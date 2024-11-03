@@ -1,0 +1,335 @@
+---
+apiVersion: infrahub.app/v1
+kind: Menu
+spec:
+  data:
+    - namespace: Organization
+      name: MainMenu
+      label: Organization
+      icon: "mdi:domain"
+      kind: OrganizationGeneric
+      children:
+        data:
+          - namespace: Organization
+            name: Manufacturer
+            label: Manufacturers
+            kind: OrganizationManufacturer
+            icon: "mdi:domain"
+
+          - namespace: Organization
+            name: Provider
+            label: Providers
+            kind: OrganizationProvider
+            icon: "mdi:domain"
+
+          - namespace: Organization
+            name: Customer
+            label: Customers
+            kind: OrganizationCustomer
+            icon: "mdi:domain"
+
+    - namespace: Location
+      name: Generic
+      label: Location
+      kind: LocationGeneric
+      icon: "mingcute:location-line"
+
+    - namespace: Infra
+      name: TopologyMenu
+      label: Topology Management
+      icon: "tabler:topology-star-ring-3"
+      children:
+        data:
+          - name: DataCenter
+            namespace: Infra
+            label: Data Center
+            kind: InfraDataCenter
+            icon: "carbon:data-center"
+
+          - name: ColocationCenter
+            namespace: Infra
+            label: Colocation Center
+            kind: InfraColocationCenter
+            icon: "carbon:data-center"
+
+          - name: CampusOffice
+            namespace: Infra
+            label: Campus Office
+            kind: InfraCampusOffice
+            icon: "solar:buildings-3-linear"
+
+          - name: BranchOffice
+            namespace: Infra
+            label: Branch Office
+            kind: InfraBranchOffice
+            icon: "tabler:building"
+
+    - namespace: Security
+      name: SecurityMenu
+      label: Security Management
+      icon: "oui:integration-security"
+      kind: SecurityGeneric
+      children:
+        data:
+
+          - namespace: Security
+            name: FiltersMenu
+            label: Filters
+            icon: "carbon:subnet-acl-rules"
+            children:
+              data:
+                - namespace: Security
+                  name: IPProtocol
+                  label: "IP Protocols"
+                  kind: SecurityIPProtocol
+                  icon: "mdi:protocol"
+                - namespace: Security
+                  name: IPAddress
+                  label: "IP Address"
+                  kind: SecurityIPAddress
+                  icon: "mdi:ip-outline"
+                - namespace: Security
+                  name: IPAMIPAddress
+                  label: "IPAM IP Address"
+                  kind: SecurityIPAddress
+                  icon: "mdi:ip-outline"
+                - namespace: Security
+                  name: FQDN
+                  label: "FQDN"
+                  kind: SecurityFQDN
+                  icon: "eos-icons:dns"
+                - namespace: Security
+                  name: Prefix
+                  label: "Prefix"
+                  kind: SecurityPrefix
+                  icon: "mdi:ip-network-outline"
+                - namespace: Security
+                  name: IPAMIPPrefix
+                  label: "IPAM Prefix"
+                  kind: SecurityPrefix
+                  icon: "mdi:ip-network-outline"
+                - namespace: Security
+                  name: IPRange
+                  label: "IP Range"
+                  kind: SecurityIPRange
+                  icon: "mdi:ip-network-outline"
+                - namespace: Security
+                  name: Service
+                  label: "Services"
+                  kind: SecurityService
+                  icon: "mdi:domain"
+                - namespace: Security
+                  name: ServiceRange
+                  label: "Service Ranges"
+                  kind: SecurityServiceRange
+                  icon: "mdi:domain"
+                - namespace: Security
+                  name: AddressGroup
+                  label: "Address Group"
+                  kind: SecurityAddressGroup
+                  icon: "material-symbols:menu-book-outline-rounded"
+                - namespace: Security
+                  name: ServiceGroup
+                  label: "Service Group"
+                  kind: SecurityServiceGroup
+                  icon: "material-symbols:menu-book-outline-rounded"
+
+          - namespace: Security
+            name: Zone
+            label: Security zone
+            kind: SecurityZone
+            icon: "game-icons:fire-zone"
+
+          - namespace: Security
+            name: PolicyRule
+            label: Policy Rule
+            kind: SecurityPolicyRule
+            icon: "material-symbols:policy"
+
+          - namespace: Security
+            name: Policy
+            label: Policy
+            kind: SecurityPolicy
+            icon: "mdi:domain"
+
+    - namespace: Infra
+      name: DeviceManagementMenu
+      label: Device Management
+      icon: "mdi:server"
+      children:
+        data:
+          - namespace: Infra
+            name: NetworkDeviceMenu
+            label: Network Device
+            icon: "mdi:server"
+            children:
+              data:
+                - namespace: Infra
+                  name: Switch
+                  label: Switches & Routers
+                  kind: InfraSwitch
+                  icon: "subway:switch"
+                - namespace: Infra
+                  name: Firewall
+                  label: Firewalls
+                  kind: InfraFirewall
+                  icon: "clarity:firewall-line"
+                - namespace: Infra
+                  name: Loadbalancer
+                  label: Load Balancers
+                  kind: InfraLoadbalancer
+                  icon: "carbon:load-balancer-classic"
+                - namespace: Infra
+                  name: Console
+                  label: Console Servers
+                  kind: InfraConsole
+                  icon: "mdi:console-line"
+          - namespace: Infra
+            name: ServerMenu
+            label: Servers
+            icon: "mdi:server"
+            children:
+              data:
+                - namespace: Infra
+                  name: NtpServer
+                  label: NTP Servers
+                  kind: InfraNtpServer
+                  icon: "iconoir:time-zone"
+                - namespace: Infra
+                  name: DnsServer
+                  label: DNS Servers
+                  kind: InfraDnsServer
+                  icon: "mdi:dns"
+                - namespace: Infra
+                  name: DhcpServer
+                  label: DHCP Servers
+                  kind: InfraDhcpServer
+                  icon: "eos-icons:ip"
+                - namespace: Infra
+                  name: CollectorServer
+                  label: Collector Servers
+                  kind: InfraCollectorServer
+                  icon: "mdi:server-network"
+
+          - namespace: Infra
+            name: Device
+            label: All Devices
+            kind: InfraDevice
+            icon: "mdi:server"
+
+          - name: Interface
+            namespace: Infra
+            label: "All Interfaces"
+            icon: "mdi:ethernet"
+            kind: InfraInterface
+
+          - namespace: Infra
+            name: MlagMenu
+            label: Link Aggregation
+            icon: "eos-icons:cluster-management"
+            children:
+              data:
+                - name: MlagDomain
+                  namespace: Infra
+                  label: "MLAG Domains"
+                  icon: "eos-icons:cluster-management"
+                  kind: InfraMlagDomain
+
+                - name: MlagInterface
+                  namespace: Infra
+                  label: "MLAG Interfaces"
+                  icon: "mdi:ethernet"
+                  kind: InfraMlagInterface
+
+          - namespace: Infra
+            name: Platform
+            label: Platform
+            kind: InfraPlatform
+            icon: "mdi:application-cog-outline"
+
+          - namespace: Infra
+            name: DeviceType
+            label: Device Type
+            kind: InfraDeviceType
+            icon: "mdi:application-settings-outline"
+
+    - namespace: Infra
+      name: CircuitMenu
+      label: Circuit Management
+      icon: "mdi:transit-connection-variant"
+      children:
+        data:
+          - name: Circuit
+            namespace: Infra
+            label: "Circuit"
+            icon: "mdi:cable-data"
+            kind: InfraCircuit
+
+    - namespace: Infra
+      name: NetworkMenu
+      label: Network Configuration
+      icon: "mdi:lan"
+      children:
+        data:
+          - name: VLAN
+            namespace: Infra
+            label: "VLAN"
+            icon: "mdi:lan-pending"
+            kind: InfraVLAN
+
+    - namespace: Infra
+      name: RoutingPeeringMenu
+      label: Routing & Peering
+      icon: "mdi:router"
+      children:
+        data:
+          - name: VRF
+            namespace: Infra
+            label: "VRF"
+            icon: "mdi:router"
+            kind: InfraVRF
+          - name: BGP
+            namespace: Infra
+            label: "BGP"
+            icon: "mdi:router"
+            children:
+              data:
+                - name: AutonomousSystem
+                  namespace: Infra
+                  label: "Autonomous System"
+                  icon: "mdi:bank-circle-outline"
+                  kind: InfraAutonomousSystem
+
+                - name: BGPSession
+                  namespace: Infra
+                  label: "BGP Session"
+                  icon: "mdi:router"
+                  kind: InfraBGPSession
+
+                - name: BGPPeerGroup
+                  namespace: Infra
+                  label: "BGP Peer Group"
+                  icon: "mdi:view-grid-plus-outline"
+                  kind: InfraBGPPeerGroup
+
+    - namespace: Infra
+      name: Service
+      label: Services
+      icon: "carbon:container-services"
+      children:
+        data:
+          - namespace: Infra
+            name: BackBoneService
+            label: "Backbone Service"
+            kind: InfraBackBoneService
+            icon: "carbon:flow-connection"
+          - namespace: Infra
+            name: Layer2NetworkService
+            label: "Layer2 Network Service"
+            kind: InfraLayer2NetworkService
+            icon: "carbon:vlan"
+          - namespace: Infra
+            name: Layer3NetworkService
+            label: "Layer3 Network Service"
+            kind: InfraLayer3NetworkService
+            icon: "carbon:container-services"

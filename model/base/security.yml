@@ -1,0 +1,556 @@
+# yaml-language-server: $schema=https://schema.infrahub.app/infrahub/schema/latest.json
+---
+version: "1.0"
+generics:
+  - name: PolicyAssignment
+    namespace: Security
+    label: Security Policy
+    include_in_menu: false
+    relationships:
+      - name: rules
+        label: Policy
+        peer: SecurityRenderedPolicyRule
+        kind: Component
+        cardinality: many
+        optional: true
+  - name: GenericAddressGroup
+    namespace: Security
+    include_in_menu: false
+    display_labels:
+      - name__value
+    hierarchical: true
+    attributes:
+      - name: name
+        kind: Text
+        label: Name
+        optional: false
+        unique: true
+      - name: description
+        label: Description
+        kind: Text
+        optional: true
+    relationships:
+      - name: addresses
+        peer: SecurityGenericAddress
+        cardinality: many
+        kind: Component
+        optional: true
+  - name: GenericAddress
+    namespace: Security
+    display_labels:
+      - name__value
+    include_in_menu: false
+    attributes:
+      - name: name
+        kind: Text
+        optional: false
+        unique: true
+    relationships:
+      - name: address_groups
+        label: Address Groups
+        peer: SecurityGenericAddressGroup
+        cardinality: many
+        optional: true
+  - name: GenericServiceGroup
+    namespace: Security
+    include_in_menu: false
+    hierarchical: true
+    display_labels:
+      - name__value
+    attributes:
+      - name: name
+        label: Name
+        kind: Text
+        optional: false
+      - name: description
+        label: Description
+        kind: Text
+        optional: true
+    relationships:
+      - name: services
+        peer: SecurityGenericService
+        label: Services
+        cardinality: many
+        kind: Component
+        optional: true
+  - name: GenericService
+    include_in_menu: false
+    namespace: Security
+    display_labels:
+      - name__value
+    attributes:
+      - name: name
+        label: Name
+        kind: Text
+        optional: false
+      - name: description
+        kind: Text
+        label: Description
+        optional: true
+    relationships:
+      - name: service_groups
+        label: Service Groups
+        peer: SecurityGenericServiceGroup
+        cardinality: many
+        optional: true
+
+nodes:
+  - name: Zone
+    namespace: Security
+    menu_placement: SecurityPolicy
+    default_filter: name__value
+    display_labels:
+      - name__value
+    include_in_menu: true
+    description: "Security zones"
+    label: "Security zone"
+    attributes:
+      - name: name
+        kind: Text
+        unique: true
+        optional: false
+  - name: IPAMIPAddress
+    namespace: Security
+    menu_placement: SecurityPolicy
+    include_in_menu: true
+    icon: "mdi:ip-outline"
+    description: "Infrahub IPv4/6 address"
+    label: "IPAM IP Address"
+    default_filter: name__value
+    inherit_from:
+      - SecurityGenericAddress
+    attributes:
+      - name: description
+        kind: Text
+        optional: true
+    relationships:
+      - name: ip_address
+        peer: IpamIPAddress
+        cardinality: one
+        kind: Attribute
+        optional: false
+  - name: IPAMIPPrefix
+    namespace: Security
+    menu_placement: SecurityPolicy
+    include_in_menu: true
+    icon: "mdi:ip-network-outline"
+    description: "Infrahub IPv4/6 prefix"
+    label: "IPAM IP Prefix"
+    default_filter: name__value
+    inherit_from:
+      - SecurityGenericAddress
+    attributes:
+      - name: description
+        kind: Text
+        optional: true
+    relationships:
+      - name: ip_prefix
+        peer: IpamIPPrefix
+        cardinality: one
+        kind: Attribute
+        optional: false
+  - name: IPAddress
+    namespace: Security
+    include_in_menu: true
+    description: "IPv4/6 address"
+    default_filter: name__value
+    label: "IP Address"
+    icon: "mdi:ip-outline"
+    inherit_from:
+      - SecurityGenericAddress
+    order_by:
+      - "address__value"
+    display_labels:
+      - name__value
+      - address__value
+    attributes:
+      - name: address
+        kind: IPHost
+      - name: description
+        kind: Text
+        optional: true
+  - name: Prefix
+    namespace: Security
+    menu_placement: SecurityPolicy
+    include_in_menu: true
+    icon: "mdi:ip-network-outline"
+    description: "IPv4/6 prefix"
+    label: "Prefix"
+    default_filter: name__value
+    inherit_from:
+      - "SecurityGenericAddress"
+    order_by:
+      - name__value
+    display_labels:
+      - name__value
+      - prefix__value
+    attributes:
+      - name: prefix
+        kind: IPNetwork
+        optional: false
+        unique: true
+      - name: description
+        kind: Text
+        optional: true
+  - name: IPRange
+    namespace: Security
+    menu_placement: SecurityPolicy
+    include_in_menu: true
+    icon: "mdi:ip-outline"
+    description: "IPv4/6 Range"
+    label: "IP Range"
+    default_filter: name__value
+    display_labels:
+      - name__value
+    inherit_from:
+      - "SecurityGenericAddress"
+    order_by:
+      - name__value
+    attributes:
+      - name: start
+        label: Start IP Address
+        kind: IPHost
+        optional: false
+      - name: end
+        label: End IP Address
+        kind: IPHost
+        optional: false
+  - name: FQDN
+    namespace: Security
+    description: "Full Qualified Domain Name"
+    include_in_menu: true
+    icon: "eos-icons:dns"
+    menu_placement: SecurityPolicy
+    label: "FQDN"
+    default_filter: name__value
+    display_labels:
+      - name__value
+    inherit_from:
+      - "SecurityGenericAddress"
+    order_by:
+      - name__value
+      - fqdn__value
+    attributes:
+      - name: fqdn
+        label: FQDN
+        kind: Text
+        optional: false
+        # https://stackoverflow.com/questions/11809631/fully-qualified-domain-name-validation
+        regex: "(?=^.{1,253}$)(^(((?!-)[a-zA-Z0-9-]{1,63}(?<!-))|((?!-)[a-zA-Z0-9-]{1,63}(?<!-)\\.)+[a-zA-Z]{2,63})$)"
+  - name: AddressGroup
+    namespace: Security
+    menu_placement: SecurityPolicy
+    include_in_menu: true
+    icon: "material-symbols:menu-book-outline-rounded"
+    description: "Group of addresses"
+    label: Address Group
+    default_filter: name__value
+    parent: SecurityAddressGroup
+    display_labels:
+      - name__value
+    inherit_from:
+      - SecurityGenericAddressGroup
+  - name: IPProtocol
+    namespace: Security
+    menu_placement: SecurityPolicy
+    icon: "mdi:protocol"
+    include_in_menu: true
+    description: "IP protocol"
+    label: IP Protocols
+    default_filter: name__value
+    display_labels:
+      - name__value
+    order_by:
+      - name__value
+    inherit_from:
+      - SecurityGenericService
+    attributes:
+      - name: protocol
+        kind: Number
+        optional: true
+  - name: Service
+    namespace: Security
+    menu_placement: SecurityPolicy
+    include_in_menu: true
+    icon: "eos-icons:application-outlined"
+    description: "Service"
+    label: Service
+    default_filter: name__value
+    display_labels:
+      - name__value
+    order_by:
+      - name__value
+    inherit_from:
+      - SecurityGenericService
+    attributes:
+      - name: port
+        kind: Number
+    relationships:
+      - name: ip_protocol
+        peer: SecurityIPProtocol
+        optional: true
+        cardinality: one
+        kind: Attribute
+  - name: ServiceRange
+    namespace: Security
+    include_in_menu: true
+    icon: "eos-icons:application-outlined"
+    description: "Service range"
+    label: Service range
+    default_filter: name__value
+    display_labels:
+      - name__value
+    order_by:
+      - name__value
+    inherit_from:
+      - SecurityGenericService
+    attributes:
+      - name: start
+        kind: Number
+        optional: false
+      - name: end
+        kind: Number
+        optional: false
+    relationships:
+      - name: ip_protocol
+        peer: SecurityIPProtocol
+        optional: false
+        cardinality: one
+        kind: Attribute
+  - name: ServiceGroup
+    namespace: Security
+    menu_placement: SecurityPolicy
+    include_in_menu: true
+    icon: "material-symbols:menu-book-outline-rounded"
+    label: Service group
+    description: "Group of services"
+    default_filter: name__value
+    display_labels:
+      - name__value
+    order_by:
+      - name__value
+    inherit_from:
+      - SecurityGenericServiceGroup
+  - name: Policy
+    namespace: Security
+    label: "Security Policy"
+    default_filter: name__value
+    display_labels:
+      - name__value
+    order_by:
+      - name__value
+    attributes:
+      - name: name
+        label: Name
+        kind: Text
+        optional: false
+      - name: description
+        label: Description
+        kind: Text
+        optional: true
+    relationships:
+      - name: rules
+        peer: SecurityPolicyRule
+        cardinality: many
+        kind: Component
+  - name: PolicyRule
+    namespace: Security
+    menu_placement: SecurityPolicy
+    include_in_menu: true
+    label: Policy rule
+    description: "Policy rule"
+    order_by:
+      - source_zone__name__value
+      - destination_zone__name__value
+      - index__value
+    uniqueness_constraints:
+      - [index__value, source_zone, destination_zone, policy]
+    attributes:
+      - name: index
+        label: Index
+        kind: Number
+        optional: false
+        order_weight: 99999
+      - name: name
+        label: Name
+        kind: Text
+        optional: false
+      - name: action
+        label: Action
+        kind: Text
+        enum: ["permit", "deny"]
+        default_value: permit
+        optional: false
+      - name: log
+        label: Log
+        kind: Boolean
+        default_value: false
+        optional: true
+        order_weight: 99998
+    relationships:
+      - name: policy
+        peer: SecurityPolicy
+        kind: Attribute
+        cardinality: one
+        optional: false
+      - name: source_zone
+        peer: SecurityZone
+        kind: Attribute
+        cardinality: one
+        optional: false
+        order_weight: 1
+        identifier: policy_rule__source_zone
+      - name: destination_zone
+        peer: SecurityZone
+        kind: Attribute
+        cardinality: one
+        optional: false
+        order_weight: 2
+        identifier: policy_rule__destination_zone
+      - name: source_address
+        peer: SecurityGenericAddress
+        optional: true
+        kind: Attribute
+        cardinality: many
+        identifier: policy_rule__source_address
+      - name: source_groups
+        peer: SecurityGenericAddressGroup
+        optional: true
+        kind: Attribute
+        cardinality: many
+        identifier: policy_rule__source_address_group
+      - name: source_services
+        peer: SecurityGenericService
+        optional: true
+        kind: Attribute
+        cardinality: many
+        identifier: policy_rule__source_service
+      - name: source_service_groups
+        peer: SecurityGenericServiceGroup
+        optional: true
+        kind: Attribute
+        cardinality: many
+        identifier: policy_rule__source_service_group
+      - name: destination_address
+        peer: SecurityGenericAddress
+        optional: true
+        kind: Attribute
+        cardinality: many
+        identifier: policy_rule__destination_address
+      - name: destination_groups
+        peer: SecurityGenericAddressGroup
+        optional: true
+        kind: Attribute
+        cardinality: many
+        identifier: policy_rule__destination_address_group
+      - name: destination_services
+        peer: SecurityGenericService
+        optional: true
+        kind: Attribute
+        cardinality: many
+        identifier: policy_rule__destination_service
+      - name: destination_service_groups
+        peer: SecurityGenericServiceGroup
+        optional: true
+        kind: Attribute
+        cardinality: many
+        identifier: policy_rule__destination_service_group
+  - name: RenderedPolicyRule
+    namespace: Security
+    include_in_menu: false
+    label: Policy rule
+    description: "Policy rule"
+    order_by:
+      - source_zone__name__value
+      - destination_zone__name__value
+      - index__value
+    attributes:
+      - name: index
+        label: Index
+        kind: Number
+        optional: false
+        order_weight: 99999
+      - name: name
+        label: Name
+        kind: Text
+        optional: false
+      - name: action
+        label: Action
+        kind: Text
+        enum: ["permit", "deny"]
+        default_value: permit
+        optional: false
+      - name: log
+        label: Log
+        kind: Boolean
+        default_value: false
+        optional: true
+        order_weight: 99998
+    relationships:
+      - name: source_policy
+        peer: SecurityPolicy
+        kind: Attribute
+        cardinality: one
+        optional: false
+      - name: source_zone
+        peer: SecurityZone
+        kind: Attribute
+        cardinality: one
+        optional: false
+        identifier: rendered_policy_rule__source_zone
+        order_weight: 1
+      - name: destination_zone
+        peer: SecurityZone
+        kind: Attribute
+        cardinality: one
+        optional: false
+        identifier: rendered_policy_rule__destination_zone
+        order_weight: 2
+      - name: source_address
+        peer: SecurityGenericAddress
+        optional: true
+        kind: Attribute
+        cardinality: many
+        identifier: rendered_policy_rule__source_address
+      - name: source_groups
+        peer: SecurityGenericAddressGroup
+        optional: true
+        kind: Attribute
+        cardinality: many
+        identifier: rendered_policy_rule__source_address_group
+      - name: source_services
+        peer: SecurityGenericService
+        optional: true
+        kind: Attribute
+        cardinality: many
+        identifier: rendered_policy_rule__source_service
+      - name: source_service_groups
+        peer: SecurityGenericServiceGroup
+        optional: true
+        kind: Attribute
+        cardinality: many
+        identifier: rendered_policy_rule__source_service_group
+      - name: destination_address
+        peer: SecurityGenericAddress
+        optional: true
+        kind: Attribute
+        cardinality: many
+        identifier: rendered_policy_rule__destination_address
+      - name: destination_groups
+        peer: SecurityGenericAddressGroup
+        optional: true
+        kind: Attribute
+        cardinality: many
+        identifier: rendered_policy_rule__destination_address_group
+      - name: destination_services
+        peer: SecurityGenericService
+        optional: true
+        kind: Attribute
+        cardinality: many
+        identifier: rendered_policy_rule__destination_service
+      - name: destination_service_groups
+        peer: SecurityGenericServiceGroup
+        optional: true
+        kind: Attribute
+        cardinality: many
+        identifier: rendered_policy_rule__destination_service_group
