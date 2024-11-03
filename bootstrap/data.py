@@ -43,7 +43,6 @@ CITIES = (
 
 SITES = (
     # name, shortname, parent, description
-
 )
 
 ACCOUNTS = (
