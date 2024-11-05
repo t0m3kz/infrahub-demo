@@ -282,7 +282,7 @@ async def devices(client: InfrahubClient, log: logging.Logger, branch: str) -> N
     log.info("Adding firewall devices to the group")
     group = await client.create(
         kind="CoreStandardGroup",
-        name="firewall_devices",
+        name="juniper_firewall_devices",
     )
     await group.save(allow_upsert=True)
     await group.members.fetch()
@@ -309,6 +309,8 @@ async def devices(client: InfrahubClient, log: logging.Logger, branch: str) -> N
                         client.store.get(kind="IpamIPAddress", key=item[4])
                     ],
                     "description": item[5],
+                    "role": item[6],
+                    "status": "active",
                     "security_zone": (
                         client.store.get(kind="SecurityZone", key=item[3])
                         if item[3]
