@@ -325,7 +325,7 @@ FIREWALLS = (
 )
 
 L3_INTERFACES = (
-    # device, interface, ,speed, zone, ip, description
+    # device, interface,speed, zone, ip, description, role
     (
         "dc1-fra-fw1",
         "ge-0/0/0",
@@ -333,6 +333,7 @@ L3_INTERFACES = (
         None,
         "10.100.5.10",
         "dc1-fra-fw1 management interface",
+        "management",
     ),
     (
         "dc1-fra-fw1",
@@ -341,6 +342,7 @@ L3_INTERFACES = (
         "OUTSIDE",
         "10.0.1.1",
         "dc1-fra-fw1 outside interface",
+        "peer",
     ),
     (
         "dc1-fra-fw1",
@@ -349,6 +351,7 @@ L3_INTERFACES = (
         "INSIDE",
         "10.0.2.1",
         "dc1-fra-fw1 inside interface",
+        "peer",
     ),
     (
         "dc1-fra-fw1",
@@ -357,6 +360,7 @@ L3_INTERFACES = (
         "DMZ",
         "10.0.3.1",
         "dc1-fra-fw1 dmz interface",
+        "peer",
     ),
     (
         "eqx1-fra-fw1",
@@ -365,6 +369,7 @@ L3_INTERFACES = (
         None,
         "10.200.100.20",
         "dc1-fra-fw1 management interface",
+        "management",
     ),
     (
         "eqx1-fra-fw1",
@@ -373,6 +378,7 @@ L3_INTERFACES = (
         None,
         "10.1.1.1",
         "eqx1-fra-fw1 outside interface",
+        "peer",
     ),
     (
         "eqx1-fra-fw1",
@@ -381,5 +387,6 @@ L3_INTERFACES = (
         None,
         "10.1.2.1",
         "eqx1-fra-fw1 inside interface",
+        "peer",
     ),
 )
