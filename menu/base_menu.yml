@@ -267,7 +267,7 @@ spec:
 
     - namespace: Infra
       name: NetworkMenu
-      label: Network Configuration
+      label: Network Segment
       icon: "mdi:lan"
       children:
         data:
@@ -276,6 +276,11 @@ spec:
             label: "VLAN"
             icon: "mdi:lan-pending"
             kind: InfraVLAN
+          - name: SSID
+            namespace: Infra
+            label: "SSID"
+            icon: "mdi:wireless"
+            kind: InfraSSID
 
     - namespace: Infra
       name: RoutingPeeringMenu

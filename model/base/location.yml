@@ -165,8 +165,16 @@ nodes:
             color: "#E6E6FA"  # lavender
           - name: pop
             label: POP
-            description: "Internal Datacenter"
-            color: "#E6E6FA"  # lavender
+            description: "Colocation Datacenter"
+            color:  "#A9DFBF"  # light pastel green
+          - name: campus
+            label: Campus
+            description: "Campus Office"
+            color: "#D3D3D3"  # light grey
+          - name: office
+            label: Office
+            description: " Branch Office"
+            color:  "#A9CCE3"  # pastel blue
         order_weight: 1300
     relationships:
       - name: owner

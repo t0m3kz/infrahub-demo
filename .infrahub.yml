@@ -1,0 +1,19 @@
+---
+jinja2_transforms:
+  - name: "firewall_config"
+    description: "Template to generate startup configuration for a Juniper SRX Firewall"
+    query: "firewall_config"
+    template_path: "templates/juniper_srx_config.j2"
+
+artifact_definitions:
+  - name: "Firewall config"
+    artifact_name: "firewall-config"
+    parameters:
+      device: "name__value"
+    content_type: "text/plain"
+    targets: "firewall_devices"
+    transformation: "firewall_config"
+
+queries:
+  - name: firewall_config
+    file_path: "templates/firewall_config.gql"

@@ -1,0 +1,142 @@
+{% set ns = namespace(management_interface = none, security_zones={}, zone_pairs={}) %}
+{% for intf in data.InfraDevice.edges[0].node.interfaces.edges %}
+{%   if "role" in intf.node and intf.node.role.value == "management" %}
+{%     set ns.management_interface = intf.node.name.value %}
+{%   endif %}
+{%   if "security_zone" in intf.node and intf.node.security_zone.node is not none %}
+{%     if intf.node.security_zone.node.name.value in ns.security_zones %}
+{%       set _ = ns.security_zones[intf.node.security_zone.node.name.value].append(intf.node.name.value) %}
+{%     else %}
+{%       set _ = ns.security_zones.update({intf.node.security_zone.node.name.value: [intf.node.name.value]}) %}
+{%     endif %}
+{%   endif %}
+{% endfor %}
+{% for rule in data.InfraDevice.edges[0].node.policy.node.rules.edges %}
+{%   if (rule.node.source_zone.node.name.value, rule.node.destination_zone.node.name.value) in ns.zone_pairs %}
+{%     set _ = ns.zone_pairs[(rule.node.source_zone.node.name.value, rule.node.destination_zone.node.name.value)].append(rule) %}
+{%   else %}
+{%     set _ = ns.zone_pairs.update({(rule.node.source_zone.node.name.value, rule.node.destination_zone.node.name.value): [rule]})  %}
+{%   endif %}
+{% endfor %}
+system {
+    root-authentication {
+        encrypted-password "YOUR_ROOT_PASSWORD";
+    }
+    services {
+        ssh;
+        web-management {
+            http {
+                interface {{ ns.management_interface }};
+            }
+            https {
+                system-generated-certificate;
+                interface {{ ns.management_interface }};
+            }
+        }
+    }
+    syslog {
+        user * {
+            any emergency;
+        }
+        file messages {
+            any critical;
+            authorization info;
+        }
+    }
+}
+interfaces {
+{%- for interface in data.InfraDevice.edges[0].node.interfaces.edges %}
+    {{ interface.node.name.value }} {
+        unit 0 {
+            family inet {
+                address {{ interface.node.ip_addresses.edges[0].node.address.value }};
+            }
+        }
+    }
+{% endfor -%}
+}
+applications {
+{% for service in data.SecurityService.edges %}
+    application {{ service.node.name.value }} {
+        protocol {{ service.node.ip_protocol.node.name.value | lower }};
+        destination-port {{ service.node.port.value }};
+    }
+{% endfor %}
+{% for group in data.SecurityServiceGroup.edges %}
+    application-set {{ group.node.name.value }} {
+    {% for application in group.node.services.edges %}
+        application {{ application.node.name.value }};
+    {% endfor %}
+    }
+{% endfor %}
+}
+security {
+    zones {
+{% for security_zone, interfaces in ns.security_zones.items() %}
+        security-zone {{ security_zone }} {
+            interfaces {
+            {% for interface in interfaces %}
+                {{ interface }};
+            {% endfor %}
+            }
+        }
+{% endfor %}
+    }
+    address-book global {
+        {% for address in data.SecurityGenericAddress.edges %}
+        {% if address.node.__typename == "SecurityPrefix" %}
+        address {{ address.node.name.value }} {{ address.node.prefix.value }};
+        {% elif address.node.__typename == "SecurityIPAddress" %}
+        address {{ address.node.name.value }} {{ address.node.address.value }};
+        {% elif address.node.__typename == "SecurityFQDN" %}
+        addresss {{ address.node.name.value }} dns-name {{ address.node.fqdn.value }};
+        {% endif %}
+        {% endfor %}
+        {% for group in data.SecurityGenericAddressGroup.edges %}
+        address-set {{ group.node.name.value }}{
+        {%   for address in group.node.addresses.edges %}
+            address {{ address.node.name.value }};
+        {%   endfor %}
+        }
+        {% endfor %}
+    }
+    policies {
+        {% for (source_zone, destination_zone), rules in ns.zone_pairs.items() %}
+        from-zone {{ source_zone }} to-zone {{ destination_zone }} {
+        {% for rule in rules %}
+            policy {{ rule.node.name.value }} {
+                match {
+                    {% for address in rule.node.source_address.edges %}
+                    source-address {{ address.node.name.value }};
+                    {% endfor %}
+                    {% for group in rule.node.source_groups.edges %}
+                    source-address {{ group.node.name.value }};
+                    {% endfor %}
+                    {% for address in rule.node.destination_address.edges %}
+                    destination-address {{ address.node.name.value }};
+                    {% endfor %}
+                    {% for group in rule.node.destination_groups.edges %}
+                    destination-address {{ group.node.name.value }};
+                    {% endfor %}
+                    {% for srv in rule.node.destination_services.edges %}
+                    application {{ srv.node.name.value }};
+                    {% endfor %}
+                    {% for srv in rule.node.destination_service_groups.edges %}
+                    application-set {{ srv.node.name.value }};
+                    {% endfor %}
+                }
+                then {
+                    {{ rule.node.action.value }};
+                    {% if rule.node.log.value %}
+                    log {
+                        session-init;
+                        session-close;
+                    }
+                    {% endif %}
+                }
+            }
+        {% endfor %}
+        }
+        {% endfor %}
+    }
+}
