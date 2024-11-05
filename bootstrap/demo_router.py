@@ -67,10 +67,3 @@ async def run(client: InfrahubClient, log: logging.Logger, branch: str) -> None:
             for item in VRFS
         ],
     )
-
-
-
-
-
-
-

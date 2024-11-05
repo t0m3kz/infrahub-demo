@@ -1,6 +1,5 @@
 """Router demo data."""
 
-
 VRFS = {
     # Name, Description, RD, RT-import, RT-export
     ("Internet", "Internet VRF", "100", "100:100", "100:100"),

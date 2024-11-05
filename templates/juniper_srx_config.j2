@@ -11,6 +11,7 @@
 {%     endif %}
 {%   endif %}
 {% endfor %}
+{% if data.InfraDevice.edges[0].node.policy.node is not none %}
 {% for rule in data.InfraDevice.edges[0].node.policy.node.rules.edges %}
 {%   if (rule.node.source_zone.node.name.value, rule.node.destination_zone.node.name.value) in ns.zone_pairs %}
 {%     set _ = ns.zone_pairs[(rule.node.source_zone.node.name.value, rule.node.destination_zone.node.name.value)].append(rule) %}
@@ -18,6 +19,7 @@
 {%     set _ = ns.zone_pairs.update({(rule.node.source_zone.node.name.value, rule.node.destination_zone.node.name.value): [rule]})  %}
 {%   endif %}
 {% endfor %}
+{% endif %}
 system {
     root-authentication {
         encrypted-password "YOUR_ROOT_PASSWORD";
@@ -83,7 +85,7 @@ security {
 {% endfor %}
     }
     address-book global {
-        {% for address in data.SecurityGenericAddress.edges %}
+        {% for address in data.SecurityGenericAddress.edges|sort(attribute='node.name.value') %}
         {% if address.node.__typename == "SecurityPrefix" %}
         address {{ address.node.name.value }} {{ address.node.prefix.value }};
         {% elif address.node.__typename == "SecurityIPAddress" %}
