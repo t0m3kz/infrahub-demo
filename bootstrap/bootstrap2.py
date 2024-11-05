@@ -7,9 +7,10 @@ from infrahub_sdk.batch import InfrahubBatch
 from infrahub_sdk.exceptions import GraphQLError
 
 from data import (
-    CITIES,
-    COUNTRIES,
     REGIONS,
+    COUNTRIES,
+    CITIES,
+    SITES,
     ACCOUNTS,
     SUBNETS_1918,
     GROUPS,
@@ -347,6 +348,27 @@ async def location(
     )
     log.info("Created Cities")
 
+    await create_objects(
+        client=client,
+        batch=batch,
+        branch=branch,
+        kind="LocationSite",
+        data_list=[
+            {
+                "payload": {
+                    "name": item[0],
+                    "shortname": item[1],
+                    "status": item[2],
+                    "site_type": item[3],
+                    "parent": client.store.get(kind="LocationCity", key=item[4]).id,
+                },
+                "store_key": item[0],
+            }
+            for item in SITES
+        ],
+    )
+    log.info("Created Cities")
+
 
 async def security(
     client: InfrahubClient, log: logging.Logger, branch: str, batch: InfrahubBatch
@@ -557,7 +579,7 @@ async def run(client: InfrahubClient, log: logging.Logger, branch: str) -> None:
     """Create all the infrastructure objects."""
 
     # Increase concurrent queries
-    client.max_concurrent_execution = 20
+    # client.max_concurrent_execution = 20
 
     batch = await client.create_batch(return_exceptions=True)
 

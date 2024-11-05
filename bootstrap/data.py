@@ -42,7 +42,11 @@ CITIES = (
 )
 
 SITES = (
-    # name, shortname, parent, description
+    # name, shortname, status, site_type, parent
+    ("DC-1", "DC1", "active", "dc", "Frankfurt"),
+    ("EQX-1", "EQX1", "active", "pop", "Frankfurt"),
+    ("FRA-1", "FRA1", "active", "campus", "Frankfurt"),
+    ("FRA-2", "FRA2", "active", "office", "Frankfurt"),
 )
 
 ACCOUNTS = (
@@ -562,3 +566,87 @@ RULES = [
         [],
     ),
 ]
+
+FIREWALLS = (
+    # name, device_type, platform, status, role, location, management_ip, policy
+    (
+        "dc1-fra-fw1",
+        "SRX-1500",
+        "Juniper JunOS",
+        "active",
+        "firewall",
+        "DC-1",
+        "10.100.5.10",
+        "FRA_POLICY",
+    ),
+    (
+        "eqx1-fra-fw1",
+        "SRX-1500",
+        "Juniper JunOS",
+        "active",
+        "firewall",
+        "EQX-1",
+        "10.200.100.20",
+        None,
+    ),
+)
+
+L3_INTERFACES = (
+    # device, interface, ,speed, zone, ip, description
+    (
+        "dc1-fra-fw1",
+        "ge-0/0/0",
+        1_000_000,
+        None,
+        "10.100.5.10",
+        "dc1-fra-fw1 management interface",
+    ),
+    (
+        "dc1-fra-fw1",
+        "ge-0/0/1",
+        1_000_000,
+        "OUTSIDE",
+        "10.0.1.1",
+        "dc1-fra-fw1 outside interface",
+    ),
+    (
+        "dc1-fra-fw1",
+        "ge-0/0/2",
+        1_000_000,
+        "INSIDE",
+        "10.0.2.1",
+        "dc1-fra-fw1 inside interface",
+    ),
+    (
+        "dc1-fra-fw1",
+        "ge-0/0/3",
+        1_000_000,
+        "DMZ",
+        "10.0.3.1",
+        "dc1-fra-fw1 dmz interface",
+    ),
+    (
+        "eqx1-fra-fw1",
+        "ge-0/0/0",
+        1_000_000,
+        None,
+        "10.200.100.20",
+        "dc1-fra-fw1 management interface",
+    ),
+    (
+        "eqx1-fra-fw1",
+        "ge-0/0/1",
+        1_000_000,
+        None,
+        "10.1.1.1",
+        "eqx1-fra-fw1 outside interface",
+    ),
+    (
+        "eqx1-fra-fw1",
+        "ge-0/0/2",
+        1_000_000,
+        None,
+        "10.1.2.1",
+        "eqx1-fra-fw1 inside interface",
+    ),
+)

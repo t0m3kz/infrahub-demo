@@ -3,12 +3,13 @@
 import logging
 from ipaddress import IPv4Network
 from infrahub_sdk import InfrahubClient
-from infrahub_sdk.exceptions import GraphQLError
+from infrahub_sdk.exceptions import GraphQLError, ValidationError
 
 from data import (
     CITIES,
     COUNTRIES,
     REGIONS,
+    SITES,
     ACCOUNTS,
     SUBNETS_1918,
     GROUPS,
@@ -30,6 +31,8 @@ from data import (
     ZONES,
     POLICIES,
     RULES,
+    FIREWALLS,
+    L3_INTERFACES,
 )
 
 
@@ -40,7 +43,11 @@ async def create_objects(
     batch = await client.create_batch()
     for data in data_list:
         obj = await client.create(kind=kind, data=data.get("payload"), branch=branch)
-        batch.add(task=obj.save, allow_upsert=True, node=obj)
+        try:
+            batch.add(task=obj.save, allow_upsert=True, node=obj)
+        # TODO: Check if this is correct
+        except ValidationError as exc:
+            log.debug(f"- Creation failed due to {exc}")
         if data.get("store_key"):
             client.store.set(key=data.get("store_key"), node=obj)
     try:
@@ -344,6 +351,27 @@ async def location(client: InfrahubClient, log: logging.Logger, branch: str) -> 
         ],
     )
 
+    log.info("Creating Sites")
+    await create_objects(
+        client=client,
+        log=log,
+        branch=branch,
+        kind="LocationSite",
+        data_list=[
+            {
+                "payload": {
+                    "name": item[0],
+                    "shortname": item[1],
+                    "status": item[2],
+                    "site_type": item[3],
+                    "parent": client.store.get(kind="LocationCity", key=item[4]).id,
+                },
+                "store_key": item[0],
+            }
+            for item in SITES
+        ],
+    )
+
 
 async def security(client: InfrahubClient, log: logging.Logger, branch: str) -> None:
     """Create all the security objects."""
@@ -546,6 +574,102 @@ async def security(client: InfrahubClient, log: logging.Logger, branch: str) -> 
     )
 
 
+async def devices(client: InfrahubClient, log: logging.Logger, branch: str) -> None:
+    """Create all the device objects."""
+    # Create IPAM addresses
+    log.info("Creating IPAM addresses")
+    await create_objects(
+        client=client,
+        log=log,
+        branch=branch,
+        kind="IpamIPAddress",
+        data_list=[
+            {
+                "payload": {
+                    "address": item[4],
+                    "description": item[5],
+                },
+                "store_key": item[4],
+            }
+            for item in L3_INTERFACES
+        ],
+    )
+
+    log.info("Creating Devices")
+    await create_objects(
+        client=client,
+        log=log,
+        branch=branch,
+        kind="InfraFirewall",
+        data_list=[
+            {
+                "payload": {
+                    "name": item[0],
+                    "hostname": f"{item[0]}.comapny.com",
+                    "device_type": client.store.get(
+                        kind="InfraDeviceType", key=item[1]
+                    ).id,
+                    "platform": client.store.get(kind="InfraPlatform", key=item[2]).id,
+                    "status": item[3],
+                    "role": item[4],
+                    "location": client.store.get(kind="LocationSite", key=item[5]).id,
+                    "primary_address": client.store.get(
+                        kind="IpamIPAddress", key=item[6]
+                    ).id,
+                    "policy": (
+                        client.store.get(kind="SecurityPolicy", key=item[7]).id
+                        if item[7]
+                        else None
+                    ),
+                },
+                "store_key": item[0],
+            }
+            for item in FIREWALLS
+        ],
+    )
+
+    log.info("Adding firewall devices to the group")
+    group = await client.create(
+        kind="CoreStandardGroup",
+        name="firewall_devices",
+    )
+    await group.save(allow_upsert=True)
+    await group.members.fetch()
+    group.members.add(
+        [client.store.get(kind="InfraFirewall", key=item[0]).id for item in FIREWALLS]
+    )
+
+    # FIXME: Addresses should be fetched and added later
+    # in case interface already exist and has other IPs attached
+    log.info("Creating Device Interfaces")
+    await create_objects(
+        client=client,
+        log=log,
+        branch=branch,
+        kind="InfraInterfaceL3",
+        data_list=[
+            {
+                "payload": {
+                    "name": item[1],
+                    "speed": item[2],
+                    # Let's play with key only
+                    "device": client.store.get(key=item[0]).id,
+                    "ip_addresses": [
+                        client.store.get(kind="IpamIPAddress", key=item[4])
+                    ],
+                    "description": item[5],
+                    "security_zone": (
+                        client.store.get(kind="SecurityZone", key=item[3])
+                        if item[3]
+                        else None
+                    ),
+                }
+            }
+            for item in L3_INTERFACES
+        ],
+    )
+
+
 async def run(client: InfrahubClient, log: logging.Logger, branch: str) -> None:
     """Create all the infrastructure objects."""
 
@@ -553,3 +677,4 @@ async def run(client: InfrahubClient, log: logging.Logger, branch: str) -> None:
     await core(client=client, log=log, branch=branch)
     await infra(client=client, log=log, branch=branch)
     await security(client=client, log=log, branch=branch)
+    await devices(client=client, log=log, branch=branch)

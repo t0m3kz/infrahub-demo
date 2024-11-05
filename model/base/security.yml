@@ -57,6 +57,8 @@ generics:
     hierarchical: true
     display_labels:
       - name__value
+    human_friendly_id:
+      - name__value
     attributes:
       - name: name
         label: Name
@@ -109,6 +111,12 @@ nodes:
         kind: Text
         unique: true
         optional: false
+    relationships:
+      - name: interfaces
+        label: Interfaces
+        kind: Attribute
+        optional: true
+        peer: InfraInterfaceL3
   - name: IPAMIPAddress
     namespace: Security
     menu_placement: SecurityPolicy
@@ -259,9 +267,9 @@ nodes:
     label: IP Protocols
     default_filter: name__value
     display_labels:
-      - name__value
+      - protocol__value
     order_by:
-      - name__value
+      - protocol__value
     inherit_from:
       - SecurityGenericService
     attributes:
@@ -339,6 +347,8 @@ nodes:
       - name__value
     order_by:
       - name__value
+    human_friendly_id:
+      - name__value
     attributes:
       - name: name
         label: Name
@@ -365,6 +375,8 @@ nodes:
       - index__value
     uniqueness_constraints:
       - [index__value, source_zone, destination_zone, policy]
+    human_friendly_id:
+      -  name__value
     attributes:
       - name: index
         label: Index
@@ -554,3 +566,23 @@ nodes:
         kind: Attribute
         cardinality: many
         identifier: rendered_policy_rule__destination_service_group
+
+extensions:
+  nodes:
+    - kind: InfraInterfaceL3
+      relationships:
+        - name: security_zone
+          peer: SecurityZone
+          optional: true
+          cardinality: one
+          kind: Attribute
+          order_weight: 1400
+    - kind: InfraFirewall
+      relationships:
+        - name: policy
+          peer: SecurityPolicy
+          label: Security Policy
+          cardinality: one
+          kind: Attribute
+
+
