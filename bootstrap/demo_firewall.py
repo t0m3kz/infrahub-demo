@@ -279,16 +279,30 @@ async def devices(client: InfrahubClient, log: logging.Logger, branch: str) -> N
         ],
     )
 
-    log.info("Adding firewall devices to the group")
-    group = await client.create(
+    log.info("Adding firewall devices to the groups")
+
+    juniper_group = await client.create(
         kind="CoreStandardGroup",
         name="juniper_firewall_devices",
     )
-    await group.save(allow_upsert=True)
-    await group.members.fetch()
-    group.members.add(
-        [client.store.get(kind="InfraFirewall", key=item[0]).id for item in FIREWALLS]
+    await juniper_group.save(allow_upsert=True)
+    await juniper_group.members.fetch()
+
+    firewall_group = await client.create(
+        kind="CoreStandardGroup",
+        name="firewalls",
     )
+    await firewall_group.save(allow_upsert=True)
+    await firewall_group.members.fetch()
+
+    # Add devices to groups is not accepting list ?
+    for member in [
+        client.store.get(kind="InfraFirewall", key=item[0]).id for item in FIREWALLS
+    ]:
+        juniper_group.members.add(member)
+        firewall_group.members.add(member)
+    await juniper_group.save()
+    await firewall_group.save()
 
     # FIXME: Addresses should be fetched and added later
     # in case interface already exist and has other IPs attached

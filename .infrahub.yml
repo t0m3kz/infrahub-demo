@@ -14,6 +14,12 @@ artifact_definitions:
     targets: "juniper_firewall_devices"
     transformation: "juniper_firewall_config"
 
+check_definitions:
+  - name: validate_firewall
+    class_name: InfrahubValidateFirewall
+    file_path: "checks/validate_firewall.py"
+    targets: "firewalls"
+
 queries:
   - name: firewall_config
     file_path: "templates/firewall_config.gql"

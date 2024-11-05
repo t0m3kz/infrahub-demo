@@ -285,4 +285,3 @@ async def run(client: InfrahubClient, log: logging.Logger, branch: str) -> None:
     await location(client=client, log=log, branch=branch)
     await core(client=client, log=log, branch=branch)
     await infra(client=client, log=log, branch=branch)
-
