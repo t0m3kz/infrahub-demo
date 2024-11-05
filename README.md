@@ -57,6 +57,6 @@ infrahubctl run bootstrap/demo_firewall.py --branch my-branch
 infrahubctl render firewall_config device=dc1-fra-fw1 --branch my-branch
 ```
 
-You can try to manually modify data and test is fonfiguration was updated.
+You can try to manually modify data and test is configuration was updated.
 
 
