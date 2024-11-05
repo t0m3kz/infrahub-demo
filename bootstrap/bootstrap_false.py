@@ -6,7 +6,7 @@ from infrahub_sdk import InfrahubClient
 from infrahub_sdk.batch import InfrahubBatch
 from infrahub_sdk.exceptions import GraphQLError
 
-from data import (
+from bootstrap.data_bootstrap import (
     REGIONS,
     COUNTRIES,
     CITIES,
