@@ -22,11 +22,11 @@ infrahubctl menu load menu --branch my-branch
 
 ## Load initial data
 
-All data are stored as static in bootstrap/data.py file.
+All initial data are stored as static in bootstrap/data_bootstrap.py file.
 
 ### Bootstrap
 
-In this script we're saving data per function called function.
+Add data to Infrahub.
 
 ```bash
 infrahubctl run bootstrap/bootstrap.py --branch my-branch
@@ -34,8 +34,8 @@ infrahubctl run bootstrap/bootstrap.py --branch my-branch
 
 ### False Bootstrap
 
-In this script we're saving data on the end of run function.
-This means that we're saving all data in one batch what is causing that relations are not saved properly.
+In this script we're tyrying to save data on the end of run function using single batch.
+This leads to the situation that relations are not saved properly.
 
 ```bash
 infrahubctl run bootstrap/bootstrap_false.py --branch my-branch
@@ -44,6 +44,8 @@ infrahubctl run bootstrap/bootstrap_false.py --branch my-branch
 ## Demo 1 - Firewall
 
 ### Load firewall data
+
+Firewall data are stored as statics in demo_firewall.py file.
 
 ```bash
 infrahubctl run bootstrap/demo_firewall.py --branch my-branch
@@ -54,3 +56,7 @@ infrahubctl run bootstrap/demo_firewall.py --branch my-branch
 ```bash
 infrahubctl render firewall_config device=dc1-fra-fw1 --branch my-branch
 ```
+
+You can try to manually modify data and test is fonfiguration was updated.
+
+
