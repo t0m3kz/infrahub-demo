@@ -3,7 +3,6 @@
 import logging
 from ipaddress import IPv4Network
 from infrahub_sdk import InfrahubClient
-from infrahub_sdk.exceptions import GraphQLError, ValidationError
 from utils import create_objects
 
 from data_bootstrap import (
@@ -21,8 +20,6 @@ from data_bootstrap import (
     ASNS,
     PLATFORMS,
     DEVICE_TYPES,
-    ROUTE_TARGETS,
-    VRFS,
 )
 
 
@@ -278,61 +275,6 @@ async def infra(client: InfrahubClient, log: logging.Logger, branch: str) -> Non
                 "store_key": item[0],
             }
             for item in DEVICE_TYPES
-        ],
-    )
-
-    log.info("Create Route Targets")
-    await create_objects(
-        client=client,
-        log=log,
-        branch=branch,
-        kind="InfraRouteTarget",
-        data_list=[
-            {
-                "payload": {
-                    "name": item[0],
-                    "description": item[1],
-                },
-                "store_key": item[0],
-            }
-            for item in ROUTE_TARGETS
-        ],
-    )
-
-    log.info("Create VRFs")
-    await create_objects(
-        client=client,
-        log=log,
-        branch=branch,
-        kind="InfraVRF",
-        data_list=[
-            {
-                "payload": {
-                    "name": item[0],
-                    "description": item[1],
-                    "vrf_rd": item[2],
-                    "export_rt": (
-                        {
-                            "id": client.store.get(
-                                kind="InfraRouteTarget", key=item[3]
-                            ).id
-                        }
-                        if item[3]
-                        else None
-                    ),
-                    "import_rt": (
-                        {
-                            "id": client.store.get(
-                                kind="InfraRouteTarget", key=item[4]
-                            ).id
-                        }
-                        if item[4]
-                        else None
-                    ),
-                },
-                "store_key": item[0],
-            }
-            for item in VRFS
         ],
     )
 

@@ -99,53 +99,6 @@ SUBNETS_1918 = {
     ("192.168.0.0/16", "active"),
 }
 
-
-ASNS = (
-    # asn, organization
-    (1299, "Arelion"),
-    (8220, "Colt Technology Services"),
-    (701, "Verizon Business"),
-    (3257, "GTT Communications"),
-    (6939, "Hurricane Electric"),
-    (3356, "Lumen"),
-    (6461, "Zayo"),
-    (24115, "Equinix"),
-    (20710, "Interxion"),
-    (3491, "PCCW Global"),
-    (5511, "Orange S.A"),
-    (6453, "Tata Communications"),
-    (1239, "Sprint"),
-    (2914, "NTT America"),
-    (174, "Cogent Communications"),
-    (7922, "Comcast Cable Communication"),
-    (6762, "Telecom Italia Sparkle"),
-    (7018, "AT&T Services"),
-)
-
-VRFS = {
-    # Name, Description, RD, RT-import, RT-export
-    ("Internet", "Internet VRF", "100", "100:100", "100:100"),
-    ("Backbone", "Backbone VRF", "101", "101:101", "101:101"),
-    ("Management", "OOBA Management VRF", "199", "199:199", "199:199"),
-    ("Production", "Production VRF", "200", "200:200", "200:200"),
-    ("Test", "Staging VRF", "201", "201:201", "201:201"),
-    ("Development", "Development VRF", "202", "202:202", "202:202"),
-    ("DMZ", "DMZ VRF", "666", "666:666", "666:666"),
-    ("Test-1", "Test VRF", "199", None, "199:199"),
-    ("Test-2", "Test VRF", "199", "199:199", None),
-}
-
-ROUTE_TARGETS = {
-    # Name, Description
-    ("100:100", "Internet VRF Route Target"),
-    ("101:101", "Backbone VRF Route Target"),
-    ("199:199", "OOBA Management VRF Route Target"),
-    ("200:200", "Production Environment VRF Route Target"),
-    ("201:201", "Staging Environment VRF Route Target"),
-    ("202:202", "Development Environment VRF Route Target"),
-    ("666:666", "DMZ VRF Route Target"),
-}
-
 PLATFORMS = (
     # name, nornir_platform, napalm_driver, netmiko_device_type, ansible_network_os, containerlab_os
     ("Cisco IOS-XE", "ios", "ios", "cisco_ios", "ios", "ios"),
@@ -226,4 +179,26 @@ GROUPS = (
     ("core_interfaces", "Core Interface"),
     ("provisioning_circuits", "Provisioning Circuits"),
     ("all_topologies", "All Topologies"),
+)
+
+ASNS = (
+    # asn, organization
+    (1299, "Arelion"),
+    (8220, "Colt Technology Services"),
+    (701, "Verizon Business"),
+    (3257, "GTT Communications"),
+    (6939, "Hurricane Electric"),
+    (3356, "Lumen"),
+    (6461, "Zayo"),
+    (24115, "Equinix"),
+    (20710, "Interxion"),
+    (3491, "PCCW Global"),
+    (5511, "Orange S.A"),
+    (6453, "Tata Communications"),
+    (1239, "Sprint"),
+    (2914, "NTT America"),
+    (174, "Cogent Communications"),
+    (7922, "Comcast Cable Communication"),
+    (6762, "Telecom Italia Sparkle"),
+    (7018, "AT&T Services"),
 )
