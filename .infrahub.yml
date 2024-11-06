@@ -18,7 +18,6 @@ check_definitions:
   - name: validate_firewall
     class_name: InfrahubValidateFirewall
     file_path: "checks/validate_firewall.py"
-    targets: "firewalls"
 
 queries:
   - name: firewall_config
