@@ -39,30 +39,16 @@ generics:
         optional: false
         unique: true
     relationships:
-      - name: ntp_servers
-        label: "NTP Servers"
-        peer: InfraNtpServer
+      - name: management_servers
+        label: "Management Servers"
+        peer: InfraManagementServer
         optional: true
         cardinality: many
         kind: Component
         order_weight: 100
-      - name: dhcp_servers
-        label: "DHCP Servers"
-        peer: InfraDhcpServer
-        optional: true
-        cardinality: many
-        kind: Component
-        order_weight: 101
-      - name: dns_servers
-        label: "DNS Servers"
-        peer: InfraDnsServer
-        optional: true
-        cardinality: many
-        kind: Component
-        order_weight: 102
-      - name: collector_server
-        label: "Collector Server"
-        peer: InfraCollectorServer
+      - name: device
+        label: "Devices"
+        peer: InfraDevice
         optional: true
         cardinality: many
         kind: Component

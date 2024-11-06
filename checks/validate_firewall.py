@@ -1,4 +1,5 @@
 """Validate firewall."""
+
 from infrahub_sdk.checks import InfrahubCheck
 
 
@@ -15,6 +16,7 @@ class InfrahubValidateFirewall(InfrahubCheck):
                 interface["node"]["role"]["value"] != "management"
                 and interface["node"]["security_zone"]["node"] is None
             ):
+                _int = interface['node']['name']['value']
                 self.log_error(
-                    message=f"No security zone assigned to interface {interface['node']['name']['value']}."
+                    message=f"No security zone assigned to interface {_int}."
                 )
