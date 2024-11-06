@@ -23,3 +23,5 @@ check_definitions:
 queries:
   - name: firewall_config
     file_path: "templates/firewall_config.gql"
+  - name: validate_firewall
+    file_path: "checks/validate_firewall.gql"
