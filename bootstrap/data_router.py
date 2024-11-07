@@ -23,3 +23,94 @@ ROUTE_TARGETS = {
     ("202:202", "Development Environment VRF Route Target"),
     ("666:666", "DMZ VRF Route Target"),
 }
+
+ROUTERS = (
+    # name, device_type, platform, status, role, location, management_ip, policy
+    (
+        "dc2-ktw-core1",
+        "N9K-C9316D-GX",
+        "Cisco NX-OS",
+        "active",
+        "core",
+        "DC-2",
+        "10.100.7.120",
+        None,
+    ),
+    (
+        "dc2-ktw-core2",
+        "N9K-C9316D-GX",
+        "Cisco NX-OS",
+        "active",
+        "core",
+        "DC-2",
+        "10.100.7.121",
+        None,
+    ),
+)
+
+L3_INTERFACES = (
+    # device, interface,speed, zone, ip, description, role
+    (
+        "dc2-ktw-core1",
+        "mgmt0",
+        1_000_000,
+        None,
+        "10.100.5.10",
+        "dc2-ktw-core1 management interface",
+        "management",
+    ),
+    (
+        "dc2-ktw-core1",
+        "eth0/0",
+        1_000_000,
+        None,
+        None,
+        "dc2-ktw-core1 outside interface",
+        "peer",
+    ),
+    (
+        "dc2-ktw-core1",
+        "eth0/1",
+        1_000_000,
+        None,
+        "10.7.2.1",
+        "dc2-ktw-core1 inside interface",
+        "peer",
+    ),
+    (
+        "dc2-ktw-core1",
+        "eth0/2",
+        1_000_000,
+        "DMZ",
+        "10.0.3.1",
+        "dc2-ktw-core1 dmz interface",
+        "peer",
+    ),
+    (
+        "dc2-ktw-core2",
+        "mgmt0",
+        1_000_000,
+        None,
+        "10.200.100.20",
+        "dc2-ktw-core1 management interface",
+        "management",
+    ),
+    (
+        "dc2-ktw-core2",
+        "eth0/0",
+        1_000_000,
+        None,
+        "10.1.1.1",
+        "dc2-ktw-core2 outside interface",
+        "peer",
+    ),
+    (
+        "dc2-ktw-core2",
+        "ge-0/0/2",
+        1_000_000,
+        None,
+        "10.1.2.1",
+        "dc2-ktw-core2 inside interface",
+        "peer",
+    ),
+)

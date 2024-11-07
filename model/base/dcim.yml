@@ -16,15 +16,21 @@ generics:
       - name: name
         kind: Text
         unique: true
+        order_weight: 1
       - name: hostname
         kind: Text
         unique: true
+        optional: true
+        order_weight: 2
       - name: description
         kind: Text
         optional: true
+        order_weight: 3
       - name: serial_number
         kind: Text
         optional: true
+        unique: true
+        order_weight: 4
       - name: status
         kind: Dropdown
         optional: true
@@ -45,7 +51,11 @@ generics:
             label: Drained
             description: "Temporarily taken out of service."
             color: "#bfbfbf"
-        order_weight: 1300
+          - name: decommissioned
+            label: Decommissioned
+            description: "No longer in service."
+            color: "#e6e6fa"
+        order_weight: 5
       - name: role
         kind: Dropdown
         optional: true
@@ -86,11 +96,7 @@ generics:
             label: Load Balancer
             description: "Load balancer."
             color: "#b6d2fa"
-          - name: server
-            label: Server
-            description: "Physical server."
-            color: "#e6c2fa"
-        order_weight: 1400
+        order_weight: 6
     relationships:
       - name: location
         label: Location
