@@ -13,6 +13,11 @@ COUNTRIES = (
     ("France", "FR", "EMEA"),
     ("Germany", "DE", "EMEA"),
     ("Netherlands", "NL", "EMEA"),
+    ("United Kingdom", "UK", "EMEA"),
+    ("Poland", "PL", "EMEA"),
+    ("Spain", "ES", "EMEA"),
+    ("Italy", "IT", "EMEA"),
+    ("Switzerland", "CH", "EMEA"),
     # Americas
     ("United States of America", "USA", "AMERICAS"),
     ("Canada", "CA", "AMERICAS"),
@@ -30,6 +35,9 @@ CITIES = (
     # name, shortname, parent (COUNTRY)
     ("Paris", "PAR", "France"),
     ("Frankfurt", "FRA", "Germany"),
+    ("Munich", "MUC", "Germany"),
+    ("London", "LON", "United Kingdom"),
+    ("Milan", "MIL", "Italy"),
     ("Amsterdam", "AMS", "Netherlands"),
     ("New York", "NYC", "United States of America"),
     ("Toronto", "TOR", "Canada"),
@@ -39,6 +47,9 @@ CITIES = (
     ("Delhi", "DEL", "India"),
     ("Cairo", "CAI", "Egypt"),
     ("Johannesburg", "JNB", "South Africa"),
+    ("Katowice", "KTW", "Poland"),
+    ("Madrid", "MAD", "Spain"),
+    ("Barcelona", "BCN", "Spain"),
 )
 
 SITES = (
@@ -47,6 +58,7 @@ SITES = (
     ("EQX-1", "EQX1", "active", "pop", "Frankfurt"),
     ("FRA-1", "FRA1", "active", "campus", "Frankfurt"),
     ("FRA-2", "FRA2", "active", "office", "Frankfurt"),
+    ("DC-2", "DC2", "active", "dc", "Katowice"),
 )
 
 ACCOUNTS = (

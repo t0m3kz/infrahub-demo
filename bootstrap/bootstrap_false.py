@@ -6,7 +6,7 @@ from infrahub_sdk import InfrahubClient
 from infrahub_sdk.batch import InfrahubBatch
 from infrahub_sdk.exceptions import GraphQLError
 
-from bootstrap.data_bootstrap import (
+from data_bootstrap import (
     REGIONS,
     COUNTRIES,
     CITIES,
@@ -315,7 +315,6 @@ async def run(client: InfrahubClient, log: logging.Logger, branch: str) -> None:
     await location(client=client, log=log, branch=branch, batch=batch)
     await core(client=client, log=log, branch=branch, batch=batch)
     await infra(client=client, log=log, branch=branch, batch=batch)
-
 
     try:
         async for node, _ in batch.execute():
