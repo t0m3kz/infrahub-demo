@@ -29,7 +29,6 @@ generics:
       - name: serial_number
         kind: Text
         optional: true
-        unique: true
         order_weight: 4
       - name: status
         kind: Dropdown
