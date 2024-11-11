@@ -61,7 +61,7 @@ async def location(client: InfrahubClient, log: logging.Logger, branch: str) -> 
         client=client,
         log=log,
         branch=branch,
-        kind="LocationCity",
+        kind="LocationMetro",
         data_list=[
             {
                 "payload": {
@@ -80,7 +80,7 @@ async def location(client: InfrahubClient, log: logging.Logger, branch: str) -> 
         client=client,
         log=log,
         branch=branch,
-        kind="LocationSite",
+        kind="LocationBuilding",
         data_list=[
             {
                 "payload": {
@@ -88,7 +88,7 @@ async def location(client: InfrahubClient, log: logging.Logger, branch: str) -> 
                     "shortname": item[1],
                     "status": item[2],
                     "site_type": item[3],
-                    "parent": client.store.get(kind="LocationCity", key=item[4]).id,
+                    "parent": client.store.get(kind="LocationMetro", key=item[4]).id,
                 },
                 "store_key": item[0],
             }
@@ -124,7 +124,7 @@ async def core(client: InfrahubClient, log: logging.Logger, branch: str) -> None
         client=client,
         log=log,
         branch=branch,
-        kind="IpamIPPrefix",
+        kind="IpamPrefix",
         data_list=[
             {
                 "payload": {
@@ -202,7 +202,7 @@ async def infra(client: InfrahubClient, log: logging.Logger, branch: str) -> Non
         client=client,
         log=log,
         branch=branch,
-        kind="InfraAutonomousSystem",
+        kind="RoutingAutonomousSystem",
         data_list=[
             {
                 "payload": {
@@ -238,7 +238,7 @@ async def infra(client: InfrahubClient, log: logging.Logger, branch: str) -> Non
         client=client,
         log=log,
         branch=branch,
-        kind="InfraPlatform",
+        kind="DcimPlatform",
         data_list=[
             {
                 "payload": {
@@ -260,7 +260,7 @@ async def infra(client: InfrahubClient, log: logging.Logger, branch: str) -> Non
         client=client,
         log=log,
         branch=branch,
-        kind="InfraDeviceType",
+        kind="DcimDeviceType",
         data_list=[
             {
                 "payload": {
@@ -268,8 +268,13 @@ async def infra(client: InfrahubClient, log: logging.Logger, branch: str) -> Non
                     "part_number": item[1],
                     "height": item[2],
                     "full_depth": item[3],
+                    "manufacturer": {
+                        "id": client.store.get(
+                            kind="OrganizationManufacturer", key=item[4]
+                        ).id
+                    },
                     "platform": {
-                        "id": client.store.get(kind="InfraPlatform", key=item[4]).id
+                        "id": client.store.get(kind="DcimPlatform", key=item[5]).id
                     },
                 },
                 "store_key": item[0],

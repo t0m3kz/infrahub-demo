@@ -14,23 +14,24 @@ async def create_objects(
     """Create objects of a specific kind."""
     batch = await client.create_batch()
     for data in data_list:
-        obj = await client.create(kind=kind, data=data.get("payload"), branch=branch)
         try:
+            obj = await client.create(
+                kind=kind, data=data.get("payload"), branch=branch
+            )
             batch.add(task=obj.save, allow_upsert=True, node=obj)
-        # TODO: Check if this is correct
-        except ValidationError as exc:
+            if data.get("store_key"):
+                client.store.set(key=data.get("store_key"), node=obj)
+        except GraphQLError as exc:
             log.debug(f"- Creation failed due to {exc}")
-        if data.get("store_key"):
-            client.store.set(key=data.get("store_key"), node=obj)
     try:
         async for node, _ in batch.execute():
-            object_reference = node.hfid[0] if node.hfid else None
+            object_reference = node.hfid[0] if node.hfid else node.display_label
             log.info(
                 f"- Created [{node.get_kind()}] '{object_reference}'"
                 if object_reference
                 else f"- Created [{node.get_kind()}]"
             )
-    except GraphQLError as exc:
+    except ValidationError as exc:
         log.debug(f"- Creation failed due to {exc}")
 
 

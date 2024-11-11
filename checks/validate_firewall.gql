@@ -1,11 +1,11 @@
 query validate_firewall($device: String!) {
-  InfraDevice(name__value: $device) {
+  DcimGenericDevice(name__value: $device) {
     edges {
       node {
         name {
           value
         }
-        ... on InfraFirewall {
+        ... on DcimFirewall {
           policy {
             node {
               ... on SecurityPolicy {
@@ -106,10 +106,10 @@ query validate_firewall($device: String!) {
               name {
                 value
               }
-              role {
-                value
-              }
-              ... on InfraInterfaceL3 {
+              ... on DcimInterfaceL3 {
+                role{
+                  value
+                }
                 security_zone {
                   node {
                     name {
@@ -128,31 +128,6 @@ query validate_firewall($device: String!) {
                 }
               }
             }
-          }
-        }
-      }
-    }
-  }
-  SecurityGenericAddress {
-    edges {
-      node {
-        __typename
-        name {
-          value
-        }
-        ... on SecurityFQDN {
-          fqdn {
-            value
-          }
-        }
-        ... on SecurityIPAddress {
-          address {
-            value
-          }
-        }
-        ... on SecurityPrefix {
-          prefix {
-            value
           }
         }
       }

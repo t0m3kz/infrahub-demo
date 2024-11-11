@@ -1,11 +1,11 @@
 query firewall_config($device: String!) {
-  InfraDevice(name__value: $device) {
+  DcimGenericDevice(name__value: $device) {
     edges {
       node {
         name {
           value
         }
-        ... on InfraFirewall {
+        ... on DcimFirewall {
           policy {
             node {
               ... on SecurityPolicy {
@@ -106,10 +106,10 @@ query firewall_config($device: String!) {
               name {
                 value
               }
-              role {
-                value
-              }
-              ... on InfraInterfaceL3 {
+              ... on DcimInterfaceL3 {
+                role {
+                  value
+                }
                 security_zone {
                   node {
                     name {
