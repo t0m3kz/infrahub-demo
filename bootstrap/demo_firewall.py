@@ -48,7 +48,13 @@ async def security(client: InfrahubClient, log: logging.Logger, branch: str) -> 
         kind="SecurityService",
         data_list=[
             {
-                "payload": {"name": item[0], "ip_protocol": item[1], "port": item[2]},
+                "payload": {
+                    "name": item[0],
+                    "ip_protocol": client.store.get(
+                        kind="SecurityIPProtocol", key=item[1]
+                    ),
+                    "port": item[2],
+                },
                 "store_key": item[0],
             }
             for item in SERVICES
@@ -241,37 +247,42 @@ async def devices(client: InfrahubClient, log: logging.Logger, branch: str) -> N
         ],
     )
 
+    juniper_group = await client.create(
+        kind="CoreStandardGroup",
+        name="juniper_firewall_devices",
+        branch=branch,
+    )
+
     log.info("Creating Devices")
     await create_objects(
         client=client,
         log=log,
         branch=branch,
-        kind="InfraFirewall",
+        kind="DcimFirewall",
         data_list=[
             {
                 "payload": {
                     "name": item[0],
-                    "hostname": f"{item[0]}.comapny.com",
                     "device_type": client.store.get(
-                        kind="InfraDeviceType", key=item[1]
+                        kind="DcimDeviceType", key=item[1]
                     ).id,
                     # Here we're using hfid to get platform and location from store
                     "platform": client.store.get_by_hfid(
-                        key=f"InfraPlatform__{item[2]}"
+                        key=f"DcimPlatform__{item[2]}"
                     ).id,
                     "status": item[3],
                     "role": item[4],
                     "location": client.store.get_by_hfid(
-                        key=f"LocationSite__{item[5]}"
-                    ).id,
+                        key=f"LocationBuilding__{item[5]}"
+                    ),
                     "primary_address": client.store.get(
                         kind="IpamIPAddress", key=item[6]
-                    ).id,
-                    "policy": (
-                        client.store.get(kind="SecurityPolicy", key=item[7]).id
-                        if item[7]
-                        else None
                     ),
+                    # "policy": (
+                    #     client.store.get(kind="SecurityPolicy", key=item[7]).id
+                    #     if item[7]
+                    #     else None
+                    # ),
                 },
                 "store_key": item[0],
             }
@@ -281,29 +292,30 @@ async def devices(client: InfrahubClient, log: logging.Logger, branch: str) -> N
 
     log.info("Adding firewall devices to the groups")
 
+    firewalls = [
+        client.store.get(kind="DcimFirewall", key=item[0]).id for item in FIREWALLS
+    ]
+
     juniper_group = await client.create(
         kind="CoreStandardGroup",
         name="juniper_firewall_devices",
+        branch=branch,
     )
+
     await juniper_group.save(allow_upsert=True)
     await juniper_group.members.fetch()
+    juniper_group.members.extend(firewalls)
+    await juniper_group.save()
 
     firewall_group = await client.create(
         kind="CoreStandardGroup",
         name="firewalls",
+        branch=branch,
     )
     await firewall_group.save(allow_upsert=True)
     await firewall_group.members.fetch()
-
-    # Add devices to groups is not accepting list ?
-    for member in [
-        client.store.get(kind="InfraFirewall", key=item[0]).id for item in FIREWALLS
-    ]:
-        juniper_group.members.add(member)
-        firewall_group.members.add(member)
-    await juniper_group.save()
+    firewall_group.members.extend(firewalls)
     await firewall_group.save()
-
     # FIXME: Addresses should be fetched and added later
     # in case interface already exist and has other IPs attached
     log.info("Creating Device Interfaces")
@@ -311,14 +323,14 @@ async def devices(client: InfrahubClient, log: logging.Logger, branch: str) -> N
         client=client,
         log=log,
         branch=branch,
-        kind="InfraInterfaceL3",
+        kind="DcimInterfaceL3",
         data_list=[
             {
                 "payload": {
                     "name": item[1],
                     "speed": item[2],
                     # Let's play with key only
-                    "device": client.store.get(key=item[0]).id,
+                    "device": client.store.get(key=item[0]),
                     "ip_addresses": [
                         client.store.get(kind="IpamIPAddress", key=item[4])
                     ],
@@ -339,13 +351,13 @@ async def devices(client: InfrahubClient, log: logging.Logger, branch: str) -> N
 
 async def run(client: InfrahubClient, log: logging.Logger, branch: str) -> None:
     """Create all the infrastructure objects."""
-
+    # client.max_concurrent_execution = 1
     # Load necessary daty into store
     # # Use filters to save memmory
     # Here we're showing method to manually populate store
     # and show how to change the key
     device_types = await client.filters(
-        kind="InfraDeviceType",
+        kind="DcimDeviceType",
         name__values=list(set(item[1] for item in FIREWALLS)),
         branch=branch,
         populate_store=True,
@@ -355,18 +367,17 @@ async def run(client: InfrahubClient, log: logging.Logger, branch: str) -> None:
     # For those we will use HFIDs in the future
     # HFID is set in schemas
     await client.filters(
-        kind="InfraPlatform",
+        kind="DcimPlatform",
         name__values=list(set(item[2] for item in FIREWALLS)),
         branch=branch,
         populate_store=True,
     )
 
     await client.filters(
-        kind="LocationSite",
+        kind="LocationBuilding",
         name__values=list(set(item[5] for item in FIREWALLS)),
         branch=branch,
         populate_store=True,
     )
-
     await security(client=client, log=log, branch=branch)
     await devices(client=client, log=log, branch=branch)

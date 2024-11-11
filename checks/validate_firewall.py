@@ -10,7 +10,9 @@ class InfrahubValidateFirewall(InfrahubCheck):
 
     def validate(self, data):
         """Validate firewall."""
-        for interface in data["InfraDevice"]["edges"][0]["node"]["interfaces"]["edges"]:
+        for interface in data["DcimGenericDevice"]["edges"][0]["node"]["interfaces"][
+            "edges"
+        ]:
             # Validate if security zone is set
             if (
                 interface["node"]["role"]["value"] != "management"

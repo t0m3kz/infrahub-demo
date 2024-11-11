@@ -1,0 +1,352 @@
+# yaml-language-server: $schema=https://schema.infrahub.app/infrahub/schema/latest.json
+
+version: "1.0"
+
+generics:
+  - name: Deployment
+    namespace: Topology
+    description: Topology Deployment
+    label: Deployment
+    icon: "carbon:network-3-reference"
+    default_filter: name__value
+    display_labels:
+      - name__value
+    order_by: [name__value]
+    include_in_menu: false
+    attributes:
+      - name: name
+        kind: Text
+        order_weight: 1
+        description: "3 letter deployment code"
+        min_length: 3
+        max_length: 3
+      - name: description
+        kind: Text
+        order_weight: 2
+        optional: true
+    relationships:
+      - name: location
+        peer: LocationMetro
+        optional: true
+        cardinality: one
+        kind: Attribute
+        order_weight: 3
+      - name: design
+        peer: TopologyDesign
+        optional: false
+        cardinality: one
+        kind: Attribute
+        order_weight: 4
+
+
+nodes:
+  - name: Design
+    namespace: Topology
+    description: "Base model for topology"
+    label: "Topology Design"
+    icon: "carbon:network-3-reference"
+    default_filter: name__value
+    display_labels:
+      - type__value
+      - name__value
+    order_by: [name__value]
+    # include_in_menu: false
+    attributes:
+      - name: name
+        kind: Text
+        order_weight: 1
+      - name: description
+        kind: Text
+        order_weight: 2
+        optional: true
+      - name: type
+        kind: Dropdown
+        optional: true
+        order_weight: 1400
+        choices:
+          - name: dc
+            label: Data Center
+            description: Data Center Fabric.
+            color: "#7f7fff"
+          - name: pop
+            label: Colocation Center
+            description: Colocation Center network.
+            color: "#e8e7fd"
+          - name: campus
+            label: Campus Office
+            description: Campus Office networks.
+            color: "#bf7fbf"
+          - name: office
+            label: Branch Office
+            description: Branch Office networks.
+            color: "#bf7f7f"
+    relationships:
+      - name: elements
+        peer: TopologyDesignElement
+        optional: true
+        cardinality: many
+        kind: Component
+
+  - name: DesignElement
+    namespace: Topology
+    description: "Base model for elements"
+    label: " Design Element"
+    icon: "carbon:network-3-reference"
+    default_filter: name__value
+    display_labels:
+      - name__value
+    order_by: [name__value]
+    # include_in_menu: false
+    attributes:
+      - name: name
+        kind: Text
+        order_weight: 1
+      - name: description
+        kind: Text
+        order_weight: 2
+        optional: true
+      - name: quantity
+        kind: Number
+        order_weight: 3
+      - name: role
+        kind: Dropdown
+        optional: true
+        order_weight: 1400
+        choices:
+          - name: core
+            label: Core Router
+            description: Central part of the network.
+            color: "#7f7fff"
+          - name: edge
+            label: Edge Router
+            description: Network boundary with external networks.
+            color: "#bf7fbf"
+          - name: cpe
+            label: Customer Premise Equipment
+            description: Devices located at the customer's premises.
+            color: "#bf7f7f"
+          - name: spine
+            label: Spine Router
+            description: Aggregation router part of a Fabric.
+            color: "#aeeeee"
+          - name: leaf
+            label: Leaf Switch
+            description: Top of Rack part of a Fabric.
+            color: "#e6e6fa"
+          - name: tor
+            label: Tor Switch
+            description: Tor switch part of a Fabric.
+            color: "#e8e7fd"
+          - name: firewall
+            label: Firewall
+            description: Firewall part of a Fabric.
+            color: "#e8e7fb"
+          - name: load_balancer
+            label: Load Balancer
+            description: Load Balancer part of a Fabric.
+            color: "#38e7fb"
+      - name: interface_patterns
+        kind: JSON
+        order_weight: 20
+        optional: false
+    relationships:
+      - name: device_type
+        peer: DcimDeviceType
+        cardinality: one
+        kind: Parent
+        optional: false
+        identifier: device_type
+
+#   --------------------  Topology  Interface Patterns --------------------
+  # - name: Interface
+  #   namespace: Topology
+  #   description: "Interface patterns"
+  #   label: "Interface Patterns"
+  #   default_filter: name__value
+  #   display_labels:
+  #     - name__value
+  #   order_by: [name__value]
+  #   attributes:
+  #     - name: name
+  #       kind: Text
+  #       order_weight: 1
+  #     - name: description
+  #       kind: Text
+  #       order_weight: 2
+  #       optional: true
+  #     - name: management
+  #       kind: Text
+  #       label: Management Interface
+  #       order_weight: 3
+  #     - name: uplink
+  #       kind: List
+  #       label: Uplink Interfaces
+  #       optional: false
+  #       order_weight: 4
+  #     - name: leaf
+  #       kind: List
+  #       label: Leaf Interfaces
+  #       order_weight: 5
+  #       optional: true
+  #     - name: spine
+  #       kind: List
+  #       label: Spine Interfaces
+  #       order_weight: 6
+  #       optional: true
+  #     - name: server
+  #       kind: List
+  #       label: Server Interfaces
+  #       order_weight: 7
+  #       optional: true
+  #   relationships:
+  #     - name: device_type
+  #       peer: DcimDeviceType
+  #       cardinality: one
+  #       kind: Parent
+  #       optional: false
+
+
+#   --------------------  Topology  Deployments --------------------
+  - name: DataCenter
+    namespace: Topology
+    description: "A Topology represents the entire network pod."
+    label: "Data Center Deployment"
+    default_filter: name__value
+    display_labels:
+      - name__value
+    order_by: [name__value]
+    inherit_from:
+      - CoreArtifactTarget
+      - TopologyDeployment
+    attributes:
+      - name: asn
+        kind: Number
+        optional: false
+        order_weight: 1200
+      - name: strategy
+        kind: Dropdown
+        label: Strategy
+        optional: false
+        order_weight: 1500
+        choices:
+          - name: ebgp-ebgp
+            label: ebgp-ebgp
+            color: "#7f7fff"
+          - name: ospf-ebgp
+            label: ospf-ebgp
+            color: "#bf7fbf"
+          - name: isis-ebgp
+            label: isis-ebgp
+            color: "#bf7f7f"
+          - name: ospf-ibgp
+            label: ospf-ibgp
+            color: "#aedcee"
+          - name: isis-ibgp
+            label: isis-ibgp
+            color: "#bf7f3c"
+      - name: customer
+        kind: IPNetwork
+        label: Customer Subnet
+        order_weight: 1700
+      - name: technical
+        kind: IPNetwork
+        label: Technical Subnet
+        order_weight: 1800
+      - name: public
+        kind: IPNetwork
+        optional: true
+        label: Public Subnet
+        order_weight: 1900
+
+
+  - name: ColocationCenter
+    namespace: Topology
+    description: "A Topology represents the Colocation Center."
+    label: "Colocation Center"
+    default_filter: name__value
+    display_labels:
+      - name__value
+    order_by: [name__value]
+    inherit_from:
+      - CoreArtifactTarget
+      - TopologyDeployment
+    attributes:
+      - name: asn
+        kind: Number
+        optional: false
+        order_weight: 1200
+      - name: customer
+        kind: IPNetwork
+        label: Customer Subnet
+        order_weight: 1700
+
+
+#   - name: CampusOffice
+#     namespace: Infra
+#     description: "A Topology represents Campus Office."
+#     label: "Campus Office"
+#     default_filter: name__value
+#     display_labels:
+#       - name__value
+#     order_by: [name__value]
+#     inherit_from:
+#       - CoreArtifactTarget
+#       - InfraTopology
+#     attributes:
+#       - name: size
+#         kind: Dropdown
+#         order_weight: 1300
+#         optional: false
+#         choices:
+#           - name: small
+#             label: Small Fabric
+#             color: "#7f7fff"
+#           - name: medium
+#             label: Medium Fabric
+#             color: "#bf7fbf"
+#           - name: large
+#             label: Large Fabric
+#             color: "#bf7f7f"
+#       - name: customer
+#         kind: IPNetwork
+#         label: Customer Subnet
+#         order_weight: 1700
+#     relationships:
+#       - name: location
+#         peer: LocationMetro
+#         optional: true
+#         cardinality: one
+#         kind: Attribute
+
+#   - name: BranchOffice
+#     namespace: Infra
+#     description: "A Topology represents the BranchOffice"
+#     label: "Branch Office"
+#     default_filter: name__value
+#     display_labels:
+#       - name__value
+#     order_by: [name__value]
+#     inherit_from:
+#       - CoreArtifactTarget
+#       - InfraTopology
+#     attributes:
+#       - name: customer
+#         kind: IPNetwork
+#         label: Customer Subnet
+#         order_weight: 1700
+#     relationships:
+#       - name: location
+#         peer: LocationMetro
+#         optional: true
+#         cardinality: one
+#         kind: Attribute
+
+extensions:
+  nodes:
+    - kind: DcimDeviceType
+      relationships:
+        - name: design_components
+          peer: TopologyDesignElement
+          optional: true
+          cardinality: many
+          kind: Component

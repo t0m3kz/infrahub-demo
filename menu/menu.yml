@@ -34,35 +34,59 @@ spec:
       kind: LocationGeneric
       icon: "mingcute:location-line"
 
-    - namespace: Infra
+    - namespace: Topology
       name: TopologyMenu
       label: Topology Management
       icon: "tabler:topology-star-ring-3"
       children:
         data:
-          - name: DataCenter
-            namespace: Infra
-            label: Data Center
-            kind: InfraDataCenter
-            icon: "carbon:data-center"
+          - namespace: Topology
+            name: DesignMenu
+            label: Designs
+            icon: "carbon:subnet-acl-rules"
+            children:
+              data:
+                - name: Design
+                  namespace: Topology
+                  label: Design Patterns
+                  kind: TopologyDesign
+                  icon: "carbon:data-center"
 
-          - name: ColocationCenter
-            namespace: Infra
-            label: Colocation Center
-            kind: InfraColocationCenter
-            icon: "carbon:data-center"
+                - name: DesignElement
+                  namespace: Topology
+                  label: Design Elements
+                  kind: TopologyDesignElement
+                  icon: "subway:switch"
 
-          - name: CampusOffice
-            namespace: Infra
-            label: Campus Office
-            kind: InfraCampusOffice
-            icon: "solar:buildings-3-linear"
+          - namespace: Topology
+            name: DeploymentMenu
+            label: Topology Deployments
+            icon: "carbon:subnet-acl-rules"
+            children:
+              data:
+                - name: DataCenter
+                  namespace: Topology
+                  label: Data Center
+                  kind: TopologyDataCenter
+                  icon: "carbon:data-center"
 
-          - name: BranchOffice
-            namespace: Infra
-            label: Branch Office
-            kind: InfraBranchOffice
-            icon: "tabler:building"
+                - name: ColocationCenter
+                  namespace: Topology
+                  label: Colocation Center
+                  kind: TopologyColocationCenter
+                  icon: "carbon:data-center"
+
+                - name: CampusOffice
+                  namespace: Topology
+                  label: Campus Office
+                  kind: TopologyCampusOffice
+                  icon: "solar:buildings-3-linear"
+
+                - name: BranchOffice
+                  namespace: Topology
+                  label: Branch Office
+                  kind: TopologyBranchOffice
+                  icon: "tabler:building"
 
     - namespace: Security
       name: SecurityMenu
@@ -71,7 +95,6 @@ spec:
       kind: SecurityGeneric
       children:
         data:
-
           - namespace: Security
             name: FiltersMenu
             label: Filters
@@ -91,7 +114,7 @@ spec:
                 - namespace: Security
                   name: IPAMIPAddress
                   label: "IPAM IP Address"
-                  kind: SecurityIPAddress
+                  kind: SecurityIpamIPAddress
                   icon: "mdi:ip-outline"
                 - namespace: Security
                   name: FQDN
@@ -106,7 +129,7 @@ spec:
                 - namespace: Security
                   name: IPAMIPPrefix
                   label: "IPAM Prefix"
-                  kind: SecurityPrefix
+                  kind: SecurityIpamPrefix
                   icon: "mdi:ip-network-outline"
                 - namespace: Security
                   name: IPRange
@@ -152,105 +175,111 @@ spec:
             kind: SecurityPolicy
             icon: "mdi:domain"
 
-    - namespace: Infra
+    - namespace: Dcim
       name: DeviceManagementMenu
       label: Device Management
       icon: "mdi:server"
       children:
         data:
-          - namespace: Infra
+          - namespace: Dcim
             name: NetworkDeviceMenu
-            label: Network Device
+            label: Network Devices
             icon: "mdi:server"
             children:
               data:
-                - namespace: Infra
-                  name: Switch
-                  label: Switches & Routers
-                  kind: InfraSwitch
+                - namespace: Dcim
+                  name: Device
+                  label: Routers & Switches
+                  kind: DcimDevice
                   icon: "subway:switch"
-                - namespace: Infra
+                - namespace: Dcim
                   name: Firewall
                   label: Firewalls
-                  kind: InfraFirewall
+                  kind: DcimFirewall
                   icon: "clarity:firewall-line"
-                - namespace: Infra
-                  name: Loadbalancer
-                  label: Load Balancers
-                  kind: InfraLoadbalancer
-                  icon: "carbon:load-balancer-classic"
-                - namespace: Infra
-                  name: Console
-                  label: Console Servers
-                  kind: InfraConsole
-                  icon: "mdi:console-line"
-          - namespace: Infra
-            name: ServerMenu
-            label: Servers
-            icon: "mdi:server"
-            children:
-              data:
-                - namespace: Infra
-                  name: NtpServer
-                  label: NTP Servers
-                  kind: InfraNtpServer
-                  icon: "iconoir:time-zone"
-                - namespace: Infra
-                  name: DnsServer
-                  label: DNS Servers
-                  kind: InfraDnsServer
-                  icon: "mdi:dns"
-                - namespace: Infra
-                  name: DhcpServer
-                  label: DHCP Servers
-                  kind: InfraDhcpServer
-                  icon: "eos-icons:ip"
-                - namespace: Infra
-                  name: CollectorServer
-                  label: Collector Servers
-                  kind: InfraCollectorServer
-                  icon: "mdi:server-network"
+    #             - namespace: Infra
+    #               name: Loadbalancer
+    #               label: Load Balancers
+    #               kind: InfraLoadbalancer
+    #               icon: "carbon:load-balancer-classic"
+    #             - namespace: Infra
+    #               name: Console
+    #               label: Console Servers
+    #               kind: InfraConsole
+    #               icon: "mdi:console-line"
+    #       - namespace: Infra
+    #         name: ServerMenu
+    #         label: Servers
+    #         icon: "mdi:server"
+    #         children:
+    #           data:
+    #             - namespace: Infra
+    #               name: NtpServer
+    #               label: NTP Servers
+    #               kind: InfraNtpServer
+    #               icon: "iconoir:time-zone"
+    #             - namespace: Infra
+    #               name: DnsServer
+    #               label: DNS Servers
+    #               kind: InfraDnsServer
+    #               icon: "mdi:dns"
+    #             - namespace: Infra
+    #               name: DhcpServer
+    #               label: DHCP Servers
+    #               kind: InfraDhcpServer
+    #               icon: "eos-icons:ip"
+    #             - namespace: Infra
+    #               name: CollectorServer
+    #               label: Collector Servers
+    #               kind: InfraCollectorServer
+    #               icon: "mdi:server-network"
 
-          - namespace: Infra
-            name: Device
+          - namespace: Dcim
+            name: GenericDevice
             label: All Devices
-            kind: InfraDevice
+            kind: DcimGenericDevice
             icon: "mdi:server"
 
           - name: Interface
-            namespace: Infra
+            namespace: Dcim
             label: "All Interfaces"
             icon: "mdi:ethernet"
-            kind: InfraInterface
+            kind: DcimInterface
 
-          - namespace: Infra
-            name: MlagMenu
-            label: Link Aggregation
-            icon: "eos-icons:cluster-management"
-            children:
-              data:
-                - name: MlagDomain
-                  namespace: Infra
-                  label: "MLAG Domains"
-                  icon: "eos-icons:cluster-management"
-                  kind: InfraMlagDomain
+          - name: SFP
+            namespace: Dcim
+            label: "All SFPs"
+            icon: "mdi:gpu"
+            kind: DcimSFP
 
-                - name: MlagInterface
-                  namespace: Infra
-                  label: "MLAG Interfaces"
-                  icon: "mdi:ethernet"
-                  kind: InfraMlagInterface
+    #       - namespace: Infra
+    #         name: MlagMenu
+    #         label: Link Aggregation
+    #         icon: "eos-icons:cluster-management"
+    #         children:
+    #           data:
+    #             - name: MlagDomain
+    #               namespace: Infra
+    #               label: "MLAG Domains"
+    #               icon: "eos-icons:cluster-management"
+    #               kind: InfraMlagDomain
 
-          - namespace: Infra
+    #             - name: MlagInterface
+    #               namespace: Infra
+    #               label: "MLAG Interfaces"
+    #               icon: "mdi:ethernet"
+    #               kind: InfraMlagInterface
+
+          - namespace: Dcim
             name: Platform
             label: Platform
-            kind: InfraPlatform
+            kind: DcimPlatform
             icon: "mdi:application-cog-outline"
 
-          - namespace: Infra
+          - namespace: Dcim
             name: DeviceType
             label: Device Type
-            kind: InfraDeviceType
+            kind: DcimDeviceType
             icon: "mdi:application-settings-outline"
 
     - namespace: Infra
@@ -260,62 +289,62 @@ spec:
       children:
         data:
           - name: Circuit
-            namespace: Infra
+            namespace: Dcim
             label: "Circuit"
             icon: "mdi:cable-data"
-            kind: InfraCircuit
+            kind: DcimCircuit
 
-    - namespace: Infra
-      name: NetworkMenu
-      label: Network Segment
-      icon: "mdi:lan"
-      children:
-        data:
-          - name: VLAN
-            namespace: Infra
-            label: "VLAN"
-            icon: "mdi:lan-pending"
-            kind: InfraVLAN
-          - name: SSID
-            namespace: Infra
-            label: "SSID"
-            icon: "mdi:wireless"
-            kind: InfraSSID
+    # - namespace: Infra
+    #   name: NetworkMenu
+    #   label: Network Segment
+    #   icon: "mdi:lan"
+    #   children:
+    #     data:
+    #       - name: VLAN
+    #         namespace: Infra
+    #         label: "VLAN"
+    #         icon: "mdi:lan-pending"
+    #         kind: InfraVLAN
+    #       - name: SSID
+    #         namespace: Infra
+    #         label: "SSID"
+    #         icon: "mdi:wireless"
+    #         kind: InfraSSID
 
-    - namespace: Infra
-      name: RoutingPeeringMenu
+    - namespace: Routing
+      name: Menu
       label: Routing & Peering
       icon: "mdi:router"
       children:
         data:
           - name: VRF
-            namespace: Infra
+            namespace: Ipam
             label: "VRF"
             icon: "mdi:router"
-            kind: InfraVRF
+            kind: IpamVRF
           - name: BGP
-            namespace: Infra
+            namespace: Routing
             label: "BGP"
             icon: "mdi:router"
             children:
               data:
                 - name: AutonomousSystem
-                  namespace: Infra
+                  namespace: Routing
                   label: "Autonomous System"
                   icon: "mdi:bank-circle-outline"
-                  kind: InfraAutonomousSystem
+                  kind: RoutingAutonomousSystem
 
                 - name: BGPSession
-                  namespace: Infra
+                  namespace: Routing
                   label: "BGP Session"
                   icon: "mdi:router"
-                  kind: InfraBGPSession
+                  kind: RoutingBGPSession
 
                 - name: BGPPeerGroup
                   namespace: Infra
                   label: "BGP Peer Group"
                   icon: "mdi:view-grid-plus-outline"
-                  kind: InfraBGPPeerGroup
+                  kind: RoutingBGPPeerGroup
 
     - namespace: Infra
       name: Service
