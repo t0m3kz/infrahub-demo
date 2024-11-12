@@ -1,14 +1,11 @@
 """Bootstrap script."""
 
 import logging
-import json
 from infrahub_sdk import InfrahubClient
+from infrahub_sdk.exceptions import GraphQLError, ValidationError
 from utils import create_objects
 
-from data_design import (
-    DESIGN_ELEMENTS,
-    DESIGN,
-)
+from data_design import DESIGN_ELEMENTS, DESIGN, DC_DEPLOYMENT
 
 
 async def run(client: InfrahubClient, log: logging.Logger, branch: str) -> None:
@@ -68,3 +65,23 @@ async def run(client: InfrahubClient, log: logging.Logger, branch: str) -> None:
             for item in DESIGN
         ],
     )
+
+    site = await (client.get(
+        kind="LocationMetro", name__value=DC_DEPLOYMENT.get("location"), branch=branch
+    ))
+
+    # log.info("Create DC Topology Deployment")
+    # let'ts update location
+    DC_DEPLOYMENT.update(
+        {
+            "location": site.id,
+        }
+    )
+    log.info(f"Creating DC Topology Deployment for {DC_DEPLOYMENT.get('name')}")
+    try:
+        deployment = await client.create(kind="TopologyDataCenter", data=DC_DEPLOYMENT, branch=branch)
+        await deployment.save(allow_upsert=True)
+    except (ValidationError, GraphQLError) as e:
+        log.error(e)
+
+    log.info(f"- Created DC Topology Deployment for {DC_DEPLOYMENT.get('name')}")

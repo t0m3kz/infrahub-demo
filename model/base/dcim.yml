@@ -92,7 +92,7 @@ generics:
         order_weight: 1200
       - name: location
         label: Location
-        peer: LocationHosting
+        peer: LocationGeneric
         optional: false
         cardinality: one
         kind: Attribute

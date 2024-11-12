@@ -278,11 +278,11 @@ async def devices(client: InfrahubClient, log: logging.Logger, branch: str) -> N
                     "primary_address": client.store.get(
                         kind="IpamIPAddress", key=item[6]
                     ),
-                    # "policy": (
-                    #     client.store.get(kind="SecurityPolicy", key=item[7]).id
-                    #     if item[7]
-                    #     else None
-                    # ),
+                    "policy": (
+                        client.store.get(kind="SecurityPolicy", key=item[7]).id
+                        if item[7]
+                        else None
+                    ),
                 },
                 "store_key": item[0],
             }
