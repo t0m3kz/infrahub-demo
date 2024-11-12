@@ -11,7 +11,7 @@ generics:
     include_in_menu: true
     hierarchical: true
     human_friendly_id:
-      - shortname__value
+      - name__value
     order_by:
       - name__value
     display_labels:

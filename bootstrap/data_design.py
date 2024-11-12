@@ -51,7 +51,7 @@ DESIGN_ELEMENTS = [
     ),
     (
         "CISCO S 8 LEAFS N9K-C9336C-FX2",
-        "4 Cisco C9336C-FX2 leafs",
+        "8 Cisco C9336C-FX2 leafs",
         8,
         "leaf",
         "N9K-C9336C-FX2",
@@ -287,7 +287,7 @@ DESIGN_ELEMENTS = [
         ],
     ),
     (
-        "JUNIPER 2 FIREWALLSSRX-1500",
+        "JUNIPER 2 FIREWALLS SRX-1500",
         "2 Juniper SRX-1500 firewalls",
         2,
         "firewall",
@@ -306,8 +306,8 @@ DESIGN = [
     # name, description, type, elements
     (
         "CISCO S",
-        "Cisco S 2 spines, 4 leafs, 2 firewalls",
-        "dc",
+        "Cisco S 2 spines, 8 leafs, 2 firewalls",
+        "DC",
         [
             "CISCO S 2 SPINES C9336C-FX2",
             "CISCO S 8 LEAFS N9K-C9336C-FX2",
@@ -317,7 +317,7 @@ DESIGN = [
     (
         "CISCO L",
         "Cisco L 4 spines, 16 leafs, 2 firewalls",
-        "dc",
+        "DC",
         [
             "CISCO M 4 SPINES N9K-C9316D-GX",
             "CISCO M 16 LEAFS N9K-C93180YC-FX3",
@@ -327,7 +327,7 @@ DESIGN = [
     (
         "ARISTA S",
         "Arista S 2 spines, 4 leafs, 2 firewalls",
-        "dc",
+        "DC",
         [
             "ARISTA S 2 SPINES DCS-7280DR3-24-F",
             "ARISTA S 6 LEAFS CCS-720DP-48S-2F",
@@ -335,3 +335,14 @@ DESIGN = [
         ],
     ),
 ]
+
+DC_DEPLOYMENT = {
+    "name": "DC-2",
+    "location": "Katowice",
+    "description": "Katowice Data Center",
+    "asn": 65005,
+    "strategy": "ebgp-ebgp",
+    "customer": "1.1.0.0/24",
+    "technical": "1.2.0.0/24",
+    "design": "CISCO S",
+}

@@ -19,7 +19,7 @@ generics:
         order_weight: 1
         description: "3 letter deployment code"
         min_length: 3
-        max_length: 3
+        max_length: 4
       - name: description
         kind: Text
         order_weight: 2
@@ -35,7 +35,7 @@ generics:
         peer: TopologyDesign
         optional: false
         cardinality: one
-        kind: Attribute
+        kind: Parent
         order_weight: 4
 
 
@@ -64,19 +64,19 @@ nodes:
         optional: true
         order_weight: 1400
         choices:
-          - name: dc
+          - name: DC
             label: Data Center
             description: Data Center Fabric.
             color: "#7f7fff"
-          - name: pop
+          - name: POP
             label: Colocation Center
             description: Colocation Center network.
             color: "#e8e7fd"
-          - name: campus
+          - name: CAMPUS
             label: Campus Office
             description: Campus Office networks.
             color: "#bf7fbf"
-          - name: office
+          - name: OFFICE
             label: Branch Office
             description: Branch Office networks.
             color: "#bf7f7f"
@@ -86,6 +86,10 @@ nodes:
         optional: true
         cardinality: many
         kind: Component
+      - name: deployments
+        peer: TopologyDeployment
+        kind: Component
+        cardinality: many
 
   - name: DesignElement
     namespace: Topology
@@ -157,54 +161,6 @@ nodes:
         optional: false
         identifier: device_type
 
-#   --------------------  Topology  Interface Patterns --------------------
-  # - name: Interface
-  #   namespace: Topology
-  #   description: "Interface patterns"
-  #   label: "Interface Patterns"
-  #   default_filter: name__value
-  #   display_labels:
-  #     - name__value
-  #   order_by: [name__value]
-  #   attributes:
-  #     - name: name
-  #       kind: Text
-  #       order_weight: 1
-  #     - name: description
-  #       kind: Text
-  #       order_weight: 2
-  #       optional: true
-  #     - name: management
-  #       kind: Text
-  #       label: Management Interface
-  #       order_weight: 3
-  #     - name: uplink
-  #       kind: List
-  #       label: Uplink Interfaces
-  #       optional: false
-  #       order_weight: 4
-  #     - name: leaf
-  #       kind: List
-  #       label: Leaf Interfaces
-  #       order_weight: 5
-  #       optional: true
-  #     - name: spine
-  #       kind: List
-  #       label: Spine Interfaces
-  #       order_weight: 6
-  #       optional: true
-  #     - name: server
-  #       kind: List
-  #       label: Server Interfaces
-  #       order_weight: 7
-  #       optional: true
-  #   relationships:
-  #     - name: device_type
-  #       peer: DcimDeviceType
-  #       cardinality: one
-  #       kind: Parent
-  #       optional: false
-
 
 #   --------------------  Topology  Deployments --------------------
   - name: DataCenter
@@ -244,6 +200,10 @@ nodes:
           - name: isis-ibgp
             label: isis-ibgp
             color: "#bf7f3c"
+      - name: management
+        kind: IPNetwork
+        label: Management Subnet
+        order_weight: 1700
       - name: customer
         kind: IPNetwork
         label: Customer Subnet
