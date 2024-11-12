@@ -559,13 +559,13 @@ all = ["flake8 (>=7.1.1)", "mypy (>=1.11.2)", "pytest (>=8.3.2)", "ruff (>=0.6.2
 
 [[package]]
 name = "infrahub-sdk"
-version = "1.0.0"
+version = "1.0.1"
 description = "Python Client to interact with Infrahub"
 optional = false
 python-versions = "<4.0,>=3.9"
 files = [
-    {file = "infrahub_sdk-1.0.0-py3-none-any.whl", hash = "sha256:70eb8b5ef5839fed0faa8ee0f3aae074a616ac9311eb5bfe9f335cb775aa7856"},
-    {file = "infrahub_sdk-1.0.0.tar.gz", hash = "sha256:8b2ca6fe04ecc5c0364c444dcc94647eef3e261629b49430a32edc3d07620149"},
+    {file = "infrahub_sdk-1.0.1-py3-none-any.whl", hash = "sha256:64b4ffa80d96820f4ade08cbda7ada5ff7d09bec3e332c84d71e1db9e9abfa6f"},
+    {file = "infrahub_sdk-1.0.1.tar.gz", hash = "sha256:73a1e7513e5a57cd2d5ed81f80a0f5940d66e82b028ab7e28f4509fe542e3b27"},
 ]
 
 [package.dependencies]
@@ -1514,8 +1514,8 @@ astroid = ">=3.3.4,<=3.4.0-dev0"
 colorama = {version = ">=0.4.5", markers = "sys_platform == \"win32\""}
 dill = [
     {version = ">=0.2", markers = "python_version < \"3.11\""},
-    {version = ">=0.3.6", markers = "python_version >= \"3.11\" and python_version < \"3.12\""},
     {version = ">=0.3.7", markers = "python_version >= \"3.12\""},
+    {version = ">=0.3.6", markers = "python_version >= \"3.11\" and python_version < \"3.12\""},
 ]
 isort = ">=4.2.5,<5.13.0 || >5.13.0,<6"
 mccabe = ">=0.6,<0.8"
