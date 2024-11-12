@@ -8,11 +8,11 @@ jinja2_transforms:
 artifact_definitions:
   - name: "Juniper firewall config"
     artifact_name: "juniper-firewall-config"
-    parameters:
-      device: "name__value"
     content_type: "text/plain"
     targets: "juniper_firewall_devices"
     transformation: "juniper_firewall_config"
+    parameters:
+      device: "name__value"
 
 check_definitions:
   - name: validate_firewall

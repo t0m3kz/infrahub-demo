@@ -311,7 +311,7 @@ DESIGN = [
         [
             "CISCO S 2 SPINES C9336C-FX2",
             "CISCO S 8 LEAFS N9K-C9336C-FX2",
-            "JUNIPER 2 FIREWALLSSRX-1500",
+            "JUNIPER 2 FIREWALLS SRX-1500",
         ],
     ),
     (
@@ -321,7 +321,7 @@ DESIGN = [
         [
             "CISCO M 4 SPINES N9K-C9316D-GX",
             "CISCO M 16 LEAFS N9K-C93180YC-FX3",
-            "JUNIPER 2 FIREWALLSSRX-1500",
+            "JUNIPER 2 FIREWALLS SRX-1500",
         ],
     ),
     (
@@ -331,7 +331,7 @@ DESIGN = [
         [
             "ARISTA S 2 SPINES DCS-7280DR3-24-F",
             "ARISTA S 6 LEAFS CCS-720DP-48S-2F",
-            "JUNIPER 2 FIREWALLSSRX-1500",
+            "JUNIPER 2 FIREWALLS SRX-1500",
         ],
     ),
 ]
@@ -341,6 +341,7 @@ DC_DEPLOYMENT = {
     "location": "Katowice",
     "description": "Katowice Data Center",
     "asn": 65005,
+    "management": "10.0.0.0/24",
     "strategy": "ebgp-ebgp",
     "customer": "1.1.0.0/24",
     "technical": "1.2.0.0/24",
