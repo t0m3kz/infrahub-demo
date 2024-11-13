@@ -221,6 +221,7 @@ GROUPS = (
     ("core_interfaces", "Core Interface"),
     ("all_topologies", "All Topologies"),
     ("provisioning_circuits", "Provisioning Circuits"),
+    ("firewall_devices", "Firewall Devices"),
 )
 
 BGP_PEER_GROUPS = (

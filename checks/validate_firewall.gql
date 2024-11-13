@@ -1,11 +1,11 @@
 query validate_firewall($device: String!) {
-  DcimGenericDevice(name__value: $device) {
+  InfraDevice(name__value: $device) {
     edges {
       node {
         name {
           value
         }
-        ... on DcimFirewall {
+        ... on InfraFirewall {
           policy {
             node {
               ... on SecurityPolicy {
@@ -106,10 +106,10 @@ query validate_firewall($device: String!) {
               name {
                 value
               }
-              ... on DcimInterfaceL3 {
-                role{
-                  value
-                }
+              role {
+                value
+              }
+              ... on InfraInterfaceL3 {
                 security_zone {
                   node {
                     name {
@@ -126,6 +126,88 @@ query validate_firewall($device: String!) {
                     }
                   }
                 }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+  SecurityGenericAddress {
+    edges {
+      node {
+        __typename
+        name {
+          value
+        }
+        ... on SecurityFQDN {
+          fqdn {
+            value
+          }
+        }
+        ... on SecurityIPAddress {
+          address {
+            value
+          }
+        }
+        ... on SecurityPrefix {
+          prefix {
+            value
+          }
+        }
+      }
+    }
+  }
+  SecurityGenericAddressGroup {
+    edges {
+      node {
+        name {
+          value
+        }
+        ... on SecurityAddressGroup {
+          addresses {
+            edges {
+              node {
+                name {
+                  value
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+  SecurityService {
+    edges {
+      node {
+        name {
+          value
+        }
+        ip_protocol {
+          node {
+            name {
+              value
+            }
+          }
+        }
+        port {
+          value
+        }
+      }
+    }
+  }
+  SecurityServiceGroup {
+    edges {
+      node {
+        name {
+          value
+        }
+        services {
+          edges {
+            node {
+              name {
+                value
               }
             }
           }
