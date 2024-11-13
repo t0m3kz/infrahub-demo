@@ -60,3 +60,17 @@ infrahubctl render firewall_config device=dc1-fra-fw1 --branch my-branch
 You can try to manually modify data and test is configuration was updated.
 
 
+or you can use the scripts:
+
+This script will load all schemas and boostrtrap data into main branch and add repository.
+
+```bash
+./scripts/bootstrap.sh
+```
+
+Demos (each will be in separated branch) can be run using scripts:
+
+```bash
+./scripts/demo.sh firewall or router or design
+```
+
