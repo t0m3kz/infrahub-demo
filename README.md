@@ -73,4 +73,3 @@ Demos (each will be in separated branch) can be run using scripts:
 ```bash
 ./scripts/demo.sh firewall or router or design
 ```
-
