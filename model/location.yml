@@ -1,0 +1,280 @@
+# yaml-language-server: $schema=https://schema.infrahub.app/infrahub/schema/latest.json
+---
+version: "1.0"
+generics:
+  - name: Generic
+    namespace: Location
+    description: "Generic Location."
+    label: "Locations"
+    icon: "mingcute:location-line"
+    include_in_menu: true
+    hierarchical: true
+    order_by:
+      - name__value
+    display_labels:
+      - name__value
+    attributes:
+      - name: name
+        kind: Text
+        order_weight: 1
+      - name: description
+        kind: Text
+        optional: true
+    relationships:
+      - name: tags
+        peer: BuiltinTag
+        kind: Attribute
+        optional: true
+        cardinality: many
+        order_weight: 2000
+
+  - name: ParameterGeneric
+    namespace: Location
+    description: "Common parameters for Region, Country, City and Site."
+    include_in_menu: false
+    attributes:
+      - name: shortname
+        kind: Text
+        order_weight: 2
+        optional: false
+        unique: true
+    relationships:
+      - name: ntp_servers
+        label: "NTP Servers"
+        peer: InfraNtpServer
+        optional: true
+        cardinality: many
+        kind: Component
+        order_weight: 100
+      - name: dhcp_servers
+        label: "DHCP Servers"
+        peer: InfraDhcpServer
+        optional: true
+        cardinality: many
+        kind: Component
+        order_weight: 101
+      - name: dns_servers
+        label: "DNS Servers"
+        peer: InfraDnsServer
+        optional: true
+        cardinality: many
+        kind: Component
+        order_weight: 102
+      - name: collector_server
+        label: "Collector Server"
+        peer: InfraCollectorServer
+        optional: true
+        cardinality: many
+        kind: Component
+        order_weight: 103
+
+nodes:
+  # --------------------  Locations  --------------------
+  - name: Region
+    namespace: Location
+    inherit_from:
+      - "LocationGeneric"
+      - "LocationParameterGeneric"
+    uniqueness_constraints:
+      - ["name__value"]
+    label: Region
+    parent: ""
+    children: "LocationCountry"
+    icon: "jam:world"
+    include_in_menu: false
+  - name: Country
+    namespace: Location
+    inherit_from:
+      - "LocationGeneric"
+      - "LocationParameterGeneric"
+    uniqueness_constraints:
+      - ["name__value"]
+    label: Country
+    parent: "LocationRegion"
+    children: "LocationCity"
+    icon: "gis:search-country"
+    include_in_menu: false
+  - name: City
+    namespace: Location
+    inherit_from:
+      - "LocationGeneric"
+      - "LocationParameterGeneric"
+    label: City
+    parent: "LocationCountry"
+    children: "LocationSite"
+    uniqueness_constraints:
+      - ["name__value"]
+    icon: "healthicons:city"
+    include_in_menu: false
+  - name: Site
+    namespace: Location
+    inherit_from:
+      - "LocationGeneric"
+      - "LocationParameterGeneric"
+    include_in_menu: false
+    icon: "ri:building-line"
+    label: Site
+    parent: "LocationCity"
+    children: "LocationRack"
+    default_filter: name__value
+    uniqueness_constraints:
+      - ["name__value"]
+    attributes:
+      - name: facility_id
+        kind: Text
+        unique: false
+        optional: True
+        order_weight: 1150
+      - name: gps_coordinates
+        label: GPS Coordinates
+        kind: Text
+        unique: false
+        optional: True
+        order_weight: 1400
+      - name: physical_address
+        kind: Text
+        unique: false
+        optional: True
+        order_weight: 1500
+      - name: status
+        kind: Dropdown
+        choices:
+          - name: provisioning
+            label: Provisioning
+            description: "Site is being provisioned."
+            color: "#A9DFBF"  # light pastel green
+          - name: active
+            label: Active
+            description: "Site is active and operational."
+            color: "#A9CCE3"  # pastel blue
+          - name: maintenance
+            label: Maintenance
+            description: "Site is under maintenance."
+            color: "#FFF2CC"  # pastel yellow
+          - name: disabled
+            label: Disabled
+            description: "Site has been disabled."
+            color: "#D3D3D3"  # light grey
+        order_weight: 1200
+      - name: site_type
+        kind: Dropdown
+        choices:
+          - name: dc
+            label: DC
+            description: "External Datacenter"
+            color: "#E6E6FA"  # lavender
+          - name: pop
+            label: POP
+            description: "Colocation Datacenter"
+            color:  "#A9DFBF"  # light pastel green
+          - name: campus
+            label: Campus
+            description: "Campus Office"
+            color: "#D3D3D3"  # light grey
+          - name: office
+            label: Office
+            description: " Branch Office"
+            color:  "#A9CCE3"  # pastel blue
+        order_weight: 1300
+    relationships:
+      - name: owner
+        peer: OrganizationGeneric
+        identifier: owner__locations
+        optional: true
+        cardinality: one
+        order_weight: 1800
+      - name: provider
+        peer: OrganizationProvider
+        identifier: provider__locations
+        optional: true
+        cardinality: one
+        order_weight: 1900
+
+  - name: Rack
+    namespace: Location
+    description: "A Rack represents a physical two- or four-post equipment rack in which devices can be installed"
+    label: "Rack"
+    inherit_from:
+      - "LocationGeneric"
+    parent: LocationSite
+    children: ""
+    default_filter: name__value
+    icon: clarity:rack-server-solid
+    include_in_menu: false
+    display_labels:
+      - name__value
+    uniqueness_constraints:
+      - ["room__value", "name__value"]
+    attributes:
+      - name: room
+        label: Room
+        kind: Text
+      - name: height
+        kind: Text
+      - name: facility_id
+        label: Facility ID
+        kind: Text
+        optional: true
+      - name: serial_number
+        label: Serial Number
+        kind: Text
+        optional: true
+      - name: asset_tag
+        label: Asset Tag
+        kind: Text
+        optional: true
+      - name: status
+        kind: Dropdown
+        choices:
+          - name: active
+            label: Active
+            description: "Functional and ready for production"
+            color: "#009933"
+          - name: planned
+            label: Planned
+            description: "Not physically present yet"
+            color: "#cc66ff"
+        default_value: "active"
+      - name: role
+        kind: Dropdown
+        choices:
+          - name: compute
+            description: "Rack mainly composed of compute"
+            color: "#0099ff"
+          - name: storage
+            description: "Rack mainly composed of Storage devices"
+            color: "#993399"
+          - name: networking
+            description: "Rack mainly composed of Network devices"
+            color: "#ff6600"
+        optional: true
+
+
+extensions:
+  nodes:
+    # Organization Extensions
+    - kind: OrganizationProvider
+      relationships:
+        - name: locations
+          peer: LocationSite
+          label: "Provided Locations (Sites)"
+          identifier: provider__locations
+          cardinality: many
+          optional: true
+          order_weight: 2100
+    - kind: OrganizationGeneric
+      relationships:
+        - name: locations_owned
+          label: "Owned Locations (Sites)"
+          identifier: owner__locations
+          cardinality: many
+          optional: true
+          peer: LocationSite
+          order_weight: 2100
+    - kind: LocationSite
+      relationships:
+        - name: racks
+          peer: LocationRack
+          optional: true
+          cardinality: many
+          kind: Generic

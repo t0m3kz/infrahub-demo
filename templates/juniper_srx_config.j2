@@ -1,5 +1,5 @@
 {% set ns = namespace(management_interface = none, security_zones={}, zone_pairs={}) %}
-{% for intf in data.DcimGenericDevice.edges[0].node.interfaces.edges %}
+{% for intf in data.InfraDevice.edges[0].node.interfaces.edges %}
 {%   if "role" in intf.node and intf.node.role.value == "management" %}
 {%     set ns.management_interface = intf.node.name.value %}
 {%   endif %}
@@ -11,15 +11,13 @@
 {%     endif %}
 {%   endif %}
 {% endfor %}
-{% if data.DcimGenericDevice.edges[0].node.policy.node is not none %}
-{% for rule in data.DcimGenericDevice.edges[0].node.policy.node.rules.edges %}
+{% for rule in data.InfraDevice.edges[0].node.policy.node.rules.edges %}
 {%   if (rule.node.source_zone.node.name.value, rule.node.destination_zone.node.name.value) in ns.zone_pairs %}
 {%     set _ = ns.zone_pairs[(rule.node.source_zone.node.name.value, rule.node.destination_zone.node.name.value)].append(rule) %}
 {%   else %}
 {%     set _ = ns.zone_pairs.update({(rule.node.source_zone.node.name.value, rule.node.destination_zone.node.name.value): [rule]})  %}
 {%   endif %}
 {% endfor %}
-{% endif %}
 system {
     root-authentication {
         encrypted-password "YOUR_ROOT_PASSWORD";
@@ -47,7 +45,7 @@ system {
     }
 }
 interfaces {
-{%- for interface in data.DcimGenericDevice.edges[0].node.interfaces.edges %}
+{%- for interface in data.InfraDevice.edges[0].node.interfaces.edges %}
     {{ interface.node.name.value }} {
         unit 0 {
             family inet {
@@ -85,7 +83,7 @@ security {
 {% endfor %}
     }
     address-book global {
-        {% for address in data.SecurityGenericAddress.edges|sort(attribute='node.name.value') %}
+        {% for address in data.SecurityGenericAddress.edges %}
         {% if address.node.__typename == "SecurityPrefix" %}
         address {{ address.node.name.value }} {{ address.node.prefix.value }};
         {% elif address.node.__typename == "SecurityIPAddress" %}

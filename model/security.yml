@@ -57,6 +57,8 @@ generics:
     hierarchical: true
     display_labels:
       - name__value
+    human_friendly_id:
+      - name__value
     attributes:
       - name: name
         label: Name
@@ -98,12 +100,10 @@ nodes:
   - name: Zone
     namespace: Security
     menu_placement: SecurityPolicy
-    human_friendly_id:
-      - name__value
+    default_filter: name__value
     display_labels:
       - name__value
     include_in_menu: true
-    icon: "game-icons:fire-zone"
     description: "Security zones"
     label: "Security zone"
     attributes:
@@ -116,8 +116,7 @@ nodes:
         label: Interfaces
         kind: Attribute
         optional: true
-        peer: DcimInterfaceL3
-        cardinality: many
+        peer: InfraInterfaceL3
   - name: IPAMIPAddress
     namespace: Security
     menu_placement: SecurityPolicy
@@ -125,8 +124,7 @@ nodes:
     icon: "mdi:ip-outline"
     description: "Infrahub IPv4/6 address"
     label: "IPAM IP Address"
-    human_friendly_id:
-      - name__value
+    default_filter: name__value
     inherit_from:
       - SecurityGenericAddress
     attributes:
@@ -146,8 +144,7 @@ nodes:
     icon: "mdi:ip-network-outline"
     description: "Infrahub IPv4/6 prefix"
     label: "IPAM IP Prefix"
-    human_friendly_id:
-      - name__value
+    default_filter: name__value
     inherit_from:
       - SecurityGenericAddress
     attributes:
@@ -156,17 +153,15 @@ nodes:
         optional: true
     relationships:
       - name: ip_prefix
-        peer: IpamPrefix
+        peer: IpamIPPrefix
         cardinality: one
         kind: Attribute
         optional: false
   - name: IPAddress
     namespace: Security
-    menu_placement: SecurityPolicy
     include_in_menu: true
     description: "IPv4/6 address"
-    human_friendly_id:
-      - name__value
+    default_filter: name__value
     label: "IP Address"
     icon: "mdi:ip-outline"
     inherit_from:
@@ -189,8 +184,7 @@ nodes:
     icon: "mdi:ip-network-outline"
     description: "IPv4/6 prefix"
     label: "Prefix"
-    human_friendly_id:
-      - name__value
+    default_filter: name__value
     inherit_from:
       - "SecurityGenericAddress"
     order_by:
@@ -213,8 +207,7 @@ nodes:
     icon: "mdi:ip-outline"
     description: "IPv4/6 Range"
     label: "IP Range"
-    human_friendly_id:
-      - name__value
+    default_filter: name__value
     display_labels:
       - name__value
     inherit_from:
@@ -237,8 +230,7 @@ nodes:
     icon: "eos-icons:dns"
     menu_placement: SecurityPolicy
     label: "FQDN"
-    human_friendly_id:
-      - name__value
+    default_filter: name__value
     display_labels:
       - name__value
     inherit_from:
@@ -260,14 +252,12 @@ nodes:
     icon: "material-symbols:menu-book-outline-rounded"
     description: "Group of addresses"
     label: Address Group
-    human_friendly_id:
-      - name__value
+    default_filter: name__value
     parent: SecurityAddressGroup
     display_labels:
       - name__value
     inherit_from:
       - SecurityGenericAddressGroup
-
   - name: IPProtocol
     namespace: Security
     menu_placement: SecurityPolicy
@@ -275,19 +265,17 @@ nodes:
     include_in_menu: true
     description: "IP protocol"
     label: IP Protocols
-    human_friendly_id:
-      - name__value
+    default_filter: name__value
     display_labels:
-      - name__value
+      - protocol__value
     order_by:
-      - name__value
+      - protocol__value
     inherit_from:
       - SecurityGenericService
     attributes:
       - name: protocol
         kind: Number
         optional: true
-
   - name: Service
     namespace: Security
     menu_placement: SecurityPolicy
@@ -295,8 +283,7 @@ nodes:
     icon: "eos-icons:application-outlined"
     description: "Service"
     label: Service
-    human_friendly_id:
-      - name__value
+    default_filter: name__value
     display_labels:
       - name__value
     order_by:
@@ -312,16 +299,13 @@ nodes:
         optional: true
         cardinality: one
         kind: Attribute
-
   - name: ServiceRange
     namespace: Security
-    menu_placement: SecurityPolicy
     include_in_menu: true
     icon: "eos-icons:application-outlined"
     description: "Service range"
     label: Service range
-    human_friendly_id:
-      - name__value
+    default_filter: name__value
     display_labels:
       - name__value
     order_by:
@@ -341,7 +325,6 @@ nodes:
         optional: false
         cardinality: one
         kind: Attribute
-
   - name: ServiceGroup
     namespace: Security
     menu_placement: SecurityPolicy
@@ -349,8 +332,7 @@ nodes:
     icon: "material-symbols:menu-book-outline-rounded"
     label: Service group
     description: "Group of services"
-    human_friendly_id:
-      - name__value
+    default_filter: name__value
     display_labels:
       - name__value
     order_by:
@@ -360,11 +342,12 @@ nodes:
   - name: Policy
     namespace: Security
     label: "Security Policy"
-    human_friendly_id:
-      - name__value
+    default_filter: name__value
     display_labels:
       - name__value
     order_by:
+      - name__value
+    human_friendly_id:
       - name__value
     attributes:
       - name: name
@@ -380,21 +363,10 @@ nodes:
         peer: SecurityPolicyRule
         cardinality: many
         kind: Component
-      - name: location_target
-        peer: LocationGeneric
-        cardinality: one
-        optional: true
-        kind: Attribute
-      - name: device_target
-        peer: DcimFirewall
-        cardinality: one
-        optional: true
-        kind: Attribute
   - name: PolicyRule
     namespace: Security
     menu_placement: SecurityPolicy
     include_in_menu: true
-    icon: "material-symbols:policy"
     label: Policy rule
     description: "Policy rule"
     order_by:
@@ -404,10 +376,7 @@ nodes:
     uniqueness_constraints:
       - [index__value, source_zone, destination_zone, policy]
     human_friendly_id:
-      - index__value
-      - source_zone__name__value
-      - destination_zone__name__value
-      - policy__name__value
+      -  name__value
     attributes:
       - name: index
         label: Index
@@ -498,36 +467,6 @@ nodes:
         kind: Attribute
         cardinality: many
         identifier: policy_rule__destination_service_group
-  - name: Firewall
-    namespace: Dcim
-    inherit_from:
-      - DcimGenericDevice
-      - CoreArtifactTarget
-      - SecurityPolicyAssignment
-    icon: "mdi:firewall"
-    include_in_menu: true
-    human_friendly_id:
-      - name__value
-    menu_placement: "DcimGenericDevice"
-    attributes:
-      - name: role
-        kind: Dropdown
-        optional: true
-        choices:
-          - name: edge_firewall
-            label: Edge firewall
-            description: "Security boundary with external network"
-            color: "#6a5acd"
-          - name: customer_firewall
-            label: Customer firewall
-            description: "Security boundary with internal network"
-            color: "#6c5abd"
-    relationships:
-      - name: policy
-        peer: SecurityPolicy
-        label: Security Policy
-        cardinality: one
-        kind: Attribute
   - name: RenderedPolicyRule
     namespace: Security
     include_in_menu: false
@@ -630,16 +569,20 @@ nodes:
 
 extensions:
   nodes:
-    - kind: LocationGeneric
-      relationships:
-        - name: policy
-          peer: SecurityPolicy
-          cardinality: one
-          kind: Attribute
-    - kind: DcimInterfaceL3
+    - kind: InfraInterfaceL3
       relationships:
         - name: security_zone
           peer: SecurityZone
           optional: true
           cardinality: one
           kind: Attribute
+          order_weight: 1400
+    - kind: InfraFirewall
+      relationships:
+        - name: policy
+          peer: SecurityPolicy
+          label: Security Policy
+          cardinality: one
+          kind: Attribute
+
+

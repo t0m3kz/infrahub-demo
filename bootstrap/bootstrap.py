@@ -20,81 +20,9 @@ from data_bootstrap import (
     ASNS,
     PLATFORMS,
     DEVICE_TYPES,
+    ROUTE_TARGETS,
+    VRFS
 )
-
-
-async def location(client: InfrahubClient, log: logging.Logger, branch: str) -> None:
-    """Create all the location objects."""
-    log.info("Creating Regions")
-    await create_objects(
-        client=client,
-        log=log,
-        branch=branch,
-        kind="LocationRegion",
-        data_list=[
-            {"payload": {"name": item[0], "shortname": item[1]}, "store_key": item[0]}
-            for item in REGIONS
-        ],
-    )
-
-    log.info("Creating Countries")
-    await create_objects(
-        client=client,
-        log=log,
-        branch=branch,
-        kind="LocationCountry",
-        data_list=[
-            {
-                "payload": {
-                    "name": item[0],
-                    "shortname": item[1],
-                    "parent": client.store.get(kind="LocationRegion", key=item[2]).id,
-                },
-                "store_key": item[0],
-            }
-            for item in COUNTRIES
-        ],
-    )
-
-    log.info("Creating Cities")
-    await create_objects(
-        client=client,
-        log=log,
-        branch=branch,
-        kind="LocationMetro",
-        data_list=[
-            {
-                "payload": {
-                    "name": item[0],
-                    "shortname": item[1],
-                    "parent": client.store.get(kind="LocationCountry", key=item[2]).id,
-                },
-                "store_key": item[0],
-            }
-            for item in CITIES
-        ],
-    )
-
-    log.info("Creating Sites")
-    await create_objects(
-        client=client,
-        log=log,
-        branch=branch,
-        kind="LocationBuilding",
-        data_list=[
-            {
-                "payload": {
-                    "name": item[0],
-                    "shortname": item[1],
-                    "status": item[2],
-                    "site_type": item[3],
-                    "parent": client.store.get(kind="LocationMetro", key=item[4]).id,
-                },
-                "store_key": item[0],
-            }
-            for item in SITES
-        ],
-    )
 
 
 async def core(client: InfrahubClient, log: logging.Logger, branch: str) -> None:
@@ -124,7 +52,7 @@ async def core(client: InfrahubClient, log: logging.Logger, branch: str) -> None
         client=client,
         log=log,
         branch=branch,
-        kind="IpamPrefix",
+        kind="IpamIPPrefix",
         data_list=[
             {
                 "payload": {
@@ -202,7 +130,7 @@ async def infra(client: InfrahubClient, log: logging.Logger, branch: str) -> Non
         client=client,
         log=log,
         branch=branch,
-        kind="RoutingAutonomousSystem",
+        kind="InfraAutonomousSystem",
         data_list=[
             {
                 "payload": {
@@ -238,7 +166,7 @@ async def infra(client: InfrahubClient, log: logging.Logger, branch: str) -> Non
         client=client,
         log=log,
         branch=branch,
-        kind="DcimPlatform",
+        kind="InfraPlatform",
         data_list=[
             {
                 "payload": {
@@ -260,7 +188,7 @@ async def infra(client: InfrahubClient, log: logging.Logger, branch: str) -> Non
         client=client,
         log=log,
         branch=branch,
-        kind="DcimDeviceType",
+        kind="InfraDeviceType",
         data_list=[
             {
                 "payload": {
@@ -268,18 +196,142 @@ async def infra(client: InfrahubClient, log: logging.Logger, branch: str) -> Non
                     "part_number": item[1],
                     "height": item[2],
                     "full_depth": item[3],
-                    "manufacturer": {
-                        "id": client.store.get(
-                            kind="OrganizationManufacturer", key=item[4]
-                        ).id
-                    },
                     "platform": {
-                        "id": client.store.get(kind="DcimPlatform", key=item[5]).id
+                        "id": client.store.get(kind="InfraPlatform", key=item[4]).id
                     },
                 },
                 "store_key": item[0],
             }
             for item in DEVICE_TYPES
+        ],
+    )
+
+    log.info("Create Route Targets")
+    await create_objects(
+        client=client,
+        log=log,
+        branch=branch,
+        kind="InfraRouteTarget",
+        data_list=[
+            {
+                "payload": {
+                    "name": item[0],
+                    "description": item[1],
+                },
+                "store_key": item[0],
+            }
+            for item in ROUTE_TARGETS
+        ],
+    )
+
+    log.info("Create VRFs")
+    await create_objects(
+        client=client,
+        log=log,
+        branch=branch,
+        kind="InfraVRF",
+        data_list=[
+            {
+                "payload": {
+                    "name": item[0],
+                    "description": item[1],
+                    "vrf_rd": item[2],
+                    "export_rt": (
+                        {
+                            "id": client.store.get(
+                                kind="InfraRouteTarget", key=item[3]
+                            ).id
+                        }
+                        if item[3]
+                        else None
+                    ),
+                    "import_rt": (
+                        {
+                            "id": client.store.get(
+                                kind="InfraRouteTarget", key=item[4]
+                            ).id
+                        }
+                        if item[4]
+                        else None
+                    ),
+                },
+                "store_key": item[0],
+            }
+            for item in VRFS
+        ],
+    )
+
+
+async def location(client: InfrahubClient, log: logging.Logger, branch: str) -> None:
+    """Create all the location objects."""
+    log.info("Creating Regions")
+    await create_objects(
+        client=client,
+        log=log,
+        branch=branch,
+        kind="LocationRegion",
+        data_list=[
+            {"payload": {"name": item[0], "shortname": item[1]}, "store_key": item[0]}
+            for item in REGIONS
+        ],
+    )
+
+    log.info("Creating Countries")
+    await create_objects(
+        client=client,
+        log=log,
+        branch=branch,
+        kind="LocationCountry",
+        data_list=[
+            {
+                "payload": {
+                    "name": item[0],
+                    "shortname": item[1],
+                    "parent": client.store.get(kind="LocationRegion", key=item[2]).id,
+                },
+                "store_key": item[0],
+            }
+            for item in COUNTRIES
+        ],
+    )
+
+    log.info("Creating Cities")
+    await create_objects(
+        client=client,
+        log=log,
+        branch=branch,
+        kind="LocationCity",
+        data_list=[
+            {
+                "payload": {
+                    "name": item[0],
+                    "shortname": item[1],
+                    "parent": client.store.get(kind="LocationCountry", key=item[2]).id,
+                },
+                "store_key": item[0],
+            }
+            for item in CITIES
+        ],
+    )
+
+    log.info("Creating Sites")
+    await create_objects(
+        client=client,
+        log=log,
+        branch=branch,
+        kind="LocationSite",
+        data_list=[
+            {
+                "payload": {
+                    "name": item[0],
+                    "shortname": item[1],
+                    "status": item[2],
+                    "site_type": item[3],
+                    "parent": client.store.get(kind="LocationCity", key=item[4]).id,
+                },
+                "store_key": item[0],
+            }
+            for item in SITES
         ],
     )
 

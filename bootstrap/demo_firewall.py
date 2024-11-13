@@ -258,22 +258,23 @@ async def devices(client: InfrahubClient, log: logging.Logger, branch: str) -> N
         client=client,
         log=log,
         branch=branch,
-        kind="DcimFirewall",
+        kind="InfraFirewall",
         data_list=[
             {
                 "payload": {
                     "name": item[0],
+                    "hostname": f"{item[0]}.company.io",
                     "device_type": client.store.get(
-                        kind="DcimDeviceType", key=item[1]
+                        kind="InfraDeviceType", key=item[1]
                     ).id,
                     # Here we're using hfid to get platform and location from store
                     "platform": client.store.get_by_hfid(
-                        key=f"DcimPlatform__{item[2]}"
+                        key=f"InfraPlatform__{item[2]}"
                     ).id,
                     "status": item[3],
                     "role": item[4],
                     "location": client.store.get_by_hfid(
-                        key=f"LocationBuilding__{item[5]}"
+                        key=f"LocationSite__{item[5]}"
                     ),
                     "primary_address": client.store.get(
                         kind="IpamIPAddress", key=item[6]
@@ -293,7 +294,7 @@ async def devices(client: InfrahubClient, log: logging.Logger, branch: str) -> N
     log.info("Adding firewall devices to the groups")
 
     firewalls = [
-        client.store.get(kind="DcimFirewall", key=item[0]).id for item in FIREWALLS
+        client.store.get(kind="InfraFirewall", key=item[0]).id for item in FIREWALLS
     ]
 
     juniper_group = await client.create(
@@ -323,7 +324,7 @@ async def devices(client: InfrahubClient, log: logging.Logger, branch: str) -> N
         client=client,
         log=log,
         branch=branch,
-        kind="DcimInterfaceL3",
+        kind="InfraInterfaceL3",
         data_list=[
             {
                 "payload": {
@@ -357,7 +358,7 @@ async def run(client: InfrahubClient, log: logging.Logger, branch: str) -> None:
     # Here we're showing method to manually populate store
     # and show how to change the key
     device_types = await client.filters(
-        kind="DcimDeviceType",
+        kind="InfraDeviceType",
         name__values=list(set(item[1] for item in FIREWALLS)),
         branch=branch,
         populate_store=True,
@@ -367,14 +368,14 @@ async def run(client: InfrahubClient, log: logging.Logger, branch: str) -> None:
     # For those we will use HFIDs in the future
     # HFID is set in schemas
     await client.filters(
-        kind="DcimPlatform",
+        kind="InfraPlatform",
         name__values=list(set(item[2] for item in FIREWALLS)),
         branch=branch,
         populate_store=True,
     )
 
     await client.filters(
-        kind="LocationBuilding",
+        kind="LocationSite",
         name__values=list(set(item[5] for item in FIREWALLS)),
         branch=branch,
         populate_store=True,

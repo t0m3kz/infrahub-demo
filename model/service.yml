@@ -71,7 +71,7 @@ nodes:
       - name: site_a
         label: Site A
         cardinality: one
-        peer: LocationMetro
+        peer: LocationSite
         optional: false
         identifier: infrabackboneservice__location_site_a
         kind: Attribute
@@ -79,7 +79,7 @@ nodes:
       - name: site_b
         label: Site B
         cardinality: one
-        peer: LocationMetro
+        peer: LocationSite
         optional: false
         identifier: infrabackboneservice__location_site_b
         kind: Attribute
@@ -93,7 +93,7 @@ nodes:
       - InfraService
     relationships:
       - name: vlan
-        peer: IpamVLAN
+        peer: InfraVLAN
         cardinality: one
         kind: Component
         order_weight: 1500
@@ -108,13 +108,13 @@ nodes:
       - InfraService
     relationships:
       - name: prefix
-        peer: IpamPrefix
+        peer: IpamIPPrefix
         cardinality: one
         kind: Component
         order_weight: 1400
         optional: true
       - name: vlan
-        peer: IpamVLAN
+        peer: InfraVLAN
         cardinality: one
         kind: Component
         order_weight: 1500

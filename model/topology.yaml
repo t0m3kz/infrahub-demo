@@ -1,0 +1,254 @@
+# yaml-language-server: $schema=https://schema.infrahub.app/infrahub/schema/latest.json
+
+version: "1.0"
+generics:
+  - name: Topology
+    namespace: Infra
+    description: "Base model for topology"
+    label: "Generic Topology"
+    icon: "carbon:network-3-reference"
+    default_filter: name__value
+    display_labels: [name__value]
+    order_by: [name__value]
+    include_in_menu: false
+    attributes:
+      - name: name
+        kind: Text
+        order_weight: 1000
+      - name: description
+        kind: Text
+        order_weight: 1100
+        optional: true
+      - name: management
+        kind: IPNetwork
+        label: Management Subnet
+        order_weight: 1600
+    relationships:
+      - name: elements
+        peer: InfraTopologyElement
+        optional: true
+        cardinality: many
+        kind: Component
+      - name: devices
+        peer: InfraDevice
+        optional: true
+        cardinality: many
+        kind: Component
+      - name: network_services
+        peer: InfraService
+        optional: true
+        cardinality: many
+        kind: Component
+
+  - name: TopologyElement
+    namespace: Infra
+    description: "Base model for elements"
+    label: "Generic Topology Element"
+    icon: "carbon:network-3-reference"
+    default_filter: name__value
+    display_labels: [name__value]
+    order_by: [name__value]
+    include_in_menu: false
+    attributes:
+      - name: name
+        kind: Text
+        order_weight: 1000
+      - name: description
+        kind: Text
+        order_weight: 1100
+        optional: true
+      - name: quantity
+        kind: Number
+        order_weight: 1200
+    relationships:
+      - name: topology
+        peer: InfraTopology
+        cardinality: one
+        kind: Parent
+        optional: false
+
+nodes:
+  # --------------------  Topology  --------------------
+  - name: DataCenter
+    namespace: Infra
+    description: "A Topology represents the entire network pod."
+    label: "Data Center"
+    default_filter: name__value
+    display_labels:
+      - name__value
+    order_by: [name__value]
+    inherit_from:
+      - CoreArtifactTarget
+      - InfraTopology
+    attributes:
+      - name: asn
+        kind: Number
+        optional: false
+        order_weight: 1200
+      - name: size
+        kind: Dropdown
+        order_weight: 1300
+        optional: false
+        choices:
+          - name: small
+            label: Small Fabric
+            description: Fabric with 2 Spines, 8-12 Lefs.
+            color: "#7f7fff"
+          - name: medium
+            label: Medium Fabric
+            description: Fabric with 2 Spines, 12-16 Lefs.
+            color: "#bf7fbf"
+          - name: large
+            label: Large Fabric
+            description: Fabric with 4 Spines, 16-24 Lefs.
+            color: "#bf7f7f"
+          - name: extra_large
+            label: Extra Large Fabric
+            description: Fabric with 4 Spines, 24-48 Lefs.
+            color: "#aeeeee"
+          - name: virtual
+            label: Virtual Fabric
+            description: Virtual Fabric.
+            color: "#aeee12"
+      - name: vendor
+        kind: Dropdown
+        label: Vendor
+        optional: true
+        order_weight: 1400
+        choices:
+          - name: cisco
+            label: Cisco
+            color: "#7f7fff"
+          - name: arista
+            label: Arista
+            color: "#bf7fbf"
+          - name: juniper
+            label: Juniper
+            color: "#bf7f7f"
+          - name: sonic
+            label: Sonic
+            color: "#aedcee"
+      - name: strategy
+        kind: Dropdown
+        label: Strategy
+        optional: false
+        order_weight: 1500
+        choices:
+          - name: ebgp-ebgp
+            label: ebgp-ebgp
+            color: "#7f7fff"
+          - name: ospf-ebgp
+            label: ospf-ebgp
+            color: "#bf7fbf"
+          - name: isis-ebgp
+            label: isis-ebgp
+            color: "#bf7f7f"
+          - name: ospf-ibgp
+            label: ospf-ibgp
+            color: "#aedcee"
+          - name: isis-ibgp
+            label: isis-ibgp
+            color: "#bf7f3c"
+      - name: customer
+        kind: IPNetwork
+        label: Customer Subnet
+        order_weight: 1700
+      - name: technical
+        kind: IPNetwork
+        label: Technical Subnet
+        order_weight: 1800
+      - name: public
+        kind: IPNetwork
+        optional: true
+        label: Public Subnet
+        order_weight: 1900
+    relationships:
+      - name: location
+        peer: LocationCity
+        optional: true
+        cardinality: one
+        kind: Attribute
+
+  - name: ColocationCenter
+    namespace: Infra
+    description: "A Topology represents the Colocation Center."
+    label: "Colocation Center"
+    default_filter: name__value
+    display_labels:
+      - name__value
+    order_by: [name__value]
+    inherit_from:
+      - CoreArtifactTarget
+      - InfraTopology
+    attributes:
+      - name: customer
+        kind: IPNetwork
+        label: Customer Subnet
+        order_weight: 1700
+    relationships:
+      - name: location
+        peer: LocationCity
+        optional: true
+        cardinality: one
+        kind: Attribute
+
+  - name: CampusOffice
+    namespace: Infra
+    description: "A Topology represents Campus Office."
+    label: "Campus Office"
+    default_filter: name__value
+    display_labels:
+      - name__value
+    order_by: [name__value]
+    inherit_from:
+      - CoreArtifactTarget
+      - InfraTopology
+    attributes:
+      - name: size
+        kind: Dropdown
+        order_weight: 1300
+        optional: false
+        choices:
+          - name: small
+            label: Small Fabric
+            color: "#7f7fff"
+          - name: medium
+            label: Medium Fabric
+            color: "#bf7fbf"
+          - name: large
+            label: Large Fabric
+            color: "#bf7f7f"
+      - name: customer
+        kind: IPNetwork
+        label: Customer Subnet
+        order_weight: 1700
+    relationships:
+      - name: location
+        peer: LocationCity
+        optional: true
+        cardinality: one
+        kind: Attribute
+
+  - name: BranchOffice
+    namespace: Infra
+    description: "A Topology represents the BranchOffice"
+    label: "Branch Office"
+    default_filter: name__value
+    display_labels:
+      - name__value
+    order_by: [name__value]
+    inherit_from:
+      - CoreArtifactTarget
+      - InfraTopology
+    attributes:
+      - name: customer
+        kind: IPNetwork
+        label: Customer Subnet
+        order_weight: 1700
+    relationships:
+      - name: location
+        peer: LocationCity
+        optional: true
+        cardinality: one
+        kind: Attribute
+

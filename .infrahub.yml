@@ -1,29 +1,19 @@
 ---
 jinja2_transforms:
-  - name: "juniper_firewall_config"
+  - name: "firewall_config"
     description: "Template to generate startup configuration for a Juniper SRX Firewall"
     query: "firewall_config"
     template_path: "templates/juniper_srx_config.j2"
 
 artifact_definitions:
-  - name: "Juniper firewall config"
-    artifact_name: "juniper-firewall-config"
+  - name: "Firewall config"
+    artifact_name: "firewall-config"
+    parameters:
+      device: "name__value"
     content_type: "text/plain"
-    targets: "juniper_firewall_devices"
-    transformation: "juniper_firewall_config"
-    parameters:
-      device: "name__value"
-
-check_definitions:
-  - name: validate_firewall
-    class_name: InfrahubValidateFirewall
-    file_path: "checks/validate_firewall.py"
-    targets: "firewalls"
-    parameters:
-      device: "name__value"
+    targets: "firewall_devices"
+    transformation: "firewall_config"
 
 queries:
   - name: firewall_config
     file_path: "templates/firewall_config.gql"
-  - name: validate_firewall
-    file_path: "checks/validate_firewall.gql"
