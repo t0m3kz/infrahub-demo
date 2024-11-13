@@ -299,7 +299,7 @@ async def devices(client: InfrahubClient, log: logging.Logger, branch: str) -> N
 
     juniper_group = await client.create(
         kind="CoreStandardGroup",
-        name="juniper_firewall_devices",
+        name="firewall_devices",
         branch=branch,
     )
 
