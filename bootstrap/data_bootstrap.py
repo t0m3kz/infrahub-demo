@@ -190,7 +190,7 @@ GROUPS = (
     ("upstream_interfaces", "Upstream Interface"),
     ("core_interfaces", "Core Interface"),
     ("provisioning_circuits", "Provisioning Circuits"),
-    ("all_topologies", "All Topologies"),
+    ("topologies_dc", "Data Center Topologies"),
 )
 
 ASNS = (

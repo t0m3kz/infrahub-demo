@@ -1,0 +1,73 @@
+query generate_topology($name: String!) {
+  TopologyDataCenter(name__value: $name) {
+    edges {
+      node {
+        name {
+          value
+        }
+        description {
+          value
+        }
+        asn {
+          value
+        }
+        management {
+          value
+        }
+        technical {
+          value
+        }
+        customer {
+          value
+        }
+        public {
+          value
+        }
+        location {
+          node {
+            id
+          }
+        }
+        provider {
+          node {
+            id
+          }
+        }
+        design {
+          node {
+            name {
+              value
+            }
+            elements {
+              edges {
+                node {
+                  ... on DesignElement {
+                    quantity {
+                      value
+                    }
+                    role {
+                      value
+                    }
+                    device_type {
+                      node {
+                        id
+                        platform {
+                          node {
+                            id
+                          }
+                        }
+                      }
+                    }
+                    interface_patterns {
+                      value
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

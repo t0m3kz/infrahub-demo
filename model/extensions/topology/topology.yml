@@ -1,8 +1,81 @@
 # yaml-language-server: $schema=https://schema.infrahub.app/infrahub/schema/latest.json
-
+---
 version: "1.0"
-
 generics:
+  - name: ManagementServer
+    namespace: Network
+    description: "Generic model for network management server (dns, ntp, and dhcp)."
+    label: "Network Management Servers"
+    human_friendly_id:
+      - name__value
+    display_labels: [name__value]
+    order_by: [name__value]
+    include_in_menu: false
+    attributes:
+      - name: name
+        kind: Text
+        order_weight: 1000
+      - name: description
+        kind: Text
+        order_weight: 1100
+        optional: true
+      - name: status
+        kind: Dropdown
+        choices:
+          - name: active
+            label: Active
+            description: "Fully operational and currently in service."
+            color: "#7fbf7f"
+          - name: provisioning
+            label: Provisioning
+            description: "In the process of being set up and configured."
+            color: "#ffff7f"
+          - name: maintenance
+            label: Maintenance
+            description: "Undergoing routine maintenance or repairs."
+            color: "#ffd27f"
+          - name: drained
+            label: Drained
+            description: "Temporarily taken out of service."
+            color: "#bfbfbf"
+    relationships:
+      - name: location
+        peer: LocationGeneric
+        optional: true
+        cardinality: many
+      - name: ip_addresses
+        peer: IpamIPAddress
+        optional: true
+        cardinality: many
+        kind: Component
+  - name: GenericElement
+    namespace: Design
+    description: "Base model for elements"
+    label: "Generic Topology Element"
+    icon: "carbon:network-3-reference"
+    human_friendly_id:
+      - name__value
+    display_labels: [name__value]
+    order_by: [name__value]
+    include_in_menu: false
+    menu_placement: "DesignTopology"
+    attributes:
+      - name: name
+        kind: Text
+        order_weight: 1000
+      - name: description
+        kind: Text
+        order_weight: 1100
+        optional: true
+      - name: quantity
+        kind: Number
+        order_weight: 1200
+    relationships:
+      - name: topology
+        peer: DesignTopology
+        cardinality: many
+        # # kind: Parent
+        # optional: false
   - name: Deployment
     namespace: Topology
     description: Topology Deployment
@@ -32,37 +105,39 @@ generics:
         kind: Attribute
         order_weight: 3
       - name: design
-        peer: TopologyDesign
+        peer: DesignTopology
         optional: false
         cardinality: one
         kind: Parent
         order_weight: 4
 
-
 nodes:
-  - name: Design
-    namespace: Topology
-    description: "Base model for topology"
-    label: "Topology Design"
-    icon: "carbon:network-3-reference"
-    default_filter: name__value
+  # --------------------  Topology  --------------------
+  - name: Topology
+    namespace: Design
+    description: "A Topology represents the entire network pod."
+    label: "Design Topology"
+    icon: "carbon:network-3"
+    human_friendly_id:
+      - name__value
     display_labels:
-      - type__value
       - name__value
     order_by: [name__value]
-    # include_in_menu: false
+    inherit_from:
+      - CoreArtifactTarget
     attributes:
       - name: name
         kind: Text
-        order_weight: 1
+        unique: true
+        order_weight: 1000
       - name: description
         kind: Text
-        order_weight: 2
         optional: true
+        order_weight: 1100
       - name: type
         kind: Dropdown
         optional: true
-        order_weight: 1400
+        order_weight: 1200
         choices:
           - name: DC
             label: Data Center
@@ -82,36 +157,26 @@ nodes:
             color: "#bf7f7f"
     relationships:
       - name: elements
-        peer: TopologyDesignElement
+        peer: DesignGenericElement
         optional: true
         cardinality: many
         kind: Component
-      - name: deployments
-        peer: TopologyDeployment
-        kind: Component
-        cardinality: many
 
-  - name: DesignElement
-    namespace: Topology
-    description: "Base model for elements"
-    label: " Design Element"
+  # --------------------  Elements  --------------------
+  - name: Element
+    namespace: Design
+    description: "Physical aspect of topology elements."
+    label: "Design Element"
     icon: "carbon:network-3-reference"
-    default_filter: name__value
-    display_labels:
+    menu_placement: "DesignTopology"
+    human_friendly_id:
       - name__value
     order_by: [name__value]
-    # include_in_menu: false
+    display_labels:
+      - name__value
+    inherit_from:
+      - DesignGenericElement
     attributes:
-      - name: name
-        kind: Text
-        order_weight: 1
-      - name: description
-        kind: Text
-        order_weight: 2
-        optional: true
-      - name: quantity
-        kind: Number
-        order_weight: 3
       - name: role
         kind: Dropdown
         optional: true
@@ -149,17 +214,100 @@ nodes:
             label: Load Balancer
             description: Load Balancer part of a Fabric.
             color: "#38e7fb"
+          - name: oob
+            label: OOB Switch
+            description: Out of Band Switch part of a Fabric.
+            color: "#e3e7fd"
+          - name: console
+            label: Console Server
+            description: Console Server part of a Fabric.
+            color: "#e9ebfd"
       - name: interface_patterns
         kind: JSON
-        order_weight: 20
+        order_weight: 1500
         optional: false
     relationships:
       - name: device_type
+        label: Type
         peer: DcimDeviceType
+        optional: true
         cardinality: one
-        kind: Parent
-        optional: false
+        kind: Attribute
+        order_weight: 1400
 
+  # --------------------  Network Management Servers --------------------
+  - name: DhcpOption
+    namespace: Network
+    description: "Represents a configurable option within a Dhcp server."
+    label: "Dhcp Option"
+    icon: "gis:globe-options"
+    menu_placement: "NetworkManagementServer"
+    include_in_menu: false
+    human_friendly_id:
+      - name__value
+    display_labels: [name__value]
+    order_by: [name__value]
+    attributes:
+      - name: name
+        kind: Text
+        order_weight: 1000
+      - name: description
+        kind: Text
+        optional: true
+        order_weight: 1100
+      - name: option_code
+        kind: Number
+        order_weight: 2000
+      - name: content
+        kind: Text
+        order_weight: 2100
+  - name: DhcpServer
+    namespace: Network
+    description: "Represents a Dhcp server in the network."
+    label: "Dhcp Server"
+    icon: "eos-icons:ip"
+    menu_placement: "NetworkManagementServer"
+    include_in_menu: false
+    human_friendly_id:
+      - name__value
+    display_labels: [name__value]
+    order_by: [name__value]
+    inherit_from:
+      - NetworkManagementServer
+    attributes:
+      - name: lease_time
+        kind: Text
+        order_weight: 2100
+    relationships:
+      - name: dhcp_options
+        peer: NetworkDhcpOption
+        optional: true
+        cardinality: many
+        kind: Component
+  - name: NameServer
+    namespace: Network
+    description: "Represents a DNS server in the network."
+    label: "DNS Server"
+    icon: "eos-icons:dns"
+    menu_placement: "NetworkManagementServer"
+    human_friendly_id:
+      - name__value
+    display_labels: [name__value]
+    order_by: [name__value]
+    inherit_from:
+      - NetworkManagementServer
+  - name: NTPServer
+    namespace: Network
+    description: "Represents a NTP server in the network."
+    label: "NTP Server"
+    icon: "iconoir:time-zone"
+    menu_placement: "NetworkManagementServer"
+    human_friendly_id:
+      - name__value
+    display_labels: [name__value]
+    order_by: [name__value]
+    inherit_from:
+      - NetworkManagementServer
 
 #   --------------------  Topology  Deployments --------------------
   - name: DataCenter
@@ -216,6 +364,12 @@ nodes:
         optional: true
         label: Public Subnet
         order_weight: 1900
+    relationships:
+      - name: provider
+        peer: OrganizationProvider
+        optional: false
+        cardinality: one
+        kind: Attribute
 
 
   - name: ColocationCenter
@@ -305,7 +459,7 @@ extensions:
     - kind: DcimDeviceType
       relationships:
         - name: design_components
-          peer: TopologyDesignElement
+          peer: DesignElement
           optional: true
           cardinality: many
           kind: Component
