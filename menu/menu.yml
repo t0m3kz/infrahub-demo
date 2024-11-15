@@ -46,16 +46,16 @@ spec:
             icon: "carbon:subnet-acl-rules"
             children:
               data:
-                - name: Design
-                  namespace: Topology
+                - name: Topology
+                  namespace: Design
                   label: Design Patterns
-                  kind: TopologyDesign
+                  kind: DesignTopology
                   icon: "carbon:data-center"
 
-                - name: DesignElement
-                  namespace: Topology
+                - name: Element
+                  namespace: Design
                   label: Design Elements
-                  kind: TopologyDesignElement
+                  kind: DesignElement
                   icon: "subway:switch"
 
           - namespace: Topology
@@ -207,22 +207,22 @@ spec:
     #               label: Console Servers
     #               kind: InfraConsole
     #               icon: "mdi:console-line"
-    #       - namespace: Infra
-    #         name: ServerMenu
-    #         label: Servers
-    #         icon: "mdi:server"
-    #         children:
-    #           data:
-    #             - namespace: Infra
-    #               name: NtpServer
-    #               label: NTP Servers
-    #               kind: InfraNtpServer
-    #               icon: "iconoir:time-zone"
-    #             - namespace: Infra
-    #               name: DnsServer
-    #               label: DNS Servers
-    #               kind: InfraDnsServer
-    #               icon: "mdi:dns"
+          - namespace: Network
+            name: ServerMenu
+            label: Servers
+            icon: "mdi:server"
+            children:
+              data:
+                - namespace: Network
+                  name: NTPServer
+                  label: NTP Servers
+                  kind: NetworkNTPServer
+                  icon: "iconoir:time-zone"
+                - namespace: Network
+                  name: NameServer
+                  label: DNS Servers
+                  kind: NetworkNameServer
+                  icon: "mdi:dns"
     #             - namespace: Infra
     #               name: DhcpServer
     #               label: DHCP Servers
@@ -246,11 +246,11 @@ spec:
             icon: "mdi:ethernet"
             kind: DcimInterface
 
-          - name: SFP
+          - name: GenericSFP
             namespace: Dcim
             label: "All SFPs"
             icon: "mdi:gpu"
-            kind: DcimSFP
+            kind: DcimGenericSFP
 
     #       - namespace: Infra
     #         name: MlagMenu

@@ -6,7 +6,7 @@ from infrahub_sdk.checks import InfrahubCheck
 class InfrahubValidateFirewall(InfrahubCheck):
     """Check Firewall."""
 
-    query = "validate_firewall"
+    query = "firewall_config"
 
     def validate(self, data):
         """Validate firewall."""

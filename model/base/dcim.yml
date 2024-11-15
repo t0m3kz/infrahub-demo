@@ -351,7 +351,14 @@ nodes:
             label: Tor Switch
             description: Tor switch part of a Fabric.
             color: "#e8e7fd"
-
+          - name: oob
+            label: OOB Switch
+            description: Out of Band Switch part of a Fabric.
+            color: "#e347fd"
+          - name: console
+            label: Console Server
+            description: Console server for remote management.
+            color: "#e8e32d"
   - name: InterfaceL3
     namespace: Dcim
     description: Network Layer 3 Interface

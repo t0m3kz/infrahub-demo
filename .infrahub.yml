@@ -22,8 +22,17 @@ check_definitions:
     parameters:
       device: "name__value"
 
+generator_definitions:
+  - name: create_dc
+    file_path: "generators/generate_dc.py"
+    targets: topologies_dc
+    query: topology_dc
+    class_name: DCTopologyGenerator
+    parameters:
+      name: "name__value"
+
 queries:
   - name: firewall_config
     file_path: "templates/firewall_config.gql"
-  - name: validate_firewall
-    file_path: "checks/validate_firewall.gql"
+  - name: topology_dc
+    file_path: "generators/topology_dc.gql"
