@@ -19,13 +19,6 @@ async def run(client: InfrahubClient, log: logging.Logger, branch: str) -> None:
         populate_store=True,
     )
 
-    # await client.filters(
-    #     kind="DcimDeviceType",
-    #     name__values=list(set(item[4] for item in DESIGN_ELEMENTS)),
-    #     branch=branch,
-    #     populate_store=True,
-    # )
-
     log.info("Creating Design Elements")
     await create_objects(
         client=client,

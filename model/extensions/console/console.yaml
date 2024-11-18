@@ -1,0 +1,28 @@
+---
+# yaml-language-server: $schema=https://schema.infrahub.app/infrahub/schema/latest.json
+version: "1.0"
+
+nodes:
+  - name: InterfaceConsole
+    namespace: Dcim
+    description: "Console Interface"
+    label: "Console Port"
+    include_in_menu: false
+    icon: "mdi:console"
+    display_labels:
+      - name__value
+    order_by:
+      - name__value
+    inherit_from:
+      - "DcimInterface"
+      - "DcimEndpoint"
+      - "CoreArtifactTarget"
+    attributes:
+      - name: speed
+        kind: Number
+        order_weight: 1400
+      - name: port
+        label: port
+        default_value: 1500
+        kind: Number
+        order_weight: 1500
