@@ -92,7 +92,7 @@ generics:
         order_weight: 1200
       - name: location
         label: Location
-        peer: LocationGeneric
+        peer: LocationHosting
         optional: false
         cardinality: one
         kind: Attribute
@@ -141,25 +141,26 @@ generics:
         optional: false
         cardinality: one
         kind: Parent
+        # on_delete: cascade
       - name: tags
         peer: BuiltinTag
         optional: true
         cardinality: many
         kind: Attribute
 
-  - name: Endpoint
-    namespace: Dcim
-    description: Generic Endpoint to receive a connector.
-    include_in_menu: false
-    relationships:
-      - name: connector
-        peer: DcimConnector
-        optional: true
-        cardinality: one
-        order_weight: 1500
-        kind: Attribute
+  # - name: Endpoint
+  #   namespace: Dcim
+  #   description: Generic Endpoint to receive a connector.
+  #   include_in_menu: false
+  #   relationships:
+  #     - name: connector
+  #       peer: DcimConnector
+  #       optional: true
+  #       cardinality: one
+  #       order_weight: 1500
+  #       kind: Attribute
 
-  - name: Connector
+  - name: Endpoint
     namespace: Dcim
     description: Generic Connector to link two endpoints together.
     include_in_menu: false
@@ -446,7 +447,6 @@ nodes:
         optional: true
         cardinality: many
         kind: Component
-
   - name: InterfaceL2
     namespace: Dcim
     description: Network Layer 2 Interface

@@ -47,7 +47,9 @@ nodes:
     icon: healthicons:city
   - name: Building
     namespace: Location
-    inherit_from: ["LocationGeneric"]
+    inherit_from:
+      - "LocationGeneric"
+      - "LocationHosting"
     menu_placement: "LocationGeneric"
     include_in_menu: false
     label: Building
@@ -85,7 +87,8 @@ nodes:
     children: "LocationSuite"
   - name: Suite
     namespace: Location
-    inherit_from: ["LocationGeneric"]
+    inherit_from:
+      - "LocationGeneric"
     include_in_menu: false
     menu_placement: "LocationGeneric"
     label: Suite
@@ -107,7 +110,9 @@ nodes:
         cardinality: one
   - name: Rack
     namespace: Location
-    inherit_from: ["LocationGeneric"]
+    inherit_from:
+      - "LocationGeneric"
+      - "LocationHosting"
     include_in_menu: false
     menu_placement: "LocationGeneric"
     label: Rack

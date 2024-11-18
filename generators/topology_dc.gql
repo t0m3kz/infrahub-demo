@@ -51,6 +51,13 @@ query generate_topology($name: String!) {
                     device_type {
                       node {
                         id
+                        manufacturer {
+                          node {
+                            name {
+                              value
+                            }
+                          }
+                        }
                         platform {
                           node {
                             id

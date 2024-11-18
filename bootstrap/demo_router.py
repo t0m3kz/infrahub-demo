@@ -82,8 +82,6 @@ async def run(client: InfrahubClient, log: logging.Logger, branch: str) -> None:
         ],
     )
 
-    log.info(client.store.__dict__)
-
     log.info("Creating Device Interfaces")
     await create_objects(
         client=client,
