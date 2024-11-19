@@ -148,29 +148,17 @@ generics:
         cardinality: many
         kind: Attribute
 
-  # - name: Endpoint
-  #   namespace: Dcim
-  #   description: Generic Endpoint to receive a connector.
-  #   include_in_menu: false
-  #   relationships:
-  #     - name: connector
-  #       peer: DcimConnector
-  #       optional: true
-  #       cardinality: one
-  #       order_weight: 1500
-  #       kind: Attribute
-
   - name: Endpoint
     namespace: Dcim
-    description: Generic Connector to link two endpoints together.
+    description: Generic Endpoint to connect two objects together.
     include_in_menu: false
     relationships:
-      - name: connected_endpoints
+      - name: connector
         peer: DcimEndpoint
         optional: true
-        cardinality: many
+        cardinality: one
         order_weight: 1500
-        kind: Generic
+        kind: Attribute
 
 nodes:
   # --------------------  Device (Types, Platforms, Device, Interfaces )  --------------------
