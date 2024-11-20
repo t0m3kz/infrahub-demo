@@ -2,6 +2,7 @@ query generate_topology($name: String!) {
   TopologyDataCenter(name__value: $name) {
     edges {
       node {
+        id
         name {
           value
         }
