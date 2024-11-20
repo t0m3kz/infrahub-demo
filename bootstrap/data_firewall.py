@@ -300,6 +300,46 @@ RULES = [
     ),
 ]
 
+DESIGN_ELEMENTS = [
+    (
+        "JUNIPER 2 FIREWALLS SRX-1500",
+        "2 Juniper SRX-1500 firewalls",
+        2,
+        "firewall",
+        "SRX-1500",
+        [
+            {"name": "fxp0", "type": "1000base-t", "role": "management"},
+            {"name": "ge-0/0/0", "type": "1000base-t", "role": "leaf"},
+            {"name": "ge-0/0/1", "type": "1000base-t", "role": "leaf"},
+            {"name": "ge-0/0/2", "type": "1000base-t", "role": "leaf"},
+            {"name": "ge-0/0/3", "type": "1000base-t", "role": "leaf"},
+        ],
+    ),
+]
+
+DESIGN = [
+    (
+        "POP S",
+        "POP 2 firewalls",
+        "POP",
+        [
+            "JUNIPER 2 FIREWALLS SRX-1500",
+        ],
+    ),
+]
+
+
+POP_DEPLOYMENT = {
+    "name": "EQX-1",
+    "location": "Frankfurt",
+    "description": "Frankfurt POP",
+    "asn": 65005,
+    "customer": "10.11.0.0/24",
+    "design": "POP S",
+    "provider": "Technology Partner",
+}
+
+
 FIREWALLS = (
     # name, device_type, platform, status, role, location, management_ip, policy
     (

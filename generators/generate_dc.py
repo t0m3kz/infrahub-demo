@@ -39,6 +39,7 @@ def clean_data(data):
         return result
     return data
 
+
 def set_speed(s):
     """Return speed in bps
 
@@ -54,6 +55,7 @@ def set_speed(s):
         multiplier = 1000_000_000 if match.group(2) == "g" else 1000_000
         speed = int(match.group(1)) * multiplier
     return speed
+
 
 class DCTopologyGenerator(InfrahubGenerator):
     """Generate topology."""
@@ -96,7 +98,7 @@ class DCTopologyGenerator(InfrahubGenerator):
 
     async def _create_ip_pools(self, topology_name: str, pools: dict) -> None:
         """Create objects of a specific kind and store in local store."""
-        namespace = await self.client.get(kind="IpamNamespace", name__value="default")
+        # namespace = await self.client.get(kind="IpamNamespace", name__value="default")
         for item in pools:
             if pools.get(item):
                 data = {
@@ -126,9 +128,11 @@ class DCTopologyGenerator(InfrahubGenerator):
         #     }
         #     await self._create(kind="CoreIPAddressPool", data=data)
 
-            # for technical subnet we have to create respective
+        # for technical subnet we have to create respective
 
-    async def _create_devices(self, topology_name: str, data: list) -> None:
+    async def _create_devices(
+        self, topology_name: str, data: list, topology: str
+    ) -> None:
         """Create objects of a specific kind and store in local store."""
         devices = {"DcimDevice": [], "DcimFirewall": []}
 
@@ -152,6 +156,7 @@ class DCTopologyGenerator(InfrahubGenerator):
                                 key=f"CoreStandardGroup__{manufacturer}_{role}"
                             ).id
                         ],
+                        "topology": topology,
                     },
                     "store_key": device_name,
                 }
@@ -246,7 +251,8 @@ class DCTopologyGenerator(InfrahubGenerator):
             }
             for source_device, source_interfaces in sources.items()
             for destination_device, destination_interfaces in destinations.items()
-            if int(destination_device.split("-")[-1]) % 2 == int(source_device.split("-")[-1]) % 2
+            if int(destination_device.split("-")[-1]) % 2
+            == int(source_device.split("-")[-1]) % 2
         ]
 
         for connection in connections:
@@ -338,14 +344,16 @@ class DCTopologyGenerator(InfrahubGenerator):
             },
         )
 
-        await self._create_devices(new_data["name"], new_data["design"]["elements"])
+        await self._create_devices(
+            new_data["name"], new_data["design"]["elements"], new_data["id"]
+        )
         await self._create_interfaces(new_data["name"], new_data["design"]["elements"])
-        await self._create_oob_connections(
-            new_data["name"], new_data["design"]["elements"], "console"
-        )
-        await self._create_oob_connections(
-            new_data["name"], new_data["design"]["elements"], "management"
-        )
-        await self._create_peering_connections(
-            new_data["name"], new_data["design"]["elements"]
-        )
+        # await self._create_oob_connections(
+        #     new_data["name"], new_data["design"]["elements"], "console"
+        # )
+        # await self._create_oob_connections(
+        #     new_data["name"], new_data["design"]["elements"], "management"
+        # )
+        # await self._create_peering_connections(
+        #     new_data["name"], new_data["design"]["elements"]
+        # )
