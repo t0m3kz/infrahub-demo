@@ -341,7 +341,7 @@ spec:
                   kind: RoutingBGPSession
 
                 - name: BGPPeerGroup
-                  namespace: Infra
+                  namespace: Routing
                   label: "BGP Peer Group"
                   icon: "mdi:view-grid-plus-outline"
                   kind: RoutingBGPPeerGroup

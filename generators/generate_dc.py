@@ -1,7 +1,6 @@
 """Infrastructure generator."""
 
 import re
-import json
 import logging
 from infrahub_sdk.generator import InfrahubGenerator
 from infrahub_sdk.exceptions import GraphQLError, ValidationError
@@ -112,23 +111,6 @@ class DCTopologyGenerator(InfrahubGenerator):
                 await self._create(
                     kind="IpamPrefix", data=data, store_key=pools.get(item)
                 )
-        # create IP address pool
-        # if pools.get("management"):
-        #     data = {
-        #         "name": f"{topology_name}-management-pool",
-        #         "description": f"Management network pool for {topology_name}",
-        #         "default_address_type": "IpamIPAddress",
-        #         # "default_member_type": "address",
-        #         "resources": [
-        #             self.store.get(kind="IpamPrefix", key=pools.get("management")).id
-        #         ],
-        #         "ip_namespace": {"id": namespace.id},
-        #         # "ip_namespace": {"id": default_ip_namespace_obj.id},
-        #         "default_prefix_length": 32,
-        #     }
-        #     await self._create(kind="CoreIPAddressPool", data=data)
-
-        # for technical subnet we have to create respective
 
     async def _create_devices(
         self, topology_name: str, data: list, topology: str
