@@ -19,7 +19,7 @@ from data_firewall import (
     L3_INTERFACES,
     DESIGN,
     DESIGN_ELEMENTS,
-    POP_DEPLOYMENT
+    POP_DEPLOYMENT,
 )
 
 
@@ -230,7 +230,9 @@ async def security(client: InfrahubClient, log: logging.Logger, branch: str) -> 
     )
 
 
-async def devices(client: InfrahubClient, log: logging.Logger, branch: str, deployment: str) -> None:
+async def devices(
+    client: InfrahubClient, log: logging.Logger, branch: str, deployment: str
+) -> None:
     """Create all the device objects."""
     # Create IPAM addresses
     log.info("Creating IPAM addresses")
@@ -287,7 +289,7 @@ async def devices(client: InfrahubClient, log: logging.Logger, branch: str, depl
                         if item[7]
                         else None
                     ),
-                    "topology": deployment
+                    "topology": deployment,
                 },
                 "store_key": item[0],
             }
@@ -478,8 +480,9 @@ async def run(client: InfrahubClient, log: logging.Logger, branch: str) -> None:
     except (ValidationError, GraphQLError) as e:
         log.error(e)
 
-    log.info(f"- Created Colocation Center Topology Deployment for {POP_DEPLOYMENT.get('name')}")
+    log.info(
+        f"- Created Colocation Center Topology Deployment for {POP_DEPLOYMENT.get('name')}"
+    )
 
     await security(client=client, log=log, branch=branch)
     await devices(client=client, log=log, branch=branch, deployment=deployment.id)
-

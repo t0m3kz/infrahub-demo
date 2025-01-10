@@ -1,15 +1,13 @@
-[tool.poetry]
+[project]
 name = "infrahub-demo"
 version = "0.1.0"
 description = ""
-authors = ["Tomek Zajac <tomek@mastuazi.com>"]
+authors = [{name = "Tomasz Zajac",email = "tomek@mastuazi.com"}]
 readme = "README.md"
-
-[tool.poetry.dependencies]
-python = ">=3.9, < 3.13"
-invoke = "^2.2.0"
-pytest = "^8.3.2"
-infrahub-sdk = {extras = ["all"], version = "^1.0.0"}
+requires-python = ">=3.9,<3.13"
+dependencies = [
+    "infrahub-sdk[all] (>=1.5.0,<2.0.0)"
+]
 
 [tool.poetry.group.dev.dependencies]
 ipdb = "^0.13.13"
@@ -21,6 +19,7 @@ bandit = "^1.7.9"
 black = "^24.8.0"
 flake8 = "^7.1.1"
 invoke = "^2.2.0"
+pytest = "^8.3.4"
 
 
 [build-system]
