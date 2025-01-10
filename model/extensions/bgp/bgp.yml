@@ -48,7 +48,6 @@ nodes:
     description: A BGP Peer Group is used to regroup parameters that are shared across multiple peers
     label: BGP Peer Group
     icon: mdi:view-grid-plus-outline
-    show_in_menu: false
     human_friendly_id:
       - name__value
     order_by:
