@@ -4,6 +4,10 @@ jinja2_transforms:
     description: "Template to generate startup configuration for a Juniper SRX Firewall"
     query: "firewall_config"
     template_path: "templates/juniper_srx_config.j2"
+  - name: "cisco_pop_config"
+    description: "Template to generate startup configuration for a cisco POP router"
+    query: "pop_config"
+    template_path: "templates/pop_config.j2"
 
 artifact_definitions:
   - name: "Juniper firewall config"
@@ -11,6 +15,13 @@ artifact_definitions:
     content_type: "text/plain"
     targets: "juniper_firewall"
     transformation: "juniper_firewall_config"
+    parameters:
+      device: "name__value"
+  - name: "Cisco POP config"
+    artifact_name: "cisco-pop-config"
+    content_type: "text/plain"
+    targets: "cisco_pop_router"
+    transformation: "cisco_pop_config"
     parameters:
       device: "name__value"
 
@@ -34,5 +45,7 @@ generator_definitions:
 queries:
   - name: firewall_config
     file_path: "templates/firewall_config.gql"
+  - name: pop_config
+    file_path: "templates/pop_config.gql"
   - name: topology_dc
     file_path: "generators/topology_dc.gql"

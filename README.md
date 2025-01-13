@@ -2,74 +2,132 @@
 
 Infrahub demo suggestions
 
-## Create new branch
+## Install the Infrahub SDK
 
 ```bash
-infrahubctl branch create my-branch
+poetry install --no-interaction --no-ansi --no-root
 ```
 
-## Load schema
+## Start Infrahub
 
 ```bash
-infrahubctl schema load model/base --branch my-branch
+poetry run invoke start
 ```
 
-## Load menu
+## Setup environment variables
 
 ```bash
-infrahubctl menu load menu --branch my-branch
+export INFRAHUB_ADDRESS="http://localhost:8000"
+export INFRAHUB_API_TOKEN="06438eb2-8019-4776-878c-0941b1f1d1ec"
 ```
 
-## Load initial data
+## Load demo
 
-All initial data are stored as static in bootstrap/data_bootstrap.py file.
-
-### Bootstrap
-
-Add data to Infrahub.
+Load schemas
 
 ```bash
-infrahubctl run bootstrap/bootstrap.py --branch my-branch
+poetry run infrahubctl schema load model --wait 10
 ```
 
-### False Bootstrap
-
-In this script we're tyrying to save data on the end of run function using single batch.
-This leads to the situation that relations are not saved properly.
+Load menu
 
 ```bash
-infrahubctl run bootstrap/bootstrap_false.py --branch my-branch
+poetry run infrahubctl menu load menu
 ```
 
-## Demo 1 - Firewall
-
-### Load firewall data
-
-Firewall data are stored as statics in demo_firewall.py file.
+Load demo data
 
 ```bash
-infrahubctl run bootstrap/demo_firewall.py --branch my-branch
+poetry run infrahubctl run bootstrap/bootstrap.py
 ```
 
-### Test firewall config
+Add demo repository
 
 ```bash
-infrahubctl render firewall_config device=dc1-fra-fw1 --branch my-branch
+poetry run infrahubctl repository add DEMO https://github.com/t0m3kz/infrahub-demo.git --read-only
 ```
 
-You can try to manually modify data and test is configuration was updated.
-
-
-or you can use the scripts:
-
-This script will load all schemas and boostrtrap data into main branch and add repository.
+You can also use the script to execute all previous steps
 
 ```bash
 ./scripts/bootstrap.sh
 ```
 
-Demos (each will be in separated branch) can be run using scripts:
+## Demo use cases
+
+Currently we have 3 demo use cases: firewall, router and design
+You can use the script to generate all use cases (script will create separated branch for each demo)
 
 ```bash
 ./scripts/demo.sh firewall or router or design
 ```
+
+### Demo 1 - Firewall
+
+In this demo we're generating configuration for firewalls.
+
+```bash
+./scripts/demo.sh firewall
+```
+
+or
+
+If you would like to process all steps manually, you have to follow the steps:
+
+1. Create branch
+
+    ```bash
+    infrahubctl branch create my-branch
+    ```
+
+2. Load example firewall data stored as statics in demo_firewall.py file.
+
+    ```bash
+    infrahubctl run bootstrap/demo_firewall.py --branch my-branch
+    ```
+
+#### Test firewall config
+
+```bash
+infrahubctl render firewall_config device=dc1-fra-fw1 --branch my-branch
+```
+
+You can try to manually modify data and check if configuration was updated.
+
+### Demo 2 - POP Router deployment
+
+In this demo we're generating configuration for firewalls.
+
+```bash
+./scripts/demo.sh router
+```
+
+If you would like to process all steps manually, you have to follow the steps:
+
+1. Create branch
+
+    ```bash
+    infrahubctl branch create my-branch
+    ```
+
+2. Load example router data stored as statics in demo_router.py file.
+
+    ```bash
+    infrahubctl run bootstrap/demo_router.py --branch my-branch
+    ```
+
+### Demo 3 - Design
+
+If you would like to process all steps manually, you have to follow the steps:
+
+1. Create branch
+
+    ```bash
+    infrahubctl branch create my-branch
+    ```
+
+2. Load example design data stored as statics in demo_design.py file.
+
+    ```bash
+    infrahubctl run bootstrap/demo_design.py --branch my-branch
+    ```

@@ -1,0 +1,19 @@
+---
+version: "1.0"
+infrahub_tests:
+  # --------------------  GraphQLQuery  --------------------
+  - resource: GraphQLQuery
+    resource_name: firewall_config
+    tests:
+      - name: syntax_check
+        spec:
+          path: templates/firewall_config.gql
+          kind: graphql-query-smoke
+
+  - resource: GraphQLQuery
+    resource_name: pop_config
+    tests:
+      - name: syntax_check
+        spec:
+          path: templates/pop_config.gql
+          kind: graphql-query-smoke
