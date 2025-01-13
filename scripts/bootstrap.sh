@@ -1,9 +1,6 @@
 
 echo "Load schema"
-poetry run infrahubctl schema load model
-
-echo "Waiting for schemas to be applied...."
-sleep 30
+poetry run infrahubctl schema load model --wait 10
 
 echo "Load menu"
 poetry run infrahubctl menu load menu

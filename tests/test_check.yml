@@ -1,0 +1,10 @@
+---
+version: "1.0"
+infrahub_tests:
+  # --------------------  Checks  --------------------
+  - resource: Check
+    resource_name: "validate_firewall"
+    tests:
+      - name: syntax_check
+        spec:
+          kind: check-smoke
