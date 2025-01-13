@@ -96,7 +96,7 @@ You can try to manually modify data and check if configuration was updated.
 
 ### Demo 2 - POP Router deployment
 
-In this demo we're generating configuration for firewalls.
+In this demo we're generating configuration pop routers.
 
 ```bash
 ./scripts/demo.sh router
@@ -117,6 +117,12 @@ If you would like to process all steps manually, you have to follow the steps:
     ```
 
 ### Demo 3 - Design
+
+In this demo we're genetating confifiguration for composable data center.
+
+```bash
+./scripts/demo.sh design
+```
 
 If you would like to process all steps manually, you have to follow the steps:
 
