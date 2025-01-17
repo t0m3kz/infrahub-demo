@@ -8,6 +8,9 @@ jinja2_transforms:
     description: "Template to generate startup configuration for a cisco POP router"
     query: "pop_config"
     template_path: "templates/pop_config.j2"
+  - name: "clab_topology"
+    query: "topology_simulator"
+    template_path: "simulators/clab_topology.j2"
 
 artifact_definitions:
   - name: "Juniper firewall config"
@@ -24,6 +27,13 @@ artifact_definitions:
     transformation: "cisco_pop_config"
     parameters:
       device: "name__value"
+  - name: "Containerlab Topology"
+    artifact_name: "containerlab-topology"
+    content_type: "text/plain"
+    targets: "all_topologies"
+    transformation: "clab_topology"
+    parameters:
+      topology_name: "name__value"
 
 check_definitions:
   - name: validate_firewall
@@ -49,3 +59,5 @@ queries:
     file_path: "templates/pop_config.gql"
   - name: topology_dc
     file_path: "generators/topology_dc.gql"
+  - name: topology_simulator
+    file_path: "simulators/topology.gql"

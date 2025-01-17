@@ -8,3 +8,14 @@ infrahub_tests:
       - name: syntax_check
         spec:
           kind: jinja2-transform-smoke
+  - resource: Jinja2Transform
+    resource_name: clab_topology
+    tests:
+      - name: syntax_check
+        spec:
+          kind: jinja2-transform-smoke
+      - name: baseline
+        expect: PASS
+        spec:
+          kind: "jinja2-transform-unit-render"
+          directory: tests/simulators

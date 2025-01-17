@@ -73,6 +73,7 @@ POP_DEPLOYMENT = {
     "description": "Frankfurt POP",
     "asn": 65005,
     "customer": "10.11.0.0/24",
+    "management": "10.112.0.0/24",
     "design": "POP S",
     "provider": "Technology Partner",
 }

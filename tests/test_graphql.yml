@@ -17,3 +17,19 @@ infrahub_tests:
         spec:
           path: templates/pop_config.gql
           kind: graphql-query-smoke
+
+  - resource: GraphQLQuery
+    resource_name: topology_dc
+    tests:
+      - name: syntax_check
+        spec:
+          path: generators/topology_dc.gql
+          kind: graphql-query-smoke
+
+  - resource: GraphQLQuery
+    resource_name: topology_simulator
+    tests:
+      - name: syntax_check
+        spec:
+          path: simulators/topology.gql
+          kind: graphql-query-smoke

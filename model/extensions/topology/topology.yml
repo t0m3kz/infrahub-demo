@@ -97,6 +97,14 @@ generics:
         kind: Text
         order_weight: 2
         optional: true
+      - name: management
+        kind: IPNetwork
+        label: Management Subnet
+        order_weight: 3
+      - name: customer
+        kind: IPNetwork
+        label: Customer Subnet
+        order_weight: 4
     relationships:
       - name: location
         peer: LocationMetro
@@ -351,14 +359,6 @@ nodes:
           - name: isis-ibgp
             label: isis-ibgp
             color: "#bf7f3c"
-      - name: management
-        kind: IPNetwork
-        label: Management Subnet
-        order_weight: 1700
-      - name: customer
-        kind: IPNetwork
-        label: Customer Subnet
-        order_weight: 1700
       - name: technical
         kind: IPNetwork
         label: Technical Subnet
@@ -374,7 +374,6 @@ nodes:
         optional: false
         cardinality: one
         kind: Attribute
-
 
   - name: ColocationCenter
     namespace: Topology
@@ -392,48 +391,24 @@ nodes:
         kind: Number
         optional: false
         order_weight: 1200
-      - name: customer
-        kind: IPNetwork
-        label: Customer Subnet
-        order_weight: 1700
 
-
-#   - name: CampusOffice
-#     namespace: Infra
-#     description: "A Topology represents Campus Office."
-#     label: "Campus Office"
-#     default_filter: name__value
-#     display_labels:
-#       - name__value
-#     order_by: [name__value]
-#     inherit_from:
-#       - CoreArtifactTarget
-#       - InfraTopology
-#     attributes:
-#       - name: size
-#         kind: Dropdown
-#         order_weight: 1300
-#         optional: false
-#         choices:
-#           - name: small
-#             label: Small Fabric
-#             color: "#7f7fff"
-#           - name: medium
-#             label: Medium Fabric
-#             color: "#bf7fbf"
-#           - name: large
-#             label: Large Fabric
-#             color: "#bf7f7f"
-#       - name: customer
-#         kind: IPNetwork
-#         label: Customer Subnet
-#         order_weight: 1700
-#     relationships:
-#       - name: location
-#         peer: LocationMetro
-#         optional: true
-#         cardinality: one
-#         kind: Attribute
+  - name: BranchOffice
+    namespace: Topology
+    description: "A Topology represents Branch Office."
+    label: "Branch Office"
+    default_filter: name__value
+    display_labels:
+      - name__value
+    order_by: [name__value]
+    inherit_from:
+      - CoreArtifactTarget
+      - TopologyDeployment
+    relationships:
+      - name: owner
+        peer: OrganizationCustomer
+        optional: true
+        cardinality: one
+        kind: Attribute
 
 #   - name: BranchOffice
 #     namespace: Infra

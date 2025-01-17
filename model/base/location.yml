@@ -48,6 +48,6 @@ generics:
         optional: true
       - name: devices
         label: Devices
-        peer: DcimPhysicalDevice
+        peer: DcimGenericDevice
         cardinality: many
         optional: true
