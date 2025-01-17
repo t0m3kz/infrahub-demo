@@ -1,0 +1,69 @@
+query topology_info($topology_name: String!) {
+  DcimGenericDevice(topology__name__value: $topology_name) {
+    edges {
+      node {
+        name {
+          value
+        }
+        interfaces {
+          edges {
+            node {
+              name {
+                value
+              }
+              ... on DcimInterfaceL3 {
+                role {
+                  value
+                }
+                ip_addresses {
+                  edges {
+                    node {
+                      address {
+                        value
+                      }
+                    }
+                  }
+                }
+              }
+              ... on DcimEndpoint {
+                connector {
+                  node {
+                    id
+                    ... on DcimInterface {
+                      name {
+                        value
+                      }
+                      device {
+                        node {
+                          name {
+                            value
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+        platform {
+          node {
+            containerlab_os {
+              value
+            }
+          }
+        }
+      }
+    }
+  }
+  TopologyDeployment(name__value: $topology_name) {
+    edges {
+      node {
+        management {
+          value
+        }
+      }
+    }
+  }
+}

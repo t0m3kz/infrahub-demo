@@ -335,6 +335,7 @@ POP_DEPLOYMENT = {
     "description": "Frankfurt POP",
     "asn": 65005,
     "customer": "10.11.0.0/24",
+    "management": "10.117.0.0/24",
     "design": "POP S",
     "provider": "Technology Partner",
 }
@@ -343,23 +344,23 @@ POP_DEPLOYMENT = {
 FIREWALLS = (
     # name, device_type, platform, status, role, location, management_ip, policy
     (
-        "dc1-fra-fw1",
+        "eqx1-fra-fw1",
         "SRX-1500",
         "Juniper JunOS",
         "active",
         "customer_firewall",
         "DC-1",
-        "10.100.5.10",
+        "10.117.0.10",
         "FRA_POLICY",
     ),
     (
-        "eqx1-fra-fw1",
+        "eqx1-fra-fw2",
         "SRX-1500",
         "Juniper JunOS",
         "active",
         "edge_firewall",
         "EQX-1",
-        "10.200.100.20",
+        "10.117.0.20",
         None,
     ),
 )
@@ -367,16 +368,16 @@ FIREWALLS = (
 L3_INTERFACES = (
     # device, interface,speed, zone, ip, description, role
     (
-        "dc1-fra-fw1",
+        "eqx1-fra-fw1",
         "ge-0/0/0",
         1_000_000,
         None,
-        "10.100.5.10",
+        "10.117.0.10",
         "dc1-fra-fw1 management interface",
         "management",
     ),
     (
-        "dc1-fra-fw1",
+        "eqx1-fra-fw1",
         "ge-0/0/1",
         1_000_000,
         "OUTSIDE",
@@ -385,7 +386,7 @@ L3_INTERFACES = (
         "peer",
     ),
     (
-        "dc1-fra-fw1",
+        "eqx1-fra-fw1",
         "ge-0/0/2",
         1_000_000,
         "INSIDE",
@@ -394,7 +395,7 @@ L3_INTERFACES = (
         "peer",
     ),
     (
-        "dc1-fra-fw1",
+        "eqx1-fra-fw1",
         "ge-0/0/3",
         1_000_000,
         "DMZ",
@@ -403,16 +404,16 @@ L3_INTERFACES = (
         "peer",
     ),
     (
-        "eqx1-fra-fw1",
+        "eqx1-fra-fw2",
         "ge-0/0/0",
         1_000_000,
         None,
-        "10.200.100.20",
+        "10.117.0.20",
         "dc1-fra-fw1 management interface",
         "management",
     ),
     (
-        "eqx1-fra-fw1",
+        "eqx1-fra-fw2",
         "ge-0/0/1",
         1_000_000,
         None,
@@ -421,7 +422,7 @@ L3_INTERFACES = (
         "peer",
     ),
     (
-        "eqx1-fra-fw1",
+        "eqx1-fra-fw2",
         "ge-0/0/2",
         1_000_000,
         None,
