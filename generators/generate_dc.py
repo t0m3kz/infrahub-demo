@@ -330,12 +330,12 @@ class DCTopologyGenerator(InfrahubGenerator):
             new_data["name"], new_data["design"]["elements"], new_data["id"]
         )
         await self._create_interfaces(new_data["name"], new_data["design"]["elements"])
-        # await self._create_oob_connections(
-        #     new_data["name"], new_data["design"]["elements"], "console"
-        # )
-        # await self._create_oob_connections(
-        #     new_data["name"], new_data["design"]["elements"], "management"
-        # )
-        # await self._create_peering_connections(
-        #     new_data["name"], new_data["design"]["elements"]
-        # )
+        await self._create_oob_connections(
+            new_data["name"], new_data["design"]["elements"], "console"
+        )
+        await self._create_oob_connections(
+            new_data["name"], new_data["design"]["elements"], "management"
+        )
+        await self._create_peering_connections(
+            new_data["name"], new_data["design"]["elements"]
+        )

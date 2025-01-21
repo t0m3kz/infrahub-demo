@@ -1,6 +1,9 @@
 # Infrahub demo
 
-Infrahub demo suggestions
+## Use code spaces
+
+Deploy demo using codespaces 
+[![Launch in GitHub Codespaces](https://img.shields.io/badge/Launch%20Infrahub%20Demo-0B6581?logo=github)](https://codespaces.new/t0m3kz/infrahub-demo?devcontainer_path=.devcontainer%2Fdevcontainer.json&ref=stable)
 
 ## Install the Infrahub SDK
 
