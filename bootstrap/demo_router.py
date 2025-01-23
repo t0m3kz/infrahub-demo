@@ -197,9 +197,11 @@ async def run(client: InfrahubClient, log: logging.Logger, branch: str) -> None:
                     "name": item[1],
                     "speed": item[2],
                     "device": client.store.get_by_hfid(key=f"DcimDevice__{item[0]}").id,
-                    "ip_addresses": [
-                        client.store.get(kind="IpamIPAddress", key=item[4])
-                    ] if item[4] else None,
+                    "ip_addresses": (
+                        [client.store.get(kind="IpamIPAddress", key=item[4])]
+                        if item[4]
+                        else None
+                    ),
                     "description": item[5],
                     "role": item[6],
                     "status": "active",

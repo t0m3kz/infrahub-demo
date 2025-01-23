@@ -1,11 +1,14 @@
 {
   "data": {
-    "DcimDevice": {
+    "DcimGenericDevice": {
       "edges": [
         {
           "node": {
             "name": {
               "value": "eqx1-edge-01"
+            },
+            "os_version": {
+              "value": null
             },
             "interfaces": {
               "edges": [
@@ -21,19 +24,7 @@
                       "edges": []
                     },
                     "connector": {
-                      "node": {
-                        "id": "1819a1f0-dcbb-5b2a-3649-c511d0dad1d6",
-                        "name": {
-                          "value": "eth0/0"
-                        },
-                        "device": {
-                          "node": {
-                            "name": {
-                              "value": "eqx1-edge-02"
-                            }
-                          }
-                        }
-                      }
+                      "node": null
                     }
                   }
                 },
@@ -111,14 +102,10 @@
                 }
               ]
             },
-            "device_type": {
+            "platform": {
               "node": {
-                "platform": {
-                  "node": {
-                    "containerlab_os": {
-                      "value": "cisco_n9kv"
-                    }
-                  }
+                "containerlab_os": {
+                  "value": "cisco_n9kv"
                 }
               }
             }
@@ -128,6 +115,9 @@
           "node": {
             "name": {
               "value": "eqx1-edge-02"
+            },
+            "os_version": {
+              "value": null
             },
             "interfaces": {
               "edges": [
@@ -151,98 +141,29 @@
                       ]
                     },
                     "connector": {
-                      "node": {
-                        "id": "1819a1f0-c62d-b0cf-364c-c5180678886b",
-                        "name": {
-                          "value": "eth0/0"
-                        },
-                        "device": {
-                          "node": {
-                            "name": {
-                              "value": "eqx1-edge-01"
-                            }
-                          }
-                        }
-                      }
-                    }
-                  }
-                },
-                {
-                  "node": {
-                    "name": {
-                      "value": "eth0/1"
-                    },
-                    "role": {
-                      "value": "peering"
-                    },
-                    "ip_addresses": {
-                      "edges": []
-                    },
-                    "connector": {
-                      "node": null
-                    }
-                  }
-                },
-                {
-                  "node": {
-                    "name": {
-                      "value": "eth0/2"
-                    },
-                    "role": {
-                      "value": "peering"
-                    },
-                    "ip_addresses": {
-                      "edges": [
-                        {
-                          "node": {
-                            "address": {
-                              "value": "10.1.2.1/32"
-                            }
-                          }
-                        }
-                      ]
-                    },
-                    "connector": {
-                      "node": null
-                    }
-                  }
-                },
-                {
-                  "node": {
-                    "name": {
-                      "value": "mgmt0"
-                    },
-                    "role": {
-                      "value": "management"
-                    },
-                    "ip_addresses": {
-                      "edges": [
-                        {
-                          "node": {
-                            "address": {
-                              "value": "10.100.7.121/32"
-                            }
-                          }
-                        }
-                      ]
-                    },
-                    "connector": {
                       "node": null
                     }
                   }
                 }
               ]
             },
-            "device_type": {
+            "platform": {
               "node": {
-                "platform": {
-                  "node": {
-                    "containerlab_os": {
-                      "value": "cisco_n9kv"
-                    }
-                  }
+                "containerlab_os": {
+                  "value": "cisco_n9kv"
                 }
               }
+            }
+          }
+        }
+      ]
+    },
+    "TopologyDeployment": {
+      "edges": [
+        {
+          "node": {
+            "management": {
+              "value": "10.112.0.0/24"
             }
           }
         }
