@@ -30,7 +30,7 @@ artifact_definitions:
   - name: "Containerlab Topology"
     artifact_name: "containerlab-topology"
     content_type: "text/plain"
-    targets: "all_topologies"
+    targets: "clab_topologies"
     transformation: "clab_topology"
     parameters:
       topology_name: "name__value"
