@@ -33,4 +33,4 @@ updates:
           - "^(?!infrahub-sdk$).*"  # Regex to exclude infrahub-sdk
       infrahub-sdk:
         patterns:
-          - "infrahub-demo"
+          - "infrahub-sdk"
