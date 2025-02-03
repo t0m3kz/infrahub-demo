@@ -195,9 +195,8 @@ GROUPS = (
     ("perle_console", "Perle Console"),
     ("provisioning_circuits", "Provisioning Circuits"),
     ("topologies_dc", "Data Center Topologies"),
-    ("topologies_pop", "POP Topologies"),    
+    ("topologies_pop", "POP Topologies"),
     ("topologies_clab", "Containerlab Topologies"),
-
 )
 
 ASNS = (

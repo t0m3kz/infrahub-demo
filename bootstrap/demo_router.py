@@ -117,7 +117,7 @@ async def run(client: InfrahubClient, log: logging.Logger, branch: str) -> None:
         member_of_groups.append(
             await client.get(
                 kind="CoreStandardGroup",
-                name__value="clab_topologies",
+                name__value="topologies_clab",
                 branch=branch,
             )
         )
@@ -131,7 +131,7 @@ async def run(client: InfrahubClient, log: logging.Logger, branch: str) -> None:
             "design": client.store.get(
                 kind="DesignTopology", key=POP_DEPLOYMENT.get("design")
             ).id,
-            "member_of_groups": member_of_groups
+            "member_of_groups": member_of_groups,
         }
     )
     log.info(f"Creating POP Topology Deployment for {POP_DEPLOYMENT.get('name')}")
