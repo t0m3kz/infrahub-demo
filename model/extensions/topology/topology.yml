@@ -100,11 +100,15 @@ generics:
       - name: management
         kind: IPNetwork
         label: Management Subnet
-        order_weight: 3
+        order_weight: 7
       - name: customer
         kind: IPNetwork
         label: Customer Subnet
-        order_weight: 4
+        order_weight: 8
+      - name: emulation
+        kind: Boolean
+        label: Create Clab Emulation Topology
+        order_weight: 9
     relationships:
       - name: location
         peer: LocationMetro
