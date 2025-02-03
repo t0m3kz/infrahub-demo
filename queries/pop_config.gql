@@ -5,6 +5,15 @@ query firewall_config($device: String!) {
         name {
           value
         }
+        ... on DcimDevice{
+          asn{
+            node{
+              name{
+                value
+              }
+            }
+          }
+        }        
         interfaces {
           edges {
             node {
@@ -14,6 +23,12 @@ query firewall_config($device: String!) {
               }
               ... on DcimInterfaceL3 {
                 role {
+                  value
+                }
+                description{
+                  value
+                }
+                enabled{
                   value
                 }
                 security_zone {

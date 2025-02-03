@@ -7,7 +7,7 @@ infrahub_tests:
     tests:
       - name: syntax_check
         spec:
-          path: templates/firewall_config.gql
+          path: queries/firewall_config.gql
           kind: graphql-query-smoke
 
   - resource: GraphQLQuery
@@ -15,7 +15,7 @@ infrahub_tests:
     tests:
       - name: syntax_check
         spec:
-          path: templates/pop_config.gql
+          path: queries/pop_config.gql
           kind: graphql-query-smoke
 
   - resource: GraphQLQuery
@@ -23,7 +23,15 @@ infrahub_tests:
     tests:
       - name: syntax_check
         spec:
-          path: generators/topology_dc.gql
+          path: queries/topology_dc.gql
+          kind: graphql-query-smoke
+
+  - resource: GraphQLQuery
+    resource_name: topology_pop
+    tests:
+      - name: syntax_check
+        spec:
+          path: queries/topology_pop.gql
           kind: graphql-query-smoke
 
   - resource: GraphQLQuery
@@ -31,5 +39,5 @@ infrahub_tests:
     tests:
       - name: syntax_check
         spec:
-          path: simulators/topology.gql
+          path: queries/topology_clab.gql
           kind: graphql-query-smoke
