@@ -12,7 +12,7 @@ jinja2_transforms:
     description: "Template to generate startup configuration for a arista POP router"
     query: "pop_config"
     template_path: "templates/arista_pop_router.j2"
-  - name: "clab_topology"
+  - name: "topology_clab"
     query: "topology_simulator"
     template_path: "simulators/clab_topology.j2"
 
@@ -34,8 +34,8 @@ artifact_definitions:
   - name: "Containerlab Topology"
     artifact_name: "containerlab-topology"
     content_type: "text/plain"
-    targets: "clab_topologies"
-    transformation: "clab_topology"
+    targets: "topologies_clab"
+    transformation: "topology_clab"
     parameters:
       topology_name: "name__value"
 

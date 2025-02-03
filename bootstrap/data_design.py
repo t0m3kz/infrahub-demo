@@ -515,5 +515,6 @@ DC_DEPLOYMENT = {
     "customer": "1.1.0.0/24",
     "technical": "1.2.0.0/24",
     "design": "CISCO S",
+    "emulation": True,
     "provider": "Technology Partner",
 }

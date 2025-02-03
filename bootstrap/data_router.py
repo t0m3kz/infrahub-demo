@@ -75,6 +75,7 @@ POP_DEPLOYMENT = {
     "customer": "10.11.0.0/24",
     "management": "10.112.0.0/24",
     "design": "POP S",
+    "emulation": False,
     "provider": "Technology Partner",
 }
 
