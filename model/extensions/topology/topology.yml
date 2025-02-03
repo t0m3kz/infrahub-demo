@@ -109,6 +109,7 @@ generics:
         kind: Boolean
         label: Create Clab Emulation Topology
         order_weight: 9
+        default_value: false
     relationships:
       - name: location
         peer: LocationMetro

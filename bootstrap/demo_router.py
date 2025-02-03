@@ -40,6 +40,15 @@ async def run(client: InfrahubClient, log: logging.Logger, branch: str) -> None:
         populate_store=True,
     )
 
+    await client.filters(
+        kind="CoreStandardGroup",
+        name__values=list(
+            set(item[2].split(" ")[0].lower() + "_pop_router" for item in ROUTERS)
+        ),
+        branch=branch,
+        populate_store=True,
+    )
+
     log.info("Creating Design Elements")
     await create_objects(
         client=client,
@@ -96,6 +105,23 @@ async def run(client: InfrahubClient, log: logging.Logger, branch: str) -> None:
         branch=branch,
     )
 
+    member_of_groups = [
+        await client.get(
+            kind="CoreStandardGroup",
+            name__value="topologies_pop",
+            branch=branch,
+        )
+    ]
+
+    if POP_DEPLOYMENT.get("emulation"):
+        member_of_groups.append(
+            await client.get(
+                kind="CoreStandardGroup",
+                name__value="clab_topologies",
+                branch=branch,
+            )
+        )
+
     # log.info("Create DC Topology Deployment")
     # let'ts update location
     POP_DEPLOYMENT.update(
@@ -105,6 +131,7 @@ async def run(client: InfrahubClient, log: logging.Logger, branch: str) -> None:
             "design": client.store.get(
                 kind="DesignTopology", key=POP_DEPLOYMENT.get("design")
             ).id,
+            "member_of_groups": member_of_groups
         }
     )
     log.info(f"Creating POP Topology Deployment for {POP_DEPLOYMENT.get('name')}")
@@ -113,17 +140,6 @@ async def run(client: InfrahubClient, log: logging.Logger, branch: str) -> None:
             kind="TopologyColocationCenter", data=POP_DEPLOYMENT, branch=branch
         )
         await deployment.save(allow_upsert=True)
-        # asssign the design to the deployment group
-        topology_group = await client.create(
-            kind="CoreStandardGroup",
-            name="topologies_pop",
-            branch=branch,
-        )
-        # create group for topologies if doesn't exist
-        await topology_group.save(allow_upsert=True)
-        await topology_group.members.fetch()
-        topology_group.members.add(deployment)
-        await topology_group.save(allow_upsert=True)
     except (ValidationError, GraphQLError) as e:
         log.error(e)
 
@@ -176,6 +192,11 @@ async def run(client: InfrahubClient, log: logging.Logger, branch: str) -> None:
                         kind="IpamIPAddress", key=item[6]
                     ).id,
                     "topology": deployment.id,
+                    "member_of_groups": [
+                        client.store.get_by_hfid(
+                            key=f"CoreStandardGroup__{item[2].split(' ')[0].lower()}_pop_router"
+                        ).id
+                    ],
                 },
                 "store_key": item[0],
             }
