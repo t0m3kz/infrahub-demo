@@ -1,0 +1,70 @@
+query generate_topology($name: String!) {
+  TopologyColocationCenter(name__value: $name) {
+    edges {
+      node {
+        id
+        name {
+          value
+        }
+        description {
+          value
+        }
+        asn {
+          value
+        }
+        management {
+          value
+        }
+        customer {
+          value
+        }
+        location {
+          node {
+            id
+          }
+        }
+        design {
+          node {
+            name {
+              value
+            }
+            elements {
+              edges {
+                node {
+                  ... on DesignElement {
+                    quantity {
+                      value
+                    }
+                    role {
+                      value
+                    }
+                    device_type {
+                      node {
+                        id
+                        manufacturer {
+                          node {
+                            name {
+                              value
+                            }
+                          }
+                        }
+                        platform {
+                          node {
+                            id
+                          }
+                        }
+                      }
+                    }
+                    interface_patterns {
+                      value
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
