@@ -3,13 +3,13 @@ version: "1.0"
 infrahub_tests:
   # --------------------  Jinja2Transform  --------------------
   - resource: Jinja2Transform
-    resource_name: juniper_firewall_config
+    resource_name: juniper_firewall
     tests:
       - name: syntax_check
         spec:
           kind: jinja2-transform-smoke
   - resource: Jinja2Transform
-    resource_name: clab_topology
+    resource_name: topology_clab
     tests:
       - name: syntax_check
         spec:

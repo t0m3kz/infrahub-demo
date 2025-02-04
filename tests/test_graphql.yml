@@ -41,3 +41,35 @@ infrahub_tests:
         spec:
           path: queries/topology_clab.gql
           kind: graphql-query-smoke
+
+  - resource: GraphQLQuery
+    resource_name: dc_leaf_config
+    tests:
+      - name: syntax_check
+        spec:
+          path: queries/dc_leaf_config.gql
+          kind: graphql-query-smoke
+
+  - resource: GraphQLQuery
+    resource_name: dc_spine_config
+    tests:
+      - name: syntax_check
+        spec:
+          path: queries/dc_spine_config.gql
+          kind: graphql-query-smoke
+
+  - resource: GraphQLQuery
+    resource_name: dc_oob_config
+    tests:
+      - name: syntax_check
+        spec:
+          path: queries/dc_oob_config.gql
+          kind: graphql-query-smoke
+
+  - resource: GraphQLQuery
+    resource_name: dc_console_config
+    tests:
+      - name: syntax_check
+        spec:
+          path: queries/dc_console_config.gql
+          kind: graphql-query-smoke
