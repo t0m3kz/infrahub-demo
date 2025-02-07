@@ -36,9 +36,9 @@ jinja2_transforms:
     query: "dc_spine_config"
     template_path: "templates/configs/arista_dc_spine.j2"
   # Perle
-  - name: "perle_dc_console"
+  - name: "perle_console"
     description: "Template to generate startup configuration for a perle DC console"
-    query: "dc_console_config"
+    query: "console_config"
     template_path: "templates/configs/perle_dc_console.j2"
   # Containerlab
   - name: "topology_clab"
@@ -114,11 +114,18 @@ artifact_definitions:
     parameters:
       device: "name__value"
   # Perle
+  - name: "Perle DC console config"
+    artifact_name: "perle-dc-console"
+    content_type: "text/plain"
+    targets: "perle_dc_console"
+    transformation: "perle_console"
+    parameters:
+      device: "name__value"
   - name: "Perle POP console config"
     artifact_name: "perle-pop-console"
     content_type: "text/plain"
     targets: "perle_pop_console"
-    transformation: "perle_pop_console"
+    transformation: "perle_console"
     parameters:
       device: "name__value"
   # Containerlab    
@@ -164,5 +171,5 @@ queries:
     file_path: "queries/dc_spine_config.gql"
   - name: dc_oob_config
     file_path: "queries/dc_oob_config.gql"
-  - name: dc_console_config
+  - name: console_config
     file_path: "queries/dc_console_config.gql"  

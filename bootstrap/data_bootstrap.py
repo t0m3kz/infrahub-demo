@@ -195,6 +195,7 @@ GROUPS = (
     ("juniper_pop_firewall", "Juniper POP firewall"),
     ("checkpoint_firewall", "Checkpoint Firewall Devices"),
     ("perle_dc_console", "Perle DC Console"),
+    ("perle_pop_console", "Perle POP Console"),
     ("provisioning_circuits", "Provisioning Circuits"),
     ("topologies_dc", "Data Center Topologies"),
     ("topologies_pop", "POP Topologies"),
