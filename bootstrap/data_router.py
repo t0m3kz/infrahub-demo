@@ -25,48 +25,6 @@ ROUTE_TARGETS = {
 }
 
 
-DESIGN_ELEMENTS = [
-    (
-        "CISCO S 2 EDGE N9K-C9316D-GX",
-        "2 Cisco N9K-C9316D-GX edges",
-        2,
-        "edge",
-        "N9K-C9316D-GX",
-        [
-            {"name": "Ethernet1/1", "type": "400gbase-x-qsfpdd", "role": "uplink"},
-            {"name": "Ethernet1/2", "type": "400gbase-x-qsfpdd", "role": "uplink"},
-            {"name": "Ethernet1/3", "type": "400gbase-x-qsfpdd", "role": "uplink"},
-            {"name": "Ethernet1/4", "type": "400gbase-x-qsfpdd", "role": "uplink"},
-            {"name": "Ethernet1/5", "type": "400gbase-x-qsfpdd", "role": "uplink"},
-            {"name": "Ethernet1/6", "type": "400gbase-x-qsfpdd", "role": "uplink"},
-            {"name": "Ethernet1/7", "type": "400gbase-x-qsfpdd", "role": "uplink"},
-            {"name": "Ethernet1/8", "type": "400gbase-x-qsfpdd", "role": "uplink"},
-            {"name": "Ethernet1/9", "type": "400gbase-x-qsfpdd", "role": "uplink"},
-            {"name": "Ethernet1/10", "type": "400gbase-x-qsfpdd", "role": "uplink"},
-            {"name": "Ethernet1/11", "type": "400gbase-x-qsfpdd", "role": "uplink"},
-            {"name": "Ethernet1/12", "type": "400gbase-x-qsfpdd", "role": "uplink"},
-            {"name": "Ethernet1/13", "type": "400gbase-x-qsfpdd", "role": "uplink"},
-            {"name": "Ethernet1/14", "type": "400gbase-x-qsfpdd", "role": "uplink"},
-            {"name": "Ethernet1/15", "type": "400gbase-x-qsfpdd", "role": "peering"},
-            {"name": "Ethernet1/16", "type": "400gbase-x-qsfpdd", "role": "peering"},
-            {"name": "mgmt0", "type": "1000base-t", "role": "management"},
-            {"name": "con", "type": "1000base-t", "role": "console"},
-        ],
-    ),
-]
-
-DESIGN = [
-    (
-        "POP S",
-        "POP 2 routers",
-        "POP",
-        [
-            "CISCO S 2 EDGE N9K-C9316D-GX",
-        ],
-    ),
-]
-
-
 POP_DEPLOYMENT = {
     "name": "EQX-1",
     "location": "Frankfurt",
