@@ -30,7 +30,7 @@ class DCTopologyGenerator(TopologyGenerator):
             kind="CoreStandardGroup",
             name__values=list(
                 set(
-                    f"{item['device_type']['manufacturer']['name'].lower()}_{item['role']}"
+                    f"{item['device_type']['manufacturer']['name'].lower()}_dc_{item['role']}"
                     for item in data["design"]["elements"]
                 )
             ),
