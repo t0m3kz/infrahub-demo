@@ -184,6 +184,7 @@ GROUPS = (
     ("cisco_pop_router", "Cisco POP Routers"),
     ("arista_dc_leaf", "Arista DC leaf devices"),
     ("arista_dc_spine", "Arista DC spine devices"),
+    ("arista_pop_router", "Arista POP Routers"),
     ("sonic_dc_leaf", "Sonic DC leaf devices"),
     ("sonic_dc_spine", "Sonic DC spine devices"),
     ("linux_devices", "Linux Devices"),
