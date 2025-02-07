@@ -11,7 +11,6 @@ from data_design import DC_DEPLOYMENT
 async def run(client: InfrahubClient, log: logging.Logger, branch: str) -> None:
     """Create all the infrastructure objects."""
 
-
     site = await client.get(
         kind="LocationMetro", name__value=DC_DEPLOYMENT.get("location"), branch=branch
     )

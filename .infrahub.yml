@@ -99,19 +99,26 @@ artifact_definitions:
     parameters:
       device: "name__value"
   # Juniper
-  - name: "Juniper firewall config"
-    artifact_name: "juniper-firewall"
+  - name: "Juniper DC firewall config"
+    artifact_name: "juniper-dc-firewall"
     content_type: "text/plain"
-    targets: "juniper_firewall"
+    targets: "juniper_dc_firewall"
     transformation: "juniper_firewall"
     parameters:
       device: "name__value"  
-  # Perle
-  - name: "Perle DC console config"
-    artifact_name: "perle-dc-console"
+  - name: "Juniper POP firewall config"
+    artifact_name: "juniper-pop-firewall"
     content_type: "text/plain"
-    targets: "perle_dc_console"
-    transformation: "perle_dc_console"
+    targets: "juniper_pop_firewall"
+    transformation: "juniper_firewall"
+    parameters:
+      device: "name__value"
+  # Perle
+  - name: "Perle POP console config"
+    artifact_name: "perle-pop-console"
+    content_type: "text/plain"
+    targets: "perle_pop_console"
+    transformation: "perle_pop_console"
     parameters:
       device: "name__value"
   # Containerlab    
