@@ -56,24 +56,24 @@ artifact_definitions:
     parameters:
       device: "name__value"
   - name: "Cisco DC leaf config"
-    artifact_name: "cisco-dc-leaf-config"
+    artifact_name: "cisco-dc-leaf"
     content_type: "text/plain"
-    targets: "dc_leaf_config"
-    transformation: "dc_leaf_config"
+    targets: "cisco_dc_leaf"
+    transformation: "cisco_dc_leaf"
     parameters:
       device: "name__value"
   - name: "Cisco DC spine config"
-    artifact_name: "cisco-dc-spine-config"
+    artifact_name: "cisco-dc-spine"
     content_type: "text/plain"
-    targets: "dc_spine_config"
-    transformation: "dc_spine_config"
+    targets: "cisco_dc_spine"
+    transformation: "cisco_dc_spine"
     parameters:
       device: "name__value"
   - name: "Cisco DC OOB config"
-    artifact_name: "cisco-dc-oob-config"
+    artifact_name: "cisco-dc-oob"
     content_type: "text/plain"
-    targets: "dc_oob_config"
-    transformation: "dc_oob_config"
+    targets: "cisco_dc_oob"
+    transformation: "cisco_dc_oob"
     parameters:
       device: "name__value"      
   # Arista
@@ -85,22 +85,22 @@ artifact_definitions:
     parameters:
       device: "name__value"
   - name: "Arista DC leaf config"
-    artifact_name: "arista-dc-leaf-config"
+    artifact_name: "arista-dc-leaf"
     content_type: "text/plain"
-    targets: "dc_leaf_config"
-    transformation: "dc_leaf_config"
+    targets: "arista_dc_leaf"
+    transformation: "arista_dc_leaf"
     parameters:
       device: "name__value"
   - name: "Arista DC spine config"
-    artifact_name: "arista-dc-spine-config"
+    artifact_name: "arista-dc-spine"
     content_type: "text/plain"
-    targets: "dc_spine_config"
-    transformation: "dc_spine_config"
+    targets: "arista_dc_spine"
+    transformation: "arista_dc_spine"
     parameters:
       device: "name__value"
   # Juniper
   - name: "Juniper firewall config"
-    artifact_name: "juniper-firewall-config"
+    artifact_name: "juniper-firewall"
     content_type: "text/plain"
     targets: "juniper_firewall"
     transformation: "juniper_firewall"
@@ -108,10 +108,10 @@ artifact_definitions:
       device: "name__value"  
   # Perle
   - name: "Perle DC console config"
-    artifact_name: "perle-dc-console-config"
+    artifact_name: "perle-dc-console"
     content_type: "text/plain"
-    targets: "dc_console_config"
-    transformation: "dc_console_config"
+    targets: "perle_dc_console"
+    transformation: "perle_dc_console"
     parameters:
       device: "name__value"
   # Containerlab    

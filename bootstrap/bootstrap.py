@@ -20,6 +20,8 @@ from data_bootstrap import (
     ASNS,
     PLATFORMS,
     DEVICE_TYPES,
+    DESIGN,
+    DESIGN_ELEMENTS,
 )
 
 
@@ -284,9 +286,62 @@ async def infra(client: InfrahubClient, log: logging.Logger, branch: str) -> Non
     )
 
 
+async def design(client: InfrahubClient, log: logging.Logger, branch: str) -> None:
+    """Create all the design objects."""
+    # Let's play with owner and source to test functionality
+
+    log.info("Creating Design Elements")
+    await create_objects(
+        client=client,
+        log=log,
+        branch=branch,
+        kind="DesignElement",
+        data_list=[
+            {
+                "payload": {
+                    "name": item[0],
+                    "description": item[1],
+                    "quantity": item[2],
+                    "role": item[3],
+                    "device_type": client.store.get_by_hfid(
+                        key=f"DcimDeviceType__{item[4]}"
+                    ).id,
+                    "interface_patterns": item[5],
+                },
+                "store_key": item[0],
+            }
+            for item in DESIGN_ELEMENTS
+        ],
+    )
+
+    log.info("Creating Design Patterns")
+    await create_objects(
+        client=client,
+        log=log,
+        branch=branch,
+        kind="DesignTopology",
+        data_list=[
+            {
+                "payload": {
+                    "name": item[0],
+                    "description": item[1],
+                    "type": item[2],
+                    "elements": [
+                        client.store.get(kind="DesignElement", key=element).id
+                        for element in item[3]
+                    ],
+                },
+                "store_key": item[0],
+            }
+            for item in DESIGN
+        ],
+    )
+
+
 async def run(client: InfrahubClient, log: logging.Logger, branch: str) -> None:
     """Create all the infrastructure objects."""
 
     await location(client=client, log=log, branch=branch)
     await core(client=client, log=log, branch=branch)
     await infra(client=client, log=log, branch=branch)
+    await design(client=client, log=log, branch=branch)

@@ -11,8 +11,8 @@ class DCTopologyGenerator(TopologyGenerator):
         """Generate topology."""
         self.client.log.setLevel(logging.INFO)
         self.client.log.addHandler(logging.StreamHandler())
-        data =clean_data(data)["TopologyDataCenter"][0]
-        
+        data = clean_data(data)["TopologyDataCenter"][0]
+
         self.client.log.info(f"Generating DC topology: {data['name']}")
         await self._create(
             kind="LocationBuilding",
@@ -48,9 +48,7 @@ class DCTopologyGenerator(TopologyGenerator):
             },
         )
 
-        await self._create_devices(
-            data["name"], data["design"]["elements"], data["id"]
-        )
+        await self._create_devices(data["name"], data["design"]["elements"], data["id"])
         await self._create_interfaces(data["name"], data["design"]["elements"])
         await self._create_oob_connections(
             data["name"], data["design"]["elements"], "console"
@@ -58,6 +56,4 @@ class DCTopologyGenerator(TopologyGenerator):
         await self._create_oob_connections(
             data["name"], data["design"]["elements"], "management"
         )
-        await self._create_peering_connections(
-            data["name"], data["design"]["elements"]
-        )
+        await self._create_peering_connections(data["name"], data["design"]["elements"])

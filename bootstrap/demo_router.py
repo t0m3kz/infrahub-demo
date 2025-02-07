@@ -8,8 +8,6 @@ from utils import create_objects
 from data_router import (
     ROUTERS,
     INTERFACES,
-    DESIGN_ELEMENTS,
-    DESIGN,
     POP_DEPLOYMENT,
     ROUTE_TARGETS,
     VRFS,
@@ -49,53 +47,6 @@ async def run(client: InfrahubClient, log: logging.Logger, branch: str) -> None:
         populate_store=True,
     )
 
-    log.info("Creating Design Elements")
-    await create_objects(
-        client=client,
-        log=log,
-        branch=branch,
-        kind="DesignElement",
-        data_list=[
-            {
-                "payload": {
-                    "name": item[0],
-                    "description": item[1],
-                    "quantity": item[2],
-                    "role": item[3],
-                    "device_type": client.store.get_by_hfid(
-                        key=f"DcimDeviceType__{item[4]}"
-                    ).id,
-                    "interface_patterns": item[5],
-                },
-                "store_key": item[0],
-            }
-            for item in DESIGN_ELEMENTS
-        ],
-    )
-
-    log.info("Creating Design Patterns")
-    await create_objects(
-        client=client,
-        log=log,
-        branch=branch,
-        kind="DesignTopology",
-        data_list=[
-            {
-                "payload": {
-                    "name": item[0],
-                    "description": item[1],
-                    "type": item[2],
-                    "elements": [
-                        client.store.get(kind="DesignElement", key=element).id
-                        for element in item[3]
-                    ],
-                },
-                "store_key": item[0],
-            }
-            for item in DESIGN
-        ],
-    )
-
     site = await client.get(
         kind="LocationMetro", name__value=POP_DEPLOYMENT.get("location"), branch=branch
     )
@@ -103,6 +54,10 @@ async def run(client: InfrahubClient, log: logging.Logger, branch: str) -> None:
         kind="OrganizationProvider",
         name__value=POP_DEPLOYMENT.get("provider"),
         branch=branch,
+    )
+
+    design = await client.get(
+        kind="DesignTopology", name__value=POP_DEPLOYMENT.get("design"), branch=branch
     )
 
     member_of_groups = [
@@ -128,9 +83,7 @@ async def run(client: InfrahubClient, log: logging.Logger, branch: str) -> None:
         {
             "location": site.id,
             "provider": provider.id,
-            "design": client.store.get(
-                kind="DesignTopology", key=POP_DEPLOYMENT.get("design")
-            ).id,
+            "design": design.id,
             "member_of_groups": member_of_groups,
         }
     )
