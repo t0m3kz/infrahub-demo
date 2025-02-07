@@ -112,7 +112,7 @@ class TopologyGenerator(InfrahubGenerator):
                 )
 
     async def _create_devices(
-        self, topology_name: str, data: list, topology: str
+        self, topology_name: str, data: list, topology_id: str, topology_type: str
     ) -> None:
         """Create objects of a specific kind and store in local store."""
         devices = {"DcimDevice": [], "DcimFirewall": []}
@@ -134,10 +134,10 @@ class TopologyGenerator(InfrahubGenerator):
                         "location": self.store.get(key=topology_name).id,
                         "member_of_groups": [
                             self.store.get_by_hfid(
-                                key=f"CoreStandardGroup__{manufacturer}_{role}"
-                            ).id
+                                key=f"CoreStandardGroup__{manufacturer}_{topology_type}_{role}"
+                            )
                         ],
-                        "topology": topology,
+                        "topology": topology_id,
                     },
                     "store_key": device_name,
                 }
@@ -190,8 +190,6 @@ class TopologyGenerator(InfrahubGenerator):
         for kind, interface_list in interfaces.items():
             if interface_list:
                 await self._create_in_batch(kind=kind, data_list=interface_list)
-        # import json
-        # print(json.dumps(l2interface_list, indent=4))
 
     async def _create_oob_connections(
         self,
