@@ -39,7 +39,7 @@ jinja2_transforms:
   - name: "perle_console"
     description: "Template to generate startup configuration for a perle DC console"
     query: "console_config"
-    template_path: "templates/configs/perle_dc_console.j2"
+    template_path: "templates/configs/perle_console.j2"
   # Containerlab
   - name: "topology_clab"
     description: "Template to generate a containerlab topology"
