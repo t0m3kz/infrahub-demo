@@ -5,6 +5,37 @@ query firewall_config($device: String!) {
         name {
           value
         }
+        interfaces {
+          edges {
+            node {
+              __typename
+              name {
+                value
+              }
+              ... on DcimInterfaceL3 {
+                role {
+                  value
+                }
+                security_zone {
+                  node {
+                    name {
+                      value
+                    }
+                  }
+                }
+                ip_addresses {
+                  edges {
+                    node {
+                      address {
+                        value
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
         ... on DcimFirewall {
           policy {
             node {
@@ -91,37 +122,6 @@ query firewall_config($device: String!) {
                             }
                           }
                         }
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          }
-        }
-        interfaces {
-          edges {
-            node {
-              __typename
-              name {
-                value
-              }
-              ... on DcimInterfaceL3 {
-                role {
-                  value
-                }
-                security_zone {
-                  node {
-                    name {
-                      value
-                    }
-                  }
-                }
-                ip_addresses {
-                  edges {
-                    node {
-                      address {
-                        value
                       }
                     }
                   }

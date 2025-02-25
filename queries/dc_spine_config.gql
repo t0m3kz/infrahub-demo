@@ -21,6 +21,9 @@ query firewall_config($device: String!) {
               name {
                 value
               }
+              description{
+                value
+              }
               ... on DcimInterfaceL3 {
                 role {
                   value
