@@ -23,15 +23,15 @@ query firewall_config($device: String!) {
               }
               description{
                 value
-              }              
+              } 
+              enabled{
+                value
+              }             
               ... on DcimInterfaceL3 {
                 role {
                   value
                 }
                 description{
-                  value
-                }
-                enabled{
                   value
                 }
                 security_zone {
