@@ -12,6 +12,12 @@ query firewall_config($device: String!) {
               name {
                 value
               }
+              description{
+                value
+              }
+              enabled{
+                value
+              }               
               ... on DcimInterfaceL3 {
                 role {
                   value
