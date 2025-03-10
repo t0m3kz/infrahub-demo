@@ -7,7 +7,7 @@ readme = "README.md"
 [tool.poetry.dependencies]
 python = ">=3.9, < 3.13"
 invoke = "^2.2.0"
-pytest = "^8.3.2"
+pytest = "^8.3.5"
 infrahub-sdk = {extras = ["all"], version = "^1.0.0"}
 
 
@@ -21,7 +21,7 @@ bandit = "^1.8.3"
 black = "^24.8.0"
 flake8 = "^7.1.2"
 invoke = "^2.2.0"
-pytest = "^8.3.4"
+pytest = "^8.3.5"
 
 
 [build-system]
