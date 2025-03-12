@@ -1,6 +1,7 @@
 """Common functions for the generators."""
 
 import re
+import ipaddress
 from infrahub_sdk.generator import InfrahubGenerator
 from infrahub_sdk.exceptions import GraphQLError, ValidationError
 
@@ -89,6 +90,12 @@ class TopologyGenerator(InfrahubGenerator):
         try:
             obj = await self.client.create(kind=kind, data=data)
             await obj.save(allow_upsert=True)
+            object_reference = obj.hfid[0] if obj.hfid else obj.display_label
+            self.client.log.info(
+                f"- Created [{kind}] '{object_reference}'"
+                if object_reference
+                else f"- Created [{kind}]"
+            )            
             if store_key:
                 self.client.store.set(key=store_key, node=obj)
         except (GraphQLError, ValidationError) as exc:
@@ -108,15 +115,41 @@ class TopologyGenerator(InfrahubGenerator):
                     "location": self.store.get(key=topology_name).id,
                 }
                 await self._create(
-                    kind="IpamPrefix", data=data, store_key=pools.get(item)
+                    kind="IpamPrefix", data=data, store_key=item
                 )
+                self.client.log.info(
+                    self.store.get(item).id
+                )
+                if item in ["management", "technical"]:
+                    data = {
+                        "name": f"{topology_name}-{item}",
+                        "description": f"Management network for {topology_name}",
+                        "default_address_type": "IpamIPAddress",
+                        "default_prefix_length": ipaddress.IPv4Network(pools.get(item)).prefixlen,
+                        "resources": [self.store.get(item).id],
+                        "ip_namespace": {"id": "default"}
+                    }
+                    await self._create(
+                        kind="CoreIPAddressPool", data=data, store_key=f"{topology_name}-{item}"
+                    )
+                else:
+                    data = {
+                        "name": f"{topology_name}-{item}",
+                        "description": f"Management network for {topology_name}",
+                        "default_address_type": "IpamIPAddress",
+                        "default_prefix_length": 24,
+                        "resources": [self.store.get(item).id],
+                        "ip_namespace": {"id": "default"}
+                    }
+                    await self._create(
+                        kind="CoreIPPrefixPool", data=data, store_key=f"{topology_name}-{item}"
+                    )
 
     async def _create_devices(
         self, topology_name: str, data: list, topology_id: str, topology_type: str
     ) -> None:
         """Create objects of a specific kind and store in local store."""
         devices = {"DcimDevice": [], "DcimFirewall": []}
-
         for device in data:
             for item in range(1, device["quantity"] + 1):
                 site = topology_name.lower()
@@ -280,3 +313,14 @@ class TopologyGenerator(InfrahubGenerator):
             # print(source_endpoint, target_endpoint)
             source_endpoint.connector = target_endpoint
             await source_endpoint.save(allow_upsert=True)
+
+    async def _create_vlan_pool():
+        pass
+
+    async def _create_prefix_pool():
+        pass
+    async def _create_ip_pool():
+        pass
+
+    async def _create_bgp_pool():
+        pass
