@@ -8,7 +8,7 @@ readme = "README.md"
 python = ">=3.9, < 3.13"
 invoke = "^2.2.0"
 pytest = "^8.3.5"
-infrahub-sdk = {extras = ["all"], version = "^1.0.0"}
+infrahub-sdk = {extras = ["all"], version = "^1.7.2"}
 
 
 [tool.poetry.group.dev.dependencies]
