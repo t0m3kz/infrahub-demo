@@ -14,7 +14,7 @@ infrahub-sdk = {extras = ["all"], version = "^1.7.2"}
 [tool.poetry.group.dev.dependencies]
 ipdb = "^0.13.13"
 pylint = "^3.2.6"
-yamllint = "^1.36.0"
+yamllint = "^1.36.2"
 pre-commit = "^4.1.0"
 pydocstyle = "^6.3.0"
 bandit = "^1.8.3"
