@@ -15,7 +15,7 @@ infrahub-sdk = {extras = ["all"], version = "^1.7.2"}
 ipdb = "^0.13.13"
 pylint = "^3.2.6"
 yamllint = "^1.36.0"
-pre-commit = "^4.1.0"
+pre-commit = "^4.2.0"
 pydocstyle = "^6.3.0"
 bandit = "^1.8.3"
 black = "^24.8.0"
