@@ -116,8 +116,7 @@ nodes:
         label: Interfaces
         kind: Attribute
         optional: true
-        peer: DcimInterfaceL3
-        cardinality: many
+        peer: DcimFirewallInterface
   - name: IPAMIPAddress
     namespace: Security
     menu_placement: SecurityPolicy
@@ -403,11 +402,6 @@ nodes:
       - index__value
     uniqueness_constraints:
       - [index__value, source_zone, destination_zone, policy]
-    human_friendly_id:
-      - index__value
-      - source_zone__name__value
-      - destination_zone__name__value
-      - policy__name__value
     attributes:
       - name: index
         label: Index
@@ -500,28 +494,32 @@ nodes:
         identifier: policy_rule__destination_service_group
   - name: Firewall
     namespace: Dcim
+    generate_template: true
+    label: Firewall
     inherit_from:
       - DcimGenericDevice
       - CoreArtifactTarget
       - SecurityPolicyAssignment
     icon: "mdi:firewall"
     include_in_menu: true
-    human_friendly_id:
-      - name__value
-    menu_placement: "DcimGenericDevice"
+    menu_placement: "InfraGenericDevice"
     attributes:
       - name: role
         kind: Dropdown
         optional: true
         choices:
-          - name: edge_firewall
-            label: Edge firewall
+          - name: dc_firewall
+            label: DC Firewall
             description: "Security boundary with external network"
-            color: "#6a5acd"
-          - name: customer_firewall
-            label: Customer firewall
-            description: "Security boundary with internal network"
-            color: "#6c5abd"
+            color: "#6e5abd"           
+          - name: edge_firewall
+            label: Edge Firewall
+            description: "Security boundary with external network"
+            color: "#6a5acd"    
+          - name: branch_firewall
+            label: Branch Firewall
+            description: "Security boundary with external network"
+            color: "#6a5bdd"                   
     relationships:
       - name: policy
         peer: SecurityPolicy
@@ -627,19 +625,33 @@ nodes:
         kind: Attribute
         cardinality: many
         identifier: rendered_policy_rule__destination_service_group
-
+  - name: FirewallInterface
+    namespace: Dcim
+    label: Firewall Interface
+    menu_placement: "InfraGenericDevice"
+    include_in_menu: false
+    icon: "mdi:ethernet"
+    display_labels:
+      - name__value
+    inherit_from:
+      - DcimInterface
+      - DcimEndpoint
+    relationships:
+      - name: ip_addresses
+        peer: IpamIPAddress
+        optional: true
+        cardinality: many
+        kind: Component
+      - name: security_zone
+        peer: SecurityZone
+        optional: true
+        cardinality: one
+        kind: Attribute
 extensions:
   nodes:
     - kind: LocationGeneric
       relationships:
         - name: policy
           peer: SecurityPolicy
-          cardinality: one
-          kind: Attribute
-    - kind: DcimInterfaceL3
-      relationships:
-        - name: security_zone
-          peer: SecurityZone
-          optional: true
           cardinality: one
           kind: Attribute

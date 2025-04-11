@@ -13,7 +13,6 @@ generics:
     order_by:
       - name__value
     display_labels:
-      # - platform__name__value
       - name__value
     attributes:
       - name: name
@@ -33,6 +32,7 @@ generics:
         peer: DcimInterface
         optional: true
         cardinality: many
+        identifier: device__interface
         kind: Component
       - name: tags
         peer: BuiltinTag
@@ -98,13 +98,36 @@ generics:
         kind: Attribute
         order_weight: 1500
 
+  - name: Endpoint
+    namespace: Dcim
+    description: Generic Endpoint to connect two objects together.
+    include_in_menu: false
+    relationships:
+      - name: connector
+        peer: DcimEndpoint
+        optional: true
+        cardinality: one
+        order_weight: 1500
+        kind: Attribute
+
+  # - name: Connector
+  #   namespace: Dcim
+  #   description: Generic Connector to link two endpoints together.
+  #   include_in_menu: false
+  #   relationships:
+  #     - name: connected_endpoints
+  #       peer: DcimEndpoint
+  #       optional: true
+  #       cardinality: many
+  #       order_weight: 1500
+  #       kind: Generic
+
+    # Interfaces
   - name: Interface
     namespace: Dcim
-    description: Generic Network Interface.
+    description: "Generic Network Interface"
     label: Interface
-    icon: mdi:ethernet
-    menu_placement: DcimGenericDevice
-    include_in_menu: true
+    include_in_menu: false
     display_labels:
       - name__value
     order_by:
@@ -118,47 +141,177 @@ generics:
     attributes:
       - name: name
         kind: Text
+        description: "Name of the interface"
         order_weight: 1000
       - name: description
         kind: Text
         optional: true
+        description: "A brief description of the interface"
         order_weight: 1100
-      - name: speed
-        kind: Number
-        order_weight: 1400
       - name: mtu
         label: MTU
-        default_value: 1500
         kind: Number
-        order_weight: 1500
-      - name: enabled
-        kind: Boolean
-        default_value: true
+        default_value: 1514
+        order_weight: 1300
+      - name: status
+        kind: Dropdown
+        description: "The status of the interface"
+        choices:
+          - name: provisioning
+            label: Provisioning
+            description: "Interface is being provisioned."
+            color: "#A9DFBF" # light pastel green
+          - name: free
+            label: Free
+            description: "Interface is unused."
+            color: "#CDEACC" # slightly darker pastel green
+          - name: active
+            label: Active
+            description: "Interface is active and operational."
+            color: "#A9CCE3" # pastel blue
+          - name: maintenance
+            label: Maintenance
+            description: "Interface is under maintenance."
+            color: "#FFF2CC" # pastel yellow
+          - name: disabled
+            label: Disabled
+            description: "Interface has been disabled."
+            color: "#D3D3D3" # light grey
+          - name: deleted
+            label: Deleted
+            description: "Interface has been deleted."
+            color: "#FAD7A0" # pastel orange
+          - name: outage
+            label: Outage
+            description: "Interface is currently experiencing an outage."
+            color: "#F4CCCC" # pastel red
+        default_value: "active"
         order_weight: 1200
+      - name: role
+        kind: Dropdown
+        optional: true
+        description: "The role of the interface in the network"
+        choices:
+          - name: lag
+            label: Lag
+            description: "Interface LAG."
+            color: "#A9DFBF" # light pastel green
+          - name: core
+            label: Core Interface
+            description: "Central part of the network."
+            color: "#A9CCE3" # pastel blue
+          - name: customer
+            label: Customer Interface
+            description: "Interface dedicated to customer connections."
+            color: "#D2B4DE" # pastel purple
+          - name: access
+            label: Access Interfaces
+            description: "Interface connecting endpoint devices."
+            color: "#B4E0DC" # pastel teal
+          - name: management
+            label: Management Interface
+            description: "Interface dedicated to device management."
+            color: "#E3DAC9" # pastel cream
+          - name: peering
+            label: Peering Interface
+            description: "Interface dedicated to peering with other networks."
+            color: "#C4B7E6" # pastel purple
+          - name: upstream
+            label: Upstream Interface
+            description: "Interface dedicated to upstream traffic between networks."
+            color: "#B2D4E6" # pastel sky blue
+          - name: leaf
+            label: Leaf Interface
+            description: "Interface dedicated to upstream to leaf between networks."
+            color: "#B2D4C6"     
+          - name: console
+            label: Console Interface
+            description: "Interface dedicated to console connection management."
+            color: "#E2D4C6"     
+          - name: uplink
+            label: Uplink Interface
+            description: "Interface dedicated to connect with aggragation switch."
+            color: "#E2D4C6"                       
+        order_weight: 1250
     relationships:
       - name: device
         peer: DcimGenericDevice
+        identifier: device__interface
         optional: false
         cardinality: one
         kind: Parent
-        # on_delete: cascade
+        order_weight: 1025
       - name: tags
         peer: BuiltinTag
         optional: true
         cardinality: many
         kind: Attribute
+        order_weight: 3000
 
-  - name: Endpoint
+  - name: InterfaceL2
     namespace: Dcim
-    description: Generic Endpoint to connect two objects together.
+    include_in_menu: false
+    description: "Layer 2 specific attributes for network interfaces"
+    label: "Layer 2 Interface"
+    attributes:
+      - name: l2_mode
+        label: Layer2 Mode
+        kind: Dropdown
+        optional: true
+        choices:
+          - name: access
+            label: Access
+            description: "Access mode"
+          - name: trunk
+            label: Trunk
+            description: "Trunk mode"
+          - name: trunk_all
+            label: Trunk (All)
+            description: "Trunk all mode"
+        description: "Layer 2 mode of the interface"
+        order_weight: 1500
+
+  - name: InterfaceL3
+    namespace: Dcim
+    include_in_menu: false
+    description: "Layer 3 specific attributes for network interfaces"
+    label: "Layer 3 Interface"
+    attributes:
+      - name: dot1q_id
+        label: VLAN ID (dot1q)
+        kind: Number
+        description: "Dot1Q VLAN ID"
+        order_weight: 1600
+        optional: true
+      - name: mac_address
+        label: Mac Address
+        kind: Text
+        optional: true
+        order_weight: 1550
+    relationships:
+      - name: ip_addresses
+        label: IP Addresses
+        peer: IpamIPAddress
+        cardinality: many
+        kind: Attribute
+        optional: true
+        description: "List of IP addresses associated with the interface"
+        order_weight: 1150
+
+  - name: HasSubInterface
+    namespace: Dcim
+    description: A generic interface that can have sub-interfaces
     include_in_menu: false
     relationships:
-      - name: connector
-        peer: DcimEndpoint
+      - name: sub_interfaces
+        label: "Sub-interface(s)"
+        peer: InterfaceVirtual
+        identifier: "sub__interface"
         optional: true
-        cardinality: one
-        order_weight: 1500
+        cardinality: many
         kind: Attribute
+        description: "Sub-interfaces of this interface"
+        order_weight: 1750
 
 nodes:
   # --------------------  Device (Types, Platforms, Device, Interfaces )  --------------------
@@ -281,10 +434,11 @@ nodes:
         order_weight: 1300
 
   - name: Device
-    namespace: Dcim
     label: Network Device
     description: A configurable network device for managing and directing data traffic, including routers, switches...
     icon: clarity:network-switch-solid
+    generate_template: true
+    namespace: Dcim
     inherit_from:
       - CoreArtifactTarget
       - DcimGenericDevice
@@ -341,186 +495,108 @@ nodes:
             description: Tor switch part of a Fabric.
             color: "#e8e7fd"
           - name: oob
-            label: OOB Switch
-            description: Out of Band Switch part of a Fabric.
-            color: "#e347fd"
+            label: Out of Band Switch
+            description: OOB switch part of a Fabric.
+            color: "#e8e7ed"
           - name: console
             label: Console Server
-            description: Console server for remote management.
-            color: "#e8e32d"
-  - name: InterfaceL3
+            description: Console server part of a Fabric.
+            color: "#e8e7ad"            
+  - name: PhysicalInterface
     namespace: Dcim
-    description: Network Layer 3 Interface
-    label: Interface L3
-    icon: mdi:ethernet
-    include_in_menu: false
-    menu_placement: DcimInterface
-    display_labels:
-      - name__value
-    order_by:
-      - name__value
+    label: Physical Interface
+    description: "Physical network port on a device"
     inherit_from:
       - DcimInterface
+      - DcimInterfaceL2
+      - DcimInterfaceL3
       - DcimEndpoint
+      - DcimHasSubInterface
+    include_in_menu: false
     attributes:
-      - name: role
+      - name: interface_type
         kind: Dropdown
-        optional: true
+        description: "The type of the interface"
         choices:
-          - name: backbone
-            label: Backbone
-            description: Provide main data routes.
-            color: "#6a5acd"
-          - name: upstream
-            label: upstream
-            description: Connect to Internet service provider.
-            color: "#9090de"
-          - name: peering
-            label: Peering
-            description: Connect with other networks via IX.
-            color: "#ffa07a"
-          - name: peer
-            label: Peer
-            description: Equal-status connections for direct interchange.
-            color: "#faa446"
-          - name: server
-            label: Server
-            description: Dedicated to interfaces connected to servers.
-            color: "#98b2d1"
-          - name: loopback
-            label: Loopback
-            description: Internal interface.
-            color: "#93e9be"
-          - name: management
-            label: Management
-            description: Dedicated network for control and monitoring.
-            color: "#ccc28a"
-          - name: uplink
-            label: Uplink
-            description: Connect to higher device.
-            color: "#ff6b6b"
-          - name: leaf
-            label: Leaf
-            description: Connect to leaf device.
-            color: "#e6e6fa"
-          - name: spare
-            label: Spare
-            description: Reserve resources for future use.
-            color: "#d3d3d3"
-        order_weight: 1700
-      - name: status
-        kind: Dropdown
-        optional: true
-        order_weight: 1300
-        choices:
-          - name: active
-            label: Active
-            description: Fully operational and currently in service.
-            color: "#7fbf7f"
-          - name: provisioning
-            label: Provisioning
-            description: In the process of being set up and configured.
-            color: "#ffff7f"
-          - name: maintenance
-            label: Maintenance
-            description: Undergoing routine maintenance or repairs.
-            color: "#ffd27f"
-          - name: drained
-            label: Drained
-            description: Temporarily taken out of service.
-            color: "#bfbfbf"
+          - name: 100base-fx
+            label: 100BASE-FX
+            description: "100 Mbps fiber interface."
+            color: "#FFF2CC" # pastel yellow
+          - name: 100base-lfx
+            label: 100BASE-LFX
+            description: "100 Mbps long-range fiber interface."
+            color: "#D3D3D3" # light grey
+          - name: 100base-tx
+            label: 100BASE-TX
+            description: "100 Mbps twisted-pair copper interface."
+            color: "#FAD7A0" # pastel orange
+          - name: 100base-t1
+            label: 100BASE-T1
+            description: "100 Mbps single-pair twisted copper interface."
+            color: "#F4CCCC" # pastel red
+          - name: 1000base-t
+            label: 1000BASE-T
+            description: "1 Gbps twisted-pair copper interface."
+            color: "#A9DFBF" # light pastel green
+          - name: 1000base-x-gbic
+            label: 1000BASE-X GBIC
+            description: "1 Gbps fiber interface with GBIC."
+            color: "#CDEACC" # slightly darker pastel green
+          - name: 1000base-x-sfp
+            label: 1000BASE-X SFP
+            description: "1 Gbps fiber interface with SFP."
+            color: "#A9CCE3" # pastel blue
+          - name: 10gbase-t
+            label: 10GBASE-T
+            description: "10 Gbps twisted-pair copper interface."
+            color: "#FFF2CC" # pastel yellow
+          - name: 10gbase-x-sfpp
+            label: 10GBASE-X SFP+
+            description: "10 Gbps fiber interface with SFP+."
+            color: "#D3D3D3" # light grey
+          - name: 25gbase-x-sfp28
+            label: 25GBASE-X SFP28
+            description: "25 Gbps fiber interface with SFP28."
+            color: "#FAD7A0" # pastel orange
+          - name: 40gbase-x-qsfpp
+            label: 40GBASE-X QSFP+
+            description: "40 Gbps fiber interface with QSFP+."
+            color: "#F4CCCC" # pastel red
+          - name: 100gbase-x-qsfp28
+            label: 100GBASE-X QSFP28
+            description: "100 Gbps fiber interface with QSFP28."
+            color: "#A9DFBF" # light pastel green
+          - name: 400gbase-x-qsfpdd
+            label: 400GBASE-X QSFP-DD
+            description: "400 Gbps fiber interface with QSFP-DD."
+            color: "#CDEACC" # slightly darker pastel green
+          - name: lte
+            label: LTE
+            description: "LTE cellular interface."
+            color: "#FFF2CC" # pastel yellow
+          - name: other
+            label: Other
+            description: "Other interface type."
+            color: "#D3D3D3" # light grey
+        default_value: "other"
+        order_weight: 1400
+
+
+
+  - name: Virtual
+    namespace: Interface
+    label: Virtual Interface
+    description: "Virtual interface like VLAN or Loopback"
+    inherit_from:
+      - DcimInterface
+      - DcimInterfaceL2
+      - DcimInterfaceL3
+      # - DcimHasSubInterface # Depending if you want your virtual interfaces to have sub interface
+    include_in_menu: false
     relationships:
-      - name: ip_addresses
-        peer: IpamIPAddress
-        optional: true
-        cardinality: many
-        kind: Component
-  - name: InterfaceL2
-    namespace: Dcim
-    description: Network Layer 2 Interface
-    label: Interface L2
-    icon: mdi:ethernet
-    include_in_menu: false
-    menu_placement: DcimInterface
-    display_labels:
-      - name__value
-    order_by:
-      - name__value
-    inherit_from:
-      - DcimInterface
-      - DcimEndpoint
-    attributes:
-      - name: role
-        kind: Dropdown
-        optional: true
-        choices:
-          - name: backbone
-            label: Backbone
-            description: Provide main data routes.
-            color: "#6a5acd"
-          - name: upstream
-            label: upstream
-            description: Connect to Internet service provider.
-            color: "#9090de"
-          - name: peering
-            label: Peering
-            description: Connect with other networks via IX.
-            color: "#ffa07a"
-          - name: peer
-            label: Peer
-            description: Equal-status connections for direct interchange.
-            color: "#faa446"
-          - name: server
-            label: Server
-            description: Dedicated to interfaces connected to servers.
-            color: "#98b2d1"
-          - name: loopback
-            label: Loopback
-            description: Internal interface.
-            color: "#93e9be"
-          - name: management
-            label: Management
-            description: Dedicated network for control and monitoring.
-            color: "#ccc28a"
-          - name: uplink
-            label: Uplink
-            description: Connect to higher device.
-            color: "#ff6b6b"
-          - name: leaf
-            label: Leaf
-            description: Connect to leaf device.
-            color: "#e6e6fa"
-          - name: spare
-            label: Spare
-            description: Reserve resources for future use.
-            color: "#d3d3d3"
-        order_weight: 1700
-      - name: status
-        kind: Dropdown
-        optional: true
-        order_weight: 1300
-        choices:
-          - name: active
-            label: Active
-            description: Fully operational and currently in service.
-            color: "#7fbf7f"
-          - name: provisioning
-            label: Provisioning
-            description: In the process of being set up and configured.
-            color: "#ffff7f"
-          - name: maintenance
-            label: Maintenance
-            description: Undergoing routine maintenance or repairs.
-            color: "#ffd27f"
-          - name: drained
-            label: Drained
-            description: Temporarily taken out of service.
-            color: "#bfbfbf"
-      - name: l2_mode
-        label: Layer2 Mode
-        kind: Text
-        enum:
-          - Access
-          - Trunk
-          - Tunnel
-        order_weight: 1250
+      - name: parent_interface
+        peer: DcimHasSubInterface
+        cardinality: one
+        kind: Attribute
+        identifier: "sub__interface"
+        description: "Parent interface to which this sub-interface belongs"

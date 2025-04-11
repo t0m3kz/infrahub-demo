@@ -48,34 +48,6 @@ generics:
         optional: true
         cardinality: many
         kind: Component
-  - name: GenericElement
-    namespace: Design
-    description: "Base model for elements"
-    label: "Generic Topology Element"
-    icon: "carbon:network-3-reference"
-    human_friendly_id:
-      - name__value
-    display_labels: [name__value]
-    order_by: [name__value]
-    include_in_menu: false
-    menu_placement: "DesignTopology"
-    attributes:
-      - name: name
-        kind: Text
-        order_weight: 1000
-      - name: description
-        kind: Text
-        order_weight: 1100
-        optional: true
-      - name: quantity
-        kind: Number
-        order_weight: 1200
-    relationships:
-      - name: topology
-        peer: DesignTopology
-        cardinality: many
-        # # kind: Parent
-        # optional: false
   - name: Deployment
     namespace: Topology
     description: Topology Deployment
@@ -174,7 +146,7 @@ nodes:
             color: "#bf7f7f"
     relationships:
       - name: elements
-        peer: DesignGenericElement
+        peer: DesignElement
         optional: true
         cardinality: many
         kind: Component
@@ -191,9 +163,17 @@ nodes:
     order_by: [name__value]
     display_labels:
       - name__value
-    inherit_from:
-      - DesignGenericElement
     attributes:
+      - name: name
+        kind: Text
+        order_weight: 1000
+      - name: description
+        kind: Text
+        order_weight: 1100
+        optional: true
+      - name: quantity
+        kind: Number
+        order_weight: 1200    
       - name: role
         kind: Dropdown
         optional: true
@@ -223,10 +203,18 @@ nodes:
             label: Tor Switch
             description: Tor switch part of a Fabric.
             color: "#e8e7fd"
-          - name: firewall
-            label: Firewall
-            description: Firewall part of a Fabric.
-            color: "#e8e7fb"
+          - name: dc_firewall
+            label: DC Firewall
+            description: "Security boundary with external network"
+            color: "#6e5abd"           
+          - name: edge_firewall
+            label: Edge Firewall
+            description: "Security boundary with external network"
+            color: "#6a5acd"    
+          - name: branch_firewall
+            label: Branch Firewall
+            description: "Security boundary with external network"
+            color: "#6a5bdd"
           - name: load_balancer
             label: Load Balancer
             description: Load Balancer part of a Fabric.
@@ -239,18 +227,21 @@ nodes:
             label: Console Server
             description: Console Server part of a Fabric.
             color: "#e9ebfd"
-      - name: interface_patterns
-        kind: JSON
-        order_weight: 1500
-        optional: false
     relationships:
       - name: device_type
         label: Type
         peer: DcimDeviceType
-        optional: true
+        optional: false
         cardinality: one
         kind: Attribute
         order_weight: 1400
+      - name: template
+        label: Device Template
+        peer: CoreObjectTemplate
+        optional: false
+        cardinality: one
+        kind: Attribute
+        order_weight: 1500
 
   # --------------------  Network Management Servers --------------------
   - name: DhcpOption
@@ -415,29 +406,6 @@ nodes:
         cardinality: one
         kind: Attribute
 
-#   - name: BranchOffice
-#     namespace: Infra
-#     description: "A Topology represents the BranchOffice"
-#     label: "Branch Office"
-#     default_filter: name__value
-#     display_labels:
-#       - name__value
-#     order_by: [name__value]
-#     inherit_from:
-#       - CoreArtifactTarget
-#       - InfraTopology
-#     attributes:
-#       - name: customer
-#         kind: IPNetwork
-#         label: Customer Subnet
-#         order_weight: 1700
-#     relationships:
-#       - name: location
-#         peer: LocationMetro
-#         optional: true
-#         cardinality: one
-#         kind: Attribute
-
 extensions:
   nodes:
     - kind: DcimDeviceType
@@ -447,11 +415,11 @@ extensions:
           optional: true
           cardinality: many
           kind: Component
-    - kind: DcimGenericDevice
-      relationships:
-        - name: topology
-          peer: TopologyDeployment
-          optional: false
-          cardinality: one
-          kind: Parent
+    # - kind: DcimGenericDevice
+    #   relationships:
+    #     - name: topology
+    #       state: absent
+    #       peer: TopologyDeployment
+    #       cardinality: one
+    #       kind: Parent
 

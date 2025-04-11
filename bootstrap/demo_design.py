@@ -3,7 +3,6 @@
 import logging
 from infrahub_sdk import InfrahubClient
 from infrahub_sdk.exceptions import GraphQLError, ValidationError
-from utils import create_objects
 
 from data_design import DC_DEPLOYMENT
 
