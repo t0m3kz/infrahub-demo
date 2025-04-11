@@ -4,6 +4,7 @@ import re
 import ipaddress
 from infrahub_sdk.generator import InfrahubGenerator
 from infrahub_sdk.exceptions import GraphQLError, ValidationError
+from netutils.interface import sort_interface_list
 
 
 def clean_data(data):
@@ -95,11 +96,18 @@ class TopologyGenerator(InfrahubGenerator):
                 f"- Created [{kind}] '{object_reference}'"
                 if object_reference
                 else f"- Created [{kind}]"
-            )            
+            )
             if store_key:
                 self.client.store.set(key=store_key, node=obj)
         except (GraphQLError, ValidationError) as exc:
             self.client.log.debug(f"- Creation failed due to {exc}")
+
+    async def _create_core_groups(
+        self,
+        data: list,
+    ):
+        if data:
+            await self._create_in_batch(kind="CoreStandardGroup", data_list=data)
 
     async def _create_ip_pools(self, topology_name: str, pools: dict) -> None:
         """Create objects of a specific kind and store in local store."""
@@ -114,23 +122,23 @@ class TopologyGenerator(InfrahubGenerator):
                     "role": "supernet" if item == "customer" else item,
                     "location": self.store.get(key=topology_name).id,
                 }
-                await self._create(
-                    kind="IpamPrefix", data=data, store_key=item
-                )
-                self.client.log.info(
-                    self.store.get(item).id
-                )
+                await self._create(kind="IpamPrefix", data=data, store_key=item)
+                self.client.log.info(self.store.get(item).id)
                 if item in ["management", "technical"]:
                     data = {
                         "name": f"{topology_name}-{item}",
                         "description": f"Management network for {topology_name}",
                         "default_address_type": "IpamIPAddress",
-                        "default_prefix_length": ipaddress.IPv4Network(pools.get(item)).prefixlen,
+                        "default_prefix_length": ipaddress.IPv4Network(
+                            pools.get(item)
+                        ).prefixlen,
                         "resources": [self.store.get(item).id],
-                        "ip_namespace": {"id": "default"}
+                        "ip_namespace": {"id": "default"},
                     }
                     await self._create(
-                        kind="CoreIPAddressPool", data=data, store_key=f"{topology_name}-{item}"
+                        kind="CoreIPAddressPool",
+                        data=data,
+                        store_key=f"{topology_name}-{item}",
                     )
                 else:
                     data = {
@@ -139,14 +147,19 @@ class TopologyGenerator(InfrahubGenerator):
                         "default_address_type": "IpamIPAddress",
                         "default_prefix_length": 24,
                         "resources": [self.store.get(item).id],
-                        "ip_namespace": {"id": "default"}
+                        "ip_namespace": {"id": "default"},
                     }
                     await self._create(
-                        kind="CoreIPPrefixPool", data=data, store_key=f"{topology_name}-{item}"
+                        kind="CoreIPPrefixPool",
+                        data=data,
+                        store_key=f"{topology_name}-{item}",
                     )
 
     async def _create_devices(
-        self, topology_name: str, data: list, topology_id: str, topology_type: str
+        self,
+        topology_name: str,
+        data: list,
+        topology_id: str,
     ) -> None:
         """Create objects of a specific kind and store in local store."""
         devices = {"DcimDevice": [], "DcimFirewall": []}
@@ -154,31 +167,36 @@ class TopologyGenerator(InfrahubGenerator):
             for item in range(1, device["quantity"] + 1):
                 site = topology_name.lower()
                 role = device["role"]
+                template = device["template"]["template_name"]
                 manufacturer = device["device_type"]["manufacturer"]["name"].lower()
                 device_name = f"{site}-{role}-{str(item).zfill(2)}"
                 _device = {
                     "payload": {
                         "name": device_name,
+                        "object_template": [template],
+                        # [self.store.get_by_hfid(
+                        #     key=f"CoreObjectTemplate__{template}"
+                        # ).id],
                         "device_type": device["device_type"]["id"],
                         # Here we're using hfid to get platform and location from store
                         "platform": device["device_type"]["platform"]["id"],
                         "status": "active",
-                        "role": role if role != "firewall" else "edge_firewall",
+                        # "role": role if role != "firewall" else "edge_firewall",
                         "location": self.store.get(key=topology_name).id,
                         "member_of_groups": [
                             self.store.get_by_hfid(
-                                key=f"CoreStandardGroup__{manufacturer}_{topology_type}_{role}"
+                                key=f"CoreStandardGroup__{manufacturer}_{role}"
                             )
                         ],
                         "topology": topology_id,
                     },
                     "store_key": device_name,
                 }
-                # create interface list for all devices
-                if role == "firewall":
+                if "firewall" in role:
                     devices["DcimFirewall"].append(_device)
                 else:
                     devices["DcimDevice"].append(_device)
+        # self.client.log.info(devices)
         for kind, device_list in devices.items():
             if device_list:
                 await self._create_in_batch(kind=kind, data_list=device_list)
@@ -231,27 +249,27 @@ class TopologyGenerator(InfrahubGenerator):
         connection_type: str,
     ) -> None:
         """Create objects of a specific kind and store in local store."""
-        if connection_type == "management":
-            # interface_roles = ["management"]
-            device_key = "oob"
-        elif connection_type == "console":
-            # interface_roles = ["console"]
-            device_key = "console"
-
+        device_key = "oob" if connection_type == "management" else "console"        
         interfaces = {
             f"{topology_name.lower()}-{item['role']}-{str(j + 1).zfill(2)}": [
                 interface["name"]
-                for interface in item["interface_patterns"]
+                for interface in item["template"]["interfaces"]
                 if interface["role"] == connection_type
             ]
-            for i, item in enumerate(data)
+            for item in data
             for j in range(item["quantity"])
             if item["role"] in ["oob", "leaf", "spine", "console"]
         }
 
-        sources = {key: value for key, value in interfaces.items() if device_key in key}
+        sources = {
+            key: sort_interface_list(value)
+            for key, value in interfaces.items()
+            if device_key in key
+        }
         destinations = {
-            key: value for key, value in interfaces.items() if key not in sources
+            key: sort_interface_list(value)
+            for key, value in interfaces.items()
+            if key not in sources
         }
 
         connections = [
@@ -268,13 +286,18 @@ class TopologyGenerator(InfrahubGenerator):
         ]
 
         for connection in connections:
-            source_endpoint = self.store.get(
-                key=f"{connection['source']}_{connection['source_interface']}",
-            )
-            target_endpoint = self.store.get(
-                key=f"{connection['target']}_{connection['destination_interface']}",
-            )
-            source_endpoint.connector = target_endpoint
+            source_endpoint = await self.client.get(
+                kind="DcimInterface",
+                name__value=connection["source_interface"],
+                device__name__value=connection["source"],
+            )  
+            target_endpoint = await self.client.get(
+                kind="DcimInterface",
+                name__value=connection["destination_interface"],
+                device__name__value=connection["target"],
+            )  
+            self.logger.info(f"Creating {source_endpoint.hfid} -> {target_endpoint.hfid}")
+            source_endpoint.connector = target_endpoint.id
             await source_endpoint.save(allow_upsert=True)
 
     async def _create_peering_connections(self, topology_name: str, data: list) -> None:
@@ -283,35 +306,39 @@ class TopologyGenerator(InfrahubGenerator):
         interfaces = {
             f"{topology_name.lower()}-{item['role']}-{str(j + 1).zfill(2)}": [
                 interface["name"]
-                for interface in item["interface_patterns"]
+                for interface in item["template"]["interfaces"]
                 if interface["role"] in ["leaf", "uplink"]
             ]
             for i, item in enumerate(data)
             for j in range(item["quantity"])
             if item["role"] in ["spine", "leaf"]
         }
-        spines = {key: value for key, value in interfaces.items() if "spine" in key}
-        leafs = {key: value for key, value in interfaces.items() if "leaf" in key}
+        spines = {key: sort_interface_list(value) for key, value in interfaces.items() if "spine" in key}
+        leafs = {key: sort_interface_list(value) for key, value in interfaces.items() if "leaf" in key}
         # print(spines)
         connections = [
             {
-                "source": spine_switch,
+                "source": spine,
                 "target": leaf,
                 "source_interface": spine_interfaces.pop(0),
                 "destination_interface": leaf_interfaces.pop(0),
             }
-            for spine_switch, spine_interfaces in spines.items()
+            for spine, spine_interfaces in spines.items()
             for leaf, leaf_interfaces in leafs.items()
         ]
         for connection in connections:
-            source_endpoint = self.store.get(
-                key=f"{connection['source']}_{connection['source_interface']}",
-            )
-            target_endpoint = self.store.get(
-                key=f"{connection['target']}_{connection['destination_interface']}",
-            )
-            # print(source_endpoint, target_endpoint)
-            source_endpoint.connector = target_endpoint
+            source_endpoint = await self.client.get(
+                kind="DcimInterface",
+                name__value=connection["source_interface"],
+                device__name__value=connection["source"],
+            )  
+            target_endpoint = await self.client.get(
+                kind="DcimInterface",
+                name__value=connection["destination_interface"],
+                device__name__value=connection["target"],
+            )  
+            self.logger.info(f"Creating {source_endpoint.hfid} -> {target_endpoint.hfid}")
+            source_endpoint.connector = target_endpoint.id
             await source_endpoint.save(allow_upsert=True)
 
     async def _create_vlan_pool():
@@ -319,6 +346,7 @@ class TopologyGenerator(InfrahubGenerator):
 
     async def _create_prefix_pool():
         pass
+
     async def _create_ip_pool():
         pass
 

@@ -18,7 +18,7 @@ def start(context: Context) -> None:
 
 @task(optional=["schema", "branch"])
 def load_schema(
-    context: Context, schema: str = "./model/base/*.yml", branch: str = "main"
+    context: Context, schema: str = "./model/", branch: str = "main"
 ) -> None:
     """Load the schemas from the given path."""
     context.run(f"infrahubctl schema load {schema} --branch {branch}")

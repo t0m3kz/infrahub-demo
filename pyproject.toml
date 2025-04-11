@@ -24,6 +24,51 @@ invoke = "^2.2.0"
 pytest = "^8.3.5"
 
 
+
+[tool.pdm.dev-dependencies]
+dev = [
+    "ipdb<1.0.0,>=0.13.13",
+    "pylint<4.0.0,>=3.2.6",
+    "yamllint<2.0.0,>=1.36.0",
+    "pre-commit<5.0.0,>=4.1.0",
+    "pydocstyle<7.0.0,>=6.3.0",
+    "bandit<2.0.0,>=1.8.3",
+    "black<25.0.0,>=24.8.0",
+    "flake8<8.0.0,>=7.1.2",
+    "invoke<3.0.0,>=2.2.0",
+    "pytest<9.0.0,>=8.3.5",
+]
 [build-system]
-requires = ["poetry-core"]
-build-backend = "poetry.core.masonry.api"
+requires = ["pdm-backend"]
+build-backend = "pdm.backend"
+
+
+[project]
+authors = [
+    {name = "Tomek Zajac", email = "tomek@mastuazi.com"},
+]
+requires-python = "<3.13,>=3.9"
+dependencies = [
+    "invoke<3.0.0,>=2.2.0",
+    "pytest<9.0.0,>=8.3.5",
+    "infrahub-sdk[all]<2.0.0,>=1.7.2",
+]
+name = "infrahub-demo"
+version = "0.1.0"
+description = ""
+readme = "README.md"
+
+[dependency-groups]
+dev = [
+    "ipdb<1.0.0,>=0.13.13",
+    "pylint<4.0.0,>=3.2.6",
+    "yamllint<2.0.0,>=1.36.0",
+    "pre-commit<5.0.0,>=4.1.0",
+    "pydocstyle<7.0.0,>=6.3.0",
+    "bandit<2.0.0,>=1.8.3",
+    "black<25.0.0,>=24.8.0",
+    "flake8<8.0.0,>=7.1.2",
+    "invoke<3.0.0,>=2.2.0",
+    "pytest<9.0.0,>=8.3.5",
+    "ruff>=0.11.4",
+]
