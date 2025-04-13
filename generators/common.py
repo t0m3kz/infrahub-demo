@@ -162,7 +162,7 @@ class TopologyGenerator(InfrahubGenerator):
         topology_id: str,
     ) -> None:
         """Create objects of a specific kind and store in local store."""
-        devices = {"DcimDevice": [], "DcimFirewall": []}
+        devices = {"DcimPhysicalDevice": [], "DcimFirewall": []}
         for device in data:
             for item in range(1, device["quantity"] + 1):
                 site = topology_name.lower()
@@ -174,9 +174,6 @@ class TopologyGenerator(InfrahubGenerator):
                     "payload": {
                         "name": device_name,
                         "object_template": [template],
-                        # [self.store.get_by_hfid(
-                        #     key=f"CoreObjectTemplate__{template}"
-                        # ).id],
                         "device_type": device["device_type"]["id"],
                         # Here we're using hfid to get platform and location from store
                         "platform": device["device_type"]["platform"]["id"],
@@ -188,20 +185,34 @@ class TopologyGenerator(InfrahubGenerator):
                                 key=f"CoreStandardGroup__{manufacturer}_{role}"
                             )
                         ],
-                        "topology": topology_id,
+                        # "topology": topology_id,
                     },
                     "store_key": device_name,
                 }
                 if "firewall" in role:
                     devices["DcimFirewall"].append(_device)
                 else:
-                    devices["DcimDevice"].append(_device)
-        # self.client.log.info(devices)
+                    devices["DcimPhysicalDevice"].append(_device)
+        # create devices
         for kind, device_list in devices.items():
             if device_list:
                 await self._create_in_batch(kind=kind, data_list=device_list)
-        # self._create_in_batch
-        # import json
+
+        # add devices to deployment
+        device_names = [
+            device.get("payload").get("name")
+            for device_list in devices.values()
+            for device in device_list
+        ]
+
+        deployment = await self.client.get(
+            kind="TopologyDeployment", name__value=topology_name, include=["devices"]
+        )
+        for device in device_names:
+            await deployment.add_relationships(
+                relation_to_update="devices",
+                related_nodes=[self.store.get(device).id],
+            )
 
     async def _create_interfaces(self, topology_name: str, data: list) -> None:
         """Create objects of a specific kind and store in local store."""
@@ -249,7 +260,7 @@ class TopologyGenerator(InfrahubGenerator):
         connection_type: str,
     ) -> None:
         """Create objects of a specific kind and store in local store."""
-        device_key = "oob" if connection_type == "management" else "console"        
+        device_key = "oob" if connection_type == "management" else "console"
         interfaces = {
             f"{topology_name.lower()}-{item['role']}-{str(j + 1).zfill(2)}": [
                 interface["name"]
@@ -290,13 +301,15 @@ class TopologyGenerator(InfrahubGenerator):
                 kind="DcimInterface",
                 name__value=connection["source_interface"],
                 device__name__value=connection["source"],
-            )  
+            )
             target_endpoint = await self.client.get(
                 kind="DcimInterface",
                 name__value=connection["destination_interface"],
                 device__name__value=connection["target"],
-            )  
-            self.logger.info(f"Creating {source_endpoint.hfid} -> {target_endpoint.hfid}")
+            )
+            self.logger.info(
+                f"Creating {source_endpoint.hfid} -> {target_endpoint.hfid}"
+            )
             source_endpoint.connector = target_endpoint.id
             await source_endpoint.save(allow_upsert=True)
 
@@ -313,8 +326,16 @@ class TopologyGenerator(InfrahubGenerator):
             for j in range(item["quantity"])
             if item["role"] in ["spine", "leaf"]
         }
-        spines = {key: sort_interface_list(value) for key, value in interfaces.items() if "spine" in key}
-        leafs = {key: sort_interface_list(value) for key, value in interfaces.items() if "leaf" in key}
+        spines = {
+            key: sort_interface_list(value)
+            for key, value in interfaces.items()
+            if "spine" in key
+        }
+        leafs = {
+            key: sort_interface_list(value)
+            for key, value in interfaces.items()
+            if "leaf" in key
+        }
         # print(spines)
         connections = [
             {
@@ -331,13 +352,15 @@ class TopologyGenerator(InfrahubGenerator):
                 kind="DcimInterface",
                 name__value=connection["source_interface"],
                 device__name__value=connection["source"],
-            )  
+            )
             target_endpoint = await self.client.get(
                 kind="DcimInterface",
                 name__value=connection["destination_interface"],
                 device__name__value=connection["target"],
-            )  
-            self.logger.info(f"Creating {source_endpoint.hfid} -> {target_endpoint.hfid}")
+            )
+            self.logger.info(
+                f"Creating {source_endpoint.hfid} -> {target_endpoint.hfid}"
+            )
             source_endpoint.connector = target_endpoint.id
             await source_endpoint.save(allow_upsert=True)
 

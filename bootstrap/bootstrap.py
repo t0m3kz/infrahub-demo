@@ -287,7 +287,7 @@ async def infra(client: InfrahubClient, log: logging.Logger, branch: str) -> Non
 
     # create device templates
     log.info("Create Device Templates")
-    templates = {"TemplateDcimDevice": [], "TemplateDcimFirewall": []}
+    templates = {"TemplateDcimPhysicalDevice": [], "TemplateDcimFirewall": []}
     for item in DEVICE_TEMPLATES:
         template = {
             "payload": {
@@ -303,7 +303,7 @@ async def infra(client: InfrahubClient, log: logging.Logger, branch: str) -> Non
         if "firewall" in item[1]:
             templates["TemplateDcimFirewall"].append(template)
         else:
-            templates["TemplateDcimDevice"].append(template)
+            templates["TemplateDcimPhysicalDevice"].append(template)
     for kind, data_list in templates.items():
         if data_list:
             await create_objects(
@@ -316,13 +316,13 @@ async def infra(client: InfrahubClient, log: logging.Logger, branch: str) -> Non
 
     log.info("Create Interface Templates")
     data_list = []
-    templates = {"TemplateDcimDevice": [], "TemplateDcimFirewall": []}
+    templates = {"TemplateDcimPhysicalDevice": [], "TemplateDcimFirewall": []}
     for template in DEVICE_TEMPLATES:
         for interface in template[3]:
             kind = (
                 "TemplateDcimFirewall"
                 if "firewall" in template[1]
-                else "TemplateDcimDevice"
+                else "TemplateDcimPhysicalDevice"
             )
             data_list.append(
                 {
@@ -372,7 +372,7 @@ async def design(client: InfrahubClient, log: logging.Logger, branch: str) -> No
                         key=f"DcimDeviceType__{item[4]}"
                     ).id,
                     "template": client.store.get_by_hfid(
-                        key=f"TemplateDcimDevice__{item[4]}_{item[3].upper()}"
+                        key=f"TemplateDcimPhysicalDevice__{item[4]}_{item[3].upper()}"
                         if "firewall" not in item[3]
                         else f"TemplateDcimFirewall__{item[4]}_{item[3].upper()}"
                     ).id,
