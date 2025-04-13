@@ -52,7 +52,7 @@ query generate_topology($name: String!) {
                     template {
                       node {
                         id
-                        ... on TemplateDcimDevice {
+                        ... on TemplateDcimPhysicalDevice {
                           interfaces {
                             edges {
                               node {

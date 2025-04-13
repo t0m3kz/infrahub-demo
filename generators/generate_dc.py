@@ -80,9 +80,7 @@ class DCTopologyGenerator(TopologyGenerator):
             data["name"], data["design"]["elements"], "console"
         )
 
-        await self._create_peering_connections(
-            data["name"], data["design"]["elements"]
-        )
+        await self._create_peering_connections(data["name"], data["design"]["elements"])
         # interfaces = {
         #     f"{data['name'].lower()}-{item['role']}-{str(j + 1).zfill(2)}": [
         #         interface["name"]
