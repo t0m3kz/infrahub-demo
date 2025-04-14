@@ -8,7 +8,7 @@ generics:
     description: Generic Device object.
     label: Device
     icon: mdi:server
-    human_friendly_id:
+    human_friendly_id: 
       - name__value
     order_by:
       - name__value
@@ -328,14 +328,14 @@ generics:
         description: "List of IP addresses associated with the interface"
         order_weight: 1150
 
-  - name: HasSubInterface
+  - name: SubInterface
     namespace: Dcim
     description: A generic interface that can have sub-interfaces
     include_in_menu: false
     relationships:
       - name: sub_interfaces
         label: "Sub-interface(s)"
-        peer: InterfaceVirtual
+        peer: DcimVirtualInterface
         identifier: "sub__interface"
         optional: true
         cardinality: many
@@ -466,8 +466,9 @@ nodes:
   - name: PhysicalDevice
     namespace: Dcim
     description: Generic holding attributes and relationships relevant for physical device.
-    include_in_menu: true
+    include_in_menu: false
     icon: clarity:network-switch-solid
+    label: Physical Device
     generate_template: true    
     inherit_from:
       - CoreArtifactTarget
@@ -515,7 +516,8 @@ nodes:
   - name: VirtualDevice
     namespace: Dcim
     description: Generic holding attributes and relationships relevant for virtual device.
-    include_in_menu: true
+    include_in_menu: false
+    label: Virtual Device
     icon: mdi:server-network
     generate_template: true
     inherit_from:
@@ -529,7 +531,6 @@ nodes:
         cardinality: one
         optional: false
 
-
   - name: PhysicalInterface
     namespace: Dcim
     label: Physical Interface
@@ -539,7 +540,7 @@ nodes:
       - DcimInterfaceL2
       - DcimInterfaceL3
       - DcimEndpoint
-      - DcimHasSubInterface
+      - DcimSubInterface
     include_in_menu: false
     attributes:
       - name: interface_type
@@ -609,19 +610,19 @@ nodes:
         default_value: "other"
         order_weight: 1400
 
-  - name: Virtual
-    namespace: Interface
+  - name: VirtualInterface
+    namespace: Dcim
     label: Virtual Interface
     description: "Virtual interface like VLAN or Loopback"
     inherit_from:
       - DcimInterface
       - DcimInterfaceL2
       - DcimInterfaceL3
-      # - DcimHasSubInterface # Depending if you want your virtual interfaces to have sub interface
+      # - DcimSubInterface # Depending if you want your virtual interfaces to have sub interface
     include_in_menu: false
     relationships:
       - name: parent_interface
-        peer: DcimHasSubInterface
+        peer: DcimSubInterface
         cardinality: one
         kind: Attribute
         identifier: "sub__interface"

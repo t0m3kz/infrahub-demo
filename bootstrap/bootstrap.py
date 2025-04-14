@@ -287,68 +287,53 @@ async def infra(client: InfrahubClient, log: logging.Logger, branch: str) -> Non
 
     # create device templates
     log.info("Create Device Templates")
-    templates = {"TemplateDcimPhysicalDevice": [], "TemplateDcimFirewall": []}
-    for item in DEVICE_TEMPLATES:
-        template = {
-            "payload": {
-                "template_name": f"{item[0]}_{item[1].upper()}",
-                "device_type": {
-                    "id": client.store.get(kind="DcimDeviceType", key=item[0]).id
+    await create_objects(
+        client=client,
+        log=log,
+        branch=branch,
+        kind="TemplateDcimPhysicalDevice",
+        data_list=[
+            {
+                "payload": {
+                    "template_name": f"{item[0]}_{item[1].upper()}",
+                    "device_type": {
+                        "id": client.store.get(kind="DcimDeviceType", key=item[0]).id
+                    },
+                    "platform": client.store.get(kind="DcimPlatform", key=item[2]).id,
+                    "role": item[1],
                 },
-                "platform": client.store.get(kind="DcimPlatform", key=item[2]).id,
-                "role": item[1],
-            },
-            "store_key": f"{item[0]}_{item[1].upper()}",
-        }
-        if "firewall" in item[1]:
-            templates["TemplateDcimFirewall"].append(template)
-        else:
-            templates["TemplateDcimPhysicalDevice"].append(template)
-    for kind, data_list in templates.items():
-        if data_list:
-            await create_objects(
-                client=client,
-                log=log,
-                branch=branch,
-                kind=kind,
-                data_list=data_list,
-            )
+                "store_key": f"{item[0]}_{item[1].upper()}",
+            }
+            for item in DEVICE_TEMPLATES
+        ],
+    )
 
     log.info("Create Interface Templates")
-    data_list = []
-    templates = {"TemplateDcimPhysicalDevice": [], "TemplateDcimFirewall": []}
-    for template in DEVICE_TEMPLATES:
-        for interface in template[3]:
-            kind = (
-                "TemplateDcimFirewall"
-                if "firewall" in template[1]
-                else "TemplateDcimPhysicalDevice"
-            )
-            data_list.append(
-                {
-                    "payload": {
-                        "template_name": f"{template[0]}_{template[1].upper()}_{interface[0].upper()}",
-                        "device": {
-                            "id": client.store.get(
-                                kind=kind,
-                                key=f"{template[0]}_{template[1].upper()}",
-                            ).id
-                        },
-                        "speed": get_interface_speed(interface[1]),
-                        "name": interface[0],
-                        "role": interface[2],
-                        "interface_type": interface[1],
+    await create_objects(
+        client=client,
+        log=log,
+        branch=branch,
+        kind="TemplateDcimPhysicalInterface",
+        data_list=[
+            {
+                "payload": {
+                    "template_name": f"{template[0]}_{template[1].upper()}_{interface[0].upper()}",
+                    "device": {
+                        "id": client.store.get(
+                            kind="TemplateDcimPhysicalDevice",
+                            key=f"{template[0]}_{template[1].upper()}",
+                        ).id
                     },
-                }
-            )
-    if data_list:
-        await create_objects(
-            client=client,
-            log=log,
-            branch=branch,
-            kind="TemplateDcimPhysicalInterface",
-            data_list=data_list,
-        )
+                    "speed": get_interface_speed(interface[1]),
+                    "name": interface[0],
+                    "role": interface[2],
+                    "interface_type": interface[1],
+                },
+            }
+            for template in DEVICE_TEMPLATES
+            for interface in template[3]
+        ],
+    )
 
 
 async def design(client: InfrahubClient, log: logging.Logger, branch: str) -> None:
@@ -373,8 +358,6 @@ async def design(client: InfrahubClient, log: logging.Logger, branch: str) -> No
                     ).id,
                     "template": client.store.get_by_hfid(
                         key=f"TemplateDcimPhysicalDevice__{item[4]}_{item[3].upper()}"
-                        if "firewall" not in item[3]
-                        else f"TemplateDcimFirewall__{item[4]}_{item[3].upper()}"
                     ).id,
                 },
                 "store_key": item[0],
