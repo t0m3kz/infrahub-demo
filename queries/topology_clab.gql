@@ -1,43 +1,72 @@
-query topology_info($topology_name: String!) {
-  DcimGenericDevice(topology__name__value: $topology_name) {
+query topology_info($name: String!) {
+  TopologyDeployment(name__value: $name) {
     edges {
       node {
         name {
           value
         }
-        interfaces {
+        management {
+          value
+        }
+        design {
+          node {
+            type {
+              value
+            }
+          }
+        }
+        devices(role__values: ["leaf", "spine", "dc_firewall", "edge", "core"]) {
           edges {
             node {
               name {
                 value
               }
-              ... on DcimInterfaceL3 {
-                role {
-                  value
+              role {
+                value
+              }
+              os_version {
+                value
+              }
+              primary_address {
+                node {
+                  address {
+                    value
+                  }
                 }
-                ip_addresses {
-                  edges {
-                    node {
-                      address {
-                        value
-                      }
+              }
+              platform {
+                node {
+                  name {
+                    value
+                  }
+                  containerlab_os {
+                    value
+                  }
+                }
+              }
+              ... on DcimPhysicalDevice {
+                device_type {
+                  node {
+                    name {
+                      value
                     }
                   }
                 }
               }
-              ... on DcimEndpoint {
-                connector {
+              interfaces {
+                edges {
                   node {
-                    id
-                    ... on DcimInterface {
-                      name {
-                        value
-                      }
-                      device {
+                    name {
+                      value
+                    }
+                    role {
+                      value
+                    }
+                    ... on DcimPhysicalInterface {
+                      connector {
                         node {
-                          name {
-                            value
-                          }
+                          hfid
+                          display_label
                         }
                       }
                     }
@@ -46,22 +75,6 @@ query topology_info($topology_name: String!) {
               }
             }
           }
-        }
-        platform {
-          node {
-            containerlab_os {
-              value
-            }
-          }
-        }
-      }
-    }
-  }
-  TopologyDeployment(name__value: $topology_name) {
-    edges {
-      node {
-        management {
-          value
         }
       }
     }

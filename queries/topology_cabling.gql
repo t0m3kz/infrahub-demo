@@ -1,0 +1,34 @@
+query topology_cables($name: String!) {
+  TopologyDeployment(name__value: $name) {
+    edges {
+      node {
+        devices {
+          edges {
+            node {
+              name {
+                value
+              }
+              interfaces {
+                edges {
+                  node {
+                    name {
+                      value
+                    }
+                    ... on DcimPhysicalInterface {
+                      connector {
+                        node {
+                          hfid
+                          display_label
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

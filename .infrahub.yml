@@ -1,5 +1,5 @@
 ---
-# jinja2_transforms:
+jinja2_transforms:
   # Cisco
   # - name: "cisco_pop_router"
   #   description: "Template to generate startup configuration for a cisco POP router"
@@ -41,12 +41,12 @@
   #   query: "console_config"
   #   template_path: "templates/configs/perle_console.j2"
   # Containerlab
-#   - name: "topology_clab"
-#     description: "Template to generate a containerlab topology"
-#     query: "topology_simulator"
-#     template_path: "templates/simulators/clab_topology.j2"
+  - name: "topology_clab"
+    description: "Template to generate a containerlab topology"
+    query: "topology_simulator"
+    template_path: "templates/clab_topology.j2"
 
-# artifact_definitions:
+artifact_definitions:
   # Cisco
   # - name: "Cisco POP config"
   #   artifact_name: "cisco-pop-router"
@@ -129,13 +129,21 @@
   #   parameters:
   #     device: "name__value"
   # Containerlab    
-  # - name: "Containerlab Topology"
-  #   artifact_name: "containerlab-topology"
-  #   content_type: "text/plain"
-  #   targets: "topologies_clab"
-  #   transformation: "topology_clab"
-  #   parameters:
-  #     topology_name: "name__value"
+  - name: "Containerlab Topology"
+    artifact_name: "containerlab-topology"
+    content_type: "text/plain"
+    targets: "topologies_clab"
+    transformation: "topology_clab"
+    parameters:
+      name: "name__value"
+
+  - name: "Cable marix for Topology"
+    artifact_name: "topology-cabling"
+    parameters:
+      name: "name__value"
+    content_type: "text/csv"
+    targets: "topologies_dc"
+    transformation: "topology_cabling"
 
 # check_definitions:
 #   - name: validate_firewall
@@ -144,6 +152,11 @@
 #     targets: "firewalls"
 #     parameters:
 #       device: "name__value"
+
+python_transforms:
+  - name: topology_cabling
+    class_name: TopologyCabling
+    file_path: "transforms/topology_cabling.py"
 
 generator_definitions:
   - name: create_dc
@@ -157,10 +170,12 @@ generator_definitions:
 queries:
   - name: topology_dc
     file_path: "queries/topology_dc.gql"
+  - name: topology_simulator
+    file_path: "queries/topology_clab.gql"
+  - name: topology_cabling
+    file_path: "queries/topology_cabling.gql"        
   # - name: topology_pop
   #   file_path: "queries/topology_pop.gql"    
-  # - name: topology_simulator
-  #   file_path: "queries/topology_clab.gql"
   # - name: firewall_config
   #   file_path: "queries/firewall_config.gql"
   # - name: pop_config

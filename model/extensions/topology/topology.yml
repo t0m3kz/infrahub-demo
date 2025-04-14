@@ -418,8 +418,7 @@ extensions:
     # - kind: DcimGenericDevice
     #   relationships:
     #     - name: topology
-    #       state: absent
     #       peer: TopologyDeployment
     #       cardinality: one
     #       kind: Parent
-
+    #       optional: true

@@ -162,57 +162,95 @@ class TopologyGenerator(InfrahubGenerator):
         topology_id: str,
     ) -> None:
         """Create objects of a specific kind and store in local store."""
-        devices = {"DcimPhysicalDevice": [], "DcimFirewall": []}
-        for device in data:
-            for item in range(1, device["quantity"] + 1):
-                site = topology_name.lower()
-                role = device["role"]
-                template = device["template"]["template_name"]
-                manufacturer = device["device_type"]["manufacturer"]["name"].lower()
-                device_name = f"{site}-{role}-{str(item).zfill(2)}"
-                _device = {
+        await self._create_in_batch(
+            kind="DcimPhysicalDevice",
+            data_list=[
+                {
                     "payload": {
-                        "name": device_name,
-                        "object_template": [template],
+                        "name": f"{topology_name.lower()}-{device['role']}-{str(item).zfill(2)}",
+                        "object_template": [device["template"]["template_name"]],
                         "device_type": device["device_type"]["id"],
-                        # Here we're using hfid to get platform and location from store
                         "platform": device["device_type"]["platform"]["id"],
                         "status": "active",
-                        # "role": role if role != "firewall" else "edge_firewall",
                         "location": self.store.get(key=topology_name).id,
                         "member_of_groups": [
                             self.store.get_by_hfid(
-                                key=f"CoreStandardGroup__{manufacturer}_{role}"
+                                key=f"CoreStandardGroup__{device['device_type']['manufacturer']['name'].lower()}_{device['role']}"
                             )
                         ],
-                        # "topology": topology_id,
                     },
-                    "store_key": device_name,
+                    "store_key": f"{topology_name.lower()}-{device['role']}-{str(item).zfill(2)}",
                 }
-                if "firewall" in role:
-                    devices["DcimFirewall"].append(_device)
-                else:
-                    devices["DcimPhysicalDevice"].append(_device)
-        # create devices
-        for kind, device_list in devices.items():
-            if device_list:
-                await self._create_in_batch(kind=kind, data_list=device_list)
-
-        # add devices to deployment
-        device_names = [
-            device.get("payload").get("name")
-            for device_list in devices.values()
-            for device in device_list
-        ]
+                for device in data
+                for item in range(1, device["quantity"] + 1)
+            ],
+        )
 
         deployment = await self.client.get(
             kind="TopologyDeployment", name__value=topology_name, include=["devices"]
         )
-        for device in device_names:
-            await deployment.add_relationships(
-                relation_to_update="devices",
-                related_nodes=[self.store.get(device).id],
-            )
+
+
+        # not elegant way to add devices to the topology
+        await deployment.add_relationships(
+            relation_to_update="devices",
+            related_nodes=[
+                # switch[0]
+                self.client.store.get_by_hfid(f"DcimPhysicalDevice__{switch[0]}").id
+                for switch in self.client.store._branches[self.branch]
+                ._hfids["DcimPhysicalDevice"]
+                .keys()
+            ],
+        )
+
+        # devices = {"DcimPhysicalDevice": []}
+        # for device in data:
+        #     for item in range(1, device["quantity"] + 1):
+        #         site = topology_name.lower()
+        #         role = device["role"]
+        #         template = device["template"]["template_name"]
+        #         manufacturer = device["device_type"]["manufacturer"]["name"].lower()
+        #         device_name = f"{site}-{role}-{str(item).zfill(2)}"
+        #         _device = {
+        #             "payload": {
+        #                 "name": device_name,
+        #                 "object_template": [template],
+        #                 "device_type": device["device_type"]["id"],
+        #                 # Here we're using hfid to get platform and location from store
+        #                 "platform": device["device_type"]["platform"]["id"],
+        #                 "status": "active",
+        #                 # "role": role if role != "firewall" else "edge_firewall",
+        #                 "location": self.store.get(key=topology_name).id,
+        #                 "member_of_groups": [
+        #                     self.store.get_by_hfid(
+        #                         key=f"CoreStandardGroup__{manufacturer}_{role}"
+        #                     )
+        #                 ],
+        #                 # "topology": topology_id,
+        #             },
+        #             "store_key": device_name,
+        #         }
+        #         devices["DcimPhysicalDevice"].append(_device)
+        # # create devices
+        # for kind, device_list in devices.items():
+        #     if device_list:
+        #         await self._create_in_batch(kind=kind, data_list=device_list)
+
+        # add devices to deployment
+        # device_names = [
+        #     device.get("payload").get("name")
+        #     for device_list in devices.values()
+        #     for device in device_list
+        # ]
+
+        # deployment = await self.client.get(
+        #     kind="TopologyDeployment", name__value=topology_name, include=["devices"]
+        # )
+        # for device in device_names:
+        #     await deployment.add_relationships(
+        #         relation_to_update="devices",
+        #         related_nodes=[self.store.get(device).id],
+        #     )
 
     async def _create_interfaces(self, topology_name: str, data: list) -> None:
         """Create objects of a specific kind and store in local store."""
