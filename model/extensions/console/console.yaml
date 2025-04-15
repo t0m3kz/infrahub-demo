@@ -14,9 +14,9 @@ nodes:
     order_by:
       - name__value
     inherit_from:
-      - "DcimInterface"
-      - "DcimEndpoint"
-      - "CoreArtifactTarget"
+      - DcimInterface
+      - DcimEndpoint
+      - CoreArtifactTarget
     attributes:
       - name: speed
         kind: Number

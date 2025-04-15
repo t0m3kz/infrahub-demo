@@ -199,41 +199,41 @@ async def core(client: InfrahubClient, log: logging.Logger, branch: str) -> None
 async def infra(client: InfrahubClient, log: logging.Logger, branch: str) -> None:
     """Create all the infra objects."""
     # Let's play with owner and source to test functionality
-    log.info("Create ASNs")
-    await create_objects(
-        client=client,
-        log=log,
-        branch=branch,
-        kind="RoutingAutonomousSystem",
-        data_list=[
-            {
-                "payload": {
-                    "name": {
-                        "value": f"AS{item[0]}",
-                        "source": client.store.get(
-                            "CRM Synchronization", kind="CoreAccount"
-                        ).id,
-                        "owner": client.store.get("Tomek Zajac", kind="CoreAccount").id,
-                    },
-                    "asn": item[0],
-                    "description": {
-                        "value": f"AS{item[0]} for {item[1]}",
-                        "source": client.store.get(
-                            "CRM Synchronization", kind="CoreAccount"
-                        ).id,
-                        "owner": client.store.get("Tomek Zajac", kind="CoreAccount").id,
-                    },
-                    "organization": {
-                        "id": client.store.get(
-                            kind="OrganizationProvider", key=item[1]
-                        ).id,
-                    },
-                },
-                "store_key": item,
-            }
-            for item in ASNS
-        ],
-    )
+    # log.info("Create ASNs")
+    # await create_objects(
+    #     client=client,
+    #     log=log,
+    #     branch=branch,
+    #     kind="RoutingAutonomousSystem",
+    #     data_list=[
+    #         {
+    #             "payload": {
+    #                 "name": {
+    #                     "value": f"AS{item[0]}",
+    #                     "source": client.store.get(
+    #                         "CRM Synchronization", kind="CoreAccount"
+    #                     ).id,
+    #                     "owner": client.store.get("Tomek Zajac", kind="CoreAccount").id,
+    #                 },
+    #                 "asn": item[0],
+    #                 "description": {
+    #                     "value": f"AS{item[0]} for {item[1]}",
+    #                     "source": client.store.get(
+    #                         "CRM Synchronization", kind="CoreAccount"
+    #                     ).id,
+    #                     "owner": client.store.get("Tomek Zajac", kind="CoreAccount").id,
+    #                 },
+    #                 "organization": {
+    #                     "id": client.store.get(
+    #                         kind="OrganizationProvider", key=item[1]
+    #                     ).id,
+    #                 },
+    #             },
+    #             "store_key": item,
+    #         }
+    #         for item in ASNS
+    #     ],
+    # )
 
     log.info("Create Platforms")
     await create_objects(
@@ -309,13 +309,12 @@ async def infra(client: InfrahubClient, log: logging.Logger, branch: str) -> Non
     )
 
     log.info("Create Interface Templates")
-    await create_objects(
-        client=client,
-        log=log,
-        branch=branch,
-        kind="TemplateDcimPhysicalInterface",
-        data_list=[
-            {
+
+    templates = {"TemplateDcimPhysicalInterface": [], "TemplateDcimConsolePort": []}
+
+    for template in DEVICE_TEMPLATES:
+        for interface in template[3]:
+            data = {
                 "payload": {
                     "template_name": f"{template[0]}_{template[1].upper()}_{interface[0].upper()}",
                     "device": {
@@ -324,16 +323,54 @@ async def infra(client: InfrahubClient, log: logging.Logger, branch: str) -> Non
                             key=f"{template[0]}_{template[1].upper()}",
                         ).id
                     },
-                    "speed": get_interface_speed(interface[1]),
-                    "name": interface[0],
-                    "role": interface[2],
-                    "interface_type": interface[1],
+
+                "name": interface[0],
+                "role": interface[2],
+                "interface_type": interface[1],
+                "status": "free",
                 },
             }
-            for template in DEVICE_TEMPLATES
-            for interface in template[3]
-        ],
-    )
+
+            templates["TemplateDcimConsolePort"].append(data) if interface[
+                1
+            ] == "console" else templates["TemplateDcimPhysicalInterface"].append(data)
+    
+    for kind, data_list in templates.items():
+        await create_objects(
+            client=client,
+            log=log,
+            branch=branch,
+            kind=kind,
+            data_list=data_list,
+        )
+
+    # await create_objects(
+    #     client=client,
+    #     log=log,
+    #     branch=branch,
+    #     kind="TemplateDcimPhysicalInterface"
+    #     if item[1] != "console"
+    #     else "TemplateDcimConsolePort",
+    #     data_list=[
+    #         {
+    #             "payload": {
+    #                 "template_name": f"{template[0]}_{template[1].upper()}_{interface[0].upper()}",
+    #                 "device": {
+    #                     "id": client.store.get(
+    #                         kind="TemplateDcimPhysicalDevice",
+    #                         key=f"{template[0]}_{template[1].upper()}",
+    #                     ).id
+    #                 },
+    #                 "speed": get_interface_speed(interface[1]),
+    #                 "name": interface[0],
+    #                 "role": interface[2],
+    #                 "interface_type": interface[1],
+    #             },
+    #         }
+    #         for template in DEVICE_TEMPLATES
+    #         for interface in template[3]
+    #     ],
+    # )
 
 
 async def design(client: InfrahubClient, log: logging.Logger, branch: str) -> None:

@@ -182,31 +182,23 @@ spec:
       children:
         data:
           - namespace: Dcim
-            name: NetworkDeviceMenu
-            label: Network Devices
+            name: GenericDevice
+            label: All Devices
+            kind: DcimGenericDevice
             icon: "mdi:server"
-            children:
-              data:
-                - namespace: Dcim
-                  name: Device
-                  label: Routers & Switches
-                  kind: DcimDevice
-                  icon: "subway:switch"
-                - namespace: Dcim
-                  name: Firewall
-                  label: Firewalls
-                  kind: DcimFirewall
-                  icon: "clarity:firewall-line"
-    #             - namespace: Infra
-    #               name: Loadbalancer
-    #               label: Load Balancers
-    #               kind: InfraLoadbalancer
-    #               icon: "carbon:load-balancer-classic"
-    #             - namespace: Infra
-    #               name: Console
-    #               label: Console Servers
-    #               kind: InfraConsole
-    #               icon: "mdi:console-line"
+
+          - name: Interface
+            namespace: Dcim
+            label: "All Interfaces"
+            icon: "mdi:ethernet"
+            kind: DcimInterface
+
+          - name: GenericSFP
+            namespace: Dcim
+            label: "All SFPs"
+            icon: "mdi:gpu"
+            kind: DcimGenericSFP            
+
           - namespace: Network
             name: ServerMenu
             label: Servers
@@ -223,52 +215,6 @@ spec:
                   label: DNS Servers
                   kind: NetworkNameServer
                   icon: "mdi:dns"
-    #             - namespace: Infra
-    #               name: DhcpServer
-    #               label: DHCP Servers
-    #               kind: InfraDhcpServer
-    #               icon: "eos-icons:ip"
-    #             - namespace: Infra
-    #               name: CollectorServer
-    #               label: Collector Servers
-    #               kind: InfraCollectorServer
-    #               icon: "mdi:server-network"
-
-          - namespace: Dcim
-            name: GenericDevice
-            label: All Devices
-            kind: DcimGenericDevice
-            icon: "mdi:server"
-
-          - name: Interface
-            namespace: Dcim
-            label: "All Interfaces"
-            icon: "mdi:ethernet"
-            kind: DcimInterface
-
-          - name: GenericSFP
-            namespace: Dcim
-            label: "All SFPs"
-            icon: "mdi:gpu"
-            kind: DcimGenericSFP
-
-    #       - namespace: Infra
-    #         name: MlagMenu
-    #         label: Link Aggregation
-    #         icon: "eos-icons:cluster-management"
-    #         children:
-    #           data:
-    #             - name: MlagDomain
-    #               namespace: Infra
-    #               label: "MLAG Domains"
-    #               icon: "eos-icons:cluster-management"
-    #               kind: InfraMlagDomain
-
-    #             - name: MlagInterface
-    #               namespace: Infra
-    #               label: "MLAG Interfaces"
-    #               icon: "mdi:ethernet"
-    #               kind: InfraMlagInterface
 
           - namespace: Dcim
             name: Platform
@@ -282,88 +228,33 @@ spec:
             kind: DcimDeviceType
             icon: "mdi:application-settings-outline"
 
-    - namespace: Infra
-      name: CircuitMenu
-      label: Circuit Management
-      icon: "mdi:transit-connection-variant"
-      children:
-        data:
-          - name: Circuit
-            namespace: Dcim
-            label: "Circuit"
-            icon: "mdi:cable-data"
-            kind: DcimCircuit
+          # - namespace: Template
+          #   name: DcimPhysicalDevice
+          #   label: Device Templates
+          #   kind: DcimDeviceType
+          #   icon: "mdi:application-settings-outline"
 
-    # - namespace: Infra
-    #   name: NetworkMenu
-    #   label: Network Segment
-    #   icon: "mdi:lan"
-    #   children:
-    #     data:
-    #       - name: VLAN
-    #         namespace: Infra
-    #         label: "VLAN"
-    #         icon: "mdi:lan-pending"
-    #         kind: InfraVLAN
-    #       - name: SSID
-    #         namespace: Infra
-    #         label: "SSID"
-    #         icon: "mdi:wireless"
-    #         kind: InfraSSID
-
-    - namespace: Routing
-      name: Menu
-      label: Routing & Peering
-      icon: "mdi:router"
-      children:
-        data:
-          - name: VRF
-            namespace: Ipam
-            label: "VRF"
-            icon: "mdi:router"
-            kind: IpamVRF
-          - name: BGP
-            namespace: Routing
-            label: "BGP"
-            icon: "mdi:router"
-            children:
-              data:
-                - name: AutonomousSystem
-                  namespace: Routing
-                  label: "Autonomous System"
-                  icon: "mdi:bank-circle-outline"
-                  kind: RoutingAutonomousSystem
-
-                - name: BGPSession
-                  namespace: Routing
-                  label: "BGP Session"
-                  icon: "mdi:router"
-                  kind: RoutingBGPSession
-
-                - name: BGPPeerGroup
-                  namespace: Routing
-                  label: "BGP Peer Group"
-                  icon: "mdi:view-grid-plus-outline"
-                  kind: RoutingBGPPeerGroup
-
-    - namespace: Infra
-      name: Service
+    - namespace: Service
+      name: Generic
       label: Services
       icon: "carbon:container-services"
       children:
         data:
-          - namespace: Infra
-            name: BackBoneService
-            label: "Backbone Service"
-            kind: InfraBackBoneService
-            icon: "carbon:flow-connection"
-          - namespace: Infra
-            name: Layer2NetworkService
-            label: "Layer2 Network Service"
-            kind: InfraLayer2NetworkService
-            icon: "carbon:vlan"
-          - namespace: Infra
-            name: Layer3NetworkService
-            label: "Layer3 Network Service"
-            kind: InfraLayer3NetworkService
-            icon: "carbon:container-services"
+          - namespace: Service
+            name: VxlanMenu
+            label: VxLAN Services
+            icon: "carbon:ibm-cloud-internet-services"
+            children:
+              data:
+                - namespace: Service
+                  name: OsfpUnderlay
+                  label: "OSFP Underlay"
+                  kind: ServiceOspfUnderlay
+                  icon: "carbon:flow-connection"
+                - namespace: Service
+                  name: IBgpOverlay
+                  label: "iBGP Overlay"
+                  kind: ServiceIBgpOverlay
+                  icon: "carbon:ibm-cloud-internet-services"
+
+

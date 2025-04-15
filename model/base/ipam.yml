@@ -28,11 +28,12 @@ nodes:
         optional: true
         # https://stackoverflow.com/questions/11809631/fully-qualified-domain-name-validation
         regex: (?=^.{1,253}$)(^(((?!-)[a-zA-Z0-9-]{1,63}(?<!-))|((?!-)[a-zA-Z0-9-]{1,63}(?<!-)\.)+[a-zA-Z]{2,63})$)
-    relationships:
-      - name: interface
-        peer: DcimInterfaceL3
-        optional: true
-        cardinality: one
+    # relationships:
+    #   - name: interface
+    #     state: absent
+    #     peer: DcimInterfaceL3
+    #     optional: true
+    #     cardinality: one
 
   - name: Prefix
     namespace: Ipam

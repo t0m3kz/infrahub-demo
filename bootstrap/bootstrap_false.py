@@ -18,7 +18,7 @@ from data_bootstrap import (
     PROVIDERS,
     CUSTOMERS,
     MANUFACTURERS,
-    ASNS,
+    # ASNS,
     PLATFORMS,
     DEVICE_TYPES,
 )
@@ -145,41 +145,41 @@ async def infra(
     """Create all the infra objects."""
     # Let's play with owner and source to test functionality
 
-    await create_objects(
-        client=client,
-        batch=batch,
-        branch=branch,
-        kind="InfraAutonomousSystem",
-        data_list=[
-            {
-                "payload": {
-                    "name": {
-                        "value": f"AS{item[0]}",
-                        "source": client.store.get(
-                            "CRM Synchronization", kind="CoreAccount"
-                        ).id,
-                        "owner": client.store.get("Tomek Zajac", kind="CoreAccount").id,
-                    },
-                    "asn": item[0],
-                    "description": {
-                        "value": f"AS{item[0]} for {item[1]}",
-                        "source": client.store.get(
-                            "CRM Synchronization", kind="CoreAccount"
-                        ).id,
-                        "owner": client.store.get("Tomek Zajac", kind="CoreAccount").id,
-                    },
-                    "organization": {
-                        "id": client.store.get(
-                            kind="OrganizationProvider", key=item[1]
-                        ).id,
-                    },
-                },
-                "store_key": item,
-            }
-            for item in ASNS
-        ],
-    )
-    log.info("Created ASNs")
+    # await create_objects(
+    #     client=client,
+    #     batch=batch,
+    #     branch=branch,
+    #     kind="InfraAutonomousSystem",
+    #     data_list=[
+    #         {
+    #             "payload": {
+    #                 "name": {
+    #                     "value": f"AS{item[0]}",
+    #                     "source": client.store.get(
+    #                         "CRM Synchronization", kind="CoreAccount"
+    #                     ).id,
+    #                     "owner": client.store.get("Tomek Zajac", kind="CoreAccount").id,
+    #                 },
+    #                 "asn": item[0],
+    #                 "description": {
+    #                     "value": f"AS{item[0]} for {item[1]}",
+    #                     "source": client.store.get(
+    #                         "CRM Synchronization", kind="CoreAccount"
+    #                     ).id,
+    #                     "owner": client.store.get("Tomek Zajac", kind="CoreAccount").id,
+    #                 },
+    #                 "organization": {
+    #                     "id": client.store.get(
+    #                         kind="OrganizationProvider", key=item[1]
+    #                     ).id,
+    #                 },
+    #             },
+    #             "store_key": item,
+    #         }
+    #         for item in ASNS
+    #     ],
+    # )
+    # log.info("Created ASNs")
 
     await create_objects(
         client=client,
