@@ -9,4 +9,4 @@ echo "Load initial data"
 poetry run infrahubctl run bootstrap/bootstrap.py
 
 # echo "Add demo repository"
-poetry run infrahubctl repository add DEMO https://github.com/t0m3kz/infrahub-demo.git --read-only
+poetry run infrahubctl repository add DEMO https://github.com/t0m3kz/infrahub-demo.git --ref main --read-only
