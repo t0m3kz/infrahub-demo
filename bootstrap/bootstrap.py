@@ -16,7 +16,6 @@ from data_bootstrap import (
     PROVIDERS,
     CUSTOMERS,
     MANUFACTURERS,
-    ASNS,
     PLATFORMS,
     DEVICE_TYPES,
     DEVICE_TEMPLATES,
@@ -332,7 +331,7 @@ async def infra(client: InfrahubClient, log: logging.Logger, branch: str) -> Non
             }
 
             templates["TemplateDcimConsolePort"].append(data) if interface[
-                1
+                2
             ] == "console" else templates["TemplateDcimPhysicalInterface"].append(data)
     
     for kind, data_list in templates.items():
