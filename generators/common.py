@@ -190,7 +190,6 @@ class TopologyGenerator(InfrahubGenerator):
             kind="TopologyDeployment", name__value=topology_name, include=["devices"]
         )
 
-
         # not elegant way to add devices to the topology
         await deployment.add_relationships(
             relation_to_update="devices",
@@ -348,8 +347,19 @@ class TopologyGenerator(InfrahubGenerator):
             self.logger.info(
                 f"Creating {source_endpoint.hfid} -> {target_endpoint.hfid}"
             )
+
+            source_endpoint.status.value = "active"
+            source_endpoint.description.value = (
+                f"Connection to {' -> '.join(target_endpoint.hfid)}"
+            )
             source_endpoint.connector = target_endpoint.id
+            target_endpoint.status.value = "active"
+            target_endpoint.description.value = (
+                f"Connection to {' -> '.join(source_endpoint.hfid)}"
+            )
+
             await source_endpoint.save(allow_upsert=True)
+            await target_endpoint.save(allow_upsert=True)
 
     async def _create_peering_connections(self, topology_name: str, data: list) -> None:
         """Create objects of a specific kind and store in local store."""
@@ -399,8 +409,18 @@ class TopologyGenerator(InfrahubGenerator):
             self.logger.info(
                 f"Creating {source_endpoint.hfid} -> {target_endpoint.hfid}"
             )
+            source_endpoint.status.value = "active"
+            source_endpoint.description.value = (
+                f"Peering connection to {' -> '.join(target_endpoint.hfid)}"
+            )
             source_endpoint.connector = target_endpoint.id
+            target_endpoint.status.value = "active"
+            target_endpoint.description.value = (
+                f"Peering connection to {' -> '.join(source_endpoint.hfid)}"
+            )
+
             await source_endpoint.save(allow_upsert=True)
+            await target_endpoint.save(allow_upsert=True)
 
     async def _create_vlan_pool():
         pass

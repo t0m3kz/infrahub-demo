@@ -178,11 +178,6 @@ generics:
         optional: true
         description: "A brief description of the interface"
         order_weight: 1100
-      - name: mtu
-        label: MTU
-        kind: Number
-        default_value: 1514
-        order_weight: 1300
       - name: status
         kind: Dropdown
         description: "The status of the interface"
@@ -215,7 +210,7 @@ generics:
             label: Outage
             description: "Interface is currently experiencing an outage."
             color: "#F4CCCC" # pastel red
-        default_value: "active"
+        default_value: "free"
         order_weight: 1200
       - name: role
         kind: Dropdown
@@ -278,55 +273,57 @@ generics:
         kind: Attribute
         order_weight: 3000
 
-  - name: InterfaceL2
-    namespace: Dcim
-    include_in_menu: false
-    description: "Layer 2 specific attributes for network interfaces"
-    label: "Layer 2 Interface"
-    attributes:
-      - name: l2_mode
-        label: Layer2 Mode
-        kind: Dropdown
-        optional: true
-        choices:
-          - name: access
-            label: Access
-            description: "Access mode"
-          - name: trunk
-            label: Trunk
-            description: "Trunk mode"
-          - name: trunk_all
-            label: Trunk (All)
-            description: "Trunk all mode"
-        description: "Layer 2 mode of the interface"
-        order_weight: 1500
+  # - name: InterfaceL2
+  #   namespace: Dcim
+  #   include_in_menu: false
+  #   description: "Layer 2 specific attributes for network interfaces"
+  #   label: "Layer 2 Interface"
+  #   state: absent
+  #   attributes:
+  #     - name: l2_mode
+  #       label: Layer2 Mode
+  #       kind: Dropdown
+  #       optional: true
+  #       choices:
+  #         - name: access
+  #           label: Access
+  #           description: "Access mode"
+  #         - name: trunk
+  #           label: Trunk
+  #           description: "Trunk mode"
+  #         - name: trunk_all
+  #           label: Trunk (All)
+  #           description: "Trunk all mode"
+  #       description: "Layer 2 mode of the interface"
+  #       order_weight: 1500
 
-  - name: InterfaceL3
-    namespace: Dcim
-    include_in_menu: false
-    description: "Layer 3 specific attributes for network interfaces"
-    label: "Layer 3 Interface"
-    attributes:
-      - name: dot1q_id
-        label: VLAN ID (dot1q)
-        kind: Number
-        description: "Dot1Q VLAN ID"
-        order_weight: 1600
-        optional: true
-      - name: mac_address
-        label: Mac Address
-        kind: Text
-        optional: true
-        order_weight: 1550
-    relationships:
-      - name: ip_addresses
-        label: IP Addresses
-        peer: IpamIPAddress
-        cardinality: many
-        kind: Attribute
-        optional: true
-        description: "List of IP addresses associated with the interface"
-        order_weight: 1150
+  # - name: InterfaceL3
+  #   namespace: Dcim
+  #   include_in_menu: false
+  #   description: "Layer 3 specific attributes for network interfaces"
+  #   label: "Layer 3 Interface"
+  #   state: absent
+  #   attributes:
+  #     - name: dot1q_id
+  #       label: VLAN ID (dot1q)
+  #       kind: Number
+  #       description: "Dot1Q VLAN ID"
+  #       order_weight: 1600
+  #       optional: true
+  #     - name: mac_address
+  #       label: Mac Address
+  #       kind: Text
+  #       optional: true
+  #       order_weight: 1550
+  #   relationships:
+  #     - name: ip_addresses
+  #       label: IP Addresses
+  #       peer: IpamIPAddress
+  #       cardinality: many
+  #       kind: Attribute
+  #       optional: true
+  #       description: "List of IP addresses associated with the interface"
+  #       order_weight: 1150
 
   - name: SubInterface
     namespace: Dcim
@@ -537,8 +534,6 @@ nodes:
     description: "Physical network port on a device"
     inherit_from:
       - DcimInterface
-      - DcimInterfaceL2
-      - DcimInterfaceL3
       - DcimEndpoint
       - DcimSubInterface
     include_in_menu: false
@@ -609,15 +604,18 @@ nodes:
             color: "#D3D3D3" # light grey
         default_value: "other"
         order_weight: 1400
-
+      - name: mtu
+        label: MTU
+        kind: Number
+        default_value: 9000
+        order_weight: 1300
+        
   - name: VirtualInterface
     namespace: Dcim
     label: Virtual Interface
     description: "Virtual interface like VLAN or Loopback"
     inherit_from:
       - DcimInterface
-      - DcimInterfaceL2
-      - DcimInterfaceL3
       # - DcimSubInterface # Depending if you want your virtual interfaces to have sub interface
     include_in_menu: false
     relationships:

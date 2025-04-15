@@ -63,6 +63,18 @@ class DCTopologyGenerator(TopologyGenerator):
                 for item in data["design"]["elements"]
             ]
         )
+
+        # add to the topology group
+
+        if data["emulation"]:
+            self.client.log.info(f"Assign CLAB group for topology: {data['name']}")
+            clab_group = await self.client.get(
+                kind="CoreStandardGroup", name__value="topologies_clab"
+            )
+            await clab_group.add_relationships(
+                related_nodes=[data["id"]], relation_to_update="members"
+            )
+
         # create respective IP address pools
         await self._create_ip_pools(
             data["name"],
@@ -81,6 +93,7 @@ class DCTopologyGenerator(TopologyGenerator):
         )
 
         await self._create_peering_connections(data["name"], data["design"]["elements"])
+
         # interfaces = {
         #     f"{data['name'].lower()}-{item['role']}-{str(j + 1).zfill(2)}": [
         #         interface["name"]
