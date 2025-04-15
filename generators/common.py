@@ -77,7 +77,7 @@ class TopologyGenerator(InfrahubGenerator):
                 self.client.log.debug(f"- Creation failed due to {exc}")
         try:
             async for node, _ in batch.execute():
-                object_reference = node.hfid[0] if node.hfid else node.display_label
+                object_reference = " ".join(node.hfid) if node.hfid else node.display_label
                 self.client.log.info(
                     f"- Created [{node.get_kind()}] '{object_reference}'"
                     if object_reference
@@ -91,7 +91,7 @@ class TopologyGenerator(InfrahubGenerator):
         try:
             obj = await self.client.create(kind=kind, data=data)
             await obj.save(allow_upsert=True)
-            object_reference = obj.hfid[0] if obj.hfid else obj.display_label
+            object_reference = " ".join(obj.hfid) if obj.hfid else obj.display_label
             self.client.log.info(
                 f"- Created [{kind}] '{object_reference}'"
                 if object_reference
@@ -202,54 +202,7 @@ class TopologyGenerator(InfrahubGenerator):
             ],
         )
 
-        # devices = {"DcimPhysicalDevice": []}
-        # for device in data:
-        #     for item in range(1, device["quantity"] + 1):
-        #         site = topology_name.lower()
-        #         role = device["role"]
-        #         template = device["template"]["template_name"]
-        #         manufacturer = device["device_type"]["manufacturer"]["name"].lower()
-        #         device_name = f"{site}-{role}-{str(item).zfill(2)}"
-        #         _device = {
-        #             "payload": {
-        #                 "name": device_name,
-        #                 "object_template": [template],
-        #                 "device_type": device["device_type"]["id"],
-        #                 # Here we're using hfid to get platform and location from store
-        #                 "platform": device["device_type"]["platform"]["id"],
-        #                 "status": "active",
-        #                 # "role": role if role != "firewall" else "edge_firewall",
-        #                 "location": self.store.get(key=topology_name).id,
-        #                 "member_of_groups": [
-        #                     self.store.get_by_hfid(
-        #                         key=f"CoreStandardGroup__{manufacturer}_{role}"
-        #                     )
-        #                 ],
-        #                 # "topology": topology_id,
-        #             },
-        #             "store_key": device_name,
-        #         }
-        #         devices["DcimPhysicalDevice"].append(_device)
-        # # create devices
-        # for kind, device_list in devices.items():
-        #     if device_list:
-        #         await self._create_in_batch(kind=kind, data_list=device_list)
 
-        # add devices to deployment
-        # device_names = [
-        #     device.get("payload").get("name")
-        #     for device_list in devices.values()
-        #     for device in device_list
-        # ]
-
-        # deployment = await self.client.get(
-        #     kind="TopologyDeployment", name__value=topology_name, include=["devices"]
-        # )
-        # for device in device_names:
-        #     await deployment.add_relationships(
-        #         relation_to_update="devices",
-        #         related_nodes=[self.store.get(device).id],
-        #     )
 
     async def _create_interfaces(self, topology_name: str, data: list) -> None:
         """Create objects of a specific kind and store in local store."""
