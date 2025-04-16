@@ -225,7 +225,7 @@ wheels = [
 [[package]]
 name = "infrahub-demo"
 version = "0.1.0"
-source = { editable = "." }
+source = { virtual = "." }
 dependencies = [
     { name = "infrahub-sdk", extra = ["all"] },
     { name = "invoke" },

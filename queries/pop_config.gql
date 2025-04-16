@@ -1,55 +1,25 @@
 query firewall_config($device: String!) {
-  DcimGenericDevice(name__value: $device) {
+  DcimPhysicalDevice(name__value: $device) {
     edges {
       node {
         name {
           value
         }
-        ... on DcimDevice{
-          asn{
-            node{
-              name{
-                value
-              }
-            }
-          }
-        }        
         interfaces {
           edges {
             node {
-              __typename
               name {
                 value
               }
-              description{
+              description {
                 value
-              } 
-              enabled{
-                value
-              }                            
-              ... on DcimInterfaceL3 {
-                role {
-                  value
-                }
-                description{
-                  value
-                }
-                enabled{
-                  value
-                }
-                security_zone {
-                  node {
-                    name {
+              }
+              service{
+                edges{
+                  node{
+                    __typename
+                    name{
                       value
-                    }
-                  }
-                }
-                ip_addresses {
-                  edges {
-                    node {
-                      address {
-                        value
-                      }
                     }
                   }
                 }
