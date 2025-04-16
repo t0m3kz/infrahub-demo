@@ -19,9 +19,6 @@ query leaf_config($device: String!) {
                 edges{
                   node{
                     ... on ServiceLayer2Network{
-                      name{
-                        value
-                      }
                       vlan{
                         value
                       }
