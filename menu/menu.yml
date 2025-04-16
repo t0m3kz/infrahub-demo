@@ -36,57 +36,21 @@ spec:
 
     - namespace: Topology
       name: TopologyMenu
-      label: Topology Management
+      label: Designs
       icon: "tabler:topology-star-ring-3"
       children:
         data:
-          - namespace: Topology
-            name: DesignMenu
-            label: Designs
-            icon: "carbon:subnet-acl-rules"
-            children:
-              data:
-                - name: Topology
-                  namespace: Design
-                  label: Design Patterns
-                  kind: DesignTopology
-                  icon: "carbon:data-center"
+          - name: Topology
+            namespace: Design
+            label: Design Patterns
+            kind: DesignTopology
+            icon: "carbon:data-center"
 
-                - name: Element
-                  namespace: Design
-                  label: Design Elements
-                  kind: DesignElement
-                  icon: "subway:switch"
-
-          - namespace: Topology
-            name: DeploymentMenu
-            label: Topology Deployments
-            icon: "carbon:subnet-acl-rules"
-            children:
-              data:
-                - name: DataCenter
-                  namespace: Topology
-                  label: Data Center
-                  kind: TopologyDataCenter
-                  icon: "carbon:data-center"
-
-                - name: ColocationCenter
-                  namespace: Topology
-                  label: Colocation Center
-                  kind: TopologyColocationCenter
-                  icon: "carbon:data-center"
-
-                - name: CampusOffice
-                  namespace: Topology
-                  label: Campus Office
-                  kind: TopologyCampusOffice
-                  icon: "solar:buildings-3-linear"
-
-                - name: BranchOffice
-                  namespace: Topology
-                  label: Branch Office
-                  kind: TopologyBranchOffice
-                  icon: "tabler:building"
+          - name: Element
+            namespace: Design
+            label: Design Elements
+            kind: DesignElement
+            icon: "subway:switch"
 
     - namespace: Security
       name: SecurityMenu
@@ -240,6 +204,94 @@ spec:
       icon: "carbon:container-services"
       children:
         data:
+          - namespace: Services
+            name: DeploymentMenu
+            label: Topology Deployments
+            icon: "carbon:subnet-acl-rules"
+            children:
+              data:
+                - name: DataCenter
+                  namespace: Services
+                  label: Data Center
+                  kind: TopologyDataCenter
+                  icon: "carbon:data-center"
+
+                - name: ColocationCenter
+                  namespace: Services
+                  label: Colocation Center
+                  kind: TopologyColocationCenter
+                  icon: "carbon:data-center"
+
+                - name: CampusOffice
+                  namespace: Services
+                  label: Campus Office
+                  kind: TopologyCampusOffice
+                  icon: "solar:buildings-3-linear"
+
+                - name: BranchOffice
+                  namespace: Services
+                  label: Branch Office
+                  kind: TopologyBranchOffice
+                  icon: "tabler:building"        
+
+          - namespace: Service
+            name: SecurityMenu
+            label: Securuty Services
+            icon: "carbon:ibm-cloud-internet-services"
+            children:
+              data:
+                - namespace: Service
+                  name: Firewall
+                  label: Firewall Zone
+                  kind: ServiceFirewall
+                  icon: "mdi:firewall"
+                - namespace: Service
+                  name: Acl
+                  label: Access Control Lists
+                  kind: ServiceFirewall
+                  icon: "mdi:firewall"
+                - namespace: Service
+                  name: ZScaler
+                  label: ZScaler Control Lists
+                  kind: ServiceZScaler
+                  icon: "mdi:firewall"
+          - namespace: Service
+            name: NetworkMenu
+            label: Network Services
+            icon: "carbon:ibm-cloud-internet-services"
+            children:
+              data:
+                - namespace: Service
+                  name: Layer2Network
+                  label: Layer2 Segment
+                  kind: ServiceLayer2Network
+                  icon: "mdi:lan"
+                - namespace: Service
+                  name: Layer3Gateway
+                  label: Layer3 Segment
+                  kind: ServiceLayer3Gateway
+                  icon: "mdi:lan"        
+          - namespace: Service
+            name: PeeringMenu
+            label: Connection Services
+            icon: "carbon:ibm-cloud-internet-services"
+            children:
+              data:
+                - namespace: Service
+                  name: ServiceBackBone
+                  label: Backbone Peering
+                  kind: ServiceBackBone
+                  icon: "mdi:lan"
+                - namespace: Service
+                  name: OspfFabricPeering
+                  label: Ospf Fabric Peering
+                  kind: ServiceOspfFabricPeering
+                  icon: "mdi:lan" 
+                - namespace: Service
+                  name: BGPFabricPeering
+                  label: BGP Fabric Peering
+                  kind: ServiceBGPFabricPeering
+                  icon: "mdi:lan"                                     
           - namespace: Service
             name: VxlanMenu
             label: VxLAN Services
@@ -247,14 +299,12 @@ spec:
             children:
               data:
                 - namespace: Service
-                  name: OsfpUnderlay
-                  label: "OSFP Underlay"
+                  name: OspfUnderlay
+                  label: "Ospf Underlay"
                   kind: ServiceOspfUnderlay
                   icon: "carbon:flow-connection"
                 - namespace: Service
                   name: IBgpOverlay
                   label: "iBGP Overlay"
                   kind: ServiceIBgpOverlay
-                  icon: "carbon:ibm-cloud-internet-services"
-
-
+                  icon: "carbon:ibm-cloud-internet-services"                  
