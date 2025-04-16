@@ -1,48 +1,3 @@
-[tool.poetry]
-name = "infrahub-demo"
-version = "0.1.0"
-description = ""
-authors = ["Tomek Zajac <tomek@mastuazi.com>"]
-readme = "README.md"
-[tool.poetry.dependencies]
-python = ">=3.9, < 3.13"
-invoke = "^2.2.0"
-pytest = "^8.3.5"
-infrahub-sdk = {extras = ["all"], version = "^1.7.2"}
-
-
-[tool.poetry.group.dev.dependencies]
-ipdb = "^0.13.13"
-pylint = "^3.2.6"
-yamllint = "^1.36.0"
-pre-commit = "^4.1.0"
-pydocstyle = "^6.3.0"
-bandit = "^1.8.3"
-black = "^24.8.0"
-flake8 = "^7.1.2"
-invoke = "^2.2.0"
-pytest = "^8.3.5"
-
-
-
-[tool.pdm.dev-dependencies]
-dev = [
-    "ipdb<1.0.0,>=0.13.13",
-    "pylint<4.0.0,>=3.2.6",
-    "yamllint<2.0.0,>=1.36.0",
-    "pre-commit<5.0.0,>=4.1.0",
-    "pydocstyle<7.0.0,>=6.3.0",
-    "bandit<2.0.0,>=1.8.3",
-    "black<25.0.0,>=24.8.0",
-    "flake8<8.0.0,>=7.1.2",
-    "invoke<3.0.0,>=2.2.0",
-    "pytest<9.0.0,>=8.3.5",
-]
-[build-system]
-requires = ["pdm-backend"]
-build-backend = "pdm.backend"
-
-
 [project]
 authors = [
     {name = "Tomek Zajac", email = "tomek@mastuazi.com"},
@@ -60,15 +15,7 @@ readme = "README.md"
 
 [dependency-groups]
 dev = [
-    "ipdb<1.0.0,>=0.13.13",
-    "pylint<4.0.0,>=3.2.6",
-    "yamllint<2.0.0,>=1.36.0",
-    "pre-commit<5.0.0,>=4.1.0",
-    "pydocstyle<7.0.0,>=6.3.0",
-    "bandit<2.0.0,>=1.8.3",
-    "black<25.0.0,>=24.8.0",
-    "flake8<8.0.0,>=7.1.2",
-    "invoke<3.0.0,>=2.2.0",
+    "infrahub-sync>=1.1.0",
     "pytest<9.0.0,>=8.3.5",
     "ruff>=0.11.4",
 ]
