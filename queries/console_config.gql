@@ -1,4 +1,4 @@
-query firewall_config($device: String!) {
+query oob_config($device: String!) {
   DcimGenericDevice(name__value: $device) {
     edges {
       node {

@@ -6,7 +6,7 @@ from invoke import task, Context  # type: ignore
 
 INFRAHUB_VERSION = os.getenv("INFRAHUB_VERSION", "")
 COMPOSE_COMMAND = (
-    f"curl https://infrahub.opsmill.io/{INFRAHUB_VERSION} | docker compose -f -"
+    f"curl https://infrahub.opsmill.io/{INFRAHUB_VERSION} | docker compose -p infrahub -f -"
 )
 
 

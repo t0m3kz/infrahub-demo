@@ -5,14 +5,14 @@ jinja2_transforms:
   #   description: "Template to generate startup configuration for a cisco POP router"
   #   query: "pop_config"
   #   template_path: "templates/configs/cisco_pop_router.j2"
-  - name: "cisco_dc_leaf"
+  - name: "cisco_leaf"
     description: "Template to generate startup configuration for a cisco DC leaf"
-    query: "dc_leaf_config"
-    template_path: "templates/configs/cisco_dc_leaf.j2"
-  # - name: "cisco_dc_spine"
-  #   description: "Template to generate startup configuration for a cisco DC spine"
-  #   query: "dc_spine_config"
-  #   template_path: "templates/configs/cisco_dc_spine.j2"
+    query: "leaf_config"
+    template_path: "templates/configs/cisco_leaf.j2"
+  - name: "cisco_spine"
+    description: "Template to generate startup configuration for a cisco DC spine"
+    query: "spine_config"
+    template_path: "templates/configs/cisco_spine.j2"
   # - name: "cisco_dc_oob"
   #   description: "Template to generate startup configuration for a cisco DC OOB"
   #   query: "dc_oob_config"
@@ -55,20 +55,20 @@ artifact_definitions:
   #   transformation: "cisco_pop_router"
   #   parameters:
   #     device: "name__value"
-  - name: "Cisco DC leaf config"
-    artifact_name: "cisco-dc-leaf"
+  - name: "Cisco leaf config"
+    artifact_name: "cisco-leaf"
     content_type: "text/plain"
-    targets: "cisco_dc_leaf"
-    transformation: "cisco_dc_leaf"
+    targets: "cisco_leaf"
+    transformation: "cisco_leaf"
     parameters:
       device: "name__value"
-  # - name: "Cisco DC spine config"
-  #   artifact_name: "cisco-dc-spine"
-  #   content_type: "text/plain"
-  #   targets: "cisco_dc_spine"
-  #   transformation: "cisco_dc_spine"
-  #   parameters:
-  #     device: "name__value"
+  - name: "Cisco spine config"
+    artifact_name: "cisco-spine"
+    content_type: "text/plain"
+    targets: "cisco_spine"
+    transformation: "cisco_spine"
+    parameters:
+      device: "name__value"
   # - name: "Cisco DC OOB config"
   #   artifact_name: "cisco-dc-oob"
   #   content_type: "text/plain"
@@ -139,7 +139,7 @@ artifact_definitions:
 
   - name: "Cable marix for Topology"
     artifact_name: "topology-cabling"
-    content_type: "text/plain"
+    content_type: "text/csv"
     targets: "topologies_dc"
     transformation: "topology_cabling"
     parameters:
@@ -180,10 +180,10 @@ queries:
   #   file_path: "queries/firewall_config.gql"
   # - name: pop_config
   #   file_path: "queries/pop_config.gql"
-  - name: dc_leaf_config
-    file_path: "queries/dc_leaf_config.gql"
-  # - name: dc_spine_config
-  #   file_path: "queries/dc_spine_config.gql"
+  - name: leaf_config
+    file_path: "queries/leaf_config.gql"
+  - name: spine_config
+    file_path: "queries/spine_config.gql"
   # - name: dc_oob_config
   #   file_path: "queries/dc_oob_config.gql"
   # - name: console_config
