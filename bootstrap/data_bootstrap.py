@@ -58,7 +58,7 @@ SITES = (
     ("EQX-1", "EQX1", "active", "pop", "Frankfurt"),
     ("FRA-1", "FRA1", "active", "campus", "Frankfurt"),
     ("FRA-2", "FRA2", "active", "office", "Frankfurt"),
-    ("DC-2", "DC2", "active", "dc", "Katowice"),
+    ("PAR-1", "PAR1", "active", "office", "Paris"),
 )
 
 ACCOUNTS = (
