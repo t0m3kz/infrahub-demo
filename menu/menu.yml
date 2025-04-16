@@ -211,28 +211,28 @@ spec:
             children:
               data:
                 - name: DataCenter
-                  namespace: Services
+                  namespace: Topology
                   label: Data Center
                   kind: TopologyDataCenter
                   icon: "carbon:data-center"
 
                 - name: ColocationCenter
-                  namespace: Services
+                  namespace: Topology
                   label: Colocation Center
                   kind: TopologyColocationCenter
                   icon: "carbon:data-center"
 
                 - name: CampusOffice
-                  namespace: Services
+                  namespace: Topology
                   label: Campus Office
                   kind: TopologyCampusOffice
                   icon: "solar:buildings-3-linear"
 
                 - name: BranchOffice
-                  namespace: Services
+                  namespace: Topology
                   label: Branch Office
                   kind: TopologyBranchOffice
-                  icon: "tabler:building"        
+                  icon: "tabler:building"
 
           - namespace: Service
             name: SecurityMenu
@@ -270,7 +270,7 @@ spec:
                   name: Layer3Gateway
                   label: Layer3 Segment
                   kind: ServiceLayer3Gateway
-                  icon: "mdi:lan"        
+                  icon: "mdi:lan"
           - namespace: Service
             name: PeeringMenu
             label: Connection Services
@@ -286,12 +286,12 @@ spec:
                   name: OspfFabricPeering
                   label: Ospf Fabric Peering
                   kind: ServiceOspfFabricPeering
-                  icon: "mdi:lan" 
+                  icon: "mdi:lan"
                 - namespace: Service
                   name: BGPFabricPeering
                   label: BGP Fabric Peering
                   kind: ServiceBGPFabricPeering
-                  icon: "mdi:lan"                                     
+                  icon: "mdi:lan"
           - namespace: Service
             name: VxlanMenu
             label: VxLAN Services
@@ -307,4 +307,4 @@ spec:
                   name: IBgpOverlay
                   label: "iBGP Overlay"
                   kind: ServiceIBgpOverlay
-                  icon: "carbon:ibm-cloud-internet-services"                  
+                  icon: "carbon:ibm-cloud-internet-services"
