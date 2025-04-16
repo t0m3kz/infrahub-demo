@@ -22,6 +22,14 @@ query topology_cables($name: String!) {
                         }
                       }
                     }
+                    ... on DcimConsoleInterface {
+                      connector {
+                        node {
+                          hfid
+                          display_label
+                        }
+                      }
+                    }
                   }
                 }
               }

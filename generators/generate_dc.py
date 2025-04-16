@@ -92,6 +92,10 @@ class DCTopologyGenerator(TopologyGenerator):
             data["name"], data["design"]["elements"], "console"
         )
 
+        await self._create_oob_connections(
+            data["name"], data["design"]["elements"], "management"
+        )
+
         await self._create_peering_connections(data["name"], data["design"]["elements"])
 
         # interfaces = {
