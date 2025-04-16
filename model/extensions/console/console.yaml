@@ -3,13 +3,12 @@
 version: "1.0"
 
 nodes:
-  - name: InterfaceConsole
+  - name: ConsoleInterface
     namespace: Dcim
     description: "Console Interface"
     label: "Console Port"
     include_in_menu: false
     icon: "mdi:console"
-    generate_template: true
     display_labels:
       - name__value
     order_by:
@@ -22,18 +21,10 @@ nodes:
       - name: speed
         kind: Number
         order_weight: 1400
+        default_value: 115200
       - name: port
         label: port
         default_value: 1500
         kind: Number
         order_weight: 1500
-      - name: role
-        kind: Dropdown
-        optional: true
-        description: "The role of the interface in the network"
-        choices:
-          - name: console
-            label: Console
-            description: Console Interface
-            color: "#E2D4C6"
-        read_only: true
+

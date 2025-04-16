@@ -67,6 +67,14 @@ query generate_topology($name: String!) {
                                     value
                                   }
                                 }
+                                ... on TemplateDcimConsoleInterface{
+                                  name{
+                                    value
+                                  }
+                                  role{
+                                    value
+                                  }
+                                }
                               }
                             }
                             count

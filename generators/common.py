@@ -202,47 +202,6 @@ class TopologyGenerator(InfrahubGenerator):
             ],
         )
 
-
-
-    async def _create_interfaces(self, topology_name: str, data: list) -> None:
-        """Create objects of a specific kind and store in local store."""
-        interfaces = {
-            "DcimInterfaceL2": [],
-            "DcimInterfaceL3": [],
-            "DcimInterfaceConsole": [],
-        }
-        for device in data:
-            for item in range(1, device["quantity"] + 1):
-                device_name = (
-                    f"{topology_name.lower()}-{device.get('role')}-{str(item).zfill(2)}"
-                )
-                # get exsting interfaces for device
-                # and update if they does't exist ?
-                for interface in device["interface_patterns"]:
-                    _interface = {
-                        "payload": {
-                            "name": interface.get("name"),
-                            "speed": set_speed(interface.get("type")),
-                            "mtu": 9000,
-                            "device": self.client.store.get(key=device_name).id,
-                            "description": f"{device_name} {interface.get('role')} interface",
-                            "role": interface.get("role"),
-                            "status": "active",
-                        },
-                        "store_key": f"{device_name}_{interface.get('name')}",
-                    }
-                    if interface.get("role") in ["uplink", "leaf", "management"]:
-                        interfaces["DcimInterfaceL3"].append(_interface)
-                    elif interface.get("role") == "console":
-                        interfaces["DcimInterfaceConsole"].append(_interface)
-                    else:
-                        _interface["payload"]["l2_mode"] = "Access"
-                        interfaces["DcimInterfaceL2"].append(_interface)
-
-        for kind, interface_list in interfaces.items():
-            if interface_list:
-                await self._create_in_batch(kind=kind, data_list=interface_list)
-
     async def _create_oob_connections(
         self,
         topology_name: str,
@@ -250,6 +209,7 @@ class TopologyGenerator(InfrahubGenerator):
         connection_type: str,
     ) -> None:
         """Create objects of a specific kind and store in local store."""
+
         device_key = "oob" if connection_type == "management" else "console"
         interfaces = {
             f"{topology_name.lower()}-{item['role']}-{str(j + 1).zfill(2)}": [

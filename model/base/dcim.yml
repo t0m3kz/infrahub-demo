@@ -100,7 +100,7 @@ generics:
           - name: drained
             label: Drained
             description: Temporarily taken out of service.
-            color: "#bfbfbf"                    
+            color: "#bfbfbf"                  
     relationships:
       - name: interfaces
         peer: DcimInterface

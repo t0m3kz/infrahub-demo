@@ -180,7 +180,7 @@ nodes:
 
 extensions:
   nodes:
-    - kind: DcimInterface
+    - kind: DcimPhysicalInterface
       relationships:
         - name: plugged_sfp
           peer: DcimGenericSFP

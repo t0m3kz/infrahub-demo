@@ -197,42 +197,6 @@ async def core(client: InfrahubClient, log: logging.Logger, branch: str) -> None
 
 async def infra(client: InfrahubClient, log: logging.Logger, branch: str) -> None:
     """Create all the infra objects."""
-    # Let's play with owner and source to test functionality
-    # log.info("Create ASNs")
-    # await create_objects(
-    #     client=client,
-    #     log=log,
-    #     branch=branch,
-    #     kind="RoutingAutonomousSystem",
-    #     data_list=[
-    #         {
-    #             "payload": {
-    #                 "name": {
-    #                     "value": f"AS{item[0]}",
-    #                     "source": client.store.get(
-    #                         "CRM Synchronization", kind="CoreAccount"
-    #                     ).id,
-    #                     "owner": client.store.get("Tomek Zajac", kind="CoreAccount").id,
-    #                 },
-    #                 "asn": item[0],
-    #                 "description": {
-    #                     "value": f"AS{item[0]} for {item[1]}",
-    #                     "source": client.store.get(
-    #                         "CRM Synchronization", kind="CoreAccount"
-    #                     ).id,
-    #                     "owner": client.store.get("Tomek Zajac", kind="CoreAccount").id,
-    #                 },
-    #                 "organization": {
-    #                     "id": client.store.get(
-    #                         kind="OrganizationProvider", key=item[1]
-    #                     ).id,
-    #                 },
-    #             },
-    #             "store_key": item,
-    #         }
-    #         for item in ASNS
-    #     ],
-    # )
 
     log.info("Create Platforms")
     await create_objects(
@@ -309,7 +273,7 @@ async def infra(client: InfrahubClient, log: logging.Logger, branch: str) -> Non
 
     log.info("Create Interface Templates")
 
-    templates = {"TemplateDcimPhysicalInterface": [], "TemplateDcimInterfaceConsole": []}
+    templates = {"TemplateDcimPhysicalInterface": [], "TemplateDcimConsoleInterface": []}
 
     for template in DEVICE_TEMPLATES:
         for interface in template[3]:
@@ -330,7 +294,7 @@ async def infra(client: InfrahubClient, log: logging.Logger, branch: str) -> Non
                 },
             }
 
-            templates["TemplateDcimInterfaceConsole"].append(data) if interface[
+            templates["TemplateDcimConsoleInterface"].append(data) if interface[
                 2
             ] == "console" else templates["TemplateDcimPhysicalInterface"].append(data)
     
