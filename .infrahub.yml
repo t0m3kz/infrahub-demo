@@ -55,13 +55,13 @@ artifact_definitions:
   #   transformation: "cisco_pop_router"
   #   parameters:
   #     device: "name__value"
-  # - name: "Cisco DC leaf config"
-  #   artifact_name: "cisco-dc-leaf"
-  #   content_type: "text/plain"
-  #   targets: "cisco_dc_leaf"
-  #   transformation: "cisco_dc_leaf"
-  #   parameters:
-  #     device: "name__value"
+  - name: "Cisco DC leaf config"
+    artifact_name: "cisco-dc-leaf"
+    content_type: "text/plain"
+    targets: "cisco_dc_leaf"
+    transformation: "cisco_dc_leaf"
+    parameters:
+      device: "name__value"
   # - name: "Cisco DC spine config"
   #   artifact_name: "cisco-dc-spine"
   #   content_type: "text/plain"
