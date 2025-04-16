@@ -77,7 +77,9 @@ class TopologyGenerator(InfrahubGenerator):
                 self.client.log.debug(f"- Creation failed due to {exc}")
         try:
             async for node, _ in batch.execute():
-                object_reference = " ".join(node.hfid) if node.hfid else node.display_label
+                object_reference = (
+                    " ".join(node.hfid) if node.hfid else node.display_label
+                )
                 self.client.log.info(
                     f"- Created [{node.get_kind()}] '{object_reference}'"
                     if object_reference

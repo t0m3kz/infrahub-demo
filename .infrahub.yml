@@ -5,10 +5,10 @@ jinja2_transforms:
   #   description: "Template to generate startup configuration for a cisco POP router"
   #   query: "pop_config"
   #   template_path: "templates/configs/cisco_pop_router.j2"
-  # - name: "cisco_dc_leaf"
-  #   description: "Template to generate startup configuration for a cisco DC leaf"
-  #   query: "dc_leaf_config"
-  #   template_path: "templates/configs/cisco_dc_leaf.j2"
+  - name: "cisco_dc_leaf"
+    description: "Template to generate startup configuration for a cisco DC leaf"
+    query: "dc_leaf_config"
+    template_path: "templates/configs/cisco_dc_leaf.j2"
   # - name: "cisco_dc_spine"
   #   description: "Template to generate startup configuration for a cisco DC spine"
   #   query: "dc_spine_config"
@@ -75,7 +75,7 @@ artifact_definitions:
   #   targets: "cisco_dc_oob"
   #   transformation: "cisco_dc_oob"
   #   parameters:
-  #     device: "name__value"      
+  #     device: "name__value"
   # Arista
   # - name: "Arista POP config"
   #   artifact_name: "arista-pop-router"
@@ -105,7 +105,7 @@ artifact_definitions:
   #   targets: "juniper_dc_firewall"
   #   transformation: "juniper_firewall"
   #   parameters:
-  #     device: "name__value"  
+  #     device: "name__value"
   # - name: "Juniper POP firewall config"
   #   artifact_name: "juniper-pop-firewall"
   #   content_type: "text/plain"
@@ -128,8 +128,7 @@ artifact_definitions:
   #   transformation: "perle_console"
   #   parameters:
   #     device: "name__value"
-  # Containerlab  
-    
+  # Containerlab
   - name: "Containerlab Topology"
     artifact_name: "containerlab-topology"
     content_type: "text/plain"
@@ -174,18 +173,18 @@ queries:
   - name: topology_simulator
     file_path: "queries/topology_clab.gql"
   - name: topology_cabling
-    file_path: "queries/topology_cabling.gql"        
+    file_path: "queries/topology_cabling.gql"
   # - name: topology_pop
-  #   file_path: "queries/topology_pop.gql"    
+  #   file_path: "queries/topology_pop.gql"
   # - name: firewall_config
   #   file_path: "queries/firewall_config.gql"
   # - name: pop_config
   #   file_path: "queries/pop_config.gql"
-  # - name: dc_leaf_config
-  #   file_path: "queries/dc_leaf_config.gql"
+  - name: dc_leaf_config
+    file_path: "queries/dc_leaf_config.gql"
   # - name: dc_spine_config
   #   file_path: "queries/dc_spine_config.gql"
   # - name: dc_oob_config
   #   file_path: "queries/dc_oob_config.gql"
   # - name: console_config
-  #   file_path: "queries/console_config.gql"  
+  #   file_path: "queries/console_config.gql"
