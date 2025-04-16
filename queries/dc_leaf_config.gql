@@ -1,19 +1,10 @@
-query firewall_config($device: String!) {
-  DcimGenericDevice(name__value: $device) {
+query leaf_config($device: String!) {
+  DcimPhysicalDevice(name__value: $device) {
     edges {
       node {
         name {
           value
         }
-        ... on DcimDevice{
-          asn{
-            node{
-              name{
-                value
-              }
-            }
-          }
-        }        
         interfaces {
           edges {
             node {
@@ -21,35 +12,23 @@ query firewall_config($device: String!) {
               name {
                 value
               }
-              description{
+              description {
                 value
-              } 
-              enabled{
-                value
-              }                            
-              ... on DcimInterfaceL3 {
-                role {
-                  value
-                }
-                description{
-                  value
-                }
-                enabled{
-                  value
-                }
-                security_zone {
-                  node {
-                    name {
-                      value
-                    }
-                  }
-                }
-                ip_addresses {
-                  edges {
-                    node {
-                      address {
+              }
+              service{
+                edges{
+                  node{
+                    ... on ServiceLayer2Network{
+                      name{
                         value
                       }
+                      vlan{
+                        value
+                      }
+                    }
+                    __typename
+                    name{
+                      value
                     }
                   }
                 }

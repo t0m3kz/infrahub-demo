@@ -1,5 +1,5 @@
 query firewall_config($device: String!) {
-  DcimGenericDevice(name__value: $device) {
+  DcimPhysicalDevice(name__value: $device) {
     edges {
       node {
         name {
@@ -12,208 +12,18 @@ query firewall_config($device: String!) {
               name {
                 value
               }
-              description{
+              description {
                 value
               }
-              enabled{
-                value
-              }               
-              ... on DcimInterfaceL3 {
-                role {
-                  value
-                }
-                security_zone {
-                  node {
-                    name {
+              service{
+                edges{
+                  node{
+                    __typename
+                    name{
                       value
                     }
                   }
                 }
-                ip_addresses {
-                  edges {
-                    node {
-                      address {
-                        value
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          }
-        }
-        ... on DcimFirewall {
-          policy {
-            node {
-              ... on SecurityPolicy {
-                rules {
-                  edges {
-                    node {
-                      name {
-                        value
-                      }
-                      index {
-                        value
-                      }
-                      action {
-                        value
-                      }
-                      log {
-                        value
-                      }
-                      source_zone {
-                        node {
-                          name {
-                            value
-                          }
-                        }
-                      }
-                      destination_zone {
-                        node {
-                          name {
-                            value
-                          }
-                        }
-                      }
-                      source_address {
-                        edges {
-                          node {
-                            name {
-                              value
-                            }
-                          }
-                        }
-                      }
-                      source_groups {
-                        edges {
-                          node {
-                            name {
-                              value
-                            }
-                          }
-                        }
-                      }
-                      destination_address {
-                        edges {
-                          node {
-                            name {
-                              value
-                            }
-                          }
-                        }
-                      }
-                      destination_groups {
-                        edges {
-                          node {
-                            name {
-                              value
-                            }
-                          }
-                        }
-                      }
-                      destination_services {
-                        edges {
-                          node {
-                            name {
-                              value
-                            }
-                          }
-                        }
-                      }
-                      destination_service_groups {
-                        edges {
-                          node {
-                            name {
-                              value
-                            }
-                          }
-                        }
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-    }
-  }
-  SecurityGenericAddress {
-    edges {
-      node {
-        __typename
-        name {
-          value
-        }
-        ... on SecurityFQDN {
-          fqdn {
-            value
-          }
-        }
-        ... on SecurityIPAddress {
-          address {
-            value
-          }
-        }
-        ... on SecurityPrefix {
-          prefix {
-            value
-          }
-        }
-      }
-    }
-  }
-  SecurityGenericAddressGroup {
-    edges {
-      node {
-        name {
-          value
-        }
-        ... on SecurityAddressGroup {
-          addresses {
-            edges {
-              node {
-                name {
-                  value
-                }
-              }
-            }
-          }
-        }
-      }
-    }
-  }
-  SecurityService {
-    edges {
-      node {
-        name {
-          value
-        }
-        ip_protocol {
-          node {
-            name {
-              value
-            }
-          }
-        }
-        port {
-          value
-        }
-      }
-    }
-  }
-  SecurityServiceGroup {
-    edges {
-      node {
-        name {
-          value
-        }
-        services {
-          edges {
-            node {
-              name {
-                value
               }
             }
           }
