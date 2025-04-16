@@ -1,6 +1,6 @@
 {% set ns = namespace(loopback_intf_name=None, loopback_ip=None, management_intf_name=None, management_ip=None, ntp_servers=[], name_servers=[]) %}
-{% if data.DcimGenericDevice.edges and data.DcimGenericDevice.edges is iterable %}
-{% set device = data.DcimGenericDevice.edges[0].node %}
+{% if data.DcimPhysicalDevice.edges and data.DcimPhysicalDevice.edges is iterable %}
+{% set device = data.DcimPhysicalDevice.edges[0].node %}
 !
 no aaa root
 !

@@ -13,7 +13,9 @@ class TopologyCabling(InfrahubTransform):
 
         seen_connections = set()  # Track connections we've already processed
 
-        for device in data["TopologyDeployment"]["edges"][0]["node"]["devices"]["edges"]:
+        for device in data["TopologyDeployment"]["edges"][0]["node"]["devices"][
+            "edges"
+        ]:
             source_device = device["node"]["name"]["value"]
 
             for interface in device["node"]["interfaces"]["edges"]:
@@ -44,10 +46,10 @@ class TopologyCabling(InfrahubTransform):
                 # Format this row and add to our list
                 # Escape any commas in field values with quotes
                 row = [source_device, source_interface, remote_device, remote_interface]
-                escaped_row = [f'"{field}"' if ',' in field else field for field in row]
-                csv_rows.append(','.join(escaped_row))
+                escaped_row = [f'"{field}"' if "," in field else field for field in row]
+                csv_rows.append(",".join(escaped_row))
 
         # Join all rows with newlines to create CSV string
-        csv_data = '\n'.join(csv_rows)
+        csv_data = "\n".join(csv_rows)
 
         return csv_data

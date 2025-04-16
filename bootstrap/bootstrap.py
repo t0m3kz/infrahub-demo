@@ -273,7 +273,10 @@ async def infra(client: InfrahubClient, log: logging.Logger, branch: str) -> Non
 
     log.info("Create Interface Templates")
 
-    templates = {"TemplateDcimPhysicalInterface": [], "TemplateDcimConsoleInterface": []}
+    templates = {
+        "TemplateDcimPhysicalInterface": [],
+        "TemplateDcimConsoleInterface": [],
+    }
 
     for template in DEVICE_TEMPLATES:
         for interface in template[3]:
@@ -286,18 +289,17 @@ async def infra(client: InfrahubClient, log: logging.Logger, branch: str) -> Non
                             key=f"{template[0]}_{template[1].upper()}",
                         ).id
                     },
-
-                "name": interface[0],
-                "role": interface[2],
-                "interface_type": interface[1],
-                "status": "free",
+                    "name": interface[0],
+                    "role": interface[2],
+                    "interface_type": interface[1],
+                    "status": "free",
                 },
             }
 
             templates["TemplateDcimConsoleInterface"].append(data) if interface[
                 2
             ] == "console" else templates["TemplateDcimPhysicalInterface"].append(data)
-    
+
     for kind, data_list in templates.items():
         await create_objects(
             client=client,
