@@ -4,11 +4,6 @@
 !
 no aaa root
 !
-username admin privilege 15 role network-admin secret sha512 $6$q4ez.aZgB/G/eeWW$ukvRobb5RtYmUlCcY0atxhwPmA6FPoRjR3AxYFJqNFoCRgJjrohKGrBsbY12n1uRZeCer1L8oejx5aPlrf.op0
-!
-transceiver qsfp default-mode 4x10G
-!
-service routing protocols model multi-agent
 !
 hostname {{ data.DcimPhysicalDevice.edges[0].node.name.value }}
 !
@@ -26,7 +21,7 @@ ip name-server {{ name_server }}
 !
 spanning-tree mode mstp
 !
-{%   for intf in data.DcimPhysicalDevice.edges[0].node.interfaces.edges |sort_interface_list(attribute="node.name.value") %}
+{%   for intf in data.DcimPhysicalDevice.edges[0].node.interfaces.edges %}
 interface {{ intf.node.name.value }}
 {%      if intf.node.description.value %}
   description "{{ intf.node.description.value }}"
@@ -44,6 +39,9 @@ interface {{ intf.node.name.value }}
 {%         endfor %}
 {%      endif %}
 !
+{% for service in intf.node.service.edges %}
+   vlan {{ service.node.name.value }}
+{% endfor %}
 {%   endfor %}
 !
 ip prefix-list BOGON-Prefixes seq 10 permit 172.16.0.0/12 le 24
