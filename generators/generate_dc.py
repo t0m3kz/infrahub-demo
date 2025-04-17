@@ -78,15 +78,15 @@ class DCTopologyGenerator(TopologyGenerator):
             )
 
         # create respective IP address pools
-        await self._create_ip_pools(
-            data["name"],
-            pools={
-                "management": data["management"],
-                "technical": data["technical"],
-                "customer": data["customer"],
-                "public": data["public"],
-            },
-        )
+        # await self._create_ip_pools(
+        #     data["name"],
+        #     pools={
+        #         "management": data["management"],
+        #         "technical": data["technical"],
+        #         "customer": data["customer"],
+        #         "public": data["public"],
+        #     },
+        # )
 
         await self._create_devices(data["name"], data["design"]["elements"], data["id"])
 
