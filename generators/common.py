@@ -122,10 +122,10 @@ class TopologyGenerator(InfrahubGenerator):
                     "is_pool": item in ["management", "customer"],
                     "status": "active",
                     "role": "supernet" if item == "customer" else item,
-                    "location": self.store.get(key=topology_name).id,
+                    "location": self.client.store.get(key=topology_name).id,
                 }
                 await self._create(kind="IpamPrefix", data=data, store_key=item)
-                self.client.log.info(self.store.get(item).id)
+                self.client.log.info(self.client.store.get(item).id)
                 if item in ["management", "technical"]:
                     data = {
                         "name": f"{topology_name}-{item}",
@@ -134,7 +134,7 @@ class TopologyGenerator(InfrahubGenerator):
                         "default_prefix_length": ipaddress.IPv4Network(
                             pools.get(item)
                         ).prefixlen,
-                        "resources": [self.store.get(item).id],
+                        "resources": [self.client.store.get(item).id],
                         "ip_namespace": {"id": "default"},
                     }
                     await self._create(
@@ -148,7 +148,7 @@ class TopologyGenerator(InfrahubGenerator):
                         "description": f"Management network for {topology_name}",
                         "default_address_type": "IpamIPAddress",
                         "default_prefix_length": 24,
-                        "resources": [self.store.get(item).id],
+                        "resources": [self.client.store.get(item).id],
                         "ip_namespace": {"id": "default"},
                     }
                     await self._create(
@@ -174,9 +174,9 @@ class TopologyGenerator(InfrahubGenerator):
                         "device_type": device["device_type"]["id"],
                         "platform": device["device_type"]["platform"]["id"],
                         "status": "active",
-                        "location": self.store.get_by_hfid(key=f"LocationBuilding__{topology_name}").id,  # self.store.get("topology_name").id,
+                        "location": self.client.store.get("topology_name").id,
                         "member_of_groups": [
-                            self.store.get_by_hfid(
+                            self.client.store.get_by_hfid(
                                 key=f"CoreStandardGroup__{device['device_type']['manufacturer']['name'].lower()}_{device['role']}"
                             )
                         ],
