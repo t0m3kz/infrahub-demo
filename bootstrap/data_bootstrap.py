@@ -101,7 +101,7 @@ PROVIDERS = [
 
 CUSTOMERS = ["OE1", "ABC", "CDE"]
 
-MANUFACTURERS = ["Juniper", "Cisco", "Arista", "Perle", "Citrix", "Sonic", "Linux"]
+MANUFACTURERS = ["Juniper", "Cisco", "Arista", "Perle", "Citrix", "Sonic", "Linux", "Edgecore"]
 
 SUBNETS_1918 = {
     # prefix, state, owner
@@ -124,7 +124,7 @@ PLATFORMS = (
         "juniper_vjunosswitch",
     ),
     ("Arista EOS", "eos", "eos", "arista_eos", "eos", "ceos"),
-    ("Sonic OS", "dell_sonic", "dell_sonic", "dell_sonic", "dell_sonic", "dell_sonic"),
+    ("Sonic OS", "sonic", "sonic", "sonic", "sonic", "sonic"),
     ("Linux", "linux", "linux", "linux", "linux", "linux"),
     ("Perle IOLAN", "linux", "linux", "linux", "linux", "linux"),
 )
@@ -171,6 +171,10 @@ DEVICE_TYPES = (
     ("C9200L-48P-4G", None, 1, False, "Cisco", "Cisco IOS-XE"),
     ("C9200L-24P-4G", None, 1, False, "Cisco", "Cisco IOS-XE"),
     ("SCG50R", None, 1, False, "Perle", "Perle IOLAN"),
+    ("5912-54XM-O-AC-F", None, 1, False, "Edgecore", "Sonic OS"),
+    ("5912-54X-O-AC-F", None, 1, False, "Edgecore", "Sonic OS"),
+    ("5912-54XM-O-AC-F", None, 1, False, "Edgecore", "Sonic OS"),    
+    ("7726-32X-O", None, 1, False, "Edgecore", "Sonic OS"),    
 )
 
 GROUPS = (
@@ -615,6 +619,110 @@ DEVICE_TEMPLATES = (
             ("con", "1000base-t", "console"),
         ),
     ),
+    (
+        "5912-54X-O-AC-F",
+        "leaf",
+        "Sonic OS",
+        (
+            ("xe1", "10gbase-x-sfpp", "customer"),
+            ("xe2", "10gbase-x-sfpp", "customer"),
+            ("xe3", "10gbase-x-sfpp", "customer"),
+            ("xe4", "10gbase-x-sfpp", "customer"),
+            ("xe5", "10gbase-x-sfpp", "customer"),
+            ("xe6", "10gbase-x-sfpp", "customer"),
+            ("xe7", "10gbase-x-sfpp", "customer"),
+            ("xe8", "10gbase-x-sfpp", "customer"),
+            ("xe9", "10gbase-x-sfpp", "customer"),
+            ("xe10", "10gbase-x-sfpp", "customer"),
+            ("xe11", "10gbase-x-sfpp", "customer"),
+            ("xe12", "10gbase-x-sfpp", "customer"),
+            ("xe13", "10gbase-x-sfpp", "customer"),
+            ("xe14", "10gbase-x-sfpp", "customer"),
+            ("xe15", "10gbase-x-sfpp", "customer"),
+            ("xe16", "10gbase-x-sfpp", "customer"),
+            ("xe17", "10gbase-x-sfpp", "customer"),
+            ("xe18", "10gbase-x-sfpp", "customer"),
+            ("xe19", "10gbase-x-sfpp", "customer"),
+            ("xe20", "10gbase-x-sfpp", "customer"),
+            ("xe21", "10gbase-x-sfpp", "customer"),
+            ("xe22", "10gbase-x-sfpp", "customer"),
+            ("xe23", "10gbase-x-sfpp", "customer"),
+            ("xe24", "10gbase-x-sfpp", "customer"),
+            ("xe25", "10gbase-x-sfpp", "customer"),
+            ("xe26", "10gbase-x-sfpp", "customer"),
+            ("xe27", "10gbase-x-sfpp", "customer"),
+            ("xe28", "10gbase-x-sfpp", "customer"),
+            ("xe29", "10gbase-x-sfpp", "customer"),
+            ("xe30", "10gbase-x-sfpp", "customer"),
+            ("xe31", "10gbase-x-sfpp", "customer"),
+            ("xe32", "10gbase-x-sfpp", "customer"),
+            ("xe33", "10gbase-x-sfpp", "customer"),
+            ("xe34", "10gbase-x-sfpp", "customer"),
+            ("xe35", "10gbase-x-sfpp", "customer"),
+            ("xe36", "10gbase-x-sfpp", "customer"),
+            ("xe37", "10gbase-x-sfpp", "customer"),
+            ("xe38", "10gbase-x-sfpp", "customer"),
+            ("xe39", "10gbase-x-sfpp", "customer"),
+            ("xe40", "10gbase-x-sfpp", "customer"),
+            ("xe41", "10gbase-x-sfpp", "customer"),
+            ("xe42", "10gbase-x-sfpp", "customer"),
+            ("xe43", "10gbase-x-sfpp", "customer"),
+            ("xe44", "10gbase-x-sfpp", "customer"),
+            ("xe45", "10gbase-x-sfpp", "customer"),
+            ("xe46", "10gbase-x-sfpp", "customer"),
+            ("xe47", "10gbase-x-sfpp", "customer"),
+            ("xe48", "10gbase-x-sfpp", "customer"),
+            ("xe49", "100gbase-x-qsfp28", "uplink"),
+            ("ce50", "100gbase-x-qsfp28", "uplink"),
+            ("ce51", "100gbase-x-qsfp28", "uplink"),
+            ("ce52", "100gbase-x-qsfp28", "uplink"),
+            ("ce53", "100gbase-x-qsfp28", "uplink"),
+            ("ce54", "100gbase-x-qsfp28", "uplink"),
+            ("eth0", "1000base-t", "management"),
+        )
+    ),
+    (
+        "7726-32X-O",
+        "spine",
+        "Sonic OS",
+        (
+            ("eth0", "1000base-t", "management"),
+            # ("eth1", "10gbase-x-sfpp", "mgmt"),
+            # ("eth2", "10gbase-x-sfpp", "mgmt"),
+            ("Ethernet0", "100gbase-x-qsfp28", "leaf"),
+            ("Ethernet4", "100gbase-x-qsfp28", "leaf"),
+            ("Ethernet8", "100gbase-x-qsfp28", "leaf"),
+            ("Ethernet12", "100gbase-x-qsfp28", "leaf"),
+            ("Ethernet16", "100gbase-x-qsfp28", "leaf"),
+            ("Ethernet20", "100gbase-x-qsfp28", "leaf"),
+            ("Ethernet24", "100gbase-x-qsfp28", "leaf"),
+            ("Ethernet28", "100gbase-x-qsfp28", "leaf"),
+            ("Ethernet32", "100gbase-x-qsfp28", "leaf"),
+            ("Ethernet36", "100gbase-x-qsfp28", "leaf"),
+            ("Ethernet40", "100gbase-x-qsfp28", "leaf"),
+            ("Ethernet44", "100gbase-x-qsfp28", "leaf"),
+            ("Ethernet48", "100gbase-x-qsfp28", "leaf"),
+            ("Ethernet52", "100gbase-x-qsfp28", "leaf"),
+            ("Ethernet56", "100gbase-x-qsfp28", "leaf"),
+            ("Ethernet60", "100gbase-x-qsfp28", "leaf"),
+            ("Ethernet64", "100gbase-x-qsfp28", "leaf"),
+            ("Ethernet68", "100gbase-x-qsfp28", "leaf"),
+            ("Ethernet72", "100gbase-x-qsfp28", "leaf"),
+            ("Ethernet76", "100gbase-x-qsfp28", "leaf"),
+            ("Ethernet80", "100gbase-x-qsfp28", "leaf"),
+            ("Ethernet84", "100gbase-x-qsfp28", "leaf"),
+            ("Ethernet88", "100gbase-x-qsfp28", "leaf"),
+            ("Ethernet92", "100gbase-x-qsfp28", "leaf"),
+            ("Ethernet96", "100gbase-x-qsfp28", "leaf"),
+            ("Ethernet100", "100gbase-x-qsfp28", "leaf"),
+            ("Ethernet104", "100gbase-x-qsfp28", "leaf"),
+            ("Ethernet108", "100gbase-x-qsfp28", "leaf"),
+            ("Ethernet112", "100gbase-x-qsfp28", "leaf"),
+            ("Ethernet116", "100gbase-x-qsfp28", "leaf"),
+            ("Ethernet120", "100gbase-x-qsfp28", "leaf"),
+            ("Ethernet124", "100gbase-x-qsfp28", "leaf")
+        )
+    ),
 )
 
 DESIGN_ELEMENTS = [
@@ -696,6 +804,20 @@ DESIGN_ELEMENTS = [
         "edge",
         "N9K-C9316D-GX",
     ),
+    (
+        "2 EDGECORE SPINES 7726-32X-O",
+        "2 EDGECORE 7726-32X-O spines",
+        2,
+        "spine",
+        "7726-32X-O",
+    ),
+    (
+        "6 EDGECORE LEAFS 5912-54X-O-AC-F",
+        "5 EDGECORE 5912-54X-O-AC-F leafs",
+        6,
+        "leaf",
+        "5912-54X-O-AC-F",
+    ),    
 ]
 
 DESIGN = [
@@ -732,6 +854,17 @@ DESIGN = [
             "2 JUNIPER DC FIREWALLS SRX-1500",
         ],
     ),
+    (
+        "SONIC S",
+        "Edgecore S 2 spines, 4 leafs, 2 firewalls",
+        "DC",
+        [
+            "2 EDGECORE SPINES 7726-32X-O",
+            "6 EDGECORE LEAFS 5912-54X-O-AC-F",
+            "2 JUNIPER DC FIREWALLS SRX-1500",
+            "2 CISCO OOB SWITCHES C9200L-24P-4G",
+        ],
+    ),    
     (
         "POP S",
         "POP 2 routers",
