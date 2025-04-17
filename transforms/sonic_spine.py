@@ -21,11 +21,7 @@ class SonicSpine(InfrahubTransform):
                 
             if service["__typename"] == "ServiceOspfUnderlay":
                 result["underlay"] = {"name": service["name"], "area": service["area"]}
-            elif service["__typename"] == "ServiceIBgpOverlay":
-                result["overlay"] = {"name": service["name"], "area": service["area"]}
 
         for interface in device["interfaces"]:            
             result["interfaces"].append({interface["name"]: {"description": interface["description"]}})
-
-
         return result

@@ -25,7 +25,7 @@ class SonicLeaf(InfrahubTransform):
             if service["__typename"] == "ServiceOspfUnderlay":
                 result["underlay"] = {"name": service["name"], "area": service["area"]}
             elif service["__typename"] == "ServiceIBgpOverlay":
-                result["overlay"] = {"name": service["name"], "area": service["area"]}
+                result["overlay"] = {"name": service["name"], "asn": service["asn"]}
         
         # Process interfaces and collect VLANs in one pass
         vlans_set = set()

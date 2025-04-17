@@ -169,6 +169,12 @@ check_definitions:
     targets: "edgecore_spine"
     parameters:
       device: "name__value"
+  - name: validate_leaf
+    class_name: CheckSonicLeaf
+    file_path: "checks/sonic_leaf.py"
+    targets: "edgecore_leaf"
+    parameters:
+      device: "name__value"
 
 python_transforms:
   - name: topology_cabling
