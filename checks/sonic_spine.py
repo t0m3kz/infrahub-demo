@@ -11,25 +11,30 @@ class CheckSonicSpine(InfrahubCheck):
 
     def validate(self, data):
         """Validate Sonic Spine."""
-        device = clean_data(data)["DcimPhysicalDevice"][0]
+        # device = clean_data(data)["DcimPhysicalDevice"][0]
         
-        # Initialize with default values
-        result = {
-            "underlay": {},
-        }
-        
+        # # Initialize with default values
+        # result = {
+        #     "underlay": {},
+        # }
+
+
+        for service in data["DcimPhysicalDevice"]["edges"][0]["node"]["device_service"][
+            "edges"
+        ]:
         # Process device services once
-        for service in device.get("device_service") or []:
             if not service:
-                continue
-                
-            if service["__typename"] == "ServiceOspfUnderlay":
-                result["underlay"] = {"name": service["name"], "area": service["area"]}
-
-        if not result["underlay"]:
-            self.log_error(
-                    message="You're MORON !!! You removed underlay."
+                self.log_error(
+                    message="You're MORON !!! No service."
                 )
+                
+        #     if service["__typename"] == "ServiceOspfUnderlay":
+        #         result["underlay"] = {"name": service["name"], "area": service["area"]}
+
+        # if not result["underlay"]:
+        #     self.log_error(
+        #             message="You're MORON !!! You removed underlay."
+        #         )
 
 
-        return result
+        

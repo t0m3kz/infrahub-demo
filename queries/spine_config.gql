@@ -5,6 +5,22 @@ query spine_config($device: String!) {
         name {
           value
         }
+        device_service{
+          count
+          edges{
+            node{
+              __typename
+              name{
+                value
+              }
+              ... on ServiceOspfUnderlay{
+                area{
+                  value
+                }
+              }
+            }
+          }
+        }      
         interfaces {
           edges {
             node {
