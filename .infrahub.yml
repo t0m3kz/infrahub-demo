@@ -133,14 +133,14 @@ artifact_definitions:
   # Sonic
   - name: "Edgecore leaf config"
     artifact_name: "edgecore-leaf"
-    content_type: "text/plain"
+    content_type: "application/json"
     targets: "edgecore_leaf"
     transformation: "edgecore_leaf"
     parameters:
       device: "name__value"
   - name: "Edgecore spine config"
     artifact_name: "edgecore-spine"
-    content_type: "text/plain"
+    content_type: "application/json"
     targets: "edgecore_spine"
     transformation: "edgecore_spine"
     parameters:
