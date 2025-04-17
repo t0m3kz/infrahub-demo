@@ -19,7 +19,7 @@ query leaf_config($device: String!) {
                 }
               }
               ... on ServiceIBgpOverlay{
-                bgp_asn{
+                asn{
                   value
                 }
               }
