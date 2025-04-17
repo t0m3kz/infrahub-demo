@@ -190,7 +190,7 @@ nodes:
     inherit_from:
       - ServiceGeneric
     attributes:
-      - name: bgp_asn
+      - name: asn
         label: ASN Number
         optional: false
         order_weight: 10
