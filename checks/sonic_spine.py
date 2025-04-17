@@ -1,24 +1,35 @@
 """Validate firewall."""
 
 from infrahub_sdk.checks import InfrahubCheck
+from .common import clean_data
 
 
-class InfrahubValidateFirewall(InfrahubCheck):
+class CheckSonicSpine(InfrahubCheck):
     """Check Firewall."""
 
-    query = "firewall_config"
+    query = "spine_config"
 
     def validate(self, data):
-        """Validate firewall."""
-        for interface in data["DcimGenericDevice"]["edges"][0]["node"]["interfaces"][
-            "edges"
-        ]:
-            # Validate if security zone is set
-            if (
-                interface["node"]["role"]["value"] != "management"
-                and interface["node"]["security_zone"]["node"] is None
-            ):
-                _int = interface["node"]["name"]["value"]
-                self.log_error(
-                    message=f"No security zone assigned to interface {_int}."
+        """Validate Sonic Spine."""
+        device = clean_data(data)["DcimPhysicalDevice"][0]
+        
+        # Initialize with default values
+        result = {
+            "underlay": {},
+        }
+        
+        # Process device services once
+        for service in device.get("device_service") or []:
+            if not service:
+                continue
+                
+            if service["__typename"] == "ServiceOspfUnderlay":
+                result["underlay"] = {"name": service["name"], "area": service["area"]}
+
+        if not result["underlay"]:
+            self.log_error(
+                    message="You're MORON !!! You removed underlay."
                 )
+
+
+        return result

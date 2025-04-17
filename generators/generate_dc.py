@@ -69,7 +69,9 @@ class DCTopologyGenerator(TopologyGenerator):
         if data["emulation"]:
             self.client.log.info(f"Assign CLAB group for topology: {data['name']}")
             clab_group = await self.client.get(
-                kind="CoreStandardGroup", name__value="topologies_clab",branch=self.branch
+                kind="CoreStandardGroup",
+                name__value="topologies_clab",
+                branch=self.branch,
             )
             await clab_group.add_relationships(
                 related_nodes=[data["id"]], relation_to_update="members"

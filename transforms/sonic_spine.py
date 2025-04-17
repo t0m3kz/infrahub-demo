@@ -1,55 +1,31 @@
 from infrahub_sdk.transforms import InfrahubTransform
+from .common import clean_data
 
-
-class TopologyCabling(InfrahubTransform):
-    query = "sonic_leaf"
+class SonicSpine(InfrahubTransform):
+    query = "spine_config"
 
     async def transform(self, data):
-        # Create a list to hold CSV rows
-        csv_rows = []
+        device = clean_data(data)["DcimPhysicalDevice"][0]
+        
+        # Initialize with default values
+        result = {
+            "name": device["name"],
+            "interfaces": [],
+            "underlay": {},
+        }
+        
+        # Process device services once
+        for service in device.get("device_service") or []:
+            if not service:
+                continue
+                
+            if service["__typename"] == "ServiceOspfUnderlay":
+                result["underlay"] = {"name": service["name"], "area": service["area"]}
+            elif service["__typename"] == "ServiceIBgpOverlay":
+                result["overlay"] = {"name": service["name"], "area": service["area"]}
 
-        # Add CSV header
-        csv_rows.append("Source Device,Source Interface,Remote Device,Remote Interface")
+        for interface in device["interfaces"]:            
+            result["interfaces"].append({interface["name"]: {"description": interface["description"]}})
 
-        seen_connections = set()  # Track connections we've already processed
 
-        for device in data["TopologyDeployment"]["edges"][0]["node"]["devices"][
-            "edges"
-        ]:
-            source_device = device["node"]["name"]["value"]
-
-            for interface in device["node"]["interfaces"]["edges"]:
-                connected = interface["node"].get("connector", {}).get("node")
-                if not connected:
-                    continue
-
-                source_interface = interface["node"]["name"]["value"]
-                remote_device, remote_interface = connected["hfid"]
-
-                # Create a unique identifier for this connection (sorted to handle duplicates)
-                connection_key = tuple(
-                    sorted(
-                        [
-                            (source_device, source_interface),
-                            (remote_device, remote_interface),
-                        ]
-                    )
-                )
-
-                # Skip if we've seen this connection already
-                if connection_key in seen_connections:
-                    continue
-
-                # Add to our tracking set
-                seen_connections.add(connection_key)
-
-                # Format this row and add to our list
-                # Escape any commas in field values with quotes
-                row = [source_device, source_interface, remote_device, remote_interface]
-                escaped_row = [f'"{field}"' if "," in field else field for field in row]
-                csv_rows.append(",".join(escaped_row))
-
-        # Join all rows with newlines to create CSV string
-        csv_data = "\n".join(csv_rows)
-
-        return csv_data
+        return result
