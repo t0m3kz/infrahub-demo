@@ -161,7 +161,6 @@ class TopologyGenerator(InfrahubGenerator):
         self,
         topology_name: str,
         data: list,
-        topology_id: str,
     ) -> None:
         """Create objects of a specific kind and store in local store."""
         await self._create_in_batch(
@@ -174,7 +173,7 @@ class TopologyGenerator(InfrahubGenerator):
                         "device_type": device["device_type"]["id"],
                         "platform": device["device_type"]["platform"]["id"],
                         "status": "active",
-                        "location": self.client.store.get(kind="LocationBuilding", key=topology_name).id,
+                        "location": self.client.store.get_by_hfid(key=f"LocationBuilding__{topology_name}").id,
                         "member_of_groups": [
                             self.client.store.get_by_hfid(
                                 key=f"CoreStandardGroup__{device['device_type']['manufacturer']['name'].lower()}_{device['role']}"
