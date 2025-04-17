@@ -135,14 +135,14 @@ artifact_definitions:
     artifact_name: "edgecore-leaf"
     content_type: "text/plain"
     targets: "edgecore_leaf"
-    transformation: "sonic_leaf"
+    transformation: "edgecore_leaf"
     parameters:
       device: "name__value"
   - name: "Edgecore spine config"
     artifact_name: "edgecore-spine"
     content_type: "text/plain"
     targets: "edgecore_spine"
-    transformation: "sonic_spine"
+    transformation: "edgecore_spine"
     parameters:
       device: "name__value"
   # Containerlab
