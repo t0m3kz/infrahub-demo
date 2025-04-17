@@ -15,6 +15,7 @@ class DCTopologyGenerator(TopologyGenerator):
         # self.client.log.info(f"Generating DC topology: {data['design']['elements']}")
 
         self.client.log.info(f"Generating DC topology: {data['name']}")
+
         await self._create(
             kind="LocationBuilding",
             data={

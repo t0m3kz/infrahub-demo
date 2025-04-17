@@ -174,7 +174,7 @@ class TopologyGenerator(InfrahubGenerator):
                         "device_type": device["device_type"]["id"],
                         "platform": device["device_type"]["platform"]["id"],
                         "status": "active",
-                        "location": self.store.get(key=topology_name).id,
+                        "location": self.store.get_by_hfid(key=f"LocationBuilding__{topology_name}").id,  # self.store.get("topology_name").id,
                         "member_of_groups": [
                             self.store.get_by_hfid(
                                 key=f"CoreStandardGroup__{device['device_type']['manufacturer']['name'].lower()}_{device['role']}"
