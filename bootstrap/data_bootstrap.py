@@ -101,7 +101,16 @@ PROVIDERS = [
 
 CUSTOMERS = ["OE1", "ABC", "CDE"]
 
-MANUFACTURERS = ["Juniper", "Cisco", "Arista", "Perle", "Citrix", "Sonic", "Linux", "Edgecore"]
+MANUFACTURERS = [
+    "Juniper",
+    "Cisco",
+    "Arista",
+    "Perle",
+    "Citrix",
+    "Sonic",
+    "Linux",
+    "Edgecore",
+]
 
 SUBNETS_1918 = {
     # prefix, state, owner
@@ -173,8 +182,8 @@ DEVICE_TYPES = (
     ("SCG50R", None, 1, False, "Perle", "Perle IOLAN"),
     ("5912-54XM-O-AC-F", None, 1, False, "Edgecore", "Sonic OS"),
     ("5912-54X-O-AC-F", None, 1, False, "Edgecore", "Sonic OS"),
-    ("5912-54XM-O-AC-F", None, 1, False, "Edgecore", "Sonic OS"),    
-    ("7726-32X-O", None, 1, False, "Edgecore", "Sonic OS"),    
+    ("5912-54XM-O-AC-F", None, 1, False, "Edgecore", "Sonic OS"),
+    ("7726-32X-O", None, 1, False, "Edgecore", "Sonic OS"),
 )
 
 GROUPS = (
@@ -182,11 +191,11 @@ GROUPS = (
     ("edge_routers", "Edge Routers"),
     ("core_routers", "Core Routers"),
     ("cisco_spine", "Cisco DC spine devices"),
-    ("cisco_leaf", "Cisco DC leaf devices"),    
+    ("cisco_leaf", "Cisco DC leaf devices"),
     ("cisco_oob", "Cisco DC OOB devices"),
     ("cisco_pop_router", "Cisco POP Routers"),
     ("edgecore_leaf", "Cisco DC leaf devices"),
-    ("edgecore_spine", "Cisco DC spine devices"),    
+    ("edgecore_spine", "Cisco DC spine devices"),
     ("arista_leaf", "Arista DC leaf devices"),
     ("arista_spine", "Arista DC spine devices"),
     ("arista_pop_router", "Arista POP Routers"),
@@ -681,7 +690,7 @@ DEVICE_TEMPLATES = (
             ("ce53", "100gbase-x-qsfp28", "uplink"),
             ("ce54", "100gbase-x-qsfp28", "uplink"),
             ("eth0", "1000base-t", "management"),
-        )
+        ),
     ),
     (
         "7726-32X-O",
@@ -722,8 +731,8 @@ DEVICE_TEMPLATES = (
             ("Ethernet112", "100gbase-x-qsfp28", "leaf"),
             ("Ethernet116", "100gbase-x-qsfp28", "leaf"),
             ("Ethernet120", "100gbase-x-qsfp28", "leaf"),
-            ("Ethernet124", "100gbase-x-qsfp28", "leaf")
-        )
+            ("Ethernet124", "100gbase-x-qsfp28", "leaf"),
+        ),
     ),
 )
 
@@ -819,7 +828,7 @@ DESIGN_ELEMENTS = [
         6,
         "leaf",
         "5912-54X-O-AC-F",
-    ),    
+    ),
 ]
 
 DESIGN = [
@@ -866,7 +875,7 @@ DESIGN = [
             "2 JUNIPER DC FIREWALLS SRX-1500",
             "2 CISCO OOB SWITCHES C9200L-24P-4G",
         ],
-    ),    
+    ),
     (
         "POP S",
         "POP 2 routers",
