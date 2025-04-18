@@ -1,5 +1,6 @@
 """Common functions for the generators."""
 
+
 def clean_data(data):
     """
     Recursively transforms the input data
@@ -31,5 +32,3 @@ def clean_data(data):
             result.append(clean_data(item))
         return result
     return data
-
-

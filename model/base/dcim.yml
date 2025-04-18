@@ -557,6 +557,12 @@ nodes:
         kind: Number
         default_value: 9000
         order_weight: 1300
+    relationships:
+      - name: ip_addresses
+        peer: IpamIPAddress
+        optional: true
+        cardinality: many
+        kind: Component
         
   - name: VirtualInterface
     namespace: Dcim
@@ -573,3 +579,8 @@ nodes:
         kind: Attribute
         identifier: "sub__interface"
         description: "Parent interface to which this sub-interface belongs"
+      - name: ip_addresses
+        peer: IpamIPAddress
+        optional: true
+        cardinality: many
+        kind: Component

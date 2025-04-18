@@ -173,7 +173,10 @@ class TopologyGenerator(InfrahubGenerator):
                         "device_type": device["device_type"]["id"],
                         "platform": device["device_type"]["platform"]["id"],
                         "status": "active",
-                        "location": self.client.store.get_by_hfid(key=f"LocationBuilding__{topology_name}").id,
+                        "role": device["role"],
+                        "location": self.client.store.get_by_hfid(
+                            key=f"LocationBuilding__{topology_name}"
+                        ).id,
                         "member_of_groups": [
                             self.client.store.get_by_hfid(
                                 key=f"CoreStandardGroup__{device['device_type']['manufacturer']['name'].lower()}_{device['role']}"
@@ -184,22 +187,6 @@ class TopologyGenerator(InfrahubGenerator):
                 }
                 for device in data
                 for item in range(1, device["quantity"] + 1)
-            ],
-        )
-
-        deployment = await self.client.get(
-            kind="TopologyDeployment", name__value=topology_name, include=["devices"]
-        )
-
-        # not elegant way to add devices to the topology
-        await deployment.add_relationships(
-            relation_to_update="devices",
-            related_nodes=[
-                # switch[0]
-                self.client.store.get_by_hfid(f"DcimPhysicalDevice__{switch[0]}").id
-                for switch in self.client.store._branches[self.branch]
-                ._hfids["DcimPhysicalDevice"]
-                .keys()
             ],
         )
 
@@ -336,14 +323,48 @@ class TopologyGenerator(InfrahubGenerator):
             await source_endpoint.save(allow_upsert=True)
             await target_endpoint.save(allow_upsert=True)
 
-    async def _create_vlan_pool():
+    async def _create_underlay(self, topology_name: str, devices_ids: list) -> None:
+        """Create underlay service and associate it to the respective switches."""
+        await self._create(
+            kind="ServiceOspfUnderlay",
+            data={
+                "name": f"{topology_name}-UNDERLAY",
+                "description": f"{topology_name} OSPF underlay service",
+                "area": 0,
+                "status": "active",
+                "devices": devices_ids,
+            },
+            store_key=f"underlay-{topology_name}",
+        )
+
+    async def _create_overlay(self, topology_name: str, devices_ids: list) -> None:
+        """Create underlay service and associate it to the respective switches."""
+        await self._create(
+            kind="ServiceIBgpOverlay",
+            data={
+                "name": f"{topology_name}-UNDERLAY",
+                "description": f"{topology_name} iBGP overlay service",
+                "asn": 65001,
+                "status": "active",
+                "devices": devices_ids,
+            },
+            store_key=f"overlay-{topology_name}",
+        )
+
+    async def _create_loopback(self, data: list):
         pass
 
-    async def _create_prefix_pool():
+    async def _create_asn_pool(self, data: list):
         pass
 
-    async def _create_ip_pool():
+    async def _create_vlan_pool(self, data: list):
         pass
 
-    async def _create_bgp_pool():
+    async def _create_prefix_pool(self, data: list):
+        pass
+
+    async def _create_ip_pool(self, data: list):
+        pass
+
+    async def _create_bgp_pool(self, data: list):
         pass

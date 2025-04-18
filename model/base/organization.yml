@@ -25,6 +25,12 @@ generics:
         optional: true
         order_weight: 1200
     relationships:
+      - name: namespaces
+        peer: IpamNamespace
+        cardinality: many
+        kind: Component
+        optional: true
+        order_weight: 2000
       - name: tags
         peer: BuiltinTag
         cardinality: many
@@ -37,10 +43,17 @@ nodes:
     namespace: Organization
     description: Device Manufacturer
     icon: mdi:domain
-    inherit_from:
-      - OrganizationGeneric
     include_in_menu: true
     menu_placement: OrganizationGeneric
+    attributes:
+      - name: name
+        kind: Text
+        unique: true
+        order_weight: 1000
+      - name: description
+        kind: Text
+        optional: true
+        order_weight: 1200    
     relationships:
       - name: device_type
         peer: DcimDeviceType
@@ -68,3 +81,4 @@ nodes:
       - OrganizationGeneric
     include_in_menu: true
     menu_placement: OrganizationGeneric
+    
