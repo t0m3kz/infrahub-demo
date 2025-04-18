@@ -314,11 +314,13 @@ class TopologyGenerator(InfrahubGenerator):
             source_endpoint.description.value = (
                 f"Peering connection to {' -> '.join(target_endpoint.hfid)}"
             )
+            source_endpoint.role.value = "ospf-unnunbered"
             source_endpoint.connector = target_endpoint.id
             target_endpoint.status.value = "active"
             target_endpoint.description.value = (
                 f"Peering connection to {' -> '.join(source_endpoint.hfid)}"
             )
+            target_endpoint.role.value = "ospf-unnunbered"
 
             await source_endpoint.save(allow_upsert=True)
             await target_endpoint.save(allow_upsert=True)

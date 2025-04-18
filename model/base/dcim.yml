@@ -237,10 +237,22 @@ generics:
             label: Management Interface
             description: "Interface dedicated to device management."
             color: "#E3DAC9" # pastel cream
-          - name: peering
-            label: Peering Interface
-            description: "Interface dedicated to peering with other networks."
+          - name: ospf-unnunbered
+            label: OSPF Unnumbered Interface
+            description: "Interface dedicated to OSPF unnumbered connections."
             color: "#C4B7E6" # pastel purple
+          - name: ospf
+            label: OSPF Interface
+            description: "Interface dedicated to OSPF connections."
+            color: "#C432E6" 
+          - name: bgp
+            label: BGP Interface
+            description: "Interface dedicated to BGP connections."
+            color: "#C432E6"
+          - name: bgp-unnunbered
+            label: BGP Unnumbered Interface
+            description: "Interface dedicated to BGP unnumbered connections."
+            color: "#C432E6"
           - name: upstream
             label: Upstream Interface
             description: "Interface dedicated to upstream traffic between networks."

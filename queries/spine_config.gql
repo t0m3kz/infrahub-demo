@@ -13,7 +13,7 @@ query spine_config($device: String!) {
               name{
                 value
               }
-              ... on ServiceOspfUnderlay{
+              ... on ServiceOspfPeering{
                 area{
                   value
                 }

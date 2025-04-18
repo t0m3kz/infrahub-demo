@@ -278,33 +278,13 @@ spec:
             children:
               data:
                 - namespace: Service
-                  name: ServiceBackBone
-                  label: Backbone Peering
-                  kind: ServiceBackBone
+                  name: OspfPeering
+                  label: OSPF Peering
+                  kind: ServiceOspfPeering
                   icon: "mdi:lan"
                 - namespace: Service
-                  name: OspfFabricPeering
-                  label: Ospf Fabric Peering
-                  kind: ServiceOspfFabricPeering
+                  name: BgpPeering
+                  label: BGP Peering
+                  kind: ServiceBgpPeering
                   icon: "mdi:lan"
-                - namespace: Service
-                  name: BGPFabricPeering
-                  label: BGP Fabric Peering
-                  kind: ServiceBGPFabricPeering
-                  icon: "mdi:lan"
-          - namespace: Service
-            name: VxlanMenu
-            label: VxLAN Services
-            icon: "carbon:ibm-cloud-internet-services"
-            children:
-              data:
-                - namespace: Service
-                  name: OspfUnderlay
-                  label: "Ospf Underlay"
-                  kind: ServiceOspfUnderlay
-                  icon: "carbon:flow-connection"
-                - namespace: Service
-                  name: IBgpOverlay
-                  label: "iBGP Overlay"
-                  kind: ServiceIBgpOverlay
-                  icon: "carbon:ibm-cloud-internet-services"
+
