@@ -268,7 +268,19 @@ generics:
           - name: uplink
             label: Uplink Interface
             description: "Interface dedicated to connect with aggragation switch."
-            color: "#E2D4C6"                       
+            color: "#E2D4C6" 
+          - name: peering
+            label: Peering Interface
+            description: "Interface dedicated to peering connections."
+            color: "#E2D4C6"
+          - name: Loopback
+            label: Loopback Interface
+            description: "Interface dedicated to loopback connections."
+            color: "#E2D4C6"
+          - name: loopback-vtep
+            label: Loopback VTEP Interface
+            description: "Interface dedicated to loopback vtep connections."
+            color: "#E2D4C6"                    
         order_weight: 1250
     relationships:
       - name: device

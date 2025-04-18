@@ -13,7 +13,7 @@ query leaf_config($device: String!) {
               name{
                 value
               }
-              ... on ServiceOspPeering{
+              ... on ServiceOspfPeering{
                 area{
                   value
                 }
