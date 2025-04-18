@@ -328,7 +328,7 @@ class TopologyGenerator(InfrahubGenerator):
     async def _create_underlay(self, topology_name: str, devices_ids: list) -> None:
         """Create underlay service and associate it to the respective switches."""
         await self._create(
-            kind="ServiceOspfUnderlay",
+            kind="ServiceOspfPeering",
             data={
                 "name": f"{topology_name}-UNDERLAY",
                 "description": f"{topology_name} OSPF underlay service",
@@ -342,7 +342,7 @@ class TopologyGenerator(InfrahubGenerator):
     async def _create_overlay(self, topology_name: str, devices_ids: list) -> None:
         """Create underlay service and associate it to the respective switches."""
         await self._create(
-            kind="ServiceIBgpOverlay",
+            kind="ServiceBgpPeering",
             data={
                 "name": f"{topology_name}-UNDERLAY",
                 "description": f"{topology_name} iBGP overlay service",

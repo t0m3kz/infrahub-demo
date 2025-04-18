@@ -20,7 +20,7 @@ class SonicSpine(InfrahubTransform):
             if not service:
                 continue
 
-            if service["__typename"] == "ServiceOspfUnderlay":
+            if service["__typename"] == "ServiceOspfPeering":
                 result["underlay"] = {"name": service["name"], "area": service["area"]}
 
         for interface in device["interfaces"]:

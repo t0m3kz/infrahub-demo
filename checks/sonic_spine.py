@@ -23,7 +23,7 @@ class CheckSonicSpine(InfrahubCheck):
             if not service:
                 self.log_error(message="You're MORON !!! No service.")
 
-            if service["__typename"] == "ServiceOspfUnderlay":
+            if service["__typename"] == "ServiceOspfPeering":
                 result["underlay"] = {"name": service["name"], "area": service["area"]}
 
         if not result["underlay"]:

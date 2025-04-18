@@ -23,9 +23,9 @@ class SonicLeaf(InfrahubTransform):
             if not service:
                 continue
 
-            if service["__typename"] == "ServiceOspfUnderlay":
+            if service["__typename"] == "ServiceOspfPeering":
                 result["underlay"] = {"name": service["name"], "area": service["area"]}
-            elif service["__typename"] == "ServiceIBgpOverlay":
+            elif service["__typename"] == "ServiceBgpPeering":
                 result["overlay"] = {"name": service["name"], "asn": service["asn"]}
 
         # Process interfaces and collect VLANs in one pass
