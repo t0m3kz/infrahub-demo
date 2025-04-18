@@ -13,12 +13,12 @@ query leaf_config($device: String!) {
               name{
                 value
               }
-              ... on ServiceOspfUnderlay{
+              ... on ServiceOspPeering{
                 area{
                   value
                 }
               }
-              ... on ServiceIBgpOverlay{
+              ... on ServiceBgpPeering{
                 asn{
                   value
                 }

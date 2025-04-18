@@ -50,49 +50,49 @@ generics:
         optional: true
 
 nodes:
-  - name: BackBone
-    namespace: Service
-    label: "Backbone Service"
-    description: "Backbone service attached to a Topology."
-    icon: "carbon:container-services"
-    menu_placement: ServiceGeneric
-    inherit_from:
-      - ServiceGeneric
-    uniqueness_constraints:
-      - ["circuit_id__value", "internal_circuit_id__value"]
-    attributes:
-      - name: circuit_id
-        kind: Text
-        label: Circuit ID
-        optional: false
-        order_weight: 3
-      - name: internal_circuit_id
-        kind: Text
-        label: Internal Circuit ID
-        optional: false
-        order_weight: 2
-    relationships:
-      - name: provider
-        cardinality: one
-        peer: OrganizationProvider
-        optional: false
-        kind: Attribute
-      - name: site_a
-        label: Site A
-        cardinality: one
-        peer: LocationMetro
-        optional: false
-        identifier: infrabackboneservice__location_site_a
-        kind: Attribute
-        order_weight: 4
-      - name: site_b
-        label: Site B
-        cardinality: one
-        peer: LocationMetro
-        optional: false
-        identifier: infrabackboneservice__location_site_b
-        kind: Attribute
-        order_weight: 5
+  # - name: BackBone
+  #   namespace: Service
+  #   label: "Backbone Service"
+  #   description: "Backbone service attached to a Topology."
+  #   icon: "carbon:container-services"
+  #   menu_placement: ServiceGeneric
+  #   inherit_from:
+  #     - ServiceGeneric
+  #   uniqueness_constraints:
+  #     - ["circuit_id__value", "internal_circuit_id__value"]
+  #   attributes:
+  #     - name: circuit_id
+  #       kind: Text
+  #       label: Circuit ID
+  #       optional: false
+  #       order_weight: 3
+  #     - name: internal_circuit_id
+  #       kind: Text
+  #       label: Internal Circuit ID
+  #       optional: false
+  #       order_weight: 2
+  #   relationships:
+  #     - name: provider
+  #       cardinality: one
+  #       peer: OrganizationProvider
+  #       optional: false
+  #       kind: Attribute
+  #     - name: site_a
+  #       label: Site A
+  #       cardinality: one
+  #       peer: LocationMetro
+  #       optional: false
+  #       identifier: infrabackboneservice__location_site_a
+  #       kind: Attribute
+  #       order_weight: 4
+  #     - name: site_b
+  #       label: Site B
+  #       cardinality: one
+  #       peer: LocationMetro
+  #       optional: false
+  #       identifier: infrabackboneservice__location_site_b
+  #       kind: Attribute
+  #       order_weight: 5
 
   - name: Layer2Network
     namespace: Service
@@ -140,17 +140,19 @@ nodes:
         kind: Component
         order_weight: 1400
         optional: true
-      - name: devices
-        peer: DcimGenericDevice
+      - name: interfaces
+        peer: DcimInterface
+        label: Interfaces
         cardinality: many
-        kind: Component
+        kind: Generic
         optional: true
-        identifier: device_service
+        on_delete: no-action
+        identifier: interface_service
 
-  - name: OspfUnderlay
+  - name: OspfPeering
     namespace: Service
-    description: "VXLAN underlay service attached to a Topology."
-    label: OSPF Underlay
+    description: "OSPF Peering service attached to a device(s)."
+    label: OSPF Peering
     icon: "carbon:ibm-cloud-internet-services"
     menu_placement: ServiceGeneric
     inherit_from:
@@ -168,7 +170,7 @@ nodes:
         default_value: true
     relationships:
       - state: present
-        name: loopback_prefix
+        name: connection_prefix
         peer: IpamPrefix
         # kind: Generic
         cardinality: one
@@ -181,10 +183,10 @@ nodes:
         identifier: device_service
 
 
-  - name: IBgpOverlay
+  - name: BgpPeering
     namespace: Service
-    description: "VXLAN overlay service attached to a Topology."
-    label: iBGP Overlay
+    description: "BGP Peering service attached to a device(s)."
+    label: BGP Peering
     icon: "carbon:ibm-cloud-internet-services"
     menu_placement: ServiceGeneric
     inherit_from:
@@ -195,13 +197,25 @@ nodes:
         optional: false
         order_weight: 10
         kind: Number
-    relationships:
+      - name: peer_asn
+        label: Peer ASN Number
+        optional: false
+        order_weight: 11
+        kind: Number
+    relationships: 
       - name: devices
         peer: DcimGenericDevice
         cardinality: many
         kind: Component
         optional: true
         identifier: device_service
+      # - name: neighbours
+      #   peer: ServiceBgpPeering
+      #   cardinality: many
+      #   kind: Component
+      #   optional: true
+      #   identifier: neighbour
+      #   on_delete: no-action
 
 extensions:
   # state: present
