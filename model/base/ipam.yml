@@ -30,8 +30,11 @@ nodes:
         regex: (?=^.{1,253}$)(^(((?!-)[a-zA-Z0-9-]{1,63}(?<!-))|((?!-)[a-zA-Z0-9-]{1,63}(?<!-)\.)+[a-zA-Z]{2,63})$)
     # relationships:
     #   - name: interface
-    #     state: absent
-    #     peer: DcimInterfaceL3
+    #     peer: DcimPhysicalInterface
+    #     optional: true
+    #     cardinality: one
+    #   - name: interface
+    #     peer: DcimVirtualInterface
     #     optional: true
     #     cardinality: one
 
@@ -96,6 +99,7 @@ nodes:
             color: "#CDB4DB"
     relationships:
       - name: organization
+        state: absent
         peer: OrganizationGeneric
         optional: true
         cardinality: one
@@ -115,3 +119,33 @@ nodes:
         cardinality: one
         kind: Attribute
         order_weight: 1500
+
+
+  - name: Namespace
+    namespace: Ipam
+    description: A generic container for IP prefixes and IP addresses and routing
+    icon: mdi:ip-network
+    include_in_menu: false
+    label: Namespace
+    order_by:
+      - name__value
+    display_labels:
+      - name__value
+    inherit_from:
+      - BuiltinIPNamespace
+    uniqueness_constraints:
+      - [ name__value ]
+    human_friendly_id:
+      - name__value
+    attributes:
+      - name: vrf_rd
+        label: Route Distinguisher
+        kind: Text
+        optional: true
+    relationships:
+      - name: organization
+        peer: OrganizationGeneric
+        optional: true
+        cardinality: one
+        kind: Attribute
+        order_weight: 1200

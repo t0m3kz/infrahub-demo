@@ -66,7 +66,6 @@ class DCTopologyGenerator(TopologyGenerator):
         )
 
         # add to the topology group
-
         if data["emulation"]:
             self.client.log.info(f"Assign CLAB group for topology: {data['name']}")
             clab_group = await self.client.get(
@@ -91,6 +90,24 @@ class DCTopologyGenerator(TopologyGenerator):
 
         await self._create_devices(data["name"], data["design"]["elements"])
 
+        devices = [
+            self.client.store.get_by_hfid(f"DcimGenericDevice__{device[0]}")
+            for device in self.client.store._branches[self.branch]
+            ._hfids["DcimGenericDevice"]
+            .keys()
+        ]
+
+        # Assign devices to deployment
+        self.client.log.info(f"Add devices to DC topology: {data['name']}")
+        deployment = await self.client.get(
+            kind="TopologyDeployment", name__value=data["name"]
+        )
+
+        await deployment.add_relationships(
+            relation_to_update="devices",
+            related_nodes=[device.id for device in devices],
+        )
+
         await self._create_oob_connections(
             data["name"], data["design"]["elements"], "console"
         )
@@ -98,5 +115,13 @@ class DCTopologyGenerator(TopologyGenerator):
         await self._create_oob_connections(
             data["name"], data["design"]["elements"], "management"
         )
-
+        spines_leafs_ids = [
+            device.id for device in devices if device.role.value in ["spine", "leaf"]
+        ]
         await self._create_peering_connections(data["name"], data["design"]["elements"])
+
+        # VxLAN configuration
+        await self._create_underlay(data["name"], spines_leafs_ids)
+        await self._create_overlay(data["name"], spines_leafs_ids)
+
+        self.client.log.info(f"DC Fabric {data['name']} created")
