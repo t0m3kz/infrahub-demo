@@ -753,6 +753,13 @@ DESIGN_ELEMENTS = [
         "N9K-C9336C-FX2",
     ),
     (
+        "4 CISCO LEAFS N9K-C9336C-FX2",
+        "4 Cisco C9336C-FX2 leafs",
+        4,
+        "leaf",
+        "N9K-C9336C-FX2",
+    ),    
+    (
         "4 CISCO SPINES N9K-C9316D-GX",
         "4 Cisco N9K-C9316D-GX spines",
         4,
@@ -774,9 +781,9 @@ DESIGN_ELEMENTS = [
         "DCS-7280DR3-24-F",
     ),
     (
-        "6 ARISTA LEAFS CCS-720DP-48S-2F",
-        "6 Arista CCS-720DP-48S-2F leafs",
-        6,
+        "4 ARISTA LEAFS CCS-720DP-48S-2F",
+        "4 Arista CCS-720DP-48S-2F leafs",
+        4,
         "leaf",
         "CCS-720DP-48S-2F",
     ),
@@ -823,12 +830,19 @@ DESIGN_ELEMENTS = [
         "7726-32X-O",
     ),
     (
-        "6 EDGECORE LEAFS 5912-54X-O-AC-F",
-        "5 EDGECORE 5912-54X-O-AC-F leafs",
-        6,
+        "4 EDGECORE LEAFS 5912-54X-O-AC-F",
+        "4 EDGECORE 5912-54X-O-AC-F leafs",
+        4,
         "leaf",
         "5912-54X-O-AC-F",
     ),
+    (
+        "8 EDGECORE LEAFS 5912-54X-O-AC-F",
+        "8 EDGECORE 5912-54X-O-AC-F leafs",
+        8,
+        "leaf",
+        "5912-54X-O-AC-F",
+    ),    
 ]
 
 DESIGN = [
@@ -852,7 +866,7 @@ DESIGN = [
         [
             "4 CISCO SPINES N9K-C9316D-GX",
             "16 CISCO LEAFS N9K-C9316D-GX",
-            "2 JUNIPER DC FIREWALLS SRX-1500",
+            "2 JUNIPER DC FIREWALLS SRX-1500",            
         ],
     ),
     (
@@ -861,7 +875,7 @@ DESIGN = [
         "DC",
         [
             "2 ARISTA SPINES DCS-7280DR3-24-F",
-            "6 ARISTA LEAFS CCS-720DP-48S-2F",
+            "4 ARISTA LEAFS CCS-720DP-48S-2F",
             "2 JUNIPER DC FIREWALLS SRX-1500",
         ],
     ),
@@ -871,7 +885,7 @@ DESIGN = [
         "DC",
         [
             "2 EDGECORE SPINES 7726-32X-O",
-            "6 EDGECORE LEAFS 5912-54X-O-AC-F",
+            "4 EDGECORE LEAFS 5912-54X-O-AC-F",
             "2 JUNIPER DC FIREWALLS SRX-1500",
             "2 CISCO OOB SWITCHES C9200L-24P-4G",
         ],

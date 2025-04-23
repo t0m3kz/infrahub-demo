@@ -24,30 +24,30 @@ export INFRAHUB_ADDRESS="http://localhost:8000"
 export INFRAHUB_API_TOKEN="06438eb2-8019-4776-878c-0941b1f1d1ec"
 ```
 
-## Load demo
+## Load initial setup
 
 Load schemas
 
 ```bash
-poetry run infrahubctl schema load model --wait 10
+uv run infrahubctl schema load schemas
 ```
 
 Load menu
 
 ```bash
-poetry run infrahubctl menu load menu
+uv run infrahubctl menu load menu
 ```
 
 Load demo data
 
 ```bash
-poetry run infrahubctl run bootstrap/bootstrap.py
+uv run infrahubctl object load data/bootstrap
 ```
 
 Add demo repository
 
 ```bash
-poetry run infrahubctl repository add DEMO https://github.com/t0m3kz/infrahub-demo.git --read-only
+uv run infrahubctl repository add DEMO https://github.com/t0m3kz/infrahub-demo.git --read-only
 ```
 
 You can also use the script to execute all previous steps
@@ -119,7 +119,7 @@ If you would like to process all steps manually, you have to follow the steps:
     infrahubctl run bootstrap/demo_router.py --branch my-branch
     ```
 
-### Demo 3 - Design
+### Demo 3 - Data Center
 
 In this demo we're genetating confifiguration for composable data center.
 

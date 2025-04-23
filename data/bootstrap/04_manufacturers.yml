@@ -1,0 +1,15 @@
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: OrganizationManufacturer
+  data: 
+    - name: "Cisco"
+    - name: "Juniper"
+    - name: "Arista"
+    - name: "Perle"
+    - name: "Citrix"
+    - name: "Sonic"
+    - name: "Linux"
+    - name: "Edgecore"
+    - name: "Alcatel"    

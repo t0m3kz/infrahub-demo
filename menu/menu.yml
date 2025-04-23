@@ -34,6 +34,141 @@ spec:
       kind: LocationGeneric
       icon: "mingcute:location-line"
 
+    - namespace: Service
+      name: Generic
+      label: Services
+      icon: "carbon:container-services"
+      children:
+        data:
+          - namespace: Services
+            name: DeploymentMenu
+            label: Topology Deployments
+            icon: "carbon:subnet-acl-rules"
+            children:
+              data:
+                - name: DataCenter
+                  namespace: Topology
+                  label: Data Center
+                  kind: TopologyDataCenter
+                  icon: "carbon:data-center"
+
+                - name: ColocationCenter
+                  namespace: Topology
+                  label: Colocation Center
+                  kind: TopologyColocationCenter
+                  icon: "carbon:data-center"
+
+                - name: CampusOffice
+                  namespace: Topology
+                  label: Campus Office
+                  kind: TopologyCampusOffice
+                  icon: "solar:buildings-3-linear"
+
+                - name: BranchOffice
+                  namespace: Topology
+                  label: Branch Office
+                  kind: TopologyBranchOffice
+                  icon: "tabler:building"
+          - namespace: Service
+            name: SecurityMenu
+            label: Securuty
+            icon: "carbon:ibm-cloud-internet-services"
+            children:
+              data:
+                - namespace: Service
+                  name: Firewall
+                  label: Firewall Zone
+                  kind: ServiceFirewall
+                  icon: "mdi:firewall"
+                - namespace: Service
+                  name: Acl
+                  label: Access Control Lists
+                  kind: ServiceFirewall
+                  icon: "mdi:firewall"
+                - namespace: Service
+                  name: ZScaler
+                  label: ZScaler Control Lists
+                  kind: ServiceZScaler
+                  icon: "mdi:firewall"
+          - namespace: Service
+            name: NetworkMenu
+            label: Network
+            icon: "carbon:ibm-cloud-internet-services"
+            children:
+              data:
+                - namespace: Service
+                  name: Layer2Network
+                  label: Layer2 Segment
+                  kind: ServiceLayer2Network
+                  icon: "mdi:lan"
+                - namespace: Service
+                  name: Layer3Gateway
+                  label: Layer3 Segment
+                  kind: ServiceLayer3Gateway
+                  icon: "mdi:lan"
+          - namespace: Service
+            name: PeeringMenu
+            label: Routing & Peering
+            icon: "carbon:ibm-cloud-internet-services"
+            children:
+              data:
+                - name: BGP
+                  namespace: Service
+                  label: "BGP"
+                  icon: "mdi:router"
+                  children:
+                    data:
+                      - name: AutonomousSystem
+                        namespace: Service
+                        label: "Autonomous System"
+                        icon: "mdi:bank-circle-outline"
+                        kind: ServiceAutonomousSystem
+
+                      - name: BGPSession
+                        namespace: Service
+                        label: "BGP Sessions"
+                        icon: "mdi:router"
+                        kind: ServiceBGPSession
+
+                      - name: BGPPeerGroup
+                        namespace: Service
+                        label: "BGP Peer Groups"
+                        icon: "mdi:view-grid-plus-outline"
+                        kind: ServiceBGPPeerGroup
+
+                      - name: BGPCommunity
+                        namespace: Service
+                        label: "BGP Communities"
+                        icon: "mdi:view-grid-plus-outline"
+                        kind: ServiceBGPCommunity
+                - name: OSPFMenu
+                  namespace: Service
+                  label: "OSPF"
+                  icon: "mdi:router"
+                  children:
+                    data:
+                      - namespace: Service
+                        name: OSPFArea
+                        label: OSPF Areas
+                        kind: ServiceOSPFArea
+                        icon: "mdi:domain"
+                      - namespace: Service
+                        name: OSPF
+                        label: OSPF Instances
+                        kind: ServiceOSPF
+                        icon: "mdi:domain"
+                      - namespace: Service
+                        name: OSPFInterfaces
+                        label: OSPF Interface Settings
+                        kind: ServiceOSPFInterface
+                        icon: "mdi:domain"
+
+                - namespace: Service
+                  name: RoutingPolicy
+                  label: Routing Policies
+                  kind: ServiceRoutingPolicy
+                  icon: "mdi:domain"
+
     - namespace: Topology
       name: TopologyMenu
       label: Designs
@@ -197,94 +332,4 @@ spec:
           #   label: Device Templates
           #   kind: DcimDeviceType
           #   icon: "mdi:application-settings-outline"
-
-    - namespace: Service
-      name: Generic
-      label: Services
-      icon: "carbon:container-services"
-      children:
-        data:
-          - namespace: Services
-            name: DeploymentMenu
-            label: Topology Deployments
-            icon: "carbon:subnet-acl-rules"
-            children:
-              data:
-                - name: DataCenter
-                  namespace: Topology
-                  label: Data Center
-                  kind: TopologyDataCenter
-                  icon: "carbon:data-center"
-
-                - name: ColocationCenter
-                  namespace: Topology
-                  label: Colocation Center
-                  kind: TopologyColocationCenter
-                  icon: "carbon:data-center"
-
-                - name: CampusOffice
-                  namespace: Topology
-                  label: Campus Office
-                  kind: TopologyCampusOffice
-                  icon: "solar:buildings-3-linear"
-
-                - name: BranchOffice
-                  namespace: Topology
-                  label: Branch Office
-                  kind: TopologyBranchOffice
-                  icon: "tabler:building"
-
-          - namespace: Service
-            name: SecurityMenu
-            label: Securuty Services
-            icon: "carbon:ibm-cloud-internet-services"
-            children:
-              data:
-                - namespace: Service
-                  name: Firewall
-                  label: Firewall Zone
-                  kind: ServiceFirewall
-                  icon: "mdi:firewall"
-                - namespace: Service
-                  name: Acl
-                  label: Access Control Lists
-                  kind: ServiceFirewall
-                  icon: "mdi:firewall"
-                - namespace: Service
-                  name: ZScaler
-                  label: ZScaler Control Lists
-                  kind: ServiceZScaler
-                  icon: "mdi:firewall"
-          - namespace: Service
-            name: NetworkMenu
-            label: Network Services
-            icon: "carbon:ibm-cloud-internet-services"
-            children:
-              data:
-                - namespace: Service
-                  name: Layer2Network
-                  label: Layer2 Segment
-                  kind: ServiceLayer2Network
-                  icon: "mdi:lan"
-                - namespace: Service
-                  name: Layer3Gateway
-                  label: Layer3 Segment
-                  kind: ServiceLayer3Gateway
-                  icon: "mdi:lan"
-          - namespace: Service
-            name: PeeringMenu
-            label: Connection Services
-            icon: "carbon:ibm-cloud-internet-services"
-            children:
-              data:
-                - namespace: Service
-                  name: OspfPeering
-                  label: OSPF Peering
-                  kind: ServiceOspfPeering
-                  icon: "mdi:lan"
-                - namespace: Service
-                  name: BgpPeering
-                  label: BGP Peering
-                  kind: ServiceBgpPeering
-                  icon: "mdi:lan"
 

@@ -1,0 +1,26 @@
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: OrganizationCustomer
+  data: 
+    - name: "Customer 1"
+    - name: "Customer 2"
+    - name: "Customer 3"
+    - name: "Customer 4"
+    - name: "Customer 5"
+    - name: "Customer 6"
+    - name: "Customer 7"
+    - name: "Customer 8"
+    - name: "Customer 9"
+    - name: "Customer 10"
+    - name: "Customer 11"
+    - name: "Customer 12"
+    - name: "Customer 13"
+    - name: "Customer 14"
+    - name: "Customer 15"
+    - name: "Customer 16"
+    - name: "Customer 17"
+    - name: "Customer 18"
+    - name: "Customer 19"
+    - name: "Customer 20"

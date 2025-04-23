@@ -1,0 +1,267 @@
+---
+# yaml-language-server: $schema=https://schema.infrahub.app/infrahub/schema/latest.json
+version: "1.0"
+
+nodes:
+  - name: AutonomousSystem
+    namespace: Service
+    description: An Autonomous System (AS) is a set of Internet routable IP prefixes belonging to a network
+    label: Autonomous System
+    icon: mdi:bank-circle-outline
+    menu_placement: ServiceBGPSession
+    inherit_from:
+      - ServiceGeneric    
+    uniqueness_constraints:
+      - ["asn__value"]
+      - ["name__value"]
+    human_friendly_id:
+      - "asn__value"
+      - "name__value"
+    order_by:
+      - asn__value
+      - name__value
+    display_labels:
+      - asn__value
+      - name__value
+    attributes:
+      - name: asn
+        kind: Number
+        description: "Autonomous System Number"
+        order_weight: 1050
+    relationships:
+      - name: devices
+        peer: DcimGenericDevice
+        cardinality: many
+        kind: Component
+        optional: true
+        identifier: device_service
+
+  - name: RoutingPolicyBGP
+    namespace: Service
+    description: A routing policiers for BGP
+    label: BGP Routing Policies
+    icon: carbon:deployment-policy
+    include_in_menu: false
+    inherit_from:
+      - "ServiceRoutingPolicy"
+    # TODO: extend if need
+
+  - name: BGPPeerGroup
+    namespace: Service
+    description: A BGP Peer Group is used to regroup parameters that are shared across multiple peers
+    label: BGP Peer Group
+    icon: mdi:view-grid-plus-outline
+    menu_placement: ServiceBGPSession
+    inherit_from:
+      - ServiceGeneric  
+    uniqueness_constraints:
+      - ["name__value"]
+    human_friendly_id:
+      - name__value
+      - description__value
+    order_by:
+      - name__value
+    display_labels:
+      - name__value
+      - description__value
+    attributes:
+      - name: maximum_routes
+        kind: Number
+        optional: true
+        description: "Maximum routes for the BGP Group."
+        order_weight: 1400
+        regex: "^[0-9]+$"
+      - name: local_pref
+        kind: Number
+        optional: true
+        description: "Force Local Pref for this BGP Peer Group."
+        order_weight: 1450
+        regex: "^[0-9]+$"
+      - name: send_community
+        kind: Checkbox
+        optional: true
+        description: "Whether to send community attributes."
+        order_weight: 1500
+      - name: address_family
+        description: "The address family for the routing policy indicating the type of IP address."
+        kind: Dropdown
+        choices:
+          - name: "ipv4"
+            label: IPv4
+            description: "Policy applies to IPv4 addresses."
+            color: "#E6E6FA"  # lavender
+          - name: "ipv6"
+            label: IPv6
+            description: "Policy applies to IPv6 addresses."
+            color: "#E6E6FA"  # lavender
+        default_value: "ipv4"
+        order_weight: 1150
+    relationships:
+      - name: local_as
+        identifier: bgppeergroup__local_as
+        peer: ServiceAutonomousSystem
+        optional: true
+        cardinality: one
+        kind: Attribute
+      - name: remote_as
+        identifier: bgppeergroup__remote_as
+        peer: ServiceAutonomousSystem
+        optional: true
+        cardinality: one
+        kind: Attribute
+      - name: import_routing_policies
+        label: Import Routing Policies
+        peer: ServiceRoutingPolicyBGP
+        identifier: bgp__import_policies
+        description: "The routing-policies used by this instance for import."
+        kind: Generic
+        cardinality: many
+      - name: export_routing_policies
+        label: Export Routing Policies
+        peer: ServiceRoutingPolicyBGP
+        identifier: bgp__export_policies
+        description: "The routing-policies used by this instance for export."
+        kind: Generic
+        cardinality: many
+
+  - name: BGPSession
+    namespace: Service
+    description: A BGP Session represent a point to point connection between two routers
+    label: BGP Session
+    icon: mdi:router    
+    inherit_from:
+      - ServiceGeneric
+    order_by:
+      - remote_as__asn__value
+    display_labels:
+      - description__value
+    attributes:
+      - name: session_type
+        kind: Text
+        enum:
+          - EXTERNAL
+          - INTERNAL
+        description: "Type of BGP Session"
+        order_weight: 1200
+      - name: role
+        kind: Dropdown
+        choices:
+          - name: backbone
+            label: Backbone
+            description: "Provide main data routes."
+            color: "#E6E6FA"  # lavender
+          - name: upstream
+            label: Upstream
+            description: "Connect to Internet service provider."
+            color: "#E6E6FA"  # lavender
+          - name: peering
+            label: Peering
+            description: "Connect with other networks via IX."
+            color: "#E6E6FA"  # lavender
+        description: "Role of the BGP Session"
+        order_weight: 1600
+      - name: local_pref
+        kind: Number
+        optional: true
+        description: "Force Local Pref for this BGP Peer Session."
+        order_weight: 1450
+        regex: "^[0-9]+$"
+    relationships:
+      - name: local_as
+        identifier: bgpsession__local_as
+        peer: ServiceAutonomousSystem
+        optional: true
+        cardinality: one
+        kind: Attribute
+      - name: remote_as
+        identifier: bgpsession__remote_as
+        peer: ServiceAutonomousSystem
+        optional: true
+        cardinality: one
+        kind: Attribute
+      - name: local_ip
+        identifier: bgpsession__local_ip
+        peer: IpamIPAddress
+        optional: true
+        cardinality: one
+        kind: Attribute
+      - name: remote_ip
+        identifier: bgpsession__remote_ip
+        peer: IpamIPAddress
+        optional: true
+        cardinality: one
+        kind: Attribute
+      - name: peer_group
+        peer: ServiceBGPPeerGroup
+        optional: true
+        cardinality: one
+        kind: Attribute
+      - name: peer_session
+        peer: ServiceBGPSession
+        optional: true
+        cardinality: one
+        kind: Attribute
+      - name: import_routing_policies
+        label: Import Routing Policies
+        peer: ServiceRoutingPolicy
+        identifier: bgp__import_policies
+        description: "The routing-policies used by this instance for import."
+        kind: Generic
+        cardinality: many
+      - name: export_routing_policies
+        label: Export Routing Policies
+        peer: ServiceRoutingPolicy
+        identifier: bgp__export_policies
+        description: "The routing-policies used by this instance for export."
+        kind: Generic
+        cardinality: many
+      - name: devices
+        peer: DcimGenericDevice
+        cardinality: one
+        kind: Component
+        optional: true
+        identifier: device_service
+
+  - name: BGPCommunity
+    namespace: Service
+    icon: iconoir:community
+    label: "BGP Community"
+    description: "Defines a BGP community."
+    uniqueness_constraints:
+      - ["name__value"]
+      - ["community__value"]
+    human_friendly_id:
+      - name__value
+    order_by:
+      - name__value
+    display_labels:
+      - name__value
+      - community__value
+    attributes:
+      - name: name
+        kind: Text
+        description: "The name of the BGP community."
+        order_weight: 1000
+      - name: description
+        kind: Text
+        description: "An optional description of the BGP community."
+        optional: true
+        order_weight: 1100
+      - name: community
+        kind: Text
+        description: "The value of the BGP community (RFC1997, RFC4360, RFC8092)."
+        order_weight: 1200
+    relationships:
+      - name: routing_policy
+        label: Routing Policies
+        peer: ServiceRoutingPolicyBGP
+        description: "The BGP Policies using this BGP Community."
+        kind: Generic
+        cardinality: many
+      - name: tags
+        peer: BuiltinTag
+        kind: Attribute
+        optional: true
+        cardinality: many
+        order_weight: 3000
+

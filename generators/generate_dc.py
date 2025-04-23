@@ -12,7 +12,11 @@ class DCTopologyGenerator(TopologyGenerator):
         self.client.log.setLevel(logging.INFO)
         self.client.log.addHandler(logging.StreamHandler())
         data = clean_data(data)["TopologyDataCenter"][0]
-        # self.client.log.info(f"Generating DC topology: {data['design']['elements']}")
+        templates = {
+            item["template"]["template_name"]: item["template"]["interfaces"]
+            for item in data["design"]["elements"]
+        }
+        # self.client.log.info(templates)
 
         self.client.log.info(f"Generating DC topology: {data['name']}")
 
@@ -108,20 +112,17 @@ class DCTopologyGenerator(TopologyGenerator):
             related_nodes=[device.id for device in devices],
         )
 
-        await self._create_oob_connections(
-            data["name"], data["design"]["elements"], "console"
-        )
+        await self._create_oob_connections(devices, templates, "console")
 
-        await self._create_oob_connections(
-            data["name"], data["design"]["elements"], "management"
-        )
+        await self._create_oob_connections(devices, templates, "management")
+
+        await self._create_peering_connections(devices, templates)
+
         spines_leafs_ids = [
             device.id for device in devices if device.role.value in ["spine", "leaf"]
         ]
-        await self._create_peering_connections(data["name"], data["design"]["elements"])
-
-        # VxLAN configuration
-        await self._create_underlay(data["name"], spines_leafs_ids)
-        await self._create_overlay(data["name"], spines_leafs_ids)
+        # # VxLAN configuration
+        await self._create_ospf_underlay(data["name"], spines_leafs_ids)
+        # await self._create_overlay(data["name"], spines_leafs_ids)
 
         self.client.log.info(f"DC Fabric {data['name']} created")
