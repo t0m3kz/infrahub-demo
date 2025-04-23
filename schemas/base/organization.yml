@@ -45,6 +45,12 @@ nodes:
     icon: mdi:domain
     include_in_menu: true
     menu_placement: OrganizationGeneric
+    human_friendly_id:
+      - name__value
+    order_by:
+      - name__value
+    display_labels:
+      - name__value    
     attributes:
       - name: name
         kind: Text

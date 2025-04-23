@@ -1,0 +1,84 @@
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DesignElement
+  data:
+    - name: "2 CISCO SPINES C9336C-FX2"
+      description: "2 Cisco C9336C-FX2 spines"
+      quantity: 2
+      role: "spine"
+      device_type: "N9K-C9336C-FX2"
+      template: "N9K-C9336C-FX2_SPINE"
+    - name: "8 CISCO LEAFS N9K-C9336C-FX2"
+      description: "8 Cisco C9336C-FX2 leafs"
+      quantity: 8
+      role: "leaf"
+      device_type: "N9K-C9336C-FX2"
+      template: "N9K-C9336C-FX2_LEAF"
+    - name: "4 CISCO SPINES N9K-C9316D-GX"
+      description: "4 Cisco N9K-C9316D-GX spines"
+      quantity: 4
+      role: "spine"
+      device_type: "N9K-C9316D-GX"
+      template: "N9K-C9316D-GX_SPINE"
+    - name: "16 CISCO LEAFS N9K-C9316D-GX"
+      description: "16 Cisco N9K-C9316D-GX leafs"
+      quantity: 16
+      role: "leaf"
+      device_type: "N9K-C9316D-GX"
+      template: "N9K-C9316D-GX_LEAF"
+    - name: "2 ARISTA SPINES DCS-7280DR3-24-F"
+      description: "2 Arista DCS-7280DR3-24-F spines"
+      quantity: 2
+      role: "spine"
+      device_type: "DCS-7280DR3-24-F"
+      template: "DCS-7280DR3-24-F_SPINE"
+    - name: "6 ARISTA LEAFS CCS-720DP-48S-2F"
+      description: "6 Arista CCS-720DP-48S-2F leafs"
+      quantity: 6
+      role: "leaf"
+      device_type: "CCS-720DP-48S-2F"
+      template: "CCS-720DP-48S-2F_LEAF"
+    - name: "2 JUNIPER EDGE FIREWALLS SRX-1500"
+      description: "2 Juniper EDGE SRX-1500 firewalls"
+      quantity: 2
+      role: "edge_firewall"
+      device_type: "SRX-1500"
+      template: "SRX-1500_EDGE_FIREWALL"
+    - name: "2 JUNIPER DC FIREWALLS SRX-1500"
+      description: "2 Juniper DC SRX-1500 firewalls"
+      quantity: 2
+      role: "dc_firewall"
+      device_type: "SRX-1500"
+      template: "SRX-1500_DC_FIREWALL"
+    - name: "2 CISCO OOB SWITCHES C9200L-24P-4G"
+      description: "2 Cisco C9200L-24P-4G OOB switches"
+      quantity: 2
+      role: "oob"
+      device_type: "C9200L-24P-4G"
+      template: "C9200L-24P-4G_OOB"
+    - name: "2 PERLE CONSOLE SCG50R"
+      description: "2 Perle SCG50R console servers"
+      quantity: 2
+      role: "console"
+      device_type: "SCG50R"
+      template: "SCG50R_CONSOLE"
+    - name: "2 CISCO EDGE N9K-C9316D-GX"
+      description: "2 Cisco N9K-C9316D-GX edges"
+      quantity: 2
+      role: "edge"
+      device_type: "N9K-C9316D-GX"
+      template: "N9K-C9316D-GX_EDGE"
+    - name: "2 EDGECORE SPINES 7726-32X-O"
+      description: "2 EDGECORE 7726-32X-O spines"
+      quantity: 2
+      role: "spine"
+      device_type: "7726-32X-O"
+      template: "7726-32X-O_SPINE"
+    - name: "4 EDGECORE LEAFS 5912-54X-O-AC-F"
+      description: "4 EDGECORE 5912-54X-O-AC-F leafs"
+      quantity: 4
+      role: "leaf"
+      device_type: "5912-54X-O-AC-F"
+      template: "5912-54X-O-AC-F_LEAF"

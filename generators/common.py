@@ -163,58 +163,73 @@ class TopologyGenerator(InfrahubGenerator):
         data: list,
     ) -> None:
         """Create objects of a specific kind and store in local store."""
+
+        data_list = []
+        role_counters = {}
+
+        # Populate the data_list with unique naming
+        for device in data:
+            role = device["role"]
+
+            # Initialize counter for this role if it doesn't exist
+            role_counters.setdefault(role, 0)
+
+            for i in range(1, device["quantity"] + 1):
+                # Increment the counter for this role
+                role_counters[role] += 1
+
+                # Format the name string once per device
+                name = f"{topology_name.lower()}-{role}-{str(role_counters[role]).zfill(2)}"
+
+                # Construct the payload once per device
+                payload = {
+                    "name": name,
+                    "object_template": [device["template"]["template_name"]],
+                    "device_type": device["device_type"]["id"],
+                    "platform": device["device_type"]["platform"]["id"],
+                    "status": "active",
+                    "role": role,
+                    "location": self.client.store.get_by_hfid(
+                        key=f"LocationBuilding__{topology_name}"
+                    ).id,
+                    "member_of_groups": [
+                        self.client.store.get_by_hfid(
+                            key=f"CoreStandardGroup__{device['device_type']['manufacturer']['name'].lower()}_{device['role']}"
+                        )
+                    ],
+                }
+                # Append the constructed dictionary to data_list
+                data_list.append({"payload": payload, "store_key": name})
+
         await self._create_in_batch(
             kind="DcimPhysicalDevice",
-            data_list=[
-                {
-                    "payload": {
-                        "name": f"{topology_name.lower()}-{device['role']}-{str(item).zfill(2)}",
-                        "object_template": [device["template"]["template_name"]],
-                        "device_type": device["device_type"]["id"],
-                        "platform": device["device_type"]["platform"]["id"],
-                        "status": "active",
-                        "role": device["role"],
-                        "location": self.client.store.get_by_hfid(
-                            key=f"LocationBuilding__{topology_name}"
-                        ).id,
-                        "member_of_groups": [
-                            self.client.store.get_by_hfid(
-                                key=f"CoreStandardGroup__{device['device_type']['manufacturer']['name'].lower()}_{device['role']}"
-                            )
-                        ],
-                    },
-                    "store_key": f"{topology_name.lower()}-{device['role']}-{str(item).zfill(2)}",
-                }
-                for device in data
-                for item in range(1, device["quantity"] + 1)
-            ],
+            data_list=data_list,
         )
 
     async def _create_oob_connections(
         self,
-        topology_name: str,
-        data: list,
+        devices: list,
+        templates: dict,
         connection_type: str,
     ) -> None:
         """Create objects of a specific kind and store in local store."""
 
-        device_key = "oob" if connection_type == "management" else "console"
         interfaces = {
-            f"{topology_name.lower()}-{item['role']}-{str(j + 1).zfill(2)}": [
+            device.name.value: [
                 interface["name"]
-                for interface in item["template"]["interfaces"]
+                for interface in templates[device._data["object_template"][0]]
                 if interface["role"] == connection_type
             ]
-            for item in data
-            for j in range(item["quantity"])
-            if item["role"] in ["oob", "leaf", "spine", "console"]
+            for device in devices
         }
 
+        device_key = "oob" if connection_type == "management" else "console"
         sources = {
             key: sort_interface_list(value)
             for key, value in interfaces.items()
             if device_key in key
         }
+
         destinations = {
             key: sort_interface_list(value)
             for key, value in interfaces.items()
@@ -262,18 +277,16 @@ class TopologyGenerator(InfrahubGenerator):
             await source_endpoint.save(allow_upsert=True)
             await target_endpoint.save(allow_upsert=True)
 
-    async def _create_peering_connections(self, topology_name: str, data: list) -> None:
+    async def _create_peering_connections(self, devices: list, templates: dict) -> None:
         """Create objects of a specific kind and store in local store."""
         # name = f"{topology_name.lower()}-{item['role']}-{str(j + 1).zfill(2)}"
         interfaces = {
-            f"{topology_name.lower()}-{item['role']}-{str(j + 1).zfill(2)}": [
+            device.name.value: [
                 interface["name"]
-                for interface in item["template"]["interfaces"]
+                for interface in templates[device._data["object_template"][0]]
                 if interface["role"] in ["leaf", "uplink"]
             ]
-            for i, item in enumerate(data)
-            for j in range(item["quantity"])
-            if item["role"] in ["spine", "leaf"]
+            for device in devices
         }
         spines = {
             key: sort_interface_list(value)
@@ -325,19 +338,33 @@ class TopologyGenerator(InfrahubGenerator):
             await source_endpoint.save(allow_upsert=True)
             await target_endpoint.save(allow_upsert=True)
 
-    async def _create_underlay(self, topology_name: str, devices_ids: list) -> None:
+    async def _create_ospf_underlay(
+        self, topology_name: str, devices_ids: list
+    ) -> None:
         """Create underlay service and associate it to the respective switches."""
         await self._create(
-            kind="ServiceOspfPeering",
+            kind="ServiceOSPFArea",
             data={
                 "name": f"{topology_name}-UNDERLAY",
                 "description": f"{topology_name} OSPF underlay service",
                 "area": 0,
                 "status": "active",
+                "namespace": {"id": "default"},
                 "devices": devices_ids,
             },
             store_key=f"underlay-{topology_name}",
         )
+        # await self._create(
+        #     kind="ServiceOspfPeering",
+        #     data={
+        #         "name": f"{topology_name}-UNDERLAY",
+        #         "description": f"{topology_name} OSPF underlay service",
+        #         "area": 0,
+        #         "status": "active",
+        #         "devices": devices_ids,
+        #     },
+        #     store_key=f"underlay-{topology_name}",
+        # )
 
     async def _create_overlay(self, topology_name: str, devices_ids: list) -> None:
         """Create underlay service and associate it to the respective switches."""

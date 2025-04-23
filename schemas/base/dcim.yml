@@ -139,6 +139,7 @@ generics:
         cardinality: one
         order_weight: 1500
         kind: Attribute
+        on_delete: no-action
 
   # - name: Connector
   #   namespace: Dcim
@@ -158,8 +159,6 @@ generics:
     description: "Generic Network Interface"
     label: Interface
     include_in_menu: false
-    display_labels:
-      - name__value
     order_by:
       - device__name__value
       - name__value
@@ -222,63 +221,63 @@ generics:
             description: "Interface LAG."
             color: "#A9DFBF" # light pastel green
           - name: core
-            label: Core Interface
+            label: Core
             description: "Central part of the network."
             color: "#A9CCE3" # pastel blue
           - name: customer
-            label: Customer Interface
+            label: Customer
             description: "Interface dedicated to customer connections."
             color: "#D2B4DE" # pastel purple
           - name: access
-            label: Access Interfaces
+            label: Access
             description: "Interface connecting endpoint devices."
             color: "#B4E0DC" # pastel teal
           - name: management
-            label: Management Interface
+            label: Management
             description: "Interface dedicated to device management."
             color: "#E3DAC9" # pastel cream
           - name: ospf-unnunbered
-            label: OSPF Unnumbered Interface
+            label: OSPF Unnumbered
             description: "Interface dedicated to OSPF unnumbered connections."
             color: "#C4B7E6" # pastel purple
           - name: ospf
-            label: OSPF Interface
+            label: OSPF
             description: "Interface dedicated to OSPF connections."
             color: "#C432E6" 
           - name: bgp
-            label: BGP Interface
+            label: BGP
             description: "Interface dedicated to BGP connections."
             color: "#C432E6"
           - name: bgp-unnunbered
-            label: BGP Unnumbered Interface
+            label: BGP Unnumbered
             description: "Interface dedicated to BGP unnumbered connections."
             color: "#C432E6"
           - name: upstream
-            label: Upstream Interface
+            label: Upstream
             description: "Interface dedicated to upstream traffic between networks."
             color: "#B2D4E6" # pastel sky blue
           - name: leaf
-            label: Leaf Interface
+            label: Leaf
             description: "Interface dedicated to upstream to leaf between networks."
             color: "#B2D4C6"     
           - name: console
-            label: Console Interface
+            label: Console
             description: "Interface dedicated to console connection management."
             color: "#E2D4C6"     
           - name: uplink
-            label: Uplink Interface
+            label: Uplink
             description: "Interface dedicated to connect with aggragation switch."
             color: "#E2D4C6" 
           - name: peering
-            label: Peering Interface
+            label: Peering
             description: "Interface dedicated to peering connections."
             color: "#E2D4C6"
-          - name: Loopback
-            label: Loopback Interface
+          - name: loopback
+            label: Loopback
             description: "Interface dedicated to loopback connections."
             color: "#E2D4C6"
           - name: loopback-vtep
-            label: Loopback VTEP Interface
+            label: Loopback VTEP
             description: "Interface dedicated to loopback vtep connections."
             color: "#E2D4C6"                    
         order_weight: 1250
@@ -503,7 +502,7 @@ nodes:
   - name: PhysicalInterface
     namespace: Dcim
     label: Physical Interface
-    description: "Physical network port on a device"
+    description: "Physical network port on a device"   
     inherit_from:
       - DcimInterface
       - DcimEndpoint
@@ -594,7 +593,7 @@ nodes:
     description: "Virtual interface like VLAN or Loopback"
     inherit_from:
       - DcimInterface
-      # - DcimSubInterface # Depending if you want your virtual interfaces to have sub interface
+      # - DcimSubInterface # Depending if you want your virtual interfaces to have sub interface    
     include_in_menu: false
     relationships:
       - name: parent_interface

@@ -1,0 +1,58 @@
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: CoreStandardGroup
+  data:
+    - name: edge_routers
+      description: Edge Routers
+    - name: core_routers
+      description: Core Routers
+    - name: cisco_spine
+      description: Cisco DC spine devices
+    - name: cisco_leaf
+      description: Cisco DC leaf devices
+    - name: cisco_oob
+      description: Cisco DC OOB devices
+    - name: cisco_pop_router
+      description: Cisco POP Routers
+    - name: edgecore_leaf
+      description: Cisco DC leaf devices
+    - name: edgecore_spine
+      description: Cisco DC spine devices
+    - name: arista_leaf
+      description: Arista DC leaf devices
+    - name: arista_spine
+      description: Arista DC spine devices
+    - name: arista_pop_router
+      description: Arista POP Routers
+    - name: sonic_leaf
+      description: Sonic DC leaf devices
+    - name: sonic_spine
+      description: Sonic DC spine devices
+    - name: linux_devices
+      description: Linux Devices
+    - name: leafs
+      description: All leafs
+    - name: spines
+      description: All spines
+    - name: firewalls
+      description: All firewalls
+    - name: juniper_firewall
+      description: Juniper DC firewall
+    - name: juniper_pop_firewall
+      description: Juniper POP firewall
+    - name: checkpoint_firewall
+      description: Checkpoint Firewall Devices
+    - name: perle_console
+      description: Perle DC Console
+    - name: perle_pop_console
+      description: Perle POP Console
+    - name: provisioning_circuits
+      description: Provisioning Circuits
+    - name: topologies_dc
+      description: Data Center Topologies
+    - name: topologies_pop
+      description: POP Topologies
+    - name: topologies_clab
+      description: Containerlab Topologies

@@ -1,0 +1,133 @@
+---
+apiVersion: infrahub.app/v1
+version: "1.0"
+kind: Object
+spec:
+  kind: LocationRegion
+  data:
+    - name: "EMEA"
+      shortname: "emea"
+      children:
+        kind: LocationCountry
+        data:
+          - name: "France"
+            shortname: "fr"
+            children:
+              kind: LocationMetro
+              data:
+                - name: "Paris"
+                  shortname: "par"
+                  children:
+                    kind: LocationBuilding
+                    data:
+                      - name: "PAR-1"
+                        shortname: "par-1"                  
+          - name: "Germany"
+            shortname: "de"
+            children:
+              kind: LocationMetro
+              data:
+                - name: "Frankfurt"
+                  shortname: "fra"
+                  children:
+                    kind: LocationBuilding
+                    data:
+                      - name: "FRA-1"
+                        shortname: "fra-1" 
+                - name: "Munich"
+                  shortname: "muc"
+                  children:
+                    kind: LocationBuilding
+                    data:
+                      - name: "MUC-1"
+                        shortname: "muc-1"  
+          - name: "United Kingdom"
+            shortname: "uk"
+            children:
+              kind: LocationMetro
+              data:
+                - name: "London"
+                  shortname: "lon"
+          - name: "Netherlands"
+            shortname: "nl"
+            children:
+              kind: LocationMetro
+              data:
+                - name: "Amsterdam"
+                  shortname: "ams"  
+          - name: "Poland"
+            shortname: "pl"
+            children:
+              kind: LocationMetro
+              data:
+                - name: "Katowice"
+                  shortname: "ktw"                                                               
+          - name: "Spain"
+            shortname: "es"
+            children:
+              kind: LocationMetro
+              data:
+                - name: "Barcelona"
+                  shortname: "bcn"  
+                - name: "Madrid"
+                  shortname: "mdr"                    
+          - name: "Italy"
+            shortname: "it"
+            children:
+              kind: LocationMetro
+              data:
+                - name: "Rome"
+                  shortname: "rom"                   
+                - name: "Milano"
+                  shortname: "mil"   
+    - name: "AMERICAS"
+      shortname: "amer"
+      children:
+        kind: LocationCountry
+        data:
+          - name: "United States"
+            shortname: "us"
+            children:
+              kind: LocationMetro
+              data:
+                - name: "New York"
+                  shortname: "ny"
+                - name: "San Francisco"
+                  shortname: "sf"
+                - name: Chicago
+                  shortname: "chi"
+          - name: "Brazil"
+            shortname: "br"
+            children:
+              kind: LocationMetro
+              data:
+                - name: "Sao Paulo"
+                  shortname: "sp"
+          - name: "Canada"
+            shortname: "ca"
+            children:
+              kind: LocationMetro
+              data:
+                - name: "Toronto"
+                  shortname: "tor"        
+    - name: "APAC"
+      shortname: "apac"    
+      children:
+        kind: LocationCountry
+        data:
+          - name: "Japan"
+            shortname: "jp"
+            children:
+              kind: LocationMetro
+              data:
+                - name: "Tokyo"
+                  shortname: "tok"
+          - name: Australia
+            shortname: "au"
+            children:
+              kind: LocationMetro
+              data:
+                - name: "Sydney"
+                  shortname: "syd"
+                - name: "Melbourne"
+                  shortname: "mel"                                     
