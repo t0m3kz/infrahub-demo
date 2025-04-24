@@ -23,7 +23,7 @@ class CheckSonicLeaf(InfrahubCheck):
             if not service:
                 self.log_error(message="You're MORON !!! No service.")
 
-            if service["__typename"] == "ServiceOspfPeering":
+            if service["__typename"] == "ServiceOSPF":
                 result["underlay"] = {"name": service["name"], "area": service["area"]}
 
         if not result["underlay"]:

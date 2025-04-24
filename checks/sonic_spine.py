@@ -13,6 +13,8 @@ class CheckSonicSpine(InfrahubCheck):
         """Validate Sonic Spine."""
         device = clean_data(data)["DcimPhysicalDevice"][0]
 
+
+        self.log_info(f"Validating device: {device}")
         # Initialize with default values
         result = {
             "underlay": {},
@@ -23,7 +25,7 @@ class CheckSonicSpine(InfrahubCheck):
             if not service:
                 self.log_error(message="You're MORON !!! No service.")
 
-            if service["__typename"] == "ServiceOspfPeering":
+            if service["__typename"] == "ServiceOSPF":
                 result["underlay"] = {"name": service["name"], "area": service["area"]}
 
         if not result["underlay"]:

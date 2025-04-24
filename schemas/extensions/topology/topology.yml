@@ -54,6 +54,8 @@ generics:
     label: Deployment
     icon: "carbon:network-3-reference"
     default_filter: name__value
+    human_friendly_id:
+      - name__value
     display_labels:
       - name__value
     order_by: [name__value]
