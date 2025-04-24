@@ -139,7 +139,6 @@ generics:
         cardinality: one
         order_weight: 1500
         kind: Attribute
-        on_delete: no-action
 
   # - name: Connector
   #   namespace: Dcim
@@ -507,7 +506,11 @@ nodes:
       - DcimInterface
       - DcimEndpoint
       - DcimSubInterface
-    include_in_menu: false
+    include_in_menu: false    
+    human_friendly_id:
+      - device__name__value
+      - name__value
+
     attributes:
       - name: interface_type
         kind: Dropdown
@@ -595,6 +598,9 @@ nodes:
       - DcimInterface
       # - DcimSubInterface # Depending if you want your virtual interfaces to have sub interface    
     include_in_menu: false
+    human_friendly_id:
+      - device__name__value
+      - name__value    
     relationships:
       - name: parent_interface
         peer: DcimSubInterface
