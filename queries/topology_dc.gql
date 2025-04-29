@@ -9,6 +9,9 @@ query device($name: String!) {
         description {
           value
         }
+        strategy{
+          value
+        }
         management_subnet {
           node {
             id

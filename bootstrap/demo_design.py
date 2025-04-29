@@ -55,16 +55,17 @@ async def run(client: InfrahubClient, log: logging.Logger, branch: str) -> None:
     ]
 
     if DC_DEPLOYMENT.get("public") is not None:
-        prefix_data.append({
-            "payload": {
-                "prefix": DC_DEPLOYMENT.get("public"),
-                "description": f"{DC_DEPLOYMENT.get('name')} Public Network",
-                "status": "active",
-                "role": "public",
-            },
-            "store_key": DC_DEPLOYMENT.get("public"),
-        })
-
+        prefix_data.append(
+            {
+                "payload": {
+                    "prefix": DC_DEPLOYMENT.get("public"),
+                    "description": f"{DC_DEPLOYMENT.get('name')} Public Network",
+                    "status": "active",
+                    "role": "public",
+                },
+                "store_key": DC_DEPLOYMENT.get("public"),
+            }
+        )
 
     log.info("Creating prefixes")
     await create_objects(
@@ -74,7 +75,6 @@ async def run(client: InfrahubClient, log: logging.Logger, branch: str) -> None:
         kind="IpamPrefix",
         data_list=prefix_data,
     )
-    
 
     # log.info("Create DC Topology Deployment")
     # let'ts update location
@@ -84,16 +84,13 @@ async def run(client: InfrahubClient, log: logging.Logger, branch: str) -> None:
             "provider": provider.id,
             "design": design.id,
             "management_subnet": client.store.get(
-                kind="IpamPrefix",
-                key=DC_DEPLOYMENT.get('management')
+                kind="IpamPrefix", key=DC_DEPLOYMENT.get("management")
             ).id,
             "customer_subnet": client.store.get(
-                kind="IpamPrefix",
-                key=DC_DEPLOYMENT.get('customer')
+                kind="IpamPrefix", key=DC_DEPLOYMENT.get("customer")
             ).id,
             "technical_subnet": client.store.get(
-                kind="IpamPrefix",
-                key=DC_DEPLOYMENT.get('technical')
+                kind="IpamPrefix", key=DC_DEPLOYMENT.get("technical")
             ).id,
         }
     )
@@ -101,12 +98,10 @@ async def run(client: InfrahubClient, log: logging.Logger, branch: str) -> None:
         DC_DEPLOYMENT.update(
             {
                 "public_subnet": client.store.get(
-                    kind="IpamPrefix",
-                    key=DC_DEPLOYMENT.get('public')
+                    kind="IpamPrefix", key=DC_DEPLOYMENT.get("public")
                 ).id,
             }
         )
-
 
     log.info(f"Creating DC Topology Deployment for {DC_DEPLOYMENT.get('name')}")
     try:

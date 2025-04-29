@@ -325,14 +325,15 @@ async def infra(client: InfrahubClient, log: logging.Logger, branch: str) -> Non
                     "asn": item[0],
                     "status": "active",
                     "provider": {
-                        "id": client.store.get(kind="OrganizationProvider", key=item[1]).id
-                    }
-                    }, 
-            } 
+                        "id": client.store.get(
+                            kind="OrganizationProvider", key=item[1]
+                        ).id
+                    },
+                },
+            }
             for item in ASNS
         ],
     )
-
 
     log.info("Create ASN Private pools")
     await create_objects(
