@@ -5,7 +5,7 @@ prefix: ""
 
 mgmt:
   network: {{ topology.node.name.value | lower() }}
-  ipv4-subnet: {{ topology.node.management.value }}
+  ipv4-subnet: {{ topology.node.management_subnet.node.prefix.value }}
 
 {% if topology.node.devices.edges is defined %} 
 topology: 

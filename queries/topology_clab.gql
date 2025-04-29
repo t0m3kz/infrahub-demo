@@ -5,8 +5,12 @@ query topology_info($name: String!) {
         name {
           value
         }
-        management {
-          value
+        management_subnet {
+          node{
+            prefix{
+              value
+            }
+          }
         }
         design {
           node {
