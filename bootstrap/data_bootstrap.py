@@ -238,6 +238,26 @@ ASNS = (
     (7018, "AT&T Services"),
 )
 
+ASN_POOLS = [
+    # name, description, node, node_attribute, start, end
+    (
+        "PRIVATE-ASN32",
+        "Private 32 bit ASN Pool",
+        "ServiceAutonomousSystem",
+        "asn",
+        4200000000,
+        4294967294,
+    ),
+    (
+        "PRIVATE-ASN4",
+        "Private 4 bit ASN Pool",
+        "ServiceAutonomousSystem",
+        "asn",
+        64512,
+        65534,
+    ),
+]
+
 DEVICE_TEMPLATES = (
     # name, role, platfrorm, interfaces
     (
@@ -758,7 +778,7 @@ DESIGN_ELEMENTS = [
         4,
         "leaf",
         "N9K-C9336C-FX2",
-    ),    
+    ),
     (
         "4 CISCO SPINES N9K-C9316D-GX",
         "4 Cisco N9K-C9316D-GX spines",
@@ -842,7 +862,7 @@ DESIGN_ELEMENTS = [
         8,
         "leaf",
         "5912-54X-O-AC-F",
-    ),    
+    ),
 ]
 
 DESIGN = [
@@ -866,7 +886,7 @@ DESIGN = [
         [
             "4 CISCO SPINES N9K-C9316D-GX",
             "16 CISCO LEAFS N9K-C9316D-GX",
-            "2 JUNIPER DC FIREWALLS SRX-1500",            
+            "2 JUNIPER DC FIREWALLS SRX-1500",
         ],
     ),
     (

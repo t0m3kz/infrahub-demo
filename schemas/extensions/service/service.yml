@@ -187,3 +187,12 @@ extensions:
           cardinality: many
           kind: Component
           on_delete: no-action
+
+    - kind: OrganizationProvider
+      relationships:
+        - name: asns
+          label: ASNs
+          peer: ServiceAutonomousSystem
+          optional: true
+          cardinality: many
+          kind: Component

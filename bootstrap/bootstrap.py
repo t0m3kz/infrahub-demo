@@ -11,6 +11,8 @@ from data_bootstrap import (
     SITES,
     ACCOUNTS,
     SUBNETS_1918,
+    ASNS,
+    ASN_POOLS,
     GROUPS,
     TAGS,
     PROVIDERS,
@@ -309,6 +311,50 @@ async def infra(client: InfrahubClient, log: logging.Logger, branch: str) -> Non
             data_list=data_list,
         )
 
+    log.info("Create ASNs")
+    await create_objects(
+        client=client,
+        log=log,
+        branch=branch,
+        kind="ServiceAutonomousSystem",
+        data_list=[
+            {
+                "payload": {
+                    "name": f"AS{item[0]}",
+                    "description": f"AS{item[0]} for {item[1]}",
+                    "asn": item[0],
+                    "status": "active",
+                    "provider": {
+                        "id": client.store.get(kind="OrganizationProvider", key=item[1]).id
+                    }
+                    }, 
+            } 
+            for item in ASNS
+        ],
+    )
+
+
+    log.info("Create ASN Private pools")
+    await create_objects(
+        client=client,
+        log=log,
+        branch=branch,
+        kind="CoreNumberPool",
+        data_list=[
+            {
+                "payload": {
+                    "name": item[0],
+                    "description": item[1],
+                    "node": item[2],
+                    "node_attribute": item[3],
+                    "start_range": item[4],
+                    "end_range": item[5],
+                },
+                "store_key": item[0],
+            }
+            for item in ASN_POOLS
+        ],
+    )
     # await create_objects(
     #     client=client,
     #     log=log,

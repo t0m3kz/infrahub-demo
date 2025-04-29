@@ -1,5 +1,5 @@
-query generate_topology($name: String!) {
-  TopologyColocationCenter(name__value: $name) {
+query device($name: String!) {
+  TopologyDataCenter(name__value: $name) {
     edges {
       node {
         id
@@ -9,19 +9,50 @@ query generate_topology($name: String!) {
         description {
           value
         }
-        asn {
-          value
+        management_subnet {
+          node {
+            id
+            prefix {
+              value
+            }
+          }
         }
-        management {
-          value
+        technical_subnet {
+          node {
+            id
+            prefix {
+              value
+            }
+          }
         }
-        customer {
-          value
+        customer_subnet {
+          node {
+            id
+            prefix {
+              value
+            }
+          }
+        }
+        public_subnet {
+          node {
+            id
+            prefix {
+              value
+            }
+          }
         }
         location {
           node {
             id
           }
+        }
+        provider {
+          node {
+            id
+          }
+        }
+        emulation {
+          value
         }
         design {
           node {
@@ -37,6 +68,47 @@ query generate_topology($name: String!) {
                     }
                     role {
                       value
+                    }
+                    template {
+                      node {
+                        id
+                        ... on TemplateDcimPhysicalDevice {
+                          template_name {
+                            value
+                          }
+                          interfaces {
+                            edges {
+                              node {
+                                ... on TemplateDcimPhysicalInterface {
+                                  name {
+                                    value
+                                  }
+                                  role {
+                                    value
+                                  }
+                                }
+                                ... on TemplateDcimConsoleInterface {
+                                  name {
+                                    value
+                                  }
+                                  role {
+                                    value
+                                  }
+                                }
+                              }
+                            }
+                            count
+                          }
+                        }
+                        template_name {
+                          value
+                        }
+                        ... on CoreObjectTemplate {
+                          template_name {
+                            value
+                          }
+                        }
+                      }
                     }
                     device_type {
                       node {
@@ -54,9 +126,6 @@ query generate_topology($name: String!) {
                           }
                         }
                       }
-                    }
-                    interface_patterns {
-                      value
                     }
                   }
                 }
