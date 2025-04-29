@@ -13,7 +13,6 @@ class CheckSonicSpine(InfrahubCheck):
         """Validate Sonic Spine."""
         device = clean_data(data)["DcimPhysicalDevice"][0]
 
-
         self.log_info(f"Validating device: {device}")
         # Initialize with default values
         result = {

@@ -29,6 +29,11 @@ nodes:
         description: "Autonomous System Number"
         order_weight: 1050
     relationships:
+      - name: provider
+        peer: OrganizationProvider
+        cardinality: one
+        kind: Attribute
+        optional: true
       - name: devices
         peer: DcimGenericDevice
         cardinality: many

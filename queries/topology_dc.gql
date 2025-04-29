@@ -1,4 +1,4 @@
-query generate_topology($name: String!) {
+query device($name: String!) {
   TopologyDataCenter(name__value: $name) {
     edges {
       node {
@@ -9,20 +9,37 @@ query generate_topology($name: String!) {
         description {
           value
         }
-        asn {
-          value
+        management_subnet {
+          node {
+            id
+            prefix {
+              value
+            }
+          }
         }
-        management {
-          value
+        technical_subnet {
+          node {
+            id
+            prefix {
+              value
+            }
+          }
         }
-        technical {
-          value
+        customer_subnet {
+          node {
+            id
+            prefix {
+              value
+            }
+          }
         }
-        customer {
-          value
-        }
-        public {
-          value
+        public_subnet {
+          node {
+            id
+            prefix {
+              value
+            }
+          }
         }
         location {
           node {
@@ -34,7 +51,7 @@ query generate_topology($name: String!) {
             id
           }
         }
-        emulation{
+        emulation {
           value
         }
         design {
@@ -56,7 +73,7 @@ query generate_topology($name: String!) {
                       node {
                         id
                         ... on TemplateDcimPhysicalDevice {
-                          template_name{
+                          template_name {
                             value
                           }
                           interfaces {
@@ -70,11 +87,11 @@ query generate_topology($name: String!) {
                                     value
                                   }
                                 }
-                                ... on TemplateDcimConsoleInterface{
-                                  name{
+                                ... on TemplateDcimConsoleInterface {
+                                  name {
                                     value
                                   }
-                                  role{
+                                  role {
                                     value
                                   }
                                 }

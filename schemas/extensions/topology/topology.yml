@@ -71,17 +71,9 @@ generics:
         kind: Text
         order_weight: 2
         optional: true
-      - name: management
-        kind: IPNetwork
-        label: Management Subnet
-        order_weight: 7
-      - name: customer
-        kind: IPNetwork
-        label: Customer Subnet
-        order_weight: 8
       - name: emulation
         kind: Boolean
-        label: Create Clab Emulation Topology
+        label: Clab Emulation
         order_weight: 9
         default_value: false
     relationships:
@@ -97,6 +89,20 @@ generics:
         cardinality: one
         kind: Parent
         order_weight: 4
+      - name: management_subnet
+        peer: IpamPrefix
+        optional: false
+        cardinality: one
+        kind: Component
+        order_weight: 10
+        identifier: management_subnet
+      - name: customer_subnet
+        peer: IpamPrefix
+        optional: false
+        cardinality: one
+        kind: Component
+        order_weight: 11
+        identifier: customer_subnet
       - name: devices
         peer: DcimGenericDevice
         cardinality: many
@@ -332,15 +338,15 @@ nodes:
       - CoreArtifactTarget
       - TopologyDeployment
     attributes:
-      - name: asn
-        kind: Number
-        optional: false
-        order_weight: 1200
+      # - name: asn
+      #   kind: Number
+      #   optional: false
+      #   order_weight: 1200
       - name: strategy
         kind: Dropdown
         label: Strategy
         optional: false
-        order_weight: 1500
+        order_weight: 5
         choices:
           - name: ebgp-ebgp
             label: ebgp-ebgp
@@ -357,16 +363,37 @@ nodes:
           - name: isis-ibgp
             label: isis-ibgp
             color: "#bf7f3c"
-      - name: technical
-        kind: IPNetwork
-        label: Technical Subnet
-        order_weight: 1800
-      - name: public
-        kind: IPNetwork
-        optional: true
-        label: Public Subnet
-        order_weight: 1900
+      # - name: technical
+      #   kind: IPNetwork
+      #   label: Technical Subnet
+      #   order_weight: 1800
+      # - name: public
+      #   state: absent
+      #   kind: IPNetwork
+      #   optional: true
+      #   label: Public Subnet
+      #   order_weight: 1900
     relationships:
+      # - name: asn
+      #   state: absent
+      #   peer: ServiceAutonomousSystem
+      #   optional: false
+      #   cardinality: one
+      #   kind: Attribute
+      - name: technical_subnet
+        peer: IpamPrefix
+        optional: false
+        cardinality: one
+        kind: Attribute
+        identifier: technical_subnet
+        order_weight: 12
+      - name: public_subnet
+        peer: IpamPrefix
+        optional: true
+        cardinality: one
+        kind: Attribute
+        identifier: public_subnet  
+        order_weight: 13      
       - name: provider
         peer: OrganizationProvider
         optional: false
