@@ -24,10 +24,10 @@ spanning-tree mode mstp
 {%   for intf in data.DcimPhysicalDevice.edges[0].node.interfaces.edges %}
 interface {{ intf.node.name.value }}
 {%      if intf.node.description.value %}
-  description "{{ intf.node.description.value }}"
+   description "{{ intf.node.description.value }}"
 {%      endif %}
 {%      if intf.node.status.value == "disabled" %}
-  shutdown
+   shutdown
 {%      endif %}
 {%      if intf.node["ip_addresses"] %}
 {%         for ip in intf.node["ip_addresses"]["edges"] %}
@@ -38,10 +38,12 @@ interface {{ intf.node.name.value }}
 {%            endif %}
 {%         endfor %}
 {%      endif %}
-!
 {% for service in intf.node.service.edges %}
-   vlan {{ service.node.name.value }}
+   {% if service.node.__typename == "ServiceLayer2Network" %}
+   vlan {{ service.node.vlan.value }}
+   {% endif %}
 {% endfor %}
+!
 {%   endfor %}
 !
 ip prefix-list BOGON-Prefixes seq 10 permit 172.16.0.0/12 le 24
