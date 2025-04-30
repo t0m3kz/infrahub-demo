@@ -162,10 +162,12 @@ generics:
       - device__name__value
       - name__value
     uniqueness_constraints:
-      - [device, name__value]
+      - ["device", "name__value"]
     human_friendly_id:
       - device__name__value
       - name__value
+    display_labels: 
+      - name__value    
     attributes:
       - name: name
         kind: Text
@@ -325,7 +327,7 @@ nodes:
       - manufacturer__name__value
       - name__value
     uniqueness_constraints:
-      - [manufacturer, name__value]
+      - ["manufacturer", "name__value"]
     attributes:
       - name: name
         kind: Text
@@ -388,7 +390,7 @@ nodes:
       - manufacturer__name__value
       - name__value
     uniqueness_constraints:
-      - [name__value]
+      - ["name__value"]
     attributes:
       - name: name
         kind: Text
@@ -507,9 +509,8 @@ nodes:
       - DcimEndpoint
       - DcimSubInterface
     include_in_menu: false    
-    human_friendly_id:
-      - device__name__value
-      - name__value
+    display_labels: 
+      - name__value 
 
     attributes:
       - name: interface_type
@@ -588,7 +589,7 @@ nodes:
         peer: IpamIPAddress
         optional: true
         cardinality: many
-        kind: Component
+        kind: Attribute
         
   - name: VirtualInterface
     namespace: Dcim
@@ -598,9 +599,11 @@ nodes:
       - DcimInterface
       # - DcimSubInterface # Depending if you want your virtual interfaces to have sub interface    
     include_in_menu: false
-    human_friendly_id:
-      - device__name__value
-      - name__value    
+    display_labels: 
+      - name__value     
+    # human_friendly_id:
+    #   - device__name__value
+    #   - name__value    
     relationships:
       - name: parent_interface
         peer: DcimSubInterface
@@ -612,4 +615,4 @@ nodes:
         peer: IpamIPAddress
         optional: true
         cardinality: many
-        kind: Component
+        kind: Attribute
