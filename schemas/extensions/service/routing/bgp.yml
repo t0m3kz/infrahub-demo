@@ -12,11 +12,10 @@ nodes:
     inherit_from:
       - ServiceGeneric    
     uniqueness_constraints:
-      - ["asn__value"]
-      - ["name__value"]
+      - ["asn__value", "name__value"]
     human_friendly_id:
-      - "asn__value"
-      - "name__value"
+      - asn__value
+      - name__value
     order_by:
       - asn__value
       - name__value
@@ -233,8 +232,7 @@ nodes:
     label: "BGP Community"
     description: "Defines a BGP community."
     uniqueness_constraints:
-      - ["name__value"]
-      - ["community__value"]
+      - ["name__value", "community__value"]
     human_friendly_id:
       - name__value
     order_by:

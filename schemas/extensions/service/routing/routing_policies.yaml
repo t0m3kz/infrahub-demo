@@ -9,9 +9,9 @@ generics:
     include_in_menu: false
     description: "Policy defining the rules for routing traffic in a network."
     uniqueness_constraints:
-      - ["name__value"]
+      - [ "name__value" ]
     human_friendly_id:
-      - "name__value"
+      - name__value
     order_by:
       - name__value
     display_labels:

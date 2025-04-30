@@ -227,13 +227,13 @@ class TopologyGenerator(InfrahubGenerator):
         sources = {
             key: sort_interface_list(value)
             for key, value in interfaces.items()
-            if device_key in key
+            if device_key in key and value
         }
 
         destinations = {
             key: sort_interface_list(value)
             for key, value in interfaces.items()
-            if key not in sources
+            if key not in sources and value
         }
 
         connections = [
@@ -291,14 +291,14 @@ class TopologyGenerator(InfrahubGenerator):
         spines = {
             key: sort_interface_list(value)
             for key, value in interfaces.items()
-            if "spine" in key
+            if "spine" in key and value
         }
         leafs = {
             key: sort_interface_list(value)
             for key, value in interfaces.items()
-            if "leaf" in key
+            if "leaf" in key and value
         }
-        # print(spines)
+        
         connections = [
             {
                 "source": spine,
