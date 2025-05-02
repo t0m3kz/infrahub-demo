@@ -156,7 +156,7 @@ artifact_definitions:
 
   - name: "Cable marix for Topology"
     artifact_name: "topology-cabling"
-    content_type: "text/csv"
+    content_type: "text/plain"
     targets: "topologies_dc"
     transformation: "topology_cabling"
     parameters:
