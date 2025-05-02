@@ -111,51 +111,34 @@ class TopologyGenerator(InfrahubGenerator):
         if data:
             await self._create_in_batch(kind="CoreStandardGroup", data_list=data)
 
-    async def _create_ip_pools(self, topology_name: str, pools: dict) -> None:
+    async def _create_ip_pools(self, topology_name: str, pools: list) -> None:
         """Create objects of a specific kind and store in local store."""
-        # namespace = await self.client.get(kind="IpamNamespace", name__value="default")
-        for item in pools:
-            if pools.get(item):
-                data = {
-                    "prefix": pools.get(item),
-                    "description": f"{item} network pool for {topology_name}",
-                    "is_pool": item in ["management", "customer"],
-                    "status": "active",
-                    "role": "supernet" if item == "customer" else item,
-                    "location": self.client.store.get(key=topology_name).id,
+        await self._create_in_batch(
+            kind="CoreIPAddressPool",
+            data_list=[
+                {
+                    "payload": {
+                        "name": f"{topology_name}-{pool.get('type')}-pool",
+                        "default_address_type": "IpamIPAddress",
+                        "description": f"{pool.get('type')} IP Pool",
+                        "ip_namespace": "default",
+                        "resources": [pool.get("prefix_id")],
+                    },
+                    "store_key": f"{pool.get('type').lower()}_ip_pool",
                 }
-                await self._create(kind="IpamPrefix", data=data, store_key=item)
-                self.client.log.info(self.client.store.get(item).id)
-                if item in ["management", "technical"]:
-                    data = {
-                        "name": f"{topology_name}-{item}",
-                        "description": f"Management network for {topology_name}",
-                        "default_address_type": "IpamIPAddress",
-                        "default_prefix_length": ipaddress.IPv4Network(
-                            pools.get(item)
-                        ).prefixlen,
-                        "resources": [self.client.store.get(item).id],
-                        "ip_namespace": {"id": "default"},
-                    }
-                    await self._create(
-                        kind="CoreIPAddressPool",
-                        data=data,
-                        store_key=f"{topology_name}-{item}",
-                    )
-                else:
-                    data = {
-                        "name": f"{topology_name}-{item}",
-                        "description": f"Management network for {topology_name}",
-                        "default_address_type": "IpamIPAddress",
-                        "default_prefix_length": 24,
-                        "resources": [self.client.store.get(item).id],
-                        "ip_namespace": {"id": "default"},
-                    }
-                    await self._create(
-                        kind="CoreIPPrefixPool",
-                        data=data,
-                        store_key=f"{topology_name}-{item}",
-                    )
+                for pool in pools
+                # {
+                #     "payload": {
+                #         "name": f"{topology_name} Loopback IP Pool",
+                #         "default_address_type": "IpamIPAddress",
+                #         "description": "Loopback IP Pool",
+                #         "ip_namespace": "default",
+                #         "resources": [data.get("technical_subnet").get("id")],
+                #     },
+                #     "store_key": "loopback_ip_pool",
+                # },
+            ],
+        )
 
     async def _create_devices(
         self,
@@ -298,7 +281,7 @@ class TopologyGenerator(InfrahubGenerator):
             for key, value in interfaces.items()
             if "leaf" in key and value
         }
-        
+
         connections = [
             {
                 "source": spine,
@@ -338,33 +321,48 @@ class TopologyGenerator(InfrahubGenerator):
             await source_endpoint.save(allow_upsert=True)
             await target_endpoint.save(allow_upsert=True)
 
-    async def _create_ospf_underlay(
-        self, topology_name: str, devices_ids: list
-    ) -> None:
+    async def _create_ospf_underlay(self, topology_name: str, devices: list) -> None:
         """Create underlay service and associate it to the respective switches."""
+        ospf_interfaces = await self.client.filters(
+            kind="DcimInterface",
+            role__values=["ospf-unnunbered", "loopback"],
+            device__name__values=[device.name.value for device in devices],
+        )
+        self.client.log.info([interface.id for interface in ospf_interfaces])
         await self._create(
             kind="ServiceOSPFArea",
             data={
                 "name": f"{topology_name}-UNDERLAY",
-                "description": f"{topology_name} OSPF underlay service",
+                "description": f"{topology_name} OSPF Underlay service",
                 "area": 0,
                 "status": "active",
                 "namespace": {"id": "default"},
-                "devices": devices_ids,
+                "ospf_interfaces": [interface.id for interface in ospf_interfaces],
             },
             store_key=f"underlay-{topology_name}",
         )
-        # await self._create(
-        #     kind="ServiceOspfPeering",
-        #     data={
-        #         "name": f"{topology_name}-UNDERLAY",
-        #         "description": f"{topology_name} OSPF underlay service",
-        #         "area": 0,
-        #         "status": "active",
-        #         "devices": devices_ids,
-        #     },
-        #     store_key=f"underlay-{topology_name}",
-        # )
+        await self._create_in_batch(
+            kind="ServiceOSPF",
+            data_list=[
+                {
+                    "payload": {
+                        "name": f"{device.name.value.upper()}-OSPF",
+                        "description": f"{device.name.value} OSPF UNDERLAY",
+                        "area": self.client.store.get(
+                            kind="ServiceOSPFArea", key=f"underlay-{topology_name}"
+                        ),
+                        "device": device.id,
+                        "status": "active",
+                        "router_id": await self.client.allocate_next_ip_address(
+                            resource_pool=self.client.store.get(key="loopback_ip_pool"),
+                            identifier=f"{device.name.value}-loopback0",
+                        ),
+                    },
+                    "store_key": f"underlay-{device.name.value}",
+                }
+                for device in devices
+            ],
+        )
 
     async def _create_overlay(self, topology_name: str, devices_ids: list) -> None:
         """Create underlay service and associate it to the respective switches."""
@@ -380,8 +378,34 @@ class TopologyGenerator(InfrahubGenerator):
             store_key=f"overlay-{topology_name}",
         )
 
-    async def _create_loopback(self, data: list):
-        pass
+    async def _create_loopback(self, devices: list, loopback_name: str):
+        await self._create_in_batch(
+            kind="DcimVirtualInterface",
+            data_list=[
+                {
+                    "payload": {
+                        "name": loopback_name,
+                        "device": self.client.store.get_by_hfid(
+                            key=f"DcimPhysicalDevice__{device}"
+                        ).id,
+                        "ip_addresses": [
+                            await self.client.allocate_next_ip_address(
+                                resource_pool=self.client.store.get(
+                                    key="loopback_ip_pool"
+                                ),
+                                identifier=f"{device}-{loopback_name}",
+                                data={"description": f"{device} Loopback IP"},
+                            ),
+                        ],
+                        "role": "loopback",
+                        "status": "active",
+                        "description": f"{device} {loopback_name} Interface",
+                    },
+                    "store_key": f"{device}-{loopback_name}",
+                }
+                for device in devices
+            ],
+        )
 
     async def _create_asn_pool(self, data: list):
         pass
@@ -393,7 +417,4 @@ class TopologyGenerator(InfrahubGenerator):
         pass
 
     async def _create_ip_pool(self, data: list):
-        pass
-
-    async def _create_bgp_pool(self, data: list):
         pass

@@ -237,7 +237,7 @@ generics:
             label: Management
             description: "Interface dedicated to device management."
             color: "#E3DAC9" # pastel cream
-          - name: ospf-unnunbered
+          - name: ospf-unnumbered
             label: OSPF Unnumbered
             description: "Interface dedicated to OSPF unnumbered connections."
             color: "#C4B7E6" # pastel purple

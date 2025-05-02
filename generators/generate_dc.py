@@ -82,15 +82,13 @@ class DCTopologyGenerator(TopologyGenerator):
             )
 
         # create respective IP address pools
-        # await self._create_ip_pools(
-        #     data["name"],
-        #     pools={
-        #         "management": data["management"],
-        #         "technical": data["technical"],
-        #         "customer": data["customer"],
-        #         "public": data["public"],
-        #     },
-        # )
+        await self._create_ip_pools(
+            data["name"],
+            pools=[
+                {"type": "Management", "prefix_id": data["management_subnet"]["id"]},
+                {"type": "Loopback", "prefix_id": data["technical_subnet"]["id"]},
+            ],
+        )
 
         await self._create_devices(data["name"], data["design"]["elements"])
 
@@ -112,17 +110,28 @@ class DCTopologyGenerator(TopologyGenerator):
             related_nodes=[device.id for device in devices],
         )
 
+        await self._create_loopback(
+            devices=[
+                device.name.value
+                for device in devices
+                if device.role.value in ["spine", "leaf"]
+            ],
+            loopback_name="loopback0",
+        )
+
         await self._create_oob_connections(devices, templates, "console")
 
         await self._create_oob_connections(devices, templates, "management")
 
         await self._create_peering_connections(devices, templates)
 
-        spines_leafs_ids = [
-            device.id for device in devices if device.role.value in ["spine", "leaf"]
-        ]
         # # VxLAN configuration
-        await self._create_ospf_underlay(data["name"], spines_leafs_ids)
+        await self._create_ospf_underlay(
+            data["name"],
+            devices=[
+                device for device in devices if device.role.value in ["spine", "leaf"]
+            ],
+        )
         # await self._create_overlay(data["name"], spines_leafs_ids)
 
         self.client.log.info(f"DC Fabric {data['name']} created")
