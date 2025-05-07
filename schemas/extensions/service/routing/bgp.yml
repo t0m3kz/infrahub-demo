@@ -219,7 +219,7 @@ nodes:
         description: "The routing-policies used by this instance for export."
         kind: Generic
         cardinality: many
-      - name: devices
+      - name: device
         peer: DcimGenericDevice
         cardinality: one
         kind: Component

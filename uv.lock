@@ -204,6 +204,7 @@ dependencies = [
 
 [package.dev-dependencies]
 dev = [
+    { name = "invoke" },
     { name = "pytest" },
     { name = "ruff" },
 ]
@@ -217,6 +218,7 @@ requires-dist = [
 
 [package.metadata.requires-dev]
 dev = [
+    { name = "invoke", specifier = ">=2.2.0" },
     { name = "pytest", specifier = ">=8.3.5,<9.0.0" },
     { name = "ruff", specifier = ">=0.11.4" },
 ]

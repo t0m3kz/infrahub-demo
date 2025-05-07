@@ -6,7 +6,7 @@ requires-python = "<3.13,>=3.9"
 dependencies = [
     "invoke<3.0.0,>=2.2.0",
     "pytest<9.0.0,>=8.3.5",
-    "infrahub-sdk[all]<2.0.0,>=1.7.2",
+    "infrahub-sdk[all]>=1.7.2,<2.0.0",
 ]
 name = "infrahub-demo"
 version = "0.1.0"
@@ -15,6 +15,7 @@ readme = "README.md"
 
 [dependency-groups]
 dev = [
+    "invoke>=2.2.0",
     "pytest<9.0.0,>=8.3.5",
     "ruff>=0.11.4",
 ]

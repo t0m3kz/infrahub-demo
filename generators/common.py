@@ -88,7 +88,7 @@ class TopologyGenerator(InfrahubGenerator):
         except ValidationError as exc:
             self.client.log.debug(f"- Creation failed due to {exc}")
 
-    async def _create(self, kind: str, data: dict, store_key: str = None) -> None:
+    async def _create(self, kind: str, data: dict) -> None:
         """Create objects of a specific kind and store in local store."""
         try:
             obj = await self.client.create(kind=kind, data=data)
@@ -99,8 +99,8 @@ class TopologyGenerator(InfrahubGenerator):
                 if object_reference
                 else f"- Created [{kind}]"
             )
-            if store_key:
-                self.client.store.set(key=store_key, node=obj)
+            if data.get("store_key"):
+                self.client.store.set(key=data.get("store_key"), node=obj)
         except (GraphQLError, ValidationError) as exc:
             self.client.log.debug(f"- Creation failed due to {exc}")
 
@@ -110,35 +110,6 @@ class TopologyGenerator(InfrahubGenerator):
     ):
         if data:
             await self._create_in_batch(kind="CoreStandardGroup", data_list=data)
-
-    async def _create_ip_pools(self, topology_name: str, pools: list) -> None:
-        """Create objects of a specific kind and store in local store."""
-        await self._create_in_batch(
-            kind="CoreIPAddressPool",
-            data_list=[
-                {
-                    "payload": {
-                        "name": f"{topology_name}-{pool.get('type')}-pool",
-                        "default_address_type": "IpamIPAddress",
-                        "description": f"{pool.get('type')} IP Pool",
-                        "ip_namespace": "default",
-                        "resources": [pool.get("prefix_id")],
-                    },
-                    "store_key": f"{pool.get('type').lower()}_ip_pool",
-                }
-                for pool in pools
-                # {
-                #     "payload": {
-                #         "name": f"{topology_name} Loopback IP Pool",
-                #         "default_address_type": "IpamIPAddress",
-                #         "description": "Loopback IP Pool",
-                #         "ip_namespace": "default",
-                #         "resources": [data.get("technical_subnet").get("id")],
-                #     },
-                #     "store_key": "loopback_ip_pool",
-                # },
-            ],
-        )
 
     async def _create_devices(
         self,
@@ -325,7 +296,7 @@ class TopologyGenerator(InfrahubGenerator):
         """Create underlay service and associate it to the respective switches."""
         ospf_interfaces = await self.client.filters(
             kind="DcimInterface",
-            role__values=["ospf-unnunbered", "loopback"],
+            role__values=["ospf-unnumbered", "loopback"],
             device__name__values=[device.name.value for device in devices],
         )
         self.client.log.info([interface.id for interface in ospf_interfaces])
@@ -407,14 +378,43 @@ class TopologyGenerator(InfrahubGenerator):
             ],
         )
 
-    async def _create_asn_pool(self, data: list):
-        pass
+    async def _create_ip_pools(self, topology_name: str, pools: list) -> None:
+        """Create objects of a specific kind and store in local store."""
+        await self._create_in_batch(
+            kind="CoreIPAddressPool",
+            data_list=[
+                {
+                    "payload": {
+                        "name": f"{topology_name}-{pool.get('type')}-pool",
+                        "default_address_type": "IpamIPAddress",
+                        "description": f"{pool.get('type')} IP Pool",
+                        "ip_namespace": "default",
+                        "resources": [pool.get("prefix_id")],
+                    },
+                    "store_key": f"{pool.get('type').lower()}_ip_pool",
+                }
+                for pool in pools
+            ],
+        )
 
-    async def _create_vlan_pool(self, data: list):
-        pass
+    async def _create_segment_pool(self, topology_name: str, pools: list):
+        """Create objects of a specific kind and store in local store."""
+        await self._create_in_batch(
+            kind="CoreIPAddressPool",
+            data_list=[
+                {
+                    "payload": {
+                        "name": f"{topology_name}-{pool.get('type')}-pool",
+                        "default_address_type": "IpamIPAddress",
+                        "description": f"{pool.get('type')} IP Pool",
+                        "ip_namespace": "default",
+                        "resources": [pool.get("prefix_id")],
+                    },
+                    "store_key": f"{pool.get('type').lower()}_ip_pool",
+                }
+                for pool in pools
+            ],
+        )
 
     async def _create_prefix_pool(self, data: list):
-        pass
-
-    async def _create_ip_pool(self, data: list):
         pass
