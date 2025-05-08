@@ -3,7 +3,7 @@
 import logging
 from ipaddress import IPv4Network
 from infrahub_sdk import InfrahubClient
-from utils import create_objects, get_interface_speed
+from utils import create_objects
 from data_bootstrap import (
     CITIES,
     COUNTRIES,

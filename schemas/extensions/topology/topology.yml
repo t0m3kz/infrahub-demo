@@ -444,10 +444,10 @@ extensions:
           optional: true
           cardinality: many
           kind: Component
-    # - kind: DcimGenericDevice
-    #   relationships:
-    #     - name: topology
-    #       peer: TopologyDeployment
-    #       cardinality: one
-    #       kind: Parent
-    #       optional: true
+    - kind: DcimGenericDevice
+      relationships:
+        - name: topology
+          peer: TopologyDeployment
+          cardinality: one
+          kind: Attribute
+          optional: true

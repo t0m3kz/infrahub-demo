@@ -24,37 +24,29 @@ async def run(client: InfrahubClient, log: logging.Logger, branch: str) -> None:
         kind="DesignTopology", name__value=DC_DEPLOYMENT.get("design"), branch=branch
     )
 
-    prefix_data = [
-        {
-            "payload": {
-                "prefix": DC_DEPLOYMENT.get("management"),
-                "description": f"{DC_DEPLOYMENT.get('name')} Management Network",
-                "status": "active",
-                "role": "management",
-            },
-            "store_key": DC_DEPLOYMENT.get("management"),
-        },
-        {
-            "payload": {
-                "prefix": DC_DEPLOYMENT.get("customer"),
-                "description": f"{DC_DEPLOYMENT.get('name')} Customer Network",
-                "status": "active",
-                "role": "supernet",
-            },
-            "store_key": DC_DEPLOYMENT.get("customer"),
-        },
-        {
-            "payload": {
-                "prefix": DC_DEPLOYMENT.get("technical"),
-                "description": f"{DC_DEPLOYMENT.get('name')} Technical Network",
-                "status": "active",
-                "role": "technical",
-            },
-            "store_key": DC_DEPLOYMENT.get("technical"),
-        },
+    network_types = [
+        ("management", "Management Network", "management"),
+        ("customer", "Customer Network", "supernet"),
+        ("technical", "Technical Network", "technical"),
     ]
 
-    if DC_DEPLOYMENT.get("public") is not None:
+    prefix_data = []
+    for prefix_key, description_suffix, role in network_types:
+        if DC_DEPLOYMENT.get(prefix_key):
+            prefix_data.append(
+                {
+                    "payload": {
+                        "prefix": DC_DEPLOYMENT.get(prefix_key),
+                        "description": f"{DC_DEPLOYMENT.get('name')} {description_suffix}",
+                        "status": "active",
+                        "role": role,
+                    },
+                    "store_key": DC_DEPLOYMENT.get(prefix_key),
+                }
+            )
+
+    # Add public network if available
+    if DC_DEPLOYMENT.get("public"):
         prefix_data.append(
             {
                 "payload": {

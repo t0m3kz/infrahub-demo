@@ -43,27 +43,27 @@ infrahub_tests:
           kind: graphql-query-smoke
 
   - resource: GraphQLQuery
-    resource_name: dc_leaf_config
+    resource_name: leaf_config
     tests:
       - name: syntax_check
         spec:
-          path: queries/dc_leaf_config.gql
+          path: queries/leaf_config.gql
           kind: graphql-query-smoke
 
   - resource: GraphQLQuery
-    resource_name: dc_spine_config
+    resource_name: spine_config
     tests:
       - name: syntax_check
         spec:
-          path: queries/dc_spine_config.gql
+          path: queries/spine_config.gql
           kind: graphql-query-smoke
 
   - resource: GraphQLQuery
-    resource_name: dc_oob_config
+    resource_name: oob_config
     tests:
       - name: syntax_check
         spec:
-          path: queries/dc_oob_config.gql
+          path: queries/oob_config.gql
           kind: graphql-query-smoke
 
   - resource: GraphQLQuery

@@ -1,0 +1,26 @@
+---
+version: "1.0"
+infrahub_tests:
+  # --------------------  Jinja2Transform  --------------------
+  - resource: Jinja2Transform
+    resource_name: topology_clab
+    tests:
+      - name: syntax_check
+        spec:
+          kind: jinja2-transform-smoke
+      - name: baseline
+        expect: PASS
+        spec:
+          kind: "jinja2-transform-unit-render"
+          directory: simulators         
+  # - resource: Jinja2Transform
+  #   resource_name: topology_clab
+  #   tests:
+  #     - name: syntax_check
+  #       spec:
+  #         kind: jinja2-transform-smoke
+  #     - name: baseline
+  #       expect: PASS
+  #       spec:
+  #         kind: "jinja2-transform-unit-render"
+  #         directory: tests/simulatorsy
