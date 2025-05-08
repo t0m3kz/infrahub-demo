@@ -5,7 +5,6 @@ authors = [
 requires-python = "<3.13,>=3.9"
 dependencies = [
     "invoke<3.0.0,>=2.2.0",
-    "pytest<9.0.0,>=8.3.5",
     "infrahub-sdk[all]>=1.7.2,<2.0.0",
 ]
 name = "infrahub-demo"
@@ -15,8 +14,7 @@ readme = "README.md"
 
 [dependency-groups]
 dev = [
-    "invoke>=2.2.0",
-    "pytest<9.0.0,>=8.3.5",
+    "pytest>=8.3.5,<9.0.0",
     "ruff>=0.11.4",
     "yamllint>=1.37.1",
 ]
