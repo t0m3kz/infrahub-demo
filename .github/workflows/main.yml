@@ -62,6 +62,7 @@ jobs:
         with:
           python-version: "3.10"
       - run: |
+          pip install uv
           echo "TAG=v$(uvx --from=toml-cli toml get --toml-path=pyproject.toml project.version)" >> $GITHUB_ENV
       - name: Creates a release in GitHub and uploads attachments
         uses: softprops/action-gh-release@v2
