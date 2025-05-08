@@ -155,9 +155,9 @@ If you would like to process all steps manually, you have to follow the steps:
 [github-discussions-badge]:
 <https://img.shields.io/static/v1?label=Discussions&message=Ask&color=blue&logo=github>
 [github-badge]:
-<https://github.com/t0m3kz/infrahub-demo/actions/workflows/main.yaml/badge.svg?branch=main>
+<https://github.com/t0m3kz/infrahub-demo/actions/workflows/main.yml/badge.svg?branch=main>
 [github-link]:
-<https://github.com/t0m3kz/infrahub-demo/actions/workflows/main.yaml>
+<https://github.com/t0m3kz/infrahub-demo/actions/workflows/main.yml>
 [python-badge]:
 <https://img.shields.io/badge/python-3.9%7C3.10%7C3.11%7C3.12-000000?logo=python>
 [python-link]:
