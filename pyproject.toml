@@ -10,7 +10,7 @@ dependencies = [
 ]
 name = "infrahub-demo"
 version = "0.1.0"
-description = ""
+description = "Design driven DC"
 readme = "README.md"
 
 [dependency-groups]
@@ -18,4 +18,5 @@ dev = [
     "invoke>=2.2.0",
     "pytest<9.0.0,>=8.3.5",
     "ruff>=0.11.4",
+    "yamllint>=1.37.1",
 ]

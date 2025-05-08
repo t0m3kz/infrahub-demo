@@ -1,4 +1,5 @@
 from infrahub_sdk.transforms import InfrahubTransform
+
 from .common import clean_data
 
 

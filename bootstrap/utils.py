@@ -2,10 +2,11 @@
 
 import logging
 from typing import List
+
 from infrahub_sdk import InfrahubClient
+from infrahub_sdk.exceptions import GraphQLError, ValidationError
 from infrahub_sdk.node import InfrahubNode
 from infrahub_sdk.store import NodeStore
-from infrahub_sdk.exceptions import GraphQLError, ValidationError
 
 
 def get_interface_speed(interface_type: str) -> int:

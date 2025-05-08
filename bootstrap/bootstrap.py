@@ -2,28 +2,29 @@
 
 import logging
 from ipaddress import IPv4Network
-from infrahub_sdk import InfrahubClient
-from utils import create_objects
+
 from data_bootstrap import (
+    ACCOUNTS,
+    ASN_POOLS,
+    ASNS,
     CITIES,
     COUNTRIES,
-    REGIONS,
-    SITES,
-    ACCOUNTS,
-    SUBNETS_1918,
-    ASNS,
-    ASN_POOLS,
-    GROUPS,
-    TAGS,
-    PROVIDERS,
     CUSTOMERS,
-    MANUFACTURERS,
-    PLATFORMS,
-    DEVICE_TYPES,
-    DEVICE_TEMPLATES,
     DESIGN,
     DESIGN_ELEMENTS,
+    DEVICE_TEMPLATES,
+    DEVICE_TYPES,
+    GROUPS,
+    MANUFACTURERS,
+    PLATFORMS,
+    PROVIDERS,
+    REGIONS,
+    SITES,
+    SUBNETS_1918,
+    TAGS,
 )
+from infrahub_sdk import InfrahubClient
+from utils import create_objects
 
 
 async def location(client: InfrahubClient, log: logging.Logger, branch: str) -> None:

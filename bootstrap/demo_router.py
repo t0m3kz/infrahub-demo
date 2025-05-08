@@ -1,17 +1,17 @@
 """Bootstrap script."""
 
 import logging
-from infrahub_sdk import InfrahubClient
-from infrahub_sdk.exceptions import GraphQLError, ValidationError
-from utils import create_objects
 
 from data_router import (
-    ROUTERS,
     INTERFACES,
     POP_DEPLOYMENT,
     ROUTE_TARGETS,
+    ROUTERS,
     VRFS,
 )
+from infrahub_sdk import InfrahubClient
+from infrahub_sdk.exceptions import GraphQLError, ValidationError
+from utils import create_objects
 
 
 async def run(client: InfrahubClient, log: logging.Logger, branch: str) -> None:
