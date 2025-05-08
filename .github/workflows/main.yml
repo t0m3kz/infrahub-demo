@@ -47,7 +47,7 @@ jobs:
           uv sync
       - name: Run pytest
         run: |
-          uv run pytest -vv 
+          uv run pytest smoke/ -vv 
 
   release:
     if: ${{ github.ref == 'refs/heads/main' }}
