@@ -47,7 +47,7 @@ jobs:
           uv sync
       - name: Run pytest
         run: |
-          uv run pytest tests -vv 
+          uv run pytest tests/ -vv 
 
   release:
     if: ${{ github.ref == 'refs/heads/main' }}
