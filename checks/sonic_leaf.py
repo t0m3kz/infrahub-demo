@@ -1,7 +1,7 @@
 """Validate firewall."""
 
 from infrahub_sdk.checks import InfrahubCheck
-from .common import clean_data
+from ..generators.common import clean_data
 
 
 class CheckSonicLeaf(InfrahubCheck):

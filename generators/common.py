@@ -1,7 +1,6 @@
 """Common functions for the generators."""
 
 import re
-import ipaddress
 from infrahub_sdk.generator import InfrahubGenerator
 from infrahub_sdk.exceptions import GraphQLError, ValidationError
 from netutils.interface import sort_interface_list
