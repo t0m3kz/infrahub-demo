@@ -159,6 +159,6 @@ If you would like to process all steps manually, you have to follow the steps:
 [github-link]:
 <https://github.com/t0m3kz/infrahub-demo/actions/workflows/main.yml>
 [python-badge]:
-<https://img.shields.io/badge/python-3.9%7C3.10%7C3.11%7C3.12-000000?logo=python>
+<https://img.shields.io/badge/python-3.10%7C3.11%7C3.12-000000?logo=python>
 [python-link]:
 <https://www.python.org>
