@@ -1,5 +1,10 @@
 # Infrahub demo
 
+[![Ruff][ruff-badge]][ruff-link]
+[![Python][python-badge]][python-link]
+[![Actions status][github-badge]][github-link]
+[![GitHub Discussion][github-discussions-badge]][github-discussions-link]
+
 ## Use code spaces
 
 Deploy demo using codespaces 
@@ -140,3 +145,20 @@ If you would like to process all steps manually, you have to follow the steps:
     ```bash
     infrahubctl run bootstrap/demo_design.py --branch my-branch
     ```
+
+[ruff-badge]:
+<https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json>
+[ruff-link]:
+(https://github.com/astral-sh/ruff)
+[github-discussions-link]:
+<https://github.com/t0m3kz/infrahub-demo/discussions/>
+[github-discussions-badge]:
+<https://img.shields.io/static/v1?label=Discussions&message=Ask&color=blue&logo=github>
+[github-badge]:
+<https://github.com/t0m3kz/infrahud-demo/actions/workflows/main.yaml/badge.svg?branch=main>
+[github-link]:
+<https://github.com/t0m3kz/infrahud-demo/actions/workflows/main.yaml>
+[python-badge]:
+<https://img.shields.io/badge/python-3.9%7C3.10%7C3.11%7C3.12-000000?logo=python>
+[python-link]:
+<https://www.python.org>
