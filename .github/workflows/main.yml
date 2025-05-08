@@ -1,0 +1,90 @@
+---
+name: CI
+on:
+  - push
+jobs:
+  code-qa:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+      - run: |
+          pip install uv
+          uv sync
+      - run: |
+          echo "Formating code"
+          uv run ruff format
+          uv run ruff check --select I --fix .
+      - run: |
+          echo "Running linters"
+          uv run ruff check 
+      - run: |
+          echo "Running validation"
+          uv run yamllint -d "{extends: default, ignore: [.github/, ./vyos/]}" \
+                   -d "{rules: {truthy: {allowed-values: ['true', 'false', 'yes', 'no', 'on', 'off']}}}" .
+  tests:
+    name: Testing plugin
+    needs: code-qa
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.9", "3.10", "3.11", "3.12"]
+    defaults:
+      run:
+        working-directory: tests
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Install Dev dependencies
+        run: |
+          pip install uv
+          uv sync
+      - name: Run pytest
+        run: |
+          uv run pytest -vv 
+
+  release:
+    if: ${{ github.ref == 'refs/heads/main' }}
+    permissions:
+      contents: write
+    needs: tests
+    name: Create release in GitHub
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+      - run: |
+          pip install uv
+          uv build
+          echo "TAG=v$(uvx --from=toml-cli toml get --toml-path=pyproject.toml project.version)" >> $GITHUB_ENV
+      - name: Creates a release in GitHub and uploads attachments
+        uses: softprops/action-gh-release@v2
+        with:
+          name: Release ${{ env.TAG }}
+          tag_name: ${{ env.TAG }}
+          generate_release_notes: true
+          files: |
+            ./dist/*
+  # document:
+  #   if: ${{ github.ref == 'refs/heads/main' }}
+  #   permissions: write-all
+  #   needs: tests
+  #   name: Update documentation
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #     - uses: actions/setup-python@v5
+  #       with:
+  #         python-version: "3.10"
+  #     - run: |
+  #         pip install uv
+  #         uv sync
+  #     - run: uv run mkdocs gh-deploy --force

@@ -1,7 +1,8 @@
 """Infrastructure generator."""
 
 import logging
-from .common import clean_data, TopologyGenerator
+
+from .common import TopologyGenerator, clean_data
 
 
 class DCTopologyGenerator(TopologyGenerator):

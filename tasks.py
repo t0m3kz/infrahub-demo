@@ -2,7 +2,7 @@
 
 import os
 
-from invoke import task, Context  # type: ignore
+from invoke import Context, task  # type: ignore
 
 INFRAHUB_VERSION = os.getenv("INFRAHUB_VERSION", "")
 COMPOSE_COMMAND = f"curl https://infrahub.opsmill.io/{INFRAHUB_VERSION} | docker compose -p infrahub -f -"

@@ -1,26 +1,26 @@
 """Bootstrap script."""
 
 import logging
+
+from data_firewall import (
+    ADDRESS_GROUPS,
+    ADDRESSES,
+    DESIGN,
+    DESIGN_ELEMENTS,
+    FIREWALLS,
+    IP_PROTOCOLS,
+    L3_INTERFACES,
+    POLICIES,
+    POP_DEPLOYMENT,
+    PREFIXES,
+    RULES,
+    SERVICE_GROUPS,
+    SERVICES,
+    ZONES,
+)
 from infrahub_sdk import InfrahubClient
 from infrahub_sdk.exceptions import GraphQLError, ValidationError
 from utils import create_objects, populate_store
-
-from data_firewall import (
-    IP_PROTOCOLS,
-    SERVICES,
-    SERVICE_GROUPS,
-    ADDRESSES,
-    PREFIXES,
-    ADDRESS_GROUPS,
-    ZONES,
-    POLICIES,
-    RULES,
-    FIREWALLS,
-    L3_INTERFACES,
-    DESIGN,
-    DESIGN_ELEMENTS,
-    POP_DEPLOYMENT,
-)
 
 
 async def security(client: InfrahubClient, log: logging.Logger, branch: str) -> None:

@@ -1,6 +1,7 @@
 """Validate firewall."""
 
 from infrahub_sdk.checks import InfrahubCheck
+
 from ..generators.common import clean_data
 
 
