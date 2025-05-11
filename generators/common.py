@@ -1,10 +1,16 @@
-"""Common functions for the generators."""
+import logging
 
-import re
-
+from infrahub_sdk import InfrahubClient
 from infrahub_sdk.exceptions import GraphQLError, ValidationError
-from infrahub_sdk.generator import InfrahubGenerator
+from infrahub_sdk.protocols import CoreIPAddressPool
 from netutils.interface import sort_interface_list
+
+from .schema_protocols import (
+    DcimConsoleInterface,
+    DcimPhysicalInterface,
+    DcimVirtualInterface,
+    ServiceBGPSession,
+)
 
 
 def clean_data(data):
@@ -40,25 +46,15 @@ def clean_data(data):
     return data
 
 
-def set_speed(s):
-    """Return speed in bps
-
-    Args:
-        s (str): intreface in the form of 1000(g)base-x
-
-    Returns:
-        int: Speed in bps
-    """
-    match = re.search(r"(\d+)(g|G)?(\w+)", s)
-    speed = None
-    if match:
-        multiplier = 1000_000_000 if match.group(2) == "g" else 1000_000
-        speed = int(match.group(1)) * multiplier
-    return speed
-
-
-class TopologyGenerator(InfrahubGenerator):
-    """Generate topology."""
+class TopologyCreator:
+    def __init__(
+        self, client: InfrahubClient, log: logging.Logger, branch: str, data: dict
+    ):
+        self.client = client
+        self.log = log
+        self.branch = branch
+        self.data = data
+        self.devices = []
 
     async def _create_in_batch(
         self,
@@ -69,60 +65,153 @@ class TopologyGenerator(InfrahubGenerator):
         batch = await self.client.create_batch()
         for data in data_list:
             try:
-                obj = await self.client.create(kind=kind, data=data.get("payload"))
+                obj = await self.client.create(
+                    kind=kind, data=data.get("payload"), branch=self.branch
+                )
                 batch.add(task=obj.save, allow_upsert=True, node=obj)
                 if data.get("store_key"):
-                    self.client.store.set(key=data.get("store_key"), node=obj)
+                    self.client.store.set(
+                        key=data.get("store_key"), node=obj, branch=self.branch
+                    )
             except GraphQLError as exc:
-                self.client.log.debug(f"- Creation failed due to {exc}")
+                self.log.debug(f"- Creation failed due to {exc}")
         try:
             async for node, _ in batch.execute():
                 object_reference = (
                     " ".join(node.hfid) if node.hfid else node.display_label
                 )
-                self.client.log.info(
-                    f"- Created [{node.get_kind()}] '{object_reference}'"
+                self.log.info(
+                    f"- Created [{node.get_kind()}] {object_reference}"
                     if object_reference
                     else f"- Created [{node.get_kind()}]"
                 )
         except ValidationError as exc:
-            self.client.log.debug(f"- Creation failed due to {exc}")
+            self.log.debug(f"- Creation failed due to {exc}")
 
     async def _create(self, kind: str, data: dict) -> None:
         """Create objects of a specific kind and store in local store."""
         try:
-            obj = await self.client.create(kind=kind, data=data)
+            obj = await self.client.create(
+                kind=kind, data=data.get("payload"), branch=self.branch
+            )
             await obj.save(allow_upsert=True)
             object_reference = " ".join(obj.hfid) if obj.hfid else obj.display_label
-            self.client.log.info(
-                f"- Created [{kind}] '{object_reference}'"
+            self.log.info(
+                f"- Created [{kind}] {object_reference}"
                 if object_reference
                 else f"- Created [{kind}]"
             )
             if data.get("store_key"):
-                self.client.store.set(key=data.get("store_key"), node=obj)
+                self.client.store.set(
+                    key=data.get("store_key"), node=obj, branch=self.branch
+                )
         except (GraphQLError, ValidationError) as exc:
-            self.client.log.debug(f"- Creation failed due to {exc}")
+            self.log.error(f"- Creation failed due to {exc}")
 
-    async def _create_core_groups(
-        self,
-        data: list,
-    ):
-        if data:
-            await self._create_in_batch(kind="CoreStandardGroup", data_list=data)
+    async def load_data(self) -> None:
+        """Load data and store in cache."""
+        self.data.update(
+            {
+                "templates": {
+                    item["template"]["template_name"]: item["template"]["interfaces"]
+                    for item in self.data["design"]["elements"]
+                }
+            }
+        )
+        await self.client.filters(
+            kind="CoreStandardGroup",
+            name__values=list(
+                set(
+                    f"{item['device_type']['manufacturer']['name'].lower()}_{item['role']}"
+                    for item in self.data["design"]["elements"]
+                )
+            ),
+            branch=self.branch,
+            populate_store=True,
+        )
+        # get the device templates
+        await self.client.filters(
+            kind="CoreObjectTemplate",
+            template_name__values=list(
+                set(
+                    item["template"]["template_name"]
+                    for item in self.data["design"]["elements"]
+                )
+            ),
+            branch=self.branch,
+            populate_store=True,
+        )
 
-    async def _create_devices(
-        self,
-        topology_name: str,
-        data: list,
-    ) -> None:
+    async def create_site(self) -> None:
+        """Create site."""
+        self.log.info(f"Create site {self.data.get('name')}")
+        await self._create(
+            kind="LocationBuilding",
+            data={
+                "payload": {
+                    "name": self.data["name"],
+                    "shortname": self.data["name"],
+                    "parent": self.data["location"]["id"],
+                },
+                # "store_key": self.data["name"],
+            },
+        )
+
+    async def create_address_pools(self) -> None:
         """Create objects of a specific kind and store in local store."""
+        self.log.info("Creating address pools")
+        await self._create_in_batch(
+            kind="CoreIPAddressPool",
+            data_list=[
+                {
+                    "payload": {
+                        "name": f"{self.data.get('name')}-{pool.get('type')}-pool",
+                        "default_address_type": "IpamIPAddress",
+                        "description": f"{pool.get('type')} IP Pool",
+                        "ip_namespace": "default",
+                        "resources": [pool.get("prefix_id")],
+                    },
+                    "store_key": f"{pool.get('type', '').lower()}_ip_pool",
+                }
+                for pool in [
+                    {
+                        "type": "Management",
+                        "prefix_id": self.data["management_subnet"]["id"],
+                    },
+                    {
+                        "type": "Loopback",
+                        "prefix_id": self.data["technical_subnet"]["id"],
+                    },
+                ]
+            ],
+        )
 
+    async def create_L2_pool(self) -> None:
+        """Create objects of a specific kind and store in local store."""
+        await self._create(
+            kind="CoreNumberPool",
+            data={
+                "payload": {
+                    "name": f"{self.data.get('name')}-vlan-pool",
+                    "description": f"{self.data.get('name')} L2 Segment Number Pool",
+                    "node": "ServiceLayer2Network",
+                    "node_attribute": "vlan",
+                    "start_range": 100,
+                    "end_range": 3500,
+                },
+                # "store_key": f"{pool.get('type').lower()}_ip_pool",
+            },
+        )
+
+    async def create_devices(self) -> None:
+        self.log.info(f"Create devices for {self.data.get('name')}")
+        # ... fetch device groups and templates logic ...
         data_list = []
         role_counters = {}
+        topology_name = self.data.get("name", "")
 
         # Populate the data_list with unique naming
-        for device in data:
+        for device in self.data["design"]["elements"]:
             role = device["role"]
 
             # Initialize counter for this role if it doesn't exist
@@ -146,6 +235,7 @@ class TopologyGenerator(InfrahubGenerator):
                     "location": self.client.store.get_by_hfid(
                         key=f"LocationBuilding__{topology_name}"
                     ).id,
+                    "topology": self.data.get("id"),
                     "member_of_groups": [
                         self.client.store.get_by_hfid(
                             key=f"CoreStandardGroup__{device['device_type']['manufacturer']['name'].lower()}_{device['role']}"
@@ -160,21 +250,28 @@ class TopologyGenerator(InfrahubGenerator):
             data_list=data_list,
         )
 
-    async def _create_oob_connections(
+        self.devices: list = [
+            self.client.store.get_by_hfid(f"DcimGenericDevice__{device[0]}")
+            for device in self.client.store._branches[self.branch]
+            ._hfids["DcimGenericDevice"]
+            .keys()
+        ]
+
+    async def create_oob_connections(
         self,
-        devices: list,
-        templates: dict,
         connection_type: str,
     ) -> None:
         """Create objects of a specific kind and store in local store."""
-
-        interfaces = {
+        batch = await self.client.create_batch()
+        interfaces: dict = {
             device.name.value: [
                 interface["name"]
-                for interface in templates[device._data["object_template"][0]]
+                for interface in self.data["templates"][
+                    device._data["object_template"][0]
+                ]
                 if interface["role"] == connection_type
             ]
-            for device in devices
+            for device in self.devices
         }
 
         device_key = "oob" if connection_type == "management" else "console"
@@ -203,57 +300,76 @@ class TopologyGenerator(InfrahubGenerator):
             == int(source_device.split("-")[-1]) % 2
         ]
 
+        if connections:
+            self.log.info(
+                f"Create {connection_type} connections for {self.data.get('name')}"
+            )
+
         for connection in connections:
             source_endpoint = await self.client.get(
-                kind="DcimInterface",
+                kind=DcimPhysicalInterface
+                if connection_type == "management"
+                else DcimConsoleInterface,
                 name__value=connection["source_interface"],
                 device__name__value=connection["source"],
             )
             target_endpoint = await self.client.get(
-                kind="DcimInterface",
+                kind=DcimPhysicalInterface
+                if connection_type == "management"
+                else DcimConsoleInterface,
                 name__value=connection["destination_interface"],
                 device__name__value=connection["target"],
-            )
-            self.logger.info(
-                f"Creating {source_endpoint.hfid} -> {target_endpoint.hfid}"
             )
 
             source_endpoint.status.value = "active"
             source_endpoint.description.value = (
-                f"Connection to {' -> '.join(target_endpoint.hfid)}"
+                f"Connection to {' -> '.join(target_endpoint.hfid or [])}"
             )
-            source_endpoint.connector = target_endpoint.id
+            source_endpoint.connector = target_endpoint.id  # type: ignore
             target_endpoint.status.value = "active"
             target_endpoint.description.value = (
-                f"Connection to {' -> '.join(source_endpoint.hfid)}"
+                f"Connection to {' -> '.join(source_endpoint.hfid or [])}"
             )
+            batch.add(
+                task=source_endpoint.save, allow_upsert=True, node=source_endpoint
+            )
+            batch.add(
+                task=target_endpoint.save, allow_upsert=True, node=target_endpoint
+            )
+        try:
+            async for node, _ in batch.execute():
+                self.log.info(
+                    f"- Created [{node.get_kind()}] {node.description.value} from {' -> '.join(node.hfid)}"
+                )
 
-            await source_endpoint.save(allow_upsert=True)
-            await target_endpoint.save(allow_upsert=True)
+        except ValidationError as exc:
+            self.log.debug(f"- Creation failed due to {exc}")
 
-    async def _create_peering_connections(self, devices: list, templates: dict) -> None:
+    async def create_fabric_peering(self) -> None:
         """Create objects of a specific kind and store in local store."""
-        # name = f"{topology_name.lower()}-{item['role']}-{str(j + 1).zfill(2)}"
-        interfaces = {
+        batch = await self.client.create_batch()
+        interfaces: dict = {
             device.name.value: [
                 interface["name"]
-                for interface in templates[device._data["object_template"][0]]
+                for interface in self.data["templates"][
+                    device._data["object_template"][0]
+                ]
                 if interface["role"] in ["leaf", "uplink"]
             ]
-            for device in devices
+            for device in self.devices
         }
-        spines = {
+        spines: dict = {
             key: sort_interface_list(value)
             for key, value in interfaces.items()
             if "spine" in key and value
         }
-        leafs = {
+        leafs: dict = {
             key: sort_interface_list(value)
             for key, value in interfaces.items()
             if "leaf" in key and value
         }
 
-        connections = [
+        connections: list = [
             {
                 "source": spine,
                 "target": leaf,
@@ -263,55 +379,112 @@ class TopologyGenerator(InfrahubGenerator):
             for spine, spine_interfaces in spines.items()
             for leaf, leaf_interfaces in leafs.items()
         ]
+
+        if connections:
+            self.log.info(
+                f"Create fabric peering connections for {self.data.get('name')}"
+            )
+
         for connection in connections:
             source_endpoint = await self.client.get(
-                kind="DcimInterface",
+                kind=DcimPhysicalInterface,
                 name__value=connection["source_interface"],
                 device__name__value=connection["source"],
             )
             target_endpoint = await self.client.get(
-                kind="DcimInterface",
+                kind=DcimPhysicalInterface,
                 name__value=connection["destination_interface"],
                 device__name__value=connection["target"],
             )
-            self.logger.info(
-                f"Creating {source_endpoint.hfid} -> {target_endpoint.hfid}"
-            )
             source_endpoint.status.value = "active"
             source_endpoint.description.value = (
-                f"Peering connection to {' -> '.join(target_endpoint.hfid)}"
+                f"Peering connection to {' -> '.join(target_endpoint.hfid or [])}"
             )
-            source_endpoint.role.value = "ospf-unnunbered"
-            source_endpoint.connector = target_endpoint.id
+            source_endpoint.role.value = "ospf-unnumbered"
+            source_endpoint.connector = target_endpoint.id  # type: ignore
             target_endpoint.status.value = "active"
             target_endpoint.description.value = (
-                f"Peering connection to {' -> '.join(source_endpoint.hfid)}"
+                f"Peering connection to {' -> '.join(source_endpoint.hfid or [])}"
             )
-            target_endpoint.role.value = "ospf-unnunbered"
+            target_endpoint.role.value = "ospf-unnumbered"
 
-            await source_endpoint.save(allow_upsert=True)
-            await target_endpoint.save(allow_upsert=True)
+            batch.add(
+                task=source_endpoint.save, allow_upsert=True, node=source_endpoint
+            )
+            batch.add(
+                task=target_endpoint.save, allow_upsert=True, node=target_endpoint
+            )
 
-    async def _create_ospf_underlay(self, topology_name: str, devices: list) -> None:
+        try:
+            async for node, _ in batch.execute():
+                self.log.info(
+                    f"- Created [{node.get_kind()}] {node.description.value} from {' -> '.join(node.hfid)}"
+                )
+
+        except ValidationError as exc:
+            self.log.debug(f"- Creation failed due to {exc}")
+
+    async def create_loopback(self, loopback_name: str) -> None:
+        """Create loopback interfaces"""
+        self.log.info(f"Creating {loopback_name} interfaces")
+        await self._create_in_batch(
+            kind="DcimVirtualInterface",
+            data_list=[
+                {
+                    "payload": {
+                        "name": loopback_name,
+                        "device": device.id,
+                        "ip_addresses": [
+                            await self.client.allocate_next_ip_address(
+                                resource_pool=self.client.store.get(
+                                    kind=CoreIPAddressPool, key="loopback_ip_pool"
+                                ),
+                                identifier=f"{device.name.value}-{loopback_name}",
+                                data={
+                                    "description": f"{device.name.value} Loopback IP"
+                                },
+                            ),
+                        ],
+                        "role": "loopback",
+                        "status": "active",
+                        "description": f"{device.name.value} {loopback_name} Interface",
+                    },
+                    "store_key": f"{device.name.value}-{loopback_name}",
+                }
+                for device in self.devices
+                if device.role.value in ["spine", "leaf"]
+            ],
+        )
+
+    async def create_ospf_underlay(self) -> None:
         """Create underlay service and associate it to the respective switches."""
+        topology_name = self.data.get("name")
         ospf_interfaces = await self.client.filters(
             kind="DcimInterface",
             role__values=["ospf-unnumbered", "loopback"],
-            device__name__values=[device.name.value for device in devices],
+            device__name__values=[
+                device.name.value
+                for device in self.devices
+                if device.role.value in ["spine", "leaf"]
+            ],
         )
-        self.client.log.info([interface.id for interface in ospf_interfaces])
+        self.log.info(f"Creating OSPF underlay for {topology_name}")
         await self._create(
             kind="ServiceOSPFArea",
             data={
-                "name": f"{topology_name}-UNDERLAY",
-                "description": f"{topology_name} OSPF Underlay service",
-                "area": 0,
-                "status": "active",
-                "namespace": {"id": "default"},
-                "ospf_interfaces": [interface.id for interface in ospf_interfaces],
+                "payload": {
+                    "name": f"{topology_name}-UNDERLAY",
+                    "description": f"{topology_name} OSPF Underlay service",
+                    "area": 0,
+                    "status": "active",
+                    "namespace": {"id": "default"},
+                    "ospf_interfaces": [interface.id for interface in ospf_interfaces],
+                },
+                "store_key": f"underlay-{topology_name}",
             },
-            store_key=f"underlay-{topology_name}",
         )
+        self.log.info(f"Creating OSPF instances for {topology_name}")
+        # self.log.info(self.client.store.get_by_hfid(f"ServiceOSPFArea__{topology_name}-UNDERLAY"))
         await self._create_in_batch(
             kind="ServiceOSPF",
             data_list=[
@@ -325,96 +498,105 @@ class TopologyGenerator(InfrahubGenerator):
                         "device": device.id,
                         "status": "active",
                         "router_id": await self.client.allocate_next_ip_address(
-                            resource_pool=self.client.store.get(key="loopback_ip_pool"),
+                            resource_pool=self.client.store.get(
+                                key="loopback_ip_pool", kind=CoreIPAddressPool
+                            ),
                             identifier=f"{device.name.value}-loopback0",
                         ),
                     },
                     "store_key": f"underlay-{device.name.value}",
                 }
-                for device in devices
+                for device in self.devices
+                if device.role.value in ["spine", "leaf"]
             ],
         )
 
-    async def _create_overlay(self, topology_name: str, devices_ids: list) -> None:
-        """Create underlay service and associate it to the respective switches."""
-        await self._create(
-            kind="ServiceBgpPeering",
-            data={
-                "name": f"{topology_name}-UNDERLAY",
-                "description": f"{topology_name} iBGP overlay service",
-                "asn": 65001,
-                "status": "active",
-                "devices": devices_ids,
-            },
-            store_key=f"overlay-{topology_name}",
-        )
+        # self.client.log.info(self.data)
 
-    async def _create_loopback(self, devices: list, loopback_name: str):
-        await self._create_in_batch(
-            kind="DcimVirtualInterface",
-            data_list=[
-                {
+        # ... any additional steps ...
+
+    async def create_ibgp_overlay(self, loopback_name: str) -> None:
+        """Create iBGP sessions."""
+        topology_name = self.data.get("name")
+        self.log.info(f"Creating iBGP overlay for {topology_name}")
+        # Get or create ASN
+        asn = await self.client.get(
+            kind="ServiceAutonomousSystem",
+            name__value=f"{topology_name}-OVERLAY",
+            populate_store=True,
+            raise_when_missing=False,
+        )
+        if not asn:
+            asn_pool = await self.client.get(
+                kind="CoreNumberPool",
+                name__value="PRIVATE-ASN4",
+                raise_when_missing=False,
+                branch=self.branch,
+            )
+            await self._create(
+                kind="ServiceAutonomousSystem",
+                data={
                     "payload": {
-                        "name": loopback_name,
-                        "device": self.client.store.get_by_hfid(
-                            key=f"DcimPhysicalDevice__{device}"
-                        ).id,
-                        "ip_addresses": [
-                            await self.client.allocate_next_ip_address(
-                                resource_pool=self.client.store.get(
-                                    key="loopback_ip_pool"
-                                ),
-                                identifier=f"{device}-{loopback_name}",
-                                data={"description": f"{device} Loopback IP"},
-                            ),
-                        ],
-                        "role": "loopback",
+                        "name": f"{topology_name}-OVERLAY",
+                        "description": f"{topology_name} iBGP Overlay service",
+                        "asn": asn_pool,
                         "status": "active",
-                        "description": f"{device} {loopback_name} Interface",
                     },
-                    "store_key": f"{device}-{loopback_name}",
-                }
-                for device in devices
-            ],
+                    "store_key": f"underlay-{topology_name}",
+                },
+            )
+        asn_id = (
+            asn.id if asn else self.client.store.get(f"underlay-{topology_name}").id
         )
+        # Filter devices by role
+        leaf_devices: list[DcimPhysicalInterface] = [
+            device for device in self.devices if device.role.value == "leaf"
+        ]
+        spine_devices = [
+            device for device in self.devices if device.role.value == "spine"
+        ]
 
-    async def _create_ip_pools(self, topology_name: str, pools: list) -> None:
-        """Create objects of a specific kind and store in local store."""
-        await self._create_in_batch(
-            kind="CoreIPAddressPool",
-            data_list=[
-                {
-                    "payload": {
-                        "name": f"{topology_name}-{pool.get('type')}-pool",
-                        "default_address_type": "IpamIPAddress",
-                        "description": f"{pool.get('type')} IP Pool",
-                        "ip_namespace": "default",
-                        "resources": [pool.get("prefix_id")],
-                    },
-                    "store_key": f"{pool.get('type').lower()}_ip_pool",
-                }
-                for pool in pools
-            ],
-        )
+        # Create BGP sessions batch
+        batch = await self.client.create_batch()
 
-    async def _create_segment_pool(self, topology_name: str, pools: list):
-        """Create objects of a specific kind and store in local store."""
-        await self._create_in_batch(
-            kind="CoreIPAddressPool",
-            data_list=[
-                {
-                    "payload": {
-                        "name": f"{topology_name}-{pool.get('type')}-pool",
-                        "default_address_type": "IpamIPAddress",
-                        "description": f"{pool.get('type')} IP Pool",
-                        "ip_namespace": "default",
-                        "resources": [pool.get("prefix_id")],
-                    },
-                    "store_key": f"{pool.get('type').lower()}_ip_pool",
-                }
-                for pool in pools
-            ],
-        )
-
-    async def _create_prefix_pool(self, data: list):
-        pass
+        # Create bidirectional BGP sessions
+        for source_devices, target_devices in [
+            (leaf_devices, spine_devices),
+            (spine_devices, leaf_devices),
+        ]:
+            for source_device in source_devices:
+                for target_device in target_devices:
+                    obj = await self.client.create(
+                        kind=ServiceBGPSession,
+                        data={
+                            "name": f"{source_device.name.value}-{target_device.name.value}",
+                            "local_as": asn_id,
+                            "remote_as": asn_id,
+                            "device": source_device.id,
+                            "local_ip": self.client.store.get(
+                                key=f"{source_device.name.value}-{loopback_name}",
+                                kind=DcimVirtualInterface,
+                                raise_when_missing=True,
+                            )
+                            .ip_addresses[0]
+                            .id,
+                            "remote_ip": self.client.store.get(
+                                key=f"{target_device.name.value}-{loopback_name}",
+                                kind=DcimVirtualInterface,
+                                raise_when_missing=True,
+                            )
+                            .ip_addresses[0]
+                            .id,
+                            "session_type": "INTERNAL",
+                            "status": "active",
+                            "description": f"{source_device.name.value} -> {target_device.name.value} iBGP Session",
+                            "role": "peering",
+                        },
+                    )
+                    batch.add(task=obj.save, allow_upsert=True, node=obj)
+        # Execute the batch
+        try:
+            async for node, _ in batch.execute():
+                self.log.info(f"- Created [{node.get_kind()}] {node.description.value}")
+        except ValidationError as exc:
+            self.log.debug(f"- Creation failed due to {exc}")
