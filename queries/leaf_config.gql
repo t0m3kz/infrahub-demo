@@ -195,22 +195,22 @@ query leaf_config($device: String!) {
               service {
                 edges {
                   node {
-                    ... on ServiceLayer2Network {
+                    ... on ServiceNetworkSegment {
                       __typename
-                      vlan {
+                      vni {
                         value
                       }
-                    }
-                    ... on ServiceLayer3Gateway {
-                      __typename
-                      name {
+                      status{
                         value
                       }
-                      is_anycast {
-                        value
-                      }
-                      status {
-                        value
+                      prefixes{
+                        edges{
+                          node{
+                            prefix{
+                            	value
+                            }
+                          }
+                        }
                       }
                     }
                     ... on ServiceOSPFArea {
