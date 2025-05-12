@@ -1,7 +1,9 @@
 """Common functions for the generators."""
 
+from typing import Any
 
-def clean_data(data):
+
+def clean_data(data: Any):
     """
     Recursively transforms the input data
     by extracting 'value', 'node', or 'edges' from dictionaries.

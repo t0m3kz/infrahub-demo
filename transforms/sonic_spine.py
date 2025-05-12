@@ -7,7 +7,11 @@ class SonicSpine(InfrahubTransform):
     query = "spine_config"
 
     async def transform(self, data):
-        device = clean_data(data)["DcimPhysicalDevice"][0]
+        cleaned_data = clean_data(data)
+        if isinstance(cleaned_data, dict):
+            device = cleaned_data["DcimPhysicalDevice"][0]
+        else:
+            raise ValueError("clean_data() did not return a dictionary")
 
         # Initialize with default values
         result = {

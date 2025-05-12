@@ -1,4 +1,5 @@
 import logging
+from typing import Any
 
 from infrahub_sdk import InfrahubClient
 from infrahub_sdk.exceptions import GraphQLError, ValidationError
@@ -13,7 +14,7 @@ from .schema_protocols import (
 )
 
 
-def clean_data(data):
+def clean_data(data: Any):
     """
     Recursively transforms the input data
     by extracting 'value', 'node', or 'edges' from dictionaries.
@@ -194,10 +195,10 @@ class TopologyCreator:
                 "payload": {
                     "name": f"{self.data.get('name')}-vlan-pool",
                     "description": f"{self.data.get('name')} L2 Segment Number Pool",
-                    "node": "ServiceLayer2Network",
-                    "node_attribute": "vlan",
-                    "start_range": 100,
-                    "end_range": 3500,
+                    "node": "ServiceNetworkSegment",
+                    "node_attribute": "vni",
+                    "start_range": 12000000,
+                    "end_range": 12009999,
                 },
                 # "store_key": f"{pool.get('type').lower()}_ip_pool",
             },
