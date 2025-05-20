@@ -13,13 +13,13 @@ Deploy demo using codespaces
 ## Install the Infrahub SDK
 
 ```bash
-poetry install --no-interaction --no-ansi --no-root
+uv sync 
 ```
 
 ## Start Infrahub
 
 ```bash
-poetry run invoke start
+uv run invoke start
 ```
 
 ## Setup environment variables
