@@ -97,14 +97,9 @@ spec:
             children:
               data:
                 - namespace: Service
-                  name: Layer2Network
-                  label: Layer2 Segment
-                  kind: ServiceLayer2Network
-                  icon: "mdi:lan"
-                - namespace: Service
-                  name: Layer3Gateway
-                  label: Layer3 Segment
-                  kind: ServiceLayer3Gateway
+                  name: NetworkSegment
+                  label: Network Segment
+                  kind: ServiceNetworkSegment
                   icon: "mdi:lan"
           - namespace: Service
             name: PeeringMenu
