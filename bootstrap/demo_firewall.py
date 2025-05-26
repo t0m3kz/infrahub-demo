@@ -16,8 +16,7 @@ from data_firewall import (
     ZONES,
 )
 from infrahub_sdk import InfrahubClient
-from infrahub_sdk.exceptions import GraphQLError, ValidationError
-from utils import create_objects, populate_store
+from utils import create_objects
 
 
 async def security(client: InfrahubClient, log: logging.Logger, branch: str) -> None:
