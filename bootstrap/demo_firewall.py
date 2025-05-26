@@ -5,13 +5,10 @@ import logging
 from data_firewall import (
     ADDRESS_GROUPS,
     ADDRESSES,
-    DESIGN,
-    DESIGN_ELEMENTS,
     FIREWALLS,
     IP_PROTOCOLS,
     L3_INTERFACES,
     POLICIES,
-    POP_DEPLOYMENT,
     PREFIXES,
     RULES,
     SERVICE_GROUPS,
@@ -121,7 +118,7 @@ async def security(client: InfrahubClient, log: logging.Logger, branch: str) -> 
         ],
     )
 
-    log.info("Create Address Groups")
+    log.info("Create Security Address Groups")
     await create_objects(
         client=client,
         log=log,
@@ -132,8 +129,7 @@ async def security(client: InfrahubClient, log: logging.Logger, branch: str) -> 
                 "payload": {
                     "name": item[0],
                     "addresses": [
-                        client.store.get(kind="SecurityIPAddress", key=address)
-                        for address in item[1]
+                        client.store.get_by_hfid(key=address) for address in item[1]
                     ],
                 },
                 "store_key": item[0],
@@ -173,6 +169,8 @@ async def security(client: InfrahubClient, log: logging.Logger, branch: str) -> 
         ],
     )
 
+    # log.info(client.store._branches["firewall"].__dict__)
+
     log.info("Create Security Policy Rules")
     await create_objects(
         client=client,
@@ -199,8 +197,7 @@ async def security(client: InfrahubClient, log: logging.Logger, branch: str) -> 
                         for group in item[7]
                     ],
                     "source_services": [
-                        client.store.get(kind="SecurityService", key=service).id
-                        for service in item[8]
+                        client.store.get_by_hfid(key=service).id for service in item[8]
                     ],
                     "source_service_groups": [
                         client.store.get(kind="SecurityServiceGroup", key=srv_group).id
@@ -215,8 +212,7 @@ async def security(client: InfrahubClient, log: logging.Logger, branch: str) -> 
                         for group in item[11]
                     ],
                     "destination_services": [
-                        client.store.get(kind="SecurityService", key=service).id
-                        for service in item[12]
+                        client.store.get_by_hfid(key=service).id for service in item[12]
                     ],
                     "destination_service_groups": [
                         client.store.get(kind="SecurityServiceGroup", key=srv_group).id
@@ -363,126 +359,128 @@ async def run(client: InfrahubClient, log: logging.Logger, branch: str) -> None:
     # # Use filters to save memmory
     # Here we're showing method to manually populate store
     # and show how to change the key
-    device_types = await client.filters(
-        kind="DcimDeviceType",
-        name__values=list(set(item[1] for item in FIREWALLS)),
-        branch=branch,
-        populate_store=True,
-    )
-    populate_store(objects=device_types, key_type="name", store=client.store)
+    # device_types = await client.filters(
+    #     kind="DcimDeviceType",
+    #     name__values=list(set(item[1] for item in FIREWALLS)),
+    #     branch=branch,
+    #     populate_store=True,
+    # )
+    # populate_store(objects=device_types, key_type="name", store=client.store)
 
     # For those we will use HFIDs in the future
     # HFID is set in schemas
-    await client.filters(
-        kind="DcimPlatform",
-        name__values=list(set(item[2] for item in FIREWALLS)),
-        branch=branch,
-        populate_store=True,
-    )
+    # await client.filters(
+    #     kind="DcimPlatform",
+    #     name__values=list(set(item[2] for item in FIREWALLS)),
+    #     branch=branch,
+    #     populate_store=True,
+    # )
 
-    await client.filters(
-        kind="LocationBuilding",
-        name__values=list(set(item[5] for item in FIREWALLS)),
-        branch=branch,
-        populate_store=True,
-    )
-    await client.filters(
-        kind="DcimDeviceType",
-        name__values=list(set(item[4] for item in DESIGN_ELEMENTS)),
-        branch=branch,
-        populate_store=True,
-    )
+    # await client.filters(
+    #     kind="LocationBuilding",
+    #     name__values=list(set(item[5] for item in FIREWALLS)),
+    #     branch=branch,
+    #     populate_store=True,
+    # )
+    # await client.filters(
+    #     kind="DcimDeviceType",
+    #     name__values=list(set(item[4] for item in DESIGN_ELEMENTS)),
+    #     branch=branch,
+    #     populate_store=True,
+    # )
 
-    log.info("Creating Design Elements")
-    await create_objects(
-        client=client,
-        log=log,
-        branch=branch,
-        kind="DesignElement",
-        data_list=[
-            {
-                "payload": {
-                    "name": item[0],
-                    "description": item[1],
-                    "quantity": item[2],
-                    "role": item[3],
-                    "device_type": client.store.get_by_hfid(
-                        key=f"DcimDeviceType__{item[4]}"
-                    ).id,
-                    "interface_patterns": item[5],
-                },
-                "store_key": item[0],
-            }
-            for item in DESIGN_ELEMENTS
-        ],
-    )
+    # log.info("Creating Design Elements")
+    # await create_objects(
+    #     client=client,
+    #     log=log,
+    #     branch=branch,
+    #     kind="DesignElement",
+    #     data_list=[
+    #         {
+    #             "payload": {
+    #                 "name": item[0],
+    #                 "description": item[1],
+    #                 "quantity": item[2],
+    #                 "role": item[3],
+    #                 "device_type": client.store.get_by_hfid(
+    #                     key=f"DcimDeviceType__{item[4]}"
+    #                 ).id,
+    #                 "template": client.store.get_by_hfid(
+    #                     key=f"TemplateDcimPhysicalDevice__{item[4]}_{item[3].upper()}"
+    #                 ).id,
+    #             },
+    #             "store_key": item[0],
+    #         }
+    #         for item in DESIGN_ELEMENTS
+    #     ],
+    # )
 
-    log.info("Creating Design Patterns")
-    await create_objects(
-        client=client,
-        log=log,
-        branch=branch,
-        kind="DesignTopology",
-        data_list=[
-            {
-                "payload": {
-                    "name": item[0],
-                    "description": item[1],
-                    "type": item[2],
-                    "elements": [
-                        client.store.get(kind="DesignElement", key=element).id
-                        for element in item[3]
-                    ],
-                },
-                "store_key": item[0],
-            }
-            for item in DESIGN
-        ],
-    )
+    # log.info("Creating Design Patterns")
+    # await create_objects(
+    #     client=client,
+    #     log=log,
+    #     branch=branch,
+    #     kind="DesignTopology",
+    #     data_list=[
+    #         {
+    #             "payload": {
+    #                 "name": item[0],
+    #                 "description": item[1],
+    #                 "type": item[2],
+    #                 "elements": [
+    #                     client.store.get(kind="DesignElement", key=element).id
+    #                     for element in item[3]
+    #                 ],
+    #             },
+    #             "store_key": item[0],
+    #         }
+    #         for item in DESIGN
+    #     ],
+    # )
 
-    site = await client.get(
-        kind="LocationMetro", name__value=POP_DEPLOYMENT.get("location"), branch=branch
-    )
-    provider = await client.get(
-        kind="OrganizationProvider",
-        name__value=POP_DEPLOYMENT.get("provider"),
-        branch=branch,
-    )
+    # site = await client.get(
+    #     kind="LocationMetro", name__value=POP_DEPLOYMENT.get("location"), branch=branch
+    # )
+    # provider = await client.get(
+    #     kind="OrganizationProvider",
+    #     name__value=POP_DEPLOYMENT.get("provider"),
+    #     branch=branch,
+    # )
 
-    # log.info("Create DC Topology Deployment")
-    # let'ts update location
-    POP_DEPLOYMENT.update(
-        {
-            "location": site.id,
-            "provider": provider.id,
-            "design": client.store.get(
-                kind="DesignTopology", key=POP_DEPLOYMENT.get("design")
-            ).id,
-        }
-    )
-    log.info(f"Creating POP Topology Deployment for {POP_DEPLOYMENT.get('name')}")
-    try:
-        deployment = await client.create(
-            kind="TopologyColocationCenter", data=POP_DEPLOYMENT, branch=branch
-        )
-        await deployment.save(allow_upsert=True)
-        # asssign the design to the deployment group
-        topology_group = await client.create(
-            kind="CoreStandardGroup",
-            name="topologies_pop",
-            branch=branch,
-        )
-        # create group for topologies if doesn't exist
-        await topology_group.save(allow_upsert=True)
-        await topology_group.members.fetch()
-        topology_group.members.add(deployment)
-        await topology_group.save(allow_upsert=True)
-    except (ValidationError, GraphQLError) as e:
-        log.error(e)
+    # # log.info("Create DC Topology Deployment")
+    # # let'ts update location
+    # POP_DEPLOYMENT.update(
+    #     {
+    #         "location": site.id,
+    #         "provider": provider.id,
+    #         "design": client.store.get(
+    #             kind="DesignTopology", key=POP_DEPLOYMENT.get("design")
+    #         ).id,
+    #     }
+    # )
+    # log.info(f"Creating POP Topology Deployment for {POP_DEPLOYMENT.get('name')}")
+    # try:
+    #     deployment = await client.create(
+    #         kind="TopologyColocationCenter", data=POP_DEPLOYMENT, branch=branch
+    #     )
+    #     await deployment.save(allow_upsert=True)
+    #     # asssign the design to the deployment group
+    #     topology_group = await client.create(
+    #         kind="CoreStandardGroup",
+    #         name="topologies_pop",
+    #         branch=branch,
+    #     )
+    #     # create group for topologies if doesn't exist
+    #     await topology_group.save(allow_upsert=True)
+    #     await topology_group.members.fetch()
+    #     topology_group.members.add(deployment)
+    #     await topology_group.save(allow_upsert=True)
+    # except (ValidationError, GraphQLError) as e:
+    #     log.error(e)
 
-    log.info(
-        f"- Created Colocation Center Topology Deployment for {POP_DEPLOYMENT.get('name')}"
-    )
+    # log.info(
+    #     f"- Created Colocation Center Topology Deployment for {POP_DEPLOYMENT.get('name')}"
+    # )
 
     await security(client=client, log=log, branch=branch)
-    await devices(client=client, log=log, branch=branch, deployment=deployment.id)
+    # await devices(client=client, log=log, branch=branch, deployment=deployment.id)

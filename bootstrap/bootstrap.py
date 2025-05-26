@@ -5,6 +5,8 @@ from ipaddress import IPv4Network
 
 from data_bootstrap import (
     ACCOUNTS,
+    ADDRESS_GROUPS,
+    ADDRESSES,
     ASN_POOLS,
     ASNS,
     CITIES,
@@ -15,13 +17,20 @@ from data_bootstrap import (
     DEVICE_TEMPLATES,
     DEVICE_TYPES,
     GROUPS,
+    IP_PROTOCOLS,
     MANUFACTURERS,
     PLATFORMS,
+    POLICIES,
+    PREFIXES,
     PROVIDERS,
     REGIONS,
+    RULES,
+    SERVICE_GROUPS,
+    SERVICES,
     SITES,
     SUBNETS_1918,
     TAGS,
+    ZONES,
 )
 from infrahub_sdk import InfrahubClient
 from utils import create_objects
@@ -276,7 +285,7 @@ async def infra(client: InfrahubClient, log: logging.Logger, branch: str) -> Non
 
     log.info("Create Interface Templates")
 
-    templates = {
+    templates: dict = {
         "TemplateDcimPhysicalInterface": [],
         "TemplateDcimConsoleInterface": [],
     }
@@ -386,6 +395,212 @@ async def infra(client: InfrahubClient, log: logging.Logger, branch: str) -> Non
     # )
 
 
+async def security(client: InfrahubClient, log: logging.Logger, branch: str) -> None:
+    """Create all the security objects."""
+
+    log.info("Create IP Protocols")
+    await create_objects(
+        client=client,
+        log=log,
+        branch=branch,
+        kind="SecurityIPProtocol",
+        data_list=[
+            {
+                "payload": {
+                    "name": item[1],
+                    "protocol": item[0],
+                    "description": item[2],
+                },
+                "store_key": item[1],
+            }
+            for item in IP_PROTOCOLS
+        ],
+    )
+    log.info("Create Services")
+    await create_objects(
+        client=client,
+        log=log,
+        branch=branch,
+        kind="SecurityService",
+        data_list=[
+            {
+                "payload": {
+                    "name": item[0],
+                    "ip_protocol": client.store.get(
+                        kind="SecurityIPProtocol", key=item[1]
+                    ),
+                    "port": item[2],
+                },
+                "store_key": item[0],
+            }
+            for item in SERVICES
+        ],
+    )
+
+    log.info("Create Service Groups")
+    await create_objects(
+        client=client,
+        log=log,
+        branch=branch,
+        kind="SecurityServiceGroup",
+        data_list=[
+            {
+                "payload": {
+                    "name": item[0],
+                    "services": [
+                        client.store.get(kind="SecurityService", key=service)
+                        for service in item[1]
+                    ],
+                },
+                "store_key": item[0],
+            }
+            for item in SERVICE_GROUPS
+        ],
+    )
+    log.info("Create Prefixes")
+    await create_objects(
+        client=client,
+        log=log,
+        branch=branch,
+        kind="SecurityPrefix",
+        data_list=[
+            {
+                "payload": {
+                    "name": item[0],
+                    "prefix": item[1],
+                },
+                "store_key": item[0],
+            }
+            for item in PREFIXES
+        ],
+    )
+
+    log.info("Create Security Addresses")
+    await create_objects(
+        client=client,
+        log=log,
+        branch=branch,
+        kind="SecurityIPAddress",
+        data_list=[
+            {
+                "payload": {
+                    "name": item[0],
+                    "address": item[1],
+                },
+                "store_key": item[0],
+            }
+            for item in ADDRESSES
+        ],
+    )
+
+    log.info("Create Security Address Groups")
+    await create_objects(
+        client=client,
+        log=log,
+        branch=branch,
+        kind="SecurityAddressGroup",
+        data_list=[
+            {
+                "payload": {
+                    "name": item[0],
+                    "addresses": [
+                        client.store.get_by_hfid(key=address) for address in item[1]
+                    ],
+                },
+                "store_key": item[0],
+            }
+            for item in ADDRESS_GROUPS
+        ],
+    )
+    log.info("Create Security Zones")
+    await create_objects(
+        client=client,
+        log=log,
+        branch=branch,
+        kind="SecurityZone",
+        data_list=[
+            {
+                "payload": {
+                    "name": item,
+                },
+                "store_key": item,
+            }
+            for item in ZONES
+        ],
+    )
+
+    log.info("Create Security Policies")
+    await create_objects(
+        client=client,
+        log=log,
+        branch=branch,
+        kind="SecurityPolicy",
+        data_list=[
+            {
+                "payload": {"name": item},
+                "store_key": item,
+            }
+            for item in POLICIES
+        ],
+    )
+
+    # log.info(client.store._branches["firewall"].__dict__)
+
+    log.info("Create Security Policy Rules")
+    await create_objects(
+        client=client,
+        log=log,
+        branch=branch,
+        kind="SecurityPolicyRule",
+        data_list=[
+            {
+                "payload": {
+                    "name": item[0],
+                    "policy": client.store.get(kind="SecurityPolicy", key=item[1]).id,
+                    "index": item[2],
+                    "action": item[3],
+                    "source_zone": client.store.get(kind="SecurityZone", key=item[4]),
+                    "destination_zone": client.store.get(
+                        kind="SecurityZone", key=item[5]
+                    ).id,
+                    "source_address": [
+                        client.store.get(kind="SecurityIPAddress", key=address).id
+                        for address in item[6]
+                    ],
+                    "source_groups": [
+                        client.store.get(kind="SecurityAddressGroup", key=group).id
+                        for group in item[7]
+                    ],
+                    "source_services": [
+                        client.store.get_by_hfid(key=service).id for service in item[8]
+                    ],
+                    "source_service_groups": [
+                        client.store.get(kind="SecurityServiceGroup", key=srv_group).id
+                        for srv_group in item[9]
+                    ],
+                    "destination_address": [
+                        client.store.get(kind="SecurityIPAddress", key=address).id
+                        for address in item[10]
+                    ],
+                    "destination_groups": [
+                        client.store.get(kind="SecurityAddressGroup", key=group).id
+                        for group in item[11]
+                    ],
+                    "destination_services": [
+                        client.store.get_by_hfid(key=service).id for service in item[12]
+                    ],
+                    "destination_service_groups": [
+                        client.store.get(kind="SecurityServiceGroup", key=srv_group).id
+                        for srv_group in item[13]
+                    ],
+                },
+                "store_key": item[0],
+            }
+            for item in RULES
+        ],
+    )
+
+
 async def design(client: InfrahubClient, log: logging.Logger, branch: str) -> None:
     """Create all the design objects."""
     # Let's play with owner and source to test functionality
@@ -446,4 +661,5 @@ async def run(client: InfrahubClient, log: logging.Logger, branch: str) -> None:
     await location(client=client, log=log, branch=branch)
     await core(client=client, log=log, branch=branch)
     await infra(client=client, log=log, branch=branch)
+    await security(client=client, log=log, branch=branch)
     await design(client=client, log=log, branch=branch)

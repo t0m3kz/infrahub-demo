@@ -118,7 +118,7 @@ nodes:
     #     optional: true
     #     peer: DcimFirewallInterface
 
-  - name: IPAMIPAddress
+  - name: IpamIPAddress
     namespace: Security
     menu_placement: SecurityPolicy
     include_in_menu: true
@@ -139,7 +139,7 @@ nodes:
         cardinality: one
         kind: Attribute
         optional: false
-  - name: IPAMIPPrefix
+  - name: IpamPrefix
     namespace: Security
     menu_placement: SecurityPolicy
     include_in_menu: true
@@ -403,6 +403,9 @@ nodes:
       - index__value
     uniqueness_constraints:
       - [index__value, source_zone, destination_zone, policy]
+    display_labels:
+      - index__value 
+      - name__value     
     attributes:
       - name: index
         label: Index
@@ -593,65 +596,6 @@ nodes:
         kind: Attribute
         cardinality: many
         identifier: rendered_policy_rule__destination_service_group
-
-
-  # - name: PhysicalFirewall
-  #   namespace: Dcim
-  #   generate_template: true
-  #   label: Physical Firewall
-  #   inherit_from:
-  #     - DcimGenericDevice
-  #     - CoreArtifactTarget
-  #     - SecurityPolicyAssignment
-  #   icon: "mdi:firewall"
-  #   include_in_menu: false                
-  #   relationships:
-  #     - name: policy
-  #       peer: SecurityPolicy
-  #       label: Security Policy
-  #       cardinality: one
-  #       kind: Attribute
-
-  # - name: PhysicalFirewall
-  #   namespace: Dcim
-  #   generate_template: true
-  #   label: Physical Firewall
-  #   inherit_from:
-  #     - DcimGenericDevice
-  #     - CoreArtifactTarget
-  #     - SecurityPolicyAssignment
-  #   icon: "mdi:firewall"
-  #   include_in_menu: false                
-  #   relationships:
-  #     - name: policy
-  #       peer: SecurityPolicy
-  #       label: Security Policy
-  #       cardinality: one
-  #       kind: Attribute
-
-
-  # - name: FirewallInterface
-  #   namespace: Dcim
-  #   label: Firewall Interface
-  #   menu_placement: "InfraGenericDevice"
-  #   include_in_menu: false
-  #   icon: "mdi:ethernet"
-  #   display_labels:
-  #     - name__value
-  #   inherit_from:
-  #     - DcimInterface
-  #     - DcimEndpoint
-  #   relationships:
-  #     - name: ip_addresses
-  #       peer: IpamIPAddress
-  #       optional: true
-  #       cardinality: many
-  #       kind: Component
-  #     - name: security_zone
-  #       peer: SecurityZone
-  #       optional: true
-  #       cardinality: one
-  #       kind: Attribute
 
 
 extensions:

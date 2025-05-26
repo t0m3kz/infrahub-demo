@@ -206,7 +206,7 @@ spec:
                   kind: SecurityIPAddress
                   icon: "mdi:ip-outline"
                 - namespace: Security
-                  name: IPAMIPAddress
+                  name: IpamIPAddress
                   label: "IPAM IP Address"
                   kind: SecurityIpamIPAddress
                   icon: "mdi:ip-outline"
@@ -221,7 +221,7 @@ spec:
                   kind: SecurityPrefix
                   icon: "mdi:ip-network-outline"
                 - namespace: Security
-                  name: IPAMIPPrefix
+                  name: IpamPrefix
                   label: "IPAM Prefix"
                   kind: SecurityIpamPrefix
                   icon: "mdi:ip-network-outline"
