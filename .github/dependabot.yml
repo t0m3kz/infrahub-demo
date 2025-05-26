@@ -19,7 +19,7 @@ updates:
           - "*"
 
   # Group all pip updates except infrahub-sdk
-  - package-ecosystem: "uv"
+  - package-ecosystem: "pip"
     directory: "/"
     schedule:
       interval: "daily"
