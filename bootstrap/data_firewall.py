@@ -302,18 +302,18 @@ RULES = [
 
 DESIGN_ELEMENTS = [
     (
-        "JUNIPER 2 FIREWALLS SRX-1500",
-        "2 Juniper SRX-1500 firewalls",
+        "2 JUNIPER EDGE FIREWALLS SRX-1500",
+        "2 Juniper EDGE SRX-1500 firewalls",
         2,
-        "firewall",
+        "edge_firewall",
         "SRX-1500",
-        [
-            {"name": "fxp0", "type": "1000base-t", "role": "management"},
-            {"name": "ge-0/0/0", "type": "1000base-t", "role": "leaf"},
-            {"name": "ge-0/0/1", "type": "1000base-t", "role": "leaf"},
-            {"name": "ge-0/0/2", "type": "1000base-t", "role": "leaf"},
-            {"name": "ge-0/0/3", "type": "1000base-t", "role": "leaf"},
-        ],
+    ),
+    (
+        "2 JUNIPER DC FIREWALLS SRX-1500",
+        "2 Juniper DC SRX-1500 firewalls",
+        2,
+        "dc_firewall",
+        "SRX-1500",
     ),
 ]
 
