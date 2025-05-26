@@ -37,10 +37,10 @@ jobs:
     strategy:
       matrix:
         python-version: ["3.10", "3.11", "3.12"]
-    # defaults:
-    #   run:
-    #     working-directory: tests
-    #     shell: bash
+    defaults:
+      run:
+        working-directory: tests
+        shell: bash
     steps:
       - uses: actions/checkout@v4
       - name: Setup Python
