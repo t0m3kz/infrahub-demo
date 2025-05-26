@@ -51,10 +51,10 @@ jobs:
         run: |
           pip install uv
           uv sync
-      - name: "Set environment variables"
-        run: |
-          RUNNER_NAME=$(echo "${{ runner.name }}" | grep -o 'ghrunner[0-9]\+' | sed 's/ghrunner\([0-9]\+\)/ghrunner_\1/')
-          echo "PYTEST_DEBUG_TEMPROOT=/var/lib/github/${RUNNER_NAME}/_temp" >> $GITHUB_ENV          
+      # - name: "Set environment variables"
+      #   run: |
+      #     RUNNER_NAME=$(echo "${{ runner.name }}" | grep -o 'ghrunner[0-9]\+' | sed 's/ghrunner\([0-9]\+\)/ghrunner_\1/')
+      #     echo "PYTEST_DEBUG_TEMPROOT=/var/lib/github/${RUNNER_NAME}/_temp" >> $GITHUB_ENV          
       - name: Run pytest
         run: |
           uv run pytest tests/ -vv 
