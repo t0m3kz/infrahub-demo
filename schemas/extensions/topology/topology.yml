@@ -411,11 +411,12 @@ nodes:
     inherit_from:
       - CoreArtifactTarget
       - TopologyDeployment
-    attributes:
+    relationships:
       - name: asn
-        kind: Number
+        peer: ServiceAutonomousSystem
         optional: false
-        order_weight: 1200
+        cardinality: one
+        kind: Attribute
 
   - name: BranchOffice
     namespace: Topology

@@ -11,5 +11,5 @@ echo "Load initial data"
 # uv run infrahubctl object load data/bootstrap/ --branch $BRANCH
 uv run infrahubctl run bootstrap/bootstrap.py --branch $BRANCH
 
-# echo "Add demo repository"
-# uv run infrahubctl repository add DEMO https://github.com/t0m3kz/infrahub-demo.git --ref main --read-only
+echo "Add demo repository"
+uv run infrahubctl repository add DEMO https://github.com/t0m3kz/infrahub-demo.git --ref main --read-only

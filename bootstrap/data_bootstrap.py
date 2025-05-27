@@ -193,6 +193,7 @@ GROUPS = (
     ("cisco_spine", "Cisco DC spine devices"),
     ("cisco_leaf", "Cisco DC leaf devices"),
     ("cisco_oob", "Cisco DC OOB devices"),
+    ("cisco_edge", "Cisco edge devices"),
     ("cisco_pop_router", "Cisco POP Routers"),
     ("edgecore_leaf", "Cisco DC leaf devices"),
     ("edgecore_spine", "Cisco DC spine devices"),
@@ -206,7 +207,7 @@ GROUPS = (
     ("spines", "All spines"),
     ("firewalls", "All firewalls"),
     ("juniper_firewall", "Juniper DC firewall"),
-    ("juniper_pop_firewall", "Juniper POP firewall"),
+    ("juniper_edge_firewall", "Juniper POP firewall"),
     ("juniper_dc_firewall", "Juniper DC firewall"),
     ("checkpoint_firewall", "Checkpoint Firewall Devices"),
     ("perle_console", "Perle DC Console"),
@@ -359,7 +360,6 @@ POLICIES = [
     "FRA_POLICY",
     "FRA_FW1_POLICY",
 ]
-
 
 RULES: list = [
     # name, policy, index, action,

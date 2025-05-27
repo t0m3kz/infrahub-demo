@@ -300,134 +300,27 @@ RULES = [
     ),
 ]
 
-DESIGN_ELEMENTS = [
-    (
-        "2 JUNIPER EDGE FIREWALLS SRX-1500",
-        "2 Juniper EDGE SRX-1500 firewalls",
-        2,
-        "edge_firewall",
-        "SRX-1500",
-    ),
-    (
-        "2 JUNIPER DC FIREWALLS SRX-1500",
-        "2 Juniper DC SRX-1500 firewalls",
-        2,
-        "dc_firewall",
-        "SRX-1500",
-    ),
-]
-
-DESIGN = [
-    (
-        "POP S",
-        "POP 2 firewalls",
-        "POP",
-        [
-            "JUNIPER 2 FIREWALLS SRX-1500",
-        ],
-    ),
-]
-
 
 POP_DEPLOYMENT = {
     "name": "EQX-1",
     "location": "Frankfurt",
-    "description": "Frankfurt POP",
-    "asn": 65005,
-    "customer": "10.11.0.0/24",
-    "management": "10.117.0.0/24",
+    "description": "Frankfurt Equinix POP",
+    "asn": 65100,
+    "customer": "172.20.100.0/24",
+    "management": "10.100.0.0/22",
     "design": "POP S",
     "provider": "Technology Partner",
 }
 
 
-FIREWALLS = (
-    # name, device_type, platform, status, role, location, management_ip, policy
-    (
-        "eqx1-fra-fw1",
-        "SRX-1500",
-        "Juniper JunOS",
-        "active",
-        "customer_firewall",
-        "DC-1",
-        "10.117.0.10",
-        "FRA_POLICY",
-    ),
-    (
-        "eqx1-fra-fw2",
-        "SRX-1500",
-        "Juniper JunOS",
-        "active",
-        "edge_firewall",
-        "EQX-1",
-        "10.117.0.20",
-        None,
-    ),
-)
-
-L3_INTERFACES = (
-    # device, interface,speed, zone, ip, description, role
-    (
-        "eqx1-fra-fw1",
-        "ge-0/0/0",
-        1_000_000,
-        None,
-        "10.117.0.10",
-        "dc1-fra-fw1 management interface",
-        "management",
-    ),
-    (
-        "eqx1-fra-fw1",
-        "ge-0/0/1",
-        1_000_000,
-        "OUTSIDE",
-        "10.0.1.1",
-        "dc1-fra-fw1 outside interface",
-        "peer",
-    ),
-    (
-        "eqx1-fra-fw1",
-        "ge-0/0/2",
-        1_000_000,
-        "INSIDE",
-        "10.0.2.1",
-        "dc1-fra-fw1 inside interface",
-        "peer",
-    ),
-    (
-        "eqx1-fra-fw1",
-        "ge-0/0/3",
-        1_000_000,
-        "DMZ",
-        "10.0.3.1",
-        "dc1-fra-fw1 dmz interface",
-        "peer",
-    ),
-    (
-        "eqx1-fra-fw2",
-        "ge-0/0/0",
-        1_000_000,
-        None,
-        "10.117.0.20",
-        "dc1-fra-fw1 management interface",
-        "management",
-    ),
-    (
-        "eqx1-fra-fw2",
-        "ge-0/0/1",
-        1_000_000,
-        None,
-        "10.1.1.1",
-        "eqx1-fra-fw1 outside interface",
-        "peer",
-    ),
-    (
-        "eqx1-fra-fw2",
-        "ge-0/0/2",
-        1_000_000,
-        None,
-        "10.1.2.1",
-        "eqx1-fra-fw1 inside interface",
-        "peer",
-    ),
-)
+# POP_DEPLOYMENT = {
+#     "name": "EQX-10",
+#     "location": "London",
+#     "description": "London Equinix Colocation",
+#     "asn": 65100,
+#     "management": "172.20.100.0/24",
+#     "customer": "10.100.0.0/22",
+#     "design": "POP S",
+#     "emulation": True,
+#     "provider": "Technology Partner",
+# }

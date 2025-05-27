@@ -1,5 +1,5 @@
 query device($name: String!) {
-  TopologyDataCenter(name__value: $name) {
+  TopologyColocationCenter(name__value: $name) {
     edges {
       node {
         id
@@ -17,14 +17,6 @@ query device($name: String!) {
             }
           }
         }
-        technical_subnet {
-          node {
-            id
-            prefix {
-              value
-            }
-          }
-        }
         customer_subnet {
           node {
             id
@@ -33,20 +25,7 @@ query device($name: String!) {
             }
           }
         }
-        public_subnet {
-          node {
-            id
-            prefix {
-              value
-            }
-          }
-        }
         location {
-          node {
-            id
-          }
-        }
-        provider {
           node {
             id
           }
