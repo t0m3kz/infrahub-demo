@@ -70,7 +70,7 @@ You can use the script to generate all use cases (script will create separated b
 ./scripts/demo.sh firewall or router or design
 ```
 
-### Demo 3 - Data Center
+### Demo 1 - Data Center
 
 In this demo we're genetating confifiguration for composable data center.
 
@@ -92,7 +92,14 @@ If you would like to process all steps manually, you have to follow the steps:
     infrahubctl run bootstrap/demo_design.py --branch my-branch
     ```
 
-3. Go to the 
+3. Change branch to design 
+4. Go to the Actions - > Generator Definitions -> create_dc
+5. Select Run -> Selected Targets , select DC-3 and click Run Generator
+6. Wait until task is completed
+7. Go to the devices and see the generated hosts.
+8. Go to the Propose Changes - > New Proposed change
+9. Select design as source branch, add name and Create proposed change
+10. Wait until all tasks are completed and check the artifacts / data.
 
 [ruff-badge]:
 <https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json>
