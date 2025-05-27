@@ -92,6 +92,10 @@ If you would like to process all steps manually, you have to follow the steps:
     infrahubctl run bootstrap/demo_design.py --branch my-branch
     ```
 
+  You can review designs in Design Patterns and in Design Elements.
+
+  New deployment shoulkd be added into Services -> Topology Deployments -> Data center
+
 3. Change branch to design 
 4. Go to the Actions - > Generator Definitions -> create_dc
 5. Select Run -> Selected Targets , select DC-3 and click Run Generator
