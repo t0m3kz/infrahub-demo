@@ -70,60 +70,6 @@ You can use the script to generate all use cases (script will create separated b
 ./scripts/demo.sh firewall or router or design
 ```
 
-### Demo 1 - Firewall
-
-In this demo we're generating configuration for firewalls.
-
-```bash
-./scripts/demo.sh firewall
-```
-
-or
-
-If you would like to process all steps manually, you have to follow the steps:
-
-1. Create branch
-
-    ```bash
-    infrahubctl branch create my-branch
-    ```
-
-2. Load example firewall data stored as statics in demo_firewall.py file.
-
-    ```bash
-    infrahubctl run bootstrap/demo_firewall.py --branch my-branch
-    ```
-
-#### Test firewall config
-
-```bash
-infrahubctl render firewall_config device=dc1-fra-fw1 --branch my-branch
-```
-
-You can try to manually modify data and check if configuration was updated.
-
-### Demo 2 - POP Router deployment
-
-In this demo we're generating configuration pop routers.
-
-```bash
-./scripts/demo.sh router
-```
-
-If you would like to process all steps manually, you have to follow the steps:
-
-1. Create branch
-
-    ```bash
-    infrahubctl branch create my-branch
-    ```
-
-2. Load example router data stored as statics in demo_router.py file.
-
-    ```bash
-    infrahubctl run bootstrap/demo_router.py --branch my-branch
-    ```
-
 ### Demo 3 - Data Center
 
 In this demo we're genetating confifiguration for composable data center.
@@ -145,6 +91,8 @@ If you would like to process all steps manually, you have to follow the steps:
     ```bash
     infrahubctl run bootstrap/demo_design.py --branch my-branch
     ```
+
+3. Go to the 
 
 [ruff-badge]:
 <https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json>

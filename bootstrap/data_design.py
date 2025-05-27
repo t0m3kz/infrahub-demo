@@ -1,6 +1,6 @@
 """Data for Design demo"""
 
-VLAN_POOLS = [
+ASN_POOLS = [
     # name, description, node, node_attribute, start, end
     (
         "PRIVATE-ASN32",

@@ -195,10 +195,20 @@ generator_definitions:
     class_name: DCTopologyGenerator
     parameters:
       name: "name__value"
+  - name: create_pop
+    file_path: "generators/generate_pop.py"
+    targets: topologies_pop
+    query: topology_pop
+    class_name: PopTopologyGenerator
+    parameters:
+      name: "name__value"
+
 
 queries:
   - name: topology_dc
     file_path: "queries/topology_dc.gql"
+  - name: topology_pop
+    file_path: "queries/topology_pop.gql"    
   - name: topology_simulator
     file_path: "queries/topology_clab.gql"
   - name: topology_cabling

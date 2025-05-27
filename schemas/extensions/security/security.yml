@@ -402,7 +402,7 @@ nodes:
       - destination_zone__name__value
       - index__value
     uniqueness_constraints:
-      - [index__value, source_zone, destination_zone, policy]
+      - [index__value, name__value, source_zone, destination_zone, policy]
     display_labels:
       - index__value 
       - name__value     

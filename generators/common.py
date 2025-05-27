@@ -55,7 +55,7 @@ class TopologyCreator:
         self.log = log
         self.branch = branch
         self.data = data
-        self.devices = []
+        self.devices: list = []
 
     async def _create_in_batch(
         self,
@@ -161,6 +161,22 @@ class TopologyCreator:
     async def create_address_pools(self) -> None:
         """Create objects of a specific kind and store in local store."""
         self.log.info("Creating address pools")
+        pools = []
+        if self.data.get("management_subnet"):
+            pools.append(
+                {
+                    "type": "Management",
+                    "prefix_id": self.data["management_subnet"]["id"],
+                },
+            )
+        if self.data.get("technical_subnet"):
+            pools.append(
+                {
+                    "type": "Loopback",
+                    "prefix_id": self.data["technical_subnet"]["id"],
+                },
+            )
+
         await self._create_in_batch(
             kind="CoreIPAddressPool",
             data_list=[
@@ -174,16 +190,7 @@ class TopologyCreator:
                     },
                     "store_key": f"{pool.get('type', '').lower()}_ip_pool",
                 }
-                for pool in [
-                    {
-                        "type": "Management",
-                        "prefix_id": self.data["management_subnet"]["id"],
-                    },
-                    {
-                        "type": "Loopback",
-                        "prefix_id": self.data["technical_subnet"]["id"],
-                    },
-                ]
+                for pool in pools
             ],
         )
 
@@ -207,8 +214,8 @@ class TopologyCreator:
     async def create_devices(self) -> None:
         self.log.info(f"Create devices for {self.data.get('name')}")
         # ... fetch device groups and templates logic ...
-        data_list = []
-        role_counters = {}
+        data_list: list = []
+        role_counters: dict = {}
         topology_name = self.data.get("name", "")
 
         # Populate the data_list with unique naming
