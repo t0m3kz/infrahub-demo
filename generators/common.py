@@ -37,13 +37,13 @@ def clean_data(data: Any):
                 result[key] = clean_data(value)
         return result
     if isinstance(data, list):
-        result = []
+        _result = []
         for item in data:
             if isinstance(item, dict) and item.get("node", None) is not None:
-                result.append(clean_data(item["node"]))
+                _result.append(clean_data(item["node"]))
                 continue
-            result.append(clean_data(item))
-        return result
+            _result.append(clean_data(item))
+        return _result
     return data
 
 
@@ -258,7 +258,7 @@ class TopologyCreator:
             data_list=data_list,
         )
 
-        self.devices: list = [
+        self.devices = [
             self.client.store.get_by_hfid(f"DcimGenericDevice__{device[0]}")
             for device in self.client.store._branches[self.branch]
             ._hfids["DcimGenericDevice"]
