@@ -9,7 +9,7 @@ dependencies = [
 ]
 name = "infrahub-demo"
 version = "0.1.0"
-description = "Design driven DC"
+description = "Design driven automation"
 readme = "README.md"
 
 [dependency-groups]
@@ -21,6 +21,10 @@ dev = [
     "ruff>=0.11.4",
     "yamllint>=1.37.1",
 ]
+
+[[tool.mypy.overrides]]
+module = ["untyped_package.*"]
+follow_untyped_imports = true
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
