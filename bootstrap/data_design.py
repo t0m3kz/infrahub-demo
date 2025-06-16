@@ -1,25 +1,5 @@
 """Data for Design demo"""
 
-ASN_POOLS = [
-    # name, description, node, node_attribute, start, end
-    (
-        "PRIVATE-ASN32",
-        "Private 32 bit ASN Pool",
-        "ServiceAutonomousSystem",
-        "asn",
-        4200000000,
-        4294967294,
-    ),
-    (
-        "PRIVATE-ASN4",
-        "Private 4 bit ASN Pool",
-        "ServiceAutonomousSystem",
-        "asn",
-        64512,
-        65534,
-    ),
-]
-
 
 # DC_DEPLOYMENT = {
 #     "name": "DC-2",
@@ -34,7 +14,6 @@ ASN_POOLS = [
 #     "emulation": True,
 #     "provider": "Technology Partner",
 # }
-
 
 DC_DEPLOYMENT = {
     "name": "DC-3",
