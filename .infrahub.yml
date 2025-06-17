@@ -227,3 +227,7 @@ queries:
   #   file_path: "queries/dc_oob_config.gql"
   # - name: console_config
   #   file_path: "queries/console_config.gql"
+schemas:
+  - schemas/
+menus:
+  - menus/manu.yml

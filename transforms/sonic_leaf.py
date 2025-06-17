@@ -21,6 +21,7 @@ class SonicLeaf(InfrahubTransform):
             "overlay": {},
             "bgp": [],
             "vlans": [],
+            "vnis": [],
         }
 
         # Process device services once
@@ -28,10 +29,18 @@ class SonicLeaf(InfrahubTransform):
             if not service:
                 continue
 
-            if service["__typename"] == "ServiceOspfPeering":
-                result["underlay"] = {"name": service["name"], "area": service["area"]}
-            elif service["__typename"] == "ServiceBgpPeering":
-                result["overlay"] = {"name": service["name"], "asn": service["asn"]}
+            if service["__typename"] == "ServiceOSPF":
+                result["underlay"] = {
+                    "name": service["name"],
+                    "area": service["area"]["area"],
+                    "router_id": service["router_id"]["address"].split("/")[0],
+                    "vrf": service["area"]["namespace"]["name"],
+                }
+            elif service["__typename"] == "ServiceBGPSession":
+                result["overlay"] = {
+                    "name": service["name"],
+                    "asn": service["local_as"],
+                }
 
         # Process interfaces and collect VLANs in one pass
         vlans_set = set()
@@ -40,8 +49,10 @@ class SonicLeaf(InfrahubTransform):
             vlans = []
 
             for service in interface.get("service") or []:
-                if service and service["__typename"] == "ServiceLayer2Network":
-                    vlan = service["vlan"]
+                if service and service["__typename"] == "ServiceNetworkSegment":
+                    if service["vni"] not in result["vnis"]:
+                        result["vnis"].append(service["vni"])
+                    vlan = service["vni"]
                     vlans.append(vlan)
                     vlans_set.add(vlan)
 
