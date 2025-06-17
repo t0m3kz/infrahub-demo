@@ -200,14 +200,17 @@ query leaf_config($device: String!) {
                       vni {
                         value
                       }
-                      status{
+                      status {
                         value
                       }
-                      prefixes{
-                        edges{
-                          node{
-                            prefix{
-                            	value
+                      description {
+                        value
+                      }
+                      prefixes {
+                        edges {
+                          node {
+                            prefix {
+                              value
                             }
                           }
                         }
