@@ -27,10 +27,10 @@ updates:
     open-pull-requests-limit: 10
     labels:
       - "patch"
-    groups:
-      all:
-        patterns:
-          - "^(?!infrahub-sdk$).*"  # Regex to exclude infrahub-sdk
-      infrahub-sdk:
-        patterns:
-          - "infrahub-sdk"
+    # groups:
+    #   all:
+    #     patterns:
+    #       - "^(?!infrahub-sdk$).*"  # Regex to exclude infrahub-sdk
+    #   infrahub-sdk:
+    #     patterns:
+    #       - "infrahub-sdk"
