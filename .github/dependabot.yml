@@ -24,7 +24,6 @@ updates:
     schedule:
       interval: "daily"
       time: "12:00"
-    target-branch: main
     open-pull-requests-limit: 10
     labels:
       - "patch"
