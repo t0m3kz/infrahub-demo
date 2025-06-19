@@ -9,10 +9,18 @@ updates:
     ignore:
       - dependency-name: "pytest"
         update-types: ["version-update:semver-major"]
+    groups:
+      all-dependencies:
+        patterns:
+          - "*"
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
       interval: "weekly"
+    groups:
+      all-actions:
+        patterns:
+          - "*"
 # yamllint disable rule:truthy
 # version: 2
 
