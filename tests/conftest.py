@@ -14,12 +14,12 @@ CURRENT_DIR = Path(__file__).parent
 
 @pytest.fixture(scope="session")
 def root_dir() -> Path:
-    return Path(__file__).parent / ".."
+    return Path(__file__).parent.parent.resolve()
 
 
 @pytest.fixture(scope="session")
 def fixtures_dir() -> Path:
-    return CURRENT_DIR / "fixtures"
+    return Path(__file__).parent / "fixtures"
 
 
 @pytest.fixture(scope="session")
