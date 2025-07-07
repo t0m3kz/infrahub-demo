@@ -1,58 +1,41 @@
 ---
 version: 2
 updates:
+  # Maintain dependencies for uv (pip replacement)
   - package-ecosystem: "uv"
     directory: "/"
     schedule:
       interval: "weekly"
+      day: "monday"
+      time: "12:00"
     open-pull-requests-limit: 10
+    target-branch: main
+    labels:
+      - "dependencies"
+      - "patch"
     ignore:
       - dependency-name: "pytest"
         update-types: ["version-update:semver-major"]
     groups:
-      all-dependencies:
+      all:
         patterns:
-          - "*"
+          - "^(?!infrahub-sdk$).*"  # Exclude infrahub-sdk from this group
+      infrahub-sdk:
+        patterns:
+          - "infrahub-sdk"
+  # Maintain dependencies for GitHub Actions
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
       interval: "weekly"
+      day: "monday"
+      time: "09:00"
+    target-branch: main
+    labels:
+      - "dependencies"
+      - "patch"
     groups:
       all-actions:
         patterns:
           - "*"
 # yamllint disable rule:truthy
-# version: 2
-
-# updates:
-#   # Maintain dependencies for GitHub Actions
-#   - package-ecosystem: "github-actions"
-#     directory: "/"
-#     schedule:
-#       interval: "weekly"
-#       day: "monday"
-#       time: "09:00"
-#     target-branch: main
-#     labels:
-#       - "patch"
-#     groups:
-#       all:
-#         patterns:
-#           - "*"
-
-#   # Group all pip updates except infrahub-sdk
-#   - package-ecosystem: "uv"
-#     directory: "/"
-#     schedule:
-#       interval: "daily"
-#       time: "12:00"
-#     open-pull-requests-limit: 10
-#     labels:
-#       - "patch"
-#     # groups:
-#     #   all:
-#     #     patterns:
-#     #       - "^(?!infrahub-sdk$).*"  # Regex to exclude infrahub-sdk
-#     #   infrahub-sdk:
-#     #     patterns:
-#     #       - "infrahub-sdk"
