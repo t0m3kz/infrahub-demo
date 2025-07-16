@@ -1,0 +1,79 @@
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: SecurityService
+  data:
+    - name: "http"
+      description: "HTTP web traffic"
+      port: 80
+      protocol: "tcp"
+
+    - name: "https"
+      description: "HTTPS secure web traffic"
+      port: 443
+      protocol: "tcp"
+
+    - name: "ssh"
+      description: "Secure Shell"
+      port: 22
+      protocol: "tcp"
+
+    - name: "ftp"
+      description: "File Transfer Protocol"
+      port: 21
+      protocol: "tcp"
+
+    - name: "smtp"
+      description: "Simple Mail Transfer Protocol"
+      port: 25
+      protocol: "tcp"
+
+    - name: "dns"
+      description: "Domain Name System"
+      port: 53
+      protocol: "udp"
+
+    - name: "ntp"
+      description: "Network Time Protocol"
+      port: 123
+      protocol: "udp"
+
+    - name: "snmp"
+      description: "Simple Network Management Protocol"
+      port: 161
+      protocol: "udp"
+
+    - name: "ldap"
+      description: "Lightweight Directory Access Protocol"
+      port: 389
+      protocol: "tcp"
+
+    - name: "ldaps"
+      description: "LDAP over SSL"
+      port: 636
+      protocol: "tcp"
+
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: SecurityServiceRange
+  data:
+    - name: "ephemeral-ports"
+      description: "Ephemeral port range"
+      start: 32768
+      end: 65535
+      protocol: "tcp"
+
+    - name: "ftp-data-range"
+      description: "FTP passive data ports"
+      start: 20000
+      end: 20100
+      protocol: "tcp"
+
+    - name: "rpc-range"
+      description: "RPC dynamic port range"
+      start: 1024
+      end: 5000
+      protocol: "tcp"

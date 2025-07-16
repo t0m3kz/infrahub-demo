@@ -1,0 +1,32 @@
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: SecurityAddressGroup
+  data:
+    - name: "web-servers"
+      description: "All web servers"
+
+    - name: "database-servers"
+      description: "All database servers"
+
+    - name: "mail-servers"
+      description: "All mail servers"
+
+    - name: "dns-servers"
+      description: "All DNS servers"
+
+    - name: "critical-servers"
+      description: "Mission critical servers"
+
+    - name: "internal-networks"
+      description: "All internal network segments"
+
+    - name: "public-services"
+      description: "Publicly accessible services"
+
+    - name: "management-servers"
+      description: "Management and monitoring servers"
+
+    - name: "development-servers"
+      description: "Development environment servers"

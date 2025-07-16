@@ -34,6 +34,12 @@ spec:
       role: "spine"
       device_type: "DCS-7280DR3-24-F"
       template: "DCS-7280DR3-24-F_SPINE"
+    - name: "4 ARISTA LEAFS CCS-720DP-48S-2F"
+      description: "4 Arista CCS-720DP-48S-2F leafs"
+      quantity: 4
+      role: "leaf"
+      device_type: "CCS-720DP-48S-2F"
+      template: "CCS-720DP-48S-2F_LEAF"      
     - name: "6 ARISTA LEAFS CCS-720DP-48S-2F"
       description: "6 Arista CCS-720DP-48S-2F leafs"
       quantity: 6

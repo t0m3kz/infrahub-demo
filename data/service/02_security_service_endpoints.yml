@@ -1,0 +1,179 @@
+---
+apiVersion: infrahub.app/v1
+kind: InfrahubObject
+data:
+  - apiVersion: infrahub.app/v1
+    kind: ServiceSecurityServiceEndpoint
+    spec:
+      name:
+        value: "corporate-fw-internal-endpoint"
+      description:
+        value: "Internal network endpoint for corporate firewall"
+      status:
+        value: "provisioning"
+      endpoint_type:
+        value: "internal"
+      vlan_id:
+        value: 100
+      ip_address:
+        value: "10.1.100.1"
+      security_service:
+        - name: "corporate-firewall-service"
+      security_zone:
+        - name: "internal"
+      owner:
+        - name: "dunder-mifflin"
+
+  - apiVersion: infrahub.app/v1
+    kind: ServiceSecurityServiceEndpoint
+    spec:
+      name:
+        value: "corporate-fw-external-endpoint"
+      description:
+        value: "External network endpoint for corporate firewall"
+      status:
+        value: "provisioning"
+      endpoint_type:
+        value: "egress"
+      vlan_id:
+        value: 200
+      ip_address:
+        value: "203.0.113.1"
+      security_service:
+        - name: "corporate-firewall-service"
+      security_zone:
+        - name: "external"
+      owner:
+        - name: "dunder-mifflin"
+
+  - apiVersion: infrahub.app/v1
+    kind: ServiceSecurityServiceEndpoint
+    spec:
+      name:
+        value: "dmz-fw-dmz-endpoint"
+      description:
+        value: "DMZ endpoint for DMZ security service"
+      status:
+        value: "provisioning"
+      endpoint_type:
+        value: "dmz"
+      vlan_id:
+        value: 300
+      ip_address:
+        value: "10.1.300.1"
+      security_service:
+        - name: "dmz-security-service"
+      security_zone:
+        - name: "dmz"
+      owner:
+        - name: "dunder-mifflin"
+
+  - apiVersion: infrahub.app/v1
+    kind: ServiceSecurityServiceEndpoint
+    spec:
+      name:
+        value: "dmz-fw-external-endpoint"
+      description:
+        value: "External endpoint for DMZ security service"
+      status:
+        value: "provisioning"
+      endpoint_type:
+        value: "egress"
+      vlan_id:
+        value: 200
+      ip_address:
+        value: "203.0.113.2"
+      security_service:
+        - name: "dmz-security-service"
+      security_zone:
+        - name: "external"
+      owner:
+        - name: "dunder-mifflin"
+
+  - apiVersion: infrahub.app/v1
+    kind: ServiceSecurityServiceEndpoint
+    spec:
+      name:
+        value: "ips-internal-endpoint"
+      description:
+        value: "Internal monitoring endpoint for IPS service"
+      status:
+        value: "provisioning"
+      endpoint_type:
+        value: "internal"
+      vlan_id:
+        value: 400
+      ip_address:
+        value: "10.1.400.1"
+      security_service:
+        - name: "ips-threat-prevention"
+      security_zone:
+        - name: "internal"
+      owner:
+        - name: "dunder-mifflin"
+
+  - apiVersion: infrahub.app/v1
+    kind: ServiceSecurityServiceEndpoint
+    spec:
+      name:
+        value: "web-filter-internal-endpoint"
+      description:
+        value: "Internal endpoint for web filtering service"
+      status:
+        value: "provisioning"
+      endpoint_type:
+        value: "internal"
+      vlan_id:
+        value: 500
+      ip_address:
+        value: "10.1.500.1"
+      security_service:
+        - name: "web-filtering-service"
+      security_zone:
+        - name: "internal"
+      owner:
+        - name: "dunder-mifflin"
+
+  - apiVersion: infrahub.app/v1
+    kind: ServiceSecurityServiceEndpoint
+    spec:
+      name:
+        value: "vpn-external-endpoint"
+      description:
+        value: "External VPN gateway endpoint"
+      status:
+        value: "provisioning"
+      endpoint_type:
+        value: "ingress"
+      vlan_id:
+        value: 600
+      ip_address:
+        value: "203.0.113.10"
+      security_service:
+        - name: "vpn-gateway-service"
+      security_zone:
+        - name: "external"
+      owner:
+        - name: "dunder-mifflin"
+
+  - apiVersion: infrahub.app/v1
+    kind: ServiceSecurityServiceEndpoint
+    spec:
+      name:
+        value: "vpn-management-endpoint"
+      description:
+        value: "Management endpoint for VPN service"
+      status:
+        value: "provisioning"
+      endpoint_type:
+        value: "management"
+      vlan_id:
+        value: 700
+      ip_address:
+        value: "10.1.700.1"
+      security_service:
+        - name: "vpn-gateway-service"
+      security_zone:
+        - name: "management"
+      owner:
+        - name: "dunder-mifflin"
