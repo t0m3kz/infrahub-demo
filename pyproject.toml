@@ -14,7 +14,6 @@ readme = "README.md"
 
 [dependency-groups]
 dev = [
-    "infrahub-testcontainers>=1.2.9",
     "invoke>=2.2.0",
     "mypy>=1.15.0",
     "pytest>=8.3.5,<9.0.0",

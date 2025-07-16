@@ -56,3 +56,5 @@ spec:
       description: POP Topologies
     - name: topologies_clab
       description: Containerlab Topologies
+    - name: juniper_dc_firewall
+      description: Juniper DC Firewall
