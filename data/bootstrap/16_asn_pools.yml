@@ -1,0 +1,17 @@
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: CoreNumberPool
+  data:
+    - name: PRIVATE-ASN32
+      description: Private 32 bit ASN Pool
+      node: ServiceAutonomousSystem
+      node_attribute: asn
+      start_range: 4200000000
+      end_range: 4294967294
+    - name: PRIVATE-ASN4
+      description: Private 4 bit ASN Pool
+      node: ServiceAutonomousSystem
+      node_attribute: asn
+      start_range: 64512
+      end_range: 65534
