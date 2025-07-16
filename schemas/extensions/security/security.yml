@@ -13,6 +13,31 @@ generics:
         kind: Component
         cardinality: many
         optional: true
+  - name: BasePolicyRule
+    namespace: Security
+    include_in_menu: false
+    attributes:
+      - name: index
+        label: Index
+        kind: Number
+        optional: false
+        order_weight: 99999
+      - name: name
+        label: Name
+        kind: Text
+        optional: false
+      - name: action
+        label: Action
+        kind: Text
+        enum: ["permit", "deny"]
+        default_value: permit
+        optional: false
+      - name: log
+        label: Log
+        kind: Boolean
+        default_value: false
+        optional: true
+        order_weight: 99998
   - name: GenericAddressGroup
     namespace: Security
     include_in_menu: false
@@ -45,12 +70,7 @@ generics:
         kind: Text
         optional: false
         unique: true
-    relationships:
-      - name: address_groups
-        label: Address Groups
-        peer: SecurityGenericAddressGroup
-        cardinality: many
-        optional: true
+    # Removed reverse relationship - use address_groups__addresses for queries
   - name: GenericServiceGroup
     namespace: Security
     include_in_menu: false
@@ -87,12 +107,7 @@ generics:
         kind: Text
         label: Description
         optional: true
-    relationships:
-      - name: service_groups
-        label: Service Groups
-        peer: SecurityGenericServiceGroup
-        cardinality: many
-        optional: true
+    # Removed reverse relationship - use service_groups__services for queries
 
 nodes:
   - name: Zone
@@ -111,12 +126,19 @@ nodes:
         kind: Text
         unique: true
         optional: false
-    # relationships:
-    #   - name: interfaces
-    #     label: Interfaces
-    #     kind: Attribute
-    #     optional: true
-    #     peer: DcimFirewallInterface
+      - name: trust_level
+        kind: Number
+        label: Trust Level
+        optional: true
+        description: "Security trust level (0-100, higher = more trusted)"
+      - name: description
+        kind: Text
+        optional: true
+      - name: parent_zone_name
+        kind: Text
+        optional: true
+        label: Parent Zone
+        description: "Name of parent zone (for organizational hierarchy)"
 
   - name: IpamIPAddress
     namespace: Security
@@ -230,6 +252,9 @@ nodes:
         label: End IP Address
         kind: IPHost
         optional: false
+      - name: description
+        kind: Text
+        optional: true
   - name: FQDN
     namespace: Security
     description: "Full Qualified Domain Name"
@@ -253,6 +278,9 @@ nodes:
         optional: false
         # https://stackoverflow.com/questions/11809631/fully-qualified-domain-name-validation
         regex: "(?=^.{1,253}$)(^(((?!-)[a-zA-Z0-9-]{1,63}(?<!-))|((?!-)[a-zA-Z0-9-]{1,63}(?<!-)\\.)+[a-zA-Z]{2,63})$)"
+      - name: description
+        kind: Text
+        optional: true
   - name: AddressGroup
     namespace: Security
     menu_placement: SecurityPolicy
@@ -265,28 +293,10 @@ nodes:
     parent: SecurityAddressGroup
     display_labels:
       - name__value
+    uniqueness_constraints:
+      - [name__value]
     inherit_from:
       - SecurityGenericAddressGroup
-
-  - name: IPProtocol
-    namespace: Security
-    menu_placement: SecurityPolicy
-    icon: "mdi:protocol"
-    include_in_menu: true
-    description: "IP protocol"
-    label: IP Protocols
-    human_friendly_id:
-      - name__value
-    display_labels:
-      - name__value
-    order_by:
-      - name__value
-    inherit_from:
-      - SecurityGenericService
-    attributes:
-      - name: protocol
-        kind: Number
-        optional: true
 
   - name: Service
     namespace: Security
@@ -306,12 +316,15 @@ nodes:
     attributes:
       - name: port
         kind: Number
-    relationships:
-      - name: ip_protocol
-        peer: SecurityIPProtocol
+        optional: false
+      - name: protocol
+        kind: Text
+        enum: ["tcp", "udp", "icmp", "any"]
+        default_value: "tcp"
+        optional: false
+      - name: description
+        kind: Text
         optional: true
-        cardinality: one
-        kind: Attribute
 
   - name: ServiceRange
     namespace: Security
@@ -335,12 +348,11 @@ nodes:
       - name: end
         kind: Number
         optional: false
-    relationships:
-      - name: ip_protocol
-        peer: SecurityIPProtocol
+      - name: protocol
+        kind: Text
+        enum: ["tcp", "udp", "icmp", "any"]
+        default_value: "tcp"
         optional: false
-        cardinality: one
-        kind: Attribute
 
   - name: ServiceGroup
     namespace: Security
@@ -366,6 +378,8 @@ nodes:
       - name__value
     order_by:
       - name__value
+    uniqueness_constraints:
+      - [name__value]
     attributes:
       - name: name
         label: Name
@@ -375,6 +389,11 @@ nodes:
         label: Description
         kind: Text
         optional: true
+      - name: parent_policy_name
+        kind: Text
+        optional: true
+        label: Parent Policy
+        description: "Name of parent policy (for organizational hierarchy)"
     relationships:
       - name: rules
         peer: SecurityPolicyRule
@@ -404,30 +423,10 @@ nodes:
     uniqueness_constraints:
       - [index__value, name__value, source_zone, destination_zone, policy]
     display_labels:
-      - index__value 
-      - name__value     
-    attributes:
-      - name: index
-        label: Index
-        kind: Number
-        optional: false
-        order_weight: 99999
-      - name: name
-        label: Name
-        kind: Text
-        optional: false
-      - name: action
-        label: Action
-        kind: Text
-        enum: ["permit", "deny"]
-        default_value: permit
-        optional: false
-      - name: log
-        label: Log
-        kind: Boolean
-        default_value: false
-        optional: true
-        order_weight: 99998
+      - index__value
+      - name__value
+    inherit_from:
+      - SecurityBasePolicyRule
     relationships:
       - name: policy
         peer: SecurityPolicy
@@ -448,54 +447,69 @@ nodes:
         optional: false
         order_weight: 2
         identifier: policy_rule__destination_zone
-      - name: source_address
+      # Consolidated source relationships
+      - name: source_objects
         peer: SecurityGenericAddress
         optional: true
         kind: Attribute
         cardinality: many
-        identifier: policy_rule__source_address
-      - name: source_groups
+        identifier: policy_rule__source_objects
+      - name: source_object_groups
         peer: SecurityGenericAddressGroup
         optional: true
         kind: Attribute
         cardinality: many
-        identifier: policy_rule__source_address_group
-      - name: source_services
-        peer: SecurityGenericService
-        optional: true
-        kind: Attribute
-        cardinality: many
-        identifier: policy_rule__source_service
-      - name: source_service_groups
-        peer: SecurityGenericServiceGroup
-        optional: true
-        kind: Attribute
-        cardinality: many
-        identifier: policy_rule__source_service_group
-      - name: destination_address
+        identifier: policy_rule__source_object_groups
+      - name: destination_objects
         peer: SecurityGenericAddress
         optional: true
         kind: Attribute
         cardinality: many
-        identifier: policy_rule__destination_address
-      - name: destination_groups
+        identifier: policy_rule__destination_objects
+      - name: destination_object_groups
         peer: SecurityGenericAddressGroup
         optional: true
         kind: Attribute
         cardinality: many
-        identifier: policy_rule__destination_address_group
-      - name: destination_services
+        identifier: policy_rule__destination_object_groups
+      # Consolidated service relationships
+      - name: services
         peer: SecurityGenericService
         optional: true
         kind: Attribute
         cardinality: many
-        identifier: policy_rule__destination_service
-      - name: destination_service_groups
+        identifier: policy_rule__services
+      - name: service_groups
         peer: SecurityGenericServiceGroup
         optional: true
         kind: Attribute
         cardinality: many
-        identifier: policy_rule__destination_service_group
+        identifier: policy_rule__service_groups
+      # Advanced security features
+      - name: applications
+        peer: SecurityApplication
+        optional: true
+        kind: Attribute
+        cardinality: many
+        identifier: policy_rule__applications
+      - name: url_categories
+        peer: SecurityURLCategory
+        optional: true
+        kind: Attribute
+        cardinality: many
+        identifier: policy_rule__url_categories
+      - name: security_profile
+        peer: SecuritySecurityProfile
+        optional: true
+        kind: Attribute
+        cardinality: one
+        identifier: policy_rule__security_profile
+      - name: schedule
+        peer: SecuritySchedule
+        optional: true
+        kind: Attribute
+        cardinality: one
+        identifier: policy_rule__schedule
 
   - name: RenderedPolicyRule
     namespace: Security
@@ -506,28 +520,8 @@ nodes:
       - source_zone__name__value
       - destination_zone__name__value
       - index__value
-    attributes:
-      - name: index
-        label: Index
-        kind: Number
-        optional: false
-        order_weight: 99999
-      - name: name
-        label: Name
-        kind: Text
-        optional: false
-      - name: action
-        label: Action
-        kind: Text
-        enum: ["permit", "deny"]
-        default_value: permit
-        optional: false
-      - name: log
-        label: Log
-        kind: Boolean
-        default_value: false
-        optional: true
-        order_weight: 99998
+    inherit_from:
+      - SecurityBasePolicyRule
     relationships:
       - name: source_policy
         peer: SecurityPolicy
@@ -548,55 +542,183 @@ nodes:
         optional: false
         identifier: rendered_policy_rule__destination_zone
         order_weight: 2
-      - name: source_address
+      # Consolidated source relationships
+      - name: source_objects
         peer: SecurityGenericAddress
         optional: true
         kind: Attribute
         cardinality: many
-        identifier: rendered_policy_rule__source_address
-      - name: source_groups
+        identifier: rendered_policy_rule__source_objects
+      - name: source_object_groups
         peer: SecurityGenericAddressGroup
         optional: true
         kind: Attribute
         cardinality: many
-        identifier: rendered_policy_rule__source_address_group
-      - name: source_services
-        peer: SecurityGenericService
-        optional: true
-        kind: Attribute
-        cardinality: many
-        identifier: rendered_policy_rule__source_service
-      - name: source_service_groups
-        peer: SecurityGenericServiceGroup
-        optional: true
-        kind: Attribute
-        cardinality: many
-        identifier: rendered_policy_rule__source_service_group
-      - name: destination_address
+        identifier: rendered_policy_rule__source_object_groups
+      - name: destination_objects
         peer: SecurityGenericAddress
         optional: true
         kind: Attribute
         cardinality: many
-        identifier: rendered_policy_rule__destination_address
-      - name: destination_groups
+        identifier: rendered_policy_rule__destination_objects
+      - name: destination_object_groups
         peer: SecurityGenericAddressGroup
         optional: true
         kind: Attribute
         cardinality: many
-        identifier: rendered_policy_rule__destination_address_group
-      - name: destination_services
+        identifier: rendered_policy_rule__destination_object_groups
+      # Consolidated service relationships
+      - name: services
         peer: SecurityGenericService
         optional: true
         kind: Attribute
         cardinality: many
-        identifier: rendered_policy_rule__destination_service
-      - name: destination_service_groups
+        identifier: rendered_policy_rule__services
+      - name: service_groups
         peer: SecurityGenericServiceGroup
         optional: true
         kind: Attribute
         cardinality: many
-        identifier: rendered_policy_rule__destination_service_group
+        identifier: rendered_policy_rule__service_groups
 
+
+  - name: Application
+    namespace: Security
+    menu_placement: SecurityPolicy
+    include_in_menu: true
+    icon: "mdi:application"
+    description: "Security application definition"
+    label: "Application"
+    human_friendly_id:
+      - name__value
+    display_labels:
+      - name__value
+    inherit_from:
+      - SecurityGenericService
+    attributes:
+      - name: category
+        kind: Text
+        optional: true
+        label: Category
+        description: "Application category (e.g., web-browsing, file-sharing)"
+      - name: subcategory
+        kind: Text
+        optional: true
+        label: Subcategory
+      - name: risk_level
+        kind: Number
+        optional: true
+        label: Risk Level
+        description: "Risk level (1-5, higher = more risky)"
+      - name: default_ports
+        kind: Text
+        optional: true
+        label: Default Ports
+        description: "Common ports used by this application"
+
+  - name: URLCategory
+    namespace: Security
+    menu_placement: SecurityPolicy
+    include_in_menu: true
+    icon: "mdi:web"
+    description: "URL category for web filtering"
+    label: "URL Category"
+    human_friendly_id:
+      - name__value
+    display_labels:
+      - name__value
+    attributes:
+      - name: name
+        kind: Text
+        optional: false
+        unique: true
+      - name: description
+        kind: Text
+        optional: true
+      - name: risk_level
+        kind: Text
+        enum: ["low", "medium", "high", "critical"]
+        default_value: "medium"
+        optional: false
+
+  - name: SecurityProfile
+    namespace: Security
+    menu_placement: SecurityPolicy
+    include_in_menu: true
+    icon: "mdi:shield-account"
+    description: "Security profile for device/user groups"
+    label: "Security Profile"
+    human_friendly_id:
+      - name__value
+    display_labels:
+      - name__value
+    attributes:
+      - name: name
+        kind: Text
+        optional: false
+        unique: true
+      - name: description
+        kind: Text
+        optional: true
+      - name: antivirus_enabled
+        kind: Boolean
+        default_value: true
+        optional: false
+      - name: ips_enabled
+        kind: Boolean
+        default_value: true
+        optional: false
+      - name: url_filtering_enabled
+        kind: Boolean
+        default_value: false
+        optional: false
+    relationships:
+      - name: blocked_url_categories
+        peer: SecurityURLCategory
+        cardinality: many
+        optional: true
+        kind: Attribute
+      - name: blocked_applications
+        peer: SecurityApplication
+        cardinality: many
+        optional: true
+        kind: Attribute
+
+  - name: Schedule
+    namespace: Security
+    menu_placement: SecurityPolicy
+    include_in_menu: true
+    icon: "mdi:calendar-clock"
+    description: "Time-based schedule for rules"
+    label: "Schedule"
+    human_friendly_id:
+      - name__value
+    display_labels:
+      - name__value
+    attributes:
+      - name: name
+        kind: Text
+        optional: false
+        unique: true
+      - name: description
+        kind: Text
+        optional: true
+      - name: days_of_week
+        kind: Text
+        optional: false
+        description: "Comma-separated list (e.g., 'monday,tuesday,friday')"
+      - name: start_time
+        kind: Text
+        optional: false
+        description: "Start time in HH:MM format"
+      - name: end_time
+        kind: Text
+        optional: false
+        description: "End time in HH:MM format"
+      - name: timezone
+        kind: Text
+        optional: true
+        default_value: "UTC"
 
 extensions:
   nodes:

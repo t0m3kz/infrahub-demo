@@ -1,0 +1,129 @@
+---
+apiVersion: infrahub.app/v1
+kind: InfrahubObject
+data:
+  - apiVersion: infrahub.app/v1
+    kind: ServiceSecurityPolicyGroup
+    spec:
+      name:
+        value: "corporate-access-policies"
+      description:
+        value: "Access control policies for corporate network"
+      status:
+        value: "provisioning"
+      policy_type:
+        value: "access_control"
+      enforcement_mode:
+        value: "enforce"
+      priority:
+        value: 10
+      owner:
+        - name: "dunder-mifflin"
+
+  - apiVersion: infrahub.app/v1
+    kind: ServiceSecurityPolicyGroup
+    spec:
+      name:
+        value: "threat-prevention-policies"
+      description:
+        value: "Threat prevention and IPS policies"
+      status:
+        value: "provisioning"
+      policy_type:
+        value: "threat_prevention"
+      enforcement_mode:
+        value: "enforce"
+      priority:
+        value: 5
+      owner:
+        - name: "dunder-mifflin"
+
+  - apiVersion: infrahub.app/v1
+    kind: ServiceSecurityPolicyGroup
+    spec:
+      name:
+        value: "web-filtering-policies"
+      description:
+        value: "URL and web content filtering policies"
+      status:
+        value: "provisioning"
+      policy_type:
+        value: "url_filtering"
+      enforcement_mode:
+        value: "enforce"
+      priority:
+        value: 20
+      owner:
+        - name: "dunder-mifflin"
+
+  - apiVersion: infrahub.app/v1
+    kind: ServiceSecurityPolicyGroup
+    spec:
+      name:
+        value: "application-control-policies"
+      description:
+        value: "Application awareness and control policies"
+      status:
+        value: "provisioning"
+      policy_type:
+        value: "application_control"
+      enforcement_mode:
+        value: "enforce"
+      priority:
+        value: 15
+      owner:
+        - name: "dunder-mifflin"
+
+  - apiVersion: infrahub.app/v1
+    kind: ServiceSecurityPolicyGroup
+    spec:
+      name:
+        value: "guest-network-policies"
+      description:
+        value: "Restricted policies for guest network access"
+      status:
+        value: "provisioning"
+      policy_type:
+        value: "access_control"
+      enforcement_mode:
+        value: "enforce"
+      priority:
+        value: 30
+      owner:
+        - name: "dunder-mifflin"
+
+  - apiVersion: infrahub.app/v1
+    kind: ServiceSecurityPolicyGroup
+    spec:
+      name:
+        value: "dmz-protection-policies"
+      description:
+        value: "DMZ protection and monitoring policies"
+      status:
+        value: "provisioning"
+      policy_type:
+        value: "threat_prevention"
+      enforcement_mode:
+        value: "enforce"
+      priority:
+        value: 8
+      owner:
+        - name: "dunder-mifflin"
+
+  - apiVersion: infrahub.app/v1
+    kind: ServiceSecurityPolicyGroup
+    spec:
+      name:
+        value: "data-loss-prevention-policies"
+      description:
+        value: "Data loss prevention and sensitive data protection"
+      status:
+        value: "provisioning"
+      policy_type:
+        value: "data_loss_prevention"
+      enforcement_mode:
+        value: "monitor"
+      priority:
+        value: 25
+      owner:
+        - name: "dunder-mifflin"

@@ -1,0 +1,29 @@
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: SecurityServiceGroup
+  data:
+    - name: "web-services"
+      description: "Web-related services"
+
+    - name: "mail-services"
+      description: "Email-related services"
+
+    - name: "management-services"
+      description: "Network management services"
+
+    - name: "file-transfer"
+      description: "File transfer services"
+
+    - name: "infrastructure-services"
+      description: "Core infrastructure services"
+
+    - name: "directory-services"
+      description: "Directory and authentication services"
+
+    - name: "database-services"
+      description: "Database access services"
+
+    - name: "monitoring-services"
+      description: "Network monitoring services"

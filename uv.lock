@@ -455,6 +455,7 @@ dependencies = [
 [package.dev-dependencies]
 dev = [
     { name = "infrahub-testcontainers" },
+    { name = "invoke" },
     { name = "mypy" },
     { name = "pytest" },
     { name = "pytest-asyncio" },
@@ -471,6 +472,7 @@ requires-dist = [
 [package.metadata.requires-dev]
 dev = [
     { name = "infrahub-testcontainers", specifier = ">=1.2.9" },
+    { name = "invoke", specifier = ">=2.2.0" },
     { name = "mypy", specifier = ">=1.15.0" },
     { name = "pytest", specifier = ">=8.3.5,<9.0.0" },
     { name = "pytest-asyncio", specifier = ">=0.26.0" },

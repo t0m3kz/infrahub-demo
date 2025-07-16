@@ -76,13 +76,13 @@ async def run(client: InfrahubClient, log: logging.Logger, branch: str) -> None:
             "provider": provider.id,
             "design": design.id,
             "management_subnet": client.store.get(
-                kind="IpamPrefix", key=DC_DEPLOYMENT.get("management")
+                kind="IpamPrefix", key=DC_DEPLOYMENT.get("management", "")
             ).id,
             "customer_subnet": client.store.get(
-                kind="IpamPrefix", key=DC_DEPLOYMENT.get("customer")
+                kind="IpamPrefix", key=DC_DEPLOYMENT.get("customer", "")
             ).id,
             "technical_subnet": client.store.get(
-                kind="IpamPrefix", key=DC_DEPLOYMENT.get("technical")
+                kind="IpamPrefix", key=DC_DEPLOYMENT.get("technical", "")
             ).id,
         }
     )
@@ -90,7 +90,7 @@ async def run(client: InfrahubClient, log: logging.Logger, branch: str) -> None:
         DC_DEPLOYMENT.update(
             {
                 "public_subnet": client.store.get(
-                    kind="IpamPrefix", key=DC_DEPLOYMENT.get("public")
+                    kind="IpamPrefix", key=DC_DEPLOYMENT.get("public", "")
                 ).id,
             }
         )

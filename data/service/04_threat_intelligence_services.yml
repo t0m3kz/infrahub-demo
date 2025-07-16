@@ -1,0 +1,103 @@
+---
+apiVersion: infrahub.app/v1
+kind: InfrahubObject
+data:
+  - apiVersion: infrahub.app/v1
+    kind: ServiceThreatIntelligenceService
+    spec:
+      name:
+        value: "ip-reputation-feed"
+      description:
+        value: "IP reputation threat intelligence feed"
+      status:
+        value: "provisioning"
+      feed_type:
+        value: "ip_reputation"
+      update_frequency:
+        value: "hourly"
+      confidence_threshold:
+        value: 80
+      auto_block:
+        value: true
+      owner:
+        - name: "dunder-mifflin"
+
+  - apiVersion: infrahub.app/v1
+    kind: ServiceThreatIntelligenceService
+    spec:
+      name:
+        value: "domain-reputation-feed"
+      description:
+        value: "Domain reputation and DNS security feed"
+      status:
+        value: "provisioning"
+      feed_type:
+        value: "domain_reputation"
+      update_frequency:
+        value: "hourly"
+      confidence_threshold:
+        value: 75
+      auto_block:
+        value: true
+      owner:
+        - name: "dunder-mifflin"
+
+  - apiVersion: infrahub.app/v1
+    kind: ServiceThreatIntelligenceService
+    spec:
+      name:
+        value: "url-reputation-feed"
+      description:
+        value: "URL reputation and malicious link detection"
+      status:
+        value: "provisioning"
+      feed_type:
+        value: "url_reputation"
+      update_frequency:
+        value: "real_time"
+      confidence_threshold:
+        value: 70
+      auto_block:
+        value: false
+      owner:
+        - name: "dunder-mifflin"
+
+  - apiVersion: infrahub.app/v1
+    kind: ServiceThreatIntelligenceService
+    spec:
+      name:
+        value: "malware-signature-feed"
+      description:
+        value: "Malware signatures and file hash intelligence"
+      status:
+        value: "provisioning"
+      feed_type:
+        value: "file_hash"
+      update_frequency:
+        value: "hourly"
+      confidence_threshold:
+        value: 90
+      auto_block:
+        value: true
+      owner:
+        - name: "dunder-mifflin"
+
+  - apiVersion: infrahub.app/v1
+    kind: ServiceThreatIntelligenceService
+    spec:
+      name:
+        value: "botnet-c2-feed"
+      description:
+        value: "Botnet command and control server intelligence"
+      status:
+        value: "provisioning"
+      feed_type:
+        value: "botnet_c2"
+      update_frequency:
+        value: "real_time"
+      confidence_threshold:
+        value: 85
+      auto_block:
+        value: true
+      owner:
+        - name: "dunder-mifflin"
