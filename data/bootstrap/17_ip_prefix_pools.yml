@@ -1,0 +1,49 @@
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: CoreIPPrefixPool
+  data:
+    - name: Technical-IPv4
+      description: Technical IPv4 Prefix Pool
+      default_prefix_type: IpamPrefix
+      default_prefix_length: 23
+      resources:
+        kind: IpamPrefix
+        default_prefix_type: IpamPrefix
+        default_prefix_length: 22
+        data:
+          - prefix: 1.0.0.0/16
+            description: Technical IPv4 Prefix Pool
+            status: active
+            member_type: prefix
+            is_pool: true
+            role: technical
+      ip_namespace: default
+    - name: Management-IPv4
+      description: Management IPv4 Prefix Pool
+      default_prefix_type: IpamPrefix
+      default_prefix_length: 24
+      resources:
+        kind: IpamPrefix
+        data:
+          - prefix: 172.16.0.0/18
+            description: Management IPv4 Prefix Pool
+            status: active
+            member_type: prefix
+            is_pool: true
+            role: management
+      ip_namespace: default
+    - name: Customer-IPv4
+      description: Customer IPv4 Prefix Pool
+      default_prefix_type: IpamPrefix
+      default_prefix_length: 25
+      resources:
+        kind: IpamPrefix
+        data:
+          - prefix: 10.0.0.0/17
+            description: Customer IPv4 Prefix Pool
+            status: active
+            member_type: prefix
+            is_pool: true
+            role: customer
+      ip_namespace: default
