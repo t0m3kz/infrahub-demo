@@ -10,13 +10,3 @@ spec:
       mutation_action: created
       action: dc
       branch_scope: other_branches
-    - name: dc-on-update
-      description: Trigger on create of any node
-      node_kind: TopologyDataCenter
-      mutation_action: updated
-      action: dc
-      branch_scope: other_branches
-
-
-
-

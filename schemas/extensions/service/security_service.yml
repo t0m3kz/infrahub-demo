@@ -45,11 +45,6 @@ nodes:
             label: "VPN Gateway"
             description: "Virtual private network service"
             color: "#44ffff"
-      - name: high_availability
-        kind: Boolean
-        description: "High availability configuration"
-        default_value: false
-        order_weight: 200
       - name: throughput_mbps
         kind: Number
         description: "Maximum throughput in Mbps"
@@ -82,22 +77,6 @@ nodes:
         optional: true
         description: "Networks protected by this service"
         order_weight: 700
-      - name: primary_device
-        peer: DcimGenericDevice
-        cardinality: one
-        kind: Attribute
-        optional: true
-        description: "Primary security device"
-        identifier: security_service__primary_device
-        order_weight: 800
-      - name: backup_device
-        peer: DcimGenericDevice
-        cardinality: one
-        kind: Attribute
-        optional: true
-        description: "Backup security device for HA"
-        identifier: security_service__backup_device
-        order_weight: 900
 
   - name: SecurityServiceEndpoint
     namespace: Service
@@ -351,33 +330,6 @@ nodes:
 
 extensions:
   nodes:
-    - kind: DcimGenericDevice
-      relationships:
-        - name: security_services
-          peer: ServiceSecurityService
-          cardinality: many
-          optional: true
-          kind: Attribute
-          label: "Security Services"
-          description: "Security services running on this device"
-          identifier: device__security_services
-        - name: primary_security_service
-          peer: ServiceSecurityService
-          cardinality: many
-          optional: true
-          kind: Attribute
-          label: "Primary Security Service"
-          description: "Security service where this is primary device"
-          identifier: device__primary_security_service
-        - name: backup_security_service
-          peer: ServiceSecurityService
-          cardinality: many
-          optional: true
-          kind: Attribute
-          label: "Backup Security Service"
-          description: "Security service where this is backup device"
-          identifier: device__backup_security_service
-
     - kind: SecurityPolicy
       relationships:
         - name: security_services
