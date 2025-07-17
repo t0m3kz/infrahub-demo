@@ -138,14 +138,6 @@ nodes:
         optional: true
         description: "Associated security zone"
         order_weight: 500
-      - name: interface
-        peer: DcimInterface
-        cardinality: one
-        kind: Attribute
-        optional: true
-        description: "Physical/virtual interface"
-        identifier: security_endpoint__interface
-        order_weight: 600
       - name: network_segment
         peer: ServiceNetworkSegment
         cardinality: one
@@ -374,12 +366,3 @@ extensions:
           label: "Security Services"
           description: "Security services protecting this network"
 
-    - kind: DcimInterface
-      relationships:
-        - name: security_endpoints
-          peer: ServiceSecurityServiceEndpoint
-          cardinality: many
-          optional: true
-          kind: Attribute
-          label: "Security Endpoints"
-          description: "Security service endpoints on this interface"
