@@ -6,8 +6,12 @@ from infrahub_sdk.exceptions import GraphQLError, ValidationError
 from infrahub_sdk.protocols import CoreIPAddressPool
 from netutils.interface import sort_interface_list
 
-from .schema_protocols import (DcimConsoleInterface, DcimPhysicalInterface,
-                               DcimVirtualInterface, ServiceBGPSession)
+from .schema_protocols import (
+    DcimConsoleInterface,
+    DcimPhysicalInterface,
+    DcimVirtualInterface,
+    ServiceBGPSession,
+)
 
 
 def clean_data(data: Any):
@@ -246,14 +250,12 @@ class TopologyCreator:
                         )
                     ],
                     "primary_address": await self.client.allocate_next_ip_address(
-                                resource_pool=self.client.store.get(
-                                    kind=CoreIPAddressPool, key="management_ip_pool"
-                                ),
-                                identifier=f"{name}-management",
-                                data={
-                                    "description": f"{name} Management IP"
-                                },
-                            ),
+                        resource_pool=self.client.store.get(
+                            kind=CoreIPAddressPool, key="management_ip_pool"
+                        ),
+                        identifier=f"{name}-management",
+                        data={"description": f"{name} Management IP"},
+                    ),
                 }
                 # Append the constructed dictionary to data_list
                 data_list.append({"payload": payload, "store_key": name})
@@ -269,7 +271,6 @@ class TopologyCreator:
             ._hfids["DcimGenericDevice"]
             .keys()
         ]
-
 
     async def create_oob_connections(
         self,
@@ -321,16 +322,20 @@ class TopologyCreator:
 
         for connection in connections:
             source_endpoint = await self.client.get(
-                kind=DcimPhysicalInterface
-                if connection_type == "management"
-                else DcimConsoleInterface,
+                kind=(
+                    DcimPhysicalInterface
+                    if connection_type == "management"
+                    else DcimConsoleInterface
+                ),
                 name__value=connection["source_interface"],
                 device__name__value=connection["source"],
             )
             target_endpoint = await self.client.get(
-                kind=DcimPhysicalInterface
-                if connection_type == "management"
-                else DcimConsoleInterface,
+                kind=(
+                    DcimPhysicalInterface
+                    if connection_type == "management"
+                    else DcimConsoleInterface
+                ),
                 name__value=connection["destination_interface"],
                 device__name__value=connection["target"],
             )
@@ -614,5 +619,3 @@ class TopologyCreator:
                 self.log.info(f"- Created [{node.get_kind()}] {node.description.value}")
         except ValidationError as exc:
             self.log.debug(f"- Creation failed due to {exc}")
-
-

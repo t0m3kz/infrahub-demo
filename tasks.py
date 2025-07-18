@@ -105,7 +105,9 @@ def kafka_logs(context: Context) -> None:
 @task
 def kafka_console(context: Context, topic: str = "infrahub.events") -> None:
     """Start Kafka console consumer to monitor events."""
-    context.run(f"docker exec -it kafka kafka-console-consumer --bootstrap-server localhost:9092 --topic {topic} --from-beginning")
+    context.run(
+        f"docker exec -it kafka kafka-console-consumer --bootstrap-server localhost:9092 --topic {topic} --from-beginning"
+    )
 
 
 @task

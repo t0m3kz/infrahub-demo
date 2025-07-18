@@ -30,4 +30,3 @@ class DCTopologyGenerator(InfrahubGenerator):
         await network_creator.create_loopback("loopback0")
         await network_creator.create_ospf_underlay()
         await network_creator.create_ibgp_overlay("loopback0")
-

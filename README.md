@@ -20,7 +20,6 @@
 - Modular structure for easy extension and experimentation
 
 ## Project Structure
-- [`bootstrap/`](bootstrap/) – Demo and data bootstrap scripts
 - [`checks/`](checks/) – Custom validation logic
 - [`data/`](data/) – Example data for bootstrapping
 - [`generators/`](generators/) – Topology and config generators
