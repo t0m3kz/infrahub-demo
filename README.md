@@ -40,7 +40,7 @@ Deploy demo using Codespaces:
 
 ### Install the Infrahub SDK
 ```bash
-uv sync 
+uv sync
 ```
 
 ### Start Infrahub
@@ -67,34 +67,40 @@ Load demo data
 ```bash
 uv run infrahubctl object load data/bootstrap
 ```
+
+Load sample security data
+```bash
+uv run infrahubctl object load data/security/
+````
+
 Add demo repository
 ```bash
 uv run infrahubctl repository add DEMO https://github.com/t0m3kz/infrahub-demo.git --read-only
 ```
+
+Add event actions (optional)
+```bash
+uv run infrahubctl object load data/events/
+````
+
 You can also use the script to execute all previous steps:
 ```bash
 ./scripts/bootstrap.sh
 ```
 
-## Demo Use Cases
-Currently there are 3 demo use cases: firewall, router, and design. You can use the script to generate all use cases (the script will create a separate branch for each demo):
-```bash
-./scripts/demo.sh firewall or router or design
-```
-
 ### Demo 1 - Data Center
 In this demo, configuration is generated for a composable data center.
 ```bash
-./scripts/demo.sh design
+./scripts/demo.sh design dc-2
 ```
 If you would like to process all steps manually, follow these steps:
 1. Create branch
     ```bash
-    infrahubctl branch create my-branch
+    uv run infrahubctl branch create my-branch
     ```
-2. Load example design data stored as statics in `demo_design.py`:
+2. Load example design data stored in data/dc-2 file:
     ```bash
-    infrahubctl run bootstrap/demo_design.py --branch my-branch
+    uv run infrahubctl object load data/ --branch my-branch
     ```
    You can review designs in Design Patterns and in Design Elements.
    New deployment should be added into Services -> Topology Deployments -> Data center
@@ -107,8 +113,10 @@ If you would like to process all steps manually, follow these steps:
 9. Select design as source branch, add name and Create proposed change
 10. Wait until all tasks are completed and check the artifacts/data
 
+If you added event actions steps 4, 5 will be executed automatically.
+
 ## CI/CD
-This project uses GitHub Actions for continuous integration. All pushes and pull requests are tested for lint, type checks, and unit tests. Coverage is reported via Codecov.
+This project uses GitHub Actions for continuous integration. All pushes and pull requests are tested for lint, type checks, and unit tests.
 
 ## Security & Secrets
 - Do not commit real API tokens. Use `.env` or GitHub secrets for sensitive data in production.
@@ -117,7 +125,7 @@ This project uses GitHub Actions for continuous integration. All pushes and pull
 ## Troubleshooting
 - If you encounter port conflicts, ensure no other service is running on port 8000.
 - For dependency issues, run `uv sync` again.
-- For Docker/containerlab issues, ensure Docker is running and you have the correct permissions.
+- For Docker/infrahub issues, ensure Docker is running and you have the correct permissions.
 
 ## Testing
 Run all tests using:
