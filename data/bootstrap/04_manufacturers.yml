@@ -3,7 +3,7 @@ apiVersion: infrahub.app/v1
 kind: Object
 spec:
   kind: OrganizationManufacturer
-  data: 
+  data:
     - name: "Cisco"
     - name: "Juniper"
     - name: "Arista"
@@ -12,4 +12,5 @@ spec:
     - name: "Sonic"
     - name: "Linux"
     - name: "Edgecore"
-    - name: "Alcatel"    
+    - name: "Alcatel"
+    - name: "Check Point"

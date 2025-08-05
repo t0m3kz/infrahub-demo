@@ -7,9 +7,9 @@ spec:
       location: Munich
       description: Munich Data Center
       strategy: ospf-ibgp
-      design: "DC CISCO S"
+      design: PHYSICAL DC CISCO S
       emulation: True
-      provider: "Technology Partner"
+      provider: Technology Partner
       management_subnet:
         data:
           prefix: 172.20.3.0/24
@@ -25,3 +25,6 @@ spec:
           prefix: 1.3.0.0/24
           status: active
           role: loopback
+      member_of_groups:
+        - topologies_dc
+        - topologies_clab

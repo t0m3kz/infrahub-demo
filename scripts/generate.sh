@@ -1,4 +1,4 @@
 echo "Generating $1 Data Center"
-uv run infrahubctl generator create_dc name=$1 --branch $2
+uv run infrahubctl generator create_$1 name=$2 --branch $3
 
 

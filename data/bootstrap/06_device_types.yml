@@ -157,7 +157,7 @@ spec:
       full_depth: false
       manufacturer: Cisco
       platform: Cisco NX-OS
-      
+
     - name: N9K-C9336PQ
       part_number: N9K-C9336PQ
       height: 1
@@ -311,3 +311,17 @@ spec:
       full_depth: false
       manufacturer: Edgecore
       platform: Sonic OS
+
+    - name: C8000V
+      # part_number: null
+      height: 0
+      full_depth: false
+      manufacturer: Cisco
+      platform: Cisco IOS-XE
+
+    - name: CloudGuard
+      part_number: CloudGuard-Network-Security
+      height: 0
+      full_depth: false
+      manufacturer: Check Point
+      platform: Check Point Gaia

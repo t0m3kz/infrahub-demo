@@ -7,9 +7,9 @@ spec:
       location: Katowice
       description: Katowice Data Center
       strategy: ospf-ibgp
-      design: "DC SONIC S"
+      design: PHYSICAL DC SONIC S
       emulation: True
-      provider: "Technology Partner"
+      provider: Technology Partner
       management_subnet:
         data:
           prefix: 172.20.2.0/24
@@ -27,4 +27,4 @@ spec:
           role: loopback
       member_of_groups:
         - topologies_dc
-
+        - topologies_clab

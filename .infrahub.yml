@@ -1,232 +1,232 @@
 ---
 jinja2_transforms:
   # Cisco
-  # - name: "cisco_pop_router"
-  #   description: "Template to generate startup configuration for a cisco POP router"
-  #   query: "pop_config"
-  #   template_path: "templates/configs/cisco_pop_router.j2"
-  - name: "cisco_leaf"
-    description: "Template to generate startup configuration for a cisco DC leaf"
-    query: "leaf_config"
-    template_path: "templates/configs/cisco_leaf.j2"
-  - name: "cisco_spine"
-    description: "Template to generate startup configuration for a cisco DC spine"
-    query: "spine_config"
-    template_path: "templates/configs/cisco_spine.j2"
-  # - name: "cisco_dc_oob"
-  #   description: "Template to generate startup configuration for a cisco DC OOB"
-  #   query: "dc_oob_config"
-  #   template_path: "templates/configs/cisco_dc_oob.j2"
+  # - name: cisco_pop_router
+  #   description: Template to generate startup configuration for a cisco POP router
+  #   query: pop_config
+  #   template_path: templates/configs/cisco_pop_router.j2
+  - name: cisco_leaf
+    description: Template to generate startup configuration for a cisco DC leaf
+    query: leaf_config
+    template_path: templates/configs/cisco_leaf.j2
+  - name: cisco_spine
+    description: Template to generate startup configuration for a cisco DC spine
+    query: spine_config
+    template_path: templates/configs/cisco_spine.j2
+  # - name: cisco_dc_oob
+  #   description: Template to generate startup configuration for a cisco DC OOB
+  #   query: dc_oob_config
+  #   template_path: templates/configs/cisco_dc_oob.j2
   # Juniper
-  # - name: "juniper_firewall"
-  #   description: "Template to generate startup configuration for a Juniper SRX Firewall"
-  #   query: "firewall_config"
-  #   template_path: "templates/configs/juniper_srx.j2"
+  # - name: juniper_firewall
+  #   description: Template to generate startup configuration for a Juniper SRX Firewall
+  #   query: firewall_config
+  #   template_path: templates/configs/juniper_srx.j2
   # Arista
-  # - name: "arista_pop_router"
-  #   description: "Template to generate startup configuration for a arista POP router"
-  #   query: "pop_config"
-  #   template_path: "templates/configs/arista_pop_router.j2"
-  # - name: "arista_dc_leaf"
-  #   description: "Template to generate startup configuration for a arista DC leaf"
-  #   query: "dc_leaf_config"
-  #   template_path: "templates/configs/arista_dc_leaf.j2"
-  # - name: "arista_dc_spine"
-  #   description: "Template to generate startup configuration for a arista DC spine"
-  #   query: "dc_spine_config"
-  #   template_path: "templates/configs/arista_dc_spine.j2"
+  # - name: arista_pop_router
+  #   description: Template to generate startup configuration for a arista POP router
+  #   query: pop_config
+  #   template_path: templates/configs/arista_pop_router.j2
+  # - name: arista_dc_leaf
+  #   description: Template to generate startup configuration for a arista DC leaf
+  #   query: dc_leaf_config
+  #   template_path: templates/configs/arista_dc_leaf.j2
+  # - name: arista_dc_spine
+  #   description: Template to generate startup configuration for a arista DC spine
+  #   query: dc_spine_config
+  #   template_path: templates/configs/arista_dc_spine.j2
   # Perle
-  # - name: "perle_console"
-  #   description: "Template to generate startup configuration for a perle DC console"
-  #   query: "console_config"
-  #   template_path: "templates/configs/perle_console.j2"
+  # - name: perle_console
+  #   description: Template to generate startup configuration for a perle DC console
+  #   query: console_config
+  #   template_path: templates/configs/perle_console.j2
 
 
   # Containerlab
-  - name: "topology_clab"
-    description: "Template to generate a containerlab topology"
-    query: "topology_simulator"
-    template_path: "templates/clab_topology.j2"
+  - name: topology_clab
+    description: Template to generate a containerlab topology
+    query: topology_simulator
+    template_path: templates/clab_topology.j2
 
 artifact_definitions:
   # Cisco
-  # - name: "Cisco POP config"
-  #   artifact_name: "cisco-pop-router"
-  #   content_type: "text/plain"
-  #   targets: "cisco_pop_router"
-  #   transformation: "cisco_pop_router"
+  # - name: Cisco POP config
+  #   artifact_name: cisco-pop-router
+  #   content_type: text/plain
+  #   targets: cisco_pop_router
+  #   transformation: cisco_pop_router
   #   parameters:
-  #     device: "name__value"
-  - name: "Cisco leaf config"
-    artifact_name: "cisco-leaf"
-    content_type: "text/plain"
-    targets: "cisco_leaf"
-    transformation: "cisco_leaf"
+  #     device: name__value
+  - name: Cisco leaf config
+    artifact_name: cisco-leaf
+    content_type: text/plain
+    targets: cisco_leaf
+    transformation: cisco_leaf
     parameters:
-      device: "name__value"
-  - name: "Cisco spine config"
-    artifact_name: "cisco-spine"
-    content_type: "text/plain"
-    targets: "cisco_spine"
-    transformation: "cisco_spine"
+      device: name__value
+  - name: Cisco spine config
+    artifact_name: cisco-spine
+    content_type: text/plain
+    targets: cisco_spine
+    transformation: cisco_spine
     parameters:
-      device: "name__value"
-  # - name: "Cisco DC OOB config"
-  #   artifact_name: "cisco-dc-oob"
-  #   content_type: "text/plain"
-  #   targets: "cisco_dc_oob"
-  #   transformation: "cisco_dc_oob"
+      device: name__value
+  # - name: Cisco DC OOB config
+  #   artifact_name: cisco-dc-oob
+  #   content_type: text/plain
+  #   targets: cisco_dc_oob
+  #   transformation: cisco_dc_oob
   #   parameters:
-  #     device: "name__value"
+  #     device: name__value
   # Arista
-  # - name: "Arista POP config"
-  #   artifact_name: "arista-pop-router"
-  #   content_type: "text/plain"
-  #   targets: "arista_pop_router"
-  #   transformation: "arista_pop_router"
+  # - name: Arista POP config
+  #   artifact_name: arista-pop-router
+  #   content_type: text/plain
+  #   targets: arista_pop_router
+  #   transformation: arista_pop_router
   #   parameters:
-  #     device: "name__value"
-  # - name: "Arista DC leaf config"
-  #   artifact_name: "arista-dc-leaf"
-  #   content_type: "text/plain"
-  #   targets: "arista_dc_leaf"
-  #   transformation: "arista_dc_leaf"
+  #     device: name__value
+  # - name: Arista DC leaf config
+  #   artifact_name: arista-dc-leaf
+  #   content_type: text/plain
+  #   targets: arista_dc_leaf
+  #   transformation: arista_dc_leaf
   #   parameters:
-  #     device: "name__value"
-  # - name: "Arista DC spine config"
-  #   artifact_name: "arista-dc-spine"
-  #   content_type: "text/plain"
-  #   targets: "arista_dc_spine"
-  #   transformation: "arista_dc_spine"
+  #     device: name__value
+  # - name: Arista DC spine config
+  #   artifact_name: arista-dc-spine
+  #   content_type: text/plain
+  #   targets: arista_dc_spine
+  #   transformation: arista_dc_spine
   #   parameters:
-  #     device: "name__value"
+  #     device: name__value
   # Juniper
-  # - name: "Juniper DC firewall config"
-  #   artifact_name: "juniper-dc-firewall"
-  #   content_type: "text/plain"
-  #   targets: "juniper_dc_firewall"
-  #   transformation: "juniper_firewall"
+  # - name: Juniper DC firewall config
+  #   artifact_name: juniper-dc-firewall
+  #   content_type: text/plain
+  #   targets: juniper_dc_firewall
+  #   transformation: juniper_firewall
   #   parameters:
-  #     device: "name__value"
-  # - name: "Juniper POP firewall config"
-  #   artifact_name: "juniper-pop-firewall"
-  #   content_type: "text/plain"
-  #   targets: "juniper_pop_firewall"
-  #   transformation: "juniper_firewall"
+  #     device: name__value
+  # - name: Juniper POP firewall config
+  #   artifact_name: juniper-pop-firewall
+  #   content_type: text/plain
+  #   targets: juniper_pop_firewall
+  #   transformation: juniper_firewall
   #   parameters:
-  #     device: "name__value"
+  #     device: name__value
   # Perle
-  # - name: "Perle DC console config"
-  #   artifact_name: "perle-dc-console"
-  #   content_type: "text/plain"
-  #   targets: "perle_dc_console"
-  #   transformation: "perle_console"
+  # - name: Perle DC console config
+  #   artifact_name: perle-dc-console
+  #   content_type: text/plain
+  #   targets: perle_dc_console
+  #   transformation: perle_console
   #   parameters:
-  #     device: "name__value"
-  # - name: "Perle POP console config"
-  #   artifact_name: "perle-pop-console"
-  #   content_type: "text/plain"
-  #   targets: "perle_pop_console"
-  #   transformation: "perle_console"
+  #     device: name__value
+  # - name: Perle POP console config
+  #   artifact_name: perle-pop-console
+  #   content_type: text/plain
+  #   targets: perle_pop_console
+  #   transformation: perle_console
   #   parameters:
-  #     device: "name__value"
+  #     device: name__value
   # Sonic
-  - name: "Edgecore leaf config"
-    artifact_name: "edgecore-leaf"
-    content_type: "application/json"
-    targets: "edgecore_leaf"
-    transformation: "edgecore_leaf"
+  - name: Edgecore leaf config
+    artifact_name: edgecore-leaf
+    content_type: application/json
+    targets: edgecore_leaf
+    transformation: edgecore_leaf
     parameters:
-      device: "name__value"
-  - name: "Edgecore spine config"
-    artifact_name: "edgecore-spine"
-    content_type: "application/json"
-    targets: "edgecore_spine"
-    transformation: "edgecore_spine"
+      device: name__value
+  - name: Edgecore spine config
+    artifact_name: edgecore-spine
+    content_type: application/json
+    targets: edgecore_spine
+    transformation: edgecore_spine
     parameters:
-      device: "name__value"
+      device: name__value
   # Containerlab
-  - name: "Containerlab Topology"
-    artifact_name: "containerlab-topology"
-    content_type: "text/plain"
-    targets: "topologies_clab"
-    transformation: "topology_clab"
+  - name: Containerlab Topology
+    artifact_name: containerlab-topology
+    content_type: text/plain
+    targets: topologies_clab
+    transformation: topology_clab
     parameters:
-      name: "name__value"
+      name: name__value
 
-  - name: "Cable marix for Topology"
-    artifact_name: "topology-cabling"
-    content_type: "text/plain"
-    targets: "topologies_dc"
-    transformation: "topology_cabling"
+  - name: Cable marix for Topology
+    artifact_name: topology-cabling
+    content_type: text/plain
+    targets: topologies_dc
+    transformation: topology_cabling
     parameters:
-      name: "name__value"
+      name: name__value
 
 check_definitions:
   - name: validate_spine
     class_name: CheckSonicSpine
-    file_path: "checks/sonic_spine.py"
-    targets: "edgecore_spine"
+    file_path: checks/sonic_spine.py
+    targets: edgecore_spine
     parameters:
-      device: "name__value"
+      device: name__value
   - name: validate_leaf
     class_name: CheckSonicLeaf
-    file_path: "checks/sonic_leaf.py"
-    targets: "edgecore_leaf"
+    file_path: checks/sonic_leaf.py
+    targets: edgecore_leaf
     parameters:
-      device: "name__value"
+      device: name__value
 
 python_transforms:
   - name: topology_cabling
     class_name: TopologyCabling
-    file_path: "transforms/topology_cabling.py"
+    file_path: transforms/topology_cabling.py
   - name: edgecore_leaf
     class_name: SonicLeaf
-    file_path: "transforms/sonic_leaf.py"
+    file_path: transforms/sonic_leaf.py
   - name: edgecore_spine
     class_name: SonicSpine
-    file_path: "transforms/sonic_spine.py"
+    file_path: transforms/sonic_spine.py
 
 generator_definitions:
   - name: create_dc
-    file_path: "generators/generate_dc.py"
+    file_path: generators/generate_dc.py
     targets: topologies_dc
     query: topology_dc
     class_name: DCTopologyGenerator
     parameters:
-      name: "name__value"
+      name: name__value
   - name: create_pop
-    file_path: "generators/generate_pop.py"
+    file_path: generators/generate_pop.py
     targets: topologies_pop
     query: topology_pop
     class_name: PopTopologyGenerator
     parameters:
-      name: "name__value"
+      name: name__value
 
 
 queries:
   - name: topology_dc
-    file_path: "queries/topology_dc.gql"
+    file_path: queries/topology_dc.gql
   - name: topology_pop
-    file_path: "queries/topology_pop.gql"    
+    file_path: queries/topology_pop.gql
   - name: topology_simulator
-    file_path: "queries/topology_clab.gql"
+    file_path: queries/topology_clab.gql
   - name: topology_cabling
-    file_path: "queries/topology_cabling.gql"
+    file_path: queries/topology_cabling.gql
   # - name: topology_pop
-  #   file_path: "queries/topology_pop.gql"
+  #   file_path: queries/topology_pop.gql
   # - name: firewall_config
-  #   file_path: "queries/firewall_config.gql"
+  #   file_path: queries/firewall_config.gql
   # - name: pop_config
-  #   file_path: "queries/pop_config.gql"
+  #   file_path: queries/pop_config.gql
   - name: leaf_config
-    file_path: "queries/leaf_config.gql"
+    file_path: queries/leaf_config.gql
   - name: spine_config
-    file_path: "queries/spine_config.gql"
+    file_path: queries/spine_config.gql
   # - name: dc_oob_config
-  #   file_path: "queries/dc_oob_config.gql"
+  #   file_path: queries/dc_oob_config.gql
   # - name: console_config
-  #   file_path: "queries/console_config.gql"
+  #   file_path: queries/console_config.gql
 # schemas:
 #   - schemas/
 # menus:
