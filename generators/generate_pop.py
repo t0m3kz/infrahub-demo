@@ -15,6 +15,8 @@ class PopTopologyGenerator(InfrahubGenerator):
             data = cleaned_data["TopologyColocationCenter"][0]
         else:
             raise ValueError("clean_data() did not return a dictionary")
+
+        self.logger.info(f"Data: {data}")
         network_creator = TopologyCreator(
             client=self.client, log=self.logger, branch=self.branch, data=data
         )

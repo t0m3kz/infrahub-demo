@@ -181,7 +181,7 @@ nodes:
         optional: true
       - name: quantity
         kind: Number
-        order_weight: 1200    
+        order_weight: 1200
       - name: role
         kind: Dropdown
         optional: true
@@ -214,11 +214,11 @@ nodes:
           - name: dc_firewall
             label: DC Firewall
             description: "Security boundary with external network"
-            color: "#6e5abd"           
+            color: "#6e5abd"
           - name: edge_firewall
             label: Edge Firewall
             description: "Security boundary with external network"
-            color: "#6a5acd"    
+            color: "#6a5acd"
           - name: branch_firewall
             label: Branch Firewall
             description: "Security boundary with external network"
@@ -392,8 +392,8 @@ nodes:
         optional: true
         cardinality: one
         kind: Attribute
-        identifier: public_subnet  
-        order_weight: 13      
+        identifier: public_subnet
+        order_weight: 13
       - name: provider
         peer: OrganizationProvider
         optional: false
@@ -412,8 +412,22 @@ nodes:
       - CoreArtifactTarget
       - TopologyDeployment
     relationships:
-      - name: asn
-        peer: ServiceAutonomousSystem
+      - name: technical_subnet
+        peer: IpamPrefix
+        optional: false
+        cardinality: one
+        kind: Attribute
+        identifier: technical_subnet
+        order_weight: 12
+      - name: public_subnet
+        peer: IpamPrefix
+        optional: true
+        cardinality: one
+        kind: Attribute
+        identifier: public_subnet
+        order_weight: 13
+      - name: provider
+        peer: OrganizationProvider
         optional: false
         cardinality: one
         kind: Attribute

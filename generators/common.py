@@ -33,6 +33,8 @@ def clean_data(data: Any):
                     result[key] = None
                 else:
                     result[key] = clean_data(value)
+            elif "__" in key:
+                result[key.replace("__", "")] = value
             else:
                 result[key] = clean_data(value)
         return result
@@ -123,7 +125,7 @@ class TopologyCreator:
             kind="CoreStandardGroup",
             name__values=list(
                 set(
-                    f"{item['device_type']['manufacturer']['name'].lower()}_{item['role']}"
+                    f"{item['device_type']['manufacturer']['name'].lower().replace(' ', '_')}_{item['role']}"
                     for item in self.data["design"]["elements"]
                 )
             ),
@@ -214,7 +216,9 @@ class TopologyCreator:
     async def create_devices(self) -> None:
         self.log.info(f"Create devices for {self.data.get('name')}")
         # ... fetch device groups and templates logic ...
-        data_list: list = []
+        physical_devices: list = []
+        virtual_devices: list = []
+        # data_list: list = []
         role_counters: dict = {}
         topology_name = self.data.get("name", "")
 
@@ -246,7 +250,7 @@ class TopologyCreator:
                     "topology": self.data.get("id"),
                     "member_of_groups": [
                         self.client.store.get_by_hfid(
-                            key=f"CoreStandardGroup__{device['device_type']['manufacturer']['name'].lower()}_{device['role']}"
+                            key=f"CoreStandardGroup__{device['device_type']['manufacturer']['name'].lower().replace(' ', '_')}_{device['role']}"
                         )
                     ],
                     "primary_address": await self.client.allocate_next_ip_address(
@@ -257,13 +261,36 @@ class TopologyCreator:
                         data={"description": f"{name} Management IP"},
                     ),
                 }
-                # Append the constructed dictionary to data_list
-                data_list.append({"payload": payload, "store_key": name})
+                # Append the constructed dictionary to respective lists
 
-        await self._create_in_batch(
-            kind="DcimPhysicalDevice",
-            data_list=data_list,
-        )
+                device_entry = {"payload": payload, "store_key": name}
+                (
+                    virtual_devices
+                    if "Virtual" in device["template"]["typename"]
+                    else physical_devices
+                ).append(device_entry)
+
+                # if "Virtual" in device["typename"]:
+                #     virtual_devices.append({"payload": payload, "store_key": name})
+                # else:
+                #     physical_devices.append({"payload": payload, "store_key": name})
+
+        for kind, devices in [
+            ("DcimPhysicalDevice", physical_devices),
+            ("DcimVirtualDevice", virtual_devices),
+        ]:
+            if devices:
+                await self._create_in_batch(kind=kind, data_list=devices)
+
+        # if physical_devices:
+        #     await self._create_in_batch(
+        #         kind="DcimPhysicalDevice", data_list=physical_devices
+        #     )
+        # if virtual_devices:
+        #     await self._create_in_batch(
+        #         kind="DcimVirtualDevice",
+        #         data_list=virtual_devices,
+        #     )
 
         self.devices = [
             self.client.store.get_by_hfid(f"DcimGenericDevice__{device[0]}")

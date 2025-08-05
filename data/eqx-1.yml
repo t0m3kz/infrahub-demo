@@ -1,30 +1,29 @@
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
-  kind: TopologyDataCenter
+  kind: TopologyColocationCenter
   data:
-    - name: DC-2
-      location: Katowice
-      description: Katowice Data Center
-      strategy: ospf-ibgp
-      design: PHYSICAL DC SONIC S
+    - name: EQX-1
+      location: London
+      description: London Virtual POP
+      design: VIRTUAL POP S
       emulation: True
-      provider: Technology Partner
+      provider: Equinix
       management_subnet:
         data:
-          prefix: 172.20.2.0/24
+          prefix: 172.20.20.0/24
           status: active
           role: management
       customer_subnet:
         data:
-          prefix: 10.2.0.0/16
+          prefix: 10.20.0.0/16
           status: active
           role: supernet
       technical_subnet:
         data:
-          prefix: 1.2.0.0/24
+          prefix: 1.20.0.0/24
           status: active
           role: loopback
       member_of_groups:
-        - topologies_dc
+        - topologies_pop
         - topologies_clab
