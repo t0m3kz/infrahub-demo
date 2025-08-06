@@ -4,7 +4,7 @@ apiVersion: infrahub.app/v1
 kind: Object
 spec:
   kind: DcimPlatform
-  data: 
+  data:
     - name: Cisco IOS-XE
       nornir_platform: ios
       napalm_driver: ios
@@ -60,3 +60,10 @@ spec:
       netmiko_device_type: linux
       ansible_network_os: linux
       containerlab_os: linux
+
+    - name: Check Point Gaia
+      nornir_platform: linux
+      napalm_driver: linux
+      netmiko_device_type: linux
+      ansible_network_os: linux
+      containerlab_os: gaia

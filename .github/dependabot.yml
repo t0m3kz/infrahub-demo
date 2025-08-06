@@ -2,7 +2,7 @@
 version: 2
 updates:
   # Maintain dependencies for uv (pip replacement)
-  - package-ecosystem: "uv"
+  - package-ecosystem: "pip"
     directory: "/"
     schedule:
       interval: "weekly"

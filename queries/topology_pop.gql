@@ -17,6 +17,14 @@ query device($name: String!) {
             }
           }
         }
+        technical_subnet {
+          node {
+            id
+            prefix {
+              value
+            }
+          }
+        }
         customer_subnet {
           node {
             id
@@ -55,6 +63,7 @@ query device($name: String!) {
                           template_name {
                             value
                           }
+                          __typename
                           interfaces {
                             edges {
                               node {
@@ -67,6 +76,36 @@ query device($name: String!) {
                                   }
                                 }
                                 ... on TemplateDcimConsoleInterface {
+                                  name {
+                                    value
+                                  }
+                                  role {
+                                    value
+                                  }
+                                }
+                              }
+                            }
+                            count
+                          }
+                        }
+                        template_name {
+                          value
+                        }
+                        ... on CoreObjectTemplate {
+                          template_name {
+                            value
+                          }
+                        }
+                        ... on TemplateDcimVirtualDevice {
+                          template_name {
+                            value
+                          }
+                          __typename
+                          interfaces {
+                            __typename
+                            edges {
+                              node {
+                                ... on TemplateDcimPhysicalInterface {
                                   name {
                                     value
                                   }

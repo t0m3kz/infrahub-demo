@@ -14,8 +14,8 @@ spec:
       description: Cisco DC leaf devices
     - name: cisco_oob
       description: Cisco DC OOB devices
-    - name: cisco_pop_router
-      description: Cisco POP Routers
+    - name: cisco_edge
+      description: Cisco Edge Routers
     - name: edgecore_leaf
       description: Cisco DC leaf devices
     - name: edgecore_spine
@@ -38,6 +38,16 @@ spec:
       description: All spines
     - name: firewalls
       description: All firewalls
+    - name: dc_firewalls
+      description: All DC firewalls
+    - name: edge_firewalls
+      description: All edge firewalls
+    - name: oobs
+      description: All OOB devices
+    - name: consoles
+      description: All console devices
+    - name: edges
+      description: All edge devices
     - name: juniper_firewall
       description: Juniper DC firewall
     - name: juniper_pop_firewall
@@ -58,3 +68,5 @@ spec:
       description: Containerlab Topologies
     - name: juniper_dc_firewall
       description: Juniper DC Firewall
+    - name: check_point_edge_firewall
+      description: Check Point Edge Firewall

@@ -5,8 +5,14 @@ spec:
   kind: CoreNodeTriggerRule
   data:
     - name: dc-on-create
-      description: Trigger on create of any node
+      description: Trigger on create of DC
       node_kind: TopologyDataCenter
       mutation_action: created
       action: dc
+      branch_scope: other_branches
+    - name: pop-on-create
+      description: Trigger on create of POP
+      node_kind: TopologyColocationCenter
+      mutation_action: created
+      action: pop
       branch_scope: other_branches
