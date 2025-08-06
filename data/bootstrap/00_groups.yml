@@ -38,6 +38,16 @@ spec:
       description: All spines
     - name: firewalls
       description: All firewalls
+    - name: dc_firewalls
+      description: All DC firewalls
+    - name: edge_firewalls
+      description: All edge firewalls
+    - name: oobs
+      description: All OOB devices
+    - name: consoles
+      description: All console devices
+    - name: edges
+      description: All edge devices
     - name: juniper_firewall
       description: Juniper DC firewall
     - name: juniper_pop_firewall

@@ -24,6 +24,7 @@ class PopTopologyGenerator(InfrahubGenerator):
         await network_creator.create_site()
         await network_creator.create_address_pools()
         await network_creator.create_devices()
+        await network_creator.create_loopback("loopback0")
         # self.log.info(self.client.store._branches[self.branch].__dict__)
         await network_creator.create_oob_connections("management")
         await network_creator.create_oob_connections("console")

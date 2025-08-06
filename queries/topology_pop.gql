@@ -17,6 +17,14 @@ query device($name: String!) {
             }
           }
         }
+        technical_subnet {
+          node {
+            id
+            prefix {
+              value
+            }
+          }
+        }
         customer_subnet {
           node {
             id
