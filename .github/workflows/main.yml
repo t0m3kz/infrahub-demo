@@ -19,7 +19,10 @@ jobs:
           uv run ruff check --select I --fix .
       - run: |
           echo "Running linters"
-          uv run ruff check 
+          uv run ruff check
+      - run: |
+          echo "Running type checks"
+          uv run mypy .
       - run: |
           echo "Running validation"
           uv run yamllint -d "{extends: default, ignore: [.github/, .venv/ , .dev/ ]}" \
@@ -33,14 +36,10 @@ jobs:
       INFRAHUB_DB_TYPE: neo4j
       INFRAHUB_API_TOKEN: '06438eb2-8019-4776-878c-0941b1f1d1ec'
       INFRAHUB_TIMEOUT: 600
-      INFRAHUB_TESTING_LOG_LEVEL: INFO    
+      INFRAHUB_TESTING_LOG_LEVEL: INFO
     strategy:
       matrix:
         python-version: ["3.10", "3.11", "3.12"]
-    # defaults:
-    #   run:
-    #     working-directory: tests
-    #     shell: bash
     steps:
       - uses: actions/checkout@v4
       - name: Setup Python
@@ -54,10 +53,10 @@ jobs:
       - name: "Set environment variables"
         run: |
           RUNNER_NAME=$(echo "${{ runner.name }}" | grep -o 'ghrunner[0-9]\+' | sed 's/ghrunner\([0-9]\+\)/ghrunner_\1/')
-          echo "PYTEST_DEBUG_TEMPROOT=/var/lib/github/${RUNNER_NAME}/_temp" >> $GITHUB_ENV          
+          echo "PYTEST_DEBUG_TEMPROOT=/var/lib/github/${RUNNER_NAME}/_temp" >> $GITHUB_ENV
       - name: Run pytest
         run: |
-          uv run pytest tests/ -vv 
+          uv run pytest tests/ -vv
 
   release:
     if: ${{ github.ref == 'refs/heads/main' }}

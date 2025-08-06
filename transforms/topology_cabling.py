@@ -4,7 +4,7 @@ from infrahub_sdk.transforms import InfrahubTransform
 class TopologyCabling(InfrahubTransform):
     query = "topology_cabling"
 
-    async def transform(self, data):
+    async def transform(self, data: dict) -> str:
         # Create a list to hold CSV rows
         csv_rows = []
 

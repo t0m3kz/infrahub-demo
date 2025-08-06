@@ -23,12 +23,12 @@ def fixtures_dir() -> Path:
 
 
 @pytest.fixture(scope="session")
-def schema_dir(root_dir) -> Path:
+def schema_dir(root_dir: Path) -> Path:
     return root_dir / "schemas"
 
 
 @pytest.fixture(scope="session")
-def data_dir(root_dir) -> Path:
+def data_dir(root_dir: Path) -> Path:
     return root_dir / "data"
 
 

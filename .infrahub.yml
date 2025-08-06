@@ -1,47 +1,5 @@
 ---
 jinja2_transforms:
-  # Cisco
-  # - name: cisco_pop_router
-  #   description: Template to generate startup configuration for a cisco POP router
-  #   query: pop_config
-  #   template_path: templates/configs/cisco_pop_router.j2
-  - name: cisco_leaf
-    description: Template to generate startup configuration for a cisco DC leaf
-    query: leaf_config
-    template_path: templates/configs/cisco_leaf.j2
-  - name: cisco_spine
-    description: Template to generate startup configuration for a cisco DC spine
-    query: spine_config
-    template_path: templates/configs/cisco_spine.j2
-  # - name: cisco_dc_oob
-  #   description: Template to generate startup configuration for a cisco DC OOB
-  #   query: dc_oob_config
-  #   template_path: templates/configs/cisco_dc_oob.j2
-  # Juniper
-  # - name: juniper_firewall
-  #   description: Template to generate startup configuration for a Juniper SRX Firewall
-  #   query: firewall_config
-  #   template_path: templates/configs/juniper_srx.j2
-  # Arista
-  # - name: arista_pop_router
-  #   description: Template to generate startup configuration for a arista POP router
-  #   query: pop_config
-  #   template_path: templates/configs/arista_pop_router.j2
-  # - name: arista_dc_leaf
-  #   description: Template to generate startup configuration for a arista DC leaf
-  #   query: dc_leaf_config
-  #   template_path: templates/configs/arista_dc_leaf.j2
-  # - name: arista_dc_spine
-  #   description: Template to generate startup configuration for a arista DC spine
-  #   query: dc_spine_config
-  #   template_path: templates/configs/arista_dc_spine.j2
-  # Perle
-  # - name: perle_console
-  #   description: Template to generate startup configuration for a perle DC console
-  #   query: console_config
-  #   template_path: templates/configs/perle_console.j2
-
-
   # Containerlab
   - name: topology_clab
     description: Template to generate a containerlab topology
@@ -50,11 +8,11 @@ jinja2_transforms:
 
 artifact_definitions:
   # Cisco
-  # - name: Cisco POP config
-  #   artifact_name: cisco-pop-router
+  # - name: Cisco edge config
+  #   artifact_name: cisco-edge
   #   content_type: text/plain
-  #   targets: cisco_pop_router
-  #   transformation: cisco_pop_router
+  #   targets: cisco_edge
+  #   transformation: cisco_edge
   #   parameters:
   #     device: name__value
   - name: Cisco leaf config
@@ -71,35 +29,20 @@ artifact_definitions:
     transformation: cisco_spine
     parameters:
       device: name__value
-  # - name: Cisco DC OOB config
-  #   artifact_name: cisco-dc-oob
-  #   content_type: text/plain
-  #   targets: cisco_dc_oob
-  #   transformation: cisco_dc_oob
-  #   parameters:
-  #     device: name__value
-  # Arista
-  # - name: Arista POP config
-  #   artifact_name: arista-pop-router
-  #   content_type: text/plain
-  #   targets: arista_pop_router
-  #   transformation: arista_pop_router
-  #   parameters:
-  #     device: name__value
-  # - name: Arista DC leaf config
-  #   artifact_name: arista-dc-leaf
-  #   content_type: text/plain
-  #   targets: arista_dc_leaf
-  #   transformation: arista_dc_leaf
-  #   parameters:
-  #     device: name__value
-  # - name: Arista DC spine config
-  #   artifact_name: arista-dc-spine
-  #   content_type: text/plain
-  #   targets: arista_dc_spine
-  #   transformation: arista_dc_spine
-  #   parameters:
-  #     device: name__value
+  - name: Arista leaf config
+    artifact_name: arista-leaf
+    content_type: text/plain
+    targets: arista_leaf
+    transformation: arista_leaf
+    parameters:
+      device: name__value
+  - name: Arista spine config
+    artifact_name: arista-spine
+    content_type: text/plain
+    targets: arista_spine
+    transformation: arista_spine
+    parameters:
+      device: name__value
   # Juniper
   # - name: Juniper DC firewall config
   #   artifact_name: juniper-dc-firewall
@@ -164,15 +107,21 @@ artifact_definitions:
 
 check_definitions:
   - name: validate_spine
-    class_name: CheckSonicSpine
-    file_path: checks/sonic_spine.py
-    targets: edgecore_spine
+    class_name: CheckSpine
+    file_path: checks/spine.py
+    targets: spines
     parameters:
       device: name__value
   - name: validate_leaf
-    class_name: CheckSonicLeaf
-    file_path: checks/sonic_leaf.py
-    targets: edgecore_leaf
+    class_name: CheckLeaf
+    file_path: checks/leaf.py
+    targets: leafs
+    parameters:
+      device: name__value
+  - name: validate_edge
+    class_name: CheckEdge
+    file_path: checks/edge.py
+    targets: edges
     parameters:
       device: name__value
 
@@ -186,6 +135,18 @@ python_transforms:
   - name: edgecore_spine
     class_name: SonicSpine
     file_path: transforms/sonic_spine.py
+  - name: cisco_leaf
+    class_name: CiscoLeaf
+    file_path: transforms/cisco_leaf.py
+  - name: cisco_spine
+    class_name: CiscoSpine
+    file_path: transforms/cisco_spine.py
+  - name: arista_leaf
+    class_name: AristaLeaf
+    file_path: transforms/arista_leaf.py
+  - name: arista_spine
+    class_name: AristaSpine
+    file_path: transforms/arista_spine.py
 
 generator_definitions:
   - name: create_dc
@@ -213,16 +174,12 @@ queries:
     file_path: queries/topology_clab.gql
   - name: topology_cabling
     file_path: queries/topology_cabling.gql
-  # - name: topology_pop
-  #   file_path: queries/topology_pop.gql
-  # - name: firewall_config
-  #   file_path: queries/firewall_config.gql
-  # - name: pop_config
-  #   file_path: queries/pop_config.gql
   - name: leaf_config
     file_path: queries/leaf_config.gql
   - name: spine_config
     file_path: queries/spine_config.gql
+  - name: edge_config
+    file_path: queries/edge_config.gql
   # - name: dc_oob_config
   #   file_path: queries/dc_oob_config.gql
   # - name: console_config
