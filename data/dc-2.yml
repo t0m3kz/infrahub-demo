@@ -4,10 +4,10 @@ spec:
   kind: TopologyDataCenter
   data:
     - name: DC-2
-      location: Katowice
-      description: Katowice Data Center
+      location: Munich
+      description: Munich Data Center
       strategy: ospf-ibgp
-      design: PHYSICAL DC SONIC S
+      design: PHYSICAL DC CISCO S
       emulation: True
       provider: Technology Partner
       management_subnet:

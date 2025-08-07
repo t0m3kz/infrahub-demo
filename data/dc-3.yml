@@ -4,10 +4,10 @@ spec:
   kind: TopologyDataCenter
   data:
     - name: DC-3
-      location: Munich
-      description: Munich Data Center
+      location: Frankfurt
+      description: Frankfurt Data Center
       strategy: ospf-ibgp
-      design: PHYSICAL DC CISCO S
+      design: PHYSICAL DC ARISTA S
       emulation: True
       provider: Technology Partner
       management_subnet:

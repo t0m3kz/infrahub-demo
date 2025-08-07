@@ -159,34 +159,32 @@ class DCTopologyCreator(TopologyCreator):
         topology_name = self.data.get("name")
         self.log.info(f"Creating iBGP overlay for {topology_name}")
         # Get or create ASN
-        asn = await self.client.get(
-            kind="ServiceAutonomousSystem",
-            name__value=f"{topology_name}-OVERLAY",
-            populate_store=True,
+        # asn = await self.client.get(
+        #     kind="ServiceAutonomousSystem",
+        #     name__value=f"{topology_name}-OVERLAY",
+        #     populate_store=True,
+        #     raise_when_missing=False,
+        # )
+        # if not asn:
+        asn_pool = await self.client.get(
+            kind="CoreNumberPool",
+            name__value="PRIVATE-ASN4",
             raise_when_missing=False,
+            branch=self.branch,
         )
-        if not asn:
-            asn_pool = await self.client.get(
-                kind="CoreNumberPool",
-                name__value="PRIVATE-ASN4",
-                raise_when_missing=False,
-                branch=self.branch,
-            )
-            await self._create(
-                kind="ServiceAutonomousSystem",
-                data={
-                    "payload": {
-                        "name": f"{topology_name}-OVERLAY",
-                        "description": f"{topology_name} iBGP Overlay service",
-                        "asn": asn_pool,
-                        "status": "active",
-                    },
-                    "store_key": f"underlay-{topology_name}",
+        await self._create(
+            kind="ServiceAutonomousSystem",
+            data={
+                "payload": {
+                    "name": f"{topology_name}-OVERLAY",
+                    "description": f"{topology_name} iBGP Overlay service",
+                    "asn": asn_pool,
+                    "status": "active",
                 },
-            )
-        asn_id = (
-            asn.id if asn else self.client.store.get(f"underlay-{topology_name}").id
+                "store_key": f"underlay-{topology_name}",
+            },
         )
+        asn_id = self.client.store.get(f"underlay-{topology_name}").id
         # Filter devices by role
         leaf_devices: list[DcimPhysicalInterface] = [
             device for device in self.devices if device.role.value == "leaf"
@@ -251,7 +249,6 @@ class DCTopologyGenerator(InfrahubGenerator):
             data = cleaned_data["TopologyDataCenter"][0]
         else:
             raise ValueError("clean_data() did not return a dictionary")
-        self.logger.info(f"Data: {data}")
         network_creator = DCTopologyCreator(
             client=self.client, log=self.logger, branch=self.branch, data=data
         )

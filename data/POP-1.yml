@@ -3,7 +3,7 @@ kind: Object
 spec:
   kind: TopologyColocationCenter
   data:
-    - name: EQX-1
+    - name: POP-1
       location: London
       description: London Virtual POP
       design: VIRTUAL POP S
