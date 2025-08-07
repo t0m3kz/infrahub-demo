@@ -1,29 +1,30 @@
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
-  kind: TopologyColocationCenter
+  kind: TopologyDataCenter
   data:
-    - name: EQX-2
-      location: Chicago
-      description: Chicago Physical POP
-      design: PHYSICAL POP S
+    - name: DC-1
+      location: Katowice
+      description: Katowice Data Center
+      strategy: ospf-ibgp
+      design: PHYSICAL DC SONIC S
       emulation: True
-      provider: Equinix
+      provider: Technology Partner
       management_subnet:
         data:
-          prefix: 172.20.22.0/24
+          prefix: 172.20.1.0/24
           status: active
           role: management
       customer_subnet:
         data:
-          prefix: 10.22.0.0/16
+          prefix: 10.1.0.0/16
           status: active
           role: supernet
       technical_subnet:
         data:
-          prefix: 1.22.0.0/24
+          prefix: 1.1.0.0/24
           status: active
           role: loopback
       member_of_groups:
-        - topologies_pop
+        - topologies_dc
         - topologies_clab

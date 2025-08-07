@@ -10,11 +10,8 @@ nodes:
     icon: mdi:bank-circle-outline
     menu_placement: ServiceBGPSession
     inherit_from:
-      - ServiceGeneric    
-    uniqueness_constraints:
-      - ["asn__value", "name__value"]
+      - ServiceGeneric
     human_friendly_id:
-      - asn__value
       - name__value
     order_by:
       - asn__value
@@ -57,7 +54,7 @@ nodes:
     icon: mdi:view-grid-plus-outline
     menu_placement: ServiceBGPSession
     inherit_from:
-      - ServiceGeneric  
+      - ServiceGeneric
     uniqueness_constraints:
       - ["name__value"]
     human_friendly_id:
@@ -132,7 +129,7 @@ nodes:
     namespace: Service
     description: A BGP Session represent a point to point connection between two routers
     label: BGP Session
-    icon: mdi:router    
+    icon: mdi:router
     inherit_from:
       - ServiceGeneric
     order_by:
