@@ -1,0 +1,259 @@
+# yaml-language-server: $schema=https://schema.infrahub.app/infrahub/schema/latest.json
+---
+version: "1.0"
+generics:
+  - name: RoutingService
+    namespace: Service
+    description: "Base service for all routing protocols that can be attached to devices."
+    label: Network Routing Service
+    icon: "carbon:network-4"
+    default_filter: priority
+    # order_by:
+    #   - routing_domain__value
+    # display_labels:
+    #   - routing_domain__value
+    attributes:
+      # - name: routing_domain
+      #   state: absent
+      #   kind: Text
+      #   description: "Name of the routing domain this service belongs to"
+      #   order_weight: 1200
+      - name: priority
+        kind: Number
+        description: "Priority of this routing service (higher number means higher priority)"
+        default_value: 100
+        order_weight: 1300
+      - name: routing_instance
+        kind: Text
+        description: "Name of the routing instance on the device"
+        optional: true
+        order_weight: 1400
+    relationships:
+      - name: device
+        peer: DcimGenericDevice
+        optional: false
+        cardinality: one
+        kind: Attribute
+        identifier: device_service
+        order_weight: 1000
+
+nodes:
+  - name: OSPF
+    namespace: Service
+    description: "OSPF routing service that can be attached to devices"
+    label: OSPF Service
+    icon: "carbon:network-4-reference"
+    menu_placement: ServiceGeneric
+    include_in_menu: true
+    inherit_from:
+      - ServiceGeneric
+      - ServiceRoutingService
+    attributes:
+      - name: process_id
+        kind: Text
+        description: "OSPF process ID on the device"
+        default_value: "1"
+        order_weight: 1500
+      - name: version
+        kind: Dropdown
+        choices:
+          - name: ospf
+            label: OSPFv2
+            description: "Open Shortest Path First version 2."
+            color: "#E6E6FA" # lavender
+          - name: ospfv3
+            label: OSPFv3
+            description: "Open Shortest Path First version 3."
+            color: "#ECD6FA" # lavender
+      - name: router_type
+        kind: Dropdown
+        description: "Type of OSPF router"
+        choices:
+          - name: abr
+            label: Area Border Router
+            description: "Connects multiple OSPF areas"
+          - name: asbr
+            label: Autonomous System Border Router
+            description: "Connects to external routing domains"
+          - name: internal
+            label: Internal Router
+            description: "Router within a single OSPF area"
+        default_value: "internal"
+        order_weight: 1600
+      - name: reference_bandwidth
+        kind: Number
+        description: "Reference bandwidth for OSPF cost calculation (Mbps)"
+        default_value: 100000
+        optional: true
+        order_weight: 1700
+    relationships:
+      - name: router_id
+        peer: IpamIPAddress
+        optional: false
+        cardinality: one
+        kind: Attribute
+        order_weight: 1500
+      - name: area
+        peer: RoutingOSPFArea
+        optional: false
+        cardinality: one
+        kind: Attribute
+        order_weight: 1600
+      - name: interfaces
+        peer: ServiceOSPFInterface
+        optional: true
+        cardinality: many
+        kind: Component
+        order_weight: 1700
+
+  - name: OSPFInterface
+    namespace: Service
+    description: "Pivot table linking OSPF configuration to an interface."
+    label: "OSPF Interface"
+    icon: "mdi:ethernet"
+    include_in_menu: false
+    inherit_from:
+      - ServiceGeneric
+    order_by:
+      - name__value
+      - description__value
+    display_labels:
+      - name__value
+    uniqueness_constraints:
+      - ["ospf", "interface"]
+    human_friendly_id:
+      - "description__value"
+    attributes:
+      # Could be computed later on based on OSPF Instance / Interface Name
+      - name: metric
+        kind: Number
+        optional: true
+        description: "OSPF metric for the interface."
+        order_weight: 1400
+      - name: mode
+        kind: Dropdown
+        choices:
+          - name: normal
+            label: Normal
+            description: "Standard OSPF interface mode."
+            color: "#E6E6FA" # lavender
+          - name: passive
+            label: Passive
+            description: "Interface will not send OSPF hello packets."
+            color: "#E6E6FA" # lavender
+          - name: peer_to_peer
+            label: Peer-to-Peer
+            description: "OSPF peer-to-peer interface mode."
+            color: "#E6E6FA" # lavender
+        default_value: normal
+        description: "Mode of the OSPF interface."
+        order_weight: 1300
+      - name: authentication_key
+        kind: Password
+        description: "Shared secret used to authenticate and secure routing messages between neighboring routers."
+        optional: true
+        order_weight: 1250
+      - name: authentication_mode
+        kind: Dropdown
+        choices:
+          - name: md5
+            label: MD5
+            color: "#E6E6FA" # lavender
+          - name: sha1
+            label: SHA1
+            color: "#ECD6FA" # lavender
+        optional: true
+        order_weight: 1225
+    relationships:
+      - name: ospf
+        label: OSPF
+        peer: ServiceOSPF
+        identifier: ospf__ospfinterfaces
+        optional: false
+        cardinality: one
+        kind: Parent
+        order_weight: 1100
+      - name: interface
+        peer: DcimInterface
+        label: Interface
+        cardinality: one
+        kind: Generic
+        optional: false
+        on_delete: no-action
+        identifier: interface_service
+
+  - name: BGP
+    namespace: Service
+    description: "BGP routing service that can be attached to devices"
+    label: BGP Service
+    icon: "carbon:network-4-reference"
+    menu_placement: ServiceGeneric
+    include_in_menu: true
+    inherit_from:
+      - ServiceRoutingService
+    attributes:
+      - name: session_type
+        kind: Dropdown
+        description: "Type of BGP session"
+        choices:
+          - name: INTERNAL
+            label: iBGP
+            description: "Internal BGP session within the same AS"
+          - name: EXTERNAL
+            label: eBGP
+            description: "External BGP session between different ASs"
+        order_weight: 1500
+      - name: multipath
+        kind: Boolean
+        description: "Whether BGP multipath is enabled"
+        default_value: false
+        optional: true
+        order_weight: 1600
+      - name: graceful_restart
+        kind: Boolean
+        description: "Whether graceful restart is enabled"
+        default_value: true
+        optional: true
+        order_weight: 1700
+    relationships:
+      - name: router_id
+        peer: IpamIPAddress
+        optional: false
+        cardinality: one
+        kind: Attribute
+        order_weight: 1500
+        identifier: bgp_router_id
+      - name: local_as
+        peer: RoutingAutonomousSystem
+        optional: false
+        cardinality: one
+        kind: Attribute
+        order_weight: 1600
+        identifier: bgp_local_as
+      - name: remote_as
+        peer: RoutingAutonomousSystem
+        optional: false
+        cardinality: one
+        kind: Attribute
+        order_weight: 1700
+        identifier: bgp_remote_as
+      - name: local_ip
+        peer: IpamIPAddress
+        optional: false
+        cardinality: one
+        kind: Attribute
+        order_weight: 1800
+        identifier: bgp_local_ip
+      - name: remote_ip
+        peer: IpamIPAddress
+        optional: false
+        cardinality: one
+        kind: Attribute
+        order_weight: 1900
+        identifier: bgp_remote_ip
+      - name: peer_group
+        peer: RoutingBGPPeerGroup
+        optional: true
+        cardinality: one
+        kind: Attribute
+        order_weight: 2000

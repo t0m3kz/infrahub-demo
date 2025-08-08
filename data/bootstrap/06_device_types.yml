@@ -325,3 +325,30 @@ spec:
       full_depth: false
       manufacturer: Check Point
       platform: Check Point Gaia
+
+    - name: N77-SUP2E
+      part_number: N77-SUP2E
+      height: 0
+      full_depth: false
+      manufacturer: Cisco
+      platform: Cisco NX-OS
+
+    - name: N77-C7710
+      part_number: N77-C7710
+      height: 24
+      full_depth: false
+      manufacturer: Cisco
+      platform: Cisco NX-OS
+
+    - name: N77-F324FQ-25
+      part_number: N77-F324FQ-25
+      height: 0
+      full_depth: false
+      manufacturer: Cisco
+      platform: Cisco NX-OS
+
+    - name: N77-M312CQ-26L
+      part_number: N77-M312CQ-26L
+      height: 0
+      full_depth: false
+      manufacturer: Cisco

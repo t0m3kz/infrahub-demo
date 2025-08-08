@@ -5,13 +5,13 @@ spec:
   data:
     - name: PRIVATE-ASN32
       description: Private 32 bit ASN Pool
-      node: ServiceAutonomousSystem
+      node: RoutingAutonomousSystem
       node_attribute: asn
       start_range: 4200000000
       end_range: 4294967294
     - name: PRIVATE-ASN4
       description: Private 4 bit ASN Pool
-      node: ServiceAutonomousSystem
+      node: RoutingAutonomousSystem
       node_attribute: asn
       start_range: 64512
       end_range: 65534

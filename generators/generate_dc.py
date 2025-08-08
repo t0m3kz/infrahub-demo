@@ -109,19 +109,20 @@ class DCTopologyCreator(TopologyCreator):
         )
         self.log.info(f"Creating OSPF underlay for {topology_name}")
         await self._create(
-            kind="ServiceOSPFArea",
+            kind="RoutingOSPFArea",
             data={
                 "payload": {
                     "name": f"{topology_name}-UNDERLAY",
                     "description": f"{topology_name} OSPF Underlay service",
                     "area": 0,
                     "status": "active",
-                    "namespace": {"id": "default"},
-                    "ospf_interfaces": [interface.id for interface in ospf_interfaces],
+                    # "namespace": {"id": "default"},
+                    # "ospf_interfaces": [interface.id for interface in ospf_interfaces],
                 },
                 "store_key": f"underlay-{topology_name}",
             },
         )
+        # self.log.info(self.client.store._branches[self.branch].__dict__)
         self.log.info(f"Creating OSPF instances for {topology_name}")
         # self.log.info(self.client.store.get_by_hfid(f"ServiceOSPFArea__{topology_name}-UNDERLAY"))
         await self._create_in_batch(
@@ -132,8 +133,10 @@ class DCTopologyCreator(TopologyCreator):
                         "name": f"{device.name.value.upper()}-OSPF",
                         "description": f"{device.name.value} OSPF UNDERLAY",
                         "area": self.client.store.get(
-                            kind="ServiceOSPFArea", key=f"underlay-{topology_name}"
+                            kind="RoutingOSPFArea",
+                            key=[f"{topology_name}-UNDERLAY", "0"],
                         ),
+                        "version": "ospfv3",
                         "device": device.id,
                         "status": "active",
                         "router_id": await self.client.allocate_next_ip_address(
@@ -173,7 +176,7 @@ class DCTopologyCreator(TopologyCreator):
             branch=self.branch,
         )
         await self._create(
-            kind="ServiceAutonomousSystem",
+            kind="RoutingAutonomousSystem",
             data={
                 "payload": {
                     "name": f"{topology_name}-OVERLAY",
@@ -204,12 +207,19 @@ class DCTopologyCreator(TopologyCreator):
             for source_device in source_devices:
                 for target_device in target_devices:
                     obj = await self.client.create(
-                        kind=ServiceBGPSession,
+                        kind="ServiceBGP",
                         data={
                             "name": f"{source_device.name.value}-{target_device.name.value}",
                             "local_as": asn_id,
                             "remote_as": asn_id,
                             "device": source_device.id,
+                            "router_id": self.client.store.get(
+                                key=f"{source_device.name.value}-{loopback_name}",
+                                kind=DcimVirtualInterface,
+                                raise_when_missing=True,
+                            )
+                            .ip_addresses[0]
+                            .id,
                             "local_ip": self.client.store.get(
                                 key=f"{source_device.name.value}-{loopback_name}",
                                 kind=DcimVirtualInterface,
@@ -263,4 +273,6 @@ class DCTopologyGenerator(InfrahubGenerator):
         await network_creator.create_fabric_peering()
         await network_creator.create_loopback("loopback0")
         await network_creator.create_ospf_underlay()
-        await network_creator.create_ibgp_overlay("loopback0")
+
+
+#         await network_creator.create_ibgp_overlay("loopback0")

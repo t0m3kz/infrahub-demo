@@ -140,65 +140,17 @@ spec:
             icon: "mdi:router"
             children:
               data:
-                - name: BGPMenu
-                  namespace: Service
-                  label: "BGP Services"
-                  icon: "mdi:router"
-                  children:
-                    data:
-                      - name: AutonomousSystem
-                        namespace: Service
-                        label: "Autonomous Systems"
-                        icon: "mdi:bank-circle-outline"
-                        kind: ServiceAutonomousSystem
-
-                      - name: BGPSession
-                        namespace: Service
-                        label: "BGP Sessions"
-                        icon: "mdi:router-network"
-                        kind: ServiceBGPSession
-
-                      - name: BGPPeerGroup
-                        namespace: Service
-                        label: "BGP Peer Groups"
-                        icon: "mdi:account-group"
-                        kind: ServiceBGPPeerGroup
-
-                      - name: BGPCommunity
-                        namespace: Service
-                        label: "BGP Communities"
-                        icon: "mdi:tag-multiple"
-                        kind: ServiceBGPCommunity
-
-                - name: OSPFMenu
-                  namespace: Service
-                  label: "OSPF Services"
-                  icon: "mdi:router-wireless"
-                  children:
-                    data:
-                      - namespace: Service
-                        name: OSPFArea
-                        label: OSPF Areas
-                        kind: ServiceOSPFArea
-                        icon: "mdi:circle-outline"
-                      - namespace: Service
-                        name: OSPF
-                        label: OSPF Instances
-                        kind: ServiceOSPF
-                        icon: "mdi:router-wireless"
-                      - namespace: Service
-                        name: OSPFInterfaces
-                        label: OSPF Interfaces
-                        kind: ServiceOSPFInterface
-                        icon: "mdi:ethernet"
-
                 - namespace: Service
-                  name: RoutingPolicy
-                  label: Routing Policies
-                  kind: ServiceRoutingPolicy
-                  icon: "mdi:file-document-outline"
-
-    # ===================== SECURITY MANAGEMENT =====================
+                  name: BGPFabricMenu
+                  label: Fabric BGP
+                  kind: ServiceBGPFabricPeering
+                  icon: "carbon:ibm-cloud-internet-services"
+                - namespace: Service
+                  name: OSPFFabricMenu
+                  label: Fabric OSPF
+                  kind: ServiceOSPFFabricPeering
+                  icon: "carbon:ibm-cloud-internet-services"
+    # ==================== SECURITY MANAGEMENT =====================
     - namespace: Security
       name: SecurityMenu
       label: Security Management
@@ -392,5 +344,79 @@ spec:
                   label: Device Types
                   kind: DcimDeviceType
                   icon: "mdi:package-variant"
+
+    # ===================== ROUTING =====================
+    - namespace: Routing
+      name: ManagementMenu
+      label: Routing Management
+      icon: "mdi:router"
+      children:
+        data:
+          - namespace: Routing
+            name: BGPMenu
+            label: "BGP Management"
+            icon: "mdi:router-network"
+            children:
+              data:
+                - namespace: Routing
+                  name: AutonomousSystem
+                  label: "Autonomous Systems"
+                  kind: RoutingAutonomousSystem
+                  icon: "mdi:bank-circle-outline"
+
+                - namespace: Routing
+                  name: BGPSession
+                  label: "BGP Sessions"
+                  kind: RoutingBGPSession
+                  icon: "mdi:router-network"
+
+                - namespace: Routing
+                  name: BGPPeerGroup
+                  label: "BGP Peer Groups"
+                  kind: RoutingBGPPeerGroup
+                  icon: "mdi:view-grid-plus-outline"
+
+                - namespace: Routing
+                  name: BGPCommunity
+                  label: "BGP Communities"
+                  kind: RoutingBGPCommunity
+                  icon: "mdi:tag-multiple"
+
+          - namespace: Routing
+            name: OSPFMenu
+            label: "OSPF Management"
+            icon: "mdi:network-outline"
+            children:
+              data:
+                - namespace: Routing
+                  name: OSPF
+                  label: OSPF Instances
+                  kind: RoutingOSPF
+                  icon: "mdi:network-outline"
+
+                - namespace: Routing
+                  name: OSPFArea
+                  label: OSPF Areas
+                  kind: RoutingOSPFArea
+                  icon: "mdi:square-rounded-outline"
+
+                - namespace: Routing
+                  name: OSPFInterface
+                  label: OSPF Interfaces
+                  kind: RoutingOSPFInterface
+                  icon: "mdi:square-rounded-rectangle"
+
+          - namespace: Routing
+            name: PIMMenu
+            label: PIM Management
+            icon: "mdi:pim-outline"
+            children:
+              data:
+                - namespace: Routing
+                  name: PIMInterface
+                  label: PIM Interfaces
+                  kind: RoutingPIMInterface
+                  icon: "mdi:ethernet"
+
 
 

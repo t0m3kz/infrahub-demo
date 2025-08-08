@@ -2,95 +2,77 @@
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
-  kind: ServiceAutonomousSystem
-  data: 
+  kind: RoutingAutonomousSystem
+  data:
     - asn: 1299
       owner: "Arelion"
       name: "AS1299"
       description: "AS1299 - Arelion"
-      status: active
     - asn: 8220
       owner: "Colt Technology Services"
       name: "AS8220"
       description: "AS8220 - Colt Technology Services"
-      status: active
     - asn: 701
       owner: "Verizon Business"
       name: "AS701"
       description: "AS701 - Verizon Business"
-      status: active
     - asn: 3257
       owner: "GTT Communications"
       name: "AS3257"
       description: "AS3257 - GTT Communications"
-      status: active
     - asn: 6939
       owner: "Hurricane Electric"
       name: "AS6939"
       description: "AS6939 - Hurricane Electric"
-      status: active
     - asn: 3356
       owner: "Lumen"
       name: "AS3356"
       description: "AS3356 - Lumen"
-      status: active
     - asn: 6461
       owner: "Zayo"
       name: "AS6461"
       description: "AS6461 - Zayo"
-      status: active
     - asn: 24115
       owner: "Equinix"
       name: "AS24115"
       description: "AS24115 - Equinix"
-      status: active
     - asn: 20710
       owner: "Interxion"
       name: "AS20710"
       description: "AS20710 - Interxion"
-      status: active
     - asn: 3491
       owner: "PCCW Global"
       name: "AS3491"
       description: "AS3491 - PCCW Global"
-      status: active
     - asn: 5511
       owner: "Orange S.A"
       name: "AS5511"
       description: "AS5511 - Orange S.A"
-      status: active
     - asn: 6453
       owner: "Tata Communications"
       name: "AS6453"
       description: "AS6453 - Tata Communications"
-      status: active
     - asn: 1239
       owner: "Sprint"
       name: "AS1239"
       description: "AS1239 - Sprint"
-      status: active
     - asn: 2914
       owner: "NTT America"
       name: "AS2914"
       description: "AS2914 - NTT America"
-      status: active
     - asn: 174
       owner: "Cogent Communications"
       name: "AS174"
       description: "AS174 - Cogent Communications"
-      status: active
     - asn: 7922
       owner: "Comcast Cable Communication"
       name: "AS7922"
       description: "AS7922 - Comcast Cable Communication"
-      status: active
     - asn: 6762
       owner: "Telecom Italia Sparkle"
       name: "AS6762"
       description: "AS6762 - Telecom Italia Sparkle"
-      status: active
     - asn: 7018
       owner: "AT&T Services"
       name: "AS7018"
       description: "AS7018 - AT&T Services"
-      status: active
