@@ -143,70 +143,6 @@ nodes:
         order_weight: 1500
         optional: true
 
-  # - name: VirtualTopology
-  #   namespace: Service
-  #   description: "Customer Network Topology."
-  #   label: Customer Topology
-  #   icon: "carbon:ibm-cloud-internet-services"
-  #   menu_placement: ServiceGeneric
-  #   inherit_from:
-  #     - ServiceGeneric
-  #   relationships:
-  #     - name: interfaces
-  #       peer: DcimInterface
-  #       label: Interfaces
-  #       cardinality: many
-  #       kind: Generic
-  #       optional: true
-  #       on_delete: no-action
-  #       identifier: interface_service
-  #     - name: prefixes
-  #       peer: IpamPrefix
-  #       cardinality: many
-  #       kind: Attribute
-  #       order_weight: 1400
-  #       optional: true
-
-
-
-
-
-  # - name: Layer3Gateway
-  #   namespace: Service
-  #   description: "Layer 3 network service attached to a Topology."
-  #   label: Layer3 Gateway
-  #   icon: "carbon:ibm-cloud-internet-services"
-  #   menu_placement: ServiceGeneric
-  #   inherit_from:
-  #     - ServiceGeneric
-  #   attributes:
-  #     - name: vni
-  #       label: VNI or VLAN
-  #       order_weight: 9
-  #       optional: false
-  #       kind: Number
-  #     - name: is_anycast
-  #       kind: Boolean
-  #       label: Anycast Gateway
-  #       default_value: false
-  #       optional: false
-  #       order_weight: 10
-  #   relationships:
-  #     - name: prefix
-  #       peer: IpamPrefix
-  #       cardinality: one
-  #       kind: Component
-  #       order_weight: 1400
-  #       optional: true
-  #     - name: interfaces
-  #       peer: DcimInterface
-  #       label: Interfaces
-  #       cardinality: many
-  #       kind: Generic
-  #       optional: true
-  #       on_delete: no-action
-  #       identifier: interface_service
-
 extensions:
   # state: present
   nodes:
@@ -249,7 +185,7 @@ extensions:
       relationships:
         - name: asns
           label: ASNs
-          peer: ServiceAutonomousSystem
+          peer: RoutingAutonomousSystem
           optional: true
           cardinality: many
           kind: Component
