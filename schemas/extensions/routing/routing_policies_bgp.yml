@@ -39,14 +39,7 @@ extensions:
           kind: Generic
           cardinality: many
 
-    - kind: RoutingBGPSession
-      attributes:
-        - name: import_policies
-          kind: Text
-          state: absent
-        - name: export_policies
-          kind: Text
-          state: absent
+    - kind: ServiceBGP
       relationships:
         - name: import_routing_policies
           label: Import Routing Policies

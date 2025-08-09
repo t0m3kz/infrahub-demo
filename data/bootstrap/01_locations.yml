@@ -21,7 +21,7 @@ spec:
                     kind: LocationBuilding
                     data:
                       - name: "PAR-1"
-                        shortname: "par-1"                  
+                        shortname: "par-1"
           - name: "Germany"
             shortname: "de"
             children:
@@ -33,14 +33,14 @@ spec:
                     kind: LocationBuilding
                     data:
                       - name: "FRA-1"
-                        shortname: "fra-1" 
+                        shortname: "fra-1"
                 - name: "Munich"
                   shortname: "muc"
                   children:
                     kind: LocationBuilding
                     data:
                       - name: "MUC-1"
-                        shortname: "muc-1"  
+                        shortname: "muc-1"
           - name: "United Kingdom"
             shortname: "uk"
             children:
@@ -54,32 +54,32 @@ spec:
               kind: LocationMetro
               data:
                 - name: "Amsterdam"
-                  shortname: "ams"  
+                  shortname: "ams"
           - name: "Poland"
             shortname: "pl"
             children:
               kind: LocationMetro
               data:
                 - name: "Katowice"
-                  shortname: "ktw"                                                               
+                  shortname: "ktw"
           - name: "Spain"
             shortname: "es"
             children:
               kind: LocationMetro
               data:
                 - name: "Barcelona"
-                  shortname: "bcn"  
+                  shortname: "bcn"
                 - name: "Madrid"
-                  shortname: "mdr"                    
+                  shortname: "mdr"
           - name: "Italy"
             shortname: "it"
             children:
               kind: LocationMetro
               data:
                 - name: "Rome"
-                  shortname: "rom"                   
+                  shortname: "rom"
                 - name: "Milano"
-                  shortname: "mil"   
+                  shortname: "mil"
     - name: "AMERICAS"
       shortname: "amer"
       children:
@@ -109,9 +109,9 @@ spec:
               kind: LocationMetro
               data:
                 - name: "Toronto"
-                  shortname: "tor"        
+                  shortname: "tor"
     - name: "APAC"
-      shortname: "apac"    
+      shortname: "apac"
       children:
         kind: LocationCountry
         data:
@@ -130,4 +130,4 @@ spec:
                 - name: "Sydney"
                   shortname: "syd"
                 - name: "Melbourne"
-                  shortname: "mel"                                     
+                  shortname: "mel"

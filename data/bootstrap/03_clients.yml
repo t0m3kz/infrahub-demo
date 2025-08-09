@@ -3,7 +3,7 @@ apiVersion: infrahub.app/v1
 kind: Object
 spec:
   kind: OrganizationCustomer
-  data: 
+  data:
     - name: "Customer 1"
     - name: "Customer 2"
     - name: "Customer 3"

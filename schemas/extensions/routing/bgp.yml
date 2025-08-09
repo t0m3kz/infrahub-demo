@@ -12,7 +12,6 @@ nodes:
     uniqueness_constraints:
       - ["name__value"]
     human_friendly_id:
-      - "asn__value"
       - "name__value"
     order_by:
       - asn__value
@@ -45,7 +44,6 @@ nodes:
         optional: true
         cardinality: one
         kind: Attribute
-
 
   - name: BGPPeerGroup
     namespace: Routing
@@ -120,95 +118,6 @@ nodes:
       - name: remote_as
         identifier: bgppeergroup__remote_as
         peer: RoutingAutonomousSystem
-        optional: true
-        cardinality: one
-        kind: Attribute
-
-  - name: BGPSession
-    namespace: Routing
-    description: A BGP Session represent a point to point connection between two routers
-    label: BGP Session
-    icon: mdi:router
-    inherit_from:
-      - "RoutingProtocol"
-    order_by:
-      - remote_as__asn__value
-    display_labels:
-      - description__value
-    attributes:
-      - name: import_policies
-        kind: Text
-        optional: true
-      - name: export_policies
-        kind: Text
-        optional: true
-      - name: session_type
-        kind: Text
-        enum:
-          - EXTERNAL
-          - INTERNAL
-        description: "Type of BGP Session"
-        order_weight: 1200
-      - name: role
-        kind: Dropdown
-        choices:
-          - name: backbone
-            label: Backbone
-            description: "Provide main data routes."
-            color: "#E6E6FA"  # lavender
-          - name: upstream
-            label: Upstream
-            description: "Connect to Internet service provider."
-            color: "#E6E6FA"  # lavender
-          - name: peering
-            label: Peering
-            description: "Connect with other networks via IX."
-            color: "#E6E6FA"  # lavender
-        description: "Role of the BGP Session"
-        order_weight: 1600
-      - name: local_pref
-        kind: Number
-        optional: true
-        description: "Force Local Pref for this BGP Peer Session."
-        order_weight: 1450
-        regex: "^[0-9]+$"
-    relationships:
-      - name: local_as
-        identifier: bgpsession__local_as
-        peer: RoutingAutonomousSystem
-        optional: true
-        cardinality: one
-        kind: Attribute
-      - name: remote_as
-        identifier: bgpsession__remote_as
-        peer: RoutingAutonomousSystem
-        optional: true
-        cardinality: one
-        kind: Attribute
-      - name: local_ip
-        identifier: bgpsession__local_ip
-        peer: IpamIPAddress
-        optional: true
-        cardinality: one
-        kind: Attribute
-      - name: remote_ip
-        identifier: bgpsession__remote_ip
-        peer: IpamIPAddress
-        optional: true
-        cardinality: one
-        kind: Attribute
-      - name: device
-        state: absent
-        peer: DcimGenericDevice
-        optional: true
-        cardinality: one
-      - name: peer_group
-        peer: RoutingBGPPeerGroup
-        optional: true
-        cardinality: one
-        kind: Attribute
-      - name: peer_session
-        peer: RoutingBGPSession
         optional: true
         cardinality: one
         kind: Attribute

@@ -1,3 +1,4 @@
+---
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
@@ -7,7 +8,7 @@ spec:
       location: Chicago
       description: Chicago Physical POP
       design: PHYSICAL POP S
-      emulation: True
+      emulation: true
       provider: Equinix
       management_subnet:
         data:

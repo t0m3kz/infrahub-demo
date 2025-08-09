@@ -27,4 +27,3 @@ nodes:
         default_value: 1500
         kind: Number
         order_weight: 1500
-
