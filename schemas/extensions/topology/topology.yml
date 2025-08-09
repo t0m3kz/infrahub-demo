@@ -87,7 +87,7 @@ generics:
         peer: DesignTopology
         optional: false
         cardinality: one
-        kind: Parent
+        kind: Hierarchy
         order_weight: 4
       - name: management_subnet
         peer: IpamPrefix
@@ -108,6 +108,7 @@ generics:
         cardinality: many
         kind: Component
         order_weight: 100
+
 nodes:
   # --------------------  Topology  --------------------
   - name: Topology
@@ -466,3 +467,4 @@ extensions:
           cardinality: one
           kind: Attribute
           optional: true
+
