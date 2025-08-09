@@ -1,4 +1,3 @@
-
 ---
 apiVersion: infrahub.app/v1
 kind: Object
@@ -6,7 +5,7 @@ spec:
   kind: DcimPlatform
   data:
     - name: Cisco IOS-XE
-      nornir_platform: ios
+      nornir_platform: iosxe
       napalm_driver: ios
       netmiko_device_type: cisco_ios
       ansible_network_os: ios
@@ -20,7 +19,7 @@ spec:
       containerlab_os: cisco_xrv
 
     - name: Cisco NX-OS
-      nornir_platform: nxos_ssh
+      nornir_platform: nxos
       napalm_driver: nxos_ssh
       netmiko_device_type: cisco_nxos
       ansible_network_os: nxos
@@ -55,14 +54,14 @@ spec:
       containerlab_os: linux
 
     - name: Perle IOLAN
-      nornir_platform: linux
+      nornir_platform: iolan
       napalm_driver: linux
       netmiko_device_type: linux
       ansible_network_os: linux
       containerlab_os: linux
 
     - name: Check Point Gaia
-      nornir_platform: linux
+      nornir_platform: gaia
       napalm_driver: linux
       netmiko_device_type: linux
       ansible_network_os: linux

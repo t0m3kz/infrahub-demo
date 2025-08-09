@@ -6,11 +6,7 @@ from infrahub_sdk.protocols import CoreIPAddressPool
 from netutils.interface import sort_interface_list
 
 from .common import TopologyCreator, clean_data
-from .schema_protocols import (
-    DcimPhysicalInterface,
-    DcimVirtualInterface,
-    ServiceBGPSession,
-)
+from .schema_protocols import DcimPhysicalInterface, DcimVirtualInterface
 
 
 class DCTopologyCreator(TopologyCreator):
@@ -98,15 +94,6 @@ class DCTopologyCreator(TopologyCreator):
     async def create_ospf_underlay(self) -> None:
         """Create underlay service and associate it to the respective switches."""
         topology_name = self.data.get("name")
-        ospf_interfaces = await self.client.filters(
-            kind="DcimInterface",
-            role__values=["ospf-unnumbered", "loopback"],
-            device__name__values=[
-                device.name.value
-                for device in self.devices
-                if device.role.value in ["spine", "leaf"]
-            ],
-        )
         self.log.info(f"Creating OSPF underlay for {topology_name}")
         await self._create(
             kind="RoutingOSPFArea",
@@ -145,6 +132,11 @@ class DCTopologyCreator(TopologyCreator):
                             ),
                             identifier=f"{device.name.value}-loopback0",
                         ),
+                        "ospf_interface": await self.client.filters(
+                            kind="DcimInterface",
+                            role__values=["ospf-unnumbered", "loopback"],
+                            device__name__value=device.name.value,
+                        ),
                     },
                     "store_key": f"underlay-{device.name.value}",
                 }
@@ -180,7 +172,7 @@ class DCTopologyCreator(TopologyCreator):
             data={
                 "payload": {
                     "name": f"{topology_name}-OVERLAY",
-                    "description": f"{topology_name} iBGP Overlay service",
+                    # "description": f"{topology_name} iBGP Overlay service",
                     "asn": asn_pool,
                     "status": "active",
                 },
@@ -274,5 +266,4 @@ class DCTopologyGenerator(InfrahubGenerator):
         await network_creator.create_loopback("loopback0")
         await network_creator.create_ospf_underlay()
 
-
-#         await network_creator.create_ibgp_overlay("loopback0")
+        await network_creator.create_ibgp_overlay("loopback0")

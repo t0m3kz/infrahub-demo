@@ -50,7 +50,7 @@ nodes:
     order_by:
       - name__value
     display_labels:
-      - name__value    
+      - name__value
     attributes:
       - name: name
         kind: Text
@@ -59,7 +59,7 @@ nodes:
       - name: description
         kind: Text
         optional: true
-        order_weight: 1200    
+        order_weight: 1200
     relationships:
       - name: device_type
         peer: DcimDeviceType
@@ -87,4 +87,3 @@ nodes:
       - OrganizationGeneric
     include_in_menu: true
     menu_placement: OrganizationGeneric
-    

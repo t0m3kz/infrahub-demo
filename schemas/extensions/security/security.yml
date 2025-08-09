@@ -581,7 +581,6 @@ nodes:
         cardinality: many
         identifier: rendered_policy_rule__service_groups
 
-
   - name: Application
     namespace: Security
     menu_placement: SecurityPolicy

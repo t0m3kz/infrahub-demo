@@ -143,12 +143,12 @@ spec:
                 - namespace: Service
                   name: BGPFabricMenu
                   label: Fabric BGP
-                  kind: ServiceBGPFabricPeering
+                  kind: ServiceBGP
                   icon: "carbon:ibm-cloud-internet-services"
                 - namespace: Service
                   name: OSPFFabricMenu
                   label: Fabric OSPF
-                  kind: ServiceOSPFFabricPeering
+                  kind: ServiceOSPF
                   icon: "carbon:ibm-cloud-internet-services"
     # ==================== SECURITY MANAGEMENT =====================
     - namespace: Security
@@ -365,12 +365,6 @@ spec:
                   icon: "mdi:bank-circle-outline"
 
                 - namespace: Routing
-                  name: BGPSession
-                  label: "BGP Sessions"
-                  kind: RoutingBGPSession
-                  icon: "mdi:router-network"
-
-                - namespace: Routing
                   name: BGPPeerGroup
                   label: "BGP Peer Groups"
                   kind: RoutingBGPPeerGroup
@@ -389,12 +383,6 @@ spec:
             children:
               data:
                 - namespace: Routing
-                  name: OSPF
-                  label: OSPF Instances
-                  kind: RoutingOSPF
-                  icon: "mdi:network-outline"
-
-                - namespace: Routing
                   name: OSPFArea
                   label: OSPF Areas
                   kind: RoutingOSPFArea
@@ -402,9 +390,9 @@ spec:
 
                 - namespace: Routing
                   name: OSPFInterface
-                  label: OSPF Interfaces
+                  label: OSPF Interface Profiles
                   kind: RoutingOSPFInterface
-                  icon: "mdi:square-rounded-rectangle"
+                  icon: "mdi:shield-check"
 
           - namespace: Routing
             name: PIMMenu
@@ -418,5 +406,27 @@ spec:
                   kind: RoutingPIMInterface
                   icon: "mdi:ethernet"
 
+    # ===================== LOAD BALANCING =====================
 
-
+    - namespace: Loadbalancing
+      name: ManagementMenu
+      label: LB Management
+      icon: carbon:load-balancer-global
+      children:
+        data:
+          - namespace: Loadbalancing
+            name: VIP
+            label: VIPs
+            kind: LoadbalancerVIP
+            icon: "carbon:floating-ip"
+            description: "Virtual IPs (VIPs) used by the load balancer for routing traffic."
+          - namespace: Loadbalancing
+            name: HealthCheck
+            label: Health-Checks
+            kind: LoadbalancerHealthCheck
+            icon: "tabler:checkup-list"
+          - namespace: Loadbalancing
+            name: Servers
+            label: Backend Servers
+            kind: LoadbalancerServer
+            icon: mdi:server-plus

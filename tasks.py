@@ -73,44 +73,7 @@ def run_tests(context: Context) -> None:
 
 
 @task
-def start_kafka(context: Context) -> None:
-    """Start Kafka infrastructure for event subscription."""
-    context.run("docker-compose -f docker-compose.kafka.yml up -d")
-
-
-@task
-def stop_kafka(context: Context) -> None:
-    """Stop Kafka infrastructure."""
-    context.run("docker-compose -f docker-compose.kafka.yml down")
-
-
-@task
-def start_event_subscriber(context: Context) -> None:
-    """Start the Infrahub Kafka event subscriber."""
-    context.run("python start_event_subscriber.py")
-
-
-@task
-def test_events(context: Context) -> None:
-    """Publish test events to Kafka."""
-    context.run("python test_event_publisher.py")
-
-
-@task
-def kafka_logs(context: Context) -> None:
-    """View Kafka container logs."""
-    context.run("docker-compose -f docker-compose.kafka.yml logs -f kafka")
-
-
-@task
-def kafka_console(context: Context, topic: str = "infrahub.events") -> None:
-    """Start Kafka console consumer to monitor events."""
-    context.run(
-        f"docker exec -it kafka kafka-console-consumer --bootstrap-server localhost:9092 --topic {topic} --from-beginning"
-    )
-
-
-@task
 def validate(context: Context) -> None:
     """Run all code quality tests."""
-    context.run("pre-commit run --all-files")
+    context.run("ruff check . --fix")
+    context.run("pytest -vv tests")

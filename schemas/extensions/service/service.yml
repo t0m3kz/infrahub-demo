@@ -49,50 +49,103 @@ generics:
         order_weight: 2000
         optional: true
 
+  - name: DeviceGeneric
+    namespace: Service
+    description: "Device Services"
+    default_filter: name__value
+    include_in_menu: false
+    order_by:
+      - name__value
+    display_labels:
+      - name__value
+    attributes:
+      - name: name
+        kind: Text
+        label: Name
+        optional: false
+        order_weight: 1
+      - name: description
+        kind: Text
+        order_weight: 2
+        optional: true
+      - name: status
+        order_weight: 3
+        optional: false
+        kind: Dropdown
+        choices:
+          - name: provisioning
+            label: Provisioning
+            description: "In the process of being set up and configured."
+            color: "#ffff7f"
+          - name: active
+            label: Active
+            description: "Fully operational and currently in service."
+            color: "#7fbf7f"
+          - name: decommissioning
+            label: Decommissioning
+            description: "In the process of beeing taken out of service."
+            color: "#fbfbfb"
+          - name: decommissioned
+            label: Decommissioned
+            description: "Taken out of service."
+            color: "#bfbfbf"
+    relationships:
+      - name: owner
+        peer: OrganizationGeneric
+        cardinality: one
+        kind: Component
+        order_weight: 2000
+        optional: true
+
+  - name: InterfaceGeneric
+    namespace: Service
+    description: "Interface Services"
+    default_filter: name__value
+    include_in_menu: false
+    order_by:
+      - name__value
+    display_labels:
+      - name__value
+    attributes:
+      - name: name
+        kind: Text
+        label: Name
+        optional: false
+        order_weight: 1
+      - name: description
+        kind: Text
+        order_weight: 2
+        optional: true
+      - name: status
+        order_weight: 3
+        optional: false
+        kind: Dropdown
+        choices:
+          - name: provisioning
+            label: Provisioning
+            description: "In the process of being set up and configured."
+            color: "#ffff7f"
+          - name: active
+            label: Active
+            description: "Fully operational and currently in service."
+            color: "#7fbf7f"
+          - name: decommissioning
+            label: Decommissioning
+            description: "In the process of beeing taken out of service."
+            color: "#fbfbfb"
+          - name: decommissioned
+            label: Decommissioned
+            description: "Taken out of service."
+            color: "#bfbfbf"
+    relationships:
+      - name: owner
+        peer: OrganizationGeneric
+        cardinality: one
+        kind: Component
+        order_weight: 2000
+        optional: true
+
 nodes:
-  # - name: BackBone
-  #   namespace: Service
-  #   label: "Backbone Service"
-  #   description: "Backbone service attached to a Topology."
-  #   icon: "carbon:container-services"
-  #   menu_placement: ServiceGeneric
-  #   inherit_from:
-  #     - ServiceGeneric
-  #   uniqueness_constraints:
-  #     - ["circuit_id__value", "internal_circuit_id__value"]
-  #   attributes:
-  #     - name: circuit_id
-  #       kind: Text
-  #       label: Circuit ID
-  #       optional: false
-  #       order_weight: 3
-  #     - name: internal_circuit_id
-  #       kind: Text
-  #       label: Internal Circuit ID
-  #       optional: false
-  #       order_weight: 2
-  #   relationships:
-  #     - name: provider
-  #       cardinality: one
-  #       peer: OrganizationProvider
-  #       optional: false
-  #       kind: Attribute
-  #     - name: site_a
-  #       label: Site A
-  #       cardinality: one
-  #       peer: LocationMetro
-  #       optional: false
-  #       identifier: infrabackboneservice__location_site_a
-  #       kind: Attribute
-  #       order_weight: 4
-  #     - name: site_b
-  #       label: Site B
-  #       cardinality: one
-  #       peer: LocationMetro
-  #       optional: false
-  #       identifier: infrabackboneservice__location_site_b
-  #       kind: Attribute
-  #       order_weight: 5
 
   - name: NetworkSegment
     namespace: Service
@@ -101,7 +154,7 @@ nodes:
     icon: "carbon:ibm-cloud-internet-services"
     menu_placement: ServiceGeneric
     inherit_from:
-      - ServiceGeneric
+      - ServiceInterfaceGeneric
     attributes:
       - name: vni
         label: VNI or VLAN
@@ -150,18 +203,18 @@ extensions:
       relationships:
         - name: device_service # l3_gateway
           # state: absent
-          peer: ServiceGeneric
+          peer: ServiceDeviceGeneric
           label: Services
           optional: true
           cardinality: many
-          kind: Attribute
+          kind: Component
           order_weight: 1400
           on_delete: no-action
           identifier: device_service
     - kind: DcimInterface
       relationships:
         - name: service # l2_segment
-          peer: ServiceGeneric
+          peer: ServiceInterfaceGeneric
           label: Interface Services # L2 Segment(s)
           identifier: interface_service
           # state: absent
@@ -171,15 +224,15 @@ extensions:
           order_weight: 1400
           on_delete: no-action
           read_only: true
-    - kind: TopologyDeployment
-      relationships:
-        - name: fabric_services
-          peer: ServiceGeneric
-          label: Fabric Services
-          optional: true
-          cardinality: many
-          kind: Component
-          on_delete: no-action
+    # - kind: TopologyDeployment
+    #   relationships:
+    #     - name: fabric_services
+    #       peer: ServiceGeneric
+    #       label: Fabric Services
+    #       optional: true
+    #       cardinality: many
+    #       kind: Component
+    #       on_delete: no-action
 
     - kind: OrganizationProvider
       relationships:

@@ -14,3 +14,6 @@ spec:
     - name: "Edgecore"
     - name: "Alcatel"
     - name: "Check Point"
+    - name: "HAProxy Technologies"
+    - name: "Fortinet"
+    - name: "F5 Networks"

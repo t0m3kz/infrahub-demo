@@ -2,32 +2,29 @@
 ---
 version: "1.0"
 generics:
-  - name: RoutingService
+  - name: Routing
     namespace: Service
     description: "Base service for all routing protocols that can be attached to devices."
     label: Network Routing Service
     icon: "carbon:network-4"
-    default_filter: priority
-    # order_by:
-    #   - routing_domain__value
-    # display_labels:
-    #   - routing_domain__value
-    attributes:
+    include_in_menu: false
+    # default_filter: device
+#    attributes:
       # - name: routing_domain
       #   state: absent
       #   kind: Text
       #   description: "Name of the routing domain this service belongs to"
       #   order_weight: 1200
-      - name: priority
-        kind: Number
-        description: "Priority of this routing service (higher number means higher priority)"
-        default_value: 100
-        order_weight: 1300
-      - name: routing_instance
-        kind: Text
-        description: "Name of the routing instance on the device"
-        optional: true
-        order_weight: 1400
+      # - name: priority
+      #   kind: Number
+      #   description: "Priority of this routing service (higher number means higher priority)"
+      #   default_value: 100
+      #   order_weight: 1300
+      # - name: routing_instance
+      #   kind: Text
+      #   description: "Name of the routing instance on the device"
+      #   optional: true
+      #   order_weight: 1400
     relationships:
       - name: device
         peer: DcimGenericDevice
@@ -44,10 +41,10 @@ nodes:
     label: OSPF Service
     icon: "carbon:network-4-reference"
     menu_placement: ServiceGeneric
-    include_in_menu: true
+    include_in_menu: false
     inherit_from:
-      - ServiceGeneric
-      - ServiceRoutingService
+      - ServiceDeviceGeneric
+      - ServiceRouting
     attributes:
       - name: process_id
         kind: Text
@@ -99,88 +96,21 @@ nodes:
         cardinality: one
         kind: Attribute
         order_weight: 1600
-      - name: interfaces
-        peer: ServiceOSPFInterface
-        optional: true
-        cardinality: many
-        kind: Component
-        order_weight: 1700
-
-  - name: OSPFInterface
-    namespace: Service
-    description: "Pivot table linking OSPF configuration to an interface."
-    label: "OSPF Interface"
-    icon: "mdi:ethernet"
-    include_in_menu: false
-    inherit_from:
-      - ServiceGeneric
-    order_by:
-      - name__value
-      - description__value
-    display_labels:
-      - name__value
-    uniqueness_constraints:
-      - ["ospf", "interface"]
-    human_friendly_id:
-      - "description__value"
-    attributes:
-      # Could be computed later on based on OSPF Instance / Interface Name
-      - name: metric
-        kind: Number
-        optional: true
-        description: "OSPF metric for the interface."
-        order_weight: 1400
-      - name: mode
-        kind: Dropdown
-        choices:
-          - name: normal
-            label: Normal
-            description: "Standard OSPF interface mode."
-            color: "#E6E6FA" # lavender
-          - name: passive
-            label: Passive
-            description: "Interface will not send OSPF hello packets."
-            color: "#E6E6FA" # lavender
-          - name: peer_to_peer
-            label: Peer-to-Peer
-            description: "OSPF peer-to-peer interface mode."
-            color: "#E6E6FA" # lavender
-        default_value: normal
-        description: "Mode of the OSPF interface."
-        order_weight: 1300
-      - name: authentication_key
-        kind: Password
-        description: "Shared secret used to authenticate and secure routing messages between neighboring routers."
-        optional: true
-        order_weight: 1250
-      - name: authentication_mode
-        kind: Dropdown
-        choices:
-          - name: md5
-            label: MD5
-            color: "#E6E6FA" # lavender
-          - name: sha1
-            label: SHA1
-            color: "#ECD6FA" # lavender
-        optional: true
-        order_weight: 1225
-    relationships:
-      - name: ospf
-        label: OSPF
-        peer: ServiceOSPF
-        identifier: ospf__ospfinterfaces
-        optional: false
-        cardinality: one
-        kind: Parent
-        order_weight: 1100
-      - name: interface
+      - name: ospf_interface
         peer: DcimInterface
         label: Interface
-        cardinality: one
-        kind: Generic
-        optional: false
+        cardinality: many
+        kind: Component
+        optional: true
         on_delete: no-action
         identifier: interface_service
+      - name: ospf_interface_profile
+        peer: RoutingOSPFInterface
+        label: Routing OSPF Interface Profile
+        cardinality: one
+        kind: Generic
+        optional: true
+        on_delete: no-action
 
   - name: BGP
     namespace: Service
@@ -188,9 +118,12 @@ nodes:
     label: BGP Service
     icon: "carbon:network-4-reference"
     menu_placement: ServiceGeneric
-    include_in_menu: true
+    include_in_menu: false
     inherit_from:
-      - ServiceRoutingService
+      - ServiceRouting
+      - ServiceDeviceGeneric
+    human_friendly_id:
+      - "name__value"
     attributes:
       - name: session_type
         kind: Dropdown
@@ -257,3 +190,15 @@ nodes:
         cardinality: one
         kind: Attribute
         order_weight: 2000
+
+extensions:
+  nodes:
+    - kind: RoutingOSPFInterface
+      relationships:
+        - name: ospf_services
+          label: OSPF Services
+          kind: Component
+          cardinality: many
+          optional: true
+          peer: ServiceOSPF
+          order_weight: 2000

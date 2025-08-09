@@ -3,27 +3,11 @@ version: "1.0"
 infrahub_tests:
   # --------------------  GraphQLQuery  --------------------
   - resource: GraphQLQuery
-    resource_name: firewall_config
-    tests:
-      - name: syntax_check
-        spec:
-          path: queries/firewall_config.gql
-          kind: graphql-query-smoke
-
-  - resource: GraphQLQuery
-    resource_name: pop_config
-    tests:
-      - name: syntax_check
-        spec:
-          path: queries/pop_config.gql
-          kind: graphql-query-smoke
-
-  - resource: GraphQLQuery
     resource_name: topology_dc
     tests:
       - name: syntax_check
         spec:
-          path: queries/topology_dc.gql
+          path: queries/topology/dc.gql
           kind: graphql-query-smoke
 
   - resource: GraphQLQuery
@@ -31,7 +15,7 @@ infrahub_tests:
     tests:
       - name: syntax_check
         spec:
-          path: queries/topology_pop.gql
+          path: queries/topology/pop.gql
           kind: graphql-query-smoke
 
   - resource: GraphQLQuery
@@ -39,7 +23,7 @@ infrahub_tests:
     tests:
       - name: syntax_check
         spec:
-          path: queries/topology_clab.gql
+          path: queries/topology/clab.gql
           kind: graphql-query-smoke
 
   - resource: GraphQLQuery
@@ -47,7 +31,7 @@ infrahub_tests:
     tests:
       - name: syntax_check
         spec:
-          path: queries/leaf_config.gql
+          path: queries/config/leaf.gql
           kind: graphql-query-smoke
 
   - resource: GraphQLQuery
@@ -55,7 +39,7 @@ infrahub_tests:
     tests:
       - name: syntax_check
         spec:
-          path: queries/spine_config.gql
+          path: queries/config/spine.gql
           kind: graphql-query-smoke
 
   - resource: GraphQLQuery
@@ -63,7 +47,7 @@ infrahub_tests:
     tests:
       - name: syntax_check
         spec:
-          path: queries/oob_config.gql
+          path: queries/config/oob.gql
           kind: graphql-query-smoke
 
   - resource: GraphQLQuery
@@ -71,5 +55,14 @@ infrahub_tests:
     tests:
       - name: syntax_check
         spec:
-          path: queries/console_config.gql
+          path: queries/config/console.gql
           kind: graphql-query-smoke
+
+  - resource: GraphQLQuery
+    resource_name: firewall_config
+    tests:
+      - name: syntax_check
+        spec:
+          path: queries/config/firewall.gql
+          kind: graphql-query-smoke
+

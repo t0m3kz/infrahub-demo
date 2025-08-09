@@ -1,0 +1,20 @@
+---
+# yaml-language-server: $schema=https://schema.infrahub.app/infrahub/schema/latest.json
+version: "1.0"
+
+nodes:
+  - name: VIP
+    namespace: Service
+    description: A load balancer that distributes network traffic via Virtual IPs (VIPs) to frontend servers.
+    label: "VIP Service"
+    icon: carbon:floating-ip
+    include_in_menu: false
+    inherit_from:
+      - ServiceDeviceGeneric
+    relationships:
+      - name: virtual_ips
+        peer: LoadbalancerVIP
+        identifier: vip__lb
+        cardinality: many
+        kind: Component
+        description: A list of Virtual IPs (VIPs) used by the load balancer for routing traffic.

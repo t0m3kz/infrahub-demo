@@ -3,7 +3,7 @@ apiVersion: infrahub.app/v1
 kind: Object
 spec:
   kind: OrganizationProvider
-  data: 
+  data:
     - name: "AWS"
     - name: "Azure"
     - name: "Google Cloud"
