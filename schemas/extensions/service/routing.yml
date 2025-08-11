@@ -9,7 +9,14 @@ generics:
     icon: "carbon:network-4"
     include_in_menu: false
     # default_filter: device
-#    attributes:
+    human_friendly_id:
+      - "name__value"
+    attributes:
+      - name: name
+        kind: Text
+        description: "Name of the routing service"
+        optional: false
+        order_weight: 1100
       # - name: routing_domain
       #   state: absent
       #   kind: Text
@@ -42,6 +49,8 @@ nodes:
     icon: "carbon:network-4-reference"
     menu_placement: ServiceGeneric
     include_in_menu: false
+    human_friendly_id:
+      - "name__value"
     inherit_from:
       - ServiceDeviceGeneric
       - ServiceRouting

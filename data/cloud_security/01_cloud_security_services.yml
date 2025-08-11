@@ -1,0 +1,55 @@
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: ServiceCloudSecurityService
+  data:
+    # Zscaler Internet Access Service
+    - name: "Production-ZIA"
+      service_type: "sase"
+      provider: "Zscaler"
+      tenant_id: "company-prod-zia"
+      api_endpoint: "https://admin.zscaler.net"
+      cloud_region: "zscaler.net"
+      status: "active"
+      description: "Production Zscaler Internet Access service"
+
+    # Prisma Access Service
+    - name: "Production-Prisma"
+      service_type: "sase"
+      provider: "Palo Alto Networks"
+      tenant_id: "company-prod-prisma"
+      api_endpoint: "https://api.gpcloudservice.com"
+      cloud_region: "us-east-1"
+      status: "active"
+      description: "Production Prisma Access SASE service"
+
+    # Cisco Umbrella Service
+    - name: "Production-Umbrella"
+      service_type: "swg"
+      provider: "Cisco"
+      tenant_id: "company-prod-umbrella"
+      api_endpoint: "https://management.api.umbrella.com"
+      cloud_region: "americas"
+      status: "active"
+      description: "Production Cisco Umbrella web security"
+
+    # Cloudflare Zero Trust Service
+    - name: "Production-Cloudflare"
+      service_type: "ztna"
+      provider: "Cloudflare"
+      tenant_id: "company-prod-cf"
+      api_endpoint: "https://api.cloudflare.com/client/v4"
+      cloud_region: "global"
+      status: "active"
+      description: "Production Cloudflare Zero Trust service"
+
+    # Development Environment
+    - name: "Development-ZIA"
+      service_type: "sase"
+      provider: "Zscaler"
+      tenant_id: "company-dev-zia"
+      api_endpoint: "https://admin.zscalerbeta.net"
+      cloud_region: "zscalerbeta.net"
+      status: "provisioning"
+      description: "Development Zscaler Internet Access service"

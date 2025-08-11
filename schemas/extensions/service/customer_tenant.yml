@@ -1,0 +1,81 @@
+# yaml-language-server: $schema=https://schema.infrahub.app/infrahub/schema/latest.json
+---
+version: "1.0"
+
+nodes:
+  - name: CustomerTenant
+    namespace: Service
+    description: "Multi-tenant container that groups all resources for a customer"
+    label: Customer Tenant
+    icon: "carbon:user-multiple"
+    menu_placement: ServiceGeneric
+    include_in_menu: true
+    inherit_from:
+      - ServiceGeneric
+    attributes:
+      - name: tenant_id
+        kind: Text
+        unique: true
+        description: "Unique tenant identifier"
+        order_weight: 2
+      - name: isolation_level
+        kind: Dropdown
+        description: "Level of tenant isolation"
+        choices:
+          - name: strict
+            label: Strict Isolation
+            description: "Complete isolation - no shared resources"
+            color: "#E74C3C"
+          - name: moderate
+            label: Moderate Isolation
+            description: "Namespace isolation with some shared infrastructure"
+            color: "#F39C12"
+          - name: basic
+            label: Basic Isolation
+            description: "VLAN-level isolation within shared namespace"
+            color: "#3498DB"
+        default_value: moderate
+        order_weight: 3
+      - name: max_services
+        kind: Number
+        description: "Maximum number of services allowed"
+        default_value: 10
+        optional: true
+        order_weight: 4
+    relationships:
+      - name: primary_namespace
+        peer: IpamNamespace
+        cardinality: one
+        kind: Attribute
+        optional: false
+        identifier: "customer_tenant__primary_namespace"
+        description: "Primary IPAM namespace for this tenant"
+        order_weight: 6100
+      - name: additional_namespaces
+        peer: IpamNamespace
+        cardinality: many
+        kind: Component
+        optional: true
+        identifier: "customer_tenant__additional_namespaces"
+        description: "Additional namespaces for complex tenant requirements"
+        order_weight: 6200
+      - name: network_services
+        peer: ServiceNetworkSegment
+        cardinality: many
+        kind: Component
+        optional: true
+        description: "Network segments/services provided to this tenant"
+        order_weight: 6300
+      - name: allocated_vlans
+        peer: CoreNumberPool
+        cardinality: many
+        kind: Component
+        optional: true
+        description: "VLAN pools allocated to this tenant"
+        order_weight: 6400
+      - name: tags
+        peer: BuiltinTag
+        cardinality: many
+        kind: Attribute
+        optional: true
+        order_weight: 7000

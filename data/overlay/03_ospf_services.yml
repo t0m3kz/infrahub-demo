@@ -1,0 +1,91 @@
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: ServiceOSPF
+  data:
+    # Spine OSPF Services
+    - name: "DC1-SPINE1-OSPF"
+      description: "OSPF underlay service for DC1-SPINE1"
+      process_id: "1"
+      version: ospf
+      router_type: internal
+      reference_bandwidth: 100000
+      device: "DC1-SPINE1"
+      router_id:
+        data:
+          address: "10.1.1.1/32"
+          status: active
+          role: loopback
+      area: "Area 0"
+
+    - name: "DC1-SPINE2-OSPF"
+      description: "OSPF underlay service for DC1-SPINE2"
+      process_id: "1"
+      version: ospf
+      router_type: internal
+      reference_bandwidth: 100000
+      device: "DC1-SPINE2"
+      router_id:
+        data:
+          address: "10.1.1.2/32"
+          status: active
+          role: loopback
+      area: "Area 0"
+
+    # Leaf OSPF Services
+    - name: "DC1-LEAF1-OSPF"
+      description: "OSPF underlay service for DC1-LEAF1"
+      process_id: "1"
+      version: ospf
+      router_type: internal
+      reference_bandwidth: 100000
+      device: "DC1-LEAF1"
+      router_id:
+        data:
+          address: "10.1.1.11/32"
+          status: active
+          role: loopback
+      area: "Area 0"
+
+    - name: "DC1-LEAF2-OSPF"
+      description: "OSPF underlay service for DC1-LEAF2"
+      process_id: "1"
+      version: ospf
+      router_type: internal
+      reference_bandwidth: 100000
+      device: "DC1-LEAF2"
+      router_id:
+        data:
+          address: "10.1.1.12/32"
+          status: active
+          role: loopback
+      area: "Area 0"
+
+    - name: "DC1-LEAF3-OSPF"
+      description: "OSPF underlay service for DC1-LEAF3"
+      process_id: "1"
+      version: ospf
+      router_type: internal
+      reference_bandwidth: 100000
+      device: "DC1-LEAF3"
+      router_id:
+        data:
+          address: "10.1.1.13/32"
+          status: active
+          role: loopback
+      area: "Area 0"
+
+    - name: "DC1-LEAF4-OSPF"
+      description: "OSPF underlay service for DC1-LEAF4"
+      process_id: "1"
+      version: ospf
+      router_type: internal
+      reference_bandwidth: 100000
+      device: "DC1-LEAF4"
+      router_id:
+        data:
+          address: "10.1.1.14/32"
+          status: active
+          role: loopback
+      area: "Area 0"

@@ -1,0 +1,15 @@
+query device($name: String!) {
+  TopologyDataCenter(name__value: $name) {
+    edges {
+      node {
+        id
+        name {
+          value
+        }
+        description {
+          value
+        }
+      }
+    }
+  }
+}

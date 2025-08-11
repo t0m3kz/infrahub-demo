@@ -76,4 +76,5 @@ def run_tests(context: Context) -> None:
 def validate(context: Context) -> None:
     """Run all code quality tests."""
     context.run("ruff check . --fix")
+    context.run("mypy .")
     context.run("pytest -vv tests")

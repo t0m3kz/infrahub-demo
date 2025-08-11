@@ -1,0 +1,20 @@
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: CoreIPPrefixPool
+  data:
+    - name: "INTER-SWITCH-P2P-PREFIX"
+      description: "P2P IP prefix pool for inter-switch eBGP underlay links"
+      default_prefix_type: "IpamPrefix"
+      default_prefix_length: 31
+      ip_namespace: default
+      resources:
+        kind: IpamPrefix
+        data:
+          - prefix: 10.255.0.0/16
+            description: "P2P inter-switch links prefix"
+            status: active
+            member_type: prefix
+            is_pool: true
+            role: technical

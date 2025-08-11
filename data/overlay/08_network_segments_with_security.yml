@@ -1,0 +1,197 @@
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: ServiceNetworkSegment
+  data:
+    # Enhanced L2 Network Segments with Security Controls
+    - name: "WEB-TIER-SEGMENT"
+      description: "Web tier L2 network segment with security controls"
+      vni: 100
+      environment: "production"
+      status: "active"
+      namespace: "default"
+      segment_type: l2_only
+      mtu: 1500
+      tenant_isolation: "shared_controlled"
+      security_enforcement: true
+      default_deny_all: false
+      enable_logging: true
+      security_zone: "WEB-TIER-ZONE"
+      security_profile: "WEB-TIER-SECURITY-PROFILE"
+      # access_control_lists:
+      #   - "WEB-TIER-INGRESS-ACL"
+      #   - "WEB-TIER-EGRESS-ACL"
+      # vxlan_services:
+      #   - "DC1-LEAF1-VXLAN-100"
+      #   - "DC1-LEAF2-VXLAN-100"
+      # underlay_routing: "DC1-LEAF1-OSPF"
+
+    - name: "APP-TIER-SEGMENT"
+      description: "Application tier L2 network segment with security controls"
+      vni: 200
+      environment: "production"
+      status: "active"
+      namespace: "default"
+      segment_type: l2_only
+      mtu: 1500
+      tenant_isolation: "shared_controlled"
+      security_enforcement: true
+      default_deny_all: true
+      enable_logging: true
+      security_zone: "APP-TIER-ZONE"
+      security_profile: "APP-TIER-SECURITY-PROFILE"
+      # access_control_lists:
+      #   - "APP-TIER-INGRESS-ACL"
+      #   - "APP-TIER-EGRESS-ACL"
+      # vxlan_services:
+      #   - "DC1-LEAF1-VXLAN-200"
+      #   - "DC1-LEAF2-VXLAN-200"
+      # underlay_routing: "DC1-LEAF1-OSPF"
+
+    - name: "DB-TIER-SEGMENT"
+      description: "Database tier L2 network segment with strict security"
+      vni: 300
+      environment: "production"
+      status: "active"
+      namespace: "default"
+      segment_type: l2_only
+      mtu: 9000
+      tenant_isolation: "customer_dedicated"
+      security_enforcement: true
+      default_deny_all: true
+      enable_logging: true
+      security_zone: "DB-TIER-ZONE"
+      security_profile: "DATABASE-SECURITY-PROFILE"
+      # access_control_lists:
+      #   - "DB-TIER-INGRESS-ACL"
+      #   - "DB-TIER-EGRESS-ACL"
+      # vxlan_services:
+      #   - "DC1-LEAF3-VXLAN-300"
+      #   - "DC1-LEAF4-VXLAN-300"
+      # underlay_routing: "DC1-LEAF3-OSPF"
+
+    # Enhanced L3 Network Segments with Security Controls
+    - name: "TENANT-A-L3-SEGMENT"
+      description: "Tenant A L3 network segment with distributed gateway and security"
+      vni: 1000
+      environment: "production"
+      status: "active"
+      namespace: "default"
+      segment_type: l3_gateway
+      mtu: 1500
+      tenant_isolation: "customer_dedicated"
+      security_enforcement: true
+      default_deny_all: true
+      enable_logging: true
+      security_zone: "TENANT-ZONE"
+      security_profile: "TENANT-SECURITY-PROFILE"
+      # access_control_lists:
+      #   - "TENANT-INGRESS-ACL"
+      customer: "Customer 1"
+      gateway_ip:
+        data:
+          address: "192.168.100.1/24"
+      # underlay_routing: "DC1-LEAF1-OSPF"
+
+    # Additional Security-Focused Segments
+    - name: "MANAGEMENT-SEGMENT"
+      description: "Network management segment with strict access controls"
+      vni: 900
+      environment: "production"
+      status: "active"
+      namespace: "default"
+      segment_type: l3_vrf
+      mtu: 1500
+      tenant_isolation: "customer_dedicated"
+      security_enforcement: true
+      default_deny_all: true
+      enable_logging: true
+      security_zone: "MANAGEMENT-ZONE"
+      security_profile: "MANAGEMENT-SECURITY-PROFILE"
+      # access_control_lists:
+      #   - "MANAGEMENT-ACL"
+      gateway_ip:
+        data:
+          address: "10.0.1.1/24"
+
+    - name: "GUEST-SEGMENT"
+      description: "Guest network segment with restricted access"
+      vni: 800
+      environment: "production"
+      status: "active"
+      namespace: "default"
+      segment_type: l3_gateway
+      mtu: 1500
+      tenant_isolation: "public_shared"
+      security_enforcement: true
+      default_deny_all: false
+      enable_logging: true
+      security_zone: "GUEST-ZONE"
+      security_profile: "GUEST-SECURITY-PROFILE"
+      # access_control_lists:
+      #   - "GUEST-ACL"
+      gateway_ip:
+        data:
+          address: "172.16.100.1/24"
+
+    - name: "DMZ-SEGMENT"
+      description: "DMZ segment for public-facing services"
+      vni: 700
+      environment: "production"
+      status: "active"
+      namespace: "default"
+      segment_type: l3_gateway
+      mtu: 1500
+      tenant_isolation: "shared_controlled"
+      security_enforcement: true
+      default_deny_all: false
+      enable_logging: true
+      security_zone: "DMZ-ZONE"
+      security_profile: "DMZ-SECURITY-PROFILE"
+      gateway_ip:
+        data:
+          address: "10.1.100.1/24"
+
+    # Multi-tenant Segments with Enhanced Security
+    - name: "TENANT-B-L3-SEGMENT"
+      description: "Tenant B isolated L3 segment"
+      vni: 2000
+      environment: "production"
+      status: "active"
+      namespace: "default"
+      segment_type: l3_vrf
+      mtu: 1500
+      tenant_isolation: "customer_dedicated"
+      security_enforcement: true
+      default_deny_all: true
+      enable_logging: true
+      security_zone: "TENANT-ZONE"
+      security_profile: "TENANT-SECURITY-PROFILE"
+      # access_control_lists:
+      #   - "TENANT-INGRESS-ACL"
+      customer: "Customer 2"
+      gateway_ip:
+        data:
+          address: "192.168.200.1/24"
+
+    - name: "TENANT-C-L3-SEGMENT"
+      description: "Tenant C isolated L3 segment"
+      vni: 3000
+      environment: "production"
+      status: "active"
+      namespace: "default"
+      segment_type: l3_vrf
+      mtu: 1500
+      tenant_isolation: "customer_dedicated"
+      security_enforcement: true
+      default_deny_all: true
+      enable_logging: true
+      security_zone: "TENANT-ZONE"
+      security_profile: "TENANT-SECURITY-PROFILE"
+      # access_control_lists:
+      #   - "TENANT-INGRESS-ACL"
+      customer: "Customer 3"
+      gateway_ip:
+        data:
+          address: "192.168.250.1/24"

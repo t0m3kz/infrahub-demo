@@ -1,4 +1,4 @@
-query device($name: String!) {
+query topology_dc($name: String!) {
   TopologyDataCenter(name__value: $name) {
     edges {
       node {
@@ -10,6 +10,9 @@ query device($name: String!) {
           value
         }
         strategy{
+          value
+        }
+        enable_ip_unnumbered {
           value
         }
         management_subnet {

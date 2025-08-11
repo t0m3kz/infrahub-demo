@@ -7,7 +7,7 @@ spec:
     - name: DC-2
       location: Munich
       description: Munich Data Center
-      strategy: ospf-ibgp
+      strategy: ebgp-ibgp
       design: PHYSICAL DC CISCO S
       emulation: true
       provider: Technology Partner

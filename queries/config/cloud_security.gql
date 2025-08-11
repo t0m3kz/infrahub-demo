@@ -1,0 +1,211 @@
+query GetCloudSecurityConfiguration($device: String!) {
+  DcimVirtualDevice(name__value: $device) {
+    edges {
+      node {
+        id
+        name {
+          value
+        }
+        description {
+          value
+        }
+        role {
+          value
+        }
+        status {
+          value
+        }
+        cpu {
+          value
+        }
+        memory {
+          value
+        }
+
+        # Device Type Information
+        device_type {
+          node {
+            name {
+              value
+            }
+            manufacturer {
+              node {
+                name {
+                  value
+                }
+              }
+            }
+            platform {
+              node {
+                name {
+                  value
+                }
+                nornir_platform {
+                  value
+                }
+                ansible_network_os {
+                  value
+                }
+                netmiko_device_type {
+                  value
+                }
+              }
+            }
+          }
+        }
+
+        # Location Information
+        location {
+          node {
+            ... on LocationBuilding {
+              name {
+                value
+              }
+            }
+          }
+        }
+
+        # Interfaces
+        interfaces {
+          edges {
+            node {
+              name {
+                value
+              }
+              role {
+                value
+              }
+              status {
+                value
+              }
+              description {
+                value
+              }
+            }
+          }
+        }
+
+        # Groups
+        member_of_groups {
+          edges {
+            node {
+              name {
+                value
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+
+  # Get Cloud Security Services
+  ServiceCloudSecurityService {
+    edges {
+      node {
+        id
+        name {
+          value
+        }
+        service_type {
+          value
+        }
+        provider {
+          value
+        }
+        tenant_id {
+          value
+        }
+        api_endpoint {
+          value
+        }
+        cloud_region {
+          value
+        }
+        description {
+          value
+        }
+        status {
+          value
+        }
+
+        # Cloud Gateways
+        gateways {
+          edges {
+            node {
+              name {
+                value
+              }
+              gateway_type {
+                value
+              }
+              city {
+                value
+              }
+              country {
+                value
+              }
+              capacity_mbps {
+                value
+              }
+              endpoint_address {
+                value
+              }
+              status {
+                value
+              }
+              description {
+                value
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+
+  # Get Cloud Gateways
+  ServiceCloudGateway {
+    edges {
+      node {
+        id
+        name {
+          value
+        }
+        gateway_type {
+          value
+        }
+        city {
+          value
+        }
+        country {
+          value
+        }
+        capacity_mbps {
+          value
+        }
+        endpoint_address {
+          value
+        }
+        status {
+          value
+        }
+        description {
+          value
+        }
+
+        # Associated service
+        service {
+          node {
+            name {
+              value
+            }
+            provider {
+              value
+            }
+          }
+        }
+      }
+    }
+  }
+}

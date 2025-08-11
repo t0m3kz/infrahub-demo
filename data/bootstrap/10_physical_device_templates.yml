@@ -8,7 +8,7 @@ spec:
       device_type: N9K-C9336C-FX2
       role: spine
       member_of_groups:
-        - name: spines
+        - spines
       status: active
       interfaces:
         kind: TemplateDcimPhysicalInterface
@@ -124,36 +124,60 @@ spec:
           - template_name: N9K-C9336C-FX2_SPINE_mgmt0
             name: mgmt0
             role: management
-          - template_name: N9K-C9336C-FX2_SPINE_Ethernet1/6
+    - template_name: N9K-C9336C-FX2_LEAF
+      device_type: N9K-C9336C-FX2
+      role: leaf
+      member_of_groups:
+        - leafs
+      status: active
+      interfaces:
+        kind: TemplateDcimPhysicalInterface
+        data:
+          - template_name: N9K-C9336C-FX2_LEAF_Ethernet1/1
+            name: Ethernet1/1
+            role: customer
+          - template_name: N9K-C9336C-FX2_LEAF_Ethernet1/2
+            name: Ethernet1/2
+            role: customer
+          - template_name: N9K-C9336C-FX2_LEAF_Ethernet1/3
+            name: Ethernet1/3
+            role: customer
+          - template_name: N9K-C9336C-FX2_LEAF_Ethernet1/4
+            name: Ethernet1/4
+            role: customer
+          - template_name: N9K-C9336C-FX2_LEAF_Ethernet1/5
+            name: Ethernet1/5
+            role: customer
+          - template_name: N9K-C9336C-FX2_LEAF_Ethernet1/6
             name: Ethernet1/6
-            role: leaf
-          - template_name: N9K-C9336C-FX2_SPINE_Ethernet1/7
+            role: customer
+          - template_name: N9K-C9336C-FX2_LEAF_Ethernet1/7
             name: Ethernet1/7
-            role: leaf
-          - template_name: N9K-C9336C-FX2_SPINE_Ethernet1/8
+            role: customer
+          - template_name: N9K-C9336C-FX2_LEAF_Ethernet1/8
             name: Ethernet1/8
-            role: leaf
-          - template_name: N9K-C9336C-FX2_SPINE_Ethernet1/9
+            role: customer
+          - template_name: N9K-C9336C-FX2_LEAF_Ethernet1/9
             name: Ethernet1/9
-            role: leaf
-          - template_name: N9K-C9336C-FX2_SPINE_Ethernet1/10
+            role: customer
+          - template_name: N9K-C9336C-FX2_LEAF_Ethernet1/10
             name: Ethernet1/10
-            role: leaf
-          - template_name: N9K-C9336C-FX2_SPINE_Ethernet1/11
+            role: customer
+          - template_name: N9K-C9336C-FX2_LEAF_Ethernet1/11
             name: Ethernet1/11
-            role: leaf
-          - template_name: N9K-C9336C-FX2_SPINE_Ethernet1/12
+            role: customer
+          - template_name: N9K-C9336C-FX2_LEAF_Ethernet1/12
             name: Ethernet1/12
-            role: leaf
-          - template_name: N9K-C9336C-FX2_SPINE_Ethernet1/13
+            role: customer
+          - template_name: N9K-C9336C-FX2_LEAF_Ethernet1/13
             name: Ethernet1/13
-            role: leaf
-          - template_name: N9K-C9336C-FX2_SPINE_Ethernet1/14
+            role: customer
+          - template_name: N9K-C9336C-FX2_LEAF_Ethernet1/14
             name: Ethernet1/14
-            role: leaf
-          - template_name: N9K-C9336C-FX2_SPINE_Ethernet1/15
+            role: customer
+          - template_name: N9K-C9336C-FX2_LEAF_Ethernet1/15
             name: Ethernet1/15
-            role: leaf
+            role: customer
           - template_name: N9K-C9336C-FX2_LEAF_Ethernet1/16
             name: Ethernet1/16
             role: customer
@@ -224,7 +248,7 @@ spec:
       device_type: N9K-C9316D-GX
       role: spine
       member_of_groups:
-        - name: spines
+        - spines
       status: active
       interfaces:
         kind: TemplateDcimPhysicalInterface
@@ -284,7 +308,7 @@ spec:
       device_type: N9K-C9316D-GX
       role: leaf
       member_of_groups:
-        - name: leafs
+        - leafs
       status: active
       interfaces:
         kind: TemplateDcimPhysicalInterface
@@ -458,7 +482,7 @@ spec:
       device_type: DCS-7280DR3-24-F
       role: spine
       member_of_groups:
-        - name: spines
+        - spines
       status: active
       interfaces:
         kind: TemplateDcimPhysicalInterface
@@ -542,7 +566,7 @@ spec:
       device_type: CCS-720DP-48S-2F
       role: leaf
       member_of_groups:
-        - name: leafs
+        - leafs
       status: active
       interfaces:
         kind: TemplateDcimPhysicalInterface
@@ -710,7 +734,7 @@ spec:
       device_type: SRX-1500
       role: edge_firewall
       member_of_groups:
-        - name: firewalls
+        - firewalls
       status: active
       interfaces:
         kind: TemplateDcimPhysicalInterface
@@ -734,7 +758,7 @@ spec:
       device_type: SRX-1500
       role: dc_firewall
       member_of_groups:
-        - name: firewalls
+        - firewalls
       status: active
       interfaces:
         kind: TemplateDcimPhysicalInterface
@@ -758,7 +782,7 @@ spec:
       device_type: C9200L-24P-4G
       role: oob
       member_of_groups:
-        - name: oobs
+        - oobs
       status: active
       interfaces:
         kind: TemplateDcimPhysicalInterface
@@ -842,7 +866,7 @@ spec:
       device_type: SCG50R
       role: console
       member_of_groups:
-        - name: consoles
+        - consoles
       status: active
       interfaces:
         kind: TemplateDcimPhysicalInterface
@@ -857,7 +881,7 @@ spec:
       device_type: N9K-C9316D-GX
       role: edge
       member_of_groups:
-        - name: edges
+        - edges
       status: active
       interfaces:
         kind: TemplateDcimPhysicalInterface
@@ -917,7 +941,7 @@ spec:
       device_type: 5912-54X-O-AC-F
       role: leaf
       member_of_groups:
-        - name: leafs
+        - leafs
       status: active
       interfaces:
         kind: TemplateDcimPhysicalInterface
@@ -1091,7 +1115,7 @@ spec:
       device_type: 7726-32X-O
       role: spine
       member_of_groups:
-        - name: spines
+        - spines
       status: active
       interfaces:
         kind: TemplateDcimPhysicalInterface

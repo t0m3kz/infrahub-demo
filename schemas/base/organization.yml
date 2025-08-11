@@ -81,9 +81,62 @@ nodes:
 
   - name: Customer
     namespace: Organization
-    description: Customer
-    icon: mdi:domain
+    description: Customer with dedicated network namespace for multi-tenant isolation
+    icon: mdi:account-group
     inherit_from:
       - OrganizationGeneric
     include_in_menu: true
     menu_placement: OrganizationGeneric
+    attributes:
+      - name: customer_id
+        kind: Text
+        unique: true
+        optional: true
+        description: "Unique customer identifier"
+        order_weight: 900
+      - name: tenant_type
+        kind: Dropdown
+        description: "Type of tenancy model"
+        choices:
+          - name: dedicated
+            label: Dedicated Namespace
+            description: "Customer has dedicated namespace isolation"
+            color: "#2E8B57"
+          - name: shared
+            label: Shared Namespace
+            description: "Customer shares namespace with other tenants"
+            color: "#4682B4"
+          - name: hybrid
+            label: Hybrid
+            description: "Customer has both dedicated and shared resources"
+            color: "#9370DB"
+        default_value: dedicated
+        optional: true
+        order_weight: 950
+      - name: max_vlans
+        kind: Number
+        description: "Maximum number of VLANs allowed for this customer"
+        default_value: 100
+        optional: true
+        order_weight: 1300
+      - name: max_prefixes
+        kind: Number
+        description: "Maximum number of IP prefixes allowed for this customer"
+        default_value: 50
+        optional: true
+        order_weight: 1400
+    relationships:
+      - name: network_segments
+        peer: ServiceNetworkSegment
+        cardinality: many
+        kind: Component
+        optional: true
+        description: "Network segments assigned to this customer"
+        order_weight: 2100
+      - name: ip_prefixes
+        peer: IpamPrefix
+        cardinality: many
+        kind: Component
+        optional: true
+        description: "IP prefixes allocated to this customer"
+        order_weight: 2200

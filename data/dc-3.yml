@@ -8,6 +8,7 @@ spec:
       location: Frankfurt
       description: Frankfurt Data Center
       strategy: ospf-ibgp
+      enable_ip_unnumbered: false
       design: PHYSICAL DC ARISTA S
       emulation: true
       provider: Technology Partner

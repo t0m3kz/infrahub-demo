@@ -1,0 +1,49 @@
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: ServiceNetworkSegment
+  data:
+    # L2 Network Segments
+    - name: "WEB-TIER-SEGMENT"
+      description: "Web tier L2 network segment"
+      vni: 100
+      segment_type: l2_only
+      mtu: 1500
+      vxlan_services:
+        - "DC1-LEAF1-VXLAN-100"
+        - "DC1-LEAF2-VXLAN-100"
+      underlay_routing: "DC1-LEAF1-OSPF"
+
+    - name: "APP-TIER-SEGMENT"
+      description: "Application tier L2 network segment"
+      vni: 200
+      segment_type: l2_only
+      mtu: 1500
+      vxlan_services:
+        - "DC1-LEAF1-VXLAN-200"
+        - "DC1-LEAF2-VXLAN-200"
+      underlay_routing: "DC1-LEAF1-OSPF"
+
+    - name: "DB-TIER-SEGMENT"
+      description: "Database tier L2 network segment"
+      vni: 300
+      segment_type: l2_only
+      mtu: 9000
+      vxlan_services:
+        - "DC1-LEAF3-VXLAN-300"
+        - "DC1-LEAF4-VXLAN-300"
+      underlay_routing: "DC1-LEAF3-OSPF"
+
+    # L3 Network Segments with Gateways
+    - name: "TENANT-A-L3-SEGMENT"
+      description: "Tenant A L3 network segment with distributed gateway"
+      vni: 1000
+      segment_type: l3_gateway
+      mtu: 1500
+      gateway_ip:
+        data:
+          address: "192.168.100.1/24"
+          status: active
+          role: gateway
+      underlay_routing: "DC1-LEAF1-OSPF"

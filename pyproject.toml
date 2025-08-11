@@ -19,6 +19,7 @@ dev = [
     "pytest>=8.3.5,<9.0.0",
     "pytest-asyncio>=0.26.0",
     "ruff>=0.11.4",
+    "types-pyyaml>=6.0.12.20250809",
     "yamllint>=1.37.1",
 ]
 

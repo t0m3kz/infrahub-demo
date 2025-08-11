@@ -190,24 +190,14 @@ class TopologyCreator:
             },
         )
 
-    async def create_address_pools(self) -> None:
-        """Create objects of a specific kind and store in local store."""
+    async def create_address_pools(self, subnets: list[dict]) -> None:
+        """Create objects of a specific kind and store in local store.
+
+        Args:
+            subnets: List of subnet dicts with 'type' and 'prefix_id' keys.
+                    Format: [{"type": "Management", "prefix_id": "subnet_id"}, ...]
+        """
         self.log.info("Creating address pools")
-        pools = []
-        if self.data.get("management_subnet"):
-            pools.append(
-                {
-                    "type": "Management",
-                    "prefix_id": self.data["management_subnet"]["id"],
-                },
-            )
-        if self.data.get("technical_subnet"):
-            pools.append(
-                {
-                    "type": "Loopback",
-                    "prefix_id": self.data["technical_subnet"]["id"],
-                },
-            )
 
         await self._create_in_batch(
             kind="CoreIPAddressPool",
@@ -222,9 +212,72 @@ class TopologyCreator:
                     },
                     "store_key": f"{pool.get('type', '').lower()}_ip_pool",
                 }
-                for pool in pools
+                for pool in subnets
             ],
         )
+
+    async def split_technical_subnet(
+        self, technical_subnet: Any, topology_name: str
+    ) -> tuple[str, str]:
+        """Split technical subnet in half for eBGP scenarios.
+
+        Args:
+            technical_subnet: The technical subnet object or dict
+            topology_name: Name of the topology
+
+        Returns:
+            Tuple of (loopback_subnet_id, p2p_subnet_id)
+        """
+        import ipaddress
+
+        # Get the technical subnet prefix - simplified with SDK error handling
+        technical_prefix = technical_subnet.prefix.value
+
+        if not technical_prefix:
+            raise ValueError("Could not extract prefix from technical subnet")
+
+        # Parse the network and split it in half
+        network = ipaddress.IPv4Network(technical_prefix)
+        split_subnets = list(
+            network.subnets(prefixlen_diff=1)
+        )  # Split into 2 equal subnets
+
+        self.log.info(
+            f"Splitting technical subnet {technical_prefix} for eBGP scenario: {split_subnets[0]} (loopbacks) and {split_subnets[1]} (P2P)"
+        )
+
+        # Create loopback subnet (first half)
+        loopback_subnet = await self.client.create(
+            kind="IpamPrefix",
+            data={
+                "prefix": str(split_subnets[0]),
+                "description": f"Loopback IP subnet for {topology_name} (split from technical)",
+                "status": "active",
+                "role": "loopback",
+                "ip_namespace": {"name": "default"},
+            },
+        )
+        await loopback_subnet.save(allow_upsert=True)
+
+        # Create P2P subnet (second half)
+        p2p_subnet = await self.client.create(
+            kind="IpamPrefix",
+            data={
+                "prefix": str(split_subnets[1]),
+                "description": f"P2P IP subnet for {topology_name} (split from technical)",
+                "status": "active",
+                "role": "technical",
+                "ip_namespace": {"name": "default"},
+            },
+        )
+        await p2p_subnet.save(allow_upsert=True)
+
+        # Store P2P subnet for later use
+        self.client.store.set(
+            key=f"{topology_name}-p2p-subnet", node=p2p_subnet, branch=self.branch
+        )
+
+        return loopback_subnet.id, p2p_subnet.id
 
     async def create_L2_pool(self) -> None:
         """Create objects of a specific kind and store in local store."""
@@ -240,6 +293,52 @@ class TopologyCreator:
                     "end_range": 12009999,
                 },
                 # "store_key": f"{pool.get('type').lower()}_ip_pool",
+            },
+        )
+
+    async def create_p2p_ip_pool(self, subnet_key: str = "technical_subnet") -> None:
+        """Create P2P IP prefix pool from specified subnet.
+
+        Args:
+            subnet_key: The key to look up the subnet in self.data (default: "technical_subnet")
+        """
+        topology_name = self.data.get("name")
+        self.log.info(f"Creating P2P IP prefix pool for {topology_name}")
+
+        # Try to get the split P2P subnet first
+        p2p_subnet = self.client.store.get(key=f"{topology_name}-p2p-subnet")
+
+        if p2p_subnet:
+            # Use the split P2P subnet (second half of technical subnet)
+            self.log.info(f"Using split P2P subnet for {topology_name}")
+            subnet_id = p2p_subnet.id
+        else:
+            # Fall back to original logic using specified subnet
+            subnet = self.data.get(subnet_key)
+            if not subnet:
+                self.log.error(
+                    f"Subnet '{subnet_key}' not found, cannot create P2P IP pool"
+                )
+                return
+            subnet_id = subnet["id"]
+            self.log.warning(
+                f"P2P subnet split not found, using original {subnet_key} - may cause IP conflicts!"
+            )
+
+        # Create a P2P IP prefix pool from the subnet
+        await self._create(
+            kind="CoreIPPrefixPool",
+            data={
+                "payload": {
+                    "name": f"{topology_name}-P2P-POOL",
+                    "description": f"P2P IP prefix pool for {topology_name} topology",
+                    "default_prefix_length": 31,
+                    "default_prefix_type": "IpamPrefix",
+                    "ip_namespace": "default",
+                    "status": "active",
+                    "resources": [subnet_id],
+                },
+                "store_key": f"p2p-pool-{topology_name}",
             },
         )
 

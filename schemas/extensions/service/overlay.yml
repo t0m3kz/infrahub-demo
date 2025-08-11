@@ -1,0 +1,280 @@
+# yaml-language-server: $schema=https://schema.infrahub.app/infrahub/schema/latest.json
+---
+version: "1.0"
+
+nodes:
+  # Device-level overlay services
+  - name: EVPN
+    namespace: Service
+    description: "EVPN service that can be attached to devices for Ethernet VPN functionality"
+    label: EVPN Service
+    icon: "carbon:cloud-foundry"
+    menu_placement: ServiceDeviceGeneric
+    include_in_menu: true
+    inherit_from:
+      - ServiceDeviceGeneric
+    attributes:
+      - name: rd_format
+        kind: Dropdown
+        description: "Route Distinguisher format"
+        choices:
+          - name: auto
+            label: Auto
+            description: "Automatically generate RD"
+            color: "#7fbf7f"
+          - name: manual
+            label: Manual
+            description: "Manually configured RD"
+            color: "#ff7f7f"
+        default_value: "auto"
+        optional: true
+        order_weight: 1600
+      - name: import_rt
+        kind: Text
+        description: "Import Route Target (format: ASN:nn or IP:nn)"
+        optional: true
+        order_weight: 1700
+      - name: export_rt
+        kind: Text
+        description: "Export Route Target (format: ASN:nn or IP:nn)"
+        optional: true
+        order_weight: 1800
+      - name: evi
+        kind: Number
+        description: "EVPN Instance identifier"
+        optional: true
+        order_weight: 1900
+    relationships:
+      - name: underlay_routing
+        peer: ServiceRouting
+        optional: true
+        cardinality: one
+        kind: Attribute
+        order_weight: 1500
+        description: "Underlay routing service (typically OSPF) for reachability"
+
+  - name: VXLAN
+    namespace: Service
+    description: "VXLAN service that can be attached to devices for overlay functionality"
+    label: VXLAN Service
+    icon: "carbon:network-3"
+    menu_placement: ServiceDeviceGeneric
+    include_in_menu: true
+    inherit_from:
+      - ServiceDeviceGeneric
+    attributes:
+      - name: vni
+        kind: Number
+        description: "VXLAN Network Identifier"
+        optional: false
+        order_weight: 1500
+      - name: udp_port
+        kind: Number
+        description: "UDP port for VXLAN encapsulation"
+        optional: false
+        default_value: 4789
+        order_weight: 1600
+      - name: learning
+        kind: Dropdown
+        description: "MAC learning behavior"
+        choices:
+          - name: enabled
+            label: Enabled
+            description: "Enable MAC learning"
+            color: "#7fbf7f"
+          - name: disabled
+            label: Disabled
+            description: "Disable MAC learning"
+            color: "#ff7f7f"
+        default_value: "enabled"
+        order_weight: 1700
+    relationships:
+      - name: vtep_source_interface
+        peer: DcimInterface
+        description: "Source interface for VXLAN tunnels (e.g., Loopback0)"
+        optional: false
+        cardinality: one
+        kind: Attribute
+        identifier: vxlan_source_interface
+        order_weight: 1500
+      - name: access_interfaces
+        peer: DcimInterface
+        label: Access Interfaces
+        description: "Access interfaces participating in this VXLAN"
+        cardinality: many
+        kind: Component
+        optional: true
+        identifier: vxlan_access_interfaces
+        order_weight: 1600
+      - name: evpn_service
+        peer: ServiceEVPN
+        optional: true
+        cardinality: one
+        kind: Attribute
+        order_weight: 1700
+        description: "Associated EVPN service for control plane"
+      - name: underlay_routing
+        peer: ServiceRouting
+        optional: true
+        cardinality: one
+        kind: Attribute
+        order_weight: 1750
+        description: "Underlay routing service (typically OSPF) for VTEP reachability"
+
+  # Interface-level overlay services (commented out due to ServiceInterfaceGeneric inheritance issue)
+  # - name: VXLANInterface
+  #   namespace: Service
+  #   description: "VXLAN service bound to a specific interface"
+  #   label: VXLAN Interface Service
+  #   icon: "carbon:network-interface"
+  #   menu_placement: ServiceInterfaceGeneric
+  #   include_in_menu: true
+  #   inherit_from:
+  #     - ServiceInterfaceGeneric
+  #   attributes:
+  #     - name: vni
+  #       kind: Number
+  #       description: "VXLAN Network Identifier for this interface"
+  #       optional: false
+  #       order_weight: 1500
+  #     - name: access_vlan
+  #       kind: Number
+  #       description: "Access VLAN mapped to this VXLAN"
+  #       optional: true
+  #       order_weight: 1600
+  #   relationships:
+  #     - name: interface
+  #       peer: DcimInterface
+  #       cardinality: one
+  #       kind: Component
+  #       optional: false
+  #       order_weight: 1650
+  #       description: "Interface this VXLAN service is bound to"
+  #     - name: vxlan_service
+  #       peer: ServiceVXLAN
+  #       optional: true
+  #       cardinality: one
+  #       kind: Attribute
+  #       order_weight: 1700
+  #       description: "Parent VXLAN service"
+
+  - name: NetworkSegment
+    namespace: Service
+    description: "Network segment that can span multiple devices using VXLAN/EVPN"
+    label: Network Segment
+    icon: "carbon:network-3"
+    menu_placement: ServiceDeviceGeneric
+    include_in_menu: true
+    inherit_from:
+      - ServiceDeviceGeneric
+    attributes:
+      - name: vni
+        kind: Number
+        description: "Global VNI for this network segment"
+        optional: false
+        order_weight: 1500
+      - name: segment_type
+        kind: Dropdown
+        description: "Type of network segment"
+        choices:
+          - name: l2_only
+            label: L2 Only
+            description: "Layer 2 segment only"
+            color: "#A9CCE3"
+          - name: l3_gateway
+            label: L3 Gateway
+            description: "Layer 2 segment with L3 gateway"
+            color: "#A9DFBF"
+          - name: l3_vrf
+            label: L3 VRF
+            description: "Layer 3 VRF segment"
+            color: "#D2B4DE"
+        default_value: "l2_only"
+        order_weight: 1600
+      - name: mtu
+        kind: Number
+        description: "Maximum Transmission Unit for the segment"
+        default_value: 1500
+        optional: true
+        order_weight: 1700
+    relationships:
+      - name: gateway_ip
+        peer: IpamIPAddress
+        optional: true
+        cardinality: one
+        kind: Attribute
+        order_weight: 1700
+        description: "Gateway IP address for L3 segments"
+      - name: vxlan_services
+        peer: ServiceVXLAN
+        label: VXLAN Services
+        cardinality: many
+        kind: Attribute
+        optional: true
+        order_weight: 1800
+        description: "VXLAN services implementing this segment"
+      - name: member_interfaces
+        peer: DcimInterface
+        label: Member Interfaces
+        cardinality: many
+        kind: Attribute
+        optional: true
+        identifier: network_segment_member_interfaces
+        order_weight: 1900
+        description: "Interfaces that are members of this network segment"
+      - name: underlay_routing
+        peer: ServiceRouting
+        optional: true
+        cardinality: one
+        kind: Attribute
+        order_weight: 1950
+        description: "Underlay routing service for segment reachability"
+
+# extensions:
+#   nodes:
+#     - kind: DcimInterface
+#       relationships:
+#         - name: vxlan_services
+#           label: VXLAN Services
+#           kind: Attribute
+#           cardinality: many
+#           optional: true
+#           peer: ServiceVXLAN
+#           order_weight: 3000
+#         - name: evpn_services
+#           label: EVPN Services
+#           kind: Attribute
+#           cardinality: many
+#           optional: true
+#           peer: ServiceEVPN
+#           order_weight: 3100
+#         - name: network_segments
+#           label: Network Segments
+#           kind: Attribute
+#           cardinality: many
+#           optional: true
+#           peer: ServiceNetworkSegment
+#           order_weight: 3200
+#     - kind: DcimGenericDevice
+#       relationships:
+#         - name: vxlan_services
+#           label: VXLAN Services
+#           kind: Component
+#           cardinality: many
+#           optional: true
+#           peer: ServiceVXLAN
+#           order_weight: 3000
+#         - name: evpn_services
+#           label: EVPN Services
+#           kind: Component
+#           cardinality: many
+#           optional: true
+#           peer: ServiceEVPN
+#           order_weight: 3100
+#         - name: network_segments
+#           label: Network Segments
+#           kind: Component
+#           cardinality: many
+#           optional: true
+#           peer: ServiceNetworkSegment
+#           order_weight: 3200
