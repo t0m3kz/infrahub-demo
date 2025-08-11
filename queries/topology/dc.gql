@@ -12,7 +12,7 @@ query topology_dc($name: String!) {
         strategy{
           value
         }
-        enable_ip_unnumbered {
+        unnumbered {
           value
         }
         management_subnet {

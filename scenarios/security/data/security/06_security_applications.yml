@@ -1,0 +1,68 @@
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: SecurityApplication
+  data:
+    - name: "web-browsing"
+      description: "General web browsing application"
+      category: "web-browsing"
+      subcategory: "general"
+      risk_level: 2
+      default_ports: "80,443,8080,8443"
+
+    - name: "file-sharing"
+      description: "Peer-to-peer file sharing"
+      category: "file-sharing"
+      subcategory: "p2p"
+      risk_level: 4
+      default_ports: "6881-6889,4662"
+
+    - name: "social-media"
+      description: "Social media applications"
+      category: "social-networking"
+      subcategory: "general"
+      risk_level: 3
+      default_ports: "443,80"
+
+    - name: "business-email"
+      description: "Business email applications"
+      category: "email"
+      subcategory: "business"
+      risk_level: 1
+      default_ports: "25,110,143,993,995"
+
+    - name: "remote-access"
+      description: "Remote access applications"
+      category: "remote-access"
+      subcategory: "vpn"
+      risk_level: 2
+      default_ports: "22,3389,1723"
+
+    - name: "gaming"
+      description: "Online gaming applications"
+      category: "gaming"
+      subcategory: "online"
+      risk_level: 3
+      default_ports: "various"
+
+    - name: "streaming-video"
+      description: "Video streaming applications"
+      category: "media"
+      subcategory: "streaming"
+      risk_level: 2
+      default_ports: "80,443,1935"
+
+    - name: "database-access"
+      description: "Database access applications"
+      category: "database"
+      subcategory: "sql"
+      risk_level: 4
+      default_ports: "1433,3306,5432,1521"
+
+    - name: "cloud-storage"
+      description: "Cloud storage and sync applications"
+      category: "collaboration"
+      subcategory: "cloud-storage"
+      risk_level: 2
+      default_ports: "443,80"

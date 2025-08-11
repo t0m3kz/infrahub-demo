@@ -339,10 +339,6 @@ nodes:
       - CoreArtifactTarget
       - TopologyDeployment
     attributes:
-      # - name: asn
-      #   kind: Number
-      #   optional: false
-      #   order_weight: 1200
       - name: strategy
         kind: Dropdown
         label: Strategy
@@ -355,31 +351,13 @@ nodes:
           - name: ospf-ibgp
             label: ospf-ibgp
             color: "#aedcee"
-      - name: enable_ip_unnumbered
+      - name: unnumbered
         kind: Boolean
         label: Enable IP Unnumbered
         description: "Enable IP unnumbered connections for topology interfaces"
-        optional: true
         default_value: true
-        order_weight: 6
-
-      # - name: technical
-      #   kind: IPNetwork
-      #   label: Technical Subnet
-      #   order_weight: 1800
-      # - name: public
-      #   state: absent
-      #   kind: IPNetwork
-      #   optional: true
-      #   label: Public Subnet
-      #   order_weight: 1900
+        order_weight: 1230
     relationships:
-      # - name: asn
-      #   state: absent
-      #   peer: ServiceAutonomousSystem
-      #   optional: false
-      #   cardinality: one
-      #   kind: Attribute
       - name: technical_subnet
         peer: IpamPrefix
         optional: false

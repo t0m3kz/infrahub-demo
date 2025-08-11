@@ -349,21 +349,12 @@ nodes:
         optional: false
         order_weight: 5
         choices:
-          - name: ebgp-ebgp
-            label: ebgp-ebgp
-            color: "#7f7fff"
-          - name: ospf-ebgp
-            label: ospf-ebgp
-            color: "#bf7fbf"
-          - name: isis-ebgp
-            label: isis-ebgp
-            color: "#bf7f7f"
           - name: ospf-ibgp
             label: ospf-ibgp
             color: "#aedcee"
-          - name: isis-ibgp
-            label: isis-ibgp
-            color: "#bf7f3c"
+          - name: ebgp-ibgp
+            label: ebgp-ibgp
+            color: "#7f7fff"
       # - name: technical
       #   kind: IPNetwork
       #   label: Technical Subnet

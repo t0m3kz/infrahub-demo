@@ -1,0 +1,90 @@
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: ServiceCloudGateway
+  data:
+    # Zscaler Gateways
+    - name: "ZIA-Amsterdam"
+      gateway_type: "pop"
+      city: "Amsterdam"
+      country: "Netherlands"
+      capacity_mbps: 10000
+      endpoint_address: "ams.gateway.zscaler.net"
+      status: "active"
+      description: "Zscaler Amsterdam point of presence"
+      service: "Production-ZIA"
+
+    - name: "ZIA-Frankfurt"
+      gateway_type: "pop"
+      city: "Frankfurt"
+      country: "Germany"
+      capacity_mbps: 15000
+      endpoint_address: "fra.gateway.zscaler.net"
+      status: "active"
+      description: "Zscaler Frankfurt point of presence"
+      service: "Production-ZIA"
+
+    - name: "ZIA-London"
+      gateway_type: "pop"
+      city: "London"
+      country: "United Kingdom"
+      capacity_mbps: 20000
+      endpoint_address: "lon.gateway.zscaler.net"
+      status: "active"
+      description: "Zscaler London point of presence"
+      service: "Production-ZIA"
+
+    # Prisma Access Gateways
+    - name: "Prisma-Europe-West"
+      gateway_type: "pop"
+      city: "Dublin"
+      country: "Ireland"
+      capacity_mbps: 5000
+      endpoint_address: "eu-west.gp-gateway.com"
+      status: "active"
+      description: "Prisma Access Europe West gateway"
+      service: "Production-Prisma"
+
+    - name: "Prisma-Europe-Central"
+      gateway_type: "pop"
+      city: "Frankfurt"
+      country: "Germany"
+      capacity_mbps: 8000
+      endpoint_address: "eu-central.gp-gateway.com"
+      status: "active"
+      description: "Prisma Access Europe Central gateway"
+      service: "Production-Prisma"
+
+    # Cisco Umbrella Gateways
+    - name: "Umbrella-AMS"
+      gateway_type: "dns"
+      city: "Amsterdam"
+      country: "Netherlands"
+      capacity_mbps: 1000
+      endpoint_address: "208.67.222.222"
+      status: "active"
+      description: "Cisco Umbrella Amsterdam DNS gateway"
+      service: "Production-Umbrella"
+
+    # Cloudflare Gateways
+    - name: "Cloudflare-AMS"
+      gateway_type: "proxy"
+      city: "Amsterdam"
+      country: "Netherlands"
+      capacity_mbps: 25000
+      endpoint_address: "ams.cloudflare-gateway.com"
+      status: "active"
+      description: "Cloudflare Amsterdam gateway"
+      service: "Production-Cloudflare"
+
+    # Development Gateways
+    - name: "ZIA-Dev-Frankfurt"
+      gateway_type: "pop"
+      city: "Frankfurt"
+      country: "Germany"
+      capacity_mbps: 1000
+      endpoint_address: "fra.gateway.zscalerbeta.net"
+      status: "active"
+      description: "Zscaler Frankfurt development gateway"
+      service: "Development-ZIA"

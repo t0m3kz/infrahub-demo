@@ -1,0 +1,53 @@
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: SecurityURLCategory
+  data:
+    - name: "social-media"
+      description: "Social media and networking sites"
+      risk_level: "medium"
+
+    - name: "malware"
+      description: "Known malware and malicious sites"
+      risk_level: "critical"
+
+    - name: "phishing"
+      description: "Phishing and fraud sites"
+      risk_level: "critical"
+
+    - name: "adult-content"
+      description: "Adult and mature content"
+      risk_level: "high"
+
+    - name: "gambling"
+      description: "Gambling and betting sites"
+      risk_level: "medium"
+
+    - name: "streaming-media"
+      description: "Video and audio streaming services"
+      risk_level: "low"
+
+    - name: "business-news"
+      description: "Business and financial news"
+      risk_level: "low"
+
+    - name: "file-sharing"
+      description: "File sharing and storage services"
+      risk_level: "medium"
+
+    - name: "weapons"
+      description: "Weapons and violence content"
+      risk_level: "high"
+
+    - name: "education"
+      description: "Educational and reference sites"
+      risk_level: "low"
+
+    - name: "productivity"
+      description: "Business productivity tools"
+      risk_level: "low"
+
+    - name: "cloud-services"
+      description: "Cloud computing and storage services"
+      risk_level: "low"

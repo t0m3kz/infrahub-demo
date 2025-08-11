@@ -1,5 +1,6 @@
 """Infrastructure generator."""
 
+
 from infrahub_sdk.generator import InfrahubGenerator
 from infrahub_sdk.protocols import CoreIPAddressPool, CoreIPPrefixPool, CoreNumberPool
 from netutils.interface import sort_interface_list
@@ -11,11 +12,15 @@ from .schema_protocols import DcimPhysicalInterface, DcimVirtualInterface
 class DCTopologyCreator(TopologyCreator):
     """Create data center topology."""
 
-    async def create_fabric_peering(
-        self, scenario: str = "ospf", use_numbered_p2p: bool = False
+    async def create_fabric_peering_and_p2p(
+        self,
     ) -> None:
-        """Create objects of a specific kind and store in local store."""
+        """
+        Create fabric peering connections for a single site (unnumbered only).
+        """
         batch = await self.client.create_batch()
+        all_devices = self.devices
+
         interfaces: dict = {
             device.name.value: [
                 interface["name"]
@@ -24,7 +29,7 @@ class DCTopologyCreator(TopologyCreator):
                 ]
                 if interface["role"] in ["leaf", "uplink"]
             ]
-            for device in self.devices
+            for device in all_devices
         }
         spines: dict = {
             key: sort_interface_list(value)
@@ -50,15 +55,13 @@ class DCTopologyCreator(TopologyCreator):
 
         if connections:
             self.log.info(
-                f"Create fabric peering connections for {self.data.get('name')} ({scenario} scenario, {'numbered' if use_numbered_p2p else 'unnumbered'} P2P)"
+                f"Create fabric peering connections for {self.data.get('name')} (unnumbered P2P only)"
             )
 
-        # Set interface role based on the use_numbered_p2p setting
-        if use_numbered_p2p:
-            interface_role = "core"
-        else:
-            interface_role = "ip_unnumbered"
+        # Set interface role for unnumbered only
+        interface_role = "ip_unnumbered"
 
+        # Assign roles and connectors
         for connection in connections:
             source_endpoint = await self.client.get(
                 kind=DcimPhysicalInterface,
@@ -91,13 +94,7 @@ class DCTopologyCreator(TopologyCreator):
 
         async for node, _ in batch.execute():
             self.log.info(
-                f"- Created [{node.get_kind()}] {node.description.value} from {' -> '.join(node.hfid)}"
-            )
-
-        # Execute batch
-        async for node, _ in batch.execute():
-            self.log.info(
-                f"- Created [{node.get_kind()}] {node.description.value} from {' -> '.join(node.hfid)}"
+                f"- Created/Updated [{node.get_kind()}] {node.description.value} from {' -> '.join(node.hfid)}"
             )
 
     async def create_ospf_underlay(self) -> None:
@@ -335,11 +332,11 @@ class DCTopologyCreator(TopologyCreator):
         async for node, _ in batch.execute():
             self.log.info(f"- Assigned P2P IP to [{node.get_kind()}] {node.name.value}")
 
-    async def create_ebgp_underlay(self, use_numbered_p2p: bool = False) -> None:
+    async def create_ebgp_underlay(self) -> None:
         """Create eBGP underlay sessions between spines and leafs."""
         topology_name = self.data.get("name")
         self.log.info(
-            f"Creating eBGP underlay for {topology_name} ({'numbered' if use_numbered_p2p else 'unnumbered'} interfaces)"
+            f"Creating eBGP underlay for {topology_name} (unnumbered interfaces)"
         )
 
         # Get ASNs
@@ -347,22 +344,12 @@ class DCTopologyCreator(TopologyCreator):
             kind="RoutingAutonomousSystem", key=f"spine-asn-{topology_name}"
         )
 
-        # Get all connected interface pairs based on P2P type
-        if use_numbered_p2p:
-            # For numbered interfaces, require IP addresses
-            core_interfaces = await self.client.filters(
-                kind=DcimPhysicalInterface,
-                role__value="core",
-                connector__isnull=False,
-                ip_addresses__isnull=False,
-            )
-        else:
-            # For unnumbered interfaces, use ip_unnumbered role
-            core_interfaces = await self.client.filters(
-                kind=DcimPhysicalInterface,
-                role__value="ip_unnumbered",
-                connector__isnull=False,
-            )
+        # Get all connected interface pairs for unnumbered interfaces
+        core_interfaces = await self.client.filters(
+            kind=DcimPhysicalInterface,
+            role__value="ip_unnumbered",
+            connector__isnull=False,
+        )
 
         batch = await self.client.create_batch()
         processed_pairs = set()
@@ -402,14 +389,7 @@ class DCTopologyCreator(TopologyCreator):
                     "status": "active",
                 }
 
-                # Add IP addresses only for numbered P2P
-                if (
-                    use_numbered_p2p
-                    and spine_interface.ip_addresses
-                    and leaf_interface.ip_addresses
-                ):
-                    spine_bgp_data["local_ip"] = spine_interface.ip_addresses[0].id
-                    spine_bgp_data["remote_ip"] = leaf_interface.ip_addresses[0].id
+                # No IP addresses needed for unnumbered P2P
 
                 spine_bgp = await self.client.create(
                     kind="ServiceBGP",
@@ -427,14 +407,7 @@ class DCTopologyCreator(TopologyCreator):
                     "status": "active",
                 }
 
-                # Add IP addresses only for numbered P2P
-                if (
-                    use_numbered_p2p
-                    and leaf_interface.ip_addresses
-                    and spine_interface.ip_addresses
-                ):
-                    leaf_bgp_data["local_ip"] = leaf_interface.ip_addresses[0].id
-                    leaf_bgp_data["remote_ip"] = spine_interface.ip_addresses[0].id
+                # No IP addresses needed for unnumbered P2P
 
                 leaf_bgp = await self.client.create(
                     kind="ServiceBGP",
@@ -675,26 +648,18 @@ class DCTopologyGenerator(InfrahubGenerator):
         await network_creator.create_oob_connections("console")
 
         # Create fabric peering with scenario-specific interface roles
-        await network_creator.create_fabric_peering(scenario, use_numbered_p2p)
+        await network_creator.create_fabric_peering_and_p2p()
         await network_creator.create_loopback("loopback0")
 
         if scenario == "ospf":
             # Traditional OSPF + iBGP scenario
-            # Create P2P IP pool if numbered P2P is needed
-            if use_numbered_p2p:
-                await network_creator.create_p2p_ip_pool()
-                await network_creator.create_p2p_interfaces()
             await network_creator.create_ospf_underlay()
             await network_creator.create_ibgp_overlay("loopback0", "overlay")
 
         elif scenario == "ebgp":
             # eBGP multi-AS + iBGP EVPN scenario
             await network_creator.create_ebgp_autonomous_systems()
-            # Create P2P IP pool and interfaces only if numbered P2P is needed
-            if use_numbered_p2p:
-                await network_creator.create_p2p_ip_pool()
-                await network_creator.create_p2p_interfaces()
-            await network_creator.create_ebgp_underlay(use_numbered_p2p)
+            await network_creator.create_ebgp_underlay()
             await network_creator.create_ibgp_overlay("loopback0", "evpn")
 
         else:
