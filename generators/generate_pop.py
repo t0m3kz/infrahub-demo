@@ -22,7 +22,26 @@ class PopTopologyGenerator(InfrahubGenerator):
         )
         await network_creator.load_data()
         await network_creator.create_site()
-        await network_creator.create_address_pools()
+
+        # Build subnets list for address pools
+        subnets = []
+        if data.get("management_subnet"):
+            subnets.append(
+                {
+                    "type": "Management",
+                    "prefix_id": data["management_subnet"]["id"],
+                }
+            )
+
+        if data.get("technical_subnet"):
+            subnets.append(
+                {
+                    "type": "Loopback",
+                    "prefix_id": data["technical_subnet"]["id"],
+                }
+            )
+
+        await network_creator.create_address_pools(subnets)
         await network_creator.create_devices()
         await network_creator.create_loopback("loopback0")
         # self.log.info(self.client.store._branches[self.branch].__dict__)

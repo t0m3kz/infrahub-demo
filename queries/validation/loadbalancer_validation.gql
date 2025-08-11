@@ -1,0 +1,278 @@
+query loadbalancer_validation($device: String!) {
+  virtual: DcimVirtualDevice(name__value: $device) {
+    edges {
+      node {
+        name {
+          value
+        }
+        device_type {
+          node {
+            platform {
+              node {
+                netmiko_device_type {
+                  value
+                }
+              }
+            }
+            manufacturer {
+              node {
+                name {
+                  value
+                }
+              }
+            }
+          }
+        }
+        role {
+          value
+        }
+        status {
+          value
+        }
+        device_service {
+          edges {
+            node {
+              __typename
+              name {
+                value
+              }
+              status {
+                value
+              }
+              ... on ServiceVIP {
+                vip_ip {
+                  node {
+                    address {
+                      value
+                    }
+                  }
+                }
+              }
+                    frontend_servers {
+                      edges {
+                        node {
+                          name {
+                            value
+                          }
+                            ... on DcimPhysicalDevice {
+                              interfaces {
+                                edges {
+                                  node {
+                                    name {
+                                      value
+                                    }
+                                    ... on DcimPhysicalInterface {
+                                      ip_addresses {
+                                        edges {
+                                          node {
+                                            address {
+                                              value
+                                            }
+                                          }
+                                        }
+                                      }
+                                    }
+                                    ... on DcimVirtualInterface {
+                                      ip_addresses {
+                                        edges {
+                                          node {
+                                            address {
+                                              value
+                                            }
+                                          }
+                                        }
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                            }
+                            ... on DcimVirtualDevice {
+                              interfaces {
+                                edges {
+                                  node {
+                                    name {
+                                      value
+                                    }
+                                    ... on DcimVirtualInterface {
+                                      ip_addresses {
+                                        edges {
+                                          node {
+                                            address {
+                                              value
+                                            }
+                                          }
+                                        }
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+        interfaces {
+          edges {
+            node {
+              __typename
+              name {
+                value
+              }
+              description {
+                value
+              }
+              status {
+                value
+              }
+              role {
+                value
+              }
+              ... on DcimVirtualInterface {
+                ip_addresses {
+                  edges {
+                    node {
+                      address {
+                        value
+                      }
+                      ip_namespace {
+                        node {
+                          name {
+                            value
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+  vips: LoadbalancerVIP {
+    edges {
+      node {
+        hostname {
+          value
+        }
+        mode {
+          value
+        }
+        status {
+          value
+        }
+        balance {
+          value
+        }
+        frontend_servers {
+          edges {
+            node {
+              name {
+                value
+              }
+              ... on DcimPhysicalDevice {
+                interfaces {
+                  edges {
+                    node {
+                      name {
+                        value
+                      }
+                      ... on DcimPhysicalInterface {
+                        ip_addresses {
+                          edges {
+                            node {
+                              address {
+                                value
+                              }
+                            }
+                          }
+                        }
+                      }
+                      ... on DcimVirtualInterface {
+                        ip_addresses {
+                          edges {
+                            node {
+                              address {
+                                value
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+              ... on DcimVirtualDevice {
+                interfaces {
+                  edges {
+                    node {
+                      name {
+                        value
+                      }
+                      ... on DcimVirtualInterface {
+                        ip_addresses {
+                          edges {
+                            node {
+                              address {
+                                value
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+  servers: LoadbalancerServer {
+    edges {
+      node {
+        hostname {
+          value
+        }
+        environment {
+          value
+        }
+        description {
+          value
+        }
+        status {
+          value
+        }
+        ip_address {
+          node {
+            address {
+              value
+            }
+          }
+        }
+        virtual_ips {
+          edges {
+            node {
+              hostname {
+                value
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

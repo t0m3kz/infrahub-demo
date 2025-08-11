@@ -1,0 +1,66 @@
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: ServiceVXLAN
+  data:
+    # Leaf VXLAN Services
+    - name: "DC1-LEAF1-VXLAN-100"
+      description: "VXLAN service VNI 100 for DC1-LEAF1"
+      vni: 100
+      udp_port: 4789
+      learning: enabled
+      device: "DC1-LEAF1"
+      vtep_source_interface: "Loopback0"
+      evpn_service: "DC1-LEAF1-EVPN"
+      underlay_routing: "DC1-LEAF1-OSPF"
+
+    - name: "DC1-LEAF1-VXLAN-200"
+      description: "VXLAN service VNI 200 for DC1-LEAF1"
+      vni: 200
+      udp_port: 4789
+      learning: enabled
+      device: "DC1-LEAF1"
+      vtep_source_interface: "Loopback0"
+      evpn_service: "DC1-LEAF1-EVPN"
+      underlay_routing: "DC1-LEAF1-OSPF"
+
+    - name: "DC1-LEAF2-VXLAN-100"
+      description: "VXLAN service VNI 100 for DC1-LEAF2"
+      vni: 100
+      udp_port: 4789
+      learning: enabled
+      device: "DC1-LEAF2"
+      vtep_source_interface: "Loopback0"
+      evpn_service: "DC1-LEAF2-EVPN"
+      underlay_routing: "DC1-LEAF2-OSPF"
+
+    - name: "DC1-LEAF2-VXLAN-200"
+      description: "VXLAN service VNI 200 for DC1-LEAF2"
+      vni: 200
+      udp_port: 4789
+      learning: enabled
+      device: "DC1-LEAF2"
+      vtep_source_interface: "Loopback0"
+      evpn_service: "DC1-LEAF2-EVPN"
+      underlay_routing: "DC1-LEAF2-OSPF"
+
+    - name: "DC1-LEAF3-VXLAN-300"
+      description: "VXLAN service VNI 300 for DC1-LEAF3"
+      vni: 300
+      udp_port: 4789
+      learning: enabled
+      device: "DC1-LEAF3"
+      vtep_source_interface: "Loopback0"
+      evpn_service: "DC1-LEAF3-EVPN"
+      underlay_routing: "DC1-LEAF3-OSPF"
+
+    - name: "DC1-LEAF4-VXLAN-300"
+      description: "VXLAN service VNI 300 for DC1-LEAF4"
+      vni: 300
+      udp_port: 4789
+      learning: enabled
+      device: "DC1-LEAF4"
+      vtep_source_interface: "Loopback0"
+      evpn_service: "DC1-LEAF4-EVPN"
+      underlay_routing: "DC1-LEAF4-OSPF"

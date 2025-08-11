@@ -237,9 +237,9 @@ generics:
             label: Management
             description: "Interface dedicated to device management."
             color: "#E3DAC9" # pastel cream
-          - name: ospf-unnumbered
-            label: OSPF Unnumbered
-            description: "Interface dedicated to OSPF unnumbered connections."
+          - name: ip_unnumbered
+            label: IP Unnumbered
+            description: "Interface dedicated to IP unnumbered connections for BGP and OSPF protocols."
             color: "#C4B7E6" # pastel purple
           - name: ospf
             label: OSPF
@@ -248,10 +248,6 @@ generics:
           - name: bgp
             label: BGP
             description: "Interface dedicated to BGP connections."
-            color: "#C432E6"
-          - name: bgp-unnunbered
-            label: BGP Unnumbered
-            description: "Interface dedicated to BGP unnumbered connections."
             color: "#C432E6"
           - name: upstream
             label: Upstream

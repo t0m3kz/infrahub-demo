@@ -2,39 +2,20 @@
 ---
 version: "1.0"
 
-generics:
-  - name: Generic
+nodes:
+
+  - name: Server
     namespace: Loadbalancer
-    label: Server
-    description: A generic server entity that forms the base for different server types.
+    label: Backend Servers
+    icon: mdi:server-plus
     include_in_menu: false
-    default_filter: hostname__value
-    order_by:
-      - hostname__value
-    display_labels:
-      - hostname__value
-    human_friendly_id:
-      - "hostname__value"
+    description: A specific server entity capable of handling multiple roles such as web server, database server, etc.
     attributes:
       - name: hostname
         kind: Text
         unique: true
         description: The unique hostname of the server used to identify it within the network.
         order_weight: 1010
-      - name: environment
-        kind: Dropdown
-        description: Environment where the device is used.
-        choices:
-          - name: production
-            label: Production
-            description: Used in the production environment.
-            color: "#ADD8E6"  # Light Blue
-          - name: development
-            label: Development
-            description: Used in the development environment.
-            color: "#FFB6C1"  # Light Pink
-        order_weight: 1500
-        default_value: production
       - name: description
         kind: Text
         optional: true
@@ -72,176 +53,19 @@ generics:
       - name: ip_address
         peer: IpamIPAddress
         label: Private IP Address
-        identifier: server__priv_ip
+        identifier: server__ip
         cardinality: one
         kind: Attribute
         description: The primary IP address assigned to the server.
         order_weight: 1300
-
-nodes:
-  # - name: LoadBalancer
-  #   namespace: Dcim
-  #   label: Load-Balancers
-  #   icon: carbon:load-balancer-global
-  #   include_in_menu: false
-  #   description: A load balancer that distributes network traffic via Virtual IPs (VIPs) to frontend servers.
-  #   inherit_from:
-  #     - CoreArtifactTarget
-  #     - DcimGenericDevice
-  #   relationships:
-  #     - name: virtual_ips
-  #       peer: LoadbalancerVIP
-  #       identifier: vip__lb
-  #       cardinality: many
-  #       kind: Component
-  #       description: A list of Virtual IPs (VIPs) used by the load balancer for routing traffic.
-
-  - name: Server
-    namespace: Loadbalancer
-    label: Backend Servers
-    icon: mdi:server-plus
-    include_in_menu: false
-    description: A specific server entity capable of handling multiple roles such as web server, database server, etc.
-    inherit_from:
-      - "LoadbalancerGeneric"
-      - "CoreArtifactTarget"
-    relationships:
       - name: virtual_ips
         label: VIPs
+        state: absent
         peer: LoadbalancerVIP
-        identifier: vip__frontend
+        identifier: vip__backend
         cardinality: many
         kind: Component
-        description: The list of VIP using this server as Frontend.
-
-  - name: VIP
-    namespace: Loadbalancer
-    label: VIP
-    icon: carbon:floating-ip
-    include_in_menu: false
-    description: A Virtual IP (VIP) that handles incoming traffic and routes it to a pool of frontend servers.
-    default_filter: hostname__value
-    order_by:
-      - hostname__value
-    display_labels:
-      - hostname__value
-    human_friendly_id:
-      - "hostname__value"
-    attributes:
-      - name: hostname
-        kind: Text
-        unique: true
-        description: The unique identifier for the VIP.
-        # https://stackoverflow.com/questions/11809631/fully-qualified-domain-name-validation
-        regex: "(?=^.{1,253}$)(^(((?!-)[a-zA-Z0-9-]{1,63}(?<!-))|((?!-)[a-zA-Z0-9-]{1,63}(?<!-)\\.)+[a-zA-Z]{2,63})$)"
-        order_weight: 1010
-      - name: mode
-        kind: Dropdown
-        description: The mode in which HAProxy operates for this VIP (HTTP or TCP).
-        choices:
-          - name: http
-            label: HTTP Mode
-            description: Layer 7 HTTP mode.
-            color: "#A9DFBF"  # light pastel green
-          - name: tcp
-            label: TCP Mode
-            description: Layer 4 TCP mode.
-            color: "#A9CCE3"  # pastel blue
-        default_value: http
-        order_weight: 1200
-      - name: status
-        kind: Dropdown
-        choices:
-          - name: provisioning
-            label: Provisioning
-            description: "Device is being provisioned."
-            color: "#A9DFBF"  # light pastel green
-          - name: active
-            label: Active
-            description: "Device is active and operational."
-            color: "#A9CCE3"  # pastel blue
-          - name: maintenance
-            label: Maintenance
-            description: "Device is under maintenance."
-            color: "#FFF2CC"  # pastel yellow
-          - name: disabled
-            label: Disabled
-            description: "Device has been disabled."
-            color: "#D3D3D3"  # light grey
-          - name: deleted
-            label: Deleted
-            description: "Device has been deleted."
-            color: "#FAD7A0"  # pastel orange
-          - name: outage
-            label: Outage
-            description: "Device is currently experiencing an outage."
-            color: "#F4CCCC"  # pastel red
-        default_value: "active"
-        order_weight: 1100
-      - name: balance
-        kind: Dropdown
-        description: The load balancing algorithm to use for this VIP.
-        choices:
-          - name: roundrobin
-            label: Round Robin
-            description: Distributes traffic evenly across all available frontends.
-            color: "#A9CCE3"  # pastel blue
-          - name: leastconn
-            label: Least Connections
-            description: Sends traffic to the frontend with the fewest connections.
-            color: "#A9DFBF"  # light pastel green
-          - name: source
-            label: Source IP Hash
-            description: Ensures requests from the same source IP are always sent to the same frontend.
-            color: "#D2B4DE"  # pastel purple
-          - name: first
-            label: First Available
-            description: Sends all traffic to the first available frontend in the server list.
-            color: "#AFC7F2"  # pastel cornflower blue
-          - name: static-rr
-            label: Static Round Robin
-            description: Distributes traffic based on a static round-robin algorithm.
-            color: "#CDEACC"  # slightly darker pastel green
-          - name: uri
-            label: URI Hash
-            description: Balances traffic based on the hash of the request URI.
-            color: "#C9A9E3"  # pastel violet
-          - name: hdr
-            label: Header Hash
-            description: Balances traffic based on the value of a specified HTTP header.
-            color: "#D8E4BC"  # pastel greenish-yellow
-          - name: random
-            label: Random
-            description: Balances traffic randomly across available frontends.
-            color: "#CDEACC"  # slightly darker pastel green
-        default_value: roundrobin
-        order_weight: 1300
-      - name: ssl_certificate
-        kind: Text
-        description: The name to the SSL certificate for this VIP. This will be used to enable HTTPS.
-        optional: true
-        order_weight: 1500
-    relationships:
-      - name: ip_address
-        peer: IpamIPAddress
-        cardinality: one
-        kind: Attribute
-        description: The IP address assigned to the VIP.
-      - name: frontend_servers
-        peer: DcimGenericDevice
-        identifier: vip__frontend
-        cardinality: many
-        kind: Attribute
-        description: The list of frontend servers that the VIP routes traffic to.
-      - name: load_balancers
-        peer: LoadbalancerServer
-        identifier: vip__lb
-        cardinality: many
-        kind: Generic
-      - name: health_checks
-        peer: LoadbalancerHealthCheck
-        kind: Attribute
-        description: "A set of health checks configured to monitor the availability and responsiveness of frontend servers for this VIP."
+        description: The list of VIP using this server as Backend.
 
   - name: HealthCheck
     namespace: Loadbalancer
@@ -251,14 +75,15 @@ nodes:
     include_in_menu: false
     description: "Configuration for a health check associated with a VIP."
     order_by:
-      - check_type__value
+      - check__value
+    uniqueness_constraints:
+      - [ description__value ]
+    human_friendly_id:
+      - description__value
     display_labels:
-      - check_type__value
-      - rise__value
-      - fall__value
-      - timeout__value
+      - description__value
     attributes:
-      - name: check_type
+      - name: check
         kind: Dropdown
         choices:
           - name: http
@@ -294,7 +119,13 @@ nodes:
         optional: true
         default_value: 1000
         order_weight: 1500
-
+      - name: description
+        kind: Text
+        computed_attribute:
+          kind: Jinja2
+          jinja2_template: "{{ check__value }}-{{ rise__value }}-{{ fall__value }}-{{ timeout__value }}"
+        read_only: true  # You must set the attribute to read-only as the value will be handled by the system
+        optional: false
 # extensions:
 #   nodes:
 #     # IPAM Extensions
