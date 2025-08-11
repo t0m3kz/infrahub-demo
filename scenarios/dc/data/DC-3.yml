@@ -4,28 +4,29 @@ kind: Object
 spec:
   kind: TopologyDataCenter
   data:
-    - name: DC-4
-      location: Barcelona
-      description: Barcelona Data Center 4
-      strategy: ebgp-ibgp
-      unnumbered: false
-      design: PHYSICAL DC SONIC S
+    - name: DC-3
+      location: Frankfurt
+      description: Frankfurt Data Center
+      strategy: ospf-ibgp
+      enable_ip_unnumbered: false
+      design: PHYSICAL DC ARISTA S
       emulation: true
       provider: Technology Partner
       management_subnet:
         data:
-          prefix: 172.20.4.0/24
+          prefix: 172.20.3.0/24
           status: active
           role: management
       customer_subnet:
         data:
-          prefix: 10.4.0.0/16
+          prefix: 10.3.0.0/16
           status: active
           role: supernet
       technical_subnet:
         data:
-          prefix: 1.4.0.0/24
+          prefix: 1.3.0.0/24
           status: active
           role: loopback
       member_of_groups:
         - topologies_dc
+        - topologies_clab

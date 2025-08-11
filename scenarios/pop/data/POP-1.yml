@@ -2,30 +2,29 @@
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
-  kind: TopologyDataCenter
+  kind: TopologyColocationCenter
   data:
-    - name: DC-4
-      location: Barcelona
-      description: Barcelona Data Center 4
-      strategy: ebgp-ibgp
-      unnumbered: false
-      design: PHYSICAL DC SONIC S
+    - name: POP-1
+      location: London
+      description: London Virtual POP
+      design: VIRTUAL POP S
       emulation: true
-      provider: Technology Partner
+      provider: Equinix
       management_subnet:
         data:
-          prefix: 172.20.4.0/24
+          prefix: 172.20.20.0/24
           status: active
           role: management
       customer_subnet:
         data:
-          prefix: 10.4.0.0/16
+          prefix: 10.20.0.0/16
           status: active
           role: supernet
       technical_subnet:
         data:
-          prefix: 1.4.0.0/24
+          prefix: 1.20.0.0/24
           status: active
           role: loopback
       member_of_groups:
-        - topologies_dc
+        - topologies_pop
+        - topologies_clab

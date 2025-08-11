@@ -1,0 +1,18 @@
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimDeviceType
+  data:
+    - name: HA-PROXY
+      part_number: HA-PROXY
+      height: 1
+      full_depth: false
+      manufacturer: HAProxy Technologies
+      platform: Linux
+    - name: NGINX
+      part_number: NGINX
+      height: 1
+      full_depth: false
+      manufacturer: F5 Networks
+      platform: Linux

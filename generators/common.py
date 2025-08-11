@@ -338,7 +338,7 @@ class TopologyCreator:
                     "status": "active",
                     "resources": [subnet_id],
                 },
-                "store_key": f"p2p-pool-{topology_name}",
+                "store_key": f"{topology_name}-P2P-POOL",
             },
         )
 

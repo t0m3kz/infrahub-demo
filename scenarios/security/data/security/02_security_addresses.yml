@@ -1,0 +1,89 @@
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: SecurityIPAddress
+  data:
+    - name: "web-server-01"
+      address: "10.1.1.10"
+      description: "Primary web server"
+
+    - name: "web-server-02"
+      address: "10.1.1.11"
+      description: "Secondary web server"
+
+    - name: "db-server-01"
+      address: "10.1.2.10"
+      description: "Primary database server"
+
+    - name: "mail-server"
+      address: "10.1.1.20"
+      description: "Mail server"
+
+    - name: "dns-server-01"
+      address: "10.1.3.10"
+      description: "Primary DNS server"
+
+    - name: "ntp-server"
+      address: "10.1.3.20"
+      description: "Network Time Protocol server"
+
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: SecurityPrefix
+  data:
+    - name: "dmz-network"
+      prefix: "10.1.1.0/24"
+      description: "DMZ network segment"
+
+    - name: "internal-network"
+      prefix: "192.168.1.0/24"
+      description: "Internal corporate network"
+
+    - name: "guest-network"
+      prefix: "172.16.1.0/24"
+      description: "Guest network segment"
+
+    - name: "management-network"
+      prefix: "10.1.3.0/24"
+      description: "Management network segment"
+
+    - name: "server-network"
+      prefix: "10.1.2.0/24"
+      description: "Server network segment"
+
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: SecurityIPRange
+  data:
+    - name: "dhcp-pool-guest"
+      start: "172.16.1.100"
+      end: "172.16.1.200"
+      description: "DHCP pool for guest network"
+
+    - name: "dhcp-pool-internal"
+      start: "192.168.1.100"
+      end: "192.168.1.200"
+      description: "DHCP pool for internal network"
+
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: SecurityFQDN
+  data:
+    - name: "company-website"
+      fqdn: "www.company.com"
+      description: "Company public website"
+
+    - name: "mail-server-fqdn"
+      fqdn: "mail.company.com"
+      description: "Company mail server"
+
+    - name: "intranet-portal"
+      fqdn: "intranet.company.local"
+      description: "Internal company portal"

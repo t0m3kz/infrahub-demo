@@ -1,0 +1,68 @@
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: ServiceSecurityService
+  data:
+    # Zscaler Production Security Service
+    - name: "Zscaler-Production-Security"
+      service_type: "firewall"
+      status: "active"
+      description: "Production Zscaler security service"
+      throughput_mbps: 10000
+      concurrent_sessions: 100000
+      cloud_security_service: "Production-ZIA"
+
+    # Zscaler Web Filtering Service
+    - name: "Zscaler-Web-Filtering"
+      service_type: "url_filter"
+      status: "active"
+      description: "Zscaler web content filtering service"
+      throughput_mbps: 5000
+      concurrent_sessions: 50000
+      cloud_security_service: "Production-ZIA"
+
+    # Zscaler Application Control Service
+    - name: "Zscaler-App-Control"
+      service_type: "application_control"
+      status: "active"
+      description: "Zscaler application control service"
+      throughput_mbps: 8000
+      concurrent_sessions: 75000
+      cloud_security_service: "Production-ZIA"
+
+    # Prisma Access Security Service
+    - name: "Prisma-SASE-Security"
+      service_type: "firewall"
+      status: "active"
+      description: "Prisma Access SASE security service"
+      throughput_mbps: 5000
+      concurrent_sessions: 50000
+      cloud_security_service: "Production-Prisma"
+
+    # Cisco Umbrella DNS Security
+    - name: "Umbrella-DNS-Security"
+      service_type: "url_filter"
+      status: "active"
+      description: "Cisco Umbrella DNS-based security"
+      throughput_mbps: 1000
+      concurrent_sessions: 25000
+      cloud_security_service: "Production-Umbrella"
+
+    # Cloudflare Zero Trust Service
+    - name: "Cloudflare-ZT-Security"
+      service_type: "vpn"
+      status: "active"
+      description: "Cloudflare Zero Trust security service"
+      throughput_mbps: 15000
+      concurrent_sessions: 100000
+      cloud_security_service: "Production-Cloudflare"
+
+    # Development Environment
+    - name: "Zscaler-Development-Security"
+      service_type: "firewall"
+      status: "provisioning"
+      description: "Zscaler development security service"
+      throughput_mbps: 1000
+      concurrent_sessions: 10000
+      cloud_security_service: "Development-ZIA"

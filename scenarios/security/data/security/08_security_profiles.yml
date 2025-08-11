@@ -1,0 +1,41 @@
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: SecuritySecurityProfile
+  data:
+    - name: "strict-security"
+      description: "High security profile for critical systems"
+      antivirus_enabled: true
+      ips_enabled: true
+      url_filtering_enabled: true
+
+    - name: "standard-security"
+      description: "Standard security profile for general use"
+      antivirus_enabled: true
+      ips_enabled: true
+      url_filtering_enabled: true
+
+    - name: "guest-security"
+      description: "Security profile for guest users"
+      antivirus_enabled: true
+      ips_enabled: false
+      url_filtering_enabled: true
+
+    - name: "minimal-security"
+      description: "Minimal security profile for testing"
+      antivirus_enabled: true
+      ips_enabled: false
+      url_filtering_enabled: false
+
+    - name: "server-security"
+      description: "Security profile for server environments"
+      antivirus_enabled: true
+      ips_enabled: true
+      url_filtering_enabled: false
+
+    - name: "dmz-security"
+      description: "Security profile for DMZ services"
+      antivirus_enabled: true
+      ips_enabled: true
+      url_filtering_enabled: true

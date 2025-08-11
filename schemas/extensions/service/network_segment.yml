@@ -71,14 +71,14 @@ nodes:
         optional: false
         description: "IPAM namespace for tenant isolation"
         order_weight: 1750
-      - name: vxlan_services
-        peer: ServiceVXLAN
-        label: VXLAN Services
-        cardinality: many
-        kind: Attribute
-        optional: true
-        order_weight: 1800
-        description: "VXLAN services implementing this segment"
+      # - name: vxlan_services
+      #   peer: ServiceVXLAN
+      #   label: VXLAN Services
+      #   cardinality: many
+      #   kind: Attribute
+      #   optional: true
+      #   order_weight: 1800
+      #   description: "VXLAN services implementing this segment"
       - name: member_interfaces
         peer: DcimInterface
         label: Member Interfaces
