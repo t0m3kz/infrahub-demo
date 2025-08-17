@@ -180,6 +180,11 @@ spec:
                   label: Fabric OSPF
                   kind: ServiceOSPF
                   icon: "carbon:ibm-cloud-internet-services"
+                - namespace: Service
+                  name: PIMFabricMenu
+                  label: Fabric PIM
+                  kind: ServicePIM
+                  icon: "carbon:ibm-cloud-internet-services"
     # ==================== SECURITY MANAGEMENT =====================
     - namespace: Security
       name: SecurityMenu
@@ -482,7 +487,7 @@ spec:
               data:
                 - namespace: Routing
                   name: PIMInterface
-                  label: PIM Interfaces
+                  label: PIM Interface Profiles
                   kind: RoutingPIMInterface
                   icon: "mdi:ethernet"
 

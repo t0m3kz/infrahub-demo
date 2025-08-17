@@ -549,16 +549,16 @@ spec:
             role: leaf
           - template_name: DCS-7280DR3-24-F_SPINE_Ethernet21/1
             name: Ethernet21/1
-            role: leaf
+            role: uplink
           - template_name: DCS-7280DR3-24-F_SPINE_Ethernet22/1
             name: Ethernet22/1
-            role: leaf
+            role: uplink
           - template_name: DCS-7280DR3-24-F_SPINE_Ethernet23/1
             name: Ethernet23/1
-            role: leaf
+            role: uplink
           - template_name: DCS-7280DR3-24-F_SPINE_Ethernet24/1
             name: Ethernet24/1
-            role: leaf
+            role: uplink
           - template_name: DCS-7280DR3-24-F_SPINE_Management1
             name: Management1
             role: management
@@ -1090,9 +1090,6 @@ spec:
           - template_name: 5912-54X-O-AC-F_LEAF_xe48
             name: xe48
             role: customer
-          - template_name: 5912-54X-O-AC-F_LEAF_xe49
-            name: xe49
-            role: uplink
           - template_name: 5912-54X-O-AC-F_LEAF_ce50
             name: ce50
             role: uplink
@@ -1104,9 +1101,6 @@ spec:
             role: uplink
           - template_name: 5912-54X-O-AC-F_LEAF_ce53
             name: ce53
-            role: uplink
-          - template_name: 5912-54X-O-AC-F_LEAF_ce54
-            name: ce54
             role: uplink
           - template_name: 5912-54X-O-AC-F_LEAF_eth0
             name: eth0
@@ -1209,13 +1203,13 @@ spec:
             role: leaf
           - template_name: 7726-32X-O_SPINE_Ethernet112
             name: Ethernet112
-            role: leaf
+            role: uplink
           - template_name: 7726-32X-O_SPINE_Ethernet116
             name: Ethernet116
-            role: leaf
+            role: uplink
           - template_name: 7726-32X-O_SPINE_Ethernet120
             name: Ethernet120
-            role: leaf
+            role: uplink
           - template_name: 7726-32X-O_SPINE_Ethernet124
             name: Ethernet124
-            role: leaf
+            role: uplink

@@ -12,9 +12,6 @@ query topology_dc($name: String!) {
         strategy{
           value
         }
-        unnumbered {
-          value
-        }
         management_subnet {
           node {
             id

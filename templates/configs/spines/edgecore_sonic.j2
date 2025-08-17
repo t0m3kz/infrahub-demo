@@ -3,13 +3,7 @@
     "localhost": {
       "hostname": "{{ data.name }}",
       "type": "SpineRouter",
-{%- set local_asn = None %}
-{%- for service in data.device_service %}
-  {%- if service.typename == "ServiceBGP" and service.local_as %}
-    {%- set local_asn = service.local_as.asn %}
-  {%- endif %}
-{%- endfor %}
-      "bgp_asn": "{{ local_asn if local_asn else '65000' }}"
+      "bgp_asn": "{{ data.local_asn }}"
     }
   },
   "LOOPBACK_INTERFACE": {
@@ -23,72 +17,50 @@
   },
   "INTERFACE": {
 {%- for interface in data.interfaces %}
-  {%- if interface.typename == "DcimPhysicalInterface" and interface.role in ["ospf-unnumbered", "core"] %}
-    {%- if interface.ip_addresses %}
-      {%- for ip in interface.ip_addresses %}
-    "{{ interface.name }}|{{ ip.address }}": {}{{ "," if not loop.last }}
-      {%- endfor %}
-    {%- else %}
+  {%- if interface.typename == "DcimPhysicalInterface" and interface.role == "unnumbered" %}
     "{{ interface.name }}": {}{{ "," if not loop.last }}
-    {%- endif %}
   {%- endif %}
 {%- endfor %}
   },
-{%- set ns = namespace(router_id=None, bgp_sessions=[], ospf_sessions=[], is_ebgp_underlay=false, is_ospf_underlay=false, evpn_sessions=[]) %}
+{# Use enhanced data structures from transforms #}
+{%- set bgp_sessions = data.bgp_services or [] %}
+{%- set router_id = data.loopback0_ip %}
+{%- set underlay_strategy = data.underlay_strategy %}
+{%- set is_ospf_underlay = underlay_strategy in ['ospf-ibgp'] %}
 
-{%- for service in data.device_service %}
-  {%- if service.typename == "ServiceBGP" %}
-    {%- set ns.bgp_sessions = ns.bgp_sessions + [service] %}
-    {%- if service.session_type == "EXTERNAL" %}
-      {%- set ns.is_ebgp_underlay = true %}
-    {%- elif service.session_type == "EVPN" %}
-      {%- set ns.evpn_sessions = ns.evpn_sessions + [service] %}
-    {%- endif %}
-    {%- if not ns.router_id and service.router_id %}
-      {%- set ns.router_id = service.router_id.address %}
-    {%- endif %}
-  {%- elif service.typename == "ServiceOSPF" %}
-    {%- set ns.ospf_sessions = ns.ospf_sessions + [service] %}
-    {%- set ns.is_ospf_underlay = true %}
-    {%- if not ns.router_id and service.router_id %}
-      {%- set ns.router_id = service.router_id.address %}
-    {%- endif %}
-  {%- endif %}
-{%- endfor %}
   "BGP_NEIGHBOR": {
-{%- for service in ns.bgp_sessions %}
-  {%- if service.remote_ip %}
-    "{{ service.remote_ip.address.split('/')[0] }}": {
-      "local_addr": "{{ service.local_ip.address.split('/')[0] if service.local_ip else ns.router_id.split('/')[0] }}",
-      "asn": "{{ service.remote_as.asn }}",
+{%- for bgp_service in bgp_sessions %}
+    "{{ bgp_service.remote_ip.split('/')[0] }}": {
+      "local_addr": "{{ router_id }}",
+      "asn": "{{ bgp_service.remote_as }}",
       "holdtime": "10",
-      "keepalive": "3"
+      "keepalive": "3",
+      "name": "{{ bgp_service.description }}"
     }{{ "," if not loop.last }}
-  {%- endif %}
 {%- endfor %}
   },
   "BGP_GLOBALS": {
     "default": {
-      "router_id": "{{ ns.router_id.split('/')[0] if ns.router_id else '1.1.1.1' }}",
-      "local_asn": "{{ local_asn if local_asn else '65000' }}"
+      "router_id": "{{ router_id }}",
+      "local_asn": "{{ data.local_asn }}"
     }
   },
-{%- if ns.is_ospf_underlay %}
+{%- if is_ospf_underlay %}
   "OSPF_ROUTER": {
     "default": {
-      "router_id": "{{ ns.router_id.split('/')[0] if ns.router_id else '1.1.1.1' }}"
+      "router_id": "{{ router_id }}"
     }
   },
   "OSPF_INTERFACE": {
 {%- for interface in data.interfaces %}
   {%- if interface.typename == "DcimPhysicalInterface" and interface.role == "ospf-unnumbered" %}
     "{{ interface.name }}": {
-      "area": "0.0.0.0",
+      "area": "{{ data.ospf_area or '0.0.0.0' }}",
       "network": "point-to-point"
     }{{ "," if not loop.last }}
   {%- elif interface.typename == "DcimVirtualInterface" and "loopback" in interface.name.lower() and interface.role == "loopback" %}
     "{{ interface.name }}": {
-      "area": "0.0.0.0"
+      "area": "{{ data.ospf_area or '0.0.0.0' }}"
     }{{ "," if not loop.last }}
   {%- endif %}
 {%- endfor %}
@@ -96,29 +68,24 @@
 {%- endif %}
   "BGP_PEER_GROUP": {
     "UNDERLAY": {
-      "asn": "{{ local_asn if local_asn else '65000' }}"
+      "asn": "{{ data.local_asn }}"
     },
     "EVPN_OVERLAY": {
-      "asn": "{{ local_asn if local_asn else '65000' }}"
+      "asn": "{{ data.local_asn }}"
     }
   },
   "BGP_NEIGHBOR_AF": {
-{%- for service in ns.bgp_sessions %}
-  {%- if service.remote_ip %}
-    "{{ service.remote_ip.address.split('/')[0] }}|ipv4_unicast": {
+{%- for bgp_service in bgp_sessions %}
+  {%- if bgp_service.session_type == "EXTERNAL" %}
+    "{{ bgp_service.remote_ip.split('/')[0] }}|ipv4_unicast": {
       "admin_status": "up"
     }{{ "," if not loop.last }}
-  {%- endif %}
-{%- endfor %}
-{%- if evpn_sessions %}
-  {%- for service in evpn_sessions %}
-    {%- if service.remote_ip %}
-    "{{ service.remote_ip.address.split('/')[0] }}|l2vpn_evpn": {
+  {%- elif bgp_service.session_type == "INTERNAL" %}
+    "{{ bgp_service.remote_ip.split('/')[0] }}|l2vpn_evpn": {
       "admin_status": "up",
       "route_reflector_client": "true"
     }{{ "," if not loop.last }}
-    {%- endif %}
-  {%- endfor %}
-{%- endif %}
+  {%- endif %}
+{%- endfor %}
   }
 }

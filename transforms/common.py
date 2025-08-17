@@ -50,10 +50,10 @@ def get_data(data: Any) -> Any:
     Extracts the relevant data from the input.
     """
     cleaned_data = clean_data(data)
-    if cleaned_data.get("physical", None) and isinstance(
-        cleaned_data["physical"], list
+    if cleaned_data.get("DcimGenericDevice", None) and isinstance(
+        cleaned_data["DcimGenericDevice"], list
     ):
-        return cleaned_data["physical"][0]
+        return cleaned_data["DcimGenericDevice"][0]
     elif cleaned_data.get("virtual", None) and isinstance(
         cleaned_data["virtual"], list
     ):

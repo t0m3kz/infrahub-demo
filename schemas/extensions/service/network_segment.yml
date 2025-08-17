@@ -5,7 +5,7 @@ version: "1.0"
 nodes:
   - name: NetworkSegment
     namespace: Service
-    description: "Network segment that can span multiple devices using VXLAN/EVPN"
+    description: "Network segment with automated VLAN, VNI, and RD assignment"
     label: Network Segment
     icon: "carbon:network-3"
     menu_placement: ServiceDeviceGeneric
@@ -13,11 +13,19 @@ nodes:
     inherit_from:
       - ServiceDeviceGeneric
     attributes:
-      - name: vni
+      - name: vlan_id
         kind: Number
-        label: VNI
+        label: VLAN ID
         optional: false
-        order_weight: 2
+        order_weight: 1500
+        description: "VLAN ID assigned from customer pool (VNI = VLAN + 10000, RD = VLAN)"
+      - name: external_routing
+        kind: Boolean
+        label: External Routing
+        optional: true
+        default_value: false
+        order_weight: 1550
+        description: "Enable routing outside the namespace"
       - name: segment_type
         kind: Dropdown
         description: "Type of network segment"
@@ -71,14 +79,14 @@ nodes:
         optional: false
         description: "IPAM namespace for tenant isolation"
         order_weight: 1750
-      # - name: vxlan_services
-      #   peer: ServiceVXLAN
-      #   label: VXLAN Services
-      #   cardinality: many
-      #   kind: Attribute
-      #   optional: true
-      #   order_weight: 1800
-      #   description: "VXLAN services implementing this segment"
+      - name: fabric
+        peer: TopologyDataCenter
+        label: Fabric
+        cardinality: one
+        kind: Attribute
+        optional: false
+        order_weight: 1750
+        description: "Fabric where this network segment is deployed"
       - name: member_interfaces
         peer: DcimInterface
         label: Member Interfaces
@@ -96,3 +104,15 @@ nodes:
         identifier: "network_segment__ip_prefixes"
         order_weight: 2000
         description: "IP prefixes allocated within this segment's namespace"
+
+extensions:
+  nodes:
+    - kind: OrganizationCustomer
+      relationships:
+        - name: network_segments
+          peer: ServiceNetworkSegment
+          cardinality: many
+          kind: Component
+          optional: true
+          description: "Network segments assigned to this customer"
+          order_weight: 2100
