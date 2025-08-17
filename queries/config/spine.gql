@@ -1,130 +1,134 @@
-query spine_config($device: String!) {
-  physical: DcimPhysicalDevice(name__value: $device) {
+query SpineConfig($device: String!) {
+  DcimPhysicalDevice(name__value: $device) {
     edges {
       node {
-        name {
-          value
-        }
-        device_type {
-          node {
-            platform {
-              node {
-                netmiko_device_type {
-                  value
-                }
-              }
+        id
+        name { value }
+        role { value }
+        topology {
+          node{
+            ... on TopologyDataCenter{
+              strategy{value}
             }
-            manufacturer {
-              node {
-                name {
-                  value
-                }
+          }
+        }
+        location {
+          node{
+            ... on LocationGeneric{
+              name{
+                value
               }
             }
           }
         }
+        device_type {
+          node {
+            name { value }
+            manufacturer { node { name { value } } }
+            platform {
+              node {
+                netmiko_device_type { value }
+                napalm_driver { value }
+                ansible_network_os { value }
+                containerlab_os { value }
+              }
+            }
+          }
+        }
+        primary_address {
+          node {
+            address { value }
+            ip_namespace { node { name { value } } }
+          }
+        }
         device_service {
-          count
           edges {
             node {
               __typename
-              name {
-                value
-              }
+              name { value }
+              status { value }
               ... on ServiceBGP {
-                session_type {
-                  value
-                }
-                local_ip {
+                session_type { value }
+                multipath { value }
+                graceful_restart { value }
+                local_ip { node { address { value } } }
+                local_as { node { asn { value } } }
+                remote_ip { node { address { value } } }
+                remote_as { node { asn { value } } }
+                router_id { node { address { value } } }
+                peer_group {
                   node {
-                    address {
-                      value
+                    name { value }
+                    description { value }
+                    peer_group_type { value }
+                    bfd_enabled { value }
+                    ebgp_multihop { value }
+                    send_community { value }
+                    send_community_extended { value }
+                    route_reflector_client { value }
+                    password { value }
+                    maximum_routes { value }
+                    local_pref { value }
+                  }
+                }
+              }
+              ... on ServicePIM {
+                dr_priority { value }
+                rp_mode { value }
+                rp_address {
+                  node {
+                    address { value }
+                    ip_namespace { node { name { value } } }
+                  }
+                }
+                pim_interfaces{
+                  edges{
+                    node{
+                      name {value}
+                      status {value}
                     }
                   }
                 }
-                local_as {
-                  node {
-                    asn {
-                      value
-                    }
-                  }
-                }
-                remote_ip {
-                  node {
-                    address {
-                      value
-                    }
-                  }
-                }
-                remote_as {
-                  node {
-                    asn {
-                      value
-                    }
-                  }
-                }
-                router_id {
-                  node {
-                    address {
-                      value
-                    }
-                  }
-                }
-                status {
-                  value
-                }
-                description {
-                  value
-                }
-                device {
-                  node {
-                    name {
-                      value
+                pim_interface_profile {
+                  edges {
+                    node {
+                      pim_mode { value }
+                      hello_interval { value }
+                      dr_priority { value }
                     }
                   }
                 }
               }
               ... on ServiceOSPF {
-                router_id {
-                  node {
-                    address {
-                      value
-                    }
-                  }
-                }
+                process_id { value }
+                version { value }
+                router_type { value }
+                reference_bandwidth { value }
+                router_id { node { address { value } } }
                 area {
                   node {
-                    area {
-                      value
-                    }
-                    name {
-                      value
-                    }
-                  }
-                }
-                version {
-                  value
-                }
-                status {
-                  value
-                }
-                device {
-                  node {
-                    name {
-                      value
-                    }
+                    area { value }
+                    name { value }
+                    area_type { value }
+                    description { value }
                   }
                 }
                 ospf_interface {
                   edges {
                     node {
-                      name {
-                        value
-                      }
-                      role {
-                        value
-                      }
+                      name { value }
+                      role { value }
+                      status { value }
+                      device { node { name { value } } }
                     }
+                  }
+                }
+                ospf_interface_profile {
+                  node {
+                    name { value }
+                    metric { value }
+                    mode { value }
+                    authentication_mode { value }
                   }
                 }
               }
@@ -135,30 +139,23 @@ query spine_config($device: String!) {
           edges {
             node {
               __typename
-              name {
-                value
-              }
-              description {
-                value
-              }
-              status {
-                value
-              }
-              role {
-                value
-              }
+              name { value }
+              description { value }
+              status { value }
+              role { value }
+
               ... on DcimPhysicalInterface {
+                interface_type { value }
+                mtu { value }
                 connector {
                   node {
                     ... on DcimPhysicalInterface {
-                      name {
-                        value
-                      }
+                      name { value }
+                      role { value }
                       device {
                         node {
-                          name {
-                            value
-                          }
+                          name { value }
+                          role { value }
                         }
                       }
                     }
@@ -167,64 +164,29 @@ query spine_config($device: String!) {
                 ip_addresses {
                   edges {
                     node {
-                      address {
-                        value
-                      }
-                      ip_namespace {
-                        node {
-                          name {
-                            value
-                          }
-                        }
-                      }
+                      address { value }
+                      ip_namespace { node { name { value } } }
                     }
                   }
                 }
               }
+
               ... on DcimVirtualInterface {
                 ip_addresses {
                   edges {
                     node {
-                      address {
-                        value
-                      }
-                      ip_namespace {
-                        node {
-                          name {
-                            value
-                          }
-                        }
-                      }
+                      address { value }
+                      ip_namespace { node { name { value } } }
                     }
                   }
                 }
               }
+
+              # Service associations (including OSPF areas)
               service {
                 edges {
                   node {
                     __typename
-                    ... on ServiceNetworkSegment {
-                      name {
-                        value
-                      }
-                      vni {
-                        value
-                      }
-                      status {
-                        value
-                      }
-                      description {
-                        value
-                      }
-                      prefixes {
-                        edges {
-                          node {
-                            prefix {
-                              value
-                            }
-                          }
-                        }
-                      }
                     }
                   }
                 }
@@ -232,7 +194,8 @@ query spine_config($device: String!) {
             }
           }
         }
+
       }
     }
   }
-}
+

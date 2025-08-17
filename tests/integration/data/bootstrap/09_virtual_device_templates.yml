@@ -1,0 +1,130 @@
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TemplateDcimVirtualDevice
+  data:
+    - template_name: C8000V_EDGE
+      device_type: C8000V
+      role: edge
+      status: active
+      cpu: 2
+      memory: 8
+      storage: 100
+      interfaces:
+        kind: TemplateDcimPhysicalInterface
+        data:
+          - template_name: C8000V_EDGE_Ethernet1/1
+            name: Ethernet1/1
+            role: customer
+          - template_name: C8000V_EDGE_Ethernet1/2
+            name: Ethernet1/2
+            role: customer
+          - template_name: C8000V_EDGE_Ethernet1/3
+            name: Ethernet1/3
+            role: customer
+          - template_name: C8000V_EDGE_Ethernet1/4
+            name: Ethernet1/4
+            role: customer
+          - template_name: C8000V_EDGE_Ethernet1/5
+            name: Ethernet1/5
+            role: customer
+          - template_name: C8000V_EDGE_Ethernet1/6
+            name: Ethernet1/6
+            role: customer
+          - template_name: C8000V_EDGE_Ethernet1/7
+            name: Ethernet1/7
+            role: customer
+          - template_name: C8000V_EDGE_Ethernet1/8
+            name: Ethernet1/8
+            role: customer
+          - template_name: C8000V_EDGE_Ethernet1/9
+            name: Ethernet1/9
+            role: customer
+          - template_name: C8000V_EDGE_Ethernet1/10
+            name: Ethernet1/10
+            role: customer
+          - template_name: C8000V_EDGE_Ethernet1/11
+            name: Ethernet1/11
+            role: customer
+          - template_name: C8000V_EDGE_Ethernet1/12
+            name: Ethernet1/12
+            role: customer
+          - template_name: C8000V_EDGE_Ethernet1/13
+            name: Ethernet1/13
+            role: customer
+          - template_name: C8000V_EDGE_Ethernet1/14
+            name: Ethernet1/14
+            role: customer
+          - template_name: C8000V_EDGE_Ethernet1/15
+            name: Ethernet1/15
+            role: customer
+          - template_name: C8000V_EDGE_Ethernet1/16
+            name: Ethernet1/16
+            role: customer
+          - template_name: C8000V_EDGE_Ethernet1/17
+            name: Ethernet1/17
+            role: customer
+          - template_name: C8000V_EDGE_Ethernet1/18
+            name: Ethernet1/18
+            role: customer
+          - template_name: C8000V_EDGE_Ethernet1/19
+            name: Ethernet1/19
+            role: customer
+          - template_name: C8000V_EDGE_Ethernet1/20
+            name: Ethernet1/20
+            role: customer
+          - template_name: C8000V_EDGE_Ethernet1/21
+            name: Ethernet1/21
+            role: customer
+          - template_name: C8000V_EDGE_Ethernet1/22
+            name: Ethernet1/22
+            role: customer
+          - template_name: C8000V_EDGE_Ethernet1/23
+            name: Ethernet1/23
+            role: customer
+          - template_name: C8000V_EDGE_Ethernet1/24
+            name: Ethernet1/24
+            role: customer
+          - template_name: C8000V_EDGE_mgmt0
+            name: mgmt0
+            role: management
+        member_of_groups:
+          - edges
+
+    - template_name: CloudGuard_EDGE
+      device_type: CloudGuard
+      role: edge_firewall
+      status: active
+      cpu: 2
+      memory: 8
+      storage: 100
+      interfaces:
+        kind: TemplateDcimPhysicalInterface
+        data:
+          - template_name: CloudGuard_EDGE_eth0
+            name: eth0
+            role: management
+          - template_name: CloudGuard_EDGE_eth1
+            name: eth1
+            role: customer
+          - template_name: CloudGuard_EDGE_eth2
+            name: eth2
+            role: customer
+          - template_name: CloudGuard_EDGE_eth3
+            name: eth3
+            role: customer
+          - template_name: CloudGuard_EDGE_eth4
+            name: eth4
+            role: customer
+          - template_name: CloudGuard_EDGE_eth5
+            name: eth5
+            role: customer
+          - template_name: CloudGuard_EDGE_eth6
+            name: eth6
+            role: customer
+          - template_name: CloudGuard_EDGE_eth7
+            name: eth7
+            role: customer
+        member_of_groups:
+          - firewalls

@@ -53,3 +53,43 @@ spec:
       elements:
         - [2 C8000V EDGES]
         - [2 CloudGuard Security Edges]
+    - name: PHYSICAL DC CISCO S WITH BORDER LEAFS
+      description: Physical Cisco S design with border leafs
+      type: DC
+      elements:
+        - [2 CISCO SPINES C9336C-FX2]
+        - [8 CISCO LEAFS N9K-C9336C-FX2]
+        - [2 CISCO BORDER LEAFS N9K-C9336C-FX2]
+        - [2 JUNIPER DC FIREWALLS SRX-1500]
+        - [2 CISCO OOB SWITCHES C9200L-24P-4G]
+        - [2 PERLE CONSOLE SCG50R]
+    - name: PHYSICAL DC CISCO L WITH BORDER LEAFS
+      description: Physical Cisco L design with border leafs
+      type: DC
+      elements:
+        - [4 CISCO SPINES N9K-C9316D-GX]
+        - [16 CISCO LEAFS N9K-C9316D-GX]
+        - [2 CISCO BORDER LEAFS N9K-C9316D-GX]
+        - [2 JUNIPER DC FIREWALLS SRX-1500]
+        - [2 CISCO OOB SWITCHES C9200L-24P-4G]
+        - [2 PERLE CONSOLE SCG50R]
+    - name: PHYSICAL DC ARISTA S WITH BORDER LEAFS
+      description: Physical ARISTA S design with border leafs
+      type: DC
+      elements:
+        - [2 ARISTA SPINES DCS-7280DR3-24-F]
+        - [4 ARISTA LEAFS CCS-720DP-48S-2F]
+        - [2 ARISTA BORDER LEAFS CCS-720DP-48S-2F]
+        - [2 JUNIPER DC FIREWALLS SRX-1500]
+        - [2 CISCO OOB SWITCHES C9200L-24P-4G]
+        - [2 PERLE CONSOLE SCG50R]
+    - name: PHYSICAL DC SONIC S WITH BORDER LEAFS
+      description: Physical SONIC S design with border leafs
+      type: DC
+      elements:
+        - [2 EDGECORE SPINES 7726-32X-O]
+        - [4 EDGECORE LEAFS 5912-54X-O-AC-F]
+        - [2 EDGECORE BORDER LEAFS 5912-54X-O-AC-F]
+        - [2 JUNIPER DC FIREWALLS SRX-1500]
+        - [2 CISCO OOB SWITCHES C9200L-24P-4G]
+        - [2 PERLE CONSOLE SCG50R]

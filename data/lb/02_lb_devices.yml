@@ -12,7 +12,7 @@ spec:
           shortname: DC-1
           parent: Katowice
       device_type: HA-PROXY
-      role: load_balancer
+      object_template: HA-PROXY
       status: active
       cpu: 2
       memory: 2
@@ -26,12 +26,14 @@ spec:
       device_service:
         kind: ServiceVIP
         data:
-          - name: VIP-1
-            hostname: web-frontend.example.com
+          - hostname: web-frontend.example.com
             status: active
             mode: http
             description: HTTP VIP Application 1
-            # owner: Customer 1
+            owner:
+              kind: OrganizationCustomer
+              data:
+                name: Customer 1
             vip_ip:
               kind: IpamIPAddress
               data:
@@ -65,8 +67,8 @@ spec:
           name: DC-1
           shortname: DC-1
           parent: Katowice
-      device_type: NGINX
-      role: load_balancer
+      object_template: NGINX
+      topology: DC-1
       status: active
       cpu: 2
       memory: 2
@@ -79,9 +81,11 @@ spec:
       device_service:
         kind: ServiceVIP
         data:
-          - name: VIP-2
-            hostname: tcp-frontend.example.com
-            owner: Customer 2
+          - hostname: tcp-frontend.example.com
+            owner:
+              kind: OrganizationCustomer
+              data:
+                name: Customer 2
             status: active
             mode: tcp
             description: TCP VIP Application 2

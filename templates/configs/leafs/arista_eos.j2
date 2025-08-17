@@ -12,37 +12,18 @@ spanning-tree mode mstp
 ! Configure VLAN 1
 no spanning-tree vlan-id 4094
 
-{%- set bgp_sessions = [] %}
-{%- set ospf_sessions = [] %}
-{%- set router_id = None %}
-{%- set local_asn = None %}
-{%- set is_ebgp_underlay = false %}
-{%- set is_ospf_underlay = false %}
-
-{%- for service in data.device_service %}
-  {%- if service.typename == "ServiceBGP" %}
-    {%- set bgp_sessions = bgp_sessions + [service] %}
-    {%- if service.session_type == "EXTERNAL" %}
-      {%- set is_ebgp_underlay = true %}
-    {%- endif %}
-    {%- if not local_asn and service.local_as %}
-      {%- set local_asn = service.local_as.asn %}
-    {%- endif %}
-    {%- if not router_id and service.router_id %}
-      {%- set router_id = service.router_id.address %}
-    {%- endif %}
-  {%- elif service.typename == "ServiceOSPF" %}
-    {%- set ospf_sessions = ospf_sessions + [service] %}
-    {%- set is_ospf_underlay = true %}
-    {%- if not router_id and service.router_id %}
-      {%- set router_id = service.router_id.address %}
-    {%- endif %}
-  {%- endif %}
-{%- endfor %}
+{# Use enhanced data structures from transforms #}
+{%- set bgp_sessions = data.bgp_services or [] %}
+{%- set router_id = data.loopback0_ip %}
+{%- set local_asn = data.local_asn %}
+{%- set vtep_source_ip = data.vtep_source_ip %}
+{%- set underlay_strategy = data.underlay_strategy %}
+{%- set is_ospf_underlay = underlay_strategy in ['ospf-ibgp'] %}
+{%- set is_ebgp_underlay = underlay_strategy in ['ebgp-ibgp', 'ebgp-only'] %}
 
 ! Configure VRFs for tenant traffic
-{%- for vrf in data.customer_vrfs %}
-vrf instance {{ vrf.name }}
+{%- for vrf_name, vrf in data.vrfs.items() %}
+vrf instance {{ vrf_name }}
 
 {%- endfor %}
 
@@ -54,8 +35,8 @@ interface {{ interface.name }}
     {%- for ip in interface.ip_addresses %}
    ip address {{ ip.address }}
     {%- endfor %}
-    {%- if is_ospf_underlay and interface.role == "loopback" %}
-   ospf area {{ data.dynamic_config.ospf_area }}
+    {%- if is_ospf_underlay and interface.name.lower() == "loopback0" %}
+   ospf area {{ data.ospf_area or "0.0.0.0" }}
     {%- endif %}
 
   {%- endif %}
@@ -64,11 +45,7 @@ interface {{ interface.name }}
 {%- if is_ospf_underlay %}
 ! Configure OSPF
 router ospf 1
-   {%- for service in ospf_sessions %}
-     {%- if service.router_id %}
-   router-id {{ service.router_id.address.split('/')[0] }}
-     {%- endif %}
-   {%- endfor %}
+   router-id {{ router_id }}
    passive-interface default
    no passive-interface Ethernet1
    no passive-interface Ethernet2
@@ -78,22 +55,16 @@ router ospf 1
 
 ! Configure underlay interfaces
 {%- for interface in data.interfaces %}
-  {%- if interface.typename == "DcimPhysicalInterface" and interface.role in ["ospf-unnumbered", "core"] %}
+  {%- if interface.typename == "DcimPhysicalInterface" and interface.role == "ospf-unnumbered" %}
 interface {{ interface.name }}
    description {{ interface.description if interface.description else "Underlay connection" }}
    mtu 9214
    no switchport
-    {%- if interface.role == "ospf-unnumbered" %}
    ip unnumbered Loopback0
       {%- if is_ospf_underlay %}
-   ospf area {{ data.dynamic_config.ospf_area }}
+   ospf area {{ data.ospf_area or "0.0.0.0" }}
    ospf network point-to-point
       {%- endif %}
-    {%- elif interface.role == "core" and interface.ip_addresses %}
-      {%- for ip in interface.ip_addresses %}
-   ip address {{ ip.address }}
-      {%- endfor %}
-    {%- endif %}
 
   {%- endif %}
 {%- endfor %}
@@ -104,39 +75,44 @@ interface Vxlan1
    vxlan source-interface Loopback1
    vxlan udp-port 4789
 
-{%- set vlan_services = data.network_segments or [] %}
+{# Use fabric segments from enhanced transform #}
+{%- set vlan_services = data.fabric.vxlan_service.segments or [] %}
 
 {%- if vlan_services %}
-{%- for service in vlan_services %}
-   vxlan vlan {{ service.vni }} vni {{ service.vni }}
+{%- for segment in vlan_services %}
+   vxlan vlan {{ segment.vlan_id }} vni {{ segment.vni }}
 {%- endfor %}
-{%- for vrf in data.customer_vrfs %}
-   vxlan vrf {{ vrf.name }} vni {{ vrf.vni }}
+{%- for vrf_name, vrf in data.vrfs.items() %}
+   vxlan vrf {{ vrf_name }} vni {{ vrf.l3vni }}
 {%- endfor %}
 
 ! Configure VLANs
-{%- for service in vlan_services %}
-vlan {{ service.vni }}
-   name {{ service.name }}{% if service.security_zone %} - Security Zone: {{ service.security_zone.name }}{% endif %}
+{%- for segment in vlan_services %}
+vlan {{ segment.vlan_id }}
+   name {{ segment.name }}
 
 {%- endfor %}
 
-! Configure VLAN interfaces
-{%- for service in vlan_services %}
-  {%- set service_vrf = None %}
-  {%- for vrf in data.customer_vrfs %}
-    {%- for segment in vrf.segments %}
-      {%- if segment.name == service.name %}
-        {%- set service_vrf = vrf %}
-      {%- endif %}
-    {%- endfor %}
+! Configure VLAN interfaces (L3 gateways)
+{%- for segment in vlan_services %}
+  {%- set segment_vrf = None %}
+  {%- for vrf_name, vrf in data.vrfs.items() %}
+    {%- if segment.customer.name == vrf.customer %}
+      {%- set segment_vrf = vrf %}
+    {%- endif %}
   {%- endfor %}
-interface Vlan{{ service.vni }}
-   description {{ service.description if service.description else service.name }}
-   vrf {{ service_vrf.name if service_vrf else (service.name | replace(' ', '_') | replace('-', '_')) + '_VRF' }}
-   {%- for prefix in service.prefixes %}
-   ip address virtual {{ prefix.prefix.split('/')[0] }}/{{ prefix.prefix.split('/')[1] }}
-   {%- endfor %}
+interface Vlan{{ segment.vlan_id }}
+   description {{ segment.name }} Gateway
+   vrf {{ segment_vrf.name if segment_vrf else segment.customer.name + '_VRF' }}
+   ip address virtual 192.168.{{ loop.index }}.1/24
+
+{%- endfor %}
+
+! Configure L3VNI SVIs
+{%- for vrf_name, vrf in data.vrfs.items() %}
+interface Vlan{{ vrf.l3vni }}
+   description {{ vrf_name }} L3VNI
+   vrf {{ vrf_name }}
 
 {%- endfor %}
 
@@ -149,75 +125,63 @@ interface Vlan4094
 
 ! Configure BGP
 router bgp {{ local_asn }}
-   router-id {{ router_id.split('/')[0] if router_id else data.dynamic_config.router_id }}
+   router-id {{ router_id }}
    no bgp default ipv4-unicast
    distance bgp 20 200 200
    maximum-paths 4 ecmp 64
-   bgp listen range {{ data.dynamic_config.bgp_listen_range | default("10.0.0.0/8") }} peer-group EVPN-OVERLAY-PEERS remote-as {{ local_asn }}
 
-{%- for service in bgp_sessions %}
-  {%- if service.session_type == "EXTERNAL" %}
-   ! eBGP Underlay neighbor {{ service.remote_as.asn }}
-   neighbor {{ service.remote_ip.address.split('/')[0] if service.remote_ip else service.name }} remote-as {{ service.remote_as.asn }}
-    {%- if service.local_ip %}
-   neighbor {{ service.remote_ip.address.split('/')[0] }} update-source {{ service.local_ip.address.split('/')[0] }}
-    {%- else %}
-   neighbor {{ service.remote_ip.address.split('/')[0] }} update-source Loopback0
-    {%- endif %}
-   neighbor {{ service.remote_ip.address.split('/')[0] }} bfd
-   neighbor {{ service.remote_ip.address.split('/')[0] }} password 7 <encrypted>
-  {%- elif service.session_type == "INTERNAL" and "evpn" in service.name.lower() %}
-   ! iBGP EVPN neighbor
-   neighbor {{ service.remote_ip.address.split('/')[0] }} peer group EVPN-OVERLAY-PEERS
-   neighbor {{ service.remote_ip.address.split('/')[0] }} remote-as {{ service.remote_as.asn }}
-   neighbor {{ service.remote_ip.address.split('/')[0] }} update-source Loopback0
-   neighbor {{ service.remote_ip.address.split('/')[0] }} bfd
-  {%- elif service.session_type == "INTERNAL" %}
-   ! iBGP neighbor
-   neighbor {{ service.remote_ip.address.split('/')[0] }} remote-as {{ service.remote_as.asn }}
-   neighbor {{ service.remote_ip.address.split('/')[0] }} update-source Loopback0
-   neighbor {{ service.remote_ip.address.split('/')[0] }} bfd
+{# Configure BGP neighbors from enhanced transform data #}
+{%- for bgp_service in bgp_sessions %}
+  {%- if bgp_service.session_type == "EXTERNAL" %}
+   ! {{ bgp_service.description }}
+   neighbor {{ bgp_service.remote_ip.split('/')[0] }} remote-as {{ bgp_service.remote_as }}
+   neighbor {{ bgp_service.remote_ip.split('/')[0] }} update-source Loopback0
+   neighbor {{ bgp_service.remote_ip.split('/')[0] }} description {{ bgp_service.description }}
+   neighbor {{ bgp_service.remote_ip.split('/')[0] }} send-community
+   neighbor {{ bgp_service.remote_ip.split('/')[0] }} maximum-routes 0
+  {%- elif bgp_service.session_type == "INTERNAL" %}
+   ! {{ bgp_service.description }}
+   neighbor {{ bgp_service.remote_ip.split('/')[0] }} remote-as {{ bgp_service.remote_as }}
+   neighbor {{ bgp_service.remote_ip.split('/')[0] }} update-source Loopback0
+   neighbor {{ bgp_service.remote_ip.split('/')[0] }} description {{ bgp_service.description }}
+   neighbor {{ bgp_service.remote_ip.split('/')[0] }} send-community extended
+   neighbor {{ bgp_service.remote_ip.split('/')[0] }} maximum-routes 0
   {%- endif %}
 {%- endfor %}
 
-   peer-group EVPN-OVERLAY-PEERS update-source Loopback0
-   peer-group EVPN-OVERLAY-PEERS bfd
-   peer-group EVPN-OVERLAY-PEERS ebgp-multihop 3
-   peer-group EVPN-OVERLAY-PEERS password 7 <encrypted>
-   peer-group EVPN-OVERLAY-PEERS send-community
-   peer-group EVPN-OVERLAY-PEERS maximum-routes 0
-
    address-family ipv4
       redistribute connected route-map RM-CONN-2-BGP
-{%- for service in bgp_sessions %}
-  {%- if service.session_type == "EXTERNAL" %}
-      neighbor {{ service.remote_ip.address.split('/')[0] if service.remote_ip else service.name }} activate
-  {%- elif service.session_type == "INTERNAL" and "evpn" not in service.name.lower() %}
-      neighbor {{ service.remote_ip.address.split('/')[0] }} activate
+{%- for bgp_service in bgp_sessions %}
+  {%- if bgp_service.session_type == "EXTERNAL" %}
+      neighbor {{ bgp_service.remote_ip.split('/')[0] }} activate
   {%- endif %}
 {%- endfor %}
 
    address-family evpn
-      peer-group EVPN-OVERLAY-PEERS activate
+{%- for bgp_service in bgp_sessions %}
+  {%- if bgp_service.session_type == "INTERNAL" %}
+      neighbor {{ bgp_service.remote_ip.split('/')[0] }} activate
+  {%- endif %}
+{%- endfor %}
 
-{%- if vlan_services %}
-{%- for vrf in data.customer_vrfs %}
-   vrf {{ vrf.name }}
-      rd {{ router_id.split('/')[0] if router_id else data.dynamic_config.router_id }}:{{ vrf.vni }}
-      route-target import evpn {{ vrf.vni }}:{{ vrf.vni }}
-      route-target export evpn {{ vrf.vni }}:{{ vrf.vni }}
+{# VRF Address Families for L3VPN #}
+{%- for vrf_name, vrf in data.vrfs.items() %}
+   vrf {{ vrf_name }}
+      rd {{ vrf.rd }}
+      route-target import evpn {{ vrf.rt_import[0] }}
+      route-target export evpn {{ vrf.rt_export[0] }}
       redistribute connected
 
 {%- endfor %}
 
-{%- for service in vlan_services %}
-   vlan {{ service.vni }}
-      rd {{ router_id.split('/')[0] if router_id else data.dynamic_config.router_id }}:{{ service.vni }}
-      route-target both {{ service.vni }}:{{ service.vni }}
+{# L2VPN EVPN for VLANs #}
+{%- for segment in vlan_services %}
+   vlan {{ segment.vlan_id }}
+      rd {{ router_id }}:{{ segment.vni }}
+      route-target both {{ segment.vni }}:{{ segment.vni }}
       redistribute learned
 
 {%- endfor %}
-{%- endif %}
 
 ! Configure route-maps
 route-map RM-CONN-2-BGP permit 10
@@ -227,64 +191,9 @@ route-map RM-CONN-2-BGP permit 20
 
 {%- if vlan_services | length > 0 %}
 
-! Security Configuration
-{%- for service in vlan_services %}
+! Virtual MAC for anycast gateway
+ip virtual-router mac-address 00:1c:73:00:00:99
 
-! Security configuration for {{ service.name }}
-{%- if service.security_zone %}
-! Security Zone: {{ service.security_zone.name }} (Trust Level: {{ service.security_zone.trust_level }})
-{%- endif %}
-
-{%- if service.access_control_lists %}
-{%- for acl in service.access_control_lists %}
-! ACL: {{ acl.name }} - {{ acl.description if acl.description else "Standard ACL" }}
-ip access-list extended {{ acl.name }}
-{%- if acl.rules %}
-{%- for rule in acl.rules %}
- {{ rule.index }} {{ rule.action }} {% if rule.services %}{% for svc in rule.services %}{{ svc.name }}{% if not loop.last %} {% endif %}{% endfor %}{% else %}ip{% endif %} {% if rule.source_addresses %}{% for addr in rule.source_addresses %}{{ addr.name }}{% if not loop.last %} {% endif %}{% endfor %}{% else %}any{% endif %} {% if rule.destination_addresses %}{% for addr in rule.destination_addresses %}{{ addr.name }}{% if not loop.last %} {% endif %}{% endfor %}{% else %}any{% endif %}{% if rule.log %} log{% endif %}
-{%- endfor %}
-{%- endif %}
-
-{%- endfor %}
-
-! Apply ACLs to VLAN interface
-interface Vlan{{ service.vni }}
-{%- for acl in service.access_control_lists %}
-   ip access-group {{ acl.name }} {% if 'INGRESS' in acl.name %}in{% else %}out{% endif %}
-{%- endfor %}
-
-{%- endif %}
-
-{%- if service.security_profile %}
-! Security Profile: {{ service.security_profile.name }}
-{%- if service.security_profile.enable_dhcp_snooping %}
-! Enable DHCP Snooping
-ip dhcp snooping
-ip dhcp snooping vlan {{ service.vni }}
-{%- endif %}
-
-{%- if service.security_profile.enable_arp_inspection %}
-! Enable ARP Inspection
-ip arp inspection vlan {{ service.vni }}
-{%- endif %}
-
-{%- if service.security_profile.max_mac_addresses %}
-! Port Security
-interface Vlan{{ service.vni }}
-   switchport port-security maximum {{ service.security_profile.max_mac_addresses }}
-   switchport port-security
-{%- endif %}
-
-{%- endif %}
-
-{%- if service.enable_logging %}
-! Security Logging
-logging host {{ data.dynamic_config.syslog_server | default("10.0.1.100") }}
-logging facility local0
-logging level informational
-{%- endif %}
-
-{%- endfor %}
 {%- endif %}
 
 ! End of configuration

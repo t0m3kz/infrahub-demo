@@ -22,17 +22,18 @@ nodes:
     attributes:
       - name: name
         kind: Text
-        description: "Name of the Autonomous System"
-        order_weight: 1000
+        computed_attribute:
+          kind: Jinja2
+          jinja2_template: "AS{{asn__value}}"
+        read_only: true
+        optional: false
       - name: asn
         kind: Number
         description: "Autonomous System Number"
-        order_weight: 1050
       - name: description
         kind: Text
         optional: true
         description: "Description of the Autonomous System"
-        order_weight: 1100
     relationships:
       - name: owner
         peer: OrganizationProvider
@@ -51,32 +52,26 @@ nodes:
     label: BGP Peer Group
     icon: mdi:view-grid-plus-outline
     menu_placement: RoutingBGPSession
-    inherit_from:
-      - "RoutingProtocol"
+    inherit_from: []
     uniqueness_constraints:
       - ["name__value"]
     human_friendly_id:
       - name__value
-      - description__value
     order_by:
       - name__value
     display_labels:
       - name__value
-      - description__value
     attributes:
+      - name: description
+        kind: Text
+        optional: false
+        description: "Description of the BGP peer group"
+        order_weight: 1100
       - name: name
         kind: Text
         optional: false
         description: "Name of the BGP Group"
         order_weight: 1000
-      - name: import_policies
-        kind: Text
-        optional: true
-        order_weight: 1300
-      - name: export_policies
-        kind: Text
-        optional: true
-        order_weight: 1350
       - name: maximum_routes
         kind: Number
         optional: true
@@ -94,33 +89,67 @@ nodes:
         optional: true
         description: "Whether to send community attributes."
         order_weight: 1500
-      - name: address_family
-        description: "The address family for the routing policy indicating the type of IP address."
+      - name: bfd_enabled
+        kind: Checkbox
+        description: "Enable BFD (Bidirectional Forwarding Detection) for fast convergence"
+        default_value: true
+        optional: true
+        order_weight: 1550
+      - name: password
+        kind: Text
+        description: "BGP session password for authentication"
+        optional: true
+        order_weight: 1600
+      - name: ebgp_multihop
+        kind: Number
+        description: "EBGP multihop TTL value (0 = disabled)"
+        default_value: 0
+        optional: true
+        order_weight: 1650
+        regex: "^[0-9]+$"
+      - name: route_reflector_client
+        kind: Checkbox
+        description: "Configure peers as route reflector clients"
+        default_value: false
+        optional: true
+        order_weight: 1700
+      - name: send_community_extended
+        kind: Checkbox
+        description: "Send extended community attributes"
+        default_value: false
+        optional: true
+        order_weight: 1850
+      - name: peer_group_type
         kind: Dropdown
+        description: "Predefined peer group type for data center fabrics"
         choices:
-          - name: "ipv4"
-            label: IPv4
-            description: "Policy applies to IPv4 addresses."
-            color: "#E6E6FA"  # lavender
-          - name: "ipv6"
-            label: IPv6
-            description: "Policy applies to IPv6 addresses."
-            color: "#E6E6FA"  # lavender
-        default_value: "ipv4"
-        order_weight: 1150
-    relationships:
-      - name: local_as
-        identifier: bgppeergroup__local_as
-        peer: RoutingAutonomousSystem
+          - name: "SPINE_TO_LEAF"
+            label: "Spine to Leaf"
+            description: "eBGP underlay from spine perspective"
+            color: "#4CAF50"
+          - name: "LEAF_TO_SPINE"
+            label: "Leaf to Spine"
+            description: "eBGP underlay from leaf perspective"
+            color: "#2196F3"
+          - name: "EVPN_RR_CLIENT"
+            label: "EVPN RR Client"
+            description: "iBGP EVPN route reflector client"
+            color: "#FF9800"
+          - name: "EVPN_RR_SERVER"
+            label: "EVPN RR Server"
+            description: "iBGP EVPN route reflector server"
+            color: "#9C27B0"
+          - name: "EXTERNAL_EBGP"
+            label: "External eBGP"
+            description: "External peering sessions"
+            color: "#F44336"
+          - name: "CUSTOM"
+            label: "Custom"
+            description: "Custom peer group configuration"
+            color: "#607D8B"
+        default_value: "CUSTOM"
         optional: true
-        cardinality: one
-        kind: Attribute
-      - name: remote_as
-        identifier: bgppeergroup__remote_as
-        peer: RoutingAutonomousSystem
-        optional: true
-        cardinality: one
-        kind: Attribute
+        order_weight: 1900
 
 extensions:
   nodes:

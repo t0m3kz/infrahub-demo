@@ -3,54 +3,6 @@
 version: "1.0"
 
 nodes:
-  - name: PIM
-    namespace: Routing
-    description: "Protocol Independent Multicast (PIM) instance on a Virtual Router."
-    label: "PIM"
-    icon: "mdi:network-outline"
-    include_in_menu: false
-    inherit_from:
-      - "RoutingProtocol"
-    order_by:
-      # - vrf__name__value
-      - device__name__value
-    uniqueness_constraints:
-      - ["device"]
-    human_friendly_id:
-      - "device__name__value"
-      # - "vrf__name__value"
-    display_labels:
-      - description__value
-    attributes:
-      - name: dr_priority
-        kind: Number
-        optional: true
-        default_value: 1
-        description: "Designated Router priority."
-        order_weight: 1250
-      - name: import_policies
-        kind: Text
-        optional: true
-        order_weight: 1300
-      - name: export_policies
-        kind: Text
-        optional: true
-        order_weight: 1350
-    relationships:
-      - name: rp_address
-        peer: IpamIPAddress
-        optional: true
-        description: "Rendezvous Point (RP) address for PIM."
-        cardinality: one
-        kind: Attribute
-      - name: pim_interfaces
-        label: PIM Interfaces
-        peer: RoutingPIMInterface
-        identifier: pim__piminterfaces
-        optional: true
-        cardinality: many
-        kind: Component
-
   - name: PIMInterface
     namespace: Routing
     description: "Interface configuration for PIM."
@@ -58,21 +10,21 @@ nodes:
     icon: "mdi:ethernet"
     include_in_menu: false
     order_by:
-      - description__value
+      - name__value
     display_labels:
-      - description__value
+      - name__value
     uniqueness_constraints:
-      - ["pim"]
+      - ["name__value"]
     human_friendly_id:
-      - "description__value"
+      - "name__value"
     attributes:
       # Could be computed later on based on PIM Instance / Interface Name
-      - name: description
+      - name: name
         kind: Text
         optional: false
         unique: true
-        description: "Description of the OSPF interface."
-        order_weight: 1100
+        description: "Name of the PIM interface Profile."
+        order_weight: 1500
       - name: pim_mode
         kind: Dropdown
         choices:
@@ -102,14 +54,6 @@ nodes:
         default_value: 1
         description: "Designated Router priority on the interface."
         order_weight: 1250
-    relationships:
-      - name: pim
-        label: PIM
-        peer: RoutingPIM
-        identifier: pim__piminterfaces
-        optional: false
-        cardinality: one
-        kind: Parent
       # - name: interface
       #   peer: InterfaceLayer3
       #   optional: false

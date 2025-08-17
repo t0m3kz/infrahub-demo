@@ -119,6 +119,13 @@ generator_definitions:
     class_name: PopTopologyGenerator
     parameters:
       name: name__value
+  - name: auto_vni_assignment
+    file_path: generators/service_network_segment_pool_based.py
+    targets: service_network_segments
+    query: service_network_segment
+    class_name: ServiceNetworkSegmentPoolBasedGenerator
+    parameters:
+      name: name__value
 
 
 queries:
@@ -146,6 +153,8 @@ queries:
     file_path: queries/config/console.gql
   - name: cloud_security_config
     file_path: queries/config/cloud_security.gql
+  - name: service_network_segment
+    file_path: queries/service_network_segment.gql
 # schemas:
 #   - schemas/
 # menus:

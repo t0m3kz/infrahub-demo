@@ -8,8 +8,7 @@ spec:
       location: Barcelona
       description: Barcelona Data Center 4
       strategy: ebgp-ibgp
-      unnumbered: false
-      design: PHYSICAL DC SONIC S
+      design: PHYSICAL DC SONIC S WITH BORDER LEAFS
       emulation: true
       provider: Technology Partner
       management_subnet:
