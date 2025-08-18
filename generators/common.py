@@ -224,12 +224,12 @@ class TopologyCreator:
             kind="CoreNumberPool",
             data={
                 "payload": {
-                    "name": f"{self.data.get('name')}-vlan-pool",
-                    "description": f"{self.data.get('name')} L2 Segment Number Pool",
+                    "name": f"{self.data.get('name')}-VLAN-POOL",
+                    "description": f"{self.data.get('name')} VLAN Number Pool",
                     "node": "ServiceNetworkSegment",
-                    "node_attribute": "vni",
-                    "start_range": 12000000,
-                    "end_range": 12009999,
+                    "node_attribute": "vlan_id",
+                    "start_range": 100,
+                    "end_range": 4000,
                 },
                 # "store_key": f"{pool.get('type').lower()}_ip_pool",
             },

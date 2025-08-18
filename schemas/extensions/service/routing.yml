@@ -52,7 +52,7 @@ nodes:
     human_friendly_id:
       - "name__value"
     inherit_from:
-      - ServiceDeviceGeneric
+      - ServiceGeneric
       - ServiceRouting
     attributes:
       - name: process_id
@@ -130,7 +130,7 @@ nodes:
     include_in_menu: false
     inherit_from:
       - ServiceRouting
-      - ServiceDeviceGeneric
+      - ServiceGeneric
     human_friendly_id:
       - "name__value"
     attributes:
@@ -209,7 +209,7 @@ nodes:
     menu_placement: ServiceGeneric
     include_in_menu: false
     inherit_from:
-      - ServiceDeviceGeneric
+      - ServiceGeneric
       - ServiceRouting
     attributes:
       - name: dr_priority

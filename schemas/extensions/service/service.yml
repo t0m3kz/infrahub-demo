@@ -45,154 +45,29 @@ generics:
         kind: Component
         order_weight: 100
         optional: true
-
-  - name: DeviceGeneric
-    namespace: Service
-    description: "Device Services"
-    default_filter: name__value
-    include_in_menu: false
-    order_by:
-      - name__value
-    display_labels:
-      - name__value
-    attributes:
-      - name: name
-        kind: Text
-        label: Name
-        optional: false
-        order_weight: 10
-      - name: status
-        order_weight: 30
-        optional: false
-        kind: Dropdown
-        choices:
-          - name: provisioning
-            label: Provisioning
-            description: "In the process of being set up and configured."
-            color: "#ffff7f"
-          - name: active
-            label: Active
-            description: "Fully operational and currently in service."
-            color: "#7fbf7f"
-          - name: decommissioning
-            label: Decommissioning
-            description: "In the process of beeing taken out of service."
-            color: "#fbfbfb"
-          - name: decommissioned
-            label: Decommissioned
-            description: "Taken out of service."
-            color: "#bfbfbf"
-    relationships:
-      - name: owner
-        peer: OrganizationGeneric
-        cardinality: one
-        kind: Component
-        order_weight: 100
-        optional: true
-
-  - name: InterfaceGeneric
-    namespace: Service
-    description: "Interface Services"
-    default_filter: name__value
-    include_in_menu: false
-    order_by:
-      - name__value
-    display_labels:
-      - name__value
-    attributes:
-      - name: name
-        kind: Text
-        label: Name
-        optional: false
-        order_weight: 10
-      - name: status
-        order_weight: 30
-        optional: false
-        kind: Dropdown
-        choices:
-          - name: provisioning
-            label: Provisioning
-            description: "In the process of being set up and configured."
-            color: "#ffff7f"
-          - name: active
-            label: Active
-            description: "Fully operational and currently in service."
-            color: "#7fbf7f"
-          - name: decommissioning
-            label: Decommissioning
-            description: "In the process of beeing taken out of service."
-            color: "#fbfbfb"
-          - name: decommissioned
-            label: Decommissioned
-            description: "Taken out of service."
-            color: "#bfbfbf"
-    relationships:
-      - name: owner
-        peer: OrganizationGeneric
-        cardinality: one
-        kind: Component
-        order_weight: 100
-        optional: true
-
-nodes:
-
-  - name: NetworkSegment
-    namespace: Service
-    description: "Network segment service attached to a Topology."
-    label: Network Segment
-    icon: "carbon:ibm-cloud-internet-services"
-    menu_placement: ServiceGeneric
-    inherit_from:
-      - ServiceGeneric
-    attributes:
-      - name: vni
-        label: VNI or VLAN
-        order_weight: 10
-        optional: false
-        kind: Number
-      - name: environment
-        order_weight: 3
-        optional: false
-        kind: Dropdown
-        choices:
-          - name: production
-            label: Production
-            description: "Production environment."
-            color: "#ffff7f"
-          - name: non_production
-            label: Non-Production
-            description: "Not a production environment."
-            color: "#7fbf7f"
-    relationships:
-      - name: interfaces
-        peer: DcimInterface
-        label: Interfaces
-        cardinality: many
-        kind: Generic
-        optional: true
         on_delete: no-action
-        identifier: interface_service
-      - name: prefixes
-        peer: IpamPrefix
-        cardinality: many
-        kind: Attribute
-        order_weight: 1400
-        optional: true
-      - name: policy
-        peer: SecurityPolicy
-        cardinality: one
-        kind: Attribute
-        order_weight: 1500
-        optional: true
+
+  # - name: InterfaceGeneric
+  #   namespace: Service
+  #   description: "Services"
+  #   state: absent
+  #   include_in_menu: false
+  #   # This is only owning relationships toward various services for interfaces
+  #   relationships:
+  #     - name: network_segments
+  #       label: Segments
+  #       peer: ServiceNetworkSegment
+  #       state: absent
+  #       cardinality: many
+  #       optional: true
+  #       identifier: interface_services
 
 extensions:
-  # state: present
   nodes:
     - kind: DcimGenericDevice
       relationships:
         - name: device_service # l3_gateway
-          # state: absent
-          peer: ServiceDeviceGeneric
+          peer: ServiceGeneric
           label: Services
           optional: true
           cardinality: many
@@ -200,19 +75,19 @@ extensions:
           # order_weight: 1400
           on_delete: no-action
           identifier: device_service
-    - kind: DcimInterface
-      relationships:
-        - name: service # l2_segment
-          peer: ServiceInterfaceGeneric
-          label: Interface Services # L2 Segment(s)
-          identifier: interface_service
-          # state: absent
-          optional: true
-          cardinality: many
-          kind: Generic
-          # order_weight: 1400
-          on_delete: no-action
-          read_only: true
+    # - kind: DcimInterface
+    #   relationships:
+    #     - name: services # l2_segment
+    #       peer: ServiceInterfaceGeneric
+    #       state: absent
+    #       label: Interface Services # L2 Segment(s)
+    #       identifier: interface_services
+    #       optional: true
+    #       cardinality: many
+    #       kind: Generic
+    #       # order_weight: 1400
+    #       on_delete: no-action
+    #       read_only: true
     # - kind: TopologyDeployment
     #   relationships:
     #     - name: fabric_services

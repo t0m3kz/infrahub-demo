@@ -93,55 +93,55 @@ spec:
       children:
         data:
           # --------- Security Services ---------
-          - namespace: Service
-            name: SecurityMenu
-            label: Security Services
-            icon: "mdi:shield-check"
-            children:
-              data:
-                - namespace: Service
-                  name: SecurityService
-                  label: Security Services
-                  kind: ServiceSecurityService
-                  icon: "mdi:shield-check"
-                - namespace: Service
-                  name: SecurityServiceEndpoint
-                  label: Security Endpoints
-                  kind: ServiceSecurityServiceEndpoint
-                  icon: "mdi:ethernet"
-                - namespace: Service
-                  name: SecurityPolicyGroup
-                  label: Policy Groups
-                  kind: ServiceSecurityPolicyGroup
-                  icon: "mdi:folder-multiple"
-                - namespace: Service
-                  name: ThreatIntelligenceService
-                  label: Threat Intelligence
-                  kind: ServiceThreatIntelligenceService
-                  icon: "mdi:shield-bug"
+          # - namespace: Service
+          #   name: SecurityMenu
+          #   label: Security Services
+          #   icon: "mdi:shield-check"
+          #   children:
+          #     data:
+          #       - namespace: Service
+          #         name: SecurityService
+          #         label: Security Services
+          #         kind: ServiceSecurityService
+          #         icon: "mdi:shield-check"
+          #       - namespace: Service
+          #         name: SecurityServiceEndpoint
+          #         label: Security Endpoints
+          #         kind: ServiceSecurityServiceEndpoint
+          #         icon: "mdi:ethernet"
+          #       - namespace: Service
+          #         name: SecurityPolicyGroup
+          #         label: Policy Groups
+          #         kind: ServiceSecurityPolicyGroup
+          #         icon: "mdi:folder-multiple"
+          #       - namespace: Service
+          #         name: ThreatIntelligenceService
+          #         label: Threat Intelligence
+          #         kind: ServiceThreatIntelligenceService
+          #         icon: "mdi:shield-bug"
 
           # --------- Cloud Security Services ---------
-          - namespace: Service
-            name: CloudSecurityMenu
-            label: Cloud Security Services
-            icon: "mdi:cloud-lock-outline"
-            children:
-              data:
-                - namespace: Service
-                  name: CloudSecurityService
-                  label: Cloud Security Services
-                  kind: ServiceCloudSecurityService
-                  icon: "mdi:cloud-lock-outline"
-                - namespace: Service
-                  name: CloudGateway
-                  label: Cloud Gateways
-                  kind: ServiceCloudGateway
-                  icon: "mdi:router-wireless"
-                - namespace: Service
-                  name: CloudSecurityPolicyGroup
-                  label: Cloud Policy Groups
-                  kind: ServiceCloudSecurityPolicyGroup
-                  icon: "mdi:shield-check-outline"
+          # - namespace: Service
+          #   name: CloudSecurityMenu
+          #   label: Cloud Security Services
+          #   icon: "mdi:cloud-lock-outline"
+          #   children:
+          #     data:
+          #       - namespace: Service
+          #         name: CloudSecurityService
+          #         label: Cloud Security Services
+          #         kind: ServiceCloudSecurityService
+          #         icon: "mdi:cloud-lock-outline"
+          #       - namespace: Service
+          #         name: CloudGateway
+          #         label: Cloud Gateways
+          #         kind: ServiceCloudGateway
+          #         icon: "mdi:router-wireless"
+          #       - namespace: Service
+          #         name: CloudSecurityPolicyGroup
+          #         label: Cloud Policy Groups
+          #         kind: ServiceCloudSecurityPolicyGroup
+          #         icon: "mdi:shield-check-outline"
 
           # --------- Network Services ---------
           - namespace: Service
@@ -186,180 +186,180 @@ spec:
                   kind: ServicePIM
                   icon: "carbon:ibm-cloud-internet-services"
     # ==================== SECURITY MANAGEMENT =====================
-    - namespace: Security
-      name: SecurityMenu
-      label: Security Management
-      icon: "mdi:security"
-      children:
-        data:
-          # --------- Policies & Rules ---------
-          - namespace: Security
-            name: PoliciesMenu
-            label: "Policies & Rules"
-            icon: "mdi:file-document-multiple"
-            children:
-              data:
-                - namespace: Security
-                  name: Policy
-                  label: "Security Policies"
-                  kind: SecurityPolicy
-                  icon: "mdi:shield-check"
-                - namespace: Security
-                  name: PolicyRule
-                  label: "Policy Rules"
-                  kind: SecurityPolicyRule
-                  icon: "mdi:format-list-bulleted"
+    # - namespace: Security
+    #   name: SecurityMenu
+    #   label: Security Management
+    #   icon: "mdi:security"
+    #   children:
+    #     data:
+    #       # --------- Policies & Rules ---------
+    #       - namespace: Security
+    #         name: PoliciesMenu
+    #         label: "Policies & Rules"
+    #         icon: "mdi:file-document-multiple"
+    #         children:
+    #           data:
+    #             - namespace: Security
+    #               name: Policy
+    #               label: "Security Policies"
+    #               kind: SecurityPolicy
+    #               icon: "mdi:shield-check"
+    #             - namespace: Security
+    #               name: PolicyRule
+    #               label: "Policy Rules"
+    #               kind: SecurityPolicyRule
+    #               icon: "mdi:format-list-bulleted"
 
-          # --------- Security Zones ---------
-          - namespace: Security
-            name: ZonesMenu
-            label: "Security Zones"
-            icon: "mdi:shield-outline"
-            children:
-              data:
-                - namespace: Security
-                  name: Zone
-                  label: "Security Zones"
-                  kind: SecurityZone
-                  icon: "mdi:shield-outline"
+    #       # --------- Security Zones ---------
+    #       - namespace: Security
+    #         name: ZonesMenu
+    #         label: "Security Zones"
+    #         icon: "mdi:shield-outline"
+    #         children:
+    #           data:
+    #             - namespace: Security
+    #               name: Zone
+    #               label: "Security Zones"
+    #               kind: SecurityZone
+    #               icon: "mdi:shield-outline"
 
-          # --------- Security Objects ---------
-          - namespace: Security
-            name: ObjectsMenu
-            label: "Security Objects"
-            icon: "mdi:cube-outline"
-            children:
-              data:
-                - namespace: Security
-                  name: AddressesSubmenu
-                  label: "Addresses & Networks"
-                  icon: "mdi:ip-network"
-                  children:
-                    data:
-                      - namespace: Security
-                        name: IPAddress
-                        label: "IP Addresses"
-                        kind: SecurityIPAddress
-                        icon: "mdi:ip"
-                      - namespace: Security
-                        name: IpamIPAddress
-                        label: "IPAM IP Addresses"
-                        kind: SecurityIpamIPAddress
-                        icon: "mdi:ip-outline"
-                      - namespace: Security
-                        name: Prefix
-                        label: "IP Prefixes"
-                        kind: SecurityPrefix
-                        icon: "mdi:ip-network-outline"
-                      - namespace: Security
-                        name: IpamPrefix
-                        label: "IPAM Prefixes"
-                        kind: SecurityIpamPrefix
-                        icon: "mdi:ip-network"
-                      - namespace: Security
-                        name: IPRange
-                        label: "IP Ranges"
-                        kind: SecurityIPRange
-                        icon: "mdi:format-list-numbered"
-                      - namespace: Security
-                        name: FQDN
-                        label: "Domain Names"
-                        kind: SecurityFQDN
-                        icon: "mdi:dns"
-                      - namespace: Security
-                        name: AddressGroup
-                        label: "Address Groups"
-                        kind: SecurityAddressGroup
-                        icon: "mdi:folder"
+    #       # --------- Security Objects ---------
+    #       - namespace: Security
+    #         name: ObjectsMenu
+    #         label: "Security Objects"
+    #         icon: "mdi:cube-outline"
+    #         children:
+    #           data:
+    #             - namespace: Security
+    #               name: AddressesSubmenu
+    #               label: "Addresses & Networks"
+    #               icon: "mdi:ip-network"
+    #               children:
+    #                 data:
+    #                   - namespace: Security
+    #                     name: IPAddress
+    #                     label: "IP Addresses"
+    #                     kind: SecurityIPAddress
+    #                     icon: "mdi:ip"
+    #                   - namespace: Security
+    #                     name: IpamIPAddress
+    #                     label: "IPAM IP Addresses"
+    #                     kind: SecurityIpamIPAddress
+    #                     icon: "mdi:ip-outline"
+    #                   - namespace: Security
+    #                     name: Prefix
+    #                     label: "IP Prefixes"
+    #                     kind: SecurityPrefix
+    #                     icon: "mdi:ip-network-outline"
+    #                   - namespace: Security
+    #                     name: IpamPrefix
+    #                     label: "IPAM Prefixes"
+    #                     kind: SecurityIpamPrefix
+    #                     icon: "mdi:ip-network"
+    #                   - namespace: Security
+    #                     name: IPRange
+    #                     label: "IP Ranges"
+    #                     kind: SecurityIPRange
+    #                     icon: "mdi:format-list-numbered"
+    #                   - namespace: Security
+    #                     name: FQDN
+    #                     label: "Domain Names"
+    #                     kind: SecurityFQDN
+    #                     icon: "mdi:dns"
+    #                   - namespace: Security
+    #                     name: AddressGroup
+    #                     label: "Address Groups"
+    #                     kind: SecurityAddressGroup
+    #                     icon: "mdi:folder"
 
-                - namespace: Security
-                  name: ServicesSubmenu
-                  label: "Services & Applications"
-                  icon: "mdi:application"
-                  children:
-                    data:
-                      - namespace: Security
-                        name: Service
-                        label: "Network Services"
-                        kind: SecurityService
-                        icon: "mdi:application-outline"
-                      - namespace: Security
-                        name: ServiceRange
-                        label: "Service Ranges"
-                        kind: SecurityServiceRange
-                        icon: "mdi:format-list-numbered"
-                      - namespace: Security
-                        name: ServiceGroup
-                        label: "Service Groups"
-                        kind: SecurityServiceGroup
-                        icon: "mdi:folder-multiple"
-                      - namespace: Security
-                        name: Application
-                        label: "Applications"
-                        kind: SecurityApplication
-                        icon: "mdi:application"
+    #             - namespace: Security
+    #               name: ServicesSubmenu
+    #               label: "Services & Applications"
+    #               icon: "mdi:application"
+    #               children:
+    #                 data:
+    #                   - namespace: Security
+    #                     name: Service
+    #                     label: "Network Services"
+    #                     kind: SecurityService
+    #                     icon: "mdi:application-outline"
+    #                   - namespace: Security
+    #                     name: ServiceRange
+    #                     label: "Service Ranges"
+    #                     kind: SecurityServiceRange
+    #                     icon: "mdi:format-list-numbered"
+    #                   - namespace: Security
+    #                     name: ServiceGroup
+    #                     label: "Service Groups"
+    #                     kind: SecurityServiceGroup
+    #                     icon: "mdi:folder-multiple"
+    #                   - namespace: Security
+    #                     name: Application
+    #                     label: "Applications"
+    #                     kind: SecurityApplication
+    #                     icon: "mdi:application"
 
-                - namespace: Security
-                  name: NetworkSegmentSecurityMenu
-                  label: "Network Segment Security"
-                  icon: "mdi:shield-network"
-                  children:
-                    data:
-                      - namespace: Security
-                        name: SegmentSecurityZone
-                        label: "Segment Security Zones"
-                        kind: SecuritySegmentSecurityZone
-                        icon: "carbon:network-3-reference"
-                      - namespace: Security
-                        name: SegmentSecurityProfile
-                        label: "Segment Security Profiles"
-                        kind: SecuritySegmentSecurityProfile
-                        icon: "mdi:shield-network"
-                      - namespace: Security
-                        name: SegmentAccessControlList
-                        label: "Segment ACLs"
-                        kind: SecuritySegmentAccessControlList
-                        icon: "mdi:format-list-checks"
-                      - namespace: Security
-                        name: SegmentACLRule
-                        label: "Segment ACL Rules"
-                        kind: SecuritySegmentACLRule
-                        icon: "mdi:format-list-numbered"
+    #             - namespace: Security
+    #               name: NetworkSegmentSecurityMenu
+    #               label: "Network Segment Security"
+    #               icon: "mdi:shield-network"
+    #               children:
+    #                 data:
+    #                   - namespace: Security
+    #                     name: SegmentSecurityZone
+    #                     label: "Segment Security Zones"
+    #                     kind: SecuritySegmentSecurityZone
+    #                     icon: "carbon:network-3-reference"
+    #                   - namespace: Security
+    #                     name: SegmentSecurityProfile
+    #                     label: "Segment Security Profiles"
+    #                     kind: SecuritySegmentSecurityProfile
+    #                     icon: "mdi:shield-network"
+    #                   - namespace: Security
+    #                     name: SegmentAccessControlList
+    #                     label: "Segment ACLs"
+    #                     kind: SecuritySegmentAccessControlList
+    #                     icon: "mdi:format-list-checks"
+    #                   - namespace: Security
+    #                     name: SegmentACLRule
+    #                     label: "Segment ACL Rules"
+    #                     kind: SecuritySegmentACLRule
+    #                     icon: "mdi:format-list-numbered"
 
-                - namespace: Security
-                  name: WebSecurityMenu
-                  label: "Web Security"
-                  icon: "mdi:web"
-                  children:
-                    data:
-                      - namespace: Security
-                        name: URLCategory
-                        label: "URL Categories"
-                        kind: SecurityURLCategory
-                        icon: "mdi:web"
+    #             - namespace: Security
+    #               name: WebSecurityMenu
+    #               label: "Web Security"
+    #               icon: "mdi:web"
+    #               children:
+    #                 data:
+    #                   - namespace: Security
+    #                     name: URLCategory
+    #                     label: "URL Categories"
+    #                     kind: SecurityURLCategory
+    #                     icon: "mdi:web"
 
-          # --------- Cloud Security Management ---------
-          - namespace: Security
-            name: CloudSecurityManagementMenu
-            label: "Cloud Security"
-            icon: "mdi:cloud-lock"
-            children:
-              data:
-                - namespace: Service
-                  name: CloudSecurityServices
-                  label: "Cloud Security Services"
-                  kind: ServiceCloudSecurityService
-                  icon: "mdi:cloud-lock-outline"
-                - namespace: Service
-                  name: CloudGateways
-                  label: "Cloud Gateways"
-                  kind: ServiceCloudGateway
-                  icon: "mdi:router-wireless"
-                - namespace: Service
-                  name: CloudPolicyGroups
-                  label: "Cloud Policy Groups"
-                  kind: ServiceCloudSecurityPolicyGroup
-                  icon: "mdi:shield-check-outline"
+    #       # --------- Cloud Security Management ---------
+    #       - namespace: Security
+    #         name: CloudSecurityManagementMenu
+    #         label: "Cloud Security"
+    #         icon: "mdi:cloud-lock"
+    #         children:
+    #           data:
+    #             - namespace: Service
+    #               name: CloudSecurityServices
+    #               label: "Cloud Security Services"
+    #               kind: ServiceCloudSecurityService
+    #               icon: "mdi:cloud-lock-outline"
+    #             - namespace: Service
+    #               name: CloudGateways
+    #               label: "Cloud Gateways"
+    #               kind: ServiceCloudGateway
+    #               icon: "mdi:router-wireless"
+    #             - namespace: Service
+    #               name: CloudPolicyGroups
+    #               label: "Cloud Policy Groups"
+    #               kind: ServiceCloudSecurityPolicyGroup
+    #               icon: "mdi:shield-check-outline"
 
     # ===================== DEVICE MANAGEMENT =====================
     - namespace: Dcim
