@@ -162,7 +162,7 @@ class DCTopologyCreator(TopologyCreator):
                             ),
                             identifier=f"{device.name.value}-loopback0",
                         ),
-                        "ospf_interface": await self.client.filters(
+                        "interfaces": await self.client.filters(
                             kind="DcimInterface",
                             role__values=["unnumbered", "loopback"],
                             device__name__value=device.name.value,
@@ -349,8 +349,6 @@ class DCTopologyCreator(TopologyCreator):
                     "store_key": f"OVERLAY-ASN-{topology_name}",
                 },
             )
-
-    # Remove numbered P2P interface creation - unnumbered only
 
     async def create_ebgp_underlay(self, loopback_name: str) -> None:
         """Create eBGP underlay sessions using peer groups, fetching ASNs and peer groups from self.client.store."""
