@@ -8,7 +8,7 @@ spec:
       location: Katowice
       description: Katowice Data Center
       strategy: ospf-ibgp
-      design: PHYSICAL DC SONIC S
+      design: PHYSICAL DC CISCO S WITH BORDER LEAFS
       emulation: true
       provider: Technology Partner
       management_subnet:

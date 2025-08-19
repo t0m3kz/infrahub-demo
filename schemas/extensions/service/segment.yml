@@ -12,6 +12,7 @@ nodes:
     include_in_menu: true
     inherit_from:
       - ServiceGeneric
+      - ServiceGenericInterfaces
     attributes:
       - name: name
         kind: Text
@@ -97,11 +98,10 @@ nodes:
         optional: false
         on_delete: no-action
         description: "The deployment location for customer services"
-      - name: segment_interfaces
-        peer: DcimInterface
-        label: Interface
-        cardinality: many
-        kind: Component
-        optional: true
-        on_delete: no-action
-        identifier: interface_service
+      # - name: segment_interfaces
+      #   peer: DcimInterface
+      #   label: Interface
+      #   cardinality: many
+      #   kind: Generic
+      #   optional: true
+      #   identifier: interface_services

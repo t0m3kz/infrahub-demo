@@ -42,52 +42,67 @@ generics:
       - name: owner
         peer: OrganizationGeneric
         cardinality: one
-        kind: Component
+        kind: Generic
         order_weight: 100
         optional: true
         on_delete: no-action
 
-  # - name: InterfaceGeneric
-  #   namespace: Service
-  #   description: "Services"
-  #   state: absent
-  #   include_in_menu: false
-  #   # This is only owning relationships toward various services for interfaces
-  #   relationships:
-  #     - name: network_segments
-  #       label: Segments
-  #       peer: ServiceNetworkSegment
-  #       state: absent
-  #       cardinality: many
-  #       optional: true
-  #       identifier: interface_services
+  - name: GenericDevice
+    namespace: Service
+    description: "Services"
+    # state: absent
+    include_in_menu: false
+    # This is only owning relationships toward various services for interfaces
+    relationships:
+      - name: device
+        peer: DcimGenericDevice
+        optional: false
+        cardinality: one
+        kind: Attribute
+        direction: inbound
+        identifier: device_services
+        order_weight: 1000
+
+  - name: GenericInterfaces
+    namespace: Service
+    description: "Services"
+    include_in_menu: false
+    relationships:
+      - name: interfaces
+        peer: DcimInterface
+        label: Assigned Interfaces
+        cardinality: many
+        kind: Generic
+        optional: true
+        identifier: interface_services
+
 
 extensions:
   nodes:
     - kind: DcimGenericDevice
       relationships:
-        - name: device_service # l3_gateway
+        - name: device_services # l3_gateway
           peer: ServiceGeneric
           label: Services
           optional: true
+          direction: outbound
           cardinality: many
-          kind: Component
+          kind: Generic
           # order_weight: 1400
           on_delete: no-action
-          identifier: device_service
-    # - kind: DcimInterface
-    #   relationships:
-    #     - name: services # l2_segment
-    #       peer: ServiceInterfaceGeneric
-    #       state: absent
-    #       label: Interface Services # L2 Segment(s)
-    #       identifier: interface_services
-    #       optional: true
-    #       cardinality: many
-    #       kind: Generic
-    #       # order_weight: 1400
-    #       on_delete: no-action
-    #       read_only: true
+          identifier: device_services
+    - kind: DcimInterface
+      relationships:
+        - name: interface_services # l2_segment
+          peer: ServiceGeneric
+          label: Interface Services # L2 Segment(s)
+          identifier: interface_services
+          optional: true
+          cardinality: many
+          kind: Generic
+          # order_weight: 1400
+          on_delete: no-action
+          # read_only: true
     # - kind: TopologyDeployment
     #   relationships:
     #     - name: fabric_services
@@ -98,11 +113,4 @@ extensions:
     #       kind: Component
     #       on_delete: no-action
 
-    - kind: OrganizationProvider
-      relationships:
-        - name: asns
-          label: ASNs
-          peer: RoutingAutonomousSystem
-          optional: true
-          cardinality: many
-          kind: Component
+

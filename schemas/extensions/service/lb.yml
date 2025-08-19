@@ -85,9 +85,10 @@ nodes:
         peer: DcimGenericDevice
         optional: false
         cardinality: many
-        kind: Component
-        identifier: device_service
+        kind: Generic
+        identifier: device_services
         order_weight: 1000
+        direction: inbound
       - name: backend_servers
         peer: LoadbalancerServer
         identifier: vip__backend_servers
@@ -100,6 +101,7 @@ nodes:
         cardinality: many
         kind: Generic
         description: The list of health checks associated with the VIP service.
+
 extensions:
   nodes:
     - kind: LoadbalancerServer
