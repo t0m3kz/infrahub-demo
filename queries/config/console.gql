@@ -5,15 +5,6 @@ query oob_config($device: String!) {
         name {
           value
         }
-        ... on DcimDevice{
-          asn{
-            node{
-              name{
-                value
-              }
-            }
-          }
-        }
         interfaces {
           edges {
             node {
@@ -23,33 +14,6 @@ query oob_config($device: String!) {
               }
               description{
                 value
-              } 
-              enabled{
-                value
-              }
-              ... on DcimInterfaceL3 {
-                role {
-                  value
-                }
-                description{
-                  value
-                }
-                security_zone {
-                  node {
-                    name {
-                      value
-                    }
-                  }
-                }
-                ip_addresses {
-                  edges {
-                    node {
-                      address {
-                        value
-                      }
-                    }
-                  }
-                }
               }
             }
           }
