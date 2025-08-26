@@ -1,3 +1,4 @@
+import os
 from typing import Any
 
 from infrahub_sdk.transforms import InfrahubTransform
@@ -159,8 +160,12 @@ class LoadBalancer(InfrahubTransform):
         )
 
         # Set up Jinja2 environment to load templates from the loadbalancers subfolder
+        template_path = os.path.join(
+            os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+            "templates/configs/loadbalancers",
+        )
         env = Environment(
-            loader=FileSystemLoader("templates/configs/loadbalancers"),
+            loader=FileSystemLoader(template_path),
             autoescape=select_autoescape(["j2"]),
         )
 
