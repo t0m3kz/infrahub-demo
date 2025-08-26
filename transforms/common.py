@@ -49,18 +49,17 @@ def clean_data(data: Any) -> Any:
 def get_data(data: Any) -> Any:
     """
     Extracts the relevant data from the input.
+    Returns the first value from the cleaned data dictionary.
     """
     cleaned_data = clean_data(data)
-    if cleaned_data.get("DcimGenericDevice", None) and isinstance(
-        cleaned_data["DcimGenericDevice"], list
-    ):
-        return cleaned_data["DcimGenericDevice"][0]
-    elif cleaned_data.get("virtual", None) and isinstance(
-        cleaned_data["virtual"], list
-    ):
-        return cleaned_data["virtual"][0]
+    if isinstance(cleaned_data, dict) and cleaned_data:
+        first_key = next(iter(cleaned_data))
+        first_value = cleaned_data[first_key]
+        if isinstance(first_value, list) and first_value:
+            return first_value[0]
+        return first_value
     else:
-        raise ValueError("clean_data() did not return a dictionary")
+        raise ValueError("clean_data() did not return a non-empty dictionary")
 
 
 def get_bgp_profile(device_services: list[dict[str, Any]]) -> list[dict[str, Any]]:
