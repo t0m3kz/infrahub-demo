@@ -22,22 +22,22 @@ class CheckLoadBalancer(InfrahubCheck):
         device_name = data.get("name", "Unknown")
 
         # Get device services (VIP services) from the load balancer device
-        device_services = data.get("device_service", [])
+        device_services = data.get("device_services", [])
         vip_services_count = 0
-        total_backend_servers = 0
 
         # Process each VIP service connected to this load balancer device
         for service in device_services:
             service_name = service.get("name", "Unknown Service")
             service_status = service.get("status", "unknown")
-            service_type = service.get("__typename", "Unknown")
+            service_type = service.get("typename", "Unknown")
+            backend_servers = len(service.get("backend_servers", []))
 
             if service_type == "ServiceVIP":
                 vip_services_count += 1
 
                 # Check service status
                 if service_status != "active":
-                    warnings.append(
+                    errors.append(
                         f"VIP service '{service_name}' is not active (status: {service_status})"
                     )
                     continue
@@ -45,9 +45,7 @@ class CheckLoadBalancer(InfrahubCheck):
                 # Get VIP IP from this service (single IP per service)
                 vip_ip = service.get("vip_ip")
                 if not vip_ip:
-                    warnings.append(
-                        f"VIP service '{service_name}' has no IP configured"
-                    )
+                    errors.append(f"VIP service '{service_name}' has no IP configured")
                     continue
 
                 ip_address = vip_ip.get("address", "Unknown IP")
@@ -57,22 +55,22 @@ class CheckLoadBalancer(InfrahubCheck):
                     # VIP service is properly configured with an IP
                     vip_services_count += 1
                 else:
-                    warnings.append(
+                    errors.append(
                         f"VIP service '{service_name}' has invalid IP configuration"
+                    )
+                if backend_servers == 0:
+                    errors.append(
+                        f"Load balancer '{device_name}' has {vip_services_count} VIP service(s) but no backend servers configured yet"
+                    )
+                elif backend_servers < 2:
+                    errors.append(
+                        f"Load balancer '{device_name}' has only {backend_servers} backend server - no redundancy"
                     )
 
         # Check if load balancer has any VIP services
         if vip_services_count == 0:
             errors.append(
                 f"Load balancer '{device_name}' has no VIP services configured"
-            )
-        elif total_backend_servers == 0:
-            warnings.append(
-                f"Load balancer '{device_name}' has {vip_services_count} VIP service(s) but no backend servers configured yet"
-            )
-        elif total_backend_servers < 2:
-            warnings.append(
-                f"Load balancer '{device_name}' has only {total_backend_servers} backend server - no redundancy"
             )
 
         # Display all errors and warnings
