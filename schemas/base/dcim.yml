@@ -498,12 +498,12 @@ nodes:
         kind: Number
         optional: true
         order_weight: 2200
-    #   - state: present
-    #     name: hosting_device
-    #     peer: DcimPhysicalDevice
-    #     kind: Parent
-    #     cardinality: one
-    #     optional: true
+    relationships:
+      - name: hosting_device
+        peer: DcimPhysicalDevice
+        kind: Attribute
+        cardinality: one
+        optional: true
 
   - name: PhysicalInterface
     namespace: Dcim

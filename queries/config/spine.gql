@@ -1,5 +1,5 @@
 query SpineConfig($device: String!) {
-  DcimPhysicalDevice(name__value: $device) {
+  DcimGenericDevice(name__value: $device) {
     edges {
       node {
         id
@@ -30,7 +30,6 @@ query SpineConfig($device: String!) {
                 netmiko_device_type { value }
                 napalm_driver { value }
                 ansible_network_os { value }
-                containerlab_os { value }
               }
             }
           }
@@ -41,12 +40,20 @@ query SpineConfig($device: String!) {
             ip_namespace { node { name { value } } }
           }
         }
-        device_service {
+        tags {
+          edges {
+            node { name { value } }
+          }
+        }
+
+        # Enhanced BGP Services with Peer Groups
+        device_services {
           edges {
             node {
               __typename
               name { value }
               status { value }
+
               ... on ServiceBGP {
                 session_type { value }
                 multipath { value }
@@ -56,6 +63,8 @@ query SpineConfig($device: String!) {
                 remote_ip { node { address { value } } }
                 remote_as { node { asn { value } } }
                 router_id { node { address { value } } }
+
+                # CRITICAL: BGP Peer Group Information
                 peer_group {
                   node {
                     name { value }
@@ -81,23 +90,6 @@ query SpineConfig($device: String!) {
                     ip_namespace { node { name { value } } }
                   }
                 }
-                pim_interfaces{
-                  edges{
-                    node{
-                      name {value}
-                      status {value}
-                    }
-                  }
-                }
-                pim_interface_profile {
-                  edges {
-                    node {
-                      pim_mode { value }
-                      hello_interval { value }
-                      dr_priority { value }
-                    }
-                  }
-                }
               }
               ... on ServiceOSPF {
                 process_id { value }
@@ -113,54 +105,23 @@ query SpineConfig($device: String!) {
                     description { value }
                   }
                 }
-                ospf_interface {
-                  edges {
-                    node {
-                      name { value }
-                      role { value }
-                      status { value }
-                      device { node { name { value } } }
-                    }
-                  }
-                }
-                ospf_interface_profile {
-                  node {
-                    name { value }
-                    metric { value }
-                    mode { value }
-                    authentication_mode { value }
-                  }
-                }
               }
             }
           }
         }
+
+        # Enhanced Interface Information
         interfaces {
           edges {
             node {
-              __typename
+              id
               name { value }
               description { value }
               status { value }
               role { value }
-
               ... on DcimPhysicalInterface {
                 interface_type { value }
                 mtu { value }
-                connector {
-                  node {
-                    ... on DcimPhysicalInterface {
-                      name { value }
-                      role { value }
-                      device {
-                        node {
-                          name { value }
-                          role { value }
-                        }
-                      }
-                    }
-                  }
-                }
                 ip_addresses {
                   edges {
                     node {
@@ -181,12 +142,18 @@ query SpineConfig($device: String!) {
                   }
                 }
               }
-
-              # Service associations (including OSPF areas)
-              service {
-                edges {
-                  node {
-                    __typename
+              interface_services{
+                edges{
+                  node{
+                    ... on ServiceOSPF{
+                      area { node {area {value}}}
+                      ospf_interface_profile{node{
+                        metric{value}
+                        mode{value}
+                        authentication_mode{value}
+                        authentication_key{value}
+                        }
+                      }
                     }
                   }
                 }
@@ -194,8 +161,8 @@ query SpineConfig($device: String!) {
             }
           }
         }
-
       }
     }
   }
+}
 

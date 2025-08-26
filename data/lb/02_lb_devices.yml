@@ -23,7 +23,7 @@ spec:
         data:
           address: 172.20.1.101
       topology: DC-1
-      device_service:
+      device_services:
         kind: ServiceVIP
         data:
           - hostname: web-frontend.example.com
@@ -78,7 +78,7 @@ spec:
         kind: IpamIPAddress
         data:
           address: 172.20.1.102
-      device_service:
+      device_services:
         kind: ServiceVIP
         data:
           - hostname: tcp-frontend.example.com

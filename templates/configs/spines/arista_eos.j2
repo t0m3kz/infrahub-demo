@@ -1,112 +1,94 @@
 !
 ! Arista EOS VXLAN/EVPN Spine Configuration
-! Device: {{ data.name }}
-! Generated for {{ data.device_type.manufacturer.name }} {{ data.device_type.platform.netmiko_device_type }}
+! Device: {{ hostname }}
+! Generated for Arista EOS
 !
 
-hostname {{ data.name }}
+hostname {{ hostname }}
 
 ! Configure spanning tree mode
 spanning-tree mode mstp
 
-{# Use enhanced data structures from transforms #}
-{%- set bgp_sessions = data.bgp_services or [] %}
-{%- set router_id = data.loopback0_ip %}
-{%- set local_asn = data.local_asn %}
-{%- set underlay_strategy = data.underlay_strategy %}
-{%- set is_ospf_underlay = underlay_strategy in ['ospf-ibgp'] %}
-{%- set is_ebgp_underlay = underlay_strategy in ['ebgp-ibgp', 'ebgp-only'] %}
-
 ! Configure loopback interfaces
-{%- for interface in data.interfaces %}
-  {%- if interface.typename == "DcimVirtualInterface" and "loopback" in interface.name.lower() %}
+{% for interface in interface_roles.loopback %}
 interface {{ interface.name }}
-   description {{ interface.description if interface.description else "Router ID" }}
-    {%- for ip in interface.ip_addresses %}
-   ip address {{ ip.address }}
-    {%- endfor %}
-    {%- if is_ospf_underlay and interface.name.lower() == "loopback0" %}
-   ospf area {{ data.ospf_area or "0.0.0.0" }}
-    {%- endif %}
+{% if interface.name == 'loopback0' %}
+   description Underlay Routing Loopback
+{% elif interface.name == 'loopback1' %}
+   description VTEP Loopback Interface
+{% elif interface.description %}
+   description {{ interface.description }}
+{% else %}
+   description Routing Loopback
+{% endif %}
+{% if interface.ip_address %}
+   ip address {{ interface.ip_address | replace('/24', '/32') }}
+{% endif %}
+{% if interface.name == 'loopback0' %}
+   ospf area {{ ospf.area or "0.0.0.0" }}
+{% elif interface.name != 'loopback1' %}
+{#- loopback1 is NOT in OSPF, used only for iBGP EVPN overlay -#}
+   ospf area {{ ospf.area or "0.0.0.0" }}
+{% endif %}
 
-  {%- endif %}
-{%- endfor %}
+{% endfor %}
 
-{%- if is_ospf_underlay %}
 ! Configure OSPF
-router ospf 1
-   router-id {{ router_id }}
+router ospf {{ ospf.process_id or 'Underlay' }}
+   router-id {{ ospf.router_id or loopbacks.loopback0 }}
    passive-interface default
    no passive-interface Ethernet1
    no passive-interface Ethernet2
    max-lsa 12000
 
-{%- endif %}
-
 ! Configure underlay interfaces
-{%- for interface in data.interfaces %}
-  {%- if interface.typename == "DcimPhysicalInterface" and interface.role == "ospf-unnumbered" %}
+{% for interface in interface_roles.all_downlink %}
 interface {{ interface.name }}
-   description {{ interface.description if interface.description else "Underlay connection" }}
-   mtu 9214
+{% if interface.description %}
+   description {{ interface.description }}
+{% else %}
+   description Link to Leaf
+{% endif %}
+   mtu {{ interface.mtu or 9214 }}
    no switchport
    ip unnumbered Loopback0
-      {%- if is_ospf_underlay %}
-   ospf area {{ data.ospf_area or "0.0.0.0" }}
+   ospf area {{ ospf.area or "0.0.0.0" }}
    ospf network point-to-point
-      {%- endif %}
 
-  {%- endif %}
-{%- endfor %}
+{% endfor %}
 
 ! Configure BGP
-router bgp {{ local_asn }}
-   router-id {{ router_id }}
+router bgp {{ bgp.local_as }}
+   router-id {{ bgp.router_id or loopbacks.loopback0 }}
    no bgp default ipv4-unicast
    distance bgp 20 200 200
    maximum-paths 4 ecmp 64
 
 {# BGP listen range for EVPN overlay clients #}
-   bgp listen range {{ data.fabric.evpn_overlay.address_family.ipv4.listen_range or "10.0.0.0/8" }} peer-group EVPN-OVERLAY-PEERS remote-as {{ local_asn }}
+   bgp listen range 10.0.0.0/8 peer-group EVPN-OVERLAY-PEERS remote-as {{ bgp.local_as }}
 
 {# Configure peer groups for EVPN overlay #}
-   peer-group EVPN-OVERLAY-PEERS remote-as {{ local_asn }}
+   peer-group EVPN-OVERLAY-PEERS remote-as {{ bgp.local_as }}
    peer-group EVPN-OVERLAY-PEERS update-source Loopback0
    peer-group EVPN-OVERLAY-PEERS send-community extended
    peer-group EVPN-OVERLAY-PEERS maximum-routes 0
 
 {# Configure BGP neighbors from enhanced transform data #}
-{%- for bgp_service in bgp_sessions %}
-  {%- if bgp_service.session_type == "EXTERNAL" %}
-   ! {{ bgp_service.description }}
-   neighbor {{ bgp_service.remote_ip.split('/')[0] }} remote-as {{ bgp_service.remote_as }}
-   neighbor {{ bgp_service.remote_ip.split('/')[0] }} update-source Loopback0
-   neighbor {{ bgp_service.remote_ip.split('/')[0] }} description {{ bgp_service.description }}
-   neighbor {{ bgp_service.remote_ip.split('/')[0] }} send-community
-   neighbor {{ bgp_service.remote_ip.split('/')[0] }} maximum-routes 0
-  {%- elif bgp_service.session_type == "INTERNAL" %}
-   ! {{ bgp_service.description }} (Route Reflector Client)
-   neighbor {{ bgp_service.remote_ip.split('/')[0] }} peer-group EVPN-OVERLAY-PEERS
-   neighbor {{ bgp_service.remote_ip.split('/')[0] }} description {{ bgp_service.description }}
-  {%- endif %}
-{%- endfor %}
+{% for neighbor in bgp.neighbors %}
+   ! {{ neighbor.description or 'BGP Neighbor' }} (Route Reflector Client)
+   neighbor {{ neighbor.remote_ip.split('/')[0] }} peer-group EVPN-OVERLAY-PEERS
+   neighbor {{ neighbor.remote_ip.split('/')[0] }} description {{ neighbor.description or 'BGP Neighbor' }}
+{% endfor %}
 
    address-family ipv4
       redistribute connected route-map RM-CONN-2-BGP
-{%- for bgp_service in bgp_sessions %}
-  {%- if bgp_service.session_type == "EXTERNAL" %}
-      neighbor {{ bgp_service.remote_ip.split('/')[0] }} activate
-  {%- endif %}
-{%- endfor %}
 
    address-family evpn
       peer-group EVPN-OVERLAY-PEERS activate
 {# Configure route reflector clients for EVPN overlay #}
-{%- for bgp_service in bgp_sessions %}
-  {%- if bgp_service.session_type == "INTERNAL" %}
-      neighbor {{ bgp_service.remote_ip.split('/')[0] }} route-reflector-client
-  {%- endif %}
-{%- endfor %}
+{% for neighbor in bgp.neighbors %}
+      neighbor {{ neighbor.remote_ip.split('/')[0] }} route-reflector-client
+{% endfor %}
 
 ! Configure route-maps
 route-map RM-CONN-2-BGP permit 10

@@ -2,20 +2,32 @@
   "DEVICE_METADATA": {
     "localhost": {
       "hostname": "{{ hostname }}",
-      "type": "SpineRouter",
+      "type": "LeafRouter",
       "bgp_asn": "{{ bgp.local_as }}"
     }
   },
+  "VLAN": {
+{% for vlan in vlans %}
+    "Vlan{{ vlan.vlan_id }}": {
+      "vlanid": "{{ vlan.vlan_id }}"
+    }{{ "," if not loop.last }}
+{% endfor %}
+  },
+  "VLAN_INTERFACE": {
+{% for vlan in vlans %}
+    "Vlan{{ vlan.vlan_id }}": {}{{ "," if not loop.last }}
+{% endfor %}
+  },
   "LOOPBACK_INTERFACE": {
-{% for interface in interface_roles.loopback %}
-  {% if interface.ip_address %}
-    "{{ interface.name }}|{{ interface.ip_address }}": {}{{ "," if not loop.last }}
-  {% endif %}
+{% for loopback_name, loopback_ip in loopbacks.items() %}
+    "{{ loopback_name }}|{{ loopback_ip }}/32": {}{{ "," if not loop.last }}
 {% endfor %}
   },
   "INTERFACE": {
-{% for interface in interface_roles.all_downlink %}
+{% for interface in interfaces.all_physical %}
+  {% if interface.role == 'uplink' %}
     "{{ interface.name }}": {}{{ "," if not loop.last }}
+  {% endif %}
 {% endfor %}
   },
   "BGP_NEIGHBOR": {
@@ -41,34 +53,37 @@
     }
   },
   "OSPF_INTERFACE": {
-{% for interface in interface_roles.all_downlink %}
+{% for interface in interfaces.all_physical %}
+  {% if interface.role == 'uplink' %}
     "{{ interface.name }}": {
       "area": "{{ ospf.area or '0.0.0.0' }}",
       "network": "point-to-point"
-    }{{ "," if not loop.last }}
-{% endfor %}
-{% if interface_roles.all_downlink and interface_roles.loopback %},{% endif %}
-{% for interface in interface_roles.loopback %}
-  {% if interface.name == 'loopback0' %}
-    "{{ interface.name }}": {
-      "area": "{{ ospf.area or '0.0.0.0' }}"
-    }{{ "," if not loop.last }}
+    }{{ "," if not (loop.last and not loopbacks.loopback0) }}
   {% endif %}
 {% endfor %}
-  },
-  "BGP_PEER_GROUP": {
-    "UNDERLAY": {
-      "asn": "{{ bgp.local_as }}"
-    },
-    "EVPN_OVERLAY": {
-      "asn": "{{ bgp.local_as }}"
+{% if loopbacks.loopback0 %}
+    "loopback0": {
+      "area": "{{ ospf.area or '0.0.0.0' }}"
     }
+{% endif %}
+  },
+  "VXLAN_TUNNEL": {
+    "vtep1": {
+      "src_ip": "{{ loopbacks.loopback1 or loopbacks.loopback0 }}"
+    }
+  },
+  "VXLAN_TUNNEL_MAP": {
+{% for vlan in vlans %}
+    "vtep1|map_{{ vlan.vni }}_Vlan{{ vlan.vlan_id }}": {
+      "vlan": "Vlan{{ vlan.vlan_id }}",
+      "vni": "{{ vlan.vni }}"
+    }{{ "," if not loop.last }}
+{% endfor %}
   },
   "BGP_NEIGHBOR_AF": {
 {% for neighbor in bgp.neighbors %}
     "{{ neighbor.remote_ip.split('/')[0] }}|l2vpn_evpn": {
-      "admin_status": "up",
-      "route_reflector_client": "true"
+      "admin_status": "up"
     }{{ "," if not loop.last }}
 {% endfor %}
   }

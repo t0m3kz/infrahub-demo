@@ -9,6 +9,8 @@ nodes:
     label: Network Segment
     icon: "carbon:network-3"
     menu_placement: ServiceDeviceGeneric
+    uniqueness_constraints:
+      - [deployment, owner, environment__value, customer_name__value]
     include_in_menu: true
     inherit_from:
       - ServiceGeneric
@@ -98,10 +100,9 @@ nodes:
         optional: false
         on_delete: no-action
         description: "The deployment location for customer services"
-      # - name: segment_interfaces
-      #   peer: DcimInterface
-      #   label: Interface
-      #   cardinality: many
-      #   kind: Generic
-      #   optional: true
-      #   identifier: interface_services
+      - name: prefix
+        peer: IpamPrefix
+        label: Prefix
+        cardinality: one
+        kind: Generic
+        optional: true

@@ -4,10 +4,8 @@ feature bgp
 feature pim
 feature nv overlay
 feature scp-server
-feature openconfig
-feature grpc
 
-vlan 1
+hostname {{ hostname }}
 
 vrf context management
 
@@ -29,7 +27,6 @@ interface {{ interface.name }}
   no shutdown
 
 {% endfor %}
-
 
 interface mgmt0
   vrf member management

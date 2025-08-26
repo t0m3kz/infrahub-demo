@@ -66,14 +66,11 @@ query loadbalancer_config($device: String!) {
             }
           }
         }
-        device_service {
+        device_services {
           edges {
             node {
               __typename
               name {
-                value
-              }
-              description {
                 value
               }
               status {
