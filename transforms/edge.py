@@ -1,3 +1,4 @@
+import os
 from typing import Any
 
 from infrahub_sdk.transforms import InfrahubTransform
@@ -17,8 +18,12 @@ class Edge(InfrahubTransform):
         platform = data["device_type"]["platform"]["netmiko_device_type"]
 
         # Set up Jinja2 environment to load templates from the role subfolder
+        template_path = os.path.join(
+            os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+            "templates/configs/leafs",
+        )
         env = Environment(
-            loader=FileSystemLoader("templates/configs/leafs"),
+            loader=FileSystemLoader(template_path),
             autoescape=select_autoescape(["j2"]),
         )
         env.filters.update(jinja2_convenience_function())
