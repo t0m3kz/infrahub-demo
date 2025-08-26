@@ -1,5 +1,5 @@
 query loadbalancer_validation($device: String!) {
-  virtual: DcimVirtualDevice(name__value: $device) {
+  DcimVirtualDevice(name__value: $device) {
     edges {
       node {
         name {
@@ -28,96 +28,6 @@ query loadbalancer_validation($device: String!) {
         }
         status {
           value
-        }
-        device_service {
-          edges {
-            node {
-              __typename
-              name {
-                value
-              }
-              status {
-                value
-              }
-              ... on ServiceVIP {
-                vip_ip {
-                  node {
-                    address {
-                      value
-                    }
-                  }
-                }
-              }
-                    frontend_servers {
-                      edges {
-                        node {
-                          name {
-                            value
-                          }
-                            ... on DcimPhysicalDevice {
-                              interfaces {
-                                edges {
-                                  node {
-                                    name {
-                                      value
-                                    }
-                                    ... on DcimPhysicalInterface {
-                                      ip_addresses {
-                                        edges {
-                                          node {
-                                            address {
-                                              value
-                                            }
-                                          }
-                                        }
-                                      }
-                                    }
-                                    ... on DcimVirtualInterface {
-                                      ip_addresses {
-                                        edges {
-                                          node {
-                                            address {
-                                              value
-                                            }
-                                          }
-                                        }
-                                      }
-                                    }
-                                  }
-                                }
-                              }
-                            }
-                            ... on DcimVirtualDevice {
-                              interfaces {
-                                edges {
-                                  node {
-                                    name {
-                                      value
-                                    }
-                                    ... on DcimVirtualInterface {
-                                      ip_addresses {
-                                        edges {
-                                          node {
-                                            address {
-                                              value
-                                            }
-                                          }
-                                        }
-                                      }
-                                    }
-                                  }
-                                }
-                              }
-                            }
-                          }
-                        }
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          }
         }
         interfaces {
           edges {
@@ -156,118 +66,70 @@ query loadbalancer_validation($device: String!) {
             }
           }
         }
-      }
-    }
-  }
-  vips: LoadbalancerVIP {
-    edges {
-      node {
-        hostname {
-          value
-        }
-        mode {
-          value
-        }
-        status {
-          value
-        }
-        balance {
-          value
-        }
-        frontend_servers {
+        device_services {
           edges {
             node {
+              __typename
               name {
                 value
               }
-              ... on DcimPhysicalDevice {
-                interfaces {
-                  edges {
-                    node {
-                      name {
-                        value
-                      }
-                      ... on DcimPhysicalInterface {
-                        ip_addresses {
-                          edges {
-                            node {
-                              address {
-                                value
-                              }
-                            }
-                          }
-                        }
-                      }
-                      ... on DcimVirtualInterface {
-                        ip_addresses {
-                          edges {
-                            node {
-                              address {
-                                value
-                              }
-                            }
-                          }
-                        }
-                      }
-                    }
-                  }
-                }
-              }
-              ... on DcimVirtualDevice {
-                interfaces {
-                  edges {
-                    node {
-                      name {
-                        value
-                      }
-                      ... on DcimVirtualInterface {
-                        ip_addresses {
-                          edges {
-                            node {
-                              address {
-                                value
-                              }
-                            }
-                          }
-                        }
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-    }
-  }
-  servers: LoadbalancerServer {
-    edges {
-      node {
-        hostname {
-          value
-        }
-        environment {
-          value
-        }
-        description {
-          value
-        }
-        status {
-          value
-        }
-        ip_address {
-          node {
-            address {
-              value
-            }
-          }
-        }
-        virtual_ips {
-          edges {
-            node {
-              hostname {
+              status {
                 value
+              }
+              ... on ServiceVIP {
+                hostname {
+                  value
+                }
+                mode {
+                  value
+                }
+                balance {
+                  value
+                }
+                ssl_certificate {
+                  value
+                }
+                vip_ip {
+                  node {
+                    address {
+                      value
+                    }
+                  }
+                }
+                backend_servers{
+                  edges{
+                    node{
+                      hostname{
+                        value
+                      }
+                      ip_address{
+                        node{
+                          address{
+                            value
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+                health_checks{
+                  edges{
+                    node{
+                      timeout{
+                        value
+                      }
+                      check{
+                        value
+                      }
+                      rise{
+                        value
+                      }
+                      fall{
+                        value
+                      }
+                    }
+                  }
+                }
               }
             }
           }
