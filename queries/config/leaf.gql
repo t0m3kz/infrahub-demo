@@ -1,4 +1,4 @@
-query LeafConfig($device: String!) {
+query leaf_config($device: String!) {
   DcimGenericDevice(name__value: $device) {
     edges {
       node {

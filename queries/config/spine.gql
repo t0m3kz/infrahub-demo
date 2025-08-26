@@ -1,4 +1,4 @@
-query SpineConfig($device: String!) {
+query spine_config($device: String!) {
   DcimGenericDevice(name__value: $device) {
     edges {
       node {
