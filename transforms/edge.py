@@ -1,4 +1,3 @@
-import os
 from typing import Any
 
 from infrahub_sdk.transforms import InfrahubTransform
