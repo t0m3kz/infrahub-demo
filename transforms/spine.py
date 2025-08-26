@@ -124,10 +124,7 @@ class Spine(InfrahubTransform):
         platform = data["device_type"]["platform"]["netmiko_device_type"]
 
         # Set up Jinja2 environment to load templates from the role subfolder
-        template_path = os.path.join(
-            os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-            "templates/configs/spines",
-        )
+        template_path = f"{self.root_directory}/templates/configs/spines"
         env = Environment(
             loader=FileSystemLoader(template_path),
             autoescape=select_autoescape(["j2"]),
