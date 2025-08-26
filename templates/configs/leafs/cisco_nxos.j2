@@ -1,194 +1,111 @@
-!
-! Cisco NX-OS VXLAN/EVPN Leaf Configuration with Security
-! Device: {{ data.name }}
-! Generated for {{ data.device_type.manufacturer.name }} {{ data.device_type.platform.netmiko_device_type }}
-!
-
-hostname {{ data.name }}
-
-! Enable required features
+{#- Cisco NX-OS Leaf VXLAN Configuration Template -#}
+{#- Enable required features -#}
+nv overlay evpn
 feature ospf
 feature bgp
-feature pim
 feature interface-vlan
 feature vn-segment-vlan-based
 feature nv overlay
-feature dhcp
-nv overlay evpn
 
-{# Use enhanced data structures from transforms #}
-{%- set bgp_sessions = data.bgp_services or [] %}
-{%- set router_id = data.loopback0_ip %}
-{%- set local_asn = data.local_asn %}
-{%- set vtep_source_ip = data.vtep_source_ip %}
-{%- set underlay_strategy = data.underlay_strategy %}
-{%- set is_ospf_underlay = underlay_strategy in ['ospf-ibgp'] %}
-{%- set is_ebgp_underlay = underlay_strategy in ['ebgp-ibgp', 'ebgp-only'] %}
+hostname {{ hostname }}
 
-! Configure VRFs for tenant traffic
-{%- for vrf_name, vrf in data.vrfs.items() %}
-vrf context {{ vrf_name }}
-  vni {{ vrf.l3vni }}
-  rd {{ vrf.rd }}
-  address-family ipv4 unicast
-    route-target import evpn {{ vrf.rt_import[0] }}
-    route-target export evpn {{ vrf.rt_export[0] }}
+{#- VLAN Configuration with VN-Segments -#}
+{% for vlan in vlans %}
+vlan {{ vlan.vlan_id }}
+  vn-segment {{ vlan.vni }}
+{% endfor %}
 
-{%- endfor %}
+{#- Loopback Interfaces -#}
+{% for loopback_name, loopback_ip in loopbacks.items() %}
+interface {{ loopback_name }}
+{% if loopback_name == 'loopback0' %}
+  description {{ hostname }} Underlay Loopback Interface
+  ip address {{ loopback_ip }}/32
+  ip router ospf {{ ospf.process_id }} area {{ ospf.area }}
+{% elif loopback_name == 'loopback1' %}
+  description {{ hostname }} VTEP Loopback Interface
+  ip address {{ loopback_ip }}/32
+{#- loopback1 is NOT in OSPF, used only for iBGP EVPN overlay -#}
+{% else %}
+  description {{ hostname }} {{ loopback_name }} Interface
+  ip address {{ loopback_ip }}/32
+  ip router ospf {{ ospf.process_id }} area {{ ospf.area }}
+{% endif %}
+{% endfor %}
 
-! Configure loopback interfaces
-{%- for interface in data.interfaces %}
-  {%- if interface.typename == "DcimVirtualInterface" and "loopback" in interface.name.lower() %}
-interface {{ interface.name }}
-  description {{ interface.description if interface.description else "Router ID / VTEP IP" }}
-    {%- for ip in interface.ip_addresses %}
-  ip address {{ ip.address }}
-    {%- endfor %}
-    {%- if is_ospf_underlay and interface.name.lower() == "loopback0" %}
-  ip router ospf 1 area {{ data.ospf_area or "0.0.0.0" }}
-    {%- endif %}
-  ip pim sparse-mode
-
-  {%- endif %}
-{%- endfor %}
-
-{%- if is_ospf_underlay %}
-! Configure OSPF
-router ospf 1
-  router-id {{ router_id }}
-
-{%- endif %}
-
-! Configure underlay interfaces
-{%- for interface in data.interfaces %}
-  {%- if interface.typename == "DcimPhysicalInterface" and interface.role == "ospf-unnumbered" %}
-interface {{ interface.name }}
-  description {{ interface.description if interface.description else "Underlay connection" }}
-  no shutdown
-  mtu 9216
-  medium p2p
-  ip unnumbered loopback0
-      {%- if is_ospf_underlay %}
-  ip router ospf 1 area {{ data.ospf_area or "0.0.0.0" }}
-      {%- endif %}
-  ip pim sparse-mode
-
-  {%- endif %}
-{%- endfor %}
-
-! Configure BGP
-router bgp {{ local_asn }}
-  router-id {{ router_id }}
-  bestpath as-path multipath-relax
-  reconnect-interval 12
-  address-family ipv4 unicast
-    redistribute direct route-map rm-connected
-    maximum-paths 64
-  address-family l2vpn evpn
-    nexthop route-map rm-nexthop-unchanged
-    retain route-target all
-
-{# Configure BGP neighbors from enhanced transform data #}
-{%- for bgp_service in bgp_sessions %}
-  {%- if bgp_service.session_type == "EXTERNAL" %}
-  ! {{ bgp_service.description }}
-  neighbor {{ bgp_service.remote_ip.split('/')[0] }}
-    remote-as {{ bgp_service.remote_as }}
-    update-source loopback0
-    description {{ bgp_service.description }}
-    address-family ipv4 unicast
-  {%- elif bgp_service.session_type == "INTERNAL" %}
-  ! {{ bgp_service.description }}
-  neighbor {{ bgp_service.remote_ip.split('/')[0] }}
-    remote-as {{ bgp_service.remote_as }}
-    update-source loopback0
-    description {{ bgp_service.description }}
-    address-family l2vpn evpn
-      send-community extended
-  {%- endif %}
-{%- endfor %}
-
-! Configure route-maps
-route-map rm-connected permit 10
-  match interface loopback0
-route-map rm-connected permit 20
-  match interface loopback1
-
-route-map rm-nexthop-unchanged permit 10
-  set ip next-hop unchanged
-
-! Configure PIM
-ip pim rp-address {{ data.dynamic_config.pim_rp_address | default("10.254.254.254") }} group-list 224.0.0.0/4
-ip pim ssm range 232.0.0.0/8
-
-{# Use fabric segments from enhanced transform #}
-{%- set vlan_services = data.fabric.vxlan_service.segments or [] %}
-
-{%- if vlan_services %}
-! Configure VLANs and VNIs
-{%- for segment in vlan_services %}
-vlan {{ segment.vlan_id }}
-  name {{ segment.name }}
-  vn-segment {{ segment.vni }}
-
-interface vlan{{ segment.vlan_id }}
-  description {{ segment.name }} Gateway
-  no shutdown
-  {%- set segment_vrf = None %}
-  {%- for vrf_name, vrf in data.vrfs.items() %}
-    {%- if segment.customer.name == vrf.customer %}
-      {%- set segment_vrf = vrf %}
-    {%- endif %}
-  {%- endfor %}
-  vrf member {{ segment_vrf.name if segment_vrf else segment.customer.name + '_VRF' }}
-  no ip redirects
-  ip address 192.168.{{ loop.index }}.1/24
-  fabric forwarding mode anycast-gateway
-
-{%- endfor %}
-
-! Configure L3VNI VLANs and SVIs
-{%- for vrf_name, vrf in data.vrfs.items() %}
-vlan {{ vrf.l3vni }}
-  name {{ vrf_name }}_L3VNI
-  vn-segment {{ vrf.l3vni }}
-
-interface vlan{{ vrf.l3vni }}
-  description {{ vrf_name }} L3VNI
-  no shutdown
-  vrf member {{ vrf_name }}
-  no ip redirects
-  ip forward
-
-{%- endfor %}
-
-! Configure NVE interface for VXLAN
+{#- NVE Interface for VXLAN VTEP (using loopback1) -#}
+{% if loopbacks.loopback1 %}
 interface nve1
+  description VXLAN VTEP Interface
   no shutdown
   host-reachability protocol bgp
   source-interface loopback1
-{%- for segment in vlan_services %}
-  member vni {{ segment.vni }}
+{% for vlan in vlans %}
+  member vni {{ vlan.vni }}
     ingress-replication protocol bgp
-{%- endfor %}
-{%- for vrf_name, vrf in data.vrfs.items() %}
-  member vni {{ vrf.l3vni }} associate-vrf
-{%- endfor %}
+{% endfor %}
+{% endif %}
 
-! Configure EVPN
-evpn
-{%- for segment in vlan_services %}
-  vni {{ segment.vni }} l2
-    rd auto
-    route-target import auto
-    route-target export auto
-{%- endfor %}
+{#- All Physical Interfaces (sorted) -#}
+{% for interface in interfaces.all_physical %}
+interface {{ interface.name }}
+{% if interface.description %}
+  description {{ interface.description }}
+{% elif interface.role == 'uplink' %}
+  description Uplink interface
+{% elif interface.role == 'customer' %}
+  description Customer interface
+{% else %}
+  description {{ interface.role|title }} interface
+{% endif %}
+{% if interface.role == 'uplink' %}
+  no switchport
+  mtu {{ interface.mtu }}
+  ip unnumbered loopback0
+  ip ospf network point-to-point
+  ip router ospf {{ ospf.process_id }} area {{ ospf.area }}
+  no shutdown
+{% elif interface.vlans %}
+{% if interface.vlans|length == 1 %}
+  switchport access vlan {{ interface.vlans[0] }}
+{% else %}
+  switchport trunk allowed vlan {{ interface.vlans|join(',') }}
+{% endif %}
+{% endif %}
+{% endfor %}
 
-{%- if vlan_services | length > 0 %}
+{#- Management Interfaces -#}
+{% for interface in interfaces.management %}
+interface {{ interface.name }}
+{% if interface.description %}
+  description {{ interface.description }}
+{% else %}
+  description Management interface
+{% endif %}
+  vrf member management
+{% endfor %}
 
-! Configure anycast gateway MAC
-fabric forwarding anycast-gateway-mac 0000.1111.2222
+{#- Console Interfaces -#}
+{% for interface in interfaces.console %}
+interface {{ interface.name }}
+{% if interface.description %}
+  description {{ interface.description }}
+{% else %}
+  description Console interface
+{% endif %}
+{% endfor %}
 
-{%- endif %}
+{#- OSPF Configuration -#}
+router ospf {{ ospf.process_id }}
+  router-id {{ ospf.router_id }}
 
-! End of configuration
+router bgp {{ bgp.local_as }}
+  router-id {{ bgp.router_id }}
+{% for neighbor in bgp.neighbors %}
+  neighbor {{ neighbor.remote_ip.split('/')[0] }}
+    remote-as {{ neighbor.remote_as }}
+    update-source loopback0
+    address-family l2vpn evpn
+      send-community
+      send-community extended
+{% endfor %}

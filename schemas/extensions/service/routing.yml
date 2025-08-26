@@ -46,7 +46,7 @@ nodes:
     inherit_from:
       - ServiceGeneric
       - ServiceGenericDevice
-      - ServiceGenericInterfaces
+      - ServiceGenericHInterfaces
       - ServiceRouting
     attributes:
       - name: process_id
@@ -123,7 +123,6 @@ nodes:
       #   identifier: device_services
       #   order_weight: 1000
 
-
   - name: BGP
     namespace: Service
     description: "BGP routing service that can be attached to devices"
@@ -134,6 +133,7 @@ nodes:
     inherit_from:
       - ServiceGeneric
       - ServiceGenericDevice
+      - ServiceGenericHInterfaces
       - ServiceRouting
     human_friendly_id:
       - "name__value"
@@ -223,7 +223,7 @@ nodes:
     inherit_from:
       - ServiceGeneric
       - ServiceGenericDevice
-      - ServiceGenericInterfaces
+      - ServiceGenericHInterfaces
       - ServiceRouting
     attributes:
       - name: dr_priority
@@ -266,22 +266,6 @@ nodes:
         cardinality: many
         kind: Generic
         order_weight: 1500
-      # - name: pim_interfaces
-      #   peer: DcimInterface
-      #   label: Interface
-      #   cardinality: many
-      #   kind: Component
-      #   optional: true
-      #   on_delete: no-action
-      #   identifier: interface_services
-      # - name: device
-      #   peer: DcimGenericDevice
-      #   optional: false
-      #   cardinality: one
-      #   kind: Attribute
-      #   direction: inbound
-      #   identifier: device_services
-      #   order_weight: 1000
 
 extensions:
   nodes:
@@ -289,7 +273,7 @@ extensions:
       relationships:
         - name: ospf_services
           label: OSPF Services
-          kind: Component
+          kind: Generic
           cardinality: many
           optional: true
           peer: ServiceOSPF
@@ -298,7 +282,7 @@ extensions:
       relationships:
         - name: pim_services
           label: PIM Services
-          kind: Component
+          kind: Generic
           cardinality: many
           optional: true
           peer: ServicePIM

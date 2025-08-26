@@ -1,0 +1,90 @@
+{
+  "DEVICE_METADATA": {
+    "localhost": {
+      "hostname": "{{ hostname }}",
+      "type": "LeafRouter",
+      "bgp_asn": "{{ bgp.local_as }}"
+    }
+  },
+  "VLAN": {
+{% for vlan in vlans %}
+    "Vlan{{ vlan.vlan_id }}": {
+      "vlanid": "{{ vlan.vlan_id }}"
+    }{{ "," if not loop.last }}
+{% endfor %}
+  },
+  "VLAN_INTERFACE": {
+{% for vlan in vlans %}
+    "Vlan{{ vlan.vlan_id }}": {}{{ "," if not loop.last }}
+{% endfor %}
+  },
+  "LOOPBACK_INTERFACE": {
+{% for loopback_name, loopback_ip in loopbacks.items() %}
+    "{{ loopback_name }}|{{ loopback_ip }}/32": {}{{ "," if not loop.last }}
+{% endfor %}
+  },
+  "INTERFACE": {
+{% for interface in interfaces.all_physical %}
+  {% if interface.role == 'uplink' %}
+    "{{ interface.name }}": {}{{ "," if not loop.last }}
+  {% endif %}
+{% endfor %}
+  },
+  "BGP_NEIGHBOR": {
+{% for neighbor in bgp.neighbors %}
+    "{{ neighbor.remote_ip.split('/')[0] }}": {
+      "local_addr": "{{ bgp.router_id or loopbacks.loopback0 }}",
+      "asn": "{{ neighbor.remote_as }}",
+      "holdtime": "10",
+      "keepalive": "3",
+      "name": "{{ neighbor.description or 'BGP Neighbor' }}"
+    }{{ "," if not loop.last }}
+{% endfor %}
+  },
+  "BGP_GLOBALS": {
+    "default": {
+      "router_id": "{{ bgp.router_id or loopbacks.loopback0 }}",
+      "local_asn": "{{ bgp.local_as }}"
+    }
+  },
+  "OSPF_ROUTER": {
+    "default": {
+      "router_id": "{{ ospf.router_id or loopbacks.loopback0 }}"
+    }
+  },
+  "OSPF_INTERFACE": {
+{% for interface in interfaces.all_physical %}
+  {% if interface.role == 'uplink' %}
+    "{{ interface.name }}": {
+      "area": "{{ ospf.area or '0.0.0.0' }}",
+      "network": "point-to-point"
+    }{{ "," if not (loop.last and not loopbacks.loopback0) }}
+  {% endif %}
+{% endfor %}
+{% if loopbacks.loopback0 %}
+    "loopback0": {
+      "area": "{{ ospf.area or '0.0.0.0' }}"
+    }
+{% endif %}
+  },
+  "VXLAN_TUNNEL": {
+    "vtep1": {
+      "src_ip": "{{ loopbacks.loopback1 or loopbacks.loopback0 }}"
+    }
+  },
+  "VXLAN_TUNNEL_MAP": {
+{% for vlan in vlans %}
+    "vtep1|map_{{ vlan.vni }}_Vlan{{ vlan.vlan_id }}": {
+      "vlan": "Vlan{{ vlan.vlan_id }}",
+      "vni": "{{ vlan.vni }}"
+    }{{ "," if not loop.last }}
+{% endfor %}
+  },
+  "BGP_NEIGHBOR_AF": {
+{% for neighbor in bgp.neighbors %}
+    "{{ neighbor.remote_ip.split('/')[0] }}|l2vpn_evpn": {
+      "admin_status": "up"
+    }{{ "," if not loop.last }}
+{% endfor %}
+  }
+}

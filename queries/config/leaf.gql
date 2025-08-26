@@ -47,7 +47,7 @@ query LeafConfig($device: String!) {
         }
 
         # Enhanced BGP Services with Peer Groups
-        device_service {
+        device_services {
           edges {
             node {
               __typename
@@ -90,23 +90,6 @@ query LeafConfig($device: String!) {
                     ip_namespace { node { name { value } } }
                   }
                 }
-                pim_interfaces{
-                  edges{
-                    node{
-                      name {value}
-                      status {value}
-                    }
-                  }
-                }
-                pim_interface_profile {
-                  edges {
-                    node {
-                      pim_mode { value }
-                      hello_interval { value }
-                      dr_priority { value }
-                    }
-                  }
-                }
               }
               ... on ServiceOSPF {
                 process_id { value }
@@ -120,25 +103,6 @@ query LeafConfig($device: String!) {
                     name { value }
                     area_type { value }
                     description { value }
-                  }
-                }
-                # Enhanced OSPF Interface Details
-                ospf_interface {
-                  edges {
-                    node {
-                      name { value }
-                      role { value }
-                      status { value }
-                      device { node { name { value } } }
-                    }
-                  }
-                }
-                ospf_interface_profile {
-                  node {
-                    name { value }
-                    metric { value }
-                    mode { value }
-                    authentication_mode { value }
                   }
                 }
               }
@@ -155,18 +119,9 @@ query LeafConfig($device: String!) {
               description { value }
               status { value }
               role { value }
-
               ... on DcimPhysicalInterface {
                 interface_type { value }
                 mtu { value }
-                connector {
-                  node {
-                    ... on DcimPhysicalInterface {
-                      name { value }
-                      device { node { name { value } } }
-                    }
-                  }
-                }
                 ip_addresses {
                   edges {
                     node {
@@ -187,12 +142,24 @@ query LeafConfig($device: String!) {
                   }
                 }
               }
-
-              # Network Segment Services (VXLAN/EVPN)
-              service {
-                edges {
-                  node {
+              interface_services{
+                edges{
+                  node{
                     __typename
+                    ... on ServiceOSPF{
+                      area { node {area {value}}}
+                      ospf_interface_profile{node{
+                        metric{value}
+                        mode{value}
+                        authentication_mode{value}
+                        authentication_key{value}
+                        }
+                      }
+
+                    }
+                    ... on ServiceNetworkSegment{
+                      vlan_id{value}
+                      name {value}
                     }
                   }
                 }
@@ -203,4 +170,4 @@ query LeafConfig($device: String!) {
       }
     }
   }
-
+}

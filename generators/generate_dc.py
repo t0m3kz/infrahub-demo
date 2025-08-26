@@ -1,7 +1,7 @@
 """Infrastructure generator."""
 
 from infrahub_sdk.generator import InfrahubGenerator
-from infrahub_sdk.protocols import CoreIPAddressPool, CoreNumberPool
+from infrahub_sdk.protocols import CoreNumberPool
 from netutils.interface import sort_interface_list
 
 from .common import TopologyCreator, clean_data
@@ -85,7 +85,7 @@ class DCTopologyCreator(TopologyCreator):
             for leaf, leaf_interfaces in border_leafs.items()
         )
 
-        # Always use ospf-unnumbered interface role
+        # Always use unnumbered interface role for both OSPF and eBGP
         interface_role = "unnumbered"
         # Assign roles and connectors
         for connection in connections:
@@ -135,6 +135,7 @@ class DCTopologyCreator(TopologyCreator):
                     "description": f"{topology_name} OSPF UNDERLAY service",
                     "area": 0,
                     "status": "active",
+                    "owner": self.data.get("provider"),
                 },
                 "store_key": f"UNDERLAY-{topology_name}",
             },
@@ -148,6 +149,7 @@ class DCTopologyCreator(TopologyCreator):
                 {
                     "payload": {
                         "name": f"{device.name.value.upper()}-UNDERLAY",
+                        "owner": self.data.get("provider"),
                         # "description": f"{device.name.value} OSPF UNDERLAY",
                         "area": self.client.store.get(
                             kind="RoutingOSPFArea",
@@ -156,12 +158,12 @@ class DCTopologyCreator(TopologyCreator):
                         "version": "ospfv3",
                         "device": device.id,
                         "status": "active",
-                        "router_id": await self.client.allocate_next_ip_address(
-                            resource_pool=self.client.store.get(
-                                key="loopback_ip_pool", kind=CoreIPAddressPool
-                            ),
-                            identifier=f"{device.name.value}-loopback0",
-                        ),
+                        "router_id": self.client.store.get(
+                            key=f"{device.name.value}-loopback0",
+                            kind=DcimVirtualInterface,
+                        )
+                        .ip_addresses[0]
+                        .id,
                         "interfaces": await self.client.filters(
                             kind="DcimInterface",
                             role__values=["unnumbered", "loopback"],
@@ -351,18 +353,15 @@ class DCTopologyCreator(TopologyCreator):
             )
 
     async def create_ebgp_underlay(self, loopback_name: str) -> None:
-        """Create eBGP underlay sessions using peer groups, fetching ASNs and peer groups from self.client.store."""
+        """Create eBGP underlay sessions using interface-based peering (unidirectional from spine perspective)."""
         topology_name = self.data.get("name")
         self.log.info(
-            f"Creating eBGP UNDERLAY for {topology_name} (unnumbered interfaces with peer groups)"
+            f"Creating eBGP UNDERLAY for {topology_name} (interface-based peering, unidirectional)"
         )
 
         # Get peer groups
         server_pg = self.client.store.get(
             kind="RoutingBGPPeerGroup", key=f"SPINE-TO-LEAF-UNDERLAY-PG-{topology_name}"
-        )
-        client_pg = self.client.store.get(
-            kind="RoutingBGPPeerGroup", key=f"LEAF-TO-SPINE-UNDERLAY-PG-{topology_name}"
         )
 
         # Get all ASNs for spines and leaves
@@ -381,10 +380,10 @@ class DCTopologyCreator(TopologyCreator):
             device for device in self.devices if device.role.value == "spine"
         ]
 
-        # Create BGP sessions batch
+        # Create BGP sessions batch - ONLY spine-to-leaf sessions (unidirectional)
         batch = await self.client.create_batch()
 
-        # Create spine-to-leaf sessions (spine is local, leaf is remote)
+        # Create spine-to-leaf sessions only (BGP will handle bidirectional communication)
         for spine_device in spine_devices:
             for leaf_device in leaf_devices:
                 leaf_asn_obj = self.client.store.get(
@@ -392,30 +391,40 @@ class DCTopologyCreator(TopologyCreator):
                     key=f"LEAF-ASN-{leaf_device.name.value}",
                 )
                 leaf_asn = leaf_asn_obj.id if leaf_asn_obj else None
-                session_name = f"{spine_device.name.value}-{leaf_device.name.value}-UNDERLAY".upper()
+                session_name = (
+                    f"{spine_device.name.value}-{leaf_device.name.value}".upper()
+                )
+
                 spine_bgp_data = {
                     "name": session_name,
+                    "owner": self.data.get("provider"),
                     "device": spine_device.id,
                     "local_as": spine_asn,
                     "remote_as": leaf_asn,
                     "router_id": self.client.store.get(
-                        key=f"{spine_device.name.value}-{loopback_name}",
+                        key=f"{spine_device.name.value}-loopback0",
                         kind=DcimVirtualInterface,
                     )
                     .ip_addresses[0]
                     .id,
                     "local_ip": self.client.store.get(
-                        key=f"{spine_device.name.value}-{loopback_name}",
+                        key=f"{spine_device.name.value}-loopback0",
                         kind=DcimVirtualInterface,
                     )
                     .ip_addresses[0]
                     .id,
                     "remote_ip": self.client.store.get(
-                        key=f"{leaf_device.name.value}-{loopback_name}",
+                        key=f"{leaf_device.name.value}-loopback0",
                         kind=DcimVirtualInterface,
                     )
                     .ip_addresses[0]
                     .id,
+                    # Associate with unnumbered interfaces like OSPF does
+                    "interfaces": await self.client.filters(
+                        kind="DcimInterface",
+                        role__values=["unnumbered"],
+                        device__name__value=spine_device.name.value,
+                    ),
                     "session_type": "EXTERNAL",
                     "status": "active",
                 }
@@ -423,71 +432,76 @@ class DCTopologyCreator(TopologyCreator):
                     spine_bgp_data["peer_group"] = server_pg.id
                 else:
                     spine_bgp_data["role"] = "peering"
+
                 spine_bgp = await self.client.create(
                     kind="ServiceBGP", data=spine_bgp_data
                 )
                 batch.add(task=spine_bgp.save, allow_upsert=True, node=spine_bgp)
-                # Assign BGP session to device (if device has a sessions or bgp_sessions field)
-                if hasattr(spine_device, "bgp_sessions"):
-                    if getattr(spine_device, "bgp_sessions", None) is None:
-                        spine_device.bgp_sessions = []
-                    spine_device.bgp_sessions.append(spine_bgp)
-                # If a different field or method is required, add logic here
 
-        # Create leaf-to-spine sessions (leaf is local, spine is remote)
+        # Create leaf BGP sessions (one session per leaf-spine pair on leaf)
         for leaf_device in leaf_devices:
             leaf_asn_obj = self.client.store.get(
                 kind="RoutingAutonomousSystem", key=f"LEAF-ASN-{leaf_device.name.value}"
             )
             leaf_asn = leaf_asn_obj.id if leaf_asn_obj else None
             for spine_device in spine_devices:
-                session_name = f"{leaf_device.name.value}-{spine_device.name.value}-UNDERLAY".upper()
-                # Spine ASN already fetched
+                session_name = (
+                    f"{leaf_device.name.value}-{spine_device.name.value}".upper()
+                )
+
                 leaf_bgp_data = {
                     "name": session_name,
+                    "owner": self.data.get("provider"),
                     "device": leaf_device.id,
                     "local_as": leaf_asn,
                     "remote_as": spine_asn,
                     "router_id": self.client.store.get(
-                        key=f"{leaf_device.name.value}-{loopback_name}",
+                        key=f"{leaf_device.name.value}-loopback0",
                         kind=DcimVirtualInterface,
                     )
                     .ip_addresses[0]
                     .id,
                     "local_ip": self.client.store.get(
-                        key=f"{leaf_device.name.value}-{loopback_name}",
+                        key=f"{leaf_device.name.value}-loopback0",
                         kind=DcimVirtualInterface,
                     )
                     .ip_addresses[0]
                     .id,
                     "remote_ip": self.client.store.get(
-                        key=f"{spine_device.name.value}-{loopback_name}",
+                        key=f"{spine_device.name.value}-loopback0",
                         kind=DcimVirtualInterface,
                     )
                     .ip_addresses[0]
                     .id,
+                    # Associate with unnumbered interfaces like OSPF does
+                    "interfaces": await self.client.filters(
+                        kind="DcimInterface",
+                        role__values=["unnumbered"],
+                        device__name__value=leaf_device.name.value,
+                    ),
                     "session_type": "EXTERNAL",
                     "status": "active",
                 }
+
+                # Get client peer group for leaves
+                client_pg = self.client.store.get(
+                    kind="RoutingBGPPeerGroup",
+                    key=f"LEAF-TO-SPINE-UNDERLAY-PG-{topology_name}",
+                )
                 if client_pg:
                     leaf_bgp_data["peer_group"] = client_pg.id
                 else:
                     leaf_bgp_data["role"] = "peering"
+
                 leaf_bgp = await self.client.create(
                     kind="ServiceBGP", data=leaf_bgp_data
                 )
                 batch.add(task=leaf_bgp.save, allow_upsert=True, node=leaf_bgp)
-                # Assign BGP session to device (if device has a sessions or bgp_sessions field)
-                if hasattr(leaf_device, "bgp_sessions"):
-                    if getattr(leaf_device, "bgp_sessions", None) is None:
-                        leaf_device.bgp_sessions = []
-                    leaf_device.bgp_sessions.append(leaf_bgp)
-                # If a different field or method is required, add logic here
 
         # Execute the batch
         async for node, _ in batch.execute():
             self.log.info(
-                f"- Created [{node.get_kind()}] {node.name.value} with peer group"
+                f"- Created [{node.get_kind()}] {node.name.value} (eBGP underlay)"
             )
 
     async def create_ibgp_overlay(
@@ -531,15 +545,18 @@ class DCTopologyCreator(TopologyCreator):
         # Create spine-to-leaf sessions (RR server to clients)
         for spine_device in spine_devices:
             for leaf_device in leaf_devices:
-                session_name = f"{spine_device.name.value}-{leaf_device.name.value}-OVERLAY".upper()
+                session_name = (
+                    f"{spine_device.name.value}-{leaf_device.name.value}-EVPN".upper()
+                )
 
                 spine_bgp_data = {
                     "name": session_name,
+                    "owner": self.data.get("provider"),
                     "device": spine_device.id,
                     "local_as": asn_id,
                     "remote_as": asn_id,
                     "router_id": self.client.store.get(
-                        key=f"{spine_device.name.value}-{loopback_name}",
+                        key=f"{spine_device.name.value}-loopback0",
                         kind=DcimVirtualInterface,
                     )
                     .ip_addresses[0]
@@ -573,15 +590,18 @@ class DCTopologyCreator(TopologyCreator):
         # Create leaf-to-spine sessions (RR clients to servers)
         for leaf_device in leaf_devices:
             for spine_device in spine_devices:
-                session_name = f"{leaf_device.name.value}-{spine_device.name.value}-OVERLAY".upper()
+                session_name = (
+                    f"{leaf_device.name.value}-{spine_device.name.value}-EVPN".upper()
+                )
 
                 leaf_bgp_data = {
                     "name": session_name,
+                    "owner": self.data.get("provider"),
                     "device": leaf_device.id,
                     "local_as": asn_id,
                     "remote_as": asn_id,
                     "router_id": self.client.store.get(
-                        key=f"{leaf_device.name.value}-{loopback_name}",
+                        key=f"{leaf_device.name.value}-loopback0",
                         kind=DcimVirtualInterface,
                     )
                     .ip_addresses[0]
@@ -615,8 +635,24 @@ class DCTopologyCreator(TopologyCreator):
         # Execute the batch
         async for node, _ in batch.execute():
             self.log.info(
-                f"- Created [{node.get_kind()}] {node.name.value} with peer group"
+                f"- Created [{node.get_kind()}] {node.name.value} (iBGP EVPN overlay)"
             )
+
+    async def create_dual_loopbacks(self) -> None:
+        """Create both underlay (loopback0) and VTEP (loopback1) loopback interfaces"""
+        self.log.info(
+            "Creating dual loopback interfaces: loopback0 (underlay) and loopback1 (VTEP)"
+        )
+
+        # Create loopback0 for underlay routing using standard loopback pool and role
+        await self.create_loopback(
+            "loopback0", "loopback_ip_pool", "loopback", "Underlay"
+        )
+
+        # Create loopback1 for VTEP/overlay using VTEP pool and role
+        await self.create_loopback(
+            "loopback1", "loopback-vtep_ip_pool", "loopback-vtep", "VTEP"
+        )
 
 
 class DCTopologyGenerator(InfrahubGenerator):
@@ -629,11 +665,9 @@ class DCTopologyGenerator(InfrahubGenerator):
             data = cleaned_data["TopologyDataCenter"][0]
         else:
             raise ValueError("clean_data() did not return a dictionary")
-
         # Determine scenario from data or default to OSPF
         # Check both 'scenario' and 'strategy' fields, and also description for EBGP indicator
         scenario = data.get("scenario", data.get("strategy", "ospf")).lower()
-
         # Map strategy values to scenario values
         if scenario in ["ebgp-ibgp", "ebgp"]:
             scenario = "ebgp"
@@ -670,16 +704,15 @@ class DCTopologyGenerator(InfrahubGenerator):
                 }
             )
 
+        # Handle technical subnet - split for VTEP functionality
         if technical_subnet_obj:
-            # Always use the original technical subnet (no splitting needed for unnumbered)
-            subnets.append(
-                {
-                    "type": "Loopback",
-                    "prefix_id": technical_subnet_obj.id,
-                }
-            )
-
-        await network_creator.create_address_pools(subnets)
+            # Create management pool first
+            await network_creator.create_address_pools(subnets)
+            # Then use the new split loopback pools method
+            await network_creator.create_split_loopback_pools(technical_subnet_obj)
+        else:
+            # Fallback to regular address pool creation if no technical subnet
+            await network_creator.create_address_pools(subnets)
         await network_creator.create_L2_pool()
         await network_creator.create_devices()
         # Create default network segments for EVPN fabric connectivity
@@ -688,7 +721,9 @@ class DCTopologyGenerator(InfrahubGenerator):
 
         # Create fabric peering with unnumbered interfaces only
         await network_creator.create_fabric_peering()
-        await network_creator.create_loopback("loopback0")
+
+        # Create dual loopbacks: loopback0 (underlay) and loopback1 (VTEP)
+        await network_creator.create_dual_loopbacks()
 
         if scenario == "ospf":
             # Traditional OSPF + iBGP scenario
@@ -699,11 +734,11 @@ class DCTopologyGenerator(InfrahubGenerator):
             await network_creator.create_bgp_peer_groups(
                 "ospf"
             )  # Create peer groups first
-            await network_creator.create_ibgp_overlay("loopback0", "overlay")
+            await network_creator.create_ibgp_overlay("loopback1", "overlay")
         else:
             await network_creator.create_autonomous_systems("ebgp")
             await network_creator.create_bgp_peer_groups(
                 "ebgp"
             )  # Create peer groups first
             await network_creator.create_ebgp_underlay("loopback0")
-            await network_creator.create_ibgp_overlay("loopback0", "evpn")
+            await network_creator.create_ibgp_overlay("loopback1", "evpn")
