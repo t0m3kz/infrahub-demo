@@ -36,13 +36,6 @@ artifact_definitions:
     transformation: loadbalancer
     parameters:
       device: name__value
-  - name: cloud security config
-    artifact_name: cloud_security
-    content_type: text/plain
-    targets: cloud_security
-    transformation: cloud_security
-    parameters:
-      device: name__value
   # Containerlab
   - name: Containerlab Topology
     artifact_name: containerlab-topology
@@ -99,10 +92,6 @@ python_transforms:
   - name: loadbalancer
     class_name: LoadBalancer
     file_path: transforms/loadbalancer.py
-  - name: cloud_security
-    class_name: CloudSecurity
-    file_path: transforms/cloud_security.py
-
 
 generator_definitions:
   - name: create_dc
@@ -117,13 +106,6 @@ generator_definitions:
     targets: topologies_pop
     query: topology_pop
     class_name: PopTopologyGenerator
-    parameters:
-      name: name__value
-  - name: auto_vni_assignment
-    file_path: generators/service_network_segment_pool_based.py
-    targets: service_network_segments
-    query: service_network_segment
-    class_name: ServiceNetworkSegmentPoolBasedGenerator
     parameters:
       name: name__value
 
@@ -149,12 +131,7 @@ queries:
     file_path: queries/validation/loadbalancer_validation.gql
   - name: oob_config
     file_path: queries/config/oob.gql
-  - name: console_config
-    file_path: queries/config/console.gql
-  - name: cloud_security_config
-    file_path: queries/config/cloud_security.gql
-  - name: service_network_segment
-    file_path: queries/service_network_segment.gql
+
 # schemas:
 #   - schemas/
 # menus:

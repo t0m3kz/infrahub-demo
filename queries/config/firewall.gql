@@ -15,9 +15,9 @@ query firewall_config($device: String!) {
               description {
                 value
               }
-              service{
-                edges{
-                  node{
+              interface_services {
+                edges {
+                  node {
                     __typename
                     name{
                       value
