@@ -11,7 +11,6 @@ class LoadBalancer(InfrahubTransform):
 
     async def transform(self, data: Any) -> Any:
         data = get_data(data)
-
         # Extract VIPs and process them for load balancer configuration
         vips = []
 

@@ -21,15 +21,15 @@ artifact_definitions:
     targets: leafs
     transformation: leaf
     parameters:
-      device: name__value
-  - name: spine config
+      device: name_ value
+  - name: spine_config
     artifact_name: spine
     content_type: text/plain
     targets: spines
     transformation: spine
     parameters:
       device: name__value
-  - name: loadbalancer config
+  - name: loadbalancer_config
     artifact_name: loadbalancer
     content_type: text/plain
     targets: loadbalancers
