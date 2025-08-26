@@ -92,6 +92,9 @@ python_transforms:
   - name: loadbalancer
     class_name: LoadBalancer
     file_path: transforms/loadbalancer.py
+  - name: edge
+    class_name: Edge
+    file_path: transforms/edge.py
 
 generator_definitions:
   - name: create_dc
