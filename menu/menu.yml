@@ -161,30 +161,18 @@ spec:
                   kind: ServiceVIP
                   icon: "carbon:floating-ip"
                   description: "Load balancers that distribute traffic across multiple servers."
+                - namespace: Service
+                  name: NTPServer
+                  label: NTP Servers
+                  kind: NetworkNTPServer
+                  icon: "mdi:clock-outline"
+                - namespace: Service
+                  name: NameServer
+                  label: DNS Servers
+                  kind: NetworkNameServer
+                  icon: "mdi:dns"
 
 
-          # --------- Routing & Peering ---------
-          - namespace: Service
-            name: RoutingMenu
-            label: Routing & Peering
-            icon: "mdi:router"
-            children:
-              data:
-                - namespace: Service
-                  name: BGPFabricMenu
-                  label: Fabric BGP
-                  kind: ServiceBGP
-                  icon: "carbon:ibm-cloud-internet-services"
-                - namespace: Service
-                  name: OSPFFabricMenu
-                  label: Fabric OSPF
-                  kind: ServiceOSPF
-                  icon: "carbon:ibm-cloud-internet-services"
-                - namespace: Service
-                  name: PIMFabricMenu
-                  label: Fabric PIM
-                  kind: ServicePIM
-                  icon: "carbon:ibm-cloud-internet-services"
     # ==================== SECURITY MANAGEMENT =====================
     # - namespace: Security
     #   name: SecurityMenu
@@ -394,22 +382,7 @@ spec:
                   kind: DcimGenericSFP
 
           # --------- Network Management ---------
-          - namespace: Network
-            name: ServerMenu
-            label: Network Services
-            icon: "mdi:server-network"
-            children:
-              data:
-                - namespace: Network
-                  name: NTPServer
-                  label: NTP Servers
-                  kind: NetworkNTPServer
-                  icon: "mdi:clock-outline"
-                - namespace: Network
-                  name: NameServer
-                  label: DNS Servers
-                  kind: NetworkNameServer
-                  icon: "mdi:dns"
+
 
           # --------- Device Types & Platforms ---------
           - namespace: Dcim
@@ -450,6 +423,12 @@ spec:
                   icon: "mdi:bank-circle-outline"
 
                 - namespace: Routing
+                  name: BGPService
+                  label: Service BGP
+                  kind: ServiceBGP
+                  icon: "carbon:ibm-cloud-internet-services"
+
+                - namespace: Routing
                   name: BGPPeerGroup
                   label: "BGP Peer Groups"
                   kind: RoutingBGPPeerGroup
@@ -474,6 +453,12 @@ spec:
                   icon: "mdi:square-rounded-outline"
 
                 - namespace: Routing
+                  name: OSPFService
+                  label: Service OSPF
+                  kind: ServiceOSPF
+                  icon: "carbon:ibm-cloud-internet-services"
+
+                - namespace: Routing
                   name: OSPFInterface
                   label: OSPF Interface Profiles
                   kind: RoutingOSPFInterface
@@ -485,6 +470,12 @@ spec:
             icon: "mdi:pim-outline"
             children:
               data:
+                - namespace: Routing
+                  name: PIMService
+                  label: Service PIM
+                  kind: ServicePIM
+                  icon: "carbon:ibm-cloud-internet-services"
+
                 - namespace: Routing
                   name: PIMInterface
                   label: PIM Interface Profiles

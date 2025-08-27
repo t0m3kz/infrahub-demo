@@ -8,27 +8,34 @@ jinja2_transforms:
 
 artifact_definitions:
   # Cisco
-  # - name: edge config
-  #   artifact_name: edge
-  #   content_type: text/plain
-  #   targets: edges
-  #   transformation: edge
-  #   parameters:
-  #     device: name__value
-  - name: leaf config
+  - name: edge_config
+    artifact_name: edge
+    content_type: text/plain
+    targets: edges
+    transformation: edge
+    parameters:
+      device: name__value
+  - name: leaf_config
     artifact_name: leaf
     content_type: text/plain
     targets: leafs
     transformation: leaf
     parameters:
       device: name__value
-  # - name: spine_config
-  #   artifact_name: spine
-  #   content_type: text/plain
-  #   targets: spines
-  #   transformation: spine
-  #   parameters:
-  #     device: name__value
+  - name: borderleaf_config
+    artifact_name: border-leaf
+    content_type: text/plain
+    targets: border_leafs
+    transformation: leaf
+    parameters:
+      device: name__value
+  - name: spine_config
+    artifact_name: spine
+    content_type: text/plain
+    targets: spines
+    transformation: spine
+    parameters:
+      device: name__value
   - name: loadbalancer_config
     artifact_name: loadbalancer
     content_type: text/plain
@@ -54,24 +61,24 @@ artifact_definitions:
       name: name__value
 
 check_definitions:
-  # - name: validate_spine
-  #   class_name: CheckSpine
-  #   file_path: checks/spine.py
-  #   targets: spines
-  #   parameters:
-  #     device: name__value
-  # - name: validate_leaf
-  #   class_name: CheckLeaf
-  #   file_path: checks/leaf.py
-  #   targets: leafs
-  #   parameters:
-  #     device: name__value
-  # - name: validate_edge
-  #   class_name: CheckEdge
-  #   file_path: checks/edge.py
-  #   targets: edges
-  #   parameters:
-  #     device: name__value
+  - name: validate_spine
+    class_name: CheckSpine
+    file_path: checks/spine.py
+    targets: spines
+    parameters:
+      device: name__value
+  - name: validate_leaf
+    class_name: CheckLeaf
+    file_path: checks/leaf.py
+    targets: leafs
+    parameters:
+      device: name__value
+  - name: validate_edge
+    class_name: CheckEdge
+    file_path: checks/edge.py
+    targets: edges
+    parameters:
+      device: name__value
   - name: validate_loadbalancer
     class_name: CheckLoadBalancer
     file_path: checks/loadbalancer.py
