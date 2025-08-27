@@ -89,8 +89,6 @@ spec:
           - template_name: C8000V_EDGE_mgmt0
             name: mgmt0
             role: management
-        member_of_groups:
-          - edges
 
     - template_name: CloudGuard_EDGE
       device_type: CloudGuard
@@ -126,8 +124,6 @@ spec:
           - template_name: CloudGuard_EDGE_eth7
             name: eth7
             role: customer
-        member_of_groups:
-          - firewalls
 
     - template_name: HA-PROXY
       device_type: HA-PROXY
@@ -157,5 +153,4 @@ spec:
           - template_name: PROXY_private
             name: private
             role: management
-        member_of_groups:
-          - loadbalancers
+
