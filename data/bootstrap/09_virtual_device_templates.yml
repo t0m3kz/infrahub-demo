@@ -128,3 +128,34 @@ spec:
             role: customer
         member_of_groups:
           - firewalls
+
+    - template_name: HA-PROXY
+      device_type: HA-PROXY
+      platform: Linux
+      role: load_balancer
+      status: active
+      cpu: 2
+      memory: 2
+      interfaces:
+        kind: TemplateDcimVirtualInterface
+        data:
+          - template_name: PROXY_private
+            name: private
+            role: management
+        member_of_groups:
+          - loadbalancers
+    - template_name: NGINX
+      device_type: NGINX
+      platform: Linux
+      role: load_balancer
+      status: active
+      cpu: 2
+      memory: 2
+      interfaces:
+        kind: TemplateDcimVirtualInterface
+        data:
+          - template_name: PROXY_private
+            name: private
+            role: management
+        member_of_groups:
+          - loadbalancers
