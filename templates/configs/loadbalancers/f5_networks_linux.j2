@@ -1,10 +1,10 @@
 #
 # F5 BIG-IP Load Balancer Configuration
-# Device: {{ data.name }}
-# Generated for {{ data.device_type.manufacturer.name }} {{ data.device_type.platform.netmiko_device_type }}
-# Management IP: {{ data.load_balancer_config.management_ip }}
-# Device Role: {{ data.load_balancer_config.device_role }}
-# Device Status: {{ data.load_balancer_config.device_status }}
+# Device: {{ name }}
+# Generated for {{ device_type.manufacturer.name }} {{ device_type.platform.netmiko_device_type }}
+# Management IP: {{ load_balancer_config.management_ip }}
+# Device Role: {{ load_balancer_config.device_role }}
+# Device Status: {{ load_balancer_config.device_status }}
 #
 
 # System Configuration
@@ -34,8 +34,8 @@ sys snmp {
     }
 }
 
-{%- if data.vips %}
-{%- for vip in data.vips %}
+{%- if vips %}
+{%- for vip in vips %}
 {%- if vip.backend_servers %}
 
 # Pool configuration for {{ vip.hostname }}
@@ -138,8 +138,8 @@ ltm virtual {{ vip.hostname | replace('.', '_') | replace('-', '_') }}_https_vs 
 {%- endif %}
 
 # System Statistics Configuration
-ltm virtual-address {{ data.load_balancer_config.management_ip }} {
-    address {{ data.load_balancer_config.management_ip }}
+ltm virtual-address {{ load_balancer_config.management_ip }} {
+    address {{ load_balancer_config.management_ip }}
     arp enabled
     icmp-echo enabled
     mask 255.255.255.255
@@ -149,8 +149,8 @@ ltm virtual-address {{ data.load_balancer_config.management_ip }} {
 }
 
 # Management Interface Configuration
-net self {{ data.load_balancer_config.management_ip }}_self {
-    address {{ data.load_balancer_config.management_ip }}/24
+net self {{ load_balancer_config.management_ip }}_self {
+    address {{ load_balancer_config.management_ip }}/24
     allow-service {
         default
     }

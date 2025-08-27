@@ -1,10 +1,10 @@
 #
 # HAProxy Load Balancer Configuration
-# Device: {{ data.name }}
-# Generated for {{ data.device_type.manufacturer.name }} {{ data.device_type.platform.netmiko_device_type }}
-# Management IP: {{ data.load_balancer_config.management_ip }}
-# Device Role: {{ data.load_balancer_config.device_role }}
-# Device Status: {{ data.load_balancer_config.device_status }}
+# Device: {{ name }}
+# Generated for {{ device_type.manufacturer.name }} {{ device_type.platform.netmiko_device_type }}
+# Management IP: {{ load_balancer_config.management_ip }}
+# Device Role: {{ load_balancer_config.device_role }}
+# Device Status: {{ load_balancer_config.device_status }}
 #
 
 # Global section
@@ -46,18 +46,18 @@ defaults
 
 # HAProxy Stats
 listen haproxy-stats
-    bind {{ data.load_balancer_config.management_ip }}:{{ data.load_balancer_config.stats_port }}
+    bind {{ load_balancer_config.management_ip }}:{{ load_balancer_config.stats_port }}
     mode http
     stats enable
     stats uri /stats
     stats refresh 30s
     stats admin if TRUE
-    acl network_allowed src 127.0.0.1 {{ data.load_balancer_config.management_ip }}
+    acl network_allowed src 127.0.0.1 {{ load_balancer_config.management_ip }}
     acl network_allowed src 10.0.0.0/8 172.16.0.0/12 192.168.0.0/16
     http-request deny unless network_allowed
 
-{%- if data.vips %}
-{%- for vip in data.vips %}
+{%- if vips %}
+{%- for vip in vips %}
 {%- if vip.backend_servers %}
 
 # Frontend for {{ vip.hostname }}
