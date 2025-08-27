@@ -21,7 +21,7 @@ artifact_definitions:
     targets: leafs
     transformation: leaf
     parameters:
-      device: name_ value
+      device: name__value
   - name: spine_config
     artifact_name: spine
     content_type: text/plain

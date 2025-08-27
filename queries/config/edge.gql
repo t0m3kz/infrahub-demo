@@ -76,7 +76,6 @@ query edge_config($device: String!) {
                       router_id { node { address { value } } }
                       area { node { area { value } } }
                     }
-                    }
                   }
                 }
               }
@@ -86,3 +85,4 @@ query edge_config($device: String!) {
       }
     }
   }
+}
