@@ -167,17 +167,7 @@ class LoadBalancer(InfrahubTransform):
         # Select the template for load balancer devices
         # Try manufacturer_platform.j2 first, fallback to platform.j2
         template_name = f"{manufacturer}_{platform}.j2"
-        try:
-            template = env.get_template(template_name)
-        except Exception:
-            # Fallback to just platform name
-            # template_name = f"{platform}.j2"
-            try:
-                template = env.get_template(template_name)
-            except Exception:
-                # Final fallback to generic haproxy
-                template = env.get_template(template_name)
-
+        template = env.get_template(template_name)
         # Render the template with the processed data
         rendered_config = template.render(data=data)
 

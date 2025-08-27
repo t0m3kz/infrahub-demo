@@ -28,7 +28,7 @@ class Edge(InfrahubTransform):
         template_name = f"{platform}.j2"
 
         # Render the template with enhanced data
-        rendered_config = env.get_template(template_name).render(**data)
+        rendered_config = env.get_template(template_name).render(data=data)
 
         # return print(config)
 
