@@ -6,7 +6,7 @@ from nested data structures returned by Infrahub APIs.
 """
 
 from collections import defaultdict
-from typing import Any, Dict, List
+from typing import Any
 
 
 def clean_data(data: Any) -> Any:
