@@ -1,5 +1,5 @@
 query loadbalancer_config($device: String!) {
-  DcimVirtualDevice(name__value: $device) {
+  DcimGenericDevice(name__value: $device) {
     edges {
       node {
         name {
