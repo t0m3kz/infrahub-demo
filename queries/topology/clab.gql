@@ -19,7 +19,7 @@ query topology_info($name: String!) {
             }
           }
         }
-        devices(role__values: ["leaf", "spine", "dc_firewall", "edge", "core"]) {
+        devices(role__values: [ "leaf", "spine", "dc_firewall", "edge", "core", "border_leaf", "edge_firewall"]) {
           edges {
             node {
               name {
@@ -48,14 +48,8 @@ query topology_info($name: String!) {
                   }
                 }
               }
-              ... on DcimPhysicalDevice {
-                device_type {
-                  node {
-                    name {
-                      value
-                    }
-                  }
-                }
+              device_type{
+                node{ name { value} }
               }
               interfaces {
                 edges {

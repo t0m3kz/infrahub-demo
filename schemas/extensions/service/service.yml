@@ -76,20 +76,6 @@ generics:
         optional: true
         identifier: interface_services
 
-  - name: GenericHInterfaces
-    namespace: Service
-    description: "Services"
-    include_in_menu: false
-    relationships:
-      - name: interfaces
-        peer: DcimInterface
-        label: Assigned Interfaces
-        cardinality: many
-        kind: Generic
-        optional: true
-        identifier: interface_services
-
-
 extensions:
   nodes:
     - kind: DcimGenericDevice
