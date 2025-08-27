@@ -13,12 +13,8 @@ query leaf_config($device: String!) {
           }
         }
         location {
-          node{
-            ... on LocationGeneric{
-              name{
-                value
-              }
-            }
+          node {
+            ... on LocationGeneric { name { value } }
           }
         }
         device_type {
@@ -146,20 +142,20 @@ query leaf_config($device: String!) {
                 edges{
                   node{
                     __typename
-                    ... on ServiceOSPF{
-                      area { node {area {value}}}
-                      ospf_interface_profile{node{
-                        metric{value}
-                        mode{value}
-                        authentication_mode{value}
-                        authentication_key{value}
+                    ... on ServiceOSPF {
+                      area { node { area { value } } }
+                      ospf_interface_profile { node {
+                        metric { value }
+                        mode { value }
+                        authentication_mode { value }
+                        authentication_key { value }
                         }
                       }
 
                     }
-                    ... on ServiceNetworkSegment{
-                      vlan_id{value}
-                      name {value}
+                    ... on ServiceNetworkSegment {
+                      vlan_id { value }
+                      name { value }
                     }
                   }
                 }
