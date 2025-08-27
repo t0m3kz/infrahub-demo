@@ -2,7 +2,6 @@ from typing import Any
 
 from infrahub_sdk.transforms import InfrahubTransform
 from jinja2 import Environment, FileSystemLoader, select_autoescape
-from netutils.interface import sort_interface_list
 from netutils.utils import jinja2_convenience_function
 
 from .common import get_data
