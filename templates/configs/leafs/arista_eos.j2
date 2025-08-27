@@ -1,0 +1,159 @@
+!
+! Arista EOS VXLAN/EVPN Leaf Configuration
+! Device: {{ hostname }}
+! Generated for Arista EOS
+!
+
+hostname {{ hostname }}
+
+! Configure spanning tree mode
+spanning-tree mode mstp
+
+! Configure VLAN 1
+no spanning-tree vlan-id 4094
+
+{#- VLAN Configuration -#}
+{% for vlan in vlans %}
+vlan {{ vlan.vlan_id }}
+   name {{ vlan.name or 'VLAN_' + vlan.vlan_id|string }}
+
+{% endfor %}
+
+{#- Loopback Interfaces -#}
+{% for loopback_name, loopback_ip in loopbacks.items() %}
+interface {{ loopback_name }}
+{% if loopback_name == 'loopback0' %}
+   description {{ hostname }} Underlay Loopback Interface
+   ip address {{ loopback_ip }}/32
+   ospf area {{ ospf.area or "0.0.0.0" }}
+{% elif loopback_name == 'loopback1' %}
+   description {{ hostname }} VTEP Loopback Interface
+   ip address {{ loopback_ip }}/32
+{#- loopback1 is NOT in OSPF, used only for iBGP EVPN overlay -#}
+{% else %}
+   description {{ hostname }} {{ loopback_name }} Interface
+   ip address {{ loopback_ip }}/32
+   ospf area {{ ospf.area or "0.0.0.0" }}
+{% endif %}
+
+{% endfor %}
+
+! Configure OSPF
+router ospf {{ ospf.process_id or 1 }}
+   router-id {{ ospf.router_id or loopbacks.loopback0 }}
+   passive-interface default
+   no passive-interface Ethernet1
+   no passive-interface Ethernet2
+   max-lsa 12000
+
+{#- All Physical Interfaces (sorted) -#}
+{% for interface in interfaces.all_physical %}
+interface {{ interface.name }}
+{% if interface.description %}
+   description {{ interface.description }}
+{% elif interface.role == 'uplink' %}
+   description Uplink interface
+{% elif interface.role == 'customer' %}
+   description Customer interface
+{% else %}
+   description {{ interface.role|title }} interface
+{% endif %}
+{% if interface.role == 'uplink' %}
+   mtu {{ interface.mtu or 9214 }}
+   no switchport
+   ip unnumbered Loopback0
+   ospf area {{ ospf.area or "0.0.0.0" }}
+   ospf network point-to-point
+{% elif interface.vlans %}
+{% if interface.vlans|length == 1 %}
+   switchport access vlan {{ interface.vlans[0] }}
+{% else %}
+   switchport trunk allowed vlan {{ interface.vlans|join(',') }}
+{% endif %}
+{% endif %}
+
+{% endfor %}
+
+{#- VXLAN Interface for VTEP (using loopback1) -#}
+{% if loopbacks.loopback1 %}
+interface Vxlan1
+   description VXLAN Tunnel Interface
+   vxlan source-interface Loopback1
+   vxlan udp-port 4789
+{% for vlan in vlans %}
+   vxlan vlan {{ vlan.vlan_id }} vni {{ vlan.vni }}
+{% endfor %}
+
+{% endif %}
+
+{#- VLAN Interfaces for L3 gateways -#}
+{% for vlan in vlans %}
+interface Vlan{{ vlan.vlan_id }}
+   description {{ vlan.name or 'VLAN_' + vlan.vlan_id|string }} Gateway
+   ip address virtual 192.168.{{ vlan.vlan_id }}.1/24
+
+{% endfor %}
+
+{#- Management Interfaces -#}
+{% for interface in interfaces.management %}
+interface {{ interface.name }}
+{% if interface.description %}
+   description {{ interface.description }}
+{% else %}
+   description Management interface
+{% endif %}
+   vrf management
+
+{% endfor %}
+
+! Configure BGP
+router bgp {{ bgp.local_as }}
+   router-id {{ bgp.router_id or loopbacks.loopback0 }}
+   no bgp default ipv4-unicast
+   distance bgp 20 200 200
+   maximum-paths 4 ecmp 64
+
+{# Configure BGP neighbors from enhanced transform data #}
+{% for neighbor in bgp.neighbors %}
+   ! {{ neighbor.description or 'BGP Neighbor' }}
+   neighbor {{ neighbor.remote_ip.split('/')[0] }} remote-as {{ neighbor.remote_as }}
+   neighbor {{ neighbor.remote_ip.split('/')[0] }} update-source Loopback0
+   neighbor {{ neighbor.remote_ip.split('/')[0] }} description {{ neighbor.description or 'BGP Neighbor' }}
+   neighbor {{ neighbor.remote_ip.split('/')[0] }} send-community extended
+   neighbor {{ neighbor.remote_ip.split('/')[0] }} maximum-routes 0
+{% endfor %}
+
+   address-family ipv4
+      redistribute connected route-map RM-CONN-2-BGP
+{% for neighbor in bgp.neighbors %}
+      neighbor {{ neighbor.remote_ip.split('/')[0] }} activate
+{% endfor %}
+
+   address-family evpn
+{% for neighbor in bgp.neighbors %}
+      neighbor {{ neighbor.remote_ip.split('/')[0] }} activate
+{% endfor %}
+
+{# L2VPN EVPN for VLANs #}
+{% for vlan in vlans %}
+   vlan {{ vlan.vlan_id }}
+      rd {{ bgp.router_id or loopbacks.loopback0 }}:{{ vlan.vni }}
+      route-target both {{ vlan.vni }}:{{ vlan.vni }}
+      redistribute learned
+
+{% endfor %}
+
+! Configure route-maps
+route-map RM-CONN-2-BGP permit 10
+   match interface Loopback0
+route-map RM-CONN-2-BGP permit 20
+   match interface Loopback1
+
+{% if vlans | length > 0 %}
+
+! Virtual MAC for anycast gateway
+ip virtual-router mac-address 00:1c:73:00:00:99
+
+{% endif %}
+
+! End of configuration

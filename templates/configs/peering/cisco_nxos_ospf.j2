@@ -1,0 +1,103 @@
+{#
+  OSPF Peering Configuration Template for Cisco NX-OS
+  Supports both internal and external peering scenarios
+#}
+!
+! OSPF Peering Configuration for {{ device_name }}
+!
+{%- for peering in ospf_peering_sessions %}
+{%- set session = peering %}
+{%- set area = session.area.area_id %}
+{%- set local_router_id = session.local_router_id.address.split('/')[0] %}
+
+{%- if session.session_scope == 'EXTERNAL' and session.external_organization %}
+! External OSPF peering with {{ session.external_organization.name }}
+! Peering Type: {{ session.peering_type }}
+{%- else %}
+! Internal OSPF peering session
+{%- endif %}
+!
+feature ospf
+!
+router ospf {{ session.name | replace('-', '') | replace('_', '') }}
+  router-id {{ local_router_id }}
+{%- if session.area_type == 'STUB' %}
+  area {{ area }} stub
+{%- elif session.area_type == 'NSSA' %}
+  area {{ area }} nssa
+{%- endif %}
+{%- if session.authentication_type == 'MD5' %}
+  area {{ area }} authentication message-digest
+{%- elif session.authentication_type == 'SIMPLE' %}
+  area {{ area }} authentication
+{%- endif %}
+  auto-cost reference-bandwidth 100000
+!
+
+{%- if session.interfaces %}
+{%- for interface in session.interfaces %}
+interface {{ interface.name }}
+  description {{ session.description or 'OSPF Peering Interface' }}
+{%- if session.admin_state != 'DOWN' %}
+  no shutdown
+{%- else %}
+  shutdown
+{%- endif %}
+  ip ospf {{ session.name | replace('-', '') | replace('_', '') }} area {{ area }}
+{%- if session.network_type != 'BROADCAST' %}
+  ip ospf network {{ session.network_type | lower | replace('_', '-') }}
+{%- endif %}
+{%- if session.hello_interval != 10 %}
+  ip ospf hello-interval {{ session.hello_interval }}
+{%- endif %}
+{%- if session.dead_interval != 40 %}
+  ip ospf dead-interval {{ session.dead_interval }}
+{%- endif %}
+{%- if session.retransmit_interval != 5 %}
+  ip ospf retransmit-interval {{ session.retransmit_interval }}
+{%- endif %}
+{%- if session.cost %}
+  ip ospf cost {{ session.cost }}
+{%- endif %}
+{%- if session.priority != 1 %}
+  ip ospf priority {{ session.priority }}
+{%- endif %}
+{%- if session.authentication_type == 'MD5' and session.authentication_key %}
+  ip ospf message-digest-key 1 md5 {{ session.authentication_key }}
+{%- elif session.authentication_type == 'SIMPLE' and session.authentication_key %}
+  ip ospf authentication-key {{ session.authentication_key }}
+{%- endif %}
+!
+{%- endfor %}
+{%- endif %}
+
+{%- if session.session_scope == 'EXTERNAL' %}
+! External peering neighbor configuration
+{%- if session.remote_router_id %}
+! Remote router ID: {{ session.remote_router_id.address.split('/')[0] }}
+{%- endif %}
+! Network Type: {{ session.network_type }}
+! Area Type: {{ session.area_type }}
+{%- if session.external_organization %}
+! Partner: {{ session.external_organization.name }}
+{%- endif %}
+{%- endif %}
+
+{%- endfor %}
+
+{%- if ospf_peering_sessions %}
+!
+! OSPF Peering Summary
+!
+{%- for peering in ospf_peering_sessions %}
+! Session: {{ peering.name }}
+!   Area: {{ peering.area.area_id }}
+!   Type: {{ peering.peering_type }}
+!   Scope: {{ peering.session_scope }}
+!   Admin State: {{ peering.admin_state }}
+{%- if peering.external_organization %}
+!   Partner: {{ peering.external_organization.name }}
+{%- endif %}
+{%- endfor %}
+!
+{%- endif %}

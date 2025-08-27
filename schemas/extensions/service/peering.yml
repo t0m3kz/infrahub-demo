@@ -1,0 +1,428 @@
+# yaml-language-server: $schema=https://schema.infrahub.app/infrahub/schema/latest.json
+---
+version: "1.0"
+
+generics:
+  - name: Peering
+    namespace: Service
+    description: "Base service for all peering protocols that can be attached to devices or external partners."
+    label: Network Peering Service
+    icon: "carbon:network-2"
+    include_in_menu: false
+    # human_friendly_id:
+    #   - "name__value"
+    attributes:
+      - name: peering_type
+        kind: Dropdown
+        description: "Type of peering relationship"
+        choices:
+          - name: "TRANSIT"
+            label: "Transit Provider"
+            description: "Peering with transit provider for internet connectivity"
+            color: "#FF6B6B"
+          - name: "CUSTOMER"
+            label: "Customer"
+            description: "Peering with customer networks"
+            color: "#4ECDC4"
+          - name: "PEER"
+            label: "Settlement-free Peer"
+            description: "Settlement-free peering relationship"
+            color: "#45B7D1"
+          - name: "ROUTE_SERVER"
+            label: "Route Server"
+            description: "Peering with IXP route server"
+            color: "#96CEB4"
+          - name: "INTERNAL"
+            label: "Internal"
+            description: "Internal peering within organization"
+            color: "#FFEAA7"
+        default_value: "PEER"
+        order_weight: 1200
+      - name: session_scope
+        kind: Dropdown
+        description: "Scope of the peering session"
+        choices:
+          - name: "INTERNAL"
+            label: "Internal Devices"
+            description: "Peering between devices in Infrahub database"
+            color: "#74B9FF"
+          - name: "EXTERNAL"
+            label: "External Partners"
+            description: "Peering with external devices requiring artifact generation"
+            color: "#FD79A8"
+        default_value: "INTERNAL"
+        order_weight: 1300
+
+nodes:
+  - name: BGPPeering
+    namespace: Service
+    description: "BGP peering service that can be attached to devices or external partners"
+    label: BGP Peering Service
+    icon: "carbon:network-4-reference"
+    menu_placement: ServiceGeneric
+    include_in_menu: false
+    human_friendly_id:
+      - "name__value"
+    inherit_from:
+      - ServiceGeneric
+      - ServicePeering
+    attributes:
+      - name: session_type
+        kind: Dropdown
+        description: "Type of BGP session"
+        choices:
+          - name: "IBGP"
+            label: "iBGP"
+            description: "Internal BGP session within the same AS"
+            color: "#74B9FF"
+          - name: "EBGP"
+            label: "eBGP"
+            description: "External BGP session between different ASs"
+            color: "#FD79A8"
+          - name: "EBGP_MULTIHOP"
+            label: "eBGP Multihop"
+            description: "External BGP session over multiple hops"
+            color: "#FDCB6E"
+        default_value: "EBGP"
+        order_weight: 1800
+      - name: maximum_routes
+        kind: Number
+        description: "Maximum routes to accept from peer"
+        optional: true
+        order_weight: 1900
+        regex: "^[0-9]+$"
+      - name: local_pref
+        kind: Number
+        description: "Local preference for routes from this peer"
+        optional: true
+        order_weight: 2000
+        regex: "^[0-9]+$"
+      - name: med
+        kind: Number
+        description: "Multi-Exit Discriminator value"
+        optional: true
+        order_weight: 2100
+        regex: "^[0-9]+$"
+      - name: send_community
+        kind: Checkbox
+        description: "Send standard community attributes"
+        default_value: true
+        optional: true
+        order_weight: 2200
+      - name: send_extended_community
+        kind: Checkbox
+        description: "Send extended community attributes"
+        default_value: false
+        optional: true
+        order_weight: 2300
+      - name: remove_private_as
+        kind: Checkbox
+        description: "Remove private AS numbers from AS path"
+        default_value: false
+        optional: true
+        order_weight: 2400
+      - name: bfd_enabled
+        kind: Checkbox
+        description: "Enable BFD for fast convergence"
+        default_value: true
+        optional: true
+        order_weight: 2500
+      - name: password
+        kind: Text
+        description: "BGP session authentication password"
+        optional: true
+        order_weight: 2600
+      - name: ttl_security
+        kind: Number
+        description: "TTL security hops (0 = disabled)"
+        default_value: 0
+        optional: true
+        order_weight: 2700
+        regex: "^[0-9]+$"
+    relationships:
+      - name: deployment
+        peer: TopologyDataCenter
+        cardinality: one
+        kind: Attribute
+        order_weight: 1000
+        optional: false
+        on_delete: no-action
+        description: "The deployment location for customer services"
+
+  - name: OSPFPeering
+    namespace: Service
+    description: "OSPF peering service that can be attached to devices or external partners"
+    label: OSPF Peering Service
+    icon: "carbon:network-4-reference"
+    menu_placement: ServiceGeneric
+    include_in_menu: false
+    human_friendly_id:
+      - "name__value"
+    inherit_from:
+      - ServiceGeneric
+      - ServicePeering
+    attributes:
+      - name: area_type
+        kind: Dropdown
+        description: "OSPF area type"
+        choices:
+          - name: "BACKBONE"
+            label: "Backbone Area"
+            description: "OSPF backbone area (Area 0)"
+            color: "#74B9FF"
+          - name: "STANDARD"
+            label: "Standard Area"
+            description: "Standard OSPF area"
+            color: "#00CEC9"
+          - name: "STUB"
+            label: "Stub Area"
+            description: "OSPF stub area"
+            color: "#FDCB6E"
+          - name: "NSSA"
+            label: "Not-So-Stubby Area"
+            description: "OSPF NSSA area"
+            color: "#E17055"
+        default_value: "STANDARD"
+        order_weight: 1800
+      - name: network_type
+        kind: Dropdown
+        description: "OSPF network type"
+        choices:
+          - name: "BROADCAST"
+            label: "Broadcast"
+            description: "Broadcast network type"
+            color: "#74B9FF"
+          - name: "POINT_TO_POINT"
+            label: "Point-to-Point"
+            description: "Point-to-point network type"
+            color: "#00CEC9"
+          - name: "NBMA"
+            label: "NBMA"
+            description: "Non-broadcast multi-access"
+            color: "#FDCB6E"
+          - name: "POINT_TO_MULTIPOINT"
+            label: "Point-to-Multipoint"
+            description: "Point-to-multipoint network type"
+            color: "#E17055"
+        default_value: "POINT_TO_POINT"
+        order_weight: 1900
+      - name: hello_interval
+        kind: Number
+        description: "OSPF hello interval in seconds"
+        default_value: 10
+        optional: true
+        order_weight: 2000
+        regex: "^[0-9]+$"
+      - name: dead_interval
+        kind: Number
+        description: "OSPF dead interval in seconds"
+        default_value: 40
+        optional: true
+        order_weight: 2100
+        regex: "^[0-9]+$"
+      - name: retransmit_interval
+        kind: Number
+        description: "OSPF retransmit interval in seconds"
+        default_value: 5
+        optional: true
+        order_weight: 2200
+        regex: "^[0-9]+$"
+      - name: cost
+        kind: Number
+        description: "OSPF interface cost"
+        optional: true
+        order_weight: 2300
+        regex: "^[0-9]+$"
+      - name: priority
+        kind: Number
+        description: "OSPF router priority for DR/BDR election"
+        default_value: 1
+        optional: true
+        order_weight: 2400
+        regex: "^[0-9]+$"
+      - name: authentication_type
+        kind: Dropdown
+        description: "OSPF authentication type"
+        choices:
+          - name: "NONE"
+            label: "No Authentication"
+            description: "No OSPF authentication"
+          - name: "SIMPLE"
+            label: "Simple Password"
+            description: "Simple password authentication"
+            color: "#FDCB6E"
+          - name: "MD5"
+            label: "MD5"
+            description: "MD5 cryptographic authentication"
+            color: "#00CEC9"
+        default_value: "NONE"
+        optional: true
+        order_weight: 2500
+      - name: authentication_key
+        kind: Text
+        description: "OSPF authentication key"
+        optional: true
+        order_weight: 2600
+    relationships:
+      - name: deployment
+        peer: TopologyDataCenter
+        cardinality: one
+        kind: Attribute
+        order_weight: 1000
+        optional: false
+        on_delete: no-action
+        description: "The deployment location for customer services"
+
+  # - name: PeeringPolicy
+  #   namespace: Service
+  #   description: "Peering policy templates for different types of peering relationships"
+  #   label: Peering Policy
+  #   icon: "carbon:policy"
+  #   menu_placement: ServiceGeneric
+  #   state: absent
+  #   human_friendly_id:
+  #     - "name__value"
+  #   display_labels:
+  #     - "name__value"
+  #   order_by:
+  #     - "name__value"
+  #   attributes:
+  #     - name: name
+  #       kind: Text
+  #       description: "Name of the peering policy"
+  #       optional: false
+  #       order_weight: 1000
+  #     - name: policy_type
+  #       kind: Dropdown
+  #       description: "Type of peering policy"
+  #       choices:
+  #         - name: "IMPORT"
+  #           label: "Import Policy"
+  #           description: "Policy for incoming routes"
+  #           color: "#74B9FF"
+  #         - name: "EXPORT"
+  #           label: "Export Policy"
+  #           description: "Policy for outgoing routes"
+  #           color: "#00CEC9"
+  #         - name: "BOTH"
+  #           label: "Import & Export"
+  #           description: "Policy for both directions"
+  #           color: "#FDCB6E"
+  #       default_value: "BOTH"
+  #       order_weight: 1100
+  #     - name: protocol
+  #       kind: Dropdown
+  #       description: "Routing protocol this policy applies to"
+  #       choices:
+  #         - name: "BGP"
+  #           label: "BGP"
+  #           description: "Border Gateway Protocol"
+  #           color: "#FD79A8"
+  #         - name: "OSPF"
+  #           label: "OSPF"
+  #           description: "Open Shortest Path First"
+  #           color: "#74B9FF"
+  #         - name: "BOTH"
+  #           label: "BGP & OSPF"
+  #           description: "Both protocols"
+  #           color: "#00CEC9"
+  #       default_value: "BGP"
+  #       order_weight: 1200
+  #     - name: max_prefix_limit
+  #       kind: Number
+  #       description: "Maximum prefix limit for this policy"
+  #       optional: true
+  #       order_weight: 1300
+  #       regex: "^[0-9]+$"
+  #     - name: route_filter
+  #       kind: Text
+  #       description: "Route filter configuration"
+  #       optional: true
+  #       order_weight: 1400
+  #     - name: community_action
+  #       kind: Dropdown
+  #       description: "Community attribute action"
+  #       choices:
+  #         - name: "NONE"
+  #           label: "No Action"
+  #           description: "Do not modify communities"
+  #           color: "#DEDEDE"
+  #         - name: "ADD"
+  #           label: "Add Communities"
+  #           description: "Add community attributes"
+  #           color: "#00CEC9"
+  #         - name: "REMOVE"
+  #           label: "Remove Communities"
+  #           description: "Remove community attributes"
+  #           color: "#E17055"
+  #         - name: "REPLACE"
+  #           label: "Replace Communities"
+  #           description: "Replace community attributes"
+  #           color: "#FDCB6E"
+  #       default_value: "NONE"
+  #       optional: true
+  #       order_weight: 1500
+  #     - name: community_values
+  #       kind: Text
+  #       description: "Community values (comma-separated)"
+  #       optional: true
+  #       order_weight: 1600
+  #     - name: as_path_prepend
+  #       kind: Number
+  #       description: "AS path prepend count"
+  #       default_value: 0
+  #       optional: true
+  #       order_weight: 1700
+  #       regex: "^[0-9]+$"
+  #     - name: description
+  #       kind: Text
+  #       description: "Description of the policy"
+  #       optional: true
+  #       order_weight: 1800
+  #   relationships:
+  #     - name: applicable_peer_types
+  #       peer: ServicePeering
+  #       label: "Applicable Peering Types"
+  #       optional: true
+  #       cardinality: many
+  #       kind: Generic
+  #       order_weight: 2000
+  #       description: "Peering types this policy can be applied to"
+
+# extensions:
+#   nodes:
+#     - kind: RoutingAutonomousSystem
+#       relationships:
+#         - name: bgp_peering_sessions
+#           peer: ServiceBGPPeering
+#           label: BGP Peering Sessions
+#           optional: true
+#           cardinality: many
+#           kind: Component
+#           order_weight: 2600
+#     - kind: OrganizationGeneric
+#       relationships:
+#         - name: bgp_peering_sessions
+#           peer: ServiceBGPPeering
+#           label: BGP Peering Sessions
+#           optional: true
+#           cardinality: many
+#           kind: Component
+#           order_weight: 2500
+#           description: "BGP peering sessions with this organization"
+#         - name: ospf_peering_sessions
+#           peer: ServiceOSPFPeering
+#           label: OSPF Peering Sessions
+#           optional: true
+#           cardinality: many
+#           kind: Component
+#           order_weight: 2600
+#           description: "OSPF peering sessions with this organization"
+#         - name: peering_policies
+#           peer: ServicePeeringPolicy
+#           label: Peering Policies
+#           optional: true
+#           cardinality: many
+#           kind: Component
+#           order_weight: 2700
+#           description: "Peering policies applicable to this organization"

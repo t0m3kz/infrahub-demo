@@ -1,0 +1,176 @@
+#
+# F5 BIG-IP Load Balancer Configuration
+# Device: {{ name }}
+# Generated for {{ device_type.manufacturer.name }} {{ device_type.platform.netmiko_device_type }}
+# Management IP: {{ load_balancer_config.management_ip }}
+# Device Role: {{ load_balancer_config.device_role }}
+# Device Status: {{ load_balancer_config.device_status }}
+#
+
+# System Configuration
+sys global-settings {
+    mgmt-dhcp disabled
+    gui-setup disabled
+}
+
+# NTP Configuration
+sys ntp {
+    timezone UTC
+}
+
+# DNS Configuration
+sys dns {
+    name-servers { 8.8.8.8 8.8.4.4 }
+}
+
+# SNMP Configuration
+sys snmp {
+    agent-addresses { udp:161 }
+    communities {
+        public {
+            access ro
+            source default
+        }
+    }
+}
+
+{%- if vips %}
+{%- for vip in vips %}
+{%- if vip.backend_servers %}
+
+# Pool configuration for {{ vip.hostname }}
+ltm pool {{ vip.hostname | replace('.', '_') | replace('-', '_') }}_pool {
+    {%- if vip.balance == 'roundrobin' %}
+    load-balancing-mode round-robin
+    {%- elif vip.balance == 'leastconn' %}
+    load-balancing-mode least-connections-member
+    {%- elif vip.balance == 'source' %}
+    load-balancing-mode source-address-hash
+    {%- elif vip.balance == 'random' %}
+    load-balancing-mode ratio-member
+    {%- else %}
+    load-balancing-mode round-robin
+    {%- endif %}
+
+    {%- if vip.mode == 'http' %}
+    monitor http
+    {%- else %}
+    monitor tcp
+    {%- endif %}
+
+    members {
+        {%- for server in vip.backend_servers %}
+        {{ server.ip_address }}:{{ server.port | default(80) }} {
+            address {{ server.ip_address }}
+            {%- if server.max_fails %}
+            ratio {{ server.max_fails }}
+            {%- endif %}
+        }
+        {%- endfor %}
+    }
+
+    {%- if vip.health_checks %}
+    {%- for check in vip.health_checks %}
+    # Health check: {{ check.check_type }} (rise={{ check.rise }}, fall={{ check.fall }}, timeout={{ check.timeout }}ms)
+    {%- endfor %}
+    {%- endif %}
+}
+
+# Virtual Server configuration for {{ vip.hostname }}
+ltm virtual {{ vip.hostname | replace('.', '_') | replace('-', '_') }}_vs {
+    destination {{ vip.ip_address.split('/')[0] }}:80
+    {%- if vip.ssl_certificate %}
+    profiles {
+        http { }
+        clientssl {
+            context clientside
+        }
+    }
+    {%- elif vip.mode == 'http' %}
+    profiles {
+        http { }
+        tcp { }
+    }
+    {%- else %}
+    profiles {
+        tcp { }
+    }
+    {%- endif %}
+
+    pool {{ vip.hostname | replace('.', '_') | replace('-', '_') }}_pool
+    source-address-translation {
+        type automap
+    }
+
+    {%- if vip.mode == 'http' %}
+    rules {
+        # HTTP processing rules can be added here
+    }
+    {%- endif %}
+}
+
+{%- if vip.ssl_certificate %}
+# SSL Certificate Profile for {{ vip.hostname }}
+ltm profile client-ssl {{ vip.hostname | replace('.', '_') | replace('-', '_') }}_clientssl {
+    cert {{ vip.ssl_certificate }}.crt
+    key {{ vip.ssl_certificate }}.key
+    chain {{ vip.ssl_certificate }}_chain.crt
+}
+
+# HTTPS Virtual Server for {{ vip.hostname }}
+ltm virtual {{ vip.hostname | replace('.', '_') | replace('-', '_') }}_https_vs {
+    destination {{ vip.ip_address.split('/')[0] }}:443
+    profiles {
+        http { }
+        {{ vip.hostname | replace('.', '_') | replace('-', '_') }}_clientssl {
+            context clientside
+        }
+    }
+    pool {{ vip.hostname | replace('.', '_') | replace('-', '_') }}_pool
+    source-address-translation {
+        type automap
+    }
+}
+{%- endif %}
+
+{%- endif %}
+{%- endfor %}
+{%- endif %}
+
+# System Statistics Configuration
+ltm virtual-address {{ load_balancer_config.management_ip }} {
+    address {{ load_balancer_config.management_ip }}
+    arp enabled
+    icmp-echo enabled
+    mask 255.255.255.255
+    route-advertisement disabled
+    spanning disabled
+    traffic-group traffic-group-local-only
+}
+
+# Management Interface Configuration
+net self {{ load_balancer_config.management_ip }}_self {
+    address {{ load_balancer_config.management_ip }}/24
+    allow-service {
+        default
+    }
+    traffic-group traffic-group-local-only
+    vlan internal
+}
+
+# HTTP Health Monitor
+ltm monitor http http_monitor {
+    defaults-from http
+    interval 30
+    timeout 91
+    send "GET /health HTTP/1.1\r\nHost: \r\nConnection: Close\r\n\r\n"
+    recv "200 OK"
+}
+
+# TCP Health Monitor
+ltm monitor tcp tcp_monitor {
+    defaults-from tcp
+    interval 30
+    timeout 91
+}
+

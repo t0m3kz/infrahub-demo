@@ -1,0 +1,116 @@
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimVirtualDevice
+  data:
+    - name: dc-1-lb-01
+      location:
+        kind: LocationBuilding
+        data:
+          name: DC-1
+          shortname: DC-1
+          parent: Katowice
+      device_type: HA-PROXY
+      object_template: HA-PROXY
+      status: active
+      cpu: 2
+      memory: 2
+      member_of_groups:
+        - loadbalancers
+      primary_address:
+        kind: IpamIPAddress
+        data:
+          address: 172.20.1.101
+      topology: DC-1
+      device_services:
+        kind: ServiceVIP
+        data:
+          - hostname: web-frontend.example.com
+            status: active
+            mode: http
+            description: HTTP VIP Application 1
+            owner:
+              kind: OrganizationCustomer
+              data:
+                name: Customer 1
+            vip_ip:
+              kind: IpamIPAddress
+              data:
+                address: 10.1.100.1
+            backend_servers:
+              kind: LoadbalancerServer
+              data:
+                - hostname: web-frontend-01
+                  ip_address:
+                    kind: IpamIPAddress
+                    data:
+                      address: 10.1.10.101
+                - hostname: web-frontend-02
+                  status: active
+                  ip_address:
+                    kind: IpamIPAddress
+                    data:
+                      address: 10.1.10.102
+            health_checks:
+              kind: LoadbalancerHealthCheck
+              data:
+                - check: ssl
+                  rise: 5
+                  fall: 2
+                  timeout: 20
+
+    - name: dc-1-lb-02
+      location:
+        kind: LocationBuilding
+        data:
+          name: DC-1
+          shortname: DC-1
+          parent: Katowice
+      object_template: NGINX
+      topology: DC-1
+      status: active
+      cpu: 2
+      memory: 2
+      member_of_groups:
+        - loadbalancers
+      primary_address:
+        kind: IpamIPAddress
+        data:
+          address: 172.20.1.102
+      device_services:
+        kind: ServiceVIP
+        data:
+          - hostname: tcp-frontend.example.com
+            owner:
+              kind: OrganizationCustomer
+              data:
+                name: Customer 2
+            status: active
+            mode: tcp
+            description: TCP VIP Application 2
+            vip_ip:
+              kind: IpamIPAddress
+              data:
+                address: 10.1.200.1
+            backend_servers:
+              kind: LoadbalancerServer
+              data:
+                - hostname: web-frontend-03
+                  ip_address:
+                    kind: IpamIPAddress
+                    data:
+                      address: 10.1.10.103
+                - hostname: web-frontend-04
+                  status: active
+                  ip_address:
+                    kind: IpamIPAddress
+                    data:
+                      address: 10.1.10.104
+            health_checks:
+              kind: LoadbalancerHealthCheck
+              data:
+                - check: tcp
+                  rise: 5
+                  fall: 2
+                  timeout: 20

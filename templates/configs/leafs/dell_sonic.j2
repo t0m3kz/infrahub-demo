@@ -1,0 +1,111 @@
+{#- Dell SONiC Leaf VXLAN Configuration Template -#}
+{#- Enable required features -#}
+nv overlay evpn
+feature ospf
+feature bgp
+feature interface-vlan
+feature vn-segment-vlan-based
+feature nv overlay
+
+hostname {{ hostname }}
+
+{#- VLAN Configuration with VN-Segments -#}
+{% for vlan in vlans %}
+vlan {{ vlan.vlan_id }}
+  vn-segment {{ vlan.vni }}
+{% endfor %}
+
+{#- Loopback Interfaces -#}
+{% for loopback_name, loopback_ip in loopbacks.items() %}
+interface {{ loopback_name }}
+{% if loopback_name == 'loopback0' %}
+  description {{ hostname }} Underlay Loopback Interface
+  ip address {{ loopback_ip }}/32
+  ip router ospf {{ ospf.process_id }} area {{ ospf.area }}
+{% elif loopback_name == 'loopback1' %}
+  description {{ hostname }} VTEP Loopback Interface
+  ip address {{ loopback_ip }}/32
+{#- loopback1 is NOT in OSPF, used only for iBGP EVPN overlay -#}
+{% else %}
+  description {{ hostname }} {{ loopback_name }} Interface
+  ip address {{ loopback_ip }}/32
+  ip router ospf {{ ospf.process_id }} area {{ ospf.area }}
+{% endif %}
+{% endfor %}
+
+{#- NVE Interface for VXLAN VTEP (using loopback1) -#}
+{% if loopbacks.loopback1 %}
+interface nve1
+  description VXLAN VTEP Interface
+  no shutdown
+  host-reachability protocol bgp
+  source-interface loopback1
+{% for vlan in vlans %}
+  member vni {{ vlan.vni }}
+    ingress-replication protocol bgp
+{% endfor %}
+{% endif %}
+
+{#- All Physical Interfaces (sorted) -#}
+{% for interface in interfaces.all_physical %}
+interface {{ interface.name }}
+{% if interface.description %}
+  description {{ interface.description }}
+{% elif interface.role == 'uplink' %}
+  description Uplink interface
+{% elif interface.role == 'customer' %}
+  description Customer interface
+{% else %}
+  description {{ interface.role|title }} interface
+{% endif %}
+{% if interface.role == 'uplink' %}
+  no switchport
+  mtu {{ interface.mtu }}
+  ip unnumbered loopback0
+  ip ospf network point-to-point
+  ip router ospf {{ ospf.process_id }} area {{ ospf.area }}
+  no shutdown
+{% elif interface.vlans %}
+{% if interface.vlans|length == 1 %}
+  switchport access vlan {{ interface.vlans[0] }}
+{% else %}
+  switchport trunk allowed vlan {{ interface.vlans|join(',') }}
+{% endif %}
+{% endif %}
+{% endfor %}
+
+{#- Management Interfaces -#}
+{% for interface in interfaces.management %}
+interface {{ interface.name }}
+{% if interface.description %}
+  description {{ interface.description }}
+{% else %}
+  description Management interface
+{% endif %}
+  vrf member management
+{% endfor %}
+
+{#- Console Interfaces -#}
+{% for interface in interfaces.console %}
+interface {{ interface.name }}
+{% if interface.description %}
+  description {{ interface.description }}
+{% else %}
+  description Console interface
+{% endif %}
+{% endfor %}
+
+{#- OSPF Configuration -#}
+router ospf {{ ospf.process_id }}
+  router-id {{ ospf.router_id }}
+
+router bgp {{ bgp.local_as }}
+  router-id {{ bgp.router_id }}
+{% for neighbor in bgp.neighbors %}
+  neighbor {{ neighbor.remote_ip.split('/')[0] }}
+    remote-as {{ neighbor.remote_as }}
+    update-source loopback0
+    address-family l2vpn evpn
+      send-community
+      send-community extended
+{% endfor %}

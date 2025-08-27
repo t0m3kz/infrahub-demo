@@ -1,0 +1,130 @@
+{#
+  BGP Peering Configuration Template for Cisco NX-OS
+  Supports both internal and external peering scenarios
+#}
+!
+! BGP Peering Configuration for {{ device_name }}
+!
+{%- for peering in bgp_peering_sessions %}
+{%- set session = peering %}
+{%- set local_as = session.local_as.asn %}
+{%- set remote_as = session.remote_as.asn %}
+{%- set local_ip = session.local_ip.address.split('/')[0] %}
+{%- set remote_ip = session.remote_ip.address.split('/')[0] %}
+
+{%- if session.session_scope == 'EXTERNAL' and session.external_organization %}
+! External peering with {{ session.external_organization.name }}
+! Peering Type: {{ session.peering_type }}
+{%- else %}
+! Internal peering session
+{%- endif %}
+!
+router bgp {{ local_as }}
+{%- if not loop.first %}
+  ! Additional peering session
+{%- endif %}
+
+  {%- if session.peer_group %}
+  ! Using peer group: {{ session.peer_group.name }}
+  template peer-policy {{ session.peer_group.name }}-POLICY
+  {%- if session.peer_group.send_community %}
+    send-community
+  {%- endif %}
+  {%- if session.peer_group.send_community_extended %}
+    send-community extended
+  {%- endif %}
+  {%- if session.peer_group.route_reflector_client %}
+    route-reflector-client
+  {%- endif %}
+  {%- if session.peer_group.local_pref %}
+    route-map {{ session.peer_group.name }}-LOCAL-PREF-IN in
+  {%- endif %}
+  {%- if session.peer_group.maximum_routes %}
+    maximum-prefix {{ session.peer_group.maximum_routes }}
+  {%- endif %}
+  exit-peer-policy
+
+  template peer-session {{ session.peer_group.name }}-SESSION
+  {%- if session.peer_group.bfd_enabled %}
+    bfd
+  {%- endif %}
+  {%- if session.peer_group.password %}
+    password {{ session.peer_group.password }}
+  {%- endif %}
+  {%- if session.peer_group.ebgp_multihop > 0 %}
+    ebgp-multihop {{ session.peer_group.ebgp_multihop }}
+  {%- endif %}
+    update-source {{ local_ip }}
+  exit-peer-session
+  {%- endif %}
+
+  ! Neighbor configuration
+  neighbor {{ remote_ip }}
+    remote-as {{ remote_as }}
+    description {{ session.description or session.name }}
+  {%- if session.peer_group %}
+    inherit peer-session {{ session.peer_group.name }}-SESSION
+  {%- else %}
+    {%- if session.bfd_enabled %}
+    bfd
+    {%- endif %}
+    {%- if session.password %}
+    password {{ session.password }}
+    {%- endif %}
+    {%- if session.session_type == 'EBGP_MULTIHOP' %}
+    ebgp-multihop {{ session.ttl_security or 5 }}
+    {%- endif %}
+    update-source {{ local_ip }}
+  {%- endif %}
+  {%- if session.admin_state == 'DOWN' %}
+    shutdown
+  {%- endif %}
+
+    address-family ipv4 unicast
+  {%- if session.peer_group %}
+      inherit peer-policy {{ session.peer_group.name }}-POLICY
+  {%- else %}
+    {%- if session.send_community %}
+      send-community
+    {%- endif %}
+    {%- if session.send_extended_community %}
+      send-community extended
+    {%- endif %}
+    {%- if session.maximum_routes %}
+      maximum-prefix {{ session.maximum_routes }}
+    {%- endif %}
+  {%- endif %}
+  {%- if session.import_policy %}
+      route-map {{ session.import_policy }} in
+  {%- endif %}
+  {%- if session.export_policy %}
+      route-map {{ session.export_policy }} out
+  {%- endif %}
+  {%- if session.remove_private_as %}
+      remove-private-as
+  {%- endif %}
+    exit-address-family
+  !
+{%- endfor %}
+
+{%- if bgp_peering_sessions %}
+! Route-map configurations for peering policies
+{%- for peering in bgp_peering_sessions %}
+{%- set session = peering %}
+{%- if session.peer_group and session.peer_group.local_pref %}
+route-map {{ session.peer_group.name }}-LOCAL-PREF-IN permit 10
+  set local-preference {{ session.peer_group.local_pref }}
+!
+{%- endif %}
+{%- if session.local_pref %}
+route-map {{ session.name }}-LOCAL-PREF-IN permit 10
+  set local-preference {{ session.local_pref }}
+!
+{%- endif %}
+{%- if session.med %}
+route-map {{ session.name }}-MED-OUT permit 10
+  set metric {{ session.med }}
+!
+{%- endif %}
+{%- endfor %}
+{%- endif %}

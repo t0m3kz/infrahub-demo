@@ -87,7 +87,7 @@ generics:
         peer: DesignTopology
         optional: false
         cardinality: one
-        kind: Parent
+        kind: Hierarchy
         order_weight: 4
       - name: management_subnet
         peer: IpamPrefix
@@ -108,6 +108,7 @@ generics:
         cardinality: many
         kind: Component
         order_weight: 100
+
 nodes:
   # --------------------  Topology  --------------------
   - name: Topology
@@ -348,21 +349,12 @@ nodes:
         optional: false
         order_weight: 5
         choices:
-          - name: ebgp-ebgp
-            label: ebgp-ebgp
-            color: "#7f7fff"
-          - name: ospf-ebgp
-            label: ospf-ebgp
-            color: "#bf7fbf"
-          - name: isis-ebgp
-            label: isis-ebgp
-            color: "#bf7f7f"
           - name: ospf-ibgp
             label: ospf-ibgp
             color: "#aedcee"
-          - name: isis-ibgp
-            label: isis-ibgp
-            color: "#bf7f3c"
+          - name: ebgp-ibgp
+            label: ebgp-ibgp
+            color: "#7f7fff"
       # - name: technical
       #   kind: IPNetwork
       #   label: Technical Subnet
@@ -466,3 +458,4 @@ extensions:
           cardinality: one
           kind: Attribute
           optional: true
+

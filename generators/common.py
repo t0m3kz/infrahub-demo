@@ -186,28 +186,18 @@ class TopologyCreator:
                     "shortname": self.data["name"],
                     "parent": self.data["location"]["id"],
                 },
-                # "store_key": self.data["name"],
+                "store_key": self.data["name"],
             },
         )
 
-    async def create_address_pools(self) -> None:
-        """Create objects of a specific kind and store in local store."""
+    async def create_address_pools(self, subnets: list[dict]) -> None:
+        """Create objects of a specific kind and store in local store.
+
+        Args:
+            subnets: List of subnet dicts with 'type' and 'prefix_id' keys.
+                    Format: [{"type": "Management", "prefix_id": "subnet_id"}, ...]
+        """
         self.log.info("Creating address pools")
-        pools = []
-        if self.data.get("management_subnet"):
-            pools.append(
-                {
-                    "type": "Management",
-                    "prefix_id": self.data["management_subnet"]["id"],
-                },
-            )
-        if self.data.get("technical_subnet"):
-            pools.append(
-                {
-                    "type": "Loopback",
-                    "prefix_id": self.data["technical_subnet"]["id"],
-                },
-            )
 
         await self._create_in_batch(
             kind="CoreIPAddressPool",
@@ -222,9 +212,97 @@ class TopologyCreator:
                     },
                     "store_key": f"{pool.get('type', '').lower()}_ip_pool",
                 }
-                for pool in pools
+                for pool in subnets
             ],
         )
+
+    async def create_split_loopback_pools(self, technical_subnet_obj: Any) -> None:
+        """Create separate IP address pools for underlay and VTEP loopbacks.
+
+        Args:
+            technical_subnet_obj: The technical subnet object to split
+        """
+        self.log.info("Creating split loopback pools for underlay and VTEP")
+
+        # Split the technical subnet
+        underlay_subnet_obj, vtep_subnet_obj = await self.split_technical_subnet(
+            technical_subnet_obj
+        )
+
+        # Create address pools for both subnets
+        subnets = [
+            {
+                "type": "Loopback",
+                "prefix_id": underlay_subnet_obj.id,
+            },
+            {
+                "type": "Loopback-VTEP",
+                "prefix_id": vtep_subnet_obj.id,
+            },
+        ]
+
+        await self.create_address_pools(subnets)
+
+    async def split_technical_subnet(
+        self, technical_subnet_obj: Any
+    ) -> tuple[Any, Any]:
+        """
+        Split the technical subnet into two equal halves for underlay and VTEP loopbacks.
+
+        Args:
+            technical_subnet_obj: The technical subnet object to split
+
+        Returns:
+            tuple: (underlay_subnet_obj, vtep_subnet_obj)
+        """
+        import ipaddress
+
+        # Get the prefix from the technical subnet
+        original_prefix = ipaddress.ip_network(technical_subnet_obj.prefix.value)
+
+        # Split into two equal subnets by adding 1 to the prefix length
+        subnets = list(original_prefix.subnets(prefixlen_diff=1))
+
+        if len(subnets) < 2:
+            raise ValueError(f"Cannot split {original_prefix} - too small to split")
+
+        underlay_subnet = subnets[0]  # First half for underlay
+        vtep_subnet = subnets[1]  # Second half for VTEP
+
+        self.log.info(f"Splitting {original_prefix} into:")
+        self.log.info(f"  - Underlay: {underlay_subnet}")
+        self.log.info(f"  - VTEP: {vtep_subnet}")
+
+        # Create the underlay subnet object
+        underlay_subnet_data = {
+            "prefix": str(underlay_subnet),
+            "status": "active",
+            "role": "loopback",
+            "description": f"{self.data.get('name')} Underlay Loopback Subnet",
+        }
+
+        underlay_subnet_obj = await self.client.create(
+            kind="IpamPrefix", data=underlay_subnet_data, branch=self.branch
+        )
+        await underlay_subnet_obj.save(allow_upsert=True)
+
+        # Create the VTEP subnet object
+        vtep_subnet_data = {
+            "prefix": str(vtep_subnet),
+            "status": "active",
+            "role": "loopback-vtep",
+            "description": f"{self.data.get('name')} VTEP Loopback Subnet",
+        }
+
+        vtep_subnet_obj = await self.client.create(
+            kind="IpamPrefix", data=vtep_subnet_data, branch=self.branch
+        )
+        await vtep_subnet_obj.save(allow_upsert=True)
+
+        self.log.info(f"Created underlay subnet: {str(underlay_subnet)}")
+        self.log.info(f"Created VTEP subnet: {str(vtep_subnet)}")
+
+        return underlay_subnet_obj, vtep_subnet_obj
 
     async def create_L2_pool(self) -> None:
         """Create objects of a specific kind and store in local store."""
@@ -232,16 +310,18 @@ class TopologyCreator:
             kind="CoreNumberPool",
             data={
                 "payload": {
-                    "name": f"{self.data.get('name')}-vlan-pool",
-                    "description": f"{self.data.get('name')} L2 Segment Number Pool",
+                    "name": f"{self.data.get('name')}-VLAN-POOL",
+                    "description": f"{self.data.get('name')} VLAN Number Pool",
                     "node": "ServiceNetworkSegment",
-                    "node_attribute": "vni",
-                    "start_range": 12000000,
-                    "end_range": 12009999,
+                    "node_attribute": "vlan_id",
+                    "start_range": 100,
+                    "end_range": 4000,
                 },
                 # "store_key": f"{pool.get('type').lower()}_ip_pool",
             },
         )
+
+    # Removed create_p2p_ip_pool method - not needed for unnumbered interfaces
 
     async def create_devices(self) -> None:
         self.log.info(f"Create devices for {self.data.get('name')}")
@@ -278,9 +358,6 @@ class TopologyCreator:
                     ).id,
                     "topology": self.data.get("id"),
                     "member_of_groups": [
-                        self.client.store.get_by_hfid(
-                            key=f"CoreStandardGroup__{device['device_type']['manufacturer']['name'].lower().replace(' ', '_')}_{device['role']}"
-                        ),
                         self.client.store.get_by_hfid(
                             key=f"CoreStandardGroup__{device['role']}s"
                         ),
@@ -408,9 +485,22 @@ class TopologyCreator:
         except ValidationError as exc:
             self.log.debug(f"- Creation failed due to {exc}")
 
-    async def create_loopback(self, loopback_name: str) -> None:
-        """Create loopback interfaces"""
-        self.log.info(f"Creating {loopback_name} interfaces")
+    async def create_loopback(
+        self,
+        loopback_name: str,
+        pool_key: str = "loopback_ip_pool",
+        interface_role: str = "loopback",
+        loopback_type: str = "Loopback",
+    ) -> None:
+        """Create loopback interfaces with specified IP pool, role, and type
+
+        Args:
+            loopback_name: Name of the loopback interface (e.g., 'loopback0', 'loopback1')
+            pool_key: Key for the IP address pool to use (default: 'loopback_ip_pool')
+            interface_role: Interface role for the schema (default: 'loopback')
+            loopback_type: Type description for logging and descriptions (default: 'Loopback')
+        """
+        self.log.info(f"Creating {loopback_name} {loopback_type.lower()} interfaces")
         await self._create_in_batch(
             kind="DcimVirtualInterface",
             data_list=[
@@ -421,21 +511,21 @@ class TopologyCreator:
                         "ip_addresses": [
                             await self.client.allocate_next_ip_address(
                                 resource_pool=self.client.store.get(
-                                    kind=CoreIPAddressPool, key="loopback_ip_pool"
+                                    kind=CoreIPAddressPool, key=pool_key
                                 ),
                                 identifier=f"{device.name.value}-{loopback_name}",
                                 data={
-                                    "description": f"{device.name.value} Loopback IP"
+                                    "description": f"{device.name.value} {loopback_type} IP"
                                 },
                             ),
                         ],
-                        "role": "loopback",
+                        "role": interface_role,
                         "status": "active",
-                        "description": f"{device.name.value} {loopback_name} Interface",
+                        "description": f"{device.name.value} {loopback_name} {loopback_type} Interface",
                     },
                     "store_key": f"{device.name.value}-{loopback_name}",
                 }
                 for device in self.devices
-                if device.role.value in ["spine", "leaf", "edge"]
+                if device.role.value in ["spine", "leaf", "border_leaf", "edge"]
             ],
         )

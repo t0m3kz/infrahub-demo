@@ -25,12 +25,6 @@ generics:
         optional: true
         order_weight: 1200
     relationships:
-      - name: namespaces
-        peer: IpamNamespace
-        cardinality: many
-        kind: Component
-        optional: true
-        order_weight: 2000
       - name: tags
         peer: BuiltinTag
         cardinality: many
@@ -50,7 +44,7 @@ nodes:
     order_by:
       - name__value
     display_labels:
-      - name__value    
+      - name__value
     attributes:
       - name: name
         kind: Text
@@ -59,7 +53,7 @@ nodes:
       - name: description
         kind: Text
         optional: true
-        order_weight: 1200    
+        order_weight: 1200
     relationships:
       - name: device_type
         peer: DcimDeviceType
@@ -81,10 +75,72 @@ nodes:
 
   - name: Customer
     namespace: Organization
-    description: Customer
-    icon: mdi:domain
+    description: Customer with dedicated network namespace for multi-tenant isolation
+    icon: mdi:account-group
     inherit_from:
       - OrganizationGeneric
     include_in_menu: true
     menu_placement: OrganizationGeneric
-    
+    attributes:
+      - name: customer_id
+        kind: Text
+        unique: true
+        optional: true
+        description: "Unique customer identifier"
+        order_weight: 900
+      # - name: tenant_type
+      #   kind: Dropdown
+      #   description: "Type of tenancy model"
+      #   choices:
+      #     - name: dedicated
+      #       label: Dedicated Namespace
+      #       description: "Customer has dedicated namespace isolation"
+      #       color: "#2E8B57"
+      #     - name: shared
+      #       label: Shared Namespace
+      #       description: "Customer shares namespace with other tenants"
+      #       color: "#4682B4"
+      #     - name: hybrid
+      #       label: Hybrid
+      #       description: "Customer has both dedicated and shared resources"
+      #       color: "#9370DB"
+      #   default_value: dedicated
+      #   optional: true
+      #   order_weight: 950
+      # - name: size
+      #   kind: Dropdown
+      #   description: "Customer size tier determining resource allocation"
+      #   choices:
+      #     - name: s
+      #       label: Small (S)
+      #       description: "Small customer - limited resources"
+      #       color: "#90EE90"
+      #     - name: m
+      #       label: Medium (M)
+      #       description: "Medium customer - standard resources"
+      #       color: "#87CEEB"
+      #     - name: l
+      #       label: Large (L)
+      #       description: "Large customer - expanded resources"
+      #       color: "#DDA0DD"
+      #     - name: x
+      #       label: Extra Large (X)
+      #       description: "Enterprise customer - maximum resources"
+      #       color: "#F0E68C"
+      #   default_value: m
+      #   optional: true
+      #   order_weight: 1300
+    relationships:
+      - name: ip_prefixes
+        peer: IpamPrefix
+        cardinality: many
+        kind: Component
+        optional: true
+        description: "IP prefixes allocated to this customer"
+        order_weight: 2200
+      - name: namespaces
+        peer: IpamNamespace
+        cardinality: many
+        kind: Component
+        optional: true
+        order_weight: 2000

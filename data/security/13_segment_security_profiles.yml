@@ -1,0 +1,114 @@
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: SecuritySegmentSecurityProfile
+  data:
+    - name: "WEB-TIER-SECURITY-PROFILE"
+      description: "Security profile for web tier segments"
+      default_action: "deny"
+      enable_micro_segmentation: true
+      enable_dhcp_snooping: true
+      enable_arp_inspection: true
+      max_mac_addresses: 100
+      # allowed_protocols:
+      #   - "http"
+      #   - "https"
+      #   - "dns"
+      # blocked_protocols:
+      #   - "ftp"
+      #   - "smtp"
+
+    - name: "APP-TIER-SECURITY-PROFILE"
+      description: "Security profile for application tier segments"
+      default_action: "deny"
+      enable_micro_segmentation: true
+      enable_dhcp_snooping: true
+      enable_arp_inspection: true
+      max_mac_addresses: 50
+      # allowed_protocols:
+      #   - "https"
+      #   - "ldap"
+      #   - "ldaps"
+      #   - "dns"
+      # blocked_protocols:
+      #   - "ftp"
+      #   - "smtp"
+
+    - name: "DATABASE-SECURITY-PROFILE"
+      description: "Security profile for database tier segments"
+      default_action: "deny"
+      enable_micro_segmentation: true
+      enable_dhcp_snooping: true
+      enable_arp_inspection: true
+      max_mac_addresses: 10
+      # allowed_protocols:
+      #   - "dns"
+      # blocked_protocols:
+      #   - "http"
+      #   - "https"
+      #   - "ftp"
+      #   - "smtp"
+
+    - name: "TENANT-SECURITY-PROFILE"
+      description: "Security profile for tenant dedicated segments"
+      default_action: "deny"
+      enable_micro_segmentation: true
+      enable_dhcp_snooping: true
+      enable_arp_inspection: true
+      max_mac_addresses: 200
+      # allowed_protocols:
+      #   - "http"
+      #   - "https"
+      #   - "ssh"
+      #   - "dns"
+
+    - name: "MANAGEMENT-SECURITY-PROFILE"
+      description: "Security profile for management segments"
+      default_action: "deny"
+      enable_micro_segmentation: true
+      enable_dhcp_snooping: true
+      enable_arp_inspection: true
+      max_mac_addresses: 20
+      # allowed_protocols:
+      #   - "ssh"
+      #   - "snmp"
+      #   - "dns"
+      #   - "ntp"
+      # blocked_protocols:
+      #   - "http"
+      #   - "ftp"
+      #   - "smtp"
+
+    - name: "GUEST-SECURITY-PROFILE"
+      description: "Security profile for guest segments"
+      default_action: "deny"
+      enable_micro_segmentation: false
+      enable_dhcp_snooping: true
+      enable_arp_inspection: false
+      max_mac_addresses: 1000
+      # allowed_protocols:
+      #   - "http"
+      #   - "https"
+      #   - "dns"
+      # blocked_protocols:
+      #   - "ssh"
+      #   - "snmp"
+      #   - "ftp"
+      #   - "smtp"
+
+    - name: "DMZ-SECURITY-PROFILE"
+      description: "Security profile for DMZ segments"
+      default_action: "deny"
+      enable_micro_segmentation: true
+      enable_dhcp_snooping: true
+      enable_arp_inspection: true
+      max_mac_addresses: 50
+      # allowed_protocols:
+      #   - "http"
+      #   - "https"
+      #   - "smtp"
+      #   - "dns"
+      # blocked_protocols:
+      #   - "ssh"
+      #   - "snmp"

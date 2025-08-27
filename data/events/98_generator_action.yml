@@ -4,9 +4,9 @@ kind: Object
 spec:
   kind: CoreGeneratorAction
   data:
-  - name: dc
-    description: Data Center
-    generator: create_dc
-  - name: pop
-    description: Point of Presence
-    generator: create_pop
+    - name: dc
+      description: Data Center
+      generator: create_dc
+    - name: pop
+      description: Point of Presence
+      generator: create_pop

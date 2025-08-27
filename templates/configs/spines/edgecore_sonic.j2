@@ -1,0 +1,75 @@
+{
+  "DEVICE_METADATA": {
+    "localhost": {
+      "hostname": "{{ hostname }}",
+      "type": "SpineRouter",
+      "bgp_asn": "{{ bgp.local_as }}"
+    }
+  },
+  "LOOPBACK_INTERFACE": {
+{% for interface in interface_roles.loopback %}
+  {% if interface.ip_address %}
+    "{{ interface.name }}|{{ interface.ip_address }}": {}{{ "," if not loop.last }}
+  {% endif %}
+{% endfor %}
+  },
+  "INTERFACE": {
+{% for interface in interface_roles.all_downlink %}
+    "{{ interface.name }}": {}{{ "," if not loop.last }}
+{% endfor %}
+  },
+  "BGP_NEIGHBOR": {
+{% for neighbor in bgp.neighbors %}
+    "{{ neighbor.remote_ip.split('/')[0] }}": {
+      "local_addr": "{{ bgp.router_id or loopbacks.loopback0 }}",
+      "asn": "{{ neighbor.remote_as }}",
+      "holdtime": "10",
+      "keepalive": "3",
+      "name": "{{ neighbor.description or 'BGP Neighbor' }}"
+    }{{ "," if not loop.last }}
+{% endfor %}
+  },
+  "BGP_GLOBALS": {
+    "default": {
+      "router_id": "{{ bgp.router_id or loopbacks.loopback0 }}",
+      "local_asn": "{{ bgp.local_as }}"
+    }
+  },
+  "OSPF_ROUTER": {
+    "default": {
+      "router_id": "{{ ospf.router_id or loopbacks.loopback0 }}"
+    }
+  },
+  "OSPF_INTERFACE": {
+{% for interface in interface_roles.all_downlink %}
+    "{{ interface.name }}": {
+      "area": "{{ ospf.area or '0.0.0.0' }}",
+      "network": "point-to-point"
+    }{{ "," if not loop.last }}
+{% endfor %}
+{% if interface_roles.all_downlink and interface_roles.loopback %},{% endif %}
+{% for interface in interface_roles.loopback %}
+  {% if interface.name == 'loopback0' %}
+    "{{ interface.name }}": {
+      "area": "{{ ospf.area or '0.0.0.0' }}"
+    }{{ "," if not loop.last }}
+  {% endif %}
+{% endfor %}
+  },
+  "BGP_PEER_GROUP": {
+    "UNDERLAY": {
+      "asn": "{{ bgp.local_as }}"
+    },
+    "EVPN_OVERLAY": {
+      "asn": "{{ bgp.local_as }}"
+    }
+  },
+  "BGP_NEIGHBOR_AF": {
+{% for neighbor in bgp.neighbors %}
+    "{{ neighbor.remote_ip.split('/')[0] }}|l2vpn_evpn": {
+      "admin_status": "up",
+      "route_reflector_client": "true"
+    }{{ "," if not loop.last }}
+{% endfor %}
+  }
+}
