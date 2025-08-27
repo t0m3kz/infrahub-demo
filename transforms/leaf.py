@@ -3,7 +3,7 @@ from typing import Any
 from infrahub_sdk.transforms import InfrahubTransform
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
-from .common import get_data
+from .common import get_bgp_profile, get_data, get_interfaces, get_ospf, get_vlans
 
 
 class Leaf(InfrahubTransform):
@@ -11,6 +11,8 @@ class Leaf(InfrahubTransform):
 
     async def transform(self, data: Any) -> Any:
         data = get_data(data)
+
+        bgp = get_bgp_profile(data.get("device_services"))
 
         # Get platform information
         platform = data["device_type"]["platform"]["netmiko_device_type"]
@@ -27,6 +29,12 @@ class Leaf(InfrahubTransform):
         # Render the template with enhanced data
         template = env.get_template(template_name)
 
-        # return print(config)
+        config = {
+            "name": data.get("name"),
+            "bgp": bgp,
+            "ospf": get_ospf(data.get("device_services")),
+            "interfaces": get_interfaces(data.get("interfaces")),
+            "vlans": get_vlans(data.get("interfaces")),
+        }
 
-        return template.render(**data)
+        return template.render(**config)

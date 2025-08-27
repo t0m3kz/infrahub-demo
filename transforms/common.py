@@ -8,6 +8,8 @@ from nested data structures returned by Infrahub APIs.
 from collections import defaultdict
 from typing import Any
 
+from netutils.interface import sort_interface_list
+
 
 def clean_data(data: Any) -> Any:
     """
@@ -101,19 +103,83 @@ def get_bgp_profile(device_services: list[dict[str, Any]]) -> list[dict[str, Any
     return grouped
 
 
+def get_ospf(device_services: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """
+    Extract OSPF configuration information.
+    """
+    ospf_configs: list[dict[str, Any]] = []
+
+    for service in device_services:
+        if service.get("typename") == "ServiceOSPF":
+            ospf_config = {
+                "process_id": service.get("process_id", 1),
+                "router_id": service.get("router_id", {}).get("address", ""),
+                "area": service.get("area", {}).get("area"),
+                "reference_bandwidth": service.get("reference_bandwidth", 10000),
+            }
+            ospf_configs.append(ospf_config)
+
+    return ospf_configs
+
+
 def get_vlans(data: list) -> list[dict[str, Any]]:
     """
     Extracts VLAN information from the input data.
+    Returns a list of dicts with only vlan_id and name, unique per (vlan_id, name).
     """
     return [
-        dict(t)
-        for t in {
-            tuple(d.items())
-            for d in [
-                segment
-                for interface in data
-                for segment in interface.get("interface_services", [])
-                if segment.get("typename") == "ServiceNetworkSegment"
-            ]
+        {"vlan_id": vlan_id, "name": vlan_name}
+        for vlan_id, vlan_name in {
+            (segment.get("vlan_id"), segment.get("name"))
+            for interface in data
+            for segment in interface.get("interface_services", [])
+            if segment.get("typename") == "ServiceNetworkSegment"
         }
+    ]
+
+
+def get_interfaces(data: list) -> list[dict[str, Any]]:
+    """
+    Returns a list of interface dictionaries sorted by interface name.
+    Only includes 'ospf' key if OSPF area is present.
+    Includes IP addresses, description, status, role, and other interface data.
+    """
+    sorted_names = sort_interface_list(
+        [iface.get("name") for iface in data if iface.get("name")]
+    )
+    name_to_interface = {}
+    for iface in data:
+        name = iface.get("name")
+        if not name:
+            continue
+
+        vlans = [
+            s.get("vlan_id")
+            for s in iface.get("interface_services", [])
+            if s.get("typename") == "ServiceNetworkSegment"
+        ]
+        ospf_areas = [
+            s.get("area", {}).get("area")
+            for s in iface.get("interface_services", [])
+            if s.get("typename") == "ServiceOSPF"
+        ]
+
+        iface_dict = {
+            "name": name,
+            "vlans": vlans,
+            "description": iface.get("description"),
+            "status": iface.get("status"),
+            "role": iface.get("role"),
+            "interface_type": iface.get("interface_type"),
+            "mtu": iface.get("mtu"),
+            "ip_addresses": iface.get("ip_addresses", []),
+        }
+
+        if ospf_areas:
+            iface_dict["ospf"] = {"area": ospf_areas[0]}
+
+        name_to_interface[name] = iface_dict
+
+    return [
+        name_to_interface[name] for name in sorted_names if name in name_to_interface
     ]
