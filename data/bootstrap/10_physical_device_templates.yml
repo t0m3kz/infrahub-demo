@@ -473,8 +473,6 @@ spec:
     - template_name: DCS-7280DR3-24-F_SPINE
       device_type: DCS-7280DR3-24-F
       role: spine
-      member_of_groups:
-        - spines
       status: active
       interfaces:
         kind: TemplateDcimPhysicalInterface

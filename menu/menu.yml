@@ -171,8 +171,33 @@ spec:
                   label: DNS Servers
                   kind: NetworkNameServer
                   icon: "mdi:dns"
+          # --------- Routing & Peering ---------
+          - namespace: Service
+            name: RoutingMenu
+            label: Routing & Peering
+            icon: "mdi:router"
+            children:
+              data:
+                - namespace: Service
+                  name: BGPPeering
+                  label: "BGP Peering Sessions"
+                  kind: ServiceBGPPeering
+                  icon: "carbon:network-4-reference"
+                  description: "BGP peering sessions with internal devices and external partners"
 
+                - namespace: Service
+                  name: OSPFPeering
+                  label: "OSPF Peering Sessions"
+                  kind: ServiceOSPFPeering
+                  icon: "carbon:network-4-reference"
+                  description: "OSPF peering sessions with internal devices and external partners"
 
+                - namespace: Service
+                  name: PeeringPolicy
+                  label: "Peering Policies"
+                  kind: ServicePeeringPolicy
+                  icon: "carbon:policy"
+                  description: "Routing policies for peering relationships"
     # ==================== SECURITY MANAGEMENT =====================
     # - namespace: Security
     #   name: SecurityMenu

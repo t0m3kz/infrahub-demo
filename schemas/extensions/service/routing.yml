@@ -46,7 +46,7 @@ nodes:
     inherit_from:
       - ServiceGeneric
       - ServiceGenericDevice
-      - ServiceGenericHInterfaces
+      - ServiceGenericInterfaces
       - ServiceRouting
     attributes:
       - name: process_id
@@ -133,7 +133,7 @@ nodes:
     inherit_from:
       - ServiceGeneric
       - ServiceGenericDevice
-      - ServiceGenericHInterfaces
+      - ServiceGenericInterfaces
       - ServiceRouting
     human_friendly_id:
       - "name__value"
@@ -223,7 +223,7 @@ nodes:
     inherit_from:
       - ServiceGeneric
       - ServiceGenericDevice
-      - ServiceGenericHInterfaces
+      - ServiceGenericInterfaces
       - ServiceRouting
     attributes:
       - name: dr_priority

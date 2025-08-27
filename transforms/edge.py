@@ -2,9 +2,8 @@ from typing import Any
 
 from infrahub_sdk.transforms import InfrahubTransform
 from jinja2 import Environment, FileSystemLoader, select_autoescape
-from netutils.utils import jinja2_convenience_function
 
-from .common import get_data
+from .common import get_bgp_profile, get_data, get_interfaces, get_ospf, get_vlans
 
 
 class Edge(InfrahubTransform):
@@ -12,6 +11,8 @@ class Edge(InfrahubTransform):
 
     async def transform(self, data: Any) -> Any:
         data = get_data(data)
+
+        bgp = get_bgp_profile(data.get("device_services"))
 
         # Get platform information
         platform = data["device_type"]["platform"]["netmiko_device_type"]
@@ -22,14 +23,18 @@ class Edge(InfrahubTransform):
             loader=FileSystemLoader(template_path),
             autoescape=select_autoescape(["j2"]),
         )
-        env.filters.update(jinja2_convenience_function())
-
         # Select the template for leaf devices based on platform
         template_name = f"{platform}.j2"
 
         # Render the template with enhanced data
-        rendered_config = env.get_template(template_name).render(data=data)
+        template = env.get_template(template_name)
 
-        # return print(config)
+        config = {
+            "name": data.get("name"),
+            "bgp": bgp,
+            "ospf": get_ospf(data.get("device_services")),
+            "interfaces": get_interfaces(data.get("interfaces")),
+            "vlans": get_vlans(data.get("interfaces")),
+        }
 
-        return rendered_config
+        return template.render(**config)
