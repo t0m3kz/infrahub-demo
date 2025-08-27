@@ -23,6 +23,27 @@ updates:
       infrahub-sdk:
         patterns:
           - "infrahub-sdk"
+  - package-ecosystem: "uv"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "12:00"
+    open-pull-requests-limit: 10
+    target-branch: main
+    labels:
+      - "dependencies"
+      - "patch"
+    ignore:
+      - dependency-name: "pytest"
+        update-types: ["version-update:semver-major"]
+    groups:
+      all:
+        patterns:
+          - "^(?!infrahub-sdk$).*"  # Exclude infrahub-sdk from this group
+      infrahub-sdk:
+        patterns:
+          - "infrahub-sdk"
   # Maintain dependencies for GitHub Actions
   - package-ecosystem: "github-actions"
     directory: "/"

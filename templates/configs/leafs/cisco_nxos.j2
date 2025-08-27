@@ -68,11 +68,9 @@ router bgp {{ bgp_config.local_as.asn }}
 {%- if bgp_config.session_type == 'INTERNAL' %}
     route-reflector-client
 {%- endif %}
-  exit-peer-policy
   !
   template peer-session {{ bgp_config.profile }}-SESSION
     update-source {{ bgp_config.local_ip.address.split('/')[0] }}
-  exit-peer-session
   !
   address-family ipv4 unicast
 {%- if bgp_config.multipath %}

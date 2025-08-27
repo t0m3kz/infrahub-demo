@@ -12,8 +12,6 @@ class Leaf(InfrahubTransform):
     async def transform(self, data: Any) -> Any:
         data = get_data(data)
 
-        bgp = get_bgp_profile(data.get("device_services"))
-
         # Get platform information
         platform = data["device_type"]["platform"]["netmiko_device_type"]
 
@@ -29,6 +27,7 @@ class Leaf(InfrahubTransform):
         # Render the template with enhanced data
         template = env.get_template(template_name)
 
+        bgp = get_bgp_profile(data.get("device_services"))
         config = {
             "name": data.get("name"),
             "bgp": bgp,
