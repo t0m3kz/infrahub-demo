@@ -1,0 +1,195 @@
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: SecuritySegmentAccessControlList
+  data:
+    - name: "WEB-TIER-INGRESS-ACL"
+      description: "Ingress ACL for web tier segments"
+      acl_type: "extended"
+
+    - name: "WEB-TIER-EGRESS-ACL"
+      description: "Egress ACL for web tier segments"
+      acl_type: "extended"
+
+    - name: "APP-TIER-INGRESS-ACL"
+      description: "Ingress ACL for application tier segments"
+      acl_type: "extended"
+
+    - name: "APP-TIER-EGRESS-ACL"
+      description: "Egress ACL for application tier segments"
+      acl_type: "extended"
+
+    - name: "DB-TIER-INGRESS-ACL"
+      description: "Ingress ACL for database tier segments"
+      acl_type: "extended"
+
+    - name: "DB-TIER-EGRESS-ACL"
+      description: "Egress ACL for database tier segments"
+      acl_type: "extended"
+
+    - name: "TENANT-INGRESS-ACL"
+      description: "Ingress ACL for tenant segments"
+      acl_type: "extended"
+
+    - name: "MANAGEMENT-ACL"
+      description: "Management segment access control"
+      acl_type: "extended"
+
+    - name: "GUEST-ACL"
+      description: "Guest segment access control"
+      acl_type: "standard"
+
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: SecuritySegmentACLRule
+  data:
+    # Web Tier Rules
+    - index: 10
+      name: "ALLOW-HTTP-FROM-INTERNET"
+      action: "permit"
+      direction: "ingress"
+      log: true
+      description: "Allow HTTP traffic from internet to web tier"
+      acl: "WEB-TIER-INGRESS-ACL"
+      # destination_addresses:
+      #   - "WEB-SERVER-01"
+      #   - "WEB-SERVER-02"
+      # services:
+      #   - "http"
+
+    - index: 20
+      name: "ALLOW-HTTPS-FROM-INTERNET"
+      action: "permit"
+      direction: "ingress"
+      log: true
+      description: "Allow HTTPS traffic from internet to web tier"
+      acl: "WEB-TIER-INGRESS-ACL"
+      # destination_addresses:
+      #   - "WEB-SERVER-01"
+      #   - "WEB-SERVER-02"
+      # services:
+      #   - "https"
+
+    - index: 30
+      name: "DENY-SSH-FROM-INTERNET"
+      action: "deny"
+      direction: "ingress"
+      log: true
+      description: "Deny SSH access from internet"
+      acl: "WEB-TIER-INGRESS-ACL"
+      # services:
+      #   - "ssh"
+
+    # App Tier Rules
+    - index: 10
+      name: "ALLOW-FROM-WEB-TIER"
+      action: "permit"
+      direction: "ingress"
+      log: true
+      description: "Allow traffic from web tier"
+      acl: "APP-TIER-INGRESS-ACL"
+      # services:
+      #   - "https"
+
+    - index: 20
+      name: "ALLOW-MANAGEMENT-SSH"
+      action: "permit"
+      direction: "ingress"
+      log: true
+      description: "Allow SSH from management network"
+      acl: "APP-TIER-INGRESS-ACL"
+      # services:
+      #   - "ssh"
+
+    - index: 10
+      name: "ALLOW-TO-DATABASE"
+      action: "permit"
+      direction: "egress"
+      log: true
+      description: "Allow app tier to access database"
+      acl: "APP-TIER-EGRESS-ACL"
+      # destination_addresses:
+      #   - "DB-SERVER-01"
+
+    # Database Tier Rules
+    - index: 10
+      name: "ALLOW-FROM-APP-TIER"
+      action: "permit"
+      direction: "ingress"
+      log: true
+      description: "Allow database access from app tier"
+      acl: "DB-TIER-INGRESS-ACL"
+
+    - index: 20
+      name: "ALLOW-MANAGEMENT-SSH-DB"
+      action: "permit"
+      direction: "ingress"
+      log: true
+      description: "Allow SSH from management network"
+      acl: "DB-TIER-INGRESS-ACL"
+      # services:
+      #   - "ssh"
+
+    - index: 30
+      name: "DENY-ALL-OTHER-DB"
+      action: "deny"
+      direction: "ingress"
+      log: true
+      description: "Deny all other traffic to database"
+      acl: "DB-TIER-INGRESS-ACL"
+
+    - index: 10
+      name: "ALLOW-DNS-NTP-DB"
+      action: "permit"
+      direction: "egress"
+      log: false
+      description: "Allow DNS and NTP services"
+      acl: "DB-TIER-EGRESS-ACL"
+      # services:
+      #   - "dns"
+      #   - "ntp"
+
+    # Management Rules
+    - index: 10
+      name: "ALLOW-MANAGEMENT-SSH-ALL"
+      action: "permit"
+      direction: "egress"
+      log: true
+      description: "Allow SSH from management to all segments"
+      acl: "MANAGEMENT-ACL"
+      # services:
+      #   - "ssh"
+
+    - index: 20
+      name: "ALLOW-MANAGEMENT-SNMP"
+      action: "permit"
+      direction: "egress"
+      log: false
+      description: "Allow SNMP monitoring"
+      acl: "MANAGEMENT-ACL"
+      # services:
+      #   - "snmp"
+
+    # Guest Rules
+    - index: 10
+      name: "ALLOW-GUEST-WEB"
+      action: "permit"
+      direction: "egress"
+      log: false
+      description: "Allow guest web access"
+      acl: "GUEST-ACL"
+      # services:
+      #   - "http"
+      #   - "https"
+      #   - "dns"
+
+    - index: 20
+      name: "DENY-GUEST-INTERNAL"
+      action: "deny"
+      direction: "egress"
+      log: true
+      description: "Deny guest access to internal networks"
+      acl: "GUEST-ACL"

@@ -1,0 +1,125 @@
+#
+# HAProxy Load Balancer Configuration
+# Device: {{ name }}
+# Generated for {{ device_type.manufacturer.name }} {{ device_type.platform.netmiko_device_type }}
+# Management IP: {{ load_balancer_config.management_ip }}
+# Device Role: {{ load_balancer_config.device_role }}
+# Device Status: {{ load_balancer_config.device_status }}
+#
+
+# Global section
+global
+    log stdout local0
+    chroot /var/lib/haproxy
+    stats socket /run/haproxy/admin.sock mode 660 level admin
+    stats timeout 30s
+    user haproxy
+    group haproxy
+    daemon
+
+    # Default SSL material locations
+    ca-base /etc/ssl/certs
+    crt-base /etc/ssl/private
+
+    # SSL Configuration
+    ssl-default-bind-ciphers ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384
+    ssl-default-bind-options ssl-min-ver TLSv1.2 no-tls-tickets
+
+# Default section
+defaults
+    mode                    http
+    log                     global
+    option                  httplog
+    option                  dontlognull
+    option                  log-health-checks
+    option                  forwardfor       except 127.0.0.0/8
+    option                  redispatch
+    retries                 3
+    timeout http-request    10s
+    timeout queue           1m
+    timeout connect         10s
+    timeout client          1m
+    timeout server          1m
+    timeout http-keep-alive 10s
+    timeout check           10s
+    maxconn                 3000
+
+# HAProxy Stats
+listen haproxy-stats
+    bind {{ load_balancer_config.management_ip }}:{{ load_balancer_config.stats_port }}
+    mode http
+    stats enable
+    stats uri /stats
+    stats refresh 30s
+    stats admin if TRUE
+    acl network_allowed src 127.0.0.1 {{ load_balancer_config.management_ip }}
+    acl network_allowed src 10.0.0.0/8 172.16.0.0/12 192.168.0.0/16
+    http-request deny unless network_allowed
+
+{%- if vips %}
+{%- for vip in vips %}
+{%- if vip.backend_servers %}
+
+# Frontend for {{ vip.hostname }}
+frontend {{ vip.hostname | replace('.', '_') | replace('-', '_') }}_frontend
+    {%- if vip.mode == 'tcp' %}
+    mode tcp
+    {%- else %}
+    mode http
+    {%- endif %}
+
+    bind {{ vip.ip_address.split('/')[0] }}:80
+    {%- if vip.ssl_certificate %}
+    bind {{ vip.ip_address.split('/')[0] }}:443 ssl crt {{ vip.ssl_certificate }}
+    {%- if vip.mode == 'http' %}
+    redirect scheme https if !{ ssl_fc }
+    {%- endif %}
+    {%- endif %}
+
+    default_backend {{ vip.hostname | replace('.', '_') | replace('-', '_') }}_backend
+
+# Backend for {{ vip.hostname }}
+backend {{ vip.hostname | replace('.', '_') | replace('-', '_') }}_backend
+    {%- if vip.mode == 'tcp' %}
+    mode tcp
+    {%- else %}
+    mode http
+    {%- endif %}
+
+    {%- if vip.balance == 'roundrobin' %}
+    balance roundrobin
+    {%- elif vip.balance == 'leastconn' %}
+    balance leastconn
+    {%- elif vip.balance == 'source' %}
+    balance source
+    {%- elif vip.balance == 'random' %}
+    balance random
+    {%- else %}
+    balance roundrobin
+    {%- endif %}
+
+    {%- if vip.mode == 'http' %}
+    option httpchk GET /health
+    http-check expect status 200
+    {%- endif %}
+
+    {%- for server in vip.backend_servers %}
+    server {{ server.hostname | default('server' ~ loop.index) }} {{ server.ip_address }}:{{ server.port | default(80) }}
+    {%- if vip.mode == 'http' %} check
+    {%- else %} check port {{ server.port | default(80) }}
+    {%- endif %}
+    {%- if server.max_fails %} maxconn {{ server.max_fails }}
+    {%- endif %}
+    {%- if server.fail_timeout %} on-error mark-down
+    {%- endif %}
+    {%- endfor %}
+
+    {%- if vip.health_checks %}
+    {%- for check in vip.health_checks %}
+    # Health check: {{ check.check_type }} (rise={{ check.rise }}, fall={{ check.fall }}, timeout={{ check.timeout }}ms)
+    {%- endfor %}
+    {%- endif %}
+
+{%- endif %}
+{%- endfor %}
+{%- endif %}

@@ -1,0 +1,24 @@
+query oob_config($device: String!) {
+  DcimGenericDevice(name__value: $device) {
+    edges {
+      node {
+        name {
+          value
+        }
+        interfaces {
+          edges {
+            node {
+              __typename
+              name {
+                value
+              }
+              description{
+                value
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

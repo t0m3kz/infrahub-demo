@@ -1,0 +1,34 @@
+query oob_config($device: String!) {
+  DcimPhysicalDevice(name__value: $device) {
+    edges {
+      node {
+        name {
+          value
+        }
+        interfaces {
+          edges {
+            node {
+              __typename
+              name {
+                value
+              }
+              description {
+                value
+              }
+              interface_services{
+                edges{
+                  node{
+                    __typename
+                    name{
+                      value
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

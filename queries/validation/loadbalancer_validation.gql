@@ -1,0 +1,140 @@
+query loadbalancer_validation($device: String!) {
+  DcimVirtualDevice(name__value: $device) {
+    edges {
+      node {
+        name {
+          value
+        }
+        device_type {
+          node {
+            platform {
+              node {
+                netmiko_device_type {
+                  value
+                }
+              }
+            }
+            manufacturer {
+              node {
+                name {
+                  value
+                }
+              }
+            }
+          }
+        }
+        role {
+          value
+        }
+        status {
+          value
+        }
+        interfaces {
+          edges {
+            node {
+              __typename
+              name {
+                value
+              }
+              description {
+                value
+              }
+              status {
+                value
+              }
+              role {
+                value
+              }
+              ... on DcimVirtualInterface {
+                ip_addresses {
+                  edges {
+                    node {
+                      address {
+                        value
+                      }
+                      ip_namespace {
+                        node {
+                          name {
+                            value
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+        device_services {
+          edges {
+            node {
+              __typename
+              name {
+                value
+              }
+              status {
+                value
+              }
+              ... on ServiceVIP {
+                hostname {
+                  value
+                }
+                mode {
+                  value
+                }
+                balance {
+                  value
+                }
+                ssl_certificate {
+                  value
+                }
+                vip_ip {
+                  node {
+                    address {
+                      value
+                    }
+                  }
+                }
+                backend_servers{
+                  edges{
+                    node{
+                      hostname{
+                        value
+                      }
+                      ip_address{
+                        node{
+                          address{
+                            value
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+                health_checks{
+                  edges{
+                    node{
+                      timeout{
+                        value
+                      }
+                      check{
+                        value
+                      }
+                      rise{
+                        value
+                      }
+                      fall{
+                        value
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

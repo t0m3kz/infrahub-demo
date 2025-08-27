@@ -8,7 +8,7 @@ dependencies = [
     "infrahub-sdk[all]>=1.7.2,<2.0.0",
 ]
 name = "infrahub-demo"
-version = "0.1.2"
+version = "0.1.3"
 description = "Design driven automation"
 readme = "README.md"
 
@@ -19,6 +19,7 @@ dev = [
     "pytest>=8.3.5,<9.0.0",
     "pytest-asyncio>=0.26.0",
     "ruff>=0.11.4",
+    "types-pyyaml>=6.0.12.20250809",
     "yamllint>=1.37.1",
 ]
 

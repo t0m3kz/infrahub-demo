@@ -100,3 +100,27 @@ spec:
       role: edge_firewall
       device_type: CloudGuard
       template: CloudGuard_EDGE
+    - name: 2 CISCO BORDER LEAFS N9K-C9336C-FX2
+      description: 2 Cisco C9336C-FX2 border leafs
+      quantity: 2
+      role: border_leaf
+      device_type: N9K-C9336C-FX2
+      template: N9K-C9336C-FX2_LEAF
+    - name: 2 CISCO BORDER LEAFS N9K-C9316D-GX
+      description: 2 Cisco N9K-C9316D-GX border leafs
+      quantity: 2
+      role: border_leaf
+      device_type: N9K-C9316D-GX
+      template: N9K-C9316D-GX_LEAF
+    - name: 2 ARISTA BORDER LEAFS CCS-720DP-48S-2F
+      description: 2 Arista CCS-720DP-48S-2F border leafs
+      quantity: 2
+      role: border_leaf
+      device_type: CCS-720DP-48S-2F
+      template: CCS-720DP-48S-2F_LEAF
+    - name: 2 EDGECORE BORDER LEAFS 5912-54X-O-AC-F
+      description: 2 EDGECORE 5912-54X-O-AC-F border leafs
+      quantity: 2
+      role: border_leaf
+      device_type: 5912-54X-O-AC-F
+      template: 5912-54X-O-AC-F_LEAF

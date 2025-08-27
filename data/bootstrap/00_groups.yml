@@ -34,10 +34,14 @@ spec:
       description: Linux Devices
     - name: leafs
       description: All leafs
+    - name: border_leafs
+      description: All border leafs
     - name: spines
       description: All spines
     - name: firewalls
       description: All firewalls
+    - name: loadbalancers
+      description: All load balancers
     - name: dc_firewalls
       description: All DC firewalls
     - name: edge_firewalls

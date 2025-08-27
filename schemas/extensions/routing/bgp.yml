@@ -1,0 +1,163 @@
+---
+# yaml-language-server: $schema=https://schema.infrahub.app/infrahub/schema/latest.json
+version: "1.0"
+
+nodes:
+  - name: AutonomousSystem
+    namespace: Routing
+    description: An Autonomous System (AS) is a set of Internet routable IP prefixes belonging to a network
+    label: Autonomous System
+    icon: mdi:bank-circle-outline
+    menu_placement: RoutingBGPSession
+    uniqueness_constraints:
+      - ["name__value"]
+    human_friendly_id:
+      - "name__value"
+    order_by:
+      - asn__value
+      - name__value
+    display_labels:
+      - asn__value
+      - name__value
+    attributes:
+      - name: name
+        kind: Text
+        computed_attribute:
+          kind: Jinja2
+          jinja2_template: "AS{{asn__value}}"
+        read_only: true
+        optional: false
+      - name: asn
+        kind: Number
+        description: "Autonomous System Number"
+      - name: description
+        kind: Text
+        optional: true
+        description: "Description of the Autonomous System"
+    relationships:
+      - name: owner
+        peer: OrganizationProvider
+        optional: true
+        cardinality: one
+        kind: Attribute
+      - name: location
+        peer: LocationGeneric
+        optional: true
+        cardinality: one
+        kind: Attribute
+
+  - name: BGPPeerGroup
+    namespace: Routing
+    description: A BGP Peer Group is used to regroup parameters that are shared across multiple peers
+    label: BGP Peer Group
+    icon: mdi:view-grid-plus-outline
+    menu_placement: RoutingBGPSession
+    inherit_from: []
+    uniqueness_constraints:
+      - ["name__value"]
+    human_friendly_id:
+      - name__value
+    order_by:
+      - name__value
+    display_labels:
+      - name__value
+    attributes:
+      - name: description
+        kind: Text
+        optional: false
+        description: "Description of the BGP peer group"
+        order_weight: 1100
+      - name: name
+        kind: Text
+        optional: false
+        description: "Name of the BGP Group"
+        order_weight: 1000
+      - name: maximum_routes
+        kind: Number
+        optional: true
+        description: "Maximum routes for the BGP Group."
+        order_weight: 1400
+        regex: "^[0-9]+$"
+      - name: local_pref
+        kind: Number
+        optional: true
+        description: "Force Local Pref for this BGP Peer Group."
+        order_weight: 1450
+        regex: "^[0-9]+$"
+      - name: send_community
+        kind: Checkbox
+        optional: true
+        description: "Whether to send community attributes."
+        order_weight: 1500
+      - name: bfd_enabled
+        kind: Checkbox
+        description: "Enable BFD (Bidirectional Forwarding Detection) for fast convergence"
+        default_value: true
+        optional: true
+        order_weight: 1550
+      - name: password
+        kind: Text
+        description: "BGP session password for authentication"
+        optional: true
+        order_weight: 1600
+      - name: ebgp_multihop
+        kind: Number
+        description: "EBGP multihop TTL value (0 = disabled)"
+        default_value: 0
+        optional: true
+        order_weight: 1650
+        regex: "^[0-9]+$"
+      - name: route_reflector_client
+        kind: Checkbox
+        description: "Configure peers as route reflector clients"
+        default_value: false
+        optional: true
+        order_weight: 1700
+      - name: send_community_extended
+        kind: Checkbox
+        description: "Send extended community attributes"
+        default_value: false
+        optional: true
+        order_weight: 1850
+      - name: peer_group_type
+        kind: Dropdown
+        description: "Predefined peer group type for data center fabrics"
+        choices:
+          - name: "SPINE_TO_LEAF"
+            label: "Spine to Leaf"
+            description: "eBGP underlay from spine perspective"
+            color: "#4CAF50"
+          - name: "LEAF_TO_SPINE"
+            label: "Leaf to Spine"
+            description: "eBGP underlay from leaf perspective"
+            color: "#2196F3"
+          - name: "EVPN_RR_CLIENT"
+            label: "EVPN RR Client"
+            description: "iBGP EVPN route reflector client"
+            color: "#FF9800"
+          - name: "EVPN_RR_SERVER"
+            label: "EVPN RR Server"
+            description: "iBGP EVPN route reflector server"
+            color: "#9C27B0"
+          - name: "EXTERNAL_EBGP"
+            label: "External eBGP"
+            description: "External peering sessions"
+            color: "#F44336"
+          - name: "CUSTOM"
+            label: "Custom"
+            description: "Custom peer group configuration"
+            color: "#607D8B"
+        default_value: "CUSTOM"
+        optional: true
+        order_weight: 1900
+
+extensions:
+  nodes:
+    - kind: OrganizationGeneric
+      relationships:
+        - name: asn
+          label: Autonomous System
+          cardinality: many
+          optional: true
+          peer: RoutingAutonomousSystem
+          order_weight: 2000
