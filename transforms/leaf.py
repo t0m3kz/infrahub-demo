@@ -79,19 +79,19 @@ class Leaf(InfrahubTransform):
         interface_roles["all_physical"] = sorted_all_physical
 
         # Prepare configuration data
-        config = {
-            "hostname": data.get("name"),
-            "vlans": vxlan_data.get("vlans", []),
-            "interfaces": interface_roles,
-            "loopbacks": loopbacks,
-            "bgp": bgp_config,
-            "ospf": {
-                "process_id": ospf_config.get("process_id", "1"),
-                "router_id": router_id
-                or ospf_config.get("router_id", "").split("/")[0],
-                "area": ospf_config.get("area", "0.0.0.0"),
-            },
-        }
+        # config = {
+        #     "hostname": data.get("name"),
+        #     "vlans": vxlan_data.get("vlans", []),
+        #     "interfaces": interface_roles,
+        #     "loopbacks": loopbacks,
+        #     "bgp": bgp_config,
+        #     "ospf": {
+        #         "process_id": ospf_config.get("process_id", "1"),
+        #         "router_id": router_id
+        #         or ospf_config.get("router_id", "").split("/")[0],
+        #         "area": ospf_config.get("area", "0.0.0.0"),
+        #     },
+        # }
 
         # Get platform information
         platform = data["device_type"]["platform"]["netmiko_device_type"]
@@ -110,4 +110,4 @@ class Leaf(InfrahubTransform):
 
         # return print(config)
 
-        return template.render(**config)
+        return template.render(**data)
