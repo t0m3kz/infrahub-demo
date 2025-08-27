@@ -3,7 +3,6 @@ from typing import Any
 from infrahub_sdk.transforms import InfrahubTransform
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 from netutils.interface import sort_interface_list
-from netutils.utils import jinja2_convenience_function
 
 from .common import (
     get_bgp_neighbors,
@@ -103,14 +102,12 @@ class Leaf(InfrahubTransform):
             loader=FileSystemLoader(template_path),
             autoescape=select_autoescape(["j2"]),
         )
-        env.filters.update(jinja2_convenience_function())
-
         # Select the template for leaf devices based on platform
         template_name = f"{platform}.j2"
 
         # Render the template with enhanced data
-        rendered_config = env.get_template(template_name).render(**config)
+        template = env.get_template(template_name)
 
         # return print(config)
 
-        return rendered_config
+        return template.render(**config)

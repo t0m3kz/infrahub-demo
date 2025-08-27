@@ -169,7 +169,7 @@ class LoadBalancer(InfrahubTransform):
         template_name = f"{manufacturer}_{platform}.j2"
         template = env.get_template(template_name)
         # Render the template with the processed data
-        rendered_config = template.render(data=data)
+        rendered_config = template.render(**data)
 
         # Return the rendered result
         return rendered_config
