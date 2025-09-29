@@ -403,6 +403,12 @@ nodes:
     inherit_from:
       - CoreArtifactTarget
       - TopologyDeployment
+    attributes:
+      - name: is_virtual
+        kind: Boolean
+        optional: false
+        default_value: false
+        order_weight: 1600
     relationships:
       - name: technical_subnet
         peer: IpamPrefix

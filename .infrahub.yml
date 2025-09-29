@@ -52,11 +52,20 @@ artifact_definitions:
     parameters:
       name: name__value
 
-  - name: Cable marix for Topology
+  - name: Cable matrix for Topology
     artifact_name: topology-cabling
     content_type: text/plain
     targets: topologies_dc
     transformation: topology_cabling
+    parameters:
+      name: name__value
+
+  # Equinix POP
+  - name: equinix_pop_config
+    artifact_name: equinix_pop
+    content_type: text/plain
+    targets: equinix_pop
+    transformation: equinix_pop
     parameters:
       name: name__value
 
@@ -102,6 +111,9 @@ python_transforms:
   - name: edge
     class_name: Edge
     file_path: transforms/edge.py
+  - name: equinix_pop
+    class_name: EquinixPOP
+    file_path: transforms/equinix_pop.py
 
 generator_definitions:
   - name: create_dc
@@ -118,7 +130,6 @@ generator_definitions:
     class_name: PopTopologyGenerator
     parameters:
       name: name__value
-
 
 queries:
   - name: topology_dc
@@ -141,7 +152,8 @@ queries:
     file_path: queries/validation/loadbalancer_validation.gql
   - name: oob_config
     file_path: queries/config/oob.gql
-
+  - name: equinix_pop_config
+    file_path: queries/config/equinix_pop.gql
 # schemas:
 #   - schemas/
 # menus:

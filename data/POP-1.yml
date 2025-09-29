@@ -10,6 +10,7 @@ spec:
       design: VIRTUAL POP S
       emulation: true
       provider: Equinix
+      is_virtual: true
       management_subnet:
         data:
           prefix: 172.20.20.0/24

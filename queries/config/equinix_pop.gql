@@ -1,0 +1,36 @@
+query equinix_pop($location: String!) {
+  LocationBuilding(name__value: $location) {
+    edges {
+      node {
+        name {
+          value
+        }
+        devices {
+          edges {
+            node {
+              name {
+                value
+              }
+              device_type{
+                node{
+                  name{
+                    value
+                  }
+                }
+              }
+              interfaces {
+                edges {
+                  node {
+                    name {
+                      value
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

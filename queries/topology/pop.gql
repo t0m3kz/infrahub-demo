@@ -6,6 +6,9 @@ query device($name: String!) {
         name {
           value
         }
+        is_virtual {
+          value
+        }
         description {
           value
         }

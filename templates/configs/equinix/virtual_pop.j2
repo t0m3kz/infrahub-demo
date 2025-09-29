@@ -1,0 +1,4 @@
+{{ name }}
+{% for device in devices %}
+  {{ device.name }} - {{ device.device_type.name }}
+{% endfor %}
