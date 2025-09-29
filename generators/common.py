@@ -158,7 +158,7 @@ class TopologyCreator:
         )
         await self.client.filters(
             kind="CoreStandardGroup",
-            name__values=roles + manufacturers,
+            name__values=roles + manufacturers + ["equinix_pop"],
             branch=self.branch,
             populate_store=True,
         )
@@ -175,17 +175,22 @@ class TopologyCreator:
             populate_store=True,
         )
 
-    async def create_site(self) -> None:
+    async def create_site(self, site_type: str = "") -> None:
         """Create site."""
         self.log.info(f"Create site {self.data.get('name')}")
+        payload = {
+            "name": self.data["name"],
+            "shortname": self.data["name"],
+            "parent": self.data["location"]["id"],
+        }
+        if self.data.get("is_virtual", "") and site_type == "pop":
+            payload["member_of_groups"] = [
+                self.client.store.get(kind="CoreStandardGroup", key="equinix_pop")
+            ]
         await self._create(
             kind="LocationBuilding",
             data={
-                "payload": {
-                    "name": self.data["name"],
-                    "shortname": self.data["name"],
-                    "parent": self.data["location"]["id"],
-                },
+                "payload": payload,
                 "store_key": self.data["name"],
             },
         )
@@ -320,8 +325,6 @@ class TopologyCreator:
                 # "store_key": f"{pool.get('type').lower()}_ip_pool",
             },
         )
-
-    # Removed create_p2p_ip_pool method - not needed for unnumbered interfaces
 
     async def create_devices(self) -> None:
         self.log.info(f"Create devices for {self.data.get('name')}")

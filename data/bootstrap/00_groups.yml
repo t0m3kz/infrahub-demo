@@ -74,3 +74,5 @@ spec:
       description: Juniper DC Firewall
     - name: check_point_edge_firewall
       description: Check Point Edge Firewall
+    - name: equinix_pop
+      description: Equinix POPs

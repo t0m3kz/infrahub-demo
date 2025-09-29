@@ -69,6 +69,11 @@ nodes:
         unique: false
         optional: true
         order_weight: 1500
+      - name: is_cloud
+        kind: Boolean
+        optional: false
+        default_value: false
+        order_weight: 1600
     relationships:
       - name: owner
         peer: OrganizationGeneric

@@ -16,12 +16,11 @@ class PopTopologyGenerator(InfrahubGenerator):
         else:
             raise ValueError("clean_data() did not return a dictionary")
 
-        self.logger.info(f"Data: {data}")
         network_creator = TopologyCreator(
             client=self.client, log=self.logger, branch=self.branch, data=data
         )
         await network_creator.load_data()
-        await network_creator.create_site()
+        await network_creator.create_site("pop")
 
         # Build subnets list for address pools
         subnets = []
@@ -42,6 +41,7 @@ class PopTopologyGenerator(InfrahubGenerator):
             )
 
         await network_creator.create_address_pools(subnets)
+        await network_creator.create_L2_pool()
         await network_creator.create_devices()
         await network_creator.create_loopback("loopback0")
         # self.log.info(self.client.store._branches[self.branch].__dict__)
