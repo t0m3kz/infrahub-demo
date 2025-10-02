@@ -1,5 +1,5 @@
-query equinix_pop($location: String!) {
-  LocationBuilding(name__value: $location) {
+query equinix_pop($name: String!) {
+  TopologyDeployment(name__value: $name) {
     edges {
       node {
         name {
