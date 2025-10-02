@@ -48,8 +48,9 @@ nodes:
   - name: Building
     namespace: Location
     inherit_from:
-      - "LocationGeneric"
-      - "LocationHosting"
+      - LocationGeneric
+      - LocationHosting
+      - CoreArtifactTarget
     menu_placement: "LocationGeneric"
     include_in_menu: false
     label: Building
