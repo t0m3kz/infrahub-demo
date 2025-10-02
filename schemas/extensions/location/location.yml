@@ -50,7 +50,6 @@ nodes:
     inherit_from:
       - LocationGeneric
       - LocationHosting
-      - CoreArtifactTarget
     menu_placement: "LocationGeneric"
     include_in_menu: false
     label: Building

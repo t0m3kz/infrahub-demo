@@ -158,7 +158,7 @@ class TopologyCreator:
         )
         await self.client.filters(
             kind="CoreStandardGroup",
-            name__values=roles + manufacturers + ["equinix_pop"],
+            name__values=roles + manufacturers,
             branch=self.branch,
             populate_store=True,
         )
@@ -175,22 +175,17 @@ class TopologyCreator:
             populate_store=True,
         )
 
-    async def create_site(self, site_type: str = "") -> None:
+    async def create_site(self) -> None:
         """Create site."""
         self.log.info(f"Create site {self.data.get('name')}")
-        payload = {
-            "name": self.data["name"],
-            "shortname": self.data["name"],
-            "parent": self.data["location"]["id"],
-        }
-        if self.data.get("is_virtual", "") and site_type == "pop":
-            payload["member_of_groups"] = [
-                self.client.store.get(kind="CoreStandardGroup", key="equinix_pop")
-            ]
         await self._create(
             kind="LocationBuilding",
             data={
-                "payload": payload,
+                "payload": {
+                    "name": self.data["name"],
+                    "shortname": self.data["name"],
+                    "parent": self.data["location"]["id"],
+                },
                 "store_key": self.data["name"],
             },
         )
