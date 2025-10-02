@@ -20,7 +20,7 @@ class PopTopologyGenerator(InfrahubGenerator):
             client=self.client, log=self.logger, branch=self.branch, data=data
         )
         await network_creator.load_data()
-        await network_creator.create_site("pop")
+        await network_creator.create_site()
 
         # Build subnets list for address pools
         subnets = []

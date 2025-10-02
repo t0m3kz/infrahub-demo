@@ -153,7 +153,7 @@ queries:
   - name: oob_config
     file_path: queries/config/oob.gql
   - name: equinix_pop_config
-    file_path: queries/config/equinix_pop.gql
+    file_path: queries/topology/equinix_pop.gql
 # schemas:
 #   - schemas/
 # menus:
