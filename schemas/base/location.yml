@@ -10,6 +10,7 @@ generics:
     icon: mingcute:location-line
     include_in_menu: true
     hierarchical: true
+    branch: agnostic
     human_friendly_id:
       - name__value
     order_by:
