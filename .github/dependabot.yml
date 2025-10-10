@@ -12,10 +12,6 @@ updates:
     target-branch: main
     labels:
       - "dependencies"
-      - "patch"
-    ignore:
-      - dependency-name: "pytest"
-        update-types: ["version-update:semver-major"]
     groups:
       all:
         patterns:
@@ -33,10 +29,6 @@ updates:
     target-branch: main
     labels:
       - "dependencies"
-      - "patch"
-    ignore:
-      - dependency-name: "pytest"
-        update-types: ["version-update:semver-major"]
     groups:
       all:
         patterns:
@@ -54,9 +46,8 @@ updates:
     target-branch: main
     labels:
       - "dependencies"
-      - "patch"
     groups:
       all-actions:
         patterns:
           - "*"
-# yamllint disable rule:truthy
+
