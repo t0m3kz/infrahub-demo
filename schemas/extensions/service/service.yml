@@ -17,6 +17,7 @@ generics:
         optional: false
         order_weight: 1
         description: Service Name
+        branch: agnostic
       - name: status
         order_weight: 30
         optional: false
@@ -38,6 +39,7 @@ generics:
             label: Decommissioned
             description: "Taken out of service."
             color: "#bfbfbf"
+        default_value: provisioning
     relationships:
       - name: owner
         peer: OrganizationGeneric
