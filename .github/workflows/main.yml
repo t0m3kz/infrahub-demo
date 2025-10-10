@@ -2,9 +2,15 @@
 name: CI
 on:
   - push
+
+permissions:
+  contents: read
+
 jobs:
   code-qa:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-python@v6
@@ -32,6 +38,8 @@ jobs:
     needs: code-qa
     runs-on: ubuntu-latest
     timeout-minutes: 60
+    permissions:
+      contents: read
     env:
       INFRAHUB_DB_TYPE: neo4j
       INFRAHUB_API_TOKEN: '06438eb2-8019-4776-878c-0941b1f1d1ec'
