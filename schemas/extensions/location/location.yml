@@ -35,6 +35,7 @@ nodes:
         order_weight: 1300
   - name: Metro
     namespace: Location
+    branch: agnostic
     label: Metro
     inherit_from:
       - LocationGeneric
@@ -46,17 +47,17 @@ nodes:
     children: LocationBuilding
     icon: healthicons:city
   - name: Building
+    branch: agnostic
     namespace: Location
     inherit_from:
       - LocationGeneric
-      - LocationHosting
     menu_placement: "LocationGeneric"
     include_in_menu: false
     label: Building
     display_labels:
       - name__value
     parent: "LocationMetro"
-    children: "LocationFloor"
+    children: "LocationSuite"
     icon: "ri:building-line"
     attributes:
       - name: facility_id
@@ -79,19 +80,9 @@ nodes:
         peer: OrganizationGeneric
         optional: true
         cardinality: one
-  - name: Floor
-    namespace: Location
-    inherit_from: ["LocationGeneric"]
-    include_in_menu: false
-    menu_placement: "LocationGeneric"
-    label: Floor
-    display_labels:
-      - name__value
-    parent: "LocationBuilding"
-    icon: "mdi:home-floor-0"
-    children: "LocationSuite"
   - name: Suite
     namespace: Location
+    branch: agnostic
     inherit_from:
       - "LocationGeneric"
     include_in_menu: false
@@ -99,7 +90,7 @@ nodes:
     label: Suite
     display_labels:
       - name__value
-    parent: "LocationFloor"
+    parent: "LocationBuilding"
     children: "LocationRack"
     icon: "game-icons:cage"
     attributes:
@@ -117,7 +108,8 @@ nodes:
     namespace: Location
     inherit_from:
       - "LocationGeneric"
-      - "LocationHosting"
+      - GeneratorTarget
+    branch: agnostic
     include_in_menu: false
     menu_placement: "LocationGeneric"
     label: Rack
@@ -129,6 +121,21 @@ nodes:
     children: ""
     icon: "clarity:rack-server-line"
     attributes:
+      - name: index
+        kind: Number
+        branch: agnostic
+        optional: false
+      - name: rack_type
+        kind: Dropdown
+        branch: aware
+        choices:
+          - name: compute
+            label: Compute
+          - name: storage
+            label: Storage
+          - name: network
+            label: Network
+        default_value: compute
       - name: facility_id
         kind: Text
         unique: false
@@ -139,7 +146,23 @@ nodes:
         peer: OrganizationGeneric
         optional: true
         cardinality: one
-
+      - name: fabric_templates
+        peer: TopologyElement
+        optional: true
+        cardinality: many
+      - name: pod
+        peer: TopologyPod
+        branch: aware
+        kind: Attribute
+        cardinality: one
+        optional: true
+        identifier: "rack__pod"
+      - name: devices
+        peer: DcimPhysicalDevice
+        optional: true
+        cardinality: many
+        kind: Generic
+        identifier: "device_rack"
 extensions:
   nodes:
     - kind: OrganizationProvider
@@ -148,3 +171,20 @@ extensions:
           peer: LocationBuilding
           cardinality: many
           optional: true
+    - kind: TopologyDeployment
+      relationships:
+        - name: racks
+          peer: LocationRack
+          branch: aware
+          cardinality: many
+          kind: Generic
+          identifier: "rack__pod"
+    - kind: DcimPhysicalDevice
+      relationships:
+        - name: rack
+          peer: LocationRack
+          branch: aware
+          cardinality: one
+          kind: Attribute
+          optional: true
+          identifier: "device_rack"

@@ -1,0 +1,10 @@
+---
+version: "1.0"
+generics:
+  - name: Target
+    namespace: Generator
+    include_in_menu: false
+    attributes:
+      - name: checksum
+        kind: Text
+        optional: true
