@@ -1,4 +1,4 @@
-query topology_dc($name: String!) {
+query FabricGeneratorQuery($name: String!) {
   TopologyDataCenter(name__value: $name) {
     edges {
       node {
@@ -6,162 +6,27 @@ query topology_dc($name: String!) {
         name {
           value
         }
-        description {
+        size {
           value
         }
-        strategy{
+        fully_managed {
           value
         }
-        management_subnet {
-          node {
-            id
-            prefix {
-              value
-            }
-          }
-        }
-        technical_subnet {
-          node {
-            id
-            prefix {
-              value
-            }
-          }
-        }
-        customer_subnet {
-          node {
-            id
-            prefix {
-              value
-            }
-          }
-        }
-        public_subnet {
-          node {
-            id
-            prefix {
-              value
-            }
-          }
-        }
-        location {
-          node {
-            id
-          }
-        }
-        provider {
-          node {
-            id
-          }
-        }
-        emulation {
+        amount_of_super_spines {
           value
         }
-        design {
+        super_spine_switch_template {
           node {
-            name {
-              value
+            __typename
+            id
+            device_type {
+              node {
+                id
+              }
             }
-            elements {
-              edges {
-                node {
-                  ... on DesignElement {
-                    quantity {
-                      value
-                    }
-                    role {
-                      value
-                    }
-                    template {
-                      node {
-                        id
-                        ... on TemplateDcimPhysicalDevice {
-                          template_name {
-                            value
-                          }
-                          __typename
-                          interfaces {
-                            edges {
-                              node {
-                                ... on TemplateDcimPhysicalInterface {
-                                  name {
-                                    value
-                                  }
-                                  role {
-                                    value
-                                  }
-                                }
-                                ... on TemplateDcimConsoleInterface {
-                                  name {
-                                    value
-                                  }
-                                  role {
-                                    value
-                                  }
-                                }
-                              }
-                            }
-                            count
-                          }
-                        }
-                        template_name {
-                          value
-                        }
-                        ... on CoreObjectTemplate {
-                          template_name {
-                            value
-                          }
-                        }
-                        ... on TemplateDcimVirtualDevice {
-                          template_name {
-                            value
-                          }
-                          __typename
-                          interfaces {
-                            edges {
-                              node {
-                                ... on TemplateDcimPhysicalInterface {
-                                  name {
-                                    value
-                                  }
-                                  role {
-                                    value
-                                  }
-                                }
-                              }
-                            }
-                            count
-                          }
-                        }
-                        template_name {
-                          value
-                        }
-                        ... on CoreObjectTemplate {
-                          template_name {
-                            value
-                          }
-                        }
-                      }
-                    }
-                    device_type {
-                      node {
-                        id
-                        manufacturer {
-                          node {
-                            name {
-                              value
-                            }
-                          }
-                        }
-                        platform {
-                          node {
-                            id
-                          }
-                        }
-                      }
-                    }
-                  }
-                }
+            platform {
+              node {
+                id
               }
             }
           }

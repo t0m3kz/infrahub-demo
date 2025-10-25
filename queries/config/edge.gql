@@ -5,9 +5,10 @@ query edge_config($device: String!) {
         id
         name { value }
         role { value }
-        location {
+        deployment {
           node {
-            ... on LocationGeneric { name { value } }
+            id
+            name { value }
           }
         }
         device_type {

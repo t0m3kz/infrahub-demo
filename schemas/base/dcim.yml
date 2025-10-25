@@ -47,6 +47,10 @@ generics:
             color: "#bf7f7f"
           - name: spine
             label: Spine Router
+            description: Aggregation router part of a Pod.
+            color: "#aeeeee"
+          - name: super_spine
+            label: Super Spine Router
             description: Aggregation router part of a Fabric.
             color: "#aeeeee"
           - name: leaf
@@ -113,13 +117,6 @@ generics:
         cardinality: one
         kind: Attribute
         order_weight: 1200
-      - name: location
-        label: Location
-        peer: LocationHosting
-        optional: false
-        cardinality: one
-        kind: Attribute
-        order_weight: 1500
       - name: interfaces
         peer: DcimInterface
         optional: true
@@ -151,8 +148,8 @@ generics:
     description: Generic Endpoint to receive a connector.
     include_in_menu: false
     relationships:
-      - name: connector
-        peer: DcimEndpoint
+      - name: cable
+        peer: DcimCable
         optional: true
         cardinality: one
         order_weight: 1500
@@ -216,6 +213,10 @@ generics:
             label: Outage
             description: "Interface is currently experiencing an outage."
             color: "#F4CCCC" # pastel red
+          - name: reserved
+            label: Reserved
+            description: "Interface is reserved for future use."
+            color: "#E0E0E0" # light grey
         default_value: "free"
         order_weight: 1200
       - name: role
@@ -225,64 +226,68 @@ generics:
         choices:
           - name: lag
             label: Lag
-            description: "Interface LAG."
-            color: "#A9DFBF" # light pastel green
+            description: "Link Aggregation Group (LAG) interface used for aggregated links."
+            color: "#60A5FA" # blue
           - name: core
             label: Core
-            description: "Central part of the network."
-            color: "#A9CCE3" # pastel blue
+            description: "Interface used in the core of the network."
+            color: "#1E3A8A" # indigo
           - name: customer
             label: Customer
-            description: "Interface dedicated to customer connections."
-            color: "#D2B4DE" # pastel purple
+            description: "Interface used for customer-facing connections."
+            color: "#F472B6" # pink
           - name: access
             label: Access
-            description: "Interface connecting endpoint devices."
-            color: "#B4E0DC" # pastel teal
+            description: "Access port connecting endpoint devices."
+            color: "#10B981" # green
           - name: management
             label: Management
-            description: "Interface dedicated to device management."
-            color: "#E3DAC9" # pastel cream
+            description: "Interface dedicated to device management traffic."
+            color: "#F59E0B" # amber
           - name: unnumbered
             label: Unnumbered
-            description: "Interface dedicated to IP unnumbered connections for BGP and OSPF protocols."
-            color: "#C4B7E6" # pastel purple
+            description: "IP-unnumbered interface (commonly used for BGP/OSPF adjacencies)."
+            color: "#8B5CF6" # violet
           - name: ospf
             label: OSPF
-            description: "Interface dedicated to OSPF connections."
-            color: "#C432E6"
+            description: "Interface used for OSPF adjacency or routing sessions."
+            color: "#FB923C" # orange
           - name: bgp
             label: BGP
-            description: "Interface dedicated to BGP connections."
-            color: "#C432E6"
+            description: "Interface used for BGP peering or sessions."
+            color: "#EF4444" # red
           - name: upstream
             label: Upstream
-            description: "Interface dedicated to upstream traffic between networks."
-            color: "#B2D4E6" # pastel sky blue
+            description: "Interface used to carry upstream traffic toward aggregation or core."
+            color: "#38BDF8" # sky
           - name: leaf
             label: Leaf
-            description: "Interface dedicated to upstream to leaf between networks."
-            color: "#B2D4C6"
+            description: "Interface connecting towards leaf switches."
+            color: "#34D399" # emerald
+          - name: spine
+            label: Spine
+            description: "Interface connecting towards spine switches."
+            color: "#06B6D4" # cyan
           - name: console
             label: Console
-            description: "Interface dedicated to console connection management."
-            color: "#E2D4C6"
+            description: "Console management interface (out-of-band access)."
+            color: "#9CA3AF" # gray
           - name: uplink
             label: Uplink
-            description: "Interface dedicated to connect with aggragation switch."
-            color: "#E2D4C6"
+            description: "Uplink interface used to connect to aggregation or upstream switches."
+            color: "#FCA5A5" # light red
           - name: peering
             label: Peering
-            description: "Interface dedicated to peering connections."
-            color: "#E2D4C6"
+            description: "Interface dedicated to peering sessions with external networks."
+            color: "#FDE68A" # yellow
           - name: loopback
             label: Loopback
-            description: "Interface dedicated to loopback connections."
-            color: "#E2D4C6"
+            description: "Loopback interface used for stable addressing on the device."
+            color: "#C7D2FE" # light indigo
           - name: loopback-vtep
             label: Loopback VTEP
-            description: "Interface dedicated to loopback vtep connections."
-            color: "#E2D4C6"
+            description: "Loopback interface used as a VTEP address for VXLAN/overlay tunneling."
+            color: "#E9D5FF" # lavender
         order_weight: 1250
     relationships:
       - name: device
@@ -621,3 +626,41 @@ nodes:
         optional: true
         cardinality: many
         kind: Attribute
+
+  # --------------------  Cables  --------------------
+  - name: Cable
+    namespace: Dcim
+    description: A cable connecting two endpoints.
+    label: Cable
+    icon: mdi:cable-data
+    human_friendly_id:
+      - name__value
+    display_labels:
+      - name__value
+    order_by:
+      - name__value
+    uniqueness_constraints:
+      - ["name__value"]
+    attributes:
+      - name: name
+        kind: Text
+        unique: true
+        order_weight: 1000
+      - name: type
+        kind: Dropdown
+        optional: false
+        order_weight: 1100
+        choices:
+          - name: mmf
+            label: Multi-Mode Fibre
+          - name: smf
+            label: Single-Mode Fibre
+          - name: copper
+            label: Copper
+    relationships:
+      - name: endpoints
+        peer: DcimEndpoint
+        cardinality: many
+        kind: Attribute
+        optional: true
+        max_count: 2
