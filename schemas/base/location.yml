@@ -10,7 +10,6 @@ generics:
     icon: mingcute:location-line
     include_in_menu: true
     hierarchical: true
-    branch: agnostic
     human_friendly_id:
       - name__value
     order_by:
@@ -36,19 +35,19 @@ generics:
         optional: true
         cardinality: many
 
-  - name: Hosting
-    namespace: Location
-    description: Location directly hosting device and services.
-    include_in_menu: false
-    # This is only owning relationships toward various assets that could be found on those locations
-    relationships:
-      - name: prefixes
-        label: Prefixes
-        peer: IpamPrefix
-        cardinality: many
-        optional: true
-      - name: devices
-        label: Devices
-        peer: DcimGenericDevice
-        cardinality: many
-        optional: true
+  # - name: Hosting
+  #   namespace: Location
+  #   description: Location directly hosting device and services.
+  #   include_in_menu: false
+  #   # This is only owning relationships toward various assets that could be found on those locations
+  #   relationships:
+  #     - name: prefixes
+  #       label: Prefixes
+  #       peer: IpamPrefix
+  #       cardinality: many
+  #       optional: true
+  #     - name: devices
+  #       label: Devices
+  #       peer: DcimGenericDevice
+  #       cardinality: many
+  #       optional: true

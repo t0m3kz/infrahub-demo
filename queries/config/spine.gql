@@ -5,19 +5,11 @@ query spine_config($device: String!) {
         id
         name { value }
         role { value }
-        topology {
+        deployment {
           node{
-            ... on TopologyDataCenter{
-              strategy{value}
-            }
-          }
-        }
-        location {
-          node{
-            ... on LocationGeneric{
-              name{
-                value
-              }
+            id
+            name {
+              value
             }
           }
         }

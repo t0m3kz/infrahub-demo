@@ -123,17 +123,59 @@ generator_definitions:
     class_name: DCTopologyGenerator
     parameters:
       name: name__value
-  - name: create_pop
-    file_path: generators/generate_pop.py
-    targets: topologies_pop
-    query: topology_pop
-    class_name: PopTopologyGenerator
+  - name: create_pod
+    file_path: generators/generate_pod.py
+    targets: topologies_pod
+    query: topology_pod
+    class_name: PodTopologyGenerator
     parameters:
       name: name__value
+  # - name: create_pop
+  #   file_path: generators/generate_pop.py
+  #   targets: topologies_pop
+  #   query: topology_pop
+  #   class_name: PopTopologyGenerator
+  #   parameters:
+  #     name: name__value
+  # - name: generate-dc
+  #   file_path: "./generators/generate_fabric.py"
+  #   query: generate_fabric
+  #   targets: fabrics
+  #   parameters:
+  #     fabric_name: name__value
+  #   class_name: FabricGenerator
+  #   convert_query_response: false
+  #   execute_in_proposed_change: false
+  #   execute_after_merge: false
+
+  # - name: generate-pod
+  #   file_path: "./generators/generate_pod.py"
+  #   query: generate_pod
+  #   targets: pods
+  #   parameters:
+  #     pod_name: name__value
+  #   class_name: PodGenerator
+  #   convert_query_response: false
+  #   execute_in_proposed_change: false
+  #   execute_after_merge: false
+
+  # - name: generate-rack
+  #   file_path: "./generators/generate_rack.py"
+  #   query: generate_rack
+  #   targets: racks
+  #   parameters:
+  #     rack_name: name__value
+  #   class_name: RackGenerator
+  #   convert_query_response: false
+  #   execute_in_proposed_change: false
+  #   execute_after_merge: false
+
 
 queries:
   - name: topology_dc
     file_path: queries/topology/dc.gql
+  - name: topology_pod
+    file_path: queries/topology/pod.gql
   - name: topology_pop
     file_path: queries/topology/pop.gql
   - name: topology_simulator

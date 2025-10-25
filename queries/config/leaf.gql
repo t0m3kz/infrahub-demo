@@ -3,42 +3,68 @@ query leaf_config($device: String!) {
     edges {
       node {
         id
-        name { value }
-        role { value }
-        topology {
-          node{
-            ... on TopologyDataCenter{
-              strategy{value}
-            }
-          }
+        name {
+          value
         }
-        location {
+        role {
+          value
+        }
+        deployment {
           node {
-            ... on LocationGeneric { name { value } }
+            id
+            name {
+              value
+            }
           }
         }
         device_type {
           node {
-            name { value }
-            manufacturer { node { name { value } } }
+            name {
+              value
+            }
+            manufacturer {
+              node {
+                name {
+                  value
+                }
+              }
+            }
             platform {
               node {
-                netmiko_device_type { value }
-                napalm_driver { value }
-                ansible_network_os { value }
+                netmiko_device_type {
+                  value
+                }
+                napalm_driver {
+                  value
+                }
+                ansible_network_os {
+                  value
+                }
               }
             }
           }
         }
         primary_address {
           node {
-            address { value }
-            ip_namespace { node { name { value } } }
+            address {
+              value
+            }
+            ip_namespace {
+              node {
+                name {
+                  value
+                }
+              }
+            }
           }
         }
         tags {
           edges {
-            node { name { value } }
+            node {
+              name {
+                value
+              }
+            }
           }
         }
 
@@ -47,58 +73,154 @@ query leaf_config($device: String!) {
           edges {
             node {
               __typename
-              name { value }
-              status { value }
+              name {
+                value
+              }
+              status {
+                value
+              }
 
               ... on ServiceBGP {
-                session_type { value }
-                multipath { value }
-                graceful_restart { value }
-                local_ip { node { address { value } } }
-                local_as { node { asn { value } } }
-                remote_ip { node { address { value } } }
-                remote_as { node { asn { value } } }
-                router_id { node { address { value } } }
+                session_type {
+                  value
+                }
+                multipath {
+                  value
+                }
+                graceful_restart {
+                  value
+                }
+                local_ip {
+                  node {
+                    address {
+                      value
+                    }
+                  }
+                }
+                local_as {
+                  node {
+                    asn {
+                      value
+                    }
+                  }
+                }
+                remote_ip {
+                  node {
+                    address {
+                      value
+                    }
+                  }
+                }
+                remote_as {
+                  node {
+                    asn {
+                      value
+                    }
+                  }
+                }
+                router_id {
+                  node {
+                    address {
+                      value
+                    }
+                  }
+                }
 
                 # CRITICAL: BGP Peer Group Information
                 peer_group {
                   node {
-                    name { value }
-                    description { value }
-                    peer_group_type { value }
-                    bfd_enabled { value }
-                    ebgp_multihop { value }
-                    send_community { value }
-                    send_community_extended { value }
-                    route_reflector_client { value }
-                    password { value }
-                    maximum_routes { value }
-                    local_pref { value }
+                    name {
+                      value
+                    }
+                    description {
+                      value
+                    }
+                    peer_group_type {
+                      value
+                    }
+                    bfd_enabled {
+                      value
+                    }
+                    ebgp_multihop {
+                      value
+                    }
+                    send_community {
+                      value
+                    }
+                    send_community_extended {
+                      value
+                    }
+                    route_reflector_client {
+                      value
+                    }
+                    password {
+                      value
+                    }
+                    maximum_routes {
+                      value
+                    }
+                    local_pref {
+                      value
+                    }
                   }
                 }
               }
               ... on ServicePIM {
-                dr_priority { value }
-                rp_mode { value }
+                dr_priority {
+                  value
+                }
+                rp_mode {
+                  value
+                }
                 rp_address {
                   node {
-                    address { value }
-                    ip_namespace { node { name { value } } }
+                    address {
+                      value
+                    }
+                    ip_namespace {
+                      node {
+                        name {
+                          value
+                        }
+                      }
+                    }
                   }
                 }
               }
               ... on ServiceOSPF {
-                process_id { value }
-                version { value }
-                router_type { value }
-                reference_bandwidth { value }
-                router_id { node { address { value } } }
+                process_id {
+                  value
+                }
+                version {
+                  value
+                }
+                router_type {
+                  value
+                }
+                reference_bandwidth {
+                  value
+                }
+                router_id {
+                  node {
+                    address {
+                      value
+                    }
+                  }
+                }
                 area {
                   node {
-                    area { value }
-                    name { value }
-                    area_type { value }
-                    description { value }
+                    area {
+                      value
+                    }
+                    name {
+                      value
+                    }
+                    area_type {
+                      value
+                    }
+                    description {
+                      value
+                    }
                   }
                 }
               }
@@ -111,18 +233,38 @@ query leaf_config($device: String!) {
           edges {
             node {
               id
-              name { value }
-              description { value }
-              status { value }
-              role { value }
+              name {
+                value
+              }
+              description {
+                value
+              }
+              status {
+                value
+              }
+              role {
+                value
+              }
               ... on DcimPhysicalInterface {
-                interface_type { value }
-                mtu { value }
+                interface_type {
+                  value
+                }
+                mtu {
+                  value
+                }
                 ip_addresses {
                   edges {
                     node {
-                      address { value }
-                      ip_namespace { node { name { value } } }
+                      address {
+                        value
+                      }
+                      ip_namespace {
+                        node {
+                          name {
+                            value
+                          }
+                        }
+                      }
                     }
                   }
                 }
@@ -132,30 +274,56 @@ query leaf_config($device: String!) {
                 ip_addresses {
                   edges {
                     node {
-                      address { value }
-                      ip_namespace { node { name { value } } }
+                      address {
+                        value
+                      }
+                      ip_namespace {
+                        node {
+                          name {
+                            value
+                          }
+                        }
+                      }
                     }
                   }
                 }
               }
-              interface_services{
-                edges{
-                  node{
+              interface_services {
+                edges {
+                  node {
                     __typename
                     ... on ServiceOSPF {
-                      area { node { area { value } } }
-                      ospf_interface_profile { node {
-                        metric { value }
-                        mode { value }
-                        authentication_mode { value }
-                        authentication_key { value }
+                      area {
+                        node {
+                          area {
+                            value
+                          }
                         }
                       }
-
+                      ospf_interface_profile {
+                        node {
+                          metric {
+                            value
+                          }
+                          mode {
+                            value
+                          }
+                          authentication_mode {
+                            value
+                          }
+                          authentication_key {
+                            value
+                          }
+                        }
+                      }
                     }
                     ... on ServiceNetworkSegment {
-                      vlan_id { value }
-                      name { value }
+                      vlan_id {
+                        value
+                      }
+                      name {
+                        value
+                      }
                     }
                   }
                 }
