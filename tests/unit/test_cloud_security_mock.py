@@ -349,9 +349,9 @@ menu:
 
         # Verify all components are defined
         for component, content in components.items():
-            assert content is not None and len(content) > 0, (
-                f"Component {component} should be properly defined"
-            )
+            assert (
+                content is not None and len(content) > 0
+            ), f"Component {component} should be properly defined"
 
         # Verify Zscaler-specific implementation
         assert "Zscaler" in components["bootstrap"]

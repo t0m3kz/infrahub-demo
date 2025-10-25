@@ -1,0 +1,50 @@
+query PodGeneratorQuery($name: String!) {
+  TopologyPod(name__value: $name) {
+    edges {
+      node {
+        id
+        amount_of_spines {
+          value
+        }
+        name {
+          value
+        }
+        checksum {
+          value
+        }
+        index {
+          value
+        }
+        role {
+          value
+        }
+        spine_switch_template {
+          node {
+            __typename
+            id
+          }
+        }
+        parent {
+          node {
+            __typename
+            id
+            name {
+              value
+            }
+            ... on TopologyDataCenter {
+              amount_of_super_spines {
+                value
+              }
+              fabric_interface_sorting_method {
+                value
+              }
+              spine_interface_sorting_method {
+                value
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

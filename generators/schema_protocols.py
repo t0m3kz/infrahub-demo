@@ -29,6 +29,10 @@ if TYPE_CHECKING:
     )
 
 
+class GeneratorTarget(CoreNode):
+    checksum: StringOptional
+
+
 class TopologyDeployment(CoreNode):
     description: StringOptional
     emulation: Boolean
@@ -225,10 +229,40 @@ class OrganizationCustomer(OrganizationGeneric):
 
 
 class TopologyDataCenter(CoreArtifactTarget, TopologyDeployment):
-    strategy: Dropdown
-    provider: RelatedNode
-    public_subnet: RelatedNode
-    technical_subnet: RelatedNode
+    amount_of_super_spines: IntegerOptional
+    fabric_interface_sorting_method: DropdownOptional
+    index: Integer
+    name: String
+    spine_interface_sorting_method: DropdownOptional
+    artifacts: RelationshipManager
+    children: RelationshipManager
+    customer_deployments: RelationshipManager
+    member_of_groups: RelationshipManager
+    parent: RelatedNode
+    profiles: RelationshipManager
+    racks: RelationshipManager
+    subscriber_of_groups: RelationshipManager
+    super_spine_switch_template: RelatedNode
+
+
+class TopologyPod(TopologyDeployment, GeneratorTarget):
+    amount_of_spines: IntegerOptional
+    checksum: StringOptional
+    index: Integer
+    leaf_interface_sorting_method: DropdownOptional
+    name: String
+    role: DropdownOptional
+    spine_interface_sorting_method: DropdownOptional
+    children: RelationshipManager
+    devices: RelationshipManager
+    loopback_pool: RelatedNode
+    member_of_groups: RelationshipManager
+    parent: RelatedNode
+    prefix_pool: RelatedNode
+    profiles: RelationshipManager
+    racks: RelationshipManager
+    spine_switch_template: RelatedNode
+    subscriber_of_groups: RelationshipManager
 
 
 class DcimDeviceType(CoreNode):
@@ -355,11 +389,25 @@ class ServiceOSPFInterface(ServiceGeneric):
 
 
 class DcimPhysicalDevice(CoreArtifactTarget, DcimGenericDevice):
+    name: String
+    os_version: StringOptional
     position: IntegerOptional
-    rack_face: Dropdown
+    rack_face: DropdownOptional
+    role: DropdownOptional
     serial: StringOptional
+    status: Dropdown
+    artifacts: RelationshipManager
+    device_services: RelationshipManager
     device_type: RelatedNode
+    interfaces: RelationshipManager
     location: RelatedNode
+    member_of_groups: RelationshipManager
+    object_template: RelatedNode
+    platform: RelatedNode
+    primary_address: RelatedNode
+    profiles: RelationshipManager
+    subscriber_of_groups: RelationshipManager
+    tags: RelationshipManager
 
 
 class DcimPhysicalInterface(DcimInterface, DcimEndpoint, DcimSubInterface):
@@ -425,6 +473,7 @@ class OrganizationProvider(OrganizationGeneric):
 class LocationRack(LocationGeneric, LocationHosting):
     facility_id: StringOptional
     owner: RelatedNode
+    checksum: StringOptional
 
 
 class LocationRegion(LocationGeneric):
@@ -489,12 +538,41 @@ class DesignTopology(CoreArtifactTarget):
 
 
 class DcimVirtualDevice(CoreArtifactTarget, DcimGenericDevice):
+    cpu: IntegerOptional
+    memory: IntegerOptional
+    name: String
+    os_version: StringOptional
+    role: DropdownOptional
+    status: Dropdown
+    storage: IntegerOptional
+    artifacts: RelationshipManager
+    device_services: RelationshipManager
+    device_type: RelatedNode
     hosting_device: RelatedNode
+    interfaces: RelationshipManager
+    location: RelatedNode
+    member_of_groups: RelationshipManager
+    object_template: RelatedNode
+    platform: RelatedNode
+    primary_address: RelatedNode
+    profiles: RelationshipManager
+    subscriber_of_groups: RelationshipManager
+    tags: RelationshipManager
 
 
 class DcimVirtualInterface(DcimInterface):
+    description: StringOptional
+    name: String
+    role: DropdownOptional
+    status: DropdownOptional
+    device: RelatedNode
+    interface_services: RelationshipManager
     ip_addresses: RelationshipManager
+    member_of_groups: RelationshipManager
     parent_interface: RelatedNode
+    profiles: RelationshipManager
+    subscriber_of_groups: RelationshipManager
+    tags: RelationshipManager
 
 
 class SecurityZone(CoreNode):

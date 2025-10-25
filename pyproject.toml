@@ -5,7 +5,7 @@ authors = [
 requires-python = "<3.13,>=3.10"
 dependencies = [
     "invoke<3.0.0,>=2.2.0",
-    "infrahub-sdk[all]>=1.7.2,<2.0.0",
+    "infrahub-sdk[all]>=1.15.0b0,<2.0.0",
 ]
 name = "infrahub-demo"
 version = "0.1.3"
