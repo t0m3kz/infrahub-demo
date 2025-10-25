@@ -15,18 +15,20 @@ query topology_cables($name: String!) {
                       value
                     }
                     ... on DcimPhysicalInterface {
-                      connector {
+                      cable {
                         node {
-                          hfid
+                          id
                           display_label
+                          type { value }
                         }
                       }
                     }
                     ... on DcimConsoleInterface {
-                      connector {
+                      cable {
                         node {
-                          hfid
+                          id
                           display_label
+                          type { value }
                         }
                       }
                     }

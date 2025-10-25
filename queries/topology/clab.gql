@@ -5,20 +5,6 @@ query topology_info($name: String!) {
         name {
           value
         }
-        management_subnet {
-          node{
-            prefix{
-              value
-            }
-          }
-        }
-        design {
-          node {
-            type {
-              value
-            }
-          }
-        }
         devices(role__values: [ "leaf", "spine", "dc_firewall", "edge", "core", "border_leaf", "edge_firewall"]) {
           edges {
             node {
@@ -61,7 +47,7 @@ query topology_info($name: String!) {
                       value
                     }
                     ... on DcimPhysicalInterface {
-                      connector {
+                      cable {
                         node {
                           hfid
                           display_label
