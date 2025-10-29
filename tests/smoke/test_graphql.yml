@@ -1,31 +1,7 @@
 ---
 version: "1.0"
 infrahub_tests:
-  # --------------------  GraphQLQuery  --------------------
-  - resource: GraphQLQuery
-    resource_name: topology_dc
-    tests:
-      - name: syntax_check
-        spec:
-          path: queries/topology/dc.gql
-          kind: graphql-query-smoke
-
-  - resource: GraphQLQuery
-    resource_name: topology_pop
-    tests:
-      - name: syntax_check
-        spec:
-          path: queries/topology/pop.gql
-          kind: graphql-query-smoke
-
-  - resource: GraphQLQuery
-    resource_name: topology_simulator
-    tests:
-      - name: syntax_check
-        spec:
-          path: queries/topology/clab.gql
-          kind: graphql-query-smoke
-
+  # ==================== CONFIG QUERIES ====================
   - resource: GraphQLQuery
     resource_name: leaf_config
     tests:
@@ -40,6 +16,14 @@ infrahub_tests:
       - name: syntax_check
         spec:
           path: queries/config/spine.gql
+          kind: graphql-query-smoke
+
+  - resource: GraphQLQuery
+    resource_name: edge_config
+    tests:
+      - name: syntax_check
+        spec:
+          path: queries/config/edge.gql
           kind: graphql-query-smoke
 
   - resource: GraphQLQuery
@@ -64,5 +48,87 @@ infrahub_tests:
       - name: syntax_check
         spec:
           path: queries/config/firewall.gql
+          kind: graphql-query-smoke
+
+  - resource: GraphQLQuery
+    resource_name: loadbalancer_config
+    tests:
+      - name: syntax_check
+        spec:
+          path: queries/config/loadbalancer.gql
+          kind: graphql-query-smoke
+
+  # ==================== TOPOLOGY QUERIES ====================
+  - resource: GraphQLQuery
+    resource_name: topology_dc
+    tests:
+      - name: syntax_check
+        spec:
+          path: queries/topology/dc.gql
+          kind: graphql-query-smoke
+
+  - resource: GraphQLQuery
+    resource_name: topology_pod
+    tests:
+      - name: syntax_check
+        spec:
+          path: queries/topology/pod.gql
+          kind: graphql-query-smoke
+
+  - resource: GraphQLQuery
+    resource_name: topology_rack
+    tests:
+      - name: syntax_check
+        spec:
+          path: queries/topology/rack.gql
+          kind: graphql-query-smoke
+
+  - resource: GraphQLQuery
+    resource_name: topology_server
+    tests:
+      - name: syntax_check
+        spec:
+          path: queries/topology/server.gql
+          kind: graphql-query-smoke
+
+  - resource: GraphQLQuery
+    resource_name: topology_cabling
+    tests:
+      - name: syntax_check
+        spec:
+          path: queries/topology/cabling.gql
+          kind: graphql-query-smoke
+
+  - resource: GraphQLQuery
+    resource_name: topology_pop
+    tests:
+      - name: syntax_check
+        spec:
+          path: queries/topology/pop.gql
+          kind: graphql-query-smoke
+
+  - resource: GraphQLQuery
+    resource_name: topology_equinix_pop
+    tests:
+      - name: syntax_check
+        spec:
+          path: queries/topology/equinix_pop.gql
+          kind: graphql-query-smoke
+
+  - resource: GraphQLQuery
+    resource_name: topology_simulator
+    tests:
+      - name: syntax_check
+        spec:
+          path: queries/topology/clab.gql
+          kind: graphql-query-smoke
+
+  # ==================== VALIDATION QUERIES ====================
+  - resource: GraphQLQuery
+    resource_name: loadbalancer_validation
+    tests:
+      - name: syntax_check
+        spec:
+          path: queries/validation/loadbalancer_validation.gql
           kind: graphql-query-smoke
 

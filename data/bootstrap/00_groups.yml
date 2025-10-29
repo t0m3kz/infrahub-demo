@@ -82,3 +82,5 @@ spec:
       description: Check Point Edge Firewall
     - name: equinix_pop
       description: Equinix POPs
+    - name: topologies_server
+      description: Group for servers in topologies
