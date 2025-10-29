@@ -113,10 +113,10 @@ query edge_config($device: String!) {
                 interface_type { value }
                 mtu { value }
                 ip_address {
-                    node {
-                      address { value }
-                      ip_namespace { node { name { value } } }
-                    }
+                  node {
+                    address { value }
+                    ip_namespace { node { name { value } } }
+                  }
                 }
               }
 
