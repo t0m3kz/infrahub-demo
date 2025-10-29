@@ -130,20 +130,20 @@ query edge_config($device: String!) {
                   }
                 }
               }
-              interface_services{
-                edges{
-                  node{
+              interface_services {
+                edges {
+                  node {
                     __typename
                     ... on ServiceOSPF {
                       area { node { area { value } } }
-                      ospf_interface_profile { node {
-                        metric { value }
-                        mode { value }
-                        authentication_mode { value }
-                        authentication_key { value }
+                      ospf_interface_profile {
+                        node {
+                          metric { value }
+                          mode { value }
+                          authentication_mode { value }
+                          authentication_key { value }
                         }
                       }
-
                     }
                     ... on ServiceNetworkSegment {
                       vlan_id { value }
