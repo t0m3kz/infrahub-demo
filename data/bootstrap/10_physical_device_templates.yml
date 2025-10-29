@@ -463,10 +463,10 @@ spec:
             role: leaf
           - template_name: N9K-C9316D-GX_SPINE_Ethernet1/11
             name: Ethernet1/11
-            role: leaf
+            role: uplink
           - template_name: N9K-C9316D-GX_SPINE_Ethernet1/12
             name: Ethernet1/12
-            role: leaf
+            role: uplink
           - template_name: N9K-C9316D-GX_SPINE_Ethernet1/13
             name: Ethernet1/13
             role: uplink
@@ -907,6 +907,7 @@ spec:
             role: management
     - template_name: SRX-1500_EDGE_FIREWALL
       device_type: SRX-1500
+      platform: junos
       role: edge_firewall
       status: active
       interfaces:
@@ -929,6 +930,7 @@ spec:
             role: leaf
     - template_name: SRX-1500_DC_FIREWALL
       device_type: SRX-1500
+      platform: junos
       role: dc_firewall
       status: active
       interfaces:
@@ -951,6 +953,7 @@ spec:
             role: leaf
     - template_name: C9200L-24P-4G_OOB
       device_type: C9200L-24P-4G
+      platform: cisco_ios
       role: oob
       status: active
       interfaces:
@@ -1033,6 +1036,7 @@ spec:
             role: management
     - template_name: SCG50R_CONSOLE
       device_type: SCG50R
+      platform: dell_force10
       role: console
       status: active
       interfaces:
@@ -1046,6 +1050,7 @@ spec:
             role: management
     - template_name: N9K-C9316D-GX_EDGE
       device_type: N9K-C9316D-GX
+      platform: cisco_nxos
       role: edge
       status: active
       interfaces:
@@ -1104,6 +1109,7 @@ spec:
             role: management
     - template_name: 5912-54X-O-AC-F_LEAF
       device_type: 5912-54X-O-AC-F
+      platform: juniper_junos
       role: leaf
       status: active
       interfaces:
@@ -1270,6 +1276,7 @@ spec:
             role: management
     - template_name: 7726-32X-O_SPINE
       device_type: 7726-32X-O
+      platform: arista_eos
       role: spine
       status: active
       interfaces:

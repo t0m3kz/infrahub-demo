@@ -241,7 +241,7 @@ nodes:
         default_value: bottom_up
         order_weight: 1300
     relationships:
-      - name: super_spine_switch_template
+      - name: super_spine_template
         branch: aware
         peer: TemplateDcimPhysicalDevice
         kind: Attribute
@@ -313,6 +313,21 @@ nodes:
         cardinality: one
         identifier: "pod__spine_template"
         order_weight: 1100
+      - name: racks
+        peer: LocationRack
+        branch: aware
+        kind: Generic
+        cardinality: many
+        identifier: "rack__pod"
+        order_weight: 1200
+      - name: management_pool
+        peer: CoreIPAddressPool
+        branch: aware
+        kind: Attribute
+        cardinality: one
+        optional: true
+        identifier: "pod__management_pool"
+        order_weight: 5500
       - name: loopback_pool
         peer: CoreIPAddressPool
         branch: aware

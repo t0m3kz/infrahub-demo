@@ -259,6 +259,7 @@ class TopologyPod(TopologyDeployment, GeneratorTarget):
     member_of_groups: RelationshipManager
     parent: RelatedNode
     prefix_pool: RelatedNode
+    management_pool: RelatedNode
     profiles: RelationshipManager
     racks: RelationshipManager
     spine_switch_template: RelatedNode
@@ -411,9 +412,22 @@ class DcimPhysicalDevice(CoreArtifactTarget, DcimGenericDevice):
 
 
 class DcimPhysicalInterface(DcimInterface, DcimEndpoint, DcimSubInterface):
-    interface_type: Dropdown
-    mtu: Integer
-    ip_addresses: RelationshipManager
+    description: StringOptional
+    interface_type: DropdownOptional
+    mtu: IntegerOptional
+    name: String
+    role: DropdownOptional
+    status: DropdownOptional
+    cable: RelatedNode
+    device: RelatedNode
+    interface_services: RelationshipManager
+    ip_address: RelatedNode
+    member_of_groups: RelationshipManager
+    plugged_sfp: RelatedNode
+    profiles: RelationshipManager
+    sub_interfaces: RelationshipManager
+    subscriber_of_groups: RelationshipManager
+    tags: RelationshipManager
 
 
 class DcimPlatform(CoreNode):
@@ -567,7 +581,7 @@ class DcimVirtualInterface(DcimInterface):
     status: DropdownOptional
     device: RelatedNode
     interface_services: RelationshipManager
-    ip_addresses: RelationshipManager
+    ip_address: RelatedNode
     member_of_groups: RelationshipManager
     parent_interface: RelatedNode
     profiles: RelationshipManager
@@ -577,3 +591,12 @@ class DcimVirtualInterface(DcimInterface):
 
 class SecurityZone(CoreNode):
     name: String
+
+
+class DcimCable(CoreNode):
+    name: String
+    type: Dropdown
+    endpoints: RelationshipManager
+    member_of_groups: RelationshipManager
+    profiles: RelationshipManager
+    subscriber_of_groups: RelationshipManager

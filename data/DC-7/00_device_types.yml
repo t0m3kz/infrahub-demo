@@ -1,0 +1,10 @@
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimDeviceType
+  data:
+    - name: DL360-Gen11
+      manufacturer: Cisco
+    - name: DL380-Gen11
+      manufacturer: Cisco

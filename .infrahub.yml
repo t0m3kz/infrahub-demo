@@ -130,6 +130,20 @@ generator_definitions:
     class_name: PodTopologyGenerator
     parameters:
       name: name__value
+  - name: create_rack
+    file_path: generators/generate_rack.py
+    targets: racks
+    query: rack
+    class_name: RackGenerator
+    parameters:
+      name: name__value
+  - name: create_server_connectivity
+    file_path: generators/generate_server.py
+    targets: topologies_pod
+    query: topology_pod
+    class_name: ServerConnectivityGenerator
+    parameters:
+      name: name__value
   # - name: create_pop
   #   file_path: generators/generate_pop.py
   #   targets: topologies_pop
@@ -176,6 +190,8 @@ queries:
     file_path: queries/topology/dc.gql
   - name: topology_pod
     file_path: queries/topology/pod.gql
+  - name: rack
+    file_path: queries/topology/rack.gql
   - name: topology_pop
     file_path: queries/topology/pop.gql
   - name: topology_simulator

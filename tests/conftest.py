@@ -1,4 +1,5 @@
 # import json
+import sys
 from pathlib import Path
 
 # from typing import Any
@@ -10,6 +11,9 @@ import pytest
 # from infrahub_sdk.yaml import SchemaFile
 
 CURRENT_DIR = Path(__file__).parent
+
+# Add project root to sys.path for imports
+sys.path.insert(0, str(CURRENT_DIR.parent))
 
 
 @pytest.fixture(scope="session")

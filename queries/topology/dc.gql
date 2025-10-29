@@ -1,32 +1,36 @@
 query FabricGeneratorQuery($name: String!) {
-  TopologyDataCenter(name__value: $name) {
+  TopologyDeployment(name__value: $name) {
     edges {
       node {
         id
         name {
           value
         }
-        size {
-          value
-        }
-        fully_managed {
-          value
-        }
-        amount_of_super_spines {
-          value
-        }
-        super_spine_switch_template {
-          node {
-            __typename
-            id
-            device_type {
-              node {
-                id
+        ... on TopologyDataCenter {
+          index {
+            value
+          }
+          size {
+            value
+          }
+          amount_of_super_spines {
+            value
+          }
+          super_spine_template {
+            node {
+              id
+              template_name {
+                value
               }
-            }
-            platform {
-              node {
-                id
+              platform {
+                node {
+                  id
+                }
+              }
+              device_type {
+                node {
+                  id
+                }
               }
             }
           }

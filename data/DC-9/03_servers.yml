@@ -1,0 +1,111 @@
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimPhysicalDevice
+  data:
+    # Compute Servers Suite 1
+    - name: compute01
+      device_type: DL360-Gen11
+      status: active
+      member_of_groups:
+        - topologies_server
+      interfaces:
+        kind: DcimPhysicalInterface
+        data:
+          - name: eth0
+            role: uplink
+            mtu: 9000
+            status: active
+          - name: eth1
+            role: uplink
+            mtu: 9000
+            status: active
+
+    - name: compute02
+      device_type: DL360-Gen11
+      status: active
+      member_of_groups:
+        - topologies_server
+      interfaces:
+        kind: DcimPhysicalInterface
+        data:
+          - name: eth0
+            role: uplink
+            mtu: 9000
+            status: active
+          - name: eth1
+            role: uplink
+            mtu: 9000
+            status: active
+
+    # Compute Servers Suite 2
+    - name: compute03
+      device_type: DL360-Gen11
+      status: active
+      member_of_groups:
+        - topologies_server
+      interfaces:
+        kind: DcimPhysicalInterface
+        data:
+          - name: eth0
+            role: uplink
+            mtu: 9000
+            status: active
+          - name: eth1
+            role: uplink
+            mtu: 9000
+            status: active
+
+    - name: compute04
+      device_type: DL360-Gen11
+      status: active
+      member_of_groups:
+        - topologies_server
+      interfaces:
+        kind: DcimPhysicalInterface
+        data:
+          - name: eth0
+            role: uplink
+            mtu: 9000
+            status: active
+          - name: eth1
+            role: uplink
+            mtu: 9000
+            status: active
+
+    # Storage Server Suite 1
+    - name: storage01
+      device_type: DL380-Gen11
+      status: active
+      member_of_groups:
+        - topologies_server
+      interfaces:
+        kind: DcimPhysicalInterface
+        data:
+          - name: eth0
+            role: uplink
+            mtu: 9000
+            status: active
+          - name: eth1
+            role: uplink
+            mtu: 9000
+            status: active
+
+    # Storage Server Suite 2
+    - name: storage02
+      device_type: DL380-Gen11
+      status: active
+      member_of_groups:
+        - topologies_server
+      interfaces:
+        kind: DcimPhysicalInterface
+        data:
+          - name: eth0
+            role: uplink
+            mtu: 9000
+            status: active
+          - name: eth1
+            role: uplink
+            mtu: 9000
+            status: active

@@ -1,0 +1,38 @@
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: LocationRack
+  data:
+    - name: "Rack-E1-1"
+      shortname: "r-e1-1"
+      index: 1
+      rack_type: compute
+      pod: Pod-E1
+      parent: "Suite-E1"
+      fabric_templates:
+        - 6_ARISTA_LEAFS_CCS-720DP-48S-2F
+        - 2_CISCO_OOB_SWITCHES_C9200L-24P-4G
+      member_of_groups:
+        - topologies_rack
+    - name: "Rack-E1-2"
+      shortname: "r-e1-2"
+      index: 2
+      rack_type: compute
+      pod: Pod-E1
+      parent: "Suite-E1"
+      fabric_templates:
+        - 6_CISCO_LEAFS_N9K-C9336C-FX2
+        - 2_CISCO_OOB_SWITCHES_C9200L-24P-4G
+      member_of_groups:
+        - topologies_rack
+    - name: "Rack-E2-1"
+      shortname: "r-e2-1"
+      index: 1
+      rack_type: compute
+      pod: Pod-E2
+      parent: "Suite-E2"
+      fabric_templates:
+        - 6_ARISTA_LEAFS_CCS-720DP-48S-2F
+      member_of_groups:
+        - topologies_rack

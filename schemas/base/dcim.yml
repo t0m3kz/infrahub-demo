@@ -169,8 +169,6 @@ generics:
     human_friendly_id:
       - device__name__value
       - name__value
-    display_labels:
-      - name__value
     attributes:
       - name: name
         kind: Text
@@ -244,18 +242,6 @@ generics:
             label: Management
             description: "Interface dedicated to device management traffic."
             color: "#F59E0B" # amber
-          - name: unnumbered
-            label: Unnumbered
-            description: "IP-unnumbered interface (commonly used for BGP/OSPF adjacencies)."
-            color: "#8B5CF6" # violet
-          - name: ospf
-            label: OSPF
-            description: "Interface used for OSPF adjacency or routing sessions."
-            color: "#FB923C" # orange
-          - name: bgp
-            label: BGP
-            description: "Interface used for BGP peering or sessions."
-            color: "#EF4444" # red
           - name: upstream
             label: Upstream
             description: "Interface used to carry upstream traffic toward aggregation or core."
@@ -595,10 +581,10 @@ nodes:
         default_value: 9000
         order_weight: 1300
     relationships:
-      - name: ip_addresses
+      - name: ip_address
         peer: IpamIPAddress
         optional: true
-        cardinality: many
+        cardinality: one
         kind: Attribute
 
   - name: VirtualInterface
@@ -661,6 +647,6 @@ nodes:
       - name: endpoints
         peer: DcimEndpoint
         cardinality: many
-        kind: Attribute
-        optional: true
+        min_count: 2
         max_count: 2
+        kind: Attribute

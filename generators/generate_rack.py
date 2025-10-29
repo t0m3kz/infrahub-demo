@@ -1,186 +1,264 @@
 from __future__ import annotations
 
-import logging
-from typing import TYPE_CHECKING
+import re
 
-from infrahub_sdk.generator import InfrahubGenerator
-from infrahub_sdk.protocols import CoreIPAddressPool, CoreIPPrefixPool
-from solution_ai_dc import sorting as solution_ai_dc_sorting
-from solution_ai_dc.addressing import assign_ip_addresses_to_p2p_connections
-from solution_ai_dc.cabling import build_rack_cabling_plan, connect_interface_maps
-from solution_ai_dc.interfaces import set_interface_profiles
-from solution_ai_dc.protocols import NetworkDevice, NetworkInterface
-
-from .rack_generator_query import RackGeneratorQuery
-
-if TYPE_CHECKING:
-    from collections.abc import Callable
-
-EXCLUDED_RACK_TYPES = []
+from .common import CommonGenerator
+from .helpers import CablingStrategy, DeviceNamingConfig
 
 
-class RackGenerator(InfrahubGenerator):
-    rack_id: str
-    rack_index: int
-    rack_name: str
-    rack_leaf_switch_template: str
-    rack_amount_of_leafs: int
+class RackGenerator(CommonGenerator):
+    """
+    A generator for creating rack infrastructure based on fabric templates.
 
-    spine_interface_sorting_function: Callable
-    leaf_interface_sorting_function: Callable
-
-    pod_id: str
-    pod_index: int
-    pod_name: str
-
-    spine_switches: list[NetworkDevice]
-
-    leaf_switches: list[NetworkDevice]
-
-    loopback_pool: CoreIPAddressPool
-    prefix_pool: CoreIPPrefixPool
-
-    logger = logging.getLogger("infrahub.tasks")
+    This generator:
+    1. Creates leaf devices and connects them to spine switches (fabric layer)
+    2. Creates OOB switches and connects them to leaf management interfaces
+    3. Creates console devices but does NOT connect them to any layer
+    4. Special conditions:
+       - OOB switches do NOT connect to spines
+       - Console devices do NOT connect to any layer
+       - Leaf management interfaces connect to OOB switches, not spines
+    """
 
     async def generate(self, data: dict) -> None:
-        data: RackGeneratorQuery = RackGeneratorQuery(**data)
+        """
+        Generate rack topology with special handling for OOB and console devices.
 
-        self.rack_id: str = data.location_rack.edges[0].node.id
-        self.rack_index: int = data.location_rack.edges[0].node.index.value
-        self.rack_name: str = data.location_rack.edges[0].node.name.value
-        self.rack_type: str = data.location_rack.edges[0].node.rack_type.value
-        self.rack_leaf_switch_template: str = data.location_rack.edges[
-            0
-        ].node.leaf_switch_template.node.id
-        self.rack_amount_of_leafs: int = data.location_rack.edges[
-            0
-        ].node.amount_of_leafs.value
-        self.leaf_switches = []
+        This method:
+        1. Creates devices (leaf, OOB, console) from fabric templates
+        2. Connects leaf uplinks to spine devices
+        3. Connects leaf management interfaces to OOB switches
+        4. Does NOT connect OOB or console devices to spine layer
 
-        self.pod_id: str = data.location_rack.edges[0].node.pod.node.id
-        self.pod_index: int = data.location_rack.edges[0].node.pod.node.index.value
-        self.pod_name: str = data.location_rack.edges[
-            0
-        ].node.pod.node.name.value.lower()
-        self.pod_amount_of_spines: int = data.location_rack.edges[
-            0
-        ].node.pod.node.amount_of_spines.value
+        Args:
+            data: Raw GraphQL response data to clean and process
+        """
+        try:
+            # Extract and clean the rack design from GraphQL response
+            # The query uses alias: location_rack: LocationRack(...)
+            # After clean_data, the structure should be: location_rack: [list of rack objects]
+            cleaned_data = self.clean_data(data)
 
-        self.loopback_pool_id: str = data.location_rack.edges[
-            0
-        ].node.pod.node.loopback_pool.node.id
-        self.prefix_pool_id: str = data.location_rack.edges[
-            0
-        ].node.pod.node.prefix_pool.node.id
+            # Try both possible keys (with and without alias)
+            rack_design_list = cleaned_data.get("location_rack", [])
+            if not rack_design_list:
+                rack_design_list = cleaned_data.get("LocationRack", [])
 
-        self.loopback_pool = await self.client.get(
-            kind=CoreIPAddressPool, id=self.loopback_pool_id
-        )
-        self.prefix_pool = await self.client.get(
-            kind=CoreIPPrefixPool, id=self.prefix_pool_id
-        )
+            if not rack_design_list:
+                self.logger.error(
+                    "No LocationRack data found in GraphQL response. "
+                    f"Available keys: {list(cleaned_data.keys())}"
+                )
+                return
 
-        self.spine_switches = await self.client.filters(
-            kind=NetworkDevice, pod__ids=[self.pod_id], role__value="spine"
-        )
+            if isinstance(rack_design_list, list) and rack_design_list:
+                rack_design = rack_design_list[0]
+            elif isinstance(rack_design_list, dict):
+                # Direct dict result, not a list
+                rack_design = rack_design_list
+            else:
+                self.logger.error(
+                    f"Unexpected rack_design_list type: {type(rack_design_list)}"
+                )
+                return
 
-        if self.rack_type in EXCLUDED_RACK_TYPES:
-            msg = f"Cannot run rack generator on {self.rack_name}-{self.rack_id}: {self.rack_type} is not supported by the generator!"
-            raise ValueError(msg)
+            rack_name = rack_design.get("name", "unknown")
+        except (ValueError, KeyError, IndexError) as exc:
+            self.logger.error(f"Generation failed due to {exc}", exc_info=True)
+            return
 
-        if self.pod_amount_of_spines != len(self.spine_switches):
-            msg = f"Cannot start rack generator on {self.rack_name}-{self.rack_id}: the pod doesn't seem to be fully generated"
-            raise RuntimeError(msg)
+        self.logger.info(f"Starting generator for rack: {rack_name}")
 
-        leaf_interface_sorting_method: str = data.location_rack.edges[
-            0
-        ].node.pod.node.leaf_interface_sorting_method.value
-        spine_interface_sorting_method: str = data.location_rack.edges[
-            0
-        ].node.pod.node.spine_interface_sorting_method.value
+        leaf_switches_names: list[str] = []
+        oob_switches_names: list[str] = []
+        console_device_names: list[str] = []
 
-        self.leaf_interface_sorting_function = getattr(
-            solution_ai_dc_sorting, leaf_interface_sorting_method
-        )
-        self.spine_interface_sorting_function = getattr(
-            solution_ai_dc_sorting, spine_interface_sorting_method
-        )
+        # Extract pod and parent references
+        pod_data = rack_design.get("pod", {})
+        pod_index = pod_data.get("index", 1)
+        pod_id = pod_data.get("id")
+        pod_name = pod_data.get("name", "").lower()
+        amount_of_spines = pod_data.get("amount_of_spines", 4)
 
-        await self.create_leaf_switches()
+        parent_data = pod_data.get("parent", {})
+        parent_index = parent_data.get("index", 1)
+        parent_id = parent_data.get("id")
+        parent_name = parent_data.get("name", "").lower()
+        rack_index = rack_design.get("index", 1)
 
-        await self.connect_leafs_to_spine()
+        # Build naming for referencing pod pools
+        # Use parent name and pod name (not indices) to match pod generator naming
+        fabric_name = parent_name  # e.g., "dc-1"
+        pod_prefix = pod_name  # e.g., "pod-a1"
+        pool_prefix = f"{fabric_name}-{pod_prefix}"
 
-    async def create_leaf_switches(self) -> None:
-        for index in range(1, self.rack_amount_of_leafs + 1):
-            leaf_switch = await self.client.create(
-                NetworkDevice,
-                hostname=f"leaf-{self.pod_name}-{self.rack_index}-{index}",
-                object_template={"id": self.rack_leaf_switch_template},
-                pod={"id": self.pod_id},
-                rack={"id": self.rack_id},
-                loopback_ip=self.loopback_pool,
-                index=index,
-                role="leaf",
-                member_of_groups=["devices"],
+        # Extract fabric templates
+        fabric_templates = rack_design.get("fabric_templates", [])
+
+        # ---------------------------------------------------------------------
+        # 1. Create Devices from Fabric Templates
+        # ---------------------------------------------------------------------
+        for template_ref in fabric_templates:
+            template_str = template_ref.get("name", "")
+            self.logger.info(f"Processing fabric template: {template_str}")
+
+            # Parse template name format: QUANTITY_DEVICE_ROLE_PATTERN_SUFFIX
+            match = re.match(
+                r"(\d+)_([A-Z0-9]+)_([A-Z0-9_]+)_([A-Z0-9_-]+)", template_str
             )
-            await leaf_switch.save(allow_upsert=True)
-            self.leaf_switches.append(leaf_switch)
+            if not match:
+                self.logger.warning(
+                    f"Skipping invalid fabric template format: {template_str}"
+                )
+                continue
 
-            # FIX: seems the id of a related node assigned from a pool is not immediately accessible
-            device = await self.client.get(
-                NetworkDevice,
-                id=leaf_switch.id,
-                include=["ip_address"],
-                exclude=[
-                    "rack",
-                    "pod",
-                    "role",
-                    "hostname",
-                    "object_template",
-                    "member_of_groups",
-                ],
+            quantity_str, _, role_str, _ = match.groups()
+            quantity = int(quantity_str)
+
+            # Determine device role
+            device_role = ""
+            if "LEAFS" in role_str:
+                device_role = "leaf"
+            elif "OOB_SWITCHES" in role_str:
+                device_role = "oob"
+            elif "CONSOLE" in role_str:
+                device_role = "console"
+            else:
+                self.logger.warning(f"Unknown device role in template: {role_str}")
+                continue
+
+            naming_config = DeviceNamingConfig()
+            fabric_name_for_device = (
+                parent_name  # Use actual parent name (e.g., "dc-1")
             )
-            loopback_interface = await self.client.get(
-                NetworkInterface, device__ids=[device.id], role__value="loopback"
+            name_prefix_for_device = pod_name  # Use actual pod name (e.g., "pod-a1")
+
+            # Create devices using pod's existing pools (not rack pools)
+            # Devices will use pod-level resource pools
+            created_devices = await self.create_devices(
+                type=device_role,
+                amount=quantity,
+                template={"id": template_ref.get("template", {}).get("id")},
+                name_prefix=name_prefix_for_device,
+                deployment_id=pod_id,
+                fabric_name=fabric_name_for_device,
+                naming_config=naming_config,
             )
-            loopback_interface.status.value = "active"
-            loopback_interface.ip_address = device.loopback_ip.id
-            await loopback_interface.save(allow_upsert=True)
 
-            await set_interface_profiles(self.client, leaf_switch)
+            # Track devices by role
+            if device_role == "leaf":
+                leaf_switches_names.extend(created_devices)
+            elif device_role == "oob":
+                oob_switches_names.extend(created_devices)
+            elif device_role == "console":
+                console_device_names.extend(created_devices)
 
-    async def connect_leafs_to_spine(self) -> None:
-        spine_interfaces = await self.client.filters(
-            kind=NetworkInterface,
-            device__ids=[spine.id for spine in self.spine_switches],
-            role__value="leaf",
+        if not leaf_switches_names:
+            self.logger.warning("No leaf switches were created. Aborting cabling.")
+            return
+
+        self.logger.info(f"Created leaf devices: {leaf_switches_names}")
+        self.logger.info(f"Created OOB devices: {oob_switches_names}")
+        self.logger.info(f"Created console devices: {console_device_names}")
+
+        # Extract spine template and get interfaces with role "leaf"
+        spine_template_data = pod_data.get("spine_switch_template", {})
+        spine_interfaces = [
+            iface.get("name") for iface in spine_template_data.get("interfaces", [])
+        ]
+        self.logger.info(f"Spine interfaces with role 'leaf': {spine_interfaces}")
+
+        # Get leaf template interfaces with role "uplink" for cabling
+        # Extract from fabric_templates data in GraphQL response
+        leaf_interfaces = []
+        for template_ref in fabric_templates:
+            if "LEAFS" in template_ref.get("name", ""):
+                # Get interfaces from the template node
+                template_data = template_ref.get("template", {})
+                interfaces_data = template_data.get("interfaces", [])
+                leaf_interfaces = [iface.get("name") for iface in interfaces_data]
+                if leaf_interfaces:
+                    break
+
+        self.logger.info(f"Leaf interfaces with role 'uplink': {leaf_interfaces}")
+
+        # ---------------------------------------------------------------------
+        # 2. Create Cabling from Leaf UPLINK to Spine (Fabric Connection)
+        # IMPORTANT: OOB and console devices do NOT connect to spines
+        # ---------------------------------------------------------------------
+        # Build spine device names (these should already exist from pod generator)
+        # Use actual names to match the pod generator's device naming
+        spine_switches_names = [
+            f"{parent_name}-{pod_name}-spine-{i:02d}"
+            for i in range(1, amount_of_spines + 1)
+        ]
+
+        # P2P IP allocation enabled
+        self.logger.info(
+            f"Creating fabric cabling from {len(leaf_switches_names)} "
+            f"leaf uplinks to {amount_of_spines} spine devices "
+            f"with P2P IP allocation"
         )
-        spine_interface_map = self.spine_interface_sorting_function(spine_interfaces)
 
-        leaf_interfaces = await self.client.filters(
-            kind=NetworkInterface,
-            device__ids=[leaf_switch.id for leaf_switch in self.leaf_switches],
-            role__value="spine",
+        await self.create_cabling(
+            bottom_devices=leaf_switches_names,
+            bottom_interfaces=leaf_interfaces,
+            top_devices=spine_switches_names,
+            top_interfaces=spine_interfaces,
+            strategy=CablingStrategy.POD,
+            cabling_offset=rack_index,
+            pool=f"{fabric_name}-{pod_prefix}-technical-pool",
         )
-        leaf_interface_map = self.leaf_interface_sorting_function(leaf_interfaces)
 
-        created_cabling_plan: list[tuple[NetworkInterface, NetworkInterface]] = (
-            build_rack_cabling_plan(
-                rack_index=self.rack_index,
-                src_interface_map=leaf_interface_map,
-                dst_interface_map=spine_interface_map,
+        self.logger.info("Fabric cabling (leaf to spine) completed successfully")
+
+        # ---------------------------------------------------------------------
+        # 3. Create Cabling from Leaf MANAGEMENT to OOB Switches
+        # IMPORTANT: Only leaf management interfaces connect to OOB
+        # Console devices do NOT get connections
+        # OOB devices do NOT connect to spines (only to leaf management)
+        # ---------------------------------------------------------------------
+        if oob_switches_names and leaf_switches_names:
+            self.logger.info(
+                f"Creating management cabling from {len(leaf_switches_names)} "
+                f"leaf management interfaces to {len(oob_switches_names)} OOB switches"
             )
-        )
+            await self.create_cabling(
+                bottom_devices=leaf_switches_names,
+                bottom_interfaces=["management"],
+                top_devices=oob_switches_names,
+                top_interfaces=["management"],
+                strategy=CablingStrategy.RACK,
+                cabling_offset=rack_index,
+            )
+            self.logger.info(
+                "Management cabling (leaf management to OOB) completed successfully"
+            )
+        else:
+            if not oob_switches_names:
+                self.logger.info(
+                    "No OOB switches created. Skipping management cabling."
+                )
+            else:
+                self.logger.warning(
+                    "No leaf devices available for management cabling to OOB."
+                )
 
-        await connect_interface_maps(
-            client=self.client, logger=self.logger, cabling_plan=created_cabling_plan
-        )
+        # ---------------------------------------------------------------------
+        # 4. Summary of Cabling Configuration
+        # ---------------------------------------------------------------------
+        # Console devices created but NOT cabled to any layer
+        if console_device_names:
+            self.logger.info(
+                f"Console devices created ({len(console_device_names)}) and "
+                "NOT connected to any layer (as specified)"
+            )
 
-        await assign_ip_addresses_to_p2p_connections(
-            client=self.client,
-            logger=self.logger,
-            connections=created_cabling_plan,
-            prefix_len=31,
-            prefix_role="pod_leaf_spine",
-            pool=self.prefix_pool,
-        )
+        # OOB devices only connected to leaf management (not to spine layer)
+        if oob_switches_names:
+            self.logger.info(
+                f"OOB devices created ({len(oob_switches_names)}) and "
+                "connected only to leaf management interfaces (NOT to spine layer)"
+            )
+
+        self.logger.info(f"Successfully completed generator for rack: {rack_name}")

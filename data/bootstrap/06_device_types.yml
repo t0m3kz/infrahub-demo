@@ -363,3 +363,13 @@ spec:
       height: 1
       full_depth: false
       manufacturer: F5 Networks
+
+
+    - name: DL360-Gen11
+      manufacturer: Cisco
+      height: 1
+      full_depth: true
+    - name: DL380-Gen11
+      manufacturer: Cisco
+      height: 1
+      full_depth: true

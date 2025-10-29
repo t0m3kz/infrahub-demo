@@ -1,0 +1,59 @@
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimPhysicalDevice
+  data:
+    # Compute Server 1 with dual uplinks
+    - name: compute01
+      device_type: DL360-Gen11
+      status: active
+      member_of_groups:
+        - topologies_server
+      interfaces:
+        kind: DcimPhysicalInterface
+        data:
+          - name: eth0
+            role: uplink
+            mtu: 9000
+            status: active
+          - name: eth1
+            role: uplink
+            mtu: 9000
+            status: active
+
+    # Compute Server 2 with dual uplinks
+    - name: compute02
+      device_type: DL360-Gen11
+      status: active
+      member_of_groups:
+        - topologies_server
+      interfaces:
+        kind: DcimPhysicalInterface
+        data:
+          - name: eth0
+            role: uplink
+            mtu: 9000
+            status: active
+          - name: eth1
+            role: uplink
+            mtu: 9000
+            status: active
+
+    # Storage Server with dual uplinks
+    - name: storage01
+      device_type: DL380-Gen11
+      status: active
+      member_of_groups:
+        - topologies_server
+      interfaces:
+        kind: DcimPhysicalInterface
+        data:
+          - name: eth0
+            role: uplink
+            mtu: 9000
+            status: active
+          - name: eth1
+            role: uplink
+            mtu: 9000
+            status: active
