@@ -132,7 +132,7 @@ generator_definitions:
       name: name__value
   - name: create_rack
     file_path: generators/generate_rack.py
-    targets: racks
+    targets: topologies_rack
     query: rack
     class_name: RackGenerator
     parameters:
