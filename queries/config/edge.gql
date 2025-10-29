@@ -112,12 +112,10 @@ query edge_config($device: String!) {
               ... on DcimPhysicalInterface {
                 interface_type { value }
                 mtu { value }
-                ip_addresses {
-                  edges {
-                    node {
-                      address { value }
-                      ip_namespace { node { name { value } } }
-                    }
+                ip_address {
+                  node {
+                    address { value }
+                    ip_namespace { node { name { value } } }
                   }
                 }
               }
