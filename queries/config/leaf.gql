@@ -252,13 +252,12 @@ query leaf_config($device: String!) {
                 mtu {
                   value
                 }
-                ip_addresses {
-                  edges {
-                    node {
-                      address {
-                        value
-                      }
-                      ip_namespace {
+                ip_address {
+                  node {
+                    address {
+                      value
+                    }
+                    ip_namespace {
                         node {
                           name {
                             value
