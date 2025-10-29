@@ -3,13 +3,7 @@ query PodGeneratorQuery($name: String!) {
     edges {
       node {
         id
-        amount_of_spines {
-          value
-        }
         name {
-          value
-        }
-        checksum {
           value
         }
         index {
@@ -18,20 +12,49 @@ query PodGeneratorQuery($name: String!) {
         role {
           value
         }
+        amount_of_spines {
+          value
+        }
+        leaf_interface_sorting_method {
+          value
+        }
+        spine_interface_sorting_method {
+          value
+        }
         spine_switch_template {
           node {
-            __typename
             id
+            platform {
+              node {
+                id
+              }
+            }
+            device_type {
+              node {
+                id
+              }
+            }
+            interfaces(role__value: "uplink") {
+              edges {
+                node {
+                  name {
+                    value
+                  }
+                }
+              }
+            }
           }
         }
         parent {
           node {
-            __typename
-            id
-            name {
-              value
-            }
             ... on TopologyDataCenter {
+              id
+              name {
+                value
+              }
+              size {
+                value
+              }
               amount_of_super_spines {
                 value
               }
@@ -40,6 +63,30 @@ query PodGeneratorQuery($name: String!) {
               }
               spine_interface_sorting_method {
                 value
+              }
+              super_spine_template {
+                node {
+                  id
+                  platform {
+                    node {
+                      id
+                    }
+                  }
+                  device_type {
+                    node {
+                      id
+                    }
+                  }
+                  interfaces(role__value: "spine") {
+                    edges {
+                      node {
+                        name {
+                          value
+                        }
+                      }
+                    }
+                  }
+                }
               }
             }
           }

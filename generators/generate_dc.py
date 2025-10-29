@@ -1,53 +1,85 @@
-"""Infrastructure generator."""
+"""Infrastructure generator for data center topology."""
 
-from infrahub_sdk.exceptions import ValidationError
+from typing import Any, Dict
 
 from .common import CommonGenerator
-from .schema_protocols import TopologyPod
 
 
 class DCTopologyGenerator(CommonGenerator):
-    """
-    This generator is responsible for creating a data center topology.
-    """
+    """Generate data center topology with super-spine infrastructure."""
 
-    async def update_checksum(self) -> None:
-        pods = await self.client.filters(
-            kind=TopologyPod, parent__ids=[self.data.get("id")]
-        )
+    async def generate(self, data: dict[str, Any]) -> None:
+        """Generate data center topology.
 
-        # store the checksum for the fabric in the object itself
-        fabric_checksum = self.calculate_checksum()
-        for pod in pods:
-            if pod.checksum.value != fabric_checksum:
-                pod.checksum.value = fabric_checksum
-                await pod.save(allow_upsert=True)
-                self.logger.info(
-                    f"Pod {pod.name.value} has been updated to checksum {fabric_checksum}"
-                )
+        Args:
+            data: Raw GraphQL response data to clean and process
+        """
 
-    async def generate(self, data: dict) -> None:
-        """Generate topology."""
         try:
-            self.data = self.clean_data(data)
-        except ValidationError as exc:
-            self.client.log.error(f"- Generation failed due to {exc}")
+            deployment_list = self.clean_data(data).get("TopologyDeployment", [])
+            if not deployment_list:
+                self.logger.error(
+                    "No TopologyDeployment data found in GraphQL response"
+                )
+                return
+
+            self.data = deployment_list[0]
+        except (ValueError, KeyError, IndexError) as exc:
+            self.logger.error(f"Generation failed due to {exc}")
             return
 
-        self.logger.info(f"Generating topology for fabric {self.data.get('name')}")
-        self.name: str = self.data.get("name").lower()
+        self.logger.info(f"Processing Data Center: {self.data.get('name')}")
+
+        # Extract deployment parameters
+        dc_id = self.data.get("id")
+        dc_name = self.data.get("name", "").lower()
+        dc_size = self.data.get("size", "M")
+        amount_of_super_spines = self.data.get("amount_of_super_spines", 4)
+        super_spine_template = self.data.get("super_spine_template", {})
+
+        if not super_spine_template:
+            self.logger.error("super_spine_template not found in deployment data")
+            return
+
+        name_prefix = dc_name
+        self.logger.info(f"Generating topology for data center {name_prefix}")
+
+        # Step 1: Allocate resource pools for super-spine
         await self.allocate_resource_pools(
             type="super-spine",
-            size="L",
-            name_prefix=self.name,
-            id=self.data.get("id"),
+            id=dc_id,
+            size=dc_size,
+            name_prefix=name_prefix,
         )
-        # await self.create_superspines()
-        await self.create_devices(
+
+        # Step 2: Create super-spine devices
+        # Build template data with proper structure
+        template_data: Dict[str, Any] = {
+            "id": super_spine_template.get("id"),
+        }
+
+        # Add optional platform reference if available
+        if super_spine_template.get("platform", {}).get("id"):
+            template_data["platform"] = {"id": super_spine_template["platform"]["id"]}
+        else:
+            template_data["platform"] = {}
+
+        # Add optional device_type reference if available
+        if super_spine_template.get("device_type", {}).get("id"):
+            template_data["device_type"] = {
+                "id": super_spine_template["device_type"]["id"]
+            }
+        else:
+            template_data["device_type"] = {}
+
+        created_super_spines = await self.create_devices(
             type="super-spine",
-            template=self.data.get("super_spine_switch_template", {}),
-            amount=self.data.get("amount_of_super_spines", 0),
-            prefix_name=self.name,
-            deployment_id=self.data.get("id"),
+            template=template_data,
+            amount=amount_of_super_spines,
+            name_prefix=name_prefix,
+            deployment_id=dc_id,
         )
-        await self.update_checksum()
+
+        self.logger.info(
+            f"Successfully created {len(created_super_spines)} super-spine devices: {created_super_spines}"
+        )

@@ -1,0 +1,154 @@
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimPhysicalDevice
+  data:
+    # Suite 1 - Compute cluster (2 servers)
+    - name: compute01
+      device_type: DL360-Gen11
+      status: active
+      member_of_groups:
+        - topologies_server
+      interfaces:
+        kind: DcimPhysicalInterface
+        data:
+          - name: eth0
+            role: uplink
+            mtu: 9000
+            status: active
+          - name: eth1
+            role: uplink
+            mtu: 9000
+            status: active
+
+    - name: compute02
+      device_type: DL360-Gen11
+      status: active
+      member_of_groups:
+        - topologies_server
+      interfaces:
+        kind: DcimPhysicalInterface
+        data:
+          - name: eth0
+            role: uplink
+            mtu: 9000
+            status: active
+          - name: eth1
+            role: uplink
+            mtu: 9000
+            status: active
+
+    # Suite 2 - Compute cluster (2 servers)
+    - name: compute03
+      device_type: DL360-Gen11
+      status: active
+      member_of_groups:
+        - topologies_server
+      interfaces:
+        kind: DcimPhysicalInterface
+        data:
+          - name: eth0
+            role: uplink
+            mtu: 9000
+            status: active
+          - name: eth1
+            role: uplink
+            mtu: 9000
+            status: active
+
+    - name: compute04
+      device_type: DL360-Gen11
+      status: active
+      member_of_groups:
+        - topologies_server
+      interfaces:
+        kind: DcimPhysicalInterface
+        data:
+          - name: eth0
+            role: uplink
+            mtu: 9000
+            status: active
+          - name: eth1
+            role: uplink
+            mtu: 9000
+            status: active
+
+    # Suite 3 - Compute cluster (2 servers)
+    - name: compute05
+      device_type: DL360-Gen11
+      status: active
+      member_of_groups:
+        - topologies_server
+      interfaces:
+        kind: DcimPhysicalInterface
+        data:
+          - name: eth0
+            role: uplink
+            mtu: 9000
+            status: active
+          - name: eth1
+            role: uplink
+            mtu: 9000
+            status: active
+
+    - name: compute06
+      device_type: DL360-Gen11
+      status: active
+      member_of_groups:
+        - topologies_server
+      interfaces:
+        kind: DcimPhysicalInterface
+        data:
+          - name: eth0
+            role: uplink
+            mtu: 9000
+            status: active
+          - name: eth1
+            role: uplink
+            mtu: 9000
+            status: active
+
+    # Suite 1 - Storage server (1 server with 3 interfaces for varied testing)
+    - name: storage01
+      device_type: DL380-Gen11
+      status: active
+      member_of_groups:
+        - topologies_server
+      interfaces:
+        kind: DcimPhysicalInterface
+        data:
+          - name: eth0
+            role: uplink
+            mtu: 9000
+            status: active
+          - name: eth1
+            role: uplink
+            mtu: 9000
+            status: active
+          - name: eth2
+            role: uplink
+            mtu: 9000
+            status: active
+
+    # Suite 2 - Storage server (1 server with 3 interfaces)
+    - name: storage02
+      device_type: DL380-Gen11
+      status: active
+      member_of_groups:
+        - topologies_server
+      interfaces:
+        kind: DcimPhysicalInterface
+        data:
+          - name: eth0
+            role: uplink
+            mtu: 9000
+            status: active
+          - name: eth1
+            role: uplink
+            mtu: 9000
+            status: active
+          - name: eth2
+            role: uplink
+            mtu: 9000
+            status: active

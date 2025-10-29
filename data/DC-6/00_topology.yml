@@ -4,8 +4,8 @@ kind: Object
 spec:
   kind: TopologyDataCenter
   data:
-    - name: DC-1
-      index: 1
+    - name: DC-6
+      index: 6
       amount_of_super_spines: 2
       super_spine_template: N9K-C9336C-FX2_SUPER_SPINE
       fabric_interface_sorting_method: top_down
@@ -15,20 +15,20 @@ spec:
       children:
         kind: TopologyPod
         data:
-          - name: "Pod-A1"
+          - name: "Pod-B1"
             index: 1
             role: "fabric"
             spine_switch_template: N9K-C9336C-FX2_SPINE
             amount_of_spines: 4
             member_of_groups:
               - topologies_pod
-          - name: "Pod-A2"
+          - name: "Pod-B2"
             index: 2
             spine_switch_template: N9K-C9316D-GX_SPINE
             amount_of_spines: 2
             member_of_groups:
               - topologies_pod
-          - name: "Pod-A3"
+          - name: "Pod-B3"
             index: 3
             spine_switch_template: N9K-C9316D-GX_SPINE
             member_of_groups:

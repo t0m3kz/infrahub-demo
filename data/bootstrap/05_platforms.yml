@@ -32,6 +32,13 @@ spec:
       ansible_network_os: nxos
       containerlab_os: cisco_n9kv
 
+    - name: dell_force10
+      nornir_platform: force10
+      napalm_driver: linux
+      netmiko_device_type: dell_force10
+      ansible_network_os: dellos10
+      containerlab_os: linux
+
     - name: juniper_junos
       nornir_platform: junos
       napalm_driver: junos
@@ -80,3 +87,10 @@ spec:
       netmiko_device_type: netscaler
       ansible_network_os: linux
       containerlab_os: netscaler
+
+    - name: junos
+      nornir_platform: juniper_junos
+      napalm_driver: linux
+      netmiko_device_type: juniper_junos
+      ansible_network_os: linux
+      containerlab_os: juniper_junos

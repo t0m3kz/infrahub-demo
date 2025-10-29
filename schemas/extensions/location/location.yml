@@ -6,13 +6,13 @@ nodes:
   - name: Region
     namespace: Location
     label: Region
+    parent: ""
     inherit_from:
       - LocationGeneric
     menu_placement: LocationGeneric
     include_in_menu: false
     display_labels:
       - name__value
-    parent: ""
     children: LocationCountry
     icon: "carbon:cics-region-target"
 
@@ -35,8 +35,8 @@ nodes:
         order_weight: 1300
   - name: Metro
     namespace: Location
-    branch: agnostic
     label: Metro
+    branch: agnostic
     inherit_from:
       - LocationGeneric
     menu_placement: LocationGeneric
@@ -47,8 +47,8 @@ nodes:
     children: LocationBuilding
     icon: healthicons:city
   - name: Building
-    branch: agnostic
     namespace: Location
+    branch: agnostic
     inherit_from:
       - LocationGeneric
     menu_placement: "LocationGeneric"
@@ -79,15 +79,16 @@ nodes:
       - name: owner
         peer: OrganizationGeneric
         optional: true
+        branch: aware
         cardinality: one
   - name: Suite
     namespace: Location
-    branch: agnostic
     inherit_from:
       - "LocationGeneric"
     include_in_menu: false
     menu_placement: "LocationGeneric"
     label: Suite
+    branch: agnostic
     display_labels:
       - name__value
     parent: "LocationBuilding"
@@ -107,12 +108,12 @@ nodes:
   - name: Rack
     namespace: Location
     inherit_from:
-      - "LocationGeneric"
+      - LocationGeneric
       - GeneratorTarget
-    branch: agnostic
     include_in_menu: false
     menu_placement: "LocationGeneric"
     label: Rack
+    branch: agnostic
     display_labels:
       - name__value
     human_friendly_id:
@@ -133,10 +134,13 @@ nodes:
             label: Compute
           - name: storage
             label: Storage
-          - name: network
-            label: Network
+          - name: tor
+            label: Top-of-Rack
+          - name: fabric
+            label: Fabric
         default_value: compute
       - name: facility_id
+        # branch: aware
         kind: Text
         unique: false
         optional: true
@@ -144,10 +148,12 @@ nodes:
     relationships:
       - name: owner
         peer: OrganizationGeneric
+        branch: aware
         optional: true
         cardinality: one
       - name: fabric_templates
         peer: TopologyElement
+        branch: aware
         optional: true
         cardinality: many
       - name: pod
@@ -159,6 +165,7 @@ nodes:
         identifier: "rack__pod"
       - name: devices
         peer: DcimPhysicalDevice
+        branch: aware
         optional: true
         cardinality: many
         kind: Generic

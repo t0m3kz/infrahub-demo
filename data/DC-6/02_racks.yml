@@ -1,0 +1,69 @@
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: LocationRack
+  data:
+    - name: "Rack-B1-1"
+      shortname: "r-b1-1"
+      index: 1
+      rack_type: compute
+      pod: Pod-B1
+      parent: "Suite-B1"
+      fabric_templates:
+        - 4_ARISTA_LEAFS_CCS-720DP-48S-2F
+        - 2_CISCO_OOB_SWITCHES_C9200L-24P-4G
+      member_of_groups:
+        - topologies_rack
+    - name: "Rack-B1-2"
+      shortname: "r-b1-2"
+      index: 2
+      rack_type: compute
+      pod: Pod-B1
+      parent: "Suite-B1"
+      fabric_templates:
+        - 8_CISCO_LEAFS_N9K-C9336C-FX2
+      member_of_groups:
+        - topologies_rack
+    - name: "Rack-B2-1"
+      shortname: "r-b2-1"
+      index: 1
+      rack_type: compute
+      pod: Pod-B2
+      parent: "Suite-B2"
+      fabric_templates:
+        - 4_ARISTA_LEAFS_CCS-720DP-48S-2F
+        - 2_CISCO_OOB_SWITCHES_C9200L-24P-4G
+      member_of_groups:
+        - topologies_rack
+    - name: "Rack-B2-2"
+      shortname: "r-b2-2"
+      index: 2
+      rack_type: compute
+      pod: Pod-B2
+      parent: "Suite-B2"
+      fabric_templates:
+        - 8_CISCO_LEAFS_N9K-C9336C-FX2
+      member_of_groups:
+        - topologies_rack
+    - name: "Rack-B3-1"
+      shortname: "r-b3-1"
+      index: 1
+      rack_type: storage
+      pod: Pod-B3
+      parent: "Suite-B3"
+      fabric_templates:
+        - 4_ARISTA_LEAFS_CCS-720DP-48S-2F
+        - 2_CISCO_OOB_SWITCHES_C9200L-24P-4G
+      member_of_groups:
+        - topologies_rack
+    - name: "Rack-B3-2"
+      shortname: "r-b3-2"
+      index: 2
+      rack_type: storage
+      pod: Pod-B3
+      parent: "Suite-B3"
+      fabric_templates:
+        - 8_CISCO_LEAFS_N9K-C9336C-FX2
+      member_of_groups:
+        - topologies_rack

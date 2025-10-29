@@ -1,0 +1,15 @@
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: LocationSuite
+  data:
+    - name: "Suite-C1"
+      shortname: "s-c1"
+      parent: "MUC-1"
+    - name: "Suite-C2"
+      shortname: "s-c2"
+      parent: "MUC-1"
+    - name: "Suite-C3"
+      shortname: "s-c3"
+      parent: "MUC-1"

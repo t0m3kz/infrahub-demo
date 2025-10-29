@@ -9,6 +9,7 @@ generics:
     label: Location
     icon: mingcute:location-line
     include_in_menu: true
+    branch: agnostic
     hierarchical: true
     human_friendly_id:
       - name__value
