@@ -258,10 +258,9 @@ query leaf_config($device: String!) {
                       value
                     }
                     ip_namespace {
-                        node {
-                          name {
-                            value
-                          }
+                      node {
+                        name {
+                          value
                         }
                       }
                     }
