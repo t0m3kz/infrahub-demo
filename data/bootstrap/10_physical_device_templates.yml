@@ -7,123 +7,122 @@ spec:
     - template_name: N9K-C9336C-FX2_SUPER_SPINE
       device_type: N9K-C9336C-FX2
       platform: cisco_nxos
-      role: super_spine
+      role: super-spine
       status: active
       interfaces:
-          kind: TemplateDcimPhysicalInterface
-          data:
-            - template_name: N9K-C9336C-FX2_SUPER_SPINE_Ethernet1/1
-              name: Ethernet1/1
-              role: spine
-            - template_name: N9K-C9336C-FX2_SUPER_SPINE_Ethernet1/2
-              name: Ethernet1/2
-              role: spine
-            - template_name: N9K-C9336C-FX2_SUPER_SPINE_Ethernet1/3
-              name: Ethernet1/3
-              role: spine
-            - template_name: N9K-C9336C-FX2_SUPER_SPINE_Ethernet1/4
-              name: Ethernet1/4
-              role: spine
-            - template_name: N9K-C9336C-FX2_SUPER_SPINE_Ethernet1/5
-              name: Ethernet1/5
-              role: spine
-            - template_name: N9K-C9336C-FX2_SUPER_SPINE_Ethernet1/6
-              name: Ethernet1/6
-              role: spine
-            - template_name: N9K-C9336C-FX2_SUPER_SPINE_Ethernet1/7
-              name: Ethernet1/7
-              role: spine
-            - template_name: N9K-C9336C-FX2_SUPER_SPINE_Ethernet1/8
-              name: Ethernet1/8
-              role: spine
-            - template_name: N9K-C9336C-FX2_SUPER_SPINE_Ethernet1/9
-              name: Ethernet1/9
-              role: spine
-            - template_name: N9K-C9336C-FX2_SUPER_SPINE_Ethernet1/10
-              name: Ethernet1/10
-              role: spine
-            - template_name: N9K-C9336C-FX2_SUPER_SPINE_Ethernet1/11
-              name: Ethernet1/11
-              role: spine
-            - template_name: N9K-C9336C-FX2_SUPER_SPINE_Ethernet1/12
-              name: Ethernet1/12
-              role: spine
-            - template_name: N9K-C9336C-FX2_SUPER_SPINE_Ethernet1/13
-              name: Ethernet1/13
-              role: spine
-            - template_name: N9K-C9336C-FX2_SUPER_SPINE_Ethernet1/14
-              name: Ethernet1/14
-              role: spine
-            - template_name: N9K-C9336C-FX2_SUPER_SPINE_Ethernet1/15
-              name: Ethernet1/15
-              role: spine
-            - template_name: N9K-C9336C-FX2_SUPER_SPINE_Ethernet1/16
-              name: Ethernet1/16
-              role: spine
-            - template_name: N9K-C9336C-FX2_SUPER_SPINE_Ethernet1/17
-              name: Ethernet1/17
-              role: spine
-            - template_name: N9K-C9336C-FX2_SUPER_SPINE_Ethernet1/18
-              name: Ethernet1/18
-              role: spine
-            - template_name: N9K-C9336C-FX2_SUPER_SPINE_Ethernet1/19
-              name: Ethernet1/19
-              role: spine
-            - template_name: N9K-C9336C-FX2_SUPER_SPINE_Ethernet1/20
-              name: Ethernet1/20
-              role: spine
-            - template_name: N9K-C9336C-FX2_SUPER_SPINE_Ethernet1/21
-              name: Ethernet1/21
-              role: spine
-            - template_name: N9K-C9336C-FX2_SUPER_SPINE_Ethernet1/22
-              name: Ethernet1/22
-              role: spine
-            - template_name: N9K-C9336C-FX2_SUPER_SPINE_Ethernet1/23
-              name: Ethernet1/23
-              role: spine
-            - template_name: N9K-C9336C-FX2_SUPER_SPINE_Ethernet1/24
-              name: Ethernet1/24
-              role: spine
-            - template_name: N9K-C9336C-FX2_SUPER_SPINE_Ethernet1/25
-              name: Ethernet1/25
-              role: spine
-            - template_name: N9K-C9336C-FX2_SUPER_SPINE_Ethernet1/26
-              name: Ethernet1/26
-              role: spine
-            - template_name: N9K-C9336C-FX2_SUPER_SPINE_Ethernet1/27
-              name: Ethernet1/27
-              role: spine
-            - template_name: N9K-C9336C-FX2_SUPER_SPINE_Ethernet1/28
-              name: Ethernet1/28
-              role: spine
-            - template_name: N9K-C9336C-FX2_SUPER_SPINE_Ethernet1/29
-              name: Ethernet1/29
-              role: spine
-            - template_name: N9K-C9336C-FX2_SUPER_SPINE_Ethernet1/30
-              name: Ethernet1/30
-              role: spine
-            - template_name: N9K-C9336C-FX2_SUPER_SPINE_Ethernet1/31
-              name: Ethernet1/31
-              role: uplink
-            - template_name: N9K-C9336C-FX2_SUPER_SPINE_Ethernet1/32
-              name: Ethernet1/32
-              role: uplink
-            - template_name: N9K-C9336C-FX2_SUPER_SPINE_Ethernet1/33
-              name: Ethernet1/33
-              role: uplink
-            - template_name: N9K-C9336C-FX2_SUPER_SPINE_Ethernet1/34
-              name: Ethernet1/34
-              role: uplink
-            - template_name: N9K-C9336C-FX2_SUPER_SPINE_Ethernet1/35
-              name: Ethernet1/35
-              role: uplink
-            - template_name: N9K-C9336C-FX2_SUPER_SPINE_Ethernet1/36
-              name: Ethernet1/36
-              role: uplink
-            - template_name: N9K-C9336C-FX2_SUPER_SPINE_mgmt0
-              name: mgmt0
-              role: management
-
+        kind: TemplateDcimPhysicalInterface
+        data:
+          - template_name: N9K-C9336C-FX2_SUPER_SPINE_Ethernet1/1
+            name: Ethernet1/1
+            role: spine
+          - template_name: N9K-C9336C-FX2_SUPER_SPINE_Ethernet1/2
+            name: Ethernet1/2
+            role: spine
+          - template_name: N9K-C9336C-FX2_SUPER_SPINE_Ethernet1/3
+            name: Ethernet1/3
+            role: spine
+          - template_name: N9K-C9336C-FX2_SUPER_SPINE_Ethernet1/4
+            name: Ethernet1/4
+            role: spine
+          - template_name: N9K-C9336C-FX2_SUPER_SPINE_Ethernet1/5
+            name: Ethernet1/5
+            role: spine
+          - template_name: N9K-C9336C-FX2_SUPER_SPINE_Ethernet1/6
+            name: Ethernet1/6
+            role: spine
+          - template_name: N9K-C9336C-FX2_SUPER_SPINE_Ethernet1/7
+            name: Ethernet1/7
+            role: spine
+          - template_name: N9K-C9336C-FX2_SUPER_SPINE_Ethernet1/8
+            name: Ethernet1/8
+            role: spine
+          - template_name: N9K-C9336C-FX2_SUPER_SPINE_Ethernet1/9
+            name: Ethernet1/9
+            role: spine
+          - template_name: N9K-C9336C-FX2_SUPER_SPINE_Ethernet1/10
+            name: Ethernet1/10
+            role: spine
+          - template_name: N9K-C9336C-FX2_SUPER_SPINE_Ethernet1/11
+            name: Ethernet1/11
+            role: spine
+          - template_name: N9K-C9336C-FX2_SUPER_SPINE_Ethernet1/12
+            name: Ethernet1/12
+            role: spine
+          - template_name: N9K-C9336C-FX2_SUPER_SPINE_Ethernet1/13
+            name: Ethernet1/13
+            role: spine
+          - template_name: N9K-C9336C-FX2_SUPER_SPINE_Ethernet1/14
+            name: Ethernet1/14
+            role: spine
+          - template_name: N9K-C9336C-FX2_SUPER_SPINE_Ethernet1/15
+            name: Ethernet1/15
+            role: spine
+          - template_name: N9K-C9336C-FX2_SUPER_SPINE_Ethernet1/16
+            name: Ethernet1/16
+            role: spine
+          - template_name: N9K-C9336C-FX2_SUPER_SPINE_Ethernet1/17
+            name: Ethernet1/17
+            role: spine
+          - template_name: N9K-C9336C-FX2_SUPER_SPINE_Ethernet1/18
+            name: Ethernet1/18
+            role: spine
+          - template_name: N9K-C9336C-FX2_SUPER_SPINE_Ethernet1/19
+            name: Ethernet1/19
+            role: spine
+          - template_name: N9K-C9336C-FX2_SUPER_SPINE_Ethernet1/20
+            name: Ethernet1/20
+            role: spine
+          - template_name: N9K-C9336C-FX2_SUPER_SPINE_Ethernet1/21
+            name: Ethernet1/21
+            role: spine
+          - template_name: N9K-C9336C-FX2_SUPER_SPINE_Ethernet1/22
+            name: Ethernet1/22
+            role: spine
+          - template_name: N9K-C9336C-FX2_SUPER_SPINE_Ethernet1/23
+            name: Ethernet1/23
+            role: spine
+          - template_name: N9K-C9336C-FX2_SUPER_SPINE_Ethernet1/24
+            name: Ethernet1/24
+            role: spine
+          - template_name: N9K-C9336C-FX2_SUPER_SPINE_Ethernet1/25
+            name: Ethernet1/25
+            role: spine
+          - template_name: N9K-C9336C-FX2_SUPER_SPINE_Ethernet1/26
+            name: Ethernet1/26
+            role: spine
+          - template_name: N9K-C9336C-FX2_SUPER_SPINE_Ethernet1/27
+            name: Ethernet1/27
+            role: spine
+          - template_name: N9K-C9336C-FX2_SUPER_SPINE_Ethernet1/28
+            name: Ethernet1/28
+            role: spine
+          - template_name: N9K-C9336C-FX2_SUPER_SPINE_Ethernet1/29
+            name: Ethernet1/29
+            role: spine
+          - template_name: N9K-C9336C-FX2_SUPER_SPINE_Ethernet1/30
+            name: Ethernet1/30
+            role: spine
+          - template_name: N9K-C9336C-FX2_SUPER_SPINE_Ethernet1/31
+            name: Ethernet1/31
+            role: uplink
+          - template_name: N9K-C9336C-FX2_SUPER_SPINE_Ethernet1/32
+            name: Ethernet1/32
+            role: uplink
+          - template_name: N9K-C9336C-FX2_SUPER_SPINE_Ethernet1/33
+            name: Ethernet1/33
+            role: uplink
+          - template_name: N9K-C9336C-FX2_SUPER_SPINE_Ethernet1/34
+            name: Ethernet1/34
+            role: uplink
+          - template_name: N9K-C9336C-FX2_SUPER_SPINE_Ethernet1/35
+            name: Ethernet1/35
+            role: uplink
+          - template_name: N9K-C9336C-FX2_SUPER_SPINE_Ethernet1/36
+            name: Ethernet1/36
+            role: uplink
+          - template_name: N9K-C9336C-FX2_SUPER_SPINE_mgmt0
+            name: mgmt0
+            role: management
     - template_name: N9K-C9316D-GX_SUPER_SPINE
       device_type: N9K-C9316D-GX
       platform: cisco_nxos
@@ -183,12 +182,10 @@ spec:
           - template_name: N9K-C9316D-GX_SUPER_SPINE_mgmt0
             name: mgmt0
             role: management
-
-
     - template_name: N9K-C9336C-FX2_SPINE
       device_type: N9K-C9336C-FX2
-      platform: cisco_nxos
       role: spine
+      platform: cisco_nxos
       status: active
       interfaces:
         kind: TemplateDcimPhysicalInterface
@@ -908,7 +905,7 @@ spec:
     - template_name: SRX-1500_EDGE_FIREWALL
       device_type: SRX-1500
       platform: junos
-      role: edge_firewall
+      role: firewall
       status: active
       interfaces:
         kind: TemplateDcimPhysicalInterface
@@ -931,7 +928,7 @@ spec:
     - template_name: SRX-1500_DC_FIREWALL
       device_type: SRX-1500
       platform: junos
-      role: dc_firewall
+      role: firewall
       status: active
       interfaces:
         kind: TemplateDcimPhysicalInterface

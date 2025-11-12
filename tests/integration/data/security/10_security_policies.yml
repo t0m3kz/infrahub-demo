@@ -1,0 +1,29 @@
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: SecurityPolicy
+  data:
+    - name: "corporate-firewall-policy"
+      description: "Main corporate firewall security policy"
+
+    - name: "guest-network-policy"
+      description: "Security policy for guest network access"
+
+    - name: "server-access-policy"
+      description: "Policy for server farm access controls"
+
+    - name: "dmz-policy"
+      description: "Security policy for DMZ services"
+
+    - name: "management-policy"
+      description: "Policy for network management access"
+
+    - name: "remote-access-policy"
+      description: "Policy for remote worker access"
+
+    - name: "database-access-policy"
+      description: "Policy for database tier access"
+
+    - name: "development-policy"
+      description: "Policy for development environment"

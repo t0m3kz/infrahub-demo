@@ -8,7 +8,6 @@ generics:
     label: Network Routing Service
     icon: "carbon:network-4"
     include_in_menu: false
-    # default_filter: device
     human_friendly_id:
       - "name__value"
     attributes:

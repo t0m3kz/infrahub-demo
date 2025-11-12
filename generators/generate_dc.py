@@ -1,8 +1,9 @@
 """Infrastructure generator for data center topology."""
 
-from typing import Any, Dict
+from typing import Any
 
 from .common import CommonGenerator
+from .helpers import DeviceNamingStrategy, FabricPoolStrategy
 
 
 class DCTopologyGenerator(CommonGenerator):
@@ -29,57 +30,35 @@ class DCTopologyGenerator(CommonGenerator):
             return
 
         self.logger.info(f"Processing Data Center: {self.data.get('name')}")
-
         # Extract deployment parameters
         dc_id = self.data.get("id")
         dc_name = self.data.get("name", "").lower()
-        dc_size = self.data.get("size", "M")
+        dc_index = self.data.get("index", 1)  # Get DC index for unique device naming
         amount_of_super_spines = self.data.get("amount_of_super_spines", 4)
         super_spine_template = self.data.get("super_spine_template", {})
+        design = self.data.get("design_pattern", {})
+        self.logger.info(f"Generating topology for data center {dc_name.upper()}")
+        indexes: list[int] = [dc_index]
 
-        if not super_spine_template:
-            self.logger.error("super_spine_template not found in deployment data")
-            return
-
-        name_prefix = dc_name
-        self.logger.info(f"Generating topology for data center {name_prefix}")
-
-        # Step 1: Allocate resource pools for super-spine
         await self.allocate_resource_pools(
-            type="super-spine",
             id=dc_id,
-            size=dc_size,
-            name_prefix=name_prefix,
+            strategy=FabricPoolStrategy.FABRIC,
+            pools=design,
+            fabric_name=dc_name,
         )
 
-        # Step 2: Create super-spine devices
-        # Build template data with proper structure
-        template_data: Dict[str, Any] = {
-            "id": super_spine_template.get("id"),
-        }
-
-        # Add optional platform reference if available
-        if super_spine_template.get("platform", {}).get("id"):
-            template_data["platform"] = {"id": super_spine_template["platform"]["id"]}
-        else:
-            template_data["platform"] = {}
-
-        # Add optional device_type reference if available
-        if super_spine_template.get("device_type", {}).get("id"):
-            template_data["device_type"] = {
-                "id": super_spine_template["device_type"]["id"]
-            }
-        else:
-            template_data["device_type"] = {}
-
-        created_super_spines = await self.create_devices(
-            type="super-spine",
-            template=template_data,
-            amount=amount_of_super_spines,
-            name_prefix=name_prefix,
+        await self.create_devices(
             deployment_id=dc_id,
-        )
-
-        self.logger.info(
-            f"Successfully created {len(created_super_spines)} super-spine devices: {created_super_spines}"
+            device_role="super-spine",
+            amount=amount_of_super_spines,
+            template=super_spine_template,
+            naming_strategy=DeviceNamingStrategy[
+                design.get("naming_strategy", "STANDARD").upper()
+            ],
+            options={
+                "name_prefix": dc_name,
+                "fabric_name": dc_name,
+                "indexes": indexes,
+                "allocate_loopback": True,
+            },
         )

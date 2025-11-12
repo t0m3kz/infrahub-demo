@@ -17,9 +17,7 @@ nodes:
     order_by:
       - asn__value
       - name__value
-    display_labels:
-      - asn__value
-      - name__value
+    display_label: "{{asn__value}} {{name__value}}"
     attributes:
       - name: name
         kind: Text
@@ -60,8 +58,7 @@ nodes:
       - name__value
     order_by:
       - name__value
-    display_labels:
-      - name__value
+    display_label: "{{name__value}}"
     attributes:
       - name: description
         kind: Text

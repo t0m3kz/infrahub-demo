@@ -1,13 +1,25 @@
 from __future__ import annotations
 
 import hashlib
-from typing import Any, Dict, Optional, TypeVar
+from typing import TYPE_CHECKING, Any, Literal, Optional, TypeVar
 
+from infrahub_sdk.exceptions import ValidationError
 from infrahub_sdk.generator import InfrahubGenerator
 from infrahub_sdk.protocols import CoreIPAddressPool, CoreIPPrefixPool
 from pydantic import BaseModel
 
-from .helpers import CablingStrategy, DeviceNamingConfig, build_cabling_plan
+from .helpers import (
+    CablingPlanner,
+    CablingScenario,
+    DeviceNamingConfig,
+    DeviceNamingStrategy,
+    FabricPoolStrategy,
+)
+
+if TYPE_CHECKING:
+    # import the dataclass for type checking only to avoid runtime cycles
+    from .helpers import FabricPoolStrategy
+
 from .schema_protocols import (
     DcimCable,
     DcimPhysicalDevice,
@@ -20,81 +32,14 @@ from .schema_protocols import (
 T = TypeVar("T", bound=BaseModel)
 
 
-SIZE_MAPPING: Dict[str, Dict[str, Dict[str, int]]] = {
-    "S": {
-        "spine": {
-            "technical": 26,
-            "management": 26,
-            "management_prefix": 26,
-            "loopback": 28,
-        },
-        "super-spine": {
-            "technical": 24,
-            "management": 24,
-            "management_prefix": 31,
-            "loopback": 28,
-        },
-    },
-    "M": {
-        "spine": {
-            "technical": 25,
-            "management": 25,
-            "management_prefix": 25,
-            "loopback": 27,
-        },
-        "super-spine": {
-            "technical": 21,
-            "management": 23,
-            "management_prefix": 30,
-            "loopback": 27,
-        },
-    },
-    "L": {
-        "spine": {
-            "technical": 23,
-            "management": 23,
-            "management_prefix": 24,
-            "loopback": 26,
-        },
-        "super-spine": {
-            "technical": 19,
-            "management": 21,
-            "management_prefix": 28,
-            "loopback": 26,
-        },
-    },
-    "XL": {
-        "spine": {
-            "technical": 21,
-            "management": 22,
-            "management_prefix": 23,
-            "loopback": 25,
-        },
-        "super-spine": {
-            "technical": 16,
-            "management": 20,
-            "management_prefix": 28,
-            "loopback": 25,
-        },
-    },
-}
-
-
 class CommonGenerator(InfrahubGenerator):
     """
     An extended InfrahubGenerator with helper methods for creating objects.
     """
 
     def clean_data(self, data: dict) -> Any:
-        """Recursively transforms the input data by extracting 'value', 'node', or 'edges' from dictionaries.
-
-        Handles GraphQL response structures including:
-        - Single-value dicts: {'value': X} → X
-        - Node wrappers: {'node': {...}} → {...}
-        - Edge lists: {'edges': [{...}]} → [...]
-        - Parent wrappers: {'parent': {...}} → {...}
-        - Nested structures with recursive cleaning
-        - Multiple top-level query keys
+        """
+        Recursively transforms the input data by extracting 'value', 'node', or 'edges' from dictionaries.
 
         Args:
             data: The input data to clean.
@@ -102,50 +47,33 @@ class CommonGenerator(InfrahubGenerator):
         Returns:
             The cleaned data with extracted values.
         """
-        # GraphQL wrapper keys to unwrap (order matters - tried first to last)
-        WRAPPER_KEYS = ["value", "node", "parent", "edges"]
-
         if isinstance(data, dict):
             dict_result = {}
             for key, value in data.items():
                 if isinstance(value, dict):
-                    # Check for pure single-key wrappers
-                    unwrapped = False
-                    for wrapper_key in WRAPPER_KEYS:
-                        if value.get(wrapper_key) and len(value) == 1:
-                            # Pure wrapper found -> unwrap and clean
-                            dict_result[key] = self.clean_data(value[wrapper_key])
-                            unwrapped = True
-                            break
-
-                    if not unwrapped:
-                        # No pure wrapper found -> recurse fully
-                        if "__" in key:
-                            # GraphQL double-underscore keys -> normalize
-                            dict_result[key.replace("__", "")] = self.clean_data(value)
-                        else:
-                            dict_result[key] = self.clean_data(value)
+                    if value.get("value"):
+                        dict_result[key] = value["value"]
+                    elif value.get("node"):
+                        dict_result[key] = self.clean_data(value["node"])
+                    elif value.get("edges"):
+                        dict_result[key] = self.clean_data(value["edges"])
+                    elif not value.get("value"):
+                        dict_result[key] = None
+                    else:
+                        dict_result[key] = self.clean_data(value)
                 elif "__" in key:
-                    # GraphQL double-underscore keys -> normalize
                     dict_result[key.replace("__", "")] = value
                 else:
-                    # Recurse on other values (lists, scalars, etc.)
                     dict_result[key] = self.clean_data(value)
             return dict_result
-
         if isinstance(data, list):
             list_result = []
             for item in data:
-                if isinstance(item, dict) and item.get("node") is not None:
-                    # Item has 'node' wrapper -> extract and clean the node
-                    cleaned_item = self.clean_data(item["node"])
-                else:
-                    # Regular item -> clean as-is
-                    cleaned_item = self.clean_data(item)
-                list_result.append(cleaned_item)
+                if isinstance(item, dict) and item.get("node", None) is not None:
+                    list_result.append(self.clean_data(item["node"]))
+                    continue
+                list_result.append(self.clean_data(item))
             return list_result
-
-        # Return the data as-is if it's a scalar
         return data
 
     def calculate_checksum(self) -> str:
@@ -167,280 +95,241 @@ class CommonGenerator(InfrahubGenerator):
 
     async def allocate_resource_pools(
         self,
-        type: str,
+        strategy: FabricPoolStrategy,
+        pools: dict[str, Any],
         id: str,
-        size: str,
-        name_prefix: str,
-        fabric_name: Optional[str] = None,
+        fabric_name: str,
+        pod_name: Optional[str] = None,
     ) -> None:
-        """Allocate resource pools for pod infrastructure."""
+        """Ensure required per-pod / fabric pools exist.
 
-        parent_technical_pool = (
-            "Technical-IPv4"
-            if type == "super-spine"
-            else f"{fabric_name}-technical-pool"
-        )
-        parent_management_pool = (
-            "Management-IPv4"
-            if type == "super-spine"
-            else f"{fabric_name}-management-prefix-pool"
-        )
+        Notes:
+        - This function ensures minimal placeholder pools exist (side-effect).
+        - It accepts a simple strategy name string for `pools` (e.g. "FABRIC") and
+          normalizes it to a FabricPoolConfig internally for deterministic behavior.
+        - It intentionally returns None: creation is a side-effect. Actual address/prefix
+          allocation is performed later by generators which will fetch pools by name.
+        """
+        # Local import to avoid runtime cycles during type-checking
+        from .helpers import FabricPoolConfig
 
-        self.logger.info(f"Allocating {type} resource pools for {name_prefix}")
-        fabric_technical_pool = await self.client.get(
-            kind=CoreIPPrefixPool, name__value=parent_technical_pool
-        )
-        fabric_management_pool = await self.client.get(
-            kind=CoreIPPrefixPool, name__value=parent_management_pool
-        )
+        self.logger.info("Implementing resource pools")
 
-        # Use appropriate naming convention based on type
-        # For super-spine (DC): use name_prefix only
-        # For spine/leaf (pods): use fabric_name-name_prefix
-        if type == "super-spine":
-            pool_prefix = name_prefix
-        else:
-            pool_prefix = f"{fabric_name}-{name_prefix}"
+        pool_prefix = f"{fabric_name}-{pod_name}" if pod_name else fabric_name
 
-        # Create technical prefix pool
-        technical_prefix = await self.client.allocate_next_ip_prefix(
-            resource_pool=fabric_technical_pool,
-            identifier=id,
-            prefix_length=SIZE_MAPPING[size][type]["technical"],
-            data={"role": "technical"},
-        )
+        # Create a new dictionary with only the keys that FabricPoolConfig expects
+        valid_keys = [
+            "maximum_super_spines",
+            "maximum_pods",
+            "maximum_spines",
+            "maximum_leafs",
+        ]
+        filtered_pools = {key: pools[key] for key in valid_keys if key in pools}
+        pod = await self.client.get(kind=TopologyPod, id=id) if pod_name else None
+        pools_config = FabricPoolConfig(**filtered_pools, kind=strategy)
+        for pool_name, pool_size in pools_config.pools().items():
+            if strategy == FabricPoolStrategy.FABRIC and pool_name in [
+                "management",
+                "technical",
+                "loopback",
+            ]:
+                parent_pool_name = f"{pool_name.capitalize()}-IPv4"
+            elif strategy == FabricPoolStrategy.FABRIC and not pod_name:
+                parent_pool_name = f"{fabric_name}-{pool_name.split('-')[-1]}-pool"
+            else:
+                parent_pool_name = f"{fabric_name}-{pool_name}-pool"
 
-        technical_pool = await self.client.create(
-            kind=CoreIPPrefixPool,
-            data={
-                "name": f"{pool_prefix}-technical-pool",
-                "default_prefix_type": "IpamPrefix",
-                "default_prefix_length": 24,
-                "ip_namespace": {"hfid": ["default"]},
-                "resources": [technical_prefix],
-            },
-        )
-        await technical_pool.save(allow_upsert=True)
-        self.logger.debug(
-            f"- Created [CoreIPPrefixPool] {technical_pool.display_label}"
-        )
+            parent_pool = await self.client.get(
+                kind=CoreIPPrefixPool,
+                name__value=parent_pool_name,
+            )
+            self.logger.info(
+                f"Allocating next IP prefix for pool '{pool_name}' (/{pool_size}) in parent '{parent_pool_name}'"
+            )
+            allocated_prefix = await self.client.allocate_next_ip_prefix(
+                resource_pool=parent_pool,
+                identifier=id,
+                prefix_length=pool_size,
+                data={
+                    "role": f"{pool_name if pool_name in ['management', 'technical', 'loopback'] else pool_name.split('-')[-1]}"
+                },
+            )
 
-        # Create loopback address pool
-        loopback_prefix = await self.client.allocate_next_ip_prefix(
-            resource_pool=technical_pool,
-            identifier=id,
-            data={"role": "loopback"},
-            prefix_length=SIZE_MAPPING[size][type]["loopback"],
-        )
+            pool_full_name = f"{pool_prefix}-{pool_name}-pool"
 
-        loopback_pool = await self.client.create(
-            kind=CoreIPAddressPool,
-            data={
-                "name": f"{pool_prefix}-loopback-pool",
-                "default_address_type": "IpamIPAddress",
-                "default_prefix_length": 32,
-                "ip_namespace": {"hfid": ["default"]},
-                "resources": [loopback_prefix],
-            },
-        )
-        await loopback_pool.save(allow_upsert=True)
-        self.logger.debug(
-            f"- Created [CoreIPAddressPool] {loopback_pool.display_label}"
-        )
+            # Determine if this is a prefix or address pool
+            is_prefix_pool = (
+                strategy == FabricPoolStrategy.FABRIC
+                and pool_name in ["technical", "loopback"]
+            ) or (strategy == FabricPoolStrategy.POD and pool_name == "technical")
 
-        # Create management prefix pool
-        management_prefix = await self.client.allocate_next_ip_prefix(
-            resource_pool=fabric_management_pool,
-            identifier=id,
-            prefix_length=SIZE_MAPPING[size][type]["management"],
-            data={"role": "management"},
-        )
+            if is_prefix_pool:
+                new_pool = await self.client.create(
+                    kind=CoreIPPrefixPool,
+                    data={
+                        "name": pool_full_name,
+                        "default_prefix_type": "IpamPrefix",
+                        "default_prefix_length": pool_size,
+                        "ip_namespace": {"hfid": ["default"]},
+                        "identifier": id,
+                        "resources": [allocated_prefix],
+                    },
+                )
+            else:
+                new_pool = await self.client.create(
+                    kind=CoreIPAddressPool,
+                    data={
+                        "name": pool_full_name,
+                        "default_address_type": "IpamIPAddress",
+                        "default_prefix_length": pool_size,
+                        "ip_namespace": {"hfid": ["default"]},
+                        "identifier": id,
+                        "resources": [allocated_prefix],
+                    },
+                )
 
-        management_prefix_pool = await self.client.create(
-            kind=CoreIPPrefixPool,
-            data={
-                "name": f"{pool_prefix}-management-prefix-pool",
-                "default_prefix_type": "IpamPrefix",
-                "default_prefix_length": 24,
-                "ip_namespace": {"hfid": ["default"]},
-                "resources": [management_prefix],
-            },
-        )
-        await management_prefix_pool.save(allow_upsert=True)
-        self.logger.debug(
-            f"- Created [CoreIPPrefixPool] {management_prefix_pool.display_label}"
-        )
+            await new_pool.save(allow_upsert=True)
 
-        # Create management address pool
-        management_addresses = await self.client.allocate_next_ip_prefix(
-            resource_pool=management_prefix_pool,
-            identifier=id,
-            data={"role": "management"},
-            prefix_length=28,
-        )
+            # Map pool names to pod attributes
+            pool_kind = "CoreIPPrefixPool" if is_prefix_pool else "CoreIPAddressPool"
+            self.logger.info(f"- Created [{pool_kind}] {new_pool.hfid}")
+            # Update Pods
+            pool_attribute_map = {
+                "loopback": "loopback_pool",
+                "technical": "prefix_pool",
+            }
 
-        management_pool = await self.client.create(
-            kind=CoreIPAddressPool,
-            data={
-                "name": f"{pool_prefix}-management-pool",
-                "default_address_type": "IpamIPAddress",
-                "default_prefix_length": SIZE_MAPPING[size][type]["management"],
-                "ip_namespace": {"hfid": ["default"]},
-                "resources": [management_addresses],
-            },
-        )
-        await management_pool.save(allow_upsert=True)
-        self.logger.debug(
-            f"- Created [CoreIPAddressPool] {management_pool.display_label}"
-        )
-
-        if fabric_name:
-            pod = await self.client.get(kind=TopologyPod, id=id)
-            # Assign relationship references (one-to-one relationships)
-            pod.loopback_pool = loopback_pool  # type: ignore
-            pod.management_pool = management_pool  # type: ignore
-            pod.prefix_pool = technical_pool  # type: ignore
-            await pod.save(allow_upsert=True)
+            if pod and pool_name in pool_attribute_map:
+                setattr(pod, pool_attribute_map[pool_name], new_pool.id)
+                self.logger.info(
+                    f"- Updated pod {pod.name.value} with {new_pool.name.value} pool"
+                )
+                await pod.save(allow_upsert=True)
 
     async def create_devices(
         self,
-        type: str,
+        device_role: str,
         amount: int,
-        template: dict,
-        name_prefix: str,
         deployment_id: str,
-        fabric_name: str = "",
-        virtual: bool = False,
-        naming_config: Optional[DeviceNamingConfig] = None,
+        template: dict[str, Any],
+        naming_strategy: DeviceNamingStrategy,
+        options: Optional[dict] = None,
     ) -> list[str]:
-        """Create devices with loopback and management interfaces.
+        """Create devices using a consolidated options dict and batch creation."""
+        # Normalize options
+        options = options or {}
+        pod_name: str = options.get("pod_name", "")
+        fabric_name: str = options.get("fabric_name", "")
+        virtual: bool = bool(options.get("virtual", False))
+        indexes: Optional[list[int]] = options.get("indexes", None)
+        allocate_loopback: bool = bool(options.get("allocate_loopback", False))
 
-        Creates physical or virtual devices based on a template, allocates management
-        and loopback IP addresses, and configures management interfaces.
+        device_prefix: str = (
+            fabric_name if not pod_name else f"{fabric_name}-{pod_name}"
+        )
 
-        Args:
-            type: Device type (super-spine, spine, leaf, etc.).
-            amount: Number of devices to create.
-            template: Template dictionary with device configuration (id, platform, device_type).
-            name_prefix: Prefix for device naming.
-            deployment_id: Deployment ID to associate devices with.
-            fabric_name: Optional fabric name for pod naming. Defaults to "".
-            virtual: If True, creates virtual devices; otherwise creates physical devices. Defaults to False.
-            naming_config: Optional DeviceNamingConfig for custom naming strategy. Defaults to standard naming.
+        device_names: list[str] = sorted(
+            [
+                DeviceNamingConfig(strategy=naming_strategy).format_device_name(
+                    fabric_name,
+                    device_role,
+                    index=idx,
+                    fabric_name=fabric_name,
+                    indexes=indexes,
+                )
+                for idx in range(1, amount + 1)
+            ]
+        )
+        management_pool_name = f"{fabric_name}-management-pool"
 
-        Returns:
-            A list of the names of the created devices.
-        """
-        self.logger.info(f"Creating {amount} {type} devices for {name_prefix}")
-        created_device_names = []
-
-        # Use default naming config if not provided
-        if naming_config is None:
-            naming_config = DeviceNamingConfig()
-
-        # Select device and interface kinds
-        if virtual:
-            device_kind = DcimVirtualDevice
+        if device_role == "super-spine":
+            # Super-spine devices use fabric-level super-spine-loopback pool
+            loopback_pool_name = f"{fabric_name}-{device_role}-loopback-pool"
         else:
-            device_kind = DcimPhysicalDevice
+            # Other devices (spine, leaf, etc.) use pod-level loopback pool
+            # device_prefix already includes fabric-pod combination when pod_name is present
+            loopback_pool_name = f"{device_prefix}-loopback-pool"
 
-        # Determine pool and device naming based on fabric context
-        if fabric_name:
-            management_pool_name = f"{fabric_name}-{name_prefix}-management-pool"
-            loopback_pool_name = f"{fabric_name}-{name_prefix}-loopback-pool"
-            device_prefix = f"{fabric_name}-{name_prefix}"
-        else:
-            management_pool_name = f"{name_prefix}-management-pool"
-            loopback_pool_name = f"{name_prefix}-loopback-pool"
-            device_prefix = name_prefix
+        device_kind = DcimVirtualDevice if virtual else DcimPhysicalDevice
 
-        # Fetch pools once
+        # # Fetch pools once
         management_pool = await self.client.get(
             kind=CoreIPAddressPool,
             name__value=management_pool_name,
         )
 
         loopback_pool = None
-        if type in ["super-spine", "spine", "leaf"]:
+        if allocate_loopback:
             loopback_pool = await self.client.get(
                 kind=CoreIPAddressPool,
                 name__value=loopback_pool_name,
             )
 
-        # Create devices using native SDK
-        for idx in range(1, amount + 1):
-            # Use naming config to format device name
-            device_name = naming_config.format_device_name(device_prefix, type, idx)
-            created_device_names.append(device_name)
+        batch_devices = await self.client.create_batch()
+        batch_loopbacks = await self.client.create_batch()
 
-            # Allocate management IP
-            mgmt_ip = await self.client.allocate_next_ip_address(
-                resource_pool=management_pool,
-                identifier=device_name,
-                prefix_length=32,
-                data={"description": f"Management IP for {device_name}"},
-            )
-
-            # Create device
-            device_data = {
-                "name": device_name,
-                "object_template": {"id": template["id"]},
-                "status": "active",
-                "deployment": {"id": deployment_id},
-                "primary_address": mgmt_ip,
-            }
-
-            # Add platform if available
-            if template.get("platform", {}).get("id"):
-                device_data["platform"] = template["platform"]
-
-            # Add device_type if available
-            if template.get("device_type", {}).get("id"):
-                device_data["device_type"] = template["device_type"]
-
-            device = await self.client.create(
-                kind=device_kind,
-                data=device_data,
-            )
-            await device.save(allow_upsert=True)
-            self.logger.debug(
-                f"- Created [{device_kind.__name__}] {device.display_label}"
-            )
-
-            # Create loopback interface if applicable
-            if type in ["super-spine", "spine", "leaf"] and loopback_pool:
-                # Allocate loopback IP
-                loop_ip = await self.client.allocate_next_ip_address(
-                    resource_pool=loopback_pool,
-                    identifier=device_name,
-                    prefix_length=32,
-                    data={"description": f"Loopback IP for {device_name}"},
-                )
-
-                # Create loopback interface
-                loopback = await self.client.create(
-                    kind=DcimVirtualInterface,
+        try:
+            # Add device objects and related loopback interfaces (if any) to the batch
+            for name in device_names:
+                obj = await self.client.create(
+                    kind=device_kind,
                     data={
-                        "name": "Loopback0",
-                        "description": "Loopback interface",
-                        "device": device,
+                        "name": name,
+                        "object_template": {
+                            "id": template.get("id") if template else None
+                        },
                         "status": "active",
-                        "role": "loopback",
-                        "ip_addresses": [loop_ip],
+                        "deployment": {"id": deployment_id} if deployment_id else None,
+                        "device_type": template.get("device_type"),
+                        "platform": template.get("platform"),
+                        "primary_address": await self.client.allocate_next_ip_address(
+                            resource_pool=management_pool,
+                            identifier=name,
+                            prefix_length=32,
+                            data={"description": f"Management IP for {name}"},
+                        ),
                     },
+                    branch=self.branch,
                 )
-                await loopback.save(allow_upsert=True)
-                self.logger.debug(
-                    f"- Created [DcimVirtualInterface] {loopback.display_label}"
-                )
+                batch_devices.add(task=obj.save, allow_upsert=True, node=obj)
 
-        # Configure management interfaces
-        # Note: Management interface configuration is skipped as assignment requires
-        # accessing the device's primary_address which should be set during device creation
-        self.logger.info(
-            f"Created {amount} {type} devices with management IPs assigned"
-        )
-        return created_device_names
+                if loopback_pool:
+                    obj = await self.client.create(
+                        kind=DcimVirtualInterface,
+                        data={
+                            "name": "Loopback0",
+                            "description": "Loopback interface",
+                            # refer to device by unique name; server should resolve references on apply
+                            "device": {"hfid": name},
+                            "status": "active",
+                            "role": "loopback",
+                            "ip_addresses": [
+                                await self.client.allocate_next_ip_address(
+                                    resource_pool=loopback_pool,
+                                    identifier=name,
+                                    prefix_length=32,
+                                    data={"description": f"Loopback IP for {name}"},
+                                )
+                            ],
+                        },
+                        branch=self.branch,
+                    )
+                    batch_loopbacks.add(task=obj.save, allow_upsert=True, node=obj)
+
+            # Execute batch and collect created nodes
+            async for node, _ in batch_devices.execute():
+                self.logger.info(f"- Created [{node.get_kind()}] {node.hfid}")
+            async for node, _ in batch_loopbacks.execute():
+                self.logger.info(
+                    f"- Created [{node.get_kind()}] {node.device.hfid} {node.name.value}"
+                )
+        except ValidationError as exc:
+            self.logger.error("Batch creation failed with validation error: %s", exc)
+            raise
+        except Exception as exc:
+            self.logger.error("Unexpected error during batch creation: %s", exc)
+            raise
+        return device_names
 
     async def create_cabling(
         self,
@@ -448,112 +337,60 @@ class CommonGenerator(InfrahubGenerator):
         bottom_interfaces: list[str],
         top_devices: list[str],
         top_interfaces: list[str],
-        strategy: CablingStrategy = CablingStrategy.POD,
-        cabling_offset: Optional[int] = None,
-        bottom_sorting: str = "top_down",
-        top_sorting: str = "top_down",
-        pool: Optional[str] = None,
+        strategy: CablingScenario = CablingScenario.RACK,
+        options: Optional[dict[str, Any]] = None,
     ) -> None:
-        """Create cabling connections between device layers using the specified strategy.
+        """Create cabling connections between device layers with enhanced hierarchical support."""
 
-        Args:
-            bottom_devices: List of source device names (in order).
-            bottom_interfaces: List of source interface names.
-            top_devices: List of target device names (in order).
-            top_interfaces: List of target interface names.
-            strategy: The cabling strategy to use. Defaults to POD.
-            cabling_offset: Optional offset for interface allocation. Required for RACK strategy.
-            bottom_sorting: Sorting direction for bottom interfaces: "top_down" or "bottom_up". Defaults to "top_down".
-            top_sorting: Sorting direction for top interfaces: "top_down" or "bottom_up". Defaults to "top_down".
-
-        Raises:
-            ValueError: If RACK strategy is used without cabling_offset.
-        """
-        from .helpers import SortingDirection
+        options = options or {}
+        bottom_sorting: Literal["top_down", "bottom_up"] = "bottom_up"
+        top_sorting: Literal["top_down", "bottom_up"] = "bottom_up"
+        cabling_offset: int = int(options.get("cabling_offset", 0))
+        pool: Any = options.get("pool")
 
         self.logger.info(
-            f"Creating connections between {len(bottom_devices)} bottom and {len(top_devices)} top devices "
-            f"using {strategy.value} strategy (bottom: {bottom_sorting}, top: {top_sorting})"
+            f"Creating cabling between {len(bottom_devices)} bottom and {len(top_devices)} top devices "
+            f"(strategy: {strategy.value}, bottom: {bottom_sorting}, top: {top_sorting})"
         )
 
-        # Fetch interfaces in batch
+        # Fetch interfaces in batch, ensuring the related device data is included
         src_interfaces = await self.client.filters(
             kind=DcimPhysicalInterface,
             device__name__values=bottom_devices,
             name__values=bottom_interfaces,
-            cable__isnull=True,
+            # cable__isnull=True,
         )
         dst_interfaces = await self.client.filters(
             kind=DcimPhysicalInterface,
             device__name__values=top_devices,
             name__values=top_interfaces,
-            cable__isnull=True,
+            # cable__isnull=True,
         )
 
-        self.logger.debug(
-            f"Fetched {len(src_interfaces)} source interfaces from devices {bottom_devices} "
-            f"with names {bottom_interfaces}"
-        )
-        self.logger.debug(
-            f"Fetched {len(dst_interfaces)} destination interfaces from devices {top_devices} "
-            f"with names {top_interfaces}"
+        if not src_interfaces or not dst_interfaces:
+            self.logger.warning("No available interfaces found; skipping cabling")
+            return
+
+        planner = CablingPlanner(
+            bottom_interfaces=src_interfaces,
+            top_interfaces=dst_interfaces,
+            bottom_sorting=bottom_sorting,
+            top_sorting=top_sorting,
         )
 
-        # Log details of fetched interfaces
-        for src in src_interfaces:
-            self.logger.debug(
-                f"  Source interface: {src.device.display_label}.{src.name.value} "
-                f"(role: {src.role.value if src.role else 'N/A'})"
+        # Build cabling plan based on strategy
+        cabling_plan = planner.build_cabling_plan(
+            scenario=strategy,
+            cabling_offset=cabling_offset,
+        )
+
+        if not cabling_plan:
+            self.logger.warning(
+                "No cabling connections planned; skipping cable creation"
             )
-        for dst in dst_interfaces:
-            self.logger.debug(
-                f"  Dest interface: {dst.device.display_label}.{dst.name.value} "
-                f"(role: {dst.role.value if dst.role else 'N/A'})"
-            )
+            return
 
-        # Validate strategy requirements
-        if cabling_offset is None and strategy == CablingStrategy.RACK:
-            raise ValueError("RACK strategy requires cabling_offset parameter")
-
-        # Convert sorting string parameters to enum
-        sort_enum_map = {
-            "top_down": SortingDirection.TOP_DOWN,
-            "bottom_up": SortingDirection.BOTTOM_UP,
-        }
-        src_sort = sort_enum_map.get(bottom_sorting, SortingDirection.TOP_DOWN)
-        dst_sort = sort_enum_map.get(top_sorting, SortingDirection.TOP_DOWN)
-
-        # Log all source and destination devices
-        src_devices_in_interfaces = set()
-        dst_devices_in_interfaces = set()
-        for iface in src_interfaces:
-            src_devices_in_interfaces.add(iface.device.display_label)
-        for iface in dst_interfaces:
-            dst_devices_in_interfaces.add(iface.device.display_label)
-
-        # Build cabling plan with flat interface lists
-        cabling_plan = build_cabling_plan(
-            index=cabling_offset or 1,
-            src_interfaces=src_interfaces,
-            dst_interfaces=dst_interfaces,
-            strategy=strategy,
-            src_sorting=src_sort,
-            dst_sorting=dst_sort,
-        )
-
-        # Create cables
-        self.logger.info(
-            f"Cabling plan has {len(cabling_plan)} cable connections to create"
-        )
-        for cable_pair in cabling_plan:
-            self.logger.debug(
-                f"  Cable: {cable_pair[0].device.display_label}.{cable_pair[0].name.value} "
-                f"↔ {cable_pair[1].device.display_label}.{cable_pair[1].name.value}"
-            )
-
-        cable_count = 0
         for src_interface, dst_interface in cabling_plan:
-            cable_count += 1
             name = f"{src_interface.device.display_label}-{src_interface.name.value}__{dst_interface.device.display_label}-{dst_interface.name.value}"
 
             # Create a stable identifier for the p2p link based on interface IDs
@@ -623,11 +460,10 @@ class CommonGenerator(InfrahubGenerator):
                     )
                 )  # type: ignore
 
-            updated_src_interface.status.value = "active"
-            updated_dst_interface.status.value = name
             updated_src_interface.description.value = name
             updated_dst_interface.description.value = name
             updated_src_interface.status.value = "active"
             updated_dst_interface.status.value = "active"
             await updated_src_interface.save()
             await updated_dst_interface.save()
+            self.logger.info(f"- Created connection {name}")

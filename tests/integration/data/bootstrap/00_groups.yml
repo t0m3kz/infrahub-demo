@@ -34,8 +34,12 @@ spec:
       description: Linux Devices
     - name: leafs
       description: All leafs
+    - name: border-leafs
+      description: All border leafs
     - name: spines
       description: All spines
+    - name: super_spines
+      description: All super spines
     - name: firewalls
       description: All firewalls
     - name: loadbalancers
@@ -63,7 +67,11 @@ spec:
     - name: provisioning_circuits
       description: Provisioning Circuits
     - name: topologies_dc
-      description: Data Center Topologies
+      description: Data Center
+    - name: topologies_pod
+      description: Data Center Pod
+    - name: topologies_rack
+      description: Data Center Rack
     - name: topologies_pop
       description: POP Topologies
     - name: topologies_clab
@@ -72,3 +80,7 @@ spec:
       description: Juniper DC Firewall
     - name: check_point_edge_firewall
       description: Check Point Edge Firewall
+    - name: equinix_pop
+      description: Equinix POPs
+    - name: topologies_server
+      description: Group for servers in topologies

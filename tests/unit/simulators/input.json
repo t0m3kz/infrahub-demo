@@ -26,10 +26,10 @@
                 {
                   "node": {
                     "name": {
-                      "value": "dc-3-dc_firewall-01"
+                      "value": "dc-3-firewall-01"
                     },
                     "role": {
-                      "value": "dc_firewall"
+                      "value": "firewall"
                     },
                     "os_version": {
                       "value": null
@@ -134,10 +134,10 @@
                 {
                   "node": {
                     "name": {
-                      "value": "dc-3-dc_firewall-02"
+                      "value": "dc-3-firewall-02"
                     },
                     "role": {
-                      "value": "dc_firewall"
+                      "value": "firewall"
                     },
                     "os_version": {
                       "value": null

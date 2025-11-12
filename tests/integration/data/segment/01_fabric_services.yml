@@ -1,6 +1,0 @@
-# This file previously contained fabric-level VXLAN and EVPN service definitions
-# These services have been removed from the schema as RD/VNI are now calculated directly from VLAN
-# Network segments no longer depend on fabric-level services
-
-# If fabric-level services are needed in the future, they can be re-added here
-# For now, network segments are self-contained with vlan_id and external_routing parameters

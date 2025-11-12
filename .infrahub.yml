@@ -25,7 +25,7 @@ artifact_definitions:
   - name: borderleaf_config
     artifact_name: border-leaf
     content_type: text/plain
-    targets: border_leafs
+    targets: border-leafs
     transformation: leaf
     parameters:
       device: name__value
@@ -116,25 +116,31 @@ python_transforms:
     file_path: transforms/equinix_pop.py
 
 generator_definitions:
-  - name: create_dc
+  - name: generate_dc
     file_path: generators/generate_dc.py
     targets: topologies_dc
     query: topology_dc
     class_name: DCTopologyGenerator
+    execute_in_proposed_change: false
+    execute_after_merge: false
     parameters:
       name: name__value
-  - name: create_pod
+  - name: generate_pod
     file_path: generators/generate_pod.py
     targets: topologies_pod
     query: topology_pod
     class_name: PodTopologyGenerator
+    execute_in_proposed_change: false
+    execute_after_merge: false
     parameters:
       name: name__value
-  - name: create_rack
+  - name: generate_rack
     file_path: generators/generate_rack.py
     targets: topologies_rack
     query: rack
     class_name: RackGenerator
+    execute_in_proposed_change: false
+    execute_after_merge: false
     parameters:
       name: name__value
   - name: create_server_connectivity
@@ -144,46 +150,13 @@ generator_definitions:
     class_name: ServerConnectivityGenerator
     parameters:
       name: name__value
-  # - name: create_pop
-  #   file_path: generators/generate_pop.py
-  #   targets: topologies_pop
-  #   query: topology_pop
-  #   class_name: PopTopologyGenerator
-  #   parameters:
-  #     name: name__value
-  # - name: generate-dc
-  #   file_path: "./generators/generate_fabric.py"
-  #   query: generate_fabric
-  #   targets: fabrics
-  #   parameters:
-  #     fabric_name: name__value
-  #   class_name: FabricGenerator
-  #   convert_query_response: false
-  #   execute_in_proposed_change: false
-  #   execute_after_merge: false
-
-  # - name: generate-pod
-  #   file_path: "./generators/generate_pod.py"
-  #   query: generate_pod
-  #   targets: pods
-  #   parameters:
-  #     pod_name: name__value
-  #   class_name: PodGenerator
-  #   convert_query_response: false
-  #   execute_in_proposed_change: false
-  #   execute_after_merge: false
-
-  # - name: generate-rack
-  #   file_path: "./generators/generate_rack.py"
-  #   query: generate_rack
-  #   targets: racks
-  #   parameters:
-  #     rack_name: name__value
-  #   class_name: RackGenerator
-  #   convert_query_response: false
-  #   execute_in_proposed_change: false
-  #   execute_after_merge: false
-
+# - name: create_pop
+#   file_path: generators/generate_pop.py
+#   targets: topologies_pop
+#   query: topology_pop
+#   class_name: PopTopologyGenerator
+#   parameters:
+#     name: name__value
 
 queries:
   - name: topology_dc

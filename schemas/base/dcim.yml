@@ -12,8 +12,7 @@ generics:
       - name__value
     order_by:
       - name__value
-    display_labels:
-      - name__value
+    display_label: "{{name__value}}"
     attributes:
       - name: name
         kind: Text
@@ -49,7 +48,7 @@ generics:
             label: Spine Router
             description: Aggregation router part of a Pod.
             color: "#aeeeee"
-          - name: super_spine
+          - name: super-spine
             label: Super Spine Router
             description: Aggregation router part of a Fabric.
             color: "#aeeeee"
@@ -57,7 +56,7 @@ generics:
             label: Leaf Switch
             description: Top of Rack part of a Fabric.
             color: "#e6e6fa"
-          - name: border_leaf
+          - name: border-leaf
             label: Border Leaf Switch
             description: Border Leaf providing external connectivity in a Fabric.
             color: "#dda0dd"
@@ -73,19 +72,11 @@ generics:
             label: Console Server
             description: Console server part of a Fabric.
             color: "#e8e7ad"
-          - name: dc_firewall
-            label: DC Firewall
+          - name: firewall
+            label: Firewall
             description: "Security boundary with external network"
             color: "#6e5abd"
-          - name: edge_firewall
-            label: Edge Firewall
-            description: "Security boundary with external network"
-            color: "#6a5acd"
-          - name: branch_firewall
-            label: Branch Firewall
-            description: "Security boundary with external network"
-            color: "#6a5bdd"
-          - name: load_balancer
+          - name: load-balancer
             label: Load Balancer
             description: Load Balancer part of a Fabric.
             color: "#38e7fb"
@@ -169,6 +160,8 @@ generics:
     human_friendly_id:
       - device__name__value
       - name__value
+    display_label: "{{name__value}}"
+
     attributes:
       - name: name
         kind: Text
@@ -275,6 +268,15 @@ generics:
             description: "Loopback interface used as a VTEP address for VXLAN/overlay tunneling."
             color: "#E9D5FF" # lavender
         order_weight: 1250
+      - name: index
+        kind: Text
+        state: absent
+        read_only: true
+        optional: true
+        computed_attribute:
+          jinja2_template: "{{ \"%03d\"| format(name__value | split_interface | last | int) }}"
+          kind: Jinja2
+        order_weight: 20000
     relationships:
       - name: device
         peer: DcimGenericDevice
@@ -314,8 +316,7 @@ nodes:
     icon: mdi:poll
     human_friendly_id:
       - name__value
-    display_labels:
-      - name__value
+    display_label: "{{name__value}}"
     order_by:
       - manufacturer__name__value
       - name__value
@@ -377,8 +378,7 @@ nodes:
     icon: mdi:application-cog-outline
     human_friendly_id:
       - name__value
-    display_labels:
-      - name__value
+    display_label: "{{name__value}}"
     order_by:
       - manufacturer__name__value
       - name__value
@@ -505,9 +505,6 @@ nodes:
       - DcimEndpoint
       - DcimSubInterface
     include_in_menu: false
-    display_labels:
-      - name__value
-
     attributes:
       - name: interface_type
         kind: Dropdown
@@ -595,11 +592,6 @@ nodes:
       - DcimInterface
       # - DcimSubInterface # Depending if you want your virtual interfaces to have sub interface
     include_in_menu: false
-    display_labels:
-      - name__value
-    # human_friendly_id:
-    #   - device__name__value
-    #   - name__value
     relationships:
       - name: parent_interface
         peer: DcimSubInterface
@@ -619,10 +611,10 @@ nodes:
     description: A cable connecting two endpoints.
     label: Cable
     icon: mdi:cable-data
+    include_in_menu: false
     human_friendly_id:
       - name__value
-    display_labels:
-      - name__value
+    display_label: "{{name__value}}"
     order_by:
       - name__value
     uniqueness_constraints:
@@ -631,6 +623,7 @@ nodes:
       - name: name
         kind: Text
         unique: true
+        optional: false
         order_weight: 1000
       - name: type
         kind: Dropdown
@@ -647,6 +640,7 @@ nodes:
       - name: endpoints
         peer: DcimEndpoint
         cardinality: many
+        optional: true
         min_count: 2
         max_count: 2
         kind: Attribute

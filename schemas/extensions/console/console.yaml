@@ -9,8 +9,7 @@ nodes:
     label: "Console Port"
     include_in_menu: false
     icon: "mdi:console"
-    display_labels:
-      - name__value
+    display_label: "{{name__value}}"
     order_by:
       - name__value
     inherit_from:

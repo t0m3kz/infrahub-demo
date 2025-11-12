@@ -1,9 +1,9 @@
 """Infrastructure generator for pod topology creation."""
 
-from typing import Any, Dict
+from typing import Any
 
 from .common import CommonGenerator
-from .helpers import CablingStrategy
+from .helpers import CablingScenario, DeviceNamingStrategy, FabricPoolStrategy
 from .schema_protocols import LocationRack
 
 
@@ -43,70 +43,52 @@ class PodTopologyGenerator(CommonGenerator):
         Args:
             data: Pod configuration data containing name, id, and parent references.
         """
-        try:
-            self.logger.debug(
-                f"Input data type: {type(data)}, keys: {list(data.keys()) if isinstance(data, dict) else 'N/A'}"
-            )
-            cleaned = self.clean_data(data)
-            self.logger.debug(
-                f"Cleaned data type: {type(cleaned)}, keys: {list(cleaned.keys()) if isinstance(cleaned, dict) else 'N/A'}"
-            )
-            deployment_list = cleaned.get("TopologyPod", [])
-            self.logger.debug(
-                f"Deployment list type: {type(deployment_list)}, length: {len(deployment_list) if isinstance(deployment_list, list) else 'N/A'}"
-            )
 
+        try:
+            deployment_list = self.clean_data(data).get("TopologyPod", [])
             if not deployment_list:
-                self.logger.error("No TopologyPod data found in GraphQL response")
+                self.logger.error("No Pod Deployment data found in GraphQL response")
                 return
 
             self.data = deployment_list[0]
         except (ValueError, KeyError, IndexError) as exc:
-            self.logger.error(f"Generation failed due to {exc}", exc_info=True)
+            self.logger.error(f"Generation failed due to {exc}")
             return
 
         self.logger.info(f"Generating topology for pod {self.data.get('name')}")
-
-        # Extract pod parameters
         pod_id = self.data.get("id")
+        dc = self.data.get("parent", {})
         pod_name = self.data.get("name", "").lower()
-        amount_of_spines = self.data.get("amount_of_spines", 4)
-        # pod_role will be used for future role-based configuration
-        # pod_role = self.data.get("role", "cpu")
-        spine_switch_template = self.data.get("spine_switch_template", {})
+        fabric_name = dc.get("name", "").lower()
+        design = dc.get("design_pattern", {})
+        indexes: list[int] = [dc.get("index", 1), self.data.get("index", 1)]
 
-        # Extract parent (DataCenter) parameters
-        parent = self.data.get("parent", {})
-        if not parent:
-            self.logger.error("Pod parent (DataCenter) not found in deployment data")
-            return
-
-        dc_name = parent.get("name", "").lower()
-        dc_size = parent.get("size", "M")
-        amount_of_super_spines = parent.get("amount_of_super_spines", 4)
-        fabric_interface_sorting = parent.get(
-            "fabric_interface_sorting_method", "bottom_up"
+        await self.allocate_resource_pools(
+            id=pod_id,
+            strategy=FabricPoolStrategy.POD,
+            pools=design,
+            pod_name=pod_name,
+            fabric_name=fabric_name,
         )
-        spine_interface_sorting = parent.get(
-            "spine_interface_sorting_method", "bottom_up"
+
+        spines = await self.create_devices(
+            deployment_id=self.data.get("id"),
+            device_role="spine",
+            amount=self.data.get("amount_of_spines"),
+            template=self.data.get("spine_template", {}),
+            naming_strategy=DeviceNamingStrategy[
+                design.get("naming_strategy", "STANDARD").upper()
+            ],
+            options={
+                "name_prefix": fabric_name,
+                "fabric_name": fabric_name,
+                "pod_name": pod_name,
+                "indexes": indexes,
+                "allocate_loopback": True,
+            },
         )
-        super_spine_template = parent.get("super_spine_template", {})
 
-        if not spine_switch_template:
-            self.logger.error("spine_switch_template not found in pod data")
-            return
-
-        if not super_spine_template:
-            self.logger.error("super_spine_template not found in parent (DataCenter)")
-            return
-
-        # Build naming
-        name_prefix = pod_name
-        dc_prefix = dc_name
-
-        self.logger.info(f"Generating topology for pod {dc_prefix}-{name_prefix}")
-
-        # Extract spine interfaces with role "uplink" from GraphQL query response
+        spine_switch_template = self.data.get("spine_template", {})
         spine_interfaces_data = spine_switch_template.get("interfaces", [])
         spine_interfaces = [iface.get("name") for iface in spine_interfaces_data]
         if not spine_interfaces:
@@ -114,7 +96,11 @@ class PodTopologyGenerator(CommonGenerator):
                 "No interfaces with role 'uplink' found in spine template"
             )
 
-        # Extract super-spine interfaces with role "spine" from GraphQL query response
+        parent = self.data.get("parent", {})
+        super_spine_devices = [
+            device.get("name") for device in parent.get("devices", [])
+        ]
+        super_spine_template = parent.get("super_spine_template", {})
         super_spine_interfaces_data = super_spine_template.get("interfaces", [])
         super_spine_interfaces = [
             iface.get("name") for iface in super_spine_interfaces_data
@@ -124,102 +110,22 @@ class PodTopologyGenerator(CommonGenerator):
                 "No interfaces with role 'spine' found in super-spine template"
             )
 
-        # Note: Device lists below are kept for future cabling implementation
-        # They are built but not currently used in device creation phase
-        # Device names will be dynamically available from created_spines return value
-        _spine_device_pattern = f"{dc_prefix}-{name_prefix}-spine"
-        _super_spine_device_pattern = f"{dc_prefix}-super-spine"
-        # Store these for potential future use in cabling
-        _num_super_spines = amount_of_super_spines
-
-        # Step 1: Allocate resource pools for spine
-        await self.allocate_resource_pools(
-            type="spine",
-            fabric_name=dc_prefix,
-            id=pod_id,
-            size=dc_size,
-            name_prefix=name_prefix,
-        )
-
-        # Step 2: Create spine devices
-        # Build template data with proper structure
-        template_data: Dict[str, Any] = {
-            "id": spine_switch_template.get("id"),
-        }
-
-        # Add optional platform reference if available
-        if spine_switch_template.get("platform", {}).get("id"):
-            template_data["platform"] = {"id": spine_switch_template["platform"]["id"]}
-        else:
-            template_data["platform"] = {}
-
-        # Add optional device_type reference if available
-        if spine_switch_template.get("device_type", {}).get("id"):
-            template_data["device_type"] = {
-                "id": spine_switch_template["device_type"]["id"]
-            }
-        else:
-            template_data["device_type"] = {}
-
-        created_spines = await self.create_devices(
-            type="spine",
-            template=template_data,
-            amount=amount_of_spines,
-            name_prefix=name_prefix,
-            deployment_id=parent.get("id"),
-            fabric_name=dc_prefix,
-        )
-
-        self.logger.info(
-            f"Successfully created {len(created_spines)} spine devices: {created_spines}"
-        )
-
-        # Step 3: Query existing super-spine devices
-        self.logger.info("Fetching super-spine devices for cabling")
-        from .schema_protocols import DcimPhysicalDevice
-
-        super_spine_devices = await self.client.filters(
-            kind=DcimPhysicalDevice,
-            name__values=[
-                f"{dc_prefix}-super-spine-{idx:02d}"
-                for idx in range(1, amount_of_super_spines + 1)
-            ],
-        )
-
-        if not super_spine_devices:
-            self.logger.error("No super-spine devices found for cabling")
-            return
-
-        super_spine_device_names = [device.name.value for device in super_spine_devices]
-        self.logger.info(
-            f"Found {len(super_spine_device_names)} super-spine devices: {super_spine_device_names}"
-        )
-
-        # Step 4: Create cabling between spines and super-spines
-        # Each spine device connects to all super-spine devices
-        self.logger.info(
-            f"Creating cabling connections between {len(created_spines)} spine devices "
-            f"and {len(super_spine_device_names)} super-spine devices with P2P IP allocation"
-        )
-
         await self.create_cabling(
-            bottom_devices=created_spines,
+            bottom_devices=spines,
             bottom_interfaces=spine_interfaces,
-            top_devices=super_spine_device_names,
-            top_interfaces=super_spine_interfaces,
-            strategy=CablingStrategy.POD,
-            bottom_sorting=spine_interface_sorting,
-            top_sorting=fabric_interface_sorting,
-            pool=f"{dc_prefix}-technical-pool",
-        )
-
-        self.logger.info(
-            "Successfully created cabling between spine and super-spine devices"
-        )
-
-        # Step 5: Update checksums for all racks in the pod
-        # await self.update_checksum()
-
-        self.logger.info(
-            f"Pod {dc_prefix}-{name_prefix} topology generation completed successfully"
+            top_devices=super_spine_devices,
+            top_interfaces=[iface.get("name") for iface in super_spine_interfaces_data],
+            strategy=CablingScenario.POD,
+            options={
+                "cabling_offset": (
+                    (self.data.get("index", 1) - 1) * design.get("maximum_spines", 2)
+                ),
+                "top_sorting": parent.get(
+                    "fabric_interface_sorting_method", "bottom_up"
+                ),
+                "bottom_sorting": parent.get(
+                    "spine_interface_sorting_method", "bottom_up"
+                ),
+                "pool": f"{fabric_name}-{pod_name}-technical-pool",
+            },
         )

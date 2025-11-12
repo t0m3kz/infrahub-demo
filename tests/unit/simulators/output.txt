@@ -6,14 +6,14 @@ mgmt:
   network: dc-3
   ipv4-subnet: 172.20.3.0/24
 
- 
-topology: 
+
+topology:
   nodes:
-    dc-3-dc_firewall-01:
+    dc-3-firewall-01:
       kind: juniper_vjunosswitch
       type: SRX-1500
       image: None
-    dc-3-dc_firewall-02:
+    dc-3-firewall-02:
       kind: juniper_vjunosswitch
       type: SRX-1500
       image: None

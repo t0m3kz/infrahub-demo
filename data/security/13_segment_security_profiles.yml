@@ -11,13 +11,13 @@ spec:
       enable_dhcp_snooping: true
       enable_arp_inspection: true
       max_mac_addresses: 100
-      # allowed_protocols:
-      #   - "http"
-      #   - "https"
-      #   - "dns"
-      # blocked_protocols:
-      #   - "ftp"
-      #   - "smtp"
+    # allowed_protocols:
+    #   - "http"
+    #   - "https"
+    #   - "dns"
+    # blocked_protocols:
+    #   - "ftp"
+    #   - "smtp"
 
     - name: "APP-TIER-SECURITY-PROFILE"
       description: "Security profile for application tier segments"
@@ -26,14 +26,14 @@ spec:
       enable_dhcp_snooping: true
       enable_arp_inspection: true
       max_mac_addresses: 50
-      # allowed_protocols:
-      #   - "https"
-      #   - "ldap"
-      #   - "ldaps"
-      #   - "dns"
-      # blocked_protocols:
-      #   - "ftp"
-      #   - "smtp"
+    # allowed_protocols:
+    #   - "https"
+    #   - "ldap"
+    #   - "ldaps"
+    #   - "dns"
+    # blocked_protocols:
+    #   - "ftp"
+    #   - "smtp"
 
     - name: "DATABASE-SECURITY-PROFILE"
       description: "Security profile for database tier segments"

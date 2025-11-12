@@ -28,16 +28,22 @@ spec:
       role: leaf
       device_type: CCS-720DP-48S-2F
       template: CCS-720DP-48S-2F_LEAF
+    - name: 8_ARISTA_LEAFS_CCS-720DP-48S-2F
+      description: 8 Arista CCS-720DP-48S-2F leafs
+      quantity: 8
+      role: leaf
+      device_type: CCS-720DP-48S-2F
+      template: CCS-720DP-48S-2F_LEAF
     - name: 2_JUNIPER_EDGE_FIREWALLS_SRX-1500
       description: 2 Juniper EDGE SRX-1500 firewalls
       quantity: 2
-      role: edge_firewall
+      role: firewall
       device_type: SRX-1500
       template: SRX-1500_EDGE_FIREWALL
     - name: 2_JUNIPER_DC_FIREWALLS_SRX-1500
       description: 2 Juniper DC SRX-1500 firewalls
       quantity: 2
-      role: dc_firewall
+      role: firewall
       device_type: SRX-1500
       template: SRX-1500_DC_FIREWALL
     - name: 2_CISCO_OOB_SWITCHES_C9200L-24P-4G
@@ -73,30 +79,30 @@ spec:
     - name: 2_CLOUDGUARD_SECURITY_EDGES
       description: 2 CloudGuard Security Edges
       quantity: 2
-      role: edge_firewall
+      role: firewall
       device_type: CloudGuard
       template: CloudGuard_EDGE
     - name: 2_CISCO_BORDER_LEAFS_N9K-C9336C-FX2
       description: 2 Cisco C9336C-FX2 border leafs
       quantity: 2
-      role: border_leaf
+      role: border-leaf
       device_type: N9K-C9336C-FX2
       template: N9K-C9336C-FX2_LEAF
     - name: 2_CISCO_BORDER_LEAFS_N9K-C9316D-GX
       description: 2 Cisco N9K-C9316D-GX border leafs
       quantity: 2
-      role: border_leaf
+      role: border-leaf
       device_type: N9K-C9316D-GX
       template: N9K-C9316D-GX_LEAF
     - name: 2_ARISTA_BORDER_LEAFS_CCS-720DP-48S-2F
       description: 2 Arista CCS-720DP-48S-2F border leafs
       quantity: 2
-      role: border_leaf
+      role: border-leaf
       device_type: CCS-720DP-48S-2F
       template: CCS-720DP-48S-2F_LEAF
     - name: 2_EDGECORE_BORDER_LEAFS_5912-54X-O-AC-F
       description: 2 EDGECORE 5912-54X-O-AC-F border leafs
       quantity: 2
-      role: border_leaf
+      role: border-leaf
       device_type: 5912-54X-O-AC-F
       template: 5912-54X-O-AC-F_LEAF

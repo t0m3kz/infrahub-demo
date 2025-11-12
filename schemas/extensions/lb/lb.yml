@@ -80,8 +80,7 @@ nodes:
       - [ description__value ]
     human_friendly_id:
       - description__value
-    display_labels:
-      - description__value
+    display_label: "{{description__value}}"
     attributes:
       - name: check
         kind: Dropdown

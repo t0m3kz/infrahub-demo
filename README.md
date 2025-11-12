@@ -12,9 +12,12 @@
 - Python 3.10, 3.11, or 3.12
 - [uv](https://github.com/astral-sh/uv) for dependency management
 - Docker (for containerlab and some integration tests)
+- **Infrahub 1.5** (currently in beta) - See note below
+
+> **Version Compatibility Note**: This demo is designed for Infrahub 1.5 (beta). The data models and generators can be modified to work with previous versions of Infrahub if needed.
 
 ## Features
-- Design-driven network automation demo using [InfraHub](https://docs.infrahub.app)
+- Design-driven network automation demo using [Infrahub](https://docs.infrahub.app)
 - Example data, schemas, and menu for rapid onboarding
 - Scripts for bootstrapping, demo use cases, and CI integration
 - Modular structure for easy extension and experimentation
@@ -24,12 +27,12 @@
 - [`data/`](data/) – Example data for bootstrapping
 - [`generators/`](generators/) – Topology and config generators
 - [`menu/`](menu/) – Example menu definition
-- [`queries/`](queries/) – GraphQL queries for InfraHub
+- [`queries/`](queries/) – GraphQL queries for Infrahub
 - [`schemas/`](schemas/) – Base and extension schemas
 - [`scripts/`](scripts/) – Helper scripts for automation
 - [`templates/`](templates/) – Jinja2 templates for device configs
 - [`tests/`](tests/) – Unit, integration, and smoke tests
-- [`transforms/`](transforms/) – Python transforms for InfraHub
+- [`transforms/`](transforms/) – Python transforms for Infrahub
 
 ## Quickstart
 
@@ -47,72 +50,64 @@ uv sync
 uv run invoke start
 ```
 
-### Setup environment variables
+### Quick Setup (Recommended)
+One command to setup everything:
 ```bash
-export INFRAHUB_ADDRESS="http://localhost:8000"
-export INFRAHUB_API_TOKEN="06438eb2-8019-4776-878c-0941b1f1d1ec"
+uv run invoke setup
 ```
 
-### Load initial setup
+This loads schemas, bootstrap data, and menu. Then explore at http://localhost:8000
+
+### Run Complete Demo
+Deploy infrastructure and load demo data:
+```bash
+uv run invoke demo
+```
+
+Deploys DC-1 with servers and security configurations - ready to explore!
+
+### Manual Setup (Alternative)
+
 Load schemas
 ```bash
-uv run infrahubctl schema load schemas
+uv run invoke load-schema
 ```
-Load menu
-```bash
-uv run infrahubctl menu load menu
-```
+
 Load demo data
 ```bash
-uv run infrahubctl object load data/bootstrap
+uv run invoke load-objects
 ```
 
-Load sample security data
+Load menu
 ```bash
-uv run infrahubctl object load data/security/
-````
-
-Add demo repository
-```bash
-uv run infrahubctl repository add DEMO https://github.com/t0m3kz/infrahub-demo.git --read-only
+uv run invoke load-menu
 ```
 
-Add event actions (optional)
-```bash
-uv run infrahubctl object load data/events/
-````
+### Deploy Data Center Scenarios
 
-You can also use the script to execute all previous steps:
+Deploy any of 5 data centers with optional add-ons:
 ```bash
-./scripts/bootstrap.sh
+# List all available scenarios
+uv run invoke list-scenarios
+
+# Deploy DC-1 with default settings
+uv run invoke deploy-dc --scenario dc1
+
+# Deploy DC-3 with security configurations
+uv run invoke deploy-dc --scenario dc3 --security
+
+# Deploy DC-2 without servers
+uv run invoke deploy-dc --scenario dc2 --servers=False
 ```
 
-### Demo 1 - Data Center
-In this demo, configuration is generated for a composable data center.
-```bash
-./scripts/demo.sh design dc-2
-```
-If you would like to process all steps manually, follow these steps:
-1. Create branch
-    ```bash
-    uv run infrahubctl branch create my-branch
-    ```
-2. Load example design data stored in data/dc-2 file:
-    ```bash
-    uv run infrahubctl object load data/ --branch my-branch
-    ```
-   You can review designs in Design Patterns and in Design Elements.
-   New deployment should be added into Services -> Topology Deployments -> Data center
-3. Change branch to design
-4. Go to Actions -> Generator Definitions -> create_dc
-5. Select Run -> Selected Targets, select DC-3 and click Run Generator
-6. Wait until task is completed
-7. Go to the devices and see the generated hosts
-8. Go to Propose Changes -> New Proposed change
-9. Select design as source branch, add name and Create proposed change
-10. Wait until all tasks are completed and check the artifacts/data
+**Scenarios:**
+- `dc1` - Large data center (Paris)
+- `dc2` - Small-Medium data center (Frankfurt)
+- `dc3` - Medium data center (London)
+- `dc4` - Medium-Large data center (Amsterdam)
+- `dc5` - Large data center (New York)
 
-If you added event actions steps 4, 5 will be executed automatically.
+For complete invoke tasks documentation, see [INVOKE_TASKS_GUIDE.md](docs/INVOKE_TASKS_GUIDE.md)
 
 ## CI/CD
 This project uses GitHub Actions for continuous integration. All pushes and pull requests are tested for lint, type checks, and unit tests.
@@ -133,11 +128,33 @@ uv run pytest
 ```
 Or run specific test scripts in the [`tests/`](tests/) directory.
 
+## Why Infrahub Demo?
+
+> "The machine cannot be blamed. It is doing exactly what it was told. The real problem lies with those who blindly trust the vendor's GUI and their promises of automation."
+>
+> — *Inspired by Stanisław Lem's "Memoirs Found in a Bathtub"*
+
+**My Journey:** I was tired. Tired of vendor tools that claimed to do "everything" but covered nothing. Tired of being forced into their web GUI dungeons, locked into their data structures, prisoner to their update cycles. These tools also came with monitoring and deployment engines that made the system incredibly demanding from a resources point of view—bloated, heavy, and requiring constant tuning. And don't get me started on managing YAML or Terraform files—it's a real nightmare, especially when you have so many dependencies. One change cascades into a hundred others, and tracking what affects what becomes nearly impossible at scale. Infrastructure as Code meant something different to me—**true independence**. Not just writing YAML files that some vendor tool interprets through their black box. I wanted **complete control over my data model**, the freedom to define my own relationships, the power to orchestrate everything through code—no "click here to continue" required.
+
+Infrahub changed that. It's not another tool telling me how to think about infrastructure. It's a framework that lets **me define the rules**. Design-driven automation means I own the schemas, I own the logic, I own the destiny of my network. No more vendor lock-in, no more GUI dependency, no more compromise.
+
+This demo is trying prove it: from topology design to device generation, from configuration templates to validation checks—all driven by **my data structures**, all automated through **my code**. That's the infrastructure revolution I was waiting for.
+
+**Special thanks to [OpsMill](https://opsmill.com) for making this happen** – they built Infrahub with the vision that infrastructure teams should have complete control, not be prisoners to vendor constraints. (And yes, I'm bloody jealous I didn't have the power and motivation to come up with such a brilliant idea myself – like Prometheus watching others steal the fire of the gods!)
+
+**To companies/vendors** who may be inspired by ideas from this repository and use them in their customer environments: please consider sponsoring 3 open source communities. It's crucial to ensure that the incredible volunteers who build these tools don't feel like losers. They deserve recognition and support for their outstanding contributions to the tech community. I sincerely hope you've earned enough that a few dollars a month sponsoring open source communities won't cause financial collapse – you can well afford to give back.
+
+---
+
+## 🙏 A Note from a Human
+
+> I'm just a human making mistakes. If something is not working as expected, please [open an issue](https://github.com/t0m3kz/infrahub-demo/issues) and I'll do my best to get it sorted out. Your feedback is invaluable in making this project better!
+
 ## Contributing
 Contributions, questions, and feedback are welcome! Please use [GitHub Discussions][github-discussions-link].
 
 ## References
-- [InfraHub Documentation](https://docs.infrahub.app)
+- [Infrahub Documentation](https://docs.infrahub.app)
 - [Project Discussions](https://github.com/t0m3kz/infrahub-demo/discussions/)
 
 ## License

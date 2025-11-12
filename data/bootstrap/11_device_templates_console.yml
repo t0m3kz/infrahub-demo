@@ -66,7 +66,7 @@ spec:
             role: console
     - template_name: SRX-1500_EDGE_FIREWALL
       device_type: SRX-1500
-      role: edge_firewall
+      role: firewall
       status: active
       interfaces:
         kind: TemplateDcimConsoleInterface

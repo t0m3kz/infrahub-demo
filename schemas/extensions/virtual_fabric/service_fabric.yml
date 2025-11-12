@@ -10,13 +10,11 @@ nodes:
     icon: "mdi:account-plus"
     include_in_menu: true
     menu_placement: "ServiceGeneric"
-    default_filter: name__value
     uniqueness_constraints:
       - [name__value]
     human_friendly_id:
       - name__value
-    display_labels:
-      - name__value
+    display_label: "{{name__value}}"
     order_by: [name__value]
     attributes:
       - name: name

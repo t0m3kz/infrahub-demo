@@ -4,65 +4,93 @@ kind: Object
 spec:
   kind: DcimPlatform
   data:
-    - name: Cisco IOS-XE
+    - name: cisco_ios
       nornir_platform: iosxe
       napalm_driver: ios
       netmiko_device_type: cisco_ios
       ansible_network_os: ios
       containerlab_os: ios
 
-    - name: Cisco IOS-XR
+    - name: cisco_xr
       nornir_platform: iosxr
       napalm_driver: iosxr
       netmiko_device_type: cisco_xr
       ansible_network_os: cisco.iosxr.iosxr
       containerlab_os: cisco_xrv
 
-    - name: Cisco NX-OS
+    - name: cisco_xe
+      nornir_platform: iosxe
+      napalm_driver: iosxe
+      netmiko_device_type: cisco_xe
+      ansible_network_os: cisco.iosxe.iosxe
+      containerlab_os: cisco_xrv
+
+    - name: cisco_nxos
       nornir_platform: nxos
       napalm_driver: nxos_ssh
       netmiko_device_type: cisco_nxos
       ansible_network_os: nxos
       containerlab_os: cisco_n9kv
 
-    - name: Juniper JunOS
+    - name: dell_force10
+      nornir_platform: force10
+      napalm_driver: linux
+      netmiko_device_type: dell_force10
+      ansible_network_os: dellos10
+      containerlab_os: linux
+
+    - name: juniper_junos
       nornir_platform: junos
       napalm_driver: junos
       netmiko_device_type: juniper_junos
       ansible_network_os: junos
       containerlab_os: juniper_vjunosswitch
 
-    - name: Arista EOS
+    - name: arista_eos
       nornir_platform: eos
       napalm_driver: eos
       netmiko_device_type: arista_eos
       ansible_network_os: eos
       containerlab_os: ceos
 
-    - name: Sonic OS
+    - name: sonic
       nornir_platform: sonic
       napalm_driver: sonic
       netmiko_device_type: sonic
       ansible_network_os: sonic
       containerlab_os: sonic
 
-    - name: Linux
+    - name: linux
       nornir_platform: linux
       napalm_driver: linux
       netmiko_device_type: linux
       ansible_network_os: linux
       containerlab_os: linux
 
-    - name: Perle IOLAN
+    - name: perle_iolan
       nornir_platform: iolan
       napalm_driver: linux
       netmiko_device_type: linux
       ansible_network_os: linux
       containerlab_os: linux
 
-    - name: Check Point Gaia
+    - name: checkpoint_gaia
       nornir_platform: gaia
       napalm_driver: linux
-      netmiko_device_type: linux
+      netmiko_device_type: checkpoint_gaia
       ansible_network_os: linux
       containerlab_os: gaia
+
+    - name: netscaler
+      nornir_platform: netscaler
+      napalm_driver: linux
+      netmiko_device_type: netscaler
+      ansible_network_os: linux
+      containerlab_os: netscaler
+
+    - name: junos
+      nornir_platform: juniper_junos
+      napalm_driver: linux
+      netmiko_device_type: juniper_junos
+      ansible_network_os: linux
+      containerlab_os: juniper_junos
