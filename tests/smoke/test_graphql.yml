@@ -131,4 +131,3 @@ infrahub_tests:
         spec:
           path: queries/validation/loadbalancer_validation.gql
           kind: graphql-query-smoke
-

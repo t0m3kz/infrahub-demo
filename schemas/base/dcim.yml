@@ -1,5 +1,4 @@
 ---
-# yaml-language-server: $schema=https://schema.infrahub.app/infrahub/schema/latest.json
 version: "1.0"
 
 generics:
@@ -58,7 +57,7 @@ generics:
             color: "#e6e6fa"
           - name: border-leaf
             label: Border Leaf Switch
-            description: Border Leaf providing external connectivity in a Fabric.
+            description: Border Leaf for external connectivity in a Fabric.
             color: "#dda0dd"
           - name: tor
             label: Tor Switch
@@ -179,35 +178,35 @@ generics:
           - name: provisioning
             label: Provisioning
             description: "Interface is being provisioned."
-            color: "#A9DFBF" # light pastel green
+            color: "#A9DFBF"
           - name: free
             label: Free
             description: "Interface is unused."
-            color: "#CDEACC" # slightly darker pastel green
+            color: "#CDEACC"
           - name: active
             label: Active
             description: "Interface is active and operational."
-            color: "#A9CCE3" # pastel blue
+            color: "#A9CCE3"
           - name: maintenance
             label: Maintenance
             description: "Interface is under maintenance."
-            color: "#FFF2CC" # pastel yellow
+            color: "#FFF2CC"
           - name: disabled
             label: Disabled
             description: "Interface has been disabled."
-            color: "#D3D3D3" # light grey
+            color: "#D3D3D3"
           - name: deleted
             label: Deleted
             description: "Interface has been deleted."
-            color: "#FAD7A0" # pastel orange
+            color: "#FAD7A0"
           - name: outage
             label: Outage
             description: "Interface is currently experiencing an outage."
-            color: "#F4CCCC" # pastel red
+            color: "#F4CCCC"
           - name: reserved
             label: Reserved
             description: "Interface is reserved for future use."
-            color: "#E0E0E0" # light grey
+            color: "#E0E0E0"
         default_value: "free"
         order_weight: 1200
       - name: role
@@ -217,56 +216,56 @@ generics:
         choices:
           - name: lag
             label: Lag
-            description: "Link Aggregation Group (LAG) interface used for aggregated links."
-            color: "#60A5FA" # blue
+            description: "Link Aggregation Group (LAG) interface."
+            color: "#60A5FA"
           - name: core
             label: Core
             description: "Interface used in the core of the network."
-            color: "#1E3A8A" # indigo
+            color: "#1E3A8A"
           - name: customer
             label: Customer
             description: "Interface used for customer-facing connections."
-            color: "#F472B6" # pink
+            color: "#F472B6"
           - name: access
             label: Access
             description: "Access port connecting endpoint devices."
-            color: "#10B981" # green
+            color: "#10B981"
           - name: management
             label: Management
             description: "Interface dedicated to device management traffic."
-            color: "#F59E0B" # amber
+            color: "#F59E0B"
           - name: upstream
             label: Upstream
-            description: "Interface used to carry upstream traffic toward aggregation or core."
-            color: "#38BDF8" # sky
+            description: "Upstream interface toward aggregation or core."
+            color: "#38BDF8"
           - name: leaf
             label: Leaf
             description: "Interface connecting towards leaf switches."
-            color: "#34D399" # emerald
+            color: "#34D399"
           - name: spine
             label: Spine
             description: "Interface connecting towards spine switches."
-            color: "#06B6D4" # cyan
+            color: "#06B6D4"
           - name: console
             label: Console
             description: "Console management interface (out-of-band access)."
-            color: "#9CA3AF" # gray
+            color: "#9CA3AF"
           - name: uplink
             label: Uplink
-            description: "Uplink interface used to connect to aggregation or upstream switches."
-            color: "#FCA5A5" # light red
+            description: "Uplink used to connect to upstream switches."
+            color: "#FCA5A5"
           - name: peering
             label: Peering
-            description: "Interface dedicated to peering sessions with external networks."
-            color: "#FDE68A" # yellow
+            description: "Peering interface with external networks."
+            color: "#FDE68A"
           - name: loopback
             label: Loopback
-            description: "Loopback interface used for stable addressing on the device."
-            color: "#C7D2FE" # light indigo
+            description: "Loopback used for stable addressing on the device."
+            color: "#C7D2FE"
           - name: loopback-vtep
             label: Loopback VTEP
-            description: "Loopback interface used as a VTEP address for VXLAN/overlay tunneling."
-            color: "#E9D5FF" # lavender
+            description: "Loopback used as a VTEP VXLAN/overlay tunneling."
+            color: "#E9D5FF"
         order_weight: 1250
       - name: index
         kind: Text
@@ -274,7 +273,7 @@ generics:
         read_only: true
         optional: true
         computed_attribute:
-          jinja2_template: "{{ \"%03d\"| format(name__value | split_interface | last | int) }}"
+          jinja2_template: "{{ \"%03d\"| format(name__value | split_interface | last | int) }}"  # yamllint disable rule:line-length
           kind: Jinja2
         order_weight: 20000
     relationships:
@@ -513,63 +512,63 @@ nodes:
           - name: 100base-fx
             label: 100BASE-FX
             description: "100 Mbps fiber interface."
-            color: "#FFF2CC" # pastel yellow
+            color: "#FFF2CC"
           - name: 100base-lfx
             label: 100BASE-LFX
             description: "100 Mbps long-range fiber interface."
-            color: "#D3D3D3" # light grey
+            color: "#D3D3D3"
           - name: 100base-tx
             label: 100BASE-TX
             description: "100 Mbps twisted-pair copper interface."
-            color: "#FAD7A0" # pastel orange
+            color: "#FAD7A0"
           - name: 100base-t1
             label: 100BASE-T1
             description: "100 Mbps single-pair twisted copper interface."
-            color: "#F4CCCC" # pastel red
+            color: "#F4CCCC"
           - name: 1000base-t
             label: 1000BASE-T
             description: "1 Gbps twisted-pair copper interface."
-            color: "#A9DFBF" # light pastel green
+            color: "#A9DFBF"
           - name: 1000base-x-gbic
             label: 1000BASE-X GBIC
             description: "1 Gbps fiber interface with GBIC."
-            color: "#CDEACC" # slightly darker pastel green
+            color: "#CDEACC"
           - name: 1000base-x-sfp
             label: 1000BASE-X SFP
             description: "1 Gbps fiber interface with SFP."
-            color: "#A9CCE3" # pastel blue
+            color: "#A9CCE3"
           - name: 10gbase-t
             label: 10GBASE-T
             description: "10 Gbps twisted-pair copper interface."
-            color: "#FFF2CC" # pastel yellow
+            color: "#FFF2CC"
           - name: 10gbase-x-sfpp
             label: 10GBASE-X SFP+
             description: "10 Gbps fiber interface with SFP+."
-            color: "#D3D3D3" # light grey
+            color: "#D3D3D3"
           - name: 25gbase-x-sfp28
             label: 25GBASE-X SFP28
             description: "25 Gbps fiber interface with SFP28."
-            color: "#FAD7A0" # pastel orange
+            color: "#FAD7A0"
           - name: 40gbase-x-qsfpp
             label: 40GBASE-X QSFP+
             description: "40 Gbps fiber interface with QSFP+."
-            color: "#F4CCCC" # pastel red
+            color: "#F4CCCC"
           - name: 100gbase-x-qsfp28
             label: 100GBASE-X QSFP28
             description: "100 Gbps fiber interface with QSFP28."
-            color: "#A9DFBF" # light pastel green
+            color: "#A9DFBF"
           - name: 400gbase-x-qsfpdd
             label: 400GBASE-X QSFP-DD
             description: "400 Gbps fiber interface with QSFP-DD."
-            color: "#CDEACC" # slightly darker pastel green
+            color: "#CDEACC"
           - name: lte
             label: LTE
             description: "LTE cellular interface."
-            color: "#FFF2CC" # pastel yellow
+            color: "#FFF2CC"
           - name: other
             label: Other
             description: "Other interface type."
-            color: "#D3D3D3" # light grey
+            color: "#D3D3D3"
         default_value: "other"
         order_weight: 1400
       - name: mtu

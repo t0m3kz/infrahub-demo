@@ -1,11 +1,10 @@
-# yaml-language-server: $schema=https://schema.infrahub.app/infrahub/schema/latest.json
 ---
 version: "1.0"
 
 generics:
   - name: Peering
     namespace: Service
-    description: "Base service for all peering protocols that can be attached to devices or external partners."
+    description: "Base service for peering protocols on devices."
     label: Network Peering Service
     icon: "carbon:network-2"
     include_in_menu: false
@@ -18,7 +17,7 @@ generics:
         choices:
           - name: "TRANSIT"
             label: "Transit Provider"
-            description: "Peering with transit provider for internet connectivity"
+            description: "Peering with transit provider"
             color: "#FF6B6B"
           - name: "CUSTOMER"
             label: "Customer"
@@ -48,7 +47,7 @@ generics:
             color: "#74B9FF"
           - name: "EXTERNAL"
             label: "External Partners"
-            description: "Peering with external devices requiring artifact generation"
+            description: "Peering with external devices"
             color: "#FD79A8"
         default_value: "INTERNAL"
         order_weight: 1300
@@ -56,7 +55,7 @@ generics:
 nodes:
   - name: BGPPeering
     namespace: Service
-    description: "BGP peering service that can be attached to devices or external partners"
+    description: "BGP peering to devices or external partners"
     label: BGP Peering Service
     icon: "carbon:network-4-reference"
     menu_placement: ServiceGeneric
@@ -151,7 +150,7 @@ nodes:
 
   - name: OSPFPeering
     namespace: Service
-    description: "OSPF peering service that can be attached to devices or external partners"
+    description: "OSPF peering attached to devices or external partners"
     label: OSPF Peering Service
     icon: "carbon:network-4-reference"
     menu_placement: ServiceGeneric
@@ -272,157 +271,3 @@ nodes:
         optional: false
         on_delete: no-action
         description: "The deployment location for customer services"
-
-  # - name: PeeringPolicy
-  #   namespace: Service
-  #   description: "Peering policy templates for different types of peering relationships"
-  #   label: Peering Policy
-  #   icon: "carbon:policy"
-  #   menu_placement: ServiceGeneric
-  #   state: absent
-  #   human_friendly_id:
-  #     - "name__value"
-  #   display_labels:
-  #     - "name__value"
-  #   order_by:
-  #     - "name__value"
-  #   attributes:
-  #     - name: name
-  #       kind: Text
-  #       description: "Name of the peering policy"
-  #       optional: false
-  #       order_weight: 1000
-  #     - name: policy_type
-  #       kind: Dropdown
-  #       description: "Type of peering policy"
-  #       choices:
-  #         - name: "IMPORT"
-  #           label: "Import Policy"
-  #           description: "Policy for incoming routes"
-  #           color: "#74B9FF"
-  #         - name: "EXPORT"
-  #           label: "Export Policy"
-  #           description: "Policy for outgoing routes"
-  #           color: "#00CEC9"
-  #         - name: "BOTH"
-  #           label: "Import & Export"
-  #           description: "Policy for both directions"
-  #           color: "#FDCB6E"
-  #       default_value: "BOTH"
-  #       order_weight: 1100
-  #     - name: protocol
-  #       kind: Dropdown
-  #       description: "Routing protocol this policy applies to"
-  #       choices:
-  #         - name: "BGP"
-  #           label: "BGP"
-  #           description: "Border Gateway Protocol"
-  #           color: "#FD79A8"
-  #         - name: "OSPF"
-  #           label: "OSPF"
-  #           description: "Open Shortest Path First"
-  #           color: "#74B9FF"
-  #         - name: "BOTH"
-  #           label: "BGP & OSPF"
-  #           description: "Both protocols"
-  #           color: "#00CEC9"
-  #       default_value: "BGP"
-  #       order_weight: 1200
-  #     - name: max_prefix_limit
-  #       kind: Number
-  #       description: "Maximum prefix limit for this policy"
-  #       optional: true
-  #       order_weight: 1300
-  #       regex: "^[0-9]+$"
-  #     - name: route_filter
-  #       kind: Text
-  #       description: "Route filter configuration"
-  #       optional: true
-  #       order_weight: 1400
-  #     - name: community_action
-  #       kind: Dropdown
-  #       description: "Community attribute action"
-  #       choices:
-  #         - name: "NONE"
-  #           label: "No Action"
-  #           description: "Do not modify communities"
-  #           color: "#DEDEDE"
-  #         - name: "ADD"
-  #           label: "Add Communities"
-  #           description: "Add community attributes"
-  #           color: "#00CEC9"
-  #         - name: "REMOVE"
-  #           label: "Remove Communities"
-  #           description: "Remove community attributes"
-  #           color: "#E17055"
-  #         - name: "REPLACE"
-  #           label: "Replace Communities"
-  #           description: "Replace community attributes"
-  #           color: "#FDCB6E"
-  #       default_value: "NONE"
-  #       optional: true
-  #       order_weight: 1500
-  #     - name: community_values
-  #       kind: Text
-  #       description: "Community values (comma-separated)"
-  #       optional: true
-  #       order_weight: 1600
-  #     - name: as_path_prepend
-  #       kind: Number
-  #       description: "AS path prepend count"
-  #       default_value: 0
-  #       optional: true
-  #       order_weight: 1700
-  #       regex: "^[0-9]+$"
-  #     - name: description
-  #       kind: Text
-  #       description: "Description of the policy"
-  #       optional: true
-  #       order_weight: 1800
-  #   relationships:
-  #     - name: applicable_peer_types
-  #       peer: ServicePeering
-  #       label: "Applicable Peering Types"
-  #       optional: true
-  #       cardinality: many
-  #       kind: Generic
-  #       order_weight: 2000
-  #       description: "Peering types this policy can be applied to"
-
-# extensions:
-#   nodes:
-#     - kind: RoutingAutonomousSystem
-#       relationships:
-#         - name: bgp_peering_sessions
-#           peer: ServiceBGPPeering
-#           label: BGP Peering Sessions
-#           optional: true
-#           cardinality: many
-#           kind: Component
-#           order_weight: 2600
-#     - kind: OrganizationGeneric
-#       relationships:
-#         - name: bgp_peering_sessions
-#           peer: ServiceBGPPeering
-#           label: BGP Peering Sessions
-#           optional: true
-#           cardinality: many
-#           kind: Component
-#           order_weight: 2500
-#           description: "BGP peering sessions with this organization"
-#         - name: ospf_peering_sessions
-#           peer: ServiceOSPFPeering
-#           label: OSPF Peering Sessions
-#           optional: true
-#           cardinality: many
-#           kind: Component
-#           order_weight: 2600
-#           description: "OSPF peering sessions with this organization"
-#         - name: peering_policies
-#           peer: ServicePeeringPolicy
-#           label: Peering Policies
-#           optional: true
-#           cardinality: many
-#           kind: Component
-#           order_weight: 2700
-#           description: "Peering policies applicable to this organization"

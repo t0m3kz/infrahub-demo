@@ -1,10 +1,9 @@
-# yaml-language-server: $schema=https://schema.infrahub.app/infrahub/schema/latest.json
 ---
 version: "1.0"
 generics:
   - name: ManagementServer
     namespace: Network
-    description: "Generic model for network management server (dns, ntp, and dhcp)."
+    description: "Generic for network management server (dns, ntp, and dhcp)."
     label: "Network Management Servers"
     human_friendly_id:
       - name__value
@@ -288,7 +287,7 @@ nodes:
         label: IPV6 underlay
         kind: Boolean
         optional: false
-        default_value: False
+        default_value: false
         order_weight: 660
       - name: amount_of_super_spines
         label: Amount of Super Spine switches
@@ -304,11 +303,11 @@ nodes:
         choices:
           - name: bottom_up
             label: Bottom Up
-            description: Assign interfaces starting from the lowest numbered interface.
+            description: Assign interfaces bottom-up.
             color: "#869FB3"
           - name: top_down
             label: Top Down
-            description: Assign interfaces starting from the highest numbered interface.
+            description: Assign interfaces top-down.
             color: "#004E64"
         default_value: bottom_up
         order_weight: 1200
@@ -319,11 +318,11 @@ nodes:
         choices:
           - name: bottom_up
             label: Bottom Up
-            description: Assign interfaces starting from the lowest numbered interface.
+            description: Assign interfaces bottom-up.
             color: "#869FB3"
           - name: top_down
             label: Top Down
-            description: Assign interfaces starting from the highest numbered interface.
+            description: Assign interfaces top-down.
             color: "#004E64"
         default_value: bottom_up
         order_weight: 1300
@@ -381,10 +380,10 @@ nodes:
         choices:
           - name: bottom_up
             color: "#869FB3"
-            description: Assign interfaces starting from the lowest numbered interface.
+            description: Assign interfaces bottom-up.
           - name: top_down
             color: "#004E64"
-            description: Assign interfaces starting from the highest numbered interface.
+            description: Assign interfaces top-down.
         default_value: bottom_up
         order_weight: 3000
       - name: spine_interface_sorting_method
@@ -393,10 +392,10 @@ nodes:
         choices:
           - name: bottom_up
             color: "#869FB3"
-            description: Assign interfaces starting from the lowest numbered interface.
+            description: Assign interfaces bottom-up.
           - name: top_down
             color: "#004E64"
-            description: Assign interfaces starting from the highest numbered interface.
+            description: Assign interfaces top-down.
         default_value: bottom_up
         order_weight: 4000
     relationships:

@@ -1,5 +1,4 @@
 ---
-# yaml-language-server: $schema=https://schema.infrahub.app/infrahub/schema/latest.json
 version: "1.0"
 
 nodes:
@@ -35,21 +34,21 @@ nodes:
           - name: normal
             label: Normal
             description: "Standard OSPF interface mode."
-            color: "#E6E6FA" # lavender
+            color: "#E6E6FA"
           - name: passive
             label: Passive
             description: "Interface will not send OSPF hello packets."
-            color: "#E6E6FA" # lavender
+            color: "#E6E6FA"
           - name: peer_to_peer
             label: Peer-to-Peer
             description: "OSPF peer-to-peer interface mode."
-            color: "#E6E6FA" # lavender
+            color: "#E6E6FA"
         default_value: normal
         description: "Mode of the OSPF interface."
         order_weight: 1300
       - name: authentication_key
         kind: Password
-        description: "Shared secret used to authenticate and secure routing messages between neighboring routers."
+        description: "Shared secret for routing message authentication."
         optional: true
         order_weight: 1250
       - name: authentication_mode
@@ -57,10 +56,10 @@ nodes:
         choices:
           - name: md5
             label: MD5
-            color: "#E6E6FA" # lavender
+            color: "#E6E6FA"
           - name: sha1
             label: SHA1
-            color: "#E6E6FA" # lavender
+            color: "#E6E6FA"
         optional: true
         order_weight: 1225
 

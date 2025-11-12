@@ -1,5 +1,4 @@
 ---
-# yaml-language-server: $schema=https://schema.infrahub.app/infrahub/schema/latest.json
 version: "1.0"
 
 generics:
@@ -34,20 +33,3 @@ generics:
         kind: Attribute
         optional: true
         cardinality: many
-
-  # - name: Hosting
-  #   namespace: Location
-  #   description: Location directly hosting device and services.
-  #   include_in_menu: false
-  #   # This is only owning relationships toward various assets that could be found on those locations
-  #   relationships:
-  #     - name: prefixes
-  #       label: Prefixes
-  #       peer: IpamPrefix
-  #       cardinality: many
-  #       optional: true
-  #     - name: devices
-  #       label: Devices
-  #       peer: DcimGenericDevice
-  #       cardinality: many
-  #       optional: true

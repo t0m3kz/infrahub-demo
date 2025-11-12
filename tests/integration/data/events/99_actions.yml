@@ -1,3 +1,4 @@
+---
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
@@ -47,36 +48,3 @@ spec:
         data:
           - attribute_name: role
             value_match: any
-
-    # - name: trigger-rack-generator-update-checksum
-    #   branch_scope: "other_branches"
-    #   node_kind: TopologyRack
-    #   mutation_action: "updated"
-    #   action: run-rack-generator
-    #   matches:
-    #     kind: CoreNodeTriggerAttributeMatch
-    #     data:
-    #       - attribute_name: checksum
-    #         value_match: any
-
-    # - name: trigger-rack-generator-update-index
-    #   branch_scope: "other_branches"
-    #   node_kind: TopologyRack
-    #   mutation_action: "updated"
-    #   action: run-rack-generator
-    #   matches:
-    #     kind: CoreNodeTriggerAttributeMatch
-    #     data:
-    #       - attribute_name: index
-    #         value_match: any
-
-    # - name: trigger-rack-generator-update-rack-type
-    #   branch_scope: "other_branches"
-    #   node_kind: TopologyRack
-    #   mutation_action: "updated"
-    #   action: run-rack-generator
-    #   matches:
-    #     kind: CoreNodeTriggerAttributeMatch
-    #     data:
-    #       - attribute_name: rack_type
-    #         value_match: any

@@ -155,4 +155,3 @@ spec:
           - template_name: PROXY_private
             name: private
             role: management
-

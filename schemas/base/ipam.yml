@@ -1,5 +1,4 @@
 ---
-# yaml-language-server: $schema=https://schema.infrahub.app/infrahub/schema/latest.json
 version: "1.0"
 
 nodes:
@@ -12,7 +11,7 @@ nodes:
     include_in_menu: false
     order_by:
       - address__value
-    display_label : "{{address__value}}"
+    display_label: "{{address__value}}"
     inherit_from:
       - BuiltinIPAddress
     uniqueness_constraints:
@@ -26,7 +25,7 @@ nodes:
         kind: Text
         optional: true
         # https://stackoverflow.com/questions/11809631/fully-qualified-domain-name-validation
-        regex: (?=^.{1,253}$)(^(((?!-)[a-zA-Z0-9-]{1,63}(?<!-))|((?!-)[a-zA-Z0-9-]{1,63}(?<!-)\.)+[a-zA-Z]{2,63})$)
+        regex: (?=^.{1,253}$)(^(((?!-)[a-zA-Z0-9-]{1,63}(?<!-))|((?!-)[a-zA-Z0-9-]{1,63}(?<!-)\.)+[a-zA-Z]{2,63})$)  # yamllint disable-line rule:line-length
 
   - name: Prefix
     namespace: Ipam
@@ -36,7 +35,7 @@ nodes:
     label: Prefix
     order_by:
       - prefix__value
-    display_label : "{{prefix__value}}"
+    display_label: "{{prefix__value}}"
     inherit_from:
       - BuiltinIPPrefix
     uniqueness_constraints:
@@ -85,7 +84,7 @@ nodes:
             color: "#9678B6"
           - name: loopback-vtep
             label: Loopback VTEP
-            description: Facilitates virtualized network communications within loopback configurations.
+            description: Virtualized network communications within loopback.
             color: "#CDB4DB"
     relationships:
       - name: organization
