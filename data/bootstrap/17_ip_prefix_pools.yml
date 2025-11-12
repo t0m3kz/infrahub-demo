@@ -20,6 +20,23 @@ spec:
             is_pool: true
             role: technical
       ip_namespace: default
+    - name: Loopback-IPv4
+      description: Loopback IPv4 Prefix Pool
+      default_prefix_type: IpamPrefix
+      default_prefix_length: 23
+      resources:
+        kind: IpamPrefix
+        default_prefix_type: IpamPrefix
+        default_prefix_length: 22
+        data:
+          - prefix: 1.127.0.0/16
+            description: Technical IPv4 Prefix Pool
+            status: active
+            member_type: prefix
+            is_pool: true
+            role: technical
+      ip_namespace: default
+
     - name: Management-IPv4
       description: Management IPv4 Prefix Pool
       default_prefix_type: IpamPrefix

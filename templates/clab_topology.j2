@@ -1,41 +1,43 @@
-{% for topology in data.TopologyDeployment.edges %}
+{% for topology in data.TopologyDeployment %}
 ---
-name: {{ topology.node.name.value }}
+name: {{ topology.name }}
 prefix: ""
 
 mgmt:
-  network: {{ topology.node.name.value | lower() }}
-  ipv4-subnet: {{ topology.node.management_subnet.node.prefix.value }}
+  network: {{ topology.name | lower() }}
+  ipv4-subnet: "172.20.{{ loop.index0 }}.0/24"
 
-{% if topology.node.devices.edges is defined %} 
-topology: 
+{% if topology.devices %}
+topology:
   nodes:
-    {% for device in topology.node.devices.edges %}
-    {{ device.node.name.value }}:
-      kind: {{ device.node.platform.node.containerlab_os.value }}
-      type: {{ device.node.device_type.node.name.value }}
-      image: {{ device.node.os_version.value }}
-      {% if device.node.primary_address.node.address is defined %}
+    {% for device in topology.devices %}
+    {{ device.name }}:
+      kind: {{ device.platform.containerlab_os }}
+      type: {{ device.device_type.name }}
+      image: {{ device.os_version }}
+      {% if device.primary_address.address is defined %}
       management:
-        ipv4: {{ device.node.primary_address.node.address.value }}
+        ipv4: {{ device.primary_address.address }}
       {% endif %}
     {% endfor %}
 
   links:
     {% set processed_endpoints = [] %}
-    {% for device in topology.node.devices.edges %}
-      {% for interface in device.node.interfaces.edges %}
-        {% if interface.node.connector is defined and interface.node.connector.node is not none and interface.node.role.value not in ["console", "management"] %}
-          {% set connected_endpoint = interface.node.connector.node %}
-          {% set endpoint1 = device.node.name.value + ":" + interface.node.name.value %}
-          {% set endpoint2 = connected_endpoint.hfid | join(":") %}
-          {% set endpoint_tuple = [endpoint1, endpoint2] | sort %}
-          {% set endpoint_key = endpoint_tuple | join("|") %}
-          {% if endpoint_key not in processed_endpoints %}
-            {% set _ = processed_endpoints.append(endpoint_key) %}
-            {% set endpoint1 = endpoint1.replace("Ethernet", "eth") %}
-            {% set endpoint2 = endpoint2.replace("Ethernet", "eth") %}
+    {% for device in topology.devices %}
+      {% for interface in device.interfaces %}
+        {% if interface.cable and interface.cable.display_label %}
+          {% set cable_endpoints = interface.cable.display_label.split("__") %}
+          {% if cable_endpoints | length == 2 %}
+            {% set endpoint1_raw = cable_endpoints[0] %}
+            {% set endpoint2_raw = cable_endpoints[1] %}
+            {% set endpoint_tuple = [endpoint1_raw, endpoint2_raw] | sort %}
+            {% set endpoint_key = endpoint_tuple | join("|") %}
+            {% if endpoint_key not in processed_endpoints %}
+              {% set _ = processed_endpoints.append(endpoint_key) %}
+              {% set endpoint1 = endpoint1_raw.replace("Ethernet", "eth") %}
+              {% set endpoint2 = endpoint2_raw.replace("Ethernet", "eth") %}
     - endpoints: ["{{ endpoint1 }}", "{{ endpoint2 }}"]
+            {% endif %}
           {% endif %}
         {% endif %}
       {% endfor %}

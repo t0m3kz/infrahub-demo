@@ -1,49 +1,64 @@
-"""Infrastructure generator."""
+"""Infrastructure generator for data center topology."""
 
-from infrahub_sdk.generator import InfrahubGenerator
+from typing import Any
 
-from .common import TopologyCreator, clean_data
+from .common import CommonGenerator
+from .helpers import DeviceNamingStrategy, FabricPoolStrategy
 
 
-class PopTopologyGenerator(InfrahubGenerator):
-    """Generate topology."""
+class DCTopologyGenerator(CommonGenerator):
+    """Generate data center topology with super-spine infrastructure."""
 
-    async def generate(self, data: dict) -> None:
-        """Generate topology."""
-        cleaned_data = clean_data(data)
-        if isinstance(cleaned_data, dict):
-            data = cleaned_data["TopologyColocationCenter"][0]
-        else:
-            raise ValueError("clean_data() did not return a dictionary")
+    async def generate(self, data: dict[str, Any]) -> None:
+        """Generate data center topology.
 
-        network_creator = TopologyCreator(
-            client=self.client, log=self.logger, branch=self.branch, data=data
+        Args:
+            data: Raw GraphQL response data to clean and process
+        """
+
+        try:
+            deployment_list = self.clean_data(data).get("TopologyDeployment", [])
+            if not deployment_list:
+                self.logger.error(
+                    "No TopologyDeployment data found in GraphQL response"
+                )
+                return
+
+            self.data = deployment_list[0]
+        except (ValueError, KeyError, IndexError) as exc:
+            self.logger.error(f"Generation failed due to {exc}")
+            return
+
+        self.logger.info(f"Processing Data Center: {self.data.get('name')}")
+        # Extract deployment parameters
+        dc_id = self.data.get("id")
+        dc_name = self.data.get("name", "").lower()
+        dc_index = self.data.get("index", 1)  # Get DC index for unique device naming
+        amount_of_super_spines = self.data.get("amount_of_super_spines", 4)
+        super_spine_template = self.data.get("super_spine_template", {})
+        design = self.data.get("design_pattern", {})
+        self.logger.info(f"Generating topology for data center {dc_name.upper()}")
+        indexes: list[int] = [dc_index]
+
+        await self.allocate_resource_pools(
+            id=dc_id,
+            strategy=FabricPoolStrategy.FABRIC,
+            pools=design,
+            fabric_name=dc_name,
         )
-        await network_creator.load_data()
-        await network_creator.create_site()
 
-        # Build subnets list for address pools
-        subnets = []
-        if data.get("management_subnet"):
-            subnets.append(
-                {
-                    "type": "Management",
-                    "prefix_id": data["management_subnet"]["id"],
-                }
-            )
-
-        if data.get("technical_subnet"):
-            subnets.append(
-                {
-                    "type": "Loopback",
-                    "prefix_id": data["technical_subnet"]["id"],
-                }
-            )
-
-        await network_creator.create_address_pools(subnets)
-        await network_creator.create_L2_pool()
-        await network_creator.create_devices()
-        await network_creator.create_loopback("loopback0")
-        # self.log.info(self.client.store._branches[self.branch].__dict__)
-        await network_creator.create_oob_connections("management")
-        await network_creator.create_oob_connections("console")
+        await self.create_devices(
+            deployment_id=dc_id,
+            device_role="super-spine",
+            amount=amount_of_super_spines,
+            template=super_spine_template,
+            naming_strategy=DeviceNamingStrategy[
+                design.get("naming_strategy", "STANDARD").upper()
+            ],
+            options={
+                "name_prefix": dc_name,
+                "fabric_name": dc_name,
+                "indexes": indexes,
+                "allocate_loopback": True,
+            },
+        )

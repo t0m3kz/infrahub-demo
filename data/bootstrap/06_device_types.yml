@@ -10,13 +10,11 @@ spec:
       full_depth: false
       manufacturer: Juniper
 
-
     - name: CCS-720DP-48S-2F
       part_number: CCS-720DP-48S-2F
       height: 1
       full_depth: false
       manufacturer: Arista
-
 
     - name: DCS-7280DR3-24-F
       part_number: DCS-7280DR3-24-F
@@ -24,13 +22,11 @@ spec:
       full_depth: false
       manufacturer: Arista
 
-
     - name: NCS-5501-SE
       part_number: NCS-5501-SE
       height: 1
       full_depth: false
       manufacturer: Cisco
-
 
     - name: ASR1002-HX
       part_number: ASR1002-HX

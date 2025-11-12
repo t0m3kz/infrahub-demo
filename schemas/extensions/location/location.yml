@@ -11,8 +11,7 @@ nodes:
       - LocationGeneric
     menu_placement: LocationGeneric
     include_in_menu: false
-    display_labels:
-      - name__value
+    display_label: "{{name__value}}"
     children: LocationCountry
     icon: "carbon:cics-region-target"
 
@@ -23,8 +22,7 @@ nodes:
       - LocationGeneric
     menu_placement: LocationGeneric
     include_in_menu: false
-    display_labels:
-      - name__value
+    display_label: "{{name__value}}"
     parent: "LocationRegion"
     children: LocationMetro
     icon: gis:search-country
@@ -41,8 +39,7 @@ nodes:
       - LocationGeneric
     menu_placement: LocationGeneric
     include_in_menu: false
-    display_labels:
-      - name__value
+    display_label: "{{name__value}}"
     parent: LocationCountry
     children: LocationBuilding
     icon: healthicons:city
@@ -54,8 +51,7 @@ nodes:
     menu_placement: "LocationGeneric"
     include_in_menu: false
     label: Building
-    display_labels:
-      - name__value
+    display_label: "{{name__value}}"
     parent: "LocationMetro"
     children: "LocationSuite"
     icon: "ri:building-line"
@@ -89,8 +85,7 @@ nodes:
     menu_placement: "LocationGeneric"
     label: Suite
     branch: agnostic
-    display_labels:
-      - name__value
+    display_label: "{{name__value}}"
     parent: "LocationBuilding"
     children: "LocationRack"
     icon: "game-icons:cage"
@@ -114,8 +109,7 @@ nodes:
     menu_placement: "LocationGeneric"
     label: Rack
     branch: agnostic
-    display_labels:
-      - name__value
+    display_label: "{{name__value}}"
     human_friendly_id:
       - shortname__value
     parent: "LocationSuite"
@@ -178,14 +172,14 @@ extensions:
           peer: LocationBuilding
           cardinality: many
           optional: true
-    - kind: TopologyDeployment
-      relationships:
-        - name: racks
-          peer: LocationRack
-          branch: aware
-          cardinality: many
-          kind: Generic
-          identifier: "rack__pod"
+    # - kind: TopologyDeployment
+    #   relationships:
+    #     - name: racks
+    #       peer: LocationRack
+    #       branch: aware
+    #       cardinality: many
+    #       kind: Generic
+    #       identifier: "rack__pod"
     - kind: DcimPhysicalDevice
       relationships:
         - name: rack

@@ -11,8 +11,7 @@ nodes:
     include_in_menu: false
     order_by:
       - name__value
-    display_labels:
-      - name__value
+    display_label: "{{name__value}}"
     uniqueness_constraints:
       - ["name__value"]
     human_friendly_id:
@@ -77,9 +76,7 @@ nodes:
     human_friendly_id:
       - name__value
       - area__value
-    display_labels:
-      - name__value
-      - area__value
+    display_label: "{{name__value}} {{area__value}}"
     attributes:
       - name: name
         kind: Text

@@ -132,13 +132,13 @@ class LoadBalancer(InfrahubTransform):
                     break
 
         # Extract device information
-        device_role = data.get("role", "load_balancer")
+        device_role = data.get("role", "load-balancer")
         device_status = data.get("status", "active")
 
         # Add processed data to template context
         data["vips"] = vips
         data["backend_servers"] = backend_servers
-        data["load_balancer_config"] = {
+        data["load-balancer_config"] = {
             "device_role": device_role,
             "device_status": device_status,
             "management_ip": management_ip or "192.168.1.100",  # fallback

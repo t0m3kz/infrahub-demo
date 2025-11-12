@@ -21,12 +21,15 @@ query PodGeneratorQuery($name: String!) {
         spine_interface_sorting_method {
           value
         }
-        spine_switch_template {
+        spine_template {
           node {
             id
             platform {
               node {
                 id
+                name {
+                  value
+                }
               }
             }
             device_type {
@@ -49,11 +52,39 @@ query PodGeneratorQuery($name: String!) {
           node {
             ... on TopologyDataCenter {
               id
+              devices(role__value: "super-spine") {
+                edges {
+                  node {
+                    name {
+                      value
+                    }
+                  }
+                }
+              }
               name {
                 value
               }
-              size {
+              index {
                 value
+              }
+              design_pattern {
+                node {
+                  maximum_super_spines {
+                    value
+                    }
+                    maximum_pods{
+                      value
+                    }
+                    maximum_spines {
+                      value
+                    }
+                    maximum_leafs {
+                      value
+                    }
+                    naming_convention {
+                      value
+                    }
+                }
               }
               amount_of_super_spines {
                 value

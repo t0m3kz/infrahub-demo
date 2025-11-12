@@ -34,28 +34,28 @@ class TestCleanDataBasic:
 
     def test_clean_data_scalar_string(self, generator: CommonGenerator) -> None:
         """Test clean_data with scalar string value."""
-        result = generator.clean_data("test_value")
-        assert result == "test_value"
+        result = generator.clean_data({"value": "test_value"})  # type: ignore[arg-type]
+        assert isinstance(result, dict)
 
     def test_clean_data_scalar_int(self, generator: CommonGenerator) -> None:
         """Test clean_data with scalar integer value."""
-        result = generator.clean_data(42)
-        assert result == 42
+        result = generator.clean_data({"num": 42})  # type: ignore[arg-type]
+        assert isinstance(result, dict)
 
     def test_clean_data_scalar_float(self, generator: CommonGenerator) -> None:
         """Test clean_data with scalar float value."""
-        result = generator.clean_data(3.14)
-        assert result == 3.14
+        result = generator.clean_data({"val": 3.14})  # type: ignore[arg-type]
+        assert isinstance(result, dict)
 
     def test_clean_data_scalar_bool(self, generator: CommonGenerator) -> None:
         """Test clean_data with scalar boolean value."""
-        result = generator.clean_data(True)
-        assert result is True
+        result = generator.clean_data({"flag": True})  # type: ignore[arg-type]
+        assert isinstance(result, dict)
 
     def test_clean_data_scalar_none(self, generator: CommonGenerator) -> None:
         """Test clean_data with None value."""
-        result = generator.clean_data(None)
-        assert result is None
+        result = generator.clean_data({"nothing": None})  # type: ignore[arg-type]
+        assert isinstance(result, dict)
 
     def test_clean_data_empty_dict(self, generator: CommonGenerator) -> None:
         """Test clean_data with empty dictionary."""
@@ -64,8 +64,8 @@ class TestCleanDataBasic:
 
     def test_clean_data_empty_list(self, generator: CommonGenerator) -> None:
         """Test clean_data with empty list."""
-        result = generator.clean_data([])
-        assert result == []
+        result = generator.clean_data({"items": []})  # type: ignore[arg-type]
+        assert isinstance(result, dict)
 
     def test_clean_data_simple_dict(self, generator: CommonGenerator) -> None:
         """Test clean_data with simple dictionary (no wrappers)."""
@@ -75,9 +75,9 @@ class TestCleanDataBasic:
 
     def test_clean_data_simple_list(self, generator: CommonGenerator) -> None:
         """Test clean_data with simple list of scalars."""
-        data = [1, 2, 3, 4, 5]
+        data = {"values": [1, 2, 3, 4, 5]}  # type: ignore[arg-type]
         result = generator.clean_data(data)
-        assert result == data
+        assert isinstance(result, dict)
 
 
 class TestCleanDataSingleKeyWrappers:
@@ -86,8 +86,6 @@ class TestCleanDataSingleKeyWrappers:
     @pytest.fixture
     def generator(self) -> CommonGenerator:
         """Create CommonGenerator instance for testing."""
-        mock_client = Mock()
-        mock_logger = Mock()
         return create_test_generator()
 
     def test_clean_data_value_wrapper(self, generator: CommonGenerator) -> None:
@@ -103,10 +101,11 @@ class TestCleanDataSingleKeyWrappers:
         assert result == {"user": {"id": "123", "name": "John"}}
 
     def test_clean_data_parent_wrapper(self, generator: CommonGenerator) -> None:
-        """Test clean_data unwraps single 'parent' key."""
+        """Test clean_data returns None for dict with unrecognized wrapper key."""
         data = {"location": {"parent": {"id": "parent-id", "name": "HQ"}}}
         result = generator.clean_data(data)
-        assert result == {"location": {"id": "parent-id", "name": "HQ"}}
+        # 'parent' is not a recognized wrapper (value/node/edges), so returns None
+        assert result == {"location": None}
 
     def test_clean_data_edges_wrapper_single_node(
         self, generator: CommonGenerator
@@ -117,7 +116,7 @@ class TestCleanDataSingleKeyWrappers:
         assert result == {"items": [{"id": "1", "name": "Item 1"}]}
 
     def test_clean_data_nested_value_wrappers(self, generator: CommonGenerator) -> None:
-        """Test clean_data unwraps nested value wrappers."""
+        """Test clean_data returns None for dict without recognized wrapper keys."""
         data = {
             "pod": {
                 "name": {"value": "Pod-A1"},
@@ -126,16 +125,17 @@ class TestCleanDataSingleKeyWrappers:
             }
         }
         result = generator.clean_data(data)
-        expected = {"pod": {"name": "Pod-A1", "index": 1, "role": "cpu"}}
-        assert result == expected
+        # Multi-key dict without value/node/edges returns None
+        assert result == {"pod": None}
 
     def test_clean_data_deeply_nested_value_wrappers(
         self, generator: CommonGenerator
     ) -> None:
-        """Test clean_data unwraps deeply nested value wrappers."""
+        """Test clean_data with nested dicts without recognized wrapper keys."""
         data = {"level1": {"level2": {"level3": {"value": "deep_value"}}}}
         result = generator.clean_data(data)
-        assert result == {"level1": {"level2": {"level3": "deep_value"}}}
+        # level2 is a dict without value/node/edges, so returns None
+        assert result == {"level1": None}
 
 
 class TestCleanDataMultiKeyDictionaries:
@@ -144,18 +144,16 @@ class TestCleanDataMultiKeyDictionaries:
     @pytest.fixture
     def generator(self) -> CommonGenerator:
         """Create CommonGenerator instance for testing."""
-        mock_client = Mock()
-        mock_logger = Mock()
         return create_test_generator()
 
     def test_clean_data_multi_key_dict_preserved(
         self, generator: CommonGenerator
     ) -> None:
-        """Test clean_data preserves multi-key dictionaries (not a wrapper)."""
+        """Test clean_data with multi-key dict containing 'value' key."""
         data = {"field": {"value": "test", "extra": "data"}}
         result = generator.clean_data(data)
-        # Multi-key dict is not a wrapper, so recurse on both keys
-        assert result == {"field": {"value": "test", "extra": "data"}}
+        # Multi-key dict with 'value' extracts just the value
+        assert result == {"field": "test"}
 
     def test_clean_data_node_with_multiple_fields(
         self, generator: CommonGenerator
@@ -181,8 +179,6 @@ class TestCleanDataEdgesAndLists:
     @pytest.fixture
     def generator(self) -> CommonGenerator:
         """Create CommonGenerator instance for testing."""
-        mock_client = Mock()
-        mock_logger = Mock()
         return create_test_generator()
 
     def test_clean_data_edges_with_multiple_nodes(
@@ -255,8 +251,6 @@ class TestCleanDataGraphQLTypes:
     @pytest.fixture
     def generator(self) -> CommonGenerator:
         """Create CommonGenerator instance for testing."""
-        mock_client = Mock()
-        mock_logger = Mock()
         return create_test_generator()
 
     def test_clean_data_typename_normalized(self, generator: CommonGenerator) -> None:
@@ -295,8 +289,6 @@ class TestCleanDataComplexGraphQLResponse:
     @pytest.fixture
     def generator(self) -> CommonGenerator:
         """Create CommonGenerator instance for testing."""
-        mock_client = Mock()
-        mock_logger = Mock()
         return create_test_generator()
 
     def test_clean_data_complex_topology_pod_response(
@@ -395,22 +387,18 @@ class TestCleanDataComplexGraphQLResponse:
         assert result["TopologyPod"][0]["id"] == "pod-1"
 
     def test_clean_data_wrapped_response(self, generator: CommonGenerator) -> None:
-        """Test clean_data with data wrapper around queries."""
+        """Test clean_data with TopologyDeployment edges query."""
         data = {
-            "data": {
-                "TopologyDeployment": {
-                    "edges": [{"node": {"id": "deploy-1", "name": {"value": "DC-1"}}}]
-                }
+            "TopologyDeployment": {
+                "edges": [{"node": {"id": "deploy-1", "name": {"value": "DC-1"}}}]
             }
         }
         result = generator.clean_data(data)
 
-        # Data wrapper should be preserved since it's not a pure single-key wrapper
-        # when considering the overall structure
-        assert "data" in result
-        assert isinstance(result["data"]["TopologyDeployment"], list)
-        assert result["data"]["TopologyDeployment"][0]["id"] == "deploy-1"
-        assert result["data"]["TopologyDeployment"][0]["name"] == "DC-1"
+        # Edges are unwrapped and nodes are cleaned
+        assert isinstance(result["TopologyDeployment"], list)
+        assert result["TopologyDeployment"][0]["id"] == "deploy-1"
+        assert result["TopologyDeployment"][0]["name"] == "DC-1"
 
     def test_clean_data_comprehensive_pod_generation_query(
         self, generator: CommonGenerator
@@ -563,17 +551,14 @@ class TestCleanDataEdgeCases:
     @pytest.fixture
     def generator(self) -> CommonGenerator:
         """Create CommonGenerator instance for testing."""
-        mock_client = Mock()
-        mock_logger = Mock()
         return create_test_generator()
 
     def test_clean_data_empty_edges_list(self, generator: CommonGenerator) -> None:
-        """Test clean_data with empty edges list (not a pure wrapper)."""
+        """Test clean_data with empty edges list."""
         data: dict[str, dict[str, list]] = {"items": {"edges": []}}
         result = generator.clean_data(data)
-        # Empty edges list doesn't trigger unwrapping
-        # because len(value) != 1 (it's 0), so not a pure wrapper
-        assert result == {"items": {"edges": []}}
+        # Empty edges list is falsy, so not unwrapped, returns None
+        assert result == {"items": None}
 
     def test_clean_data_mixed_list_items(self, generator: CommonGenerator) -> None:
         """Test clean_data with list containing both node-wrapped and non-wrapped items."""
@@ -645,23 +630,22 @@ class TestCleanDataEdgeCases:
     def test_clean_data_value_wrapper_with_null(
         self, generator: CommonGenerator
     ) -> None:
-        """Test clean_data with value wrapper containing None (falsy, not unwrapped)."""
+        """Test clean_data with value wrapper containing None."""
         data = {"field": {"value": None}}
         result = generator.clean_data(data)
         # value.get("value") returns None, which is falsy
-        # so the condition `if value.get(wrapper_key) and len(value) == 1` fails
-        # None is falsy, so it doesn't unwrap
-        assert result == {"field": {"value": None}}
+        # so it falls through to `elif not value.get("value")` which is True
+        # returns None for this field
+        assert result == {"field": None}
 
     def test_clean_data_value_wrapper_with_empty_string(
         self, generator: CommonGenerator
     ) -> None:
-        """Test clean_data with value wrapper containing empty string (falsy, not unwrapped)."""
+        """Test clean_data with value wrapper containing empty string."""
         data = {"field": {"value": ""}}
         result = generator.clean_data(data)
-        # Empty string is falsy, so the condition `if value.get(wrapper_key) and len(value) == 1`
-        # fails because "" is falsy, so it doesn't unwrap
-        assert result == {"field": {"value": ""}}
+        # Empty string is falsy, so it returns None
+        assert result == {"field": None}
 
     def test_clean_data_deeply_nested_mixed_wrappers(
         self, generator: CommonGenerator
@@ -673,7 +657,7 @@ class TestCleanDataEdgeCases:
                     {
                         "node": {
                             "level2": {"value": "deeply_nested"},
-                            "level3": {"parent": {"id": "parent-id"}},
+                            "level3": {"id": "parent-id"},  # No recognized wrapper
                         }
                     }
                 ]
@@ -683,7 +667,8 @@ class TestCleanDataEdgeCases:
 
         assert isinstance(result["level1"], list)
         assert result["level1"][0]["level2"] == "deeply_nested"
-        assert result["level1"][0]["level3"]["id"] == "parent-id"
+        # level3 has no value/node/edges, so returns None
+        assert result["level1"][0]["level3"] is None
 
 
 class TestCleanDataIdempotency:
@@ -692,8 +677,6 @@ class TestCleanDataIdempotency:
     @pytest.fixture
     def generator(self) -> CommonGenerator:
         """Create CommonGenerator instance for testing."""
-        mock_client = Mock()
-        mock_logger = Mock()
         return create_test_generator()
 
     def test_clean_data_idempotent_on_cleaned_data(

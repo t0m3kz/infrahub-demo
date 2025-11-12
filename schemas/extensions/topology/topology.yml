@@ -8,7 +8,7 @@ generics:
     label: "Network Management Servers"
     human_friendly_id:
       - name__value
-    display_labels: [name__value]
+    display_label: "{{name__value}}"
     order_by: [name__value]
     include_in_menu: false
     attributes:
@@ -49,8 +49,10 @@ generics:
 
   - name: Deployment
     namespace: Topology
-    display_labels: ["name__value"]
+    display_label: "{{name__value}}"
     include_in_menu: false
+    human_friendly_id:
+      - name__value
     hierarchical: true
     attributes:
       - name: name
@@ -70,8 +72,96 @@ generics:
         cardinality: many
         identifier: "fabric__devices"
         order_weight: 7000
+  - name: Design
+    namespace: Topology
+    description: "Design aspect of topology elements."
+    label: "Topology Design"
+    include_in_menu: false
+    human_friendly_id:
+      - name__value
+    display_label: "{{name__value}}"
+    attributes:
+      - name: name
+        kind: Text
+        unique: true
+        order_weight: 100
+      - name: naming_convention
+        order_weight: 500
+        label: "Naming Convention"
+        kind: Dropdown
+        choices:
+          - name: standard
+            label: Standard
+          - name: hierarchical
+            label: Hierarchical
+          - name: flat
+            label: Flat
+
 nodes:
   # --------------------  Elements  --------------------
+  - name: DataCenterDesign
+    namespace: Topology
+    description: "Design aspect of topology elements."
+    label: "Topology Design"
+    inherit_from:
+      - TopologyDesign
+    attributes:
+      - name: deployment_type
+        kind: Dropdown
+        optional: false
+        order_weight: 150
+        choices:
+          - name: middle_rack
+            label: Middle Rack
+            description: Middle Rack deployment
+            color: "#7f7fff"
+          - name: tor
+            label: Top of Rack
+            description: Top of Rack deployment
+            color: "#bf7fbf"
+          - name: mixed
+            label: ToR and Middle Rack
+            description: Mix of ToR and Middle Rack deployment
+            color: "#bf7f7f"
+        default_value: tor
+      - name: maximum_super_spines
+        order_weight: 200
+        label: "Maximum Super Spines"
+        kind: Number
+        default_value: 2
+        optional: false
+      - name: maximum_pods
+        order_weight: 300
+        label: "Maximum Pods"
+        kind: Number
+        default_value: 2
+        optional: false
+      - name: maximum_spines
+        order_weight: 350
+        label: "Maximum Spine Switches per Pod"
+        kind: Number
+        default_value: 2
+        optional: false
+      - name: maximum_leafs
+        order_weight: 400
+        label: "Maximum Leaf Switches per Pod"
+        kind: Number
+        default_value: 16
+        optional: false
+      - name: maximum_rack_leafs
+        order_weight: 450
+        label: "Maximum Leaf Switches per Rack"
+        kind: Number
+        default_value: 4
+        optional: false
+    relationships:
+      - name: deployments
+        peer: TopologyDataCenter
+        kind: Generic
+        cardinality: many
+        identifier: "dc__deployments"
+        order_weight: 5000
+
   - name: Element
     namespace: Topology
     description: "Physical aspect of topology elements."
@@ -81,11 +171,11 @@ nodes:
     human_friendly_id:
       - name__value
     order_by: [name__value]
-    display_labels:
-      - name__value
+    display_label: "{{name__value}}"
+    # workaround for loading data
+    default_filter: name__value
     uniqueness_constraints:
       - [name__value]
-    default_filter: name__value
     attributes:
       - name: name
         kind: Text
@@ -118,15 +208,15 @@ nodes:
             label: Leaf Switch
             description: Top of Rack part of a Pod.
             color: "#e6e6fa"
-          - name: border_leaf
+          - name: border-leaf
             label: Border Leaf Switch
             description: Border Leaf providing external connectivity in a Pod.
             color: "#dda0dd"
-          - name: dc_firewall
+          - name: firewall
             label: DC Firewall
             description: "Security boundary with external network"
             color: "#6e5abd"
-          - name: edge_firewall
+          - name: firewall
             label: Edge Firewall
             description: "Security boundary with external network"
             color: "#6a5acd"
@@ -134,7 +224,7 @@ nodes:
             label: Branch Firewall
             description: "Security boundary with external network"
             color: "#6a5bdd"
-          - name: load_balancer
+          - name: load-balancer
             label: Load Balancer
             description: Load Balancer part of a Fabric.
             color: "#38e7fb"
@@ -147,6 +237,10 @@ nodes:
             description: Console Server part of a Fabric.
             color: "#e9ebfd"
     relationships:
+      - name: deployment
+        peer: LocationRack
+        optional: true
+        cardinality: many
       - name: device_type
         label: Type
         peer: DcimDeviceType
@@ -170,38 +264,32 @@ nodes:
       - TopologyDeployment
     include_in_menu: true
     children: TopologyPod
-    parent: ""
     attributes:
-      - name: size
-        label: Data Center Size
-        kind: Dropdown
-        branch: aware
-        choices:
-          - name: S
-            label: Small
-            description: Small data center with limited capacity.
-            color: "#869FB3"
-          - name: M
-            label: Medium
-            description: Medium-sized data center with moderate capacity.
-            color: "#004E64"
-          - name: L
-            label: Large
-            description: Large data center with high capacity.
-            color: "#003147"
-          - name: XL
-            label: Extra Large
-            description: Extra large data center with extensive capacity.
-            color: "#001F2D"
-        optional: false
-        default_value: M
-        order_weight: 500
       - name: fully_managed
         label: Fully Managed
         kind: Boolean
         optional: false
         default_value: true
         order_weight: 600
+      - name: strategy
+        kind: Dropdown
+        label: Strategy
+        optional: false
+        order_weight: 650
+        choices:
+          - name: ospf-ibgp
+            label: ospf-ibgp
+            color: "#aedcee"
+          - name: ebgp-ibgp
+            label: ebgp-ibgp
+            color: "#7f7fff"
+        default_value: ebgp-ibgp
+      - name: underlay
+        label: IPV6 underlay
+        kind: Boolean
+        optional: false
+        default_value: False
+        order_weight: 660
       - name: amount_of_super_spines
         label: Amount of Super Spine switches
         kind: Number
@@ -209,7 +297,6 @@ nodes:
         default_value: 4
         branch: aware
         order_weight: 1000
-
       - name: fabric_interface_sorting_method
         kind: Dropdown
         branch: aware
@@ -241,6 +328,13 @@ nodes:
         default_value: bottom_up
         order_weight: 1300
     relationships:
+      - name: design_pattern
+        branch: aware
+        peer: TopologyDataCenterDesign
+        kind: Generic
+        cardinality: one
+        identifier: "dc__design_pattern"
+        order_weight: 500
       - name: super_spine_template
         branch: aware
         peer: TemplateDcimPhysicalDevice
@@ -257,7 +351,7 @@ nodes:
       - GeneratorTarget
     parent: TopologyDataCenter
     children: ""
-    include_in_menu: true
+    include_in_menu: false
     attributes:
       - name: amount_of_spines
         label: Amount of Spine switches
@@ -306,7 +400,7 @@ nodes:
         default_value: bottom_up
         order_weight: 4000
     relationships:
-      - name: spine_switch_template
+      - name: spine_template
         peer: TemplateDcimPhysicalDevice
         branch: aware
         kind: Attribute
@@ -320,8 +414,10 @@ nodes:
         cardinality: many
         identifier: "rack__pod"
         order_weight: 1200
+        on_delete: cascade
       - name: management_pool
         peer: CoreIPAddressPool
+        state: absent
         branch: aware
         kind: Attribute
         cardinality: one

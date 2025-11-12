@@ -41,6 +41,13 @@ spec:
                     data:
                       - name: "MUC-1"
                         shortname: "muc-1"
+                - name: "Berlin"
+                  shortname: "ber"
+                  children:
+                    kind: LocationBuilding
+                    data:
+                      - name: "BER-1"
+                        shortname: "ber-1"
           - name: "United Kingdom"
             shortname: "uk"
             children:
@@ -48,6 +55,11 @@ spec:
               data:
                 - name: "London"
                   shortname: "lon"
+                  children:
+                    kind: LocationBuilding
+                    data:
+                      - name: "LON-1"
+                        shortname: "lon-1"
           - name: "Netherlands"
             shortname: "nl"
             children:
@@ -55,6 +67,11 @@ spec:
               data:
                 - name: "Amsterdam"
                   shortname: "ams"
+                  children:
+                    kind: LocationBuilding
+                    data:
+                      - name: "AMS-1"
+                        shortname: "ams-1"
           - name: "Poland"
             shortname: "pl"
             children:
@@ -92,6 +109,11 @@ spec:
               data:
                 - name: "New York"
                   shortname: "ny"
+                  children:
+                    kind: LocationBuilding
+                    data:
+                      - name: "NY-1"
+                        shortname: "ny-1"
                 - name: "San Francisco"
                   shortname: "sf"
                 - name: Chicago

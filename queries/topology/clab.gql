@@ -5,7 +5,17 @@ query topology_info($name: String!) {
         name {
           value
         }
-        devices(role__values: [ "leaf", "spine", "dc_firewall", "edge", "core", "border_leaf", "edge_firewall"]) {
+        devices(
+          role__values: [
+            "leaf"
+            "spine"
+            "firewall"
+            "edge"
+            "core"
+            "border-leaf"
+            "super-spine"
+          ]
+        ) {
           edges {
             node {
               name {
@@ -34,8 +44,12 @@ query topology_info($name: String!) {
                   }
                 }
               }
-              device_type{
-                node{ name { value} }
+              device_type {
+                node {
+                  name {
+                    value
+                  }
+                }
               }
               interfaces {
                 edges {
@@ -51,6 +65,81 @@ query topology_info($name: String!) {
                         node {
                           hfid
                           display_label
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+        children {
+          edges {
+            node {
+              devices(
+                role__values: [
+                  "leaf"
+                  "spine"
+                  "firewall"
+                  "edge"
+                  "core"
+                  "border-leaf"
+                  "super-spine"
+                ]
+              ) {
+                edges {
+                  node {
+                    name {
+                      value
+                    }
+                    role {
+                      value
+                    }
+                    os_version {
+                      value
+                    }
+                    primary_address {
+                      node {
+                        address {
+                          value
+                        }
+                      }
+                    }
+                    platform {
+                      node {
+                        name {
+                          value
+                        }
+                        containerlab_os {
+                          value
+                        }
+                      }
+                    }
+                    device_type {
+                      node {
+                        name {
+                          value
+                        }
+                      }
+                    }
+                    interfaces {
+                      edges {
+                        node {
+                          name {
+                            value
+                          }
+                          role {
+                            value
+                          }
+                          ... on DcimPhysicalInterface {
+                            cable {
+                              node {
+                                hfid
+                                display_label
+                              }
+                            }
+                          }
                         }
                       }
                     }

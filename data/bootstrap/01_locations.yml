@@ -22,20 +22,6 @@ spec:
                     data:
                       - name: "PAR-1"
                         shortname: "par-1"
-                        children:
-                          kind: LocationSuite
-                          data:
-                            - name: "Suite-1"
-                              shortname: "s1"
-                              children:
-                                kind: LocationRack
-                                data:
-                                  - name: "Rack-1"
-                                    shortname: "r1"
-                                    index: 1
-                                  - name: "Rack-2"
-                                    shortname: "r2"
-                                    index: 2
           - name: "Germany"
             shortname: "de"
             children:
@@ -55,20 +41,6 @@ spec:
                     data:
                       - name: "MUC-1"
                         shortname: "muc-1"
-                        children:
-                          kind: LocationSuite
-                          data:
-                            - name: "Suite-3"
-                              shortname: "s3"
-                              children:
-                                kind: LocationRack
-                                data:
-                                  - name: "Rack-6"
-                                    shortname: "r6"
-                                    index: 6
-                                  - name: "Rack-21"
-                                    shortname: "r21"
-                                    index: 21
                 - name: "Berlin"
                   shortname: "ber"
                   children:
@@ -83,6 +55,11 @@ spec:
               data:
                 - name: "London"
                   shortname: "lon"
+                  children:
+                    kind: LocationBuilding
+                    data:
+                      - name: "LON-1"
+                        shortname: "lon-1"
           - name: "Netherlands"
             shortname: "nl"
             children:
@@ -90,6 +67,11 @@ spec:
               data:
                 - name: "Amsterdam"
                   shortname: "ams"
+                  children:
+                    kind: LocationBuilding
+                    data:
+                      - name: "AMS-1"
+                        shortname: "ams-1"
           - name: "Poland"
             shortname: "pl"
             children:
@@ -127,6 +109,11 @@ spec:
               data:
                 - name: "New York"
                   shortname: "ny"
+                  children:
+                    kind: LocationBuilding
+                    data:
+                      - name: "NY-1"
+                        shortname: "ny-1"
                 - name: "San Francisco"
                   shortname: "sf"
                 - name: Chicago

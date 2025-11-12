@@ -1,5 +1,5 @@
 query RackGenerator($name: String!) {
-  location_rack: LocationRack(name__value: $name) {
+  LocationRack(name__value: $name) {
     edges {
       node {
         id
@@ -18,6 +18,12 @@ query RackGenerator($name: String!) {
               name {
                 value
               }
+              role {
+                value
+              }
+              quantity {
+                value
+              }
               template {
                 node {
                   id
@@ -25,15 +31,23 @@ query RackGenerator($name: String!) {
                     platform {
                       node {
                         id
-                        name {
+                        name{
                           value
                         }
+                      }
+                    }
+                    device_type{
+                      node{
+                        id
                       }
                     }
                     interfaces(role__value: "uplink") {
                       edges {
                         node {
                           name {
+                            value
+                          }
+                          role {
                             value
                           }
                         }
@@ -54,19 +68,43 @@ query RackGenerator($name: String!) {
             index {
               value
             }
-            amount_of_spines {
-              value
+            devices(role__value: "spine"){
+              edges{
+                node{
+                  name{
+                    value
+                  }
+                }
+              }
             }
             parent {
               node {
-                id
-                name {
-                  value
-                }
-                index {
-                  value
+                ... on TopologyDataCenter {
+                  id
+                  name {
+                    value
+                  }
+                  index {
+                    value
+                  }
+                  design_pattern {
+                    node {
+                      naming_convention {
+                        value
+                      }
+                      maximum_rack_leafs{
+                        value
+                      }
+                      deployment_type{
+                        value
+                      }
+                    }
+                  }
                 }
               }
+            }
+            amount_of_spines {
+              value
             }
             leaf_interface_sorting_method {
               value
@@ -84,15 +122,7 @@ query RackGenerator($name: String!) {
                 id
               }
             }
-            parent {
-              node {
-                id
-                name {
-                  value
-                }
-              }
-            }
-            spine_switch_template {
+            spine_template {
               node {
                 id
                 interfaces(role__value: "leaf") {

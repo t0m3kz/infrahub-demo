@@ -4,11 +4,191 @@ kind: Object
 spec:
   kind: TemplateDcimPhysicalDevice
   data:
+    - template_name: N9K-C9336C-FX2_SUPER_SPINE
+      device_type: N9K-C9336C-FX2
+      platform: cisco_nxos
+      role: super-spine
+      status: active
+      interfaces:
+          kind: TemplateDcimPhysicalInterface
+          data:
+            - template_name: N9K-C9336C-FX2_SUPER_SPINE_Ethernet1/1
+              name: Ethernet1/1
+              role: spine
+            - template_name: N9K-C9336C-FX2_SUPER_SPINE_Ethernet1/2
+              name: Ethernet1/2
+              role: spine
+            - template_name: N9K-C9336C-FX2_SUPER_SPINE_Ethernet1/3
+              name: Ethernet1/3
+              role: spine
+            - template_name: N9K-C9336C-FX2_SUPER_SPINE_Ethernet1/4
+              name: Ethernet1/4
+              role: spine
+            - template_name: N9K-C9336C-FX2_SUPER_SPINE_Ethernet1/5
+              name: Ethernet1/5
+              role: spine
+            - template_name: N9K-C9336C-FX2_SUPER_SPINE_Ethernet1/6
+              name: Ethernet1/6
+              role: spine
+            - template_name: N9K-C9336C-FX2_SUPER_SPINE_Ethernet1/7
+              name: Ethernet1/7
+              role: spine
+            - template_name: N9K-C9336C-FX2_SUPER_SPINE_Ethernet1/8
+              name: Ethernet1/8
+              role: spine
+            - template_name: N9K-C9336C-FX2_SUPER_SPINE_Ethernet1/9
+              name: Ethernet1/9
+              role: spine
+            - template_name: N9K-C9336C-FX2_SUPER_SPINE_Ethernet1/10
+              name: Ethernet1/10
+              role: spine
+            - template_name: N9K-C9336C-FX2_SUPER_SPINE_Ethernet1/11
+              name: Ethernet1/11
+              role: spine
+            - template_name: N9K-C9336C-FX2_SUPER_SPINE_Ethernet1/12
+              name: Ethernet1/12
+              role: spine
+            - template_name: N9K-C9336C-FX2_SUPER_SPINE_Ethernet1/13
+              name: Ethernet1/13
+              role: spine
+            - template_name: N9K-C9336C-FX2_SUPER_SPINE_Ethernet1/14
+              name: Ethernet1/14
+              role: spine
+            - template_name: N9K-C9336C-FX2_SUPER_SPINE_Ethernet1/15
+              name: Ethernet1/15
+              role: spine
+            - template_name: N9K-C9336C-FX2_SUPER_SPINE_Ethernet1/16
+              name: Ethernet1/16
+              role: spine
+            - template_name: N9K-C9336C-FX2_SUPER_SPINE_Ethernet1/17
+              name: Ethernet1/17
+              role: spine
+            - template_name: N9K-C9336C-FX2_SUPER_SPINE_Ethernet1/18
+              name: Ethernet1/18
+              role: spine
+            - template_name: N9K-C9336C-FX2_SUPER_SPINE_Ethernet1/19
+              name: Ethernet1/19
+              role: spine
+            - template_name: N9K-C9336C-FX2_SUPER_SPINE_Ethernet1/20
+              name: Ethernet1/20
+              role: spine
+            - template_name: N9K-C9336C-FX2_SUPER_SPINE_Ethernet1/21
+              name: Ethernet1/21
+              role: spine
+            - template_name: N9K-C9336C-FX2_SUPER_SPINE_Ethernet1/22
+              name: Ethernet1/22
+              role: spine
+            - template_name: N9K-C9336C-FX2_SUPER_SPINE_Ethernet1/23
+              name: Ethernet1/23
+              role: spine
+            - template_name: N9K-C9336C-FX2_SUPER_SPINE_Ethernet1/24
+              name: Ethernet1/24
+              role: spine
+            - template_name: N9K-C9336C-FX2_SUPER_SPINE_Ethernet1/25
+              name: Ethernet1/25
+              role: spine
+            - template_name: N9K-C9336C-FX2_SUPER_SPINE_Ethernet1/26
+              name: Ethernet1/26
+              role: spine
+            - template_name: N9K-C9336C-FX2_SUPER_SPINE_Ethernet1/27
+              name: Ethernet1/27
+              role: spine
+            - template_name: N9K-C9336C-FX2_SUPER_SPINE_Ethernet1/28
+              name: Ethernet1/28
+              role: spine
+            - template_name: N9K-C9336C-FX2_SUPER_SPINE_Ethernet1/29
+              name: Ethernet1/29
+              role: spine
+            - template_name: N9K-C9336C-FX2_SUPER_SPINE_Ethernet1/30
+              name: Ethernet1/30
+              role: spine
+            - template_name: N9K-C9336C-FX2_SUPER_SPINE_Ethernet1/31
+              name: Ethernet1/31
+              role: uplink
+            - template_name: N9K-C9336C-FX2_SUPER_SPINE_Ethernet1/32
+              name: Ethernet1/32
+              role: uplink
+            - template_name: N9K-C9336C-FX2_SUPER_SPINE_Ethernet1/33
+              name: Ethernet1/33
+              role: uplink
+            - template_name: N9K-C9336C-FX2_SUPER_SPINE_Ethernet1/34
+              name: Ethernet1/34
+              role: uplink
+            - template_name: N9K-C9336C-FX2_SUPER_SPINE_Ethernet1/35
+              name: Ethernet1/35
+              role: uplink
+            - template_name: N9K-C9336C-FX2_SUPER_SPINE_Ethernet1/36
+              name: Ethernet1/36
+              role: uplink
+            - template_name: N9K-C9336C-FX2_SUPER_SPINE_mgmt0
+              name: mgmt0
+              role: management
+
+    - template_name: N9K-C9316D-GX_SUPER_SPINE
+      device_type: N9K-C9316D-GX
+      platform: cisco_nxos
+      role: spine
+      status: active
+      interfaces:
+        kind: TemplateDcimPhysicalInterface
+        data:
+          - template_name: N9K-C9316D-GX_SUPER_SPINE_Ethernet1/1
+            name: Ethernet1/1
+            role: spine
+          - template_name: N9K-C9316D-GX_SUPER_SPINE_Ethernet1/2
+            name: Ethernet1/2
+            role: spine
+          - template_name: N9K-C9316D-GX_SUPER_SPINE_Ethernet1/3
+            name: Ethernet1/3
+            role: spine
+          - template_name: N9K-C9316D-GX_SUPER_SPINE_Ethernet1/4
+            name: Ethernet1/4
+            role: spine
+          - template_name: N9K-C9316D-GX_SUPER_SPINE_Ethernet1/5
+            name: Ethernet1/5
+            role: spine
+          - template_name: N9K-C9316D-GX_SUPER_SPINE_Ethernet1/6
+            name: Ethernet1/6
+            role: spine
+          - template_name: N9K-C9316D-GX_SUPER_SPINE_Ethernet1/7
+            name: Ethernet1/7
+            role: spine
+          - template_name: N9K-C9316D-GX_SUPER_SPINE_Ethernet1/8
+            name: Ethernet1/8
+            role: spine
+          - template_name: N9K-C9316D-GX_SUPER_SPINE_Ethernet1/9
+            name: Ethernet1/9
+            role: spine
+          - template_name: N9K-C9316D-GX_SUPER_SPINE_Ethernet1/10
+            name: Ethernet1/10
+            role: spine
+          - template_name: N9K-C9316D-GX_SUPER_SPINE_Ethernet1/11
+            name: Ethernet1/11
+            role: spine
+          - template_name: N9K-C9316D-GX_SUPER_SPINE_Ethernet1/12
+            name: Ethernet1/12
+            role: spine
+          - template_name: N9K-C9316D-GX_SUPER_SPINE_Ethernet1/13
+            name: Ethernet1/13
+            role: uplink
+          - template_name: N9K-C9316D-GX_SUPER_SPINE_Ethernet1/14
+            name: Ethernet1/14
+            role: uplink
+          - template_name: N9K-C9316D-GX_SUPER_SPINE_Ethernet1/15
+            name: Ethernet1/15
+            role: uplink
+          - template_name: N9K-C9316D-GX_SUPER_SPINE_Ethernet1/16
+            name: Ethernet1/16
+            role: uplink
+          - template_name: N9K-C9316D-GX_SUPER_SPINE_mgmt0
+            name: mgmt0
+            role: management
+
+
     - template_name: N9K-C9336C-FX2_SPINE
       device_type: N9K-C9336C-FX2
+      platform: cisco_nxos
       role: spine
-      member_of_groups:
-        - spines
       status: active
       interfaces:
         kind: TemplateDcimPhysicalInterface
@@ -126,9 +306,8 @@ spec:
             role: management
     - template_name: N9K-C9336C-FX2_LEAF
       device_type: N9K-C9336C-FX2
+      platform: cisco_nxos
       role: leaf
-      member_of_groups:
-        - leafs
       status: active
       interfaces:
         kind: TemplateDcimPhysicalInterface
@@ -246,9 +425,8 @@ spec:
             role: management
     - template_name: N9K-C9316D-GX_SPINE
       device_type: N9K-C9316D-GX
+      platform: cisco_nxos
       role: spine
-      member_of_groups:
-        - spines
       status: active
       interfaces:
         kind: TemplateDcimPhysicalInterface
@@ -285,10 +463,10 @@ spec:
             role: leaf
           - template_name: N9K-C9316D-GX_SPINE_Ethernet1/11
             name: Ethernet1/11
-            role: leaf
+            role: uplink
           - template_name: N9K-C9316D-GX_SPINE_Ethernet1/12
             name: Ethernet1/12
-            role: leaf
+            role: uplink
           - template_name: N9K-C9316D-GX_SPINE_Ethernet1/13
             name: Ethernet1/13
             role: uplink
@@ -306,9 +484,8 @@ spec:
             role: management
     - template_name: N9K-C9316D-GX_LEAF
       device_type: N9K-C9316D-GX
+      platform: cisco_nxos
       role: leaf
-      member_of_groups:
-        - leafs
       status: active
       interfaces:
         kind: TemplateDcimPhysicalInterface
@@ -480,9 +657,8 @@ spec:
             role: management
     - template_name: DCS-7280DR3-24-F_SPINE
       device_type: DCS-7280DR3-24-F
+      platform: arista_eos
       role: spine
-      member_of_groups:
-        - spines
       status: active
       interfaces:
         kind: TemplateDcimPhysicalInterface
@@ -549,24 +725,23 @@ spec:
             role: leaf
           - template_name: DCS-7280DR3-24-F_SPINE_Ethernet21/1
             name: Ethernet21/1
-            role: leaf
+            role: uplink
           - template_name: DCS-7280DR3-24-F_SPINE_Ethernet22/1
             name: Ethernet22/1
-            role: leaf
+            role: uplink
           - template_name: DCS-7280DR3-24-F_SPINE_Ethernet23/1
             name: Ethernet23/1
-            role: leaf
+            role: uplink
           - template_name: DCS-7280DR3-24-F_SPINE_Ethernet24/1
             name: Ethernet24/1
-            role: leaf
+            role: uplink
           - template_name: DCS-7280DR3-24-F_SPINE_Management1
             name: Management1
             role: management
     - template_name: CCS-720DP-48S-2F_LEAF
       device_type: CCS-720DP-48S-2F
+      platform: arista_eos
       role: leaf
-      member_of_groups:
-        - leafs
       status: active
       interfaces:
         kind: TemplateDcimPhysicalInterface
@@ -732,9 +907,8 @@ spec:
             role: management
     - template_name: SRX-1500_EDGE_FIREWALL
       device_type: SRX-1500
-      role: edge_firewall
-      member_of_groups:
-        - firewalls
+      platform: junos
+      role: firewall
       status: active
       interfaces:
         kind: TemplateDcimPhysicalInterface
@@ -756,9 +930,8 @@ spec:
             role: leaf
     - template_name: SRX-1500_DC_FIREWALL
       device_type: SRX-1500
-      role: dc_firewall
-      member_of_groups:
-        - firewalls
+      platform: junos
+      role: firewall
       status: active
       interfaces:
         kind: TemplateDcimPhysicalInterface
@@ -780,9 +953,8 @@ spec:
             role: leaf
     - template_name: C9200L-24P-4G_OOB
       device_type: C9200L-24P-4G
+      platform: cisco_ios
       role: oob
-      member_of_groups:
-        - oobs
       status: active
       interfaces:
         kind: TemplateDcimPhysicalInterface
@@ -864,9 +1036,8 @@ spec:
             role: management
     - template_name: SCG50R_CONSOLE
       device_type: SCG50R
+      platform: dell_force10
       role: console
-      member_of_groups:
-        - consoles
       status: active
       interfaces:
         kind: TemplateDcimPhysicalInterface
@@ -879,9 +1050,8 @@ spec:
             role: management
     - template_name: N9K-C9316D-GX_EDGE
       device_type: N9K-C9316D-GX
+      platform: cisco_nxos
       role: edge
-      member_of_groups:
-        - edges
       status: active
       interfaces:
         kind: TemplateDcimPhysicalInterface
@@ -939,9 +1109,8 @@ spec:
             role: management
     - template_name: 5912-54X-O-AC-F_LEAF
       device_type: 5912-54X-O-AC-F
+      platform: juniper_junos
       role: leaf
-      member_of_groups:
-        - leafs
       status: active
       interfaces:
         kind: TemplateDcimPhysicalInterface
@@ -1090,9 +1259,6 @@ spec:
           - template_name: 5912-54X-O-AC-F_LEAF_xe48
             name: xe48
             role: customer
-          - template_name: 5912-54X-O-AC-F_LEAF_xe49
-            name: xe49
-            role: uplink
           - template_name: 5912-54X-O-AC-F_LEAF_ce50
             name: ce50
             role: uplink
@@ -1105,17 +1271,13 @@ spec:
           - template_name: 5912-54X-O-AC-F_LEAF_ce53
             name: ce53
             role: uplink
-          - template_name: 5912-54X-O-AC-F_LEAF_ce54
-            name: ce54
-            role: uplink
           - template_name: 5912-54X-O-AC-F_LEAF_eth0
             name: eth0
             role: management
     - template_name: 7726-32X-O_SPINE
       device_type: 7726-32X-O
+      platform: arista_eos
       role: spine
-      member_of_groups:
-        - spines
       status: active
       interfaces:
         kind: TemplateDcimPhysicalInterface
@@ -1209,13 +1371,13 @@ spec:
             role: leaf
           - template_name: 7726-32X-O_SPINE_Ethernet112
             name: Ethernet112
-            role: leaf
+            role: uplink
           - template_name: 7726-32X-O_SPINE_Ethernet116
             name: Ethernet116
-            role: leaf
+            role: uplink
           - template_name: 7726-32X-O_SPINE_Ethernet120
             name: Ethernet120
-            role: leaf
+            role: uplink
           - template_name: 7726-32X-O_SPINE_Ethernet124
             name: Ethernet124
-            role: leaf
+            role: uplink

@@ -1,0 +1,53 @@
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologyDataCenterDesign
+  data:
+    - name: S-Standard
+      maximum_spines: 2
+      maximum_pods: 2
+      maximum_leafs: 8
+      maximum_rack_leafs: 4
+      naming_convention: standard
+    - name: S-Hierarchical
+      maximum_spines: 2
+      maximum_pods: 2
+      maximum_leafs: 8
+      naming_convention: hierarchical
+    - name: M-Standard
+      maximum_spines: 2
+      maximum_pods: 2
+      maximum_leafs: 32
+      maximum_rack_leafs: 6
+      naming_convention: standard
+    - name: M-Hierarchical
+      maximum_spines: 2
+      maximum_pods: 2
+      maximum_leafs: 32
+      maximum_rack_leafs: 6
+      naming_convention: hierarchical
+    - name: L-Standard
+      maximum_spines: 4
+      maximum_pods: 4
+      maximum_leafs: 64
+      maximum_rack_leafs: 8
+      naming_convention: standard
+    - name: L-Hierarchical
+      maximum_spines: 4
+      maximum_pods: 4
+      maximum_leafs: 64
+      maximum_rack_leafs: 8
+      naming_convention: hierarchical
+    - name: XL-Standard
+      maximum_spines: 4
+      maximum_pods: 8
+      maximum_leafs: 64
+      maximum_rack_leafs: 8
+      naming_convention: standard
+    - name: XL-Hierarchical
+      maximum_spines: 4
+      maximum_pods: 8
+      maximum_leafs: 64
+      maximum_rack_leafs: 8
+      naming_convention: hierarchical

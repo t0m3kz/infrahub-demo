@@ -1,0 +1,41 @@
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: SecurityZone
+  data:
+    - name: "dmz"
+      description: "Demilitarized Zone for public-facing services"
+      trust_level: 30
+
+    - name: "internal"
+      description: "Internal corporate network"
+      trust_level: 80
+
+    - name: "guest"
+      description: "Guest network for visitors"
+      trust_level: 10
+
+    - name: "management"
+      description: "Network management and administration"
+      trust_level: 90
+
+    - name: "external"
+      description: "External/Internet zone"
+      trust_level: 0
+
+    - name: "server-farm"
+      description: "Production server environment"
+      trust_level: 85
+
+    - name: "database"
+      description: "Database tier"
+      trust_level: 95
+
+    - name: "development"
+      description: "Development and testing environment"
+      trust_level: 60
+
+    - name: "staging"
+      description: "Staging environment for pre-production testing"
+      trust_level: 70

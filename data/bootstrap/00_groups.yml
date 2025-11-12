@@ -34,7 +34,7 @@ spec:
       description: Linux Devices
     - name: leafs
       description: All leafs
-    - name: border_leafs
+    - name: border-leafs
       description: All border leafs
     - name: spines
       description: All spines
