@@ -1,11 +1,10 @@
 ---
-# yaml-language-server: $schema=https://schema.infrahub.app/infrahub/schema/latest.json
 version: "1.0"
 
 nodes:
   - name: VIP
     namespace: Service
-    description: A load balancer that distributes network traffic via Virtual IPs (VIPs) to frontend servers.
+    description: "Distributes network traffic via Virtual IPs to servers."
     label: "VIP Service"
     icon: carbon:floating-ip
     include_in_menu: false
@@ -24,8 +23,7 @@ nodes:
         kind: Text
         unique: true
         description: The unique identifier for the VIP.
-        # https://stackoverflow.com/questions/11809631/fully-qualified-domain-name-validation
-        regex: "(?=^.{1,253}$)(^(((?!-)[a-zA-Z0-9-]{1,63}(?<!-))|((?!-)[a-zA-Z0-9-]{1,63}(?<!-)\\.)+[a-zA-Z]{2,63})$)"
+        regex: "(?=^.{1,253}$)(^(((?!-)[a-zA-Z0-9-]{1,63}(?<!-))|((?!-)[a-zA-Z0-9-]{1,63}(?<!-)\\.)+[a-zA-Z]{2,63})$)"  # yamllint disable-line rule:line-length
         order_weight: 11
       - name: description
         kind: Text
@@ -34,16 +32,16 @@ nodes:
       - name: mode
         kind: Dropdown
         order_weight: 15
-        description: The mode in which HAProxy operates for this VIP (HTTP or TCP).
+        description: HAProxy mode for this VIP (HTTP or TCP).
         choices:
           - name: http
             label: HTTP Mode
             description: Layer 7 HTTP mode.
-            color: "#A9DFBF"  # light pastel green
+            color: "#A9DFBF"
           - name: tcp
             label: TCP Mode
             description: Layer 4 TCP mode.
-            color: "#A9CCE3"  # pastel blue
+            color: "#A9CCE3"
       - name: balance
         kind: Dropdown
         description: The load balancing algorithm to use for this VIP.
@@ -51,40 +49,40 @@ nodes:
         choices:
           - name: roundrobin
             label: Round Robin
-            description: Distributes traffic evenly across all available frontends.
-            color: "#A9CCE3"  # pastel blue
+            description: Distributes traffic evenly across frontends.
+            color: "#A9CCE3"
           - name: leastconn
             label: Least Connections
-            description: Sends traffic to the frontend with the fewest connections.
-            color: "#A9DFBF"  # light pastel green
+            description: Routes to frontend with fewest connections.
+            color: "#A9DFBF"
           - name: source
             label: Source IP Hash
-            description: Ensures requests from the same source IP are always sent to the same frontend.
-            color: "#D2B4DE"  # pastel purple
+            description: Sends same source IP to same frontend.
+            color: "#D2B4DE"
           - name: first
             label: First Available
-            description: Sends all traffic to the first available frontend in the server list.
-            color: "#AFC7F2"  # pastel cornflower blue
+            description: Routes to first available frontend.
+            color: "#AFC7F2"
           - name: static-rr
             label: Static Round Robin
-            description: Distributes traffic based on a static round-robin algorithm.
-            color: "#CDEACC"  # slightly darker pastel green
+            description: Distributes via round-robin.
+            color: "#CDEACC"
           - name: uri
             label: URI Hash
-            description: Balances traffic based on the hash of the request URI.
-            color: "#C9A9E3"  # pastel violet
+            description: Balances by request URI hash.
+            color: "#C9A9E3"
           - name: hdr
             label: Header Hash
-            description: Balances traffic based on the value of a specified HTTP header.
-            color: "#D8E4BC"  # pastel greenish-yellow
+            description: Balances by HTTP header value.
+            color: "#D8E4BC"
           - name: random
             label: Random
             description: Balances traffic randomly across available frontends.
-            color: "#CDEACC"  # slightly darker pastel green
+            color: "#CDEACC"
         default_value: roundrobin
       - name: ssl_certificate
         kind: Text
-        description: The name to the SSL certificate for this VIP. This will be used to enable HTTPS.
+        description: "SSL certificate name for HTTPS support."
         optional: true
         order_weight: 19
     relationships:
@@ -109,7 +107,7 @@ nodes:
         identifier: vip__backend_servers
         cardinality: many
         kind: Generic
-        description: The list of backend servers that the VIP service forwards traffic to.
+        description: Backend servers forwarding VIP traffic.
         order_weight: 1100
         on_delete: no-action
       - name: health_checks
@@ -117,7 +115,7 @@ nodes:
         identifier: vip__health_checks
         cardinality: many
         kind: Generic
-        description: The list of health checks associated with the VIP service.
+        description: Health checks for VIP service.
         order_weight: 1200
         on_delete: no-action
 extensions:

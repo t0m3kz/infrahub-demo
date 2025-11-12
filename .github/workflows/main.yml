@@ -31,8 +31,7 @@ jobs:
           uv run mypy .
       - run: |
           echo "Running validation"
-          uv run yamllint -d "{extends: default, ignore: [.github/, .venv/ , .dev/ ]}" \
-                   -d "{rules: {truthy: {allowed-values: ['true', 'false', 'yes', 'no', 'on', 'off', 'True', 'False']}}}" .
+          uv run yamllint -d "{extends: default, ignore: [.github/, .venv/ , .dev/ ] }" .
   tests:
     name: Testing plugin
     needs: code-qa
@@ -102,3 +101,4 @@ jobs:
   #         pip install uv
   #         uv sync
   #     - run: uv run mkdocs gh-deploy --force
+

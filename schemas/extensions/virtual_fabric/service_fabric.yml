@@ -1,11 +1,10 @@
-# yaml-language-server: $schema=https://schema.infrahub.app/infrahub/schema/latest.json
 ---
 version: "1.0"
 
 nodes:
   - name: VirtualFabric
     namespace: Service
-    description: "Service for deploying customer services with automated resource allocation based on customer size"
+    description: "Deploy customer services with auto-scaled resources."
     label: "Deploy Customer"
     icon: "mdi:account-plus"
     include_in_menu: true
@@ -21,7 +20,7 @@ nodes:
         kind: Text
         computed_attribute:
           kind: Jinja2
-          jinja2_template: "{{deployment__name__value}} - {{ customer__name__value }}"
+          jinja2_template: "{{deployment__name__value}} - {{ customer__name__value }}"  # yamllint disable-line rule:line-length
         read_only: true
         optional: false
         description: "Unique name for the customer deployment"

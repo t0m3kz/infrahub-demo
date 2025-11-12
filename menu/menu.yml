@@ -84,7 +84,7 @@ spec:
             name: DeploymentMenu
             label: Deployments
             icon: "mdi:server-network"
-            description: "Data centers, colocation, and branch office deployments"
+            description: "DC, PoP and branch office deployments"
             children:
               data:
                 - name: DataCenter
@@ -144,8 +144,6 @@ spec:
                   kind: DcimCable
                   description: "Cabling and physicalconnections between devices"
 
-
-
           # --------- Types & Platforms ---------
           - namespace: Dcim
             name: CatalogMenu
@@ -167,16 +165,6 @@ spec:
                   kind: DcimPlatform
                   icon: "mdi:chip"
                   description: "Operating system and firmware platforms"
-
-          # # --------- Locations ---------
-          # - namespace: Location
-          #   name: Generic
-          #   label: Locations
-          #   kind: LocationGeneric
-          #   icon: "mdi:map-marker"
-          #   description: "Geographic and logical locations"
-
-    # ===================== NETWORK & CONNECTIVITY =====================
     # Operational networking and connectivity management
     - namespace: Network
       name: MainMenu
@@ -325,7 +313,7 @@ spec:
                   label: BGP Peering Sessions
                   kind: ServiceBGPPeering
                   icon: "carbon:network-4-reference"
-                  description: "BGP peer relationships with internal and external networks"
+                  description: "BGP peer with internal and external networks"
 
                 - namespace: Service
                   name: OSPFPeering
@@ -362,68 +350,3 @@ spec:
                   kind: LoadbalancerServer
                   icon: "mdi:server-plus"
                   description: "Backend servers for load balancing"
-
-    # ===================== ORGANIZATION =====================
-
-    # ===================== SECURITY MANAGEMENT =====================
-    # (Commented out for future expansion)
-    # - namespace: Security
-    #   name: SecurityMenu
-    #   label: Security Management
-    #   icon: "mdi:security"
-    #   description: "Policies, rules, and threat management"
-    #   children:
-    #     data:
-    #       # --------- Security Policies & Rules ---------
-    #       - namespace: Security
-    #         name: PoliciesMenu
-    #         label: "Policies & Rules"
-    #         icon: "mdi:file-document-multiple"
-    #         children:
-    #           data:
-    #             - namespace: Security
-    #               name: Policy
-    #               label: "Security Policies"
-    #               kind: SecurityPolicy
-    #               icon: "mdi:shield-check"
-    #             - namespace: Security
-    #               name: PolicyRule
-    #               label: "Policy Rules"
-    #               kind: SecurityPolicyRule
-    #               icon: "mdi:format-list-bulleted"
-
-    #       # --------- Security Zones ---------
-    #       - namespace: Security
-    #         name: ZonesMenu
-    #         label: "Security Zones"
-    #         icon: "mdi:shield-outline"
-    #         children:
-    #           data:
-    #             - namespace: Security
-    #               name: Zone
-    #               label: "Security Zones"
-    #               kind: SecurityZone
-    #               icon: "mdi:shield-outline"
-
-    #       # --------- Cloud Security ---------
-    #       - namespace: Service
-    #         name: CloudSecurityManagementMenu
-    #         label: "Cloud Security"
-    #         icon: "mdi:cloud-lock"
-    #         children:
-    #           data:
-    #             - namespace: Service
-    #               name: CloudSecurityService
-    #               label: "Cloud Security Services"
-    #               kind: ServiceCloudSecurityService
-    #               icon: "mdi:cloud-lock-outline"
-    #             - namespace: Service
-    #               name: CloudGateway
-    #               label: "Cloud Gateways"
-    #               kind: ServiceCloudGateway
-    #               icon: "mdi:router-wireless"
-    #             - namespace: Service
-    #               name: CloudPolicyGroup
-    #               label: "Cloud Policy Groups"
-    #               kind: ServiceCloudSecurityPolicyGroup
-    #               icon: "mdi:shield-check-outline"

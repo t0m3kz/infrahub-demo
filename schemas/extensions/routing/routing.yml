@@ -1,4 +1,3 @@
-# yaml-language-server: $schema=https://schema.infrahub.app/infrahub/schema/latest.json
 ---
 version: "1.0"
 
@@ -23,15 +22,15 @@ generics:
           - name: active
             label: Active
             description: "Configuration is active and operational."
-            color: "#A9CCE3" # pastel blue
+            color: "#A9CCE3"
           - name: disabled
             label: Disabled
             description: "Configuration has been disabled."
-            color: "#D3D3D3" # light grey
+            color: "#D3D3D3"
           - name: deleted
             label: Deleted
             description: "Configuration has been deleted."
-            color: "#FAD7A0" # pastel orange
+            color: "#FAD7A0"
         description: "Status of the Protocol Configuration."
         order_weight: 1150
     relationships:
@@ -41,10 +40,3 @@ generics:
         cardinality: one
         kind: Parent
         order_weight: 1050
-      # - name: vrf
-      #   label: VRF
-      #   peer: IpamVRF
-      #   optional: false
-      #   cardinality: one
-      #   kind: Attribute
-      #   order_weight: 1075

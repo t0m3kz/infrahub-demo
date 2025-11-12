@@ -1,11 +1,10 @@
 ---
-# yaml-language-server: $schema=https://schema.infrahub.app/infrahub/schema/latest.json
 version: "1.0"
 
 generics:
   - name: GenericSFP
     namespace: Dcim
-    description: Generic base for all Small Form-factor Pluggable (SFP) transceivers.
+    description: Generic for all Small Form-factor Pluggable (SFP) transceivers.
     label: SFP
     icon: mdi:gpu
     include_in_menu: false
@@ -23,11 +22,11 @@ generics:
         choices:
           - name: lr
             label: LR (Long Reach)
-            description: Long Reach SFP, suitable for long-distance fiber connections.
+            description: Long Reach SFP, suitable for long-distance.
             color: "#009933"
           - name: sr
             label: SR (Short Reach)
-            description: Short Reach SFP, typically used for short-distance fiber.
+            description: Short Reach SFP, typically used for short-distance.
             color: "#cc66ff"
           - name: lrm
             label: LRM (Long Reach Multimode)
@@ -43,7 +42,7 @@ generics:
             color: "#6666ff"
           - name: lr4
             label: LR4 (Long Range 4-lane)
-            description: Long Range 4-lane SFP, typically used for longer distances over parallel optics.
+            description: "Long Range 4-lane SFP for parallel optics."
             color: "#336699"
           - name: zr
             label: ZR (Extended Reach)
@@ -54,12 +53,12 @@ generics:
             description: Extended Reach SFP, typically used for 40km distances.
             color: "#ff6600"
           - name: dac
-            label: DAC (Direct Attach Copper)
-            description: Direct Attach Copper, used for short connections over copper.
+            label: DAC
+            description: Direct Attach Copper for short connections.
             color: "#b35900"
           - name: aoc
-            label: AOC (Active Optical Cable)
-            description: Active Optical Cable, used for short connections over fiber.
+            label: AOC
+            description: Active Optical Cable for short connections.
             color: "#6699ff"
       - name: status
         kind: Dropdown
@@ -158,7 +157,7 @@ nodes:
     namespace: Dcim
     inherit_from:
       - DcimGenericSFP
-    description: "Bidirectional SFP supporting two wavelengths for single-fiber operation."
+    description: "Bidirectional SFP with dual-wavelength fiber support."
     label: Bidirectional SFP
     icon: lineicons:arrow-both-direction-vertical-1
     include_in_menu: false

@@ -1,4 +1,3 @@
-# yaml-language-server: $schema=https://schema.infrahub.app/infrahub/schema/latest.json
 ---
 version: "1.0"
 
@@ -9,12 +8,12 @@ nodes:
     label: Backend Servers
     icon: mdi:server-plus
     include_in_menu: false
-    description: A specific server entity capable of handling multiple roles such as web server, database server, etc.
+    description: Backen servers
     attributes:
       - name: hostname
         kind: Text
         unique: true
-        description: The unique hostname of the server used to identify it within the network.
+        description: Unique hostname for server identification.
         order_weight: 1010
       - name: description
         kind: Text
@@ -26,27 +25,27 @@ nodes:
           - name: provisioning
             label: Provisioning
             description: "Device is being provisioned."
-            color: "#A9DFBF"  # light pastel green
+            color: "#A9DFBF"
           - name: active
             label: Active
             description: "Device is active and operational."
-            color: "#A9CCE3"  # pastel blue
+            color: "#A9CCE3"
           - name: maintenance
             label: Maintenance
             description: "Device is under maintenance."
-            color: "#FFF2CC"  # pastel yellow
+            color: "#FFF2CC"
           - name: disabled
             label: Disabled
             description: "Device has been disabled."
-            color: "#D3D3D3"  # light grey
+            color: "#D3D3D3"
           - name: deleted
             label: Deleted
             description: "Device has been deleted."
-            color: "#FAD7A0"  # pastel orange
+            color: "#FAD7A0"
           - name: outage
             label: Outage
             description: "Device is currently experiencing an outage."
-            color: "#F4CCCC"  # pastel red
+            color: "#F4CCCC"
         default_value: "active"
         order_weight: 1200
     relationships:
@@ -56,7 +55,7 @@ nodes:
         identifier: server__ip
         cardinality: one
         kind: Attribute
-        description: The primary IP address assigned to the server.
+        description: Primary IP address of the server.
         order_weight: 1300
       - name: virtual_ips
         label: VIPs
@@ -77,7 +76,7 @@ nodes:
     order_by:
       - check__value
     uniqueness_constraints:
-      - [ description__value ]
+      - [description__value]
     human_friendly_id:
       - description__value
     display_label: "{{description__value}}"
@@ -88,26 +87,26 @@ nodes:
           - name: http
             label: "HTTP Check"
             description: "Performs HTTP health checks."
-            color: "#A9DFBF"  # light pastel green
+            color: "#A9DFBF"
           - name: tcp
             label: "TCP Check"
             description: "Performs TCP health checks."
-            color: "#D8E4BC"  # pastel greenish-yellow
+            color: "#D8E4BC"
           - name: ssl
             label: "SSL Check"
             description: "Performs SSL health checks."
-            color: "#CDEACC"  # slightly darker pastel green
+            color: "#CDEACC"
         description: "The type of health check to perform."
         order_weight: 1100
       - name: rise
         kind: Number
-        description: "Number of successful health checks required for the VIP to be marked as UP."
+        description: "Successful checks required to mark VIP UP."
         optional: true
         default_value: 3
         order_weight: 1200
       - name: fall
         kind: Number
-        description: "Number of failed health checks required for the VIP to be marked as DOWN."
+        description: "Failed checks required to mark VIP DOWN."
         optional: true
         default_value: 3
         order_weight: 1300
@@ -122,8 +121,8 @@ nodes:
         kind: Text
         computed_attribute:
           kind: Jinja2
-          jinja2_template: "{{ check__value }}-{{ rise__value }}-{{ fall__value }}-{{ timeout__value }}"
-        read_only: true  # You must set the attribute to read-only as the value will be handled by the system
+          jinja2_template: "{{ check__value }}-{{ rise__value }}-{{ fall__value }}-{{ timeout__value }}"  # yamllint disable-line rule:line-length
+        read_only: true
         optional: false
 # extensions:
 #   nodes:

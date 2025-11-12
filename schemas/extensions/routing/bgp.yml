@@ -1,11 +1,10 @@
 ---
-# yaml-language-server: $schema=https://schema.infrahub.app/infrahub/schema/latest.json
 version: "1.0"
 
 nodes:
   - name: AutonomousSystem
     namespace: Routing
-    description: An Autonomous System (AS) is a set of Internet routable IP prefixes belonging to a network
+    description: "Autonomous System (AS) with routable IP prefixes."
     label: Autonomous System
     icon: mdi:bank-circle-outline
     menu_placement: RoutingBGPSession
@@ -47,7 +46,7 @@ nodes:
 
   - name: BGPPeerGroup
     namespace: Routing
-    description: A BGP Peer Group is used to regroup parameters that are shared across multiple peers
+    description: "Groups shared BGP parameters for multiple peers."
     label: BGP Peer Group
     icon: mdi:view-grid-plus-outline
     menu_placement: RoutingBGPSession
@@ -89,7 +88,7 @@ nodes:
         order_weight: 1500
       - name: bfd_enabled
         kind: Checkbox
-        description: "Enable BFD (Bidirectional Forwarding Detection) for fast convergence"
+        description: "Enable BFD for fast convergence"
         default_value: true
         optional: true
         order_weight: 1550
@@ -107,13 +106,13 @@ nodes:
         regex: "^[0-9]+$"
       - name: route_reflector_client
         kind: Checkbox
-        description: "Configure peers as route reflector clients"
+        description: "Configure as RR clients"
         default_value: false
         optional: true
         order_weight: 1700
       - name: send_community_extended
         kind: Checkbox
-        description: "Send extended community attributes"
+        description: "Send extended communities"
         default_value: false
         optional: true
         order_weight: 1850

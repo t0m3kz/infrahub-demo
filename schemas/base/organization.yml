@@ -1,5 +1,4 @@
 ---
-# yaml-language-server: $schema=https://schema.infrahub.app/infrahub/schema/latest.json
 version: "1.0"
 
 generics:
@@ -73,7 +72,7 @@ nodes:
 
   - name: Customer
     namespace: Organization
-    description: Customer with dedicated network namespace for multi-tenant isolation
+    description: Customer with dedicated network namespace
     icon: mdi:account-group
     inherit_from:
       - OrganizationGeneric
@@ -86,48 +85,6 @@ nodes:
         optional: true
         description: "Unique customer identifier"
         order_weight: 900
-      # - name: tenant_type
-      #   kind: Dropdown
-      #   description: "Type of tenancy model"
-      #   choices:
-      #     - name: dedicated
-      #       label: Dedicated Namespace
-      #       description: "Customer has dedicated namespace isolation"
-      #       color: "#2E8B57"
-      #     - name: shared
-      #       label: Shared Namespace
-      #       description: "Customer shares namespace with other tenants"
-      #       color: "#4682B4"
-      #     - name: hybrid
-      #       label: Hybrid
-      #       description: "Customer has both dedicated and shared resources"
-      #       color: "#9370DB"
-      #   default_value: dedicated
-      #   optional: true
-      #   order_weight: 950
-      # - name: size
-      #   kind: Dropdown
-      #   description: "Customer size tier determining resource allocation"
-      #   choices:
-      #     - name: s
-      #       label: Small (S)
-      #       description: "Small customer - limited resources"
-      #       color: "#90EE90"
-      #     - name: m
-      #       label: Medium (M)
-      #       description: "Medium customer - standard resources"
-      #       color: "#87CEEB"
-      #     - name: l
-      #       label: Large (L)
-      #       description: "Large customer - expanded resources"
-      #       color: "#DDA0DD"
-      #     - name: x
-      #       label: Extra Large (X)
-      #       description: "Enterprise customer - maximum resources"
-      #       color: "#F0E68C"
-      #   default_value: m
-      #   optional: true
-      #   order_weight: 1300
     relationships:
       - name: ip_prefixes
         peer: IpamPrefix

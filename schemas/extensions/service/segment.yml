@@ -1,4 +1,3 @@
-# yaml-language-server: $schema=https://schema.infrahub.app/infrahub/schema/latest.json
 ---
 version: "1.0"
 
@@ -20,7 +19,7 @@ nodes:
         kind: Text
         computed_attribute:
           kind: Jinja2
-          jinja2_template: "{{deployment__name__value}} - {{ owner__name__value }} - {{ environment__value }} - {{ customer_name__value }}"
+          jinja2_template: "{{deployment__name__value}} - {{ owner__name__value }} - {{ environment__value }} - {{ customer_name__value }}"  # yamllint disable-line rule:line-length
         read_only: true
         optional: false
       - name: customer_name
@@ -83,7 +82,7 @@ nodes:
         label: VLAN ID
         optional: false
         order_weight: 5
-        description: "VLAN ID assigned from customer pool (VNI = VLAN + 10000, RD = VLAN)"
+        description: "VLANID assigned from pool (VNI = VLAN + 10000, RD = VLAN)"
       - name: external_routing
         kind: Boolean
         label: External Routing
