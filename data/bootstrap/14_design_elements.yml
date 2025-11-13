@@ -4,6 +4,18 @@ kind: Object
 spec:
   kind: TopologyElement
   data:
+    - name: 2_CISCO_LEAFS_N9K-C9336C-FX2
+      description: 2 Cisco C9336C-FX2 leafs
+      quantity: 2
+      role: leaf
+      device_type: N9K-C9336C-FX2
+      template: N9K-C9336C-FX2_LEAF
+    - name: 4_CISCO_LEAFS_N9K-C9336C-FX2
+      description: 4 Cisco C9336C-FX2 leafs
+      quantity: 4
+      role: leaf
+      device_type: N9K-C9336C-FX2
+      template: N9K-C9336C-FX2_LEAF
     - name: 8_CISCO_LEAFS_N9K-C9336C-FX2
       description: 8 Cisco C9336C-FX2 leafs
       quantity: 8

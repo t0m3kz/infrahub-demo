@@ -113,7 +113,7 @@ nodes:
         optional: true
         on_delete: no-action
 
-  - name: PIM
+  - name: BGP
     namespace: Service
     description: "BGP routing service that can be attached to devices"
     label: BGP Service

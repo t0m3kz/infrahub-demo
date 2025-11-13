@@ -66,6 +66,7 @@ class RackGenerator(CommonGenerator):
                         "fabric_name": fabric_name,
                         "indexes": indexes,
                         "allocate_loopback": True,
+                        "rack": self.data.get("id", ""),
                     },
                 )
 
@@ -80,6 +81,8 @@ class RackGenerator(CommonGenerator):
                     interface.get("name")
                     for interface in pod.get("spine_template", {}).get("interfaces", [])
                 ]
+
+                print("Rack_id", self.data.get("id", "Dupa"))
 
                 await self.create_cabling(
                     bottom_devices=leafs,

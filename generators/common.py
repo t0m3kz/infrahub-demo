@@ -5,7 +5,11 @@ from typing import TYPE_CHECKING, Any, Literal, Optional, TypeVar
 
 from infrahub_sdk.exceptions import ValidationError
 from infrahub_sdk.generator import InfrahubGenerator
-from infrahub_sdk.protocols import CoreIPAddressPool, CoreIPPrefixPool
+from infrahub_sdk.protocols import (
+    CoreIPAddressPool,
+    CoreIPPrefixPool,
+    CoreStandardGroup,
+)
 from pydantic import BaseModel
 
 from .helpers import (
@@ -223,6 +227,7 @@ class CommonGenerator(InfrahubGenerator):
         virtual: bool = bool(options.get("virtual", False))
         indexes: Optional[list[int]] = options.get("indexes", None)
         allocate_loopback: bool = bool(options.get("allocate_loopback", False))
+        rack: str = options.get("rack", "")
 
         device_prefix: str = (
             fabric_name if not pod_name else f"{fabric_name}-{pod_name}"
@@ -268,6 +273,9 @@ class CommonGenerator(InfrahubGenerator):
         batch_devices = await self.client.create_batch()
         batch_loopbacks = await self.client.create_batch()
 
+        device_group = await self.client.get(
+            kind=CoreStandardGroup, name__value=f"{device_role}s"
+        )
         try:
             # Add device objects and related loopback interfaces (if any) to the batch
             for name in device_names:
@@ -288,6 +296,8 @@ class CommonGenerator(InfrahubGenerator):
                             prefix_length=32,
                             data={"description": f"Management IP for {name}"},
                         ),
+                        "rack": {"id": rack} if rack else None,
+                        "member_of_groups": [device_group.id],
                     },
                     branch=self.branch,
                 )

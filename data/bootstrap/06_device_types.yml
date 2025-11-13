@@ -34,13 +34,11 @@ spec:
       full_depth: true
       manufacturer: Cisco
 
-
     - name: N9K-C9000V
       part_number: N9K-C9000V
       height: 1
       full_depth: false
       manufacturer: Cisco
-
 
     - name: N9K-C93108TC-FX
       part_number: N9K-C93108TC-FX
@@ -48,13 +46,11 @@ spec:
       full_depth: false
       manufacturer: Cisco
 
-
     - name: N9K-C93108TC-FX3
       part_number: N9K-C93108TC-FX3
       height: 1
       full_depth: false
       manufacturer: Cisco
-
 
     - name: N9K-C93108TC-FX3P
       part_number: N9K-C93108TC-FX3P
@@ -62,13 +58,11 @@ spec:
       full_depth: false
       manufacturer: Cisco
 
-
     - name: N9K-C93120TX
       part_number: N9K-C93120TX
       height: 1
       full_depth: false
       manufacturer: Cisco
-
 
     - name: N9K-C93128TX
       part_number: N9K-C93128TX
@@ -76,13 +70,11 @@ spec:
       full_depth: false
       manufacturer: Cisco
 
-
     - name: N9K-C9316D-GX
       part_number: N9K-C9316D-GX
       height: 1
       full_depth: false
       manufacturer: Cisco
-
 
     - name: N9K-C93180YC-EX
       part_number: N9K-C93180YC-EX
@@ -90,13 +82,11 @@ spec:
       full_depth: false
       manufacturer: Cisco
 
-
     - name: N9K-C93180YC-FX
       part_number: N9K-C93180YC-FX
       height: 1
       full_depth: false
       manufacturer: Cisco
-
 
     - name: N9K-C93180YC-FX3
       part_number: N9K-C93180YC-FX3
@@ -104,13 +94,11 @@ spec:
       full_depth: false
       manufacturer: Cisco
 
-
     - name: N9K-C93180YC-FX3S
       part_number: N9K-C93180YC-FX3S
       height: 1
       full_depth: false
       manufacturer: Cisco
-
 
     - name: N9K-C93216TC-FX2
       part_number: N9K-C93216TC-FX2
@@ -118,13 +106,11 @@ spec:
       full_depth: false
       manufacturer: Cisco
 
-
     - name: N9K-C93240YC-FX2
       part_number: N9K-C93240YC-FX2
       height: 1
       full_depth: false
       manufacturer: Cisco
-
 
     - name: N9K-C9332C
       part_number: N9K-C9332C
@@ -132,13 +118,11 @@ spec:
       full_depth: false
       manufacturer: Cisco
 
-
     - name: N9K-C9332D-GX2B
       part_number: N9K-C9332D-GX2B
       height: 1
       full_depth: false
       manufacturer: Cisco
-
 
     - name: N9K-C9332PQ
       part_number: N9K-C9332PQ
@@ -146,13 +130,11 @@ spec:
       full_depth: false
       manufacturer: Cisco
 
-
     - name: N9K-C9336C-FX2
       part_number: N9K-C9336C-FX2
       height: 1
       full_depth: false
       manufacturer: Cisco
-
 
     - name: N9K-C9336PQ
       part_number: N9K-C9336PQ
@@ -160,13 +142,11 @@ spec:
       full_depth: false
       manufacturer: Cisco
 
-
     - name: N9K-C9348D-GX2A
       part_number: N9K-C9348D-GX2A
       height: 1
       full_depth: false
       manufacturer: Cisco
-
 
     - name: N9K-C9348GC-FX3
       part_number: N9K-C9348GC-FX3
@@ -174,13 +154,11 @@ spec:
       full_depth: false
       manufacturer: Cisco
 
-
     - name: N9K-C9348GC-FX3PH
       part_number: N9K-C9348GC-FX3PH
       height: 1
       full_depth: false
       manufacturer: Cisco
-
 
     - name: N9K-C9348GC-FXP
       part_number: N9K-C9348GC-FXP
@@ -188,13 +166,11 @@ spec:
       full_depth: false
       manufacturer: Cisco
 
-
     - name: N9K-C93600CD-GX
       part_number: N9K-C93600CD-GX
       height: 1
       full_depth: false
       manufacturer: Cisco
-
 
     - name: N9K-C9364C-GX
       part_number: N9K-C9364C-GX
@@ -202,13 +178,11 @@ spec:
       full_depth: false
       manufacturer: Cisco
 
-
     - name: N9K-C9364C
       part_number: N9K-C9364C
       height: 1
       full_depth: false
       manufacturer: Cisco
-
 
     - name: N9K-C9364D-GX2A
       part_number: N9K-C9364D-GX2A
@@ -216,13 +190,11 @@ spec:
       full_depth: false
       manufacturer: Cisco
 
-
     - name: N9K-C9372PX-E
       part_number: N9K-C9372PX-E
       height: 1
       full_depth: false
       manufacturer: Cisco
-
 
     - name: N9K-C9372PX
       part_number: N9K-C9372PX
@@ -230,13 +202,11 @@ spec:
       full_depth: false
       manufacturer: Cisco
 
-
     - name: N9K-C9372TX-E
       part_number: N9K-C9372TX-E
       height: 1
       full_depth: false
       manufacturer: Cisco
-
 
     - name: N9K-C9372TX
       part_number: N9K-C9372TX
@@ -244,13 +214,11 @@ spec:
       full_depth: false
       manufacturer: Cisco
 
-
     - name: N9K-C9396PX
       part_number: N9K-C9396PX
       height: 1
       full_depth: false
       manufacturer: Cisco
-
 
     - name: SRX-1500
       # part_number: null
@@ -258,20 +226,17 @@ spec:
       full_depth: false
       manufacturer: Juniper
 
-
     - name: C9200L-48P-4G
       part_number: C9200L-48P-4G
       height: 1
       full_depth: false
       manufacturer: Cisco
 
-
     - name: C9200L-24P-4G
       part_number: C9200L-24P-4G
       height: 1
       full_depth: false
       manufacturer: Cisco
-
 
     - name: SCG50R
       part_number: SCG50R
@@ -291,13 +256,11 @@ spec:
       full_depth: false
       manufacturer: Edgecore
 
-
     - name: 5912-54XM-O-AC-F
       # part_number: null
       height: 1
       full_depth: false
       manufacturer: Edgecore
-
 
     - name: 7726-32X-O
       # part_number: null
@@ -305,13 +268,11 @@ spec:
       full_depth: false
       manufacturer: Edgecore
 
-
     - name: C8000V
       # part_number: null
       height: 0
       full_depth: false
       manufacturer: Cisco
-
 
     - name: CloudGuard
       part_number: CloudGuard-Network-Security
@@ -319,13 +280,11 @@ spec:
       full_depth: false
       manufacturer: Check Point
 
-
     - name: N77-SUP2E
       part_number: N77-SUP2E
       height: 0
       full_depth: false
       manufacturer: Cisco
-
 
     - name: N77-C7710
       part_number: N77-C7710
@@ -333,13 +292,11 @@ spec:
       full_depth: false
       manufacturer: Cisco
 
-
     - name: N77-F324FQ-25
       part_number: N77-F324FQ-25
       height: 0
       full_depth: false
       manufacturer: Cisco
-
 
     - name: N77-M312CQ-26L
       part_number: N77-M312CQ-26L
@@ -353,13 +310,11 @@ spec:
       full_depth: false
       manufacturer: HAProxy Technologies
 
-
     - name: NGINX
       part_number: NGINX
       height: 1
       full_depth: false
       manufacturer: F5 Networks
-
 
     - name: DL360-Gen11
       manufacturer: Cisco
@@ -369,3 +324,33 @@ spec:
       manufacturer: Cisco
       height: 1
       full_depth: true
+
+    - name: DCS-7050SX3-48YC8-F
+      part_number: DCS-7050SX3-48YC8-F
+      height: 1
+      full_depth: false
+      manufacturer: Arista
+
+    - name: DCS-7280SR3-48YC8-F
+      part_number: DCS-7280SR3-48YC8-F
+      height: 1
+      full_depth: false
+      manufacturer: Arista
+
+    - name: DCS-7050CX3-32S-F
+      part_number: DCS-7050CX3-32S-F
+      height: 1
+      full_depth: true
+      manufacturer: Arista
+
+    - name: DCS-7060CX-32S-F
+      part_number: DCS-7060CX-32S-F
+      height: 1
+      full_depth: false
+      manufacturer: Arista
+
+    - name: DCS-7130-48EH-F
+      part_number: DCS-7130-48EH-F
+      height: 1
+      full_depth: false
+      manufacturer: Arista
