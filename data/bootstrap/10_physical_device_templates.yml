@@ -15,114 +15,151 @@ spec:
           - template_name: N9K-C9336C-FX2_SUPER_SPINE_Ethernet1/1
             name: Ethernet1/1
             role: spine
+            interface_type: 100gbase-x-qsfp28
           - template_name: N9K-C9336C-FX2_SUPER_SPINE_Ethernet1/2
             name: Ethernet1/2
             role: spine
+            interface_type: 100gbase-x-qsfp28
           - template_name: N9K-C9336C-FX2_SUPER_SPINE_Ethernet1/3
             name: Ethernet1/3
             role: spine
+            interface_type: 100gbase-x-qsfp28
           - template_name: N9K-C9336C-FX2_SUPER_SPINE_Ethernet1/4
             name: Ethernet1/4
             role: spine
+            interface_type: 100gbase-x-qsfp28
           - template_name: N9K-C9336C-FX2_SUPER_SPINE_Ethernet1/5
             name: Ethernet1/5
             role: spine
+            interface_type: 100gbase-x-qsfp28
           - template_name: N9K-C9336C-FX2_SUPER_SPINE_Ethernet1/6
             name: Ethernet1/6
             role: spine
+            interface_type: 100gbase-x-qsfp28
           - template_name: N9K-C9336C-FX2_SUPER_SPINE_Ethernet1/7
             name: Ethernet1/7
             role: spine
+            interface_type: 100gbase-x-qsfp28
           - template_name: N9K-C9336C-FX2_SUPER_SPINE_Ethernet1/8
             name: Ethernet1/8
             role: spine
+            interface_type: 100gbase-x-qsfp28
           - template_name: N9K-C9336C-FX2_SUPER_SPINE_Ethernet1/9
             name: Ethernet1/9
             role: spine
+            interface_type: 100gbase-x-qsfp28
           - template_name: N9K-C9336C-FX2_SUPER_SPINE_Ethernet1/10
             name: Ethernet1/10
             role: spine
+            interface_type: 100gbase-x-qsfp28
           - template_name: N9K-C9336C-FX2_SUPER_SPINE_Ethernet1/11
             name: Ethernet1/11
             role: spine
+            interface_type: 100gbase-x-qsfp28
           - template_name: N9K-C9336C-FX2_SUPER_SPINE_Ethernet1/12
             name: Ethernet1/12
             role: spine
+            interface_type: 100gbase-x-qsfp28
           - template_name: N9K-C9336C-FX2_SUPER_SPINE_Ethernet1/13
             name: Ethernet1/13
             role: spine
+            interface_type: 100gbase-x-qsfp28
           - template_name: N9K-C9336C-FX2_SUPER_SPINE_Ethernet1/14
             name: Ethernet1/14
             role: spine
+            interface_type: 100gbase-x-qsfp28
           - template_name: N9K-C9336C-FX2_SUPER_SPINE_Ethernet1/15
             name: Ethernet1/15
             role: spine
+            interface_type: 100gbase-x-qsfp28
           - template_name: N9K-C9336C-FX2_SUPER_SPINE_Ethernet1/16
             name: Ethernet1/16
             role: spine
+            interface_type: 100gbase-x-qsfp28
           - template_name: N9K-C9336C-FX2_SUPER_SPINE_Ethernet1/17
             name: Ethernet1/17
             role: spine
+            interface_type: 100gbase-x-qsfp28
           - template_name: N9K-C9336C-FX2_SUPER_SPINE_Ethernet1/18
             name: Ethernet1/18
             role: spine
+            interface_type: 100gbase-x-qsfp28
           - template_name: N9K-C9336C-FX2_SUPER_SPINE_Ethernet1/19
             name: Ethernet1/19
             role: spine
+            interface_type: 100gbase-x-qsfp28
           - template_name: N9K-C9336C-FX2_SUPER_SPINE_Ethernet1/20
             name: Ethernet1/20
             role: spine
+            interface_type: 100gbase-x-qsfp28
           - template_name: N9K-C9336C-FX2_SUPER_SPINE_Ethernet1/21
             name: Ethernet1/21
             role: spine
+            interface_type: 100gbase-x-qsfp28
           - template_name: N9K-C9336C-FX2_SUPER_SPINE_Ethernet1/22
             name: Ethernet1/22
             role: spine
+            interface_type: 100gbase-x-qsfp28
           - template_name: N9K-C9336C-FX2_SUPER_SPINE_Ethernet1/23
             name: Ethernet1/23
             role: spine
+            interface_type: 100gbase-x-qsfp28
           - template_name: N9K-C9336C-FX2_SUPER_SPINE_Ethernet1/24
             name: Ethernet1/24
             role: spine
+            interface_type: 100gbase-x-qsfp28
           - template_name: N9K-C9336C-FX2_SUPER_SPINE_Ethernet1/25
             name: Ethernet1/25
             role: spine
+            interface_type: 100gbase-x-qsfp28
           - template_name: N9K-C9336C-FX2_SUPER_SPINE_Ethernet1/26
             name: Ethernet1/26
             role: spine
+            interface_type: 100gbase-x-qsfp28
           - template_name: N9K-C9336C-FX2_SUPER_SPINE_Ethernet1/27
             name: Ethernet1/27
             role: spine
+            interface_type: 100gbase-x-qsfp28
           - template_name: N9K-C9336C-FX2_SUPER_SPINE_Ethernet1/28
             name: Ethernet1/28
             role: spine
+            interface_type: 100gbase-x-qsfp28
           - template_name: N9K-C9336C-FX2_SUPER_SPINE_Ethernet1/29
             name: Ethernet1/29
             role: spine
+            interface_type: 100gbase-x-qsfp28
           - template_name: N9K-C9336C-FX2_SUPER_SPINE_Ethernet1/30
             name: Ethernet1/30
             role: spine
+            interface_type: 100gbase-x-qsfp28
           - template_name: N9K-C9336C-FX2_SUPER_SPINE_Ethernet1/31
             name: Ethernet1/31
             role: uplink
+            interface_type: 100gbase-x-qsfp28
           - template_name: N9K-C9336C-FX2_SUPER_SPINE_Ethernet1/32
             name: Ethernet1/32
             role: uplink
+            interface_type: 100gbase-x-qsfp28
           - template_name: N9K-C9336C-FX2_SUPER_SPINE_Ethernet1/33
             name: Ethernet1/33
             role: uplink
+            interface_type: 100gbase-x-qsfp28
           - template_name: N9K-C9336C-FX2_SUPER_SPINE_Ethernet1/34
             name: Ethernet1/34
             role: uplink
+            interface_type: 100gbase-x-qsfp28
           - template_name: N9K-C9336C-FX2_SUPER_SPINE_Ethernet1/35
             name: Ethernet1/35
             role: uplink
+            interface_type: 100gbase-x-qsfp28
           - template_name: N9K-C9336C-FX2_SUPER_SPINE_Ethernet1/36
             name: Ethernet1/36
             role: uplink
+            interface_type: 100gbase-x-qsfp28
           - template_name: N9K-C9336C-FX2_SUPER_SPINE_mgmt0
             name: mgmt0
             role: management
+            interface_type: 1000base-t
     - template_name: N9K-C9316D-GX_SUPER_SPINE
       device_type: N9K-C9316D-GX
       platform: cisco_nxos
@@ -161,27 +198,35 @@ spec:
           - template_name: N9K-C9316D-GX_SUPER_SPINE_Ethernet1/10
             name: Ethernet1/10
             role: spine
+            interface_type: 400gbase-x-qsfpdd
           - template_name: N9K-C9316D-GX_SUPER_SPINE_Ethernet1/11
             name: Ethernet1/11
             role: spine
+            interface_type: 400gbase-x-qsfpdd
           - template_name: N9K-C9316D-GX_SUPER_SPINE_Ethernet1/12
             name: Ethernet1/12
             role: spine
+            interface_type: 400gbase-x-qsfpdd
           - template_name: N9K-C9316D-GX_SUPER_SPINE_Ethernet1/13
             name: Ethernet1/13
             role: uplink
+            interface_type: 100gbase-x-qsfp28
           - template_name: N9K-C9316D-GX_SUPER_SPINE_Ethernet1/14
             name: Ethernet1/14
             role: uplink
+            interface_type: 100gbase-x-qsfp28
           - template_name: N9K-C9316D-GX_SUPER_SPINE_Ethernet1/15
             name: Ethernet1/15
             role: uplink
+            interface_type: 100gbase-x-qsfp28
           - template_name: N9K-C9316D-GX_SUPER_SPINE_Ethernet1/16
             name: Ethernet1/16
             role: uplink
+            interface_type: 100gbase-x-qsfp28
           - template_name: N9K-C9316D-GX_SUPER_SPINE_mgmt0
             name: mgmt0
             role: management
+            interface_type: 1000base-t
     - template_name: N9K-C9336C-FX2_SPINE
       device_type: N9K-C9336C-FX2
       role: spine
@@ -193,114 +238,151 @@ spec:
           - template_name: N9K-C9336C-FX2_SPINE_Ethernet1/1
             name: Ethernet1/1
             role: leaf
+            interface_type: 100gbase-x-qsfp28
           - template_name: N9K-C9336C-FX2_SPINE_Ethernet1/2
             name: Ethernet1/2
             role: leaf
+            interface_type: 100gbase-x-qsfp28
           - template_name: N9K-C9336C-FX2_SPINE_Ethernet1/3
             name: Ethernet1/3
             role: leaf
+            interface_type: 100gbase-x-qsfp28
           - template_name: N9K-C9336C-FX2_SPINE_Ethernet1/4
             name: Ethernet1/4
             role: leaf
+            interface_type: 100gbase-x-qsfp28
           - template_name: N9K-C9336C-FX2_SPINE_Ethernet1/5
             name: Ethernet1/5
             role: leaf
+            interface_type: 100gbase-x-qsfp28
           - template_name: N9K-C9336C-FX2_SPINE_Ethernet1/6
             name: Ethernet1/6
             role: leaf
+            interface_type: 100gbase-x-qsfp28
           - template_name: N9K-C9336C-FX2_SPINE_Ethernet1/7
             name: Ethernet1/7
             role: leaf
+            interface_type: 100gbase-x-qsfp28
           - template_name: N9K-C9336C-FX2_SPINE_Ethernet1/8
             name: Ethernet1/8
             role: leaf
+            interface_type: 100gbase-x-qsfp28
           - template_name: N9K-C9336C-FX2_SPINE_Ethernet1/9
             name: Ethernet1/9
             role: leaf
+            interface_type: 100gbase-x-qsfp28
           - template_name: N9K-C9336C-FX2_SPINE_Ethernet1/10
             name: Ethernet1/10
             role: leaf
+            interface_type: 100gbase-x-qsfp28
           - template_name: N9K-C9336C-FX2_SPINE_Ethernet1/11
             name: Ethernet1/11
             role: leaf
+            interface_type: 100gbase-x-qsfp28
           - template_name: N9K-C9336C-FX2_SPINE_Ethernet1/12
             name: Ethernet1/12
             role: leaf
+            interface_type: 100gbase-x-qsfp28
           - template_name: N9K-C9336C-FX2_SPINE_Ethernet1/13
             name: Ethernet1/13
             role: leaf
+            interface_type: 100gbase-x-qsfp28
           - template_name: N9K-C9336C-FX2_SPINE_Ethernet1/14
             name: Ethernet1/14
             role: leaf
+            interface_type: 100gbase-x-qsfp28
           - template_name: N9K-C9336C-FX2_SPINE_Ethernet1/15
             name: Ethernet1/15
             role: leaf
+            interface_type: 100gbase-x-qsfp28
           - template_name: N9K-C9336C-FX2_SPINE_Ethernet1/16
             name: Ethernet1/16
             role: leaf
+            interface_type: 100gbase-x-qsfp28
           - template_name: N9K-C9336C-FX2_SPINE_Ethernet1/17
             name: Ethernet1/17
             role: leaf
+            interface_type: 100gbase-x-qsfp28
           - template_name: N9K-C9336C-FX2_SPINE_Ethernet1/18
             name: Ethernet1/18
             role: leaf
+            interface_type: 100gbase-x-qsfp28
           - template_name: N9K-C9336C-FX2_SPINE_Ethernet1/19
             name: Ethernet1/19
             role: leaf
+            interface_type: 100gbase-x-qsfp28
           - template_name: N9K-C9336C-FX2_SPINE_Ethernet1/20
             name: Ethernet1/20
             role: leaf
+            interface_type: 100gbase-x-qsfp28
           - template_name: N9K-C9336C-FX2_SPINE_Ethernet1/21
             name: Ethernet1/21
             role: leaf
+            interface_type: 100gbase-x-qsfp28
           - template_name: N9K-C9336C-FX2_SPINE_Ethernet1/22
             name: Ethernet1/22
             role: leaf
+            interface_type: 100gbase-x-qsfp28
           - template_name: N9K-C9336C-FX2_SPINE_Ethernet1/23
             name: Ethernet1/23
             role: leaf
+            interface_type: 100gbase-x-qsfp28
           - template_name: N9K-C9336C-FX2_SPINE_Ethernet1/24
             name: Ethernet1/24
             role: leaf
+            interface_type: 100gbase-x-qsfp28
           - template_name: N9K-C9336C-FX2_SPINE_Ethernet1/25
             name: Ethernet1/25
             role: leaf
+            interface_type: 100gbase-x-qsfp28
           - template_name: N9K-C9336C-FX2_SPINE_Ethernet1/26
             name: Ethernet1/26
             role: leaf
+            interface_type: 100gbase-x-qsfp28
           - template_name: N9K-C9336C-FX2_SPINE_Ethernet1/27
             name: Ethernet1/27
             role: leaf
+            interface_type: 100gbase-x-qsfp28
           - template_name: N9K-C9336C-FX2_SPINE_Ethernet1/28
             name: Ethernet1/28
             role: leaf
+            interface_type: 100gbase-x-qsfp28
           - template_name: N9K-C9336C-FX2_SPINE_Ethernet1/29
             name: Ethernet1/29
             role: leaf
+            interface_type: 100gbase-x-qsfp28
           - template_name: N9K-C9336C-FX2_SPINE_Ethernet1/30
             name: Ethernet1/30
             role: leaf
+            interface_type: 100gbase-x-qsfp28
           - template_name: N9K-C9336C-FX2_SPINE_Ethernet1/31
             name: Ethernet1/31
             role: uplink
+            interface_type: 100gbase-x-qsfp28
           - template_name: N9K-C9336C-FX2_SPINE_Ethernet1/32
             name: Ethernet1/32
             role: uplink
+            interface_type: 100gbase-x-qsfp28
           - template_name: N9K-C9336C-FX2_SPINE_Ethernet1/33
             name: Ethernet1/33
             role: uplink
+            interface_type: 100gbase-x-qsfp28
           - template_name: N9K-C9336C-FX2_SPINE_Ethernet1/34
             name: Ethernet1/34
             role: uplink
+            interface_type: 100gbase-x-qsfp28
           - template_name: N9K-C9336C-FX2_SPINE_Ethernet1/35
             name: Ethernet1/35
             role: uplink
+            interface_type: 100gbase-x-qsfp28
           - template_name: N9K-C9336C-FX2_SPINE_Ethernet1/36
             name: Ethernet1/36
             role: uplink
+            interface_type: 100gbase-x-qsfp28
           - template_name: N9K-C9336C-FX2_SPINE_mgmt0
             name: mgmt0
             role: management
+            interface_type: 1000base-t
     - template_name: N9K-C9336C-FX2_LEAF
       device_type: N9K-C9336C-FX2
       platform: cisco_nxos
@@ -312,114 +394,151 @@ spec:
           - template_name: N9K-C9336C-FX2_LEAF_Ethernet1/1
             name: Ethernet1/1
             role: customer
+            interface_type: 100gbase-x-qsfp28
           - template_name: N9K-C9336C-FX2_LEAF_Ethernet1/2
             name: Ethernet1/2
             role: customer
+            interface_type: 100gbase-x-qsfp28
           - template_name: N9K-C9336C-FX2_LEAF_Ethernet1/3
             name: Ethernet1/3
             role: customer
+            interface_type: 100gbase-x-qsfp28
           - template_name: N9K-C9336C-FX2_LEAF_Ethernet1/4
             name: Ethernet1/4
             role: customer
+            interface_type: 100gbase-x-qsfp28
           - template_name: N9K-C9336C-FX2_LEAF_Ethernet1/5
             name: Ethernet1/5
             role: customer
+            interface_type: 100gbase-x-qsfp28
           - template_name: N9K-C9336C-FX2_LEAF_Ethernet1/6
             name: Ethernet1/6
             role: customer
+            interface_type: 100gbase-x-qsfp28
           - template_name: N9K-C9336C-FX2_LEAF_Ethernet1/7
             name: Ethernet1/7
             role: customer
+            interface_type: 100gbase-x-qsfp28
           - template_name: N9K-C9336C-FX2_LEAF_Ethernet1/8
             name: Ethernet1/8
             role: customer
+            interface_type: 100gbase-x-qsfp28
           - template_name: N9K-C9336C-FX2_LEAF_Ethernet1/9
             name: Ethernet1/9
             role: customer
+            interface_type: 100gbase-x-qsfp28
           - template_name: N9K-C9336C-FX2_LEAF_Ethernet1/10
             name: Ethernet1/10
             role: customer
+            interface_type: 100gbase-x-qsfp28
           - template_name: N9K-C9336C-FX2_LEAF_Ethernet1/11
             name: Ethernet1/11
             role: customer
+            interface_type: 100gbase-x-qsfp28
           - template_name: N9K-C9336C-FX2_LEAF_Ethernet1/12
             name: Ethernet1/12
             role: customer
+            interface_type: 100gbase-x-qsfp28
           - template_name: N9K-C9336C-FX2_LEAF_Ethernet1/13
             name: Ethernet1/13
             role: customer
+            interface_type: 100gbase-x-qsfp28
           - template_name: N9K-C9336C-FX2_LEAF_Ethernet1/14
             name: Ethernet1/14
             role: customer
+            interface_type: 100gbase-x-qsfp28
           - template_name: N9K-C9336C-FX2_LEAF_Ethernet1/15
             name: Ethernet1/15
             role: customer
+            interface_type: 100gbase-x-qsfp28
           - template_name: N9K-C9336C-FX2_LEAF_Ethernet1/16
             name: Ethernet1/16
             role: customer
+            interface_type: 100gbase-x-qsfp28
           - template_name: N9K-C9336C-FX2_LEAF_Ethernet1/17
             name: Ethernet1/17
             role: customer
+            interface_type: 100gbase-x-qsfp28
           - template_name: N9K-C9336C-FX2_LEAF_Ethernet1/18
             name: Ethernet1/18
             role: customer
+            interface_type: 100gbase-x-qsfp28
           - template_name: N9K-C9336C-FX2_LEAF_Ethernet1/19
             name: Ethernet1/19
             role: customer
+            interface_type: 100gbase-x-qsfp28
           - template_name: N9K-C9336C-FX2_LEAF_Ethernet1/20
             name: Ethernet1/20
             role: customer
+            interface_type: 100gbase-x-qsfp28
           - template_name: N9K-C9336C-FX2_LEAF_Ethernet1/21
             name: Ethernet1/21
             role: customer
+            interface_type: 100gbase-x-qsfp28
           - template_name: N9K-C9336C-FX2_LEAF_Ethernet1/22
             name: Ethernet1/22
             role: customer
+            interface_type: 100gbase-x-qsfp28
           - template_name: N9K-C9336C-FX2_LEAF_Ethernet1/23
             name: Ethernet1/23
             role: customer
+            interface_type: 100gbase-x-qsfp28
           - template_name: N9K-C9336C-FX2_LEAF_Ethernet1/24
             name: Ethernet1/24
             role: customer
+            interface_type: 100gbase-x-qsfp28
           - template_name: N9K-C9336C-FX2_LEAF_Ethernet1/25
             name: Ethernet1/25
             role: customer
+            interface_type: 100gbase-x-qsfp28
           - template_name: N9K-C9336C-FX2_LEAF_Ethernet1/26
             name: Ethernet1/26
             role: customer
+            interface_type: 100gbase-x-qsfp28
           - template_name: N9K-C9336C-FX2_LEAF_Ethernet1/27
             name: Ethernet1/27
             role: customer
+            interface_type: 100gbase-x-qsfp28
           - template_name: N9K-C9336C-FX2_LEAF_Ethernet1/28
             name: Ethernet1/28
             role: customer
+            interface_type: 100gbase-x-qsfp28
           - template_name: N9K-C9336C-FX2_LEAF_Ethernet1/29
             name: Ethernet1/29
             role: customer
+            interface_type: 100gbase-x-qsfp28
           - template_name: N9K-C9336C-FX2_LEAF_Ethernet1/30
             name: Ethernet1/30
             role: customer
+            interface_type: 100gbase-x-qsfp28
           - template_name: N9K-C9336C-FX2_LEAF_Ethernet1/31
             name: Ethernet1/31
             role: uplink
+            interface_type: 100gbase-x-qsfp28
           - template_name: N9K-C9336C-FX2_LEAF_Ethernet1/32
             name: Ethernet1/32
             role: uplink
+            interface_type: 100gbase-x-qsfp28
           - template_name: N9K-C9336C-FX2_LEAF_Ethernet1/33
             name: Ethernet1/33
             role: uplink
+            interface_type: 100gbase-x-qsfp28
           - template_name: N9K-C9336C-FX2_LEAF_Ethernet1/34
             name: Ethernet1/34
             role: uplink
+            interface_type: 100gbase-x-qsfp28
           - template_name: N9K-C9336C-FX2_LEAF_Ethernet1/35
             name: Ethernet1/35
             role: uplink
+            interface_type: 100gbase-x-qsfp28
           - template_name: N9K-C9336C-FX2_LEAF_Ethernet1/36
             name: Ethernet1/36
             role: uplink
+            interface_type: 100gbase-x-qsfp28
           - template_name: N9K-C9336C-FX2_LEAF_mgmt0
             name: mgmt0
             role: management
+            interface_type: 1000base-t
     - template_name: N9K-C9316D-GX_SPINE
       device_type: N9K-C9316D-GX
       platform: cisco_nxos
@@ -458,27 +577,35 @@ spec:
           - template_name: N9K-C9316D-GX_SPINE_Ethernet1/10
             name: Ethernet1/10
             role: leaf
+            interface_type: 400gbase-x-qsfpdd
           - template_name: N9K-C9316D-GX_SPINE_Ethernet1/11
             name: Ethernet1/11
             role: uplink
+            interface_type: 400gbase-x-qsfpdd
           - template_name: N9K-C9316D-GX_SPINE_Ethernet1/12
             name: Ethernet1/12
             role: uplink
+            interface_type: 400gbase-x-qsfpdd
           - template_name: N9K-C9316D-GX_SPINE_Ethernet1/13
             name: Ethernet1/13
             role: uplink
+            interface_type: 100gbase-x-qsfp28
           - template_name: N9K-C9316D-GX_SPINE_Ethernet1/14
             name: Ethernet1/14
             role: uplink
+            interface_type: 100gbase-x-qsfp28
           - template_name: N9K-C9316D-GX_SPINE_Ethernet1/15
             name: Ethernet1/15
             role: uplink
+            interface_type: 100gbase-x-qsfp28
           - template_name: N9K-C9316D-GX_SPINE_Ethernet1/16
             name: Ethernet1/16
             role: uplink
+            interface_type: 100gbase-x-qsfp28
           - template_name: N9K-C9316D-GX_SPINE_mgmt0
             name: mgmt0
             role: management
+            interface_type: 1000base-t
     - template_name: N9K-C9316D-GX_LEAF
       device_type: N9K-C9316D-GX
       platform: cisco_nxos
@@ -517,24 +644,31 @@ spec:
           - template_name: N9K-C9316D-GX_LEAF_Ethernet1/10
             name: Ethernet1/10
             role: customer
+            interface_type: 400gbase-x-qsfpdd
           - template_name: N9K-C9316D-GX_LEAF_Ethernet1/11
             name: Ethernet1/11
             role: customer
+            interface_type: 400gbase-x-qsfpdd
           - template_name: N9K-C9316D-GX_LEAF_Ethernet1/12
             name: Ethernet1/12
             role: customer
+            interface_type: 400gbase-x-qsfpdd
           - template_name: N9K-C9316D-GX_LEAF_Ethernet1/13
             name: Ethernet1/13
             role: customer
+            interface_type: 100gbase-x-qsfp28
           - template_name: N9K-C9316D-GX_LEAF_Ethernet1/14
             name: Ethernet1/14
             role: customer
+            interface_type: 100gbase-x-qsfp28
           - template_name: N9K-C9316D-GX_LEAF_Ethernet1/15
             name: Ethernet1/15
             role: customer
+            interface_type: 100gbase-x-qsfp28
           - template_name: N9K-C9316D-GX_LEAF_Ethernet1/16
             name: Ethernet1/16
             role: customer
+            interface_type: 100gbase-x-qsfp28
           - template_name: N9K-C9316D-GX_LEAF_Ethernet1/17
             name: Ethernet1/17
             role: customer
@@ -652,6 +786,7 @@ spec:
           - template_name: N9K-C9316D-GX_LEAF_mgmt0
             name: mgmt0
             role: management
+            interface_type: 1000base-t
     - template_name: DCS-7280DR3-24-F_SPINE
       device_type: DCS-7280DR3-24-F
       platform: arista_eos
@@ -663,78 +798,103 @@ spec:
           - template_name: DCS-7280DR3-24-F_SPINE_Ethernet1/1
             name: Ethernet1/1
             role: leaf
+            interface_type: 400gbase-x-qsfpdd
           - template_name: DCS-7280DR3-24-F_SPINE_Ethernet2/1
             name: Ethernet2/1
             role: leaf
+            interface_type: 400gbase-x-qsfpdd
           - template_name: DCS-7280DR3-24-F_SPINE_Ethernet3/1
             name: Ethernet3/1
             role: leaf
+            interface_type: 400gbase-x-qsfpdd
           - template_name: DCS-7280DR3-24-F_SPINE_Ethernet4/1
             name: Ethernet4/1
             role: leaf
+            interface_type: 400gbase-x-qsfpdd
           - template_name: DCS-7280DR3-24-F_SPINE_Ethernet5/1
             name: Ethernet5/1
             role: leaf
+            interface_type: 400gbase-x-qsfpdd
           - template_name: DCS-7280DR3-24-F_SPINE_Ethernet6/1
             name: Ethernet6/1
             role: leaf
+            interface_type: 400gbase-x-qsfpdd
           - template_name: DCS-7280DR3-24-F_SPINE_Ethernet7/1
             name: Ethernet7/1
             role: leaf
+            interface_type: 400gbase-x-qsfpdd
           - template_name: DCS-7280DR3-24-F_SPINE_Ethernet8/1
             name: Ethernet8/1
             role: leaf
+            interface_type: 400gbase-x-qsfpdd
           - template_name: DCS-7280DR3-24-F_SPINE_Ethernet9/1
             name: Ethernet9/1
             role: leaf
+            interface_type: 400gbase-x-qsfpdd
           - template_name: DCS-7280DR3-24-F_SPINE_Ethernet10/1
             name: Ethernet10/1
             role: leaf
+            interface_type: 400gbase-x-qsfpdd
           - template_name: DCS-7280DR3-24-F_SPINE_Ethernet11/1
             name: Ethernet11/1
             role: leaf
+            interface_type: 400gbase-x-qsfpdd
           - template_name: DCS-7280DR3-24-F_SPINE_Ethernet12/1
             name: Ethernet12/1
             role: leaf
+            interface_type: 400gbase-x-qsfpdd
           - template_name: DCS-7280DR3-24-F_SPINE_Ethernet13/1
             name: Ethernet13/1
             role: leaf
+            interface_type: 400gbase-x-qsfpdd
           - template_name: DCS-7280DR3-24-F_SPINE_Ethernet14/1
             name: Ethernet14/1
             role: leaf
+            interface_type: 400gbase-x-qsfpdd
           - template_name: DCS-7280DR3-24-F_SPINE_Ethernet15/1
             name: Ethernet15/1
             role: leaf
+            interface_type: 400gbase-x-qsfpdd
           - template_name: DCS-7280DR3-24-F_SPINE_Ethernet16/1
             name: Ethernet16/1
             role: leaf
+            interface_type: 400gbase-x-qsfpdd
           - template_name: DCS-7280DR3-24-F_SPINE_Ethernet17/1
             name: Ethernet17/1
             role: leaf
+            interface_type: 400gbase-x-qsfpdd
           - template_name: DCS-7280DR3-24-F_SPINE_Ethernet18/1
             name: Ethernet18/1
             role: leaf
+            interface_type: 400gbase-x-qsfpdd
           - template_name: DCS-7280DR3-24-F_SPINE_Ethernet19/1
             name: Ethernet19/1
             role: leaf
+            interface_type: 400gbase-x-qsfpdd
           - template_name: DCS-7280DR3-24-F_SPINE_Ethernet20/1
             name: Ethernet20/1
             role: leaf
+            interface_type: 400gbase-x-qsfpdd
           - template_name: DCS-7280DR3-24-F_SPINE_Ethernet21/1
             name: Ethernet21/1
             role: uplink
+            interface_type: 400gbase-x-qsfpdd
           - template_name: DCS-7280DR3-24-F_SPINE_Ethernet22/1
             name: Ethernet22/1
             role: uplink
+            interface_type: 400gbase-x-qsfpdd
           - template_name: DCS-7280DR3-24-F_SPINE_Ethernet23/1
             name: Ethernet23/1
             role: uplink
+            interface_type: 400gbase-x-qsfpdd
           - template_name: DCS-7280DR3-24-F_SPINE_Ethernet24/1
             name: Ethernet24/1
             role: uplink
+            interface_type: 400gbase-x-qsfpdd
           - template_name: DCS-7280DR3-24-F_SPINE_Management1
             name: Management1
             role: management
+            interface_type: 1000base-t
     - template_name: CCS-720DP-48S-2F_LEAF
       device_type: CCS-720DP-48S-2F
       platform: arista_eos
@@ -746,162 +906,215 @@ spec:
           - template_name: CCS-720DP-48S-2F_LEAF_Ethernet1
             name: Ethernet1
             role: customer
+            interface_type: 10gbase-x-sfpp
           - template_name: CCS-720DP-48S-2F_LEAF_Ethernet2
             name: Ethernet2
             role: customer
+            interface_type: 10gbase-x-sfpp
           - template_name: CCS-720DP-48S-2F_LEAF_Ethernet3
             name: Ethernet3
             role: customer
+            interface_type: 10gbase-x-sfpp
           - template_name: CCS-720DP-48S-2F_LEAF_Ethernet4
             name: Ethernet4
             role: customer
+            interface_type: 10gbase-x-sfpp
           - template_name: CCS-720DP-48S-2F_LEAF_Ethernet5
             name: Ethernet5
             role: customer
+            interface_type: 10gbase-x-sfpp
           - template_name: CCS-720DP-48S-2F_LEAF_Ethernet6
             name: Ethernet6
             role: customer
+            interface_type: 10gbase-x-sfpp
           - template_name: CCS-720DP-48S-2F_LEAF_Ethernet7
             name: Ethernet7
             role: customer
+            interface_type: 10gbase-x-sfpp
           - template_name: CCS-720DP-48S-2F_LEAF_Ethernet8
             name: Ethernet8
             role: customer
+            interface_type: 10gbase-x-sfpp
           - template_name: CCS-720DP-48S-2F_LEAF_Ethernet9
             name: Ethernet9
             role: customer
+            interface_type: 10gbase-x-sfpp
           - template_name: CCS-720DP-48S-2F_LEAF_Ethernet10
             name: Ethernet10
             role: customer
+            interface_type: 10gbase-x-sfpp
           - template_name: CCS-720DP-48S-2F_LEAF_Ethernet11
             name: Ethernet11
             role: customer
+            interface_type: 10gbase-x-sfpp
           - template_name: CCS-720DP-48S-2F_LEAF_Ethernet12
             name: Ethernet12
             role: customer
+            interface_type: 10gbase-x-sfpp
           - template_name: CCS-720DP-48S-2F_LEAF_Ethernet13
             name: Ethernet13
             role: customer
+            interface_type: 10gbase-x-sfpp
           - template_name: CCS-720DP-48S-2F_LEAF_Ethernet14
             name: Ethernet14
             role: customer
+            interface_type: 10gbase-x-sfpp
           - template_name: CCS-720DP-48S-2F_LEAF_Ethernet15
             name: Ethernet15
             role: customer
+            interface_type: 10gbase-x-sfpp
           - template_name: CCS-720DP-48S-2F_LEAF_Ethernet16
             name: Ethernet16
             role: customer
+            interface_type: 10gbase-x-sfpp
           - template_name: CCS-720DP-48S-2F_LEAF_Ethernet17
             name: Ethernet17
             role: customer
+            interface_type: 10gbase-x-sfpp
           - template_name: CCS-720DP-48S-2F_LEAF_Ethernet18
             name: Ethernet18
             role: customer
+            interface_type: 10gbase-x-sfpp
           - template_name: CCS-720DP-48S-2F_LEAF_Ethernet19
             name: Ethernet19
             role: customer
+            interface_type: 10gbase-x-sfpp
           - template_name: CCS-720DP-48S-2F_LEAF_Ethernet20
             name: Ethernet20
             role: customer
+            interface_type: 10gbase-x-sfpp
           - template_name: CCS-720DP-48S-2F_LEAF_Ethernet21
             name: Ethernet21
             role: customer
+            interface_type: 10gbase-x-sfpp
           - template_name: CCS-720DP-48S-2F_LEAF_Ethernet22
             name: Ethernet22
             role: customer
+            interface_type: 10gbase-x-sfpp
           - template_name: CCS-720DP-48S-2F_LEAF_Ethernet23
             name: Ethernet23
             role: customer
+            interface_type: 10gbase-x-sfpp
           - template_name: CCS-720DP-48S-2F_LEAF_Ethernet24
             name: Ethernet24
             role: customer
+            interface_type: 10gbase-x-sfpp
           - template_name: CCS-720DP-48S-2F_LEAF_Ethernet25
             name: Ethernet25
             role: customer
+            interface_type: 10gbase-x-sfpp
           - template_name: CCS-720DP-48S-2F_LEAF_Ethernet26
             name: Ethernet26
             role: customer
+            interface_type: 10gbase-x-sfpp
           - template_name: CCS-720DP-48S-2F_LEAF_Ethernet27
             name: Ethernet27
             role: customer
+            interface_type: 10gbase-x-sfpp
           - template_name: CCS-720DP-48S-2F_LEAF_Ethernet28
             name: Ethernet28
             role: customer
+            interface_type: 10gbase-x-sfpp
           - template_name: CCS-720DP-48S-2F_LEAF_Ethernet29
             name: Ethernet29
             role: customer
+            interface_type: 10gbase-x-sfpp
           - template_name: CCS-720DP-48S-2F_LEAF_Ethernet30
             name: Ethernet30
             role: customer
+            interface_type: 10gbase-x-sfpp
           - template_name: CCS-720DP-48S-2F_LEAF_Ethernet31
             name: Ethernet31
             role: customer
+            interface_type: 10gbase-x-sfpp
           - template_name: CCS-720DP-48S-2F_LEAF_Ethernet32
             name: Ethernet32
             role: customer
+            interface_type: 10gbase-x-sfpp
           - template_name: CCS-720DP-48S-2F_LEAF_Ethernet33
             name: Ethernet33
             role: customer
+            interface_type: 10gbase-x-sfpp
           - template_name: CCS-720DP-48S-2F_LEAF_Ethernet34
             name: Ethernet34
             role: customer
+            interface_type: 10gbase-x-sfpp
           - template_name: CCS-720DP-48S-2F_LEAF_Ethernet35
             name: Ethernet35
             role: customer
+            interface_type: 10gbase-x-sfpp
           - template_name: CCS-720DP-48S-2F_LEAF_Ethernet36
             name: Ethernet36
             role: customer
+            interface_type: 10gbase-x-sfpp
           - template_name: CCS-720DP-48S-2F_LEAF_Ethernet37
             name: Ethernet37
             role: customer
+            interface_type: 10gbase-x-sfpp
           - template_name: CCS-720DP-48S-2F_LEAF_Ethernet38
             name: Ethernet38
             role: customer
+            interface_type: 10gbase-x-sfpp
           - template_name: CCS-720DP-48S-2F_LEAF_Ethernet39
             name: Ethernet39
             role: customer
+            interface_type: 10gbase-x-sfpp
           - template_name: CCS-720DP-48S-2F_LEAF_Ethernet40
             name: Ethernet40
             role: customer
+            interface_type: 10gbase-x-sfpp
           - template_name: CCS-720DP-48S-2F_LEAF_Ethernet41
             name: Ethernet41
             role: customer
+            interface_type: 10gbase-x-sfpp
           - template_name: CCS-720DP-48S-2F_LEAF_Ethernet42
             name: Ethernet42
             role: customer
+            interface_type: 10gbase-x-sfpp
           - template_name: CCS-720DP-48S-2F_LEAF_Ethernet43
             name: Ethernet43
             role: customer
+            interface_type: 10gbase-x-sfpp
           - template_name: CCS-720DP-48S-2F_LEAF_Ethernet44
             name: Ethernet44
             role: customer
+            interface_type: 10gbase-x-sfpp
           - template_name: CCS-720DP-48S-2F_LEAF_Ethernet45
             name: Ethernet45
             role: customer
+            interface_type: 10gbase-x-sfpp
           - template_name: CCS-720DP-48S-2F_LEAF_Ethernet46
             name: Ethernet46
             role: customer
+            interface_type: 10gbase-x-sfpp
           - template_name: CCS-720DP-48S-2F_LEAF_Ethernet47
             name: Ethernet47
             role: customer
+            interface_type: 10gbase-x-sfpp
           - template_name: CCS-720DP-48S-2F_LEAF_Ethernet48
             name: Ethernet48
             role: customer
+            interface_type: 10gbase-x-sfpp
           - template_name: CCS-720DP-48S-2F_LEAF_Ethernet49
             name: Ethernet49
             role: uplink
+            interface_type: 10gbase-x-sfpp
           - template_name: CCS-720DP-48S-2F_LEAF_Ethernet50
             name: Ethernet50
             role: uplink
+            interface_type: 10gbase-x-sfpp
           - template_name: CCS-720DP-48S-2F_LEAF_Ethernet51
             name: Ethernet51
             role: uplink
+            interface_type: 10gbase-x-sfpp
           - template_name: CCS-720DP-48S-2F_LEAF_Ethernet52
             name: Ethernet52
             role: uplink
+            interface_type: 10gbase-x-sfpp
           - template_name: CCS-720DP-48S-2F_LEAF_Management1
             name: Management1
             role: management
+            interface_type: 1000base-t
     - template_name: SRX-1500_EDGE_FIREWALL
       device_type: SRX-1500
       platform: junos
@@ -913,18 +1126,23 @@ spec:
           - template_name: SRX-1500_EDGE_FIREWALL_fxp0
             name: fxp0
             role: management
+            interface_type: 1000base-t
           - template_name: SRX-1500_EDGE_FIREWALL_ge-0/0/0
             name: ge-0/0/0
             role: leaf
+            interface_type: 1000base-t
           - template_name: SRX-1500_EDGE_FIREWALL_ge-0/0/1
             name: ge-0/0/1
             role: leaf
+            interface_type: 1000base-t
           - template_name: SRX-1500_EDGE_FIREWALL_ge-0/0/2
             name: ge-0/0/2
             role: leaf
+            interface_type: 1000base-t
           - template_name: SRX-1500_EDGE_FIREWALL_ge-0/0/3
             name: ge-0/0/3
             role: leaf
+            interface_type: 1000base-t
     - template_name: SRX-1500_DC_FIREWALL
       device_type: SRX-1500
       platform: junos
@@ -936,18 +1154,23 @@ spec:
           - template_name: SRX-1500_DC_FIREWALL_fxp0
             name: fxp0
             role: management
+            interface_type: 1000base-t
           - template_name: SRX-1500_DC_FIREWALL_ge-0/0/0
             name: ge-0/0/0
             role: leaf
+            interface_type: 1000base-t
           - template_name: SRX-1500_DC_FIREWALL_ge-0/0/1
             name: ge-0/0/1
             role: leaf
+            interface_type: 1000base-t
           - template_name: SRX-1500_DC_FIREWALL_ge-0/0/2
             name: ge-0/0/2
             role: leaf
+            interface_type: 1000base-t
           - template_name: SRX-1500_DC_FIREWALL_ge-0/0/3
             name: ge-0/0/3
             role: leaf
+            interface_type: 1000base-t
     - template_name: C9200L-24P-4G_OOB
       device_type: C9200L-24P-4G
       platform: cisco_ios
@@ -1042,9 +1265,11 @@ spec:
           - template_name: SCG50R_CONSOLE_Ethernet0
             name: Ethernet0
             role: management
+            interface_type: 1000base-t
           - template_name: SCG50R_CONSOLE_Ethernet1
             name: Ethernet1
             role: management
+            interface_type: 1000base-t
     - template_name: N9K-C9316D-GX_EDGE
       device_type: N9K-C9316D-GX
       platform: cisco_nxos
@@ -1083,27 +1308,35 @@ spec:
           - template_name: N9K-C9316D-GX_EDGE_Ethernet1/10
             name: Ethernet1/10
             role: uplink
+            interface_type: 400gbase-x-qsfpdd
           - template_name: N9K-C9316D-GX_EDGE_Ethernet1/11
             name: Ethernet1/11
             role: uplink
+            interface_type: 400gbase-x-qsfpdd
           - template_name: N9K-C9316D-GX_EDGE_Ethernet1/12
             name: Ethernet1/12
             role: uplink
+            interface_type: 400gbase-x-qsfpdd
           - template_name: N9K-C9316D-GX_EDGE_Ethernet1/13
             name: Ethernet1/13
             role: uplink
+            interface_type: 100gbase-x-qsfp28
           - template_name: N9K-C9316D-GX_EDGE_Ethernet1/14
             name: Ethernet1/14
             role: uplink
+            interface_type: 100gbase-x-qsfp28
           - template_name: N9K-C9316D-GX_EDGE_Ethernet1/15
             name: Ethernet1/15
             role: peering
+            interface_type: 100gbase-x-qsfp28
           - template_name: N9K-C9316D-GX_EDGE_Ethernet1/16
             name: Ethernet1/16
             role: peering
+            interface_type: 100gbase-x-qsfp28
           - template_name: N9K-C9316D-GX_EDGE_mgmt0
             name: mgmt0
             role: management
+            interface_type: 1000base-t
     - template_name: 5912-54X-O-AC-F_LEAF
       device_type: 5912-54X-O-AC-F
       platform: juniper_junos
@@ -1115,162 +1348,681 @@ spec:
           - template_name: 5912-54X-O-AC-F_LEAF_xe1
             name: xe1
             role: customer
+            interface_type: 10gbase-x-sfpp
           - template_name: 5912-54X-O-AC-F_LEAF_xe2
             name: xe2
             role: customer
+            interface_type: 10gbase-x-sfpp
           - template_name: 5912-54X-O-AC-F_LEAF_xe3
             name: xe3
             role: customer
+            interface_type: 10gbase-x-sfpp
           - template_name: 5912-54X-O-AC-F_LEAF_xe4
             name: xe4
             role: customer
+            interface_type: 10gbase-x-sfpp
           - template_name: 5912-54X-O-AC-F_LEAF_xe5
             name: xe5
             role: customer
+            interface_type: 10gbase-x-sfpp
           - template_name: 5912-54X-O-AC-F_LEAF_xe6
             name: xe6
             role: customer
+            interface_type: 10gbase-x-sfpp
           - template_name: 5912-54X-O-AC-F_LEAF_xe7
             name: xe7
             role: customer
+            interface_type: 10gbase-x-sfpp
           - template_name: 5912-54X-O-AC-F_LEAF_xe8
             name: xe8
             role: customer
+            interface_type: 10gbase-x-sfpp
           - template_name: 5912-54X-O-AC-F_LEAF_xe9
             name: xe9
             role: customer
+            interface_type: 10gbase-x-sfpp
+    - template_name: Arista-7050SX3-48YC8-F-LEAF
+      device_type: DCS-7050SX3-48YC8-F
+      interfaces:
+        kind: TemplateDcimPhysicalInterface
+        data:
+          - template_name: Arista-7050SX3-LEAF_Management1
+            name: Management1
+            role: management
+            interface_type: 1000base-t
+          - template_name: Arista-7050SX3-LEAF_Ethernet1
+            name: Ethernet1
+            role: customer
+            interface_type: 25gbase-x-sfp28
+          - template_name: Arista-7050SX3-LEAF_Ethernet2
+            name: Ethernet2
+            role: customer
+            interface_type: 25gbase-x-sfp28
+          - template_name: Arista-7050SX3-LEAF_Ethernet3
+            name: Ethernet3
+            role: customer
+            interface_type: 25gbase-x-sfp28
+          - template_name: Arista-7050SX3-LEAF_Ethernet4
+            name: Ethernet4
+            role: customer
+            interface_type: 25gbase-x-sfp28
+          - template_name: Arista-7050SX3-LEAF_Ethernet5
+            name: Ethernet5
+            role: customer
+            interface_type: 25gbase-x-sfp28
+          - template_name: Arista-7050SX3-LEAF_Ethernet6
+            name: Ethernet6
+            role: customer
+            interface_type: 25gbase-x-sfp28
+          - template_name: Arista-7050SX3-LEAF_Ethernet7
+            name: Ethernet7
+            role: customer
+            interface_type: 25gbase-x-sfp28
+          - template_name: Arista-7050SX3-LEAF_Ethernet8
+            name: Ethernet8
+            role: customer
+            interface_type: 25gbase-x-sfp28
+          - template_name: Arista-7050SX3-LEAF_Ethernet9
+            name: Ethernet9
+            role: customer
+            interface_type: 25gbase-x-sfp28
+          - template_name: Arista-7050SX3-LEAF_Ethernet10
+            name: Ethernet10
+            role: customer
+            interface_type: 25gbase-x-sfp28
+          - template_name: Arista-7050SX3-LEAF_Ethernet11
+            name: Ethernet11
+            role: customer
+            interface_type: 25gbase-x-sfp28
+          - template_name: Arista-7050SX3-LEAF_Ethernet12
+            name: Ethernet12
+            role: customer
+            interface_type: 25gbase-x-sfp28
+          - template_name: Arista-7050SX3-LEAF_Ethernet13
+            name: Ethernet13
+            role: customer
+            interface_type: 25gbase-x-sfp28
+          - template_name: Arista-7050SX3-LEAF_Ethernet14
+            name: Ethernet14
+            role: customer
+            interface_type: 25gbase-x-sfp28
+          - template_name: Arista-7050SX3-LEAF_Ethernet15
+            name: Ethernet15
+            role: customer
+            interface_type: 25gbase-x-sfp28
+          - template_name: Arista-7050SX3-LEAF_Ethernet16
+            name: Ethernet16
+            role: customer
+            interface_type: 25gbase-x-sfp28
+          - template_name: Arista-7050SX3-LEAF_Ethernet17
+            name: Ethernet17
+            role: customer
+            interface_type: 25gbase-x-sfp28
+          - template_name: Arista-7050SX3-LEAF_Ethernet18
+            name: Ethernet18
+            role: customer
+            interface_type: 25gbase-x-sfp28
+          - template_name: Arista-7050SX3-LEAF_Ethernet19
+            name: Ethernet19
+            role: customer
+            interface_type: 25gbase-x-sfp28
+          - template_name: Arista-7050SX3-LEAF_Ethernet20
+            name: Ethernet20
+            role: customer
+            interface_type: 25gbase-x-sfp28
+          - template_name: Arista-7050SX3-LEAF_Ethernet21
+            name: Ethernet21
+            role: customer
+            interface_type: 25gbase-x-sfp28
+          - template_name: Arista-7050SX3-LEAF_Ethernet22
+            name: Ethernet22
+            role: customer
+            interface_type: 25gbase-x-sfp28
+          - template_name: Arista-7050SX3-LEAF_Ethernet23
+            name: Ethernet23
+            role: customer
+            interface_type: 25gbase-x-sfp28
+          - template_name: Arista-7050SX3-LEAF_Ethernet24
+            name: Ethernet24
+            role: customer
+            interface_type: 25gbase-x-sfp28
+          - template_name: Arista-7050SX3-LEAF_Ethernet25
+            name: Ethernet25
+            role: customer
+            interface_type: 25gbase-x-sfp28
+          - template_name: Arista-7050SX3-LEAF_Ethernet26
+            name: Ethernet26
+            role: customer
+            interface_type: 25gbase-x-sfp28
+          - template_name: Arista-7050SX3-LEAF_Ethernet27
+            name: Ethernet27
+            role: customer
+            interface_type: 25gbase-x-sfp28
+          - template_name: Arista-7050SX3-LEAF_Ethernet28
+            name: Ethernet28
+            role: customer
+            interface_type: 25gbase-x-sfp28
+          - template_name: Arista-7050SX3-LEAF_Ethernet29
+            name: Ethernet29
+            role: customer
+            interface_type: 25gbase-x-sfp28
+          - template_name: Arista-7050SX3-LEAF_Ethernet30
+            name: Ethernet30
+            role: customer
+            interface_type: 25gbase-x-sfp28
+          - template_name: Arista-7050SX3-LEAF_Ethernet31
+            name: Ethernet31
+            role: customer
+            interface_type: 25gbase-x-sfp28
+          - template_name: Arista-7050SX3-LEAF_Ethernet32
+            name: Ethernet32
+            role: customer
+            interface_type: 25gbase-x-sfp28
+          - template_name: Arista-7050SX3-LEAF_Ethernet33
+            name: Ethernet33
+            role: customer
+            interface_type: 25gbase-x-sfp28
+          - template_name: Arista-7050SX3-LEAF_Ethernet34
+            name: Ethernet34
+            role: customer
+            interface_type: 25gbase-x-sfp28
+          - template_name: Arista-7050SX3-LEAF_Ethernet35
+            name: Ethernet35
+            role: customer
+            interface_type: 25gbase-x-sfp28
+          - template_name: Arista-7050SX3-LEAF_Ethernet36
+            name: Ethernet36
+            role: customer
+            interface_type: 25gbase-x-sfp28
+          - template_name: Arista-7050SX3-LEAF_Ethernet37
+            name: Ethernet37
+            role: customer
+            interface_type: 25gbase-x-sfp28
+          - template_name: Arista-7050SX3-LEAF_Ethernet38
+            name: Ethernet38
+            role: customer
+            interface_type: 25gbase-x-sfp28
+          - template_name: Arista-7050SX3-LEAF_Ethernet39
+            name: Ethernet39
+            role: customer
+            interface_type: 25gbase-x-sfp28
+          - template_name: Arista-7050SX3-LEAF_Ethernet40
+            name: Ethernet40
+            role: customer
+            interface_type: 25gbase-x-sfp28
+          - template_name: Arista-7050SX3-LEAF_Ethernet41
+            name: Ethernet41
+            role: customer
+            interface_type: 25gbase-x-sfp28
+          - template_name: Arista-7050SX3-LEAF_Ethernet42
+            name: Ethernet42
+            role: customer
+            interface_type: 25gbase-x-sfp28
+          - template_name: Arista-7050SX3-LEAF_Ethernet43
+            name: Ethernet43
+            role: customer
+            interface_type: 25gbase-x-sfp28
+          - template_name: Arista-7050SX3-LEAF_Ethernet44
+            name: Ethernet44
+            role: customer
+            interface_type: 25gbase-x-sfp28
+          - template_name: Arista-7050SX3-LEAF_Ethernet45
+            name: Ethernet45
+            role: customer
+            interface_type: 25gbase-x-sfp28
+          - template_name: Arista-7050SX3-LEAF_Ethernet46
+            name: Ethernet46
+            role: customer
+            interface_type: 25gbase-x-sfp28
+          - template_name: Arista-7050SX3-LEAF_Ethernet47
+            name: Ethernet47
+            role: customer
+            interface_type: 25gbase-x-sfp28
+          - template_name: Arista-7050SX3-LEAF_Ethernet48
+            name: Ethernet48
+            role: customer
+            interface_type: 25gbase-x-sfp28
+          - template_name: Arista-7050SX3-LEAF_Ethernet49
+            name: Ethernet49/1
+            role: uplink
+            interface_type: 100gbase-x-qsfp28
+          - template_name: Arista-7050SX3-LEAF_Ethernet50
+            name: Ethernet50/1
+            role: uplink
+            interface_type: 100gbase-x-qsfp28
+          - template_name: Arista-7050SX3-LEAF_Ethernet51
+            name: Ethernet51/1
+            role: uplink
+            interface_type: 100gbase-x-qsfp28
+          - template_name: Arista-7050SX3-LEAF_Ethernet52
+            name: Ethernet52/1
+            role: uplink
+            interface_type: 100gbase-x-qsfp28
+          - template_name: Arista-7050SX3-LEAF_Ethernet53
+            name: Ethernet53/1
+            role: uplink
+            interface_type: 100gbase-x-qsfp28
+          - template_name: Arista-7050SX3-LEAF_Ethernet54
+            name: Ethernet54/1
+            role: uplink
+            interface_type: 100gbase-x-qsfp28
+          - template_name: Arista-7050SX3-LEAF_Ethernet55
+            name: Ethernet55/1
+            role: uplink
+            interface_type: 100gbase-x-qsfp28
+          - template_name: Arista-7050SX3-LEAF_Ethernet56
+            name: Ethernet56/1
+            role: uplink
+            interface_type: 100gbase-x-qsfp28
+    - template_name: Arista-7280SR3-48YC8-F-SPINE
+      device_type: DCS-7280SR3-48YC8-F
+      interfaces:
+        kind: TemplateDcimPhysicalInterface
+        data:
+          - template_name: Arista-7280SR3-SPINE_Management1
+            name: Management1
+            role: management
+            interface_type: 1000base-t
+          - template_name: Arista-7280SR3-SPINE_Ethernet1
+            name: Ethernet1
+            role: peering
+            interface_type: 25gbase-x-sfp28
+          - template_name: Arista-7280SR3-SPINE_Ethernet2
+            name: Ethernet2
+            role: peering
+            interface_type: 25gbase-x-sfp28
+          - template_name: Arista-7280SR3-SPINE_Ethernet3
+            name: Ethernet3
+            role: peering
+            interface_type: 25gbase-x-sfp28
+          - template_name: Arista-7280SR3-SPINE_Ethernet4
+            name: Ethernet4
+            role: peering
+            interface_type: 25gbase-x-sfp28
+          - template_name: Arista-7280SR3-SPINE_Ethernet5
+            name: Ethernet5
+            role: peering
+            interface_type: 25gbase-x-sfp28
+          - template_name: Arista-7280SR3-SPINE_Ethernet6
+            name: Ethernet6
+            role: peering
+            interface_type: 25gbase-x-sfp28
+          - template_name: Arista-7280SR3-SPINE_Ethernet7
+            name: Ethernet7
+            role: peering
+            interface_type: 25gbase-x-sfp28
+          - template_name: Arista-7280SR3-SPINE_Ethernet8
+            name: Ethernet8
+            role: peering
+            interface_type: 25gbase-x-sfp28
+          - template_name: Arista-7280SR3-SPINE_Ethernet9
+            name: Ethernet9
+            role: peering
+            interface_type: 25gbase-x-sfp28
+          - template_name: Arista-7280SR3-SPINE_Ethernet10
+            name: Ethernet10
+            role: peering
+            interface_type: 25gbase-x-sfp28
+          - template_name: Arista-7280SR3-SPINE_Ethernet11
+            name: Ethernet11
+            role: peering
+            interface_type: 25gbase-x-sfp28
+          - template_name: Arista-7280SR3-SPINE_Ethernet12
+            name: Ethernet12
+            role: peering
+            interface_type: 25gbase-x-sfp28
+          - template_name: Arista-7280SR3-SPINE_Ethernet13
+            name: Ethernet13
+            role: peering
+            interface_type: 25gbase-x-sfp28
+          - template_name: Arista-7280SR3-SPINE_Ethernet14
+            name: Ethernet14
+            role: peering
+            interface_type: 25gbase-x-sfp28
+          - template_name: Arista-7280SR3-SPINE_Ethernet15
+            name: Ethernet15
+            role: peering
+            interface_type: 25gbase-x-sfp28
+          - template_name: Arista-7280SR3-SPINE_Ethernet16
+            name: Ethernet16
+            role: peering
+            interface_type: 25gbase-x-sfp28
+          - template_name: Arista-7280SR3-SPINE_Ethernet17
+            name: Ethernet17
+            role: peering
+            interface_type: 25gbase-x-sfp28
+          - template_name: Arista-7280SR3-SPINE_Ethernet18
+            name: Ethernet18
+            role: peering
+            interface_type: 25gbase-x-sfp28
+          - template_name: Arista-7280SR3-SPINE_Ethernet19
+            name: Ethernet19
+            role: peering
+            interface_type: 25gbase-x-sfp28
+          - template_name: Arista-7280SR3-SPINE_Ethernet20
+            name: Ethernet20
+            role: peering
+            interface_type: 25gbase-x-sfp28
+          - template_name: Arista-7280SR3-SPINE_Ethernet21
+            name: Ethernet21
+            role: peering
+            interface_type: 25gbase-x-sfp28
+          - template_name: Arista-7280SR3-SPINE_Ethernet22
+            name: Ethernet22
+            role: peering
+            interface_type: 25gbase-x-sfp28
+          - template_name: Arista-7280SR3-SPINE_Ethernet23
+            name: Ethernet23
+            role: peering
+            interface_type: 25gbase-x-sfp28
+          - template_name: Arista-7280SR3-SPINE_Ethernet24
+            name: Ethernet24
+            role: peering
+            interface_type: 25gbase-x-sfp28
+          - template_name: Arista-7280SR3-SPINE_Ethernet25
+            name: Ethernet25
+            role: peering
+            interface_type: 25gbase-x-sfp28
+          - template_name: Arista-7280SR3-SPINE_Ethernet26
+            name: Ethernet26
+            role: peering
+            interface_type: 25gbase-x-sfp28
+          - template_name: Arista-7280SR3-SPINE_Ethernet27
+            name: Ethernet27
+            role: peering
+            interface_type: 25gbase-x-sfp28
+          - template_name: Arista-7280SR3-SPINE_Ethernet28
+            name: Ethernet28
+            role: peering
+            interface_type: 25gbase-x-sfp28
+          - template_name: Arista-7280SR3-SPINE_Ethernet29
+            name: Ethernet29
+            role: peering
+            interface_type: 25gbase-x-sfp28
+          - template_name: Arista-7280SR3-SPINE_Ethernet30
+            name: Ethernet30
+            role: peering
+            interface_type: 25gbase-x-sfp28
+          - template_name: Arista-7280SR3-SPINE_Ethernet31
+            name: Ethernet31
+            role: peering
+            interface_type: 25gbase-x-sfp28
+          - template_name: Arista-7280SR3-SPINE_Ethernet32
+            name: Ethernet32
+            role: peering
+            interface_type: 25gbase-x-sfp28
+          - template_name: Arista-7280SR3-SPINE_Ethernet33
+            name: Ethernet33
+            role: peering
+            interface_type: 25gbase-x-sfp28
+          - template_name: Arista-7280SR3-SPINE_Ethernet34
+            name: Ethernet34
+            role: peering
+            interface_type: 25gbase-x-sfp28
+          - template_name: Arista-7280SR3-SPINE_Ethernet35
+            name: Ethernet35
+            role: peering
+            interface_type: 25gbase-x-sfp28
+          - template_name: Arista-7280SR3-SPINE_Ethernet36
+            name: Ethernet36
+            role: peering
+            interface_type: 25gbase-x-sfp28
+          - template_name: Arista-7280SR3-SPINE_Ethernet37
+            name: Ethernet37
+            role: peering
+            interface_type: 25gbase-x-sfp28
+          - template_name: Arista-7280SR3-SPINE_Ethernet38
+            name: Ethernet38
+            role: peering
+            interface_type: 25gbase-x-sfp28
+          - template_name: Arista-7280SR3-SPINE_Ethernet39
+            name: Ethernet39
+            role: peering
+            interface_type: 25gbase-x-sfp28
+          - template_name: Arista-7280SR3-SPINE_Ethernet40
+            name: Ethernet40
+            role: peering
+            interface_type: 25gbase-x-sfp28
+          - template_name: Arista-7280SR3-SPINE_Ethernet41
+            name: Ethernet41
+            role: peering
+            interface_type: 25gbase-x-sfp28
+          - template_name: Arista-7280SR3-SPINE_Ethernet42
+            name: Ethernet42
+            role: peering
+            interface_type: 25gbase-x-sfp28
+          - template_name: Arista-7280SR3-SPINE_Ethernet43
+            name: Ethernet43
+            role: peering
+            interface_type: 25gbase-x-sfp28
+          - template_name: Arista-7280SR3-SPINE_Ethernet44
+            name: Ethernet44
+            role: peering
+            interface_type: 25gbase-x-sfp28
+          - template_name: Arista-7280SR3-SPINE_Ethernet45
+            name: Ethernet45
+            role: peering
+            interface_type: 25gbase-x-sfp28
+          - template_name: Arista-7280SR3-SPINE_Ethernet46
+            name: Ethernet46
+            role: peering
+            interface_type: 25gbase-x-sfp28
+          - template_name: Arista-7280SR3-SPINE_Ethernet47
+            name: Ethernet47
+            role: peering
+            interface_type: 25gbase-x-sfp28
+          - template_name: Arista-7280SR3-SPINE_Ethernet48
+            name: Ethernet48
+            role: peering
+            interface_type: 25gbase-x-sfp28
+          - template_name: Arista-7280SR3-SPINE_Ethernet49
+            name: Ethernet49/1
+            role: uplink
+            interface_type: 100gbase-x-qsfp28
+          - template_name: Arista-7280SR3-SPINE_Ethernet50
+            name: Ethernet50/1
+            role: uplink
+            interface_type: 100gbase-x-qsfp28
+          - template_name: Arista-7280SR3-SPINE_Ethernet51
+            name: Ethernet51/1
+            role: uplink
+            interface_type: 100gbase-x-qsfp28
+          - template_name: Arista-7280SR3-SPINE_Ethernet52
+            name: Ethernet52/1
+            role: uplink
+            interface_type: 100gbase-x-qsfp28
+          - template_name: Arista-7280SR3-SPINE_Ethernet53
+            name: Ethernet53/1
+            role: uplink
+            interface_type: 100gbase-x-qsfp28
+          - template_name: Arista-7280SR3-SPINE_Ethernet54
+            name: Ethernet54/1
+            role: uplink
+            interface_type: 100gbase-x-qsfp28
+          - template_name: Arista-7280SR3-SPINE_Ethernet55
+            name: Ethernet55/1
+            role: uplink
+            interface_type: 100gbase-x-qsfp28
+          - template_name: Arista-7280SR3-SPINE_Ethernet56
+            name: Ethernet56/1
+            role: uplink
+            interface_type: 100gbase-x-qsfp28
           - template_name: 5912-54X-O-AC-F_LEAF_xe10
             name: xe10
             role: customer
+            interface_type: 10gbase-x-sfpp
           - template_name: 5912-54X-O-AC-F_LEAF_xe11
             name: xe11
             role: customer
+            interface_type: 10gbase-x-sfpp
           - template_name: 5912-54X-O-AC-F_LEAF_xe12
             name: xe12
             role: customer
+            interface_type: 10gbase-x-sfpp
           - template_name: 5912-54X-O-AC-F_LEAF_xe13
             name: xe13
             role: customer
+            interface_type: 10gbase-x-sfpp
           - template_name: 5912-54X-O-AC-F_LEAF_xe14
             name: xe14
             role: customer
+            interface_type: 10gbase-x-sfpp
           - template_name: 5912-54X-O-AC-F_LEAF_xe15
             name: xe15
             role: customer
+            interface_type: 10gbase-x-sfpp
           - template_name: 5912-54X-O-AC-F_LEAF_xe16
             name: xe16
             role: customer
+            interface_type: 10gbase-x-sfpp
           - template_name: 5912-54X-O-AC-F_LEAF_xe17
             name: xe17
             role: customer
+            interface_type: 10gbase-x-sfpp
           - template_name: 5912-54X-O-AC-F_LEAF_xe18
             name: xe18
             role: customer
+            interface_type: 10gbase-x-sfpp
           - template_name: 5912-54X-O-AC-F_LEAF_xe19
             name: xe19
             role: customer
+            interface_type: 10gbase-x-sfpp
           - template_name: 5912-54X-O-AC-F_LEAF_xe20
             name: xe20
             role: customer
+            interface_type: 10gbase-x-sfpp
           - template_name: 5912-54X-O-AC-F_LEAF_xe21
             name: xe21
             role: customer
+            interface_type: 10gbase-x-sfpp
           - template_name: 5912-54X-O-AC-F_LEAF_xe22
             name: xe22
             role: customer
+            interface_type: 10gbase-x-sfpp
           - template_name: 5912-54X-O-AC-F_LEAF_xe23
             name: xe23
             role: customer
+            interface_type: 10gbase-x-sfpp
           - template_name: 5912-54X-O-AC-F_LEAF_xe24
             name: xe24
             role: customer
+            interface_type: 10gbase-x-sfpp
           - template_name: 5912-54X-O-AC-F_LEAF_xe25
             name: xe25
             role: customer
+            interface_type: 10gbase-x-sfpp
           - template_name: 5912-54X-O-AC-F_LEAF_xe26
             name: xe26
             role: customer
+            interface_type: 10gbase-x-sfpp
           - template_name: 5912-54X-O-AC-F_LEAF_xe27
             name: xe27
             role: customer
+            interface_type: 10gbase-x-sfpp
           - template_name: 5912-54X-O-AC-F_LEAF_xe28
             name: xe28
             role: customer
+            interface_type: 10gbase-x-sfpp
           - template_name: 5912-54X-O-AC-F_LEAF_xe29
             name: xe29
             role: customer
+            interface_type: 10gbase-x-sfpp
           - template_name: 5912-54X-O-AC-F_LEAF_xe30
             name: xe30
             role: customer
+            interface_type: 10gbase-x-sfpp
           - template_name: 5912-54X-O-AC-F_LEAF_xe31
             name: xe31
             role: customer
+            interface_type: 10gbase-x-sfpp
           - template_name: 5912-54X-O-AC-F_LEAF_xe32
             name: xe32
             role: customer
+            interface_type: 10gbase-x-sfpp
           - template_name: 5912-54X-O-AC-F_LEAF_xe33
             name: xe33
             role: customer
+            interface_type: 10gbase-x-sfpp
           - template_name: 5912-54X-O-AC-F_LEAF_xe34
             name: xe34
             role: customer
+            interface_type: 10gbase-x-sfpp
           - template_name: 5912-54X-O-AC-F_LEAF_xe35
             name: xe35
             role: customer
+            interface_type: 10gbase-x-sfpp
           - template_name: 5912-54X-O-AC-F_LEAF_xe36
             name: xe36
             role: customer
+            interface_type: 10gbase-x-sfpp
           - template_name: 5912-54X-O-AC-F_LEAF_xe37
             name: xe37
             role: customer
+            interface_type: 10gbase-x-sfpp
           - template_name: 5912-54X-O-AC-F_LEAF_xe38
             name: xe38
             role: customer
+            interface_type: 10gbase-x-sfpp
           - template_name: 5912-54X-O-AC-F_LEAF_xe39
             name: xe39
             role: customer
+            interface_type: 10gbase-x-sfpp
           - template_name: 5912-54X-O-AC-F_LEAF_xe40
             name: xe40
             role: customer
+            interface_type: 10gbase-x-sfpp
           - template_name: 5912-54X-O-AC-F_LEAF_xe41
             name: xe41
             role: customer
+            interface_type: 10gbase-x-sfpp
           - template_name: 5912-54X-O-AC-F_LEAF_xe42
             name: xe42
             role: customer
+            interface_type: 10gbase-x-sfpp
           - template_name: 5912-54X-O-AC-F_LEAF_xe43
             name: xe43
             role: customer
+            interface_type: 10gbase-x-sfpp
           - template_name: 5912-54X-O-AC-F_LEAF_xe44
             name: xe44
             role: customer
+            interface_type: 10gbase-x-sfpp
           - template_name: 5912-54X-O-AC-F_LEAF_xe45
             name: xe45
             role: customer
+            interface_type: 10gbase-x-sfpp
           - template_name: 5912-54X-O-AC-F_LEAF_xe46
             name: xe46
             role: customer
+            interface_type: 10gbase-x-sfpp
           - template_name: 5912-54X-O-AC-F_LEAF_xe47
             name: xe47
             role: customer
+            interface_type: 10gbase-x-sfpp
           - template_name: 5912-54X-O-AC-F_LEAF_xe48
             name: xe48
             role: customer
+            interface_type: 10gbase-x-sfpp
           - template_name: 5912-54X-O-AC-F_LEAF_ce50
             name: ce50
             role: uplink
+            interface_type: 40gbase-x-qsfpp
           - template_name: 5912-54X-O-AC-F_LEAF_ce51
             name: ce51
             role: uplink
+            interface_type: 40gbase-x-qsfpp
           - template_name: 5912-54X-O-AC-F_LEAF_ce52
             name: ce52
             role: uplink
+            interface_type: 40gbase-x-qsfpp
           - template_name: 5912-54X-O-AC-F_LEAF_ce53
             name: ce53
             role: uplink
+            interface_type: 40gbase-x-qsfpp
           - template_name: 5912-54X-O-AC-F_LEAF_eth0
             name: eth0
             role: management
+            interface_type: 1000base-t
     - template_name: 7726-32X-O_SPINE
       device_type: 7726-32X-O
       platform: arista_eos
@@ -1282,99 +2034,636 @@ spec:
           - template_name: 7726-32X-O_SPINE_eth0
             name: eth0
             role: management
+            interface_type: 1000base-t
           - template_name: 7726-32X-O_SPINE_Ethernet0
             name: Ethernet0
             role: leaf
+            interface_type: 100gbase-x-qsfp28
           - template_name: 7726-32X-O_SPINE_Ethernet4
             name: Ethernet4
             role: leaf
+            interface_type: 100gbase-x-qsfp28
           - template_name: 7726-32X-O_SPINE_Ethernet8
             name: Ethernet8
             role: leaf
+            interface_type: 100gbase-x-qsfp28
           - template_name: 7726-32X-O_SPINE_Ethernet12
             name: Ethernet12
             role: leaf
+            interface_type: 100gbase-x-qsfp28
           - template_name: 7726-32X-O_SPINE_Ethernet16
             name: Ethernet16
             role: leaf
+            interface_type: 100gbase-x-qsfp28
           - template_name: 7726-32X-O_SPINE_Ethernet20
             name: Ethernet20
             role: leaf
+            interface_type: 100gbase-x-qsfp28
           - template_name: 7726-32X-O_SPINE_Ethernet24
             name: Ethernet24
             role: leaf
+            interface_type: 100gbase-x-qsfp28
           - template_name: 7726-32X-O_SPINE_Ethernet28
             name: Ethernet28
             role: leaf
+            interface_type: 100gbase-x-qsfp28
           - template_name: 7726-32X-O_SPINE_Ethernet32
             name: Ethernet32
             role: leaf
+            interface_type: 100gbase-x-qsfp28
           - template_name: 7726-32X-O_SPINE_Ethernet36
             name: Ethernet36
             role: leaf
+            interface_type: 100gbase-x-qsfp28
           - template_name: 7726-32X-O_SPINE_Ethernet40
             name: Ethernet40
             role: leaf
+            interface_type: 100gbase-x-qsfp28
           - template_name: 7726-32X-O_SPINE_Ethernet44
             name: Ethernet44
             role: leaf
+            interface_type: 100gbase-x-qsfp28
           - template_name: 7726-32X-O_SPINE_Ethernet48
             name: Ethernet48
             role: leaf
+            interface_type: 100gbase-x-qsfp28
           - template_name: 7726-32X-O_SPINE_Ethernet52
             name: Ethernet52
             role: leaf
+            interface_type: 100gbase-x-qsfp28
           - template_name: 7726-32X-O_SPINE_Ethernet56
             name: Ethernet56
             role: leaf
+            interface_type: 100gbase-x-qsfp28
           - template_name: 7726-32X-O_SPINE_Ethernet60
             name: Ethernet60
             role: leaf
+            interface_type: 100gbase-x-qsfp28
           - template_name: 7726-32X-O_SPINE_Ethernet64
             name: Ethernet64
             role: leaf
+            interface_type: 100gbase-x-qsfp28
           - template_name: 7726-32X-O_SPINE_Ethernet68
             name: Ethernet68
             role: leaf
+            interface_type: 100gbase-x-qsfp28
           - template_name: 7726-32X-O_SPINE_Ethernet72
             name: Ethernet72
             role: leaf
+            interface_type: 100gbase-x-qsfp28
           - template_name: 7726-32X-O_SPINE_Ethernet76
             name: Ethernet76
             role: leaf
+            interface_type: 100gbase-x-qsfp28
           - template_name: 7726-32X-O_SPINE_Ethernet80
             name: Ethernet80
             role: leaf
+            interface_type: 100gbase-x-qsfp28
           - template_name: 7726-32X-O_SPINE_Ethernet84
             name: Ethernet84
             role: leaf
+            interface_type: 100gbase-x-qsfp28
           - template_name: 7726-32X-O_SPINE_Ethernet88
             name: Ethernet88
             role: leaf
+            interface_type: 100gbase-x-qsfp28
           - template_name: 7726-32X-O_SPINE_Ethernet92
             name: Ethernet92
             role: leaf
+            interface_type: 100gbase-x-qsfp28
           - template_name: 7726-32X-O_SPINE_Ethernet96
             name: Ethernet96
             role: leaf
+            interface_type: 100gbase-x-qsfp28
           - template_name: 7726-32X-O_SPINE_Ethernet100
             name: Ethernet100
             role: leaf
+            interface_type: 100gbase-x-qsfp28
           - template_name: 7726-32X-O_SPINE_Ethernet104
             name: Ethernet104
             role: leaf
+            interface_type: 100gbase-x-qsfp28
           - template_name: 7726-32X-O_SPINE_Ethernet108
             name: Ethernet108
             role: leaf
+            interface_type: 100gbase-x-qsfp28
           - template_name: 7726-32X-O_SPINE_Ethernet112
             name: Ethernet112
             role: uplink
+            interface_type: 100gbase-x-qsfp28
           - template_name: 7726-32X-O_SPINE_Ethernet116
             name: Ethernet116
             role: uplink
+            interface_type: 100gbase-x-qsfp28
           - template_name: 7726-32X-O_SPINE_Ethernet120
             name: Ethernet120
             role: uplink
+            interface_type: 100gbase-x-qsfp28
           - template_name: 7726-32X-O_SPINE_Ethernet124
             name: Ethernet124
             role: uplink
+            interface_type: 100gbase-x-qsfp28
+    - template_name: Arista-7050CX3-32S-F-SPINE
+      device_type: DCS-7050CX3-32S-F
+      platform: arista_eos
+      role: spine
+      status: active
+      interfaces:
+        kind: TemplateDcimPhysicalInterface
+        data:
+          - template_name: Arista-7050CX3-32S-F-SPINE_Management1
+            name: Management1
+            role: management
+            interface_type: 1000base-t
+          - template_name: Arista-7050CX3-32S-F-SPINE_Ethernet1/1
+            name: Ethernet1/1
+            role: peering
+            interface_type: 100gbase-x-qsfp28
+          - template_name: Arista-7050CX3-32S-F-SPINE_Ethernet2/1
+            name: Ethernet2/1
+            role: peering
+            interface_type: 100gbase-x-qsfp28
+          - template_name: Arista-7050CX3-32S-F-SPINE_Ethernet3/1
+            name: Ethernet3/1
+            role: peering
+            interface_type: 100gbase-x-qsfp28
+          - template_name: Arista-7050CX3-32S-F-SPINE_Ethernet4/1
+            name: Ethernet4/1
+            role: peering
+            interface_type: 100gbase-x-qsfp28
+          - template_name: Arista-7050CX3-32S-F-SPINE_Ethernet5/1
+            name: Ethernet5/1
+            role: peering
+            interface_type: 100gbase-x-qsfp28
+          - template_name: Arista-7050CX3-32S-F-SPINE_Ethernet6/1
+            name: Ethernet6/1
+            role: peering
+            interface_type: 100gbase-x-qsfp28
+          - template_name: Arista-7050CX3-32S-F-SPINE_Ethernet7/1
+            name: Ethernet7/1
+            role: peering
+            interface_type: 100gbase-x-qsfp28
+          - template_name: Arista-7050CX3-32S-F-SPINE_Ethernet8/1
+            name: Ethernet8/1
+            role: peering
+            interface_type: 100gbase-x-qsfp28
+          - template_name: Arista-7050CX3-32S-F-SPINE_Ethernet9/1
+            name: Ethernet9/1
+            role: uplink
+            interface_type: 100gbase-x-qsfp28
+          - template_name: Arista-7050CX3-32S-F-SPINE_Ethernet10/1
+            name: Ethernet10/1
+            role: uplink
+            interface_type: 100gbase-x-qsfp28
+          - template_name: Arista-7050CX3-32S-F-SPINE_Ethernet11/1
+            name: Ethernet11/1
+            role: uplink
+            interface_type: 100gbase-x-qsfp28
+          - template_name: Arista-7050CX3-32S-F-SPINE_Ethernet12/1
+            name: Ethernet12/1
+            role: uplink
+            interface_type: 100gbase-x-qsfp28
+          - template_name: Arista-7050CX3-32S-F-SPINE_Ethernet13/1
+            name: Ethernet13/1
+            role: uplink
+            interface_type: 100gbase-x-qsfp28
+          - template_name: Arista-7050CX3-32S-F-SPINE_Ethernet14/1
+            name: Ethernet14/1
+            role: uplink
+            interface_type: 100gbase-x-qsfp28
+          - template_name: Arista-7050CX3-32S-F-SPINE_Ethernet15/1
+            name: Ethernet15/1
+            role: uplink
+            interface_type: 100gbase-x-qsfp28
+          - template_name: Arista-7050CX3-32S-F-SPINE_Ethernet16/1
+            name: Ethernet16/1
+            role: uplink
+            interface_type: 100gbase-x-qsfp28
+          - template_name: Arista-7050CX3-32S-F-SPINE_Ethernet17/1
+            name: Ethernet17/1
+            role: uplink
+            interface_type: 100gbase-x-qsfp28
+          - template_name: Arista-7050CX3-32S-F-SPINE_Ethernet18/1
+            name: Ethernet18/1
+            role: uplink
+            interface_type: 100gbase-x-qsfp28
+          - template_name: Arista-7050CX3-32S-F-SPINE_Ethernet19/1
+            name: Ethernet19/1
+            role: uplink
+            interface_type: 100gbase-x-qsfp28
+          - template_name: Arista-7050CX3-32S-F-SPINE_Ethernet20/1
+            name: Ethernet20/1
+            role: uplink
+            interface_type: 100gbase-x-qsfp28
+          - template_name: Arista-7050CX3-32S-F-SPINE_Ethernet21/1
+            name: Ethernet21/1
+            role: uplink
+            interface_type: 100gbase-x-qsfp28
+          - template_name: Arista-7050CX3-32S-F-SPINE_Ethernet22/1
+            name: Ethernet22/1
+            role: uplink
+            interface_type: 100gbase-x-qsfp28
+          - template_name: Arista-7050CX3-32S-F-SPINE_Ethernet23/1
+            name: Ethernet23/1
+            role: uplink
+            interface_type: 100gbase-x-qsfp28
+          - template_name: Arista-7050CX3-32S-F-SPINE_Ethernet24/1
+            name: Ethernet24/1
+            role: uplink
+            interface_type: 100gbase-x-qsfp28
+          - template_name: Arista-7050CX3-32S-F-SPINE_Ethernet25/1
+            name: Ethernet25/1
+            role: uplink
+            interface_type: 100gbase-x-qsfp28
+          - template_name: Arista-7050CX3-32S-F-SPINE_Ethernet26/1
+            name: Ethernet26/1
+            role: uplink
+            interface_type: 100gbase-x-qsfp28
+          - template_name: Arista-7050CX3-32S-F-SPINE_Ethernet27/1
+            name: Ethernet27/1
+            role: uplink
+            interface_type: 100gbase-x-qsfp28
+          - template_name: Arista-7050CX3-32S-F-SPINE_Ethernet28/1
+            name: Ethernet28/1
+            role: uplink
+            interface_type: 100gbase-x-qsfp28
+          - template_name: Arista-7050CX3-32S-F-SPINE_Ethernet29/1
+            name: Ethernet29/1
+            role: uplink
+            interface_type: 100gbase-x-qsfp28
+          - template_name: Arista-7050CX3-32S-F-SPINE_Ethernet30/1
+            name: Ethernet30/1
+            role: uplink
+            interface_type: 100gbase-x-qsfp28
+          - template_name: Arista-7050CX3-32S-F-SPINE_Ethernet31/1
+            name: Ethernet31/1
+            role: uplink
+            interface_type: 100gbase-x-qsfp28
+          - template_name: Arista-7050CX3-32S-F-SPINE_Ethernet32/1
+            name: Ethernet32/1
+            role: uplink
+            interface_type: 100gbase-x-qsfp28
+          - template_name: Arista-7050CX3-32S-F-SPINE_Ethernet33
+            name: Ethernet33
+            role: management
+            interface_type: 10gbase-x-sfpp
+          - template_name: Arista-7050CX3-32S-F-SPINE_Ethernet34
+            name: Ethernet34
+            role: management
+            interface_type: 10gbase-x-sfpp
+    - template_name: Arista-7060CX-32S-F-SUPER-SPINE
+      device_type: DCS-7060CX-32S-F
+      platform: arista_eos
+      role: super-spine
+      status: active
+      interfaces:
+        kind: TemplateDcimPhysicalInterface
+        data:
+          - template_name: Arista-7060CX-32S-F-SUPER-SPINE_Management1
+            name: Management1
+            role: management
+            interface_type: 1000base-t
+          - template_name: Arista-7060CX-32S-F-SUPER-SPINE_Ethernet1/1
+            name: Ethernet1/1
+            role: spine
+            interface_type: 100gbase-x-qsfp28
+          - template_name: Arista-7060CX-32S-F-SUPER-SPINE_Ethernet2/1
+            name: Ethernet2/1
+            role: spine
+            interface_type: 100gbase-x-qsfp28
+          - template_name: Arista-7060CX-32S-F-SUPER-SPINE_Ethernet3/1
+            name: Ethernet3/1
+            role: spine
+            interface_type: 100gbase-x-qsfp28
+          - template_name: Arista-7060CX-32S-F-SUPER-SPINE_Ethernet4/1
+            name: Ethernet4/1
+            role: spine
+            interface_type: 100gbase-x-qsfp28
+          - template_name: Arista-7060CX-32S-F-SUPER-SPINE_Ethernet5/1
+            name: Ethernet5/1
+            role: spine
+            interface_type: 100gbase-x-qsfp28
+          - template_name: Arista-7060CX-32S-F-SUPER-SPINE_Ethernet6/1
+            name: Ethernet6/1
+            role: spine
+            interface_type: 100gbase-x-qsfp28
+          - template_name: Arista-7060CX-32S-F-SUPER-SPINE_Ethernet7/1
+            name: Ethernet7/1
+            role: spine
+            interface_type: 100gbase-x-qsfp28
+          - template_name: Arista-7060CX-32S-F-SUPER-SPINE_Ethernet8/1
+            name: Ethernet8/1
+            role: spine
+            interface_type: 100gbase-x-qsfp28
+          - template_name: Arista-7060CX-32S-F-SUPER-SPINE_Ethernet9/1
+            name: Ethernet9/1
+            role: spine
+            interface_type: 100gbase-x-qsfp28
+          - template_name: Arista-7060CX-32S-F-SUPER-SPINE_Ethernet10/1
+            name: Ethernet10/1
+            role: spine
+            interface_type: 100gbase-x-qsfp28
+          - template_name: Arista-7060CX-32S-F-SUPER-SPINE_Ethernet11/1
+            name: Ethernet11/1
+            role: spine
+            interface_type: 100gbase-x-qsfp28
+          - template_name: Arista-7060CX-32S-F-SUPER-SPINE_Ethernet12/1
+            name: Ethernet12/1
+            role: spine
+            interface_type: 100gbase-x-qsfp28
+          - template_name: Arista-7060CX-32S-F-SUPER-SPINE_Ethernet13/1
+            name: Ethernet13/1
+            role: spine
+            interface_type: 100gbase-x-qsfp28
+          - template_name: Arista-7060CX-32S-F-SUPER-SPINE_Ethernet14/1
+            name: Ethernet14/1
+            role: spine
+            interface_type: 100gbase-x-qsfp28
+          - template_name: Arista-7060CX-32S-F-SUPER-SPINE_Ethernet15/1
+            name: Ethernet15/1
+            role: spine
+            interface_type: 100gbase-x-qsfp28
+          - template_name: Arista-7060CX-32S-F-SUPER-SPINE_Ethernet16/1
+            name: Ethernet16/1
+            role: spine
+            interface_type: 100gbase-x-qsfp28
+          - template_name: Arista-7060CX-32S-F-SUPER-SPINE_Ethernet17/1
+            name: Ethernet17/1
+            role: spine
+            interface_type: 100gbase-x-qsfp28
+          - template_name: Arista-7060CX-32S-F-SUPER-SPINE_Ethernet18/1
+            name: Ethernet18/1
+            role: spine
+            interface_type: 100gbase-x-qsfp28
+          - template_name: Arista-7060CX-32S-F-SUPER-SPINE_Ethernet19/1
+            name: Ethernet19/1
+            role: spine
+            interface_type: 100gbase-x-qsfp28
+          - template_name: Arista-7060CX-32S-F-SUPER-SPINE_Ethernet20/1
+            name: Ethernet20/1
+            role: spine
+            interface_type: 100gbase-x-qsfp28
+          - template_name: Arista-7060CX-32S-F-SUPER-SPINE_Ethernet21/1
+            name: Ethernet21/1
+            role: spine
+            interface_type: 100gbase-x-qsfp28
+          - template_name: Arista-7060CX-32S-F-SUPER-SPINE_Ethernet22/1
+            name: Ethernet22/1
+            role: spine
+            interface_type: 100gbase-x-qsfp28
+          - template_name: Arista-7060CX-32S-F-SUPER-SPINE_Ethernet23/1
+            name: Ethernet23/1
+            role: spine
+            interface_type: 100gbase-x-qsfp28
+          - template_name: Arista-7060CX-32S-F-SUPER-SPINE_Ethernet24/1
+            name: Ethernet24/1
+            role: spine
+            interface_type: 100gbase-x-qsfp28
+          - template_name: Arista-7060CX-32S-F-SUPER-SPINE_Ethernet25/1
+            name: Ethernet25/1
+            role: spine
+            interface_type: 100gbase-x-qsfp28
+          - template_name: Arista-7060CX-32S-F-SUPER-SPINE_Ethernet26/1
+            name: Ethernet26/1
+            role: spine
+            interface_type: 100gbase-x-qsfp28
+          - template_name: Arista-7060CX-32S-F-SUPER-SPINE_Ethernet27/1
+            name: Ethernet27/1
+            role: spine
+            interface_type: 100gbase-x-qsfp28
+          - template_name: Arista-7060CX-32S-F-SUPER-SPINE_Ethernet28/1
+            name: Ethernet28/1
+            role: spine
+            interface_type: 100gbase-x-qsfp28
+          - template_name: Arista-7060CX-32S-F-SUPER-SPINE_Ethernet29/1
+            name: Ethernet29/1
+            role: spine
+            interface_type: 100gbase-x-qsfp28
+          - template_name: Arista-7060CX-32S-F-SUPER-SPINE_Ethernet30/1
+            name: Ethernet30/1
+            role: spine
+            interface_type: 100gbase-x-qsfp28
+          - template_name: Arista-7060CX-32S-F-SUPER-SPINE_Ethernet31/1
+            name: Ethernet31/1
+            role: spine
+            interface_type: 100gbase-x-qsfp28
+          - template_name: Arista-7060CX-32S-F-SUPER-SPINE_Ethernet32/1
+            name: Ethernet32/1
+            role: spine
+            interface_type: 100gbase-x-qsfp28
+          - template_name: Arista-7060CX-32S-F-SUPER-SPINE_Ethernet33
+            name: Ethernet33
+            role: management
+            interface_type: 10gbase-x-sfpp
+          - template_name: Arista-7060CX-32S-F-SUPER-SPINE_Ethernet34
+            name: Ethernet34
+            role: management
+            interface_type: 10gbase-x-sfpp
+    - template_name: Arista-7130-48EH-F-CAMPUS-ACCESS
+      device_type: DCS-7130-48EH-F
+      platform: arista_eos
+      role: leaf
+      status: active
+      interfaces:
+        kind: TemplateDcimPhysicalInterface
+        data:
+          - template_name: Arista-7130-48EH-F-CAMPUS-ACCESS_Management1
+            name: Management1
+            role: management
+            interface_type: 1000base-t
+          - template_name: Arista-7130-48EH-F-CAMPUS-ACCESS_Management2
+            name: Management2
+            role: management
+            interface_type: 1000base-t
+          - template_name: Arista-7130-48EH-F-CAMPUS-ACCESS_Ethernet1
+            name: Ethernet1
+            role: customer
+            interface_type: 10gbase-x-sfpp
+          - template_name: Arista-7130-48EH-F-CAMPUS-ACCESS_Ethernet2
+            name: Ethernet2
+            role: customer
+            interface_type: 10gbase-x-sfpp
+          - template_name: Arista-7130-48EH-F-CAMPUS-ACCESS_Ethernet3
+            name: Ethernet3
+            role: customer
+            interface_type: 10gbase-x-sfpp
+          - template_name: Arista-7130-48EH-F-CAMPUS-ACCESS_Ethernet4
+            name: Ethernet4
+            role: customer
+            interface_type: 10gbase-x-sfpp
+          - template_name: Arista-7130-48EH-F-CAMPUS-ACCESS_Ethernet5
+            name: Ethernet5
+            role: customer
+            interface_type: 10gbase-x-sfpp
+          - template_name: Arista-7130-48EH-F-CAMPUS-ACCESS_Ethernet6
+            name: Ethernet6
+            role: customer
+            interface_type: 10gbase-x-sfpp
+          - template_name: Arista-7130-48EH-F-CAMPUS-ACCESS_Ethernet7
+            name: Ethernet7
+            role: customer
+            interface_type: 10gbase-x-sfpp
+          - template_name: Arista-7130-48EH-F-CAMPUS-ACCESS_Ethernet8
+            name: Ethernet8
+            role: customer
+            interface_type: 10gbase-x-sfpp
+          - template_name: Arista-7130-48EH-F-CAMPUS-ACCESS_Ethernet9
+            name: Ethernet9
+            role: customer
+            interface_type: 10gbase-x-sfpp
+          - template_name: Arista-7130-48EH-F-CAMPUS-ACCESS_Ethernet10
+            name: Ethernet10
+            role: customer
+            interface_type: 10gbase-x-sfpp
+          - template_name: Arista-7130-48EH-F-CAMPUS-ACCESS_Ethernet11
+            name: Ethernet11
+            role: customer
+            interface_type: 10gbase-x-sfpp
+          - template_name: Arista-7130-48EH-F-CAMPUS-ACCESS_Ethernet12
+            name: Ethernet12
+            role: customer
+            interface_type: 10gbase-x-sfpp
+          - template_name: Arista-7130-48EH-F-CAMPUS-ACCESS_Ethernet13
+            name: Ethernet13
+            role: customer
+            interface_type: 10gbase-x-sfpp
+          - template_name: Arista-7130-48EH-F-CAMPUS-ACCESS_Ethernet14
+            name: Ethernet14
+            role: customer
+            interface_type: 10gbase-x-sfpp
+          - template_name: Arista-7130-48EH-F-CAMPUS-ACCESS_Ethernet15
+            name: Ethernet15
+            role: customer
+            interface_type: 10gbase-x-sfpp
+          - template_name: Arista-7130-48EH-F-CAMPUS-ACCESS_Ethernet16
+            name: Ethernet16
+            role: customer
+            interface_type: 10gbase-x-sfpp
+          - template_name: Arista-7130-48EH-F-CAMPUS-ACCESS_Ethernet17
+            name: Ethernet17
+            role: customer
+            interface_type: 10gbase-x-sfpp
+          - template_name: Arista-7130-48EH-F-CAMPUS-ACCESS_Ethernet18
+            name: Ethernet18
+            role: customer
+            interface_type: 10gbase-x-sfpp
+          - template_name: Arista-7130-48EH-F-CAMPUS-ACCESS_Ethernet19
+            name: Ethernet19
+            role: customer
+            interface_type: 10gbase-x-sfpp
+          - template_name: Arista-7130-48EH-F-CAMPUS-ACCESS_Ethernet20
+            name: Ethernet20
+            role: customer
+            interface_type: 10gbase-x-sfpp
+          - template_name: Arista-7130-48EH-F-CAMPUS-ACCESS_Ethernet21
+            name: Ethernet21
+            role: customer
+            interface_type: 10gbase-x-sfpp
+          - template_name: Arista-7130-48EH-F-CAMPUS-ACCESS_Ethernet22
+            name: Ethernet22
+            role: customer
+            interface_type: 10gbase-x-sfpp
+          - template_name: Arista-7130-48EH-F-CAMPUS-ACCESS_Ethernet23
+            name: Ethernet23
+            role: customer
+            interface_type: 10gbase-x-sfpp
+          - template_name: Arista-7130-48EH-F-CAMPUS-ACCESS_Ethernet24
+            name: Ethernet24
+            role: customer
+            interface_type: 10gbase-x-sfpp
+          - template_name: Arista-7130-48EH-F-CAMPUS-ACCESS_Ethernet25
+            name: Ethernet25
+            role: customer
+            interface_type: 10gbase-x-sfpp
+          - template_name: Arista-7130-48EH-F-CAMPUS-ACCESS_Ethernet26
+            name: Ethernet26
+            role: customer
+            interface_type: 10gbase-x-sfpp
+          - template_name: Arista-7130-48EH-F-CAMPUS-ACCESS_Ethernet27
+            name: Ethernet27
+            role: customer
+            interface_type: 10gbase-x-sfpp
+          - template_name: Arista-7130-48EH-F-CAMPUS-ACCESS_Ethernet28
+            name: Ethernet28
+            role: customer
+            interface_type: 10gbase-x-sfpp
+          - template_name: Arista-7130-48EH-F-CAMPUS-ACCESS_Ethernet29
+            name: Ethernet29
+            role: customer
+            interface_type: 10gbase-x-sfpp
+          - template_name: Arista-7130-48EH-F-CAMPUS-ACCESS_Ethernet30
+            name: Ethernet30
+            role: customer
+            interface_type: 10gbase-x-sfpp
+          - template_name: Arista-7130-48EH-F-CAMPUS-ACCESS_Ethernet31
+            name: Ethernet31
+            role: customer
+            interface_type: 10gbase-x-sfpp
+          - template_name: Arista-7130-48EH-F-CAMPUS-ACCESS_Ethernet32
+            name: Ethernet32
+            role: customer
+            interface_type: 10gbase-x-sfpp
+          - template_name: Arista-7130-48EH-F-CAMPUS-ACCESS_Ethernet33
+            name: Ethernet33
+            role: customer
+            interface_type: 10gbase-x-sfpp
+          - template_name: Arista-7130-48EH-F-CAMPUS-ACCESS_Ethernet34
+            name: Ethernet34
+            role: customer
+            interface_type: 10gbase-x-sfpp
+          - template_name: Arista-7130-48EH-F-CAMPUS-ACCESS_Ethernet35
+            name: Ethernet35
+            role: customer
+            interface_type: 10gbase-x-sfpp
+          - template_name: Arista-7130-48EH-F-CAMPUS-ACCESS_Ethernet36
+            name: Ethernet36
+            role: customer
+            interface_type: 10gbase-x-sfpp
+          - template_name: Arista-7130-48EH-F-CAMPUS-ACCESS_Ethernet37
+            name: Ethernet37
+            role: customer
+            interface_type: 10gbase-x-sfpp
+          - template_name: Arista-7130-48EH-F-CAMPUS-ACCESS_Ethernet38
+            name: Ethernet38
+            role: customer
+            interface_type: 10gbase-x-sfpp
+          - template_name: Arista-7130-48EH-F-CAMPUS-ACCESS_Ethernet39
+            name: Ethernet39
+            role: customer
+            interface_type: 10gbase-x-sfpp
+          - template_name: Arista-7130-48EH-F-CAMPUS-ACCESS_Ethernet40
+            name: Ethernet40
+            role: customer
+            interface_type: 10gbase-x-sfpp
+          - template_name: Arista-7130-48EH-F-CAMPUS-ACCESS_Ethernet41
+            name: Ethernet41
+            role: customer
+            interface_type: 10gbase-x-sfpp
+          - template_name: Arista-7130-48EH-F-CAMPUS-ACCESS_Ethernet42
+            name: Ethernet42
+            role: customer
+            interface_type: 10gbase-x-sfpp
+          - template_name: Arista-7130-48EH-F-CAMPUS-ACCESS_Ethernet43
+            name: Ethernet43
+            role: customer
+            interface_type: 10gbase-x-sfpp
+          - template_name: Arista-7130-48EH-F-CAMPUS-ACCESS_Ethernet44
+            name: Ethernet44
+            role: customer
+            interface_type: 10gbase-x-sfpp
+          - template_name: Arista-7130-48EH-F-CAMPUS-ACCESS_Ethernet45
+            name: Ethernet45
+            role: customer
+            interface_type: 10gbase-x-sfpp
+          - template_name: Arista-7130-48EH-F-CAMPUS-ACCESS_Ethernet46
+            name: Ethernet46
+            role: customer
+            interface_type: 10gbase-x-sfpp
+          - template_name: Arista-7130-48EH-F-CAMPUS-ACCESS_Ethernet47
+            name: Ethernet47
+            role: customer
+            interface_type: 10gbase-x-sfpp
+          - template_name: Arista-7130-48EH-F-CAMPUS-ACCESS_Ethernet48
+            name: Ethernet48
+            role: customer
+            interface_type: 10gbase-x-sfpp

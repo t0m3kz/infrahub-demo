@@ -6,6 +6,9 @@ query RackGenerator($name: String!) {
         name {
           value
         }
+        checksum {
+          value
+        }
         index {
           value
         }

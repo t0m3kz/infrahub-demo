@@ -143,13 +143,13 @@ generator_definitions:
     execute_after_merge: false
     parameters:
       name: name__value
-  - name: create_server_connectivity
-    file_path: generators/generate_server.py
-    targets: topologies_pod
-    query: topology_pod
-    class_name: ServerConnectivityGenerator
-    parameters:
-      name: name__value
+# - name: create_server_connectivity
+#   file_path: generators/generate_server.py
+#   targets: topologies_pod
+#   query: topology_pod
+#   class_name: ServerConnectivityGenerator
+#   parameters:
+#     name: name__value
 # - name: create_pop
 #   file_path: generators/generate_pop.py
 #   targets: topologies_pop

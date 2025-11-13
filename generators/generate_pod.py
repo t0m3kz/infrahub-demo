@@ -129,3 +129,5 @@ class PodTopologyGenerator(CommonGenerator):
                 "pool": f"{fabric_name}-{pod_name}-technical-pool",
             },
         )
+
+        await self.update_checksum()

@@ -4,10 +4,26 @@ from typing import Any
 
 from .common import CommonGenerator
 from .helpers import DeviceNamingStrategy, FabricPoolStrategy
+from .schema_protocols import TopologyPod
 
 
 class DCTopologyGenerator(CommonGenerator):
     """Generate data center topology with super-spine infrastructure."""
+
+    async def update_checksum(self) -> None:
+        pods = await self.client.filters(
+            kind=TopologyPod, parent__ids=[self.data.get("id")]
+        )
+
+        # store the checksum for the fabric in the object itself
+        fabric_checksum = self.calculate_checksum()
+        for pod in pods:
+            if pod.checksum.value != fabric_checksum:
+                pod.checksum.value = fabric_checksum
+                await pod.save(allow_upsert=True)
+                self.logger.info(
+                    f"Pod {pod.name.value} has been updated to checksum {fabric_checksum}"
+                )
 
     async def generate(self, data: dict[str, Any]) -> None:
         """Generate data center topology.
@@ -62,3 +78,5 @@ class DCTopologyGenerator(CommonGenerator):
                 "allocate_loopback": True,
             },
         )
+
+        await self.update_checksum()

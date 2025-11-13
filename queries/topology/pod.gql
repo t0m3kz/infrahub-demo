@@ -6,6 +6,9 @@ query PodGeneratorQuery($name: String!) {
         name {
           value
         }
+        checksum {
+          value
+        }
         index {
           value
         }
