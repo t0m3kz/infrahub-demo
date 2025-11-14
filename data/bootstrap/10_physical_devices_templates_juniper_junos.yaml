@@ -1,0 +1,60 @@
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TemplateDcimPhysicalDevice
+  data:
+  - template_name: 5912_54X_O_AC_F_LEAF
+    device_type: 5912-54X-O-AC-F
+    platform: juniper_junos
+    role: leaf
+    status: provisioning
+    interfaces:
+      kind: TemplateDcimPhysicalInterface
+      data:
+      - template_name: 5912-54X-O-AC-F_LEAF_xe1
+        name: xe1
+        role: customer
+        interface_type: 10gbase-x-sfpp
+      - template_name: 5912-54X-O-AC-F_LEAF_xe2
+        name: xe2
+        role: customer
+        interface_type: 10gbase-x-sfpp
+      - template_name: 5912-54X-O-AC-F_LEAF_xe3
+        name: xe3
+        role: customer
+        interface_type: 10gbase-x-sfpp
+      - template_name: 5912-54X-O-AC-F_LEAF_xe4
+        name: xe4
+        role: customer
+        interface_type: 10gbase-x-sfpp
+      - template_name: 5912-54X-O-AC-F_LEAF_xe5
+        name: xe5
+        role: customer
+        interface_type: 10gbase-x-sfpp
+      - template_name: 5912-54X-O-AC-F_LEAF_xe6
+        name: xe6
+        role: customer
+        interface_type: 10gbase-x-sfpp
+      - template_name: 5912-54X-O-AC-F_LEAF_xe7
+        name: xe7
+        role: customer
+        interface_type: 10gbase-x-sfpp
+      - template_name: 5912-54X-O-AC-F_LEAF_xe8
+        name: xe8
+        role: customer
+        interface_type: 10gbase-x-sfpp
+      - template_name: 5912-54X-O-AC-F_LEAF_xe9
+        name: xe9
+        role: customer
+        interface_type: 10gbase-x-sfpp
+  - template_name: SRX_1500_EDGE_FIREWALL_CONSOLE
+    device_type: SRX-1500
+    platform: juniper_junos
+    role: firewall
+    status: provisioning
+    interfaces:
+      kind: TemplateDcimConsoleInterface
+      data:
+      - template_name: SRX-1500_EDGE_FIREWALL_con
+        name: con
+        role: console

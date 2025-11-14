@@ -20,8 +20,6 @@ spec:
       description: All firewalls
     - name: loadbalancers
       description: All load balancers
-    - name: firewalls
-      description: All DC firewalls
     - name: oobs
       description: All OOB devices
     - name: consoles

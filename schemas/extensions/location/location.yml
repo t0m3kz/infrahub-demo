@@ -5,9 +5,9 @@ nodes:
   - name: Region
     namespace: Location
     label: Region
-    parent: ""
     inherit_from:
       - LocationGeneric
+    branch: agnostic
     menu_placement: LocationGeneric
     include_in_menu: false
     display_label: "{{name__value}}"
@@ -22,6 +22,7 @@ nodes:
     menu_placement: LocationGeneric
     include_in_menu: false
     display_label: "{{name__value}}"
+    branch: agnostic
     parent: "LocationRegion"
     children: LocationMetro
     icon: gis:search-country
@@ -115,10 +116,6 @@ nodes:
     children: ""
     icon: "clarity:rack-server-line"
     attributes:
-      - name: index
-        kind: Number
-        branch: agnostic
-        optional: false
       - name: rack_type
         kind: Dropdown
         branch: aware
@@ -129,8 +126,8 @@ nodes:
             label: Storage
           - name: tor
             label: Top-of-Rack
-          - name: fabric
-            label: Fabric
+          - name: network
+            label: Network
         default_value: compute
       - name: facility_id
         # branch: aware

@@ -212,17 +212,9 @@ nodes:
             description: Border Leaf providing external connectivity in a Pod.
             color: "#dda0dd"
           - name: firewall
-            label: DC Firewall
+            label: Firewall
             description: "Security boundary with external network"
             color: "#6e5abd"
-          - name: firewall
-            label: Edge Firewall
-            description: "Security boundary with external network"
-            color: "#6a5acd"
-          - name: branch_firewall
-            label: Branch Firewall
-            description: "Security boundary with external network"
-            color: "#6a5bdd"
           - name: load-balancer
             label: Load Balancer
             description: Load Balancer part of a Fabric.
@@ -263,6 +255,8 @@ nodes:
       - TopologyDeployment
     include_in_menu: true
     children: TopologyPod
+    uniqueness_constraints:
+      - [name__value, index__value]
     attributes:
       - name: fully_managed
         label: Fully Managed

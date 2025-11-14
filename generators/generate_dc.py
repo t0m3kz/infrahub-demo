@@ -12,7 +12,7 @@ class DCTopologyGenerator(CommonGenerator):
 
     async def update_checksum(self) -> None:
         pods = await self.client.filters(
-            kind=TopologyPod, parent__ids=[self.data.get("id")]
+            kind=TopologyPod, parent__ids=[self.data.get("id")], branch=self.branch
         )
 
         # store the checksum for the fabric in the object itself

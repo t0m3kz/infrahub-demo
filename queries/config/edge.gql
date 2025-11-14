@@ -2,6 +2,7 @@ query edge_config($device: String!) {
   DcimGenericDevice(name__value: $device) {
     edges {
       node {
+        __typename
         id
         name { value }
         role { value }
@@ -15,13 +16,11 @@ query edge_config($device: String!) {
           node {
             name { value }
             manufacturer { node { name { value } } }
-            platform {
-              node {
-                netmiko_device_type { value }
-                napalm_driver { value }
-                ansible_network_os { value }
-              }
-            }
+          }
+        }
+        platform {
+          node {
+            name { value }
           }
         }
         primary_address {
@@ -104,7 +103,7 @@ query edge_config($device: String!) {
         interfaces {
           edges {
             node {
-              id
+              __typename
               name { value }
               description { value }
               status { value }

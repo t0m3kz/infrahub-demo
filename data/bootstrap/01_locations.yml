@@ -79,6 +79,11 @@ spec:
               data:
                 - name: "Katowice"
                   shortname: "ktw"
+                  children:
+                    kind: LocationBuilding
+                    data:
+                      - name: "KTW-1"
+                        shortname: "ktw-1"
           - name: "Spain"
             shortname: "es"
             children:

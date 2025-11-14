@@ -1,90 +1,99 @@
-{
-  "DEVICE_METADATA": {
-    "localhost": {
-      "hostname": "{{ hostname }}",
-      "type": "LeafRouter",
-      "bgp_asn": "{{ bgp.local_as }}"
-    }
-  },
-  "VLAN": {
-{% for vlan in vlans %}
-    "Vlan{{ vlan.vlan_id }}": {
-      "vlanid": "{{ vlan.vlan_id }}"
-    }{{ "," if not loop.last }}
-{% endfor %}
-  },
-  "VLAN_INTERFACE": {
-{% for vlan in vlans %}
-    "Vlan{{ vlan.vlan_id }}": {}{{ "," if not loop.last }}
-{% endfor %}
-  },
-  "LOOPBACK_INTERFACE": {
-{% for loopback_name, loopback_ip in loopbacks.items() %}
-    "{{ loopback_name }}|{{ loopback_ip }}/32": {}{{ "," if not loop.last }}
-{% endfor %}
-  },
-  "INTERFACE": {
-{% for interface in interfaces.all_physical %}
-  {% if interface.role == 'uplink' %}
-    "{{ interface.name }}": {}{{ "," if not loop.last }}
-  {% endif %}
-{% endfor %}
-  },
-  "BGP_NEIGHBOR": {
-{% for neighbor in bgp.neighbors %}
-    "{{ neighbor.remote_ip.split('/')[0] }}": {
-      "local_addr": "{{ bgp.router_id or loopbacks.loopback0 }}",
-      "asn": "{{ neighbor.remote_as }}",
-      "holdtime": "10",
-      "keepalive": "3",
-      "name": "{{ neighbor.description or 'BGP Neighbor' }}"
-    }{{ "," if not loop.last }}
-{% endfor %}
-  },
-  "BGP_GLOBALS": {
-    "default": {
-      "router_id": "{{ bgp.router_id or loopbacks.loopback0 }}",
-      "local_asn": "{{ bgp.local_as }}"
-    }
-  },
-  "OSPF_ROUTER": {
-    "default": {
-      "router_id": "{{ ospf.router_id or loopbacks.loopback0 }}"
-    }
-  },
-  "OSPF_INTERFACE": {
-{% for interface in interfaces.all_physical %}
-  {% if interface.role == 'uplink' %}
-    "{{ interface.name }}": {
-      "area": "{{ ospf.area or '0.0.0.0' }}",
-      "network": "point-to-point"
-    }{{ "," if not (loop.last and not loopbacks.loopback0) }}
-  {% endif %}
-{% endfor %}
-{% if loopbacks.loopback0 %}
-    "loopback0": {
-      "area": "{{ ospf.area or '0.0.0.0' }}"
-    }
-{% endif %}
-  },
-  "VXLAN_TUNNEL": {
-    "vtep1": {
-      "src_ip": "{{ loopbacks.loopback1 or loopbacks.loopback0 }}"
-    }
-  },
-  "VXLAN_TUNNEL_MAP": {
-{% for vlan in vlans %}
-    "vtep1|map_{{ vlan.vni }}_Vlan{{ vlan.vlan_id }}": {
-      "vlan": "Vlan{{ vlan.vlan_id }}",
-      "vni": "{{ vlan.vni }}"
-    }{{ "," if not loop.last }}
-{% endfor %}
-  },
-  "BGP_NEIGHBOR_AF": {
-{% for neighbor in bgp.neighbors %}
-    "{{ neighbor.remote_ip.split('/')[0] }}|l2vpn_evpn": {
-      "admin_status": "up"
-    }{{ "," if not loop.last }}
-{% endfor %}
+{#- Sonic JSON Leaf Configuration - Using Jinja2 tojson filter for clean JSON -#}
+{%- set device_metadata = {
+  'localhost': {
+    'hostname': hostname,
+    'type': 'LeafRouter'
   }
-}
+} -%}
+{%- if bgp %}
+{%- set _ = device_metadata['localhost'].update({'bgp_asn': bgp[0].local_as.asn}) -%}
+{%- endif %}
+
+{%- set vlan_config = {} -%}
+{%- for vlan in vlans -%}
+{%- set _ = vlan_config.update({
+  ('Vlan' + vlan.vlan_id|string): {
+    'vlanid': vlan.vlan_id|string
+  }
+}) -%}
+{%- endfor %}
+
+{%- set loopback_interfaces = {} -%}
+{%- for interface in interfaces -%}
+{%- if 'loopback' in interface.name|lower -%}
+{%- for ip in interface.ip_addresses -%}
+{%- set key = interface.name + '|' + ip -%}
+{%- set _ = loopback_interfaces.update({key: {}}) -%}
+{%- endfor -%}
+{%- endif -%}
+{%- endfor %}
+
+{%- set physical_interfaces = {} -%}
+{%- for interface in interfaces -%}
+{%- if 'loopback' not in interface.name|lower -%}
+{%- set _ = physical_interfaces.update({interface.name: {}}) -%}
+{%- endif -%}
+{%- endfor %}
+
+{%- set interface_ips = {} -%}
+{%- for interface in interfaces -%}
+{%- if 'loopback' not in interface.name|lower and interface.ip_addresses -%}
+{%- for ip in interface.ip_addresses -%}
+{%- set key = interface.name + '|' + ip -%}
+{%- set _ = interface_ips.update({key: {}}) -%}
+{%- endfor -%}
+{%- endif -%}
+{%- endfor %}
+
+{%- set vlan_interfaces = {} -%}
+{%- for vlan in vlans -%}
+{%- set key = 'Vlan' + vlan.vlan_id|string -%}
+{%- set _ = vlan_interfaces.update({key: {}}) -%}
+{%- endfor %}
+
+{%- set bgp_neighbors = {} -%}
+{%- for bgp_config in bgp -%}
+{%- for session in bgp_config.sessions -%}
+{%- set neighbor_ip = session.remote_ip.address.split('/')[0] -%}
+{%- set _ = bgp_neighbors.update({
+  neighbor_ip: {
+    'local_addr': bgp_config.router_id.address.split('/')[0],
+    'asn': session.remote_as.asn,
+    'holdtime': '10',
+    'keepalive': '3'
+  }
+}) -%}
+{%- endfor -%}
+{%- endfor %}
+
+{%- set bgp_globals = {
+  'default': {}
+} -%}
+{%- if bgp %}
+{%- set _ = bgp_globals['default'].update({
+  'router_id': bgp[0].router_id.address.split('/')[0],
+  'local_asn': bgp[0].local_as.asn
+}) -%}
+{%- endif %}
+
+{%- set ospf_router = {} -%}
+{%- for ospf_config in ospf -%}
+{%- set _ = ospf_router.update({
+  'default': {
+    'router_id': ospf_config.router_id.split('/')[0],
+    'reference_bandwidth': ospf_config.reference_bandwidth or 100000
+  }
+}) -%}
+{%- endfor %}
+
+{{ {
+  'DEVICE_METADATA': device_metadata,
+  'VLAN': vlan_config,
+  'LOOPBACK_INTERFACE': loopback_interfaces,
+  'INTERFACE': physical_interfaces,
+  'INTERFACE_IP': interface_ips,
+  'VLAN_INTERFACE': vlan_interfaces,
+  'BGP_NEIGHBOR': bgp_neighbors,
+  'BGP_GLOBALS': bgp_globals,
+  'OSPF_ROUTER': ospf_router
+} | tojson(indent=2) }}

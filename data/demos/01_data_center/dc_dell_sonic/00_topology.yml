@@ -1,0 +1,32 @@
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologyDataCenter
+  data:
+    - name: DC-DELL-SONIC
+      index: 10
+      amount_of_super_spines: 2
+      super_spine_template: Dell_PowerSwitch_Z9100_ON_SUPER_SPINE
+      fabric_interface_sorting_method: top_down
+      design_pattern: L-Standard
+      size: M
+      member_of_groups:
+        - topologies_dc
+      children:
+        kind: TopologyPod
+        data:
+          - name: Pod-Sonic-1
+            index: 1
+            role: fabric
+            spine_template: Dell_PowerSwitch_Z9100_ON_SPINE
+            amount_of_spines: 4
+            member_of_groups:
+              - topologies_pod
+          - name: Pod-Sonic-2
+            index: 2
+            role: fabric
+            spine_template: Dell_PowerSwitch_Z9100_ON_SPINE
+            amount_of_spines: 2
+            member_of_groups:
+              - topologies_pod

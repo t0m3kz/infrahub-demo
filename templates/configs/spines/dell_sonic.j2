@@ -1,80 +1,86 @@
+{#- Dell SONiC Spine Configuration -#}
+! Hostname configuration
+hostname {{ hostname }}
+
+! Enable required features
 nv overlay evpn
 feature ospf
 feature bgp
-feature pim
+feature interface-vlan
+feature vn-segment-vlan-based
 feature nv overlay
-feature scp-server
 
-hostname {{ hostname }}
+{#- VLAN Configuration -#}
+{% for vlan in vlans %}
+vlan {{ vlan.vlan_id }}
+  name {{ vlan.name or 'VLAN_' + vlan.vlan_id|string }}
+  vn-segment {{ vlan.get('vni', vlan.vlan_id) }}
+{% endfor %}
 
-vrf context management
-
-{#- All Downlink Interfaces (sorted) -#}
-{% for interface in interface_roles.all_downlink %}
+{#- All Interfaces (Physical and Virtual) -#}
+{% for interface in interfaces %}
 interface {{ interface.name }}
-{% if interface.description %}
+{%- if interface.description %}
   description {{ interface.description }}
-{% else %}
-  description Link to Leaf
-{% endif %}
-  no switchport
-  mtu {{ interface.mtu or 9216 }}
-  medium p2p
-  ip unnumbered loopback0
-  ip ospf network point-to-point
-  ip router ospf {{ ospf.process_id or 'Underlay' }} area {{ ospf.area or '0.0.0.0' }}
-  ip pim sparse-mode
+{%- endif %}
+{%- if interface.ip_addresses %}
+{%- for ip in interface.ip_addresses %}
+  ip address {{ ip }}
+{%- endfor %}
+{%- endif %}
+{%- if interface.vlans %}
+  switchport
+  switchport mode access
+  switchport access vlan {{ interface.vlans[0] }}
+{%- endif %}
+{%- if interface.get('ospf') %}
+  ip router ospf {{ ospf[0].process_id or 1 }} area {{ interface.ospf.area }}
+{%- endif %}
   no shutdown
-
+!
 {% endfor %}
 
-interface mgmt0
-  vrf member management
-
-{#- Loopback interfaces -#}
-{% for interface in interface_roles.loopback %}
-interface {{ interface.name }}
-{% if interface.name == 'loopback0' %}
-  description Underlay Routing Loopback
-{% elif interface.name == 'loopback1' %}
-  description VTEP Loopback Interface
-{% elif interface.description %}
-  description {{ interface.description }}
-{% else %}
-  description Routing Loopback
-{% endif %}
-{% if interface.ip_address %}
-  ip address {{ interface.ip_address | replace('/24', '/32') }}
-{% endif %}
-{% if interface.name == 'loopback0' %}
-  ip router ospf {{ ospf.process_id or 'Underlay' }} area {{ ospf.area or '0.0.0.0' }}
-  ip pim sparse-mode
-{% elif interface.name != 'loopback1' %}
-{#- loopback1 is NOT in OSPF, used only for iBGP EVPN overlay -#}
-  ip router ospf {{ ospf.process_id or 'Underlay' }} area {{ ospf.area or '0.0.0.0' }}
-  ip pim sparse-mode
-{% endif %}
+{#- OSPF Configuration -#}
+{% for ospf_config in ospf %}
+router ospf {{ ospf_config.process_id or 1 }}
+  router-id {{ ospf_config.router_id.split('/')[0] }}
+  reference-bandwidth {{ ospf_config.reference_bandwidth or 100000 }}
+  passive-interface default
+{%- for interface in interfaces %}
+{%- if interface.get('ospf') %}
+  no passive-interface {{ interface.name }}
+{%- endif %}
+{%- endfor %}
+!
 {% endfor %}
 
-icam monitor scale
-
-cli alias name wr copy r s
-line console
-line vty
-
-router ospf {{ ospf.process_id or 'Underlay' }}
-  router-id {{ ospf.router_id or loopbacks.loopback0 }}
-
-router bgp {{ bgp.local_as }}
-  router-id {{ bgp.router_id or loopbacks.loopback0 }}
-{% for neighbor in bgp.neighbors %}
-  neighbor {{ neighbor.remote_ip.split('/')[0] }}
-    remote-as {{ neighbor.remote_as }}
-    update-source loopback0
-    address-family l2vpn evpn
-      send-community
-      send-community extended
-      route-reflector-client
+{#- BGP Configuration -#}
+{% for bgp_config in bgp %}
+router bgp {{ bgp_config.local_as.asn }}
+  router-id {{ bgp_config.router_id.address.split('/')[0] }}
+  no bgp default ipv4-unicast
+  distance bgp 20 200 200
+  maximum-paths 4 ecmp 64
+{%- for session in bgp_config.sessions %}
+  neighbor {{ session.remote_ip.address.split('/')[0] }} remote-as {{ session.remote_as.asn }}
+  neighbor {{ session.remote_ip.address.split('/')[0] }} update-source Loopback0
+  neighbor {{ session.remote_ip.address.split('/')[0] }} send-community extended
+  neighbor {{ session.remote_ip.address.split('/')[0] }} maximum-routes 0
+{%- endfor %}
+  address-family ipv4
+    redistribute connected route-map RM-CONN-2-BGP
+{%- for session in bgp_config.sessions %}
+    neighbor {{ session.remote_ip.address.split('/')[0] }} activate
+{%- endfor %}
+  address-family evpn
+{%- for session in bgp_config.sessions %}
+    neighbor {{ session.remote_ip.address.split('/')[0] }} activate
+{%- endfor %}
+!
 {% endfor %}
 
-grpc port 57400
+! Configure route-maps
+route-map RM-CONN-2-BGP permit 10
+  match interface Loopback0
+
+! End of configuration

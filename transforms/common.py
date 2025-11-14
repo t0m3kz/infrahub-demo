@@ -144,6 +144,7 @@ def get_interfaces(data: list) -> list[dict[str, Any]]:
     Only includes 'ospf' key if OSPF area is present.
     Includes IP addresses, description, status, role, and other interface data.
     """
+
     sorted_names = sort_interface_list(
         [iface.get("name") for iface in data if iface.get("name")]
     )
@@ -164,6 +165,17 @@ def get_interfaces(data: list) -> list[dict[str, Any]]:
             if s.get("typename") == "ServiceOSPF"
         ]
 
+        # Extract IP addresses - after clean_data, these should be simple strings
+        ip_addresses: list[dict[str, Any]] = []
+
+        # For VirtualInterface: ip_addresses is a list
+        for ip_item in iface.get("ip_addresses", []):
+            ip_addresses.append(ip_item)
+
+        # For PhysicalInterface: ip_address is a single address
+        if iface.get("ip_address") and not ip_addresses:
+            ip_addresses.append(iface.get("ip_address"))
+
         iface_dict = {
             "name": name,
             "vlans": vlans,
@@ -172,7 +184,7 @@ def get_interfaces(data: list) -> list[dict[str, Any]]:
             "role": iface.get("role"),
             "interface_type": iface.get("interface_type"),
             "mtu": iface.get("mtu"),
-            "ip_addresses": iface.get("ip_addresses", []),
+            "ip_addresses": ip_addresses,
         }
 
         if ospf_areas:
@@ -183,3 +195,32 @@ def get_interfaces(data: list) -> list[dict[str, Any]]:
     return [
         name_to_interface[name] for name in sorted_names if name in name_to_interface
     ]
+
+
+def get_loopbacks(interfaces: list[dict[str, Any]]) -> dict[str, str]:
+    """
+    Extract loopback interfaces and their IP addresses from interface data.
+
+    Args:
+        interfaces: List of interface dictionaries from get_interfaces()
+
+    Returns:
+        Dictionary mapping loopback interface names to their IP addresses
+    """
+    loopbacks: dict[str, str] = {}
+
+    for interface in interfaces:
+        # Check if this is a loopback interface
+        if interface.get("role") != "loopback":
+            continue
+
+        name = interface.get("name", "").lower()
+        ip_addresses = interface.get("ip_addresses", [])
+
+        # Extract first IP address from the list
+        if ip_addresses and len(ip_addresses) > 0:
+            ip_addr = ip_addresses[0]
+            if ip_addr:
+                loopbacks[name] = ip_addr
+
+    return loopbacks

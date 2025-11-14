@@ -1,35 +1,76 @@
-query topology_cables($name: String!) {
+fragment CableDetails on DcimPhysicalInterface {
+  name {
+    value
+  }
+  role {
+    value
+  }
+  ... on DcimPhysicalInterface {
+    cable {
+      node {
+        id
+        display_label
+        type {
+          value
+        }
+      }
+    }
+  }
+}
+
+fragment DeviceWithCables on DcimPhysicalDevice {
+  id
+  name {
+    value
+  }
+  role {
+    value
+  }
+  rack {
+    node {
+      name {
+        value
+      }
+    }
+  }
+  interfaces {
+    edges {
+      node {
+        ...CableDetails
+      }
+    }
+  }
+}
+
+query FabricCablingPlanQuery($name: String!) {
   TopologyDeployment(name__value: $name) {
     edges {
       node {
-        devices {
-          edges {
-            node {
-              name {
-                value
+        ... on TopologyDataCenter {
+          id
+          name {
+            value
+          }
+          devices {
+            edges {
+              node {
+                ...DeviceWithCables
               }
-              interfaces {
-                edges {
-                  node {
-                    name {
-                      value
-                    }
-                    ... on DcimPhysicalInterface {
-                      cable {
-                        node {
-                          id
-                          display_label
-                          type { value }
-                        }
-                      }
-                    }
-                    ... on DcimConsoleInterface {
-                      cable {
-                        node {
-                          id
-                          display_label
-                          type { value }
-                        }
+            }
+          }
+          children {
+            edges {
+              node {
+                __typename
+                ... on TopologyPod {
+                  id
+                  name {
+                    value
+                  }
+                  devices {
+                    edges {
+                      node {
+                        ...DeviceWithCables
                       }
                     }
                   }

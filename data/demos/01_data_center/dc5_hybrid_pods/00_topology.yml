@@ -1,0 +1,127 @@
+---
+spec:
+  data:
+    - name: DC-5-HYBRID-PODS
+      site_index: 5
+      metro_location: "New York"
+      description: "Multi-vendor within pods - Dell/Edgecore/Cisco mixed at spine and leaf layers"
+      design: "3-tier-clos"
+      strategy: "ospf-ibgp"
+      size: "XL"
+
+      # Super-spine core layer (uniform Dell backbone)
+      super_spines:
+        - name: DC5-SUPER-SPINE-1
+          device_type: "C9316D-GX"
+          role: "super_spine"
+          template: "N9K_C9316D_GX_SUPER_SPINE_1"
+        - name: DC5-SUPER-SPINE-2
+          device_type: "C9316D-GX"
+          role: "super_spine"
+          template: "N9K_C9316D_GX_SUPER_SPINE_2"
+        - name: DC5-SUPER-SPINE-3
+          device_type: "C9316D-GX"
+          role: "super_spine"
+          template: "N9K_C9316D_GX_SUPER_SPINE_3"
+        - name: DC5-SUPER-SPINE-4
+          device_type: "C9316D-GX"
+          role: "super_spine"
+          template: "N9K_C9316D_GX_SUPER_SPINE_4"
+
+      # Hybrid pods - each pod has mixed spine vendors
+      pods:
+        # Pod 1: Dell spine with Edgecore/Cisco leafs
+        - name: Pod-Hybrid-1
+          pod_index: 1
+          location: "Pod-1-Hybrid"
+          description: "Dell spines aggregating Edgecore and Cisco leafs"
+          spines:
+            - name: DC5-SPINE-DELL-1A
+              device_type: "Z9100-ON"
+              role: "spine"
+              template: "Dell_PowerSwitch_Z9100_ON_SPINE_1"
+            - name: DC5-SPINE-DELL-1B
+              device_type: "Z9100-ON"
+              role: "spine"
+              template: "Dell_PowerSwitch_Z9100_ON_SPINE_2"
+          leafs:
+            - name: DC5-LEAF-EDGECORE-1A
+              device_type: "AS7326-56X-O-AC-F"
+              role: "leaf"
+              template: "AS7326_56X_O_AC_F_LEAF_1"
+            - name: DC5-LEAF-EDGECORE-1B
+              device_type: "AS7326-56X-O-AC-F"
+              role: "leaf"
+              template: "AS7326_56X_O_AC_F_LEAF_2"
+            - name: DC5-LEAF-CISCO-1A
+              device_type: "C9336C-FX2"
+              role: "leaf"
+              template: "N9K_C9336C_FX2_LEAF_1"
+            - name: DC5-LEAF-CISCO-1B
+              device_type: "C9336C-FX2"
+              role: "leaf"
+              template: "N9K_C9336C_FX2_LEAF_2"
+
+        # Pod 2: Edgecore spine with Dell/Cisco leafs
+        - name: Pod-Hybrid-2
+          pod_index: 2
+          location: "Pod-2-Hybrid"
+          description: "Edgecore spines aggregating Dell and Cisco leafs"
+          spines:
+            - name: DC5-SPINE-EDGECORE-2A
+              device_type: "7726-32X-O"
+              role: "spine"
+              template: "Edgecore_7726_32X_O_SPINE_1"
+            - name: DC5-SPINE-EDGECORE-2B
+              device_type: "7726-32X-O"
+              role: "spine"
+              template: "Edgecore_7726_32X_O_SPINE_2"
+          leafs:
+            - name: DC5-LEAF-DELL-2A
+              device_type: "S5248F-ON"
+              role: "leaf"
+              template: "PowerSwitch_S5248F_ON_LEAF_1"
+            - name: DC5-LEAF-DELL-2B
+              device_type: "S5248F-ON"
+              role: "leaf"
+              template: "PowerSwitch_S5248F_ON_LEAF_2"
+            - name: DC5-LEAF-CISCO-2A
+              device_type: "C9336C-FX2"
+              role: "leaf"
+              template: "N9K_C9336C_FX2_LEAF_3"
+            - name: DC5-LEAF-CISCO-2B
+              device_type: "C9336C-FX2"
+              role: "leaf"
+              template: "N9K_C9336C_FX2_LEAF_4"
+
+        # Pod 3: Cisco spine with Dell/Edgecore leafs
+        - name: Pod-Hybrid-3
+          pod_index: 3
+          location: "Pod-3-Hybrid"
+          description: "Cisco spines aggregating Dell and Edgecore leafs"
+          spines:
+            - name: DC5-SPINE-CISCO-3A
+              device_type: "C9336C-FX2"
+              role: "spine"
+              template: "N9K_C9336C_FX2_SPINE_1"
+            - name: DC5-SPINE-CISCO-3B
+              device_type: "C9336C-FX2"
+              role: "spine"
+              template: "N9K_C9336C_FX2_SPINE_2"
+          leafs:
+            - name: DC5-LEAF-EDGECORE-3A
+              device_type: "AS7326-56X-O-AC-F"
+              role: "leaf"
+              template: "AS7326_56X_O_AC_F_LEAF_3"
+            - name: DC5-LEAF-EDGECORE-3B
+              device_type: "AS7326-56X-O-AC-F"
+              role: "leaf"
+              template: "AS7326_56X_O_AC_F_LEAF_4"
+            - name: DC5-LEAF-DELL-3A
+              device_type: "S5248F-ON"
+              role: "leaf"
+              template: "PowerSwitch_S5248F_ON_LEAF_3"
+            - name: DC5-LEAF-DELL-3B
+              device_type: "S5248F-ON"
+              role: "leaf"
+              template: "PowerSwitch_S5248F_ON_LEAF_4"

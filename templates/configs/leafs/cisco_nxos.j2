@@ -26,6 +26,9 @@ interface {{ interface.name }}
 {%- if interface.ip_addresses %}
 {%- for ip in interface.ip_addresses %}
   ip address {{ ip.address }}
+{%- if ip.ip_namespace.name != "default" %}
+  vrf member {{ ip.ip_namespace.name }}
+{%- endif %}
 {%- endfor %}
 {%- endif %}
 {%- if interface.vlans %}

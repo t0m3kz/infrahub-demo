@@ -1,0 +1,99 @@
+{#- Sonic JSON Border Leaf Configuration - Using Jinja2 tojson filter for clean JSON -#}
+{%- set device_metadata = {
+  'localhost': {
+    'hostname': hostname,
+    'type': 'BorderLeafRouter'
+  }
+} -%}
+{%- if bgp %}
+{%- set _ = device_metadata['localhost'].update({'bgp_asn': bgp[0].local_as.asn}) -%}
+{%- endif %}
+
+{%- set vlan_config = {} -%}
+{%- for vlan in vlans -%}
+{%- set _ = vlan_config.update({
+  ('Vlan' + vlan.vlan_id|string): {
+    'vlanid': vlan.vlan_id|string
+  }
+}) -%}
+{%- endfor %}
+
+{%- set loopback_interfaces = {} -%}
+{%- for interface in interfaces -%}
+{%- if 'loopback' in interface.name|lower -%}
+{%- for ip in interface.ip_addresses -%}
+{%- set key = interface.name + '|' + ip -%}
+{%- set _ = loopback_interfaces.update({key: {}}) -%}
+{%- endfor -%}
+{%- endif -%}
+{%- endfor %}
+
+{%- set physical_interfaces = {} -%}
+{%- for interface in interfaces -%}
+{%- if 'loopback' not in interface.name|lower -%}
+{%- set _ = physical_interfaces.update({interface.name: {}}) -%}
+{%- endif -%}
+{%- endfor %}
+
+{%- set interface_ips = {} -%}
+{%- for interface in interfaces -%}
+{%- if 'loopback' not in interface.name|lower and interface.ip_addresses -%}
+{%- for ip in interface.ip_addresses -%}
+{%- set key = interface.name + '|' + ip -%}
+{%- set _ = interface_ips.update({key: {}}) -%}
+{%- endfor -%}
+{%- endif -%}
+{%- endfor %}
+
+{%- set vlan_interfaces = {} -%}
+{%- for vlan in vlans -%}
+{%- set key = 'Vlan' + vlan.vlan_id|string -%}
+{%- set _ = vlan_interfaces.update({key: {}}) -%}
+{%- endfor %}
+
+{%- set bgp_neighbors = {} -%}
+{%- for bgp_config in bgp -%}
+{%- for session in bgp_config.sessions -%}
+{%- set neighbor_ip = session.remote_ip.address.split('/')[0] -%}
+{%- set _ = bgp_neighbors.update({
+  neighbor_ip: {
+    'local_addr': bgp_config.router_id.address.split('/')[0],
+    'asn': session.remote_as.asn,
+    'holdtime': '10',
+    'keepalive': '3'
+  }
+}) -%}
+{%- endfor -%}
+{%- endfor %}
+
+{%- set bgp_globals = {
+  'default': {}
+} -%}
+{%- if bgp %}
+{%- set _ = bgp_globals['default'].update({
+  'router_id': bgp[0].router_id.address.split('/')[0],
+  'local_asn': bgp[0].local_as.asn
+}) -%}
+{%- endif %}
+
+{%- set ospf_router = {} -%}
+{%- for ospf_config in ospf -%}
+{%- set _ = ospf_router.update({
+  'default': {
+    'router_id': ospf_config.router_id.split('/')[0],
+    'reference_bandwidth': ospf_config.reference_bandwidth or 100000
+  }
+}) -%}
+{%- endfor %}
+
+{{ {
+  'DEVICE_METADATA': device_metadata,
+  'VLAN': vlan_config,
+  'LOOPBACK_INTERFACE': loopback_interfaces,
+  'INTERFACE': physical_interfaces,
+  'INTERFACE_IP': interface_ips,
+  'VLAN_INTERFACE': vlan_interfaces,
+  'BGP_NEIGHBOR': bgp_neighbors,
+  'BGP_GLOBALS': bgp_globals,
+  'OSPF_ROUTER': ospf_router
+} | tojson(indent=2) }}
