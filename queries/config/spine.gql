@@ -1,29 +1,14 @@
-query spine_config($device: String!) {
+query edge_config($device: String!) {
   DcimGenericDevice(name__value: $device) {
     edges {
       node {
+        __typename
         id
         name { value }
         role { value }
-        deployment {
-          node{
-            id
-            name {
-              value
-            }
-          }
-        }
-        device_type {
+        platform {
           node {
             name { value }
-            manufacturer { node { name { value } } }
-            platform {
-              node {
-                netmiko_device_type { value }
-                napalm_driver { value }
-                ansible_network_os { value }
-              }
-            }
           }
         }
         primary_address {
@@ -106,7 +91,7 @@ query spine_config($device: String!) {
         interfaces {
           edges {
             node {
-              id
+              __typename
               name { value }
               description { value }
               status { value }
@@ -115,11 +100,10 @@ query spine_config($device: String!) {
                 interface_type { value }
                 mtu { value }
                 ip_address {
-                    node {
-                      address { value }
-                      ip_namespace { node { name { value } } }
-                    }
-
+                  node {
+                    address { value }
+                    ip_namespace { node { name { value } } }
+                  }
                 }
               }
 
@@ -133,18 +117,24 @@ query spine_config($device: String!) {
                   }
                 }
               }
-              interface_services{
-                edges{
-                  node{
-                    ... on ServiceOSPF{
-                      area { node {area {value}}}
-                      ospf_interface_profile{node{
-                        metric{value}
-                        mode{value}
-                        authentication_mode{value}
-                        authentication_key{value}
+              interface_services {
+                edges {
+                  node {
+                    __typename
+                    ... on ServiceOSPF {
+                      area { node { area { value } } }
+                      ospf_interface_profile {
+                        node {
+                          metric { value }
+                          mode { value }
+                          authentication_mode { value }
+                          authentication_key { value }
                         }
                       }
+                    }
+                    ... on ServiceNetworkSegment {
+                      vlan_id { value }
+                      name { value }
                     }
                   }
                 }
@@ -156,4 +146,3 @@ query spine_config($device: String!) {
     }
   }
 }
-

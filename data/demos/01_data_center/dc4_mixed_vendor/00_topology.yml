@@ -1,0 +1,74 @@
+---
+spec:
+  data:
+    - name: DC-4-MIXED-VENDOR
+      site_index: 4
+      metro_location: "London"
+      description: "Multi-vendor fabric demonstrating Dell, Edgecore, and Cisco interoperability"
+      design: "3-tier-clos"
+      strategy: "ospf-ibgp"
+      size: "L"
+
+      # Super-spine core layer (uniform across all pods)
+      super_spines:
+        - name: DC4-SUPER-SPINE-1
+          device_type: "Z9100-ON"
+          role: "super_spine"
+          template: "Dell_PowerSwitch_Z9100_ON_SUPER_SPINE_1"
+        - name: DC4-SUPER-SPINE-2
+          device_type: "Z9100-ON"
+          role: "super_spine"
+          template: "Dell_PowerSwitch_Z9100_ON_SUPER_SPINE_2"
+
+      # Multi-vendor pods - each with different platform
+      pods:
+        # Pod 1: Dell Sonic (cost-optimized)
+        - name: Pod-Dell-1
+          pod_index: 1
+          location: "Pod-A-Dell"
+          description: "Dell Sonic pod - cost-optimized access tier"
+          spines:
+            - name: DC4-SPINE-DELL-1
+              device_type: "Z9100-ON"
+              role: "spine"
+              template: "Dell_PowerSwitch_Z9100_ON_SPINE_1"
+            - name: DC4-SPINE-DELL-2
+              device_type: "Z9100-ON"
+              role: "spine"
+              template: "Dell_PowerSwitch_Z9100_ON_SPINE_2"
+          design_element: "2_DELL_SONIC_LEAFS_S5248F"
+          leaf_count: 4
+
+        # Pod 2: Edgecore Sonic (performance-optimized)
+        - name: Pod-Edgecore-1
+          pod_index: 2
+          location: "Pod-B-Edgecore"
+          description: "Edgecore Sonic pod - high-performance 100G fabric"
+          spines:
+            - name: DC4-SPINE-EDGECORE-1
+              device_type: "7726-32X-O"
+              role: "spine"
+              template: "Edgecore_7726_32X_O_SPINE_1"
+            - name: DC4-SPINE-EDGECORE-2
+              device_type: "7726-32X-O"
+              role: "spine"
+              template: "Edgecore_7726_32X_O_SPINE_2"
+          design_element: "2_EDGECORE_SONIC_LEAFS_AS7326"
+          leaf_count: 4
+
+        # Pod 3: Cisco NX-OS (enterprise-grade)
+        - name: Pod-Cisco-1
+          pod_index: 3
+          location: "Pod-C-Cisco"
+          description: "Cisco NX-OS pod - enterprise features and telemetry"
+          spines:
+            - name: DC4-SPINE-CISCO-1
+              device_type: "C9336C-FX2"
+              role: "spine"
+              template: "N9K_C9336C_FX2_SPINE_1"
+            - name: DC4-SPINE-CISCO-2
+              device_type: "C9336C-FX2"
+              role: "spine"
+              template: "N9K_C9336C_FX2_SPINE_2"
+          design_element: "2_CISCO_LEAFS_N9K-C9336C-FX2"
+          leaf_count: 4

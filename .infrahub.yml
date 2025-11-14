@@ -26,7 +26,7 @@ artifact_definitions:
     artifact_name: border-leaf
     content_type: text/plain
     targets: border-leafs
-    transformation: leaf
+    transformation: border_leaf
     parameters:
       device: name__value
   - name: spine_config
@@ -34,6 +34,13 @@ artifact_definitions:
     content_type: text/plain
     targets: spines
     transformation: spine
+    parameters:
+      device: name__value
+  - name: super_spine_config
+    artifact_name: super-spine
+    content_type: text/plain
+    targets: super-spines
+    transformation: super_spine
     parameters:
       device: name__value
   - name: loadbalancer_config
@@ -52,7 +59,7 @@ artifact_definitions:
     parameters:
       name: name__value
 
-  - name: Cable matrix for Topology
+  - name: Cable matrix for DC
     artifact_name: topology-cabling
     content_type: text/plain
     targets: topologies_dc
@@ -102,9 +109,15 @@ python_transforms:
   - name: leaf
     class_name: Leaf
     file_path: transforms/leaf.py
+  - name: border_leaf
+    class_name: BorderLeaf
+    file_path: transforms/border_leaf.py
   - name: spine
     class_name: Spine
     file_path: transforms/spine.py
+  - name: super_spine
+    class_name: SuperSpine
+    file_path: transforms/super_spine.py
   - name: loadbalancer
     class_name: LoadBalancer
     file_path: transforms/loadbalancer.py
@@ -173,8 +186,12 @@ queries:
     file_path: queries/topology/cabling.gql
   - name: leaf_config
     file_path: queries/config/leaf.gql
+  - name: border_leaf_config
+    file_path: queries/config/border_leaf.gql
   - name: spine_config
     file_path: queries/config/spine.gql
+  - name: super_spine_config
+    file_path: queries/config/super_spine.gql
   - name: edge_config
     file_path: queries/config/edge.gql
   - name: loadbalancer_config

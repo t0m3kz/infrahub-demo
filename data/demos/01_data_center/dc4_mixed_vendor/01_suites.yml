@@ -1,0 +1,15 @@
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: LocationSuite
+  data:
+    - name: "Suite-1"
+      shortname: "s-1"
+      parent: "DC-4-MIXED-VENDOR"
+    - name: "Suite-2"
+      shortname: "s-2"
+      parent: "DC-4-MIXED-VENDOR"
+    - name: "Suite-3"
+      shortname: "s-3"
+      parent: "DC-4-MIXED-VENDOR"

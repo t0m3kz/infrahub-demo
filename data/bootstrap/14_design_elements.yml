@@ -9,61 +9,61 @@ spec:
       quantity: 2
       role: leaf
       device_type: N9K-C9336C-FX2
-      template: N9K-C9336C-FX2_LEAF
+      template: N9K_C9336C_FX2_LEAF
     - name: 4_CISCO_LEAFS_N9K-C9336C-FX2
       description: 4 Cisco C9336C-FX2 leafs
       quantity: 4
       role: leaf
       device_type: N9K-C9336C-FX2
-      template: N9K-C9336C-FX2_LEAF
+      template: N9K_C9336C_FX2_LEAF
     - name: 8_CISCO_LEAFS_N9K-C9336C-FX2
       description: 8 Cisco C9336C-FX2 leafs
       quantity: 8
       role: leaf
       device_type: N9K-C9336C-FX2
-      template: N9K-C9336C-FX2_LEAF
+      template: N9K_C9336C_FX2_LEAF
     - name: 16_CISCO_LEAFS_N9K-C9316D-GX
       description: 16 Cisco N9K-C9316D-GX leafs
       quantity: 16
       role: leaf
       device_type: N9K-C9316D-GX
-      template: N9K-C9316D-GX_LEAF
+      template: N9K_C9316D_GX_LEAF
     - name: 4_ARISTA_LEAFS_CCS-720DP-48S-2F
       description: 4 Arista CCS-720DP-48S-2F leafs
       quantity: 4
       role: leaf
       device_type: CCS-720DP-48S-2F
-      template: CCS-720DP-48S-2F_LEAF
+      template: CCS_720DP_48S_2F_LEAF
     - name: 6_ARISTA_LEAFS_CCS-720DP-48S-2F
       description: 6 Arista CCS-720DP-48S-2F leafs
       quantity: 6
       role: leaf
       device_type: CCS-720DP-48S-2F
-      template: CCS-720DP-48S-2F_LEAF
+      template: CCS_720DP_48S_2F_LEAF
     - name: 8_ARISTA_LEAFS_CCS-720DP-48S-2F
       description: 8 Arista CCS-720DP-48S-2F leafs
       quantity: 8
       role: leaf
       device_type: CCS-720DP-48S-2F
-      template: CCS-720DP-48S-2F_LEAF
+      template: CCS_720DP_48S_2F_LEAF
     - name: 2_JUNIPER_EDGE_FIREWALLS_SRX-1500
       description: 2 Juniper EDGE SRX-1500 firewalls
       quantity: 2
       role: firewall
       device_type: SRX-1500
-      template: SRX-1500_EDGE_FIREWALL
+      template: SRX_1500_EDGE_FIREWALL
     - name: 2_JUNIPER_DC_FIREWALLS_SRX-1500
       description: 2 Juniper DC SRX-1500 firewalls
       quantity: 2
       role: firewall
       device_type: SRX-1500
-      template: SRX-1500_DC_FIREWALL
+      template: SRX_1500_DC_FIREWALL
     - name: 2_CISCO_OOB_SWITCHES_C9200L-24P-4G
       description: 2 Cisco C9200L-24P-4G OOB switches
       quantity: 2
       role: oob
       device_type: C9200L-24P-4G
-      template: C9200L-24P-4G_OOB
+      template: C9200L_24P_4G_OOB
     - name: 2_PERLE_CONSOLE_SCG50R
       description: 2 Perle SCG50R console servers
       quantity: 2
@@ -75,13 +75,13 @@ spec:
       quantity: 2
       role: edge
       device_type: N9K-C9316D-GX
-      template: N9K-C9316D-GX_EDGE
+      template: N9K_C9316D_GX_EDGE
     - name: 4_EDGECORE_LEAFS_5912-54X-O-AC-F
       description: 4 EDGECORE 5912-54X-O-AC-F leafs
       quantity: 4
       role: leaf
       device_type: 5912-54X-O-AC-F
-      template: 5912-54X-O-AC-F_LEAF
+      template: 5912_54X_O_AC_F_LEAF
     - name: 2_C8000V_EDGES
       description: 2 C8000V edges
       quantity: 2
@@ -99,22 +99,119 @@ spec:
       quantity: 2
       role: border-leaf
       device_type: N9K-C9336C-FX2
-      template: N9K-C9336C-FX2_LEAF
+      template: N9K_C9336C_FX2_LEAF
     - name: 2_CISCO_BORDER_LEAFS_N9K-C9316D-GX
       description: 2 Cisco N9K-C9316D-GX border leafs
       quantity: 2
       role: border-leaf
       device_type: N9K-C9316D-GX
-      template: N9K-C9316D-GX_LEAF
+      template: N9K_C9316D_GX_LEAF
     - name: 2_ARISTA_BORDER_LEAFS_CCS-720DP-48S-2F
       description: 2 Arista CCS-720DP-48S-2F border leafs
       quantity: 2
       role: border-leaf
       device_type: CCS-720DP-48S-2F
-      template: CCS-720DP-48S-2F_LEAF
+      template: CCS_720DP_48S_2F_LEAF
     - name: 2_EDGECORE_BORDER_LEAFS_5912-54X-O-AC-F
       description: 2 EDGECORE 5912-54X-O-AC-F border leafs
       quantity: 2
       role: border-leaf
       device_type: 5912-54X-O-AC-F
-      template: 5912-54X-O-AC-F_LEAF
+      template: 5912_54X_O_AC_F_LEAF
+
+    # ===== DELL SONIC - 2 LEAFS SCENARIO =====
+    - name: 2_DELL_SONIC_LEAFS_S5248F
+      description: 2 Dell PowerSwitch S5248F-ON leafs (compact setup, 48x25G + 8x100G each)
+      quantity: 2
+      role: leaf
+      device_type: PowerSwitch S5248F-ON
+      template: Dell_PowerSwitch_S5248F_ON_LEAF
+
+    # ===== DELL SONIC - 4 LEAFS SCENARIO =====
+    - name: 4_DELL_SONIC_LEAFS_S5248F
+      description: 4 Dell PowerSwitch S5248F-ON leafs (small-medium deployment)
+      quantity: 4
+      role: leaf
+      device_type: PowerSwitch S5248F-ON
+      template: Dell_PowerSwitch_S5248F_ON_LEAF
+
+    # ===== EDGECORE SONIC - 2 LEAFS SCENARIO =====
+    - name: 2_EDGECORE_SONIC_LEAFS_AS7326
+      description: 2 Edgecore AS7326-56X-O-AC-F leafs (compact high-density access, 48x25G + 8x100G)
+      quantity: 2
+      role: leaf
+      device_type: AS7326-56X-O-AC-F
+      template: Edgecore_AS7326_56X_O_AC_F_LEAF
+
+    # ===== EDGECORE SONIC - 4 LEAFS SCENARIO =====
+    - name: 4_EDGECORE_SONIC_LEAFS_AS7326
+      description: 4 Edgecore AS7326-56X-O-AC-F leafs (small-medium deployment)
+      quantity: 4
+      role: leaf
+      device_type: AS7326-56X-O-AC-F
+      template: Edgecore_AS7326_56X_O_AC_F_LEAF
+
+    # ===== EDGECORE SONIC - 2 LEAFS (7726) SCENARIO =====
+    - name: 2_EDGECORE_SONIC_LEAFS_7726
+      description: 2 Edgecore 7726-32X-O leafs (high-capacity 100G, 32 ports each)
+      quantity: 2
+      role: leaf
+      device_type: 7726-32X-O
+      template: Edgecore_7726_32X_O_LEAF
+
+    # ===== EDGECORE SONIC - 4 LEAFS (7726) SCENARIO =====
+    - name: 4_EDGECORE_SONIC_LEAFS_7726
+      description: 4 Edgecore 7726-32X-O leafs (high-capacity distributed access)
+      quantity: 4
+      role: leaf
+      device_type: 7726-32X-O
+      template: Edgecore_7726_32X_O_LEAF
+
+    # ===== CISCO NX-OS - 2 LEAFS SCENARIO =====
+    - name: 2_CISCO_LEAFS_N9K-C9336C-FX2
+      description: 2 Cisco N9K-C9336C-FX2 leafs (compact access layer, 36x100G each)
+      quantity: 2
+      role: leaf
+      device_type: N9K-C9336C-FX2
+      template: N9K_C9336C_FX2_LEAF
+
+    # ===== CISCO NX-OS - 4 LEAFS SCENARIO =====
+    - name: 4_CISCO_LEAFS_N9K-C9336C-FX2
+      description: 4 Cisco N9K-C9336C-FX2 leafs (small-medium deployment)
+      quantity: 4
+      role: leaf
+      device_type: N9K-C9336C-FX2
+      template: N9K_C9336C_FX2_LEAF
+
+    # ===== CISCO NX-OS - 2 LEAFS (C9316D) SCENARIO =====
+    - name: 2_CISCO_LEAFS_N9K-C9316D-GX
+      description: 2 Cisco N9K-C9316D-GX leafs (high-capacity with 400G support)
+      quantity: 2
+      role: leaf
+      device_type: N9K-C9316D-GX
+      template: N9K_C9316D_GX_LEAF
+
+    # ===== CISCO NX-OS - 4 LEAFS (C9316D) SCENARIO =====
+    - name: 4_CISCO_LEAFS_N9K-C9316D-GX
+      description: 4 Cisco N9K-C9316D-GX leafs (high-capacity distributed access)
+      quantity: 4
+      role: leaf
+      device_type: N9K-C9316D-GX
+      template: N9K_C9316D_GX_LEAF
+
+    # ===== ARISTA EOS - 2 LEAFS SCENARIO =====
+    - name: 2_ARISTA_LEAFS_CCS-720DP-48S-2F
+      description: 2 Arista CCS-720DP-48S-2F leafs (compact CloudVision ready)
+      quantity: 2
+      role: leaf
+      device_type: CCS-720DP-48S-2F
+      template: CCS_720DP_48S_2F_LEAF
+
+    # ===== ARISTA EOS - 4 LEAFS SCENARIO =====
+    - name: 4_ARISTA_LEAFS_CCS-720DP-48S-2F
+      description: 4 Arista CCS-720DP-48S-2F leafs (small-medium deployment)
+      quantity: 4
+      role: leaf
+      device_type: CCS-720DP-48S-2F
+      template: CCS_720DP_48S_2F_LEAF
+

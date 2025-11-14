@@ -459,14 +459,14 @@ class CommonGenerator(InfrahubGenerator):
                     await self.client.allocate_next_ip_address(
                         p2p_address_pool,
                         identifier=f"{link_identifier}-A",
-                        prefix_length=32,
+                        prefix_length=31,
                     )
                 )  # type: ignore
                 updated_dst_interface.ip_address = (
                     await self.client.allocate_next_ip_address(
                         p2p_address_pool,
                         identifier=f"{link_identifier}-B",
-                        prefix_length=32,
+                        prefix_length=31,
                     )
                 )  # type: ignore
 
