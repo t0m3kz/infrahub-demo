@@ -195,32 +195,3 @@ def get_interfaces(data: list) -> list[dict[str, Any]]:
     return [
         name_to_interface[name] for name in sorted_names if name in name_to_interface
     ]
-
-
-def get_loopbacks(interfaces: list[dict[str, Any]]) -> dict[str, str]:
-    """
-    Extract loopback interfaces and their IP addresses from interface data.
-
-    Args:
-        interfaces: List of interface dictionaries from get_interfaces()
-
-    Returns:
-        Dictionary mapping loopback interface names to their IP addresses
-    """
-    loopbacks: dict[str, str] = {}
-
-    for interface in interfaces:
-        # Check if this is a loopback interface
-        if interface.get("role") != "loopback":
-            continue
-
-        name = interface.get("name", "").lower()
-        ip_addresses = interface.get("ip_addresses", [])
-
-        # Extract first IP address from the list
-        if ip_addresses and len(ip_addresses) > 0:
-            ip_addr = ip_addresses[0]
-            if ip_addr:
-                loopbacks[name] = ip_addr
-
-    return loopbacks

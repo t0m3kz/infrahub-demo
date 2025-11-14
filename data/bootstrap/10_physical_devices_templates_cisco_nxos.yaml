@@ -1,910 +1,911 @@
+---
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
   kind: TemplateDcimPhysicalDevice
   data:
-  - template_name: N9K_C9336C_FX2_SUPER_SPINE
-    device_type: N9K-C9336C-FX2
-    platform: cisco_nxos
-    role: super-spine
-    status: provisioning
-    interfaces:
-      kind: TemplateDcimPhysicalInterface
-      data:
-      - template_name: N9K-C9336C-FX2_SUPER_SPINE_Ethernet1/1
-        name: Ethernet1/1
-        role: spine
-        interface_type: 100gbase-x-qsfp28
-      - template_name: N9K-C9336C-FX2_SUPER_SPINE_Ethernet1/2
-        name: Ethernet1/2
-        role: spine
-        interface_type: 100gbase-x-qsfp28
-      - template_name: N9K-C9336C-FX2_SUPER_SPINE_Ethernet1/3
-        name: Ethernet1/3
-        role: spine
-        interface_type: 100gbase-x-qsfp28
-      - template_name: N9K-C9336C-FX2_SUPER_SPINE_Ethernet1/4
-        name: Ethernet1/4
-        role: spine
-        interface_type: 100gbase-x-qsfp28
-      - template_name: N9K-C9336C-FX2_SUPER_SPINE_Ethernet1/5
-        name: Ethernet1/5
-        role: spine
-        interface_type: 100gbase-x-qsfp28
-      - template_name: N9K-C9336C-FX2_SUPER_SPINE_Ethernet1/6
-        name: Ethernet1/6
-        role: spine
-        interface_type: 100gbase-x-qsfp28
-      - template_name: N9K-C9336C-FX2_SUPER_SPINE_Ethernet1/7
-        name: Ethernet1/7
-        role: spine
-        interface_type: 100gbase-x-qsfp28
-      - template_name: N9K-C9336C-FX2_SUPER_SPINE_Ethernet1/8
-        name: Ethernet1/8
-        role: spine
-        interface_type: 100gbase-x-qsfp28
-      - template_name: N9K-C9336C-FX2_SUPER_SPINE_Ethernet1/9
-        name: Ethernet1/9
-        role: spine
-        interface_type: 100gbase-x-qsfp28
-      - template_name: N9K-C9336C-FX2_SUPER_SPINE_Ethernet1/10
-        name: Ethernet1/10
-        role: spine
-        interface_type: 100gbase-x-qsfp28
-      - template_name: N9K-C9336C-FX2_SUPER_SPINE_Ethernet1/11
-        name: Ethernet1/11
-        role: spine
-        interface_type: 100gbase-x-qsfp28
-      - template_name: N9K-C9336C-FX2_SUPER_SPINE_Ethernet1/12
-        name: Ethernet1/12
-        role: spine
-        interface_type: 100gbase-x-qsfp28
-      - template_name: N9K-C9336C-FX2_SUPER_SPINE_Ethernet1/13
-        name: Ethernet1/13
-        role: spine
-        interface_type: 100gbase-x-qsfp28
-      - template_name: N9K-C9336C-FX2_SUPER_SPINE_Ethernet1/14
-        name: Ethernet1/14
-        role: spine
-        interface_type: 100gbase-x-qsfp28
-      - template_name: N9K-C9336C-FX2_SUPER_SPINE_Ethernet1/15
-        name: Ethernet1/15
-        role: spine
-        interface_type: 100gbase-x-qsfp28
-      - template_name: N9K-C9336C-FX2_SUPER_SPINE_Ethernet1/16
-        name: Ethernet1/16
-        role: spine
-        interface_type: 100gbase-x-qsfp28
-      - template_name: N9K-C9336C-FX2_SUPER_SPINE_Ethernet1/17
-        name: Ethernet1/17
-        role: spine
-        interface_type: 100gbase-x-qsfp28
-      - template_name: N9K-C9336C-FX2_SUPER_SPINE_Ethernet1/18
-        name: Ethernet1/18
-        role: spine
-        interface_type: 100gbase-x-qsfp28
-      - template_name: N9K-C9336C-FX2_SUPER_SPINE_Ethernet1/19
-        name: Ethernet1/19
-        role: spine
-        interface_type: 100gbase-x-qsfp28
-      - template_name: N9K-C9336C-FX2_SUPER_SPINE_Ethernet1/20
-        name: Ethernet1/20
-        role: spine
-        interface_type: 100gbase-x-qsfp28
-      - template_name: N9K-C9336C-FX2_SUPER_SPINE_Ethernet1/21
-        name: Ethernet1/21
-        role: spine
-        interface_type: 100gbase-x-qsfp28
-      - template_name: N9K-C9336C-FX2_SUPER_SPINE_Ethernet1/22
-        name: Ethernet1/22
-        role: spine
-        interface_type: 100gbase-x-qsfp28
-      - template_name: N9K-C9336C-FX2_SUPER_SPINE_Ethernet1/23
-        name: Ethernet1/23
-        role: spine
-        interface_type: 100gbase-x-qsfp28
-      - template_name: N9K-C9336C-FX2_SUPER_SPINE_Ethernet1/24
-        name: Ethernet1/24
-        role: spine
-        interface_type: 100gbase-x-qsfp28
-      - template_name: N9K-C9336C-FX2_SUPER_SPINE_Ethernet1/25
-        name: Ethernet1/25
-        role: spine
-        interface_type: 100gbase-x-qsfp28
-      - template_name: N9K-C9336C-FX2_SUPER_SPINE_Ethernet1/26
-        name: Ethernet1/26
-        role: spine
-        interface_type: 100gbase-x-qsfp28
-      - template_name: N9K-C9336C-FX2_SUPER_SPINE_Ethernet1/27
-        name: Ethernet1/27
-        role: spine
-        interface_type: 100gbase-x-qsfp28
-      - template_name: N9K-C9336C-FX2_SUPER_SPINE_Ethernet1/28
-        name: Ethernet1/28
-        role: spine
-        interface_type: 100gbase-x-qsfp28
-      - template_name: N9K-C9336C-FX2_SUPER_SPINE_Ethernet1/29
-        name: Ethernet1/29
-        role: spine
-        interface_type: 100gbase-x-qsfp28
-      - template_name: N9K-C9336C-FX2_SUPER_SPINE_Ethernet1/30
-        name: Ethernet1/30
-        role: spine
-        interface_type: 100gbase-x-qsfp28
-      - template_name: N9K-C9336C-FX2_SUPER_SPINE_Ethernet1/31
-        name: Ethernet1/31
-        role: uplink
-        interface_type: 100gbase-x-qsfp28
-      - template_name: N9K-C9336C-FX2_SUPER_SPINE_Ethernet1/32
-        name: Ethernet1/32
-        role: uplink
-        interface_type: 100gbase-x-qsfp28
-      - template_name: N9K-C9336C-FX2_SUPER_SPINE_Ethernet1/33
-        name: Ethernet1/33
-        role: uplink
-        interface_type: 100gbase-x-qsfp28
-      - template_name: N9K-C9336C-FX2_SUPER_SPINE_Ethernet1/34
-        name: Ethernet1/34
-        role: uplink
-        interface_type: 100gbase-x-qsfp28
-      - template_name: N9K-C9336C-FX2_SUPER_SPINE_Ethernet1/35
-        name: Ethernet1/35
-        role: uplink
-        interface_type: 100gbase-x-qsfp28
-      - template_name: N9K-C9336C-FX2_SUPER_SPINE_Ethernet1/36
-        name: Ethernet1/36
-        role: uplink
-        interface_type: 100gbase-x-qsfp28
-      - template_name: N9K-C9336C-FX2_SUPER_SPINE_mgmt0
-        name: mgmt0
-        role: management
-        interface_type: 1000base-t
-  - template_name: N9K_C9316D_GX_SUPER_SPINE
-    device_type: N9K-C9316D-GX
-    platform: cisco_nxos
-    role: spine
-    status: provisioning
-    interfaces:
-      kind: TemplateDcimPhysicalInterface
-      data:
-      - template_name: N9K-C9316D-GX_SUPER_SPINE_Ethernet1/1
-        name: Ethernet1/1
-        role: spine
-      - template_name: N9K-C9316D-GX_SUPER_SPINE_Ethernet1/2
-        name: Ethernet1/2
-        role: spine
-      - template_name: N9K-C9316D-GX_SUPER_SPINE_Ethernet1/3
-        name: Ethernet1/3
-        role: spine
-      - template_name: N9K-C9316D-GX_SUPER_SPINE_Ethernet1/4
-        name: Ethernet1/4
-        role: spine
-      - template_name: N9K-C9316D-GX_SUPER_SPINE_Ethernet1/5
-        name: Ethernet1/5
-        role: spine
-      - template_name: N9K-C9316D-GX_SUPER_SPINE_Ethernet1/6
-        name: Ethernet1/6
-        role: spine
-      - template_name: N9K-C9316D-GX_SUPER_SPINE_Ethernet1/7
-        name: Ethernet1/7
-        role: spine
-      - template_name: N9K-C9316D-GX_SUPER_SPINE_Ethernet1/8
-        name: Ethernet1/8
-        role: spine
-      - template_name: N9K-C9316D-GX_SUPER_SPINE_Ethernet1/9
-        name: Ethernet1/9
-        role: spine
-      - template_name: N9K-C9316D-GX_SUPER_SPINE_Ethernet1/10
-        name: Ethernet1/10
-        role: spine
-        interface_type: 400gbase-x-qsfpdd
-      - template_name: N9K-C9316D-GX_SUPER_SPINE_Ethernet1/11
-        name: Ethernet1/11
-        role: spine
-        interface_type: 400gbase-x-qsfpdd
-      - template_name: N9K-C9316D-GX_SUPER_SPINE_Ethernet1/12
-        name: Ethernet1/12
-        role: spine
-        interface_type: 400gbase-x-qsfpdd
-      - template_name: N9K-C9316D-GX_SUPER_SPINE_Ethernet1/13
-        name: Ethernet1/13
-        role: uplink
-        interface_type: 100gbase-x-qsfp28
-      - template_name: N9K-C9316D-GX_SUPER_SPINE_Ethernet1/14
-        name: Ethernet1/14
-        role: uplink
-        interface_type: 100gbase-x-qsfp28
-      - template_name: N9K-C9316D-GX_SUPER_SPINE_Ethernet1/15
-        name: Ethernet1/15
-        role: uplink
-        interface_type: 100gbase-x-qsfp28
-      - template_name: N9K-C9316D-GX_SUPER_SPINE_Ethernet1/16
-        name: Ethernet1/16
-        role: uplink
-        interface_type: 100gbase-x-qsfp28
-      - template_name: N9K-C9316D-GX_SUPER_SPINE_mgmt0
-        name: mgmt0
-        role: management
-        interface_type: 1000base-t
-  - template_name: N9K_C9336C_FX2_SPINE
-    device_type: N9K-C9336C-FX2
-    role: spine
-    platform: cisco_nxos
-    status: provisioning
-    interfaces:
-      kind: TemplateDcimPhysicalInterface
-      data:
-      - template_name: N9K-C9336C-FX2_SPINE_Ethernet1/1
-        name: Ethernet1/1
-        role: leaf
-        interface_type: 100gbase-x-qsfp28
-      - template_name: N9K-C9336C-FX2_SPINE_Ethernet1/2
-        name: Ethernet1/2
-        role: leaf
-        interface_type: 100gbase-x-qsfp28
-      - template_name: N9K-C9336C-FX2_SPINE_Ethernet1/3
-        name: Ethernet1/3
-        role: leaf
-        interface_type: 100gbase-x-qsfp28
-      - template_name: N9K-C9336C-FX2_SPINE_Ethernet1/4
-        name: Ethernet1/4
-        role: leaf
-        interface_type: 100gbase-x-qsfp28
-      - template_name: N9K-C9336C-FX2_SPINE_Ethernet1/5
-        name: Ethernet1/5
-        role: leaf
-        interface_type: 100gbase-x-qsfp28
-      - template_name: N9K-C9336C-FX2_SPINE_Ethernet1/6
-        name: Ethernet1/6
-        role: leaf
-        interface_type: 100gbase-x-qsfp28
-      - template_name: N9K-C9336C-FX2_SPINE_Ethernet1/7
-        name: Ethernet1/7
-        role: leaf
-        interface_type: 100gbase-x-qsfp28
-      - template_name: N9K-C9336C-FX2_SPINE_Ethernet1/8
-        name: Ethernet1/8
-        role: leaf
-        interface_type: 100gbase-x-qsfp28
-      - template_name: N9K-C9336C-FX2_SPINE_Ethernet1/9
-        name: Ethernet1/9
-        role: leaf
-        interface_type: 100gbase-x-qsfp28
-      - template_name: N9K-C9336C-FX2_SPINE_Ethernet1/10
-        name: Ethernet1/10
-        role: leaf
-        interface_type: 100gbase-x-qsfp28
-      - template_name: N9K-C9336C-FX2_SPINE_Ethernet1/11
-        name: Ethernet1/11
-        role: leaf
-        interface_type: 100gbase-x-qsfp28
-      - template_name: N9K-C9336C-FX2_SPINE_Ethernet1/12
-        name: Ethernet1/12
-        role: leaf
-        interface_type: 100gbase-x-qsfp28
-      - template_name: N9K-C9336C-FX2_SPINE_Ethernet1/13
-        name: Ethernet1/13
-        role: leaf
-        interface_type: 100gbase-x-qsfp28
-      - template_name: N9K-C9336C-FX2_SPINE_Ethernet1/14
-        name: Ethernet1/14
-        role: leaf
-        interface_type: 100gbase-x-qsfp28
-      - template_name: N9K-C9336C-FX2_SPINE_Ethernet1/15
-        name: Ethernet1/15
-        role: leaf
-        interface_type: 100gbase-x-qsfp28
-      - template_name: N9K-C9336C-FX2_SPINE_Ethernet1/16
-        name: Ethernet1/16
-        role: leaf
-        interface_type: 100gbase-x-qsfp28
-      - template_name: N9K-C9336C-FX2_SPINE_Ethernet1/17
-        name: Ethernet1/17
-        role: leaf
-        interface_type: 100gbase-x-qsfp28
-      - template_name: N9K-C9336C-FX2_SPINE_Ethernet1/18
-        name: Ethernet1/18
-        role: leaf
-        interface_type: 100gbase-x-qsfp28
-      - template_name: N9K-C9336C-FX2_SPINE_Ethernet1/19
-        name: Ethernet1/19
-        role: leaf
-        interface_type: 100gbase-x-qsfp28
-      - template_name: N9K-C9336C-FX2_SPINE_Ethernet1/20
-        name: Ethernet1/20
-        role: leaf
-        interface_type: 100gbase-x-qsfp28
-      - template_name: N9K-C9336C-FX2_SPINE_Ethernet1/21
-        name: Ethernet1/21
-        role: leaf
-        interface_type: 100gbase-x-qsfp28
-      - template_name: N9K-C9336C-FX2_SPINE_Ethernet1/22
-        name: Ethernet1/22
-        role: leaf
-        interface_type: 100gbase-x-qsfp28
-      - template_name: N9K-C9336C-FX2_SPINE_Ethernet1/23
-        name: Ethernet1/23
-        role: leaf
-        interface_type: 100gbase-x-qsfp28
-      - template_name: N9K-C9336C-FX2_SPINE_Ethernet1/24
-        name: Ethernet1/24
-        role: leaf
-        interface_type: 100gbase-x-qsfp28
-      - template_name: N9K-C9336C-FX2_SPINE_Ethernet1/25
-        name: Ethernet1/25
-        role: leaf
-        interface_type: 100gbase-x-qsfp28
-      - template_name: N9K-C9336C-FX2_SPINE_Ethernet1/26
-        name: Ethernet1/26
-        role: leaf
-        interface_type: 100gbase-x-qsfp28
-      - template_name: N9K-C9336C-FX2_SPINE_Ethernet1/27
-        name: Ethernet1/27
-        role: leaf
-        interface_type: 100gbase-x-qsfp28
-      - template_name: N9K-C9336C-FX2_SPINE_Ethernet1/28
-        name: Ethernet1/28
-        role: leaf
-        interface_type: 100gbase-x-qsfp28
-      - template_name: N9K-C9336C-FX2_SPINE_Ethernet1/29
-        name: Ethernet1/29
-        role: leaf
-        interface_type: 100gbase-x-qsfp28
-      - template_name: N9K-C9336C-FX2_SPINE_Ethernet1/30
-        name: Ethernet1/30
-        role: leaf
-        interface_type: 100gbase-x-qsfp28
-      - template_name: N9K-C9336C-FX2_SPINE_Ethernet1/31
-        name: Ethernet1/31
-        role: uplink
-        interface_type: 100gbase-x-qsfp28
-      - template_name: N9K-C9336C-FX2_SPINE_Ethernet1/32
-        name: Ethernet1/32
-        role: uplink
-        interface_type: 100gbase-x-qsfp28
-      - template_name: N9K-C9336C-FX2_SPINE_Ethernet1/33
-        name: Ethernet1/33
-        role: uplink
-        interface_type: 100gbase-x-qsfp28
-      - template_name: N9K-C9336C-FX2_SPINE_Ethernet1/34
-        name: Ethernet1/34
-        role: uplink
-        interface_type: 100gbase-x-qsfp28
-      - template_name: N9K-C9336C-FX2_SPINE_Ethernet1/35
-        name: Ethernet1/35
-        role: uplink
-        interface_type: 100gbase-x-qsfp28
-      - template_name: N9K-C9336C-FX2_SPINE_Ethernet1/36
-        name: Ethernet1/36
-        role: uplink
-        interface_type: 100gbase-x-qsfp28
-      - template_name: N9K-C9336C-FX2_SPINE_mgmt0
-        name: mgmt0
-        role: management
-        interface_type: 1000base-t
-  - template_name: N9K_C9336C_FX2_LEAF
-    device_type: N9K-C9336C-FX2
-    platform: cisco_nxos
-    role: leaf
-    status: provisioning
-    interfaces:
-      kind: TemplateDcimPhysicalInterface
-      data:
-      - template_name: N9K-C9336C-FX2_LEAF_Ethernet1/1
-        name: Ethernet1/1
-        role: customer
-        interface_type: 100gbase-x-qsfp28
-      - template_name: N9K-C9336C-FX2_LEAF_Ethernet1/2
-        name: Ethernet1/2
-        role: customer
-        interface_type: 100gbase-x-qsfp28
-      - template_name: N9K-C9336C-FX2_LEAF_Ethernet1/3
-        name: Ethernet1/3
-        role: customer
-        interface_type: 100gbase-x-qsfp28
-      - template_name: N9K-C9336C-FX2_LEAF_Ethernet1/4
-        name: Ethernet1/4
-        role: customer
-        interface_type: 100gbase-x-qsfp28
-      - template_name: N9K-C9336C-FX2_LEAF_Ethernet1/5
-        name: Ethernet1/5
-        role: customer
-        interface_type: 100gbase-x-qsfp28
-      - template_name: N9K-C9336C-FX2_LEAF_Ethernet1/6
-        name: Ethernet1/6
-        role: customer
-        interface_type: 100gbase-x-qsfp28
-      - template_name: N9K-C9336C-FX2_LEAF_Ethernet1/7
-        name: Ethernet1/7
-        role: customer
-        interface_type: 100gbase-x-qsfp28
-      - template_name: N9K-C9336C-FX2_LEAF_Ethernet1/8
-        name: Ethernet1/8
-        role: customer
-        interface_type: 100gbase-x-qsfp28
-      - template_name: N9K-C9336C-FX2_LEAF_Ethernet1/9
-        name: Ethernet1/9
-        role: customer
-        interface_type: 100gbase-x-qsfp28
-      - template_name: N9K-C9336C-FX2_LEAF_Ethernet1/10
-        name: Ethernet1/10
-        role: customer
-        interface_type: 100gbase-x-qsfp28
-      - template_name: N9K-C9336C-FX2_LEAF_Ethernet1/11
-        name: Ethernet1/11
-        role: customer
-        interface_type: 100gbase-x-qsfp28
-      - template_name: N9K-C9336C-FX2_LEAF_Ethernet1/12
-        name: Ethernet1/12
-        role: customer
-        interface_type: 100gbase-x-qsfp28
-      - template_name: N9K-C9336C-FX2_LEAF_Ethernet1/13
-        name: Ethernet1/13
-        role: customer
-        interface_type: 100gbase-x-qsfp28
-      - template_name: N9K-C9336C-FX2_LEAF_Ethernet1/14
-        name: Ethernet1/14
-        role: customer
-        interface_type: 100gbase-x-qsfp28
-      - template_name: N9K-C9336C-FX2_LEAF_Ethernet1/15
-        name: Ethernet1/15
-        role: customer
-        interface_type: 100gbase-x-qsfp28
-      - template_name: N9K-C9336C-FX2_LEAF_Ethernet1/16
-        name: Ethernet1/16
-        role: customer
-        interface_type: 100gbase-x-qsfp28
-      - template_name: N9K-C9336C-FX2_LEAF_Ethernet1/17
-        name: Ethernet1/17
-        role: customer
-        interface_type: 100gbase-x-qsfp28
-      - template_name: N9K-C9336C-FX2_LEAF_Ethernet1/18
-        name: Ethernet1/18
-        role: customer
-        interface_type: 100gbase-x-qsfp28
-      - template_name: N9K-C9336C-FX2_LEAF_Ethernet1/19
-        name: Ethernet1/19
-        role: customer
-        interface_type: 100gbase-x-qsfp28
-      - template_name: N9K-C9336C-FX2_LEAF_Ethernet1/20
-        name: Ethernet1/20
-        role: customer
-        interface_type: 100gbase-x-qsfp28
-      - template_name: N9K-C9336C-FX2_LEAF_Ethernet1/21
-        name: Ethernet1/21
-        role: customer
-        interface_type: 100gbase-x-qsfp28
-      - template_name: N9K-C9336C-FX2_LEAF_Ethernet1/22
-        name: Ethernet1/22
-        role: customer
-        interface_type: 100gbase-x-qsfp28
-      - template_name: N9K-C9336C-FX2_LEAF_Ethernet1/23
-        name: Ethernet1/23
-        role: customer
-        interface_type: 100gbase-x-qsfp28
-      - template_name: N9K-C9336C-FX2_LEAF_Ethernet1/24
-        name: Ethernet1/24
-        role: customer
-        interface_type: 100gbase-x-qsfp28
-      - template_name: N9K-C9336C-FX2_LEAF_Ethernet1/25
-        name: Ethernet1/25
-        role: customer
-        interface_type: 100gbase-x-qsfp28
-      - template_name: N9K-C9336C-FX2_LEAF_Ethernet1/26
-        name: Ethernet1/26
-        role: customer
-        interface_type: 100gbase-x-qsfp28
-      - template_name: N9K-C9336C-FX2_LEAF_Ethernet1/27
-        name: Ethernet1/27
-        role: customer
-        interface_type: 100gbase-x-qsfp28
-      - template_name: N9K-C9336C-FX2_LEAF_Ethernet1/28
-        name: Ethernet1/28
-        role: customer
-        interface_type: 100gbase-x-qsfp28
-      - template_name: N9K-C9336C-FX2_LEAF_Ethernet1/29
-        name: Ethernet1/29
-        role: customer
-        interface_type: 100gbase-x-qsfp28
-      - template_name: N9K-C9336C-FX2_LEAF_Ethernet1/30
-        name: Ethernet1/30
-        role: customer
-        interface_type: 100gbase-x-qsfp28
-      - template_name: N9K-C9336C-FX2_LEAF_Ethernet1/31
-        name: Ethernet1/31
-        role: uplink
-        interface_type: 100gbase-x-qsfp28
-      - template_name: N9K-C9336C-FX2_LEAF_Ethernet1/32
-        name: Ethernet1/32
-        role: uplink
-        interface_type: 100gbase-x-qsfp28
-      - template_name: N9K-C9336C-FX2_LEAF_Ethernet1/33
-        name: Ethernet1/33
-        role: uplink
-        interface_type: 100gbase-x-qsfp28
-      - template_name: N9K-C9336C-FX2_LEAF_Ethernet1/34
-        name: Ethernet1/34
-        role: uplink
-        interface_type: 100gbase-x-qsfp28
-      - template_name: N9K-C9336C-FX2_LEAF_Ethernet1/35
-        name: Ethernet1/35
-        role: uplink
-        interface_type: 100gbase-x-qsfp28
-      - template_name: N9K-C9336C-FX2_LEAF_Ethernet1/36
-        name: Ethernet1/36
-        role: uplink
-        interface_type: 100gbase-x-qsfp28
-      - template_name: N9K-C9336C-FX2_LEAF_mgmt0
-        name: mgmt0
-        role: management
-        interface_type: 1000base-t
-  - template_name: N9K_C9316D_GX_SPINE
-    device_type: N9K-C9316D-GX
-    platform: cisco_nxos
-    role: spine
-    status: provisioning
-    interfaces:
-      kind: TemplateDcimPhysicalInterface
-      data:
-      - template_name: N9K-C9316D-GX_SPINE_Ethernet1/1
-        name: Ethernet1/1
-        role: leaf
-      - template_name: N9K-C9316D-GX_SPINE_Ethernet1/2
-        name: Ethernet1/2
-        role: leaf
-      - template_name: N9K-C9316D-GX_SPINE_Ethernet1/3
-        name: Ethernet1/3
-        role: leaf
-      - template_name: N9K-C9316D-GX_SPINE_Ethernet1/4
-        name: Ethernet1/4
-        role: leaf
-      - template_name: N9K-C9316D-GX_SPINE_Ethernet1/5
-        name: Ethernet1/5
-        role: leaf
-      - template_name: N9K-C9316D-GX_SPINE_Ethernet1/6
-        name: Ethernet1/6
-        role: leaf
-      - template_name: N9K-C9316D-GX_SPINE_Ethernet1/7
-        name: Ethernet1/7
-        role: leaf
-      - template_name: N9K-C9316D-GX_SPINE_Ethernet1/8
-        name: Ethernet1/8
-        role: leaf
-      - template_name: N9K-C9316D-GX_SPINE_Ethernet1/9
-        name: Ethernet1/9
-        role: leaf
-      - template_name: N9K-C9316D-GX_SPINE_Ethernet1/10
-        name: Ethernet1/10
-        role: leaf
-        interface_type: 400gbase-x-qsfpdd
-      - template_name: N9K-C9316D-GX_SPINE_Ethernet1/11
-        name: Ethernet1/11
-        role: uplink
-        interface_type: 400gbase-x-qsfpdd
-      - template_name: N9K-C9316D-GX_SPINE_Ethernet1/12
-        name: Ethernet1/12
-        role: uplink
-        interface_type: 400gbase-x-qsfpdd
-      - template_name: N9K-C9316D-GX_SPINE_Ethernet1/13
-        name: Ethernet1/13
-        role: uplink
-        interface_type: 100gbase-x-qsfp28
-      - template_name: N9K-C9316D-GX_SPINE_Ethernet1/14
-        name: Ethernet1/14
-        role: uplink
-        interface_type: 100gbase-x-qsfp28
-      - template_name: N9K-C9316D-GX_SPINE_Ethernet1/15
-        name: Ethernet1/15
-        role: uplink
-        interface_type: 100gbase-x-qsfp28
-      - template_name: N9K-C9316D-GX_SPINE_Ethernet1/16
-        name: Ethernet1/16
-        role: uplink
-        interface_type: 100gbase-x-qsfp28
-      - template_name: N9K-C9316D-GX_SPINE_mgmt0
-        name: mgmt0
-        role: management
-        interface_type: 1000base-t
-  - template_name: N9K_C9316D_GX_LEAF
-    device_type: N9K-C9316D-GX
-    platform: cisco_nxos
-    role: leaf
-    status: provisioning
-    interfaces:
-      kind: TemplateDcimPhysicalInterface
-      data:
-      - template_name: N9K-C9316D-GX_LEAF_Ethernet1/1
-        name: Ethernet1/1
-        role: customer
-      - template_name: N9K-C9316D-GX_LEAF_Ethernet1/2
-        name: Ethernet1/2
-        role: customer
-      - template_name: N9K-C9316D-GX_LEAF_Ethernet1/3
-        name: Ethernet1/3
-        role: customer
-      - template_name: N9K-C9316D-GX_LEAF_Ethernet1/4
-        name: Ethernet1/4
-        role: customer
-      - template_name: N9K-C9316D-GX_LEAF_Ethernet1/5
-        name: Ethernet1/5
-        role: customer
-      - template_name: N9K-C9316D-GX_LEAF_Ethernet1/6
-        name: Ethernet1/6
-        role: customer
-      - template_name: N9K-C9316D-GX_LEAF_Ethernet1/7
-        name: Ethernet1/7
-        role: customer
-      - template_name: N9K-C9316D-GX_LEAF_Ethernet1/8
-        name: Ethernet1/8
-        role: customer
-      - template_name: N9K-C9316D-GX_LEAF_Ethernet1/9
-        name: Ethernet1/9
-        role: customer
-      - template_name: N9K-C9316D-GX_LEAF_Ethernet1/10
-        name: Ethernet1/10
-        role: customer
-        interface_type: 400gbase-x-qsfpdd
-      - template_name: N9K-C9316D-GX_LEAF_Ethernet1/11
-        name: Ethernet1/11
-        role: customer
-        interface_type: 400gbase-x-qsfpdd
-      - template_name: N9K-C9316D-GX_LEAF_Ethernet1/12
-        name: Ethernet1/12
-        role: customer
-        interface_type: 400gbase-x-qsfpdd
-      - template_name: N9K-C9316D-GX_LEAF_Ethernet1/13
-        name: Ethernet1/13
-        role: customer
-        interface_type: 100gbase-x-qsfp28
-      - template_name: N9K-C9316D-GX_LEAF_Ethernet1/14
-        name: Ethernet1/14
-        role: customer
-        interface_type: 100gbase-x-qsfp28
-      - template_name: N9K-C9316D-GX_LEAF_Ethernet1/15
-        name: Ethernet1/15
-        role: customer
-        interface_type: 100gbase-x-qsfp28
-      - template_name: N9K-C9316D-GX_LEAF_Ethernet1/16
-        name: Ethernet1/16
-        role: customer
-        interface_type: 100gbase-x-qsfp28
-      - template_name: N9K-C9316D-GX_LEAF_Ethernet1/17
-        name: Ethernet1/17
-        role: customer
-      - template_name: N9K-C9316D-GX_LEAF_Ethernet1/18
-        name: Ethernet1/18
-        role: customer
-      - template_name: N9K-C9316D-GX_LEAF_Ethernet1/19
-        name: Ethernet1/19
-        role: customer
-      - template_name: N9K-C9316D-GX_LEAF_Ethernet1/20
-        name: Ethernet1/20
-        role: customer
-      - template_name: N9K-C9316D-GX_LEAF_Ethernet1/21
-        name: Ethernet1/21
-        role: customer
-      - template_name: N9K-C9316D-GX_LEAF_Ethernet1/22
-        name: Ethernet1/22
-        role: customer
-      - template_name: N9K-C9316D-GX_LEAF_Ethernet1/23
-        name: Ethernet1/23
-        role: customer
-      - template_name: N9K-C9316D-GX_LEAF_Ethernet1/24
-        name: Ethernet1/24
-        role: customer
-      - template_name: N9K-C9316D-GX_LEAF_Ethernet1/25
-        name: Ethernet1/25
-        role: customer
-      - template_name: N9K-C9316D-GX_LEAF_Ethernet1/26
-        name: Ethernet1/26
-        role: customer
-      - template_name: N9K-C9316D-GX_LEAF_Ethernet1/27
-        name: Ethernet1/27
-        role: customer
-      - template_name: N9K-C9316D-GX_LEAF_Ethernet1/28
-        name: Ethernet1/28
-        role: customer
-      - template_name: N9K-C9316D-GX_LEAF_Ethernet1/29
-        name: Ethernet1/29
-        role: customer
-      - template_name: N9K-C9316D-GX_LEAF_Ethernet1/30
-        name: Ethernet1/30
-        role: customer
-      - template_name: N9K-C9316D-GX_LEAF_Ethernet1/31
-        name: Ethernet1/31
-        role: customer
-      - template_name: N9K-C9316D-GX_LEAF_Ethernet1/32
-        name: Ethernet1/32
-        role: customer
-      - template_name: N9K-C9316D-GX_LEAF_Ethernet1/33
-        name: Ethernet1/33
-        role: customer
-      - template_name: N9K-C9316D-GX_LEAF_Ethernet1/34
-        name: Ethernet1/34
-        role: customer
-      - template_name: N9K-C9316D-GX_LEAF_Ethernet1/35
-        name: Ethernet1/35
-        role: customer
-      - template_name: N9K-C9316D-GX_LEAF_Ethernet1/36
-        name: Ethernet1/36
-        role: customer
-      - template_name: N9K-C9316D-GX_LEAF_Ethernet1/37
-        name: Ethernet1/37
-        role: customer
-      - template_name: N9K-C9316D-GX_LEAF_Ethernet1/38
-        name: Ethernet1/38
-        role: customer
-      - template_name: N9K-C9316D-GX_LEAF_Ethernet1/39
-        name: Ethernet1/39
-        role: customer
-      - template_name: N9K-C9316D-GX_LEAF_Ethernet1/40
-        name: Ethernet1/40
-        role: customer
-      - template_name: N9K-C9316D-GX_LEAF_Ethernet1/41
-        name: Ethernet1/41
-        role: customer
-      - template_name: N9K-C9316D-GX_LEAF_Ethernet1/42
-        name: Ethernet1/42
-        role: customer
-      - template_name: N9K-C9316D-GX_LEAF_Ethernet1/43
-        name: Ethernet1/43
-        role: customer
-      - template_name: N9K-C9316D-GX_LEAF_Ethernet1/44
-        name: Ethernet1/44
-        role: customer
-      - template_name: N9K-C9316D-GX_LEAF_Ethernet1/45
-        name: Ethernet1/45
-        role: customer
-      - template_name: N9K-C9316D-GX_LEAF_Ethernet1/46
-        name: Ethernet1/46
-        role: customer
-      - template_name: N9K-C9316D-GX_LEAF_Ethernet1/47
-        name: Ethernet1/47
-        role: customer
-      - template_name: N9K-C9316D-GX_LEAF_Ethernet1/48
-        name: Ethernet1/48
-        role: customer
-      - template_name: N9K-C9316D-GX_LEAF_Ethernet1/49
-        name: Ethernet1/49
-        role: uplink
-      - template_name: N9K-C9316D-GX_LEAF_Ethernet1/50
-        name: Ethernet1/50
-        role: uplink
-      - template_name: N9K-C9316D-GX_LEAF_Ethernet1/51
-        name: Ethernet1/51
-        role: uplink
-      - template_name: N9K-C9316D-GX_LEAF_Ethernet1/52
-        name: Ethernet1/52
-        role: uplink
-      - template_name: N9K-C9316D-GX_LEAF_Ethernet1/53
-        name: Ethernet1/53
-        role: uplink
-      - template_name: N9K-C9316D-GX_LEAF_Ethernet1/54
-        name: Ethernet1/54
-        role: uplink
-      - template_name: N9K-C9316D-GX_LEAF_mgmt0
-        name: mgmt0
-        role: management
-        interface_type: 1000base-t
-  - template_name: N9K_C9316D_GX_EDGE
-    device_type: N9K-C9316D-GX
-    platform: cisco_nxos
-    role: edge
-    status: provisioning
-    interfaces:
-      kind: TemplateDcimPhysicalInterface
-      data:
-      - template_name: N9K-C9316D-GX_EDGE_Ethernet1/1
-        name: Ethernet1/1
-        role: uplink
-      - template_name: N9K-C9316D-GX_EDGE_Ethernet1/2
-        name: Ethernet1/2
-        role: uplink
-      - template_name: N9K-C9316D-GX_EDGE_Ethernet1/3
-        name: Ethernet1/3
-        role: uplink
-      - template_name: N9K-C9316D-GX_EDGE_Ethernet1/4
-        name: Ethernet1/4
-        role: uplink
-      - template_name: N9K-C9316D-GX_EDGE_Ethernet1/5
-        name: Ethernet1/5
-        role: uplink
-      - template_name: N9K-C9316D-GX_EDGE_Ethernet1/6
-        name: Ethernet1/6
-        role: uplink
-      - template_name: N9K-C9316D-GX_EDGE_Ethernet1/7
-        name: Ethernet1/7
-        role: uplink
-      - template_name: N9K-C9316D-GX_EDGE_Ethernet1/8
-        name: Ethernet1/8
-        role: uplink
-      - template_name: N9K-C9316D-GX_EDGE_Ethernet1/9
-        name: Ethernet1/9
-        role: uplink
-      - template_name: N9K-C9316D-GX_EDGE_Ethernet1/10
-        name: Ethernet1/10
-        role: uplink
-        interface_type: 400gbase-x-qsfpdd
-      - template_name: N9K-C9316D-GX_EDGE_Ethernet1/11
-        name: Ethernet1/11
-        role: uplink
-        interface_type: 400gbase-x-qsfpdd
-      - template_name: N9K-C9316D-GX_EDGE_Ethernet1/12
-        name: Ethernet1/12
-        role: uplink
-        interface_type: 400gbase-x-qsfpdd
-      - template_name: N9K-C9316D-GX_EDGE_Ethernet1/13
-        name: Ethernet1/13
-        role: uplink
-        interface_type: 100gbase-x-qsfp28
-      - template_name: N9K-C9316D-GX_EDGE_Ethernet1/14
-        name: Ethernet1/14
-        role: uplink
-        interface_type: 100gbase-x-qsfp28
-      - template_name: N9K-C9316D-GX_EDGE_Ethernet1/15
-        name: Ethernet1/15
-        role: peering
-        interface_type: 100gbase-x-qsfp28
-      - template_name: N9K-C9316D-GX_EDGE_Ethernet1/16
-        name: Ethernet1/16
-        role: peering
-        interface_type: 100gbase-x-qsfp28
-      - template_name: N9K-C9316D-GX_EDGE_mgmt0
-        name: mgmt0
-        role: management
-        interface_type: 1000base-t
-  - template_name: N9K_C9336C_FX2_SPINE_CONSOLE
-    device_type: N9K-C9336C-FX2
-    platform: cisco_nxos
-    role: spine
-    status: provisioning
-    interfaces:
-      kind: TemplateDcimConsoleInterface
-      data:
-      - template_name: N9K-C9336C-FX2_SPINE_con
-        name: con
-        role: console
-  - template_name: N9K_C9336C_FX2_LEAF_CONSOLE
-    device_type: N9K-C9336C-FX2
-    platform: cisco_nxos
-    role: leaf
-    status: provisioning
-    interfaces:
-      kind: TemplateDcimConsoleInterface
-      data:
-      - template_name: N9K-C9336C-FX2_LEAF_con
-        name: con
-        role: console
-  - template_name: N9K_C9316D_GX_SPINE_CONSOLE
-    device_type: N9K-C9316D-GX
-    platform: cisco_nxos
-    role: spine
-    status: provisioning
-    interfaces:
-      kind: TemplateDcimConsoleInterface
-      data:
-      - template_name: N9K-C9316D-GX_SPINE_con
-        name: con
-        role: console
-  - template_name: N9K_C9316D_GX_LEAF_CONSOLE
-    device_type: N9K-C9316D-GX
-    platform: cisco_nxos
-    role: leaf
-    status: provisioning
-    interfaces:
-      kind: TemplateDcimConsoleInterface
-      data:
-      - template_name: N9K-C9316D-GX_LEAF_con
-        name: con
-        role: console
-  - template_name: N9K_C9316D_GX_EDGE_CONSOLE
-    device_type: N9K-C9316D-GX
-    platform: cisco_nxos
-    role: edge
-    status: provisioning
-    interfaces:
-      kind: TemplateDcimConsoleInterface
-      data:
-      - template_name: N9K-C9316D-GX_EDGE_con
-        name: con
-        role: console
+    - template_name: N9K_C9336C_FX2_SUPER_SPINE
+      device_type: N9K-C9336C-FX2
+      platform: cisco_nxos
+      role: super-spine
+      status: provisioning
+      interfaces:
+        kind: TemplateDcimPhysicalInterface
+        data:
+          - template_name: N9K-C9336C-FX2_SUPER_SPINE_Ethernet1/1
+            name: Ethernet1/1
+            role: spine
+            interface_type: 100gbase-x-qsfp28
+          - template_name: N9K-C9336C-FX2_SUPER_SPINE_Ethernet1/2
+            name: Ethernet1/2
+            role: spine
+            interface_type: 100gbase-x-qsfp28
+          - template_name: N9K-C9336C-FX2_SUPER_SPINE_Ethernet1/3
+            name: Ethernet1/3
+            role: spine
+            interface_type: 100gbase-x-qsfp28
+          - template_name: N9K-C9336C-FX2_SUPER_SPINE_Ethernet1/4
+            name: Ethernet1/4
+            role: spine
+            interface_type: 100gbase-x-qsfp28
+          - template_name: N9K-C9336C-FX2_SUPER_SPINE_Ethernet1/5
+            name: Ethernet1/5
+            role: spine
+            interface_type: 100gbase-x-qsfp28
+          - template_name: N9K-C9336C-FX2_SUPER_SPINE_Ethernet1/6
+            name: Ethernet1/6
+            role: spine
+            interface_type: 100gbase-x-qsfp28
+          - template_name: N9K-C9336C-FX2_SUPER_SPINE_Ethernet1/7
+            name: Ethernet1/7
+            role: spine
+            interface_type: 100gbase-x-qsfp28
+          - template_name: N9K-C9336C-FX2_SUPER_SPINE_Ethernet1/8
+            name: Ethernet1/8
+            role: spine
+            interface_type: 100gbase-x-qsfp28
+          - template_name: N9K-C9336C-FX2_SUPER_SPINE_Ethernet1/9
+            name: Ethernet1/9
+            role: spine
+            interface_type: 100gbase-x-qsfp28
+          - template_name: N9K-C9336C-FX2_SUPER_SPINE_Ethernet1/10
+            name: Ethernet1/10
+            role: spine
+            interface_type: 100gbase-x-qsfp28
+          - template_name: N9K-C9336C-FX2_SUPER_SPINE_Ethernet1/11
+            name: Ethernet1/11
+            role: spine
+            interface_type: 100gbase-x-qsfp28
+          - template_name: N9K-C9336C-FX2_SUPER_SPINE_Ethernet1/12
+            name: Ethernet1/12
+            role: spine
+            interface_type: 100gbase-x-qsfp28
+          - template_name: N9K-C9336C-FX2_SUPER_SPINE_Ethernet1/13
+            name: Ethernet1/13
+            role: spine
+            interface_type: 100gbase-x-qsfp28
+          - template_name: N9K-C9336C-FX2_SUPER_SPINE_Ethernet1/14
+            name: Ethernet1/14
+            role: spine
+            interface_type: 100gbase-x-qsfp28
+          - template_name: N9K-C9336C-FX2_SUPER_SPINE_Ethernet1/15
+            name: Ethernet1/15
+            role: spine
+            interface_type: 100gbase-x-qsfp28
+          - template_name: N9K-C9336C-FX2_SUPER_SPINE_Ethernet1/16
+            name: Ethernet1/16
+            role: spine
+            interface_type: 100gbase-x-qsfp28
+          - template_name: N9K-C9336C-FX2_SUPER_SPINE_Ethernet1/17
+            name: Ethernet1/17
+            role: spine
+            interface_type: 100gbase-x-qsfp28
+          - template_name: N9K-C9336C-FX2_SUPER_SPINE_Ethernet1/18
+            name: Ethernet1/18
+            role: spine
+            interface_type: 100gbase-x-qsfp28
+          - template_name: N9K-C9336C-FX2_SUPER_SPINE_Ethernet1/19
+            name: Ethernet1/19
+            role: spine
+            interface_type: 100gbase-x-qsfp28
+          - template_name: N9K-C9336C-FX2_SUPER_SPINE_Ethernet1/20
+            name: Ethernet1/20
+            role: spine
+            interface_type: 100gbase-x-qsfp28
+          - template_name: N9K-C9336C-FX2_SUPER_SPINE_Ethernet1/21
+            name: Ethernet1/21
+            role: spine
+            interface_type: 100gbase-x-qsfp28
+          - template_name: N9K-C9336C-FX2_SUPER_SPINE_Ethernet1/22
+            name: Ethernet1/22
+            role: spine
+            interface_type: 100gbase-x-qsfp28
+          - template_name: N9K-C9336C-FX2_SUPER_SPINE_Ethernet1/23
+            name: Ethernet1/23
+            role: spine
+            interface_type: 100gbase-x-qsfp28
+          - template_name: N9K-C9336C-FX2_SUPER_SPINE_Ethernet1/24
+            name: Ethernet1/24
+            role: spine
+            interface_type: 100gbase-x-qsfp28
+          - template_name: N9K-C9336C-FX2_SUPER_SPINE_Ethernet1/25
+            name: Ethernet1/25
+            role: spine
+            interface_type: 100gbase-x-qsfp28
+          - template_name: N9K-C9336C-FX2_SUPER_SPINE_Ethernet1/26
+            name: Ethernet1/26
+            role: spine
+            interface_type: 100gbase-x-qsfp28
+          - template_name: N9K-C9336C-FX2_SUPER_SPINE_Ethernet1/27
+            name: Ethernet1/27
+            role: spine
+            interface_type: 100gbase-x-qsfp28
+          - template_name: N9K-C9336C-FX2_SUPER_SPINE_Ethernet1/28
+            name: Ethernet1/28
+            role: spine
+            interface_type: 100gbase-x-qsfp28
+          - template_name: N9K-C9336C-FX2_SUPER_SPINE_Ethernet1/29
+            name: Ethernet1/29
+            role: spine
+            interface_type: 100gbase-x-qsfp28
+          - template_name: N9K-C9336C-FX2_SUPER_SPINE_Ethernet1/30
+            name: Ethernet1/30
+            role: spine
+            interface_type: 100gbase-x-qsfp28
+          - template_name: N9K-C9336C-FX2_SUPER_SPINE_Ethernet1/31
+            name: Ethernet1/31
+            role: uplink
+            interface_type: 100gbase-x-qsfp28
+          - template_name: N9K-C9336C-FX2_SUPER_SPINE_Ethernet1/32
+            name: Ethernet1/32
+            role: uplink
+            interface_type: 100gbase-x-qsfp28
+          - template_name: N9K-C9336C-FX2_SUPER_SPINE_Ethernet1/33
+            name: Ethernet1/33
+            role: uplink
+            interface_type: 100gbase-x-qsfp28
+          - template_name: N9K-C9336C-FX2_SUPER_SPINE_Ethernet1/34
+            name: Ethernet1/34
+            role: uplink
+            interface_type: 100gbase-x-qsfp28
+          - template_name: N9K-C9336C-FX2_SUPER_SPINE_Ethernet1/35
+            name: Ethernet1/35
+            role: uplink
+            interface_type: 100gbase-x-qsfp28
+          - template_name: N9K-C9336C-FX2_SUPER_SPINE_Ethernet1/36
+            name: Ethernet1/36
+            role: uplink
+            interface_type: 100gbase-x-qsfp28
+          - template_name: N9K-C9336C-FX2_SUPER_SPINE_mgmt0
+            name: mgmt0
+            role: management
+            interface_type: 1000base-t
+    - template_name: N9K_C9316D_GX_SUPER_SPINE
+      device_type: N9K-C9316D-GX
+      platform: cisco_nxos
+      role: spine
+      status: provisioning
+      interfaces:
+        kind: TemplateDcimPhysicalInterface
+        data:
+          - template_name: N9K-C9316D-GX_SUPER_SPINE_Ethernet1/1
+            name: Ethernet1/1
+            role: spine
+          - template_name: N9K-C9316D-GX_SUPER_SPINE_Ethernet1/2
+            name: Ethernet1/2
+            role: spine
+          - template_name: N9K-C9316D-GX_SUPER_SPINE_Ethernet1/3
+            name: Ethernet1/3
+            role: spine
+          - template_name: N9K-C9316D-GX_SUPER_SPINE_Ethernet1/4
+            name: Ethernet1/4
+            role: spine
+          - template_name: N9K-C9316D-GX_SUPER_SPINE_Ethernet1/5
+            name: Ethernet1/5
+            role: spine
+          - template_name: N9K-C9316D-GX_SUPER_SPINE_Ethernet1/6
+            name: Ethernet1/6
+            role: spine
+          - template_name: N9K-C9316D-GX_SUPER_SPINE_Ethernet1/7
+            name: Ethernet1/7
+            role: spine
+          - template_name: N9K-C9316D-GX_SUPER_SPINE_Ethernet1/8
+            name: Ethernet1/8
+            role: spine
+          - template_name: N9K-C9316D-GX_SUPER_SPINE_Ethernet1/9
+            name: Ethernet1/9
+            role: spine
+          - template_name: N9K-C9316D-GX_SUPER_SPINE_Ethernet1/10
+            name: Ethernet1/10
+            role: spine
+            interface_type: 400gbase-x-qsfpdd
+          - template_name: N9K-C9316D-GX_SUPER_SPINE_Ethernet1/11
+            name: Ethernet1/11
+            role: spine
+            interface_type: 400gbase-x-qsfpdd
+          - template_name: N9K-C9316D-GX_SUPER_SPINE_Ethernet1/12
+            name: Ethernet1/12
+            role: spine
+            interface_type: 400gbase-x-qsfpdd
+          - template_name: N9K-C9316D-GX_SUPER_SPINE_Ethernet1/13
+            name: Ethernet1/13
+            role: uplink
+            interface_type: 100gbase-x-qsfp28
+          - template_name: N9K-C9316D-GX_SUPER_SPINE_Ethernet1/14
+            name: Ethernet1/14
+            role: uplink
+            interface_type: 100gbase-x-qsfp28
+          - template_name: N9K-C9316D-GX_SUPER_SPINE_Ethernet1/15
+            name: Ethernet1/15
+            role: uplink
+            interface_type: 100gbase-x-qsfp28
+          - template_name: N9K-C9316D-GX_SUPER_SPINE_Ethernet1/16
+            name: Ethernet1/16
+            role: uplink
+            interface_type: 100gbase-x-qsfp28
+          - template_name: N9K-C9316D-GX_SUPER_SPINE_mgmt0
+            name: mgmt0
+            role: management
+            interface_type: 1000base-t
+    - template_name: N9K_C9336C_FX2_SPINE
+      device_type: N9K-C9336C-FX2
+      role: spine
+      platform: cisco_nxos
+      status: provisioning
+      interfaces:
+        kind: TemplateDcimPhysicalInterface
+        data:
+          - template_name: N9K-C9336C-FX2_SPINE_Ethernet1/1
+            name: Ethernet1/1
+            role: leaf
+            interface_type: 100gbase-x-qsfp28
+          - template_name: N9K-C9336C-FX2_SPINE_Ethernet1/2
+            name: Ethernet1/2
+            role: leaf
+            interface_type: 100gbase-x-qsfp28
+          - template_name: N9K-C9336C-FX2_SPINE_Ethernet1/3
+            name: Ethernet1/3
+            role: leaf
+            interface_type: 100gbase-x-qsfp28
+          - template_name: N9K-C9336C-FX2_SPINE_Ethernet1/4
+            name: Ethernet1/4
+            role: leaf
+            interface_type: 100gbase-x-qsfp28
+          - template_name: N9K-C9336C-FX2_SPINE_Ethernet1/5
+            name: Ethernet1/5
+            role: leaf
+            interface_type: 100gbase-x-qsfp28
+          - template_name: N9K-C9336C-FX2_SPINE_Ethernet1/6
+            name: Ethernet1/6
+            role: leaf
+            interface_type: 100gbase-x-qsfp28
+          - template_name: N9K-C9336C-FX2_SPINE_Ethernet1/7
+            name: Ethernet1/7
+            role: leaf
+            interface_type: 100gbase-x-qsfp28
+          - template_name: N9K-C9336C-FX2_SPINE_Ethernet1/8
+            name: Ethernet1/8
+            role: leaf
+            interface_type: 100gbase-x-qsfp28
+          - template_name: N9K-C9336C-FX2_SPINE_Ethernet1/9
+            name: Ethernet1/9
+            role: leaf
+            interface_type: 100gbase-x-qsfp28
+          - template_name: N9K-C9336C-FX2_SPINE_Ethernet1/10
+            name: Ethernet1/10
+            role: leaf
+            interface_type: 100gbase-x-qsfp28
+          - template_name: N9K-C9336C-FX2_SPINE_Ethernet1/11
+            name: Ethernet1/11
+            role: leaf
+            interface_type: 100gbase-x-qsfp28
+          - template_name: N9K-C9336C-FX2_SPINE_Ethernet1/12
+            name: Ethernet1/12
+            role: leaf
+            interface_type: 100gbase-x-qsfp28
+          - template_name: N9K-C9336C-FX2_SPINE_Ethernet1/13
+            name: Ethernet1/13
+            role: leaf
+            interface_type: 100gbase-x-qsfp28
+          - template_name: N9K-C9336C-FX2_SPINE_Ethernet1/14
+            name: Ethernet1/14
+            role: leaf
+            interface_type: 100gbase-x-qsfp28
+          - template_name: N9K-C9336C-FX2_SPINE_Ethernet1/15
+            name: Ethernet1/15
+            role: leaf
+            interface_type: 100gbase-x-qsfp28
+          - template_name: N9K-C9336C-FX2_SPINE_Ethernet1/16
+            name: Ethernet1/16
+            role: leaf
+            interface_type: 100gbase-x-qsfp28
+          - template_name: N9K-C9336C-FX2_SPINE_Ethernet1/17
+            name: Ethernet1/17
+            role: leaf
+            interface_type: 100gbase-x-qsfp28
+          - template_name: N9K-C9336C-FX2_SPINE_Ethernet1/18
+            name: Ethernet1/18
+            role: leaf
+            interface_type: 100gbase-x-qsfp28
+          - template_name: N9K-C9336C-FX2_SPINE_Ethernet1/19
+            name: Ethernet1/19
+            role: leaf
+            interface_type: 100gbase-x-qsfp28
+          - template_name: N9K-C9336C-FX2_SPINE_Ethernet1/20
+            name: Ethernet1/20
+            role: leaf
+            interface_type: 100gbase-x-qsfp28
+          - template_name: N9K-C9336C-FX2_SPINE_Ethernet1/21
+            name: Ethernet1/21
+            role: leaf
+            interface_type: 100gbase-x-qsfp28
+          - template_name: N9K-C9336C-FX2_SPINE_Ethernet1/22
+            name: Ethernet1/22
+            role: leaf
+            interface_type: 100gbase-x-qsfp28
+          - template_name: N9K-C9336C-FX2_SPINE_Ethernet1/23
+            name: Ethernet1/23
+            role: leaf
+            interface_type: 100gbase-x-qsfp28
+          - template_name: N9K-C9336C-FX2_SPINE_Ethernet1/24
+            name: Ethernet1/24
+            role: leaf
+            interface_type: 100gbase-x-qsfp28
+          - template_name: N9K-C9336C-FX2_SPINE_Ethernet1/25
+            name: Ethernet1/25
+            role: leaf
+            interface_type: 100gbase-x-qsfp28
+          - template_name: N9K-C9336C-FX2_SPINE_Ethernet1/26
+            name: Ethernet1/26
+            role: leaf
+            interface_type: 100gbase-x-qsfp28
+          - template_name: N9K-C9336C-FX2_SPINE_Ethernet1/27
+            name: Ethernet1/27
+            role: leaf
+            interface_type: 100gbase-x-qsfp28
+          - template_name: N9K-C9336C-FX2_SPINE_Ethernet1/28
+            name: Ethernet1/28
+            role: leaf
+            interface_type: 100gbase-x-qsfp28
+          - template_name: N9K-C9336C-FX2_SPINE_Ethernet1/29
+            name: Ethernet1/29
+            role: leaf
+            interface_type: 100gbase-x-qsfp28
+          - template_name: N9K-C9336C-FX2_SPINE_Ethernet1/30
+            name: Ethernet1/30
+            role: leaf
+            interface_type: 100gbase-x-qsfp28
+          - template_name: N9K-C9336C-FX2_SPINE_Ethernet1/31
+            name: Ethernet1/31
+            role: uplink
+            interface_type: 100gbase-x-qsfp28
+          - template_name: N9K-C9336C-FX2_SPINE_Ethernet1/32
+            name: Ethernet1/32
+            role: uplink
+            interface_type: 100gbase-x-qsfp28
+          - template_name: N9K-C9336C-FX2_SPINE_Ethernet1/33
+            name: Ethernet1/33
+            role: uplink
+            interface_type: 100gbase-x-qsfp28
+          - template_name: N9K-C9336C-FX2_SPINE_Ethernet1/34
+            name: Ethernet1/34
+            role: uplink
+            interface_type: 100gbase-x-qsfp28
+          - template_name: N9K-C9336C-FX2_SPINE_Ethernet1/35
+            name: Ethernet1/35
+            role: uplink
+            interface_type: 100gbase-x-qsfp28
+          - template_name: N9K-C9336C-FX2_SPINE_Ethernet1/36
+            name: Ethernet1/36
+            role: uplink
+            interface_type: 100gbase-x-qsfp28
+          - template_name: N9K-C9336C-FX2_SPINE_mgmt0
+            name: mgmt0
+            role: management
+            interface_type: 1000base-t
+    - template_name: N9K_C9336C_FX2_LEAF
+      device_type: N9K-C9336C-FX2
+      platform: cisco_nxos
+      role: leaf
+      status: provisioning
+      interfaces:
+        kind: TemplateDcimPhysicalInterface
+        data:
+          - template_name: N9K-C9336C-FX2_LEAF_Ethernet1/1
+            name: Ethernet1/1
+            role: customer
+            interface_type: 100gbase-x-qsfp28
+          - template_name: N9K-C9336C-FX2_LEAF_Ethernet1/2
+            name: Ethernet1/2
+            role: customer
+            interface_type: 100gbase-x-qsfp28
+          - template_name: N9K-C9336C-FX2_LEAF_Ethernet1/3
+            name: Ethernet1/3
+            role: customer
+            interface_type: 100gbase-x-qsfp28
+          - template_name: N9K-C9336C-FX2_LEAF_Ethernet1/4
+            name: Ethernet1/4
+            role: customer
+            interface_type: 100gbase-x-qsfp28
+          - template_name: N9K-C9336C-FX2_LEAF_Ethernet1/5
+            name: Ethernet1/5
+            role: customer
+            interface_type: 100gbase-x-qsfp28
+          - template_name: N9K-C9336C-FX2_LEAF_Ethernet1/6
+            name: Ethernet1/6
+            role: customer
+            interface_type: 100gbase-x-qsfp28
+          - template_name: N9K-C9336C-FX2_LEAF_Ethernet1/7
+            name: Ethernet1/7
+            role: customer
+            interface_type: 100gbase-x-qsfp28
+          - template_name: N9K-C9336C-FX2_LEAF_Ethernet1/8
+            name: Ethernet1/8
+            role: customer
+            interface_type: 100gbase-x-qsfp28
+          - template_name: N9K-C9336C-FX2_LEAF_Ethernet1/9
+            name: Ethernet1/9
+            role: customer
+            interface_type: 100gbase-x-qsfp28
+          - template_name: N9K-C9336C-FX2_LEAF_Ethernet1/10
+            name: Ethernet1/10
+            role: customer
+            interface_type: 100gbase-x-qsfp28
+          - template_name: N9K-C9336C-FX2_LEAF_Ethernet1/11
+            name: Ethernet1/11
+            role: customer
+            interface_type: 100gbase-x-qsfp28
+          - template_name: N9K-C9336C-FX2_LEAF_Ethernet1/12
+            name: Ethernet1/12
+            role: customer
+            interface_type: 100gbase-x-qsfp28
+          - template_name: N9K-C9336C-FX2_LEAF_Ethernet1/13
+            name: Ethernet1/13
+            role: customer
+            interface_type: 100gbase-x-qsfp28
+          - template_name: N9K-C9336C-FX2_LEAF_Ethernet1/14
+            name: Ethernet1/14
+            role: customer
+            interface_type: 100gbase-x-qsfp28
+          - template_name: N9K-C9336C-FX2_LEAF_Ethernet1/15
+            name: Ethernet1/15
+            role: customer
+            interface_type: 100gbase-x-qsfp28
+          - template_name: N9K-C9336C-FX2_LEAF_Ethernet1/16
+            name: Ethernet1/16
+            role: customer
+            interface_type: 100gbase-x-qsfp28
+          - template_name: N9K-C9336C-FX2_LEAF_Ethernet1/17
+            name: Ethernet1/17
+            role: customer
+            interface_type: 100gbase-x-qsfp28
+          - template_name: N9K-C9336C-FX2_LEAF_Ethernet1/18
+            name: Ethernet1/18
+            role: customer
+            interface_type: 100gbase-x-qsfp28
+          - template_name: N9K-C9336C-FX2_LEAF_Ethernet1/19
+            name: Ethernet1/19
+            role: customer
+            interface_type: 100gbase-x-qsfp28
+          - template_name: N9K-C9336C-FX2_LEAF_Ethernet1/20
+            name: Ethernet1/20
+            role: customer
+            interface_type: 100gbase-x-qsfp28
+          - template_name: N9K-C9336C-FX2_LEAF_Ethernet1/21
+            name: Ethernet1/21
+            role: customer
+            interface_type: 100gbase-x-qsfp28
+          - template_name: N9K-C9336C-FX2_LEAF_Ethernet1/22
+            name: Ethernet1/22
+            role: customer
+            interface_type: 100gbase-x-qsfp28
+          - template_name: N9K-C9336C-FX2_LEAF_Ethernet1/23
+            name: Ethernet1/23
+            role: customer
+            interface_type: 100gbase-x-qsfp28
+          - template_name: N9K-C9336C-FX2_LEAF_Ethernet1/24
+            name: Ethernet1/24
+            role: customer
+            interface_type: 100gbase-x-qsfp28
+          - template_name: N9K-C9336C-FX2_LEAF_Ethernet1/25
+            name: Ethernet1/25
+            role: customer
+            interface_type: 100gbase-x-qsfp28
+          - template_name: N9K-C9336C-FX2_LEAF_Ethernet1/26
+            name: Ethernet1/26
+            role: customer
+            interface_type: 100gbase-x-qsfp28
+          - template_name: N9K-C9336C-FX2_LEAF_Ethernet1/27
+            name: Ethernet1/27
+            role: customer
+            interface_type: 100gbase-x-qsfp28
+          - template_name: N9K-C9336C-FX2_LEAF_Ethernet1/28
+            name: Ethernet1/28
+            role: customer
+            interface_type: 100gbase-x-qsfp28
+          - template_name: N9K-C9336C-FX2_LEAF_Ethernet1/29
+            name: Ethernet1/29
+            role: customer
+            interface_type: 100gbase-x-qsfp28
+          - template_name: N9K-C9336C-FX2_LEAF_Ethernet1/30
+            name: Ethernet1/30
+            role: customer
+            interface_type: 100gbase-x-qsfp28
+          - template_name: N9K-C9336C-FX2_LEAF_Ethernet1/31
+            name: Ethernet1/31
+            role: uplink
+            interface_type: 100gbase-x-qsfp28
+          - template_name: N9K-C9336C-FX2_LEAF_Ethernet1/32
+            name: Ethernet1/32
+            role: uplink
+            interface_type: 100gbase-x-qsfp28
+          - template_name: N9K-C9336C-FX2_LEAF_Ethernet1/33
+            name: Ethernet1/33
+            role: uplink
+            interface_type: 100gbase-x-qsfp28
+          - template_name: N9K-C9336C-FX2_LEAF_Ethernet1/34
+            name: Ethernet1/34
+            role: uplink
+            interface_type: 100gbase-x-qsfp28
+          - template_name: N9K-C9336C-FX2_LEAF_Ethernet1/35
+            name: Ethernet1/35
+            role: uplink
+            interface_type: 100gbase-x-qsfp28
+          - template_name: N9K-C9336C-FX2_LEAF_Ethernet1/36
+            name: Ethernet1/36
+            role: uplink
+            interface_type: 100gbase-x-qsfp28
+          - template_name: N9K-C9336C-FX2_LEAF_mgmt0
+            name: mgmt0
+            role: management
+            interface_type: 1000base-t
+    - template_name: N9K_C9316D_GX_SPINE
+      device_type: N9K-C9316D-GX
+      platform: cisco_nxos
+      role: spine
+      status: provisioning
+      interfaces:
+        kind: TemplateDcimPhysicalInterface
+        data:
+          - template_name: N9K-C9316D-GX_SPINE_Ethernet1/1
+            name: Ethernet1/1
+            role: leaf
+          - template_name: N9K-C9316D-GX_SPINE_Ethernet1/2
+            name: Ethernet1/2
+            role: leaf
+          - template_name: N9K-C9316D-GX_SPINE_Ethernet1/3
+            name: Ethernet1/3
+            role: leaf
+          - template_name: N9K-C9316D-GX_SPINE_Ethernet1/4
+            name: Ethernet1/4
+            role: leaf
+          - template_name: N9K-C9316D-GX_SPINE_Ethernet1/5
+            name: Ethernet1/5
+            role: leaf
+          - template_name: N9K-C9316D-GX_SPINE_Ethernet1/6
+            name: Ethernet1/6
+            role: leaf
+          - template_name: N9K-C9316D-GX_SPINE_Ethernet1/7
+            name: Ethernet1/7
+            role: leaf
+          - template_name: N9K-C9316D-GX_SPINE_Ethernet1/8
+            name: Ethernet1/8
+            role: leaf
+          - template_name: N9K-C9316D-GX_SPINE_Ethernet1/9
+            name: Ethernet1/9
+            role: leaf
+          - template_name: N9K-C9316D-GX_SPINE_Ethernet1/10
+            name: Ethernet1/10
+            role: leaf
+            interface_type: 400gbase-x-qsfpdd
+          - template_name: N9K-C9316D-GX_SPINE_Ethernet1/11
+            name: Ethernet1/11
+            role: uplink
+            interface_type: 400gbase-x-qsfpdd
+          - template_name: N9K-C9316D-GX_SPINE_Ethernet1/12
+            name: Ethernet1/12
+            role: uplink
+            interface_type: 400gbase-x-qsfpdd
+          - template_name: N9K-C9316D-GX_SPINE_Ethernet1/13
+            name: Ethernet1/13
+            role: uplink
+            interface_type: 100gbase-x-qsfp28
+          - template_name: N9K-C9316D-GX_SPINE_Ethernet1/14
+            name: Ethernet1/14
+            role: uplink
+            interface_type: 100gbase-x-qsfp28
+          - template_name: N9K-C9316D-GX_SPINE_Ethernet1/15
+            name: Ethernet1/15
+            role: uplink
+            interface_type: 100gbase-x-qsfp28
+          - template_name: N9K-C9316D-GX_SPINE_Ethernet1/16
+            name: Ethernet1/16
+            role: uplink
+            interface_type: 100gbase-x-qsfp28
+          - template_name: N9K-C9316D-GX_SPINE_mgmt0
+            name: mgmt0
+            role: management
+            interface_type: 1000base-t
+    - template_name: N9K_C9316D_GX_LEAF
+      device_type: N9K-C9316D-GX
+      platform: cisco_nxos
+      role: leaf
+      status: provisioning
+      interfaces:
+        kind: TemplateDcimPhysicalInterface
+        data:
+          - template_name: N9K-C9316D-GX_LEAF_Ethernet1/1
+            name: Ethernet1/1
+            role: customer
+          - template_name: N9K-C9316D-GX_LEAF_Ethernet1/2
+            name: Ethernet1/2
+            role: customer
+          - template_name: N9K-C9316D-GX_LEAF_Ethernet1/3
+            name: Ethernet1/3
+            role: customer
+          - template_name: N9K-C9316D-GX_LEAF_Ethernet1/4
+            name: Ethernet1/4
+            role: customer
+          - template_name: N9K-C9316D-GX_LEAF_Ethernet1/5
+            name: Ethernet1/5
+            role: customer
+          - template_name: N9K-C9316D-GX_LEAF_Ethernet1/6
+            name: Ethernet1/6
+            role: customer
+          - template_name: N9K-C9316D-GX_LEAF_Ethernet1/7
+            name: Ethernet1/7
+            role: customer
+          - template_name: N9K-C9316D-GX_LEAF_Ethernet1/8
+            name: Ethernet1/8
+            role: customer
+          - template_name: N9K-C9316D-GX_LEAF_Ethernet1/9
+            name: Ethernet1/9
+            role: customer
+          - template_name: N9K-C9316D-GX_LEAF_Ethernet1/10
+            name: Ethernet1/10
+            role: customer
+            interface_type: 400gbase-x-qsfpdd
+          - template_name: N9K-C9316D-GX_LEAF_Ethernet1/11
+            name: Ethernet1/11
+            role: customer
+            interface_type: 400gbase-x-qsfpdd
+          - template_name: N9K-C9316D-GX_LEAF_Ethernet1/12
+            name: Ethernet1/12
+            role: customer
+            interface_type: 400gbase-x-qsfpdd
+          - template_name: N9K-C9316D-GX_LEAF_Ethernet1/13
+            name: Ethernet1/13
+            role: customer
+            interface_type: 100gbase-x-qsfp28
+          - template_name: N9K-C9316D-GX_LEAF_Ethernet1/14
+            name: Ethernet1/14
+            role: customer
+            interface_type: 100gbase-x-qsfp28
+          - template_name: N9K-C9316D-GX_LEAF_Ethernet1/15
+            name: Ethernet1/15
+            role: customer
+            interface_type: 100gbase-x-qsfp28
+          - template_name: N9K-C9316D-GX_LEAF_Ethernet1/16
+            name: Ethernet1/16
+            role: customer
+            interface_type: 100gbase-x-qsfp28
+          - template_name: N9K-C9316D-GX_LEAF_Ethernet1/17
+            name: Ethernet1/17
+            role: customer
+          - template_name: N9K-C9316D-GX_LEAF_Ethernet1/18
+            name: Ethernet1/18
+            role: customer
+          - template_name: N9K-C9316D-GX_LEAF_Ethernet1/19
+            name: Ethernet1/19
+            role: customer
+          - template_name: N9K-C9316D-GX_LEAF_Ethernet1/20
+            name: Ethernet1/20
+            role: customer
+          - template_name: N9K-C9316D-GX_LEAF_Ethernet1/21
+            name: Ethernet1/21
+            role: customer
+          - template_name: N9K-C9316D-GX_LEAF_Ethernet1/22
+            name: Ethernet1/22
+            role: customer
+          - template_name: N9K-C9316D-GX_LEAF_Ethernet1/23
+            name: Ethernet1/23
+            role: customer
+          - template_name: N9K-C9316D-GX_LEAF_Ethernet1/24
+            name: Ethernet1/24
+            role: customer
+          - template_name: N9K-C9316D-GX_LEAF_Ethernet1/25
+            name: Ethernet1/25
+            role: customer
+          - template_name: N9K-C9316D-GX_LEAF_Ethernet1/26
+            name: Ethernet1/26
+            role: customer
+          - template_name: N9K-C9316D-GX_LEAF_Ethernet1/27
+            name: Ethernet1/27
+            role: customer
+          - template_name: N9K-C9316D-GX_LEAF_Ethernet1/28
+            name: Ethernet1/28
+            role: customer
+          - template_name: N9K-C9316D-GX_LEAF_Ethernet1/29
+            name: Ethernet1/29
+            role: customer
+          - template_name: N9K-C9316D-GX_LEAF_Ethernet1/30
+            name: Ethernet1/30
+            role: customer
+          - template_name: N9K-C9316D-GX_LEAF_Ethernet1/31
+            name: Ethernet1/31
+            role: customer
+          - template_name: N9K-C9316D-GX_LEAF_Ethernet1/32
+            name: Ethernet1/32
+            role: customer
+          - template_name: N9K-C9316D-GX_LEAF_Ethernet1/33
+            name: Ethernet1/33
+            role: customer
+          - template_name: N9K-C9316D-GX_LEAF_Ethernet1/34
+            name: Ethernet1/34
+            role: customer
+          - template_name: N9K-C9316D-GX_LEAF_Ethernet1/35
+            name: Ethernet1/35
+            role: customer
+          - template_name: N9K-C9316D-GX_LEAF_Ethernet1/36
+            name: Ethernet1/36
+            role: customer
+          - template_name: N9K-C9316D-GX_LEAF_Ethernet1/37
+            name: Ethernet1/37
+            role: customer
+          - template_name: N9K-C9316D-GX_LEAF_Ethernet1/38
+            name: Ethernet1/38
+            role: customer
+          - template_name: N9K-C9316D-GX_LEAF_Ethernet1/39
+            name: Ethernet1/39
+            role: customer
+          - template_name: N9K-C9316D-GX_LEAF_Ethernet1/40
+            name: Ethernet1/40
+            role: customer
+          - template_name: N9K-C9316D-GX_LEAF_Ethernet1/41
+            name: Ethernet1/41
+            role: customer
+          - template_name: N9K-C9316D-GX_LEAF_Ethernet1/42
+            name: Ethernet1/42
+            role: customer
+          - template_name: N9K-C9316D-GX_LEAF_Ethernet1/43
+            name: Ethernet1/43
+            role: customer
+          - template_name: N9K-C9316D-GX_LEAF_Ethernet1/44
+            name: Ethernet1/44
+            role: customer
+          - template_name: N9K-C9316D-GX_LEAF_Ethernet1/45
+            name: Ethernet1/45
+            role: customer
+          - template_name: N9K-C9316D-GX_LEAF_Ethernet1/46
+            name: Ethernet1/46
+            role: customer
+          - template_name: N9K-C9316D-GX_LEAF_Ethernet1/47
+            name: Ethernet1/47
+            role: customer
+          - template_name: N9K-C9316D-GX_LEAF_Ethernet1/48
+            name: Ethernet1/48
+            role: customer
+          - template_name: N9K-C9316D-GX_LEAF_Ethernet1/49
+            name: Ethernet1/49
+            role: uplink
+          - template_name: N9K-C9316D-GX_LEAF_Ethernet1/50
+            name: Ethernet1/50
+            role: uplink
+          - template_name: N9K-C9316D-GX_LEAF_Ethernet1/51
+            name: Ethernet1/51
+            role: uplink
+          - template_name: N9K-C9316D-GX_LEAF_Ethernet1/52
+            name: Ethernet1/52
+            role: uplink
+          - template_name: N9K-C9316D-GX_LEAF_Ethernet1/53
+            name: Ethernet1/53
+            role: uplink
+          - template_name: N9K-C9316D-GX_LEAF_Ethernet1/54
+            name: Ethernet1/54
+            role: uplink
+          - template_name: N9K-C9316D-GX_LEAF_mgmt0
+            name: mgmt0
+            role: management
+            interface_type: 1000base-t
+    - template_name: N9K_C9316D_GX_EDGE
+      device_type: N9K-C9316D-GX
+      platform: cisco_nxos
+      role: edge
+      status: provisioning
+      interfaces:
+        kind: TemplateDcimPhysicalInterface
+        data:
+          - template_name: N9K-C9316D-GX_EDGE_Ethernet1/1
+            name: Ethernet1/1
+            role: uplink
+          - template_name: N9K-C9316D-GX_EDGE_Ethernet1/2
+            name: Ethernet1/2
+            role: uplink
+          - template_name: N9K-C9316D-GX_EDGE_Ethernet1/3
+            name: Ethernet1/3
+            role: uplink
+          - template_name: N9K-C9316D-GX_EDGE_Ethernet1/4
+            name: Ethernet1/4
+            role: uplink
+          - template_name: N9K-C9316D-GX_EDGE_Ethernet1/5
+            name: Ethernet1/5
+            role: uplink
+          - template_name: N9K-C9316D-GX_EDGE_Ethernet1/6
+            name: Ethernet1/6
+            role: uplink
+          - template_name: N9K-C9316D-GX_EDGE_Ethernet1/7
+            name: Ethernet1/7
+            role: uplink
+          - template_name: N9K-C9316D-GX_EDGE_Ethernet1/8
+            name: Ethernet1/8
+            role: uplink
+          - template_name: N9K-C9316D-GX_EDGE_Ethernet1/9
+            name: Ethernet1/9
+            role: uplink
+          - template_name: N9K-C9316D-GX_EDGE_Ethernet1/10
+            name: Ethernet1/10
+            role: uplink
+            interface_type: 400gbase-x-qsfpdd
+          - template_name: N9K-C9316D-GX_EDGE_Ethernet1/11
+            name: Ethernet1/11
+            role: uplink
+            interface_type: 400gbase-x-qsfpdd
+          - template_name: N9K-C9316D-GX_EDGE_Ethernet1/12
+            name: Ethernet1/12
+            role: uplink
+            interface_type: 400gbase-x-qsfpdd
+          - template_name: N9K-C9316D-GX_EDGE_Ethernet1/13
+            name: Ethernet1/13
+            role: uplink
+            interface_type: 100gbase-x-qsfp28
+          - template_name: N9K-C9316D-GX_EDGE_Ethernet1/14
+            name: Ethernet1/14
+            role: uplink
+            interface_type: 100gbase-x-qsfp28
+          - template_name: N9K-C9316D-GX_EDGE_Ethernet1/15
+            name: Ethernet1/15
+            role: peering
+            interface_type: 100gbase-x-qsfp28
+          - template_name: N9K-C9316D-GX_EDGE_Ethernet1/16
+            name: Ethernet1/16
+            role: peering
+            interface_type: 100gbase-x-qsfp28
+          - template_name: N9K-C9316D-GX_EDGE_mgmt0
+            name: mgmt0
+            role: management
+            interface_type: 1000base-t
+    - template_name: N9K_C9336C_FX2_SPINE_CONSOLE
+      device_type: N9K-C9336C-FX2
+      platform: cisco_nxos
+      role: spine
+      status: provisioning
+      interfaces:
+        kind: TemplateDcimConsoleInterface
+        data:
+          - template_name: N9K-C9336C-FX2_SPINE_con
+            name: con
+            role: console
+    - template_name: N9K_C9336C_FX2_LEAF_CONSOLE
+      device_type: N9K-C9336C-FX2
+      platform: cisco_nxos
+      role: leaf
+      status: provisioning
+      interfaces:
+        kind: TemplateDcimConsoleInterface
+        data:
+          - template_name: N9K-C9336C-FX2_LEAF_con
+            name: con
+            role: console
+    - template_name: N9K_C9316D_GX_SPINE_CONSOLE
+      device_type: N9K-C9316D-GX
+      platform: cisco_nxos
+      role: spine
+      status: provisioning
+      interfaces:
+        kind: TemplateDcimConsoleInterface
+        data:
+          - template_name: N9K-C9316D-GX_SPINE_con
+            name: con
+            role: console
+    - template_name: N9K_C9316D_GX_LEAF_CONSOLE
+      device_type: N9K-C9316D-GX
+      platform: cisco_nxos
+      role: leaf
+      status: provisioning
+      interfaces:
+        kind: TemplateDcimConsoleInterface
+        data:
+          - template_name: N9K-C9316D-GX_LEAF_con
+            name: con
+            role: console
+    - template_name: N9K_C9316D_GX_EDGE_CONSOLE
+      device_type: N9K-C9316D-GX
+      platform: cisco_nxos
+      role: edge
+      status: provisioning
+      interfaces:
+        kind: TemplateDcimConsoleInterface
+        data:
+          - template_name: N9K-C9316D-GX_EDGE_con
+            name: con
+            role: console

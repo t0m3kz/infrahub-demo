@@ -31,7 +31,7 @@ jobs:
           uv run mypy .
       - run: |
           echo "Running validation"
-          uv run yamllint -d "{extends: default, ignore: [.github/, .venv/ , .dev/ ] }" .
+          uv run yamllint -d "{extends: default, ignore: [.github/, .venv/ , .dev/, .ai/] }" .
   tests:
     name: Testing plugin
     needs: code-qa

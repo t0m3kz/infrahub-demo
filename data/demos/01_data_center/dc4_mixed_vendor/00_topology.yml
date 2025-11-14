@@ -4,7 +4,7 @@ spec:
     - name: DC-4-MIXED-VENDOR
       site_index: 4
       metro_location: "London"
-      description: "Multi-vendor fabric demonstrating Dell, Edgecore, and Cisco interoperability"
+      description: "Multi-vendor fabric with Dell, Edgecore, and Cisco interop"
       design: "3-tier-clos"
       strategy: "ospf-ibgp"
       size: "L"
