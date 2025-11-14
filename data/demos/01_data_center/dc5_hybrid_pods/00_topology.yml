@@ -4,7 +4,7 @@ spec:
     - name: DC-5-HYBRID-PODS
       site_index: 5
       metro_location: "New York"
-      description: "Multi-vendor within pods - Dell/Edgecore/Cisco mixed at spine and leaf layers"
+      description: "Multi-vendor pods - mixed Cisco, Dell, Edgecore fabric"
       design: "3-tier-clos"
       strategy: "ospf-ibgp"
       size: "XL"

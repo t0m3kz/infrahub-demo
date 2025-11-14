@@ -211,6 +211,10 @@ def validate(context: Context) -> None:
     """Run all code quality tests."""
     context.run("ruff check . --fix", pty=True)
     context.run("mypy .", pty=True)
+    context.run(
+        'uv run yamllint -d "{extends: default, ignore: [.github/, .venv/ , .dev/, .ai/] }" .',
+        pty=True,
+    )
     context.run("pytest -vv tests", pty=True)
 
 
@@ -287,59 +291,6 @@ def list_scenarios(context: Context, branch: str = "main") -> None:
 
 
 # ============================================================================
-# Use Case: Configuration Generation & Templating
-# Note: Transforms/artifacts triggered by events or manual triggers in UI
-# ============================================================================
-
-
-@task(optional=["branch"])
-def load_config_data(context: Context, branch: str = "main") -> None:
-    """Load configuration generation data to a branch.
-
-    This task only LOADS data. Actual config generation is triggered by:
-    - Events in InfraHub (webhook-based automation)
-    - Manual triggers in InfraHub UI (Actions → Artifact Definitions)
-
-    Args:
-        branch: Branch to load data into (default: main)
-
-    Example:
-        invoke load-config-data --branch my-branch
-    """
-    print(f"\n� Loading configuration data to branch: {branch}")
-    print(
-        "� Trigger config generation in InfraHub UI → Actions → Artifact Definitions\n"
-    )
-
-
-# ============================================================================
-# Use Case: Validation & Health Checks
-# Note: Checks triggered by events or manual triggers in InfraHub UI
-# ============================================================================
-
-
-@task(optional=["branch"])
-def load_validation_data(
-    context: Context, scenario: str = "dc1", branch: str = "main"
-) -> None:
-    """Load validation data for topology checks.
-
-    This task only LOADS data. Actual validation is triggered by:
-    - Events in InfraHub (webhook-based automation)
-    - Manual triggers in InfraHub UI (Actions → Check Definitions)
-
-    Args:
-        scenario: Scenario to load (default: dc1)
-        branch: Branch to load into (default: main)
-
-    Example:
-        invoke load-validation-data --scenario dc1 --branch my-branch
-    """
-    print(f"\n📦 Loading validation data for scenario: {scenario}")
-    print("💡 Trigger checks in InfraHub UI → Actions → Check Definitions\n")
-
-
-# ============================================================================
 # Use Case: Quick Setup
 # ============================================================================
 
@@ -394,7 +345,7 @@ def setup(context: Context) -> None:
 
     # Wait a bit before loading data
     print("  5️⃣  Waiting before loading bootstrap data...")
-    time.sleep(2)
+    time.sleep(5)
 
     print("  6️⃣  Loading bootstrap data...")
     load_objects(context)

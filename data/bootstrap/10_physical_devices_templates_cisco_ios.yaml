@@ -1,99 +1,100 @@
+---
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
   kind: TemplateDcimPhysicalDevice
   data:
-  - template_name: C9200L_24P_4G_OOB
-    device_type: C9200L-24P-4G
-    platform: cisco_ios
-    role: oob
-    status: provisioning
-    interfaces:
-      kind: TemplateDcimPhysicalInterface
-      data:
-      - template_name: C9200L-24P-4G_OOB_GigabitEthernet1/0/1
-        name: GigabitEthernet1/0/1
-        role: management
-      - template_name: C9200L-24P-4G_OOB_GigabitEthernet1/0/2
-        name: GigabitEthernet1/0/2
-        role: management
-      - template_name: C9200L-24P-4G_OOB_GigabitEthernet1/0/3
-        name: GigabitEthernet1/0/3
-        role: management
-      - template_name: C9200L-24P-4G_OOB_GigabitEthernet1/0/4
-        name: GigabitEthernet1/0/4
-        role: management
-      - template_name: C9200L-24P-4G_OOB_GigabitEthernet1/0/5
-        name: GigabitEthernet1/0/5
-        role: management
-      - template_name: C9200L-24P-4G_OOB_GigabitEthernet1/0/6
-        name: GigabitEthernet1/0/6
-        role: management
-      - template_name: C9200L-24P-4G_OOB_GigabitEthernet1/0/7
-        name: GigabitEthernet1/0/7
-        role: management
-      - template_name: C9200L-24P-4G_OOB_GigabitEthernet1/0/8
-        name: GigabitEthernet1/0/8
-        role: management
-      - template_name: C9200L-24P-4G_OOB_GigabitEthernet1/0/9
-        name: GigabitEthernet1/0/9
-        role: management
-      - template_name: C9200L-24P-4G_OOB_GigabitEthernet1/0/10
-        name: GigabitEthernet1/0/10
-        role: management
-      - template_name: C9200L-24P-4G_OOB_GigabitEthernet1/0/11
-        name: GigabitEthernet1/0/11
-        role: management
-      - template_name: C9200L-24P-4G_OOB_GigabitEthernet1/0/12
-        name: GigabitEthernet1/0/12
-        role: management
-      - template_name: C9200L-24P-4G_OOB_GigabitEthernet1/0/13
-        name: GigabitEthernet1/0/13
-        role: management
-      - template_name: C9200L-24P-4G_OOB_GigabitEthernet1/0/14
-        name: GigabitEthernet1/0/14
-        role: management
-      - template_name: C9200L-24P-4G_OOB_GigabitEthernet1/0/15
-        name: GigabitEthernet1/0/15
-        role: management
-      - template_name: C9200L-24P-4G_OOB_GigabitEthernet1/0/16
-        name: GigabitEthernet1/0/16
-        role: management
-      - template_name: C9200L-24P-4G_OOB_GigabitEthernet1/0/17
-        name: GigabitEthernet1/0/17
-        role: management
-      - template_name: C9200L-24P-4G_OOB_GigabitEthernet1/0/18
-        name: GigabitEthernet1/0/18
-        role: management
-      - template_name: C9200L-24P-4G_OOB_GigabitEthernet1/0/19
-        name: GigabitEthernet1/0/19
-        role: management
-      - template_name: C9200L-24P-4G_OOB_GigabitEthernet1/0/20
-        name: GigabitEthernet1/0/20
-        role: management
-      - template_name: C9200L-24P-4G_OOB_GigabitEthernet1/0/21
-        name: GigabitEthernet1/0/21
-        role: management
-      - template_name: C9200L-24P-4G_OOB_GigabitEthernet1/0/22
-        name: GigabitEthernet1/0/22
-        role: management
-      - template_name: C9200L-24P-4G_OOB_GigabitEthernet1/0/23
-        name: GigabitEthernet1/0/23
-        role: management
-      - template_name: C9200L-24P-4G_OOB_GigabitEthernet1/0/24
-        name: GigabitEthernet1/0/24
-        role: management
-  - template_name: C9200L_24P_4G_OOB_CONSOLE
-    device_type: C9200L-24P-4G
-    platform: cisco_ios
-    role: oob
-    status: provisioning
-    interfaces:
-      kind: TemplateDcimConsoleInterface
-      data:
-      - template_name: C9200L-24P-4G_OOB_con
-        name: con
-        role: console
-      - template_name: C9200L-24P-4G_OOB_mgmt0
-        name: mgmt0
-        role: management
+    - template_name: C9200L_24P_4G_OOB
+      device_type: C9200L-24P-4G
+      platform: cisco_ios
+      role: oob
+      status: provisioning
+      interfaces:
+        kind: TemplateDcimPhysicalInterface
+        data:
+          - template_name: C9200L-24P-4G_OOB_GigabitEthernet1/0/1
+            name: GigabitEthernet1/0/1
+            role: management
+          - template_name: C9200L-24P-4G_OOB_GigabitEthernet1/0/2
+            name: GigabitEthernet1/0/2
+            role: management
+          - template_name: C9200L-24P-4G_OOB_GigabitEthernet1/0/3
+            name: GigabitEthernet1/0/3
+            role: management
+          - template_name: C9200L-24P-4G_OOB_GigabitEthernet1/0/4
+            name: GigabitEthernet1/0/4
+            role: management
+          - template_name: C9200L-24P-4G_OOB_GigabitEthernet1/0/5
+            name: GigabitEthernet1/0/5
+            role: management
+          - template_name: C9200L-24P-4G_OOB_GigabitEthernet1/0/6
+            name: GigabitEthernet1/0/6
+            role: management
+          - template_name: C9200L-24P-4G_OOB_GigabitEthernet1/0/7
+            name: GigabitEthernet1/0/7
+            role: management
+          - template_name: C9200L-24P-4G_OOB_GigabitEthernet1/0/8
+            name: GigabitEthernet1/0/8
+            role: management
+          - template_name: C9200L-24P-4G_OOB_GigabitEthernet1/0/9
+            name: GigabitEthernet1/0/9
+            role: management
+          - template_name: C9200L-24P-4G_OOB_GigabitEthernet1/0/10
+            name: GigabitEthernet1/0/10
+            role: management
+          - template_name: C9200L-24P-4G_OOB_GigabitEthernet1/0/11
+            name: GigabitEthernet1/0/11
+            role: management
+          - template_name: C9200L-24P-4G_OOB_GigabitEthernet1/0/12
+            name: GigabitEthernet1/0/12
+            role: management
+          - template_name: C9200L-24P-4G_OOB_GigabitEthernet1/0/13
+            name: GigabitEthernet1/0/13
+            role: management
+          - template_name: C9200L-24P-4G_OOB_GigabitEthernet1/0/14
+            name: GigabitEthernet1/0/14
+            role: management
+          - template_name: C9200L-24P-4G_OOB_GigabitEthernet1/0/15
+            name: GigabitEthernet1/0/15
+            role: management
+          - template_name: C9200L-24P-4G_OOB_GigabitEthernet1/0/16
+            name: GigabitEthernet1/0/16
+            role: management
+          - template_name: C9200L-24P-4G_OOB_GigabitEthernet1/0/17
+            name: GigabitEthernet1/0/17
+            role: management
+          - template_name: C9200L-24P-4G_OOB_GigabitEthernet1/0/18
+            name: GigabitEthernet1/0/18
+            role: management
+          - template_name: C9200L-24P-4G_OOB_GigabitEthernet1/0/19
+            name: GigabitEthernet1/0/19
+            role: management
+          - template_name: C9200L-24P-4G_OOB_GigabitEthernet1/0/20
+            name: GigabitEthernet1/0/20
+            role: management
+          - template_name: C9200L-24P-4G_OOB_GigabitEthernet1/0/21
+            name: GigabitEthernet1/0/21
+            role: management
+          - template_name: C9200L-24P-4G_OOB_GigabitEthernet1/0/22
+            name: GigabitEthernet1/0/22
+            role: management
+          - template_name: C9200L-24P-4G_OOB_GigabitEthernet1/0/23
+            name: GigabitEthernet1/0/23
+            role: management
+          - template_name: C9200L-24P-4G_OOB_GigabitEthernet1/0/24
+            name: GigabitEthernet1/0/24
+            role: management
+    - template_name: C9200L_24P_4G_OOB_CONSOLE
+      device_type: C9200L-24P-4G
+      platform: cisco_ios
+      role: oob
+      status: provisioning
+      interfaces:
+        kind: TemplateDcimConsoleInterface
+        data:
+          - template_name: C9200L-24P-4G_OOB_con
+            name: con
+            role: console
+          - template_name: C9200L-24P-4G_OOB_mgmt0
+            name: mgmt0
+            role: management

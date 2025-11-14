@@ -121,7 +121,7 @@ spec:
 
     # ===== DELL SONIC - 2 LEAFS SCENARIO =====
     - name: 2_DELL_SONIC_LEAFS_S5248F
-      description: 2 Dell PowerSwitch S5248F-ON leafs (compact setup, 48x25G + 8x100G each)
+      description: 2 Dell PowerSwitch S5248F-ON leafs (compact)
       quantity: 2
       role: leaf
       device_type: PowerSwitch S5248F-ON
@@ -137,7 +137,7 @@ spec:
 
     # ===== EDGECORE SONIC - 2 LEAFS SCENARIO =====
     - name: 2_EDGECORE_SONIC_LEAFS_AS7326
-      description: 2 Edgecore AS7326-56X-O-AC-F leafs (compact high-density access, 48x25G + 8x100G)
+      description: 2 Edgecore AS7326-56X-O-AC-F leafs (compact, 48x25G + 8x100G)
       quantity: 2
       role: leaf
       device_type: AS7326-56X-O-AC-F
@@ -153,7 +153,7 @@ spec:
 
     # ===== EDGECORE SONIC - 2 LEAFS (7726) SCENARIO =====
     - name: 2_EDGECORE_SONIC_LEAFS_7726
-      description: 2 Edgecore 7726-32X-O leafs (high-capacity 100G, 32 ports each)
+      description: 2 Edgecore 7726-32X-O leafs (high-capacity 100G, 32 ports)
       quantity: 2
       role: leaf
       device_type: 7726-32X-O
@@ -161,7 +161,7 @@ spec:
 
     # ===== EDGECORE SONIC - 4 LEAFS (7726) SCENARIO =====
     - name: 4_EDGECORE_SONIC_LEAFS_7726
-      description: 4 Edgecore 7726-32X-O leafs (high-capacity distributed access)
+      description: 4 Edgecore 7726-32X-O leafs (distributed access layer)
       quantity: 4
       role: leaf
       device_type: 7726-32X-O
@@ -169,7 +169,7 @@ spec:
 
     # ===== CISCO NX-OS - 2 LEAFS SCENARIO =====
     - name: 2_CISCO_LEAFS_N9K-C9336C-FX2
-      description: 2 Cisco N9K-C9336C-FX2 leafs (compact access layer, 36x100G each)
+      description: 2 Cisco N9K-C9336C-FX2 leafs (compact, 36x100G each)
       quantity: 2
       role: leaf
       device_type: N9K-C9336C-FX2
@@ -193,7 +193,7 @@ spec:
 
     # ===== CISCO NX-OS - 4 LEAFS (C9316D) SCENARIO =====
     - name: 4_CISCO_LEAFS_N9K-C9316D-GX
-      description: 4 Cisco N9K-C9316D-GX leafs (high-capacity distributed access)
+      description: 4 Cisco N9K-C9316D-GX leafs (distributed access)
       quantity: 4
       role: leaf
       device_type: N9K-C9316D-GX
@@ -214,4 +214,3 @@ spec:
       role: leaf
       device_type: CCS-720DP-48S-2F
       template: CCS_720DP_48S_2F_LEAF
-
