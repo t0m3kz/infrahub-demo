@@ -6,4 +6,7 @@ spec:
   data:
     - name: run-pod-generator
       description: Run Pod Generator
-      generator: create_pod
+      generator: generate_pod
+    - name: run-rack-generator
+      description: Run Rack Generator
+      generator: generate_rack

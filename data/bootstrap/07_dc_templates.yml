@@ -4,50 +4,208 @@ kind: Object
 spec:
   kind: TopologyDataCenterDesign
   data:
-    - name: S-Standard
+    - name: S-Standard-ToR
       maximum_spines: 2
       maximum_pods: 2
       maximum_leafs: 8
       maximum_rack_leafs: 4
       naming_convention: standard
-    - name: S-Hierarchical
+    - name: S-Hierarchical-ToR
       maximum_spines: 2
       maximum_pods: 2
       maximum_leafs: 8
       naming_convention: hierarchical
-    - name: M-Standard
+    - name: S-Flat-ToR
+      maximum_spines: 2
+      maximum_pods: 2
+      maximum_leafs: 8
+      naming_convention: flat
+    - name: S-Standard-MR
+      maximum_spines: 2
+      maximum_pods: 2
+      maximum_leafs: 8
+      maximum_rack_leafs: 4
+      naming_convention: standard
+      deployment_type: middle_rack
+    - name: S-Hierarchical-MR
+      maximum_spines: 2
+      maximum_pods: 2
+      maximum_leafs: 8
+      naming_convention: hierarchical
+      deployment_type: middle_rack
+    - name: S-Flat-MR
+      maximum_spines: 2
+      maximum_pods: 2
+      maximum_leafs: 8
+      naming_convention: flat
+      deployment_type: middle_rack
+    - name: S-Standard-Mixed
+      maximum_spines: 2
+      maximum_pods: 2
+      maximum_leafs: 8
+      maximum_rack_leafs: 4
+      naming_convention: standard
+      deployment_type: mixed
+    - name: S-Hierarchical-Mixed
+      maximum_spines: 2
+      maximum_pods: 2
+      maximum_leafs: 8
+      naming_convention: hierarchical
+      deployment_type: mixed
+    - name: S-Flat-Mixed
+      maximum_spines: 2
+      maximum_pods: 2
+      maximum_leafs: 8
+      naming_convention: flat
+      deployment_type: mixed
+    - name: M-Flat-ToR
+      maximum_spines: 2
+      maximum_pods: 2
+      maximum_leafs: 32
+      maximum_rack_leafs: 6
+      naming_convention: flat
+    - name: M-Flat-MR
+      maximum_spines: 2
+      maximum_pods: 2
+      maximum_leafs: 32
+      maximum_rack_leafs: 6
+      naming_convention: flat
+      deployment_type: middle_rack
+    - name: M-Flat-Mixed
+      maximum_spines: 2
+      maximum_pods: 2
+      maximum_leafs: 32
+      maximum_rack_leafs: 6
+      naming_convention: flat
+      deployment_type: mixed
+    - name: M-Standard-MR
       maximum_spines: 2
       maximum_pods: 2
       maximum_leafs: 32
       maximum_rack_leafs: 6
       naming_convention: standard
-    - name: M-Hierarchical
+      deployment_type: middle_rack
+    - name: M-Hierarchical-MR
       maximum_spines: 2
       maximum_pods: 2
       maximum_leafs: 32
       maximum_rack_leafs: 6
       naming_convention: hierarchical
-    - name: L-Standard
+      deployment_type: middle_rack
+    - name: M-Standard-Mixed
+      maximum_spines: 2
+      maximum_pods: 2
+      maximum_leafs: 32
+      maximum_rack_leafs: 6
+      naming_convention: standard
+      deployment_type: mixed
+    - name: M-Hierarchical-Mixed
+      maximum_spines: 2
+      maximum_pods: 2
+      maximum_leafs: 32
+      maximum_rack_leafs: 6
+      naming_convention: hierarchical
+      deployment_type: mixed
+    - name: L-Flat-ToR
+      maximum_spines: 4
+      maximum_pods: 4
+      maximum_leafs: 64
+      maximum_rack_leafs: 8
+      naming_convention: flat
+    - name: L-Flat-MR
+      maximum_spines: 4
+      maximum_pods: 4
+      maximum_leafs: 64
+      maximum_rack_leafs: 8
+      naming_convention: flat
+      deployment_type: middle_rack
+    - name: L-Flat-Mixed
+      maximum_spines: 4
+      maximum_pods: 4
+      maximum_leafs: 64
+      maximum_rack_leafs: 8
+      naming_convention: flat
+      deployment_type: mixed
+    - name: L-Standard-MR
       maximum_spines: 4
       maximum_pods: 4
       maximum_leafs: 64
       maximum_rack_leafs: 8
       naming_convention: standard
-    - name: L-Hierarchical
+      deployment_type: middle_rack
+    - name: L-Hierarchical-MR
       maximum_spines: 4
       maximum_pods: 4
       maximum_leafs: 64
       maximum_rack_leafs: 8
       naming_convention: hierarchical
-    - name: XL-Standard
+      deployment_type: middle_rack
+    - name: L-Standard-Mixed
+      maximum_spines: 4
+      maximum_pods: 4
+      maximum_leafs: 64
+      maximum_rack_leafs: 8
+      naming_convention: standard
+      deployment_type: mixed
+    - name: L-Hierarchical-Mixed
+      maximum_spines: 4
+      maximum_pods: 4
+      maximum_leafs: 64
+      maximum_rack_leafs: 8
+      naming_convention: hierarchical
+      deployment_type: mixed
+    - name: XL-Flat-ToR
+      maximum_super_spines: 4
+      maximum_spines: 4
+      maximum_pods: 8
+      maximum_leafs: 64
+      maximum_rack_leafs: 8
+      naming_convention: flat
+    - name: XL-Flat-MR
+      maximum_super_spines: 4
+      maximum_spines: 4
+      maximum_pods: 8
+      maximum_leafs: 64
+      maximum_rack_leafs: 8
+      naming_convention: flat
+      deployment_type: middle_rack
+    - name: XL-Flat-Mixed
+      maximum_super_spines: 4
+      maximum_spines: 4
+      maximum_pods: 8
+      maximum_leafs: 64
+      maximum_rack_leafs: 8
+      naming_convention: flat
+      deployment_type: mixed
+    - name: XL-Standard-MR
+      maximum_super_spines: 4
       maximum_spines: 4
       maximum_pods: 8
       maximum_leafs: 64
       maximum_rack_leafs: 8
       naming_convention: standard
-    - name: XL-Hierarchical
+      deployment_type: middle_rack
+    - name: XL-Hierarchical-MR
+      maximum_super_spines: 4
       maximum_spines: 4
       maximum_pods: 8
       maximum_leafs: 64
       maximum_rack_leafs: 8
       naming_convention: hierarchical
+      deployment_type: middle_rack
+    - name: XL-Standard-Mixed
+      maximum_super_spines: 4
+      maximum_spines: 4
+      maximum_pods: 8
+      maximum_leafs: 64
+      maximum_rack_leafs: 8
+      naming_convention: standard
+      deployment_type: mixed
+    - name: XL-Hierarchical-Mixed
+      maximum_super_spines: 4
+      maximum_spines: 4
+      maximum_pods: 8
+      maximum_leafs: 64
+      maximum_rack_leafs: 8
+      naming_convention: hierarchical
+      deployment_type: mixed

@@ -129,6 +129,9 @@ nodes:
         kind: Number
         default_value: 2
         optional: false
+        parameters:
+          min_value: 1
+          max_value: 4
       - name: maximum_pods
         order_weight: 300
         label: "Maximum Pods"
@@ -141,6 +144,9 @@ nodes:
         kind: Number
         default_value: 2
         optional: false
+        parameters:
+          min_value: 2
+          max_value: 4
       - name: maximum_leafs
         order_weight: 400
         label: "Maximum Leaf Switches per Pod"
@@ -287,9 +293,12 @@ nodes:
         label: Amount of Super Spine switches
         kind: Number
         optional: false
-        default_value: 4
+        default_value: 2
         branch: aware
         order_weight: 1000
+        parameters:
+          min_value: 1
+          max_value: 4
       - name: fabric_interface_sorting_method
         kind: Dropdown
         branch: aware
@@ -353,6 +362,9 @@ nodes:
         optional: false
         default_value: 4
         order_weight: 1000
+        parameters:
+          min_value: 1
+          max_value: 4
       - name: role
         kind: Dropdown
         branch: aware

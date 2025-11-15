@@ -116,6 +116,10 @@ nodes:
     children: ""
     icon: "clarity:rack-server-line"
     attributes:
+      - name: index
+        kind: Number
+        branch: agnostic
+        order_weight: 110
       - name: rack_type
         kind: Dropdown
         branch: aware

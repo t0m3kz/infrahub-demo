@@ -36,12 +36,12 @@ spec:
       kind: LocationGeneric
       icon: "mdi:map-marker"
 
-    # ===================== INFRASTRUCTURE =====================
-    # Primary category for all infrastructure design and deployment
-    - namespace: Infrastructure
+    # ===================== DESIGN =====================
+    # Design patterns, templates, and reusable elements
+    - namespace: Design
       name: MainMenu
-      label: Infrastructure
-      icon: "mdi:network"
+      label: Design
+      icon: "mdi:pencil-ruler"
       children:
         data:
           # --------- Design & Planning ---------
@@ -72,6 +72,13 @@ spec:
                   icon: "mdi:vector-arrange-above"
                   description: "Branch office design templates and patterns"
 
+          # --------- Design Elements ---------
+          - namespace: Design
+            name: ElementsMenu
+            label: Design Elements
+            icon: "mdi:cube-outline"
+            children:
+              data:
                 - name: Element
                   namespace: Topology
                   label: Design Elements
@@ -79,35 +86,46 @@ spec:
                   icon: "mdi:cube-outline"
                   description: "Reusable design elements for infrastructure"
 
-          # --------- Deployments ---------
-          - namespace: Topology
-            name: DeploymentMenu
-            label: Deployments
+    # ===================== DEPLOYMENT =====================
+    # Deployed infrastructure and topologies
+    - namespace: Infrastructure
+      name: MainMenu
+      label: Deployment
+      icon: "mdi:server-network"
+      children:
+        data:
+          # --------- Data Centers ---------
+          - name: DataCenter
+            namespace: Topology
+            label: Data Centers
+            kind: TopologyDataCenter
             icon: "mdi:server-network"
-            description: "DC, PoP and branch office deployments"
-            children:
-              data:
-                - name: DataCenter
-                  namespace: Topology
-                  label: Data Centers
-                  kind: TopologyDataCenter
-                  icon: "mdi:server-network"
-                  description: "Enterprise data center deployments"
+            description: "Enterprise data center deployments"
 
-                - name: ColocationCenter
-                  namespace: Topology
-                  label: Colocation Centers
-                  kind: TopologyColocationCenter
-                  icon: "mdi:office-building"
-                  description: "Third-party colocation facilities"
+          # --------- Colocation Centers ---------
+          - name: ColocationCenter
+            namespace: Topology
+            label: Colocation Centers
+            kind: TopologyColocationCenter
+            icon: "mdi:office-building"
+            description: "Third-party colocation facilities"
 
-                - name: BranchOffice
-                  namespace: Topology
-                  label: Branch Offices
-                  kind: TopologyBranchOffice
-                  icon: "mdi:office-building-outline"
-                  description: "Remote office deployments"
+          # --------- Branch Offices ---------
+          - name: BranchOffice
+            namespace: Topology
+            label: Branch Offices
+            kind: TopologyBranchOffice
+            icon: "mdi:office-building-outline"
+            description: "Remote office deployments"
 
+    # ===================== INVENTORY =====================
+    # Physical and logical inventory management
+    - namespace: Inventory
+      name: MainMenu
+      label: Inventory
+      icon: "mdi:warehouse"
+      children:
+        data:
           # --------- Physical Inventory ---------
           - namespace: Dcim
             name: InventoryMenu
@@ -142,9 +160,9 @@ spec:
                   label: Cabling & Connections
                   icon: "mdi:cable-data"
                   kind: DcimCable
-                  description: "Cabling and physicalconnections between devices"
+                  description: "Cabling between devices"
 
-          # --------- Types & Platforms ---------
+          # --------- Device Catalog ---------
           - namespace: Dcim
             name: CatalogMenu
             label: Device Catalog

@@ -312,12 +312,13 @@ class TestFabricPoolConfigEdgeCases:
         pools = config.pools()
 
         # With zero devices:
-        # management/loopback: (0 + 0 + 0).bit_length() = 0, so 32 - 0 = 32
+        # management/loopback: (0*0 + 0*0 + 0 + 0).bit_length() = 0, so 32 - 0 = 32
         # technical: (0 * 0 * 0).bit_length() = 0, so 32 - 0 = 32
         # super-spine-loopback: (0 + 2).bit_length() = 2, so 32 - 2 = 30
-        assert pools["management"] == 32
+        # But we have the +2 in management now, so: (0 + 0 + 0 + 2).bit_length() = 2, so 32 - 2 = 30
+        assert pools["management"] == 30
         assert pools["technical"] == 32
-        assert pools["loopback"] == 32
+        assert pools["loopback"] == 30
         assert pools["super-spine-loopback"] == 30
 
     def test_very_large_devices(self) -> None:
@@ -386,3 +387,183 @@ class TestFabricPoolConfigConsistency:
         assert config.maximum_leafs == original_leafs
         assert config.maximum_pods == original_pods
         assert config.kind == original_kind
+
+
+class TestFabricPoolConfigIPv6:
+    """Test FabricPoolConfig with IPv6 support."""
+
+    def test_ipv6_fabric_strategy_pools(self) -> None:
+        """Test IPv6 pools with FABRIC strategy."""
+        config = FabricPoolConfig(
+            kind=FabricPoolStrategy.FABRIC,
+            ipv6=True,
+        )
+        pools_ipv6 = config.pools()
+
+        # IPv6 should have larger prefix lengths (since /128 is max)
+        assert isinstance(pools_ipv6, dict)
+        assert "management" in pools_ipv6
+        assert "technical" in pools_ipv6
+        assert "loopback" in pools_ipv6
+        assert "super-spine-loopback" in pools_ipv6
+
+        # Management always uses /32 max, data pools use /128 max for IPv6
+        for pool_name, prefix_length in pools_ipv6.items():
+            assert isinstance(prefix_length, int)
+            if pool_name == "management":
+                assert 1 <= prefix_length <= 32, f"{pool_name} should use IPv4 max"
+            else:
+                assert 1 <= prefix_length <= 128, f"{pool_name} should use IPv6 max"
+
+    def test_ipv6_pod_strategy_pools(self) -> None:
+        """Test IPv6 pools with POD strategy."""
+        config = FabricPoolConfig(
+            kind=FabricPoolStrategy.POD,
+            ipv6=True,
+        )
+        pools_ipv6 = config.pools()
+
+        assert isinstance(pools_ipv6, dict)
+        assert "technical" in pools_ipv6
+        assert "loopback" in pools_ipv6
+        assert len(pools_ipv6) == 2
+
+        # All should be valid IPv6 prefixes
+        for pool_name, prefix_length in pools_ipv6.items():
+            assert isinstance(prefix_length, int)
+            assert 1 <= prefix_length <= 128, f"{pool_name} should be valid IPv6 prefix"
+
+    def test_ipv6_vs_ipv4_fabric_strategy(self) -> None:
+        """Test that IPv6 pools are different from IPv4."""
+        config_ipv4 = FabricPoolConfig(
+            maximum_leafs=8,
+            maximum_pods=2,
+            maximum_spines=2,
+            kind=FabricPoolStrategy.FABRIC,
+            ipv6=False,
+        )
+        config_ipv6 = FabricPoolConfig(
+            maximum_leafs=8,
+            maximum_pods=2,
+            maximum_spines=2,
+            kind=FabricPoolStrategy.FABRIC,
+            ipv6=True,
+        )
+
+        pools_ipv4 = config_ipv4.pools()
+        pools_ipv6 = config_ipv6.pools()
+
+        # IPv6 should have larger prefix lengths since the max is 128 instead of 32
+        # Device counts are the same, so the bit_length() is the same,
+        # but we subtract from 32 for IPv4 and 128 for IPv6
+        assert pools_ipv4["management"] == pools_ipv6["management"]  # Both use /32 max
+        assert pools_ipv4["technical"] < pools_ipv6["technical"]
+        assert pools_ipv4["loopback"] < pools_ipv6["loopback"]
+
+    def test_ipv6_vs_ipv4_pod_strategy(self) -> None:
+        """Test that IPv6 pods are different from IPv4."""
+        config_ipv4 = FabricPoolConfig(
+            maximum_leafs=16,
+            maximum_spines=4,
+            kind=FabricPoolStrategy.POD,
+            ipv6=False,
+        )
+        config_ipv6 = FabricPoolConfig(
+            maximum_leafs=16,
+            maximum_spines=4,
+            kind=FabricPoolStrategy.POD,
+            ipv6=True,
+        )
+
+        pools_ipv4 = config_ipv4.pools()
+        pools_ipv6 = config_ipv6.pools()
+
+        # IPv6 should have larger prefix lengths
+        assert pools_ipv4["technical"] < pools_ipv6["technical"]
+        assert pools_ipv4["loopback"] < pools_ipv6["loopback"]
+
+    def test_ipv6_management_always_uses_max_prefix(self) -> None:
+        """Test that management pool always uses IPv4 /32 max."""
+        config_ipv4 = FabricPoolConfig(
+            kind=FabricPoolStrategy.FABRIC,
+            ipv6=False,
+        )
+        config_ipv6 = FabricPoolConfig(
+            kind=FabricPoolStrategy.FABRIC,
+            ipv6=True,
+        )
+
+        pools_ipv4 = config_ipv4.pools()
+        pools_ipv6 = config_ipv6.pools()
+
+        # Management should always use /32 max (IPv4)
+        assert pools_ipv4["management"] <= 32
+        assert pools_ipv6["management"] <= 32
+        assert pools_ipv4["management"] == pools_ipv6["management"]
+
+    def test_ipv6_large_scale_allocation(self) -> None:
+        """Test IPv6 pool allocation for large scale (100+ DCs)."""
+        # Simulate large scale with high device counts
+        config = FabricPoolConfig(
+            maximum_super_spines=10,
+            maximum_pods=64,  # Support many pods
+            maximum_spines=8,
+            maximum_leafs=256,  # Large leaf count
+            kind=FabricPoolStrategy.FABRIC,
+            ipv6=True,
+        )
+
+        pools_ipv6 = config.pools()
+
+        # IPv6 should easily accommodate large scale allocations
+        # /40 per DC is common, with plenty of room for subnets
+        assert pools_ipv6["technical"] > 40
+        assert pools_ipv6["loopback"] > 40
+
+    def test_ipv6_pod_loopback_sizing(self) -> None:
+        """Test IPv6 loopback pool sizing for pods."""
+        # L-Standard design: 4 pods, 64 leafs, 4 spines
+        config = FabricPoolConfig(
+            maximum_leafs=64,
+            maximum_pods=4,
+            maximum_spines=4,
+            kind=FabricPoolStrategy.POD,
+            ipv6=True,
+        )
+
+        pools_ipv6 = config.pools()
+
+        # With IPv6, loopback should be large enough for 4 pods
+        # 64 * 4 + 4 * 4 + 2 = 278, bit_length = 9
+        # /119 (128 - 9) = ~512 addresses per /119
+        assert pools_ipv6["loopback"] >= 100
+        assert pools_ipv6["technical"] >= 100
+
+    def test_ipv6_default_is_ipv4(self) -> None:
+        """Test that default pools() call returns IPv4 (ipv6=False)."""
+        config_explicit = FabricPoolConfig(
+            ipv6=False,
+        )
+        config_implicit = FabricPoolConfig()
+
+        pools_explicit = config_explicit.pools()
+        pools_implicit = config_implicit.pools()
+
+        # Default should be IPv4
+        assert pools_explicit == pools_implicit
+        # Management should use /32 max
+        assert pools_implicit["management"] <= 32
+
+    def test_ipv6_multiple_calls_consistency(self) -> None:
+        """Test that multiple IPv6 calls return consistent results."""
+        config = FabricPoolConfig(
+            maximum_leafs=32,
+            maximum_pods=8,
+            ipv6=True,
+        )
+
+        pools_1 = config.pools()
+        pools_2 = config.pools()
+        pools_3 = config.pools()
+
+        assert pools_1 == pools_2 == pools_3
