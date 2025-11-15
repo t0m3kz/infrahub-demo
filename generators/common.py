@@ -104,6 +104,7 @@ class CommonGenerator(InfrahubGenerator):
         id: str,
         fabric_name: str,
         pod_name: Optional[str] = None,
+        ipv6: Optional[bool] = False,
     ) -> None:
         """Ensure required per-pod / fabric pools exist.
 
@@ -130,14 +131,20 @@ class CommonGenerator(InfrahubGenerator):
         ]
         filtered_pools = {key: pools[key] for key in valid_keys if key in pools}
         pod = await self.client.get(kind=TopologyPod, id=id) if pod_name else None
-        pools_config = FabricPoolConfig(**filtered_pools, kind=strategy)
+        pools_config = FabricPoolConfig(
+            **filtered_pools, kind=strategy, ipv6=ipv6 or False
+        )
         for pool_name, pool_size in pools_config.pools().items():
             if strategy == FabricPoolStrategy.FABRIC and pool_name in [
                 "management",
                 "technical",
                 "loopback",
             ]:
-                parent_pool_name = f"{pool_name.capitalize()}-IPv4"
+                parent_pool_name = (
+                    f"{pool_name.capitalize()}-IPv4"
+                    if not ipv6 or pool_name == "management"
+                    else f"{pool_name.capitalize()}-IPv6"
+                )
             elif strategy == FabricPoolStrategy.FABRIC and not pod_name:
                 parent_pool_name = f"{fabric_name}-{pool_name.split('-')[-1]}-pool"
             else:

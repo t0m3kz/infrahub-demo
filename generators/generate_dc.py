@@ -61,6 +61,7 @@ class DCTopologyGenerator(CommonGenerator):
             strategy=FabricPoolStrategy.FABRIC,
             pools=design,
             fabric_name=dc_name,
+            ipv6=self.data.get("underlay"),
         )
 
         await self.create_devices(

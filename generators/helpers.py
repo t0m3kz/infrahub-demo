@@ -131,42 +131,62 @@ class FabricPoolConfig:
     maximum_pods: int = 2
     maximum_spines: int = 2
     maximum_leafs: int = 8
+    ipv6: bool = False
     # `kind` now uses the FabricPoolStrategy enum for clarity (FABRIC or POD)
     kind: FabricPoolStrategy = FabricPoolStrategy.FABRIC
 
     def pools(
         self,
     ) -> dict[str, int]:
-        """Compute the pools on the request parameters."""
+        """Compute the pools on the request parameters.
+
+        Args:
+            None - uses class-level ipv6 flag for IPv6 configuration.
+                   When ipv6=True:
+                   - management stays IPv4 (/32 max)
+                   - loopback and technical (p2p) use IPv6 (/128 max)
+
+        Returns:
+            Dictionary mapping pool names to prefix lengths.
+        """
+        # Management always uses IPv4, others depend on ipv6 flag
+        management_max_prefix = 32
+        data_max_prefix = 128 if self.ipv6 else 32
+
         if self.kind == FabricPoolStrategy.FABRIC:
             return {
-                "management": 32
+                "management": management_max_prefix
                 - (
                     self.maximum_leafs * self.maximum_pods
                     + self.maximum_spines * self.maximum_pods
                     + self.maximum_super_spines
+                    + 2
                 ).bit_length(),
-                "technical": 32
+                "technical": data_max_prefix
                 - (
                     self.maximum_pods * self.maximum_leafs * self.maximum_spines
                 ).bit_length(),
-                "loopback": 32
+                "loopback": data_max_prefix
                 - (
                     self.maximum_leafs * self.maximum_pods
                     + self.maximum_spines * self.maximum_pods
                     + self.maximum_super_spines
+                    + self.maximum_pods * 2
+                    + 2
                 ).bit_length(),
-                "super-spine-loopback": 32
+                "super-spine-loopback": data_max_prefix
                 - (self.maximum_super_spines + 2).bit_length(),
-                # "super-spine": 32 - (maximum_super_spines + 2).bit_length(),
             }
 
         if self.kind == FabricPoolStrategy.POD:
             return {
-                "technical": 32
-                - (self.maximum_leafs * self.maximum_spines).bit_length(),
-                "loopback": 32
-                - (self.maximum_leafs + self.maximum_spines).bit_length(),
+                "technical": data_max_prefix
+                - (
+                    self.maximum_leafs * self.maximum_spines
+                    + self.maximum_spines * self.maximum_super_spines
+                ).bit_length(),
+                "loopback": data_max_prefix
+                - (self.maximum_leafs + self.maximum_spines + 2).bit_length(),
             }
 
         raise ValueError(f"Unknown naming type: {self.kind}")

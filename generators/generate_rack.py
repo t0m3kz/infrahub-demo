@@ -72,14 +72,18 @@ class RackGenerator(CommonGenerator):
 
                 leaf_interfaces = [
                     interface.get("name")
-                    for interface in template.get("template", {}).get("interfaces", [])
+                    for interface in (
+                        template.get("template", {}).get("interfaces") or []
+                    )
                 ]
                 spine_devices = [
-                    device.get("name") for device in pod.get("devices", [])
+                    device.get("name") for device in (pod.get("devices") or [])
                 ]
                 spine_interfaces = [
                     interface.get("name")
-                    for interface in pod.get("spine_template", {}).get("interfaces", [])
+                    for interface in (
+                        pod.get("spine_template", {}).get("interfaces") or []
+                    )
                 ]
 
                 print("Rack_id", self.data.get("id", "Dupa"))

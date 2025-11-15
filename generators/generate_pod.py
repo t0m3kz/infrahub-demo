@@ -98,7 +98,7 @@ class PodTopologyGenerator(CommonGenerator):
 
         parent = self.data.get("parent", {})
         super_spine_devices = [
-            device.get("name") for device in parent.get("devices", [])
+            device.get("name") for device in (parent.get("devices") or [])
         ]
         super_spine_template = parent.get("super_spine_template", {})
         super_spine_interfaces_data = super_spine_template.get("interfaces", [])

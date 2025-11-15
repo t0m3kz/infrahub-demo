@@ -7,8 +7,8 @@ spec:
     - name: "Rack-1-1"
       shortname: "r-1-1"
       index: 1
-      rack_type: fabric
-      pod: Pod-Cisco-1
+      rack_type: network
+      pod: Pod-1
       parent: "Suite-1"
       fabric_templates:
         - 4_CISCO_LEAFS_N9K-C9336C-FX2
@@ -17,8 +17,8 @@ spec:
     - name: "Rack-1-2"
       shortname: "r-1-2"
       index: 2
-      rack_type: fabric
-      pod: Pod-Cisco-1
+      rack_type: network
+      pod: Pod-1
       parent: "Suite-1"
       fabric_templates:
         - 4_CISCO_LEAFS_N9K-C9336C-FX2
@@ -27,8 +27,8 @@ spec:
     - name: "Rack-1-3"
       shortname: "r-1-3"
       index: 3
-      rack_type: fabric
-      pod: Pod-Cisco-1
+      rack_type: network
+      pod: Pod-1
       parent: "Suite-1"
       fabric_templates:
         - 4_CISCO_LEAFS_N9K-C9336C-FX2
@@ -37,8 +37,8 @@ spec:
     - name: "Rack-1-4"
       shortname: "r-1-4"
       index: 4
-      rack_type: fabric
-      pod: Pod-Cisco-1
+      rack_type: network
+      pod: Pod-1
       parent: "Suite-1"
       fabric_templates:
         - 4_CISCO_LEAFS_N9K-C9336C-FX2
@@ -47,8 +47,8 @@ spec:
     - name: "Rack-2-1"
       shortname: "r-2-1"
       index: 1
-      rack_type: fabric
-      pod: Pod-Cisco-2
+      rack_type: network
+      pod: Pod-2
       parent: "Suite-2"
       fabric_templates:
         - 4_CISCO_LEAFS_N9K-C9336C-FX2
@@ -57,8 +57,8 @@ spec:
     - name: "Rack-2-2"
       shortname: "r-2-2"
       index: 2
-      rack_type: fabric
-      pod: Pod-Cisco-2
+      rack_type: network
+      pod: Pod-2
       parent: "Suite-2"
       fabric_templates:
         - 4_CISCO_LEAFS_N9K-C9336C-FX2
@@ -67,8 +67,8 @@ spec:
     - name: "Rack-2-3"
       shortname: "r-2-3"
       index: 3
-      rack_type: fabric
-      pod: Pod-Cisco-2
+      rack_type: network
+      pod: Pod-2
       parent: "Suite-2"
       fabric_templates:
         - 4_CISCO_LEAFS_N9K-C9336C-FX2
@@ -77,8 +77,8 @@ spec:
     - name: "Rack-2-4"
       shortname: "r-2-4"
       index: 4
-      rack_type: fabric
-      pod: Pod-Cisco-2
+      rack_type: network
+      pod: Pod-2
       parent: "Suite-2"
       fabric_templates:
         - 4_CISCO_LEAFS_N9K-C9336C-FX2
@@ -87,8 +87,8 @@ spec:
     - name: "Rack-3-1"
       shortname: "r-3-1"
       index: 1
-      rack_type: fabric
-      pod: Pod-Cisco-3
+      rack_type: network
+      pod: Pod-3
       parent: "Suite-3"
       fabric_templates:
         - 4_CISCO_LEAFS_N9K-C9336C-FX2
@@ -97,8 +97,8 @@ spec:
     - name: "Rack-3-2"
       shortname: "r-3-2"
       index: 2
-      rack_type: fabric
-      pod: Pod-Cisco-3
+      rack_type: network
+      pod: Pod-3
       parent: "Suite-3"
       fabric_templates:
         - 4_CISCO_LEAFS_N9K-C9336C-FX2
@@ -107,8 +107,8 @@ spec:
     - name: "Rack-3-3"
       shortname: "r-3-3"
       index: 3
-      rack_type: fabric
-      pod: Pod-Cisco-3
+      rack_type: network
+      pod: Pod-3
       parent: "Suite-3"
       fabric_templates:
         - 4_CISCO_LEAFS_N9K-C9336C-FX2
@@ -117,8 +117,8 @@ spec:
     - name: "Rack-3-4"
       shortname: "r-3-4"
       index: 4
-      rack_type: fabric
-      pod: Pod-Cisco-3
+      rack_type: network
+      pod: Pod-3
       parent: "Suite-3"
       fabric_templates:
         - 4_CISCO_LEAFS_N9K-C9336C-FX2
@@ -127,8 +127,8 @@ spec:
     - name: "Rack-4-1"
       shortname: "r-4-1"
       index: 1
-      rack_type: fabric
-      pod: Pod-Cisco-4
+      rack_type: network
+      pod: Pod-4
       parent: "Suite-4"
       fabric_templates:
         - 2_CISCO_LEAFS_N9K-C9336C-FX2
@@ -137,8 +137,8 @@ spec:
     - name: "Rack-4-2"
       shortname: "r-4-2"
       index: 2
-      rack_type: fabric
-      pod: Pod-Cisco-4
+      rack_type: network
+      pod: Pod-4
       parent: "Suite-4"
       fabric_templates:
         - 2_CISCO_LEAFS_N9K-C9336C-FX2
@@ -147,8 +147,8 @@ spec:
     - name: "Rack-4-3"
       shortname: "r-4-3"
       index: 3
-      rack_type: fabric
-      pod: Pod-Cisco-4
+      rack_type: tor
+      pod: Pod-4
       parent: "Suite-4"
       fabric_templates:
         - 2_CISCO_LEAFS_N9K-C9336C-FX2
@@ -157,8 +157,8 @@ spec:
     - name: "Rack-4-4"
       shortname: "r-4-4"
       index: 4
-      rack_type: fabric
-      pod: Pod-Cisco-4
+      rack_type: tor
+      pod: Pod-4
       parent: "Suite-4"
       fabric_templates:
         - 2_CISCO_LEAFS_N9K-C9336C-FX2

@@ -14,3 +14,5 @@ spec:
       status: active
     - prefix: fd00:1000::/32
       status: active
+    - prefix: fd00:2000::/32
+      status: active

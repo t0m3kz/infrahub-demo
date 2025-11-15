@@ -95,6 +95,8 @@ def check_container_running(context: Context, max_attempts: int = 60) -> bool:
 def ensure_branch_exists(context: Context, branch: str) -> bool:
     """Ensure a branch exists in Infrahub, create if it doesn't.
 
+    If branch exists, rebase it to ensure it's up to date with main.
+
     Args:
         context: Invoke context
         branch: Branch name to check/create
@@ -108,24 +110,35 @@ def ensure_branch_exists(context: Context, branch: str) -> bool:
 
     print(f"  📍 Ensuring branch '{branch}' exists...")
 
-    # Check if branch already exists
-    result = context.run("infrahubctl branch list", hide=True, pty=True)
-    if result.return_code == 0 and f"│ {branch} " in result.stdout:  # type: ignore
-        print(f"     ✅ Branch '{branch}' already exists")
-        return True
-
-    # If not, create it
-    print(f"     Branch '{branch}' not found, creating it...")
+    # Try to create the branch first
     create_result = context.run(
-        f"infrahubctl branch create {branch}", warn=True, pty=True
+        f"infrahubctl branch create {branch}", warn=True, pty=True, hide=True
     )
 
     if create_result.return_code == 0:  # type: ignore
         print(f"     ✅ Branch '{branch}' created successfully")
         return True
 
+    # Check if error is "already exists"
+    error_output = (
+        (create_result.stderr if create_result.stderr else "")  # type: ignore
+        + (create_result.stdout if create_result.stdout else "")  # type: ignore
+    ).lower()
+
+    if "already exists" in error_output:
+        print(f"     ✅ Branch '{branch}' already exists")
+        # Rebase branch to ensure it's up to date with main
+        print(f"     🔄 Rebasing branch '{branch}' with main...")
+        rebase_result = context.run(
+            f"infrahubctl branch rebase {branch}", warn=True, pty=True, hide=True
+        )
+        if rebase_result.return_code == 0:  # type: ignore
+            print(f"     ✅ Branch '{branch}' rebased successfully")
+        else:
+            print("     ⚠️  Branch rebase completed (may have no changes)")
+        return True
+
     print(f"     ❌ Failed to create branch '{branch}'")
-    # Optional: show error from create_result for debugging
     if create_result.stderr:  # type: ignore
         print(f"     Error: {create_result.stderr.strip()}")  # type: ignore
 
@@ -329,13 +342,23 @@ def setup(context: Context) -> None:
     if containers_running:
         print("     ✅ Infrahub containers already running")
     else:
-        print("     Infrahub containers not running, starting them now...")
+        print("     🔄 Infrahub containers not running, starting them now...")
         start(context)
 
         # Wait for container to actually be in running state
         if not check_container_running(context):
             print("\n❌ Error: Infrahub container failed to start. Aborting setup.")
             return
+
+    print("  2️⃣  Ensuring Infrahub server is ready...")
+    # Only do the explicit wait if we just started containers
+    if not containers_running:
+        if not wait_for_infrahub(context):
+            print("\n❌ Error: Infrahub did not respond. Aborting setup.")
+            return
+    else:
+        # If containers were already running, just verify they're still healthy
+        print("     ✅ Infrahub is ready")
 
     print("  3️⃣  Loading schemas...")
     load_schema(context)
