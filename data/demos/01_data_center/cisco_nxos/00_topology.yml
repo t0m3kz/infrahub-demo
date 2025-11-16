@@ -4,36 +4,42 @@ kind: Object
 spec:
   kind: TopologyDataCenter
   data:
-    - name: DC-EDGECORE-SONIC
-      index: 11
+    - name: DC1
+      index: 1
       amount_of_super_spines: 2
-      super_spine_template: Edgecore_7726_32X_O_SUPER_SPINE
+      super_spine_template: N9K_C9316D_GX_SUPER_SPINE
       fabric_interface_sorting_method: top_down
-      design_pattern: L-Standard
-      size: L
+      design_pattern: L-Hierarchical-MR
       member_of_groups:
         - topologies_dc
       children:
         kind: TopologyPod
         data:
-          - name: Pod-Edgecore-1
+          - name: Pod-1
             index: 1
             role: fabric
-            spine_template: Edgecore_7726_32X_O_SPINE
-            amount_of_spines: 4
+            spine_template: N9K_C9336C_FX2_SPINE
+            amount_of_spines: 3
             member_of_groups:
               - topologies_pod
-          - name: Pod-Edgecore-2
+          - name: Pod-2
             index: 2
             role: fabric
-            spine_template: Edgecore_7726_32X_O_SPINE
+            spine_template: N9K_C9336C_FX2_SPINE
+            amount_of_spines: 3
+            member_of_groups:
+              - topologies_pod
+          - name: Pod-3
+            index: 3
+            role: fabric
+            spine_template: N9K_C9316D_GX_SPINE
             amount_of_spines: 4
             member_of_groups:
               - topologies_pod
-          - name: Pod-Edgecore-3
-            index: 3
+          - name: Pod-4
+            index: 4
             role: fabric
-            spine_template: Edgecore_7726_32X_O_SPINE
+            spine_template: N9K_C9316D_GX_SPINE
             amount_of_spines: 2
             member_of_groups:
               - topologies_pod

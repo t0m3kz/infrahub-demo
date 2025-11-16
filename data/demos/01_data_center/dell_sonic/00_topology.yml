@@ -4,27 +4,28 @@ kind: Object
 spec:
   kind: TopologyDataCenter
   data:
-    - name: DC-3
-      index: 3
+    - name: DC2
+      index: 1
       amount_of_super_spines: 2
-      super_spine_template: N9K-C9336C-FX2_SUPER_SPINE
+      super_spine_template: Dell_PowerSwitch_Z9100_ON_SUPER_SPINE
       fabric_interface_sorting_method: top_down
-      size: M
+      design_pattern: M-Flat-ToR
       member_of_groups:
         - topologies_dc
       children:
         kind: TopologyPod
         data:
-          - name: "Pod-1"
+          - name: Pod-1
             index: 1
-            role: "fabric"
-            spine_template: N9K-C9336C-FX2_SPINE
+            role: fabric
+            spine_template: Dell_PowerSwitch_Z9100_ON_SPINE
             amount_of_spines: 3
             member_of_groups:
               - topologies_pod
-          - name: "Pod-2"
+          - name: Pod-2
             index: 2
-            spine_template: N9K-C9316D-GX_SPINE
+            role: fabric
+            spine_template: Dell_PowerSwitch_Z9100_ON_SPINE
             amount_of_spines: 3
             member_of_groups:
               - topologies_pod

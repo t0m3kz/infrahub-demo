@@ -4,7 +4,7 @@ from typing import Any
 
 from infrahub_sdk.checks import InfrahubCheck
 
-from .common import get_data
+from .common import get_data, validate_interfaces
 
 
 class CheckSpine(InfrahubCheck):
@@ -16,6 +16,7 @@ class CheckSpine(InfrahubCheck):
         """Validate Sonic Spine."""
         errors: list[str] = []
         data = get_data(data)
+        errors.extend(validate_interfaces(data))
         # Display all errors
         if errors:
             for error in errors:

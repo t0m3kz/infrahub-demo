@@ -164,16 +164,26 @@ class FabricPoolConfig:
                 ).bit_length(),
                 "technical": data_max_prefix
                 - (
-                    self.maximum_pods * self.maximum_leafs * self.maximum_spines
+                    self.maximum_pods
+                    * self.maximum_leafs
+                    * self.maximum_spines
+                    * self.maximum_super_spines
                 ).bit_length(),
                 "loopback": data_max_prefix
-                - (
-                    self.maximum_leafs * self.maximum_pods
-                    + self.maximum_spines * self.maximum_pods
-                    + self.maximum_super_spines
-                    + self.maximum_pods * 2
-                    + 2
-                ).bit_length(),
+                - max(
+                    (
+                        self.maximum_leafs * self.maximum_pods
+                        + self.maximum_spines * self.maximum_pods
+                        + self.maximum_super_spines * 2
+                        + self.maximum_pods * 2
+                        + 2
+                        + self.maximum_super_spines
+                        + 2  # Reserve space for super-spine-loopback /29 pool
+                    ).bit_length(),
+                    (
+                        self.maximum_pods * (2**7)
+                    ).bit_length(),  # Pod loopback pools: 128 addresses per pod
+                ),
                 "super-spine-loopback": data_max_prefix
                 - (self.maximum_super_spines + 2).bit_length(),
             }

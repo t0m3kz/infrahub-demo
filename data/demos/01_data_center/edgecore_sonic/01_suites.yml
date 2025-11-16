@@ -6,10 +6,10 @@ spec:
   data:
     - name: "Suite-1"
       shortname: "s-1"
-      parent: "DC-5-HYBRID-PODS"
+      parent: "BAR-1"
     - name: "Suite-2"
       shortname: "s-2"
-      parent: "DC-5-HYBRID-PODS"
+      parent: "BAR-1"
     - name: "Suite-3"
       shortname: "s-3"
-      parent: "DC-5-HYBRID-PODS"
+      parent: "BAR-1"

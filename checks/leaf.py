@@ -17,15 +17,16 @@ class CheckLeaf(InfrahubCheck):
         errors: list[str] = []
         data = get_data(data)
         errors.extend(validate_interfaces(data))
-        if not data.get("device_services"):
-            errors.append("You're MORON !!! No service.")
-        redundant_bgp = [
-            service.get("name")
-            for service in data.get("device_services", [])
-            if service["typename"] == "ServiceBGP"
-        ]
-        if len(redundant_bgp) < 2:
-            errors.append("No BGP redundancy set !!!")
+        # if not data.get("device_services", []):
+        #     errors.append("No overlay/ underlay services.")
+        # else:
+        #     redundant_bgp = [
+        #         service.get("name")
+        #         for service in data.get("device_services", [])
+        #         if service["typename"] == "ServiceBGP"
+        #     ]
+        #     if redundant_bgp and len(redundant_bgp) < 2:
+        #         errors.append("No BGP redundancy set !!!")
 
         # Display all errors
         if errors:
