@@ -4,9 +4,9 @@ kind: Object
 spec:
   kind: LocationSuite
   data:
-    - name: "Suite-1"
+    - name: "Room-1"
       shortname: "s-1"
-      parent: "FRA-1"
-    - name: "Suite-2"
+      parent: "LON-1"
+    - name: "Room-2"
       shortname: "s-2"
-      parent: "FRA-1"
+      parent: "LON-1"

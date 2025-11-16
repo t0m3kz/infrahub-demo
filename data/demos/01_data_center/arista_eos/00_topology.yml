@@ -4,27 +4,28 @@ kind: Object
 spec:
   kind: TopologyDataCenter
   data:
-    - name: DC-2
+    - name: DC2
       index: 2
       amount_of_super_spines: 2
-      super_spine_template: N9K-C9336C-FX2_SUPER_SPINE
+      super_spine_template: DCS-7368S4-25MS_SUPER_SPINE
       fabric_interface_sorting_method: top_down
-      size: M
+      design_pattern: M-Standard-MR
       member_of_groups:
         - topologies_dc
       children:
         kind: TopologyPod
         data:
-          - name: "Pod-1"
+          - name: Pod-1
             index: 1
-            role: "fabric"
-            spine_template: N9K-C9336C-FX2_SPINE
-            amount_of_spines: 3
+            role: fabric
+            spine_template: DCS-7368S4-25MS_SPINE
+            amount_of_spines: 2
             member_of_groups:
               - topologies_pod
-          - name: "Pod-2"
+          - name: Pod-2
             index: 2
-            spine_template: N9K-C9316D-GX_SPINE
-            amount_of_spines: 3
+            role: fabric
+            spine_template: DCS-7368S4-25MS_SPINE
+            amount_of_spines: 2
             member_of_groups:
               - topologies_pod

@@ -1,4 +1,4 @@
-"""Validate firewall."""
+"""Validate border leaf."""
 
 from typing import Any
 
@@ -7,13 +7,13 @@ from infrahub_sdk.checks import InfrahubCheck
 from .common import get_data, validate_interfaces
 
 
-class CheckLeaf(InfrahubCheck):
-    """Check Firewall."""
+class CheckBorderLeaf(InfrahubCheck):
+    """Check Border Leaf."""
 
-    query = "leaf_config"
+    query = "border_leaf_config"
 
     def validate(self, data: Any) -> None:
-        """Validate Leaf."""
+        """Validate Border Leaf."""
         errors: list[str] = []
         data = get_data(data)
         errors.extend(validate_interfaces(data))

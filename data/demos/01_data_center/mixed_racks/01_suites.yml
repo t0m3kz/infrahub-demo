@@ -6,10 +6,7 @@ spec:
   data:
     - name: "Suite-1"
       shortname: "s-1"
-      parent: "NY-1"
+      parent: "MUC-1"
     - name: "Suite-2"
       shortname: "s-2"
-      parent: "NY-1"
-    - name: "Suite-3"
-      shortname: "s-3"
-      parent: "NY-1"
+      parent: "MUC-1"

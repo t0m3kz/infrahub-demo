@@ -7,7 +7,6 @@ jinja2_transforms:
     template_path: templates/clab_topology.j2
 
 artifact_definitions:
-  # Cisco
   - name: edge_config
     artifact_name: edge
     content_type: text/plain
@@ -61,7 +60,7 @@ artifact_definitions:
 
   - name: Cable matrix for DC
     artifact_name: topology-cabling
-    content_type: text/plain
+    content_type: csv
     targets: topologies_dc
     transformation: topology_cabling
     parameters:
@@ -99,6 +98,18 @@ check_definitions:
     class_name: CheckLoadBalancer
     file_path: checks/loadbalancer.py
     targets: loadbalancers
+    parameters:
+      device: name__value
+  - name: validate_border_leaf
+    class_name: CheckBorderLeaf
+    file_path: checks/border_leaf.py
+    targets: border-leafs
+    parameters:
+      device: name__value
+  - name: validate_super_spine
+    class_name: CheckSuperSpine
+    file_path: checks/super_spine.py
+    targets: super-spines
     parameters:
       device: name__value
 

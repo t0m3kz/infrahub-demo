@@ -147,7 +147,7 @@ spec:
     - name: "Rack-4-3"
       shortname: "r-4-3"
       index: 3
-      rack_type: tor
+      rack_type: network
       pod: Pod-4
       parent: "Suite-4"
       fabric_templates:
@@ -157,7 +157,7 @@ spec:
     - name: "Rack-4-4"
       shortname: "r-4-4"
       index: 4
-      rack_type: tor
+      rack_type: network
       pod: Pod-4
       parent: "Suite-4"
       fabric_templates:
