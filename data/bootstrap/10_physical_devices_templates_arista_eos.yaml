@@ -11,6 +11,8 @@ spec:
       status: provisioning
       interfaces:
         kind: TemplateDcimPhysicalInterface
+        parameters:
+          expand_range: true
         data:
           - template_name: DCS-7050CX3-32C-R_SUPER_SPINE_Ethernet[1-24]/1
             name: Ethernet[1-24]/1
@@ -36,6 +38,8 @@ spec:
       status: provisioning
       interfaces:
         kind: TemplateDcimPhysicalInterface
+        parameters:
+          expand_range: true
         data:
           - template_name: DCS-7050PX4-32S-R_SUPER_SPINE_Ethernet[1-24]/1
             name: Ethernet[1-24]/1
@@ -61,6 +65,8 @@ spec:
       status: provisioning
       interfaces:
         kind: TemplateDcimPhysicalInterface
+        parameters:
+          expand_range: true
         data:
           - template_name: DCS-7050PX4-32S-R_SPINE_Ethernet[1-24]/1
             name: Ethernet[1-24]/1
@@ -86,6 +92,8 @@ spec:
       status: provisioning
       interfaces:
         kind: TemplateDcimPhysicalInterface
+        parameters:
+          expand_range: true
         data:
           - template_name: DCS-7050CX3-32C-R_SPINE_Ethernet[1-24]/1
             name: Ethernet[1-24]/1
@@ -111,6 +119,8 @@ spec:
       status: provisioning
       interfaces:
         kind: TemplateDcimPhysicalInterface
+        parameters:
+          expand_range: true
         data:
           - template_name: DCS-7050CX3-32C-R_LEAF_Ethernet[1-24]/1
             name: Ethernet[1-24]/1
@@ -136,6 +146,8 @@ spec:
       status: provisioning
       interfaces:
         kind: TemplateDcimPhysicalInterface
+        parameters:
+          expand_range: true
         data:
           - template_name: DCS-7050CX4M-48D8-F_LEAF_Ethernet[1-48]/1
             name: Ethernet[1-48]/1
@@ -157,6 +169,8 @@ spec:
       status: provisioning
       interfaces:
         kind: TemplateDcimPhysicalInterface
+        parameters:
+          expand_range: true
         data:
           - template_name: DCS-7050SX3-24YC4C-S-R_LEAF_Ethernet[1-24]
             name: Ethernet[1-24]

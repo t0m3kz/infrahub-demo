@@ -293,6 +293,8 @@ spec:
       status: provisioning
       interfaces:
         kind: TemplateDcimPhysicalInterface
+        parameters:
+          expand_range: true
         data:
           - template_name: 7AS7326-56X-O-48V-F_LEAF_eth0
             name: eth0

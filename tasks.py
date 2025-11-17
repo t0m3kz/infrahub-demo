@@ -13,38 +13,6 @@ INFRAHUB_API_TOKEN = os.getenv("INFRAHUB_API_TOKEN", "admin")
 COMPOSE_COMMAND = "docker compose -p infrahub "
 
 
-def wait_for_infrahub(context: Context, max_attempts: int = 30) -> bool:
-    """Wait for Infrahub to be ready.
-
-    Args:
-        context: Invoke context
-        max_attempts: Maximum number of attempts to check readiness
-
-    Returns:
-        True if Infrahub is ready, False if timeout
-    """
-    print("  ⏳ Waiting for Infrahub to be ready...")
-
-    for attempt in range(max_attempts):
-        # Use a simple GET to /api/version which doesn't require auth and returns 200 when ready
-        result = context.run(
-            f"curl -s -f {INFRAHUB_ADDRESS}/api/version > /dev/null 2>&1",
-            warn=True,
-            hide=True,
-            pty=True,
-        )
-
-        if result.return_code == 0:  # type: ignore
-            print(f"     ✅ Infrahub is ready (attempt {attempt + 1}/{max_attempts})")
-            return True
-
-        if attempt < max_attempts - 1:
-            time.sleep(2)
-
-    print(f"     ⚠️  Infrahub did not respond after {max_attempts} attempts")
-    return False
-
-
 def check_container_running(context: Context, max_attempts: int = 60) -> bool:
     """Check if Infrahub server container is healthy.
 
@@ -351,33 +319,25 @@ def setup(context: Context) -> None:
             print("\n❌ Error: Infrahub container failed to start. Aborting setup.")
             return
 
-    print("  2️⃣  Ensuring Infrahub server is ready...")
-    # Only do the explicit wait if we just started containers
-    if not containers_running:
-        if not wait_for_infrahub(context):
-            print("\n❌ Error: Infrahub did not respond. Aborting setup.")
-            return
-    else:
-        # If containers were already running, just verify they're still healthy
-        print("     ✅ Infrahub is ready")
-
-    print("  3️⃣  Loading schemas...")
+    print("  2️⃣  Loading schemas...")
     load_schema(context)
 
-    print("  4️⃣  Loading menu...")
+    print("  3️⃣  Loading menu...")
     load_menu(context)
 
     # Wait a bit before loading data
-    print("  5️⃣  Waiting before loading bootstrap data...")
+    print("  4️⃣  Waiting before loading bootstrap data...")
     time.sleep(5)
 
-    print("  6️⃣  Loading bootstrap data...")
+    print("  5️⃣  Loading bootstrap data...")
     load_objects(context)
 
     print("\n✅ Setup complete! Infrahub is ready for fun !!!")
     print(
         "💡 Next: Run 'invoke deploy-dc --scenario [dc1 - dc5] --branch your_branch' to load scenario data\n"
     )
+
+    print("6️⃣ Adding repository")
 
 
 @task
