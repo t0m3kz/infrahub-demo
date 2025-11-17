@@ -60,7 +60,7 @@ artifact_definitions:
 
   - name: Cable matrix for DC
     artifact_name: topology-cabling
-    content_type: csv
+    content_type: text/csv
     targets: topologies_dc
     transformation: topology_cabling
     parameters:

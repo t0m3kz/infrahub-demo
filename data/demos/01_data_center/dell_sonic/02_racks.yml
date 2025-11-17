@@ -11,7 +11,7 @@ spec:
       pod: Pod1
       parent: "Room-1"
       fabric_templates:
-        - 2_DELL_SONIC_LEAFS_S5248F
+        - 2_DELL_LEAFS_PowerSwitch-S5224F-ON
       member_of_groups:
         - topologies_rack
     - name: "Rack-1-2"
@@ -21,7 +21,7 @@ spec:
       pod: Pod1
       parent: "Room-1"
       fabric_templates:
-        - 2_DELL_SONIC_LEAFS_S5248F
+        - 2_DELL_LEAFS_PowerSwitch-S5248F-ON
       member_of_groups:
         - topologies_rack
     - name: "Rack-1-3"
@@ -31,7 +31,7 @@ spec:
       pod: Pod1
       parent: "Room-1"
       fabric_templates:
-        - 2_DELL_SONIC_LEAFS_S5248F
+        - 2_DELL_LEAFS_PowerSwitch-S5224F-ON
       member_of_groups:
         - topologies_rack
     - name: "Rack-1-4"
@@ -41,7 +41,7 @@ spec:
       pod: Pod1
       parent: "Room-1"
       fabric_templates:
-        - 2_DELL_SONIC_LEAFS_S5248F
+        - 2_DELL_LEAFS_PowerSwitch-S5248F-ON
       member_of_groups:
         - topologies_rack
     - name: "Rack-2-1"
@@ -51,7 +51,7 @@ spec:
       pod: Pod2
       parent: "Room-2"
       fabric_templates:
-        - 2_DELL_SONIC_LEAFS_S5248F
+        - 2_DELL_LEAFS_PowerSwitch-S5224F-ON
       member_of_groups:
         - topologies_rack
     - name: "Rack-2-2"
@@ -61,7 +61,7 @@ spec:
       pod: Pod2
       parent: "Room-2"
       fabric_templates:
-        - 2_DELL_SONIC_LEAFS_S5248F
+        - 2_DELL_LEAFS_PowerSwitch-S5248F-ON
       member_of_groups:
         - topologies_rack
     - name: "Rack-2-3"
@@ -71,7 +71,7 @@ spec:
       pod: Pod2
       parent: "Room-2"
       fabric_templates:
-        - 2_DELL_SONIC_LEAFS_S5248F
+        - 2_DELL_LEAFS_PowerSwitch-S5248F-ON
       member_of_groups:
         - topologies_rack
     - name: "Rack-2-4"
@@ -81,6 +81,6 @@ spec:
       pod: Pod2
       parent: "Room-2"
       fabric_templates:
-        - 2_DELL_SONIC_LEAFS_S5248F
+        - 2_DELL_LEAFS_PowerSwitch-S5224F-ON
       member_of_groups:
         - topologies_rack

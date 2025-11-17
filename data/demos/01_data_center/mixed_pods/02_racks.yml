@@ -45,7 +45,7 @@ spec:
         - 4_CISCO_LEAFS_N9K-C9336C-FX2
       member_of_groups:
         - topologies_rack
-    # Pod-2: Arista EOS DCS leafs
+    # Pod-2: Arista EOS leafs
     - name: "Rack-2-1"
       shortname: "r-2-1"
       index: 1
@@ -53,7 +53,7 @@ spec:
       pod: Pod-2
       parent: "Suite-2"
       fabric_templates:
-        - 4_ARISTA_LEAFS_CCS-720DP-48S-2F
+        - 4_ARISTA_LEAFS_DCS-7050CX3-32C-R
       member_of_groups:
         - topologies_rack
     - name: "Rack-2-2"
@@ -63,7 +63,7 @@ spec:
       pod: Pod-2
       parent: "Suite-2"
       fabric_templates:
-        - 4_ARISTA_LEAFS_CCS-720DP-48S-2F
+        - 4_ARISTA_LEAFS_DCS-7050CX3-32C-R
       member_of_groups:
         - topologies_rack
     - name: "Rack-2-3"
@@ -73,7 +73,7 @@ spec:
       pod: Pod-2
       parent: "Suite-2"
       fabric_templates:
-        - 4_ARISTA_LEAFS_CCS-720DP-48S-2F
+        - 4_ARISTA_LEAFS_DCS-7050CX4M-48D8-F
       member_of_groups:
         - topologies_rack
     - name: "Rack-2-4"
@@ -83,10 +83,10 @@ spec:
       pod: Pod-2
       parent: "Suite-2"
       fabric_templates:
-        - 4_ARISTA_LEAFS_CCS-720DP-48S-2F
+        - 4_ARISTA_LEAFS_DCS-7050CX4M-48D8-F
       member_of_groups:
         - topologies_rack
-    # Pod-3: Dell Sonic S6100 leafs
+    # Pod-3: Dell Sonic leafs
     - name: "Rack-3-1"
       shortname: "r-3-1"
       index: 1
@@ -94,7 +94,7 @@ spec:
       pod: Pod-3
       parent: "Suite-3"
       fabric_templates:
-        - 4_DELL_SONIC_LEAFS_S5248F
+        - 4_DELL_LEAFS_PowerSwitch-S5248F-ON
       member_of_groups:
         - topologies_rack
     - name: "Rack-3-2"
@@ -104,7 +104,7 @@ spec:
       pod: Pod-3
       parent: "Suite-3"
       fabric_templates:
-        - 4_DELL_SONIC_LEAFS_S5248F
+        - 4_DELL_LEAFS_PowerSwitch-S5248F-ON
       member_of_groups:
         - topologies_rack
     - name: "Rack-3-3"
@@ -114,7 +114,7 @@ spec:
       pod: Pod-3
       parent: "Suite-3"
       fabric_templates:
-        - 4_DELL_SONIC_LEAFS_S5248F
+        - 4_DELL_LEAFS_PowerSwitch-S5248F-ON
       member_of_groups:
         - topologies_rack
     - name: "Rack-3-4"
@@ -124,10 +124,10 @@ spec:
       pod: Pod-3
       parent: "Suite-3"
       fabric_templates:
-        - 4_DELL_SONIC_LEAFS_S5248F
+        - 4_DELL_LEAFS_PowerSwitch-S5248F-ON
       member_of_groups:
         - topologies_rack
-    # Pod-4: Dell Sonic S6100 leafs
+    # Pod-4: Edgecore Sonic leafs
     - name: "Rack-4-1"
       shortname: "r-4-1"
       index: 1
@@ -135,7 +135,7 @@ spec:
       pod: Pod-4
       parent: "Suite-4"
       fabric_templates:
-        - 4_DELL_SONIC_LEAFS_S5248F
+        - 4_EDGECORE_LEAFS_Edgecore-7AS7326-56X-O-48V-F
       member_of_groups:
         - topologies_rack
     - name: "Rack-4-2"
@@ -145,13 +145,15 @@ spec:
       pod: Pod-4
       parent: "Suite-4"
       fabric_templates:
-        - 4_DELL_SONIC_LEAFS_S5248F
+        - 4_EDGECORE_LEAFS_Edgecore-7AS7326-56X-O-48V-F
       member_of_groups:
         - topologies_rack
     - name: "Rack-4-3"
       shortname: "r-4-3"
       index: 3
       rack_type: network
+      fabric_templates:
+        - 4_EDGECORE_LEAFS_Edgecore-7AS7326-56X-O-48V-F
       pod: Pod-4
       parent: "Suite-4"
       member_of_groups:
