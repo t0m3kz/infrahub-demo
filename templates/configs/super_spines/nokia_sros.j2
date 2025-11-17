@@ -1,1 +1,68 @@
-#!/usr/bin/env python3\n# Nokia SROS Super Spine Configuration Template\n# Device: {{ hostname }}\n# Generated configuration\n\n{#- Nokia SROS Configuration -#}\nA admin configure system hostname \"{{ hostname }}\"\nA admin configure system dns resolver admin-state enable\nA admin configure router \"Base\" admin-state enable\nA admin configure router \"Base\" router-id \"{{ bgp.router_id.address.split('/')[0] if bgp else '0.0.0.0' }}\"\n\n{#- Loopback Interface -#}\nA admin configure port \"system\" admin-state enable\nA admin configure port \"system\" mtu 9212\nA admin configure router \"Base\" interface \"system\" admin-state enable\nA admin configure router \"Base\" interface \"system\" ip-mtu 9000\nA admin configure router \"Base\" interface \"system\" ipv4 admin-state enable\nA admin configure router \"Base\" interface \"system\" ipv4 primary address \"{{ bgp.router_id.address if bgp else '0.0.0.1/32' }}\"\n\n{#- Physical Interfaces -#}\n{% for interface in interfaces %}\nA admin configure port \"{{ interface.name }}\" admin-state enable\nA admin configure port \"{{ interface.name }}\" mtu 9212\nA admin configure router \"Base\" interface \"{{ interface.name }}\" admin-state enable\nA admin configure router \"Base\" interface \"{{ interface.name }}\" mtu 9000\nA admin configure router \"Base\" interface \"{{ interface.name }}\" description \"{{ interface.description or interface.role|title }}\"\n{%- if interface.ip_addresses %}\nA admin configure router \"Base\" interface \"{{ interface.name }}\" ipv4 admin-state enable\n{%- for ip in interface.ip_addresses %}\nA admin configure router \"Base\" interface \"{{ interface.name }}\" ipv4 primary address \"{{ ip }}\"\n{%- endfor %}\n{%- endif %}\n{%- if interface.get('ospf') %}\nA admin configure router \"Base\" ospf 1 interface \"{{ interface.name }}\" admin-state enable\nA admin configure router \"Base\" ospf 1 interface \"{{ interface.name }}\" area \"{{ interface.ospf.area }}\"\n{%- endif %}\n{% endfor %}\n\n{#- OSPF Configuration -#}\n{% for ospf_config in ospf %}\nA admin configure router \"Base\" ospf 1 admin-state enable\nA admin configure router \"Base\" ospf 1 router-id \"{{ ospf_config.router_id.split('/')[0] }}\"\nA admin configure router \"Base\" ospf 1 traffic-engineering admin-state enable\n{%- for interface in interfaces %}\n{%- if interface.get('ospf') %}\nA admin configure router \"Base\" ospf 1 interface \"{{ interface.name }}\" passive disable\n{%- else %}\nA admin configure router \"Base\" ospf 1 interface \"{{ interface.name }}\" passive enable\n{%- endif %}\n{%- endfor %}\n!\n{% endfor %}\n\n{#- BGP Configuration -#}\n{% for bgp_config in bgp %}\nA admin configure router \"Base\" bgp 1 admin-state enable\nA admin configure router \"Base\" bgp 1 router-id \"{{ bgp_config.router_id.address.split('/')[0] }}\"\nA admin configure router \"Base\" bgp 1 local-as {{ bgp_config.local_as.asn }}\n{%- for session in bgp_config.sessions %}\nA admin configure router \"Base\" bgp 1 neighbor \"{{ session.remote_ip.address.split('/')[0] }}\" admin-state enable\nA admin configure router \"Base\" bgp 1 neighbor \"{{ session.remote_ip.address.split('/')[0] }}\" peer-as {{ session.remote_as.asn }}\n{%- endfor %}\n{%- endfor %}\n\n! End of configuration\n"
+#!/usr/bin/env python3
+# Nokia SROS Super Spine Configuration Template
+# Device: {{ hostname }}
+# Generated configuration
+
+{#- Nokia SROS Configuration -#}
+A admin configure system hostname "{{ hostname }}"
+A admin configure system dns resolver admin-state enable
+A admin configure router "Base" admin-state enable
+A admin configure router "Base" router-id "{{ bgp[0].router_id.address.split('/')[0] if bgp else '0.0.0.0' }}"
+
+{#- Loopback Interface -#}
+A admin configure port "system" admin-state enable
+A admin configure port "system" mtu 9212
+A admin configure router "Base" interface "system" admin-state enable
+A admin configure router "Base" interface "system" ip-mtu 9000
+A admin configure router "Base" interface "system" ipv4 admin-state enable
+A admin configure router "Base" interface "system" ipv4 primary address "{{ bgp[0].router_id.address if bgp else '0.0.0.1/32' }}"
+
+{#- Physical Interfaces -#}
+{%- for interface in interfaces %}
+A admin configure port "{{ interface.name }}" admin-state enable
+A admin configure port "{{ interface.name }}" mtu 9212
+A admin configure router "Base" interface "{{ interface.name }}" admin-state enable
+A admin configure router "Base" interface "{{ interface.name }}" mtu 9000
+A admin configure router "Base" interface "{{ interface.name }}" description "{{ interface.description or interface.role|title }}"
+{%- if interface.ip_addresses %}
+A admin configure router "Base" interface "{{ interface.name }}" ipv4 admin-state enable
+{%- for ip in interface.ip_addresses %}
+A admin configure router "Base" interface "{{ interface.name }}" ipv4 primary address "{{ ip.address }}"
+{%- endfor %}
+{%- endif %}
+{%- if interface.get('ospf') %}
+A admin configure router "Base" ospf 1 interface "{{ interface.name }}" admin-state enable
+A admin configure router "Base" ospf 1 interface "{{ interface.name }}" area "{{ interface.ospf.area }}"
+{%- endif %}
+{% endfor %}
+
+{%- if ospf %}
+{#- OSPF Configuration -#}
+{%- for ospf_config in ospf %}
+A admin configure router "Base" ospf 1 admin-state enable
+A admin configure router "Base" ospf 1 router-id "{{ ospf_config.router_id.split('/')[0] }}"
+A admin configure router "Base" ospf 1 traffic-engineering admin-state enable
+{%- for interface in interfaces %}
+{%- if interface.get('ospf') %}
+A admin configure router "Base" ospf 1 interface "{{ interface.name }}" passive disable
+{%- else %}
+A admin configure router "Base" ospf 1 interface "{{ interface.name }}" passive enable
+{%- endif %}
+{%- endfor %}
+{% endfor %}
+{%- endif %}
+
+{%- if bgp %}
+{#- BGP Configuration -#}
+{%- for bgp_config in bgp %}
+A admin configure router "Base" bgp 1 admin-state enable
+A admin configure router "Base" bgp 1 router-id "{{ bgp_config.router_id.address.split('/')[0] }}"
+A admin configure router "Base" bgp 1 local-as {{ bgp_config.local_as.asn }}
+{%- for session in bgp_config.sessions %}
+A admin configure router "Base" bgp 1 neighbor "{{ session.remote_ip.address.split('/')[0] }}" admin-state enable
+A admin configure router "Base" bgp 1 neighbor "{{ session.remote_ip.address.split('/')[0] }}" peer-as {{ session.remote_as.asn }}
+{%- endfor %}
+{% endfor %}
+{%- endif %}
+
+! End of configuration

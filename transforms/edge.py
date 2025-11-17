@@ -2,6 +2,7 @@ from typing import Any
 
 from infrahub_sdk.transforms import InfrahubTransform
 from jinja2 import Environment, FileSystemLoader, select_autoescape
+from netutils.utils import jinja2_convenience_function
 
 from .common import get_bgp_profile, get_data, get_interfaces, get_ospf, get_vlans
 
@@ -30,7 +31,9 @@ class Edge(InfrahubTransform):
             loader=FileSystemLoader(template_path),
             autoescape=select_autoescape(["j2"]),
         )
-        # Select the template for leaf devices based on platform
+        env.filters.update(jinja2_convenience_function())
+
+        # Select the template for edge devices based on platform
         template_name = f"{platform_name}.j2"
 
         # Render the template with enhanced data

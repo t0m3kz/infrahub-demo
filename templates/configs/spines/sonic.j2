@@ -10,19 +10,21 @@
 {%- endif %}
 
 {%- set vlan_config = {} -%}
+{%- if vlans and vlans|length > 0 -%}
 {%- for vlan in vlans -%}
 {%- set _ = vlan_config.update({
   ('Vlan' + vlan.vlan_id|string): {
     'vlanid': vlan.vlan_id|string
   }
 }) -%}
-{%- endfor %}
+{%- endfor -%}
+{%- endif %}
 
 {%- set loopback_interfaces = {} -%}
 {%- for interface in interfaces -%}
 {%- if 'loopback' in interface.name|lower -%}
 {%- for ip in interface.ip_addresses -%}
-{%- set key = interface.name + '|' + ip -%}
+{%- set key = interface.name + '|' + ip.address -%}
 {%- set _ = loopback_interfaces.update({key: {}}) -%}
 {%- endfor -%}
 {%- endif -%}
@@ -39,19 +41,22 @@
 {%- for interface in interfaces -%}
 {%- if 'loopback' not in interface.name|lower and interface.ip_addresses -%}
 {%- for ip in interface.ip_addresses -%}
-{%- set key = interface.name + '|' + ip -%}
+{%- set key = interface.name + '|' + ip.address -%}
 {%- set _ = interface_ips.update({key: {}}) -%}
 {%- endfor -%}
 {%- endif -%}
 {%- endfor %}
 
 {%- set vlan_interfaces = {} -%}
+{%- if vlans and vlans|length > 0 -%}
 {%- for vlan in vlans -%}
 {%- set key = 'Vlan' + vlan.vlan_id|string -%}
 {%- set _ = vlan_interfaces.update({key: {}}) -%}
-{%- endfor %}
+{%- endfor -%}
+{%- endif %}
 
 {%- set bgp_neighbors = {} -%}
+{%- if bgp -%}
 {%- for bgp_config in bgp -%}
 {%- for session in bgp_config.sessions -%}
 {%- set neighbor_ip = session.remote_ip.address.split('/')[0] -%}
@@ -64,7 +69,8 @@
   }
 }) -%}
 {%- endfor -%}
-{%- endfor %}
+{%- endfor -%}
+{%- endif %}
 
 {%- set bgp_globals = {
   'default': {}
@@ -77,6 +83,7 @@
 {%- endif %}
 
 {%- set ospf_router = {} -%}
+{%- if ospf -%}
 {%- for ospf_config in ospf -%}
 {%- set _ = ospf_router.update({
   'default': {
@@ -84,7 +91,8 @@
     'reference_bandwidth': ospf_config.reference_bandwidth or 100000
   }
 }) -%}
-{%- endfor %}
+{%- endfor -%}
+{%- endif %}
 
 {{ {
   'DEVICE_METADATA': device_metadata,

@@ -2,6 +2,7 @@ from typing import Any
 
 from infrahub_sdk.transforms import InfrahubTransform
 from jinja2 import Environment, FileSystemLoader, select_autoescape
+from netutils.utils import jinja2_convenience_function
 
 from .common import get_data
 
@@ -163,6 +164,7 @@ class LoadBalancer(InfrahubTransform):
             loader=FileSystemLoader(template_path),
             autoescape=select_autoescape(["j2"]),
         )
+        env.filters.update(jinja2_convenience_function())
 
         # Select the template for load balancer devices
         # Try manufacturer_platform.j2 first, fallback to platform.j2

@@ -10,12 +10,14 @@ feature lacp
 feature vpc
 feature lldp
 !
+{%- if vlans and vlans|length > 0 %}
 ! VLANs
 {%- for vlan in vlans %}
 vlan {{ vlan.vlan_id }}
   name {{ vlan.name }}
 !
 {%- endfor %}
+{%- endif %}
 !
 ! Interfaces
 {%- for interface in interfaces %}
@@ -25,13 +27,13 @@ interface {{ interface.name }}
 {%- endif %}
 {%- if interface.ip_addresses %}
 {%- for ip in interface.ip_addresses %}
-  ip address {{ ip.address }}
+  ip address {{ ip.address.address }}
 {%- if ip.ip_namespace.name != "default" %}
   vrf member {{ ip.ip_namespace.name }}
 {%- endif %}
 {%- endfor %}
 {%- endif %}
-{%- if interface.vlans %}
+{%- if interface.vlans and interface.vlans|length > 0 %}
   switchport
   switchport mode access
   switchport access vlan {{ interface.vlans[0] }}
@@ -42,10 +44,11 @@ interface {{ interface.name }}
 !
 {%- endfor %}
 !
+{%- if ospf and ospf|length > 0 %}
 ! OSPF Configuration
 {%- for ospf_config in ospf %}
 router ospf {{ ospf_config.process_id }}
-  router-id {{ ospf_config.router_id.split('/')[0] }}
+  router-id {{ ospf_config.router_id.address.split('/')[0] }}
   area {{ ospf_config.area }} authentication message-digest
   auto-cost reference-bandwidth {{ ospf_config.reference_bandwidth }}
   passive-interface default
@@ -56,7 +59,9 @@ router ospf {{ ospf_config.process_id }}
 {%- endfor %}
 !
 {%- endfor %}
+{%- endif %}
 !
+{%- if bgp and bgp|length > 0 %}
 ! BGP Configuration
 {%- for bgp_config in bgp %}
 router bgp {{ bgp_config.local_as.asn }}
@@ -91,6 +96,7 @@ router bgp {{ bgp_config.local_as.asn }}
 {%- endfor %}
 !
 {%- endfor %}
+{%- endif %}
 !
 ! Management
 line console
