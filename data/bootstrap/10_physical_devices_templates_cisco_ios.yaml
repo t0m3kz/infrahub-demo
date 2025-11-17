@@ -33,7 +33,7 @@ spec:
           expand_range: true
         data:
           - template_name: C9200L-48P-4G_OOB_GigabitEthernet1/0/[1-48]
-            name: GigabitEthernet1/0/[1-24]
+            name: GigabitEthernet1/0/[1-48]
             role: management
             interface_type: 10gbase-x-sfpp
           - template_name: C9200L-48P-4G_OOB_mgmt0
