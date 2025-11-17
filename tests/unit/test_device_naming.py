@@ -75,4 +75,4 @@ class TestDeviceNamingSimplified:
             indexes=[1, 2, 3],
         )
 
-        assert result == "fab1123leaf05"
+        assert result == "fab1leaf12305"

@@ -289,7 +289,7 @@ spec:
     - template_name: Edgecore-7AS7326-56X-O-48V-F_LEAF
       device_type: 7AS7326-56X-O-48V-F
       platform: sonic
-      role: spine
+      role: leaf
       status: provisioning
       interfaces:
         kind: TemplateDcimPhysicalInterface

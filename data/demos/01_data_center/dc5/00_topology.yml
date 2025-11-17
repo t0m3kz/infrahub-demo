@@ -4,10 +4,10 @@ kind: Object
 spec:
   kind: TopologyDataCenter
   data:
-    - name: DC3
-      index: 3
+    - name: DC5
+      index: 1
       amount_of_super_spines: 2
-      super_spine_template: N9K_C9316D_GX_SUPER_SPINE
+      super_spine_template: N9K-C9364C-GX_SPINE
       fabric_interface_sorting_method: top_down
       design_pattern: L-Standard-MR
       member_of_groups:
