@@ -69,6 +69,7 @@ class DeviceNamingConfig:
                 fabric_name, indexes, device_type, formatted_idx
             )
         elif self.strategy == DeviceNamingStrategy.FLAT:
+            self.separator = ""
             components = self._build_flat_components(
                 fabric_name, indexes, device_type, formatted_idx
             )
@@ -107,8 +108,9 @@ class DeviceNamingConfig:
         """Build components for FLAT naming (no separators)."""
         components = [fabric_name]
         if indexes:
-            components.append("".join(str(idx) for idx in indexes))
-        components.extend([device_type, formatted_idx])
+            components.extend(
+                [device_type, "".join(str(idx) for idx in indexes), formatted_idx]
+            )
         return components
 
 

@@ -29,7 +29,7 @@ spec:
     - template_name: N9K_C9316D_GX_SUPER_SPINE
       device_type: N9K-C9316D-GX
       platform: cisco_nxos
-      role: spine
+      role: super-spine
       status: provisioning
       interfaces:
         kind: TemplateDcimPhysicalInterface

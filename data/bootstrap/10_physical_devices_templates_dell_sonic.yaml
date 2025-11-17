@@ -7,23 +7,23 @@ spec:
     - template_name: PowerSwitch-S5232F-ON_SUPER_SPINE
       device_type: PowerSwitch S5232F-ON
       platform: dell_sonic
-      role: leaf
+      role: super-spine
       status: provisioning
       interfaces:
         kind: TemplateDcimPhysicalInterface
         parameters:
           expand_range: true
         data:
-          - template_name: PowerSwitch-S5232F-ON_SUPER_SPINE_Ethernet1_1_[1-24]
-            name: Ethernet 1/1/[1-24]
+          - template_name: PowerSwitch-S5232F-ON_SUPER_SPINE_Ethernet1/1/[1-24]
+            name: Ethernet1/1/[1-24]
             role: spine
             interface_type: 100gbase-x-qsfp28
-          - template_name: PowerSwitch_S5232F-ON_SUPER_SPINE_Ethernet1_1_[25-32]
-            name: Ethernet 1/1/[25-32]
+          - template_name: PowerSwitch_S5232F-ON_SUPER_SPINE_Ethernet1/1/[25-32]
+            name: Ethernet1/1/[25-32]
             role: uplink
             interface_type: 100gbase-x-qsfp28
-          - template_name: PowerSwitch_S5232F-ON_SUPER_SPINE_Ethernet1_1_[33-34]
-            name: Ethernet 1/1/[33-34]
+          - template_name: PowerSwitch_S5232F-ON_SUPER_SPINE_Ethernet1/1/[33-34]
+            name: Ethernet1/1/[33-34]
             role: management
             interface_type: 10gbase-x-sfpp
           - template_name: PowerSwitch_S5232F-ON_SUPER_SPINE_mgmt1
@@ -34,23 +34,23 @@ spec:
     - template_name: PowerSwitch-S5232F-ON_SPINE
       device_type: PowerSwitch S5232F-ON
       platform: dell_sonic
-      role: leaf
+      role: spine
       status: provisioning
       interfaces:
         kind: TemplateDcimPhysicalInterface
         parameters:
           expand_range: true
         data:
-          - template_name: PowerSwitch-S5232F-ON_SPINE_Ethernet1_1_[1-24]
-            name: Ethernet 1/1/[1-24]
+          - template_name: PowerSwitch-S5232F-ON_SPINE_Ethernet1/1/[1-24]
+            name: Ethernet1/1/[1-24]
             role: leaf
             interface_type: 100gbase-x-qsfp28
-          - template_name: PowerSwitch_S5232F-ON_SPINE_Ethernet1_1_[25-32]
-            name: Ethernet 1/1/[25-32]
+          - template_name: PowerSwitch_S5232F-ON_SPINE_Ethernet1/1/[25-32]
+            name: Ethernet1/1/[25-32]
             role: uplink
             interface_type: 100gbase-x-qsfp28
-          - template_name: PowerSwitch_S5232F-ON_SPINE_Ethernet1_1_[33-34]
-            name: Ethernet 1/1/[33-34]
+          - template_name: PowerSwitch_S5232F-ON_SPINE_Ethernet1/1/[33-34]
+            name: Ethernet1/1/[33-34]
             role: management
             interface_type: 10gbase-x-sfpp
           - template_name: PowerSwitch_S5232F-ON_SPINE_mgmt1
@@ -68,12 +68,12 @@ spec:
         parameters:
           expand_range: true
         data:
-          - template_name: PowerSwitch-S5224F-ON_LEAF_Ethernet1_1_[1-24]
-            name: Ethernet 1/1/[1-24]
+          - template_name: PowerSwitch-S5224F-ON_LEAF_Ethernet1/1/[1-24]
+            name: Ethernet1/1/[1-24]
             role: customer
             interface_type: 25gbase-x-sfp28
-          - template_name: PowerSwitch_S5224F-ON_LEAF_Ethernet1_1_[25-28]
-            name: Ethernet 1/1/[25-28]
+          - template_name: PowerSwitch_S5224F-ON_LEAF_Ethernet1/1/[25-28]
+            name: Ethernet1/1/[25-28]
             role: uplink
             interface_type: 100gbase-x-qsfp28
           - template_name: PowerSwitch_S5224F-ON_LEAF_mgmt1
@@ -91,12 +91,12 @@ spec:
         parameters:
           expand_range: true
         data:
-          - template_name: PowerSwitch-S5248F-ON_LEAF_Ethernet1_1_[1-48]
-            name: Ethernet 1/1/[1-48]
+          - template_name: PowerSwitch-S5248F-ON_LEAF_Ethernet1/1/[1-48]
+            name: Ethernet1/1/[1-48]
             role: customer
             interface_type: 25gbase-x-sfp28
-          - template_name: PowerSwitch_S5248F-ON_LEAF_Ethernet1_1_[49-56]
-            name: Ethernet 1/1/[49-56]
+          - template_name: PowerSwitch_S5248F-ON_LEAF_Ethernet1/1/[49-56]
+            name: Ethernet1/1/[49-56]
             role: uplink
             interface_type: 100gbase-x-qsfp28
           - template_name: PowerSwitch_S5248F-ON_LEAF_mgmt1

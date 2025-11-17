@@ -4,12 +4,12 @@ kind: Object
 spec:
   kind: TopologyDataCenter
   data:
-    - name: DC2
-      index: 2
+    - name: DC3
+      index: 1
       amount_of_super_spines: 2
-      super_spine_template: DCS-7050CX3-32C-R_SUPER_SPINE
+      super_spine_template: PowerSwitch-S5232F-ON_SUPER_SPINE
       fabric_interface_sorting_method: top_down
-      design_pattern: M-Standard-MR
+      design_pattern: S-Flat-ToR
       member_of_groups:
         - topologies_dc
       children:
@@ -18,14 +18,14 @@ spec:
           - name: Pod-1
             index: 1
             role: fabric
-            spine_template: DCS-7050PX4-32S-R_SPINE
+            spine_template: PowerSwitch-S5232F-ON_SPINE
             amount_of_spines: 2
             member_of_groups:
               - topologies_pod
           - name: Pod-2
             index: 2
             role: fabric
-            spine_template: DCS-7050PX4-32C-R_SPINE
+            spine_template: PowerSwitch-S5232F-ON_SPINE
             amount_of_spines: 2
             member_of_groups:
               - topologies_pod

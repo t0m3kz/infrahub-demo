@@ -6,10 +6,10 @@ spec:
   data:
     - name: "Suite-1"
       shortname: "s-1"
-      parent: "BAR-1"
+      parent: "BER-1"
     - name: "Suite-2"
       shortname: "s-2"
-      parent: "BAR-1"
+      parent: "BER-1"
     - name: "Suite-3"
       shortname: "s-3"
-      parent: "BAR-1"
+      parent: "BER-1"
