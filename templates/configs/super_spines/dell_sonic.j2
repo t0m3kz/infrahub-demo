@@ -11,7 +11,7 @@ feature vn-segment-vlan-based
 feature nv overlay
 
 {#- VLAN Configuration -#}
-{% for vlan in vlans %}
+{%- for vlan in vlans %}
 vlan {{ vlan.vlan_id }}
   name {{ vlan.name or 'VLAN_' + vlan.vlan_id|string }}
   vn-segment {{ vlan.get('vni', vlan.vlan_id) }}
@@ -25,7 +25,7 @@ interface {{ interface.name }}
 {%- endif %}
 {%- if interface.ip_addresses %}
 {%- for ip in interface.ip_addresses %}
-  ip address {{ ip }}
+  ip address {{ ip.address }}
 {%- endfor %}
 {%- endif %}
 {%- if interface.vlans %}
@@ -40,8 +40,9 @@ interface {{ interface.name }}
 !
 {% endfor %}
 
+{%- if ospf %}
 {#- OSPF Configuration -#}
-{% for ospf_config in ospf %}
+{%- for ospf_config in ospf %}
 router ospf {{ ospf_config.process_id or 1 }}
   router-id {{ ospf_config.router_id.split('/')[0] }}
   reference-bandwidth {{ ospf_config.reference_bandwidth or 100000 }}
@@ -53,9 +54,11 @@ router ospf {{ ospf_config.process_id or 1 }}
 {%- endfor %}
 !
 {% endfor %}
+{%- endif %}
 
+{%- if bgp %}
 {#- BGP Configuration -#}
-{% for bgp_config in bgp %}
+{%- for bgp_config in bgp %}
 router bgp {{ bgp_config.local_as.asn }}
   router-id {{ bgp_config.router_id.address.split('/')[0] }}
   no bgp default ipv4-unicast
@@ -78,6 +81,7 @@ router bgp {{ bgp_config.local_as.asn }}
 {%- endfor %}
 !
 {% endfor %}
+{%- endif %}
 
 ! Configure route-maps
 route-map RM-CONN-2-BGP permit 10
