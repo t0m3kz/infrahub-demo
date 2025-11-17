@@ -57,15 +57,12 @@ generics:
       - name: name
         kind: Text
         unique: true
-        branch: aware
         order_weight: 100
       - name: index
         kind: Number
-        branch: agnostic
         order_weight: 110
     relationships:
       - name: devices
-        branch: aware
         peer: DcimGenericDevice
         kind: Component
         cardinality: many
@@ -255,7 +252,6 @@ nodes:
 
   - name: DataCenter
     namespace: Topology
-    branch: agnostic
     inherit_from:
       - CoreArtifactTarget
       - TopologyDeployment
@@ -294,14 +290,12 @@ nodes:
         kind: Number
         optional: false
         default_value: 2
-        branch: aware
         order_weight: 1000
         parameters:
           min_value: 1
           max_value: 4
       - name: fabric_interface_sorting_method
         kind: Dropdown
-        branch: aware
         label: Fabric interface assignment
         choices:
           - name: bottom_up
@@ -316,7 +310,6 @@ nodes:
         order_weight: 1200
       - name: spine_interface_sorting_method
         kind: Dropdown
-        branch: aware
         label: Spine interface assignment
         choices:
           - name: bottom_up
@@ -331,14 +324,12 @@ nodes:
         order_weight: 1300
     relationships:
       - name: design_pattern
-        branch: aware
         peer: TopologyDataCenterDesign
         kind: Generic
         cardinality: one
         identifier: "dc__design_pattern"
         order_weight: 500
       - name: super_spine_template
-        branch: aware
         peer: TemplateDcimPhysicalDevice
         kind: Attribute
         cardinality: one
@@ -347,7 +338,6 @@ nodes:
 
   - name: Pod
     namespace: Topology
-    branch: agnostic
     inherit_from:
       - TopologyDeployment
       - GeneratorTarget
@@ -357,7 +347,6 @@ nodes:
     attributes:
       - name: amount_of_spines
         label: Amount of Spine switches
-        branch: aware
         kind: Number
         optional: false
         default_value: 4
@@ -367,7 +356,6 @@ nodes:
           max_value: 4
       - name: role
         kind: Dropdown
-        branch: aware
         default_value: cpu
         choices:
           - name: fabric
@@ -381,7 +369,6 @@ nodes:
         optional: false
         order_weight: 2000
       - name: leaf_interface_sorting_method
-        branch: aware
         kind: Dropdown
         choices:
           - name: bottom_up
@@ -393,7 +380,6 @@ nodes:
         default_value: bottom_up
         order_weight: 3000
       - name: spine_interface_sorting_method
-        branch: aware
         kind: Dropdown
         choices:
           - name: bottom_up
@@ -407,14 +393,12 @@ nodes:
     relationships:
       - name: spine_template
         peer: TemplateDcimPhysicalDevice
-        branch: aware
         kind: Attribute
         cardinality: one
         identifier: "pod__spine_template"
         order_weight: 1100
       - name: racks
         peer: LocationRack
-        branch: aware
         kind: Generic
         cardinality: many
         identifier: "rack__pod"
@@ -423,7 +407,6 @@ nodes:
       - name: management_pool
         peer: CoreIPAddressPool
         state: absent
-        branch: aware
         kind: Attribute
         cardinality: one
         optional: true
@@ -431,7 +414,6 @@ nodes:
         order_weight: 5500
       - name: loopback_pool
         peer: CoreIPAddressPool
-        branch: aware
         kind: Attribute
         cardinality: one
         optional: true
@@ -439,7 +421,6 @@ nodes:
         order_weight: 6000
       - name: prefix_pool
         peer: CoreIPPrefixPool
-        branch: aware
         kind: Attribute
         cardinality: one
         optional: true

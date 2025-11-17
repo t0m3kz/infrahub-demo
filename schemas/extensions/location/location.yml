@@ -7,7 +7,6 @@ nodes:
     label: Region
     inherit_from:
       - LocationGeneric
-    branch: agnostic
     menu_placement: LocationGeneric
     include_in_menu: false
     display_label: "{{name__value}}"
@@ -22,7 +21,6 @@ nodes:
     menu_placement: LocationGeneric
     include_in_menu: false
     display_label: "{{name__value}}"
-    branch: agnostic
     parent: "LocationRegion"
     children: LocationMetro
     icon: gis:search-country
@@ -34,7 +32,6 @@ nodes:
   - name: Metro
     namespace: Location
     label: Metro
-    branch: agnostic
     inherit_from:
       - LocationGeneric
     menu_placement: LocationGeneric
@@ -45,7 +42,6 @@ nodes:
     icon: healthicons:city
   - name: Building
     namespace: Location
-    branch: agnostic
     inherit_from:
       - LocationGeneric
     menu_placement: "LocationGeneric"
@@ -84,7 +80,6 @@ nodes:
     include_in_menu: false
     menu_placement: "LocationGeneric"
     label: Suite
-    branch: agnostic
     display_label: "{{name__value}}"
     parent: "LocationBuilding"
     children: "LocationRack"
@@ -108,7 +103,6 @@ nodes:
     include_in_menu: false
     menu_placement: "LocationGeneric"
     label: Rack
-    branch: agnostic
     display_label: "{{name__value}}"
     human_friendly_id:
       - shortname__value
@@ -142,24 +136,20 @@ nodes:
     relationships:
       - name: owner
         peer: OrganizationGeneric
-        branch: aware
         optional: true
         cardinality: one
       - name: fabric_templates
         peer: TopologyElement
-        branch: aware
         optional: true
         cardinality: many
       - name: pod
         peer: TopologyPod
-        branch: aware
         kind: Attribute
         cardinality: one
         optional: true
         identifier: "rack__pod"
       - name: devices
         peer: DcimPhysicalDevice
-        branch: aware
         optional: true
         cardinality: many
         kind: Generic
@@ -184,7 +174,6 @@ extensions:
       relationships:
         - name: rack
           peer: LocationRack
-          branch: aware
           cardinality: one
           kind: Attribute
           optional: true

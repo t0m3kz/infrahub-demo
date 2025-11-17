@@ -334,7 +334,7 @@ def setup(context: Context) -> None:
 
     print("\n✅ Setup complete! Infrahub is ready for fun !!!")
     print(
-        "💡 Next: Run 'invoke deploy-dc --scenario [dc1 - dc5] --branch your_branch' to load scenario data\n"
+        "💡 Next: Run 'uv run invoke deploy-dc --scenario [dc1 - dc5] --branch your_branch' to load scenario data\n"
     )
 
     print("6️⃣ Adding repository")
