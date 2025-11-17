@@ -11,6 +11,8 @@ spec:
       status: provisioning
       interfaces:
         kind: TemplateDcimPhysicalInterface
+        parameters:
+          expand_range: true
         data:
           - template_name: N9K-C9336C-FX2_SUPER_SPINE_Ethernet1/[1-30]
             name: Ethernet1/[1-30]
@@ -31,6 +33,8 @@ spec:
       status: provisioning
       interfaces:
         kind: TemplateDcimPhysicalInterface
+        parameters:
+          expand_range: true
         data:
           - template_name: N9K-C9316D-GX_SUPER_SPINE_Ethernet1/[1-12]
             name: Ethernet1/[1-12]
@@ -51,6 +55,8 @@ spec:
       status: provisioning
       interfaces:
         kind: TemplateDcimPhysicalInterface
+        parameters:
+          expand_range: true
         data:
           - template_name: N9K-C9336C-FX2_SPINE_Ethernet1/[1-30]
             name: Ethernet1/[1-30]
@@ -71,6 +77,8 @@ spec:
       status: provisioning
       interfaces:
         kind: TemplateDcimPhysicalInterface
+        parameters:
+          expand_range: true
         data:
           - template_name: N9K-C9336C-FX2_LEAF_Ethernet1/[1-30]
             name: Ethernet1/[1-30]
@@ -91,6 +99,8 @@ spec:
       status: provisioning
       interfaces:
         kind: TemplateDcimPhysicalInterface
+        parameters:
+          expand_range: true
         data:
           - template_name: N9K-C9316D-GX_SPINE_Ethernet1/[1-12]
             name: Ethernet1/[1-12]
@@ -111,6 +121,8 @@ spec:
       status: provisioning
       interfaces:
         kind: TemplateDcimPhysicalInterface
+        parameters:
+          expand_range: true
         data:
           - template_name: N9K-C9316D-GX_LEAF_Ethernet1/[1-12]
             name: Ethernet1/[1-12]
@@ -131,6 +143,8 @@ spec:
       status: provisioning
       interfaces:
         kind: TemplateDcimPhysicalInterface
+        parameters:
+          expand_range: true
         data:
           - template_name: N9K-C9316D-GX_LEAF_Ethernet1/[1-12]
             name: Ethernet1/[1-12]

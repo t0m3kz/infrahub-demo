@@ -11,6 +11,8 @@ spec:
       status: provisioning
       interfaces:
         kind: TemplateDcimPhysicalInterface
+        parameters:
+          expand_range: true
         data:
           - template_name: SRX-1500_EDGE_FIREWALL_fxp0
             name: fxp0
@@ -28,6 +30,8 @@ spec:
       status: provisioning
       interfaces:
         kind: TemplateDcimPhysicalInterface
+        parameters:
+          expand_range: true
         data:
           - template_name: SRX-1500_DC_FIREWALL_fxp0
             name: fxp0

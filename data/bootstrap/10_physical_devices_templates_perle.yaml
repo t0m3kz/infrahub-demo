@@ -11,6 +11,8 @@ spec:
       status: provisioning
       interfaces:
         kind: TemplateDcimConsoleInterface
+        parameters:
+          expand_range: true
         data:
           - template_name: SCG50R_CONSOLE_con[0-24]
             name: con[0-24]
