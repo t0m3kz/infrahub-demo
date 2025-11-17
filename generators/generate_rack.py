@@ -42,7 +42,7 @@ class RackGenerator(CommonGenerator):
                     amount=template.get("quantity", 1),
                     template=template.get("template", {}),
                     naming_strategy=DeviceNamingStrategy[
-                        design.get("naming_strategy", "STANDARD").upper()
+                        design.get("naming_convention", "STANDARD").upper()
                     ],
                     options={
                         "pod_name": pod_name,
@@ -59,7 +59,7 @@ class RackGenerator(CommonGenerator):
                     amount=template.get("quantity", 1),
                     template=template.get("template", {}),
                     naming_strategy=DeviceNamingStrategy[
-                        design.get("naming_strategy", "STANDARD").upper()
+                        design.get("naming_convention", "STANDARD").upper()
                     ],
                     options={
                         "pod_name": pod_name,
