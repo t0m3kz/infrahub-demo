@@ -19,7 +19,7 @@ spec:
             role: spine
             interface_type: 100gbase-x-qsfp28
           - template_name: DCS-7050CX3-32C-R_SUPER_SPINE_Ethernet[25-32]/1
-            name: Ethernet[21-24]/1
+            name: Ethernet[25-32]/1
             role: uplink
             interface_type: 100gbase-x-qsfp28
           - template_name: DCS-7050CX3-32C-R_SUPER_SPINE_Ethernet[33-34]
@@ -46,7 +46,7 @@ spec:
             role: spine
             interface_type: 400gbase-x-qsfpdd
           - template_name: DCS-7050PX4-32S-R_SUPER_SPINE_Ethernet[25-32]/1
-            name: Ethernet[21-24]/1
+            name: Ethernet[25-32]/1
             role: uplink
             interface_type: 400gbase-x-qsfpdd
           - template_name: DCS-7050PX4-32S-R_SUPER_SPINE_Ethernet[33-34]
@@ -73,7 +73,7 @@ spec:
             role: spine
             interface_type: 400gbase-x-qsfpdd
           - template_name: DCS-7050PX4-32S-R_SPINE_Ethernet[25-32]/1
-            name: Ethernet[21-24]/1
+            name: Ethernet[25-32]/1
             role: uplink
             interface_type: 400gbase-x-qsfpdd
           - template_name: DCS-7050PX4-32S-R_SPINE_Ethernet[33-34]
@@ -100,7 +100,7 @@ spec:
             role: leaf
             interface_type: 100gbase-x-qsfp28
           - template_name: DCS-7050CX3-32C-R_SPINE_Ethernet[25-32]/1
-            name: Ethernet[21-24]/1
+            name: Ethernet[25-32]/1
             role: uplink
             interface_type: 100gbase-x-qsfp28
           - template_name: DCS-7050CX3-32C-R_SPINE_Ethernet[33-34]
@@ -127,7 +127,7 @@ spec:
             role: customer
             interface_type: 100gbase-x-qsfp28
           - template_name: DCS-7050CX3-32C-R_LEAF_Ethernet[25-32]/1
-            name: Ethernet[21-24]/1
+            name: Ethernet[25-32]/1
             role: uplink
             interface_type: 100gbase-x-qsfp28
           - template_name: DCS-7050CX3-32C-R_LEAF_Ethernet[33-34]
@@ -154,7 +154,7 @@ spec:
             role: customer
             interface_type: 100gbase-x-qsfp28
           - template_name: DCS-7050CX4M-48D8-F_LEAF_Ethernet[49-56]/1
-            name: Ethernet[21-24]/1
+            name: Ethernet[49-56]/1
             role: uplink
             interface_type: 400gbase-x-qsfpdd
           - template_name: DCS-7050CX4M-48D8-F_LEAF_Management1
