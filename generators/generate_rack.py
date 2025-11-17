@@ -41,7 +41,7 @@ class RackGenerator(CommonGenerator):
                     device_role=role,
                     amount=template.get("quantity", 1),
                     template=template.get("template", {}),
-                    naming_strategy=DeviceNamingStrategy[
+                    naming_convention=DeviceNamingStrategy[
                         design.get("naming_convention", "STANDARD").upper()
                     ],
                     options={
@@ -58,7 +58,7 @@ class RackGenerator(CommonGenerator):
                     device_role=role,
                     amount=template.get("quantity", 1),
                     template=template.get("template", {}),
-                    naming_strategy=DeviceNamingStrategy[
+                    naming_convention=DeviceNamingStrategy[
                         design.get("naming_convention", "STANDARD").upper()
                     ],
                     options={
@@ -85,8 +85,6 @@ class RackGenerator(CommonGenerator):
                         pod.get("spine_template", {}).get("interfaces") or []
                     )
                 ]
-
-                print("Rack_id", self.data.get("id", "Dupa"))
 
                 await self.create_cabling(
                     bottom_devices=leafs,

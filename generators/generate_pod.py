@@ -76,7 +76,7 @@ class PodTopologyGenerator(CommonGenerator):
             device_role="spine",
             amount=self.data.get("amount_of_spines"),
             template=self.data.get("spine_template", {}),
-            naming_strategy=DeviceNamingStrategy[
+            naming_convention=DeviceNamingStrategy[
                 design.get("naming_convention", "STANDARD").upper()
             ],
             options={

@@ -223,7 +223,7 @@ class CommonGenerator(InfrahubGenerator):
         amount: int,
         deployment_id: str,
         template: dict[str, Any],
-        naming_strategy: DeviceNamingStrategy,
+        naming_convention: DeviceNamingStrategy,
         options: Optional[dict] = None,
     ) -> list[str]:
         """Create devices using a consolidated options dict and batch creation."""
@@ -242,7 +242,7 @@ class CommonGenerator(InfrahubGenerator):
 
         device_names: list[str] = sorted(
             [
-                DeviceNamingConfig(strategy=naming_strategy).format_device_name(
+                DeviceNamingConfig(strategy=naming_convention).format_device_name(
                     fabric_name,
                     device_role,
                     index=idx,

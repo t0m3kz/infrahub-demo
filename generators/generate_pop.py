@@ -52,7 +52,7 @@ class DCTopologyGenerator(CommonGenerator):
             device_role="super-spine",
             amount=amount_of_super_spines,
             template=super_spine_template,
-            naming_strategy=DeviceNamingStrategy[
+            naming_convention=DeviceNamingStrategy[
                 design.get("naming_convention", "STANDARD").upper()
             ],
             options={
