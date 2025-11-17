@@ -4,275 +4,94 @@ kind: Object
 spec:
   kind: TemplateDcimPhysicalDevice
   data:
-    - template_name: Dell_PowerSwitch_Z9100_ON_SUPER_SPINE
-      device_type: PowerSwitch Z9100-ON
+    - template_name: PowerSwitch-S5232F-ON_SUPER_SPINE
+      device_type: PowerSwitch S5232F-ON
       platform: dell_sonic
+      role: leaf
+      status: provisioning
       interfaces:
         kind: TemplateDcimPhysicalInterface
         data:
-          - template_name: PowerSwitch_Z9100_ON_SUPER_SPINE_mgmt1
+          - template_name: PowerSwitch-S5232F-ON_SUPER_SPINE_Ethernet1_1_[1-24]
+            name: Ethernet 1/1/[1-24]
+            role: spine
+            interface_type: 100gbase-x-qsfp28
+          - template_name: PowerSwitch_S5232F-ON_SUPER_SPINE_Ethernet1_1_[25-32]
+            name: Ethernet 1/1/[25-32]
+            role: uplink
+            interface_type: 100gbase-x-qsfp28
+          - template_name: PowerSwitch_S5232F-ON_SUPER_SPINE_Ethernet1_1_[33-34]
+            name: Ethernet 1/1/[33-34]
+            role: management
+            interface_type: 10gbase-x-sfpp
+          - template_name: PowerSwitch_S5232F-ON_SUPER_SPINE_mgmt1
             name: mgmt1/1/1
             role: management
             interface_type: 1000base-t
-          - template_name: PowerSwitch_Z9100_ON_SUPER_SPINE_Ethernet1_1_1
-            name: Ethernet 1/1/1
-            role: uplink
-            interface_type: 100gbase-x-qsfp28
-          - template_name: PowerSwitch_Z9100_ON_SUPER_SPINE_Ethernet1_1_2
-            name: Ethernet 1/1/2
-            role: uplink
-            interface_type: 100gbase-x-qsfp28
-          - template_name: PowerSwitch_Z9100_ON_SUPER_SPINE_Ethernet1_1_3
-            name: Ethernet 1/1/3
-            role: uplink
-            interface_type: 100gbase-x-qsfp28
-          - template_name: PowerSwitch_Z9100_ON_SUPER_SPINE_Ethernet1_1_4
-            name: Ethernet 1/1/4
-            role: uplink
-            interface_type: 100gbase-x-qsfp28
-          - template_name: PowerSwitch_Z9100_ON_SUPER_SPINE_Ethernet1_1_5
-            name: Ethernet 1/1/5
-            role: uplink
-            interface_type: 100gbase-x-qsfp28
-          - template_name: PowerSwitch_Z9100_ON_SUPER_SPINE_Ethernet1_1_6
-            name: Ethernet 1/1/6
-            role: uplink
-            interface_type: 100gbase-x-qsfp28
-          - template_name: PowerSwitch_Z9100_ON_SUPER_SPINE_Ethernet1_1_7
-            name: Ethernet 1/1/7
-            role: uplink
-            interface_type: 100gbase-x-qsfp28
-          - template_name: PowerSwitch_Z9100_ON_SUPER_SPINE_Ethernet1_1_8
-            name: Ethernet 1/1/8
-            role: uplink
-            interface_type: 100gbase-x-qsfp28
-          - template_name: PowerSwitch_Z9100_ON_SUPER_SPINE_Ethernet1_1_9
-            name: Ethernet 1/1/9
-            role: access
-            interface_type: 100gbase-x-qsfp28
-          - template_name: PowerSwitch_Z9100_ON_SUPER_SPINE_Ethernet1_1_10
-            name: Ethernet 1/1/10
-            role: access
-            interface_type: 100gbase-x-qsfp28
-          - template_name: PowerSwitch_Z9100_ON_SUPER_SPINE_Ethernet1_1_11
-            name: Ethernet 1/1/11
-            role: access
-            interface_type: 100gbase-x-qsfp28
-          - template_name: PowerSwitch_Z9100_ON_SUPER_SPINE_Ethernet1_1_12
-            name: Ethernet 1/1/12
-            role: access
-            interface_type: 100gbase-x-qsfp28
-      role: super-spine
-      status: provisioning
-    - template_name: Dell_PowerSwitch_Z9100_ON_SPINE
-      device_type: PowerSwitch Z9100-ON
+
+    - template_name: PowerSwitch-S5232F-ON_SPINE
+      device_type: PowerSwitch S5232F-ON
       platform: dell_sonic
+      role: leaf
+      status: provisioning
       interfaces:
         kind: TemplateDcimPhysicalInterface
         data:
-          - template_name: PowerSwitch_Z9100_ON_SPINE_mgmt1
+          - template_name: PowerSwitch-S5232F-ON_SPINE_Ethernet1_1_[1-24]
+            name: Ethernet 1/1/[1-24]
+            role: leaf
+            interface_type: 100gbase-x-qsfp28
+          - template_name: PowerSwitch_S5232F-ON_SPINE_Ethernet1_1_[25-32]
+            name: Ethernet 1/1/[25-32]
+            role: uplink
+            interface_type: 100gbase-x-qsfp28
+          - template_name: PowerSwitch_S5232F-ON_SPINE_Ethernet1_1_[33-34]
+            name: Ethernet 1/1/[33-34]
+            role: management
+            interface_type: 10gbase-x-sfpp
+          - template_name: PowerSwitch_S5232F-ON_SPINE_mgmt1
             name: mgmt1/1/1
             role: management
             interface_type: 1000base-t
-          - template_name: PowerSwitch_Z9100_ON_SPINE_Ethernet1_1_1
-            name: Ethernet 1/1/1
-            role: uplink
-            interface_type: 100gbase-x-qsfp28
-          - template_name: PowerSwitch_Z9100_ON_SPINE_Ethernet1_1_2
-            name: Ethernet 1/1/2
-            role: uplink
-            interface_type: 100gbase-x-qsfp28
-          - template_name: PowerSwitch_Z9100_ON_SPINE_Ethernet1_1_3
-            name: Ethernet 1/1/3
-            role: uplink
-            interface_type: 100gbase-x-qsfp28
-          - template_name: PowerSwitch_Z9100_ON_SPINE_Ethernet1_1_4
-            name: Ethernet 1/1/4
-            role: uplink
-            interface_type: 100gbase-x-qsfp28
-          - template_name: PowerSwitch_Z9100_ON_SPINE_Ethernet1_1_5
-            name: Ethernet 1/1/5
-            role: uplink
-            interface_type: 100gbase-x-qsfp28
-          - template_name: PowerSwitch_Z9100_ON_SPINE_Ethernet1_1_6
-            name: Ethernet 1/1/6
-            role: uplink
-            interface_type: 100gbase-x-qsfp28
-          - template_name: PowerSwitch_Z9100_ON_SPINE_Ethernet1_1_7
-            name: Ethernet 1/1/7
-            role: uplink
-            interface_type: 100gbase-x-qsfp28
-          - template_name: PowerSwitch_Z9100_ON_SPINE_Ethernet1_1_8
-            name: Ethernet 1/1/8
-            role: uplink
-            interface_type: 100gbase-x-qsfp28
-          - template_name: PowerSwitch_Z9100_ON_SPINE_Ethernet1_1_9
-            name: Ethernet 1/1/9
-            role: access
-            interface_type: 100gbase-x-qsfp28
-          - template_name: PowerSwitch_Z9100_ON_SPINE_Ethernet1_1_10
-            name: Ethernet 1/1/10
-            role: access
-            interface_type: 100gbase-x-qsfp28
-          - template_name: PowerSwitch_Z9100_ON_SPINE_Ethernet1_1_11
-            name: Ethernet 1/1/11
-            role: access
-            interface_type: 100gbase-x-qsfp28
-          - template_name: PowerSwitch_Z9100_ON_SPINE_Ethernet1_1_12
-            name: Ethernet 1/1/12
-            role: access
-            interface_type: 100gbase-x-qsfp28
-      role: spine
+
+    - template_name: PowerSwitch-S5224F-ON_LEAF
+      device_type: PowerSwitch S5224F-ON
+      platform: dell_sonic
+      role: leaf
       status: provisioning
-    - template_name: Dell_PowerSwitch_S5248F_ON_LEAF
+      interfaces:
+        kind: TemplateDcimPhysicalInterface
+        data:
+          - template_name: PowerSwitch-S5224F-ON_LEAF_Ethernet1_1_[1-24]
+            name: Ethernet 1/1/[1-24]
+            role: customer
+            interface_type: 25gbase-x-sfp28
+          - template_name: PowerSwitch_S5224F-ON_LEAF_Ethernet1_1_[25-28]
+            name: Ethernet 1/1/[25-28]
+            role: uplink
+            interface_type: 100gbase-x-qsfp28
+          - template_name: PowerSwitch_S5224F-ON_LEAF_mgmt1
+            name: mgmt1/1/1
+            role: management
+            interface_type: 1000base-t
+
+    - template_name: PowerSwitch-S5248F-ON_LEAF
       device_type: PowerSwitch S5248F-ON
       platform: dell_sonic
-      interfaces:
-        kind: TemplateDcimPhysicalInterface
-        data:
-          - template_name: PowerSwitch_S5248F_ON_LEAF_mgmt1
-            name: mgmt 1/1/1
-            role: management
-            interface_type: 1000base-t
-          - template_name: PowerSwitch_S5248F_ON_LEAF_Ethernet1_1_1
-            name: Ethernet 1/1/1
-            role: access
-            interface_type: 25gbase-x-sfp28
-          - template_name: PowerSwitch_S5248F_ON_LEAF_Ethernet1_1_2
-            name: Ethernet 1/1/2
-            role: access
-            interface_type: 25gbase-x-sfp28
-          - template_name: PowerSwitch_S5248F_ON_LEAF_Ethernet1_1_3
-            name: Ethernet 1/1/3
-            role: access
-            interface_type: 25gbase-x-sfp28
-          - template_name: PowerSwitch_S5248F_ON_LEAF_Ethernet1_1_4
-            name: Ethernet 1/1/4
-            role: access
-            interface_type: 25gbase-x-sfp28
-          - template_name: PowerSwitch_S5248F_ON_LEAF_Ethernet1_1_5
-            name: Ethernet 1/1/5
-            role: access
-            interface_type: 25gbase-x-sfp28
-          - template_name: PowerSwitch_S5248F_ON_LEAF_Ethernet1_1_6
-            name: Ethernet 1/1/6
-            role: access
-            interface_type: 25gbase-x-sfp28
-          - template_name: PowerSwitch_S5248F_ON_LEAF_Ethernet1_1_7
-            name: Ethernet 1/1/7
-            role: access
-            interface_type: 25gbase-x-sfp28
-          - template_name: PowerSwitch_S5248F_ON_LEAF_Ethernet1_1_8
-            name: Ethernet 1/1/8
-            role: access
-            interface_type: 25gbase-x-sfp28
-          - template_name: PowerSwitch_S5248F_ON_LEAF_Ethernet1_1_9
-            name: Ethernet 1/1/9
-            role: access
-            interface_type: 25gbase-x-sfp28
-          - template_name: PowerSwitch_S5248F_ON_LEAF_Ethernet1_1_10
-            name: Ethernet 1/1/10
-            role: access
-            interface_type: 25gbase-x-sfp28
-          - template_name: PowerSwitch_S5248F_ON_LEAF_Ethernet1_1_11
-            name: Ethernet 1/1/11
-            role: access
-            interface_type: 25gbase-x-sfp28
-          - template_name: PowerSwitch_S5248F_ON_LEAF_Ethernet1_1_12
-            name: Ethernet 1/1/12
-            role: access
-            interface_type: 25gbase-x-sfp28
-          - template_name: PowerSwitch_S5248F_ON_LEAF_Ethernet1_1_49
-            name: Ethernet 1/1/49
-            role: uplink
-            interface_type: 100gbase-x-qsfp28
-          - template_name: PowerSwitch_S5248F_ON_LEAF_Ethernet1_1_50
-            name: Ethernet 1/1/50
-            role: uplink
-            interface_type: 100gbase-x-qsfp28
-          - template_name: PowerSwitch_S5248F_ON_LEAF_Ethernet1_1_51
-            name: Ethernet 1/1/51
-            role: uplink
-            interface_type: 100gbase-x-qsfp28
-          - template_name: PowerSwitch_S5248F_ON_LEAF_Ethernet1_1_52
-            name: Ethernet 1/1/52
-            role: uplink
-            interface_type: 100gbase-x-qsfp28
-          - template_name: PowerSwitch_S5248F_ON_LEAF_Ethernet1_1_53
-            name: Ethernet 1/1/53
-            role: uplink
-            interface_type: 100gbase-x-qsfp28
-          - template_name: PowerSwitch_S5248F_ON_LEAF_Ethernet1_1_54
-            name: Ethernet 1/1/54
-            role: uplink
-            interface_type: 100gbase-x-qsfp28
-          - template_name: PowerSwitch_S5248F_ON_LEAF_Ethernet1_1_55
-            name: Ethernet 1/1/55
-            role: uplink
-            interface_type: 100gbase-x-qsfp28
-          - template_name: PowerSwitch_S5248F_ON_LEAF_Ethernet1_1_56
-            name: Ethernet 1/1/56
-            role: uplink
-            interface_type: 100gbase-x-qsfp28
       role: leaf
       status: provisioning
-    - template_name: Dell_PowerSwitch_Z9100_ON_BORDER_LEAF
-      device_type: PowerSwitch Z9100-ON
-      platform: dell_sonic
       interfaces:
         kind: TemplateDcimPhysicalInterface
         data:
-          - template_name: PowerSwitch_Z9100_ON_BORDER_LEAF_mgmt1
+          - template_name: PowerSwitch-S5248F-ON_LEAF_Ethernet1_1_[1-48]
+            name: Ethernet 1/1/[1-48]
+            role: customer
+            interface_type: 25gbase-x-sfp28
+          - template_name: PowerSwitch_S5248F-ON_LEAF_Ethernet1_1_[49-56]
+            name: Ethernet 1/1/[49-56]
+            role: uplink
+            interface_type: 100gbase-x-qsfp28
+          - template_name: PowerSwitch_S5248F-ON_LEAF_mgmt1
             name: mgmt1/1/1
             role: management
             interface_type: 1000base-t
-          - template_name: PowerSwitch_Z9100_ON_BORDER_LEAF_Ethernet1_1_1
-            name: Ethernet 1/1/1
-            role: access
-            interface_type: 100gbase-x-qsfp28
-          - template_name: PowerSwitch_Z9100_ON_BORDER_LEAF_Ethernet1_1_2
-            name: Ethernet 1/1/2
-            role: access
-            interface_type: 100gbase-x-qsfp28
-          - template_name: PowerSwitch_Z9100_ON_BORDER_LEAF_Ethernet1_1_3
-            name: Ethernet 1/1/3
-            role: access
-            interface_type: 100gbase-x-qsfp28
-          - template_name: PowerSwitch_Z9100_ON_BORDER_LEAF_Ethernet1_1_4
-            name: Ethernet 1/1/4
-            role: access
-            interface_type: 100gbase-x-qsfp28
-          - template_name: PowerSwitch_Z9100_ON_BORDER_LEAF_Ethernet1_1_5
-            name: Ethernet 1/1/5
-            role: uplink
-            interface_type: 100gbase-x-qsfp28
-          - template_name: PowerSwitch_Z9100_ON_BORDER_LEAF_Ethernet1_1_6
-            name: Ethernet 1/1/6
-            role: uplink
-            interface_type: 100gbase-x-qsfp28
-          - template_name: PowerSwitch_Z9100_ON_BORDER_LEAF_Ethernet1_1_7
-            name: Ethernet 1/1/7
-            role: peering
-            interface_type: 100gbase-x-qsfp28
-          - template_name: PowerSwitch_Z9100_ON_BORDER_LEAF_Ethernet1_1_8
-            name: Ethernet 1/1/8
-            role: peering
-            interface_type: 100gbase-x-qsfp28
-          - template_name: PowerSwitch_Z9100_ON_BORDER_LEAF_Ethernet1_1_9
-            name: Ethernet 1/1/9
-            role: peering
-            interface_type: 100gbase-x-qsfp28
-          - template_name: PowerSwitch_Z9100_ON_BORDER_LEAF_Ethernet1_1_10
-            name: Ethernet 1/1/10
-            role: peering
-            interface_type: 100gbase-x-qsfp28
-          - template_name: PowerSwitch_Z9100_ON_BORDER_LEAF_Ethernet1_1_11
-            name: Ethernet 1/1/11
-            role: peering
-            interface_type: 100gbase-x-qsfp28
-          - template_name: PowerSwitch_Z9100_ON_BORDER_LEAF_Ethernet1_1_12
-            name: Ethernet 1/1/12
-            role: peering
-            interface_type: 100gbase-x-qsfp28
-      role: leaf
-      status: provisioning

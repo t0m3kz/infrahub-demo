@@ -4,46 +4,34 @@ kind: Object
 spec:
   kind: DcimDeviceType
   data:
-    - name: CCS-720DP-48S-2F
-      part_number: CCS-720DP-48S-2F
+    # Arista
+    - name: DCS-7050CX3-32C-R
+      part_number: DCS-7050CX3-32C-R
       height: 1
       full_depth: false
       manufacturer: Arista
-    - name: DCS-7050CX3-32S-F
-      part_number: DCS-7050CX3-32S-F
-      height: 1
-      full_depth: true
-      manufacturer: Arista
-    - name: DCS-7050SX3-48YC8-F
-      part_number: DCS-7050SX3-48YC8-F
+    - name: DCS-7050PX4-32S-R
+      part_number: DCS-7050PX4-32S-R
       height: 1
       full_depth: false
       manufacturer: Arista
-    - name: DCS-7060CX-32S-F
-      part_number: DCS-7060CX-32S-F
+    - name: DCS-7050CX4M-48D8-F
+      part_number: DCS-7050CX4M-48D8-F
       height: 1
       full_depth: false
       manufacturer: Arista
-    - name: DCS-7130-48EH-F
-      part_number: DCS-7130-48EH-F
+    - name: DCS-7050SX3-24YC4C-S-R
+      part_number: DCS-7050SX3-24YC4C-S-R
       height: 1
       full_depth: false
       manufacturer: Arista
-    - name: DCS-7280DR3-24-F
-      part_number: DCS-7280DR3-24-F
-      height: 1
-      full_depth: false
-      manufacturer: Arista
-    - name: DCS-7280SR3-48YC8-F
-      part_number: DCS-7280SR3-48YC8-F
-      height: 1
-      full_depth: false
-      manufacturer: Arista
+    # CheckPoint
     - name: CloudGuard
       part_number: CloudGuard-Network-Security
       height: 0
       full_depth: false
       manufacturer: Check Point
+    # Cisco
     - name: ASR1002-HX
       part_number: ASR1002-HX
       height: 2
@@ -251,37 +239,34 @@ spec:
       height: 1
       full_depth: false
       manufacturer: Cisco
+    # Dell
+    - name: PowerSwitch S5224F-ON
+      part_number: S5224F-ON
+      height: 1
+      full_depth: true
+      manufacturer: Dell
+    - name: PowerSwitch S5232F-ON
+      part_number: S5232F-ON
+      height: 1
+      full_depth: true
+      manufacturer: Dell
     - name: PowerSwitch S5248F-ON
       part_number: S5248F-ON
       height: 1
       full_depth: true
       manufacturer: Dell
-    - name: PowerSwitch Z9100-ON
-      part_number: Z9100-ON
-      height: 1
-      full_depth: true
-      manufacturer: Dell
-    - name: 5912-54X-O-AC-F
-      height: 1
-      full_depth: false
-      manufacturer: Edgecore
-    - name: 5912-54XM-O-AC-F
-      height: 1
-      full_depth: false
-      manufacturer: Edgecore
-    - name: 5912-54XM-O-AC-F
-      height: 1
-      full_depth: false
-      manufacturer: Edgecore
+
+    # EdgeCore
     - name: 7726-32X-O
       height: 1
       full_depth: false
       manufacturer: Edgecore
-    - name: AS7326-56X-O-AC-F
-      part_number: AS7326-56X-O-AC-F
+    - name: 7AS7326-56X-O-48V-F
+      part_number: 7AS7326-56X-O-48V-F
       height: 1
       full_depth: true
       manufacturer: Edgecore
+    # LBs
     - name: NGINX
       part_number: NGINX
       height: 1
@@ -292,15 +277,17 @@ spec:
       height: 1
       full_depth: false
       manufacturer: HAProxy Technologies
+    # Juniper
+    - name: SRX-1500
+      height: 1
+      full_depth: false
+      manufacturer: Juniper
     - name: MX204
       part_number: MX204-HWBASE-AC-FS
       height: 1
       full_depth: false
       manufacturer: Juniper
-    - name: SRX-1500
-      height: 1
-      full_depth: false
-      manufacturer: Juniper
+    # Perle
     - name: SCG50R
       part_number: SCG50R
       height: 1

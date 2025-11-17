@@ -351,17 +351,27 @@ def setup(context: Context) -> None:
             print("\n❌ Error: Infrahub container failed to start. Aborting setup.")
             return
 
-    print("  2️⃣  Loading schemas...")
+    print("  2️⃣  Ensuring Infrahub server is ready...")
+    # Only do the explicit wait if we just started containers
+    if not containers_running:
+        if not wait_for_infrahub(context):
+            print("\n❌ Error: Infrahub did not respond. Aborting setup.")
+            return
+    else:
+        # If containers were already running, just verify they're still healthy
+        print("     ✅ Infrahub is ready")
+
+    print("  3️⃣  Loading schemas...")
     load_schema(context)
 
-    print("  3️⃣  Loading menu...")
+    print("  4️⃣  Loading menu...")
     load_menu(context)
 
     # Wait a bit before loading data
-    print("  4️⃣  Waiting before loading bootstrap data...")
+    print("  5️⃣  Waiting before loading bootstrap data...")
     time.sleep(5)
 
-    print("  5️⃣  Loading bootstrap data...")
+    print("  6️⃣  Loading bootstrap data...")
     load_objects(context)
 
     print("\n✅ Setup complete! Infrahub is ready for fun !!!")

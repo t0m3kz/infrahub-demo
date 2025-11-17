@@ -7,7 +7,7 @@ spec:
     - name: DC4
       index: 4
       amount_of_super_spines: 2
-      super_spine_template: N9K_C9316D_GX_SUPER_SPINE
+      super_spine_template: PowerSwitch-S5232F-ON_SPINE
       fabric_interface_sorting_method: top_down
       design_pattern: M-Standard-MR
       member_of_groups:
@@ -25,7 +25,7 @@ spec:
           - name: Pod-2
             index: 2
             role: fabric
-            spine_template: DCS-7368S4-25MS_SPINE
+            spine_template: DCS-7050PX4-32S-R_SPINE
             amount_of_spines: 2
             member_of_groups:
               - topologies_pod

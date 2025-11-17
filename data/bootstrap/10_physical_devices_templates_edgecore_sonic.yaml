@@ -4,9 +4,11 @@ kind: Object
 spec:
   kind: TemplateDcimPhysicalDevice
   data:
-    - template_name: Edgecore_7726_32X_O_SUPER_SPINE
+    - template_name: Edgecore-7726_32X_O_SUPER_SPINE
       device_type: 7726-32X-O
       platform: sonic
+      role: super-spine
+      status: provisioning
       interfaces:
         kind: TemplateDcimPhysicalInterface
         data:
@@ -16,57 +18,138 @@ spec:
             interface_type: 1000base-t
           - template_name: 7726_32X_O_SUPER_SPINE_Ethernet0
             name: Ethernet0
-            role: uplink
+            role: spine
             interface_type: 100gbase-x-qsfp28
           - template_name: 7726_32X_O_SUPER_SPINE_Ethernet4
             name: Ethernet4
-            role: uplink
+            role: spine
             interface_type: 100gbase-x-qsfp28
           - template_name: 7726_32X_O_SUPER_SPINE_Ethernet8
             name: Ethernet8
-            role: uplink
+            role: spine
             interface_type: 100gbase-x-qsfp28
           - template_name: 7726_32X_O_SUPER_SPINE_Ethernet12
             name: Ethernet12
-            role: uplink
+            role: spine
             interface_type: 100gbase-x-qsfp28
           - template_name: 7726_32X_O_SUPER_SPINE_Ethernet16
             name: Ethernet16
-            role: uplink
+            role: spine
             interface_type: 100gbase-x-qsfp28
           - template_name: 7726_32X_O_SUPER_SPINE_Ethernet20
             name: Ethernet20
-            role: uplink
+            role: spine
             interface_type: 100gbase-x-qsfp28
           - template_name: 7726_32X_O_SUPER_SPINE_Ethernet24
             name: Ethernet24
-            role: access
+            role: spine
             interface_type: 100gbase-x-qsfp28
           - template_name: 7726_32X_O_SUPER_SPINE_Ethernet28
             name: Ethernet28
-            role: access
+            role: spine
             interface_type: 100gbase-x-qsfp28
           - template_name: 7726_32X_O_SUPER_SPINE_Ethernet32
             name: Ethernet32
-            role: access
+            role: spine
             interface_type: 100gbase-x-qsfp28
           - template_name: 7726_32X_O_SUPER_SPINE_Ethernet36
             name: Ethernet36
-            role: access
+            role: spine
             interface_type: 100gbase-x-qsfp28
           - template_name: 7726_32X_O_SUPER_SPINE_Ethernet40
             name: Ethernet40
-            role: access
+            role: spine
             interface_type: 100gbase-x-qsfp28
           - template_name: 7726_32X_O_SUPER_SPINE_Ethernet44
             name: Ethernet44
-            role: access
+            role: spine
             interface_type: 100gbase-x-qsfp28
-      role: super-spine
-      status: provisioning
-    - template_name: Edgecore_7726_32X_O_SPINE
+          - template_name: 7726_32X_O_SUPER_SPINE_Ethernet48
+            name: Ethernet48
+            role: spine
+            interface_type: 100gbase-x-qsfp28
+          - template_name: 7726_32X_O_SUPER_SPINE_Ethernet52
+            name: Ethernet52
+            role: spine
+            interface_type: 100gbase-x-qsfp28
+          - template_name: 7726_32X_O_SUPER_SPINE_Ethernet56
+            name: Ethernet56
+            role: spine
+            interface_type: 100gbase-x-qsfp28
+          - template_name: 7726_32X_O_SUPER_SPINE_Ethernet60
+            name: Ethernet60
+            role: spine
+            interface_type: 100gbase-x-qsfp28
+          - template_name: 7726_32X_O_SUPER_SPINE_Ethernet64
+            name: Ethernet64
+            role: spine
+            interface_type: 100gbase-x-qsfp28
+          - template_name: 7726_32X_O_SUPER_SPINE_Ethernet68
+            name: Ethernet68
+            role: spine
+            interface_type: 100gbase-x-qsfp28
+          - template_name: 7726_32X_O_SUPER_SPINE_Ethernet72
+            name: Ethernet72
+            role: spine
+            interface_type: 100gbase-x-qsfp28
+          - template_name: 7726_32X_O_SUPER_SPINE_Ethernet76
+            name: Ethernet76
+            role: spine
+            interface_type: 100gbase-x-qsfp28
+          - template_name: 7726_32X_O_SUPER_SPINE_Ethernet80
+            name: Ethernet80
+            role: spine
+            interface_type: 100gbase-x-qsfp28
+          - template_name: 7726_32X_O_SUPER_SPINE_Ethernet84
+            name: Ethernet84
+            role: spine
+            interface_type: 100gbase-x-qsfp28
+          - template_name: 7726_32X_O_SUPER_SPINE_Ethernet88
+            name: Ethernet88
+            role: spine
+            interface_type: 100gbase-x-qsfp28
+          - template_name: 7726_32X_O_SUPER_SPINE_Ethernet92
+            name: Ethernet92
+            role: spine
+            interface_type: 100gbase-x-qsfp28
+          - template_name: 7726_32X_O_SUPER_SPINE_Ethernet96
+            name: Ethernet96
+            role: spine
+            interface_type: 100gbase-x-qsfp28
+          - template_name: 7726_32X_O_SUPER_SPINE_Ethernet100
+            name: Ethernet100
+            role: spine
+            interface_type: 100gbase-x-qsfp28
+          - template_name: 7726_32X_O_SUPER_SPINE_Ethernet104
+            name: Ethernet104
+            role: spine
+            interface_type: 100gbase-x-qsfp28
+          - template_name: 7726_32X_O_SUPER_SPINE_Ethernet108
+            name: Ethernet108
+            role: spine
+            interface_type: 100gbase-x-qsfp28
+          - template_name: 7726_32X_O_SUPER_SPINE_Ethernet112
+            name: Ethernet112
+            role: uplink
+            interface_type: 100gbase-x-qsfp28
+          - template_name: 7726_32X_O_SUPER_SPINE_Ethernet116
+            name: Ethernet116
+            role: uplink
+            interface_type: 100gbase-x-qsfp28
+          - template_name: 7726_32X_O_SUPER_SPINE_Ethernet120
+            name: Ethernet120
+            role: uplink
+            interface_type: 100gbase-x-qsfp28
+          - template_name: 7726_32X_O_SUPER_SPINE_Ethernet124
+            name: Ethernet124
+            role: uplink
+            interface_type: 100gbase-x-qsfp28
+
+    - template_name: Edgecore-7726_32X_O_SPINE
       device_type: 7726-32X-O
       platform: sonic
+      role: spine
+      status: provisioning
       interfaces:
         kind: TemplateDcimPhysicalInterface
         data:
@@ -76,247 +159,154 @@ spec:
             interface_type: 1000base-t
           - template_name: 7726_32X_O_SPINE_Ethernet0
             name: Ethernet0
-            role: uplink
+            role: leaf
             interface_type: 100gbase-x-qsfp28
           - template_name: 7726_32X_O_SPINE_Ethernet4
             name: Ethernet4
-            role: uplink
+            role: leaf
             interface_type: 100gbase-x-qsfp28
           - template_name: 7726_32X_O_SPINE_Ethernet8
             name: Ethernet8
-            role: uplink
+            role: leaf
             interface_type: 100gbase-x-qsfp28
           - template_name: 7726_32X_O_SPINE_Ethernet12
             name: Ethernet12
-            role: uplink
+            role: leaf
             interface_type: 100gbase-x-qsfp28
           - template_name: 7726_32X_O_SPINE_Ethernet16
             name: Ethernet16
-            role: uplink
+            role: leaf
             interface_type: 100gbase-x-qsfp28
           - template_name: 7726_32X_O_SPINE_Ethernet20
             name: Ethernet20
-            role: uplink
+            role: leaf
             interface_type: 100gbase-x-qsfp28
           - template_name: 7726_32X_O_SPINE_Ethernet24
             name: Ethernet24
-            role: access
+            role: leaf
             interface_type: 100gbase-x-qsfp28
           - template_name: 7726_32X_O_SPINE_Ethernet28
             name: Ethernet28
-            role: access
+            role: leaf
             interface_type: 100gbase-x-qsfp28
           - template_name: 7726_32X_O_SPINE_Ethernet32
             name: Ethernet32
-            role: access
+            role: leaf
             interface_type: 100gbase-x-qsfp28
           - template_name: 7726_32X_O_SPINE_Ethernet36
             name: Ethernet36
-            role: access
+            role: leaf
             interface_type: 100gbase-x-qsfp28
           - template_name: 7726_32X_O_SPINE_Ethernet40
             name: Ethernet40
-            role: access
+            role: leaf
             interface_type: 100gbase-x-qsfp28
           - template_name: 7726_32X_O_SPINE_Ethernet44
             name: Ethernet44
-            role: access
+            role: leaf
             interface_type: 100gbase-x-qsfp28
+          - template_name: 7726_32X_O_SPINE_Ethernet48
+            name: Ethernet48
+            role: leaf
+            interface_type: 100gbase-x-qsfp28
+          - template_name: 7726_32X_O_SPINE_Ethernet52
+            name: Ethernet52
+            role: leaf
+            interface_type: 100gbase-x-qsfp28
+          - template_name: 7726_32X_O_SPINE_Ethernet56
+            name: Ethernet56
+            role: leaf
+            interface_type: 100gbase-x-qsfp28
+          - template_name: 7726_32X_O_SPINE_Ethernet60
+            name: Ethernet60
+            role: leaf
+            interface_type: 100gbase-x-qsfp28
+          - template_name: 7726_32X_O_SPINE_Ethernet64
+            name: Ethernet64
+            role: leaf
+            interface_type: 100gbase-x-qsfp28
+          - template_name: 7726_32X_O_SPINE_Ethernet68
+            name: Ethernet68
+            role: leaf
+            interface_type: 100gbase-x-qsfp28
+          - template_name: 7726_32X_O_SPINE_Ethernet72
+            name: Ethernet72
+            role: leaf
+            interface_type: 100gbase-x-qsfp28
+          - template_name: 7726_32X_O_SPINE_Ethernet76
+            name: Ethernet76
+            role: leaf
+            interface_type: 100gbase-x-qsfp28
+          - template_name: 7726_32X_O_SPINE_Ethernet80
+            name: Ethernet80
+            role: leaf
+            interface_type: 100gbase-x-qsfp28
+          - template_name: 7726_32X_O_SPINE_Ethernet84
+            name: Ethernet84
+            role: leaf
+            interface_type: 100gbase-x-qsfp28
+          - template_name: 7726_32X_O_SPINE_Ethernet88
+            name: Ethernet88
+            role: leaf
+            interface_type: 100gbase-x-qsfp28
+          - template_name: 7726_32X_O_SPINE_Ethernet92
+            name: Ethernet92
+            role: leaf
+            interface_type: 100gbase-x-qsfp28
+          - template_name: 7726_32X_O_SPINE_Ethernet96
+            name: Ethernet96
+            role: leaf
+            interface_type: 100gbase-x-qsfp28
+          - template_name: 7726_32X_O_SPINE_Ethernet100
+            name: Ethernet100
+            role: leaf
+            interface_type: 100gbase-x-qsfp28
+          - template_name: 7726_32X_O_SPINE_Ethernet104
+            name: Ethernet104
+            role: leaf
+            interface_type: 100gbase-x-qsfp28
+          - template_name: 7726_32X_O_SPINE_Ethernet108
+            name: Ethernet108
+            role: leaf
+            interface_type: 100gbase-x-qsfp28
+          - template_name: 7726_32X_O_SPINE_Ethernet112
+            name: Ethernet112
+            role: uplink
+            interface_type: 100gbase-x-qsfp28
+          - template_name: 7726_32X_O_SPINE_Ethernet116
+            name: Ethernet116
+            role: uplink
+            interface_type: 100gbase-x-qsfp28
+          - template_name: 7726_32X_O_SPINE_Ethernet120
+            name: Ethernet120
+            role: uplink
+            interface_type: 100gbase-x-qsfp28
+          - template_name: 7726_32X_O_SPINE_Ethernet124
+            name: Ethernet124
+            role: uplink
+            interface_type: 100gbase-x-qsfp28
+
+    - template_name: Edgecore-7AS7326-56X-O-48V-F_LEAF
+      device_type: 7AS7326-56X-O-48V-F
+      platform: sonic
       role: spine
       status: provisioning
-    - template_name: Edgecore_AS7326_56X_O_AC_F_LEAF
-      device_type: AS7326-56X-O-AC-F
-      platform: sonic
       interfaces:
         kind: TemplateDcimPhysicalInterface
         data:
-          - template_name: AS7326_56X_O_AC_F_LEAF_eth0
+          - template_name: 7AS7326-56X-O-48V-F_LEAF_eth0
             name: eth0
             role: management
             interface_type: 1000base-t
-          - template_name: AS7326_56X_O_AC_F_LEAF_Ethernet1
-            name: Ethernet1
-            role: access
+          - template_name: 7AS7326-56X-O-48V-F_LEAF_xe[1-48]
+            name: xe[1-48]
+            role: customer
             interface_type: 25gbase-x-sfp28
-          - template_name: AS7326_56X_O_AC_F_LEAF_Ethernet5
-            name: Ethernet5
-            role: access
-            interface_type: 25gbase-x-sfp28
-          - template_name: AS7326_56X_O_AC_F_LEAF_Ethernet9
-            name: Ethernet9
-            role: access
-            interface_type: 25gbase-x-sfp28
-          - template_name: AS7326_56X_O_AC_F_LEAF_Ethernet13
-            name: Ethernet13
-            role: access
-            interface_type: 25gbase-x-sfp28
-          - template_name: AS7326_56X_O_AC_F_LEAF_Ethernet17
-            name: Ethernet17
-            role: access
-            interface_type: 25gbase-x-sfp28
-          - template_name: AS7326_56X_O_AC_F_LEAF_Ethernet21
-            name: Ethernet21
-            role: access
-            interface_type: 25gbase-x-sfp28
-          - template_name: AS7326_56X_O_AC_F_LEAF_Ethernet25
-            name: Ethernet25
+          - template_name: 7AS7326-56X-O-48V-F_LEAF_ce[49-56]
+            name: xe[49-56]
             role: uplink
             interface_type: 25gbase-x-sfp28
-          - template_name: AS7326_56X_O_AC_F_LEAF_Ethernet29
-            name: Ethernet29
-            role: uplink
-            interface_type: 25gbase-x-sfp28
-          - template_name: AS7326_56X_O_AC_F_LEAF_Ethernet33
-            name: Ethernet33
-            role: uplink
-            interface_type: 25gbase-x-sfp28
-          - template_name: AS7326_56X_O_AC_F_LEAF_Ethernet37
-            name: Ethernet37
-            role: uplink
-            interface_type: 25gbase-x-sfp28
-          - template_name: AS7326_56X_O_AC_F_LEAF_Ethernet41
-            name: Ethernet41
-            role: uplink
-            interface_type: 25gbase-x-sfp28
-          - template_name: AS7326_56X_O_AC_F_LEAF_Ethernet45
-            name: Ethernet45
-            role: uplink
-            interface_type: 25gbase-x-sfp28
-          - template_name: AS7326_56X_O_AC_F_LEAF_ce49
-            name: ce49
-            role: uplink
-            interface_type: 100gbase-x-qsfp28
-          - template_name: AS7326_56X_O_AC_F_LEAF_ce50
-            name: ce50
-            role: uplink
-            interface_type: 100gbase-x-qsfp28
-          - template_name: AS7326_56X_O_AC_F_LEAF_ce51
-            name: ce51
-            role: uplink
-            interface_type: 100gbase-x-qsfp28
-          - template_name: AS7326_56X_O_AC_F_LEAF_ce52
-            name: ce52
-            role: uplink
-            interface_type: 100gbase-x-qsfp28
-      role: leaf
-      status: provisioning
-    - template_name: Edgecore_7726_32X_O_LEAF
-      device_type: 7726-32X-O
-      platform: sonic
-      interfaces:
-        kind: TemplateDcimPhysicalInterface
-        data:
-          - template_name: 7726_32X_O_LEAF_eth0
-            name: eth0
+          - template_name: 7AS7326-56X-O-48V-F_LEAF_xe[57-58]
+            name: xe[57-58]
             role: management
-            interface_type: 1000base-t
-          - template_name: 7726_32X_O_LEAF_Ethernet0
-            name: Ethernet0
-            role: access
-            interface_type: 100gbase-x-qsfp28
-          - template_name: 7726_32X_O_LEAF_Ethernet4
-            name: Ethernet4
-            role: access
-            interface_type: 100gbase-x-qsfp28
-          - template_name: 7726_32X_O_LEAF_Ethernet8
-            name: Ethernet8
-            role: access
-            interface_type: 100gbase-x-qsfp28
-          - template_name: 7726_32X_O_LEAF_Ethernet12
-            name: Ethernet12
-            role: access
-            interface_type: 100gbase-x-qsfp28
-          - template_name: 7726_32X_O_LEAF_Ethernet16
-            name: Ethernet16
-            role: access
-            interface_type: 100gbase-x-qsfp28
-          - template_name: 7726_32X_O_LEAF_Ethernet20
-            name: Ethernet20
-            role: access
-            interface_type: 100gbase-x-qsfp28
-          - template_name: 7726_32X_O_LEAF_Ethernet24
-            name: Ethernet24
-            role: uplink
-            interface_type: 100gbase-x-qsfp28
-          - template_name: 7726_32X_O_LEAF_Ethernet28
-            name: Ethernet28
-            role: uplink
-            interface_type: 100gbase-x-qsfp28
-          - template_name: 7726_32X_O_LEAF_Ethernet32
-            name: Ethernet32
-            role: uplink
-            interface_type: 100gbase-x-qsfp28
-          - template_name: 7726_32X_O_LEAF_Ethernet36
-            name: Ethernet36
-            role: uplink
-            interface_type: 100gbase-x-qsfp28
-          - template_name: 7726_32X_O_LEAF_Ethernet40
-            name: Ethernet40
-            role: uplink
-            interface_type: 100gbase-x-qsfp28
-          - template_name: 7726_32X_O_LEAF_Ethernet44
-            name: Ethernet44
-            role: uplink
-            interface_type: 100gbase-x-qsfp28
-      role: leaf
-      status: provisioning
-    - template_name: Edgecore_7726_32X_O_BORDER_LEAF
-      device_type: 7726-32X-O
-      platform: sonic
-      interfaces:
-        kind: TemplateDcimPhysicalInterface
-        data:
-          - template_name: 7726_32X_O_BORDER_LEAF_eth0
-            name: eth0
-            role: management
-            interface_type: 1000base-t
-          - template_name: 7726_32X_O_BORDER_LEAF_Ethernet0
-            name: Ethernet0
-            role: access
-            interface_type: 100gbase-x-qsfp28
-          - template_name: 7726_32X_O_BORDER_LEAF_Ethernet4
-            name: Ethernet4
-            role: access
-            interface_type: 100gbase-x-qsfp28
-          - template_name: 7726_32X_O_BORDER_LEAF_Ethernet8
-            name: Ethernet8
-            role: access
-            interface_type: 100gbase-x-qsfp28
-          - template_name: 7726_32X_O_BORDER_LEAF_Ethernet12
-            name: Ethernet12
-            role: access
-            interface_type: 100gbase-x-qsfp28
-          - template_name: 7726_32X_O_BORDER_LEAF_Ethernet16
-            name: Ethernet16
-            role: uplink
-            interface_type: 100gbase-x-qsfp28
-          - template_name: 7726_32X_O_BORDER_LEAF_Ethernet20
-            name: Ethernet20
-            role: uplink
-            interface_type: 100gbase-x-qsfp28
-          - template_name: 7726_32X_O_BORDER_LEAF_Ethernet24
-            name: Ethernet24
-            role: peering
-            interface_type: 100gbase-x-qsfp28
-          - template_name: 7726_32X_O_BORDER_LEAF_Ethernet28
-            name: Ethernet28
-            role: peering
-            interface_type: 100gbase-x-qsfp28
-          - template_name: 7726_32X_O_BORDER_LEAF_Ethernet32
-            name: Ethernet32
-            role: peering
-            interface_type: 100gbase-x-qsfp28
-          - template_name: 7726_32X_O_BORDER_LEAF_Ethernet36
-            name: Ethernet36
-            role: peering
-            interface_type: 100gbase-x-qsfp28
-          - template_name: 7726_32X_O_BORDER_LEAF_Ethernet40
-            name: Ethernet40
-            role: peering
-            interface_type: 100gbase-x-qsfp28
-          - template_name: 7726_32X_O_BORDER_LEAF_Ethernet44
-            name: Ethernet44
-            role: peering
-            interface_type: 100gbase-x-qsfp28
-      role: leaf
-      status: provisioning
+            interface_type: 10gbase-x-sfpp

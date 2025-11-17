@@ -11,7 +11,7 @@ spec:
       pod: Pod-1
       parent: "Suite-1"
       fabric_templates:
-        - 4_ARISTA_LEAFS_CCS-720DP-48S-2F
+        - 4_ARISTA_LEAFS_DCS-7050CX3-32C-R
       member_of_groups:
         - topologies_rack
     - name: "Rack-1-2"
@@ -21,7 +21,7 @@ spec:
       pod: Pod-1
       parent: "Suite-1"
       fabric_templates:
-        - 4_ARISTA_LEAFS_CCS-720DP-48S-2F
+        - 4_ARISTA_LEAFS_DCS-7050CX4M-48D8-F
       member_of_groups:
         - topologies_rack
     - name: "Rack-1-3"
@@ -31,7 +31,7 @@ spec:
       pod: Pod-1
       parent: "Suite-1"
       fabric_templates:
-        - 4_ARISTA_LEAFS_CCS-720DP-48S-2F
+        - 2_ARISTA_LEAFS_DCS-7050SX3-24YC4C-S-R
       member_of_groups:
         - topologies_rack
     - name: "Rack-2-1"
@@ -41,7 +41,7 @@ spec:
       pod: Pod-2
       parent: "Suite-2"
       fabric_templates:
-        - 4_ARISTA_LEAFS_CCS-720DP-48S-2F
+        - 2_ARISTA_LEAFS_DCS-7050SX3-24YC4C-S-R
       member_of_groups:
         - topologies_rack
     - name: "Rack-2-2"
@@ -51,7 +51,7 @@ spec:
       pod: Pod-2
       parent: "Suite-2"
       fabric_templates:
-        - 4_ARISTA_LEAFS_CCS-720DP-48S-2F
+        - 2_ARISTA_LEAFS_DCS-7050SX3-24YC4C-S-R
       member_of_groups:
         - topologies_rack
     - name: "Rack-2-3"
@@ -61,6 +61,6 @@ spec:
       pod: Pod-2
       parent: "Suite-2"
       fabric_templates:
-        - 4_ARISTA_LEAFS_CCS-720DP-48S-2F
+        - 4_ARISTA_LEAFS_DCS-7050CX3-32C-R
       member_of_groups:
         - topologies_rack
