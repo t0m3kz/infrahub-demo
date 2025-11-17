@@ -70,7 +70,7 @@ class DCTopologyGenerator(CommonGenerator):
             amount=amount_of_super_spines,
             template=super_spine_template,
             naming_strategy=DeviceNamingStrategy[
-                design.get("naming_strategy", "STANDARD").upper()
+                design.get("naming_convention", "STANDARD").upper()
             ],
             options={
                 "name_prefix": dc_name,

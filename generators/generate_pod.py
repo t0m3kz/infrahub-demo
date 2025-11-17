@@ -77,7 +77,7 @@ class PodTopologyGenerator(CommonGenerator):
             amount=self.data.get("amount_of_spines"),
             template=self.data.get("spine_template", {}),
             naming_strategy=DeviceNamingStrategy[
-                design.get("naming_strategy", "STANDARD").upper()
+                design.get("naming_convention", "STANDARD").upper()
             ],
             options={
                 "name_prefix": fabric_name,
@@ -101,9 +101,8 @@ class PodTopologyGenerator(CommonGenerator):
             device.get("name") for device in (parent.get("devices") or [])
         ]
         super_spine_template = parent.get("super_spine_template", {})
-        super_spine_interfaces_data = super_spine_template.get("interfaces", [])
         super_spine_interfaces = [
-            iface.get("name") for iface in super_spine_interfaces_data
+            iface.get("name") for iface in super_spine_template.get("interfaces", [])
         ]
         if not super_spine_interfaces:
             self.logger.warning(
@@ -114,7 +113,7 @@ class PodTopologyGenerator(CommonGenerator):
             bottom_devices=spines,
             bottom_interfaces=spine_interfaces,
             top_devices=super_spine_devices,
-            top_interfaces=[iface.get("name") for iface in super_spine_interfaces_data],
+            top_interfaces=super_spine_interfaces,
             strategy=CablingScenario.POD,
             options={
                 "cabling_offset": (
