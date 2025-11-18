@@ -1,329 +1,255 @@
 """Transform for extracting fabric cabling information from topology."""
 
+from typing import Any
+
 from infrahub_sdk.transforms import InfrahubTransform
+
+from .common import clean_data
 
 
 class TopologyCabling(InfrahubTransform):
     """Extract cabling connections from DC and Pod devices.
 
-    This transform processes both DC-level (super-spine) and Pod-level
-    (spine/leaf) devices to build a cabling plan CSV output.
+    This transform processes topology data to extract cable connections
+    between devices and generates a CSV cable matrix output.
     """
 
     query = "topology_cabling"
 
-    async def transform(self, data: dict) -> str:
+    async def transform(self, data: dict[str, Any]) -> str:
         """Transform cabling data into CSV format.
 
-        Processes both DC-level (super-spine) and Pod-level (spine/leaf) devices
-        to extract cable connections between devices.
-
-        Query response returns TopologyDeployment (which is TopologyDataCenter):
-        - TopologyDeployment.devices -> DC-level devices (super-spines)
-        - TopologyDeployment.children -> Pods (each with their own devices)
+        Processes TopologyDeployment data to extract cable connections
+        from all pods and devices within the topology. Deduplicates cables
+        by cable ID to ensure each connection appears only once.
 
         Args:
             data: Query response containing TopologyDeployment
 
         Returns:
             CSV string with cabling information
-        """
-        # Create a list to hold CSV rows
-        csv_rows = []
 
-        # Add CSV header
-        csv_rows.append(
-            ",".join(
-                [
-                    "Pod",
-                    "Source Rack",
-                    "Source Device",
-                    "Source Interface",
-                    "Destination Rack",
-                    "Destination Device",
-                    "Destination Interface",
-                ]
-            )
+        Raises:
+            ValueError: If data extraction or validation fails
+        """
+        try:
+            # Clean the raw GraphQL response
+            cleaned_data = clean_data(data)
+
+            # Extract cables with deduplication by cable ID
+            cables = self._extract_unique_cables(cleaned_data)
+
+            # Generate CSV output
+            return self._generate_csv(cables)
+
+        except (ValueError, KeyError, TypeError) as e:
+            raise ValueError(f"Failed to transform cabling data: {e}") from e
+
+    def _extract_unique_cables(
+        self, topology_data: dict[str, Any]
+    ) -> list[dict[str, Any]]:
+        """Extract unique cables from topology data, avoiding duplicates.
+
+        Each cable appears twice in the GraphQL response (once from each endpoint),
+        so we deduplicate by cable ID.
+
+        Args:
+            topology_data: Cleaned topology deployment data from GraphQL
+
+        Returns:
+            List of unique cable dictionaries
+        """
+        cables_by_id: dict[str, dict[str, Any]] = {}
+
+        # Handle both TopologyDeployment wrapper and direct children structure
+        children = topology_data.get("children", [])
+
+        # If topology_data is from TopologyDeployment, get the node
+        if "TopologyDeployment" in topology_data:
+            deployments = topology_data.get("TopologyDeployment", [])
+            if deployments and isinstance(deployments, list):
+                children = deployments[0].get("children", [])
+
+        # Process each pod
+        for pod in children:
+            if not isinstance(pod, dict):
+                continue
+
+            pod_name = self._get_safe_value(pod, "name", "Not applicable")
+
+            # Process devices in each pod
+            for device in pod.get("devices", []):
+                if not isinstance(device, dict):
+                    continue
+
+                # Process interfaces for each device
+                for interface in device.get("interfaces", []):
+                    if not isinstance(interface, dict):
+                        continue
+
+                    cable_info = interface.get("cable")
+                    if not cable_info or not isinstance(cable_info, dict):
+                        continue
+
+                    cable_id = cable_info.get("id")
+                    if not cable_id or cable_id in cables_by_id:
+                        # Skip if no ID or already processed
+                        continue
+
+                    # Extract cable data
+                    cable_data = self._extract_cable_data(cable_info, pod_name)
+                    if cable_data:
+                        cables_by_id[cable_id] = cable_data
+
+        return list(cables_by_id.values())
+
+    def _extract_cable_data(
+        self, cable_info: dict[str, Any], pod_name: str
+    ) -> dict[str, Any] | None:
+        """Extract cable connection data from cable information.
+
+        Parses cable endpoints to extract source and destination device/interface
+        information, including rack details.
+
+        Args:
+            cable_info: Cable information containing type and endpoints
+            pod_name: Pod name for the cable
+
+        Returns:
+            Cable record dictionary or None if extraction fails
+        """
+        endpoints = cable_info.get("endpoints", [])
+
+        if len(endpoints) < 2:
+            return None
+
+        # Extract source and destination endpoints
+        source_endpoint = endpoints[0]
+        dest_endpoint = endpoints[1]
+
+        # Parse endpoint HFID to extract device and interface names
+        source_device, source_interface = self._parse_hfid(
+            source_endpoint.get("hfid", [])
         )
+        dest_device, dest_interface = self._parse_hfid(dest_endpoint.get("hfid", []))
 
-        seen_connections: set[tuple] = (
-            set()
-        )  # Track connections we've already processed
-        device_info: dict[str, dict] = {}  # Map device names to their properties
+        if not all([source_device, source_interface, dest_device, dest_interface]):
+            return None
 
-        # Query returns TopologyDeployment which can be TopologyDataCenter
-        deployment_edges = data.get("TopologyDeployment", {}).get("edges", [])
-        print(f"DEBUG: Deployment edges count = {len(deployment_edges)}")
+        # Extract rack information from endpoints
+        source_rack = self._extract_rack_from_endpoint(source_endpoint)
+        dest_rack = self._extract_rack_from_endpoint(dest_endpoint)
 
-        if not deployment_edges:
-            return "\n".join(csv_rows)
+        # Extract cable type
+        cable_type = cable_info.get("type", "Unknown")
+        if isinstance(cable_type, dict):
+            cable_type = cable_type.get("value", "Unknown")
 
-        dc_node = deployment_edges[0]["node"]
-        dc_name = dc_node.get("name", {}).get("value", "UNKNOWN")
-        print(f"DEBUG: DC name = {dc_name}")
-
-        # Phase 1: Collect device info from all devices for later lookup
-        # Process DC-level devices (super-spines)
-        dc_devices = dc_node.get("devices", {}).get("edges", [])
-        print(f"DEBUG: DC devices count = {len(dc_devices)}")
-
-        for device in dc_devices:
-            device_name = self._safe_get(device["node"], "name", "value")
-            device_rack = self._safe_get(
-                device["node"], "rack", "node", "name", "value"
-            )
-
-            # Extract device name from cables if not available
-            if not device_name:
-                device_name = self._extract_device_name_from_cables(device["node"])
-
-            if device_name:
-                device_info[device_name] = {
-                    "pod": "",  # DC devices have no pod
-                    "rack": device_rack,
-                }
-
-        # Process pod-level devices (spine, leaf)
-        pods = dc_node.get("children", {}).get("edges", [])
-        print(f"DEBUG: Pods count = {len(pods)}")
-
-        for pod in pods:
-            pod_typename = pod["node"].get("__typename", "MISSING")
-            if pod_typename != "TopologyPod":
-                continue
-
-            pod_name = pod["node"].get("name", {}).get("value", "UNKNOWN")
-            pod_devices = pod["node"].get("devices", {}).get("edges", [])
-
-            for device in pod_devices:
-                device_name = self._safe_get(device["node"], "name", "value")
-                device_rack = self._safe_get(
-                    device["node"], "rack", "node", "name", "value"
-                )
-
-                # Extract device name from cables if not available
-                if not device_name:
-                    device_name = self._extract_device_name_from_cables(device["node"])
-
-                if device_name:
-                    device_info[device_name] = {
-                        "pod": pod_name,
-                        "rack": device_rack,
-                    }
-
-        print(f"DEBUG: Collected device info for {len(device_info)} devices")
-
-        # Phase 2: Process cables from all devices
-        dc_count = 0
-        for device in dc_devices:
-            dc_count += 1
-            self._process_device(
-                device["node"],
-                pod_name="",
-                csv_rows=csv_rows,
-                seen_connections=seen_connections,
-                device_info=device_info,
-            )
-
-        # Process pod-level devices for cables
-        pod_count = 0
-        for pod in pods:
-            pod_typename = pod["node"].get("__typename")
-            if pod_typename != "TopologyPod":
-                continue
-
-            pod_devices = pod["node"].get("devices", {}).get("edges", [])
-            pod_name = pod["node"].get("name", {}).get("value", "")
-
-            for device in pod_devices:
-                pod_count += 1
-                self._process_device(
-                    device["node"],
-                    pod_name=pod_name,
-                    csv_rows=csv_rows,
-                    seen_connections=seen_connections,
-                    device_info=device_info,
-                )
-
-        print(f"DEBUG: Processed {dc_count} DC devices and {pod_count} Pod devices")
-        print(f"DEBUG: Generated {len(csv_rows) - 1} cable connections")
-
-        # Join all rows with newlines to create CSV string
-        csv_data = "\n".join(csv_rows)
-        return csv_data
-
-    def _safe_get(self, obj: dict | None, *keys: str) -> str:
-        """Safely get nested dict values, returning empty string if any level is None.
-
-        Args:
-            obj: Dictionary to traverse
-            *keys: Nested keys to access
-
-        Returns:
-            String value at path, or empty string if any level is missing/None
-        """
-        current = obj
-        for key in keys:
-            if not isinstance(current, dict):
-                return ""
-            current = current.get(key)
-            if current is None:
-                return ""
-        return str(current) if current is not None else ""
-
-    def _extract_device_name_from_cables(self, device: dict) -> str:
-        """Extract device name from cable display labels.
-
-        For devices with null names (like super-spines), extract from cable
-        display_label in format: source_device-source_interface__remote_device-remote_interface
-
-        Parses by finding the rightmost hyphen followed by an uppercase letter,
-        treating everything before that as the device name.
-
-        Args:
-            device: Device node from query
-
-        Returns:
-            Device name extracted from cable label, or empty string
-        """
-        for interface in device.get("interfaces", {}).get("edges", []):
-            cable = interface["node"].get("cable", {}).get("node")
-            if cable:
-                display_label = cable.get("display_label", "")
-                if "__" in display_label:
-                    source_part, _ = display_label.split("__", 1)
-                    # Extract device name from source part (before last hyphen + uppercase letter)
-                    for i in range(len(source_part) - 1, 0, -1):
-                        if (
-                            source_part[i] == "-"
-                            and i + 1 < len(source_part)
-                            and source_part[i + 1].isupper()
-                        ):
-                            return source_part[:i]
-        return ""
-
-    def _process_device(
-        self,
-        device: dict,
-        pod_name: str,
-        csv_rows: list,
-        seen_connections: set,
-        device_info: dict,
-    ) -> None:
-        """Process a device and extract cable connections.
-
-        For each interface with a cable, parse the cable display_label to extract
-        the remote device and interface, then create a CSV row.
-
-        Args:
-            device: Device node to process
-            pod_name: Pod name for this device (empty for DC-level devices)
-            csv_rows: List to append CSV rows to
-            seen_connections: Set to track dedup on normalized keys
-            device_info: Map of device names to their metadata (pod, rack)
-        """
-        # Get source device name and rack
-        source_device_name = self._safe_get(device, "name", "value")
-        if not source_device_name:
-            source_device_name = self._extract_device_name_from_cables(device)
-
-        source_rack = self._safe_get(device, "rack", "node", "name", "value")
-
-        # Get source pod from device_info if built earlier
-        source_pod = pod_name
-        if source_device_name in device_info:
-            source_pod = device_info[source_device_name].get("pod", pod_name)
-            if not source_rack:
-                source_rack = device_info[source_device_name].get("rack", "")
-
-        # Process interfaces
-        for interface in device.get("interfaces", {}).get("edges", []):
-            interface_name = self._safe_get(interface["node"], "name", "value")
-            cable = interface["node"].get("cable", {}).get("node")
-
-            if not cable:
-                continue
-
-            display_label = cable.get("display_label", "")
-            if "__" not in display_label:
-                continue
-
-            # Parse cable display label: source_device-source_interface__remote_device-remote_interface
-            source_part, remote_part = display_label.split("__", 1)
-
-            # Extract remote device and interface
-            # remote_part format: "remote_device-remote_interface"
-            remote_device_name, remote_interface_name = self._parse_remote_info(
-                remote_part
-            )
-
-            if not remote_device_name or not remote_interface_name:
-                continue
-
-            # Create normalized connection key (sorted for dedup)
-            connection_key = tuple(sorted([source_device_name, remote_device_name]))
-
-            if connection_key in seen_connections:
-                continue
-            seen_connections.add(connection_key)
-
-            # Look up remote device info
-            remote_rack = ""
-            if remote_device_name in device_info:
-                remote_rack = device_info[remote_device_name].get("rack", "")
-
-            # Format display values
-            display_pod = source_pod if source_pod else "Not applicable"
-            display_source_rack = source_rack if source_rack else "TBD"
-            display_remote_rack = remote_rack if remote_rack else "TBD"
-
-            # Create CSV row
-            csv_row = ",".join(
-                [
-                    display_pod,
-                    display_source_rack,
-                    source_device_name,
-                    interface_name,
-                    display_remote_rack,
-                    remote_device_name,
-                    remote_interface_name,
-                ]
-            )
-
-            csv_rows.append(csv_row)
+        return {
+            "pod": pod_name,
+            "source_rack": source_rack,
+            "source_device": source_device,
+            "source_interface": source_interface,
+            "destination_rack": dest_rack,
+            "destination_device": dest_device,
+            "destination_interface": dest_interface,
+            "cable_type": cable_type,
+        }
 
     @staticmethod
-    def _parse_remote_info(remote_part: str) -> tuple[str, str]:
-        """Parse remote device and interface from display_label part.
+    def _parse_hfid(hfid: list[str] | str) -> tuple[str, str]:
+        """Parse HFID to extract device name and interface name.
 
-        Format: remote_device-remote_interface
-        Must find the boundary where device name ends and interface begins.
-        Typically interface starts with uppercase after a hyphen.
-
-        For example:
-        - "dc-1-fab1-pod1-spine-01-Ethernet1/31" -> ("dc-1-fab1-pod1-spine-01", "Ethernet1/31")
-        - "leaf-01-Eth1/1" -> ("leaf-01", "Eth1/1")
+        HFID format: [device_name, interface_name]
 
         Args:
-            remote_part: String in format "device-interface" or similar
+            hfid: HFID as list or string
 
         Returns:
-            Tuple of (device_name, interface_name) or ("", "") if parse fails
+            Tuple of (device_name, interface_name)
         """
-        if not remote_part or "-" not in remote_part:
-            return "", ""
+        if isinstance(hfid, list) and len(hfid) >= 2:
+            return hfid[0], hfid[1]
+        elif isinstance(hfid, str):
+            parts = hfid.split("/")
+            if len(parts) >= 2:
+                return parts[0], "/".join(parts[1:])
+        return "", ""
 
-        # Find the last hyphen followed by an uppercase letter (start of interface)
-        for i in range(len(remote_part) - 1, 0, -1):
-            if (
-                remote_part[i] == "-"
-                and i + 1 < len(remote_part)
-                and remote_part[i + 1].isupper()
-            ):
-                device = remote_part[:i]
-                interface = remote_part[i + 1 :]
-                return device, interface
+    @staticmethod
+    def _extract_rack_from_endpoint(endpoint: dict[str, Any]) -> str:
+        """Extract rack name from endpoint device information.
 
-        # Fallback: split on first hyphen
-        parts = remote_part.split("-", 1)
-        return parts[0], parts[1] if len(parts) > 1 else ""
+        Args:
+            endpoint: Endpoint information containing device and rack details
+
+        Returns:
+            Rack name or "TBD" if not found
+        """
+        device_info = endpoint.get("device", {})
+        if isinstance(device_info, dict) and device_info.get("rack"):
+            rack_info = device_info["rack"]
+            if isinstance(rack_info, dict) and rack_info.get("name"):
+                return rack_info["name"]
+        return "TBD"
+
+    @staticmethod
+    def _get_safe_value(data: dict[str, Any], key: str, default: str = "") -> str:
+        """Safely extract value from nested data structure.
+
+        Args:
+            data: Data dictionary
+            key: Key to extract
+            default: Default value if key not found
+
+        Returns:
+            Extracted value or default
+        """
+        value = data.get(key)
+        if value is None:
+            return default
+        if isinstance(value, dict):
+            return value.get("value", default)
+        return str(value) if value else default
+
+    def _generate_csv(self, cables: list[dict[str, Any]]) -> str:
+        """Generate CSV output from cable data.
+
+        Args:
+            cables: List of cable dictionaries
+
+        Returns:
+            CSV string with proper formatting
+        """
+        # CSV header
+        header = ",".join(
+            [
+                "Pod",
+                "Source Rack",
+                "Source Device",
+                "Source Interface",
+                "Destination Rack",
+                "Destination Device",
+                "Destination Interface",
+                "Cable type",
+            ]
+        )
+
+        csv_rows = [header]
+
+        for cable in cables:
+            row = ",".join(
+                [
+                    cable.get("pod", "Not applicable"),
+                    cable.get("source_rack", "TBD"),
+                    cable.get("source_device", "Unknown"),
+                    cable.get("source_interface", "Unknown"),
+                    cable.get("destination_rack", "TBD"),
+                    cable.get("destination_device", "Unknown"),
+                    cable.get("destination_interface", "Unknown"),
+                    cable.get("cable_type", "Unknown"),
+                ]
+            )
+            csv_rows.append(row)
+
+        return "\n".join(csv_rows) + "\n"

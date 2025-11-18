@@ -81,15 +81,15 @@ spec:
         parameters:
           expand_range: true
         data:
-          - template_name:  N9K-C9364C-GX_SPINE_Ethernet1/[1-60]
+          - template_name: N9K-C9364C-GX_SPINE_Ethernet1/[1-60]
             name: Ethernet1/[1-60]
             role: leaf
             interface_type: 100gbase-x-qsfp28
-          - template_name:  N9K-C9364C-GX_SPINE_Ethernet1/[61-64]
+          - template_name: N9K-C9364C-GX_SPINE_Ethernet1/[61-64]
             name: Ethernet1/[61-64]
             role: uplink
             interface_type: 100gbase-x-qsfp28
-          - template_name:  N9K-C9364C-GX_SPINE_mgmt0
+          - template_name: N9K-C9364C-GX_SPINE_mgmt0
             name: mgmt0
             role: management
             interface_type: 1000base-t

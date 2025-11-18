@@ -1,76 +1,52 @@
-fragment CableDetails on DcimPhysicalInterface {
-  name {
-    value
-  }
-  role {
-    value
-  }
-  ... on DcimPhysicalInterface {
-    cable {
-      node {
-        id
-        display_label
-        type {
-          value
-        }
-      }
-    }
-  }
-}
-
-fragment DeviceWithCables on DcimPhysicalDevice {
-  id
-  name {
-    value
-  }
-  role {
-    value
-  }
-  rack {
-    node {
-      name {
-        value
-      }
-    }
-  }
-  interfaces {
-    edges {
-      node {
-        ...CableDetails
-      }
-    }
-  }
-}
-
 query FabricCablingPlanQuery($name: String!) {
   TopologyDeployment(name__value: $name) {
     edges {
       node {
-        ... on TopologyDataCenter {
-          id
-          name {
-            value
-          }
-          devices {
-            edges {
-              node {
-                ...DeviceWithCables
-              }
-            }
-          }
-          children {
-            edges {
-              node {
-                __typename
-                ... on TopologyPod {
-                  id
-                  name {
-                    value
-                  }
-                  devices {
-                    edges {
-                      node {
-                        ...DeviceWithCables
+        children {
+          edges {
+            node {
+              ... on TopologyPod {
+                name{value}
+                devices {
+                  edges {
+                    node {
+                      interfaces {
+                        edges {
+                          node {
+                            ... on DcimPhysicalInterface {
+                              cable {
+                                node {
+                                  __typename
+                                  id
+                                  type{
+                                    value
+                                  }
+                                  endpoints {
+                                    edges {
+                                      node {
+                                        ... on DcimPhysicalInterface {
+                                          hfid
+                                          name{value}
+                                          device{
+                                            node{
+                                              ... on DcimPhysicalDevice{
+                                                rack{
+                                                  node{
+                                                    name{value}
+                                                  }
+                                                }
+                                              }
+                                            }
+                                          }
+                                        }
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        }
                       }
                     }
                   }

@@ -11,27 +11,28 @@ from typing import Any
 from netutils.interface import sort_interface_list
 
 
-def clean_data(data: Any) -> Any:
+def clean_data(data: dict) -> Any:
     """
-    Recursively normalize Infrahub API data by extracting values from nested dictionaries and lists.
+    Recursively transforms the input data by extracting 'value', 'node', or 'edges' from dictionaries.
+
+    Args:
+        data: The input data to clean.
+
+    Returns:
+        The cleaned data with extracted values.
     """
-    # Handle dictionaries
     if isinstance(data, dict):
         dict_result = {}
         for key, value in data.items():
             if isinstance(value, dict):
-                # Handle special cases with single keys
-                keys = set(value.keys())
-                if keys == {"value"}:
-                    dict_result[key] = value["value"]  # This handles None values too
-                elif keys == {"edges"} and not value["edges"]:
-                    dict_result[key] = []
-                # Handle nested structures
-                elif "node" in value:
+                if value.get("value"):
+                    dict_result[key] = value["value"]
+                elif value.get("node"):
                     dict_result[key] = clean_data(value["node"])
-                elif "edges" in value:
+                elif value.get("edges"):
                     dict_result[key] = clean_data(value["edges"])
-                # Process any other dictionaries
+                elif not value.get("value"):
+                    dict_result[key] = None
                 else:
                     dict_result[key] = clean_data(value)
             elif "__" in key:
@@ -39,12 +40,14 @@ def clean_data(data: Any) -> Any:
             else:
                 dict_result[key] = clean_data(value)
         return dict_result
-
-    # Handle lists
     if isinstance(data, list):
-        return [clean_data(item.get("node", item)) for item in data]
-
-    # Return primitives unchanged
+        list_result = []
+        for item in data:
+            if isinstance(item, dict) and item.get("node", None) is not None:
+                list_result.append(clean_data(item["node"]))
+                continue
+            list_result.append(clean_data(item))
+        return list_result
     return data
 
 
@@ -68,6 +71,9 @@ def get_bgp_profile(device_services: list[dict[str, Any]]) -> list[dict[str, Any
     """
     Groups BGP sessions by peer group and returns a list of peer group dicts in the desired structure.
     """
+    if not device_services:
+        return []
+
     unique_keys = {"name", "remote_ip", "remote_as"}
     peer_groups = defaultdict(list)
     for service in device_services:
@@ -107,6 +113,9 @@ def get_ospf(device_services: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """
     Extract OSPF configuration information.
     """
+    if not device_services:
+        return []
+
     ospf_configs: list[dict[str, Any]] = []
 
     for service in device_services:
@@ -127,12 +136,15 @@ def get_vlans(data: list) -> list[dict[str, Any]]:
     Extracts VLAN information from the input data.
     Returns a list of dicts with only vlan_id and name, unique per (vlan_id, name).
     """
+    if not data:
+        return []
+
     return [
         {"vlan_id": vlan_id, "name": vlan_name}
         for vlan_id, vlan_name in {
             (segment.get("vlan_id"), segment.get("name"))
             for interface in data
-            for segment in interface.get("interface_services", [])
+            for segment in (interface.get("interface_services") or [])
             if segment.get("typename") == "ServiceNetworkSegment"
         }
     ]
@@ -144,6 +156,8 @@ def get_interfaces(data: list) -> list[dict[str, Any]]:
     Only includes 'ospf' key if OSPF area is present.
     Includes IP addresses, description, status, role, and other interface data.
     """
+    if not data:
+        return []
 
     sorted_names = sort_interface_list(
         [iface.get("name") for iface in data if iface.get("name")]
@@ -156,12 +170,12 @@ def get_interfaces(data: list) -> list[dict[str, Any]]:
 
         vlans = [
             s.get("vlan_id")
-            for s in iface.get("interface_services", [])
+            for s in (iface.get("interface_services") or [])
             if s.get("typename") == "ServiceNetworkSegment"
         ]
         ospf_areas = [
             s.get("area", {}).get("area")
-            for s in iface.get("interface_services", [])
+            for s in (iface.get("interface_services") or [])
             if s.get("typename") == "ServiceOSPF"
         ]
 
