@@ -120,7 +120,7 @@ class CommonGenerator(InfrahubGenerator):
 
         self.logger.info("Implementing resource pools")
 
-        pool_prefix = f"{fabric_name}-{pod_name}" if pod_name else fabric_name
+        pool_prefix = f"{pod_name}" if pod_name else fabric_name
 
         # Create a new dictionary with only the keys that FabricPoolConfig expects
         valid_keys = [
