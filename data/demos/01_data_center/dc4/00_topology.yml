@@ -15,22 +15,19 @@ spec:
       children:
         kind: TopologyPod
         data:
-          - name: Pod-1
-            index: 1
+          - index: 1
             role: fabric
             spine_template: Edgecore-7726_32X_O_SPINE
             amount_of_spines: 4
             member_of_groups:
               - topologies_pod
-          - name: Pod-2
-            index: 2
+          - index: 2
             role: fabric
             spine_template: Edgecore-7726_32X_O_SPINE
             amount_of_spines: 2
             member_of_groups:
               - topologies_pod
-          - name: Pod-3
-            index: 3
+          - index: 3
             role: fabric
             spine_template: Edgecore-7726_32X_O_SPINE
             amount_of_spines: 3
