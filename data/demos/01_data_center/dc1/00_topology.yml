@@ -15,28 +15,28 @@ spec:
       children:
         kind: TopologyPod
         data:
-          - name: Pod-1
+          - # name: Pod-1
             index: 1
             role: fabric
             spine_template: N9K-C9364C-GX_SPINE
             amount_of_spines: 3
             member_of_groups:
               - topologies_pod
-          - name: Pod-2
+          - # name: Pod-2
             index: 2
             role: fabric
             spine_template: N9K-C9364C-GX_SPINE
             amount_of_spines: 3
             member_of_groups:
               - topologies_pod
-          - name: Pod-3
+          - # name: Pod-3
             index: 3
             role: fabric
             spine_template: N9K-C9364C-GX_SPINE
             amount_of_spines: 4
             member_of_groups:
               - topologies_pod
-          - name: Pod-4
+          - # name: Pod-4
             index: 4
             role: fabric
             spine_template: N9K-C9364C-GX_SPINE

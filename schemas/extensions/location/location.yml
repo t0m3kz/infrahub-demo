@@ -102,11 +102,12 @@ nodes:
     include_in_menu: false
     menu_placement: "LocationGeneric"
     label: Rack
-    display_label: "{{name__value}}"
+    display_label: "{{parent__description__value}}-{{name__value}}"
     uniqueness_constraints:
       - ["pod", "name__value", "index__value"]
     human_friendly_id:
-      - shortname__value
+      - name__value
+      - index__value
     parent: "LocationSuite"
     children: ""
     icon: "clarity:rack-server-line"
