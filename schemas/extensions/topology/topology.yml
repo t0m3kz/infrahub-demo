@@ -343,6 +343,8 @@ nodes:
       - GeneratorTarget
     parent: TopologyDataCenter
     children: ""
+    uniqueness_constraints:
+      - ["parent", "index__value"]
     include_in_menu: false
     attributes:
       - name: amount_of_spines
@@ -404,14 +406,6 @@ nodes:
         identifier: "rack__pod"
         order_weight: 1200
         on_delete: cascade
-      - name: management_pool
-        peer: CoreIPAddressPool
-        state: absent
-        kind: Attribute
-        cardinality: one
-        optional: true
-        identifier: "pod__management_pool"
-        order_weight: 5500
       - name: loopback_pool
         peer: CoreIPAddressPool
         kind: Attribute
