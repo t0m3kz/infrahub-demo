@@ -423,12 +423,14 @@ nodes:
         kind: Attribute
         cardinality: one
         optional: true
+        branch: agnostic
         identifier: "pod__loopback_pool"
         order_weight: 6000
       - name: prefix_pool
         peer: CoreIPPrefixPool
         kind: Attribute
         cardinality: one
+        branch: agnostic
         optional: true
         identifier: "pod__prefix_pool"
         order_weight: 7000
