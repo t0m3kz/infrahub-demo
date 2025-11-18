@@ -6,6 +6,9 @@ generics:
     description: Generic Location, could be a country, city ...
     label: Location
     icon: mingcute:location-line
+    uniqueness_constraints:
+      - [shortname__value]
+    display_label: "{{name__value}}"
     include_in_menu: true
     hierarchical: true
     attributes:

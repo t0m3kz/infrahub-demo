@@ -82,8 +82,8 @@ nodes:
     display_label: "{{name__value}}"
     parent: "LocationBuilding"
     children: "LocationRack"
-    uniqueness_constraints:
-      - ["identifier__value"]
+    # uniqueness_constraints:
+    #   - ["identifier__value"]
     icon: "game-icons:cage"
     attributes:
       - name: facility_id
@@ -98,6 +98,7 @@ nodes:
           jinja2_template: "{{parent__name__value}} {{name__value}}"
         read_only: true
         optional: false
+        state: absent
     relationships:
       - name: owner
         peer: OrganizationGeneric
