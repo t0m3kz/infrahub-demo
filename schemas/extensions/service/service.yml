@@ -15,7 +15,6 @@ generics:
         optional: false
         order_weight: 1
         description: Service Name
-        branch: agnostic
       - name: status
         order_weight: 30
         optional: false

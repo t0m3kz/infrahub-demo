@@ -137,7 +137,7 @@ def load_schema(
     """Load the schemas from the given path."""
     context.run(f"infrahubctl schema load {schema}/base --branch {branch}", pty=True)
     context.run(
-        f"infrahubctl schema load {schema}/extentions --branch {branch}", pty=True
+        f"infrahubctl schema load {schema}/extensions --branch {branch}", pty=True
     )
 
 
@@ -242,7 +242,7 @@ def deploy_dc(
 
     print(f"✅ Data loaded into branch '{branch}'")
     print(
-        "💡 Trigger infrastructure generation in InfraHub UI → Actions → Generator Definitions\n"
+        "💡 Trigger infrastructure generation in InfraHub UI → Actions → Generator Definitions → generate_dc \n"
     )
 
 

@@ -8,7 +8,6 @@ nodes:
     label: Autonomous System
     icon: mdi:bank-circle-outline
     menu_placement: RoutingBGPSession
-    branch: agnostic
     uniqueness_constraints:
       - ["name__value"]
     human_friendly_id:
