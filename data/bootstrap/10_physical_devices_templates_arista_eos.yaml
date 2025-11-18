@@ -70,7 +70,7 @@ spec:
         data:
           - template_name: DCS-7050PX4-32S-R_SPINE_Ethernet[1-24]/1
             name: Ethernet[1-24]/1
-            role: spine
+            role: leaf
             interface_type: 400gbase-x-qsfpdd
           - template_name: DCS-7050PX4-32S-R_SPINE_Ethernet[25-32]/1
             name: Ethernet[25-32]/1
