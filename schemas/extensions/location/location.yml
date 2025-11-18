@@ -82,6 +82,8 @@ nodes:
     display_label: "{{name__value}}"
     parent: "LocationBuilding"
     children: "LocationRack"
+    uniqueness_constraints:
+      - [description__value]
     icon: "game-icons:cage"
     attributes:
       - name: facility_id
