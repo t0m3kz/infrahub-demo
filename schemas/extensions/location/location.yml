@@ -103,6 +103,8 @@ nodes:
     menu_placement: "LocationGeneric"
     label: Rack
     display_label: "{{name__value}}"
+    uniqueness_constraints:
+      - ["pod", "name__value", "index__value"]
     human_friendly_id:
       - shortname__value
     parent: "LocationSuite"
@@ -143,8 +145,8 @@ nodes:
         peer: TopologyPod
         kind: Attribute
         cardinality: one
-        optional: true
         identifier: "rack__pod"
+        optional: false
       - name: devices
         peer: DcimPhysicalDevice
         optional: true
