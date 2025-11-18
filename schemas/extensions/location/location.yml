@@ -102,7 +102,7 @@ nodes:
     include_in_menu: false
     menu_placement: "LocationGeneric"
     label: Rack
-    display_label: "{{parent__description__value}}-{{name__value}}"
+    display_label: "{{identifier__value}}"
     uniqueness_constraints:
       - ["pod", "name__value", "index__value"]
     human_friendly_id:
@@ -115,6 +115,13 @@ nodes:
       - name: index
         kind: Number
         order_weight: 110
+      - name: identifier
+        kind: Text
+        computed_attribute:
+          kind: Jinja2
+          jinja2_template: "{{parent__description__value}} {{name__value}}"
+        read_only: true
+        optional: false
       - name: rack_type
         kind: Dropdown
         choices:

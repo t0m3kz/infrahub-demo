@@ -166,7 +166,7 @@ generator_definitions:
     execute_in_proposed_change: false
     execute_after_merge: false
     parameters:
-      name: name__value
+      identifier: identifier__value
 # - name: create_server_connectivity
 #   file_path: generators/generate_server.py
 #   targets: topologies_pod
