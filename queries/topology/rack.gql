@@ -1,5 +1,5 @@
-query RackGenerator($identifier: String!) {
-  LocationRack(identifier__value: $identifier) {
+query RackGenerator($shortname: String!) {
+  LocationRack(shortname__value: $shortname) {
     edges {
       node {
         id
