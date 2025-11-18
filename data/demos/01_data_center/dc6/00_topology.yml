@@ -4,10 +4,10 @@ kind: Object
 spec:
   kind: TopologyDataCenter
   data:
-    - name: DC4
+    - name: DC6
       index: 4
       amount_of_super_spines: 2
-      super_spine_template: PowerSwitch-S5232F-ON_SPINE
+      super_spine_template: PowerSwitch-S5232F-ON_SUPER_SPINE
       fabric_interface_sorting_method: top_down
       design_pattern: M-Standard-MR
       member_of_groups:
