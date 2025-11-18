@@ -8,11 +8,6 @@ generics:
     icon: mingcute:location-line
     include_in_menu: true
     hierarchical: true
-    human_friendly_id:
-      - name__value
-    order_by:
-      - name__value
-    display_label: "{{name__value}}"
     attributes:
       - name: name
         kind: Text
