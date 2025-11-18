@@ -112,7 +112,6 @@ nodes:
     attributes:
       - name: index
         kind: Number
-        branch: agnostic
         order_weight: 110
       - name: rack_type
         kind: Dropdown
