@@ -71,7 +71,6 @@ nodes:
       - name: owner
         peer: OrganizationGeneric
         optional: true
-        branch: aware
         cardinality: one
   - name: Suite
     namespace: Location
@@ -115,7 +114,6 @@ nodes:
         order_weight: 110
       - name: rack_type
         kind: Dropdown
-        branch: aware
         choices:
           - name: compute
             label: Compute
