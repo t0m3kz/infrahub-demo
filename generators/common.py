@@ -12,17 +12,10 @@ from infrahub_sdk.protocols import (
 )
 from pydantic import BaseModel
 
-from .helpers import (
-    CablingPlanner,
-    CablingScenario,
-    DeviceNamingConfig,
-    DeviceNamingStrategy,
-    FabricPoolStrategy,
-)
+from .helpers import CablingPlanner, DeviceNamingConfig
 
 if TYPE_CHECKING:
-    # import the dataclass for type checking only to avoid runtime cycles
-    from .helpers import FabricPoolStrategy
+    pass
 
 from .schema_protocols import (
     DcimCable,
@@ -99,7 +92,7 @@ class CommonGenerator(InfrahubGenerator):
 
     async def allocate_resource_pools(
         self,
-        strategy: FabricPoolStrategy,
+        strategy: Literal["fabric", "pod"],
         pools: dict[str, Any],
         id: str,
         fabric_name: str,
@@ -110,7 +103,7 @@ class CommonGenerator(InfrahubGenerator):
 
         Notes:
         - This function ensures minimal placeholder pools exist (side-effect).
-        - It accepts a simple strategy name string for `pools` (e.g. "FABRIC") and
+        - It accepts a simple strategy name string for `pools` (e.g. "fabric") and
           normalizes it to a FabricPoolConfig internally for deterministic behavior.
         - It intentionally returns None: creation is a side-effect. Actual address/prefix
           allocation is performed later by generators which will fetch pools by name.
@@ -135,7 +128,7 @@ class CommonGenerator(InfrahubGenerator):
             **filtered_pools, kind=strategy, ipv6=ipv6 or False
         )
         for pool_name, pool_size in pools_config.pools().items():
-            if strategy == FabricPoolStrategy.FABRIC and pool_name in [
+            if strategy == "fabric" and pool_name in [
                 "management",
                 "technical",
                 "loopback",
@@ -145,7 +138,7 @@ class CommonGenerator(InfrahubGenerator):
                     if not ipv6 or pool_name == "management"
                     else f"{pool_name.capitalize()}-IPv6"
                 )
-            elif strategy == FabricPoolStrategy.FABRIC and not pod_name:
+            elif strategy == "fabric" and not pod_name:
                 parent_pool_name = f"{fabric_name}-{pool_name.split('-')[-1]}-pool"
             else:
                 parent_pool_name = f"{fabric_name}-{pool_name}-pool"
@@ -170,9 +163,8 @@ class CommonGenerator(InfrahubGenerator):
 
             # Determine if this is a prefix or address pool
             is_prefix_pool = (
-                strategy == FabricPoolStrategy.FABRIC
-                and pool_name in ["technical", "loopback"]
-            ) or (strategy == FabricPoolStrategy.POD and pool_name == "technical")
+                strategy == "fabric" and pool_name in ["technical", "loopback"]
+            ) or (strategy == "pod" and pool_name == "technical")
 
             if is_prefix_pool:
                 new_pool = await self.client.create(
@@ -223,7 +215,7 @@ class CommonGenerator(InfrahubGenerator):
         amount: int,
         deployment_id: str,
         template: dict[str, Any],
-        naming_convention: DeviceNamingStrategy,
+        naming_convention: Literal["standard", "hierarchical", "flat"] = "flat",
         options: Optional[dict] = None,
     ) -> list[str]:
         """Create devices using a consolidated options dict and batch creation."""
@@ -352,7 +344,9 @@ class CommonGenerator(InfrahubGenerator):
         bottom_interfaces: list[str],
         top_devices: list[str],
         top_interfaces: list[str],
-        strategy: CablingScenario = CablingScenario.RACK,
+        strategy: Literal[
+            "pod", "rack", "hierarchical_rack", "intra_rack", "custom"
+        ] = "rack",
         options: Optional[dict[str, Any]] = None,
     ) -> None:
         """Create cabling connections between device layers with enhanced hierarchical support."""
@@ -365,7 +359,7 @@ class CommonGenerator(InfrahubGenerator):
 
         self.logger.info(
             f"Creating cabling between {len(bottom_devices)} bottom and {len(top_devices)} top devices "
-            f"(strategy: {strategy.value}, bottom: {bottom_sorting}, top: {top_sorting})"
+            f"(strategy: {strategy}, bottom: {bottom_sorting}, top: {top_sorting})"
         )
 
         # Fetch interfaces in batch, ensuring the related device data is included

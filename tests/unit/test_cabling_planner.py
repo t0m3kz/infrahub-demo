@@ -7,7 +7,7 @@ from unittest.mock import Mock
 
 import pytest
 
-from generators.helpers import CablingPlanner, CablingScenario
+from generators.helpers import CablingPlanner
 
 
 class MockInterface:
@@ -154,7 +154,7 @@ class TestCablingPlannerRackScenario:
         top = create_mock_interfaces("spine-01", ["Ethernet1/1", "Ethernet1/2"])
 
         planner = CablingPlanner(bottom, top)  # type: ignore
-        cabling_plan = planner.build_cabling_plan(scenario=CablingScenario.RACK)
+        cabling_plan = planner.build_cabling_plan(scenario="rack")
 
         assert isinstance(cabling_plan, list)
         assert len(cabling_plan) > 0
@@ -171,7 +171,7 @@ class TestCablingPlannerRackScenario:
             bottom1 + bottom2,  # type: ignore[arg-type]
             top1 + top2,  # type: ignore[arg-type]
         )
-        cabling_plan = planner.build_cabling_plan(scenario=CablingScenario.RACK)
+        cabling_plan = planner.build_cabling_plan(scenario="rack")
 
         assert isinstance(cabling_plan, list)
         assert len(cabling_plan) > 0
@@ -182,9 +182,7 @@ class TestCablingPlannerRackScenario:
         top = create_mock_interfaces("spine-01", ["Ethernet1/1"])
 
         planner = CablingPlanner(bottom, top)  # type: ignore
-        cabling_plan = planner.build_cabling_plan(
-            scenario=CablingScenario.RACK, cabling_offset=0
-        )
+        cabling_plan = planner.build_cabling_plan(scenario="rack", cabling_offset=0)
 
         assert len(cabling_plan) >= 1
 
@@ -194,12 +192,8 @@ class TestCablingPlannerRackScenario:
         top = create_mock_interfaces("spine-01", ["Ethernet1/1", "Ethernet1/2"])
 
         planner = CablingPlanner(bottom, top)  # type: ignore
-        plan_no_offset = planner.build_cabling_plan(
-            scenario=CablingScenario.RACK, cabling_offset=0
-        )
-        plan_with_offset = planner.build_cabling_plan(
-            scenario=CablingScenario.RACK, cabling_offset=1
-        )
+        plan_no_offset = planner.build_cabling_plan(scenario="rack", cabling_offset=0)
+        plan_with_offset = planner.build_cabling_plan(scenario="rack", cabling_offset=1)
 
         # Both should have connections
         assert len(plan_no_offset) > 0
@@ -215,7 +209,7 @@ class TestCablingPlannerPodScenario:
         top = create_mock_interfaces("spine-01", ["Ethernet1/1", "Ethernet1/2"])
 
         planner = CablingPlanner(bottom, top)  # type: ignore
-        cabling_plan = planner.build_cabling_plan(scenario=CablingScenario.POD)
+        cabling_plan = planner.build_cabling_plan(scenario="pod")
 
         assert isinstance(cabling_plan, list)
         assert len(cabling_plan) > 0
@@ -229,7 +223,7 @@ class TestCablingPlannerPodScenario:
         top2 = create_mock_interfaces("spine-02", ["Ethernet1/1", "Ethernet1/2"])
 
         planner = CablingPlanner(bottom1 + bottom2, top1 + top2)  # type: ignore
-        cabling_plan = planner.build_cabling_plan(scenario=CablingScenario.POD)
+        cabling_plan = planner.build_cabling_plan(scenario="pod")
 
         assert isinstance(cabling_plan, list)
         assert len(cabling_plan) > 0
@@ -240,9 +234,7 @@ class TestCablingPlannerPodScenario:
         top = create_mock_interfaces("spine-01", ["Ethernet1/1", "Ethernet1/2"])
 
         planner = CablingPlanner(bottom, top)  # type: ignore
-        cabling_plan = planner.build_cabling_plan(
-            scenario=CablingScenario.POD, cabling_offset=1
-        )
+        cabling_plan = planner.build_cabling_plan(scenario="pod", cabling_offset=1)
 
         assert len(cabling_plan) > 0
 
@@ -264,7 +256,7 @@ class TestCablingPlannerMultipleOffsets:
         # Test offsets 0, 1, 2, 3, 4
         for offset in range(5):
             cabling_plan = planner.build_cabling_plan(
-                scenario=CablingScenario.RACK, cabling_offset=offset
+                scenario="rack", cabling_offset=offset
             )
             assert len(cabling_plan) > 0
             assert isinstance(cabling_plan, list)
@@ -283,7 +275,7 @@ class TestCablingPlannerMultipleOffsets:
         # Test offsets 0, 1, 2, 3, 4
         for offset in range(5):
             cabling_plan = planner.build_cabling_plan(
-                scenario=CablingScenario.POD, cabling_offset=offset
+                scenario="pod", cabling_offset=offset
             )
             assert len(cabling_plan) > 0
             assert isinstance(cabling_plan, list)
@@ -299,12 +291,8 @@ class TestCablingPlannerMultipleOffsets:
 
         planner = CablingPlanner(bottom, top)  # type: ignore
 
-        plan_offset_0 = planner.build_cabling_plan(
-            scenario=CablingScenario.RACK, cabling_offset=0
-        )
-        plan_offset_1 = planner.build_cabling_plan(
-            scenario=CablingScenario.RACK, cabling_offset=1
-        )
+        plan_offset_0 = planner.build_cabling_plan(scenario="rack", cabling_offset=0)
+        plan_offset_1 = planner.build_cabling_plan(scenario="rack", cabling_offset=1)
 
         # Both should have connections
         assert len(plan_offset_0) > 0
@@ -324,12 +312,8 @@ class TestCablingPlannerMultipleOffsets:
 
         planner = CablingPlanner(bottom, top)  # type: ignore
 
-        plan_offset_0 = planner.build_cabling_plan(
-            scenario=CablingScenario.POD, cabling_offset=0
-        )
-        plan_offset_1 = planner.build_cabling_plan(
-            scenario=CablingScenario.POD, cabling_offset=1
-        )
+        plan_offset_0 = planner.build_cabling_plan(scenario="pod", cabling_offset=0)
+        plan_offset_1 = planner.build_cabling_plan(scenario="pod", cabling_offset=1)
 
         # Both should have connections
         assert len(plan_offset_0) > 0
@@ -347,9 +331,7 @@ class TestCablingPlannerMultipleOffsets:
         planner = CablingPlanner(bottom, top)  # type: ignore
 
         # Test with offset of 15 (should still be valid)
-        cabling_plan = planner.build_cabling_plan(
-            scenario=CablingScenario.RACK, cabling_offset=15
-        )
+        cabling_plan = planner.build_cabling_plan(scenario="rack", cabling_offset=15)
         assert len(cabling_plan) > 0
 
     def test_multiple_devices_with_offsets(self) -> None:
@@ -382,7 +364,7 @@ class TestCablingPlannerMultipleOffsets:
         # Test with various offsets (0 and 1 are safe with 5 interfaces)
         for offset in [0, 1]:
             cabling_plan = planner.build_cabling_plan(
-                scenario=CablingScenario.RACK, cabling_offset=offset
+                scenario="rack", cabling_offset=offset
             )
             assert len(cabling_plan) > 0
 
@@ -397,12 +379,8 @@ class TestCablingPlannerMultipleOffsets:
 
         planner = CablingPlanner(bottom, top)  # type: ignore
 
-        rack_plan = planner.build_cabling_plan(
-            scenario=CablingScenario.RACK, cabling_offset=1
-        )
-        pod_plan = planner.build_cabling_plan(
-            scenario=CablingScenario.POD, cabling_offset=1
-        )
+        rack_plan = planner.build_cabling_plan(scenario="rack", cabling_offset=1)
+        pod_plan = planner.build_cabling_plan(scenario="pod", cabling_offset=1)
 
         # Both should succeed
         assert len(rack_plan) > 0
@@ -416,12 +394,8 @@ class TestCablingPlannerMultipleOffsets:
         planner = CablingPlanner(bottom, top)  # type: ignore
 
         # Get same cabling plan twice with same offset
-        plan1 = planner.build_cabling_plan(
-            scenario=CablingScenario.RACK, cabling_offset=1
-        )
-        plan2 = planner.build_cabling_plan(
-            scenario=CablingScenario.RACK, cabling_offset=1
-        )
+        plan1 = planner.build_cabling_plan(scenario="rack", cabling_offset=1)
+        plan2 = planner.build_cabling_plan(scenario="rack", cabling_offset=1)
 
         # Should have same length (deterministic behavior)
         assert len(plan1) == len(plan2)
@@ -438,17 +412,11 @@ class TestCablingPlannerMultipleOffsets:
         planner = CablingPlanner(bottom, top)  # type: ignore
 
         # Start with RACK offset 0
-        rack_0 = planner.build_cabling_plan(
-            scenario=CablingScenario.RACK, cabling_offset=0
-        )
+        rack_0 = planner.build_cabling_plan(scenario="rack", cabling_offset=0)
         # Then POD offset 0
-        pod_0 = planner.build_cabling_plan(
-            scenario=CablingScenario.POD, cabling_offset=0
-        )
+        pod_0 = planner.build_cabling_plan(scenario="pod", cabling_offset=0)
         # Back to RACK offset 1
-        rack_1 = planner.build_cabling_plan(
-            scenario=CablingScenario.RACK, cabling_offset=1
-        )
+        rack_1 = planner.build_cabling_plan(scenario="rack", cabling_offset=1)
 
         assert len(rack_0) > 0
         assert len(pod_0) > 0
@@ -467,9 +435,7 @@ class TestCablingPlannerMultipleOffsets:
 
         plans = []
         for offset in range(6):
-            plan = planner.build_cabling_plan(
-                scenario=CablingScenario.RACK, cabling_offset=offset
-            )
+            plan = planner.build_cabling_plan(scenario="rack", cabling_offset=offset)
             plans.append(plan)
             assert len(plan) > 0
 
@@ -607,9 +573,7 @@ class TestCablingPlannerDefaultScenario:
 
         planner = CablingPlanner(bottom, top)  # type: ignore
         cabling_plan_default = planner.build_cabling_plan()
-        cabling_plan_explicit = planner.build_cabling_plan(
-            scenario=CablingScenario.RACK
-        )
+        cabling_plan_explicit = planner.build_cabling_plan(scenario="rack")
 
         # Both should produce same result (both using RACK scenario)
         assert len(cabling_plan_default) == len(cabling_plan_explicit)

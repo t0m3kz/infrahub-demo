@@ -1,5 +1,5 @@
 # tests/unit/test_device_naming.py
-from generators.helpers import DeviceNamingConfig, DeviceNamingStrategy
+from generators.helpers import DeviceNamingConfig
 
 
 class TestDeviceNamingSimplified:
@@ -8,7 +8,7 @@ class TestDeviceNamingSimplified:
     def test_standard_naming_with_three_indexes(self) -> None:
         """Test STANDARD strategy with dc, pod, rack indexes."""
         config = DeviceNamingConfig(
-            strategy=DeviceNamingStrategy.STANDARD,
+            strategy="standard",
             separator="-",
             zero_padded=True,
             pad_width=2,
@@ -26,7 +26,7 @@ class TestDeviceNamingSimplified:
     def test_standard_naming_with_single_index(self) -> None:
         """Test STANDARD strategy with only dc index."""
         config = DeviceNamingConfig(
-            strategy=DeviceNamingStrategy.STANDARD,
+            strategy="standard",
             separator="-",
             zero_padded=True,
             pad_width=2,
@@ -44,7 +44,7 @@ class TestDeviceNamingSimplified:
     def test_hierarchical_naming(self) -> None:
         """Test HIERARCHICAL strategy."""
         config = DeviceNamingConfig(
-            strategy=DeviceNamingStrategy.HIERARCHICAL,
+            strategy="hierarchical",
             separator=".",
             zero_padded=True,
             pad_width=2,
@@ -62,7 +62,7 @@ class TestDeviceNamingSimplified:
     def test_flat_naming(self) -> None:
         """Test FLAT strategy."""
         config = DeviceNamingConfig(
-            strategy=DeviceNamingStrategy.FLAT,
+            strategy="flat",
             separator="",
             zero_padded=True,
             pad_width=2,

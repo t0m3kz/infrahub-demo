@@ -3,7 +3,6 @@
 from typing import Any
 
 from .common import CommonGenerator
-from .helpers import DeviceNamingStrategy, FabricPoolStrategy
 from .schema_protocols import TopologyPod
 
 
@@ -58,7 +57,7 @@ class DCTopologyGenerator(CommonGenerator):
 
         await self.allocate_resource_pools(
             id=dc_id,
-            strategy=FabricPoolStrategy.FABRIC,
+            strategy="fabric",
             pools=design,
             fabric_name=dc_name,
             ipv6=self.data.get("underlay"),
@@ -69,9 +68,7 @@ class DCTopologyGenerator(CommonGenerator):
             device_role="super-spine",
             amount=amount_of_super_spines,
             template=super_spine_template,
-            naming_convention=DeviceNamingStrategy[
-                design.get("naming_convention", "STANDARD").upper()
-            ],
+            naming_convention=design.get("naming_convention", "flat").lower(),
             options={
                 "name_prefix": dc_name,
                 "fabric_name": dc_name,
