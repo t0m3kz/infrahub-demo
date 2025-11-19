@@ -15,6 +15,9 @@ query RackGenerator($name: String!) {
         rack_type {
           value
         }
+        row{
+          value
+        }
         fabric_templates {
           edges {
             node {
@@ -96,6 +99,12 @@ query RackGenerator($name: String!) {
                         value
                       }
                       maximum_rack_leafs{
+                        value
+                      }
+                      maximum_tors{
+                        value
+                      }
+                      maximum_middle_racks{
                         value
                       }
                       deployment_type{
