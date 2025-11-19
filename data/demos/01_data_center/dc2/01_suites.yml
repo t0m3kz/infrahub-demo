@@ -5,8 +5,8 @@ spec:
   kind: LocationSuite
   data:
     - name: "Suite-1"
-      shortname: "s-1"
+      shortname: "par-1-s-1"
       parent: "PAR-1"
     - name: "Suite-2"
-      shortname: "s-2"
+      shortname: "par-1-s-2"
       parent: "PAR-1"

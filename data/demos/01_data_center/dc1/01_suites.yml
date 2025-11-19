@@ -5,14 +5,14 @@ spec:
   kind: LocationSuite
   data:
     - name: "Suite-1"
-      shortname: "s-1"
+      shortname: "muc-1-s-1"
       parent: "MUC-1"
     - name: "Suite-2"
-      shortname: "s-2"
+      shortname: "muc-1-s-2"
       parent: "MUC-1"
     - name: "Suite-3"
-      shortname: "s-3"
+      shortname: "muc-1-s-3"
       parent: "MUC-1"
     - name: "Suite-4"
-      shortname: "s-4"
+      shortname: "muc-1-s-4"
       parent: "MUC-1"
