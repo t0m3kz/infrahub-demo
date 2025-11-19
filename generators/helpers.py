@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from collections import defaultdict
 from dataclasses import dataclass
-from enum import Enum
 from typing import TYPE_CHECKING, Any, Literal
 
 from netutils.interface import sort_interface_list
@@ -18,14 +17,6 @@ if TYPE_CHECKING:
 # ============================================================================
 # Standalone Cabling Plan Functions
 # ============================================================================
-
-
-class DeviceNamingStrategy(Enum):
-    """Enum for device naming conventions."""
-
-    STANDARD = "standard"
-    HIERARCHICAL = "hierarchical"
-    FLAT = "flat"
 
 
 @dataclass
@@ -42,7 +33,7 @@ class DeviceNamingConfig:
         rack_prefix: Optional prefix for rack-based naming.
     """
 
-    strategy: DeviceNamingStrategy = DeviceNamingStrategy.STANDARD
+    strategy: Literal["standard", "hierarchical", "flat"] = "standard"
     separator: str = "-"
     zero_padded: bool = True
     pad_width: int = 2
@@ -60,15 +51,15 @@ class DeviceNamingConfig:
         indexes = kwargs.get("indexes", [])
 
         # Build strategy-specific components
-        if self.strategy == DeviceNamingStrategy.STANDARD:
+        if self.strategy == "standard":
             components = self._build_standard_components(
                 fabric_name, indexes, device_type, formatted_idx
             )
-        elif self.strategy == DeviceNamingStrategy.HIERARCHICAL:
+        elif self.strategy == "hierarchical":
             components = self._build_hierarchical_components(
                 fabric_name, indexes, device_type, formatted_idx
             )
-        elif self.strategy == DeviceNamingStrategy.FLAT:
+        elif self.strategy == "flat":
             self.separator = ""
             components = self._build_flat_components(
                 fabric_name, indexes, device_type, formatted_idx
@@ -114,18 +105,11 @@ class DeviceNamingConfig:
         return components
 
 
-class FabricPoolStrategy(Enum):
-    """Enumeration of fabric types."""
-
-    FABRIC = "fabric"
-    POD = "pod"
-
-
 @dataclass
 class FabricPoolConfig:
     """Simple dataclass to compute pool counts and prefixes.
 
-    Minimal API used by generators/common: .prefixes(return_cidr=False)
+    Minimal API used by generators/common: .pools(return_cidr=False)
     and compatibility accessors get_management_pool/get_technical_pool/get_loopback_pool.
     """
 
@@ -134,8 +118,7 @@ class FabricPoolConfig:
     maximum_spines: int = 2
     maximum_leafs: int = 8
     ipv6: bool = False
-    # `kind` now uses the FabricPoolStrategy enum for clarity (FABRIC or POD)
-    kind: FabricPoolStrategy = FabricPoolStrategy.FABRIC
+    kind: Literal["fabric", "pod"] = "fabric"
 
     def pools(
         self,
@@ -151,84 +134,69 @@ class FabricPoolConfig:
         Returns:
             Dictionary mapping pool names to prefix lengths.
         """
-        # Management always uses IPv4, others depend on ipv6 flag
         management_max_prefix = 32
         data_max_prefix = 128 if self.ipv6 else 32
 
-        if self.kind == FabricPoolStrategy.FABRIC:
-            return {
-                "management": management_max_prefix
-                - (
-                    self.maximum_leafs * self.maximum_pods
-                    + self.maximum_spines * self.maximum_pods
-                    + self.maximum_super_spines
-                    + 2
-                ).bit_length(),
-                "technical": data_max_prefix
-                - (
-                    self.maximum_pods
-                    * self.maximum_leafs
-                    * self.maximum_spines
-                    * self.maximum_super_spines
-                ).bit_length(),
-                "loopback": data_max_prefix
-                - max(
-                    (
-                        self.maximum_leafs * self.maximum_pods
-                        + self.maximum_spines * self.maximum_pods
-                        + self.maximum_super_spines * 2
-                        + self.maximum_pods * 2
-                        + 2
-                        + self.maximum_super_spines
-                        + 2  # Reserve space for super-spine-loopback /29 pool
-                    ).bit_length(),
-                    (
-                        self.maximum_pods * (2**7)
-                    ).bit_length(),  # Pod loopback pools: 128 addresses per pod
-                ),
-                "super-spine-loopback": data_max_prefix
-                - (self.maximum_super_spines + 2).bit_length(),
-            }
-
-        if self.kind == FabricPoolStrategy.POD:
-            return {
-                "technical": data_max_prefix
-                - (
-                    self.maximum_leafs * self.maximum_spines
-                    + self.maximum_spines * self.maximum_super_spines
-                ).bit_length(),
-                "loopback": data_max_prefix
-                - (self.maximum_leafs + self.maximum_spines + 2).bit_length(),
-            }
+        if self.kind == "fabric":
+            return self._calculate_fabric_pools(management_max_prefix, data_max_prefix)
+        if self.kind == "pod":
+            return self._calculate_pod_pools(data_max_prefix)
 
         raise ValueError(f"Unknown naming type: {self.kind}")
 
+    def _calculate_fabric_pools(
+        self, management_max_prefix: int, data_max_prefix: int
+    ) -> dict[str, int]:
+        """Calculate pool prefixes for the entire fabric."""
+        # Management pool: one address per physical device + buffer
+        management_devices = (
+            self.maximum_leafs * self.maximum_pods
+            + self.maximum_spines * self.maximum_pods
+            + self.maximum_super_spines
+            + 2
+        )
 
-class CablingStrategy(Enum):
-    """Enumeration of available cabling strategies."""
+        # Technical (P2P) pool: based on the sum of all connections
+        # Each P2P link requires 2 IP addresses.
+        # Formula: (super-spine <> spine links) + (spine <> leaf links)
+        p2p_links = (
+            self.maximum_super_spines * self.maximum_spines * self.maximum_pods
+        ) + (self.maximum_spines * self.maximum_leafs * self.maximum_pods)
+        # Each link needs a /31 or /30, so we count total IPs needed (links * 2)
+        total_p2p_ips_needed = p2p_links * 2
 
-    POD = "pod"
-    RACK = "rack"
-    SERVER = "server"
+        # Loopback pool: one address per device + reserves
+        loopback_devices = management_devices
+        pod_loopback_reserve = self.maximum_pods * (2**7)  # 128 addresses per pod
 
+        return {
+            "management": management_max_prefix - management_devices.bit_length(),
+            "technical": data_max_prefix - total_p2p_ips_needed.bit_length(),
+            "loopback": data_max_prefix
+            - max(
+                (loopback_devices + 2).bit_length(),
+                pod_loopback_reserve.bit_length(),
+            ),
+            "super-spine-loopback": data_max_prefix
+            - (self.maximum_super_spines + 2).bit_length(),
+        }
 
-class SortingDirection(Enum):
-    """Enum for interface sorting direction."""
+    def _calculate_pod_pools(self, data_max_prefix: int) -> dict[str, int]:
+        """Calculate pool prefixes for a single pod."""
+        # Technical (P2P) pool for one pod
+        # Formula: (super-spine <> spine links) + (spine <> leaf links)
+        p2p_links_per_pod = (self.maximum_super_spines * self.maximum_spines) + (
+            self.maximum_spines * self.maximum_leafs
+        )
+        total_p2p_ips_needed = p2p_links_per_pod * 2
 
-    TOP_DOWN = "top_down"
-    BOTTOM_UP = "bottom_up"
+        # Loopback pool for one pod
+        loopback_devices_per_pod = self.maximum_leafs + self.maximum_spines + 2
 
-
-class CablingScenario(Enum):
-    """Enum for different cabling scenarios."""
-
-    POD = "pod"  # Pod-based cabling with pod index offset
-    RACK = "rack"  # Rack-based cabling with rack index offset
-    HIERARCHICAL_RACK = (
-        "hierarchical_rack"  # Multi-level leaf-spine cabling with device role awareness
-    )
-    INTRA_RACK = "intra_rack"  # Border leaf to regular leaf connections within rack
-    CUSTOM = "custom"  # Custom filtering function
+        return {
+            "technical": data_max_prefix - total_p2p_ips_needed.bit_length(),
+            "loopback": data_max_prefix - loopback_devices_per_pod.bit_length(),
+        }
 
 
 class CablingPlanner:
@@ -340,15 +308,17 @@ class CablingPlanner:
 
     def build_cabling_plan(
         self,
-        scenario: CablingScenario = CablingScenario.RACK,
+        scenario: Literal[
+            "pod", "rack", "hierarchical_rack", "intra_rack", "custom"
+        ] = "rack",
         cabling_offset: int = 0,
         **kwargs: Any,
     ) -> list:
         """Build cabling plan using specified scenario."""
 
-        if scenario == CablingScenario.POD:
+        if scenario == "pod":
             return self._build_pod_cabling_plan(cabling_offset=cabling_offset)
-        elif scenario == CablingScenario.RACK:
+        elif scenario == "rack":
             return self._build_rack_cabling_plan(cabling_offset=cabling_offset)
         else:
             raise ValueError(f"Unknown cabling scenario: {scenario}")

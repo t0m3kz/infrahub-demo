@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from .common import CommonGenerator
-from .helpers import CablingScenario, DeviceNamingStrategy
 
 
 class RackGenerator(CommonGenerator):
@@ -41,9 +40,7 @@ class RackGenerator(CommonGenerator):
                     device_role=role,
                     amount=template.get("quantity", 1),
                     template=template.get("template", {}),
-                    naming_convention=DeviceNamingStrategy[
-                        design.get("naming_convention", "STANDARD").upper()
-                    ],
+                    naming_convention=design.get("naming_convention", "standard").lower(),
                     options={
                         "pod_name": pod_name,
                         "fabric_name": dc.get("name", "").lower(),
@@ -58,9 +55,7 @@ class RackGenerator(CommonGenerator):
                     device_role=role,
                     amount=template.get("quantity", 1),
                     template=template.get("template", {}),
-                    naming_convention=DeviceNamingStrategy[
-                        design.get("naming_convention", "STANDARD").upper()
-                    ],
+                    naming_convention=design.get("naming_convention", "standard").lower(),
                     options={
                         "pod_name": pod_name,
                         "fabric_name": fabric_name,
@@ -91,7 +86,7 @@ class RackGenerator(CommonGenerator):
                     bottom_interfaces=leaf_interfaces,
                     top_devices=spine_devices,
                     top_interfaces=spine_interfaces,
-                    strategy=CablingScenario.RACK,
+                    strategy="rack",
                     options={
                         "cabling_offset": (
                             (self.data.get("index", 1) - 1)

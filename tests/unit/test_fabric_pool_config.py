@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from generators.helpers import FabricPoolConfig, FabricPoolStrategy
+from generators.helpers import FabricPoolConfig
 
 
 class TestFabricPoolConfigDefaults:
@@ -18,7 +18,7 @@ class TestFabricPoolConfigDefaults:
         assert config.maximum_pods == 2
         assert config.maximum_spines == 2
         assert config.maximum_leafs == 8
-        assert config.kind == FabricPoolStrategy.FABRIC
+        assert config.kind == "fabric"
 
     def test_default_fabric_pools(self) -> None:
         """Test default FABRIC strategy returns expected pool structure."""
@@ -48,9 +48,9 @@ class TestFabricPoolConfigFabricStrategy:
 
     def test_fabric_strategy_explicit(self) -> None:
         """Test explicit FABRIC strategy initialization."""
-        config = FabricPoolConfig(kind=FabricPoolStrategy.FABRIC)
+        config = FabricPoolConfig(kind="fabric")
 
-        assert config.kind == FabricPoolStrategy.FABRIC
+        assert config.kind == "fabric"
 
     def test_fabric_strategy_custom_dimensions(self) -> None:
         """Test FABRIC strategy with custom dimensions."""
@@ -59,7 +59,7 @@ class TestFabricPoolConfigFabricStrategy:
             maximum_pods=3,
             maximum_spines=4,
             maximum_leafs=16,
-            kind=FabricPoolStrategy.FABRIC,
+            kind="fabric",
         )
         pools = config.pools()
 
@@ -76,7 +76,7 @@ class TestFabricPoolConfigFabricStrategy:
             maximum_pods=10,
             maximum_spines=8,
             maximum_leafs=32,
-            kind=FabricPoolStrategy.FABRIC,
+            kind="fabric",
         )
         pools = config.pools()
 
@@ -93,7 +93,7 @@ class TestFabricPoolConfigFabricStrategy:
             maximum_pods=1,
             maximum_spines=1,
             maximum_leafs=1,
-            kind=FabricPoolStrategy.FABRIC,
+            kind="fabric",
         )
         pools = config.pools()
 
@@ -106,13 +106,13 @@ class TestFabricPoolConfigPodStrategy:
 
     def test_pod_strategy_initialization(self) -> None:
         """Test POD strategy initialization."""
-        config = FabricPoolConfig(kind=FabricPoolStrategy.POD)
+        config = FabricPoolConfig(kind="pod")
 
-        assert config.kind == FabricPoolStrategy.POD
+        assert config.kind == "pod"
 
     def test_pod_strategy_default_pools(self) -> None:
         """Test POD strategy returns expected pool structure."""
-        config = FabricPoolConfig(kind=FabricPoolStrategy.POD)
+        config = FabricPoolConfig(kind="pod")
         pools = config.pools()
 
         assert isinstance(pools, dict)
@@ -127,7 +127,7 @@ class TestFabricPoolConfigPodStrategy:
         config = FabricPoolConfig(
             maximum_spines=4,
             maximum_leafs=16,
-            kind=FabricPoolStrategy.POD,
+            kind="pod",
         )
         pools = config.pools()
 
@@ -138,7 +138,7 @@ class TestFabricPoolConfigPodStrategy:
 
     def test_pod_strategy_all_positive(self) -> None:
         """Test all POD strategy pool values are positive."""
-        config = FabricPoolConfig(kind=FabricPoolStrategy.POD)
+        config = FabricPoolConfig(kind="pod")
         pools = config.pools()
 
         for pool_name, prefix_length in pools.items():
@@ -176,8 +176,8 @@ class TestFabricPoolConfigCustomDimensions:
 
     def test_custom_spines(self) -> None:
         """Test custom maximum_spines."""
-        config_pod_2 = FabricPoolConfig(maximum_spines=2, kind=FabricPoolStrategy.POD)
-        config_pod_8 = FabricPoolConfig(maximum_spines=8, kind=FabricPoolStrategy.POD)
+        config_pod_2 = FabricPoolConfig(maximum_spines=2, kind="pod")
+        config_pod_8 = FabricPoolConfig(maximum_spines=8, kind="pod")
 
         pools_2 = config_pod_2.pools()
         pools_8 = config_pod_8.pools()
@@ -266,17 +266,19 @@ class TestFabricPoolConfigCalculations:
 
     def test_technical_calculation_pod(self) -> None:
         """Test technical pool prefix length calculation for POD strategy."""
-        # Given: max_leafs=8, max_spines=2
-        # Calculation: 8 * 2 = 16 devices
-        # bit_length(16) = 5, so 32 - 5 = 27
+        # Given: max_leafs=8, max_spines=2, max_super_spines=2 (default)
+        # Calculation:
+        # p2p_links_per_pod = (2 * 2) + (2 * 8) = 4 + 16 = 20
+        # total_p2p_ips_needed = 20 * 2 = 40
+        # bit_length(40) = 6, so 32 - 6 = 26
         config = FabricPoolConfig(
             maximum_leafs=8,
             maximum_spines=2,
-            kind=FabricPoolStrategy.POD,
+            kind="pod",
         )
         pools = config.pools()
 
-        assert pools["technical"] == 27
+        assert pools["technical"] == 26
 
     def test_loopback_calculation_pod(self) -> None:
         """Test loopback pool prefix length calculation for POD strategy."""
@@ -286,7 +288,7 @@ class TestFabricPoolConfigCalculations:
         config = FabricPoolConfig(
             maximum_leafs=8,
             maximum_spines=2,
-            kind=FabricPoolStrategy.POD,
+            kind="pod",
         )
         pools = config.pools()
 
@@ -405,7 +407,7 @@ class TestFabricPoolConfigIPv6:
     def test_ipv6_fabric_strategy_pools(self) -> None:
         """Test IPv6 pools with FABRIC strategy."""
         config = FabricPoolConfig(
-            kind=FabricPoolStrategy.FABRIC,
+            kind="fabric",
             ipv6=True,
         )
         pools_ipv6 = config.pools()
@@ -428,7 +430,7 @@ class TestFabricPoolConfigIPv6:
     def test_ipv6_pod_strategy_pools(self) -> None:
         """Test IPv6 pools with POD strategy."""
         config = FabricPoolConfig(
-            kind=FabricPoolStrategy.POD,
+            kind="pod",
             ipv6=True,
         )
         pools_ipv6 = config.pools()
@@ -449,14 +451,14 @@ class TestFabricPoolConfigIPv6:
             maximum_leafs=8,
             maximum_pods=2,
             maximum_spines=2,
-            kind=FabricPoolStrategy.FABRIC,
+            kind="fabric",
             ipv6=False,
         )
         config_ipv6 = FabricPoolConfig(
             maximum_leafs=8,
             maximum_pods=2,
             maximum_spines=2,
-            kind=FabricPoolStrategy.FABRIC,
+            kind="fabric",
             ipv6=True,
         )
 
@@ -475,13 +477,13 @@ class TestFabricPoolConfigIPv6:
         config_ipv4 = FabricPoolConfig(
             maximum_leafs=16,
             maximum_spines=4,
-            kind=FabricPoolStrategy.POD,
+            kind="pod",
             ipv6=False,
         )
         config_ipv6 = FabricPoolConfig(
             maximum_leafs=16,
             maximum_spines=4,
-            kind=FabricPoolStrategy.POD,
+            kind="pod",
             ipv6=True,
         )
 
@@ -495,11 +497,11 @@ class TestFabricPoolConfigIPv6:
     def test_ipv6_management_always_uses_max_prefix(self) -> None:
         """Test that management pool always uses IPv4 /32 max."""
         config_ipv4 = FabricPoolConfig(
-            kind=FabricPoolStrategy.FABRIC,
+            kind="fabric",
             ipv6=False,
         )
         config_ipv6 = FabricPoolConfig(
-            kind=FabricPoolStrategy.FABRIC,
+            kind="fabric",
             ipv6=True,
         )
 
@@ -519,7 +521,7 @@ class TestFabricPoolConfigIPv6:
             maximum_pods=64,  # Support many pods
             maximum_spines=8,
             maximum_leafs=256,  # Large leaf count
-            kind=FabricPoolStrategy.FABRIC,
+            kind="fabric",
             ipv6=True,
         )
 
@@ -537,7 +539,7 @@ class TestFabricPoolConfigIPv6:
             maximum_leafs=64,
             maximum_pods=4,
             maximum_spines=4,
-            kind=FabricPoolStrategy.POD,
+            kind="pod",
             ipv6=True,
         )
 

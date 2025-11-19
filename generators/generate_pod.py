@@ -3,7 +3,6 @@
 from typing import Any
 
 from .common import CommonGenerator
-from .helpers import CablingScenario, DeviceNamingStrategy, FabricPoolStrategy
 from .schema_protocols import LocationRack
 
 
@@ -65,7 +64,7 @@ class PodTopologyGenerator(CommonGenerator):
 
         await self.allocate_resource_pools(
             id=pod_id,
-            strategy=FabricPoolStrategy.POD,
+            strategy="pod",
             pools=design,
             pod_name=pod_name,
             fabric_name=fabric_name,
@@ -76,9 +75,7 @@ class PodTopologyGenerator(CommonGenerator):
             device_role="spine",
             amount=self.data.get("amount_of_spines"),
             template=self.data.get("spine_template", {}),
-            naming_convention=DeviceNamingStrategy[
-                design.get("naming_convention", "STANDARD").upper()
-            ],
+            naming_convention=design.get("naming_convention", "standard").lower(),
             options={
                 "name_prefix": fabric_name,
                 "fabric_name": fabric_name,
@@ -114,7 +111,7 @@ class PodTopologyGenerator(CommonGenerator):
             bottom_interfaces=spine_interfaces,
             top_devices=super_spine_devices,
             top_interfaces=super_spine_interfaces,
-            strategy=CablingScenario.POD,
+            strategy="pod",
             options={
                 "cabling_offset": (
                     (self.data.get("index", 1) - 1) * design.get("maximum_spines", 2)
