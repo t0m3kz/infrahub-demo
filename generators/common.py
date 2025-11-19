@@ -24,7 +24,6 @@ from .schema_protocols import (
     DcimVirtualDevice,
     DcimVirtualInterface,
     IpamIPAddress,
-    IpamPrefix,
     TopologyPod,
 )
 
