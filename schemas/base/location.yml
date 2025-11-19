@@ -7,14 +7,15 @@ generics:
     label: Location
     icon: mingcute:location-line
     uniqueness_constraints:
-      - [shortname__value]
+      - [name__value]
     include_in_menu: true
     hierarchical: true
+    branch: agnostic
     human_friendly_id:
       - name__value
     order_by:
       - name__value
-    display_label: "{{name__value}}"
+    display_label: "{{ name__value }}"
     attributes:
       - name: name
         kind: Text
@@ -25,11 +26,8 @@ generics:
         order_weight: 1100
       - name: description
         kind: Text
-        computed_attribute:
-          kind: Jinja2
-          jinja2_template: "{{parent__name__value}} {{name__value}}"
-        read_only: true
-        optional: false
+        optional: true
+        order_weight: 1200
     relationships:
       - name: tags
         peer: BuiltinTag
