@@ -72,21 +72,30 @@ query PodGeneratorQuery($name: String!) {
               }
               design_pattern {
                 node {
+                  deployment_type{
+                    value
+                  }
                   maximum_super_spines {
                     value
-                    }
-                    maximum_pods{
+                  }
+                  maximum_pods{
                       value
-                    }
-                    maximum_spines {
-                      value
-                    }
-                    maximum_leafs {
-                      value
-                    }
-                    naming_convention {
-                      value
-                    }
+                  }
+                  maximum_spines {
+                    value
+                  }
+                  maximum_leafs {
+                    value
+                  }
+                  maximum_middle_racks{
+                    value
+                  }
+                  maximum_tors{
+                    value
+                  }
+                  naming_convention {
+                    value
+                  }
                 }
               }
               amount_of_super_spines {
