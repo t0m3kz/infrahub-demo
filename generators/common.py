@@ -91,6 +91,9 @@ class CommonGenerator(InfrahubGenerator):
         joined = ",".join(sorted_ids)
         return hashlib.sha256(joined.encode("utf-8")).hexdigest()
 
+    async def get_rack_leaf_interfaces(self) -> None:
+        pass
+
     async def allocate_resource_pools(
         self,
         strategy: Literal["fabric", "pod"],

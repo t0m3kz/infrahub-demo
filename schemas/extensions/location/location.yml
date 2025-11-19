@@ -12,7 +12,6 @@ nodes:
     display_label: "{{name__value}}"
     children: LocationCountry
     icon: "carbon:cics-region-target"
-
   - name: Country
     namespace: Location
     label: Country
@@ -114,7 +113,8 @@ nodes:
         kind: Text
         computed_attribute:
           kind: Jinja2
-          jinja2_template: "{{parent__name__value}} {{rack_name__value}}"
+          jinja2_template: |
+            "{{parent__name__value}} {{rack_name__value}} {{row__value}}"
         read_only: true
         optional: false
       - name: rack_name
@@ -123,14 +123,9 @@ nodes:
       - name: index
         kind: Number
         order_weight: 120
-      - name: identifier
+      - name: row
         kind: Text
-        state: absent
-        computed_attribute:
-          kind: Jinja2
-          jinja2_template: "{{parent__description__value}} {{name__value}}"
-        read_only: true
-        optional: false
+        optional: true
       - name: rack_type
         kind: Dropdown
         choices:
