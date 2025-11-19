@@ -23,6 +23,8 @@ from .schema_protocols import (
     DcimPhysicalInterface,
     DcimVirtualDevice,
     DcimVirtualInterface,
+    IpamIPAddress,
+    IpamPrefix,
     TopologyPod,
 )
 
@@ -437,37 +439,26 @@ class CommonGenerator(InfrahubGenerator):
                         "is_pool": True,
                     },
                 )
-                await p2p_prefix.save(allow_upsert=True)
+                self.logger.info(
+                    f"- Allocated prefix {p2p_prefix.display_label} for {name}"
+                )
 
                 # Create a temporary address pool from the p2p prefix
-                p2p_address_pool = await self.client.create(
-                    kind=CoreIPAddressPool,
-                    data={
-                        "name": f"p2p-pool-{p2p_prefix.id}",
-                        "resources": [p2p_prefix],
-                        "ip_namespace": {"hfid": ["default"]},
-                        "default_address_type": "IpamIPAddress",
-                        "default_prefix_length": 31,
-                        "is_pool": True,
-                        "member_type": "address",
-                    },
-                )
-                await p2p_address_pool.save(allow_upsert=True)
+                host_addresses = p2p_prefix.prefix.value.hosts()  # type: ignore
 
-                updated_src_interface.ip_address = (
-                    await self.client.allocate_next_ip_address(
-                        p2p_address_pool,
-                        identifier=f"{link_identifier}-A",
-                        prefix_length=31,
-                    )
-                )  # type: ignore
-                updated_dst_interface.ip_address = (
-                    await self.client.allocate_next_ip_address(
-                        p2p_address_pool,
-                        identifier=f"{link_identifier}-B",
-                        prefix_length=31,
-                    )
-                )  # type: ignore
+                src_ip = await self.client.create(
+                    kind=IpamIPAddress,
+                    address=str(next(host_addresses)) + "/31",
+                )
+                await src_ip.save()
+                updated_src_interface.ip_address = src_ip.id  # type: ignore
+
+                dst_ip = await self.client.create(
+                    kind=IpamIPAddress,
+                    address=str(next(host_addresses)) + "/31",
+                )
+                await dst_ip.save()
+                updated_dst_interface.ip_address = dst_ip.id  # type: ignore
 
             updated_src_interface.description.value = name
             updated_dst_interface.description.value = name
