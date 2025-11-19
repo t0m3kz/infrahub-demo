@@ -146,11 +146,23 @@ nodes:
         kind: Number
         default_value: 16
         optional: false
+      - name: maximum_middle_racks
+        order_weight: 420
+        label: "Maximum Middle Racks per Pod"
+        kind: Number
+        default_value: 2
+        optional: false
       - name: maximum_rack_leafs
         order_weight: 450
         label: "Maximum Leaf Switches per Rack"
         kind: Number
         default_value: 4
+        optional: false
+      - name: maximum_tors
+        order_weight: 460
+        label: "Maximum ToR Switches."
+        kind: Number
+        default_value: 16
         optional: false
     relationships:
       - name: deployments
@@ -171,9 +183,7 @@ nodes:
     order_by: [name__value]
     display_label: "{{name__value}}"
     # workaround for loading data
-    default_filter: name__value
-    uniqueness_constraints:
-      - [name__value]
+    # default_filter: name__value
     attributes:
       - name: name
         kind: Text
@@ -204,7 +214,11 @@ nodes:
             color: "#bf7f7f"
           - name: leaf
             label: Leaf Switch
-            description: Top of Rack part of a Pod.
+            description: Leaf Switch part of a Pod.
+            color: "#e6e6fa"
+          - name: tor
+            label: ToR/Level2 Switch
+            description: Top of Rack  or Lavel2 leaf part of a Pod.
             color: "#e6e6fa"
           - name: border-leaf
             label: Border Leaf Switch
@@ -426,6 +440,7 @@ nodes:
         branch: agnostic
         identifier: "pod__loopback_pool"
         order_weight: 6000
+        on_delete: cascade
       - name: prefix_pool
         peer: CoreIPPrefixPool
         kind: Attribute
@@ -434,6 +449,7 @@ nodes:
         optional: true
         identifier: "pod__prefix_pool"
         order_weight: 7000
+        on_delete: cascade
 
 extensions:
   nodes:

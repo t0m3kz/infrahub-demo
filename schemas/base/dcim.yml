@@ -60,8 +60,8 @@ generics:
             description: Border Leaf for external connectivity in a Fabric.
             color: "#dda0dd"
           - name: tor
-            label: Tor Switch
-            description: Tor switch part of a Fabric.
+            label: ToR Switch
+            description: ToR/Lavel2 switch part of a Fabric.
             color: "#e8e7fd"
           - name: oob
             label: Out of Band Switch
@@ -79,6 +79,10 @@ generics:
             label: Load Balancer
             description: Load Balancer part of a Fabric.
             color: "#38e7fb"
+          - name: endpoint
+            label: Endpoint device
+            description: Endpoint Device/Server part of a Fabric.
+            color: "#38a7fb"
       - name: status
         kind: Dropdown
         optional: false

@@ -14,11 +14,6 @@ if TYPE_CHECKING:
     pass
 
 
-# ============================================================================
-# Standalone Cabling Plan Functions
-# ============================================================================
-
-
 @dataclass
 class DeviceNamingConfig:
     """Configuration for device naming strategy.
