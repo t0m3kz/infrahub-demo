@@ -236,9 +236,7 @@ class CommonGenerator(InfrahubGenerator):
         allocate_loopback: bool = bool(options.get("allocate_loopback", False))
         rack: str = options.get("rack", "")
 
-        device_prefix: str = (
-            fabric_name if not pod_name else f"{fabric_name}-{pod_name}"
-        )
+        device_prefix: str = fabric_name if not pod_name else pod_name
 
         device_names: list[str] = sorted(
             [

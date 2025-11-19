@@ -85,7 +85,14 @@ nodes:
     attributes:
       - name: name
         kind: Text
-        unique: false
+        computed_attribute:
+          kind: Jinja2
+          jinja2_template: "{{parent__name__value}} {{suite_name__value}}"
+        read_only: true
+        optional: false
+      - name: suite_name
+        kind: Text
+        optional: false
     relationships:
       - name: owner
         peer: OrganizationGeneric
@@ -99,20 +106,23 @@ nodes:
     include_in_menu: false
     menu_placement: "LocationGeneric"
     label: Rack
-    display_label: "{{parent__description__value}} {{name__value}}"
-    # human_friendly_id:
-    #   - name__value
-    #   - index__value
     parent: "LocationSuite"
     children: ""
     icon: "clarity:rack-server-line"
     attributes:
       - name: name
         kind: Text
-        unique: false
+        computed_attribute:
+          kind: Jinja2
+          jinja2_template: "{{parent__name__value}} {{rack_name__value}}"
+        read_only: true
+        optional: false
+      - name: rack_name
+        kind: Text
+        optional: false
       - name: index
         kind: Number
-        order_weight: 110
+        order_weight: 120
       - name: identifier
         kind: Text
         state: absent

@@ -5,7 +5,7 @@ spec:
   kind: TopologyDataCenter
   data:
     - name: DC6
-      index: 4
+      index: 1
       amount_of_super_spines: 2
       super_spine_template: PowerSwitch-S5232F-ON_SUPER_SPINE
       fabric_interface_sorting_method: top_down
