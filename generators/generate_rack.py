@@ -103,6 +103,6 @@ class RackGenerator(CommonGenerator):
                         "bottom_sorting": pod.get(
                             "spine_interface_sorting_method", "bottom_up"
                         ),
-                        "pool": f"{fabric_name}-{pod_name}-technical-pool",
+                        "pool": f"{pod_name}-technical-pool",
                     },
                 )
