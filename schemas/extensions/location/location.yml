@@ -79,26 +79,13 @@ nodes:
     include_in_menu: false
     menu_placement: "LocationGeneric"
     label: Suite
-    display_label: "{{name__value}}"
     parent: "LocationBuilding"
     children: "LocationRack"
-    # uniqueness_constraints:
-    #   - ["identifier__value"]
     icon: "game-icons:cage"
     attributes:
-      - name: facility_id
+      - name: name
         kind: Text
         unique: false
-        optional: true
-        order_weight: 1100
-      - name: identifier
-        kind: Text
-        computed_attribute:
-          kind: Jinja2
-          jinja2_template: "{{parent__name__value}} {{name__value}}"
-        read_only: true
-        optional: false
-        state: absent
     relationships:
       - name: owner
         peer: OrganizationGeneric
@@ -113,15 +100,16 @@ nodes:
     menu_placement: "LocationGeneric"
     label: Rack
     display_label: "{{parent__description__value}} {{name__value}}"
-    # uniqueness_constraints:
-    #   - ["pod", "name__value", "index__value"]
-    human_friendly_id:
-      - name__value
-      - index__value
+    # human_friendly_id:
+    #   - name__value
+    #   - index__value
     parent: "LocationSuite"
     children: ""
     icon: "clarity:rack-server-line"
     attributes:
+      - name: name
+        kind: Text
+        unique: false
       - name: index
         kind: Number
         order_weight: 110
