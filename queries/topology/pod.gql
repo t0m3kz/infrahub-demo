@@ -1,136 +1,72 @@
+fragment DeviceTemplateFields on TemplateDcimPhysicalDevice {
+  id
+  platform {
+    node {
+      id
+      name { value }
+    }
+  }
+  device_type {
+    node {
+      id
+    }
+  }
+  interfaces(role__value: "uplink") {
+    edges {
+      node {
+        name { value }
+      }
+    }
+  }
+}
+
+fragment SuperSpineTemplateFields on TemplateDcimPhysicalDevice {
+  id
+  platform { node { id } }
+  device_type { node { id } }
+  interfaces(role__value: "spine") {
+    edges { node { name { value } } }
+  }
+}
+
+fragment DesignPatternFields on TopologyDataCenterDesign {
+  maximum_super_spines { value }
+  maximum_pods { value }
+  maximum_spines { value }
+  maximum_leafs { value }
+  maximum_middle_racks { value }
+  maximum_tors { value }
+  naming_convention { value }
+}
+
+fragment DataCenterFields on TopologyDataCenter {
+  id
+  devices(role__value: "super-spine") {
+    edges { node { name { value } } }
+  }
+  name { value }
+  index { value }
+  design_pattern { node { ...DesignPatternFields } }
+  amount_of_super_spines { value }
+  fabric_interface_sorting_method { value }
+  spine_interface_sorting_method { value }
+  super_spine_template { node { ...SuperSpineTemplateFields } }
+}
+
 query PodGeneratorQuery($name: String!) {
   TopologyPod(name__value: $name) {
     edges {
       node {
         id
-        name {
-          value
-        }
-        checksum {
-          value
-        }
-        index {
-          value
-        }
-        deployment_type {
-          value
-        }
-        amount_of_spines {
-          value
-        }
-        leaf_interface_sorting_method {
-          value
-        }
-        spine_interface_sorting_method {
-          value
-        }
-        spine_template {
-          node {
-            id
-            platform {
-              node {
-                id
-                name {
-                  value
-                }
-              }
-            }
-            device_type {
-              node {
-                id
-              }
-            }
-            interfaces(role__value: "uplink") {
-              edges {
-                node {
-                  name {
-                    value
-                  }
-                }
-              }
-            }
-          }
-        }
-        parent {
-          node {
-            ... on TopologyDataCenter {
-              id
-              devices(role__value: "super-spine") {
-                edges {
-                  node {
-                    name {
-                      value
-                    }
-                  }
-                }
-              }
-              name {
-                value
-              }
-              index {
-                value
-              }
-              design_pattern {
-                node {
-                  maximum_super_spines {
-                    value
-                  }
-                  maximum_pods{
-                      value
-                  }
-                  maximum_spines {
-                    value
-                  }
-                  maximum_leafs {
-                    value
-                  }
-                  maximum_middle_racks{
-                    value
-                  }
-                  maximum_tors{
-                    value
-                  }
-                  naming_convention {
-                    value
-                  }
-                }
-              }
-              amount_of_super_spines {
-                value
-              }
-              fabric_interface_sorting_method {
-                value
-              }
-              spine_interface_sorting_method {
-                value
-              }
-              super_spine_template {
-                node {
-                  id
-                  platform {
-                    node {
-                      id
-                    }
-                  }
-                  device_type {
-                    node {
-                      id
-                    }
-                  }
-                  interfaces(role__value: "spine") {
-                    edges {
-                      node {
-                        name {
-                          value
-                        }
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          }
-        }
+        name { value }
+        checksum { value }
+        index { value }
+        deployment_type { value }
+        amount_of_spines { value }
+        leaf_interface_sorting_method { value }
+        spine_interface_sorting_method { value }
+        spine_template { node { ...DeviceTemplateFields } }
+        parent { node { ...DataCenterFields } }
       }
     }
   }
