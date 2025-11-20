@@ -281,7 +281,3 @@ spec:
       maximum_tors: 32
       naming_convention: flat
       deployment_type: mixed
-
-
-
-
