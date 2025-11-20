@@ -261,6 +261,7 @@ def list_scenarios(context: Context, branch: str = "main") -> None:
         "dc3": "Medium data center - London",
         "dc4": "Medium-Large data center - Amsterdam",
         "dc5": "Large data center - New York",
+        "dc6": "Large data center - New York",
     }
 
     print("\n📍 Available Data Center Scenarios:\n")
@@ -269,9 +270,9 @@ def list_scenarios(context: Context, branch: str = "main") -> None:
 
     print("\n💡 Workflow:\n")
     print("  1. Load scenario data:")
-    print("     invoke deploy-dc --scenario dc1")
+    print("     invoke deploy-dc --scenario dc1 --branch dc1")
     print("\n  2. Trigger generation in InfraHub UI:")
-    print("     Navigate to: Actions → Generator Definitions → Run")
+    print("     Navigate to: Actions → Generator Definitions → generate_dc → Run")
     print()
 
 

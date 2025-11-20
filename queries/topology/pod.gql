@@ -12,7 +12,7 @@ query PodGeneratorQuery($name: String!) {
         index {
           value
         }
-        role {
+        deployment_type {
           value
         }
         amount_of_spines {
@@ -72,9 +72,6 @@ query PodGeneratorQuery($name: String!) {
               }
               design_pattern {
                 node {
-                  deployment_type{
-                    value
-                  }
                   maximum_super_spines {
                     value
                   }
