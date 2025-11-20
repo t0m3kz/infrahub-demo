@@ -155,13 +155,11 @@ class RackGenerator(CommonGenerator):
                         )
                         if interface.role == check_interface_role
                     ]
-                    
+
                     # If template doesn't have interface details, use known interface names
                     # for N9K_C9336C_FX2_LEAF_MR template (Ethernet1/25-30 are leaf role)
                     if not leaf_role_interfaces:
-                        leaf_role_interfaces = [
-                            f"Ethernet1/{i}" for i in range(25, 31)
-                        ]
+                        leaf_role_interfaces = [f"Ethernet1/{i}" for i in range(25, 31)]
 
                     # Use load-balanced cabling strategy that distributes ToRs evenly across all leafs
                     await self.create_cabling(

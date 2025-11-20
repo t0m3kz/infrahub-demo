@@ -305,35 +305,46 @@ class CablingPlanner:
     ) -> list[tuple[DcimPhysicalInterface, DcimPhysicalInterface]]:
         """Builds a cabling plan for intra-rack connections (e.g., ToR to Leaf).
 
-        Distributes bottom devices (ToRs) evenly across top devices (Leafs)
-        to ensure balanced port utilization. Each ToR connects to all Leafs,
-        but uses different interfaces on each Leaf to avoid conflicts.
-        
-        Example with 4 ToRs and 4 Leafs:
-        - ToR-1: connects to Leaf-1[0], Leaf-2[0], Leaf-3[0], Leaf-4[0]
-        - ToR-2: connects to Leaf-1[1], Leaf-2[1], Leaf-3[1], Leaf-4[1]
-        - ToR-3: connects to Leaf-1[2], Leaf-2[2], Leaf-3[2], Leaf-4[2]
-        - ToR-4: connects to Leaf-1[3], Leaf-2[3], Leaf-3[3], Leaf-4[3]
+        Each ToR connects to the 2 Leafs with the least connections to ensure
+        balanced port utilization across all Leafs.
+
+        Example with 4 ToRs and 4 Leafs (2 uplinks per ToR):
+        - ToR-1: connects to Leaf-1, Leaf-2
+        - ToR-2: connects to Leaf-3, Leaf-4
+        - ToR-3: connects to Leaf-1, Leaf-2
+        - ToR-4: connects to Leaf-3, Leaf-4
         """
         cabling_plan: list[tuple[DcimPhysicalInterface, DcimPhysicalInterface]] = []
 
         sorted_bottom_devices = sorted(self.bottom_by_device.keys())
         sorted_top_devices = sorted(self.top_by_device.keys())
-        
-        # Each ToR (bottom) connects to each Leaf (top), using a unique interface on each Leaf
-        for tor_idx, bottom_device in enumerate(sorted_bottom_devices):
+
+        # Track connection count and next available interface index per Leaf
+        leaf_connections: dict[str, int] = {leaf: 0 for leaf in sorted_top_devices}
+        leaf_interface_idx: dict[str, int] = {leaf: 0 for leaf in sorted_top_devices}
+
+        # Each ToR connects to the 2 Leafs with least connections
+        for bottom_device in sorted_bottom_devices:
             bottom_interfaces = self.bottom_by_device[bottom_device]
-            
-            # Connect this ToR to each Leaf
-            for leaf_idx, top_device in enumerate(sorted_top_devices):
+
+            # Find 2 Leafs with least connections
+            sorted_leafs = sorted(leaf_connections.items(), key=lambda x: x[1])
+            selected_leafs = [leaf for leaf, _ in sorted_leafs[:2]]
+
+            # Connect ToR to the 2 selected Leafs
+            for tor_port_idx, top_device in enumerate(selected_leafs):
+                if tor_port_idx >= len(bottom_interfaces):
+                    break
+
                 top_interfaces = self.top_by_device[top_device]
-                
-                # Use tor_idx to select which interface on the Leaf
-                # This ensures each ToR uses a different interface on each Leaf
-                if leaf_idx < len(bottom_interfaces) and tor_idx < len(top_interfaces):
+                leaf_idx = leaf_interface_idx[top_device]
+
+                if leaf_idx < len(top_interfaces):
                     cabling_plan.append(
-                        (bottom_interfaces[leaf_idx], top_interfaces[tor_idx])
+                        (bottom_interfaces[tor_port_idx], top_interfaces[leaf_idx])
                     )
+                    leaf_connections[top_device] += 1
+                    leaf_interface_idx[top_device] += 1
 
         return cabling_plan
 
