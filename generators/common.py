@@ -125,6 +125,7 @@ class CommonGenerator(InfrahubGenerator):
             "maximum_pods",
             "maximum_spines",
             "maximum_leafs",
+            "maximum_tors",
         ]
         filtered_pools = {key: pools[key] for key in valid_keys if key in pools}
         pod = await self.client.get(kind=TopologyPod, id=id) if pod_name else None
