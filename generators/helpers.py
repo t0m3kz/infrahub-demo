@@ -163,13 +163,10 @@ class FabricPoolConfig:
         # Each link needs a /31 or /30, so we count total IPs needed (links * 2)
         total_p2p_ips_needed = p2p_links * 2
 
-        # Loopback pool: one address per device + reserves
-        loopback_devices = maximum_devices - self.maximum_super_spines
-
         return {
             "management": management_max_prefix - maximum_devices.bit_length(),
             "technical": data_max_prefix - total_p2p_ips_needed.bit_length(),
-            "loopback": data_max_prefix - loopback_devices.bit_length(),
+            "loopback": data_max_prefix - maximum_devices.bit_length() - 1,
             "super-spine-loopback": data_max_prefix
             - (self.maximum_super_spines + 2).bit_length(),
         }
