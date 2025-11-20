@@ -90,8 +90,6 @@ spec:
             role: management
             interface_type: 1000base-t
 
-
-
     - template_name: PowerSwitch-S5224F-ON_LEAF
       device_type: PowerSwitch S5224F-ON
       platform: dell_sonic
@@ -114,8 +112,6 @@ spec:
             name: mgmt1/1/1
             role: management
             interface_type: 1000base-t
-
-
     - template_name: PowerSwitch-S5248F-ON_LEAF
       device_type: PowerSwitch S5248F-ON
       platform: dell_sonic
@@ -138,7 +134,6 @@ spec:
             name: mgmt1/1/1
             role: management
             interface_type: 1000base-t
-
 
     - template_name: PowerSwitch-S5248F-ON_TOR
       device_type: PowerSwitch S5248F-ON

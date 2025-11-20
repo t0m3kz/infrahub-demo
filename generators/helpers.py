@@ -300,6 +300,43 @@ class CablingPlanner:
         ]
         return cabling_plan
 
+    def _build_intra_rack_cabling_plan(
+        self,
+    ) -> list[tuple[DcimPhysicalInterface, DcimPhysicalInterface]]:
+        """Builds a cabling plan for intra-rack connections (e.g., ToR to Leaf).
+
+        Distributes bottom devices (ToRs) evenly across top devices (Leafs)
+        to ensure balanced port utilization. Each ToR connects to all Leafs,
+        but uses different interfaces on each Leaf to avoid conflicts.
+        
+        Example with 4 ToRs and 4 Leafs:
+        - ToR-1: connects to Leaf-1[0], Leaf-2[0], Leaf-3[0], Leaf-4[0]
+        - ToR-2: connects to Leaf-1[1], Leaf-2[1], Leaf-3[1], Leaf-4[1]
+        - ToR-3: connects to Leaf-1[2], Leaf-2[2], Leaf-3[2], Leaf-4[2]
+        - ToR-4: connects to Leaf-1[3], Leaf-2[3], Leaf-3[3], Leaf-4[3]
+        """
+        cabling_plan: list[tuple[DcimPhysicalInterface, DcimPhysicalInterface]] = []
+
+        sorted_bottom_devices = sorted(self.bottom_by_device.keys())
+        sorted_top_devices = sorted(self.top_by_device.keys())
+        
+        # Each ToR (bottom) connects to each Leaf (top), using a unique interface on each Leaf
+        for tor_idx, bottom_device in enumerate(sorted_bottom_devices):
+            bottom_interfaces = self.bottom_by_device[bottom_device]
+            
+            # Connect this ToR to each Leaf
+            for leaf_idx, top_device in enumerate(sorted_top_devices):
+                top_interfaces = self.top_by_device[top_device]
+                
+                # Use tor_idx to select which interface on the Leaf
+                # This ensures each ToR uses a different interface on each Leaf
+                if leaf_idx < len(bottom_interfaces) and tor_idx < len(top_interfaces):
+                    cabling_plan.append(
+                        (bottom_interfaces[leaf_idx], top_interfaces[tor_idx])
+                    )
+
+        return cabling_plan
+
     def build_cabling_plan(
         self,
         scenario: Literal[
@@ -314,5 +351,7 @@ class CablingPlanner:
             return self._build_pod_cabling_plan(cabling_offset=cabling_offset)
         elif scenario == "rack":
             return self._build_rack_cabling_plan(cabling_offset=cabling_offset)
+        elif scenario == "intra_rack":
+            return self._build_intra_rack_cabling_plan()
         else:
             raise ValueError(f"Unknown cabling scenario: {scenario}")
