@@ -24,6 +24,10 @@ class TestFabricPoolConfigDefaults:
         """Test default FABRIC strategy returns expected pool structure."""
         config = FabricPoolConfig()
         pools = config.pools()
+        assert pools["management"] == 26
+        assert pools["technical"] == 23
+        assert pools["loopback"] == 26
+        assert pools["super-spine-loopback"] == 29
 
     def test_default_fabric_pools_all_positive(self) -> None:
         """Test all pool values are positive integers."""
