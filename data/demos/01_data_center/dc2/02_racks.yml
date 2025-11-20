@@ -34,6 +34,7 @@ spec:
         - 2_ARISTA_LEAFS_DCS-7050SX3-24YC4C-S-R
       member_of_groups:
         - topologies_rack
+
     - rack_name: "Rack-2-1"
       shortname: "dc2-r-2-1"
       index: 1

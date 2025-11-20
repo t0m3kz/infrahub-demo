@@ -44,6 +44,7 @@ spec:
         - 2_DELL_LEAFS_PowerSwitch-S5248F-ON
       member_of_groups:
         - topologies_rack
+
     - rack_name: "Rack-2-1"
       shortname: "dc3-r-2-1"
       index: 1

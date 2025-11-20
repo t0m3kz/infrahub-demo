@@ -40,6 +40,13 @@
 Deploy demo using Codespaces:
 [![Launch in GitHub Codespaces](https://img.shields.io/badge/Launch%20Infrahub%20Demo-0B6581?logo=github)](https://codespaces.new/t0m3kz/infrahub-demo?devcontainer_path=.devcontainer%2Fdevcontainer.json&ref=stable)
 
+### Setup environment variables
+
+```bash
+export INFRAHUB_ADDRESS="http://localhost:8000"
+export INFRAHUB_API_TOKEN="06438eb2-8019-4776-878c-0941b1f1d1ec"
+```
+
 ### Install the Infrahub SDK
 ```bash
 uv sync
@@ -94,10 +101,10 @@ uv run invoke list-scenarios
 uv run invoke deploy-dc --scenario dc1
 
 # Deploy DC-3 with security configurations
-uv run invoke deploy-dc --scenario dc3 --security
+uv run invoke deploy-dc --scenario dc3
 
 # Deploy DC-2 without servers
-uv run invoke deploy-dc --scenario dc2 --servers=False
+uv run invoke deploy-dc --scenario dc2
 ```
 
 **Scenarios:**

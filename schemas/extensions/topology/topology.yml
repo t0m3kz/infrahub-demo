@@ -98,24 +98,6 @@ nodes:
     inherit_from:
       - TopologyDesign
     attributes:
-      - name: deployment_type
-        kind: Dropdown
-        optional: false
-        order_weight: 150
-        choices:
-          - name: middle_rack
-            label: Middle Rack
-            description: Middle Rack deployment
-            color: "#7f7fff"
-          - name: tor
-            label: Top of Rack
-            description: Top of Rack deployment
-            color: "#bf7fbf"
-          - name: mixed
-            label: ToR and Middle Rack
-            description: Mix of ToR and Middle Rack deployment
-            color: "#bf7f7f"
-        default_value: tor
       - name: maximum_super_spines
         order_weight: 200
         label: "Maximum Super Spines"
@@ -382,20 +364,24 @@ nodes:
         parameters:
           min_value: 1
           max_value: 4
-      - name: role
+      - name: deployment_type
         kind: Dropdown
-        default_value: cpu
-        choices:
-          - name: fabric
-            label: Fabric
-          - name: cpu
-            label: CPU
-          - name: gpu
-            label: GPU
-          - name: storage
-            label: Storage
         optional: false
-        order_weight: 2000
+        order_weight: 150
+        choices:
+          - name: middle_rack
+            label: Middle Rack
+            description: Middle Rack deployment
+            color: "#7f7fff"
+          - name: tor
+            label: Top of Rack
+            description: Top of Rack deployment
+            color: "#bf7fbf"
+          - name: mixed
+            label: ToR and Middle Rack
+            description: Mix of ToR and Middle Rack deployment
+            color: "#bf7f7f"
+        default_value: tor
       - name: leaf_interface_sorting_method
         kind: Dropdown
         choices:
@@ -418,6 +404,10 @@ nodes:
             description: Assign interfaces top-down.
         default_value: bottom_up
         order_weight: 4000
+      - name: usage
+        kind: Text
+        read_only: true
+        optional: true
     relationships:
       - name: spine_template
         peer: TemplateDcimPhysicalDevice

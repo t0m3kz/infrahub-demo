@@ -107,9 +107,6 @@ query RackGenerator($name: String!) {
                       maximum_middle_racks{
                         value
                       }
-                      deployment_type{
-                        value
-                      }
                     }
                   }
                 }
@@ -133,6 +130,9 @@ query RackGenerator($name: String!) {
               node {
                 id
               }
+            }
+            deployment_type{
+              value
             }
             spine_template {
               node {
