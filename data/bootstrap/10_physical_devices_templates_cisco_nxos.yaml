@@ -116,6 +116,33 @@ spec:
             name: mgmt0
             role: management
             interface_type: 1000base-t
+    - template_name: N9K_C9336C_FX2_LEAF_MR
+      device_type: N9K-C9336C-FX2
+      platform: cisco_nxos
+      role: leaf
+      status: provisioning
+      interfaces:
+        kind: TemplateDcimPhysicalInterface
+        parameters:
+          expand_range: true
+        data:
+          - template_name: N9K-C9336C-FX2_LEAF_MR_Ethernet1/[1-24]
+            name: Ethernet1/[1-24]
+            role: customer
+            interface_type: 100gbase-x-qsfp28
+          - template_name: N9K-C9336C-FX2_LEAF_MR_Ethernet1/[25-30]
+            name: Ethernet1/[25-30]
+            role: leaf
+            interface_type: 100gbase-x-qsfp28
+          - template_name: N9K-C9336C-FX2_LEAF_MR_Ethernet1/[31-36]
+            name: Ethernet1/[31-36]
+            role: uplink
+            interface_type: 100gbase-x-qsfp28
+          - template_name: N9K-C9336C-FX2_LEAF_MR_mgmt0
+            name: mgmt0
+            role: management
+            interface_type: 1000base-t
+
     - template_name: N9K_C9316D_GX_LEAF
       device_type: N9K-C9316D-GX
       platform: cisco_nxos
@@ -138,6 +165,74 @@ spec:
             name: mgmt0
             role: management
             interface_type: 1000base-t
+    - template_name: N9K_C9316D_GX_LEAF_MIXED
+      device_type: N9K-C9316D-GX
+      platform: cisco_nxos
+      role: leaf
+      status: provisioning
+      interfaces:
+        kind: TemplateDcimPhysicalInterface
+        parameters:
+          expand_range: true
+        data:
+          - template_name: N9K-C9316D-GX_LEAF_MIXED_Ethernet1/[1-12]
+            name: Ethernet1/[1-12]
+            role: leaf
+            interface_type: 100gbase-x-qsfp28
+          - template_name: N9K-C9316D-GX_LEAF_MIXED_Ethernet1/[13-16]
+            name: Ethernet1/[13-16]
+            role: uplink
+            interface_type: 100gbase-x-qsfp28
+          - template_name: N9K-C9316D-GX_LEAF_MIXED_mgmt0
+            name: mgmt0
+            role: management
+            interface_type: 1000base-t
+
+    - template_name: N9K_C9316D_GX_TOR
+      device_type: N9K-C9316D-GX
+      platform: cisco_nxos
+      role: leaf
+      status: provisioning
+      interfaces:
+        kind: TemplateDcimPhysicalInterface
+        parameters:
+          expand_range: true
+        data:
+          - template_name: N9K-C9316D-GX_TOR_Ethernet1/[1-12]
+            name: Ethernet1/[1-12]
+            role: customer
+            interface_type: 100gbase-x-qsfp28
+          - template_name: N9K-C9316D-GX_TOR_Ethernet1/[13-16]
+            name: Ethernet1/[13-16]
+            role: uplink
+            interface_type: 100gbase-x-qsfp28
+          - template_name: N9K-C9316D-GX_TOR_mgmt0
+            name: mgmt0
+            role: management
+            interface_type: 1000base-t
+    - template_name: N9K_C9336C_FX2_TOR
+      device_type: N9K-C9336C-FX2
+      platform: cisco_nxos
+      role: leaf
+      status: provisioning
+      interfaces:
+        kind: TemplateDcimPhysicalInterface
+        parameters:
+          expand_range: true
+        data:
+          - template_name: N9K-C9336C-FX2_TOR_Ethernet1/[1-30]
+            name: Ethernet1/[1-30]
+            role: customer
+            interface_type: 100gbase-x-qsfp28
+          - template_name: N9K-C9336C-FX2_TOR_Ethernet1/[31-36]
+            name: Ethernet1/[31-36]
+            role: uplink
+            interface_type: 100gbase-x-qsfp28
+          - template_name: N9K-C9336C-FX2_TOR_mgmt0
+            name: mgmt0
+            role: management
+            interface_type: 1000base-t
+
     - template_name: N9K_C9316D_GX_EDGE
       device_type: N9K-C9316D-GX
       platform: cisco_nxos
@@ -160,6 +255,7 @@ spec:
             name: mgmt0
             role: management
             interface_type: 1000base-t
+
     # Console interfaces
     - template_name: N9K_C9336C_FX2_SPINE
       device_type: N9K-C9336C-FX2

@@ -1,3 +1,32 @@
+fragment PhysicalInterfaceFields on DcimPhysicalInterface {
+  hfid
+  name { value }
+  device {
+    node {
+      ... on DcimPhysicalDevice {
+        rack {
+          node {
+            name { value }
+          }
+        }
+      }
+    }
+  }
+}
+
+fragment CableFields on DcimCable {
+  __typename
+  id
+  type { value }
+  endpoints {
+    edges {
+      node {
+        ...PhysicalInterfaceFields
+      }
+    }
+  }
+}
+
 query FabricCablingPlanQuery($name: String!) {
   TopologyDeployment(name__value: $name) {
     edges {
@@ -6,7 +35,7 @@ query FabricCablingPlanQuery($name: String!) {
           edges {
             node {
               ... on TopologyPod {
-                name{value}
+                name { value }
                 devices {
                   edges {
                     node {
@@ -16,32 +45,7 @@ query FabricCablingPlanQuery($name: String!) {
                             ... on DcimPhysicalInterface {
                               cable {
                                 node {
-                                  __typename
-                                  id
-                                  type{
-                                    value
-                                  }
-                                  endpoints {
-                                    edges {
-                                      node {
-                                        ... on DcimPhysicalInterface {
-                                          hfid
-                                          name{value}
-                                          device{
-                                            node{
-                                              ... on DcimPhysicalDevice{
-                                                rack{
-                                                  node{
-                                                    name{value}
-                                                  }
-                                                }
-                                              }
-                                            }
-                                          }
-                                        }
-                                      }
-                                    }
-                                  }
+                                  ...CableFields
                                 }
                               }
                             }

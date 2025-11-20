@@ -139,6 +139,64 @@ spec:
             role: management
             interface_type: 1000base-t
 
+    - template_name: DCS-7050CX3-32C-R_LEAF_MR
+      device_type: DCS-7050CX3-32C-R
+      platform: arista_eos
+      role: leaf
+      status: provisioning
+      interfaces:
+        kind: TemplateDcimPhysicalInterface
+        parameters:
+          expand_range: true
+        data:
+          - template_name: DCS-7050CX3-32C-R_LEAF_MR_Ethernet[1-16]/1
+            name: Ethernet[1-16]/1
+            role: customer
+            interface_type: 100gbase-x-qsfp28
+          - template_name: DCS-7050CX3-32C-R_LEAF_MR_Ethernet[17-24]/1
+            name: Ethernet[17-24]/1
+            role: leaf
+            interface_type: 100gbase-x-qsfp28
+          - template_name: DCS-7050CX3-32C-R_LEAF_MR_Ethernet[25-32]/1
+            name: Ethernet[25-32]/1
+            role: uplink
+            interface_type: 100gbase-x-qsfp28
+          - template_name: DCS-7050CX3-32C-R_LEAF_MR_Ethernet[33-34]
+            name: Ethernet[33-34]
+            role: management
+            interface_type: 10gbase-x-sfpp
+          - template_name: DCS-7050CX3-32C-R_LEAF_Management1
+            name: Management1
+            role: management
+            interface_type: 1000base-t
+
+    - template_name: DCS-7050CX3-32C-R_TOR
+      device_type: DCS-7050CX3-32C-R
+      platform: arista_eos
+      role: leaf
+      status: provisioning
+      interfaces:
+        kind: TemplateDcimPhysicalInterface
+        parameters:
+          expand_range: true
+        data:
+          - template_name: DCS-7050CX3-32C-R_TOR_Ethernet[1-30]/1
+            name: Ethernet[1-30]/1
+            role: customer
+            interface_type: 100gbase-x-qsfp28
+          - template_name: DCS-7050CX3-32C-R_TOR_Ethernet[29-32]/1
+            name: Ethernet[29-32]/1
+            role: uplink
+            interface_type: 100gbase-x-qsfp28
+          - template_name: DCS-7050CX3-32C-R_TOR_Ethernet[33-34]
+            name: Ethernet[33-34]
+            role: management
+            interface_type: 10gbase-x-sfpp
+          - template_name: DCS-7050CX3-32C-R_TOR_Management1
+            name: Management1
+            role: management
+            interface_type: 1000base-t
+
     - template_name: DCS-7050CX4M-48D8-F_LEAF
       device_type: DCS-7050CX3-32C-R
       platform: arista_eos
@@ -181,6 +239,29 @@ spec:
             role: uplink
             interface_type: 100gbase-x-qsfp28
           - template_name: DCS-7050SX3-24YC4C-S-R_LEAF_Management1
+            name: Management1
+            role: management
+            interface_type: 1000base-t
+
+    - template_name: DCS-7050SX3-24YC4C-S-R_TOR
+      device_type: DCS-7050SX3-24YC4C-S-R
+      platform: arista_eos
+      role: leaf
+      status: provisioning
+      interfaces:
+        kind: TemplateDcimPhysicalInterface
+        parameters:
+          expand_range: true
+        data:
+          - template_name: DCS-7050SX3-24YC4C-S-R_TOR_Ethernet[1-24]
+            name: Ethernet[1-24]
+            role: customer
+            interface_type: 25gbase-x-sfp28
+          - template_name: DCS-7050SX3-24YC4C-S-R_TOR_Ethernet[25-28]/1
+            name: Ethernet[25-28]/1
+            role: uplink
+            interface_type: 100gbase-x-qsfp28
+          - template_name: DCS-7050SX3-24YC4C-S-R_TOR_Management1
             name: Management1
             role: management
             interface_type: 1000base-t
