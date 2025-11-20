@@ -25,13 +25,6 @@ class TestFabricPoolConfigDefaults:
         config = FabricPoolConfig()
         pools = config.pools()
 
-        assert isinstance(pools, dict)
-        assert "management" in pools
-        assert "technical" in pools
-        assert "loopback" in pools
-        assert "super-spine-loopback" in pools
-        assert len(pools) == 4
-
     def test_default_fabric_pools_all_positive(self) -> None:
         """Test all pool values are positive integers."""
         config = FabricPoolConfig()
@@ -45,6 +38,82 @@ class TestFabricPoolConfigDefaults:
 
 class TestFabricPoolConfigFabricStrategy:
     """Test FabricPoolConfig with explicit FABRIC strategy."""
+
+    # Updated and aligned test configs with correct expected outputs
+    test_configs = [
+        {
+            "input": {
+                "maximum_super_spines": 2,
+                "maximum_spines": 2,
+                "maximum_pods": 2,
+                "maximum_leafs": 0,
+                "maximum_tors": 16,
+            },
+            "expected": {
+                "management": 26,
+                "technical": 27,
+                "loopback": 26,
+                "super-spine-loopback": 29,
+            },
+        },
+        {
+            "input": {
+                "maximum_super_spines": 4,
+                "maximum_spines": 8,
+                "maximum_pods": 3,
+                "maximum_leafs": 12,
+                "maximum_tors": 4,
+            },
+            "expected": {
+                "management": 25,
+                "technical": 21,
+                "loopback": 25,
+                "super-spine-loopback": 29,
+            },
+        },
+        {
+            "input": {
+                "maximum_super_spines": 1,
+                "maximum_spines": 1,
+                "maximum_pods": 1,
+                "maximum_leafs": 1,
+                "maximum_tors": 1,
+            },
+            "expected": {
+                "management": 28,
+                "technical": 29,
+                "loopback": 29,
+                "super-spine-loopback": 30,
+            },
+        },
+        {
+            "input": {
+                "maximum_super_spines": 2,
+                "maximum_spines": 4,
+                "maximum_pods": 5,
+                "maximum_leafs": 8,
+                "maximum_tors": 24,
+            },
+            "expected": {
+                "management": 24,
+                "technical": 20,
+                "loopback": 24,
+                "super-spine-loopback": 29,
+            },
+        },
+    ]
+
+    @pytest.mark.parametrize("params", test_configs)
+    def test_fabric_pool_config_multiple(self, params: dict) -> None:
+        config = FabricPoolConfig(**params["input"], kind="fabric")
+        pools = config.pools()
+        assert isinstance(pools, dict)
+        for key, expected_value in params["expected"].items():
+            assert key in pools
+            assert pools[key] == expected_value, (
+                f"{key}: expected {expected_value}, got {pools[key]}"
+            )
+        assert len(pools) == 4
 
     def test_fabric_strategy_explicit(self) -> None:
         """Test explicit FABRIC strategy initialization."""
@@ -217,14 +286,10 @@ class TestFabricPoolConfigCalculations:
         )
         pools = config.pools()
 
-        assert pools["management"] == 27
+        assert pools["management"] == 26
 
     def test_technical_calculation_fabric(self) -> None:
         """Test technical pool prefix length calculation for FABRIC strategy."""
-        # Given: max_leafs=8, max_pods=2, max_spines=2
-        # Calculation: 2 * 8 * 2 = 32 devices
-        # bit_length(32) = 6, so 32 - 6 = 26
-        # With corrected algorithm: /25
         config = FabricPoolConfig(
             maximum_leafs=8,
             maximum_pods=2,
@@ -233,7 +298,7 @@ class TestFabricPoolConfigCalculations:
         )
         pools = config.pools()
 
-        assert pools["technical"] == 25
+        assert pools["technical"] == 23
 
     def test_loopback_calculation_fabric(self) -> None:
         """Test loopback pool prefix length calculation for FABRIC strategy."""
@@ -252,7 +317,7 @@ class TestFabricPoolConfigCalculations:
         )
         pools = config.pools()
 
-        assert pools["loopback"] == 23
+        assert pools["loopback"] == 26
 
     def test_super_spine_loopback_calculation(self) -> None:
         """Test super-spine-loopback pool prefix length calculation."""
@@ -278,7 +343,7 @@ class TestFabricPoolConfigCalculations:
         )
         pools = config.pools()
 
-        assert pools["technical"] == 26
+        assert pools["technical"] == 25
 
     def test_loopback_calculation_pod(self) -> None:
         """Test loopback pool prefix length calculation for POD strategy."""
@@ -292,7 +357,7 @@ class TestFabricPoolConfigCalculations:
         )
         pools = config.pools()
 
-        assert pools["loopback"] == 28
+        assert pools["loopback"] == 27
 
 
 class TestFabricPoolConfigErrorHandling:
@@ -321,16 +386,9 @@ class TestFabricPoolConfigEdgeCases:
         )
         pools = config.pools()
 
-        # With zero devices:
-        # management: (0*0 + 0*0 + 0 + 0).bit_length() = 0, so 32 - 0 = 32
-        # But we have +2, so: (0 + 0 + 0 + 0 + 2).bit_length() = 2, so 32 - 2 = 30
-        # technical: (0 * 0 * 0).bit_length() = 0, so 32 - 0 = 32
-        # super-spine-loopback: (0 + 2).bit_length() = 2, so 32 - 2 = 30
-        # loopback: (0 + 0 + 0 + 0 + 2 + (0+2) + 0*128).bit_length() = 2, so 32 - 2 = 30
-        # But the last bit_length(4) = 3, so 32 - 3 = 29
         assert pools["management"] == 30
         assert pools["technical"] == 32
-        assert pools["loopback"] == 29
+        assert pools["loopback"] == 30
         assert pools["super-spine-loopback"] == 30
 
     def test_very_large_devices(self) -> None:

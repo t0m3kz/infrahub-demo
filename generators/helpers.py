@@ -112,6 +112,7 @@ class FabricPoolConfig:
     maximum_pods: int = 2
     maximum_spines: int = 2
     maximum_leafs: int = 8
+    maximum_tors: int = 8
     ipv6: bool = False
     kind: Literal["fabric", "pod"] = "fabric"
 
@@ -144,9 +145,9 @@ class FabricPoolConfig:
     ) -> dict[str, int]:
         """Calculate pool prefixes for the entire fabric."""
         # Management pool: one address per physical device + buffer
-        management_devices = (
-            self.maximum_leafs * self.maximum_pods
-            + self.maximum_spines * self.maximum_pods
+        maximum_devices = (
+            (self.maximum_leafs + self.maximum_spines + self.maximum_tors + 2)
+            * self.maximum_pods
             + self.maximum_super_spines
             + 2
         )
@@ -156,22 +157,19 @@ class FabricPoolConfig:
         # Formula: (super-spine <> spine links) + (spine <> leaf links)
         p2p_links = (
             self.maximum_super_spines * self.maximum_spines * self.maximum_pods
-        ) + (self.maximum_spines * self.maximum_leafs * self.maximum_pods)
+            + self.maximum_spines * self.maximum_leafs * self.maximum_pods
+            + self.maximum_tors * self.maximum_leafs * self.maximum_pods
+        )
         # Each link needs a /31 or /30, so we count total IPs needed (links * 2)
         total_p2p_ips_needed = p2p_links * 2
 
         # Loopback pool: one address per device + reserves
-        loopback_devices = management_devices
-        pod_loopback_reserve = self.maximum_pods * (2**7)  # 128 addresses per pod
+        loopback_devices = maximum_devices - self.maximum_super_spines
 
         return {
-            "management": management_max_prefix - management_devices.bit_length(),
+            "management": management_max_prefix - maximum_devices.bit_length(),
             "technical": data_max_prefix - total_p2p_ips_needed.bit_length(),
-            "loopback": data_max_prefix
-            - max(
-                (loopback_devices + 2).bit_length(),
-                pod_loopback_reserve.bit_length(),
-            ),
+            "loopback": data_max_prefix - loopback_devices.bit_length(),
             "super-spine-loopback": data_max_prefix
             - (self.maximum_super_spines + 2).bit_length(),
         }
@@ -179,14 +177,18 @@ class FabricPoolConfig:
     def _calculate_pod_pools(self, data_max_prefix: int) -> dict[str, int]:
         """Calculate pool prefixes for a single pod."""
         # Technical (P2P) pool for one pod
-        # Formula: (super-spine <> spine links) + (spine <> leaf links)
-        p2p_links_per_pod = (self.maximum_super_spines * self.maximum_spines) + (
-            self.maximum_spines * self.maximum_leafs
+        # Formula: (super-spine <> spine links) + (spine <> leaf links) + (spine <> tor links)
+        p2p_links_per_pod = (
+            (self.maximum_super_spines * self.maximum_spines)
+            + (self.maximum_spines * self.maximum_leafs)
+            + (self.maximum_tors * self.maximum_spines)
         )
         total_p2p_ips_needed = p2p_links_per_pod * 2
 
         # Loopback pool for one pod
-        loopback_devices_per_pod = self.maximum_leafs + self.maximum_spines + 2
+        loopback_devices_per_pod = (
+            self.maximum_leafs + self.maximum_spines + self.maximum_tors + 2
+        )
 
         return {
             "technical": data_max_prefix - total_p2p_ips_needed.bit_length(),
