@@ -26,7 +26,7 @@ class TestFabricPoolConfigDefaults:
         pools = config.pools()
         assert pools["management"] == 26
         assert pools["technical"] == 23
-        assert pools["loopback"] == 26
+        assert pools["loopback"] == 25
         assert pools["super-spine-loopback"] == 29
 
     def test_default_fabric_pools_all_positive(self) -> None:
@@ -56,7 +56,7 @@ class TestFabricPoolConfigFabricStrategy:
             "expected": {
                 "management": 26,
                 "technical": 27,
-                "loopback": 26,
+                "loopback": 25,
                 "super-spine-loopback": 29,
             },
         },
@@ -71,7 +71,7 @@ class TestFabricPoolConfigFabricStrategy:
             "expected": {
                 "management": 25,
                 "technical": 21,
-                "loopback": 25,
+                "loopback": 24,
                 "super-spine-loopback": 29,
             },
         },
@@ -86,7 +86,7 @@ class TestFabricPoolConfigFabricStrategy:
             "expected": {
                 "management": 28,
                 "technical": 29,
-                "loopback": 29,
+                "loopback": 27,
                 "super-spine-loopback": 30,
             },
         },
@@ -101,7 +101,7 @@ class TestFabricPoolConfigFabricStrategy:
             "expected": {
                 "management": 24,
                 "technical": 20,
-                "loopback": 24,
+                "loopback": 23,
                 "super-spine-loopback": 29,
             },
         },
@@ -116,7 +116,7 @@ class TestFabricPoolConfigFabricStrategy:
             "expected": {
                 "management": 23,
                 "technical": 18,
-                "loopback": 23,
+                "loopback": 22,
                 "super-spine-loopback": 29,
             },
         },
@@ -416,7 +416,7 @@ class TestFabricPoolConfigCalculations:
         )
         pools = config.pools()
 
-        assert pools["loopback"] == 26
+        assert pools["loopback"] == 25
 
     def test_super_spine_loopback_calculation(self) -> None:
         """Test super-spine-loopback pool prefix length calculation."""
@@ -487,7 +487,7 @@ class TestFabricPoolConfigEdgeCases:
 
         assert pools["management"] == 30
         assert pools["technical"] == 32
-        assert pools["loopback"] == 30
+        assert pools["loopback"] == 29
         assert pools["super-spine-loopback"] == 30
 
     def test_very_large_devices(self) -> None:
