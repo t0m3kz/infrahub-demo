@@ -27,6 +27,9 @@ query FabricGeneratorQuery($name: String!) {
               maximum_leafs {
                 value
               }
+              maximum_tors{
+                value
+              }
               naming_convention {
                 value
               }

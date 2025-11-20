@@ -38,7 +38,7 @@ spec:
           - attribute_name: amount_of_spines
             value_match: any
 
-    - name: trigger-pod-generator-update-role
+    - name: trigger-pod-generator-update-deployment
       branch_scope: "other_branches"
       node_kind: TopologyPod
       mutation_action: "updated"
@@ -46,7 +46,7 @@ spec:
       matches:
         kind: CoreNodeTriggerAttributeMatch
         data:
-          - attribute_name: role
+          - attribute_name: deployment_type
             value_match: any
 
     - name: trigger-rack-generator-update-checksum

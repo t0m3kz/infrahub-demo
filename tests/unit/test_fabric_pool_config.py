@@ -105,6 +105,21 @@ class TestFabricPoolConfigFabricStrategy:
                 "super-spine-loopback": 29,
             },
         },
+        {
+            "input": {
+                "maximum_super_spines": 2,
+                "maximum_spines": 4,
+                "maximum_pods": 4,
+                "maximum_leafs": 24,
+                "maximum_tors": 48,
+            },
+            "expected": {
+                "management": 23,
+                "technical": 18,
+                "loopback": 23,
+                "super-spine-loopback": 29,
+            },
+        },
     ]
 
     @pytest.mark.parametrize("params", test_configs)
@@ -217,6 +232,86 @@ class TestFabricPoolConfigPodStrategy:
         for pool_name, prefix_length in pools.items():
             assert prefix_length > 0, f"{pool_name} should be positive"
             assert prefix_length <= 32, f"{pool_name} should be <= 32"
+
+    test_configs = [
+        {
+            "input": {
+                "maximum_super_spines": 2,
+                "maximum_spines": 2,
+                "maximum_pods": 2,
+                "maximum_leafs": 0,
+                "maximum_tors": 16,
+            },
+            "expected": {
+                "technical": 25,
+                "loopback": 27,
+            },
+        },
+        {
+            "input": {
+                "maximum_super_spines": 4,
+                "maximum_spines": 8,
+                "maximum_pods": 3,
+                "maximum_leafs": 12,
+                "maximum_tors": 4,
+            },
+            "expected": {
+                "technical": 23,
+                "loopback": 27,
+            },
+        },
+        {
+            "input": {
+                "maximum_super_spines": 1,
+                "maximum_spines": 1,
+                "maximum_pods": 1,
+                "maximum_leafs": 1,
+                "maximum_tors": 1,
+            },
+            "expected": {
+                "technical": 29,
+                "loopback": 29,
+            },
+        },
+        {
+            "input": {
+                "maximum_super_spines": 2,
+                "maximum_spines": 4,
+                "maximum_pods": 5,
+                "maximum_leafs": 8,
+                "maximum_tors": 24,
+            },
+            "expected": {
+                "technical": 23,
+                "loopback": 26,
+            },
+        },
+        {
+            "input": {
+                "maximum_super_spines": 2,
+                "maximum_spines": 4,
+                "maximum_pods": 4,
+                "maximum_leafs": 24,
+                "maximum_tors": 48,
+            },
+            "expected": {
+                "technical": 22,
+                "loopback": 25,
+            },
+        },
+    ]
+
+    @pytest.mark.parametrize("params", test_configs)
+    def test_pod_pool_config_multiple(self, params: dict) -> None:
+        config = FabricPoolConfig(**params["input"], kind="pod")
+        pools = config.pools()
+        assert isinstance(pools, dict)
+        for key, expected_value in params["expected"].items():
+            assert key in pools
+            assert pools[key] == expected_value, (
+                f"{key}: expected {expected_value}, got {pools[key]}"
+            )
+        assert len(pools) == 2
 
 
 class TestFabricPoolConfigCustomDimensions:
