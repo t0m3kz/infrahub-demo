@@ -91,8 +91,108 @@ class CommonGenerator(InfrahubGenerator):
         joined = ",".join(sorted_ids)
         return hashlib.sha256(joined.encode("utf-8")).hexdigest()
 
-    async def get_rack_leaf_interfaces(self) -> None:
-        pass
+    async def get_devices_with_available_ports(
+        self,
+        device_names: list[str],
+        interface_role: str = "leaf",
+        top_n: int = 2,
+    ) -> tuple[list[str], int]:
+        """Get devices with most available ports using GraphQL.
+
+        Args:
+            device_names: List of device names to check
+            interface_role: Role of interfaces to check (default: "leaf")
+            top_n: Number of top devices to return (default: 2)
+
+        Returns:
+            Tuple of (selected_device_names, total_available_ports)
+        """
+        from typing import TypedDict
+
+        class DeviceAvailability(TypedDict):
+            device: str
+            available_ports: int
+
+        device_availability: list[DeviceAvailability] = []
+
+        for device_name in device_names:
+            # Use GraphQL to efficiently count available ports
+            query = """
+            query GetDeviceAvailablePorts($device_name: String!, $role: String!) {
+                DcimGenericDevice(name__value: $device_name) {
+                    edges {
+                        node {
+                            id
+                            name { value }
+                            interfaces(role__value: $role) {
+                                count
+                                edges {
+                                    node {
+                                        id
+                                        name { value }
+                                        ... on DcimPhysicalInterface {
+                                            cable {
+                                                node { id }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            """
+
+            result = await self.client.execute_graphql(
+                query=query,
+                variables={"device_name": device_name, "role": interface_role},
+                branch_name=self.branch,
+            )
+
+            device_data = result.get("DcimGenericDevice", {}).get("edges", [])
+            if not device_data:
+                self.logger.warning(
+                    f"Device {device_name} not found in GraphQL response"
+                )
+                continue
+
+            interfaces_data = device_data[0].get("node", {}).get("interfaces", {})
+            total_ports = interfaces_data.get("count", 0)
+
+            # Count interfaces with cables
+            connected_count = 0
+            for iface_edge in interfaces_data.get("edges", []):
+                iface = iface_edge.get("node", {})
+                if iface.get("cable", {}).get("node"):
+                    connected_count += 1
+
+            available_ports = total_ports - connected_count
+
+            self.logger.debug(
+                f"Device {device_name}: {total_ports} total ports, "
+                f"{connected_count} connected, {available_ports} available"
+            )
+
+            device_availability.append(
+                {
+                    "device": device_name,
+                    "available_ports": available_ports,
+                }
+            )
+
+        # Sort by available ports (descending) and select top N
+        device_availability.sort(key=lambda x: x["available_ports"], reverse=True)
+        selected_devices: list[str] = [
+            item["device"] for item in device_availability[:top_n]
+        ]
+
+        # Calculate total available ports in selected devices
+        total_available = sum(
+            item["available_ports"] for item in device_availability[:top_n]
+        )
+
+        return selected_devices, total_available
 
     async def allocate_resource_pools(
         self,
@@ -453,14 +553,14 @@ class CommonGenerator(InfrahubGenerator):
                     kind=IpamIPAddress,
                     address=str(next(host_addresses)) + "/31",
                 )
-                await src_ip.save()
+                await src_ip.save(allow_upsert=True)
                 updated_src_interface.ip_address = src_ip.id  # type: ignore
 
                 dst_ip = await self.client.create(
                     kind=IpamIPAddress,
                     address=str(next(host_addresses)) + "/31",
                 )
-                await dst_ip.save()
+                await dst_ip.save(allow_upsert=True)
                 updated_dst_interface.ip_address = dst_ip.id  # type: ignore
 
             updated_src_interface.description.value = name

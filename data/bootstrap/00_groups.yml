@@ -9,7 +9,9 @@ spec:
     - name: linux_devices
       description: Linux Devices
     - name: leafs
-      description: All leafs
+      description: All leaf switches
+    - name: tors
+      description: All ToR/Level2 switches
     - name: border-leafs
       description: All border leafs
     - name: spines

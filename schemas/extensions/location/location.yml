@@ -113,7 +113,7 @@ nodes:
         kind: Text
         computed_attribute:
           kind: Jinja2
-          jinja2_template: "{{parent__name__value}} {{rack_name__value}} {{row__value}}"
+          jinja2_template: "{{parent__name__value}} {{rack_name__value}} {{row__value}}"  # yamllint disable-line rule:line-length
         read_only: true
         optional: false
       - name: rack_name

@@ -3,6 +3,7 @@
 from typing import Any
 
 from .common import CommonGenerator
+from .models import PodModel
 from .schema_protocols import LocationRack
 
 
@@ -19,9 +20,7 @@ class PodTopologyGenerator(CommonGenerator):
         Compares the calculated checksum with existing rack checksums and updates
         them if they differ, ensuring consistency across the pod infrastructure.
         """
-        racks = await self.client.filters(
-            kind=LocationRack, pod__ids=[self.data.get("id")]
-        )
+        racks = await self.client.filters(kind=LocationRack, pod__ids=[self.data.id])
 
         # store the checksum for the fabric in the object itself
         checksum = self.calculate_checksum()
@@ -49,33 +48,40 @@ class PodTopologyGenerator(CommonGenerator):
                 self.logger.error("No Pod Deployment data found in GraphQL response")
                 return
 
-            self.data = deployment_list[0]
+            self.data = PodModel(**deployment_list[0])
         except (ValueError, KeyError, IndexError) as exc:
             self.logger.error(f"Generation failed due to {exc}")
             return
 
-        self.logger.info(f"Generating topology for pod {self.data.get('name')}")
-        pod_id = self.data.get("id")
-        dc = self.data.get("parent", {})
-        pod_name = self.data.get("name", "").lower()
-        fabric_name = dc.get("name", "").lower()
-        design = dc.get("design_pattern", {})
-        indexes: list[int] = [dc.get("index", 1), self.data.get("index", 1)]
+        self.logger.info(f"Generating topology for pod {self.data.name}")
+        pod_id = self.data.id
+        dc = self.data.parent
+        pod_name = self.data.name.lower()
+        fabric_name = dc.name.lower()
+        design = dc.design_pattern
+        indexes: list[int] = [dc.index or 1, self.data.index]
 
         await self.allocate_resource_pools(
             id=pod_id,
             strategy="pod",
-            pools=design,
+            pools=design.model_dump() if design else {},
             pod_name=pod_name,
             fabric_name=fabric_name,
         )
 
+        from typing import Literal, cast
+
+        naming_conv = cast(
+            Literal["standard", "hierarchical", "flat"],
+            (design.naming_convention if design else "standard").lower(),
+        )
+
         spines = await self.create_devices(
-            deployment_id=self.data.get("id"),
+            deployment_id=self.data.id,
             device_role="spine",
-            amount=self.data.get("amount_of_spines"),
-            template=self.data.get("spine_template", {}),
-            naming_convention=design.get("naming_convention", "standard").lower(),
+            amount=self.data.amount_of_spines,
+            template=self.data.spine_template.model_dump(),
+            naming_convention=naming_conv,
             options={
                 "name_prefix": fabric_name,
                 "fabric_name": fabric_name,
@@ -85,21 +91,22 @@ class PodTopologyGenerator(CommonGenerator):
             },
         )
 
-        spine_switch_template = self.data.get("spine_template", {})
-        spine_interfaces_data = spine_switch_template.get("interfaces", [])
-        spine_interfaces = [iface.get("name") for iface in spine_interfaces_data]
+        spine_switch_template = self.data.spine_template
+        spine_interfaces_data = spine_switch_template.interfaces
+        spine_interfaces = [iface.name for iface in spine_interfaces_data]
         if not spine_interfaces:
             self.logger.warning(
                 "No interfaces with role 'uplink' found in spine template"
             )
 
-        parent = self.data.get("parent", {})
-        super_spine_devices = [
-            device.get("name") for device in (parent.get("devices") or [])
-        ]
-        super_spine_template = parent.get("super_spine_template", {})
+        parent = self.data.parent
+        super_spine_devices = [device.name for device in (parent.devices or [])]
+        super_spine_template = parent.super_spine_template
         super_spine_interfaces = [
-            iface.get("name") for iface in super_spine_template.get("interfaces", [])
+            iface.name
+            for iface in (
+                super_spine_template.interfaces if super_spine_template else []
+            )
         ]
         if not super_spine_interfaces:
             self.logger.warning(
@@ -114,14 +121,11 @@ class PodTopologyGenerator(CommonGenerator):
             strategy="pod",
             options={
                 "cabling_offset": (
-                    (self.data.get("index", 1) - 1) * design.get("maximum_spines", 2)
+                    (self.data.index - 1)
+                    * ((design.maximum_spines if design else None) or 2)
                 ),
-                "top_sorting": parent.get(
-                    "fabric_interface_sorting_method", "bottom_up"
-                ),
-                "bottom_sorting": parent.get(
-                    "spine_interface_sorting_method", "bottom_up"
-                ),
+                "top_sorting": self.data.spine_interface_sorting_method,
+                "bottom_sorting": self.data.spine_interface_sorting_method,
                 "pool": f"{pod_name}-technical-pool",
             },
         )

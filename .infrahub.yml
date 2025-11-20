@@ -28,6 +28,13 @@ artifact_definitions:
     transformation: border_leaf
     parameters:
       device: name__value
+  - name: tor_config
+    artifact_name: tor
+    content_type: text/plain
+    targets: tors
+    transformation: tor
+    parameters:
+      device: name__value
   - name: spine_config
     artifact_name: spine
     content_type: text/plain
@@ -100,6 +107,12 @@ check_definitions:
     targets: loadbalancers
     parameters:
       device: name__value
+  - name: validate_tor
+    class_name: CheckToR
+    file_path: checks/tor.py
+    targets: border-leafs
+    parameters:
+      device: name__value
   - name: validate_border_leaf
     class_name: CheckBorderLeaf
     file_path: checks/border_leaf.py
@@ -123,6 +136,9 @@ python_transforms:
   - name: border_leaf
     class_name: BorderLeaf
     file_path: transforms/border_leaf.py
+  - name: tor
+    class_name: ToR
+    file_path: transforms/tor.py
   - name: spine
     class_name: Spine
     file_path: transforms/spine.py
