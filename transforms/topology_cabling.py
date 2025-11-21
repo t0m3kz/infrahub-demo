@@ -4,7 +4,7 @@ from typing import Any
 
 from infrahub_sdk.transforms import InfrahubTransform
 
-from utils.data_cleaning import clean_data
+from .common import clean_data
 
 
 class TopologyCabling(InfrahubTransform):

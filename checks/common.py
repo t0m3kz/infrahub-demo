@@ -1,5 +1,11 @@
 from typing import Any
 
+# Re-export shared utilities for Infrahub compatibility
+# Infrahub loads files directly from git, so utils package may not be in path
+from utils.data_cleaning import clean_data, get_data
+
+__all__ = ["clean_data", "get_data", "validate_interfaces"]
+
 
 def validate_interfaces(data: dict[str, Any]) -> list[str]:
     """

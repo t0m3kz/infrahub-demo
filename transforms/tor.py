@@ -4,8 +4,7 @@ from infrahub_sdk.transforms import InfrahubTransform
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 from netutils.utils import jinja2_convenience_function
 
-from transforms.common import get_bgp_profile, get_interfaces, get_ospf, get_vlans
-from utils.data_cleaning import get_data
+from .common import get_bgp_profile, get_data, get_interfaces, get_ospf, get_vlans
 
 
 class ToR(InfrahubTransform):
