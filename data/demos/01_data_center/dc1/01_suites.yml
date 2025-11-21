@@ -6,13 +6,13 @@ spec:
   data:
     - suite_name: "Suite-1"
       shortname: "muc-1-s-1"
-      parent: "MUC-1"
+      parent: muc-1
     - suite_name: "Suite-2"
       shortname: "muc-1-s-2"
-      parent: "MUC-1"
+      parent: muc-1
     - suite_name: "Suite-3"
       shortname: "muc-1-s-3"
-      parent: "MUC-1"
+      parent: muc-1
     - suite_name: "Suite-4"
       shortname: "muc-1-s-4"
-      parent: "MUC-1"
+      parent: muc-1

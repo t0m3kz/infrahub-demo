@@ -6,7 +6,7 @@ spec:
   data:
     - suite_name: "Suite-1"
       shortname: "ktw-1-s-1"
-      parent: "KTW-1"
+      parent: ktw-1
     - suite_name: "Suite-2"
       shortname: "ktw-1-s-2"
-      parent: "KTW-1"
+      parent: ktw-1

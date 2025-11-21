@@ -6,7 +6,7 @@ spec:
   data:
     - suite_name: "Room-1"
       shortname: "lon-1-s-1"
-      parent: "LON-1"
+      parent: lon-1
     - suite_name: "Room-2"
       shortname: "lon-1-s-2"
-      parent: "LON-1"
+      parent: lon-1

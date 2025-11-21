@@ -6,10 +6,10 @@ spec:
   data:
     - suite_name: "Suite-1"
       shortname: "ber-1-s-1"
-      parent: "BER-1"
+      parent: ber-1
     - suite_name: "Suite-2"
       shortname: "ber-1-s-2"
-      parent: "BER-1"
+      parent: ber-1
     - suite_name: "Suite-3"
       shortname: "ber-1-s-3"
-      parent: "BER-1"
+      parent: ber-1

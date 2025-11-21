@@ -6,7 +6,7 @@ spec:
   data:
     - suite_name: "Suite-1"
       shortname: "par-1-s-1"
-      parent: "PAR-1"
+      parent: par-1
     - suite_name: "Suite-2"
       shortname: "par-1-s-2"
-      parent: "PAR-1"
+      parent: par-1

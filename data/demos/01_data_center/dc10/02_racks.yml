@@ -10,7 +10,7 @@ spec:
       row: A
       rack_type: network
       pod: ["DC10", "10", "1"]
-      parent: "SYD-1-Room-1"
+      parent: syd-1-s-1
       fabric_templates:
         - [2_DELL_LEAFS_PowerSwitch-S5224F-ON]
       member_of_groups:
@@ -21,7 +21,7 @@ spec:
       row: B
       rack_type: network
       pod: ["DC10", "10", "1"]
-      parent: "SYD-1-Room-1"
+      parent: syd-1-s-1
       fabric_templates:
         - [4_DELL_LEAFS_PowerSwitch-S5248F-ON]
       member_of_groups:
@@ -32,7 +32,7 @@ spec:
       row: C
       rack_type: network
       pod: ["DC10", "10", "1"]
-      parent: "SYD-1-Room-1"
+      parent: syd-1-s-1
       fabric_templates:
         - [2_DELL_LEAFS_PowerSwitch-S5224F-ON]
       member_of_groups:
@@ -43,7 +43,7 @@ spec:
       row: D
       rack_type: network
       pod: ["DC10", "10", "1"]
-      parent: "SYD-1-Room-1"
+      parent: syd-1-s-1
       fabric_templates:
         - [4_DELL_LEAFS_PowerSwitch-S5248F-ON]
       member_of_groups:
@@ -54,7 +54,7 @@ spec:
       row: A
       rack_type: network
       pod: ["DC10", "10", "2"]
-      parent: "SYD-1-Room-2"
+      parent: syd-1-s-2
       fabric_templates:
         - [2_DELL_LEAFS_PowerSwitch-S5224F-ON]
       member_of_groups:
@@ -65,7 +65,7 @@ spec:
       row: B
       rack_type: network
       pod: ["DC10", "10", "2"]
-      parent: "SYD-1-Room-2"
+      parent: syd-1-s-2
       fabric_templates:
         - [4_DELL_LEAFS_PowerSwitch-S5248F-ON]
       member_of_groups:
@@ -76,7 +76,7 @@ spec:
       row: C
       rack_type: network
       pod: ["DC10", "10", "2"]
-      parent: "SYD-1-Room-2"
+      parent: syd-1-s-2
       fabric_templates:
         - [2_DELL_LEAFS_PowerSwitch-S5224F-ON]
       member_of_groups:
@@ -87,7 +87,7 @@ spec:
       row: D
       rack_type: network
       pod: ["DC10", "10", "2"]
-      parent: "SYD-1-Room-2"
+      parent: syd-1-s-2
       fabric_templates:
         - [4_DELL_LEAFS_PowerSwitch-S5248F-ON]
       member_of_groups:

@@ -343,7 +343,7 @@ nodes:
       - parent__name__value
       - parent__index__value
       - index__value
-    display_label: "{{parent__name__value}}-Fabric-{{parent__index__value}}-POD-{{index__value}}"  # yamllint disable-line rule:line-length
+    display_label: "{{ name__value }}"
     uniqueness_constraints:
       - ["parent", "index__value"]
     include_in_menu: false

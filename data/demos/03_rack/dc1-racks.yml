@@ -10,7 +10,7 @@ spec:
       row: A
       rack_type: network
       pod: ["DC1", "1", "4"]
-      parent: "MUC-1-Suite-4"
+      parent: muc-1-s-4
       fabric_templates:
         - [2_CISCO_LEAFS_N9K-C9336C-FX2]
       member_of_groups:
@@ -21,7 +21,7 @@ spec:
       row: B
       rack_type: network
       pod: ["DC1", "1", "4"]
-      parent: "MUC-1-Suite-4"
+      parent: muc-1-s-4
       fabric_templates:
         - [2_CISCO_LEAFS_N9K-C9336C-FX2]
       member_of_groups:
@@ -32,7 +32,7 @@ spec:
       row: C
       rack_type: network
       pod: ["DC1", "1", "4"]
-      parent: "MUC-1-Suite-4"
+      parent: muc-1-s-4
       fabric_templates:
         - [2_CISCO_LEAFS_N9K-C9336C-FX2]
       member_of_groups:
@@ -43,7 +43,7 @@ spec:
       row: D
       rack_type: network
       pod: ["DC1", "1", "4"]
-      parent: "MUC-1-Suite-4"
+      parent: muc-1-s-4
       fabric_templates:
         - [2_CISCO_LEAFS_N9K-C9336C-FX2]
       member_of_groups:

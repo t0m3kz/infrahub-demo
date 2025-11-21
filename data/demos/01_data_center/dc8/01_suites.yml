@@ -6,25 +6,25 @@ spec:
   data:
     - suite_name: "Suite-1"
       shortname: "tyo-1-s-1"
-      parent: "TYO-1"
+      parent: tyo-1
     - suite_name: "Suite-2"
       shortname: "tyo-1-s-2"
-      parent: "TYO-1"
+      parent: tyo-1
     - suite_name: "Suite-3"
       shortname: "tyo-1-s-3"
-      parent: "TYO-1"
+      parent: tyo-1
     - suite_name: "Suite-4"
       shortname: "tyo-1-s-4"
-      parent: "TYO-1"
+      parent: tyo-1
     - suite_name: "Suite-5"
       shortname: "tyo-1-s-5"
-      parent: "TYO-1"
+      parent: tyo-1
     - suite_name: "Suite-6"
       shortname: "tyo-1-s-6"
-      parent: "TYO-1"
+      parent: tyo-1
     - suite_name: "Suite-7"
       shortname: "tyo-1-s-7"
-      parent: "TYO-1"
+      parent: tyo-1
     - suite_name: "Suite-8"
       shortname: "tyo-1-s-8"
-      parent: "TYO-1"
+      parent: tyo-1
