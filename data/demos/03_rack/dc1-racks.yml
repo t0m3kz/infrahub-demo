@@ -1,0 +1,50 @@
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: LocationRack
+  data:
+    - rack_name: "Rack-4-1-05"
+      shortname: "dc1-r-4-1-05a"
+      index: 1
+      row: A
+      rack_type: network
+      pod: ["DC1", "1", "4"]
+      parent: "MUC-1-Suite-4"
+      fabric_templates:
+        - [2_CISCO_LEAFS_N9K-C9336C-FX2]
+      member_of_groups:
+        - topologies_rack
+    - rack_name: "Rack-4-2-05"
+      shortname: "dc1-r-4-2-05b"
+      index: 2
+      row: B
+      rack_type: network
+      pod: ["DC1", "1", "4"]
+      parent: "MUC-1-Suite-4"
+      fabric_templates:
+        - [2_CISCO_LEAFS_N9K-C9336C-FX2]
+      member_of_groups:
+        - topologies_rack
+    - rack_name: "Rack-4-3-05"
+      shortname: "dc1-r-4-3-05c"
+      index: 3
+      row: C
+      rack_type: network
+      pod: ["DC1", "1", "4"]
+      parent: "MUC-1-Suite-4"
+      fabric_templates:
+        - [2_CISCO_LEAFS_N9K-C9336C-FX2]
+      member_of_groups:
+        - topologies_rack
+    - rack_name: "Rack-4-4-05"
+      shortname: "dc1-r-4-4-05d"
+      index: 4
+      row: D
+      rack_type: network
+      pod: ["DC1", "1", "4"]
+      parent: "MUC-1-Suite-4"
+      fabric_templates:
+        - [2_CISCO_LEAFS_N9K-C9336C-FX2]
+      member_of_groups:
+        - topologies_rack

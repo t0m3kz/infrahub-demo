@@ -4,8 +4,8 @@ kind: Object
 spec:
   kind: LocationRack
   data:
-    - rack_name: "Rack-1-1"
-      shortname: "dc8-r-1-1"
+    - rack_name: "Rack-1-1-05"
+      shortname: "dc8-r-1-1-05a"
       index: 1
       row: A
       rack_type: network
@@ -16,8 +16,8 @@ spec:
         - [4_CISCO_TORS_N9K-C9336C-FX2]
       member_of_groups:
         - topologies_rack
-    - rack_name: "Rack-1-2"
-      shortname: "dc8-r-1-2"
+    - rack_name: "Rack-1-2-05"
+      shortname: "dc8-r-1-2-05b"
       index: 2
       row: B
       rack_type: network
@@ -28,8 +28,8 @@ spec:
         - [4_CISCO_TORS_N9K-C9336C-FX2]
       member_of_groups:
         - topologies_rack
-    - rack_name: "Rack-1-3"
-      shortname: "dc8-r-1-3"
+    - rack_name: "Rack-1-3-05"
+      shortname: "dc8-r-1-3-05c"
       index: 3
       row: C
       rack_type: network
@@ -40,8 +40,8 @@ spec:
         - [4_CISCO_TORS_N9K-C9336C-FX2]
       member_of_groups:
         - topologies_rack
-    - rack_name: "Rack-1-4"
-      shortname: "dc8-r-1-4"
+    - rack_name: "Rack-1-4-05"
+      shortname: "dc8-r-1-4-05d"
       index: 4
       row: D
       rack_type: network
@@ -52,8 +52,8 @@ spec:
         - [4_CISCO_TORS_N9K-C9336C-FX2]
       member_of_groups:
         - topologies_rack
-    - rack_name: "Rack-1-5"
-      shortname: "dc8-r-1-5"
+    - rack_name: "Rack-1-5-05"
+      shortname: "dc8-r-1-5-05e"
       index: 5
       row: E
       rack_type: network
@@ -64,8 +64,8 @@ spec:
         - [4_CISCO_TORS_N9K-C9336C-FX2]
       member_of_groups:
         - topologies_rack
-    - rack_name: "Rack-1-6"
-      shortname: "dc8-r-1-6"
+    - rack_name: "Rack-1-6-05"
+      shortname: "dc8-r-1-6-05f"
       index: 6
       row: F
       rack_type: network
@@ -76,8 +76,8 @@ spec:
         - [4_CISCO_TORS_N9K-C9336C-FX2]
       member_of_groups:
         - topologies_rack
-    - rack_name: "Rack-1-7"
-      shortname: "dc8-r-1-7"
+    - rack_name: "Rack-1-7-05"
+      shortname: "dc8-r-1-7-05g"
       index: 7
       row: G
       rack_type: network
@@ -88,8 +88,8 @@ spec:
         - [4_CISCO_TORS_N9K-C9336C-FX2]
       member_of_groups:
         - topologies_rack
-    - rack_name: "Rack-1-8"
-      shortname: "dc8-r-1-8"
+    - rack_name: "Rack-1-8-05"
+      shortname: "dc8-r-1-8-05h"
       index: 8
       row: H
       rack_type: network
@@ -100,8 +100,8 @@ spec:
         - [4_CISCO_TORS_N9K-C9336C-FX2]
       member_of_groups:
         - topologies_rack
-    - rack_name: "Rack-2-1"
-      shortname: "dc8-r-2-1"
+    - rack_name: "Rack-2-1-05"
+      shortname: "dc8-r-2-1-05a"
       index: 1
       row: A
       rack_type: network
@@ -112,8 +112,8 @@ spec:
         - [4_CISCO_TORS_N9K-C9336C-FX2]
       member_of_groups:
         - topologies_rack
-    - rack_name: "Rack-2-2"
-      shortname: "dc8-r-2-2"
+    - rack_name: "Rack-2-2-05"
+      shortname: "dc8-r-2-2-05b"
       index: 2
       row: B
       rack_type: network
@@ -124,8 +124,8 @@ spec:
         - [4_CISCO_TORS_N9K-C9336C-FX2]
       member_of_groups:
         - topologies_rack
-    - rack_name: "Rack-2-3"
-      shortname: "dc8-r-2-3"
+    - rack_name: "Rack-2-3-05"
+      shortname: "dc8-r-2-3-05c"
       index: 3
       row: C
       rack_type: network
@@ -136,8 +136,8 @@ spec:
         - [4_CISCO_TORS_N9K-C9336C-FX2]
       member_of_groups:
         - topologies_rack
-    - rack_name: "Rack-2-4"
-      shortname: "dc8-r-2-4"
+    - rack_name: "Rack-2-4-05"
+      shortname: "dc8-r-2-4-05d"
       index: 4
       row: D
       rack_type: network
@@ -148,8 +148,8 @@ spec:
         - [4_CISCO_TORS_N9K-C9336C-FX2]
       member_of_groups:
         - topologies_rack
-    - rack_name: "Rack-2-5"
-      shortname: "dc8-r-2-5"
+    - rack_name: "Rack-2-5-05"
+      shortname: "dc8-r-2-5-05e"
       index: 5
       row: E
       rack_type: network
@@ -160,8 +160,8 @@ spec:
         - [4_CISCO_TORS_N9K-C9336C-FX2]
       member_of_groups:
         - topologies_rack
-    - rack_name: "Rack-2-6"
-      shortname: "dc8-r-2-6"
+    - rack_name: "Rack-2-6-05"
+      shortname: "dc8-r-2-6-05f"
       index: 6
       row: F
       rack_type: network
@@ -172,8 +172,8 @@ spec:
         - [4_CISCO_TORS_N9K-C9336C-FX2]
       member_of_groups:
         - topologies_rack
-    - rack_name: "Rack-2-7"
-      shortname: "dc8-r-2-7"
+    - rack_name: "Rack-2-7-05"
+      shortname: "dc8-r-2-7-05g"
       index: 7
       row: G
       rack_type: network
@@ -184,8 +184,8 @@ spec:
         - [4_CISCO_TORS_N9K-C9336C-FX2]
       member_of_groups:
         - topologies_rack
-    - rack_name: "Rack-2-8"
-      shortname: "dc8-r-2-8"
+    - rack_name: "Rack-2-8-05"
+      shortname: "dc8-r-2-8-05h"
       index: 8
       row: H
       rack_type: network
@@ -196,8 +196,8 @@ spec:
         - [4_CISCO_TORS_N9K-C9336C-FX2]
       member_of_groups:
         - topologies_rack
-    - rack_name: "Rack-3-1"
-      shortname: "dc8-r-3-1"
+    - rack_name: "Rack-3-1-05"
+      shortname: "dc8-r-3-1-05a"
       index: 1
       row: A
       rack_type: network
@@ -208,8 +208,8 @@ spec:
         - [4_CISCO_TORS_N9K-C9336C-FX2]
       member_of_groups:
         - topologies_rack
-    - rack_name: "Rack-3-2"
-      shortname: "dc8-r-3-2"
+    - rack_name: "Rack-3-2-05"
+      shortname: "dc8-r-3-2-05b"
       index: 2
       row: B
       rack_type: network
@@ -220,8 +220,8 @@ spec:
         - [4_CISCO_TORS_N9K-C9336C-FX2]
       member_of_groups:
         - topologies_rack
-    - rack_name: "Rack-3-3"
-      shortname: "dc8-r-3-3"
+    - rack_name: "Rack-3-3-05"
+      shortname: "dc8-r-3-3-05c"
       index: 3
       row: C
       rack_type: network
@@ -232,8 +232,8 @@ spec:
         - [4_CISCO_TORS_N9K-C9336C-FX2]
       member_of_groups:
         - topologies_rack
-    - rack_name: "Rack-3-4"
-      shortname: "dc8-r-3-4"
+    - rack_name: "Rack-3-4-05"
+      shortname: "dc8-r-3-4-05d"
       index: 4
       row: D
       rack_type: network
@@ -244,8 +244,8 @@ spec:
         - [4_CISCO_TORS_N9K-C9336C-FX2]
       member_of_groups:
         - topologies_rack
-    - rack_name: "Rack-3-5"
-      shortname: "dc8-r-3-5"
+    - rack_name: "Rack-3-5-05"
+      shortname: "dc8-r-3-5-05e"
       index: 5
       row: E
       rack_type: network
@@ -256,8 +256,8 @@ spec:
         - [4_CISCO_TORS_N9K-C9336C-FX2]
       member_of_groups:
         - topologies_rack
-    - rack_name: "Rack-3-6"
-      shortname: "dc8-r-3-6"
+    - rack_name: "Rack-3-6-05"
+      shortname: "dc8-r-3-6-05f"
       index: 6
       row: F
       rack_type: network
@@ -268,8 +268,8 @@ spec:
         - [4_CISCO_TORS_N9K-C9336C-FX2]
       member_of_groups:
         - topologies_rack
-    - rack_name: "Rack-3-7"
-      shortname: "dc8-r-3-7"
+    - rack_name: "Rack-3-7-05"
+      shortname: "dc8-r-3-7-05g"
       index: 7
       row: G
       rack_type: network
@@ -280,8 +280,8 @@ spec:
         - [4_CISCO_TORS_N9K-C9336C-FX2]
       member_of_groups:
         - topologies_rack
-    - rack_name: "Rack-3-8"
-      shortname: "dc8-r-3-8"
+    - rack_name: "Rack-3-8-05"
+      shortname: "dc8-r-3-8-05h"
       index: 8
       row: H
       rack_type: network
@@ -292,8 +292,8 @@ spec:
         - [4_CISCO_TORS_N9K-C9336C-FX2]
       member_of_groups:
         - topologies_rack
-    - rack_name: "Rack-4-1"
-      shortname: "dc8-r-4-1"
+    - rack_name: "Rack-4-1-05"
+      shortname: "dc8-r-4-1-05a"
       index: 1
       row: A
       rack_type: network
@@ -304,8 +304,8 @@ spec:
         - [4_CISCO_TORS_N9K-C9336C-FX2]
       member_of_groups:
         - topologies_rack
-    - rack_name: "Rack-4-2"
-      shortname: "dc8-r-4-2"
+    - rack_name: "Rack-4-2-05"
+      shortname: "dc8-r-4-2-05b"
       index: 2
       row: B
       rack_type: network
@@ -316,8 +316,8 @@ spec:
         - [4_CISCO_TORS_N9K-C9336C-FX2]
       member_of_groups:
         - topologies_rack
-    - rack_name: "Rack-4-3"
-      shortname: "dc8-r-4-3"
+    - rack_name: "Rack-4-3-05"
+      shortname: "dc8-r-4-3-05c"
       index: 3
       row: C
       rack_type: network
@@ -328,8 +328,8 @@ spec:
         - [4_CISCO_TORS_N9K-C9336C-FX2]
       member_of_groups:
         - topologies_rack
-    - rack_name: "Rack-4-4"
-      shortname: "dc8-r-4-4"
+    - rack_name: "Rack-4-4-05"
+      shortname: "dc8-r-4-4-05d"
       index: 4
       row: D
       rack_type: network
@@ -340,8 +340,8 @@ spec:
         - [4_CISCO_TORS_N9K-C9336C-FX2]
       member_of_groups:
         - topologies_rack
-    - rack_name: "Rack-4-5"
-      shortname: "dc8-r-4-5"
+    - rack_name: "Rack-4-5-05"
+      shortname: "dc8-r-4-5-05e"
       index: 5
       row: E
       rack_type: network
@@ -352,8 +352,8 @@ spec:
         - [4_CISCO_TORS_N9K-C9336C-FX2]
       member_of_groups:
         - topologies_rack
-    - rack_name: "Rack-4-6"
-      shortname: "dc8-r-4-6"
+    - rack_name: "Rack-4-6-05"
+      shortname: "dc8-r-4-6-05f"
       index: 6
       row: F
       rack_type: network
@@ -364,8 +364,8 @@ spec:
         - [4_CISCO_TORS_N9K-C9336C-FX2]
       member_of_groups:
         - topologies_rack
-    - rack_name: "Rack-4-7"
-      shortname: "dc8-r-4-7"
+    - rack_name: "Rack-4-7-05"
+      shortname: "dc8-r-4-7-05g"
       index: 7
       row: G
       rack_type: network
@@ -376,8 +376,8 @@ spec:
         - [4_CISCO_TORS_N9K-C9336C-FX2]
       member_of_groups:
         - topologies_rack
-    - rack_name: "Rack-4-8"
-      shortname: "dc8-r-4-8"
+    - rack_name: "Rack-4-8-05"
+      shortname: "dc8-r-4-8-05h"
       index: 8
       row: H
       rack_type: network
@@ -388,8 +388,8 @@ spec:
         - [4_CISCO_TORS_N9K-C9336C-FX2]
       member_of_groups:
         - topologies_rack
-    - rack_name: "Rack-5-1"
-      shortname: "dc8-r-5-1"
+    - rack_name: "Rack-5-1-05"
+      shortname: "dc8-r-5-1-05a"
       index: 1
       row: A
       rack_type: network
@@ -400,8 +400,8 @@ spec:
         - [4_CISCO_TORS_N9K-C9336C-FX2]
       member_of_groups:
         - topologies_rack
-    - rack_name: "Rack-5-2"
-      shortname: "dc8-r-5-2"
+    - rack_name: "Rack-5-2-05"
+      shortname: "dc8-r-5-2-05b"
       index: 2
       row: B
       rack_type: network
@@ -412,8 +412,8 @@ spec:
         - [4_CISCO_TORS_N9K-C9336C-FX2]
       member_of_groups:
         - topologies_rack
-    - rack_name: "Rack-5-3"
-      shortname: "dc8-r-5-3"
+    - rack_name: "Rack-5-3-05"
+      shortname: "dc8-r-5-3-05c"
       index: 3
       row: C
       rack_type: network
@@ -424,8 +424,8 @@ spec:
         - [4_CISCO_TORS_N9K-C9336C-FX2]
       member_of_groups:
         - topologies_rack
-    - rack_name: "Rack-5-4"
-      shortname: "dc8-r-5-4"
+    - rack_name: "Rack-5-4-05"
+      shortname: "dc8-r-5-4-05d"
       index: 4
       row: D
       rack_type: network
@@ -436,8 +436,8 @@ spec:
         - [4_CISCO_TORS_N9K-C9336C-FX2]
       member_of_groups:
         - topologies_rack
-    - rack_name: "Rack-5-5"
-      shortname: "dc8-r-5-5"
+    - rack_name: "Rack-5-5-05"
+      shortname: "dc8-r-5-5-05e"
       index: 5
       row: E
       rack_type: network
@@ -448,8 +448,8 @@ spec:
         - [4_CISCO_TORS_N9K-C9336C-FX2]
       member_of_groups:
         - topologies_rack
-    - rack_name: "Rack-5-6"
-      shortname: "dc8-r-5-6"
+    - rack_name: "Rack-5-6-05"
+      shortname: "dc8-r-5-6-05f"
       index: 6
       row: F
       rack_type: network
@@ -460,8 +460,8 @@ spec:
         - [4_CISCO_TORS_N9K-C9336C-FX2]
       member_of_groups:
         - topologies_rack
-    - rack_name: "Rack-5-7"
-      shortname: "dc8-r-5-7"
+    - rack_name: "Rack-5-7-05"
+      shortname: "dc8-r-5-7-05g"
       index: 7
       row: G
       rack_type: network
@@ -472,8 +472,8 @@ spec:
         - [4_CISCO_TORS_N9K-C9336C-FX2]
       member_of_groups:
         - topologies_rack
-    - rack_name: "Rack-5-8"
-      shortname: "dc8-r-5-8"
+    - rack_name: "Rack-5-8-05"
+      shortname: "dc8-r-5-8-05h"
       index: 8
       row: H
       rack_type: network
@@ -484,8 +484,8 @@ spec:
         - [4_CISCO_TORS_N9K-C9336C-FX2]
       member_of_groups:
         - topologies_rack
-    - rack_name: "Rack-6-1"
-      shortname: "dc8-r-6-1"
+    - rack_name: "Rack-6-1-05"
+      shortname: "dc8-r-6-1-05a"
       index: 1
       row: A
       rack_type: network
@@ -496,8 +496,8 @@ spec:
         - [4_CISCO_TORS_N9K-C9336C-FX2]
       member_of_groups:
         - topologies_rack
-    - rack_name: "Rack-6-2"
-      shortname: "dc8-r-6-2"
+    - rack_name: "Rack-6-2-05"
+      shortname: "dc8-r-6-2-05b"
       index: 2
       row: B
       rack_type: network
@@ -508,8 +508,8 @@ spec:
         - [4_CISCO_TORS_N9K-C9336C-FX2]
       member_of_groups:
         - topologies_rack
-    - rack_name: "Rack-6-3"
-      shortname: "dc8-r-6-3"
+    - rack_name: "Rack-6-3-05"
+      shortname: "dc8-r-6-3-05c"
       index: 3
       row: C
       rack_type: network
@@ -520,8 +520,8 @@ spec:
         - [4_CISCO_TORS_N9K-C9336C-FX2]
       member_of_groups:
         - topologies_rack
-    - rack_name: "Rack-6-4"
-      shortname: "dc8-r-6-4"
+    - rack_name: "Rack-6-4-05"
+      shortname: "dc8-r-6-4-05d"
       index: 4
       row: D
       rack_type: network
@@ -532,8 +532,8 @@ spec:
         - [4_CISCO_TORS_N9K-C9336C-FX2]
       member_of_groups:
         - topologies_rack
-    - rack_name: "Rack-6-5"
-      shortname: "dc8-r-6-5"
+    - rack_name: "Rack-6-5-05"
+      shortname: "dc8-r-6-5-05e"
       index: 5
       row: E
       rack_type: network
@@ -544,8 +544,8 @@ spec:
         - [4_CISCO_TORS_N9K-C9336C-FX2]
       member_of_groups:
         - topologies_rack
-    - rack_name: "Rack-6-6"
-      shortname: "dc8-r-6-6"
+    - rack_name: "Rack-6-6-05"
+      shortname: "dc8-r-6-6-05f"
       index: 6
       row: F
       rack_type: network
@@ -556,8 +556,8 @@ spec:
         - [4_CISCO_TORS_N9K-C9336C-FX2]
       member_of_groups:
         - topologies_rack
-    - rack_name: "Rack-6-7"
-      shortname: "dc8-r-6-7"
+    - rack_name: "Rack-6-7-05"
+      shortname: "dc8-r-6-7-05g"
       index: 7
       row: G
       rack_type: network
@@ -568,8 +568,8 @@ spec:
         - [4_CISCO_TORS_N9K-C9336C-FX2]
       member_of_groups:
         - topologies_rack
-    - rack_name: "Rack-6-8"
-      shortname: "dc8-r-6-8"
+    - rack_name: "Rack-6-8-05"
+      shortname: "dc8-r-6-8-05h"
       index: 8
       row: H
       rack_type: network
@@ -580,8 +580,8 @@ spec:
         - [4_CISCO_TORS_N9K-C9336C-FX2]
       member_of_groups:
         - topologies_rack
-    - rack_name: "Rack-7-1"
-      shortname: "dc8-r-7-1"
+    - rack_name: "Rack-7-1-05"
+      shortname: "dc8-r-7-1-05a"
       index: 1
       row: A
       rack_type: network
@@ -592,8 +592,8 @@ spec:
         - [4_CISCO_TORS_N9K-C9336C-FX2]
       member_of_groups:
         - topologies_rack
-    - rack_name: "Rack-7-2"
-      shortname: "dc8-r-7-2"
+    - rack_name: "Rack-7-2-05"
+      shortname: "dc8-r-7-2-05b"
       index: 2
       row: B
       rack_type: network
@@ -604,8 +604,8 @@ spec:
         - [4_CISCO_TORS_N9K-C9336C-FX2]
       member_of_groups:
         - topologies_rack
-    - rack_name: "Rack-7-3"
-      shortname: "dc8-r-7-3"
+    - rack_name: "Rack-7-3-05"
+      shortname: "dc8-r-7-3-05c"
       index: 3
       row: C
       rack_type: network
@@ -616,8 +616,8 @@ spec:
         - [4_CISCO_TORS_N9K-C9336C-FX2]
       member_of_groups:
         - topologies_rack
-    - rack_name: "Rack-7-4"
-      shortname: "dc8-r-7-4"
+    - rack_name: "Rack-7-4-05"
+      shortname: "dc8-r-7-4-05d"
       index: 4
       row: D
       rack_type: network
@@ -628,8 +628,8 @@ spec:
         - [4_CISCO_TORS_N9K-C9336C-FX2]
       member_of_groups:
         - topologies_rack
-    - rack_name: "Rack-7-5"
-      shortname: "dc8-r-7-5"
+    - rack_name: "Rack-7-5-05"
+      shortname: "dc8-r-7-5-05e"
       index: 5
       row: E
       rack_type: network
@@ -640,8 +640,8 @@ spec:
         - [4_CISCO_TORS_N9K-C9336C-FX2]
       member_of_groups:
         - topologies_rack
-    - rack_name: "Rack-7-6"
-      shortname: "dc8-r-7-6"
+    - rack_name: "Rack-7-6-05"
+      shortname: "dc8-r-7-6-05f"
       index: 6
       row: F
       rack_type: network
@@ -652,8 +652,8 @@ spec:
         - [4_CISCO_TORS_N9K-C9336C-FX2]
       member_of_groups:
         - topologies_rack
-    - rack_name: "Rack-7-7"
-      shortname: "dc8-r-7-7"
+    - rack_name: "Rack-7-7-05"
+      shortname: "dc8-r-7-7-05g"
       index: 7
       row: G
       rack_type: network
@@ -664,8 +664,8 @@ spec:
         - [4_CISCO_TORS_N9K-C9336C-FX2]
       member_of_groups:
         - topologies_rack
-    - rack_name: "Rack-7-8"
-      shortname: "dc8-r-7-8"
+    - rack_name: "Rack-7-8-05"
+      shortname: "dc8-r-7-8-05h"
       index: 8
       row: H
       rack_type: network
@@ -676,8 +676,8 @@ spec:
         - [4_CISCO_TORS_N9K-C9336C-FX2]
       member_of_groups:
         - topologies_rack
-    - rack_name: "Rack-8-1"
-      shortname: "dc8-r-8-1"
+    - rack_name: "Rack-8-1-05"
+      shortname: "dc8-r-8-1-05a"
       index: 1
       row: A
       rack_type: network
@@ -688,8 +688,8 @@ spec:
         - [4_CISCO_TORS_N9K-C9336C-FX2]
       member_of_groups:
         - topologies_rack
-    - rack_name: "Rack-8-2"
-      shortname: "dc8-r-8-2"
+    - rack_name: "Rack-8-2-05"
+      shortname: "dc8-r-8-2-05b"
       index: 2
       row: B
       rack_type: network
@@ -700,8 +700,8 @@ spec:
         - [4_CISCO_TORS_N9K-C9336C-FX2]
       member_of_groups:
         - topologies_rack
-    - rack_name: "Rack-8-3"
-      shortname: "dc8-r-8-3"
+    - rack_name: "Rack-8-3-05"
+      shortname: "dc8-r-8-3-05c"
       index: 3
       row: C
       rack_type: network
@@ -712,8 +712,8 @@ spec:
         - [4_CISCO_TORS_N9K-C9336C-FX2]
       member_of_groups:
         - topologies_rack
-    - rack_name: "Rack-8-4"
-      shortname: "dc8-r-8-4"
+    - rack_name: "Rack-8-4-05"
+      shortname: "dc8-r-8-4-05d"
       index: 4
       row: D
       rack_type: network
@@ -724,8 +724,8 @@ spec:
         - [4_CISCO_TORS_N9K-C9336C-FX2]
       member_of_groups:
         - topologies_rack
-    - rack_name: "Rack-8-5"
-      shortname: "dc8-r-8-5"
+    - rack_name: "Rack-8-5-05"
+      shortname: "dc8-r-8-5-05e"
       index: 5
       row: E
       rack_type: network
@@ -736,8 +736,8 @@ spec:
         - [4_CISCO_TORS_N9K-C9336C-FX2]
       member_of_groups:
         - topologies_rack
-    - rack_name: "Rack-8-6"
-      shortname: "dc8-r-8-6"
+    - rack_name: "Rack-8-6-05"
+      shortname: "dc8-r-8-6-05f"
       index: 6
       row: F
       rack_type: network
@@ -748,8 +748,8 @@ spec:
         - [4_CISCO_TORS_N9K-C9336C-FX2]
       member_of_groups:
         - topologies_rack
-    - rack_name: "Rack-8-7"
-      shortname: "dc8-r-8-7"
+    - rack_name: "Rack-8-7-05"
+      shortname: "dc8-r-8-7-05g"
       index: 7
       row: G
       rack_type: network
@@ -760,8 +760,8 @@ spec:
         - [4_CISCO_TORS_N9K-C9336C-FX2]
       member_of_groups:
         - topologies_rack
-    - rack_name: "Rack-8-8"
-      shortname: "dc8-r-8-8"
+    - rack_name: "Rack-8-8-05"
+      shortname: "dc8-r-8-8-05h"
       index: 8
       row: H
       rack_type: network

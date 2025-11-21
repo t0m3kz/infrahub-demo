@@ -33,9 +33,3 @@ spec:
             amount_of_spines: 4
             member_of_groups:
               - topologies_pod
-          - index: 4
-            deployment_type: tor
-            spine_template: N9K-C9364C-GX_SPINE
-            amount_of_spines: 2
-            member_of_groups:
-              - topologies_pod
