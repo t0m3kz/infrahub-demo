@@ -46,3 +46,5 @@ spec:
       description: Equinix POPs
     - name: topologies_server
       description: Group for servers in topologies
+    - name: virtual_fabrics
+      description: Virtual Fabric Customer Deployments
