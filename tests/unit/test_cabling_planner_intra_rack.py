@@ -107,7 +107,7 @@ class TestCablingPlannerIntraRackScenario:
         leaf4 = create_mock_interfaces("leaf-04", ["Ethernet1/25", "Ethernet1/26"])
 
         planner = CablingPlanner(
-            tor1 + tor2 + tor3 + tor4,
+            tor1 + tor2 + tor3 + tor4,  # type: ignore
             leaf1 + leaf2 + leaf3 + leaf4,  # type: ignore
         )  # type: ignore
         cabling_plan = planner.build_cabling_plan(scenario="intra_rack")
