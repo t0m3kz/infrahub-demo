@@ -10,7 +10,7 @@ spec:
       row: A
       rack_type: network
       pod: ["DC9", "9", "1"]
-      parent: "SIN-1-Suite-1"
+      parent: sin-1-s-1
       fabric_templates:
         - [4_ARISTA_LEAFS_DCS-7050CX3-32C-R]
       member_of_groups:
@@ -21,7 +21,7 @@ spec:
       row: B
       rack_type: network
       pod: ["DC9", "9", "1"]
-      parent: "SIN-1-Suite-1"
+      parent: sin-1-s-1
       fabric_templates:
         - [2_ARISTA_LEAFS_DCS-7050CX3-32C-R]
       member_of_groups:
@@ -32,7 +32,7 @@ spec:
       row: C
       rack_type: network
       pod: ["DC9", "9", "1"]
-      parent: "SIN-1-Suite-1"
+      parent: sin-1-s-1
       fabric_templates:
         - [4_ARISTA_LEAFS_DCS-7050CX4M-48D8-F]
       member_of_groups:
@@ -43,7 +43,7 @@ spec:
       row: D
       rack_type: network
       pod: ["DC9", "9", "1"]
-      parent: "SIN-1-Suite-1"
+      parent: sin-1-s-1
       fabric_templates:
         - [4_ARISTA_LEAFS_DCS-7050CX3-32C-R]
       member_of_groups:
@@ -54,7 +54,7 @@ spec:
       row: E
       rack_type: network
       pod: ["DC9", "9", "1"]
-      parent: "SIN-1-Suite-1"
+      parent: sin-1-s-1
       fabric_templates:
         - [2_ARISTA_LEAFS_DCS-7050CX3-32C-R]
       member_of_groups:
@@ -65,7 +65,7 @@ spec:
       row: F
       rack_type: network
       pod: ["DC9", "9", "1"]
-      parent: "SIN-1-Suite-1"
+      parent: sin-1-s-1
       fabric_templates:
         - [4_ARISTA_LEAFS_DCS-7050SX3-24YC4C-S-R]
       member_of_groups:
@@ -76,7 +76,7 @@ spec:
       row: A
       rack_type: network
       pod: ["DC9", "9", "2"]
-      parent: "SIN-1-Suite-2"
+      parent: sin-1-s-2
       fabric_templates:
         - [4_ARISTA_LEAFS_DCS-7050CX3-32C-R]
       member_of_groups:
@@ -87,7 +87,7 @@ spec:
       row: B
       rack_type: network
       pod: ["DC9", "9", "2"]
-      parent: "SIN-1-Suite-2"
+      parent: sin-1-s-2
       fabric_templates:
         - [2_ARISTA_LEAFS_DCS-7050CX3-32C-R]
       member_of_groups:
@@ -98,7 +98,7 @@ spec:
       row: C
       rack_type: network
       pod: ["DC9", "9", "2"]
-      parent: "SIN-1-Suite-2"
+      parent: sin-1-s-2
       fabric_templates:
         - [4_ARISTA_LEAFS_DCS-7050CX4M-48D8-F]
       member_of_groups:
@@ -109,7 +109,7 @@ spec:
       row: D
       rack_type: network
       pod: ["DC9", "9", "2"]
-      parent: "SIN-1-Suite-2"
+      parent: sin-1-s-2
       fabric_templates:
         - [4_ARISTA_LEAFS_DCS-7050CX3-32C-R]
       member_of_groups:
@@ -120,7 +120,7 @@ spec:
       row: E
       rack_type: network
       pod: ["DC9", "9", "2"]
-      parent: "SIN-1-Suite-2"
+      parent: sin-1-s-2
       fabric_templates:
         - [2_ARISTA_LEAFS_DCS-7050CX3-32C-R]
       member_of_groups:
@@ -131,7 +131,7 @@ spec:
       row: F
       rack_type: network
       pod: ["DC9", "9", "2"]
-      parent: "SIN-1-Suite-2"
+      parent: sin-1-s-2
       fabric_templates:
         - [4_ARISTA_LEAFS_DCS-7050SX3-24YC4C-S-R]
       member_of_groups:
@@ -142,7 +142,7 @@ spec:
       row: A
       rack_type: network
       pod: ["DC9", "9", "3"]
-      parent: "SIN-1-Suite-3"
+      parent: sin-1-s-3
       fabric_templates:
         - [4_ARISTA_LEAFS_DCS-7050CX3-32C-R]
       member_of_groups:
@@ -153,7 +153,7 @@ spec:
       row: B
       rack_type: network
       pod: ["DC9", "9", "3"]
-      parent: "SIN-1-Suite-3"
+      parent: sin-1-s-3
       fabric_templates:
         - [2_ARISTA_LEAFS_DCS-7050CX3-32C-R]
       member_of_groups:
@@ -164,7 +164,7 @@ spec:
       row: C
       rack_type: network
       pod: ["DC9", "9", "3"]
-      parent: "SIN-1-Suite-3"
+      parent: sin-1-s-3
       fabric_templates:
         - [4_ARISTA_LEAFS_DCS-7050CX4M-48D8-F]
       member_of_groups:
@@ -175,7 +175,7 @@ spec:
       row: D
       rack_type: network
       pod: ["DC9", "9", "3"]
-      parent: "SIN-1-Suite-3"
+      parent: sin-1-s-3
       fabric_templates:
         - [4_ARISTA_LEAFS_DCS-7050CX3-32C-R]
       member_of_groups:
@@ -186,7 +186,7 @@ spec:
       row: E
       rack_type: network
       pod: ["DC9", "9", "3"]
-      parent: "SIN-1-Suite-3"
+      parent: sin-1-s-3
       fabric_templates:
         - [2_ARISTA_LEAFS_DCS-7050CX3-32C-R]
       member_of_groups:
@@ -197,7 +197,7 @@ spec:
       row: F
       rack_type: network
       pod: ["DC9", "9", "3"]
-      parent: "SIN-1-Suite-3"
+      parent: sin-1-s-3
       fabric_templates:
         - [4_ARISTA_LEAFS_DCS-7050SX3-24YC4C-S-R]
       member_of_groups:
@@ -208,7 +208,7 @@ spec:
       row: A
       rack_type: network
       pod: ["DC9", "9", "4"]
-      parent: "SIN-1-Suite-4"
+      parent: sin-1-s-4
       fabric_templates:
         - [4_ARISTA_LEAFS_DCS-7050CX3-32C-R]
       member_of_groups:
@@ -219,7 +219,7 @@ spec:
       row: B
       rack_type: network
       pod: ["DC9", "9", "4"]
-      parent: "SIN-1-Suite-4"
+      parent: sin-1-s-4
       fabric_templates:
         - [2_ARISTA_LEAFS_DCS-7050CX3-32C-R]
       member_of_groups:
@@ -230,7 +230,7 @@ spec:
       row: C
       rack_type: network
       pod: ["DC9", "9", "4"]
-      parent: "SIN-1-Suite-4"
+      parent: sin-1-s-4
       fabric_templates:
         - [4_ARISTA_LEAFS_DCS-7050CX4M-48D8-F]
       member_of_groups:
@@ -241,7 +241,7 @@ spec:
       row: D
       rack_type: network
       pod: ["DC9", "9", "4"]
-      parent: "SIN-1-Suite-4"
+      parent: sin-1-s-4
       fabric_templates:
         - [4_ARISTA_LEAFS_DCS-7050CX3-32C-R]
       member_of_groups:
@@ -252,7 +252,7 @@ spec:
       row: E
       rack_type: network
       pod: ["DC9", "9", "4"]
-      parent: "SIN-1-Suite-4"
+      parent: sin-1-s-4
       fabric_templates:
         - [2_ARISTA_LEAFS_DCS-7050CX3-32C-R]
       member_of_groups:
@@ -263,7 +263,7 @@ spec:
       row: F
       rack_type: network
       pod: ["DC9", "9", "4"]
-      parent: "SIN-1-Suite-4"
+      parent: sin-1-s-4
       fabric_templates:
         - [4_ARISTA_LEAFS_DCS-7050SX3-24YC4C-S-R]
       member_of_groups:

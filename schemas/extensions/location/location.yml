@@ -78,7 +78,7 @@ nodes:
     include_in_menu: false
     menu_placement: "LocationGeneric"
     label: Suite
-    parent: "LocationBuilding"
+    parent: LocationBuilding
     children: "LocationRack"
     icon: "game-icons:cage"
     attributes:
@@ -108,6 +108,7 @@ nodes:
     parent: "LocationSuite"
     children: ""
     icon: "clarity:rack-server-line"
+    display_label: "{{ name__value }}"
     attributes:
       - name: name
         kind: Text

@@ -10,7 +10,7 @@ spec:
       row: A
       rack_type: network
       pod: ["DC4", "1", "1"]
-      parent: "BER-1-Suite-1"
+      parent: ber-1-s-1
       fabric_templates:
         - [4_EDGECORE_LEAFS_Edgecore-7AS7326-56X-O-48V-F]
       member_of_groups:
@@ -21,7 +21,7 @@ spec:
       row: B
       rack_type: network
       pod: ["DC4", "1", "1"]
-      parent: "BER-1-Suite-1"
+      parent: ber-1-s-1
       fabric_templates:
         - [4_EDGECORE_LEAFS_Edgecore-7AS7326-56X-O-48V-F]
       member_of_groups:
@@ -32,7 +32,7 @@ spec:
       row: C
       rack_type: network
       pod: ["DC4", "1", "1"]
-      parent: "BER-1-Suite-1"
+      parent: ber-1-s-1
       fabric_templates:
         - [4_EDGECORE_LEAFS_Edgecore-7AS7326-56X-O-48V-F]
       member_of_groups:
@@ -43,7 +43,7 @@ spec:
       row: D
       rack_type: network
       pod: ["DC4", "1", "1"]
-      parent: "BER-1-Suite-1"
+      parent: ber-1-s-1
       fabric_templates:
         - [4_EDGECORE_LEAFS_Edgecore-7AS7326-56X-O-48V-F]
       member_of_groups:
@@ -54,7 +54,7 @@ spec:
       row: A
       rack_type: network
       pod: ["DC4", "1", "2"]
-      parent: "BER-1-Suite-2"
+      parent: ber-1-s-2
       fabric_templates:
         - [4_EDGECORE_LEAFS_Edgecore-7AS7326-56X-O-48V-F]
       member_of_groups:
@@ -65,7 +65,7 @@ spec:
       row: B
       rack_type: network
       pod: ["DC4", "1", "2"]
-      parent: "BER-1-Suite-2"
+      parent: ber-1-s-2
       fabric_templates:
         - [2_EDGECORE_LEAFS_Edgecore-7AS7326-56X-O-48V-F]
       member_of_groups:
@@ -76,7 +76,7 @@ spec:
       row: C
       rack_type: network
       pod: ["DC4", "1", "2"]
-      parent: "BER-1-Suite-2"
+      parent: ber-1-s-2
       fabric_templates:
         - [4_EDGECORE_LEAFS_Edgecore-7AS7326-56X-O-48V-F]
       member_of_groups:
@@ -87,7 +87,7 @@ spec:
       row: D
       rack_type: network
       pod: ["DC4", "1", "2"]
-      parent: "BER-1-Suite-2"
+      parent: ber-1-s-2
       fabric_templates:
         - [4_EDGECORE_LEAFS_Edgecore-7AS7326-56X-O-48V-F]
       member_of_groups:
@@ -98,7 +98,7 @@ spec:
       row: A
       rack_type: network
       pod: ["DC4", "1", "3"]
-      parent: "BER-1-Suite-3"
+      parent: ber-1-s-3
       fabric_templates:
         - [2_EDGECORE_LEAFS_Edgecore-7AS7326-56X-O-48V-F]
       member_of_groups:
@@ -109,7 +109,7 @@ spec:
       row: B
       rack_type: network
       pod: ["DC4", "1", "3"]
-      parent: "BER-1-Suite-3"
+      parent: ber-1-s-3
       fabric_templates:
         - [2_EDGECORE_LEAFS_Edgecore-7AS7326-56X-O-48V-F]
       member_of_groups:
@@ -120,7 +120,7 @@ spec:
       row: C
       rack_type: network
       pod: ["DC4", "1", "3"]
-      parent: "BER-1-Suite-3"
+      parent: ber-1-s-3
       fabric_templates:
         - [4_EDGECORE_LEAFS_Edgecore-7AS7326-56X-O-48V-F]
       member_of_groups:
@@ -131,7 +131,7 @@ spec:
       row: D
       rack_type: network
       pod: ["DC4", "1", "3"]
-      parent: "BER-1-Suite-3"
+      parent: ber-1-s-3
       fabric_templates:
         - [4_EDGECORE_LEAFS_Edgecore-7AS7326-56X-O-48V-F]
       member_of_groups:

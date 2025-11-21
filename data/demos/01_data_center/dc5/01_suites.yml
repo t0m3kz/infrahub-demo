@@ -6,13 +6,13 @@ spec:
   data:
     - suite_name: "Suite-1"
       shortname: "ny-1-s-1"
-      parent: "NY-1"
+      parent: ny-1
     - suite_name: "Suite-2"
       shortname: "ny-1-s-2"
-      parent: "NY-1"
+      parent: ny-1
     - suite_name: "Suite-3"
       shortname: "ny-1-s-3"
-      parent: "NY-1"
+      parent: ny-1
     - suite_name: "Suite-4"
       shortname: "ny-1-s-4"
-      parent: "NY-1"
+      parent: ny-1

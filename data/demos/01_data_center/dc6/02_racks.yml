@@ -11,7 +11,7 @@ spec:
       row: A
       rack_type: network
       pod: ["DC6", "1", "1"]
-      parent: "KTW-1-Suite-1"
+      parent: ktw-1-s-1
       fabric_templates:
         - [4_ARISTA_LEAFS_DCS-7050SX3-24YC4C-S-R]
       member_of_groups:
@@ -22,7 +22,7 @@ spec:
       row: B
       rack_type: network
       pod: ["DC6", "1", "1"]
-      parent: "KTW-1-Suite-1"
+      parent: ktw-1-s-1
       fabric_templates:
         - [4_DELL_LEAFS_PowerSwitch-S5248F-ON]
       member_of_groups:
@@ -33,7 +33,7 @@ spec:
       row: C
       rack_type: network
       pod: ["DC6", "1", "1"]
-      parent: "KTW-1-Suite-1"
+      parent: ktw-1-s-1
       fabric_templates:
         - [4_EDGECORE_LEAFS_Edgecore-7AS7326-56X-O-48V-F]
       member_of_groups:
@@ -45,7 +45,7 @@ spec:
       row: A
       rack_type: network
       pod: ["DC6", "1", "2"]
-      parent: "KTW-1-Suite-2"
+      parent: ktw-1-s-2
       fabric_templates:
         - [4_CISCO_LEAFS_N9K-C9336C-FX2]
       member_of_groups:
@@ -56,7 +56,7 @@ spec:
       row: B
       rack_type: network
       pod: ["DC6", "1", "2"]
-      parent: "KTW-1-Suite-2"
+      parent: ktw-1-s-2
       fabric_templates:
         - [2_EDGECORE_LEAFS_Edgecore-7AS7326-56X-O-48V-F]
       member_of_groups:
@@ -67,7 +67,7 @@ spec:
       row: C
       rack_type: network
       pod: ["DC6", "1", "2"]
-      parent: "KTW-1-Suite-2"
+      parent: ktw-1-s-2
       fabric_templates:
         - [4_DELL_LEAFS_PowerSwitch-S5248F-ON]
       member_of_groups:

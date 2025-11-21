@@ -10,7 +10,7 @@ spec:
       row: A
       rack_type: network
       pod: ["DC2", "2", "1"]
-      parent: "PAR-1-Suite-1"
+      parent: par-1-s-1
       fabric_templates:
         - [4_ARISTA_LEAFS_DCS-7050CX3-32C-R]
       member_of_groups:
@@ -21,7 +21,7 @@ spec:
       row: B
       rack_type: network
       pod: ["DC2", "2", "1"]
-      parent: "PAR-1-Suite-1"
+      parent: par-1-s-1
       fabric_templates:
         - [4_ARISTA_LEAFS_DCS-7050CX4M-48D8-F]
       member_of_groups:
@@ -32,7 +32,7 @@ spec:
       row: C
       rack_type: network
       pod: ["DC2", "2", "1"]
-      parent: "PAR-1-Suite-1"
+      parent: par-1-s-1
       fabric_templates:
         - [2_ARISTA_LEAFS_DCS-7050SX3-24YC4C-S-R]
       member_of_groups:
@@ -44,7 +44,7 @@ spec:
       row: A
       rack_type: network
       pod: ["DC2", "2", "2"]
-      parent: "PAR-1-Suite-2"
+      parent: par-1-s-2
       fabric_templates:
         - [2_ARISTA_LEAFS_DCS-7050SX3-24YC4C-S-R]
       member_of_groups:
@@ -55,7 +55,7 @@ spec:
       row: B
       rack_type: network
       pod: ["DC2", "2", "2"]
-      parent: "PAR-1-Suite-2"
+      parent: par-1-s-2
       fabric_templates:
         - [2_ARISTA_LEAFS_DCS-7050SX3-24YC4C-S-R]
       member_of_groups:
@@ -66,7 +66,7 @@ spec:
       row: C
       rack_type: network
       pod: ["DC2", "2", "2"]
-      parent: "PAR-1-Suite-2"
+      parent: par-1-s-2
       fabric_templates:
         - [4_ARISTA_LEAFS_DCS-7050CX3-32C-R]
       member_of_groups:

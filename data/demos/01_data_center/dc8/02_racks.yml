@@ -10,7 +10,7 @@ spec:
       row: A
       rack_type: network
       pod: ["DC8", "8", "1"]
-      parent: "TYO-1-Suite-1"
+      parent: tyo-1-s-1
       fabric_templates:
         - [4_CISCO_LEAFS_MR_N9K-C9336C-FX2]
         - [4_CISCO_TORS_N9K-C9336C-FX2]
@@ -22,7 +22,7 @@ spec:
       row: B
       rack_type: network
       pod: ["DC8", "8", "1"]
-      parent: "TYO-1-Suite-1"
+      parent: tyo-1-s-1
       fabric_templates:
         - [4_CISCO_LEAFS_MR_N9K-C9336C-FX2]
         - [4_CISCO_TORS_N9K-C9336C-FX2]
@@ -34,7 +34,7 @@ spec:
       row: C
       rack_type: network
       pod: ["DC8", "8", "1"]
-      parent: "TYO-1-Suite-1"
+      parent: tyo-1-s-1
       fabric_templates:
         - [4_CISCO_LEAFS_MR_N9K-C9336C-FX2]
         - [4_CISCO_TORS_N9K-C9336C-FX2]
@@ -46,7 +46,7 @@ spec:
       row: D
       rack_type: network
       pod: ["DC8", "8", "1"]
-      parent: "TYO-1-Suite-1"
+      parent: tyo-1-s-1
       fabric_templates:
         - [4_CISCO_LEAFS_MR_N9K-C9336C-FX2]
         - [4_CISCO_TORS_N9K-C9336C-FX2]
@@ -58,7 +58,7 @@ spec:
       row: E
       rack_type: network
       pod: ["DC8", "8", "1"]
-      parent: "TYO-1-Suite-1"
+      parent: tyo-1-s-1
       fabric_templates:
         - [4_CISCO_LEAFS_MR_N9K-C9336C-FX2]
         - [4_CISCO_TORS_N9K-C9336C-FX2]
@@ -70,7 +70,7 @@ spec:
       row: F
       rack_type: network
       pod: ["DC8", "8", "1"]
-      parent: "TYO-1-Suite-1"
+      parent: tyo-1-s-1
       fabric_templates:
         - [4_CISCO_LEAFS_MR_N9K-C9336C-FX2]
         - [4_CISCO_TORS_N9K-C9336C-FX2]
@@ -82,7 +82,7 @@ spec:
       row: G
       rack_type: network
       pod: ["DC8", "8", "1"]
-      parent: "TYO-1-Suite-1"
+      parent: tyo-1-s-1
       fabric_templates:
         - [4_CISCO_LEAFS_MR_N9K-C9336C-FX2]
         - [4_CISCO_TORS_N9K-C9336C-FX2]
@@ -94,7 +94,7 @@ spec:
       row: H
       rack_type: network
       pod: ["DC8", "8", "1"]
-      parent: "TYO-1-Suite-1"
+      parent: tyo-1-s-1
       fabric_templates:
         - [4_CISCO_LEAFS_MR_N9K-C9336C-FX2]
         - [4_CISCO_TORS_N9K-C9336C-FX2]
@@ -106,7 +106,7 @@ spec:
       row: A
       rack_type: network
       pod: ["DC8", "8", "2"]
-      parent: "TYO-1-Suite-2"
+      parent: tyo-1-s-2
       fabric_templates:
         - [4_CISCO_LEAFS_MR_N9K-C9336C-FX2]
         - [4_CISCO_TORS_N9K-C9336C-FX2]
@@ -118,7 +118,7 @@ spec:
       row: B
       rack_type: network
       pod: ["DC8", "8", "2"]
-      parent: "TYO-1-Suite-2"
+      parent: tyo-1-s-2
       fabric_templates:
         - [4_CISCO_LEAFS_MR_N9K-C9336C-FX2]
         - [4_CISCO_TORS_N9K-C9336C-FX2]
@@ -130,7 +130,7 @@ spec:
       row: C
       rack_type: network
       pod: ["DC8", "8", "2"]
-      parent: "TYO-1-Suite-2"
+      parent: tyo-1-s-2
       fabric_templates:
         - [4_CISCO_LEAFS_MR_N9K-C9336C-FX2]
         - [4_CISCO_TORS_N9K-C9336C-FX2]
@@ -142,7 +142,7 @@ spec:
       row: D
       rack_type: network
       pod: ["DC8", "8", "2"]
-      parent: "TYO-1-Suite-2"
+      parent: tyo-1-s-2
       fabric_templates:
         - [4_CISCO_LEAFS_MR_N9K-C9336C-FX2]
         - [4_CISCO_TORS_N9K-C9336C-FX2]
@@ -154,7 +154,7 @@ spec:
       row: E
       rack_type: network
       pod: ["DC8", "8", "2"]
-      parent: "TYO-1-Suite-2"
+      parent: tyo-1-s-2
       fabric_templates:
         - [4_CISCO_LEAFS_MR_N9K-C9336C-FX2]
         - [4_CISCO_TORS_N9K-C9336C-FX2]
@@ -166,7 +166,7 @@ spec:
       row: F
       rack_type: network
       pod: ["DC8", "8", "2"]
-      parent: "TYO-1-Suite-2"
+      parent: tyo-1-s-2
       fabric_templates:
         - [4_CISCO_LEAFS_MR_N9K-C9336C-FX2]
         - [4_CISCO_TORS_N9K-C9336C-FX2]
@@ -178,7 +178,7 @@ spec:
       row: G
       rack_type: network
       pod: ["DC8", "8", "2"]
-      parent: "TYO-1-Suite-2"
+      parent: tyo-1-s-2
       fabric_templates:
         - [4_CISCO_LEAFS_MR_N9K-C9336C-FX2]
         - [4_CISCO_TORS_N9K-C9336C-FX2]
@@ -190,7 +190,7 @@ spec:
       row: H
       rack_type: network
       pod: ["DC8", "8", "2"]
-      parent: "TYO-1-Suite-2"
+      parent: tyo-1-s-2
       fabric_templates:
         - [4_CISCO_LEAFS_MR_N9K-C9336C-FX2]
         - [4_CISCO_TORS_N9K-C9336C-FX2]
@@ -202,7 +202,7 @@ spec:
       row: A
       rack_type: network
       pod: ["DC8", "8", "3"]
-      parent: "TYO-1-Suite-3"
+      parent: tyo-1-s-3
       fabric_templates:
         - [4_CISCO_LEAFS_MR_N9K-C9336C-FX2]
         - [4_CISCO_TORS_N9K-C9336C-FX2]
@@ -214,7 +214,7 @@ spec:
       row: B
       rack_type: network
       pod: ["DC8", "8", "3"]
-      parent: "TYO-1-Suite-3"
+      parent: tyo-1-s-3
       fabric_templates:
         - [4_CISCO_LEAFS_MR_N9K-C9336C-FX2]
         - [4_CISCO_TORS_N9K-C9336C-FX2]
@@ -226,7 +226,7 @@ spec:
       row: C
       rack_type: network
       pod: ["DC8", "8", "3"]
-      parent: "TYO-1-Suite-3"
+      parent: tyo-1-s-3
       fabric_templates:
         - [4_CISCO_LEAFS_MR_N9K-C9336C-FX2]
         - [4_CISCO_TORS_N9K-C9336C-FX2]
@@ -238,7 +238,7 @@ spec:
       row: D
       rack_type: network
       pod: ["DC8", "8", "3"]
-      parent: "TYO-1-Suite-3"
+      parent: tyo-1-s-3
       fabric_templates:
         - [4_CISCO_LEAFS_MR_N9K-C9336C-FX2]
         - [4_CISCO_TORS_N9K-C9336C-FX2]
@@ -250,7 +250,7 @@ spec:
       row: E
       rack_type: network
       pod: ["DC8", "8", "3"]
-      parent: "TYO-1-Suite-3"
+      parent: tyo-1-s-3
       fabric_templates:
         - [4_CISCO_LEAFS_MR_N9K-C9336C-FX2]
         - [4_CISCO_TORS_N9K-C9336C-FX2]
@@ -262,7 +262,7 @@ spec:
       row: F
       rack_type: network
       pod: ["DC8", "8", "3"]
-      parent: "TYO-1-Suite-3"
+      parent: tyo-1-s-3
       fabric_templates:
         - [4_CISCO_LEAFS_MR_N9K-C9336C-FX2]
         - [4_CISCO_TORS_N9K-C9336C-FX2]
@@ -274,7 +274,7 @@ spec:
       row: G
       rack_type: network
       pod: ["DC8", "8", "3"]
-      parent: "TYO-1-Suite-3"
+      parent: tyo-1-s-3
       fabric_templates:
         - [4_CISCO_LEAFS_MR_N9K-C9336C-FX2]
         - [4_CISCO_TORS_N9K-C9336C-FX2]
@@ -286,7 +286,7 @@ spec:
       row: H
       rack_type: network
       pod: ["DC8", "8", "3"]
-      parent: "TYO-1-Suite-3"
+      parent: tyo-1-s-3
       fabric_templates:
         - [4_CISCO_LEAFS_MR_N9K-C9336C-FX2]
         - [4_CISCO_TORS_N9K-C9336C-FX2]
@@ -298,7 +298,7 @@ spec:
       row: A
       rack_type: network
       pod: ["DC8", "8", "4"]
-      parent: "TYO-1-Suite-4"
+      parent: tyo-1-s-4
       fabric_templates:
         - [4_CISCO_LEAFS_MR_N9K-C9336C-FX2]
         - [4_CISCO_TORS_N9K-C9336C-FX2]
@@ -310,7 +310,7 @@ spec:
       row: B
       rack_type: network
       pod: ["DC8", "8", "4"]
-      parent: "TYO-1-Suite-4"
+      parent: tyo-1-s-4
       fabric_templates:
         - [4_CISCO_LEAFS_MR_N9K-C9336C-FX2]
         - [4_CISCO_TORS_N9K-C9336C-FX2]
@@ -322,7 +322,7 @@ spec:
       row: C
       rack_type: network
       pod: ["DC8", "8", "4"]
-      parent: "TYO-1-Suite-4"
+      parent: tyo-1-s-4
       fabric_templates:
         - [4_CISCO_LEAFS_MR_N9K-C9336C-FX2]
         - [4_CISCO_TORS_N9K-C9336C-FX2]
@@ -334,7 +334,7 @@ spec:
       row: D
       rack_type: network
       pod: ["DC8", "8", "4"]
-      parent: "TYO-1-Suite-4"
+      parent: tyo-1-s-4
       fabric_templates:
         - [4_CISCO_LEAFS_MR_N9K-C9336C-FX2]
         - [4_CISCO_TORS_N9K-C9336C-FX2]
@@ -346,7 +346,7 @@ spec:
       row: E
       rack_type: network
       pod: ["DC8", "8", "4"]
-      parent: "TYO-1-Suite-4"
+      parent: tyo-1-s-4
       fabric_templates:
         - [4_CISCO_LEAFS_MR_N9K-C9336C-FX2]
         - [4_CISCO_TORS_N9K-C9336C-FX2]
@@ -358,7 +358,7 @@ spec:
       row: F
       rack_type: network
       pod: ["DC8", "8", "4"]
-      parent: "TYO-1-Suite-4"
+      parent: tyo-1-s-4
       fabric_templates:
         - [4_CISCO_LEAFS_MR_N9K-C9336C-FX2]
         - [4_CISCO_TORS_N9K-C9336C-FX2]
@@ -370,7 +370,7 @@ spec:
       row: G
       rack_type: network
       pod: ["DC8", "8", "4"]
-      parent: "TYO-1-Suite-4"
+      parent: tyo-1-s-4
       fabric_templates:
         - [4_CISCO_LEAFS_MR_N9K-C9336C-FX2]
         - [4_CISCO_TORS_N9K-C9336C-FX2]
@@ -382,7 +382,7 @@ spec:
       row: H
       rack_type: network
       pod: ["DC8", "8", "4"]
-      parent: "TYO-1-Suite-4"
+      parent: tyo-1-s-4
       fabric_templates:
         - [4_CISCO_LEAFS_MR_N9K-C9336C-FX2]
         - [4_CISCO_TORS_N9K-C9336C-FX2]
@@ -394,7 +394,7 @@ spec:
       row: A
       rack_type: network
       pod: ["DC8", "8", "5"]
-      parent: "TYO-1-Suite-5"
+      parent: tyo-1-s-5
       fabric_templates:
         - [4_CISCO_LEAFS_MR_N9K-C9336C-FX2]
         - [4_CISCO_TORS_N9K-C9336C-FX2]
@@ -406,7 +406,7 @@ spec:
       row: B
       rack_type: network
       pod: ["DC8", "8", "5"]
-      parent: "TYO-1-Suite-5"
+      parent: tyo-1-s-5
       fabric_templates:
         - [4_CISCO_LEAFS_MR_N9K-C9336C-FX2]
         - [4_CISCO_TORS_N9K-C9336C-FX2]
@@ -418,7 +418,7 @@ spec:
       row: C
       rack_type: network
       pod: ["DC8", "8", "5"]
-      parent: "TYO-1-Suite-5"
+      parent: tyo-1-s-5
       fabric_templates:
         - [4_CISCO_LEAFS_MR_N9K-C9336C-FX2]
         - [4_CISCO_TORS_N9K-C9336C-FX2]
@@ -430,7 +430,7 @@ spec:
       row: D
       rack_type: network
       pod: ["DC8", "8", "5"]
-      parent: "TYO-1-Suite-5"
+      parent: tyo-1-s-5
       fabric_templates:
         - [4_CISCO_LEAFS_MR_N9K-C9336C-FX2]
         - [4_CISCO_TORS_N9K-C9336C-FX2]
@@ -442,7 +442,7 @@ spec:
       row: E
       rack_type: network
       pod: ["DC8", "8", "5"]
-      parent: "TYO-1-Suite-5"
+      parent: tyo-1-s-5
       fabric_templates:
         - [4_CISCO_LEAFS_MR_N9K-C9336C-FX2]
         - [4_CISCO_TORS_N9K-C9336C-FX2]
@@ -454,7 +454,7 @@ spec:
       row: F
       rack_type: network
       pod: ["DC8", "8", "5"]
-      parent: "TYO-1-Suite-5"
+      parent: tyo-1-s-5
       fabric_templates:
         - [4_CISCO_LEAFS_MR_N9K-C9336C-FX2]
         - [4_CISCO_TORS_N9K-C9336C-FX2]
@@ -466,7 +466,7 @@ spec:
       row: G
       rack_type: network
       pod: ["DC8", "8", "5"]
-      parent: "TYO-1-Suite-5"
+      parent: tyo-1-s-5
       fabric_templates:
         - [4_CISCO_LEAFS_MR_N9K-C9336C-FX2]
         - [4_CISCO_TORS_N9K-C9336C-FX2]
@@ -478,7 +478,7 @@ spec:
       row: H
       rack_type: network
       pod: ["DC8", "8", "5"]
-      parent: "TYO-1-Suite-5"
+      parent: tyo-1-s-5
       fabric_templates:
         - [4_CISCO_LEAFS_MR_N9K-C9336C-FX2]
         - [4_CISCO_TORS_N9K-C9336C-FX2]
@@ -490,7 +490,7 @@ spec:
       row: A
       rack_type: network
       pod: ["DC8", "8", "6"]
-      parent: "TYO-1-Suite-6"
+      parent: tyo-1-s-6
       fabric_templates:
         - [4_CISCO_LEAFS_MR_N9K-C9336C-FX2]
         - [4_CISCO_TORS_N9K-C9336C-FX2]
@@ -502,7 +502,7 @@ spec:
       row: B
       rack_type: network
       pod: ["DC8", "8", "6"]
-      parent: "TYO-1-Suite-6"
+      parent: tyo-1-s-6
       fabric_templates:
         - [4_CISCO_LEAFS_MR_N9K-C9336C-FX2]
         - [4_CISCO_TORS_N9K-C9336C-FX2]
@@ -514,7 +514,7 @@ spec:
       row: C
       rack_type: network
       pod: ["DC8", "8", "6"]
-      parent: "TYO-1-Suite-6"
+      parent: tyo-1-s-6
       fabric_templates:
         - [4_CISCO_LEAFS_MR_N9K-C9336C-FX2]
         - [4_CISCO_TORS_N9K-C9336C-FX2]
@@ -526,7 +526,7 @@ spec:
       row: D
       rack_type: network
       pod: ["DC8", "8", "6"]
-      parent: "TYO-1-Suite-6"
+      parent: tyo-1-s-6
       fabric_templates:
         - [4_CISCO_LEAFS_MR_N9K-C9336C-FX2]
         - [4_CISCO_TORS_N9K-C9336C-FX2]
@@ -538,7 +538,7 @@ spec:
       row: E
       rack_type: network
       pod: ["DC8", "8", "6"]
-      parent: "TYO-1-Suite-6"
+      parent: tyo-1-s-6
       fabric_templates:
         - [4_CISCO_LEAFS_MR_N9K-C9336C-FX2]
         - [4_CISCO_TORS_N9K-C9336C-FX2]
@@ -550,7 +550,7 @@ spec:
       row: F
       rack_type: network
       pod: ["DC8", "8", "6"]
-      parent: "TYO-1-Suite-6"
+      parent: tyo-1-s-6
       fabric_templates:
         - [4_CISCO_LEAFS_MR_N9K-C9336C-FX2]
         - [4_CISCO_TORS_N9K-C9336C-FX2]
@@ -562,7 +562,7 @@ spec:
       row: G
       rack_type: network
       pod: ["DC8", "8", "6"]
-      parent: "TYO-1-Suite-6"
+      parent: tyo-1-s-6
       fabric_templates:
         - [4_CISCO_LEAFS_MR_N9K-C9336C-FX2]
         - [4_CISCO_TORS_N9K-C9336C-FX2]
@@ -574,7 +574,7 @@ spec:
       row: H
       rack_type: network
       pod: ["DC8", "8", "6"]
-      parent: "TYO-1-Suite-6"
+      parent: tyo-1-s-6
       fabric_templates:
         - [4_CISCO_LEAFS_MR_N9K-C9336C-FX2]
         - [4_CISCO_TORS_N9K-C9336C-FX2]
@@ -586,7 +586,7 @@ spec:
       row: A
       rack_type: network
       pod: ["DC8", "8", "7"]
-      parent: "TYO-1-Suite-7"
+      parent: tyo-1-s-7
       fabric_templates:
         - [4_CISCO_LEAFS_MR_N9K-C9336C-FX2]
         - [4_CISCO_TORS_N9K-C9336C-FX2]
@@ -598,7 +598,7 @@ spec:
       row: B
       rack_type: network
       pod: ["DC8", "8", "7"]
-      parent: "TYO-1-Suite-7"
+      parent: tyo-1-s-7
       fabric_templates:
         - [4_CISCO_LEAFS_MR_N9K-C9336C-FX2]
         - [4_CISCO_TORS_N9K-C9336C-FX2]
@@ -610,7 +610,7 @@ spec:
       row: C
       rack_type: network
       pod: ["DC8", "8", "7"]
-      parent: "TYO-1-Suite-7"
+      parent: tyo-1-s-7
       fabric_templates:
         - [4_CISCO_LEAFS_MR_N9K-C9336C-FX2]
         - [4_CISCO_TORS_N9K-C9336C-FX2]
@@ -622,7 +622,7 @@ spec:
       row: D
       rack_type: network
       pod: ["DC8", "8", "7"]
-      parent: "TYO-1-Suite-7"
+      parent: tyo-1-s-7
       fabric_templates:
         - [4_CISCO_LEAFS_MR_N9K-C9336C-FX2]
         - [4_CISCO_TORS_N9K-C9336C-FX2]
@@ -634,7 +634,7 @@ spec:
       row: E
       rack_type: network
       pod: ["DC8", "8", "7"]
-      parent: "TYO-1-Suite-7"
+      parent: tyo-1-s-7
       fabric_templates:
         - [4_CISCO_LEAFS_MR_N9K-C9336C-FX2]
         - [4_CISCO_TORS_N9K-C9336C-FX2]
@@ -646,7 +646,7 @@ spec:
       row: F
       rack_type: network
       pod: ["DC8", "8", "7"]
-      parent: "TYO-1-Suite-7"
+      parent: tyo-1-s-7
       fabric_templates:
         - [4_CISCO_LEAFS_MR_N9K-C9336C-FX2]
         - [4_CISCO_TORS_N9K-C9336C-FX2]
@@ -658,7 +658,7 @@ spec:
       row: G
       rack_type: network
       pod: ["DC8", "8", "7"]
-      parent: "TYO-1-Suite-7"
+      parent: tyo-1-s-7
       fabric_templates:
         - [4_CISCO_LEAFS_MR_N9K-C9336C-FX2]
         - [4_CISCO_TORS_N9K-C9336C-FX2]
@@ -670,7 +670,7 @@ spec:
       row: H
       rack_type: network
       pod: ["DC8", "8", "7"]
-      parent: "TYO-1-Suite-7"
+      parent: tyo-1-s-7
       fabric_templates:
         - [4_CISCO_LEAFS_MR_N9K-C9336C-FX2]
         - [4_CISCO_TORS_N9K-C9336C-FX2]
@@ -682,7 +682,7 @@ spec:
       row: A
       rack_type: network
       pod: ["DC8", "8", "8"]
-      parent: "TYO-1-Suite-8"
+      parent: tyo-1-s-8
       fabric_templates:
         - [4_CISCO_LEAFS_MR_N9K-C9336C-FX2]
         - [4_CISCO_TORS_N9K-C9336C-FX2]
@@ -694,7 +694,7 @@ spec:
       row: B
       rack_type: network
       pod: ["DC8", "8", "8"]
-      parent: "TYO-1-Suite-8"
+      parent: tyo-1-s-8
       fabric_templates:
         - [4_CISCO_LEAFS_MR_N9K-C9336C-FX2]
         - [4_CISCO_TORS_N9K-C9336C-FX2]
@@ -706,7 +706,7 @@ spec:
       row: C
       rack_type: network
       pod: ["DC8", "8", "8"]
-      parent: "TYO-1-Suite-8"
+      parent: tyo-1-s-8
       fabric_templates:
         - [4_CISCO_LEAFS_MR_N9K-C9336C-FX2]
         - [4_CISCO_TORS_N9K-C9336C-FX2]
@@ -718,7 +718,7 @@ spec:
       row: D
       rack_type: network
       pod: ["DC8", "8", "8"]
-      parent: "TYO-1-Suite-8"
+      parent: tyo-1-s-8
       fabric_templates:
         - [4_CISCO_LEAFS_MR_N9K-C9336C-FX2]
         - [4_CISCO_TORS_N9K-C9336C-FX2]
@@ -730,7 +730,7 @@ spec:
       row: E
       rack_type: network
       pod: ["DC8", "8", "8"]
-      parent: "TYO-1-Suite-8"
+      parent: tyo-1-s-8
       fabric_templates:
         - [4_CISCO_LEAFS_MR_N9K-C9336C-FX2]
         - [4_CISCO_TORS_N9K-C9336C-FX2]
@@ -742,7 +742,7 @@ spec:
       row: F
       rack_type: network
       pod: ["DC8", "8", "8"]
-      parent: "TYO-1-Suite-8"
+      parent: tyo-1-s-8
       fabric_templates:
         - [4_CISCO_LEAFS_MR_N9K-C9336C-FX2]
         - [4_CISCO_TORS_N9K-C9336C-FX2]
@@ -754,7 +754,7 @@ spec:
       row: G
       rack_type: network
       pod: ["DC8", "8", "8"]
-      parent: "TYO-1-Suite-8"
+      parent: tyo-1-s-8
       fabric_templates:
         - [4_CISCO_LEAFS_MR_N9K-C9336C-FX2]
         - [4_CISCO_TORS_N9K-C9336C-FX2]
@@ -766,7 +766,7 @@ spec:
       row: H
       rack_type: network
       pod: ["DC8", "8", "8"]
-      parent: "TYO-1-Suite-8"
+      parent: tyo-1-s-8
       fabric_templates:
         - [4_CISCO_LEAFS_MR_N9K-C9336C-FX2]
         - [4_CISCO_TORS_N9K-C9336C-FX2]
