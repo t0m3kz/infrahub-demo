@@ -83,9 +83,9 @@ artifact_definitions:
       name: name__value
 
 check_definitions:
-  - name: validate_datacenter_capacity
+  - name: validate_dc_capacity
     class_name: CheckDataCenterCapacity
-    file_path: checks/datacenter.py
+    file_path: checks/dc.py
     targets: topologies_dc
     parameters:
       name: name__value
@@ -133,12 +133,6 @@ check_definitions:
       device: name__value
 
 python_transforms:
-  - name: computed_dc_capacity_summary
-    class_name: ComputedDCCapacitySummary
-    file_path: computed_attributes/capacity_summary.py
-  - name: computed_pod_capacity_summary
-    class_name: ComputedPodCapacitySummary
-    file_path: computed_attributes/capacity_summary.py
   - name: topology_cabling
     class_name: TopologyCabling
     file_path: transforms/topology_cabling.py
@@ -195,7 +189,7 @@ generator_definitions:
     execute_after_merge: false
     parameters:
       name: name__value
-# - name: create_server_connectivity
+# - name: connect_endpoint
 #   file_path: generators/generate_server.py
 #   targets: topologies_pod
 #   query: topology_pod
@@ -211,12 +205,10 @@ generator_definitions:
 #     name: name__value
 
 queries:
-  - name: computed_dc_capacity_summary
-    file_path: queries/computed/computed_dc_capacity_summary.gql
-  - name: computed_pod_capacity_summary
-    file_path: queries/computed/computed_pod_capacity_summary.gql
-  - name: datacenter_capacity_validation
-    file_path: queries/validation/datacenter_capacity_validation.gql
+  - name: dc_validation
+    file_path: queries/validation/dc_capacity.gql
+  # - name: endpoint_connectivity
+  #   file_path: queries/connectivity/endpoint_connectivity.gql
   - name: topology_dc
     file_path: queries/topology/dc.gql
   - name: topology_pod

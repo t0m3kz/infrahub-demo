@@ -100,14 +100,6 @@ infrahub_tests:
           kind: graphql-query-smoke
 
   - resource: GraphQLQuery
-    resource_name: topology_server
-    tests:
-      - name: syntax_check
-        spec:
-          path: queries/topology/server.gql
-          kind: graphql-query-smoke
-
-  - resource: GraphQLQuery
     resource_name: topology_cabling
     tests:
       - name: syntax_check
@@ -137,13 +129,4 @@ infrahub_tests:
       - name: syntax_check
         spec:
           path: queries/topology/clab.gql
-          kind: graphql-query-smoke
-
-  # ==================== VALIDATION QUERIES ====================
-  - resource: GraphQLQuery
-    resource_name: loadbalancer_validation
-    tests:
-      - name: syntax_check
-        spec:
-          path: queries/validation/loadbalancer_validation.gql
           kind: graphql-query-smoke

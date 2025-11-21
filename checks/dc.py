@@ -10,7 +10,7 @@ from .common import get_data
 class CheckDataCenterCapacity(InfrahubCheck):
     """Check Data Center deployment against design pattern limits."""
 
-    query = "datacenter_capacity_validation"
+    query = "dc_validation"
 
     def validate(self, data: Any) -> None:
         """Validate Data Center capacity and design compliance.
