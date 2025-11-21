@@ -1,0 +1,12 @@
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: LocationSuite
+  data:
+    - suite_name: "Room-1"
+      shortname: "syd-1-r-1"
+      parent: "SYD-1"
+    - suite_name: "Room-2"
+      shortname: "syd-1-r-2"
+      parent: "SYD-1"

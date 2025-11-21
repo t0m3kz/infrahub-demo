@@ -16,19 +16,19 @@ spec:
         kind: TopologyPod
         data:
           - index: 1
-            role: fabric
+            deployment_type: mixed
             spine_template: Edgecore-7726_32X_O_SPINE
             amount_of_spines: 4
             member_of_groups:
               - topologies_pod
           - index: 2
-            role: fabric
+            deployment_type: mixed
             spine_template: Edgecore-7726_32X_O_SPINE
             amount_of_spines: 2
             member_of_groups:
               - topologies_pod
           - index: 3
-            role: fabric
+            deployment_type: middle_rack
             spine_template: Edgecore-7726_32X_O_SPINE
             amount_of_spines: 3
             member_of_groups:

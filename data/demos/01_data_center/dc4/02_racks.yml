@@ -9,9 +9,9 @@ spec:
       index: 1
       rack_type: network
       pod: ["DC4", "1", "1"]
-      parent: "BER-1 Suite-1"
+      parent: "BER-1-Suite-1"
       fabric_templates:
-        - 4_EDGECORE_LEAFS_Edgecore-7AS7326-56X-O-48V-F
+        - [4_EDGECORE_LEAFS_Edgecore-7AS7326-56X-O-48V-F]
       member_of_groups:
         - topologies_rack
     - rack_name: "Rack-1-2"
@@ -19,9 +19,9 @@ spec:
       index: 2
       rack_type: network
       pod: ["DC4", "1", "1"]
-      parent: "BER-1 Suite-1"
+      parent: "BER-1-Suite-1"
       fabric_templates:
-        - 4_EDGECORE_LEAFS_Edgecore-7AS7326-56X-O-48V-F
+        - [4_EDGECORE_LEAFS_Edgecore-7AS7326-56X-O-48V-F]
       member_of_groups:
         - topologies_rack
     - rack_name: "Rack-1-3"
@@ -29,9 +29,9 @@ spec:
       index: 3
       rack_type: network
       pod: ["DC4", "1", "1"]
-      parent: "BER-1 Suite-1"
+      parent: "BER-1-Suite-1"
       fabric_templates:
-        - 4_EDGECORE_LEAFS_Edgecore-7AS7326-56X-O-48V-F
+        - [4_EDGECORE_LEAFS_Edgecore-7AS7326-56X-O-48V-F]
       member_of_groups:
         - topologies_rack
     - rack_name: "Rack-1-4"
@@ -39,9 +39,9 @@ spec:
       index: 4
       rack_type: network
       pod: ["DC4", "1", "1"]
-      parent: "BER-1 Suite-1"
+      parent: "BER-1-Suite-1"
       fabric_templates:
-        - 4_EDGECORE_LEAFS_Edgecore-7AS7326-56X-O-48V-F
+        - [4_EDGECORE_LEAFS_Edgecore-7AS7326-56X-O-48V-F]
       member_of_groups:
         - topologies_rack
     - rack_name: "Rack-2-1"
@@ -49,9 +49,9 @@ spec:
       index: 1
       rack_type: network
       pod: ["DC4", "1", "2"]
-      parent: "BER-1 Suite-2"
+      parent: "BER-1-Suite-2"
       fabric_templates:
-        - 4_EDGECORE_LEAFS_Edgecore-7AS7326-56X-O-48V-F
+        - [4_EDGECORE_LEAFS_Edgecore-7AS7326-56X-O-48V-F]
       member_of_groups:
         - topologies_rack
     - rack_name: "Rack-2-2"
@@ -59,9 +59,9 @@ spec:
       index: 2
       rack_type: network
       pod: ["DC4", "1", "2"]
-      parent: "BER-1 Suite-2"
+      parent: "BER-1-Suite-2"
       fabric_templates:
-        - 2_EDGECORE_LEAFS_Edgecore-7AS7326-56X-O-48V-F
+        - [2_EDGECORE_LEAFS_Edgecore-7AS7326-56X-O-48V-F]
       member_of_groups:
         - topologies_rack
     - rack_name: "Rack-2-3"
@@ -69,9 +69,9 @@ spec:
       index: 3
       rack_type: network
       pod: ["DC4", "1", "2"]
-      parent: "BER-1 Suite-2"
+      parent: "BER-1-Suite-2"
       fabric_templates:
-        - 4_EDGECORE_LEAFS_Edgecore-7AS7326-56X-O-48V-F
+        - [4_EDGECORE_LEAFS_Edgecore-7AS7326-56X-O-48V-F]
       member_of_groups:
         - topologies_rack
     - rack_name: "Rack-2-4"
@@ -79,9 +79,9 @@ spec:
       index: 4
       rack_type: network
       pod: ["DC4", "1", "2"]
-      parent: "BER-1 Suite-2"
+      parent: "BER-1-Suite-2"
       fabric_templates:
-        - 4_EDGECORE_LEAFS_Edgecore-7AS7326-56X-O-48V-F
+        - [4_EDGECORE_LEAFS_Edgecore-7AS7326-56X-O-48V-F]
       member_of_groups:
         - topologies_rack
     - rack_name: "Rack-3-1"
@@ -89,9 +89,9 @@ spec:
       index: 1
       rack_type: network
       pod: ["DC4", "1", "3"]
-      parent: "BER-1 Suite-3"
+      parent: "BER-1-Suite-3"
       fabric_templates:
-        - 2_EDGECORE_LEAFS_Edgecore-7AS7326-56X-O-48V-F
+        - [2_EDGECORE_LEAFS_Edgecore-7AS7326-56X-O-48V-F]
       member_of_groups:
         - topologies_rack
     - rack_name: "Rack-3-2"
@@ -99,9 +99,9 @@ spec:
       index: 2
       rack_type: network
       pod: ["DC4", "1", "3"]
-      parent: "BER-1 Suite-3"
+      parent: "BER-1-Suite-3"
       fabric_templates:
-        - 2_EDGECORE_LEAFS_Edgecore-7AS7326-56X-O-48V-F
+        - [2_EDGECORE_LEAFS_Edgecore-7AS7326-56X-O-48V-F]
       member_of_groups:
         - topologies_rack
     - rack_name: "Rack-3-3"
@@ -109,9 +109,9 @@ spec:
       index: 3
       rack_type: network
       pod: ["DC4", "1", "3"]
-      parent: "BER-1 Suite-3"
+      parent: "BER-1-Suite-3"
       fabric_templates:
-        - 4_EDGECORE_LEAFS_Edgecore-7AS7326-56X-O-48V-F
+        - [4_EDGECORE_LEAFS_Edgecore-7AS7326-56X-O-48V-F]
       member_of_groups:
         - topologies_rack
     - rack_name: "Rack-3-4"
@@ -119,8 +119,8 @@ spec:
       index: 4
       rack_type: network
       pod: ["DC4", "1", "3"]
-      parent: "BER-1 Suite-3"
+      parent: "BER-1-Suite-3"
       fabric_templates:
-        - 4_EDGECORE_LEAFS_Edgecore-7AS7326-56X-O-48V-F
+        - [4_EDGECORE_LEAFS_Edgecore-7AS7326-56X-O-48V-F]
       member_of_groups:
         - topologies_rack

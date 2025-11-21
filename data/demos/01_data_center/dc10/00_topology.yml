@@ -4,12 +4,12 @@ kind: Object
 spec:
   kind: TopologyDataCenter
   data:
-    - name: DC3
-      index: 1
-      amount_of_super_spines: 2
+    - name: DC10
+      index: 10
+      amount_of_super_spines: 4
       super_spine_template: PowerSwitch-S5232F-ON_SUPER_SPINE
       fabric_interface_sorting_method: top_down
-      design_pattern: S-Flat-ToR
+      design_pattern: S-Hierarchical-ToR
       member_of_groups:
         - topologies_dc
       children:
@@ -18,12 +18,12 @@ spec:
           - index: 1
             deployment_type: tor
             spine_template: PowerSwitch-S5232F-ON_SPINE
-            amount_of_spines: 2
+            amount_of_spines: 4
             member_of_groups:
               - topologies_pod
           - index: 2
             deployment_type: tor
             spine_template: PowerSwitch-S5232F-ON_SPINE
-            amount_of_spines: 2
+            amount_of_spines: 4
             member_of_groups:
               - topologies_pod

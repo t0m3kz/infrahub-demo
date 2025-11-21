@@ -4,26 +4,26 @@ kind: Object
 spec:
   kind: TopologyDataCenter
   data:
-    - name: DC3
-      index: 1
+    - name: DC7
+      index: 7
       amount_of_super_spines: 2
-      super_spine_template: PowerSwitch-S5232F-ON_SUPER_SPINE
+      super_spine_template: Edgecore-7726_32X_O_SUPER_SPINE
       fabric_interface_sorting_method: top_down
-      design_pattern: S-Flat-ToR
+      design_pattern: M-Standard-Mixed
       member_of_groups:
         - topologies_dc
       children:
         kind: TopologyPod
         data:
           - index: 1
-            deployment_type: tor
-            spine_template: PowerSwitch-S5232F-ON_SPINE
+            deployment_type: mixed
+            spine_template: Edgecore-7726_32X_O_SPINE
             amount_of_spines: 2
             member_of_groups:
               - topologies_pod
           - index: 2
-            deployment_type: tor
-            spine_template: PowerSwitch-S5232F-ON_SPINE
+            deployment_type: mixed
+            spine_template: Edgecore-7726_32X_O_SPINE
             amount_of_spines: 2
             member_of_groups:
               - topologies_pod

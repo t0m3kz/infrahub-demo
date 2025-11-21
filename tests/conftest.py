@@ -1,8 +1,9 @@
 # import json
 import sys
 from pathlib import Path
+from typing import Any
+from unittest.mock import Mock
 
-# from typing import Any
 import pytest
 
 # from infrahub_sdk import Config, InfrahubClientSync
@@ -14,6 +15,40 @@ CURRENT_DIR = Path(__file__).parent
 
 # Add project root to sys.path for imports
 sys.path.insert(0, str(CURRENT_DIR.parent))
+
+
+# ============================================================================
+# CablingPlanner Test Utilities
+# ============================================================================
+
+
+class MockInterface:
+    """Mock DcimPhysicalInterface for testing."""
+
+    def __init__(self, name: str, device_label: str) -> None:
+        """Initialize mock interface.
+
+        Args:
+            name: Interface name (e.g., 'Ethernet1/1')
+            device_label: Device display label (e.g., 'spine-01')
+        """
+        self.name: Any = Mock(value=name)
+        self.device: Any = Mock(display_label=device_label)
+
+
+def create_mock_interfaces(
+    device_label: str, interface_names: list[str]
+) -> list[MockInterface]:
+    """Helper to create multiple mock interfaces for a device.
+
+    Args:
+        device_label: Device display label
+        interface_names: List of interface names
+
+    Returns:
+        List of MockInterface objects
+    """
+    return [MockInterface(name, device_label) for name in interface_names]
 
 
 @pytest.fixture(scope="session")

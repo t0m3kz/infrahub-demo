@@ -1,54 +1,148 @@
-# Scenario: dc6
+# DC6 - Medium Multi-Vendor Data Center
 
-**Description:**
-Large data center - New York
+## Overview
+**Location:** Seattle
+**Size:** Medium (M)
+**Platform:** Multi-Vendor (Dell, Cisco, Arista)
+**Design Pattern:** M-Standard-MR (Medium Standard with Middle Rack)
 
-
-- Similar to dc5, with additional customizations
-- Used for advanced testing and validation
-- Highlights flexibility and extensibility
-
----
-## Deployment Template / Design
-
-- **Design Pattern:** M-Standard-MR
-- **Deployment Type:** middle_rack
-- **Maximum Super Spines:** 2
-- **Maximum Spines:** 2
-- **Maximum Pods:** 2
-- **Maximum Leafs:** 16
-- **Maximum Rack Leafs:** 6
-- **Maximum Middle Racks:** 4
-- **Maximum ToRs:** 24
-- **Naming Convention:** standard
+**Use Case:** Medium-sized **multi-vendor** data center with middle_rack deployment. Demonstrates vendor interoperability at smaller scale. Cost-effective multi-vendor approach for medium enterprises.
 
 ---
-## Used Hardware Components
 
-### Super Spines
-- Dell PowerSwitch S5232F-ON (Template: PowerSwitch-S5232F-ON_SUPER_SPINE)
+## Architecture
 
-### Pods & Spines
-- Pod 1: Cisco N9K-C9336C-FX2 (Template: N9K_C9336C_FX2_SPINE, 2 spines)
-- Pod 2: Arista DCS-7050PX4-32S-R (Template: DCS-7050PX4-32S-R_SPINE, 2 spines)
+### Fabric Scale
+- **Super Spines:** 2 (Dell PowerSwitch S5232F-ON)
+- **Total Pods:** 2
+- **Total Spines:** 4 (2+2 across pods)
+- **Total Racks:** 6
+- **Deployment Type:** middle_rack (all pods)
 
-### Racks & Leafs
-- Pod 1 Racks:
-	- Rack-1-1: Arista Leafs (Template: 4_ARISTA_LEAFS_DCS-7050SX3-24YC4C-S-R)
-	- Rack-1-2: Dell Leafs (Template: 4_DELL_LEAFS_PowerSwitch-S5248F-ON)
-	- Rack-1-3: Edgecore Leafs (Template: 4_EDGECORE_LEAFS_Edgecore-7AS7326-56X-O-48V-F)
-- Pod 2 Racks:
-	- Rack-2-1: Cisco Leafs (Template: 4_CISCO_LEAFS_N9K-C9336C-FX2)
-	- Rack-2-2: Edgecore Leafs (Template: 2_EDGECORE_LEAFS_Edgecore-7AS7326-56X-O-48V-F)
-	- Rack-2-3: Dell Leafs (Template: 4_DELL_LEAFS_PowerSwitch-S5248F-ON)
+### Pod Structure - Multi-Vendor
+| Pod | Spines | Vendor | Model | Racks | Deployment |
+|-----|--------|--------|-------|-------|------------|
+| Pod 1 | 2 | Cisco | N9K-C9336C-FX2 | 3 | middle_rack |
+| Pod 2 | 2 | Arista | DCS-7050PX4-32S-R | 3 | middle_rack |
 
-### Suites
-- Suite-1: Racks 1-x (Arista, Dell, Edgecore)
-- Suite-2: Racks 2-x (Cisco, Edgecore, Dell)
+### Design Template Constraints
+- maximum_spines: 2 per pod
+- maximum_pods: 2
+- maximum_leafs: 16
+- maximum_rack_leafs: 6
+- maximum_middle_racks: 4
+- maximum_tors: 24
+- naming_convention: standard
 
 ---
-## Topology Overview
 
-- 2 pods, each with dedicated spine hardware
-- Each pod contains 3 racks with mixed leaf hardware
-- Suites group racks by pod and vendor/hardware type
+## Hardware Stack
+
+### Super Spine Layer
+- **Model:** Dell PowerSwitch S5232F-ON
+- **Ports:** 32x100GbE
+- **Role:** Inter-pod connectivity
+- **OS:** SONiC (open source)
+
+### Spine Layer (Multi-Vendor)
+- **Pod 1:** Cisco N9K-C9336C-FX2 (36x100GbE, NX-OS, 2 spines)
+- **Pod 2:** Arista DCS-7050PX4-32S-R (32x100GbE, EOS, 2 spines)
+
+### Vendor Distribution
+- **Dell:** Super Spines (SONiC)
+- **Cisco:** Pod 1 Spines (NX-OS)
+- **Arista:** Pod 2 Spines (EOS)
+
+---
+
+## Deployment Strategy
+
+### Middle Rack (All Pods)
+**Vendor-Agnostic Pattern:**
+```
+ToR → Local Leafs (within rack)
+ToR → External Leafs (if no local, least utilized)
+```
+
+**Benefits:**
+- Same deployment logic across all vendors
+- Consistent operations
+- Reduced complexity vs. mixed deployment
+- Cost-effective aggregation
+
+---
+
+## Use Case Analysis
+
+### ✅ **Strengths**
+- **Tri-Vendor:** Dell, Cisco, Arista in one fabric
+- **Medium Scale:** Right-sized for SMB/departmental
+- **Open + Proprietary:** SONiC (Dell) + NX-OS + EOS
+- **Cost Balanced:** Mix of price points
+- **Interoperability:** Validates multi-vendor middle_rack
+
+### 🎯 **Best For**
+- Medium enterprises (300-700 servers)
+- Organizations transitioning between vendors
+- Testing multi-vendor interoperability
+- Avoiding single-vendor dependency
+- Departmental or regional data centers
+
+### 💡 **Unique Features**
+- **Tri-Vendor Compact:** All 3 major vendors in small footprint
+- **Open Source Super Spine:** Dell SONiC at core
+- **Proprietary Pods:** NX-OS and EOS for feature-rich pods
+- **Balanced Scale:** Not too large, not too small
+
+### ⚠️ **Considerations**
+- Multi-vendor support requirements
+- Different CLI/API per vendor
+- Feature parity challenges
+- Training on 3 platforms
+
+### 📊 **Capacity Estimate**
+- 6 network racks
+- ~12-24 server racks (potential)
+- Supports 300-600 servers
+
+---
+
+## Quick Start
+
+```bash
+# Load topology
+uv run infrahubctl object load data/demos/01_data_center/dc6/
+
+# Generate fabric
+uv run infrahubctl generator create_dc name=DC6 --branch main
+```
+
+---
+
+## Interoperability Testing
+
+### Multi-Vendor Validation
+```bash
+# Generate full fabric
+uv run infrahubctl generator create_dc name=DC6 --branch main
+
+# Test scenarios:
+# 1. Dell SONiC ↔ Cisco NX-OS BGP peering
+# 2. Dell SONiC ↔ Arista EOS BGP peering
+# 3. EVPN route exchange across all vendors
+# 4. Consistent VXLAN behavior
+```
+
+---
+
+## Files
+- `00_topology.yml` - Tri-vendor DC and Pod definitions
+- `01_suites.yml` - 2 suites (SEA-1 Room-1/2)
+- `02_racks.yml` - 6 network racks with mixed vendor equipment
+
+---
+
+## Related Scenarios
+- **DC2:** Similar scale, Arista-only
+- **DC5:** Large multi-vendor (4 vendors)
+- **Comparison:** DC2 (single-vendor) vs DC6 (multi-vendor) at same scale

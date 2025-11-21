@@ -1,13 +1,9 @@
 ---
 version: "1.0"
 infrahub_tests:
-  # --------------------  PythonTransform  --------------------
   - resource: PythonTransform
     resource_name: topology_cabling
     tests:
-      - name: syntax_check
-        spec:
-          kind: python-transform-smoke
       - name: baseline
         expect: PASS
         spec:

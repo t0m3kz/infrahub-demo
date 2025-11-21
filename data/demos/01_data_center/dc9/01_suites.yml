@@ -1,0 +1,18 @@
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: LocationSuite
+  data:
+    - suite_name: "Suite-1"
+      shortname: "sin-1-s-1"
+      parent: "SIN-1"
+    - suite_name: "Suite-2"
+      shortname: "sin-1-s-2"
+      parent: "SIN-1"
+    - suite_name: "Suite-3"
+      shortname: "sin-1-s-3"
+      parent: "SIN-1"
+    - suite_name: "Suite-4"
+      shortname: "sin-1-s-4"
+      parent: "SIN-1"

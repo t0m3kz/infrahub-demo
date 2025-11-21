@@ -134,17 +134,9 @@ class RackGenerator(CommonGenerator):
                 )
             elif deployment_type == "middle_rack":
                 # Connect ToRs to leaf switches in the same rack if available
-                # Use "leaf" role interfaces on leaf switches for ToR connectivity
                 check_interface_role = "leaf"
 
-                # Get the leaf devices that were created in this rack
-                # (we know their names from the create_devices call earlier)
                 if created_leaf_devices:
-                    self.logger.info(
-                        f"ToR connectivity: using {len(created_leaf_devices)} leaf devices "
-                        f"created in rack {self.data.name}"
-                    )
-
                     # Get leaf interfaces for ToR connectivity from template
                     leaf_role_interfaces = [
                         interface.name
@@ -173,9 +165,199 @@ class RackGenerator(CommonGenerator):
                         },
                     )
                 else:
-                    # No leaf switches in rack - connect to 2 leaf switches with lowest port usage
-                    # TODO: Implement logic to find leaf switches with lowest port usage
-                    self.logger.warning(
-                        f"No leaf switches in rack {self.data.name}, "
-                        "ToR connectivity to external leafs not yet implemented"
+                    # No leaf switches in rack - find external leafs from the pod
+                    # Query all leaf devices in the pod excluding this rack
+                    external_leafs_query = await self._get_external_leafs(
+                        pod_id=pod.id, exclude_rack_id=self.data.id
                     )
+
+                    if external_leafs_query:
+                        # Find the 2 leafs with most available ports
+                        (
+                            external_leaf_devices,
+                            _,
+                        ) = await self.get_devices_with_available_ports(
+                            device_names=external_leafs_query,
+                            interface_role="leaf",
+                            top_n=2,
+                        )
+
+                        self.logger.info(
+                            f"ToR connectivity: using {len(external_leaf_devices)} external leaf devices "
+                            f"from pod {pod_name} for rack {self.data.name}"
+                        )
+
+                        # Get leaf role interfaces
+                        leaf_role_interfaces = [f"Ethernet1/{i}" for i in range(25, 31)]
+
+                        await self.create_cabling(
+                            bottom_devices=tor_devices,
+                            bottom_interfaces=tor_interfaces,
+                            top_devices=external_leaf_devices,
+                            top_interfaces=leaf_role_interfaces,
+                            strategy="intra_rack",
+                            options={
+                                "pool": f"{pod_name}-technical-pool",
+                            },
+                        )
+                    else:
+                        self.logger.warning(
+                            f"No external leaf switches available in pod {pod_name} for ToR connectivity"
+                        )
+            elif deployment_type == "mixed":
+                # Mixed deployment: ToRs in this rack connect to local Leafs,
+                # and external ToRs connect to this rack's Leafs (if available)
+                check_interface_role = "leaf"
+
+                if created_leaf_devices:
+                    # Get leaf interfaces for ToR connectivity
+                    leaf_role_interfaces = [
+                        interface.name
+                        for interface in (
+                            self.data.leafs[0].template.interfaces
+                            if self.data.leafs
+                            else []
+                        )
+                        if interface.role == check_interface_role
+                    ]
+
+                    if not leaf_role_interfaces:
+                        leaf_role_interfaces = [f"Ethernet1/{i}" for i in range(25, 31)]
+
+                    # Connect local ToRs to local Leafs in this rack
+                    await self.create_cabling(
+                        bottom_devices=tor_devices,
+                        bottom_interfaces=tor_interfaces,
+                        top_devices=created_leaf_devices,
+                        top_interfaces=leaf_role_interfaces,
+                        strategy="intra_rack",
+                        options={
+                            "pool": f"{pod_name}-technical-pool",
+                        },
+                    )
+
+                    # Now handle external ToRs from other racks in the same pod
+                    # Query all ToR devices in the pod excluding this rack
+                    external_tors_query = await self._get_external_tors(
+                        pod_id=pod.id, exclude_rack_id=self.data.id
+                    )
+
+                    if external_tors_query:
+                        self.logger.info(
+                            f"Mixed deployment: connecting {len(external_tors_query)} external ToRs "
+                            f"to {len(created_leaf_devices)} leafs in rack {self.data.name}"
+                        )
+
+                        # Get ToR uplink interfaces
+                        tor_uplink_interfaces = [
+                            interface.name
+                            for interface in tor_role.template.interfaces
+                            if interface.role == "uplink"
+                        ]
+
+                        # Connect external ToRs to this rack's Leafs using least-utilized strategy
+                        await self.create_cabling(
+                            bottom_devices=external_tors_query,
+                            bottom_interfaces=tor_uplink_interfaces,
+                            top_devices=created_leaf_devices,
+                            top_interfaces=leaf_role_interfaces,
+                            strategy="intra_rack",
+                            options={
+                                "pool": f"{pod_name}-technical-pool",
+                            },
+                        )
+                else:
+                    self.logger.warning(
+                        f"Mixed deployment without local leafs in rack {self.data.name} - "
+                        "ToRs will need external connectivity"
+                    )
+
+    async def _get_external_leafs(self, pod_id: str, exclude_rack_id: str) -> list[str]:
+        """Get all leaf device names from the pod excluding specified rack.
+
+        Args:
+            pod_id: Pod ID to query
+            exclude_rack_id: Rack ID to exclude
+
+        Returns:
+            List of leaf device names
+        """
+        query = """
+        query GetExternalLeafs($pod_id: String!, $rack_id: String!) {
+            DcimGenericDevice(
+                role__name__value: "leaf"
+                location__id: $pod_id
+            ) {
+                edges {
+                    node {
+                        id
+                        name { value }
+                        rack {
+                            node { id }
+                        }
+                    }
+                }
+            }
+        }
+        """
+
+        result = await self.client.execute_graphql(
+            query=query,
+            variables={"pod_id": pod_id, "rack_id": exclude_rack_id},
+            branch_name=self.branch,
+        )
+
+        devices = result.get("DcimGenericDevice", {}).get("edges", [])
+        external_leafs = [
+            device["node"]["name"]["value"]
+            for device in devices
+            if device["node"].get("rack", {}).get("node", {}).get("id")
+            != exclude_rack_id
+        ]
+
+        return external_leafs
+
+    async def _get_external_tors(self, pod_id: str, exclude_rack_id: str) -> list[str]:
+        """Get all ToR device names from the pod excluding specified rack.
+
+        Args:
+            pod_id: Pod ID to query
+            exclude_rack_id: Rack ID to exclude
+
+        Returns:
+            List of ToR device names
+        """
+        query = """
+        query GetExternalToRs($pod_id: String!, $rack_id: String!) {
+            DcimGenericDevice(
+                role__name__value: "tor"
+                location__id: $pod_id
+            ) {
+                edges {
+                    node {
+                        id
+                        name { value }
+                        rack {
+                            node { id }
+                        }
+                    }
+                }
+            }
+        }
+        """
+
+        result = await self.client.execute_graphql(
+            query=query,
+            variables={"pod_id": pod_id, "rack_id": exclude_rack_id},
+            branch_name=self.branch,
+        )
+
+        devices = result.get("DcimGenericDevice", {}).get("edges", [])
+        external_tors = [
+            device["node"]["name"]["value"]
+            for device in devices
+            if device["node"].get("rack", {}).get("node", {}).get("id")
+            != exclude_rack_id
+        ]
+
+        return external_tors

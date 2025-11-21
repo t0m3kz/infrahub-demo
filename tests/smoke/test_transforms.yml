@@ -1,0 +1,74 @@
+---
+version: "1.0"
+infrahub_tests:
+  # ==================== PYTHON TRANSFORMS ====================
+  - resource: PythonTransform
+    resource_name: topology_cabling
+    tests:
+      - name: syntax_check
+        spec:
+          kind: python-transform-smoke
+
+  - resource: PythonTransform
+    resource_name: leaf
+    tests:
+      - name: syntax_check
+        spec:
+          kind: python-transform-smoke
+
+  - resource: PythonTransform
+    resource_name: border_leaf
+    tests:
+      - name: syntax_check
+        spec:
+          kind: python-transform-smoke
+
+  - resource: PythonTransform
+    resource_name: tor
+    tests:
+      - name: syntax_check
+        spec:
+          kind: python-transform-smoke
+
+  - resource: PythonTransform
+    resource_name: spine
+    tests:
+      - name: syntax_check
+        spec:
+          kind: python-transform-smoke
+
+  - resource: PythonTransform
+    resource_name: super_spine
+    tests:
+      - name: syntax_check
+        spec:
+          kind: python-transform-smoke
+
+  - resource: PythonTransform
+    resource_name: loadbalancer
+    tests:
+      - name: syntax_check
+        spec:
+          kind: python-transform-smoke
+
+  - resource: PythonTransform
+    resource_name: edge
+    tests:
+      - name: syntax_check
+        spec:
+          kind: python-transform-smoke
+
+  - resource: PythonTransform
+    resource_name: equinix_pop
+    tests:
+      - name: syntax_check
+        spec:
+          kind: python-transform-smoke
+
+  # ==================== JINJA2 TRANSFORMS ====================
+  - resource: Jinja2Transform
+    resource_name: topology_clab
+    tests:
+      - name: syntax_check
+        spec:
+          kind: jinja2-transform-smoke
