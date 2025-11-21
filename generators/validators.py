@@ -30,9 +30,9 @@ def validate_dc_capacity(
             "Cannot validate capacity."
         )
 
-    # Get design limits
-    max_super_spines = design_pattern.get("maximum_super_spines", {}).get("value", 0)
-    max_pods = design_pattern.get("maximum_pods", {}).get("value", 0)
+    # Get design limits (already extracted as integers by Pydantic)
+    max_super_spines = design_pattern.get("maximum_super_spines", 0)
+    max_pods = design_pattern.get("maximum_pods", 0)
 
     # Validate super spine count
     if super_spine_count > max_super_spines:
@@ -79,10 +79,10 @@ def validate_pod_capacity(
             f"Pod '{pod_name}' has no design pattern. Cannot validate capacity."
         )
 
-    # Get design limits
-    max_spines = design_pattern.get("maximum_spines", {}).get("value", 0)
-    max_leafs = design_pattern.get("maximum_leafs", {}).get("value", 0)
-    max_tors = design_pattern.get("maximum_tors", {}).get("value", 0)
+    # Get design limits (already extracted as integers by Pydantic)
+    max_spines = design_pattern.get("maximum_spines", 0)
+    max_leafs = design_pattern.get("maximum_leafs", 0)
+    max_tors = design_pattern.get("maximum_tors", 0)
 
     # Validate spine count
     if spine_count > max_spines:
