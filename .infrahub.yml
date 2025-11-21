@@ -134,7 +134,7 @@ check_definitions:
   - name: validate_virtual_fabric_capacity
     class_name: CheckVirtualFabricCapacity
     file_path: checks/virtual_fabric.py
-    targets: virtual-fabric-deployments
+    targets: virtual_fabrics
     parameters:
       fabric_id: id
 
