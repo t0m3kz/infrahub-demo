@@ -54,7 +54,8 @@ nodes:
         label: Private IP Address
         identifier: server__ip
         cardinality: one
-        kind: Attribute
+        kind: Component
+        on_delete: cascade
         description: Primary IP address of the server.
         order_weight: 1300
       - name: virtual_ips

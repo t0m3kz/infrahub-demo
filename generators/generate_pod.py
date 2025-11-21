@@ -5,6 +5,7 @@ from typing import Any
 from .common import CommonGenerator
 from .models import PodModel
 from .schema_protocols import LocationRack
+from .validators import validate_pod_capacity
 
 
 class PodTopologyGenerator(CommonGenerator):
@@ -39,7 +40,10 @@ class PodTopologyGenerator(CommonGenerator):
         for spine switches within the pod.
 
         Args:
-            data: Pod configuration data containing name, id, and parent references.
+            data: Raw GraphQL response data to clean and process
+
+        Raises:
+            ValidationError: If pod capacity exceeds design pattern limits
         """
 
         try:
@@ -60,6 +64,16 @@ class PodTopologyGenerator(CommonGenerator):
         fabric_name = dc.name.lower()
         design = dc.design_pattern
         indexes: list[int] = [dc.index or 1, self.data.index]
+
+        # Validate capacity before generation using data from GraphQL query
+        # Add the devices we're about to create to existing counts
+        validate_pod_capacity(
+            pod_name=self.data.name,
+            design_pattern=design.model_dump() if design else {},
+            spine_count=self.data.spine_count + self.data.amount_of_spines,
+            leaf_count=self.data.leaf_count,
+            tor_count=self.data.tor_count,
+        )
 
         await self.allocate_resource_pools(
             id=pod_id,

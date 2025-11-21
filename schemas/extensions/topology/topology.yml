@@ -45,6 +45,7 @@ generics:
         optional: true
         cardinality: many
         kind: Component
+        on_delete: cascade
 
   - name: Deployment
     namespace: Topology
@@ -64,6 +65,7 @@ generics:
         cardinality: many
         identifier: "fabric__devices"
         order_weight: 7000
+        on_delete: cascade
   - name: Design
     namespace: Topology
     description: "Design aspect of topology elements."
@@ -164,8 +166,6 @@ nodes:
       - name__value
     order_by: [name__value]
     display_label: "{{name__value}}"
-    # workaround for loading data
-    # default_filter: name__value
     attributes:
       - name: name
         kind: Text
@@ -290,6 +290,15 @@ nodes:
         parameters:
           min_value: 1
           max_value: 4
+      - name: capacity_summary
+        label: Capacity Summary
+        kind: TextArea
+        read_only: true
+        optional: true
+        computed_attribute:
+          kind: TransformPython
+          transform: computed_dc_capacity_summary
+        order_weight: 1050
       - name: fabric_interface_sorting_method
         kind: Dropdown
         label: Fabric interface assignment
@@ -325,12 +334,14 @@ nodes:
         cardinality: one
         identifier: "dc__design_pattern"
         order_weight: 500
+        on_delete: no-action
       - name: super_spine_template
         peer: TemplateDcimPhysicalDevice
         kind: Attribute
         cardinality: one
         identifier: "fabric__super_spine_template"
         order_weight: 1100
+        on_delete: no-action
 
   - name: Pod
     namespace: Topology
@@ -348,6 +359,15 @@ nodes:
       - ["parent", "index__value"]
     include_in_menu: false
     attributes:
+      - name: capacity_summary
+        label: Capacity Summary
+        kind: TextArea
+        read_only: true
+        optional: true
+        computed_attribute:
+          kind: TransformPython
+          transform: computed_pod_capacity_summary
+        order_weight: 550
       - name: name
         kind: Text
         computed_attribute:
@@ -415,6 +435,7 @@ nodes:
         cardinality: one
         identifier: "pod__spine_template"
         order_weight: 1100
+        on_delete: no-action
       - name: racks
         peer: LocationRack
         kind: Generic

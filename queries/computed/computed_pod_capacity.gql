@@ -1,0 +1,22 @@
+query ComputedPodCapacity($id: ID!) {
+  TopologyDataCenter(ids: [$id]) {
+    edges {
+      node {
+        design_pattern {
+          node {
+            maximum_pods {
+              value
+            }
+          }
+        }
+        children {
+          edges {
+            node {
+              id
+            }
+          }
+        }
+      }
+    }
+  }
+}

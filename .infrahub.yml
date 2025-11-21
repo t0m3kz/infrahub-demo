@@ -83,6 +83,12 @@ artifact_definitions:
       name: name__value
 
 check_definitions:
+  - name: validate_datacenter_capacity
+    class_name: CheckDataCenterCapacity
+    file_path: checks/datacenter.py
+    targets: topologies_dc
+    parameters:
+      name: name__value
   - name: validate_spine
     class_name: CheckSpine
     file_path: checks/spine.py
@@ -127,6 +133,12 @@ check_definitions:
       device: name__value
 
 python_transforms:
+  - name: computed_dc_capacity_summary
+    class_name: ComputedDCCapacitySummary
+    file_path: computed_attributes/capacity_summary.py
+  - name: computed_pod_capacity_summary
+    class_name: ComputedPodCapacitySummary
+    file_path: computed_attributes/capacity_summary.py
   - name: topology_cabling
     class_name: TopologyCabling
     file_path: transforms/topology_cabling.py
@@ -199,6 +211,12 @@ generator_definitions:
 #     name: name__value
 
 queries:
+  - name: computed_dc_capacity_summary
+    file_path: queries/computed/computed_dc_capacity_summary.gql
+  - name: computed_pod_capacity_summary
+    file_path: queries/computed/computed_pod_capacity_summary.gql
+  - name: datacenter_capacity_validation
+    file_path: queries/validation/datacenter_capacity_validation.gql
   - name: topology_dc
     file_path: queries/topology/dc.gql
   - name: topology_pod

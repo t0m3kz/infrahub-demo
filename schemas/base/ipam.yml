@@ -100,5 +100,6 @@ nodes:
         peer: IpamIPAddress
         optional: true
         cardinality: one
-        kind: Attribute
+        kind: Component
+        on_delete: cascade
         order_weight: 1500

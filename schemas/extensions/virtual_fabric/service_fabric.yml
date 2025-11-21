@@ -20,7 +20,7 @@ nodes:
         kind: Text
         computed_attribute:
           kind: Jinja2
-          jinja2_template: "{{deployment__name__value}} - {{ customer__name__value }}"  # yamllint disable-line rule:line-length
+          jinja2_template: "{{deployment__name__value}}-{{ customer__name__value }}"  # yamllint disable-line rule:line-length
         read_only: true
         optional: false
         description: "Unique name for the customer deployment"
@@ -92,6 +92,7 @@ nodes:
         kind: Attribute
         order_weight: 1000
         optional: false
+        on_delete: no-action
         description: "The deployment location for customer services"
 
 extensions:
@@ -102,6 +103,7 @@ extensions:
           peer: ServiceVirtualFabric
           cardinality: many
           kind: Component
+          on_delete: cascade
           optional: true
           order_weight: 2500
           description: "Customer deployment instances"
@@ -113,4 +115,5 @@ extensions:
           kind: Component
           optional: true
           order_weight: 2600
+          on_delete: cascade
           description: "Customer deployments in this location"
