@@ -131,6 +131,12 @@ check_definitions:
     targets: super-spines
     parameters:
       device: name__value
+  - name: validate_virtual_fabric_capacity
+    class_name: CheckVirtualFabricCapacity
+    file_path: checks/virtual_fabric.py
+    targets: virtual-fabric-deployments
+    parameters:
+      fabric_id: id
 
 python_transforms:
   - name: topology_cabling
@@ -207,6 +213,8 @@ generator_definitions:
 queries:
   - name: dc_validation
     file_path: queries/validation/dc_capacity.gql
+  - name: virtual_fabric_validation
+    file_path: queries/service/virtual_fabric_validation.gql
   # - name: endpoint_connectivity
   #   file_path: queries/connectivity/endpoint_connectivity.gql
   - name: topology_dc

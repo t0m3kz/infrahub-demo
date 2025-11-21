@@ -1,0 +1,46 @@
+query VirtualFabricValidation($fabric_id: String!) {
+  ServiceVirtualFabricDeployment(ids: [$fabric_id]) {
+    edges {
+      node {
+        id
+        name {
+          value
+        }
+        design_pattern {
+          node {
+            maximum_network_segments {
+              value
+            }
+            maximum_ip_prefixes {
+              value
+            }
+            maximum_external_connections {
+              value
+            }
+            maximum_bgp_sessions {
+              value
+            }
+            maximum_load_balancers {
+              value
+            }
+            maximum_firewall_rules {
+              value
+            }
+            maximum_endpoints {
+              value
+            }
+            maximum_bandwidth_mbps {
+              value
+            }
+          }
+        }
+        # These would be actual relationship counts in real implementation
+        # For now using placeholder aggregations
+        network_segments {
+          count
+        }
+        # Add more aggregation fields as needed based on actual schema
+      }
+    }
+  }
+}

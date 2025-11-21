@@ -1,0 +1,113 @@
+---
+# Virtual Fabric Design Patterns
+# Define standard customer tiers with resource limits
+
+- kind: TopologyVirtualFabricDesign
+  data:
+    # Small Customer Tier
+    - name: Small
+      description: |
+        Small business customer tier - suitable for single-site deployments
+        with basic networking needs
+      maximum_network_segments: 10
+      maximum_vlans_per_segment: 5
+      maximum_ip_prefixes: 20
+      maximum_ipv4_prefixes: 15
+      maximum_ipv6_prefixes: 5
+      maximum_external_connections: 2
+      maximum_bgp_sessions: 2
+      maximum_static_routes: 50
+      maximum_load_balancers: 1
+      maximum_virtual_ips: 5
+      maximum_firewall_rules: 100
+      maximum_acl_entries: 100
+      maximum_security_zones: 3
+      maximum_bandwidth_mbps: 1000
+      maximum_qos_policies: 3
+      maximum_endpoints: 100
+      maximum_multicast_groups: 5
+      supports_encryption: true
+      supports_multitenancy: false
+      supports_anycast: false
+      sla_tier: bronze
+
+    # Medium Customer Tier
+    - name: Medium
+      description: |
+        Medium enterprise customer tier - multi-site deployments with
+        advanced networking features
+      maximum_network_segments: 50
+      maximum_vlans_per_segment: 20
+      maximum_ip_prefixes: 100
+      maximum_ipv4_prefixes: 80
+      maximum_ipv6_prefixes: 20
+      maximum_external_connections: 4
+      maximum_bgp_sessions: 10
+      maximum_static_routes: 200
+      maximum_load_balancers: 4
+      maximum_virtual_ips: 20
+      maximum_firewall_rules: 500
+      maximum_acl_entries: 500
+      maximum_security_zones: 10
+      maximum_bandwidth_mbps: 5000
+      maximum_qos_policies: 10
+      maximum_endpoints: 500
+      maximum_multicast_groups: 20
+      supports_encryption: true
+      supports_multitenancy: true
+      supports_anycast: false
+      sla_tier: silver
+
+    # Large Customer Tier
+    - name: Large
+      description: |
+        Large enterprise customer tier - extensive multi-site deployments
+        with full feature set
+      maximum_network_segments: 100
+      maximum_vlans_per_segment: 50
+      maximum_ip_prefixes: 500
+      maximum_ipv4_prefixes: 400
+      maximum_ipv6_prefixes: 100
+      maximum_external_connections: 8
+      maximum_bgp_sessions: 30
+      maximum_static_routes: 1000
+      maximum_load_balancers: 10
+      maximum_virtual_ips: 100
+      maximum_firewall_rules: 2000
+      maximum_acl_entries: 2000
+      maximum_security_zones: 25
+      maximum_bandwidth_mbps: 10000
+      maximum_qos_policies: 20
+      maximum_endpoints: 2000
+      maximum_multicast_groups: 50
+      supports_encryption: true
+      supports_multitenancy: true
+      supports_anycast: true
+      sla_tier: gold
+
+    # Enterprise Customer Tier
+    - name: Enterprise
+      description: |
+        Enterprise/carrier-grade tier - unlimited scale for service providers
+        and large corporations
+      maximum_network_segments: 200
+      maximum_vlans_per_segment: 100
+      maximum_ip_prefixes: 2000
+      maximum_ipv4_prefixes: 1500
+      maximum_ipv6_prefixes: 500
+      maximum_external_connections: 32
+      maximum_bgp_sessions: 100
+      maximum_static_routes: 5000
+      maximum_load_balancers: 20
+      maximum_virtual_ips: 500
+      maximum_firewall_rules: 10000
+      maximum_acl_entries: 5000
+      maximum_security_zones: 50
+      maximum_bandwidth_mbps: 100000
+      maximum_qos_policies: 50
+      maximum_endpoints: 10000
+      maximum_multicast_groups: 500
+      supports_encryption: true
+      supports_multitenancy: true
+      supports_anycast: true
+      sla_tier: platinum

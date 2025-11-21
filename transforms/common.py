@@ -12,7 +12,14 @@ from netutils.interface import sort_interface_list
 
 from utils.data_cleaning import clean_data, get_data
 
-__all__ = ["clean_data", "get_data", "get_bgp_profile", "get_interfaces", "get_ospf", "get_vlans"]
+__all__ = [
+    "clean_data",
+    "get_data",
+    "get_bgp_profile",
+    "get_interfaces",
+    "get_ospf",
+    "get_vlans",
+]
 
 
 def get_bgp_profile(device_services: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -127,16 +134,27 @@ def get_interfaces(data: list) -> list[dict[str, Any]]:
             if s.get("typename") == "ServiceOSPF"
         ]
 
-        # Extract IP addresses - after clean_data, these should be simple strings
+        # Extract IP addresses - after clean_data, these are dicts with 'address' and 'ip_namespace'
+        # Structure: [{"address": "10.0.0.1/24", "ip_namespace": {"name": "default"}}, ...]
+        # Note: Free interfaces may have ip_address: None or {"node": None}
         ip_addresses: list[dict[str, Any]] = []
 
-        # For VirtualInterface: ip_addresses is a list
+        # For VirtualInterface: ip_addresses is a list (supports multiple IPs for VIPs)
         for ip_item in iface.get("ip_addresses", []):
-            ip_addresses.append(ip_item)
+            # Skip None entries and entries without an 'address' field
+            if ip_item and isinstance(ip_item, dict) and ip_item.get("address"):
+                ip_addresses.append(ip_item)
 
-        # For PhysicalInterface: ip_address is a single address
-        if iface.get("ip_address") and not ip_addresses:
-            ip_addresses.append(iface.get("ip_address"))
+        # For PhysicalInterface: ip_address is a single address object
+        # Only add if it exists, is not None, and has an 'address' field
+        physical_ip = iface.get("ip_address")
+        if (
+            physical_ip
+            and isinstance(physical_ip, dict)
+            and physical_ip.get("address")
+            and not ip_addresses
+        ):
+            ip_addresses.append(physical_ip)
 
         iface_dict = {
             "name": name,
