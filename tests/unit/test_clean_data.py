@@ -101,11 +101,11 @@ class TestCleanDataSingleKeyWrappers:
         assert result == {"user": {"id": "123", "name": "John"}}
 
     def test_clean_data_parent_wrapper(self, generator: CommonGenerator) -> None:
-        """Test clean_data returns None for dict with unrecognized wrapper key."""
+        """Test clean_data recursively cleans nested objects."""
         data = {"location": {"parent": {"id": "parent-id", "name": "HQ"}}}
         result = generator.clean_data(data)
-        # 'parent' is not a recognized wrapper (value/node/edges), so returns None
-        assert result == {"location": None}
+        # Nested 'parent' dict has multiple keys, so it's preserved as-is (recursively cleaned)
+        assert result == {"location": {"parent": {"id": "parent-id", "name": "HQ"}}}
 
     def test_clean_data_edges_wrapper_single_node(
         self, generator: CommonGenerator
@@ -116,7 +116,7 @@ class TestCleanDataSingleKeyWrappers:
         assert result == {"items": [{"id": "1", "name": "Item 1"}]}
 
     def test_clean_data_nested_value_wrappers(self, generator: CommonGenerator) -> None:
-        """Test clean_data returns None for dict without recognized wrapper keys."""
+        """Test clean_data recursively extracts value wrappers from nested dicts."""
         data = {
             "pod": {
                 "name": {"value": "Pod-A1"},
@@ -125,17 +125,17 @@ class TestCleanDataSingleKeyWrappers:
             }
         }
         result = generator.clean_data(data)
-        # Multi-key dict without value/node/edges returns None
-        assert result == {"pod": None}
+        # Multi-key dict with value wrappers gets recursively cleaned
+        assert result == {"pod": {"name": "Pod-A1", "index": 1, "role": "cpu"}}
 
     def test_clean_data_deeply_nested_value_wrappers(
         self, generator: CommonGenerator
     ) -> None:
-        """Test clean_data with nested dicts without recognized wrapper keys."""
+        """Test clean_data recursively processes deeply nested structures."""
         data = {"level1": {"level2": {"level3": {"value": "deep_value"}}}}
         result = generator.clean_data(data)
-        # level2 is a dict without value/node/edges, so returns None
-        assert result == {"level1": None}
+        # All levels are recursively cleaned, extracting nested value
+        assert result == {"level1": {"level2": {"level3": "deep_value"}}}
 
 
 class TestCleanDataMultiKeyDictionaries:
@@ -557,8 +557,8 @@ class TestCleanDataEdgeCases:
         """Test clean_data with empty edges list."""
         data: dict[str, dict[str, list]] = {"items": {"edges": []}}
         result = generator.clean_data(data)
-        # Empty edges list is falsy, so not unwrapped, returns None
-        assert result == {"items": None}
+        # Empty edges list is still a list (edges key present)
+        assert result == {"items": []}
 
     def test_clean_data_mixed_list_items(self, generator: CommonGenerator) -> None:
         """Test clean_data with list containing both node-wrapped and non-wrapped items."""
@@ -644,8 +644,8 @@ class TestCleanDataEdgeCases:
         """Test clean_data with value wrapper containing empty string."""
         data = {"field": {"value": ""}}
         result = generator.clean_data(data)
-        # Empty string is falsy, so it returns None
-        assert result == {"field": None}
+        # Empty string is extracted (uses 'in' check, not truthy)
+        assert result == {"field": ""}
 
     def test_clean_data_deeply_nested_mixed_wrappers(
         self, generator: CommonGenerator
@@ -657,7 +657,7 @@ class TestCleanDataEdgeCases:
                     {
                         "node": {
                             "level2": {"value": "deeply_nested"},
-                            "level3": {"id": "parent-id"},  # No recognized wrapper
+                            "level3": {"id": "parent-id"},  # Single-key id wrapper
                         }
                     }
                 ]
@@ -667,8 +667,8 @@ class TestCleanDataEdgeCases:
 
         assert isinstance(result["level1"], list)
         assert result["level1"][0]["level2"] == "deeply_nested"
-        # level3 has no value/node/edges, so returns None
-        assert result["level1"][0]["level3"] is None
+        # level3 is single-key id wrapper, so extracts the id
+        assert result["level1"][0]["level3"] == "parent-id"
 
 
 class TestCleanDataIdempotency:

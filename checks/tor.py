@@ -4,7 +4,8 @@ from typing import Any
 
 from infrahub_sdk.checks import InfrahubCheck
 
-from .common import get_data, validate_interfaces
+from checks.common import validate_interfaces
+from utils.data_cleaning import get_data
 
 
 class CheckToR(InfrahubCheck):

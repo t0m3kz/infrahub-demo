@@ -3,7 +3,7 @@ from typing import Any
 from infrahub_sdk.transforms import InfrahubTransform
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
-from .common import get_data
+from utils.data_cleaning import get_data
 
 
 class EquinixPOP(InfrahubTransform):

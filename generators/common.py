@@ -39,40 +39,18 @@ class CommonGenerator(InfrahubGenerator):
         """
         Recursively transforms the input data by extracting 'value', 'node', or 'edges' from dictionaries.
 
+        This is a wrapper around the shared utils.data_cleaning.clean_data function
+        to maintain compatibility with existing generator code.
+
         Args:
             data: The input data to clean.
 
         Returns:
             The cleaned data with extracted values.
         """
-        if isinstance(data, dict):
-            dict_result = {}
-            for key, value in data.items():
-                if isinstance(value, dict):
-                    if value.get("value"):
-                        dict_result[key] = value["value"]
-                    elif value.get("node"):
-                        dict_result[key] = self.clean_data(value["node"])
-                    elif value.get("edges"):
-                        dict_result[key] = self.clean_data(value["edges"])
-                    elif not value.get("value"):
-                        dict_result[key] = None
-                    else:
-                        dict_result[key] = self.clean_data(value)
-                elif "__" in key:
-                    dict_result[key.replace("__", "")] = value
-                else:
-                    dict_result[key] = self.clean_data(value)
-            return dict_result
-        if isinstance(data, list):
-            list_result = []
-            for item in data:
-                if isinstance(item, dict) and item.get("node", None) is not None:
-                    list_result.append(self.clean_data(item["node"]))
-                    continue
-                list_result.append(self.clean_data(item))
-            return list_result
-        return data
+        from utils.data_cleaning import clean_data as _clean_data
+
+        return _clean_data(data)
 
     def calculate_checksum(self) -> str:
         """Calculate a SHA256 checksum of related IDs from the current session.
