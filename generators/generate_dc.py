@@ -24,11 +24,7 @@ class DCTopologyGenerator(CommonGenerator):
                 )
 
     async def generate(self, data: dict[str, Any]) -> None:
-        """Generate data center topology.
-
-        Args:
-            data: Raw GraphQL response data to clean and process
-        """
+        """Generate data center topology."""
 
         try:
             deployment_list = self.clean_data(data).get("TopologyDeployment", [])
@@ -44,15 +40,13 @@ class DCTopologyGenerator(CommonGenerator):
             return
 
         self.logger.info(f"Processing Data Center: {self.data.name}")
-        # Extract deployment parameters
+
         dc_id = self.data.id
         dc_name = self.data.name.lower()
         dc_index = self.data.index  # Get DC index for unique device naming
         amount_of_super_spines = self.data.amount_of_super_spines
         super_spine_template = self.data.super_spine_template
         design = self.data.design_pattern
-        # Note: Super spine count is validated by schema (max_value: 4)
-        # Pod count is validated when pods are created
         self.logger.info(f"Generating topology for data center {dc_name.upper()}")
         indexes: list[int] = [dc_index]
 

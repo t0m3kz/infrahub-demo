@@ -1,0 +1,86 @@
+query GetEndpointForConnectivity($name: String!) {
+  # Get the endpoint device
+DcimGenericDevice(ids: [$endpoint_id]) {
+    edges {
+      node {
+        id
+        name {
+          value
+        }
+        role {
+          value
+        }
+        ... on DcimPhysicalDevice {
+          rack {
+            node {
+              id
+              name {
+                value
+              }
+              row{
+                value
+              }
+              # Get all devices in the same rack
+              devices (device_type: ["leaf", "tor"]){
+                edges {
+                  node {
+                    ... on DcimPhysicalDevice {
+                      id
+                      name {
+                        value
+                      }
+                      role {
+                        value
+                      }
+                      # Get all interfaces for rack leafs
+                      interfaces {
+                        edges {
+                          node {
+                            ... on DcimPhysicalInterface {
+                              id
+                              name {
+                                value
+                              }
+                              role {
+                                value
+                              }
+                              cable {
+                                node {
+                                  id
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+        interfaces {
+          edges {
+            node {
+              ... on DcimPhysicalInterface {
+                id
+                name {
+                  value
+                }
+                role {
+                  value
+                }
+                cable {
+                  node {
+                    id
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

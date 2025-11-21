@@ -290,15 +290,15 @@ nodes:
         parameters:
           min_value: 1
           max_value: 4
-      - name: capacity_summary
-        label: Capacity Summary
-        kind: Text
-        read_only: true
-        optional: true
-        computed_attribute:
-          kind: TransformPython
-          transform: computed_pod_capacity_summary
-        order_weight: 1050
+      # - name: capacity_summary
+      #   label: Capacity Summary
+      #   kind: Text
+      #   read_only: true
+      #   optional: true
+      #   computed_attribute:
+      #     kind: TransformPython
+      #     transform: computed_pod_capacity_summary
+      #   order_weight: 1050
       - name: fabric_interface_sorting_method
         kind: Dropdown
         label: Fabric interface assignment
@@ -359,15 +359,15 @@ nodes:
       - ["parent", "index__value"]
     include_in_menu: false
     attributes:
-      - name: capacity_summary
-        label: Capacity Summary
-        kind: Text
-        read_only: true
-        optional: true
-        computed_attribute:
-          kind: TransformPython
-          transform: computed_pod_capacity_summary
-        order_weight: 550
+      # - name: capacity_summary
+      #   label: Capacity Summary
+      #   kind: Text
+      #   read_only: true
+      #   optional: true
+      #   computed_attribute:
+      #     kind: TransformPython
+      #     transform: computed_pod_capacity_summary
+      #   order_weight: 550
       - name: name
         kind: Text
         computed_attribute:

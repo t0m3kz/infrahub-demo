@@ -28,6 +28,8 @@ spec:
       description: All console devices
     - name: edges
       description: All edge devices
+    - name: endpoints
+      description: All endpoint devices (servers)
     - name: provisioning_circuits
       description: Provisioning Circuits
     - name: topologies_dc
