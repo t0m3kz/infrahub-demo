@@ -10,8 +10,6 @@ from typing import Any
 
 from netutils.interface import sort_interface_list
 
-# Re-export shared utilities for Infrahub compatibility
-# Infrahub loads files directly from git, so utils package may not be in path
 from utils.data_cleaning import clean_data, get_data
 
 __all__ = ["clean_data", "get_data", "get_bgp_profile", "get_interfaces", "get_ospf", "get_vlans"]

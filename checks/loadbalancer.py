@@ -5,7 +5,7 @@ from typing import Any
 
 from infrahub_sdk.checks import InfrahubCheck
 
-from .common import get_data, validate_interfaces
+from .common import get_data
 
 
 class CheckLoadBalancer(InfrahubCheck):
