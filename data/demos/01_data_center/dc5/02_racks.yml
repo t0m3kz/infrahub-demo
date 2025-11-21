@@ -10,9 +10,9 @@ spec:
       index: 1
       rack_type: network
       pod: ["DC5", "1", "1"]
-      parent: "NY-1 Suite-1"
+      parent: "NY-1-Suite-1"
       fabric_templates:
-        - 4_CISCO_LEAFS_N9K-C9336C-FX2
+        - [4_CISCO_LEAFS_N9K-C9336C-FX2]
       member_of_groups:
         - topologies_rack
     - rack_name: "Rack-1-2"
@@ -20,9 +20,9 @@ spec:
       index: 2
       rack_type: network
       pod: ["DC5", "1", "1"]
-      parent: "NY-1 Suite-1"
+      parent: "NY-1-Suite-1"
       fabric_templates:
-        - 4_CISCO_LEAFS_N9K-C9336C-FX2
+        - [4_CISCO_LEAFS_N9K-C9336C-FX2]
       member_of_groups:
         - topologies_rack
     - rack_name: "Rack-1-3"
@@ -30,9 +30,9 @@ spec:
       index: 3
       rack_type: network
       pod: ["DC5", "1", "1"]
-      parent: "NY-1 Suite-1"
+      parent: "NY-1-Suite-1"
       fabric_templates:
-        - 4_CISCO_LEAFS_N9K-C9336C-FX2
+        - [4_CISCO_LEAFS_N9K-C9336C-FX2]
       member_of_groups:
         - topologies_rack
     - rack_name: "Rack-1-4"
@@ -40,9 +40,9 @@ spec:
       index: 4
       rack_type: network
       pod: ["DC5", "1", "1"]
-      parent: "NY-1 Suite-1"
+      parent: "NY-1-Suite-1"
       fabric_templates:
-        - 4_CISCO_LEAFS_N9K-C9336C-FX2
+        - [4_CISCO_LEAFS_N9K-C9336C-FX2]
       member_of_groups:
         - topologies_rack
     # ["DC5", "1", "2"]: Arista EOS leafs
@@ -51,9 +51,9 @@ spec:
       index: 1
       rack_type: network
       pod: ["DC5", "1", "2"]
-      parent: "NY-1 Suite-2"
+      parent: "NY-1-Suite-2"
       fabric_templates:
-        - 2_ARISTA_LEAFS_DCS-7050CX3-32C-R
+        - [2_ARISTA_LEAFS_DCS-7050CX3-32C-R]
       member_of_groups:
         - topologies_rack
     - rack_name: "Rack-2-2"
@@ -61,9 +61,9 @@ spec:
       index: 2
       rack_type: network
       pod: ["DC5", "1", "2"]
-      parent: "NY-1 Suite-2"
+      parent: "NY-1-Suite-2"
       fabric_templates:
-        - 2_ARISTA_LEAFS_DCS-7050CX3-32C-R
+        - [2_ARISTA_LEAFS_DCS-7050CX3-32C-R]
       member_of_groups:
         - topologies_rack
     - rack_name: "Rack-2-3"
@@ -71,9 +71,9 @@ spec:
       index: 3
       rack_type: network
       pod: ["DC5", "1", "2"]
-      parent: "NY-1 Suite-2"
+      parent: "NY-1-Suite-2"
       fabric_templates:
-        - 4_ARISTA_LEAFS_DCS-7050CX4M-48D8-F
+        - [4_ARISTA_LEAFS_DCS-7050CX4M-48D8-F]
       member_of_groups:
         - topologies_rack
     - rack_name: "Rack-2-4"
@@ -81,9 +81,9 @@ spec:
       index: 4
       rack_type: network
       pod: ["DC5", "1", "2"]
-      parent: "NY-1 Suite-2"
+      parent: "NY-1-Suite-2"
       fabric_templates:
-        - 4_ARISTA_LEAFS_DCS-7050CX4M-48D8-F
+        - [4_ARISTA_LEAFS_DCS-7050CX4M-48D8-F]
       member_of_groups:
         - topologies_rack
     # ["DC5", "1", "3"]: Dell Sonic leafs
@@ -92,9 +92,9 @@ spec:
       index: 1
       rack_type: network
       pod: ["DC5", "1", "3"]
-      parent: "NY-1 Suite-3"
+      parent: "NY-1-Suite-3"
       fabric_templates:
-        - 4_DELL_LEAFS_PowerSwitch-S5248F-ON
+        - [4_DELL_LEAFS_PowerSwitch-S5248F-ON]
       member_of_groups:
         - topologies_rack
     - rack_name: "Rack-3-2"
@@ -102,9 +102,9 @@ spec:
       index: 2
       rack_type: network
       pod: ["DC5", "1", "3"]
-      parent: "NY-1 Suite-3"
+      parent: "NY-1-Suite-3"
       fabric_templates:
-        - 2_DELL_LEAFS_PowerSwitch-S5248F-ON
+        - [2_DELL_LEAFS_PowerSwitch-S5248F-ON]
       member_of_groups:
         - topologies_rack
     - rack_name: "Rack-3-3"
@@ -112,9 +112,9 @@ spec:
       index: 3
       rack_type: network
       pod: ["DC5", "1", "3"]
-      parent: "NY-1 Suite-3"
+      parent: "NY-1-Suite-3"
       fabric_templates:
-        - 2_DELL_LEAFS_PowerSwitch-S5248F-ON
+        - [2_DELL_LEAFS_PowerSwitch-S5248F-ON]
       member_of_groups:
         - topologies_rack
     - rack_name: "Rack-3-4"
@@ -122,9 +122,9 @@ spec:
       index: 4
       rack_type: network
       pod: ["DC5", "1", "3"]
-      parent: "NY-1 Suite-3"
+      parent: "NY-1-Suite-3"
       fabric_templates:
-        - 4_DELL_LEAFS_PowerSwitch-S5248F-ON
+        - [4_DELL_LEAFS_PowerSwitch-S5248F-ON]
       member_of_groups:
         - topologies_rack
     # ["DC5", "1", "4"]: Edgecore Sonic leafs
@@ -133,9 +133,9 @@ spec:
       index: 1
       rack_type: network
       pod: ["DC5", "1", "4"]
-      parent: "NY-1 Suite-4"
+      parent: "NY-1-Suite-4"
       fabric_templates:
-        - 4_EDGECORE_LEAFS_Edgecore-7AS7326-56X-O-48V-F
+        - [4_EDGECORE_LEAFS_Edgecore-7AS7326-56X-O-48V-F]
       member_of_groups:
         - topologies_rack
     - rack_name: "Rack-4-2"
@@ -143,9 +143,9 @@ spec:
       index: 2
       rack_type: network
       pod: ["DC5", "1", "4"]
-      parent: "NY-1 Suite-4"
+      parent: "NY-1-Suite-4"
       fabric_templates:
-        - 4_EDGECORE_LEAFS_Edgecore-7AS7326-56X-O-48V-F
+        - [4_EDGECORE_LEAFS_Edgecore-7AS7326-56X-O-48V-F]
       member_of_groups:
         - topologies_rack
     - rack_name: "Rack-4-3"
@@ -153,8 +153,8 @@ spec:
       index: 3
       rack_type: network
       fabric_templates:
-        - 4_EDGECORE_LEAFS_Edgecore-7AS7326-56X-O-48V-F
+        - [4_EDGECORE_LEAFS_Edgecore-7AS7326-56X-O-48V-F]
       pod: ["DC5", "1", "4"]
-      parent: "NY-1 Suite-4"
+      parent: "NY-1-Suite-4"
       member_of_groups:
         - topologies_rack

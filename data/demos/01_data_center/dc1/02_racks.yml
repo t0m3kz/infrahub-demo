@@ -10,7 +10,7 @@ spec:
       row: A
       rack_type: network
       pod: ["DC1", "1", "1"]
-      parent: "MUC-1 Suite-1"
+      parent: "MUC-1-Suite-1"
       fabric_templates:
         - [4_CISCO_LEAFS_MR_N9K-C9336C-FX2]
         - [4_CISCO_TORS_N9K-C9336C-FX2]
@@ -22,7 +22,7 @@ spec:
       row: B
       rack_type: network
       pod: ["DC1", "1", "1"]
-      parent: "MUC-1 Suite-1"
+      parent: "MUC-1-Suite-1"
       fabric_templates:
         - [4_CISCO_LEAFS_MR_N9K-C9336C-FX2]
         - [4_CISCO_TORS_N9K-C9336C-FX2]
@@ -34,7 +34,7 @@ spec:
       row: C
       rack_type: network
       pod: ["DC1", "1", "1"]
-      parent: "MUC-1 Suite-1"
+      parent: "MUC-1-Suite-1"
       fabric_templates:
         - [4_CISCO_LEAFS_MR_N9K-C9336C-FX2]
         - [4_CISCO_TORS_N9K-C9336C-FX2]
@@ -45,7 +45,7 @@ spec:
       index: 4
       rack_type: network
       pod: ["DC1", "1", "1"]
-      parent: "MUC-1 Suite-1"
+      parent: "MUC-1-Suite-1"
       row: D
       fabric_templates:
         - [4_CISCO_LEAFS_MR_N9K-C9336C-FX2]
@@ -59,7 +59,7 @@ spec:
       row: A
       rack_type: network
       pod: ["DC1", "1", "2"]
-      parent: "MUC-1 Suite-2"
+      parent: "MUC-1-Suite-2"
       fabric_templates:
         - [4_CISCO_LEAFS_MR_N9K-C9336C-FX2]
         - [4_CISCO_TORS_N9K-C9336C-FX2]
@@ -71,7 +71,7 @@ spec:
       row: B
       rack_type: network
       pod: ["DC1", "1", "2"]
-      parent: "MUC-1 Suite-2"
+      parent: "MUC-1-Suite-2"
       fabric_templates:
         - [4_CISCO_LEAFS_MR_N9K-C9336C-FX2]
         - [4_CISCO_TORS_N9K-C9336C-FX2]
@@ -83,7 +83,7 @@ spec:
       row: C
       rack_type: network
       pod: ["DC1", "1", "2"]
-      parent: "MUC-1 Suite-2"
+      parent: "MUC-1-Suite-2"
       fabric_templates:
         - [4_CISCO_LEAFS_MR_N9K-C9336C-FX2]
         - [4_CISCO_TORS_N9K-C9336C-FX2]
@@ -95,7 +95,7 @@ spec:
       row: D
       rack_type: network
       pod: ["DC1", "1", "2"]
-      parent: "MUC-1 Suite-2"
+      parent: "MUC-1-Suite-2"
       fabric_templates:
         - [4_CISCO_LEAFS_MR_N9K-C9336C-FX2]
         - [4_CISCO_TORS_N9K-C9336C-FX2]
@@ -108,7 +108,7 @@ spec:
       row: A
       rack_type: network
       pod: ["DC1", "1", "3"]
-      parent: "MUC-1 Suite-3"
+      parent: "MUC-1-Suite-3"
       fabric_templates:
         - [4_CISCO_LEAFS_N9K-C9336C-FX2]
       member_of_groups:
@@ -119,7 +119,7 @@ spec:
       row: B
       rack_type: network
       pod: ["DC1", "1", "3"]
-      parent: "MUC-1 Suite-3"
+      parent: "MUC-1-Suite-3"
       fabric_templates:
         - [4_CISCO_LEAFS_N9K-C9336C-FX2]
       member_of_groups:
@@ -130,7 +130,7 @@ spec:
       row: C
       rack_type: network
       pod: ["DC1", "1", "3"]
-      parent: "MUC-1 Suite-3"
+      parent: "MUC-1-Suite-3"
       fabric_templates:
         - [4_CISCO_LEAFS_N9K-C9336C-FX2]
       member_of_groups:
@@ -141,7 +141,7 @@ spec:
       row: D
       rack_type: network
       pod: ["DC1", "1", "3"]
-      parent: "MUC-1 Suite-3"
+      parent: "MUC-1-Suite-3"
       fabric_templates:
         - [4_CISCO_LEAFS_N9K-C9336C-FX2]
       member_of_groups:
@@ -153,7 +153,7 @@ spec:
       row: A
       rack_type: network
       pod: ["DC1", "1", "4"]
-      parent: "MUC-1 Suite-4"
+      parent: "MUC-1-Suite-4"
       fabric_templates:
         - [2_CISCO_LEAFS_N9K-C9336C-FX2]
       member_of_groups:
@@ -164,7 +164,7 @@ spec:
       row: B
       rack_type: network
       pod: ["DC1", "1", "4"]
-      parent: "MUC-1 Suite-4"
+      parent: "MUC-1-Suite-4"
       fabric_templates:
         - [2_CISCO_LEAFS_N9K-C9336C-FX2]
       member_of_groups:
@@ -175,7 +175,7 @@ spec:
       row: C
       rack_type: network
       pod: ["DC1", "1", "4"]
-      parent: "MUC-1 Suite-4"
+      parent: "MUC-1-Suite-4"
       fabric_templates:
         - [2_CISCO_LEAFS_N9K-C9336C-FX2]
       member_of_groups:
@@ -186,7 +186,7 @@ spec:
       row: D
       rack_type: network
       pod: ["DC1", "1", "4"]
-      parent: "MUC-1 Suite-4"
+      parent: "MUC-1-Suite-4"
       fabric_templates:
         - [2_CISCO_LEAFS_N9K-C9336C-FX2]
       member_of_groups:

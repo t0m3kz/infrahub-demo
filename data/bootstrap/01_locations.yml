@@ -84,6 +84,18 @@ spec:
                     data:
                       - name: "KTW-1"
                         shortname: "ktw-1"
+          - name: "Ireland"
+            shortname: "ie"
+            children:
+              kind: LocationMetro
+              data:
+                - name: "Dublin"
+                  shortname: "dub"
+                  children:
+                    kind: LocationBuilding
+                    data:
+                      - name: "DUB-1"
+                        shortname: "dub-1"
           - name: "Spain"
             shortname: "es"
             children:
@@ -148,7 +160,24 @@ spec:
               kind: LocationMetro
               data:
                 - name: "Tokyo"
-                  shortname: "tok"
+                  shortname: "tyo"
+                  children:
+                    kind: LocationBuilding
+                    data:
+                      - name: "TYO-1"
+                        shortname: "tyo-1"
+          - name: "Singapore_"
+            shortname: "sg"
+            children:
+              kind: LocationMetro
+              data:
+                - name: "Singapore"
+                  shortname: "sin"
+                  children:
+                    kind: LocationBuilding
+                    data:
+                      - name: "SIN-1"
+                        shortname: "sin-1"
           - name: Australia
             shortname: "au"
             children:
@@ -156,5 +185,10 @@ spec:
               data:
                 - name: "Sydney"
                   shortname: "syd"
+                  children:
+                    kind: LocationBuilding
+                    data:
+                      - name: "SYD-1"
+                        shortname: "syd-1"
                 - name: "Melbourne"
                   shortname: "mel"

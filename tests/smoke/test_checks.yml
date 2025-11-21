@@ -1,0 +1,52 @@
+---
+version: "1.0"
+infrahub_tests:
+  # ==================== VALIDATION CHECKS ====================
+  - resource: Check
+    resource_name: validate_spine
+    tests:
+      - name: syntax_check
+        spec:
+          kind: check-smoke
+
+  - resource: Check
+    resource_name: validate_leaf
+    tests:
+      - name: syntax_check
+        spec:
+          kind: check-smoke
+
+  - resource: Check
+    resource_name: validate_edge
+    tests:
+      - name: syntax_check
+        spec:
+          kind: check-smoke
+
+  - resource: Check
+    resource_name: validate_loadbalancer
+    tests:
+      - name: syntax_check
+        spec:
+          kind: check-smoke
+
+  - resource: Check
+    resource_name: validate_tor
+    tests:
+      - name: syntax_check
+        spec:
+          kind: check-smoke
+
+  - resource: Check
+    resource_name: validate_border_leaf
+    tests:
+      - name: syntax_check
+        spec:
+          kind: check-smoke
+
+  - resource: Check
+    resource_name: validate_super_spine
+    tests:
+      - name: syntax_check
+        spec:
+          kind: check-smoke

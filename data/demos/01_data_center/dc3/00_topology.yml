@@ -16,13 +16,13 @@ spec:
         kind: TopologyPod
         data:
           - index: 1
-            role: fabric
+            deployment_type: tor
             spine_template: PowerSwitch-S5232F-ON_SPINE
             amount_of_spines: 2
             member_of_groups:
               - topologies_pod
           - index: 2
-            role: fabric
+            deployment_type: tor
             spine_template: PowerSwitch-S5232F-ON_SPINE
             amount_of_spines: 2
             member_of_groups:

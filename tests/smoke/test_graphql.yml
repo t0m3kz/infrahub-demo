@@ -58,6 +58,22 @@ infrahub_tests:
           path: queries/config/loadbalancer.gql
           kind: graphql-query-smoke
 
+  - resource: GraphQLQuery
+    resource_name: border_leaf_config
+    tests:
+      - name: syntax_check
+        spec:
+          path: queries/config/border_leaf.gql
+          kind: graphql-query-smoke
+
+  - resource: GraphQLQuery
+    resource_name: super_spine_config
+    tests:
+      - name: syntax_check
+        spec:
+          path: queries/config/super_spine.gql
+          kind: graphql-query-smoke
+
   # ==================== TOPOLOGY QUERIES ====================
   - resource: GraphQLQuery
     resource_name: topology_dc
