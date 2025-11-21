@@ -233,8 +233,6 @@ queries:
     file_path: queries/config/edge.gql
   - name: loadbalancer_config
     file_path: queries/config/loadbalancer.gql
-  - name: loadbalancer_validation
-    file_path: queries/validation/loadbalancer_validation.gql
   - name: oob_config
     file_path: queries/config/oob.gql
   - name: equinix_pop_config
