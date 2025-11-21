@@ -72,6 +72,14 @@ spec:
                   icon: "mdi:vector-arrange-above"
                   description: "Branch office design templates and patterns"
 
+                - name: VirtualFabricDesign
+                  namespace: Topology
+                  label: Virtual Fabric Templates
+                  kind: TopologyVirtualFabricDesign
+                  icon: "mdi:cloud-network-outline"
+                  description: |
+                    Virtual fabric design templates with resource limits
+
           # --------- Design Elements ---------
           - namespace: Design
             name: ElementsMenu
@@ -117,6 +125,22 @@ spec:
             kind: TopologyBranchOffice
             icon: "mdi:office-building-outline"
             description: "Remote office deployments"
+
+          # --------- Customer Services ---------
+          - name: CustomerServices
+            namespace: Service
+            label: Customer Services
+            icon: "mdi:cloud-network"
+            description: "Customer virtual fabric deployments"
+            children:
+              data:
+                - name: VirtualFabricDeployment
+                  namespace: Service
+                  label: Virtual Fabric Deployments
+                  kind: ServiceVirtualFabricDeployment
+                  icon: "mdi:cloud-network"
+                  description: |
+                    Customer virtual fabric deployments with resource limits
 
     # ===================== INVENTORY =====================
     # Physical and logical inventory management
