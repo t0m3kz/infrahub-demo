@@ -51,6 +51,8 @@ class DCTopologyGenerator(CommonGenerator):
         amount_of_super_spines = self.data.amount_of_super_spines
         super_spine_template = self.data.super_spine_template
         design = self.data.design_pattern
+        # Note: Super spine count is validated by schema (max_value: 4)
+        # Pod count is validated when pods are created
         self.logger.info(f"Generating topology for data center {dc_name.upper()}")
         indexes: list[int] = [dc_index]
 

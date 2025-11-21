@@ -128,7 +128,8 @@ generics:
         label: Primary IP Address
         optional: true
         cardinality: one
-        kind: Attribute
+        kind: Component
+        on_delete: cascade
         order_weight: 1700
       - name: platform
         peer: DcimPlatform
@@ -148,6 +149,7 @@ generics:
         cardinality: one
         order_weight: 1500
         kind: Attribute
+        on_delete: no-action
 
   # Interfaces
   - name: Interface
@@ -585,7 +587,8 @@ nodes:
         peer: IpamIPAddress
         optional: true
         cardinality: one
-        kind: Attribute
+        kind: Component
+        on_delete: cascade
 
   - name: VirtualInterface
     namespace: Dcim
@@ -606,7 +609,8 @@ nodes:
         peer: IpamIPAddress
         optional: true
         cardinality: many
-        kind: Attribute
+        kind: Component
+        on_delete: cascade
 
   # --------------------  Cables  --------------------
   - name: Cable
@@ -647,3 +651,4 @@ nodes:
         min_count: 2
         max_count: 2
         kind: Attribute
+        on_delete: no-action

@@ -1,0 +1,18 @@
+query ComputedSuperSpineCapacity($id: ID!) {
+  TopologyDataCenter(ids: [$id]) {
+    edges {
+      node {
+        amount_of_super_spines {
+          value
+        }
+        design_pattern {
+          node {
+            maximum_super_spines {
+              value
+            }
+          }
+        }
+      }
+    }
+  }
+}

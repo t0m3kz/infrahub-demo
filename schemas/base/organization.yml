@@ -90,6 +90,7 @@ nodes:
         peer: IpamPrefix
         cardinality: many
         kind: Component
+        on_delete: cascade
         optional: true
         description: "IP prefixes allocated to this customer"
         order_weight: 2200
@@ -97,5 +98,6 @@ nodes:
         peer: IpamNamespace
         cardinality: many
         kind: Component
+        on_delete: cascade
         optional: true
         order_weight: 2000

@@ -1,0 +1,44 @@
+query ComputedPodPortUtilization($id: ID!) {
+  TopologyPod(ids: [$id]) {
+    edges {
+      node {
+        name {
+          value
+        }
+        devices {
+          edges {
+            node {
+              name {
+                value
+              }
+              role {
+                value
+              }
+              interfaces {
+                edges {
+                  node {
+                    name {
+                      value
+                    }
+                    ... on DcimPhysicalInterface {
+                      cable {
+                        node {
+                          id
+                        }
+                      }
+                      ip_address {
+                        node {
+                          id
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
