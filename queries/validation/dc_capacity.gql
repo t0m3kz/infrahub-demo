@@ -1,5 +1,5 @@
-query DataCenterCapacityValidation($device_name: String!) {
-  TopologyDataCenter(name__value: $device_name) {
+query DataCenterCapacityValidation($name: String!) {
+  TopologyDataCenter(name__value: $name) {
     edges {
       node {
         id

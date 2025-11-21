@@ -4,7 +4,7 @@ from typing import Any
 
 from infrahub_sdk.checks import InfrahubCheck
 
-from .common import get_data
+from utils.data_cleaning import get_data
 
 
 class CheckDataCenterCapacity(InfrahubCheck):
@@ -22,8 +22,13 @@ class CheckDataCenterCapacity(InfrahubCheck):
         - Per-pod leaf count vs design maximum
         - Per-pod ToR count vs design maximum
         """
+
+        print(data)
+
         data = get_data(data)
         errors: list[str] = []
+
+        print(data)
 
         if not data:
             self.log_error(message="No data center data found")
@@ -45,10 +50,10 @@ class CheckDataCenterCapacity(InfrahubCheck):
         max_leafs = design_pattern.get("maximum_leafs", 0)
         max_tors = design_pattern.get("maximum_tors", 0)
 
-        # Get actual deployment
-        actual_super_spines = data.get("amount_of_super_spines", 0)
+        # Get actual deployment (handle None values)
+        actual_super_spines = data.get("amount_of_super_spines") or 0
         pods = data.get("children", [])
-        actual_pod_count = len(pods)
+        actual_pod_count = len(pods) if pods else 0
 
         # Validate super spines
         if actual_super_spines > max_super_spines:
@@ -66,10 +71,10 @@ class CheckDataCenterCapacity(InfrahubCheck):
         for pod in pods:
             pod_name = pod.get("name", "Unknown")
 
-            # Get counts directly from GraphQL query aggregation
-            spine_count = pod.get("spine_count", 0)
-            leaf_count = pod.get("leaf_count", 0)
-            tor_count = pod.get("tor_count", 0)
+            # Get counts directly from GraphQL query aggregation (handle None values)
+            spine_count = pod.get("spine_count") or 0
+            leaf_count = pod.get("leaf_count") or 0
+            tor_count = pod.get("tor_count") or 0
 
             # Validate against design
             if spine_count > max_spines:
