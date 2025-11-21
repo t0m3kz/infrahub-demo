@@ -79,9 +79,9 @@ class PodModel(BaseModel):
     leaf_interface_sorting_method: str
     spine_interface_sorting_method: str
     spine_template: Template
-    spine_count: int = 0
-    leaf_count: int = 0
-    tor_count: int = 0
+    spine_count: Optional[int] = 0
+    leaf_count: Optional[int] = 0
+    tor_count: Optional[int] = 0
     parent: PodParent
 
 

@@ -70,9 +70,9 @@ class PodTopologyGenerator(CommonGenerator):
         validate_pod_capacity(
             pod_name=self.data.name,
             design_pattern=design.model_dump() if design else {},
-            spine_count=self.data.spine_count + self.data.amount_of_spines,
-            leaf_count=self.data.leaf_count,
-            tor_count=self.data.tor_count,
+            spine_count=(self.data.spine_count or 0) + self.data.amount_of_spines,
+            leaf_count=self.data.leaf_count or 0,
+            tor_count=self.data.tor_count or 0,
         )
 
         await self.allocate_resource_pools(

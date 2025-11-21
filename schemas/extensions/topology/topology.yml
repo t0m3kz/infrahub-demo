@@ -292,12 +292,12 @@ nodes:
           max_value: 4
       - name: capacity_summary
         label: Capacity Summary
-        kind: TextArea
+        kind: Text
         read_only: true
         optional: true
         computed_attribute:
           kind: TransformPython
-          transform: computed_dc_capacity_summary
+          transform: computed_pod_capacity_summary
         order_weight: 1050
       - name: fabric_interface_sorting_method
         kind: Dropdown
@@ -361,7 +361,7 @@ nodes:
     attributes:
       - name: capacity_summary
         label: Capacity Summary
-        kind: TextArea
+        kind: Text
         read_only: true
         optional: true
         computed_attribute:
