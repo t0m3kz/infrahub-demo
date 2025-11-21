@@ -4,7 +4,7 @@ from infrahub_sdk.transforms import InfrahubTransform
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 from netutils.utils import jinja2_convenience_function
 
-from utils.data_cleaning import get_data
+from .common import get_data, get_interfaces
 
 
 class LoadBalancer(InfrahubTransform):
