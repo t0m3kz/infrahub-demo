@@ -2,6 +2,8 @@
 
 from typing import Any
 
+from utils.data_cleaning import clean_data
+
 from .common import CommonGenerator
 from .models import PodModel
 from .schema_protocols import LocationRack
@@ -47,7 +49,7 @@ class PodTopologyGenerator(CommonGenerator):
         """
 
         try:
-            deployment_list = self.clean_data(data).get("TopologyPod", [])
+            deployment_list = clean_data(data).get("TopologyPod", [])
             if not deployment_list:
                 self.logger.error("No Pod Deployment data found in GraphQL response")
                 return
