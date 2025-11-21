@@ -2,7 +2,11 @@
 # Virtual Fabric Design Patterns
 # Define standard customer tiers with resource limits
 
-- kind: TopologyVirtualFabricDesign
+apiVersion: infrahub.app/v1
+version: "1.0"
+kind: Object
+spec:
+  kind: TopologyVirtualFabricDesign
   data:
     # Small Customer Tier
     - name: Small

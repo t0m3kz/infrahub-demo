@@ -118,7 +118,7 @@ nodes:
         optional: false
         parameters:
           min_value: 0
-          max_value: 500
+          max_value: 10000
         description: "Maximum static route entries"
 
       # Service Endpoints
@@ -272,7 +272,7 @@ nodes:
 
 extensions:
   nodes:
-    - kind: ServiceVirtualFabric
+    - kind: ServiceVirtualFabricDeployment
       relationships:
         - name: design_pattern
           peer: TopologyVirtualFabricDesign
@@ -282,4 +282,5 @@ extensions:
           order_weight: 1250
           on_delete: no-action
           optional: false
-          description: "Design pattern defining resource limits for deployment"
+          description: |
+            Design pattern defining resource limits for deployment
