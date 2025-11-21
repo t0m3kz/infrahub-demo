@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from typing import Literal, cast
 
+from utils.data_cleaning import clean_data
+
 from .common import CommonGenerator
 from .models import RackModel
 
@@ -12,7 +14,7 @@ class RackGenerator(CommonGenerator):
     async def generate(self, data: dict) -> None:
         """Generate rack topology with special handling for OOB and console devices."""
         try:
-            deployment_list = self.clean_data(data).get("LocationRack", [])
+            deployment_list = clean_data(data).get("LocationRack", [])
             if not deployment_list:
                 self.logger.error("No Rack Deployment data found in GraphQL response")
                 return

@@ -2,6 +2,8 @@
 
 from typing import Any, Literal, cast
 
+from utils.data_cleaning import clean_data
+
 from .common import CommonGenerator
 from .models import DCModel
 from .schema_protocols import TopologyPod
@@ -27,7 +29,7 @@ class DCTopologyGenerator(CommonGenerator):
         """Generate data center topology."""
 
         try:
-            deployment_list = self.clean_data(data).get("TopologyDeployment", [])
+            deployment_list = clean_data(data).get("TopologyDeployment", [])
             if not deployment_list:
                 self.logger.error(
                     "No TopologyDeployment data found in GraphQL response"
