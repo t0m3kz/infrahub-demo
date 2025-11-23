@@ -13,14 +13,27 @@ class DCTopologyGenerator(CommonGenerator):
     """Generate data center topology with super-spine infrastructure."""
 
     async def update_checksum(self) -> None:
+        """Update checksum for all pods in the data center.
+
+        The checksum is based on DC configuration.
+        """
         pods = await self.client.filters(kind=TopologyPod, parent__ids=[self.data.id])
 
-        # store the checksum for the fabric in the object itself
-        fabric_checksum = self.calculate_checksum()
+        # Calculate checksum based on DC configuration
+        config_data = {
+            "id": self.data.id,
+            "name": self.data.name,
+            "super_spines": self.data.amount_of_super_spines,
+            "design": self.data.design_pattern.model_dump()
+            if self.data.design_pattern
+            else {},
+        }
+        fabric_checksum = self.calculate_checksum(config_data)
+
         for pod in pods:
             if pod.checksum.value != fabric_checksum:
                 pod.checksum.value = fabric_checksum
-                await pod.save(allow_upsert=True)
+                await pod.save()  # Don't use allow_upsert to avoid lifecycle management
                 self.logger.info(
                     f"Pod {pod.name.value} has been updated to checksum {fabric_checksum}"
                 )
@@ -42,6 +55,13 @@ class DCTopologyGenerator(CommonGenerator):
             return
 
         self.logger.info(f"Processing Data Center: {self.data.name}")
+
+        # Add existing pods to group context to prevent deletion
+        existing_pods = await self.client.filters(
+            kind=TopologyPod, parent__ids=[self.data.id]
+        )
+        for pod in existing_pods:
+            self.client.group_context.related_node_ids.append(pod.id)
 
         dc_id = self.data.id
         dc_name = self.data.name.lower()

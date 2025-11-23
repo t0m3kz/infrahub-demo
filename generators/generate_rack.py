@@ -11,6 +11,71 @@ from .models import RackModel
 class RackGenerator(CommonGenerator):
     """Generator for creating rack infrastructure based on fabric templates."""
 
+    async def _calculate_cumulative_cabling_offset(self) -> int:
+        """Calculate cabling offset based on cumulative device counts from previous racks.
+        
+        Returns the sum of all devices (leafs + tors) from racks that come before
+        the current rack when sorted by (row_index, index).
+        """
+        query = "pod_racks_for_offset"
+        variables = {"pod_id": self.data.pod.id}
+        
+        response = await self.client.execute_graphql(
+            query=query,
+            variables=variables,
+        )
+        
+        pod_data = clean_data(response).get("TopologyPod", [])
+        if not pod_data:
+            self.logger.warning("No pod data found for offset calculation, using offset=0")
+            return 0
+        
+        # Extract racks from the pod
+        racks_raw = pod_data[0].get("racks", [])
+        
+        # Parse rack data: (row_index, index, leaf_count, tor_count)
+        rack_info = []
+        for rack_data in racks_raw:
+            row_index = rack_data.get("row_index", 0) or 0
+            index = rack_data.get("index", 0) or 0
+            rack_id = rack_data.get("id")
+            
+            # Count leafs from templates
+            leaf_count = sum(
+                leaf.get("quantity", 0) or 0
+                for leaf in rack_data.get("leafs", [])
+            )
+            
+            # Count tors from templates
+            tor_count = sum(
+                tor.get("quantity", 0) or 0
+                for tor in rack_data.get("tors", [])
+            )
+            
+            rack_info.append({
+                "id": rack_id,
+                "row_index": row_index,
+                "index": index,
+                "device_count": leaf_count + tor_count,
+            })
+        
+        # Sort racks by (row_index, index) for deterministic ordering
+        rack_info.sort(key=lambda r: (r["row_index"], r["index"]))
+        
+        # Find current rack position and calculate cumulative offset
+        offset = 0
+        for rack in rack_info:
+            if rack["id"] == self.data.id:
+                # Found current rack, return cumulative count from all previous racks
+                break
+            offset += rack["device_count"]
+        
+        self.logger.info(
+            f"Calculated cabling offset={offset} for rack {self.data.name} "
+            f"(row={self.data.row}, index={self.data.index})"
+        )
+        return offset
+
     async def generate(self, data: dict) -> None:
         """Generate rack topology with special handling for OOB and console devices."""
         try:
@@ -49,7 +114,7 @@ class RackGenerator(CommonGenerator):
             # Create leaf devices and collect them for cabling
             leaf_devices = await self.create_devices(
                 deployment_id=pod.id,
-                device_role=leaf_role.role,
+                device_role="leaf",
                 amount=leaf_role.quantity,
                 template=leaf_role.template.model_dump(),
                 naming_convention=naming_conv,
@@ -67,31 +132,36 @@ class RackGenerator(CommonGenerator):
             leaf_interfaces = [
                 interface.name for interface in leaf_role.template.interfaces
             ]
-            spine_devices = [device.name for device in pod.devices]
+
+            # Filter spine devices from all pod devices (GraphQL filter doesn't work)
+            spine_device_names = [
+                device.name for device in pod.spine_devices if device.role == "spine"
+            ]
             spine_interfaces = [iface.name for iface in pod.spine_template.interfaces]
 
+            # Calculate cumulative offset based on actual device counts from previous racks
+            cabling_offset = await self._calculate_cumulative_cabling_offset()
+            
             await self.create_cabling(
                 bottom_devices=leaf_devices,
                 bottom_interfaces=leaf_interfaces,
-                top_devices=spine_devices,
+                top_devices=spine_device_names,
                 top_interfaces=spine_interfaces,
                 strategy="rack",
                 options={
-                    "cabling_offset": (
-                        (self.data.index - 1) * (design.maximum_rack_leafs or 2)
-                    ),
+                    "cabling_offset": cabling_offset,
                     "top_sorting": pod.spine_interface_sorting_method,
                     "bottom_sorting": pod.leaf_interface_sorting_method,
                     "pool": f"{pod_name}-technical-pool",
                 },
             )
 
-        # Process ToR devices with specific connectivity logic
+        # Process ToR devices with specific connectivity logic based on deployment_type
         for tor_role in self.data.tors or []:
             # Create ToR devices
             tor_devices = await self.create_devices(
                 deployment_id=pod.id,
-                device_role=tor_role.role,
+                device_role="tor",
                 amount=tor_role.quantity,
                 template=tor_role.template.model_dump(),
                 naming_convention=naming_conv,
@@ -104,262 +174,111 @@ class RackGenerator(CommonGenerator):
                 },
             )
 
-            # Get ToR uplink interfaces for connectivity
             tor_interfaces = [
-                interface.name
-                for interface in tor_role.template.interfaces
-                if interface.role == "uplink"
+                interface.name for interface in tor_role.template.interfaces
             ]
 
-            # Determine ToR connectivity based on deployment_type
-            if deployment_type == "tor":
-                # Connect ToRs to spine switches
-                spine_devices = [device.name for device in pod.devices]
-                spine_interfaces = [
-                    iface.name for iface in pod.spine_template.interfaces
+            # Calculate cumulative offset for ToR cabling
+            cabling_offset = await self._calculate_cumulative_cabling_offset()
+
+            # Deployment type: middle_rack - ToRs connect to local leafs in same rack
+            if deployment_type == "middle_rack":
+                if created_leaf_devices:
+                    leaf_device_names = created_leaf_devices
+                    # Get leaf interfaces marked with role="leaf" (downlink to ToRs)
+                    leaf_interfaces = [
+                        iface.name
+                        for leaf_role in self.data.leafs or []
+                        for iface in leaf_role.template.interfaces
+                        if iface.role == "leaf"
+                    ]
+
+                    await self.create_cabling(
+                        bottom_devices=tor_devices,
+                        bottom_interfaces=tor_interfaces,
+                        top_devices=leaf_device_names,
+                        top_interfaces=leaf_interfaces,
+                        strategy="rack",
+                        options={
+                            "cabling_offset": cabling_offset,
+                            "top_sorting": pod.leaf_interface_sorting_method,
+                            "bottom_sorting": "sequential",
+                            "pool": f"{pod_name}-technical-pool",
+                        },
+                    )
+                else:
+                    self.logger.warning(
+                        f"middle_rack deployment for {self.data.name} has ToRs but no leafs"
+                    )
+
+            # Deployment type: tor - ToRs connect directly to spines
+            elif deployment_type == "tor":
+                spine_device_names = [
+                    device.name for device in pod.spine_devices if device.role == "spine"
                 ]
+                spine_interfaces = [iface.name for iface in pod.spine_template.interfaces]
 
                 await self.create_cabling(
                     bottom_devices=tor_devices,
                     bottom_interfaces=tor_interfaces,
-                    top_devices=spine_devices,
+                    top_devices=spine_device_names,
                     top_interfaces=spine_interfaces,
                     strategy="rack",
                     options={
-                        "cabling_offset": (
-                            (self.data.index - 1) * (design.maximum_tors or 2)
-                        ),
+                        "cabling_offset": cabling_offset,
                         "top_sorting": pod.spine_interface_sorting_method,
-                        "bottom_sorting": pod.leaf_interface_sorting_method,
+                        "bottom_sorting": "sequential",
                         "pool": f"{pod_name}-technical-pool",
                     },
                 )
-            elif deployment_type == "middle_rack":
-                # Connect ToRs to leaf switches in the same rack if available
-                check_interface_role = "leaf"
 
-                if created_leaf_devices:
-                    # Get leaf interfaces for ToR connectivity from template
-                    leaf_role_interfaces = [
-                        interface.name
-                        for interface in (
-                            self.data.leafs[0].template.interfaces
-                            if self.data.leafs
-                            else []
-                        )
-                        if interface.role == check_interface_role
-                    ]
-
-                    # If template doesn't have interface details, use known interface names
-                    # for N9K_C9336C_FX2_LEAF_MR template (Ethernet1/25-30 are leaf role)
-                    if not leaf_role_interfaces:
-                        leaf_role_interfaces = [f"Ethernet1/{i}" for i in range(25, 31)]
-
-                    # Use load-balanced cabling strategy that distributes ToRs evenly across all leafs
-                    await self.create_cabling(
-                        bottom_devices=tor_devices,
-                        bottom_interfaces=tor_interfaces,
-                        top_devices=created_leaf_devices,
-                        top_interfaces=leaf_role_interfaces,
-                        strategy="intra_rack",
-                        options={
-                            "pool": f"{pod_name}-technical-pool",
-                        },
-                    )
-                else:
-                    # No leaf switches in rack - find external leafs from the pod
-                    # Query all leaf devices in the pod excluding this rack
-                    external_leafs_query = await self._get_external_leafs(
-                        pod_id=pod.id, exclude_rack_id=self.data.id
-                    )
-
-                    if external_leafs_query:
-                        # Find the 2 leafs with most available ports
-                        (
-                            external_leaf_devices,
-                            _,
-                        ) = await self.get_devices_with_available_ports(
-                            device_names=external_leafs_query,
-                            interface_role="leaf",
-                            top_n=2,
-                        )
-
-                        self.logger.info(
-                            f"ToR connectivity: using {len(external_leaf_devices)} external leaf devices "
-                            f"from pod {pod_name} for rack {self.data.name}"
-                        )
-
-                        # Get leaf role interfaces
-                        leaf_role_interfaces = [f"Ethernet1/{i}" for i in range(25, 31)]
-
-                        await self.create_cabling(
-                            bottom_devices=tor_devices,
-                            bottom_interfaces=tor_interfaces,
-                            top_devices=external_leaf_devices,
-                            top_interfaces=leaf_role_interfaces,
-                            strategy="intra_rack",
-                            options={
-                                "pool": f"{pod_name}-technical-pool",
-                            },
-                        )
-                    else:
-                        self.logger.warning(
-                            f"No external leaf switches available in pod {pod_name} for ToR connectivity"
-                        )
+            # Deployment type: mixed - ToRs connect to local leafs if present, otherwise external leafs
             elif deployment_type == "mixed":
-                # Mixed deployment: ToRs in this rack connect to local Leafs,
-                # and external ToRs connect to this rack's Leafs (if available)
-                check_interface_role = "leaf"
-
                 if created_leaf_devices:
-                    # Get leaf interfaces for ToR connectivity
-                    leaf_role_interfaces = [
-                        interface.name
-                        for interface in (
-                            self.data.leafs[0].template.interfaces
-                            if self.data.leafs
-                            else []
-                        )
-                        if interface.role == check_interface_role
+                    # Connect to local leafs in same rack
+                    leaf_device_names = created_leaf_devices
+                    leaf_interfaces = [
+                        iface.name
+                        for leaf_role in self.data.leafs or []
+                        for iface in leaf_role.template.interfaces
+                        if iface.role == "leaf"
                     ]
 
-                    if not leaf_role_interfaces:
-                        leaf_role_interfaces = [f"Ethernet1/{i}" for i in range(25, 31)]
-
-                    # Connect local ToRs to local Leafs in this rack
                     await self.create_cabling(
                         bottom_devices=tor_devices,
                         bottom_interfaces=tor_interfaces,
-                        top_devices=created_leaf_devices,
-                        top_interfaces=leaf_role_interfaces,
-                        strategy="intra_rack",
+                        top_devices=leaf_device_names,
+                        top_interfaces=leaf_interfaces,
+                        strategy="rack",
                         options={
+                            "cabling_offset": cabling_offset,
+                            "top_sorting": pod.leaf_interface_sorting_method,
+                            "bottom_sorting": "sequential",
+                            "pool": f"{pod_name}-technical-pool",
+                        },
+                    )
+                else:
+                    # No local leafs - connect to spines instead (fallback for mixed without local leafs)
+                    spine_device_names = [
+                        device.name for device in pod.spine_devices if device.role == "spine"
+                    ]
+                    spine_interfaces = [iface.name for iface in pod.spine_template.interfaces]
+
+                    await self.create_cabling(
+                        bottom_devices=tor_devices,
+                        bottom_interfaces=tor_interfaces,
+                        top_devices=spine_device_names,
+                        top_interfaces=spine_interfaces,
+                        strategy="rack",
+                        options={
+                            "cabling_offset": cabling_offset,
+                            "top_sorting": pod.spine_interface_sorting_method,
+                            "bottom_sorting": "sequential",
                             "pool": f"{pod_name}-technical-pool",
                         },
                     )
 
-                    # Now handle external ToRs from other racks in the same pod
-                    # Query all ToR devices in the pod excluding this rack
-                    external_tors_query = await self._get_external_tors(
-                        pod_id=pod.id, exclude_rack_id=self.data.id
-                    )
-
-                    if external_tors_query:
-                        self.logger.info(
-                            f"Mixed deployment: connecting {len(external_tors_query)} external ToRs "
-                            f"to {len(created_leaf_devices)} leafs in rack {self.data.name}"
-                        )
-
-                        # Get ToR uplink interfaces
-                        tor_uplink_interfaces = [
-                            interface.name
-                            for interface in tor_role.template.interfaces
-                            if interface.role == "uplink"
-                        ]
-
-                        # Connect external ToRs to this rack's Leafs using least-utilized strategy
-                        await self.create_cabling(
-                            bottom_devices=external_tors_query,
-                            bottom_interfaces=tor_uplink_interfaces,
-                            top_devices=created_leaf_devices,
-                            top_interfaces=leaf_role_interfaces,
-                            strategy="intra_rack",
-                            options={
-                                "pool": f"{pod_name}-technical-pool",
-                            },
-                        )
-                else:
-                    self.logger.warning(
-                        f"Mixed deployment without local leafs in rack {self.data.name} - "
-                        "ToRs will need external connectivity"
-                    )
-
-    async def _get_external_leafs(self, pod_id: str, exclude_rack_id: str) -> list[str]:
-        """Get all leaf device names from the pod excluding specified rack.
-
-        Args:
-            pod_id: Pod ID to query
-            exclude_rack_id: Rack ID to exclude
-
-        Returns:
-            List of leaf device names
-        """
-        query = """
-        query GetExternalLeafs($pod_id: String!, $rack_id: String!) {
-            DcimGenericDevice(
-                role__name__value: "leaf"
-                location__id: $pod_id
-            ) {
-                edges {
-                    node {
-                        id
-                        name { value }
-                        rack {
-                            node { id }
-                        }
-                    }
-                }
-            }
-        }
-        """
-
-        result = await self.client.execute_graphql(
-            query=query,
-            variables={"pod_id": pod_id, "rack_id": exclude_rack_id},
-            branch_name=self.branch,
-        )
-
-        devices = result.get("DcimGenericDevice", {}).get("edges", [])
-        external_leafs = [
-            device["node"]["name"]["value"]
-            for device in devices
-            if device["node"].get("rack", {}).get("node", {}).get("id")
-            != exclude_rack_id
-        ]
-
-        return external_leafs
-
-    async def _get_external_tors(self, pod_id: str, exclude_rack_id: str) -> list[str]:
-        """Get all ToR device names from the pod excluding specified rack.
-
-        Args:
-            pod_id: Pod ID to query
-            exclude_rack_id: Rack ID to exclude
-
-        Returns:
-            List of ToR device names
-        """
-        query = """
-        query GetExternalToRs($pod_id: String!, $rack_id: String!) {
-            DcimGenericDevice(
-                role__name__value: "tor"
-                location__id: $pod_id
-            ) {
-                edges {
-                    node {
-                        id
-                        name { value }
-                        rack {
-                            node { id }
-                        }
-                    }
-                }
-            }
-        }
-        """
-
-        result = await self.client.execute_graphql(
-            query=query,
-            variables={"pod_id": pod_id, "rack_id": exclude_rack_id},
-            branch_name=self.branch,
-        )
-
-        devices = result.get("DcimGenericDevice", {}).get("edges", [])
-        external_tors = [
-            device["node"]["name"]["value"]
-            for device in devices
-            if device["node"].get("rack", {}).get("node", {}).get("id")
-            != exclude_rack_id
-        ]
-
-        return external_tors
+            else:
+                self.logger.warning(
+                    f"Unknown deployment_type '{deployment_type}' for rack {self.data.name}"
+                )

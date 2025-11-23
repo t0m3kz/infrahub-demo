@@ -114,18 +114,22 @@ nodes:
         kind: Text
         computed_attribute:
           kind: Jinja2
-          jinja2_template: "{{parent__name__value}}-{{rack_name__value}}-{{row__value}}"  # yamllint disable-line rule:line-length
+          jinja2_template: "{{parent__shortname__value|upper}}-R{{row_index__value}}-{{index__value}}"  # yamllint disable-line rule:line-length
         read_only: true
         optional: false
-      - name: rack_name
+      - name: shortname
         kind: Text
+        computed_attribute:
+          kind: Jinja2
+          jinja2_template: "{{parent__shortname__value}}-{{row_index__value}}-{{index__value}}"  # yamllint disable-line rule:line-length
+        read_only: true
         optional: false
       - name: index
         kind: Number
         order_weight: 120
-      - name: row
-        kind: Text
-        optional: true
+      - name: row_index
+        kind: Number
+        order_weight: 121
       - name: rack_type
         kind: Dropdown
         choices:
@@ -139,7 +143,6 @@ nodes:
             label: Network
         default_value: compute
       - name: facility_id
-        # branch: aware
         kind: Text
         unique: false
         optional: true

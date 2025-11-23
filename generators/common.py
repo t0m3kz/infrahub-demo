@@ -52,125 +52,24 @@ class CommonGenerator(InfrahubGenerator):
 
         return _clean_data(data)
 
-    def calculate_checksum(self) -> str:
-        """Calculate a SHA256 checksum of related IDs from the current session.
+    def calculate_checksum(self, data: dict[str, Any]) -> str:
+        """Calculate a SHA256 checksum based on configuration data.
 
-        Combines related group IDs and node IDs into a sorted comma-separated string,
-        then computes the SHA256 hash for validation or change detection.
-
-        Returns:
-            SHA256 hexdigest of sorted related IDs.
-        """
-        related_ids = (
-            self.client.group_context.related_group_ids
-            + self.client.group_context.related_node_ids
-        )
-        sorted_ids = sorted(related_ids)
-        joined = ",".join(sorted_ids)
-        return hashlib.sha256(joined.encode("utf-8")).hexdigest()
-
-    async def get_devices_with_available_ports(
-        self,
-        device_names: list[str],
-        interface_role: str = "leaf",
-        top_n: int = 2,
-    ) -> tuple[list[str], int]:
-        """Get devices with most available ports using GraphQL.
+        Creates a deterministic checksum from the configuration that will be
+        used to generate infrastructure. This ensures the same configuration
+        always produces the same checksum, regardless of what was created.
 
         Args:
-            device_names: List of device names to check
-            interface_role: Role of interfaces to check (default: "leaf")
-            top_n: Number of top devices to return (default: 2)
+            data: Configuration data dictionary (e.g., design pattern, capacities)
 
         Returns:
-            Tuple of (selected_device_names, total_available_ports)
+            SHA256 hexdigest of the configuration data.
         """
-        from typing import TypedDict
+        import json
 
-        class DeviceAvailability(TypedDict):
-            device: str
-            available_ports: int
-
-        device_availability: list[DeviceAvailability] = []
-
-        for device_name in device_names:
-            # Use GraphQL to efficiently count available ports
-            query = """
-            query GetDeviceAvailablePorts($device_name: String!, $role: String!) {
-                DcimGenericDevice(name__value: $device_name) {
-                    edges {
-                        node {
-                            id
-                            name { value }
-                            interfaces(role__value: $role) {
-                                count
-                                edges {
-                                    node {
-                                        id
-                                        name { value }
-                                        ... on DcimPhysicalInterface {
-                                            cable {
-                                                node { id }
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-            """
-
-            result = await self.client.execute_graphql(
-                query=query,
-                variables={"device_name": device_name, "role": interface_role},
-                branch_name=self.branch,
-            )
-
-            device_data = result.get("DcimGenericDevice", {}).get("edges", [])
-            if not device_data:
-                self.logger.warning(
-                    f"Device {device_name} not found in GraphQL response"
-                )
-                continue
-
-            interfaces_data = device_data[0].get("node", {}).get("interfaces", {})
-            total_ports = interfaces_data.get("count", 0)
-
-            # Count interfaces with cables
-            connected_count = 0
-            for iface_edge in interfaces_data.get("edges", []):
-                iface = iface_edge.get("node", {})
-                if iface.get("cable", {}).get("node"):
-                    connected_count += 1
-
-            available_ports = total_ports - connected_count
-
-            self.logger.debug(
-                f"Device {device_name}: {total_ports} total ports, "
-                f"{connected_count} connected, {available_ports} available"
-            )
-
-            device_availability.append(
-                {
-                    "device": device_name,
-                    "available_ports": available_ports,
-                }
-            )
-
-        # Sort by available ports (descending) and select top N
-        device_availability.sort(key=lambda x: x["available_ports"], reverse=True)
-        selected_devices: list[str] = [
-            item["device"] for item in device_availability[:top_n]
-        ]
-
-        # Calculate total available ports in selected devices
-        total_available = sum(
-            item["available_ports"] for item in device_availability[:top_n]
-        )
-
-        return selected_devices, total_available
+        # Sort keys for deterministic output
+        sorted_data = json.dumps(data, sort_keys=True)
+        return hashlib.sha256(sorted_data.encode("utf-8")).hexdigest()
 
     async def allocate_resource_pools(
         self,
@@ -367,6 +266,7 @@ class CommonGenerator(InfrahubGenerator):
                             "id": template.get("id") if template else None
                         },
                         "status": "active",
+                        "role": device_role,
                         "deployment": {"id": deployment_id} if deployment_id else None,
                         "device_type": template.get("device_type"),
                         "platform": template.get("platform"),
@@ -445,22 +345,39 @@ class CommonGenerator(InfrahubGenerator):
             f"(strategy: {strategy}, bottom: {bottom_sorting}, top: {top_sorting})"
         )
 
-        # Fetch interfaces in batch, ensuring the related device data is included
+        # Fetch interfaces in batch, ensuring the related device and cable data is included
+        # Using include=["cable"] to get cable information in a single query
+        # This allows the cabling planner to detect and match existing connections
+        import asyncio
+
+        # Wait for device templates to instantiate interfaces
+        # Templates create interfaces asynchronously in Infrahub
+        await asyncio.sleep(2.0)  # Increased delay to allow template processing
+
+        # Query ALL interfaces on bottom devices (not filtered by name)
+        # This ensures we see existing cables for ToR connections
+        # CablingPlanner will match existing connections deterministically
         src_interfaces = await self.client.filters(
             kind=DcimPhysicalInterface,
             device__name__values=bottom_devices,
             name__values=bottom_interfaces,
-            # cable__isnull=True,
         )
+
+        # Query ALL interfaces on top devices (not filtered by name)
+        # This includes both free and occupied interfaces
+        # For ToR connections: queries existing leaf interfaces with cable status
         dst_interfaces = await self.client.filters(
             kind=DcimPhysicalInterface,
             device__name__values=top_devices,
             name__values=top_interfaces,
-            # cable__isnull=True,
         )
 
         if not src_interfaces or not dst_interfaces:
-            self.logger.warning("No available interfaces found; skipping cabling")
+            self.logger.warning(
+                f"No available interfaces found; skipping cabling "
+                f"(src: {len(src_interfaces) if src_interfaces else 0}, "
+                f"dst: {len(dst_interfaces) if dst_interfaces else 0})"
+            )
             return
 
         planner = CablingPlanner(
@@ -482,13 +399,47 @@ class CommonGenerator(InfrahubGenerator):
             )
             return
 
+        # Process cabling plan - create cables with upsert to ensure idempotency
+        # Running generator multiple times will produce same cables
         for src_interface, dst_interface in cabling_plan:
-            name = f"{src_interface.device.display_label}-{src_interface.name.value}__{dst_interface.device.display_label}-{dst_interface.name.value}"
+            # # Check if interface already has a cable - if so, skip to avoid duplicate endpoints error
+            # # When using include=["cable"], check the _peer object directly to avoid triggering lazy load
+            # src_has_cable = False
+            # if hasattr(src_interface, "cable") and src_interface.cable is not None:
+            #     # Access the internal _peer attribute to check if cable exists without triggering .get()
+            #     if hasattr(src_interface.cable, "_peer") and src_interface.cable._peer is not None:
+            #         src_has_cable = True
 
-            # Create a stable identifier for the p2p link based on interface IDs
+            # dst_has_cable = False
+            # if hasattr(dst_interface, "cable") and dst_interface.cable is not None:
+            #     # Access the internal _peer attribute to check if cable exists without triggering .get()
+            #     if hasattr(dst_interface.cable, "_peer") and dst_interface.cable._peer is not None:
+            #         dst_has_cable = True
+
+            # if src_has_cable or dst_has_cable:
+            #     self.logger.debug(
+            #         f"Skipping cable - interface(s) already cabled: "
+            #         f"{src_interface.device.display_label}-{src_interface.name.value} (has_cable={src_has_cable}), "
+            #         f"{dst_interface.device.display_label}-{dst_interface.name.value} (has_cable={dst_has_cable})"
+            #     )
+            #     continue
+
+            # Create deterministic cable name based on sorted endpoint names
+            # This ensures the same cable name is generated every time
+            endpoint_names = sorted(
+                [
+                    f"{src_interface.device.display_label}-{src_interface.name.value}",
+                    f"{dst_interface.device.display_label}-{dst_interface.name.value}",
+                ]
+            )
+            name = "__".join(endpoint_names)
+
+            # Create a stable identifier for the p2p link based on sorted interface IDs
+            # This identifier is used for IP prefix allocation to ensure same IPs every time
             link_identifier = "__".join(sorted([src_interface.id, dst_interface.id]))
 
-            # Create the cable and link it to the interfaces
+            # Create or update the cable using upsert
+            # If cable already exists with same endpoints, it will be updated (no-op)
             network_link = await self.client.create(
                 kind=DcimCable,
                 data={

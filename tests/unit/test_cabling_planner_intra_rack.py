@@ -163,9 +163,9 @@ class TestCablingPlannerIntraRackScenario:
         planner = CablingPlanner(tor1 + tor2 + tor3, leaf)  # type: ignore
         cabling_plan = planner.build_cabling_plan(scenario="intra_rack")
 
-        # With only 1 Leaf available, algorithm selects min(2, available_leafs) = 1 Leaf per ToR
-        # Each ToR uses first uplink only: 3 ToRs × 1 connection = 3 connections
-        assert len(cabling_plan) == 3
+        # With deterministic round-robin, all ToRs use both uplinks to single Leaf
+        # 3 ToRs × 2 uplinks = 6 connections
+        assert len(cabling_plan) == 6
 
     def test_intra_rack_asymmetric_interface_counts(self) -> None:
         """Test INTRA_RACK with different interface counts per device."""

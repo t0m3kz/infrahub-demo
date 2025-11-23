@@ -4,9 +4,7 @@ version: "1.0"
 nodes:
   - name: VirtualFabricDesign
     namespace: Topology
-    description: |
-      Design pattern defining resource limits for customer virtual fabric
-      deployments
+    description: Design pattern defining resource limits for virtual fabric
     label: "Virtual Fabric Design Pattern"
     icon: "mdi:cloud-outline"
     include_in_menu: true
@@ -22,8 +20,7 @@ nodes:
         kind: Text
         unique: true
         order_weight: 100
-        description: |
-          Design pattern name (e.g., 'Small', 'Medium', 'Large', 'Enterprise')
+        description: "Design name ('Small', 'Medium', 'Large', 'Enterprise')"
       - name: description
         kind: Text
         optional: true
@@ -282,5 +279,4 @@ extensions:
           order_weight: 1250
           on_delete: no-action
           optional: false
-          description: |
-            Design pattern defining resource limits for deployment
+          description: "Design pattern defining resource limits for deployment"

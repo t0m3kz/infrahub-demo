@@ -1,6 +1,6 @@
-query GetEndpointForConnectivity($name: String!) {
+query GetEndpointForConnectivity($endpoint_id: ID!) {
   # Get the endpoint device
-DcimGenericDevice(ids: [$endpoint_id]) {
+  DcimGenericDevice(ids: [$endpoint_id]) {
     edges {
       node {
         id
@@ -21,7 +21,7 @@ DcimGenericDevice(ids: [$endpoint_id]) {
                 value
               }
               # Get all devices in the same rack
-              devices (device_type: ["leaf", "tor"]){
+              devices (role__values: ["leaf", "tor"]) {
                 edges {
                   node {
                     ... on DcimPhysicalDevice {

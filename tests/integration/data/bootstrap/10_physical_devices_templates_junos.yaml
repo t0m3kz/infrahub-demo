@@ -1,0 +1,66 @@
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TemplateDcimPhysicalDevice
+  data:
+    - template_name: SRX_1500_EDGE_FIREWALL
+      device_type: SRX-1500
+      platform: junos
+      role: firewall
+      status: provisioning
+      interfaces:
+        kind: TemplateDcimPhysicalInterface
+        parameters:
+          expand_range: true
+        data:
+          - template_name: SRX-1500_EDGE_FIREWALL_fxp0
+            name: fxp0
+            role: management
+            interface_type: 1000base-t
+          - template_name: SRX-1500_DC_FIREWALL_ge-0/0/[0-3]
+            name: ge-0/0/[0-3]
+            role: leaf
+            interface_type: 1000base-t
+
+    - template_name: SRX_1500_DC_FIREWALL
+      device_type: SRX-1500
+      platform: junos
+      role: firewall
+      status: provisioning
+      interfaces:
+        kind: TemplateDcimPhysicalInterface
+        parameters:
+          expand_range: true
+        data:
+          - template_name: SRX-1500_DC_FIREWALL_fxp0
+            name: fxp0
+            role: management
+            interface_type: 1000base-t
+          - template_name: SRX-1500_DC_FIREWALL_ge-0/0/[0-3]
+            name: ge-0/0/[0-3]
+            role: leaf
+            interface_type: 1000base-t
+    # console
+    - template_name: SRX_1500_EDGE_FIREWALL
+      device_type: SRX-1500
+      platform: juniper_junos
+      role: firewall
+      status: provisioning
+      interfaces:
+        kind: TemplateDcimConsoleInterface
+        data:
+          - template_name: SRX-1500_EDGE_FIREWALL_con
+            name: con
+            role: console
+    - template_name: SRX_1500_DC_FIREWALL
+      device_type: SRX-1500
+      platform: juniper_junos
+      role: firewall
+      status: provisioning
+      interfaces:
+        kind: TemplateDcimConsoleInterface
+        data:
+          - template_name: SRX-1500_DC_FIREWALL_con
+            name: con
+            role: console

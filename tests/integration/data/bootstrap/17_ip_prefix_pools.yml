@@ -79,3 +79,31 @@ spec:
             is_pool: true
             role: management
       ip_namespace: default
+    - name: Loopback-IPv6
+      description: Loopback IPv6 Prefix Pool
+      default_prefix_type: IpamPrefix
+      default_prefix_length: 48
+      resources:
+        kind: IpamPrefix
+        data:
+          - prefix: fd00:2000::/32
+            description: IPv6 Loopback Prefix Pool supporting 100+ DCs
+            status: active
+            member_type: prefix
+            is_pool: true
+            role: loopback
+      ip_namespace: default
+    - name: Technical-IPv6
+      description: Technical P2P IPv6 Prefix Pool
+      default_prefix_type: IpamPrefix
+      default_prefix_length: 64
+      resources:
+        kind: IpamPrefix
+        data:
+          - prefix: fd00:2100::/40
+            description: Technical P2P IPv6 for spine-leaf connections
+            status: active
+            member_type: prefix
+            is_pool: true
+            role: technical
+      ip_namespace: default

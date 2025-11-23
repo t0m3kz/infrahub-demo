@@ -13,6 +13,18 @@ query FabricGeneratorQuery($name: String!) {
           underlay{
             value
           }
+          children {
+            edges {
+              node {
+                id
+                ... on TopologyPod {
+                  checksum {
+                    value
+                  }
+                }
+              }
+            }
+          }
           design_pattern {
             node {
               maximum_super_spines {
