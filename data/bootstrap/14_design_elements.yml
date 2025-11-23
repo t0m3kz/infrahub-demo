@@ -183,6 +183,20 @@ spec:
       role: leaf
       device_type: 7AS7326-56X-O-48V-F
       template: Edgecore-7AS7326-56X-O-48V-F_LEAF
+    - name: 2_EDGECORE_LEAFS_MR_Edgecore-7726_32X_O
+      description: 2 Edgecore Edgecore-7726_32X_O MR LEAFS
+      quantity: 2
+      role: leaf
+      device_type: 7726-32X-O
+      template: Edgecore-7726_32X_O_LEAF_MR
+    - name: 2_EDGECORE_TORS_Edgecore-7AS7326-56X-O-48V-F
+      description: 2 Edgecore Edgecore-7AS7326-56X-O-48V-F TORS
+      quantity: 2
+      role: tor
+      device_type: 7AS7326-56X-O-48V-F
+      template: Edgecore-7AS7326-56X-O-48V-F_TOR
+
+
     # Juniper Firewalls
     - name: 2_JUNIPER_EDGE_FIREWALLS_SRX-1500
       description: 2 Juniper EDGE SRX-1500 firewalls

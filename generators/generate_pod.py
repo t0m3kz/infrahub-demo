@@ -22,18 +22,35 @@ class PodTopologyGenerator(CommonGenerator):
 
         Compares the calculated checksum with existing rack checksums and updates
         them if they differ, ensuring consistency across the pod infrastructure.
-        """
-        racks = await self.client.filters(kind=LocationRack, pod__ids=[self.data.id])
 
-        # store the checksum for the fabric in the object itself
-        checksum = self.calculate_checksum()
+        The checksum is based on the pod ID to ensure all racks in the same pod
+        share the same checksum value.
+        """
+        self.logger.info(f"Updating checksums for racks in pod {self.data.name}")
+        racks = await self.client.filters(kind=LocationRack, pod__ids=[self.data.id])
+        self.logger.info(f"Found {len(racks)} racks to update")
+
+        # Calculate checksum based on pod configuration
+        config_data = {
+            "id": self.data.id,
+            "name": self.data.name,
+            "spines": self.data.amount_of_spines,
+            "parent_id": self.data.parent.id if self.data.parent else None,
+        }
+        checksum = self.calculate_checksum(config_data)
+        self.logger.info(f"Calculated checksum: {checksum}")
+
         for rack in racks:
             if rack.checksum.value != checksum:
                 rack.checksum.value = checksum
-                await rack.save(allow_upsert=True)
+                await (
+                    rack.save()
+                )  # Don't use allow_upsert to avoid lifecycle management
                 self.logger.info(
                     f"Rack {rack.name.value} has been updated to checksum {checksum}"
                 )
+
+        self.logger.info("Checksum update complete")
 
     async def generate(self, data: dict[str, Any]) -> None:
         """Generate pod topology infrastructure.
@@ -60,6 +77,7 @@ class PodTopologyGenerator(CommonGenerator):
             return
 
         self.logger.info(f"Generating topology for pod {self.data.name}")
+
         pod_id = self.data.id
         dc = self.data.parent
         pod_name = self.data.name.lower()
@@ -68,11 +86,11 @@ class PodTopologyGenerator(CommonGenerator):
         indexes: list[int] = [dc.index or 1, self.data.index]
 
         # Validate capacity before generation using data from GraphQL query
-        # Add the devices we're about to create to existing counts
+        # Only validate the desired spine count (leafs/tors come from rack deployments)
         validate_pod_capacity(
             pod_name=self.data.name,
             design_pattern=design.model_dump() if design else {},
-            spine_count=(self.data.spine_count or 0) + self.data.amount_of_spines,
+            spine_count=self.data.amount_of_spines,
             leaf_count=self.data.leaf_count or 0,
             tor_count=self.data.tor_count or 0,
         )

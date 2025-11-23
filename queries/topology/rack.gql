@@ -2,68 +2,44 @@ fragment TemplateDeviceFields on TemplateDcimPhysicalDevice {
   platform {
     node {
       id
-      name { value }
+      name {
+        value
+      }
     }
   }
-  device_type { node { id } }
+  device_type {
+    node {
+      id
+    }
+  }
   interfaces(role__value: "uplink") {
     edges {
       node {
-        name { value }
-        role { value }
+        name {
+          value
+        }
+        role {
+          value
+        }
       }
     }
   }
 }
 
 fragment FabricTemplateFields on TopologyElement {
-  name { value }
-  role { value }
-  quantity { value }
+  name {
+    value
+  }
+  role {
+    value
+  }
+  quantity {
+    value
+  }
   template {
     node {
       id
       ...TemplateDeviceFields
-    }
-  }
-}
-
-fragment PodFields on TopologyPod {
-  id
-  name { value }
-  index { value }
-  devices(role__value: "spine") {
-    edges { node { name { value } } }
-  }
-  parent {
-    node {
-      ... on TopologyDataCenter {
-        id
-        name { value }
-        index { value }
-        design_pattern {
-          node {
-            naming_convention { value }
-            maximum_rack_leafs { value }
-            maximum_tors { value }
-            maximum_middle_racks { value }
-          }
-        }
-      }
-    }
-  }
-  amount_of_spines { value }
-  leaf_interface_sorting_method { value }
-  spine_interface_sorting_method { value }
-  loopback_pool { node { id } }
-  prefix_pool { node { id } }
-  deployment_type { value }
-  spine_template {
-    node {
-      id
-      interfaces(role__value: "leaf") {
-        edges { node { name { value } } }
-      }
     }
   }
 }
@@ -73,18 +49,147 @@ query RackGenerator($name: String!) {
     edges {
       node {
         id
-        name { value }
-        checksum { value }
-        index { value }
-        rack_type { value }
-        row { value }
+        name {
+          value
+        }
+        checksum {
+          value
+        }
+        index {
+          value
+        }
+        rack_type {
+          value
+        }
+        row {
+          value
+        }
         leafs: fabric_templates(role__value: "leaf") {
-          edges { node { ...FabricTemplateFields } }
+          edges {
+            node {
+              ...FabricTemplateFields
+            }
+          }
         }
         tors: fabric_templates(role__value: "tor") {
-          edges { node { ...FabricTemplateFields } }
+          edges {
+            node {
+              ...FabricTemplateFields
+            }
+          }
         }
-        pod { node { ...PodFields } }
+        leafs_in_rack: devices(role__value: "leaf"){
+          edges{
+            node{
+              name{
+                value
+              }
+              interfaces(role__value: "leaf"){
+                edges{
+                  node{
+                    name{
+                      value
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+        pod {
+          node {
+            id
+            name {
+              value
+            }
+            index {
+              value
+            }
+            spine_devices: devices(role__value: "spine"){
+              edges{
+                node{
+                  name{
+                    value
+                  }
+                  interfaces(role__value: "leaf"){
+                    edges{
+                      node{
+                        name{
+                          value
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+            parent {
+              node {
+                ... on TopologyDataCenter {
+                  id
+                  name {
+                    value
+                  }
+                  index {
+                    value
+                  }
+                  design_pattern {
+                    node {
+                      naming_convention {
+                        value
+                      }
+                      maximum_rack_leafs {
+                        value
+                      }
+                      maximum_tors {
+                        value
+                      }
+                      maximum_middle_racks {
+                        value
+                      }
+                    }
+                  }
+                }
+              }
+            }
+            amount_of_spines {
+              value
+            }
+            leaf_interface_sorting_method {
+              value
+            }
+            spine_interface_sorting_method {
+              value
+            }
+            loopback_pool {
+              node {
+                id
+              }
+            }
+            prefix_pool {
+              node {
+                id
+              }
+            }
+            deployment_type {
+              value
+            }
+            spine_template {
+              node {
+                id
+                interfaces(role__value: "leaf") {
+                  edges {
+                    node {
+                      name {
+                        value
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
       }
     }
   }

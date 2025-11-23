@@ -4,7 +4,7 @@ kind: Object
 spec:
   kind: TopologyDataCenter
   data:
-    - name: DC4
+    - name: DC11
       index: 1
       amount_of_super_spines: 2
       super_spine_template: Edgecore-7726_32X_O_SUPER_SPINE
@@ -22,7 +22,7 @@ spec:
             member_of_groups:
               - topologies_pod
           - index: 2
-            deployment_type: mixed
+            deployment_type: tor
             spine_template: Edgecore-7726_32X_O_SPINE
             amount_of_spines: 2
             member_of_groups:

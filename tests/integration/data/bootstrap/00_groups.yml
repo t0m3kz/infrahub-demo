@@ -4,66 +4,32 @@ kind: Object
 spec:
   kind: CoreStandardGroup
   data:
-    - name: edge_routers
-      description: Edge Routers
-    - name: core_routers
+    - name: cores
       description: Core Routers
-    - name: cisco_spine
-      description: Cisco DC spine devices
-    - name: cisco_leaf
-      description: Cisco DC leaf devices
-    - name: cisco_oob
-      description: Cisco DC OOB devices
-    - name: cisco_edge
-      description: Cisco Edge Routers
-    - name: edgecore_leaf
-      description: Cisco DC leaf devices
-    - name: edgecore_spine
-      description: Cisco DC spine devices
-    - name: arista_leaf
-      description: Arista DC leaf devices
-    - name: arista_spine
-      description: Arista DC spine devices
-    - name: arista_pop_router
-      description: Arista POP Routers
-    - name: sonic_leaf
-      description: Sonic DC leaf devices
-    - name: sonic_spine
-      description: Sonic DC spine devices
     - name: linux_devices
       description: Linux Devices
     - name: leafs
-      description: All leafs
+      description: All leaf switches
+    - name: tors
+      description: All ToR/Level2 switches
     - name: border-leafs
       description: All border leafs
     - name: spines
       description: All spines
-    - name: super_spines
+    - name: super-spines
       description: All super spines
     - name: firewalls
       description: All firewalls
     - name: loadbalancers
       description: All load balancers
-    - name: dc_firewalls
-      description: All DC firewalls
-    - name: edge_firewalls
-      description: All edge firewalls
     - name: oobs
       description: All OOB devices
     - name: consoles
       description: All console devices
     - name: edges
       description: All edge devices
-    - name: juniper_firewall
-      description: Juniper DC firewall
-    - name: juniper_pop_firewall
-      description: Juniper POP firewall
-    - name: checkpoint_firewall
-      description: Checkpoint Firewall Devices
-    - name: perle_console
-      description: Perle DC Console
-    - name: perle_pop_console
-      description: Perle POP Console
+    - name: endpoints
+      description: All endpoint devices (servers)
     - name: provisioning_circuits
       description: Provisioning Circuits
     - name: topologies_dc
@@ -76,11 +42,9 @@ spec:
       description: POP Topologies
     - name: topologies_clab
       description: Containerlab Topologies
-    - name: juniper_dc_firewall
-      description: Juniper DC Firewall
-    - name: check_point_edge_firewall
-      description: Check Point Edge Firewall
     - name: equinix_pop
       description: Equinix POPs
     - name: topologies_server
       description: Group for servers in topologies
+    - name: virtual_fabrics
+      description: Virtual Fabric Customer Deployments

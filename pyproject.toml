@@ -15,6 +15,7 @@ readme = "README.md"
 [dependency-groups]
 dev = [
     "datamodel-code-generator>=0.35.0",
+    "infrahub-testcontainers>=1.5.2",
     "invoke>=2.2.0",
     "mypy>=1.15.0",
     "pytest>=8.3.5,<9.0.0",

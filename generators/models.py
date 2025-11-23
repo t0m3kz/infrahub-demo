@@ -42,6 +42,7 @@ class Template(BaseModel):
 
 class Device(BaseModel):
     name: str
+    role: Optional[str] = None
 
 
 class Pool(BaseModel):
@@ -49,6 +50,11 @@ class Pool(BaseModel):
 
 
 # DC model
+class DCPod(BaseModel):
+    id: str
+    checksum: Optional[str] = None
+
+
 class DCModel(BaseModel):
     id: str
     name: str
@@ -57,6 +63,7 @@ class DCModel(BaseModel):
     design_pattern: DesignPattern
     amount_of_super_spines: int
     super_spine_template: Template
+    children: List[DCPod] = []
 
 
 # Pod model
@@ -72,7 +79,7 @@ class PodParent(BaseModel):
 class PodModel(BaseModel):
     id: str
     name: str
-    checksum: str
+    checksum: Optional[str] = None
     index: int
     deployment_type: str
     amount_of_spines: int
@@ -104,7 +111,7 @@ class RackPod(BaseModel):
     id: str
     name: str
     index: int
-    devices: List[Device]
+    spine_devices: List[Device]  # Filtered spine devices from query
     parent: RackParent
     amount_of_spines: int
     leaf_interface_sorting_method: str

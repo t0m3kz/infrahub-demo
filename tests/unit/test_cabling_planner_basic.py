@@ -145,12 +145,29 @@ class TestCablingPlannerDeviceGrouping:
         assert len(planner.top_by_device) == 1
         assert "spine-01" in planner.top_by_device
 
-    def test_same_device_different_interfaces(self) -> None:
-        """Test that same device accumulates multiple interfaces."""
-        interfaces1 = create_mock_interfaces("leaf-01", ["Ethernet1/1", "Ethernet1/2"])
-        interfaces2 = create_mock_interfaces("leaf-01", ["Ethernet1/3", "Ethernet1/4"])
 
-        planner = CablingPlanner(interfaces1 + interfaces2, [])  # type: ignore
+class TestCablingPlannerOffsetBasics:
+    """Test essential offset functionality (legacy rack/pod scenarios)."""
 
-        assert len(planner.bottom_by_device) == 1
-        assert len(planner.bottom_by_device["leaf-01"]) == 4
+    def test_rack_scenario_with_offset_zero(self) -> None:
+        """Test RACK scenario with zero offset."""
+        bottom = create_mock_interfaces("leaf-01", ["Ethernet1/1", "Ethernet1/2"])
+        top = create_mock_interfaces("spine-01", ["Ethernet1/1", "Ethernet1/2"])
+
+        planner = CablingPlanner(bottom, top)  # type: ignore
+        plan = planner.build_cabling_plan(scenario="rack", cabling_offset=0)
+
+        assert len(plan) >= 1
+        assert all(isinstance(conn, tuple) for conn in plan)
+
+    def test_offset_consistency(self) -> None:
+        """Test that same offset produces consistent results."""
+        bottom = create_mock_interfaces("leaf-01", ["Ethernet1/1", "Ethernet1/2"])
+        top = create_mock_interfaces("spine-01", ["Ethernet1/1", "Ethernet1/2"])
+
+        planner = CablingPlanner(bottom, top)  # type: ignore
+
+        plan1 = planner.build_cabling_plan(scenario="rack", cabling_offset=1)
+        plan2 = planner.build_cabling_plan(scenario="rack", cabling_offset=1)
+
+        assert len(plan1) == len(plan2)

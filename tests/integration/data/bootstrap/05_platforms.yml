@@ -32,11 +32,11 @@ spec:
       ansible_network_os: nxos
       containerlab_os: cisco_n9kv
 
-    - name: dell_force10
-      nornir_platform: force10
-      napalm_driver: linux
-      netmiko_device_type: dell_force10
-      ansible_network_os: dellos10
+    - name: dell_sonic
+      nornir_platform: sonic
+      napalm_driver: sonic
+      netmiko_device_type: sonic
+      ansible_network_os: sonic
       containerlab_os: linux
 
     - name: juniper_junos
@@ -61,6 +61,13 @@ spec:
       containerlab_os: sonic
 
     - name: linux
+      nornir_platform: linux
+      napalm_driver: linux
+      netmiko_device_type: linux
+      ansible_network_os: linux
+      containerlab_os: linux
+
+    - name: perle
       nornir_platform: linux
       napalm_driver: linux
       netmiko_device_type: linux
