@@ -84,7 +84,7 @@ nodes:
   # --------------------  Elements  --------------------
   - name: DataCenterDesign
     namespace: Topology
-    description: "Design aspect for data center topology - DC-level parameters only"
+    description: "Design aspect for data center topology - DC-level parameters"
     label: "Data Center Design"
     inherit_from:
       - TopologyDesign
@@ -125,7 +125,7 @@ nodes:
         kind: Number
         default_value: 32
         optional: false
-        description: "Maximum number of Top-of-Rack switches across all racks in a pod"
+        description: "Maximum number of ToR switches across all racks in a pod"
       - name: naming_convention
         order_weight: 500
         label: "Device Naming Convention"
@@ -391,7 +391,7 @@ nodes:
       - name: maximum_leafs_per_row
         order_weight: 1110
         label: "Maximum Leafs per Row"
-        description: "Maximum leaf switches per row for cabling offset calculation"
+        description: "Maximum leaf switches per row for offset calculation"
         kind: Number
         optional: true
         parameters:
@@ -400,7 +400,7 @@ nodes:
       - name: maximum_tors_per_row
         order_weight: 1120
         label: "Maximum ToRs per Row"
-        description: "Maximum ToR switches per row for cabling offset calculation"
+        description: "Maximum ToR switches per row for offset calculation"
         kind: Number
         optional: true
         parameters:

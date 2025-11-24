@@ -63,7 +63,7 @@ spec:
                   label: Rack Configuration Patterns
                   kind: TopologyRackDesign
                   icon: "mdi:server-network"
-                  description: "Rack deployment patterns (device types, quantities, cabling)"
+                  description: "Rack deployment patterns."
 
                 - name: PopDesign
                   namespace: Topology
