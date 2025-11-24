@@ -1,6 +1,6 @@
 """Infrastructure generator for pod topology creation."""
 
-from typing import Any
+from typing import Any, Literal, cast
 
 from utils.data_cleaning import clean_data
 
@@ -103,11 +103,9 @@ class PodTopologyGenerator(CommonGenerator):
             fabric_name=fabric_name,
         )
 
-        from typing import Literal, cast
-
         naming_conv = cast(
             Literal["standard", "hierarchical", "flat"],
-            (design.naming_convention if design else "standard").lower(),
+            ((design.naming_convention if design else None) or "standard").lower(),
         )
 
         spines = await self.create_devices(

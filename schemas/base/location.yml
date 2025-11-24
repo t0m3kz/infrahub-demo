@@ -6,12 +6,10 @@ generics:
     description: Generic Location, could be a country, city ...
     label: Location
     icon: mingcute:location-line
+    hierarchical: true
+    include_in_menu: true
     uniqueness_constraints:
       - ["shortname__value"]
-    human_friendly_id:
-      - shortname__value
-    include_in_menu: true
-    hierarchical: true
     order_by:
       - name__value
     display_label: "{{ name__value }}"
@@ -22,11 +20,7 @@ generics:
       - name: shortname
         kind: Text
         unique: true
-        order_weight: 100
-      - name: description
-        kind: Text
-        optional: true
-        order_weight: 1200
+        order_weight: 110
     relationships:
       - name: tags
         peer: BuiltinTag

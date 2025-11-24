@@ -328,7 +328,12 @@ class CommonGenerator(InfrahubGenerator):
         top_devices: list[str],
         top_interfaces: list[str],
         strategy: Literal[
-            "pod", "rack", "hierarchical_rack", "intra_rack", "custom"
+            "pod",
+            "rack",
+            "hierarchical_rack",
+            "intra_rack",
+            "intra_rack_middle",
+            "custom",
         ] = "rack",
         options: Optional[dict[str, Any]] = None,
     ) -> None:

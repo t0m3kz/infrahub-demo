@@ -5,11 +5,11 @@ spec:
   kind: TopologyDataCenter
   data:
     - name: DC9
-      index: 9
-      amount_of_super_spines: 4
-      super_spine_template: DCS-7050CX3-32C-R_SUPER_SPINE
+      index: 1
+      amount_of_super_spines: 2
+      super_spine_template: Edgecore-7726_32X_O_SUPER_SPINE
       fabric_interface_sorting_method: top_down
-      design_pattern: L-Hierarchical-Mixed
+      design_pattern: L-Standard-Mixed
       member_of_groups:
         - topologies_dc
       children:
@@ -17,25 +17,19 @@ spec:
         data:
           - index: 1
             deployment_type: mixed
-            spine_template: DCS-7050CX3-32C-R_SPINE
-            amount_of_spines: 4
+            spine_template: Edgecore-7726_32X_O_SPINE
+            amount_of_spines: 3
+            number_of_rows: 2
+            maximum_leafs_per_row: 2
+            maximum_tors_per_row: 2
             member_of_groups:
               - topologies_pod
           - index: 2
             deployment_type: mixed
-            spine_template: DCS-7050CX3-32C-R_SPINE
-            amount_of_spines: 4
-            member_of_groups:
-              - topologies_pod
-          - index: 3
-            deployment_type: mixed
-            spine_template: DCS-7050CX3-32C-R_SPINE
-            amount_of_spines: 4
-            member_of_groups:
-              - topologies_pod
-          - index: 4
-            deployment_type: mixed
-            spine_template: DCS-7050CX3-32C-R_SPINE
-            amount_of_spines: 4
+            spine_template: Edgecore-7726_32X_O_SPINE
+            amount_of_spines: 3
+            number_of_rows: 2
+            maximum_leafs_per_row: 2
+            maximum_tors_per_row: 2
             member_of_groups:
               - topologies_pod

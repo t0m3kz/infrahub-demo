@@ -166,7 +166,7 @@ spec:
                     data:
                       - name: "TYO-1"
                         shortname: "tyo-1"
-          - name: "Singapore_"
+          - name: "Singapore"
             shortname: "sg"
             children:
               kind: LocationMetro

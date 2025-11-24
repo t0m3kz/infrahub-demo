@@ -4,145 +4,177 @@ kind: Object
 spec:
   kind: LocationRack
   data:
-    - rack_name: "Rack-1-1-05"
-      shortname: "dc1-r-1-1-05a"
-      index: 1
-      row: A
+    # Pod 1 - Middle Rack deployment (network racks with local leafs+tors)
+    - index: 5
+      row_index: 1
+      shortname: muc-1-s-1-r-1-1
+      rack_type: network
+      pod: ["DC1", "1", "1"]
+      parent: muc-1-s-1
+      fabric_templates:
+        - [2_CISCO_LEAFS_MR_N9K-C9336C-FX2]
+        - [2_CISCO_TORS_N9K-C9336C-FX2]
+    - index: 5
+      row_index: 2
+      shortname: muc-1-s-1-r-2-1
       rack_type: network
       pod: ["DC1", "1", "1"]
       parent: muc-1-s-1
       fabric_templates:
         - [4_CISCO_LEAFS_MR_N9K-C9336C-FX2]
         - [4_CISCO_TORS_N9K-C9336C-FX2]
-      member_of_groups:
-        - topologies_rack
-    - rack_name: "Rack-1-2-05"
-      shortname: "dc1-r-1-2-05b"
-      index: 2
-      row: B
+    - index: 5
+      row_index: 3
       rack_type: network
+      shortname: muc-1-s-1-r-3-3
       pod: ["DC1", "1", "1"]
       parent: muc-1-s-1
       fabric_templates:
         - [4_CISCO_LEAFS_MR_N9K-C9336C-FX2]
         - [4_CISCO_TORS_N9K-C9336C-FX2]
-      member_of_groups:
-        - topologies_rack
-    - rack_name: "Rack-1-3-05"
-      shortname: "dc1-r-1-3-05c"
-      index: 3
-      row: C
+    - index: 5
+      row_index: 4
       rack_type: network
+      shortname: muc-1-s-1-r-4-4
       pod: ["DC1", "1", "1"]
       parent: muc-1-s-1
       fabric_templates:
         - [4_CISCO_LEAFS_MR_N9K-C9336C-FX2]
         - [4_CISCO_TORS_N9K-C9336C-FX2]
-      member_of_groups:
-        - topologies_rack
-    - rack_name: "Rack-1-4-05"
-      shortname: "dc1-r-1-4-05d"
-      index: 4
-      row: D
-      rack_type: network
-      pod: ["DC1", "1", "1"]
-      parent: muc-1-s-1
-      fabric_templates:
-        - [4_CISCO_LEAFS_MR_N9K-C9336C-FX2]
-        - [4_CISCO_TORS_N9K-C9336C-FX2]
-      member_of_groups:
-        - topologies_rack
 
-    - rack_name: "Rack-2-1-05"
-      shortname: "dc1-r-2-1-05a"
-      index: 1
-      row: A
+    # Pod 2 - Mixed Rack deployment (network racks with local leafs+tors)
+    - index: 5
+      row_index: 1
+      rack_type: network
+      shortname: muc-1-s-2-r-1-5
+      pod: ["DC1", "1", "2"]
+      parent: muc-1-s-2
+      fabric_templates:
+        - [2_CISCO_LEAFS_MR_N9K-C9336C-FX2]
+    - index: 5
+      row_index: 2
+      shortname: muc-1-s-2-r-2-5
       rack_type: network
       pod: ["DC1", "1", "2"]
       parent: muc-1-s-2
       fabric_templates:
         - [4_CISCO_LEAFS_MR_N9K-C9336C-FX2]
         - [4_CISCO_TORS_N9K-C9336C-FX2]
-      member_of_groups:
-        - topologies_rack
-    - rack_name: "Rack-2-2-05"
-      shortname: "dc1-r-2-2-05b"
-      index: 2
-      row: B
+    - index: 5
+      row_index: 3
+      shortname: muc-1-s-2-r-3-5
       rack_type: network
       pod: ["DC1", "1", "2"]
       parent: muc-1-s-2
       fabric_templates:
         - [4_CISCO_LEAFS_MR_N9K-C9336C-FX2]
         - [4_CISCO_TORS_N9K-C9336C-FX2]
-      member_of_groups:
-        - topologies_rack
-    - rack_name: "Rack-2-3-05"
-      shortname: "dc1-r-2-3-05c"
-      index: 3
-      row: C
+    - index: 5
+      row_index: 4
       rack_type: network
+      shortname: muc-1-s-2-r-4-5
       pod: ["DC1", "1", "2"]
       parent: muc-1-s-2
       fabric_templates:
         - [4_CISCO_LEAFS_MR_N9K-C9336C-FX2]
         - [4_CISCO_TORS_N9K-C9336C-FX2]
-      member_of_groups:
-        - topologies_rack
-    - rack_name: "Rack-2-4-05"
-      shortname: "dc1-r-2-4-05d"
-      index: 4
-      row: D
-      rack_type: network
-      pod: ["DC1", "1", "2"]
-      parent: muc-1-s-2
-      fabric_templates:
-        - [4_CISCO_LEAFS_MR_N9K-C9336C-FX2]
-        - [4_CISCO_TORS_N9K-C9336C-FX2]
-      member_of_groups:
-        - topologies_rack
 
-    - rack_name: "Rack-3-1-05"
-      shortname: "dc1-r-3-1-05a"
-      index: 1
-      row: A
-      rack_type: network
+    # Pod 3 - ToR deployment (all tor racks, no leafs)
+    # Row 1
+    - index: 1
+      rack_type: tor
+      row_index: 1
+      shortname: muc-1-s-3-r-1-1
       pod: ["DC1", "1", "3"]
       parent: muc-1-s-3
       fabric_templates:
-        - [4_CISCO_LEAFS_N9K-C9336C-FX2]
-      member_of_groups:
-        - topologies_rack
-    - rack_name: "Rack-3-2-05"
-      shortname: "dc1-r-3-2-05b"
-      index: 2
-      row: B
-      rack_type: network
+        - [2_CISCO_TORS_N9K-C9336C-FX2]
+    - index: 2
+      rack_type: tor
+      row_index: 1
+      shortname: muc-1-s-3-r-1-2
       pod: ["DC1", "1", "3"]
       parent: muc-1-s-3
       fabric_templates:
-        - [4_CISCO_LEAFS_N9K-C9336C-FX2]
-      member_of_groups:
-        - topologies_rack
-    - rack_name: "Rack-3-3-05"
-      shortname: "dc1-r-3-3-05c"
-      index: 3
-      row: C
-      rack_type: network
+        - [2_CISCO_TORS_N9K-C9336C-FX2]
+    - index: 3
+      rack_type: tor
+      row_index: 1
+      shortname: muc-1-s-3-r-1-3
       pod: ["DC1", "1", "3"]
       parent: muc-1-s-3
       fabric_templates:
-        - [4_CISCO_LEAFS_N9K-C9336C-FX2]
-      member_of_groups:
-        - topologies_rack
-    - rack_name: "Rack-3-4-05"
-      shortname: "dc1-r-3-4-05d"
-      index: 4
-      row: D
-      rack_type: network
+        - [2_CISCO_TORS_N9K-C9336C-FX2]
+    - index: 4
+      rack_type: tor
+      row_index: 1
+      shortname: muc-1-s-3-r-1-4
       pod: ["DC1", "1", "3"]
       parent: muc-1-s-3
       fabric_templates:
-        - [4_CISCO_LEAFS_N9K-C9336C-FX2]
-      member_of_groups:
-        - topologies_rack
+        - [2_CISCO_TORS_N9K-C9336C-FX2]
+    - index: 5
+      rack_type: tor
+      row_index: 1
+      shortname: muc-1-s-3-r-1-5
+      pod: ["DC1", "1", "3"]
+      parent: muc-1-s-3
+      fabric_templates:
+        - [2_CISCO_TORS_N9K-C9336C-FX2]
+    - index: 6
+      rack_type: tor
+      row_index: 1
+      shortname: muc-1-s-3-r-1-6
+      pod: ["DC1", "1", "3"]
+      parent: muc-1-s-3
+      fabric_templates:
+        - [2_CISCO_TORS_N9K-C9336C-FX2]
+    # Row 2
+    - index: 1
+      rack_type: tor
+      row_index: 2
+      shortname: muc-1-s-3-r-2-1
+      pod: ["DC1", "1", "3"]
+      parent: muc-1-s-3
+      fabric_templates:
+        - [2_CISCO_TORS_N9K-C9336C-FX2]
+    - index: 2
+      rack_type: tor
+      row_index: 2
+      shortname: muc-1-s-3-r-2-2
+      pod: ["DC1", "1", "3"]
+      parent: muc-1-s-3
+      fabric_templates:
+        - [2_CISCO_TORS_N9K-C9336C-FX2]
+    - index: 3
+      rack_type: tor
+      row_index: 2
+      shortname: muc-1-s-3-r-2-3
+      pod: ["DC1", "1", "3"]
+      parent: muc-1-s-3
+      fabric_templates:
+        - [2_CISCO_TORS_N9K-C9336C-FX2]
+    - index: 4
+      rack_type: tor
+      row_index: 2
+      shortname: muc-1-s-3-r-2-4
+      pod: ["DC1", "1", "3"]
+      parent: muc-1-s-3
+      fabric_templates:
+        - [2_CISCO_TORS_N9K-C9336C-FX2]
+    - index: 5
+      rack_type: tor
+      row_index: 2
+      shortname: muc-1-s-3-r-2-5
+      pod: ["DC1", "1", "3"]
+      parent: muc-1-s-3
+      fabric_templates:
+        - [2_CISCO_TORS_N9K-C9336C-FX2]
+    - index: 6
+      rack_type: tor
+      row_index: 2
+      shortname: muc-1-s-3-r-2-6
+      pod: ["DC1", "1", "3"]
+      parent: muc-1-s-3
+      fabric_templates:
+        - [2_CISCO_TORS_N9K-C9336C-FX2]

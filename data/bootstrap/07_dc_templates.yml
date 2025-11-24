@@ -4,13 +4,12 @@ kind: Object
 spec:
   kind: TopologyDataCenterDesign
   data:
+    # ToR deployment patterns
     - name: S-Standard-ToR
       maximum_super_spines: 2
       maximum_spines: 2
       maximum_pods: 2
       maximum_leafs: 0
-      maximum_rack_leafs: 0
-      maximum_middle_racks: 0
       maximum_tors: 16
       naming_convention: standard
 
@@ -18,8 +17,6 @@ spec:
       maximum_spines: 2
       maximum_pods: 2
       maximum_leafs: 0
-      maximum_rack_leafs: 0
-      maximum_middle_racks: 0
       maximum_tors: 16
       naming_convention: hierarchical
 
@@ -27,8 +24,6 @@ spec:
       maximum_spines: 2
       maximum_pods: 2
       maximum_leafs: 0
-      maximum_rack_leafs: 0
-      maximum_middle_racks: 0
       maximum_tors: 16
       naming_convention: flat
 
@@ -36,18 +31,14 @@ spec:
       maximum_spines: 2
       maximum_pods: 2
       maximum_leafs: 0
-      maximum_rack_leafs: 0
-      maximum_middle_racks: 0
-      maximum_tors: 24
+      maximum_tors: 32
       naming_convention: flat
 
     - name: L-Flat-ToR
       maximum_spines: 4
       maximum_pods: 4
       maximum_leafs: 0
-      maximum_rack_leafs: 0
-      maximum_middle_racks: 0
-      maximum_tors: 60
+      maximum_tors: 64
       naming_convention: flat
 
     - name: XL-Flat-ToR
@@ -55,36 +46,29 @@ spec:
       maximum_spines: 4
       maximum_pods: 8
       maximum_leafs: 0
-      maximum_rack_leafs: 0
-      maximum_middle_racks: 0
-      maximum_tors: 60
+      maximum_tors: 128
       naming_convention: flat
 
+    # Middle Rack deployment patterns
     - name: S-Standard-MR
       maximum_spines: 2
       maximum_pods: 2
       maximum_leafs: 8
-      maximum_rack_leafs: 4
-      maximum_middle_racks: 2
-      maximum_tors: 16
+      maximum_tors: 8
       naming_convention: standard
 
     - name: M-Standard-MR
       maximum_spines: 2
       maximum_pods: 2
       maximum_leafs: 16
-      maximum_rack_leafs: 6
-      maximum_middle_racks: 4
-      maximum_tors: 24
+      maximum_tors: 16
       naming_convention: standard
 
     - name: L-Standard-MR
       maximum_spines: 4
       maximum_pods: 4
       maximum_leafs: 32
-      maximum_rack_leafs: 8
-      maximum_middle_racks: 8
-      maximum_tors: 96
+      maximum_tors: 32
       naming_convention: standard
 
     - name: XL-Standard-MR
@@ -92,26 +76,20 @@ spec:
       maximum_spines: 4
       maximum_pods: 8
       maximum_leafs: 64
-      maximum_rack_leafs: 8
-      maximum_middle_racks: 16
-      maximum_tors: 192
+      maximum_tors: 64
       naming_convention: standard
 
     - name: S-Hierarchical-MR
       maximum_spines: 2
       maximum_pods: 2
       maximum_leafs: 8
-      maximum_rack_leafs: 4
-      maximum_middle_racks: 2
-      maximum_tors: 16
+      maximum_tors: 8
       naming_convention: hierarchical
 
     - name: M-Hierarchical-MR
       maximum_spines: 2
       maximum_pods: 2
       maximum_leafs: 16
-      maximum_rack_leafs: 6
-      maximum_middle_racks: 4
       maximum_tors: 16
       naming_convention: hierarchical
 
@@ -119,9 +97,7 @@ spec:
       maximum_spines: 4
       maximum_pods: 4
       maximum_leafs: 32
-      maximum_rack_leafs: 8
-      maximum_middle_racks: 8
-      maximum_tors: 96
+      maximum_tors: 32
       naming_convention: hierarchical
 
     - name: XL-Hierarchical-MR
@@ -129,26 +105,20 @@ spec:
       maximum_spines: 4
       maximum_pods: 8
       maximum_leafs: 64
-      maximum_rack_leafs: 8
-      maximum_middle_racks: 16
-      maximum_tors: 192
+      maximum_tors: 64
       naming_convention: hierarchical
 
     - name: S-Flat-MR
       maximum_spines: 2
       maximum_pods: 2
       maximum_leafs: 8
-      maximum_rack_leafs: 4
-      maximum_middle_racks: 2
-      maximum_tors: 16
+      maximum_tors: 8
       naming_convention: flat
 
     - name: M-Flat-MR
       maximum_spines: 2
       maximum_pods: 2
       maximum_leafs: 16
-      maximum_rack_leafs: 6
-      maximum_middle_racks: 4
       maximum_tors: 16
       naming_convention: flat
 
@@ -156,9 +126,7 @@ spec:
       maximum_spines: 4
       maximum_pods: 4
       maximum_leafs: 32
-      maximum_rack_leafs: 8
-      maximum_middle_racks: 8
-      maximum_tors: 96
+      maximum_tors: 32
       naming_convention: flat
 
     - name: XL-Flat-MR
@@ -166,36 +134,29 @@ spec:
       maximum_spines: 4
       maximum_pods: 8
       maximum_leafs: 64
-      maximum_rack_leafs: 8
-      maximum_middle_racks: 16
-      maximum_tors: 192
+      maximum_tors: 64
       naming_convention: flat
 
+    # Mixed deployment patterns
     - name: S-Standard-Mixed
       maximum_spines: 2
       maximum_pods: 2
       maximum_leafs: 8
-      maximum_rack_leafs: 4
-      maximum_middle_racks: 2
-      maximum_tors: 8
+      maximum_tors: 16
       naming_convention: standard
 
     - name: M-Standard-Mixed
       maximum_spines: 2
       maximum_pods: 2
       maximum_leafs: 16
-      maximum_rack_leafs: 6
-      maximum_middle_racks: 4
-      maximum_tors: 24
+      maximum_tors: 32
       naming_convention: standard
 
     - name: L-Standard-Mixed
       maximum_spines: 4
       maximum_pods: 4
       maximum_leafs: 32
-      maximum_rack_leafs: 8
-      maximum_middle_racks: 8
-      maximum_tors: 96
+      maximum_tors: 64
       naming_convention: standard
 
     - name: XL-Standard-Mixed
@@ -203,36 +164,28 @@ spec:
       maximum_spines: 4
       maximum_pods: 8
       maximum_leafs: 64
-      maximum_rack_leafs: 8
-      maximum_middle_racks: 16
-      maximum_tors: 192
+      maximum_tors: 128
       naming_convention: standard
 
     - name: S-Hierarchical-Mixed
       maximum_spines: 2
       maximum_pods: 2
       maximum_leafs: 8
-      maximum_rack_leafs: 4
-      maximum_middle_racks: 2
-      maximum_tors: 8
+      maximum_tors: 16
       naming_convention: hierarchical
 
     - name: M-Hierarchical-Mixed
       maximum_spines: 2
       maximum_pods: 2
       maximum_leafs: 16
-      maximum_rack_leafs: 6
-      maximum_middle_racks: 4
-      maximum_tors: 16
+      maximum_tors: 32
       naming_convention: hierarchical
 
     - name: L-Hierarchical-Mixed
       maximum_spines: 4
       maximum_pods: 4
       maximum_leafs: 32
-      maximum_rack_leafs: 8
-      maximum_middle_racks: 8
-      maximum_tors: 96
+      maximum_tors: 64
       naming_convention: hierarchical
 
     - name: XL-Hierarchical-Mixed
@@ -240,27 +193,21 @@ spec:
       maximum_spines: 4
       maximum_pods: 8
       maximum_leafs: 64
-      maximum_rack_leafs: 8
-      maximum_middle_racks: 16
-      maximum_tors: 192
+      maximum_tors: 128
       naming_convention: hierarchical
 
     - name: S-Flat-Mixed
       maximum_spines: 2
       maximum_pods: 2
       maximum_leafs: 8
-      maximum_rack_leafs: 4
-      maximum_middle_racks: 2
-      maximum_tors: 8
+      maximum_tors: 16
       naming_convention: flat
 
     - name: M-Flat-Mixed
       maximum_spines: 2
       maximum_pods: 2
       maximum_leafs: 16
-      maximum_rack_leafs: 6
-      maximum_middle_racks: 4
-      maximum_tors: 24
+      maximum_tors: 32
       naming_convention: flat
 
     - name: XL-Flat-Mixed
@@ -268,7 +215,5 @@ spec:
       maximum_spines: 4
       maximum_pods: 8
       maximum_leafs: 64
-      maximum_rack_leafs: 8
-      maximum_middle_racks: 16
-      maximum_tors: 192
+      maximum_tors: 128
       naming_convention: flat
