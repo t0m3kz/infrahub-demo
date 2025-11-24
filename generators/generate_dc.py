@@ -87,7 +87,7 @@ class DCTopologyGenerator(CommonGenerator):
             template=super_spine_template.model_dump(),
             naming_convention=cast(
                 Literal["standard", "hierarchical", "flat"],
-                design.naming_convention.lower(),
+                (design.naming_convention or "standard").lower(),
             ),
             options={
                 "name_prefix": dc_name,

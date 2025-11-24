@@ -4,91 +4,88 @@ kind: Object
 spec:
   kind: LocationRack
   data:
-    - rack_name: "Rack-1-1-05"
-      shortname: "dc10-r-1-1-05a"
-      index: 1
-      row: A
+    # Pod 1 - Mixed deployment
+    # Row 1: network rack (index 5) + 2 tor racks (index 1, 11)
+    - index: 5
+      row_index: 1
       rack_type: network
-      pod: ["DC10", "10", "1"]
-      parent: syd-1-s-1
+      pod: ["DC11", "1", "1"]
+      parent: ams-1-s-1
       fabric_templates:
-        - [2_DELL_LEAFS_PowerSwitch-S5224F-ON]
-      member_of_groups:
-        - topologies_rack
-    - rack_name: "Rack-1-2-05"
-      shortname: "dc10-r-1-2-05b"
-      index: 2
-      row: B
+        - [2_EDGECORE_LEAFS_MR_Edgecore-7726_32X_O]
+    - index: 1
+      row_index: 1
+      rack_type: tor
+      pod: ["DC11", "1", "1"]
+      parent: ams-1-s-1
+      fabric_templates:
+        - [2_EDGECORE_TORS_Edgecore-7AS7326-56X-O-48V-F]
+    - index: 10
+      row_index: 1
+      rack_type: tor
+      pod: ["DC11", "1", "1"]
+      parent: ams-1-s-1
+      fabric_templates:
+        - [2_EDGECORE_TORS_Edgecore-7AS7326-56X-O-48V-F]
+
+    # Row 2: network rack (index 5)
+    - index: 5
+      row_index: 2
       rack_type: network
-      pod: ["DC10", "10", "1"]
-      parent: syd-1-s-1
+      pod: ["DC11", "1", "1"]
+      parent: ams-1-s-1
       fabric_templates:
-        - [4_DELL_LEAFS_PowerSwitch-S5248F-ON]
-      member_of_groups:
-        - topologies_rack
-    - rack_name: "Rack-1-3-05"
-      shortname: "dc10-r-1-3-05c"
-      index: 3
-      row: C
+        - [2_EDGECORE_LEAFS_MR_Edgecore-7726_32X_O]
+
+    # Pod 2 - ToR deployment (all tor racks, no leafs)
+    # Row 1: 2 tor racks (index 1, 2)
+    - index: 1
+      row_index: 1
+      rack_type: tor
+      pod: ["DC11", "1", "2"]
+      parent: ams-1-s-2
+      fabric_templates:
+        - [2_EDGECORE_TORS_Edgecore-7AS7326-56X-O-48V-F]
+    - index: 2
+      row_index: 1
+      rack_type: tor
+      pod: ["DC11", "1", "2"]
+      parent: ams-1-s-2
+      fabric_templates:
+        - [2_EDGECORE_TORS_Edgecore-7AS7326-56X-O-48V-F]
+    # Row 2: 1 tor rack (index 1)
+    - index: 1
+      row_index: 2
+      rack_type: tor
+      pod: ["DC11", "1", "2"]
+      parent: ams-1-s-2
+      fabric_templates:
+        - [2_EDGECORE_TORS_Edgecore-7AS7326-56X-O-48V-F]
+    # Row 3: 1 tor rack (index 1)
+    - index: 1
+      row_index: 3
+      rack_type: tor
+      pod: ["DC11", "1", "2"]
+      parent: ams-1-s-2
+      fabric_templates:
+        - [2_EDGECORE_TORS_Edgecore-7AS7326-56X-O-48V-F]
+
+    # Pod 3 - Middle Rack deployment (network racks with local leafs+tors)
+    # Row 1: network rack (index 1)
+    - index: 1
+      row_index: 1
       rack_type: network
-      pod: ["DC10", "10", "1"]
-      parent: syd-1-s-1
+      pod: ["DC11", "1", "3"]
+      parent: ams-1-s-3
       fabric_templates:
-        - [2_DELL_LEAFS_PowerSwitch-S5224F-ON]
-      member_of_groups:
-        - topologies_rack
-    - rack_name: "Rack-1-4-05"
-      shortname: "dc10-r-1-4-05d"
-      index: 4
-      row: D
+        - [2_EDGECORE_LEAFS_MR_Edgecore-7726_32X_O]
+        - [2_EDGECORE_TORS_Edgecore-7AS7326-56X-O-48V-F]
+    # Row 2: network rack (index 2)
+    - index: 2
+      row_index: 2
       rack_type: network
-      pod: ["DC10", "10", "1"]
-      parent: syd-1-s-1
+      pod: ["DC11", "1", "3"]
+      parent: ams-1-s-3
       fabric_templates:
-        - [4_DELL_LEAFS_PowerSwitch-S5248F-ON]
-      member_of_groups:
-        - topologies_rack
-    - rack_name: "Rack-2-1-05"
-      shortname: "dc10-r-2-1-05a"
-      index: 1
-      row: A
-      rack_type: network
-      pod: ["DC10", "10", "2"]
-      parent: syd-1-s-2
-      fabric_templates:
-        - [2_DELL_LEAFS_PowerSwitch-S5224F-ON]
-      member_of_groups:
-        - topologies_rack
-    - rack_name: "Rack-2-2-05"
-      shortname: "dc10-r-2-2-05b"
-      index: 2
-      row: B
-      rack_type: network
-      pod: ["DC10", "10", "2"]
-      parent: syd-1-s-2
-      fabric_templates:
-        - [4_DELL_LEAFS_PowerSwitch-S5248F-ON]
-      member_of_groups:
-        - topologies_rack
-    - rack_name: "Rack-2-3-05"
-      shortname: "dc10-r-2-3-05c"
-      index: 3
-      row: C
-      rack_type: network
-      pod: ["DC10", "10", "2"]
-      parent: syd-1-s-2
-      fabric_templates:
-        - [2_DELL_LEAFS_PowerSwitch-S5224F-ON]
-      member_of_groups:
-        - topologies_rack
-    - rack_name: "Rack-2-4-05"
-      shortname: "dc10-r-2-4-05d"
-      index: 4
-      row: D
-      rack_type: network
-      pod: ["DC10", "10", "2"]
-      parent: syd-1-s-2
-      fabric_templates:
-        - [4_DELL_LEAFS_PowerSwitch-S5248F-ON]
-      member_of_groups:
-        - topologies_rack
+        - [2_EDGECORE_LEAFS_MR_Edgecore-7726_32X_O]
+        - [2_EDGECORE_TORS_Edgecore-7AS7326-56X-O-48V-F]

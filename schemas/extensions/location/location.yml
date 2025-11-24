@@ -7,6 +7,8 @@ nodes:
     label: Region
     inherit_from:
       - LocationGeneric
+    uniqueness_constraints:
+      - ["name__value"]
     menu_placement: LocationGeneric
     include_in_menu: false
     display_label: "{{name__value}}"
@@ -18,6 +20,8 @@ nodes:
     inherit_from:
       - LocationGeneric
     menu_placement: LocationGeneric
+    uniqueness_constraints:
+      - ["name__value"]
     include_in_menu: false
     display_label: "{{name__value}}"
     parent: "LocationRegion"
@@ -104,9 +108,11 @@ nodes:
       - GeneratorTarget
     include_in_menu: false
     menu_placement: "LocationGeneric"
-    label: Rack
     parent: "LocationSuite"
     children: ""
+    uniqueness_constraints:
+      - ["name__value"]
+    label: Rack
     icon: "clarity:rack-server-line"
     display_label: "{{ name__value }}"
     attributes:
@@ -114,14 +120,7 @@ nodes:
         kind: Text
         computed_attribute:
           kind: Jinja2
-          jinja2_template: "{{parent__shortname__value|upper}}-R{{row_index__value}}-{{index__value}}"  # yamllint disable-line rule:line-length
-        read_only: true
-        optional: false
-      - name: shortname
-        kind: Text
-        computed_attribute:
-          kind: Jinja2
-          jinja2_template: "{{parent__shortname__value}}-{{row_index__value}}-{{index__value}}"  # yamllint disable-line rule:line-length
+          jinja2_template: "{{parent__name__value|upper}}-R{{row_index__value}}-{{index__value}}"  # yamllint disable-line rule:line-length
         read_only: true
         optional: false
       - name: index
@@ -161,7 +160,7 @@ nodes:
         kind: Attribute
         cardinality: one
         identifier: "rack__pod"
-        optional: false
+        optional: true
       - name: devices
         peer: DcimPhysicalDevice
         optional: true

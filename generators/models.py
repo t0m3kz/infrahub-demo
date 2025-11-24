@@ -23,14 +23,14 @@ class Interface(BaseModel):
 
 
 class DesignPattern(BaseModel):
+    """Data Center design pattern - DC-level parameters only."""
+
     maximum_super_spines: Optional[int] = None
     maximum_pods: Optional[int] = None
     maximum_spines: Optional[int] = None
     maximum_leafs: Optional[int] = None
-    maximum_middle_racks: Optional[int] = None
     maximum_tors: Optional[int] = None
-    naming_convention: str = "flat"
-    maximum_rack_leafs: Optional[int] = None
+    naming_convention: str = "standard"
 
 
 class Template(BaseModel):
@@ -40,9 +40,19 @@ class Template(BaseModel):
     interfaces: List[Interface] = []
 
 
+class DeviceRack(BaseModel):
+    """Rack information for device location."""
+
+    id: str
+    index: int
+    row_index: int
+
+
 class Device(BaseModel):
     name: str
     role: Optional[str] = None
+    rack: Optional[DeviceRack] = None  # For leaf devices in mixed deployment
+    interfaces: List[Interface] = []
 
 
 class Pool(BaseModel):
@@ -83,6 +93,9 @@ class PodModel(BaseModel):
     index: int
     deployment_type: str
     amount_of_spines: int
+    number_of_rows: Optional[int] = 1
+    maximum_leafs_per_row: Optional[int] = None
+    maximum_tors_per_row: Optional[int] = None
     leaf_interface_sorting_method: str
     spine_interface_sorting_method: str
     spine_template: Template
@@ -107,11 +120,26 @@ class RackParent(BaseModel):
     design_pattern: DesignPattern
 
 
+class QuantityOnly(BaseModel):
+    """Minimal model for offset calculation - only quantity needed."""
+
+    quantity: int
+
+
+class SimpleRack(BaseModel):
+    """Simplified rack data for offset calculation."""
+
+    id: str
+    index: int
+    row_index: int
+    leafs: Optional[List[QuantityOnly]] = []
+    tors: Optional[List[QuantityOnly]] = []
+
+
 class RackPod(BaseModel):
     id: str
     name: str
     index: int
-    spine_devices: List[Device]  # Filtered spine devices from query
     parent: RackParent
     amount_of_spines: int
     leaf_interface_sorting_method: str
@@ -120,6 +148,9 @@ class RackPod(BaseModel):
     prefix_pool: Pool
     deployment_type: str
     spine_template: Template
+    maximum_leafs_per_row: Optional[int] = None
+    maximum_tors_per_row: Optional[int] = None
+    # Spine and leaf devices queried separately when needed (on-demand for specific deployment types)
 
 
 class RackModel(BaseModel):
@@ -128,7 +159,7 @@ class RackModel(BaseModel):
     checksum: str
     index: int
     rack_type: str
-    row: str
+    row_index: int
     leafs: Optional[List[DeviceRole]] = []
     tors: Optional[List[DeviceRole]] = []
     pod: RackPod

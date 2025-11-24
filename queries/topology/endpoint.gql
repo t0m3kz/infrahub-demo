@@ -17,7 +17,7 @@ query GetEndpointForConnectivity($endpoint_id: ID!) {
               name {
                 value
               }
-              row{
+              row_index{
                 value
               }
               # Get all devices in the same rack

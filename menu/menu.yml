@@ -58,6 +58,13 @@ spec:
                   icon: "mdi:vector-arrange-above"
                   description: "Data center design templates and patterns"
 
+                - name: RackDesign
+                  namespace: Topology
+                  label: Rack Configuration Patterns
+                  kind: TopologyRackDesign
+                  icon: "mdi:server-network"
+                  description: "Rack deployment patterns (device types, quantities, cabling)"
+
                 - name: PopDesign
                   namespace: Topology
                   label: PoP Templates

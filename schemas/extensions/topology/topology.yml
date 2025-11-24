@@ -79,24 +79,13 @@ generics:
         kind: Text
         unique: true
         order_weight: 100
-      - name: naming_convention
-        order_weight: 500
-        label: "Naming Convention"
-        kind: Dropdown
-        choices:
-          - name: standard
-            label: Standard
-          - name: hierarchical
-            label: Hierarchical
-          - name: flat
-            label: Flat
 
 nodes:
   # --------------------  Elements  --------------------
   - name: DataCenterDesign
     namespace: Topology
-    description: "Design aspect of topology elements."
-    label: "Topology Design"
+    description: "Design aspect for data center topology - DC-level parameters only"
+    label: "Data Center Design"
     inherit_from:
       - TopologyDesign
     attributes:
@@ -130,24 +119,29 @@ nodes:
         kind: Number
         default_value: 16
         optional: false
-      - name: maximum_middle_racks
-        order_weight: 420
-        label: "Maximum Middle Racks per Pod"
-        kind: Number
-        default_value: 2
-        optional: false
-      - name: maximum_rack_leafs
-        order_weight: 450
-        label: "Maximum Leaf Switches per Rack"
-        kind: Number
-        default_value: 4
-        optional: false
       - name: maximum_tors
-        order_weight: 460
-        label: "Maximum ToR Switches."
+        order_weight: 450
+        label: "Maximum ToR Switches per Pod"
         kind: Number
-        default_value: 16
+        default_value: 32
         optional: false
+        description: "Maximum number of Top-of-Rack switches across all racks in a pod"
+      - name: naming_convention
+        order_weight: 500
+        label: "Device Naming Convention"
+        kind: Dropdown
+        default_value: standard
+        optional: true
+        choices:
+          - name: standard
+            label: Standard
+            description: "Standard device naming (e.g., DC1-1-R01-L01)"
+          - name: hierarchical
+            label: Hierarchical
+            description: "Hierarchical naming with full path"
+          - name: flat
+            label: Flat
+            description: "Flat naming without hierarchy"
     relationships:
       - name: deployments
         peer: TopologyDataCenter
@@ -384,6 +378,34 @@ nodes:
         parameters:
           min_value: 1
           max_value: 4
+      - name: number_of_rows
+        order_weight: 1050
+        label: "Number of Rows"
+        description: "Number of rack rows in this pod (for layout planning)"
+        kind: Number
+        default_value: 1
+        optional: true
+        parameters:
+          min_value: 1
+          max_value: 20
+      - name: maximum_leafs_per_row
+        order_weight: 1110
+        label: "Maximum Leafs per Row"
+        description: "Maximum leaf switches per row for cabling offset calculation"
+        kind: Number
+        optional: true
+        parameters:
+          min_value: 0
+          max_value: 100
+      - name: maximum_tors_per_row
+        order_weight: 1120
+        label: "Maximum ToRs per Row"
+        description: "Maximum ToR switches per row for cabling offset calculation"
+        kind: Number
+        optional: true
+        parameters:
+          min_value: 0
+          max_value: 100
       - name: deployment_type
         kind: Dropdown
         optional: false

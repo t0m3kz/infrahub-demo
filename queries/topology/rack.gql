@@ -44,6 +44,84 @@ fragment FabricTemplateFields on TopologyElement {
   }
 }
 
+fragment PodFields on TopologyPod {
+  id
+  name {
+    value
+  }
+  index {
+    value
+  }
+  parent {
+    node {
+      ... on TopologyDataCenter {
+        id
+        name {
+          value
+        }
+        index {
+          value
+        }
+        design_pattern {
+          node {
+            naming_convention {
+              value
+            }
+            maximum_leafs {
+              value
+            }
+            maximum_tors {
+              value
+            }
+          }
+        }
+      }
+    }
+  }
+  amount_of_spines {
+    value
+  }
+  maximum_leafs_per_row {
+    value
+  }
+  maximum_tors_per_row {
+    value
+  }
+  leaf_interface_sorting_method {
+    value
+  }
+  spine_interface_sorting_method {
+    value
+  }
+  loopback_pool {
+    node {
+      id
+    }
+  }
+  prefix_pool {
+    node {
+      id
+    }
+  }
+  deployment_type {
+    value
+  }
+  spine_template {
+    node {
+      id
+      interfaces(role__value: "leaf") {
+        edges {
+          node {
+            name {
+              value
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
 query RackGenerator($name: String!) {
   LocationRack(name__value: $name) {
     edges {
@@ -61,7 +139,7 @@ query RackGenerator($name: String!) {
         rack_type {
           value
         }
-        row {
+        row_index {
           value
         }
         leafs: fabric_templates(role__value: "leaf") {
@@ -78,116 +156,9 @@ query RackGenerator($name: String!) {
             }
           }
         }
-        leafs_in_rack: devices(role__value: "leaf"){
-          edges{
-            node{
-              name{
-                value
-              }
-              interfaces(role__value: "leaf"){
-                edges{
-                  node{
-                    name{
-                      value
-                    }
-                  }
-                }
-              }
-            }
-          }
-        }
         pod {
           node {
-            id
-            name {
-              value
-            }
-            index {
-              value
-            }
-            spine_devices: devices(role__value: "spine"){
-              edges{
-                node{
-                  name{
-                    value
-                  }
-                  interfaces(role__value: "leaf"){
-                    edges{
-                      node{
-                        name{
-                          value
-                        }
-                      }
-                    }
-                  }
-                }
-              }
-            }
-            parent {
-              node {
-                ... on TopologyDataCenter {
-                  id
-                  name {
-                    value
-                  }
-                  index {
-                    value
-                  }
-                  design_pattern {
-                    node {
-                      naming_convention {
-                        value
-                      }
-                      maximum_rack_leafs {
-                        value
-                      }
-                      maximum_tors {
-                        value
-                      }
-                      maximum_middle_racks {
-                        value
-                      }
-                    }
-                  }
-                }
-              }
-            }
-            amount_of_spines {
-              value
-            }
-            leaf_interface_sorting_method {
-              value
-            }
-            spine_interface_sorting_method {
-              value
-            }
-            loopback_pool {
-              node {
-                id
-              }
-            }
-            prefix_pool {
-              node {
-                id
-              }
-            }
-            deployment_type {
-              value
-            }
-            spine_template {
-              node {
-                id
-                interfaces(role__value: "leaf") {
-                  edges {
-                    node {
-                      name {
-                        value
-                      }
-                    }
-                  }
-                }
-              }
-            }
+            ...PodFields
           }
         }
       }

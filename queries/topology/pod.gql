@@ -34,7 +34,6 @@ fragment DesignPatternFields on TopologyDataCenterDesign {
   maximum_pods { value }
   maximum_spines { value }
   maximum_leafs { value }
-  maximum_middle_racks { value }
   maximum_tors { value }
   naming_convention { value }
 }
@@ -63,6 +62,9 @@ query PodGeneratorQuery($name: String!) {
         index { value }
         deployment_type { value }
         amount_of_spines { value }
+        number_of_rows { value }
+        maximum_leafs_per_row { value }
+        maximum_tors_per_row { value }
         leaf_interface_sorting_method { value }
         spine_interface_sorting_method { value }
         spine_template { node { ...DeviceTemplateFields } }

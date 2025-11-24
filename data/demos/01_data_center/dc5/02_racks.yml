@@ -4,172 +4,31 @@ kind: Object
 spec:
   kind: LocationRack
   data:
-    # ["DC5", "1", "1"]: Cisco NXOS N9K leafs
-    - rack_name: "Rack-1-1-05"
-      shortname: "dc5-r-1-1-05a"
-      index: 1
-      row: A
+    - index: 1
       rack_type: network
       pod: ["DC5", "1", "1"]
       parent: ny-1-s-1
       fabric_templates:
-        - [4_CISCO_LEAFS_N9K-C9336C-FX2]
-      member_of_groups:
-        - topologies_rack
-    - rack_name: "Rack-1-2-05"
-      shortname: "dc5-r-1-2-05b"
-      index: 2
-      row: B
+        - [2_CISCO_LEAFS_MR_N9K-C9336C-FX2]
+        - [2_CISCO_TORS_N9K-C9336C-FX2]
+    - index: 1
       rack_type: network
       pod: ["DC5", "1", "1"]
       parent: ny-1-s-1
       fabric_templates:
-        - [4_CISCO_LEAFS_N9K-C9336C-FX2]
-      member_of_groups:
-        - topologies_rack
-    - rack_name: "Rack-1-3-05"
-      shortname: "dc5-r-1-3-05c"
-      index: 3
-      row: C
-      rack_type: network
-      pod: ["DC5", "1", "1"]
-      parent: ny-1-s-1
-      fabric_templates:
-        - [4_CISCO_LEAFS_N9K-C9336C-FX2]
-      member_of_groups:
-        - topologies_rack
-    - rack_name: "Rack-1-4-05"
-      shortname: "dc5-r-1-4-05d"
-      index: 4
-      row: D
-      rack_type: network
-      pod: ["DC5", "1", "1"]
-      parent: ny-1-s-1
-      fabric_templates:
-        - [4_CISCO_LEAFS_N9K-C9336C-FX2]
-      member_of_groups:
-        - topologies_rack
-    # ["DC5", "1", "2"]: Arista EOS leafs
-    - rack_name: "Rack-2-1-05"
-      shortname: "dc5-r-2-1-05a"
-      index: 1
-      row: A
+        - [2_CISCO_LEAFS_MR_N9K-C9336C-FX2]
+        - [2_CISCO_TORS_N9K-C9336C-FX2]
+    - index: 1
       rack_type: network
       pod: ["DC5", "1", "2"]
       parent: ny-1-s-2
       fabric_templates:
-        - [2_ARISTA_LEAFS_DCS-7050CX3-32C-R]
-      member_of_groups:
-        - topologies_rack
-    - rack_name: "Rack-2-2-05"
-      shortname: "dc5-r-2-2-05b"
-      index: 2
-      row: B
+        - [2_CISCO_LEAFS_MR_N9K-C9336C-FX2]
+        - [2_CISCO_TORS_N9K-C9336C-FX2]
+    - index: 1
       rack_type: network
       pod: ["DC5", "1", "2"]
       parent: ny-1-s-2
       fabric_templates:
-        - [2_ARISTA_LEAFS_DCS-7050CX3-32C-R]
-      member_of_groups:
-        - topologies_rack
-    - rack_name: "Rack-2-3-05"
-      shortname: "dc5-r-2-3-05c"
-      index: 3
-      row: C
-      rack_type: network
-      pod: ["DC5", "1", "2"]
-      parent: ny-1-s-2
-      fabric_templates:
-        - [4_ARISTA_LEAFS_DCS-7050CX4M-48D8-F]
-      member_of_groups:
-        - topologies_rack
-    - rack_name: "Rack-2-4-05"
-      shortname: "dc5-r-2-4-05d"
-      index: 4
-      row: D
-      rack_type: network
-      pod: ["DC5", "1", "2"]
-      parent: ny-1-s-2
-      fabric_templates:
-        - [4_ARISTA_LEAFS_DCS-7050CX4M-48D8-F]
-      member_of_groups:
-        - topologies_rack
-    # ["DC5", "1", "3"]: Dell Sonic leafs
-    - rack_name: "Rack-3-1-05"
-      shortname: "dc5-r-3-1-05a"
-      index: 1
-      row: A
-      rack_type: network
-      pod: ["DC5", "1", "3"]
-      parent: ny-1-s-3
-      fabric_templates:
-        - [4_DELL_LEAFS_PowerSwitch-S5248F-ON]
-      member_of_groups:
-        - topologies_rack
-    - rack_name: "Rack-3-2-05"
-      shortname: "dc5-r-3-2-05b"
-      index: 2
-      row: B
-      rack_type: network
-      pod: ["DC5", "1", "3"]
-      parent: ny-1-s-3
-      fabric_templates:
-        - [2_DELL_LEAFS_PowerSwitch-S5248F-ON]
-      member_of_groups:
-        - topologies_rack
-    - rack_name: "Rack-3-3-05"
-      shortname: "dc5-r-3-3-05c"
-      index: 3
-      row: C
-      rack_type: network
-      pod: ["DC5", "1", "3"]
-      parent: ny-1-s-3
-      fabric_templates:
-        - [2_DELL_LEAFS_PowerSwitch-S5248F-ON]
-      member_of_groups:
-        - topologies_rack
-    - rack_name: "Rack-3-4-05"
-      shortname: "dc5-r-3-4-05d"
-      index: 4
-      row: D
-      rack_type: network
-      pod: ["DC5", "1", "3"]
-      parent: ny-1-s-3
-      fabric_templates:
-        - [4_DELL_LEAFS_PowerSwitch-S5248F-ON]
-      member_of_groups:
-        - topologies_rack
-    # ["DC5", "1", "4"]: Edgecore Sonic leafs
-    - rack_name: "Rack-4-1-05"
-      shortname: "dc5-r-4-1-05a"
-      index: 1
-      row: A
-      rack_type: network
-      pod: ["DC5", "1", "4"]
-      parent: ny-1-s-4
-      fabric_templates:
-        - [4_EDGECORE_LEAFS_Edgecore-7AS7326-56X-O-48V-F]
-      member_of_groups:
-        - topologies_rack
-    - rack_name: "Rack-4-2-05"
-      shortname: "dc5-r-4-2-05b"
-      index: 2
-      row: B
-      rack_type: network
-      pod: ["DC5", "1", "4"]
-      parent: ny-1-s-4
-      fabric_templates:
-        - [4_EDGECORE_LEAFS_Edgecore-7AS7326-56X-O-48V-F]
-      member_of_groups:
-        - topologies_rack
-    - rack_name: "Rack-4-3-05"
-      shortname: "dc5-r-4-3-05c"
-      index: 3
-      row: C
-      rack_type: network
-      pod: ["DC5", "1", "4"]
-      parent: ny-1-s-4
-      fabric_templates:
-        - [4_EDGECORE_LEAFS_Edgecore-7AS7326-56X-O-48V-F]
-      member_of_groups:
-        - topologies_rack
+        - [2_CISCO_LEAFS_MR_N9K-C9336C-FX2]
+        - [2_CISCO_TORS_N9K-C9336C-FX2]

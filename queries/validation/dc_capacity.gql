@@ -23,9 +23,6 @@ query DataCenterCapacityValidation($name: String!) {
             maximum_leafs {
               value
             }
-            maximum_tors {
-              value
-            }
           }
         }
         children {

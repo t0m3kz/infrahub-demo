@@ -4,9 +4,12 @@ kind: Object
 spec:
   kind: LocationSuite
   data:
-    - suite_name: "Room-1"
-      shortname: "syd-1-r-1"
-      parent: syd-1
-    - suite_name: "Room-2"
-      shortname: "syd-1-r-2"
-      parent: syd-1
+    - suite_name: "Suite-1"
+      shortname: "ams-1-s-1"
+      parent: ams-1
+    - suite_name: "Suite-2"
+      shortname: "ams-1-s-2"
+      parent: ams-1
+    - suite_name: "Suite-3"
+      shortname: "ams-1-s-3"
+      parent: ams-1
