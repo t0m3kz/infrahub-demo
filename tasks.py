@@ -251,41 +251,6 @@ def deploy_dc(
     )
 
 
-@task(optional=["branch"])
-def list_scenarios(context: Context, branch: str = "main") -> None:
-    """List all available scenario data to load.
-
-    After loading, trigger generation in InfraHub UI.
-
-    Args:
-        branch: Branch to query (default: main)
-    """
-    scenarios = {
-        "dc1": "Large data center - Paris (Multiple Pods)",
-        "dc2": "Small-Medium data center - Frankfurt",
-        "dc3": "Medium data center - London",
-        "dc4": "Medium-Large data center - Amsterdam",
-        "dc5": "Large data center - New York",
-        "dc6": "Large data center - New York",
-    }
-
-    print("\n📍 Available Data Center Scenarios:\n")
-    for scenario, description in scenarios.items():
-        print(f"  • {scenario:8} - {description}")
-
-    print("\n💡 Workflow:\n")
-    print("  1. Load scenario data:")
-    print("     invoke deploy-dc --scenario dc1 --branch dc1")
-    print("\n  2. Trigger generation in InfraHub UI:")
-    print("     Navigate to: Actions → Generator Definitions → generate_dc → Run")
-    print()
-
-
-# ============================================================================
-# Use Case: Quick Setup
-# ============================================================================
-
-
 @task
 def setup(context: Context) -> None:
     """Quick setup: start Infrahub, load schemas, menu, and bootstrap data.
@@ -347,24 +312,3 @@ def setup(context: Context) -> None:
     )
 
     print("6️⃣ Adding repository")
-
-
-@task
-def bootstrap(context: Context) -> None:
-    """Load bootstrap data into Infrahub.
-
-    Loads core bootstrap objects (locations, providers, groups, etc).
-    Separated from setup to allow independent control over infrastructure setup
-    vs data loading.
-
-    Usage:
-        invoke bootstrap              # Load to main branch
-        invoke bootstrap --branch my-branch  # Load to specific branch
-    """
-    print("\n📦 Loading bootstrap data...\n")
-
-    print("  1️⃣  Loading bootstrap objects...")
-    load_objects(context)
-
-    print("\n✅ Bootstrap data loaded!")
-    print("💡 Ready to load scenario data (invoke deploy-dc --scenario dc1)\n")
