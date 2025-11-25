@@ -43,6 +43,13 @@ spec:
       device_type: N9K-C9336C-FX2
       template: N9K_C9336C_FX2_LEAF_MR
 
+    - name: 2_CISCO_LEAFS_MIXED_N9K-C9336C-FX2
+      description: 2 Cisco C9336C-FX2 leafs
+      quantity: 2
+      role: leaf
+      device_type: N9K-C9336C-FX2
+      template: N9K_C9336C_FX2_LEAF_MIXED
+
     # Cisco ToR
     - name: 2_CISCO_TORS_N9K-C9336C-FX2
       description: 2 Cisco C9336C-FX2 leafs

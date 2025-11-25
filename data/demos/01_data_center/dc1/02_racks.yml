@@ -43,6 +43,14 @@ spec:
         - [4_CISCO_TORS_N9K-C9336C-FX2]
 
     # Pod 2 - Mixed Rack deployment (network racks with local leafs+tors)
+    - index: 1
+      row_index: 1
+      rack_type: tor
+      shortname: muc-1-s-2-r-1-1
+      pod: ["DC1", "1", "2"]
+      parent: muc-1-s-2
+      fabric_templates:
+        - [2_CISCO_TORS_N9K-C9336C-FX2]
     - index: 5
       row_index: 1
       rack_type: network
@@ -50,7 +58,15 @@ spec:
       pod: ["DC1", "1", "2"]
       parent: muc-1-s-2
       fabric_templates:
-        - [2_CISCO_LEAFS_MR_N9K-C9336C-FX2]
+        - [2_CISCO_LEAFS_MIXED_N9K-C9336C-FX2]
+    - index: 9
+      row_index: 1
+      rack_type: tor
+      shortname: muc-1-s-2-r-1-9
+      pod: ["DC1", "1", "2"]
+      parent: muc-1-s-2
+      fabric_templates:
+        - [2_CISCO_TORS_N9K-C9336C-FX2]
     - index: 5
       row_index: 2
       shortname: muc-1-s-2-r-2-5
@@ -58,8 +74,7 @@ spec:
       pod: ["DC1", "1", "2"]
       parent: muc-1-s-2
       fabric_templates:
-        - [4_CISCO_LEAFS_MR_N9K-C9336C-FX2]
-        - [4_CISCO_TORS_N9K-C9336C-FX2]
+        - [2_CISCO_LEAFS_MIXED_N9K-C9336C-FX2]
     - index: 5
       row_index: 3
       shortname: muc-1-s-2-r-3-5
@@ -67,8 +82,16 @@ spec:
       pod: ["DC1", "1", "2"]
       parent: muc-1-s-2
       fabric_templates:
-        - [4_CISCO_LEAFS_MR_N9K-C9336C-FX2]
-        - [4_CISCO_TORS_N9K-C9336C-FX2]
+        - [2_CISCO_LEAFS_MIXED_N9K-C9336C-FX2]
+
+    - index: 1
+      row_index: 4
+      rack_type: tor
+      shortname: muc-1-s-2-r-4-1
+      pod: ["DC1", "1", "2"]
+      parent: muc-1-s-2
+      fabric_templates:
+        - [2_CISCO_TORS_N9K-C9336C-FX2]
     - index: 5
       row_index: 4
       rack_type: network
@@ -76,8 +99,15 @@ spec:
       pod: ["DC1", "1", "2"]
       parent: muc-1-s-2
       fabric_templates:
-        - [4_CISCO_LEAFS_MR_N9K-C9336C-FX2]
-        - [4_CISCO_TORS_N9K-C9336C-FX2]
+        - [2_CISCO_LEAFS_MIXED_N9K-C9336C-FX2]
+    - index: 9
+      row_index: 4
+      rack_type: tor
+      shortname: muc-1-s-2-r-4-9
+      pod: ["DC1", "1", "2"]
+      parent: muc-1-s-2
+      fabric_templates:
+        - [2_CISCO_TORS_N9K-C9336C-FX2]
 
     # Pod 3 - ToR deployment (all tor racks, no leafs)
     # Row 1

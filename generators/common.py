@@ -333,6 +333,7 @@ class CommonGenerator(InfrahubGenerator):
             "hierarchical_rack",
             "intra_rack",
             "intra_rack_middle",
+            "intra_rack_mixed",
             "custom",
         ] = "rack",
         options: Optional[dict[str, Any]] = None,

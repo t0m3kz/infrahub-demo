@@ -6,10 +6,33 @@ from utils.data_cleaning import clean_data
 
 from .common import CommonGenerator
 from .models import RackModel
+from .schema_protocols import LocationRack
 
 
 class RackGenerator(CommonGenerator):
     """Generator for creating rack infrastructure based on fabric templates."""
+
+    async def update_checksum(self) -> None:
+        """Update checksum for racks in the pod with optional filtering."""
+
+        # Query racks, optionally filtered by rack_type
+        racks = await self.client.filters(
+            kind=LocationRack,
+            pod__ids=[self.data.pod.id],
+            row_index__value=self.data.row_index,
+            rack_type__value="tor",
+        )
+
+        for rack in racks:
+            # Skip if checksum already matches
+            if rack.checksum.value != self.data.checksum:
+                rack.checksum.value = self.data.checksum
+                await (
+                    rack.save()
+                )  # Don't use allow_upsert to avoid lifecycle management
+                self.logger.info(
+                    f"Rack {rack.name.value} (type={rack.rack_type.value}) has been updated to checksum {self.data.checksum}"
+                )
 
     async def _get_spine_devices(self, pod_id: str) -> tuple[list[str], list[str]]:
         """Query spine devices and their interfaces for leaf/tor-to-spine cabling.
@@ -196,6 +219,14 @@ class RackGenerator(CommonGenerator):
             self.data = RackModel(**deployment_list[0])
         except (ValueError, KeyError, IndexError) as exc:
             self.logger.error(f"Generation failed due to {exc}")
+            return
+
+        # Validate checksum is set (required for proper generation ordering in mixed deployments)
+        if not self.data.checksum:
+            self.logger.warning(
+                f"Rack {self.data.name} has no checksum set - skipping generation. "
+                "Checksum will be set by pod or middle rack generator."
+            )
             return
 
         self.logger.info(f"Generating topology for rack {self.data.name}")
@@ -422,6 +453,7 @@ class RackGenerator(CommonGenerator):
                     )
                 else:
                     # This is a ToR-only rack - connect to middle rack leafs in same row
+                    # Calculate offset based on ALL ToRs in previous racks within the same row
                     cabling_offset = self._calculate_cumulative_cabling_offset(
                         device_count=sum(
                             tor_role.quantity or 0 for tor_role in self.data.tors or []
@@ -439,7 +471,8 @@ class RackGenerator(CommonGenerator):
 
                     if leaf_device_names:
                         self.logger.info(
-                            f"Mixed deployment (ToR rack): Found {len(leaf_device_names)} middle rack leafs in row {self.data.row_index} for ToR cabling"
+                            f"Mixed deployment (ToR rack): Found {len(leaf_device_names)} middle rack leafs in row {self.data.row_index} for ToR cabling. "
+                            f"Using cabling_offset={cabling_offset} to account for {cabling_offset} ToRs from previous racks."
                         )
 
                         await self.create_cabling(
@@ -447,7 +480,7 @@ class RackGenerator(CommonGenerator):
                             bottom_interfaces=tor_interfaces,
                             top_devices=leaf_device_names,
                             top_interfaces=leaf_interfaces,
-                            strategy="rack",
+                            strategy="intra_rack_mixed",
                             options={
                                 "cabling_offset": cabling_offset,
                                 "top_sorting": pod.leaf_interface_sorting_method,
@@ -464,3 +497,8 @@ class RackGenerator(CommonGenerator):
                 self.logger.warning(
                     f"Unknown deployment_type '{deployment_type}' for rack {self.data.name}"
                 )
+
+        # For mixed deployment with middle rack: trigger ToR rack checksum updates
+        # This ensures ToR racks in the same row are generated after middle rack completes
+        if deployment_type == "mixed":
+            await self.update_checksum()

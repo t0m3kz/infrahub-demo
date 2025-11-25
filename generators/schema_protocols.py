@@ -31,34 +31,47 @@ if TYPE_CHECKING:
 
 class GeneratorTarget(CoreNode):
     checksum: StringOptional
+    member_of_groups: RelationshipManager
+    profiles: RelationshipManager
+    subscriber_of_groups: RelationshipManager
 
 
 class TopologyDeployment(CoreNode):
-    description: StringOptional
-    emulation: Boolean
+    index: Integer
     name: String
-    customer_subnet: RelatedNode
-    design: RelatedNode
+    children: RelationshipManager
     devices: RelationshipManager
-    location: RelatedNode
-    management_subnet: RelatedNode
+    member_of_groups: RelationshipManager
+    parent: RelatedNode
+    profiles: RelationshipManager
+    subscriber_of_groups: RelationshipManager
 
 
 class DcimEndpoint(CoreNode):
-    connector: RelatedNode
+    cable: RelatedNode
+    member_of_groups: RelationshipManager
+    profiles: RelationshipManager
+    subscriber_of_groups: RelationshipManager
 
 
 class LocationGeneric(CoreNode):
-    description: StringOptional
     name: String
     shortname: String
+    children: RelationshipManager
+    member_of_groups: RelationshipManager
+    parent: RelatedNode
+    profiles: RelationshipManager
+    subscriber_of_groups: RelationshipManager
     tags: RelationshipManager
 
 
 class OrganizationGeneric(CoreNode):
     description: StringOptional
     name: String
-    namespaces: RelationshipManager
+    asn: RelationshipManager
+    member_of_groups: RelationshipManager
+    profiles: RelationshipManager
+    subscriber_of_groups: RelationshipManager
     tags: RelationshipManager
 
 
@@ -81,14 +94,19 @@ class SecurityGenericAddressGroup(CoreNode):
 
 
 class DcimGenericDevice(CoreNode):
-    description: StringOptional
     name: String
     os_version: StringOptional
     role: DropdownOptional
     status: Dropdown
+    deployment: RelatedNode
+    device_services: RelationshipManager
+    device_type: RelatedNode
     interfaces: RelationshipManager
+    member_of_groups: RelationshipManager
     platform: RelatedNode
     primary_address: RelatedNode
+    profiles: RelationshipManager
+    subscriber_of_groups: RelationshipManager
     tags: RelationshipManager
 
 
@@ -96,10 +114,12 @@ class DcimGenericSFP(CoreNode):
     form_factor: Dropdown
     serial: StringOptional
     sfp_type: Dropdown
-    status: Dropdown
+    status: DropdownOptional
     interface: RelatedNode
     manufacturer: RelatedNode
-    spare_location: RelatedNode
+    member_of_groups: RelationshipManager
+    profiles: RelationshipManager
+    subscriber_of_groups: RelationshipManager
 
 
 class SecurityGenericService(CoreNode):
@@ -123,8 +143,12 @@ class DcimInterface(CoreNode):
     description: StringOptional
     name: String
     role: DropdownOptional
-    status: Dropdown
+    status: DropdownOptional
     device: RelatedNode
+    interface_services: RelationshipManager
+    member_of_groups: RelationshipManager
+    profiles: RelationshipManager
+    subscriber_of_groups: RelationshipManager
     tags: RelationshipManager
 
 
@@ -134,6 +158,9 @@ class NetworkManagementServer(CoreNode):
     status: Dropdown
     ip_addresses: RelationshipManager
     location: RelationshipManager
+    member_of_groups: RelationshipManager
+    profiles: RelationshipManager
+    subscriber_of_groups: RelationshipManager
 
 
 class SecurityPolicyAssignment(CoreNode):
@@ -149,7 +176,10 @@ class ServiceRoutingPolicy(CoreNode):
 
 
 class DcimSubInterface(CoreNode):
+    member_of_groups: RelationshipManager
+    profiles: RelationshipManager
     sub_interfaces: RelationshipManager
+    subscriber_of_groups: RelationshipManager
 
 
 class SecurityAddressGroup(SecurityGenericAddressGroup):
@@ -197,18 +227,36 @@ class ServiceBGPSession(ServiceGeneric):
 
 
 class DcimBidiSFP(DcimGenericSFP):
+    form_factor: Dropdown
+    serial: StringOptional
+    sfp_type: Dropdown
+    status: DropdownOptional
     wavelength_rx: Integer
     wavelength_tx: Integer
+    interface: RelatedNode
+    manufacturer: RelatedNode
+    member_of_groups: RelationshipManager
+    profiles: RelationshipManager
+    subscriber_of_groups: RelationshipManager
 
 
 class TopologyBranchOffice(CoreArtifactTarget, TopologyDeployment):
     owner: RelatedNode
 
 
-class LocationBuilding(LocationGeneric, LocationHosting):
+class LocationBuilding(LocationGeneric):
     facility_id: StringOptional
+    is_cloud: BooleanOptional
+    name: String
     physical_address: StringOptional
+    shortname: String
+    children: RelationshipManager
+    member_of_groups: RelationshipManager
     owner: RelatedNode
+    parent: RelatedNode
+    profiles: RelationshipManager
+    subscriber_of_groups: RelationshipManager
+    tags: RelationshipManager
 
 
 class TopologyColocationCenter(CoreArtifactTarget, TopologyDeployment):
@@ -216,16 +264,46 @@ class TopologyColocationCenter(CoreArtifactTarget, TopologyDeployment):
 
 
 class DcimConsoleInterface(DcimInterface, DcimEndpoint, CoreArtifactTarget):
-    port: Integer
-    speed: Integer
+    description: StringOptional
+    name: String
+    port: IntegerOptional
+    role: DropdownOptional
+    speed: IntegerOptional
+    status: DropdownOptional
+    artifacts: RelationshipManager
+    cable: RelatedNode
+    device: RelatedNode
+    interface_services: RelationshipManager
+    member_of_groups: RelationshipManager
+    profiles: RelationshipManager
+    subscriber_of_groups: RelationshipManager
+    tags: RelationshipManager
 
 
 class LocationCountry(LocationGeneric):
+    name: String
+    shortname: String
     timezone: StringOptional
+    children: RelationshipManager
+    member_of_groups: RelationshipManager
+    parent: RelatedNode
+    profiles: RelationshipManager
+    subscriber_of_groups: RelationshipManager
+    tags: RelationshipManager
 
 
 class OrganizationCustomer(OrganizationGeneric):
-    pass
+    customer_id: StringOptional
+    description: StringOptional
+    name: String
+    asn: RelationshipManager
+    ip_prefixes: RelationshipManager
+    member_of_groups: RelationshipManager
+    namespaces: RelationshipManager
+    profiles: RelationshipManager
+    subscriber_of_groups: RelationshipManager
+    tags: RelationshipManager
+    virtual_fabric_deployments: RelationshipManager
 
 
 class TopologyDataCenter(CoreArtifactTarget, TopologyDeployment):
@@ -248,33 +326,39 @@ class TopologyDataCenter(CoreArtifactTarget, TopologyDeployment):
 class TopologyPod(TopologyDeployment, GeneratorTarget):
     amount_of_spines: IntegerOptional
     checksum: StringOptional
+    deployment_type: DropdownOptional
     index: Integer
     leaf_interface_sorting_method: DropdownOptional
+    maximum_leafs_per_row: IntegerOptional
+    maximum_tors_per_row: IntegerOptional
     name: String
-    role: DropdownOptional
+    number_of_rows: IntegerOptional
     spine_interface_sorting_method: DropdownOptional
+    usage: StringOptional
     children: RelationshipManager
     devices: RelationshipManager
     loopback_pool: RelatedNode
     member_of_groups: RelationshipManager
     parent: RelatedNode
     prefix_pool: RelatedNode
-    management_pool: RelatedNode
     profiles: RelationshipManager
     racks: RelationshipManager
-    spine_switch_template: RelatedNode
+    spine_template: RelatedNode
     subscriber_of_groups: RelationshipManager
 
 
 class DcimDeviceType(CoreNode):
     description: StringOptional
-    full_depth: Boolean
-    height: Integer
+    full_depth: BooleanOptional
+    height: IntegerOptional
     name: String
     part_number: StringOptional
     weight: IntegerOptional
     manufacturer: RelatedNode
+    member_of_groups: RelationshipManager
     platform: RelatedNode
+    profiles: RelationshipManager
+    subscriber_of_groups: RelationshipManager
     tags: RelationshipManager
 
 
@@ -318,7 +402,14 @@ class SecurityIPAMIPPrefix(SecurityGenericAddress):
 
 
 class IpamIPAddress(BuiltinIPAddress):
+    address: IPHost
+    description: StringOptional
     fqdn: StringOptional
+    ip_namespace: RelatedNode
+    ip_prefix: RelatedNode
+    member_of_groups: RelationshipManager
+    profiles: RelationshipManager
+    subscriber_of_groups: RelationshipManager
 
 
 class SecurityIPAddress(SecurityGenericAddress):
@@ -350,11 +441,22 @@ class OrganizationManufacturer(CoreNode):
     description: StringOptional
     name: String
     device_type: RelationshipManager
+    member_of_groups: RelationshipManager
     platform: RelationshipManager
+    profiles: RelationshipManager
+    sfps: RelationshipManager
+    subscriber_of_groups: RelationshipManager
 
 
 class LocationMetro(LocationGeneric):
-    pass
+    name: String
+    shortname: String
+    children: RelationshipManager
+    member_of_groups: RelationshipManager
+    parent: RelatedNode
+    profiles: RelationshipManager
+    subscriber_of_groups: RelationshipManager
+    tags: RelationshipManager
 
 
 class NetworkNTPServer(NetworkManagementServer):
@@ -398,15 +500,16 @@ class DcimPhysicalDevice(CoreArtifactTarget, DcimGenericDevice):
     serial: StringOptional
     status: Dropdown
     artifacts: RelationshipManager
+    deployment: RelatedNode
     device_services: RelationshipManager
     device_type: RelatedNode
     interfaces: RelationshipManager
-    location: RelatedNode
     member_of_groups: RelationshipManager
     object_template: RelatedNode
     platform: RelatedNode
     primary_address: RelatedNode
     profiles: RelationshipManager
+    rack: RelatedNode
     subscriber_of_groups: RelationshipManager
     tags: RelationshipManager
 
@@ -440,6 +543,9 @@ class DcimPlatform(CoreNode):
     nornir_platform: StringOptional
     devices: RelationshipManager
     manufacturer: RelatedNode
+    member_of_groups: RelationshipManager
+    profiles: RelationshipManager
+    subscriber_of_groups: RelationshipManager
 
 
 class SecurityPolicy(CoreNode):
@@ -468,11 +574,27 @@ class SecurityPolicyRule(CoreNode):
 
 
 class IpamPrefix(BuiltinIPPrefix):
+    broadcast_address: StringOptional
+    description: StringOptional
+    hostmask: StringOptional
+    is_pool: BooleanOptional
+    is_top_level: BooleanOptional
+    member_type: DropdownOptional
+    netmask: StringOptional
+    network_address: StringOptional
+    prefix: IPNetwork
     role: DropdownOptional
-    status: Dropdown
+    status: DropdownOptional
+    utilization: IntegerOptional
+    children: RelationshipManager
     gateway: RelatedNode
-    location: RelatedNode
-    organization: RelatedNode
+    ip_addresses: RelationshipManager
+    ip_namespace: RelatedNode
+    member_of_groups: RelationshipManager
+    parent: RelatedNode
+    profiles: RelationshipManager
+    resource_pool: RelationshipManager
+    subscriber_of_groups: RelationshipManager
 
 
 class SecurityPrefix(SecurityGenericAddress):
@@ -481,17 +603,46 @@ class SecurityPrefix(SecurityGenericAddress):
 
 
 class OrganizationProvider(OrganizationGeneric):
-    pass
+    description: StringOptional
+    name: String
+    asn: RelationshipManager
+    asns: RelationshipManager
+    location: RelationshipManager
+    member_of_groups: RelationshipManager
+    profiles: RelationshipManager
+    subscriber_of_groups: RelationshipManager
+    tags: RelationshipManager
 
 
-class LocationRack(LocationGeneric, LocationHosting):
-    facility_id: StringOptional
-    owner: RelatedNode
+class LocationRack(LocationGeneric, GeneratorTarget):
     checksum: StringOptional
+    facility_id: StringOptional
+    index: Integer
+    name: String
+    rack_type: DropdownOptional
+    row_index: Integer
+    shortname: String
+    children: RelationshipManager
+    devices: RelationshipManager
+    fabric_templates: RelationshipManager
+    member_of_groups: RelationshipManager
+    owner: RelatedNode
+    parent: RelatedNode
+    pod: RelatedNode
+    profiles: RelationshipManager
+    subscriber_of_groups: RelationshipManager
+    tags: RelationshipManager
 
 
 class LocationRegion(LocationGeneric):
-    pass
+    name: String
+    shortname: String
+    children: RelationshipManager
+    member_of_groups: RelationshipManager
+    parent: RelatedNode
+    profiles: RelationshipManager
+    subscriber_of_groups: RelationshipManager
+    tags: RelationshipManager
 
 
 class SecurityRenderedPolicyRule(CoreNode):
@@ -536,12 +687,28 @@ class SecurityServiceRange(SecurityGenericService):
 
 
 class DcimStandardSFP(DcimGenericSFP):
-    pass
+    form_factor: Dropdown
+    serial: StringOptional
+    sfp_type: Dropdown
+    status: DropdownOptional
+    interface: RelatedNode
+    manufacturer: RelatedNode
+    member_of_groups: RelationshipManager
+    profiles: RelationshipManager
+    subscriber_of_groups: RelationshipManager
 
 
 class LocationSuite(LocationGeneric):
-    facility_id: StringOptional
+    name: String
+    shortname: String
+    suite_name: String
+    children: RelationshipManager
+    member_of_groups: RelationshipManager
     owner: RelatedNode
+    parent: RelatedNode
+    profiles: RelationshipManager
+    subscriber_of_groups: RelationshipManager
+    tags: RelationshipManager
 
 
 class DesignTopology(CoreArtifactTarget):
@@ -560,11 +727,11 @@ class DcimVirtualDevice(CoreArtifactTarget, DcimGenericDevice):
     status: Dropdown
     storage: IntegerOptional
     artifacts: RelationshipManager
+    deployment: RelatedNode
     device_services: RelationshipManager
     device_type: RelatedNode
     hosting_device: RelatedNode
     interfaces: RelationshipManager
-    location: RelatedNode
     member_of_groups: RelationshipManager
     object_template: RelatedNode
     platform: RelatedNode
@@ -581,7 +748,7 @@ class DcimVirtualInterface(DcimInterface):
     status: DropdownOptional
     device: RelatedNode
     interface_services: RelationshipManager
-    ip_address: RelatedNode
+    ip_addresses: RelationshipManager
     member_of_groups: RelationshipManager
     parent_interface: RelatedNode
     profiles: RelationshipManager

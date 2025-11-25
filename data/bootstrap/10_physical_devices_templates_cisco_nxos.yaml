@@ -143,6 +143,30 @@ spec:
             role: management
             interface_type: 1000base-t
 
+    - template_name: N9K_C9336C_FX2_LEAF_MIXED
+      device_type: N9K-C9336C-FX2
+      platform: cisco_nxos
+      role: leaf
+      status: provisioning
+      interfaces:
+        kind: TemplateDcimPhysicalInterface
+        parameters:
+          expand_range: true
+        data:
+          - template_name: N9K-C9336C-FX2_LEAF_MIXED_Ethernet1/[1-30]
+            name: Ethernet1/[1-30]
+            role: leaf
+            interface_type: 100gbase-x-qsfp28
+          - template_name: N9K-C9336C-FX2_LEAF_MIXED_Ethernet1/[31-36]
+            name: Ethernet1/[31-36]
+            role: uplink
+            interface_type: 100gbase-x-qsfp28
+          - template_name: N9K-C9336C-FX2_LEAF_MIXED_mgmt0
+            name: mgmt0
+            role: management
+            interface_type: 1000base-t
+
+
     - template_name: N9K_C9316D_GX_LEAF
       device_type: N9K-C9316D-GX
       platform: cisco_nxos

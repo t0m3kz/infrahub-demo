@@ -18,17 +18,13 @@ class PodTopologyGenerator(CommonGenerator):
     """
 
     async def update_checksum(self) -> None:
-        """Update checksum for all racks in the pod.
+        """Update checksum for racks in the pod with optional filtering."""
 
-        Compares the calculated checksum with existing rack checksums and updates
-        them if they differ, ensuring consistency across the pod infrastructure.
-
-        The checksum is based on the pod ID to ensure all racks in the same pod
-        share the same checksum value.
-        """
-        self.logger.info(f"Updating checksums for racks in pod {self.data.name}")
-        racks = await self.client.filters(kind=LocationRack, pod__ids=[self.data.id])
-        self.logger.info(f"Found {len(racks)} racks to update")
+        # Query racks, optionally filtered by rack_type
+        racks = await self.client.filters(
+            kind=LocationRack,
+            pod__ids=[self.data.id],
+        )
 
         # Calculate checksum based on pod configuration
         config_data = {
@@ -40,30 +36,39 @@ class PodTopologyGenerator(CommonGenerator):
         checksum = self.calculate_checksum(config_data)
         self.logger.info(f"Calculated checksum: {checksum}")
 
+        updated_count = 0
         for rack in racks:
-            if rack.checksum.value != checksum:
+            # Skip if checksum already matches
+            if rack.checksum.value == checksum:
+                self.logger.debug(
+                    f"Rack {rack.name.value} (type={rack.rack_type.value}) already has current checksum"
+                )
+                continue
+
+            # Determine if this rack should be updated based on deployment type
+            should_update = self.data.deployment_type in ["tor", "middle_rack"] or (
+                self.data.deployment_type == "mixed"
+                and rack.rack_type.value == "network"
+            )
+
+            if should_update:
                 rack.checksum.value = checksum
                 await (
                     rack.save()
                 )  # Don't use allow_upsert to avoid lifecycle management
+                updated_count += 1
                 self.logger.info(
-                    f"Rack {rack.name.value} has been updated to checksum {checksum}"
+                    f"Rack {rack.name.value} (type={rack.rack_type.value}) has been updated to checksum {checksum}"
+                )
+            else:
+                self.logger.debug(
+                    f"Rack {rack.name.value} (type={rack.rack_type.value}) checksum skipped - will be updated by middle rack generator"
                 )
 
-        self.logger.info("Checksum update complete")
+        self.logger.info(f"Updated {updated_count} rack checksums")
 
     async def generate(self, data: dict[str, Any]) -> None:
-        """Generate pod topology infrastructure.
-
-        Creates resource pools (technical and management) and allocates IP prefixes
-        for spine switches within the pod.
-
-        Args:
-            data: Raw GraphQL response data to clean and process
-
-        Raises:
-            ValidationError: If pod capacity exceeds design pattern limits
-        """
+        """Generate pod topology infrastructure."""
 
         try:
             deployment_list = clean_data(data).get("TopologyPod", [])
@@ -162,4 +167,12 @@ class PodTopologyGenerator(CommonGenerator):
             },
         )
 
+        # Update checksums for middle racks first (rack_type="network" with leafs)
+        # This triggers middle rack generation before ToR racks in mixed deployments
+        self.logger.info(
+            "Updating checksums for middle racks (network type) to trigger their generation first"
+        )
         await self.update_checksum()
+
+        # Note: ToR racks (rack_type="tor") will be updated by middle rack generator
+        # after middle rack completes, ensuring proper generation order
