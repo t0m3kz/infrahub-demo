@@ -503,7 +503,7 @@ class CablingPlanner:
         - Group leafs into pairs: [L1,L2], [L3,L4], [L5,L6], etc.
         - Each ToR connects to exactly one pair of leafs (uses 2 uplinks)
         - ToRs cycle through pairs sequentially
-        
+
         Examples:
         - 2 Leafs: Pair0=[L1,L2] → All ToRs connect to L1,L2
         - 4 Leafs: Pair0=[L1,L2], Pair1=[L3,L4]
@@ -531,7 +531,7 @@ class CablingPlanner:
         leaf_pairs = []
         for pair_idx in range(num_pairs):
             pair_start = pair_idx * 2
-            pair = sorted_top_devices[pair_start:pair_start + 2]
+            pair = sorted_top_devices[pair_start : pair_start + 2]
             leaf_pairs.append(pair)
 
         # Handle odd number of leafs (last leaf gets paired with first)
@@ -550,14 +550,101 @@ class CablingPlanner:
             tors_using_same_pair = tor_index // num_pairs
 
             # Connect using first 2 uplink interfaces from ToR
-            for uplink_idx in range(min(uplinks_per_tor_to_use, len(bottom_interfaces))):
+            for uplink_idx in range(
+                min(uplinks_per_tor_to_use, len(bottom_interfaces))
+            ):
                 bottom_intf = bottom_interfaces[uplink_idx]
-                
+
                 # Connect to the two leafs in the pair
                 top_device = selected_leafs[uplink_idx]
                 top_interfaces = self.top_by_device[top_device]
 
                 # Port index = how many ToRs have already used this leaf
+                port_index = tors_using_same_pair
+
+                if port_index < len(top_interfaces):
+                    top_intf = top_interfaces[port_index]
+                    cabling_plan.append((bottom_intf, top_intf))
+                else:
+                    self.logger.warning(
+                        f"Insufficient interfaces on {top_device} for connection from "
+                        f"{bottom_intf.device.display_label}:{bottom_intf.name.value}"
+                    )
+
+        return cabling_plan
+
+    def _build_intra_rack_mixed_cabling_plan(
+        self,
+        cabling_offset: int = 0,
+    ) -> list[tuple[DcimPhysicalInterface, DcimPhysicalInterface]]:
+        """Builds cabling plan for mixed deployment - ToR racks connecting to middle rack leafs.
+
+        Strategy:
+        - All ToRs within the same row connect to middle rack leafs in that row
+        - Uses same leaf pair distribution as middle_rack deployment
+        - Each ToR connects to exactly one pair of leafs (2 uplinks)
+        - cabling_offset accounts for ToRs from previous racks in the row
+        - Ensures idempotency across multiple runs
+
+        Examples:
+        - Row with 3 racks, each with 2 ToRs, connecting to 4 middle rack leafs:
+          Leaf pairs: [L1,L2], [L3,L4]
+          Rack-1: ToR-01→Pair0, ToR-02→Pair1 (offset=0)
+          Rack-2: ToR-03→Pair0, ToR-04→Pair1 (offset=2)
+          Rack-3: ToR-05→Pair0, ToR-06→Pair1 (offset=4)
+        """
+        cabling_plan: list[tuple[DcimPhysicalInterface, DcimPhysicalInterface]] = []
+
+        sorted_bottom_devices = sorted(self.bottom_by_device.keys())
+        sorted_top_devices = sorted(self.top_by_device.keys())
+
+        num_top_devices = len(sorted_top_devices)
+        if num_top_devices < 2:
+            self.logger.warning(
+                f"Mixed rack cabling requires at least 2 leaf devices, found {num_top_devices}"
+            )
+            return cabling_plan
+
+        # Each ToR uses exactly 2 uplinks
+        uplinks_per_tor_to_use = 2
+
+        # Create pairs of leafs: [L1,L2], [L3,L4], [L5,L6], ...
+        num_pairs = num_top_devices // 2
+        leaf_pairs = []
+        for pair_idx in range(num_pairs):
+            pair_start = pair_idx * 2
+            pair = sorted_top_devices[pair_start : pair_start + 2]
+            leaf_pairs.append(pair)
+
+        # Handle odd number of leafs (last leaf gets paired with first)
+        if num_top_devices % 2 == 1:
+            leaf_pairs.append([sorted_top_devices[-1], sorted_top_devices[0]])
+            num_pairs += 1
+
+        for local_tor_index, bottom_device in enumerate(sorted_bottom_devices):
+            bottom_interfaces = self.bottom_by_device[bottom_device]
+
+            # Global ToR index within the row (includes ToRs from previous racks)
+            global_tor_index = cabling_offset + local_tor_index
+
+            # Determine which pair this ToR uses (cycles through pairs)
+            pair_idx = global_tor_index % num_pairs
+            selected_leafs = leaf_pairs[pair_idx]
+
+            # Count how many ToRs have used this same pair before (across all racks in row)
+            tors_using_same_pair = global_tor_index // num_pairs
+
+            # Connect using first 2 uplink interfaces from ToR
+            for uplink_idx in range(
+                min(uplinks_per_tor_to_use, len(bottom_interfaces))
+            ):
+                bottom_intf = bottom_interfaces[uplink_idx]
+
+                # Connect to the two leafs in the pair
+                top_device = selected_leafs[uplink_idx]
+                top_interfaces = self.top_by_device[top_device]
+
+                # Port index = how many ToRs have already used this leaf (from all racks in row)
                 port_index = tors_using_same_pair
 
                 if port_index < len(top_interfaces):
@@ -579,6 +666,7 @@ class CablingPlanner:
             "hierarchical_rack",
             "intra_rack",
             "intra_rack_middle",
+            "intra_rack_mixed",
             "custom",
         ] = "rack",
         cabling_offset: int = 0,
@@ -594,5 +682,9 @@ class CablingPlanner:
             return self._build_intra_rack_cabling_plan()
         elif scenario == "intra_rack_middle":
             return self._build_intra_rack_middle_cabling_plan()
+        elif scenario == "intra_rack_mixed":
+            return self._build_intra_rack_mixed_cabling_plan(
+                cabling_offset=cabling_offset
+            )
         else:
             raise ValueError(f"Unknown cabling scenario: {scenario}")

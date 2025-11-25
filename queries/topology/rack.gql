@@ -52,6 +52,9 @@ fragment PodFields on TopologyPod {
   index {
     value
   }
+  deployment_type {
+    value
+  }
   parent {
     node {
       ... on TopologyDataCenter {
@@ -137,6 +140,9 @@ query RackGenerator($name: String!) {
           value
         }
         rack_type {
+          value
+        }
+        checksum {
           value
         }
         row_index {
