@@ -6,7 +6,7 @@ from utils.data_cleaning import clean_data
 
 from .common import CommonGenerator
 from .models import RackModel
-from .schema_protocols import LocationRack
+from .schema_protocols import DcimPhysicalDevice, LocationRack
 
 
 class RackGenerator(CommonGenerator):
@@ -228,6 +228,17 @@ class RackGenerator(CommonGenerator):
             return
 
         self.logger.info(f"Generating topology for rack {self.data.name}")
+
+        # Add existing devices in this rack to group context to prevent deletion
+        # This protects devices created in previous runs when generator runs manually
+
+        existing_devices = await self.client.filters(
+            kind=DcimPhysicalDevice,
+            rack__ids=[self.data.id],
+        )
+        for device in existing_devices:
+            self.client.group_context.related_node_ids.append(device.id)
+
         dc = self.data.pod.parent
         pod = self.data.pod
         pod_name = pod.name.lower()
