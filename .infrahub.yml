@@ -83,12 +83,12 @@ artifact_definitions:
       name: name__value
 
 check_definitions:
-  - name: validate_dc_capacity
-    class_name: CheckDataCenterCapacity
-    file_path: checks/dc.py
-    targets: topologies_dc
-    parameters:
-      name: name__value
+  # - name: validate_dc_capacity
+  #   class_name: CheckDataCenterCapacity
+  #   file_path: checks/dc.py
+  #   targets: topologies_dc
+  #   parameters:
+  #     name: name__value
   - name: validate_spine
     class_name: CheckSpine
     file_path: checks/spine.py

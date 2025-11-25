@@ -6,29 +6,37 @@ spec:
   data:
     - index: 1
       row_index: 1
+      shortname: sin-1-s-1-r-1-1
       rack_type: network
       pod: ["DC9", "1", "1"]
       parent: sin-1-s-1
+      member_of_groups: [topologies_rack]
       fabric_templates:
         - [2_EDGECORE_LEAFS_MR_Edgecore-7726_32X_O]
     - index: 1
       row_index: 2
+      shortname: sin-1-s-1-r-2-1
       rack_type: tor
       pod: ["DC9", "1", "1"]
       parent: sin-1-s-1
+      member_of_groups: [topologies_rack]
       fabric_templates:
         - [2_EDGECORE_TORS_Edgecore-7AS7326-56X-O-48V-F]
     - index: 1
       row_index: 1
+      shortname: sin-1-s-2-r-1-1
       rack_type: network
       pod: ["DC9", "1", "2"]
       parent: sin-1-s-2
+      member_of_groups: [topologies_rack]
       fabric_templates:
         - [2_EDGECORE_LEAFS_MR_Edgecore-7726_32X_O]
     - index: 1
       row_index: 2
+      shortname: sin-1-s-2-r-2-1
       rack_type: tor
       pod: ["DC9", "1", "2"]
       parent: sin-1-s-2
+      member_of_groups: [topologies_rack]
       fabric_templates:
         - [2_EDGECORE_TORS_Edgecore-7AS7326-56X-O-48V-F]

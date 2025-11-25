@@ -5,12 +5,12 @@ import time
 
 from invoke import Context, task  # type: ignore
 
-INFRAHUB_VERSION = os.getenv("INFRAHUB_VERSION", "1.5.0b1")
+INFRAHUB_VERSION = os.getenv("INFRAHUB_VERSION", "latest")
 INFRAHUB_ADDRESS = os.getenv("INFRAHUB_ADDRESS", "http://localhost:8000")
 INFRAHUB_API_TOKEN = os.getenv("INFRAHUB_API_TOKEN", "admin")
 
-# COMPOSE_COMMAND = f"curl https://infrahub.opsmill.io/{INFRAHUB_VERSION} | docker compose -p infrahub -f -"
-COMPOSE_COMMAND = "docker compose -p infrahub "
+COMPOSE_COMMAND = f"curl https://infrahub.opsmill.io/{INFRAHUB_VERSION} | docker compose -p infrahub -f -"
+# COMPOSE_COMMAND = "docker compose -p infrahub "
 
 
 def check_container_running(context: Context, max_attempts: int = 60) -> bool:
