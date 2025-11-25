@@ -7,6 +7,23 @@
 [![GitHub Discussion][github-discussions-badge]][github-discussions-link]
 
 ---
+## Why Infrahub Demo?
+
+> "The machine cannot be blamed. It is doing precisely what it was instructed to do. The real culprits are those who sit idly by, awaiting some miraculous vendor contraption that will magically satisfy all their peculiar requirements—instead of rolling up their sleeves and constructing it themselves."
+>
+> — *Inspired by Stanisław Lem's "Memoirs Found in a Bathtub"*
+
+**My Journey:** I was exhausted. Exhausted by vendor tools that promised the moon but delivered a handful of dust. Exhausted by being herded into their GUI labyrinths—click here, click there, click everywhere—imprisoned in their rigid schemas, held hostage by their glacial update cycles. These so-called "solutions" arrived festooned with monitoring dashboards and deployment wizards that turned your controller into a wheezing, resource-gobbling behemoth requiring constant massage and sweet-talking just to stay upright. And don't even get me started on YAML files or Terraform configurations so deeply nested and interdependent that changing one variable requires a PhD in archaeology to trace what will explode three modules away. Infrastructure as Code was supposed to mean **freedom**—not just shuffling YAML incantations into some vendor's inscrutable black box and praying to the Cloud Gods for mercy. I wanted **absolute sovereignty over my data model**, the liberty to forge my own relationships, the power to orchestrate everything through code—no "Wizard Step 3 of 47" required, no integration hell spanning multiple vendor portals where you need a Rosetta Stone just to make two systems talk to each other.
+
+Infrahub changed that. It's not another tool telling me how to think about infrastructure. It's a framework that lets **me define the rules**. Design-driven automation means I own the schemas, I own the logic, I own the destiny of my network. No more vendor lock-in, no more GUI dependency, no more compromise.
+
+This demo is trying prove it: from topology design to device generation, from configuration templates to validation checks—all driven by **my data structures**, all automated through **my code**. That's the infrastructure revolution I was waiting for.
+
+**Special thanks to [OpsMill](https://opsmill.com) for making this happen** – they built Infrahub with the vision that infrastructure teams should have complete control, not be prisoners to vendor constraints. (And yes, I'm bloody jealous I didn't have the power and motivation to come up with such a brilliant idea myself – like Prometheus watching others steal the fire of the gods!)
+
+**To companies/vendors** who may be inspired by ideas from this repository and use them in their customer environments: please consider sponsoring 3 open source communities. It's crucial to ensure that the incredible volunteers who build these tools don't feel like losers. They deserve recognition and support for their outstanding contributions to the tech community. I sincerely hope you've earned enough that a few dollars a month sponsoring open source communities won't cause financial collapse – you can well afford to give back.
+
+---
 
 ## Requirements
 - Python 3.10, 3.11, or 3.12
@@ -52,11 +69,6 @@ export INFRAHUB_API_TOKEN="06438eb2-8019-4776-878c-0941b1f1d1ec"
 uv sync
 ```
 
-### Start Infrahub
-```bash
-uv run invoke start
-```
-
 ### Quick Setup (Recommended)
 One command to setup everything:
 ```bash
@@ -80,41 +92,29 @@ Load schemas
 uv run invoke load-schema
 ```
 
-Load demo data
-```bash
-uv run invoke load-objects
-```
-
 Load menu
 ```bash
 uv run invoke load-menu
+```
+
+Load demo data
+```bash
+uv run invoke load-objects
 ```
 
 ### Deploy Data Center Scenarios
 
 Deploy any of 5 data centers with optional add-ons:
 ```bash
-# List all available scenarios
-uv run invoke list-scenarios
-
 # Deploy DC-1 with default settings
-uv run invoke deploy-dc --scenario dc1
+uv run invoke deploy-dc --scenario dc1 --branch your_branch
 
 # Deploy DC-3 with security configurations
-uv run invoke deploy-dc --scenario dc3
+uv run invoke deploy-dc --scenario dc3 --branch your_branch
 
 # Deploy DC-2 without servers
-uv run invoke deploy-dc --scenario dc2
+uv run invoke deploy-dc --scenario dc2  --branch your_branch
 ```
-
-**Scenarios:**
-- `dc1` - Large data center (Paris)
-- `dc2` - Small-Medium data center (Frankfurt)
-- `dc3` - Medium data center (London)
-- `dc4` - Medium-Large data center (Amsterdam)
-- `dc5` - Large data center (New York)
-
-For complete invoke tasks documentation, see [INVOKE_TASKS_GUIDE.md](docs/INVOKE_TASKS_GUIDE.md)
 
 ## CI/CD
 This project uses GitHub Actions for continuous integration. All pushes and pull requests are tested for lint, type checks, and unit tests.
@@ -131,27 +131,9 @@ This project uses GitHub Actions for continuous integration. All pushes and pull
 ## Testing
 Run all tests using:
 ```bash
-uv run pytest
+uv run inv validate
 ```
 Or run specific test scripts in the [`tests/`](tests/) directory.
-
-## Why Infrahub Demo?
-
-> "The machine cannot be blamed. It is doing exactly what it was told. The real problem lies with those who blindly trust the vendor's GUI and their promises of automation."
->
-> — *Inspired by Stanisław Lem's "Memoirs Found in a Bathtub"*
-
-**My Journey:** I was tired. Tired of vendor tools that claimed to do "everything" but covered nothing. Tired of being forced into their web GUI dungeons, locked into their data structures, prisoner to their update cycles. These tools also came with monitoring and deployment engines that made the system incredibly demanding from a resources point of view—bloated, heavy, and requiring constant tuning. And don't get me started on managing YAML or Terraform files—it's a real nightmare, especially when you have so many dependencies. One change cascades into a hundred others, and tracking what affects what becomes nearly impossible at scale. Infrastructure as Code meant something different to me—**true independence**. Not just writing YAML files that some vendor tool interprets through their black box. I wanted **complete control over my data model**, the freedom to define my own relationships, the power to orchestrate everything through code—no "click here to continue" required.
-
-Infrahub changed that. It's not another tool telling me how to think about infrastructure. It's a framework that lets **me define the rules**. Design-driven automation means I own the schemas, I own the logic, I own the destiny of my network. No more vendor lock-in, no more GUI dependency, no more compromise.
-
-This demo is trying prove it: from topology design to device generation, from configuration templates to validation checks—all driven by **my data structures**, all automated through **my code**. That's the infrastructure revolution I was waiting for.
-
-**Special thanks to [OpsMill](https://opsmill.com) for making this happen** – they built Infrahub with the vision that infrastructure teams should have complete control, not be prisoners to vendor constraints. (And yes, I'm bloody jealous I didn't have the power and motivation to come up with such a brilliant idea myself – like Prometheus watching others steal the fire of the gods!)
-
-**To companies/vendors** who may be inspired by ideas from this repository and use them in their customer environments: please consider sponsoring 3 open source communities. It's crucial to ensure that the incredible volunteers who build these tools don't feel like losers. They deserve recognition and support for their outstanding contributions to the tech community. I sincerely hope you've earned enough that a few dollars a month sponsoring open source communities won't cause financial collapse – you can well afford to give back.
-
----
 
 ## 🙏 A Note from a Human
 
