@@ -19,21 +19,12 @@ class DCTopologyGenerator(CommonGenerator):
         """
         pods = await self.client.filters(kind=TopologyPod, parent__ids=[self.data.id])
 
-        # Calculate checksum based on DC configuration
-        config_data = {
-            "id": self.data.id,
-            "name": self.data.name,
-            "super_spines": self.data.amount_of_super_spines,
-            "design": self.data.design_pattern.model_dump()
-            if self.data.design_pattern
-            else {},
-        }
-        fabric_checksum = self.calculate_checksum(config_data)
+        fabric_checksum = self.calculate_checksum()
 
         for pod in pods:
             if pod.checksum.value != fabric_checksum:
                 pod.checksum.value = fabric_checksum
-                await pod.save()  # Don't use allow_upsert to avoid lifecycle management
+                await pod.save(allow_upsert=True)
                 self.logger.info(
                     f"Pod {pod.name.value} has been updated to checksum {fabric_checksum}"
                 )

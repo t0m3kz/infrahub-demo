@@ -27,9 +27,7 @@ class RackGenerator(CommonGenerator):
             # Skip if checksum already matches
             if rack.checksum.value != self.data.checksum:
                 rack.checksum.value = self.data.checksum
-                await (
-                    rack.save()
-                )  # Don't use allow_upsert to avoid lifecycle management
+                await rack.save(allow_upsert=True)
                 self.logger.info(
                     f"Rack {rack.name.value} (type={rack.rack_type.value}) has been updated to checksum {self.data.checksum}"
                 )
