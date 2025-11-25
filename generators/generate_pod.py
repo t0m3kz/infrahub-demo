@@ -24,48 +24,23 @@ class PodTopologyGenerator(CommonGenerator):
         racks = await self.client.filters(
             kind=LocationRack,
             pod__ids=[self.data.id],
+            rack_type__values=["network", "tor"],
         )
 
-        # Calculate checksum based on pod configuration
-        config_data = {
-            "id": self.data.id,
-            "name": self.data.name,
-            "spines": self.data.amount_of_spines,
-            "parent_id": self.data.parent.id if self.data.parent else None,
-        }
-        checksum = self.calculate_checksum(config_data)
-        self.logger.info(f"Calculated checksum: {checksum}")
-
-        updated_count = 0
+        pod_checksum = self.calculate_checksum()
         for rack in racks:
-            # Skip if checksum already matches
-            if rack.checksum.value == checksum:
-                self.logger.debug(
-                    f"Rack {rack.name.value} (type={rack.rack_type.value}) already has current checksum"
-                )
-                continue
-
             # Determine if this rack should be updated based on deployment type
             should_update = self.data.deployment_type in ["tor", "middle_rack"] or (
                 self.data.deployment_type == "mixed"
                 and rack.rack_type.value == "network"
             )
 
-            if should_update:
-                rack.checksum.value = checksum
-                await (
-                    rack.save()
-                )  # Don't use allow_upsert to avoid lifecycle management
-                updated_count += 1
+            if should_update and rack.checksum.value != pod_checksum:
+                rack.checksum.value = pod_checksum
+                await rack.save(allow_upsert=True)
                 self.logger.info(
-                    f"Rack {rack.name.value} (type={rack.rack_type.value}) has been updated to checksum {checksum}"
+                    f"Pod {rack.name.value} has been updated to checksum {pod_checksum}"
                 )
-            else:
-                self.logger.debug(
-                    f"Rack {rack.name.value} (type={rack.rack_type.value}) checksum skipped - will be updated by middle rack generator"
-                )
-
-        self.logger.info(f"Updated {updated_count} rack checksums")
 
     async def generate(self, data: dict[str, Any]) -> None:
         """Generate pod topology infrastructure."""

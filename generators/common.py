@@ -52,7 +52,7 @@ class CommonGenerator(InfrahubGenerator):
 
         return _clean_data(data)
 
-    def calculate_checksum(self, data: dict[str, Any]) -> str:
+    def calculate_checksum(self) -> str:
         """Calculate a SHA256 checksum based on configuration data.
 
         Creates a deterministic checksum from the configuration that will be
@@ -65,11 +65,15 @@ class CommonGenerator(InfrahubGenerator):
         Returns:
             SHA256 hexdigest of the configuration data.
         """
-        import json
+        # import json
 
-        # Sort keys for deterministic output
-        sorted_data = json.dumps(data, sort_keys=True)
-        return hashlib.sha256(sorted_data.encode("utf-8")).hexdigest()
+        related_ids = (
+            self.client.group_context.related_group_ids
+            + self.client.group_context.related_node_ids
+        )
+        sorted_ids = sorted(related_ids)
+        joined = ",".join(sorted_ids)
+        return hashlib.sha256(joined.encode("utf-8")).hexdigest()
 
     async def allocate_resource_pools(
         self,
