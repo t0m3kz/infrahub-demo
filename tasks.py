@@ -2,6 +2,7 @@
 
 import os
 import time
+from pathlib import Path
 
 from invoke import Context, task  # type: ignore
 
@@ -9,8 +10,12 @@ INFRAHUB_VERSION = os.getenv("INFRAHUB_VERSION", "latest")
 INFRAHUB_ADDRESS = os.getenv("INFRAHUB_ADDRESS", "http://localhost:8000")
 INFRAHUB_API_TOKEN = os.getenv("INFRAHUB_API_TOKEN", "admin")
 
-COMPOSE_COMMAND = f"curl https://infrahub.opsmill.io/{INFRAHUB_VERSION} | docker compose -p infrahub -f -"
-# COMPOSE_COMMAND = "docker compose -p infrahub "
+# Use local docker-compose.yml if it exists, otherwise fetch from URL
+DOCKER_COMPOSE_FILE = Path("docker-compose.yml")
+if DOCKER_COMPOSE_FILE.exists():
+    COMPOSE_COMMAND = "docker compose -p infrahub"
+else:
+    COMPOSE_COMMAND = f"curl https://infrahub.opsmill.io/{INFRAHUB_VERSION} | docker compose -p infrahub -f -"
 
 
 def check_container_running(context: Context, max_attempts: int = 60) -> bool:

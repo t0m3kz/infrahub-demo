@@ -18,9 +18,14 @@ class PodTopologyGenerator(CommonGenerator):
     """
 
     async def update_checksum(self) -> None:
-        """Update checksum for racks in the pod with optional filtering."""
+        """Update checksum for racks in the pod and add them to group context for protection.
 
-        # Query racks, optionally filtered by rack_type
+        Combined operation to avoid querying racks twice:
+        1. Protects all existing racks from deletion
+        2. Updates checksum for network/tor racks to trigger their generation
+        """
+
+        # Query all racks in this pod once
         racks = await self.client.filters(
             kind=LocationRack,
             pod__ids=[self.data.id],
@@ -28,8 +33,12 @@ class PodTopologyGenerator(CommonGenerator):
         )
 
         pod_checksum = self.calculate_checksum()
+
         for rack in racks:
-            # Determine if this rack should be updated based on deployment type
+            # Always add to group context to prevent deletion
+            self.client.group_context.related_node_ids.append(rack.id)
+
+            # Determine if this rack's checksum should be updated based on deployment type
             should_update = self.data.deployment_type in ["tor", "middle_rack"] or (
                 self.data.deployment_type == "mixed"
                 and rack.rack_type.value == "network"
@@ -39,7 +48,7 @@ class PodTopologyGenerator(CommonGenerator):
                 rack.checksum.value = pod_checksum
                 await rack.save(allow_upsert=True)
                 self.logger.info(
-                    f"Pod {rack.name.value} has been updated to checksum {pod_checksum}"
+                    f"Rack {rack.name.value} has been updated to checksum {pod_checksum}"
                 )
 
     async def generate(self, data: dict[str, Any]) -> None:
@@ -148,6 +157,3 @@ class PodTopologyGenerator(CommonGenerator):
             "Updating checksums for middle racks (network type) to trigger their generation first"
         )
         await self.update_checksum()
-
-        # Note: ToR racks (rack_type="tor") will be updated by middle rack generator
-        # after middle rack completes, ensuring proper generation order
