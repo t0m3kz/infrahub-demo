@@ -90,7 +90,7 @@ One command to setup everything:
 uv run invoke setup
 ```
 
-This loads schemas, bootstrap data, and menu. Then explore at http://localhost:8000
+This loads schemas, bootstrap data, menu, repo and events. Then explore at http://localhost:8000
 
 ### Manual Setup (Alternative)
 
@@ -109,12 +109,12 @@ Load demo data
 uv run invoke load-objects
 ```
 
-Load demo data
+Load demo repo
 ```bash
 uv run invoke load-repo
 ```
 
-Load demo data
+Load demo events
 ```bash
 uv run invoke load-events
 ```
