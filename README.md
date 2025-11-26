@@ -44,9 +44,9 @@ This demo is trying prove it: from topology design to device generation, from co
 - Python 3.10, 3.11, or 3.12
 - [uv](https://github.com/astral-sh/uv) for dependency management
 - Docker (for containerlab and some integration tests)
-- **Infrahub 1.5** (currently in beta) - See note below
+- **Infrahub 1.5** (or higher) - See note below
 
-> **Version Compatibility Note**: This demo is designed for Infrahub 1.5 (beta). The data models and generators can be modified to work with previous versions of Infrahub if needed.
+> **Version Compatibility Note**: This demo is designed for Infrahub 1.5. The data models and generators can be modified to work with previous versions of Infrahub if needed.
 
 ## Features
 - Design-driven network automation demo using [Infrahub](https://docs.infrahub.app)
