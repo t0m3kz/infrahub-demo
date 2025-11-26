@@ -109,6 +109,17 @@ Load demo data
 uv run invoke load-objects
 ```
 
+Load demo data
+```bash
+uv run invoke load-repo
+```
+
+Load demo data
+```bash
+uv run invoke load-events
+```
+
+
 ### Deploy Data Center Scenarios
 
 **6 strategic scenarios** demonstrating vendor platforms, naming strategies, multi-vendor architectures.
@@ -133,10 +144,10 @@ Explore LLM upgrades and organic growth patterns—all in one place:
 
 | Scenario | Location | Type/Architecture | Description |
 |----------|----------|-------------------|-------------|
-| **[02_switch](data/demos/02_switch/)** | Munich 🇩🇪 | Rack Expansion | "Just TWO more switches" - 2 ToRs to existing rack. How organic growth happens. |
-| **[03_rack](data/demos/03_rack/)** | Munich 🇩🇪 | Minimal ToR | The minimalist approach - single ToR rack that started as a "test" and became critical infrastructure. |
-| **[04_pod](data/demos/04_pod/)** | Munich 🇩🇪 | Pod Expansion | Pod 4 arrives because Pods 1-3 weren't enough. Flat topology to keep things simple (this time). |
-| **[05_llm_time](data/demos/05_llm_time/)** | Munich 🇩🇪 | Spine Expansion | Trojan Horse upgrade: Sneak in extra spines for LLM workloads and plausible deniability. |
+| **[switch](data/demos/02_switch/)** | Munich 🇩🇪 | Rack Expansion | "Just TWO more switches" - 2 ToRs to existing rack. How organic growth happens. |
+| **[rack](data/demos/03_rack/)** | Munich 🇩🇪 | Minimal ToR | The minimalist approach - single ToR rack that started as a "test" and became critical infrastructure. |
+| **[pod](data/demos/04_pod/)** | Munich 🇩🇪 | Pod Expansion | Pod 4 arrives because Pods 1-3 weren't enough. Flat topology to keep things simple (this time). |
+| **[llm time](data/demos/05_llm_time/)** | Munich 🇩🇪 | Spine Expansion | Trojan Horse upgrade: Sneak in extra spines for LLM workloads and plausible deniability. |
 
 Each scenario is a living example of how design-driven automation can handle vendor drama, topology chaos, and the occasional AI hype—while keeping you in control of your data model and your destiny.
 
