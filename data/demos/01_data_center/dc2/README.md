@@ -1,117 +1,91 @@
-# DC2 - Medium Middle Rack Data Center
+# DC2 - The "Arista EOS" Edition
+*Middle Rack Data Center with Hierarchical Naming Strategy*
 
 ## Overview
-**Location:** Frankfurt
-**Size:** Medium (M)
-**Platform:** Arista EOS
-**Design Pattern:** M-Standard-MR (Medium Standard with Middle Rack)
+**Location:** Paris 🇫🇷 (The City of Light - where your packets enjoy croissants and romantic latency)
 
-**Use Case:** Medium-sized data center with **middle_rack deployment** demonstrating hierarchical rack aggregation. Ideal for cost-effective deployments where rack-level aggregation reduces spine port requirements.
+**Size:** Small (S) - Efficient, elegant, and budget-friendly
+
+**Platform:** Arista EOS - API-driven modern network OS
+
+**Design Pattern:** S-Middle-MR (Small Middle Rack)
+
+**Use Case:** When the CFO says "make it work but don't make me cry" and you actually deliver. DC2 proves you don't need four pods and a mortgage to build reliable infrastructure. Just 2 pods, 4 racks, and a healthy respect for hierarchical aggregation. It's the Parisian café of data centers - small, efficient, and everyone knows everyone.
 
 ---
 
-## Architecture
+## Architecture (Minimalism with a French Accent)
 
 ### Fabric Scale
-- **Super Spines:** 2 (Arista DCS-7050CX3-32C-R)
-- **Total Pods:** 2
-- **Total Spines:** 4 (2+2 across pods)
-- **Total Racks:** 6
-- **Deployment Type:** middle_rack (all pods)
+- **Super Spines:** 2 (Arista DCS-7050CX3-32C-R) - *Your inter-pod highway patrol*
+- **Total Pods:** 2 - *Because symmetry is beautiful and troubleshooting is easier*
+- **Total Spines:** 4 (2 per pod) - *Just enough aggregation, not too much*
+- **Total Racks:** 4 - *Count them: FOUR. Not six. Not three. FOUR.*
+- **Deployment Type:** middle_rack (both pods) - *Hierarchical all the way down*
 
-### Pod Structure
-| Pod | Spines | Racks | Deployment Type |
-|-----|--------|-------|----------------|
-| Pod 1 | 2 (DCS-7050PX4-32S-R) | 3 | middle_rack |
-| Pod 2 | 2 (DCS-7050CX3-32C-R) | 3 | middle_rack |
-
-### Design Template Constraints
-- maximum_spines: 2 per pod
-- maximum_pods: 2
-- maximum_leafs: 16
-- maximum_rack_leafs: 6
-- maximum_middle_racks: 4
-- maximum_tors: 24
-- naming_convention: standard
+### Pod Structure (The Twin Towers of Efficiency)
+| Pod   | Spines | Model                | Racks | Deployment    | Personality                |
+|-------|--------|----------------------|-------|--------------|----------------------------|
+| Pod 1 | 2      | DCS-7050CX3-32C-R   | 2     | middle_rack  | The Responsible Sibling    |
+| Pod 2 | 2      | DCS-7050CX3-32C-R   | 2     | middle_rack  | The Copy-Paste Sibling     |
 
 ---
 
-## Hardware Stack
-
-### Spine Layer
-- **Pod 1:** Arista DCS-7050PX4-32S-R (32x100GbE)
-- **Pod 2:** Arista DCS-7050CX3-32C-R (32x100GbE)
-- **Role:** Pod-level aggregation
+## Hardware Stack (Budget-Conscious Excellence)
 
 ### Super Spine Layer
+- **Model:** Cisco Nexus N9K-C9336C-FX2
+- **Ports:** 36×100GbE - *More than you need, exactly what you want*
+- **Role:** Making pods talk to each other without drama
+- **Fun Fact:** These switches cost more than your car but last longer
+
+### Spine Layer
 - **Model:** Arista DCS-7050CX3-32C-R
 - **Ports:** 32x100GbE
-- **Role:** Inter-pod connectivity
+- **Role:** Pod-level aggregation
+- **Deployment:** Identical in both pods
 
-### Leaf Layer (in racks)
-- **Models:** DCS-7050CX3-32C-R, DCS-7050CX4M-48D8-F, DCS-7050SX3-24YC4C-S-R
+### Leaf Layer (In Racks)
+- **Model:** Arista DCS-7050CX3-32C-R
+- **Count:** 2 per rack
 - **Role:** Rack-level aggregation
+- **Ports:** 36x100GbE
+
+### ToR Layer
+- **Model:** Arista DCS-7050CX3-32C-R
+- **Count:** 2 per rack
+- **Role:** Server connectivity
 
 ---
 
-## Deployment Strategy
+## Deployment Strategy (Middle Rack Mastery)
 
-### Middle Rack (All Pods)
-**ToR Connectivity:**
+**ToR Connectivity Pattern:**
 ```
-ToR → Local Leafs (within rack)
-ToR → External Leafs (if no local Leafs, least utilized)
+ToR → Local Leafs (same rack)
+     ↓
+   Leaf → Spine
+          ↓
+        Spine → Super Spine
 ```
 
-**Benefits:**
-- Reduced spine port consumption
-- Rack-level aggregation
-- Lower cost per port
-- Easier cable management
-
----
-
-## Use Case Analysis
-
-### ✅ **Strengths**
-- **Cost Effective:** Middle rack aggregation reduces spine ports needed
-- **Arista EOS:** Industry-leading open network OS
-- **Medium Scale:** Perfect for SMB or departmental DC
-- **Consistent Deployment:** Single deployment type simplifies operations
-
-### 🎯 **Best For**
-- Medium enterprises (500-2000 servers)
-- Cost-conscious deployments
-- Organizations standardizing on Arista
-- Middle-of-row or end-of-row aggregation
-
-### 📊 **Capacity Estimate**
-- 6 network racks with Leafs
-- ~12-24 server racks (with ToRs)
-- Supports 300-600 servers
-
----
-
-## Quick Start
+## Quick Start (For the Brave)
 
 ```bash
-# Load topology
-uv run infrahubctl object load data/demos/01_data_center/dc2/
+# really quick
+uv run inv deploy-dc --scenario dc1 --branch your_branch
 
-# Generate fabric
-uv run infrahubctl generator create_dc name=DC2 --branch main
+# I'm the control nerd
+uv run infrahubctl branch create you_branch
+
+# Load topology (this is the point of no return)
+uv run infrahubctl object load data/demos/01_data_center/dc2/ --branch you_branch
+
+# Generate fabric (grab coffee, this might take a while)
+uv run infrahubctl generator generate_dc name=DC2 --branch you_branch
+
+# Watch the magic happen (or the chaos unfold, depending on your perspective)
+# Pro tip: Have the InfraHub UI open to see devices spawn like rabbits
 ```
 
----
-
-## Files
-- `00_topology.yml` - DC and Pod definitions
-- `01_suites.yml` - 2 suites (PAR-1 Suite-1, PAR-1 Suite-2)
-- `02_racks.yml` - 6 network racks with varying Leaf configurations
-
----
-
-## Related Scenarios
-- **DC1:** Mixed deployment (middle_rack + tor)
-- **DC3:** Pure ToR deployment
-- **DC6:** Similar M-Standard-MR with different vendors
+Trigger infrastructure generation in InfraHub UI → Actions → Generator Definitions → generate_dc DC1-Fabric-1

@@ -1,0 +1,16 @@
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: LocationRack
+  data:
+    - index: 5
+      row_index: 1
+      shortname: muc-1-s-1-r-1-1
+      rack_type: network
+      pod: ["DC1", "1", "1"]
+      parent: muc-1-s-1
+      member_of_groups: [topologies_rack]
+      fabric_templates:
+        - [2_CISCO_LEAFS_MR_N9K-C9336C-FX2]
+        - [4_CISCO_TORS_N9K-C9336C-FX2]

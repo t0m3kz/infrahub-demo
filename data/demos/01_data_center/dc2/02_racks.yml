@@ -13,8 +13,8 @@ spec:
       parent: par-1-s-1
       member_of_groups: [topologies_rack]
       fabric_templates:
-        - [2_CISCO_LEAFS_MR_N9K-C9336C-FX2]
-        - [2_CISCO_TORS_N9K-C9336C-FX2]
+        - [2_ARISTA_LEAFS_MR_DCS-7050CX3-32C-R]
+        - [2_ARISTA_TORS_DCS-7050CX3-32C-R]
     - index: 1
       row_index: 2
       shortname: par-1-s-1-r-2-1
@@ -23,8 +23,8 @@ spec:
       parent: par-1-s-1
       member_of_groups: [topologies_rack]
       fabric_templates:
-        - [2_CISCO_LEAFS_MR_N9K-C9336C-FX2]
-        - [2_CISCO_TORS_N9K-C9336C-FX2]
+        - [2_ARISTA_LEAFS_MR_DCS-7050CX3-32C-R]
+        - [2_ARISTA_TORS_DCS-7050CX3-32C-R]
     # Pod 2 - Middle Rack
     - index: 1
       row_index: 1
@@ -34,8 +34,8 @@ spec:
       parent: par-1-s-2
       member_of_groups: [topologies_rack]
       fabric_templates:
-        - [2_CISCO_LEAFS_MR_N9K-C9336C-FX2]
-        - [2_CISCO_TORS_N9K-C9336C-FX2]
+        - [2_ARISTA_LEAFS_MR_DCS-7050CX3-32C-R]
+        - [2_ARISTA_TORS_DCS-7050CX3-32C-R]
     - index: 1
       row_index: 2
       shortname: par-1-s-2-r-2-1
@@ -44,5 +44,5 @@ spec:
       parent: par-1-s-2
       member_of_groups: [topologies_rack]
       fabric_templates:
-        - [2_CISCO_LEAFS_MR_N9K-C9336C-FX2]
-        - [2_CISCO_TORS_N9K-C9336C-FX2]
+        - [2_ARISTA_LEAFS_MR_DCS-7050CX3-32C-R]
+        - [2_ARISTA_TORS_DCS-7050CX3-32C-R]
