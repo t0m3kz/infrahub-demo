@@ -140,9 +140,12 @@ def load_schema(
     context: Context, schema: str = "./schemas/", branch: str = "main"
 ) -> None:
     """Load the schemas from the given path."""
-    context.run(f"infrahubctl schema load {schema}/base --branch {branch}", pty=True)
     context.run(
-        f"infrahubctl schema load {schema}/extensions --branch {branch}", pty=True
+        f"uv run infrahubctl schema load {schema}/base --branch {branch}", pty=True
+    )
+    context.run(
+        f"uv run infrahubctl schema load {schema}/extensions --branch {branch}",
+        pty=True,
     )
 
 
@@ -151,7 +154,31 @@ def load_data(
     context: Context, name: str = "bootstrap.py", branch: str = "main"
 ) -> None:
     """Load the data from the given path."""
-    context.run(f"infrahubctl run bootstrap/{name} --branch {branch}", pty=True)
+    context.run(f"uv run infrahubctl run bootstrap/{name} --branch {branch}", pty=True)
+
+
+@task(optional=["branch"])
+def load_repo(
+    context: Context,
+    name: str = "https://github.com/t0m3kz/infrahub-demo/",
+    branch: str = "main",
+) -> None:
+    """Load the data from the given path."""
+    context.run(
+        f"uv run infrahubctl repository add test {name} --read-only --branch {branch}",
+        pty=True,
+    )
+
+
+def load_events(
+    context: Context,
+    branch: str = "main",
+) -> None:
+    """Load the data from the given path."""
+    context.run(
+        f"uv run infrahubctl object load data/events/ --branch {branch}",
+        pty=True,
+    )
 
 
 @task(optional=["branch"])
@@ -305,6 +332,12 @@ def setup(context: Context) -> None:
 
     print("  5️⃣  Loading bootstrap data...")
     load_objects(context)
+
+    load_repo(context)
+
+    time.sleep(10)
+
+    load_events(context)
 
     print("\n✅ Setup complete! Infrahub is ready for fun !!!")
     print(
