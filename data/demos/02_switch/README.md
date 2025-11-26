@@ -3,7 +3,9 @@
 
 ## Overview
 **Purpose:** Add 2 ToRs to an existing rack in DC1's Pod 1. Because "temporary" upgrades are forever.
+
 **Philosophy:** "We just need a FEW more switches" - said everyone before their topology doubled and their cable management became performance art.
+
 **Difficulty:** Easy (until you realize you're modifying production infrastructure and the CFO is watching).
 
 ---

@@ -3,7 +3,9 @@
 
 ## Overview
 **Purpose:** Add Pod 4 to DC1 because Pods 1-3 weren't enough chaos. Because every good story needs a sequel.
+
 **Philosophy:** If 3 pods are good, 4 pods are... more? Or maybe just more confusing.
+
 **Difficulty:** Medium (high if you forget to update documentation and the compliance team is watching).
 
 ---

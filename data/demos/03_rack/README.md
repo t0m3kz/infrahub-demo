@@ -3,7 +3,9 @@
 
 ## Overview
 **Purpose:** Deploy a single ToR rack to DC1's Pod 2. Because sometimes "minimal" is just code for "we ran out of money."
+
 **Philosophy:** Sometimes less is more. Sometimes it's just all you can afford. Sometimes it's a lie.
+
 **Difficulty:** Trivial (until it becomes critical infrastructure and nobody wants to touch it).
 
 ---
