@@ -5,7 +5,7 @@
 
 **Size:** Small (S) - Flexible, creative, and a little chaotic
 
-**Platform:** Edgecore with SONiC - Vendor-neutral open source networking
+**Platform:** Edgecore with SONiC - So vendor-neutral, even your hipster barista could deploy it between DJ sets.
 
 **Design Pattern:** S-Mixed (Small Mixed Deployment)
 

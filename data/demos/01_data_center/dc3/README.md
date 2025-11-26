@@ -5,7 +5,7 @@
 
 **Size:** Small (S) - Minimalist, fast, and direct
 
-**Platform:** Dell PowerSwitch with SONiC - Open networking, ultra-low latency
+**Platform:** Dell PowerSwitch with SONiC - So open, even your neighbor's cat could SSH in (if it knew the password).
 
 **Design Pattern:** S-Flat-ToR (Small Flat Top-of-Rack)
 
