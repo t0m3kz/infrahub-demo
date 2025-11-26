@@ -140,7 +140,7 @@ uv run invoke load-events
 
 #### Expansion & Incremental Deployment Scenarios
 
-Explore LLM upgrades and organic growth patterns—all in one place:
+Explore LLM upgrades and organic growth patterns—all in one place, please make sure DC1 is alredy deployed:
 
 | Scenario | Location | Type/Architecture | Description |
 |----------|----------|-------------------|-------------|
@@ -149,7 +149,7 @@ Explore LLM upgrades and organic growth patterns—all in one place:
 | **[pod](data/demos/04_pod/)** | Munich 🇩🇪 | Pod Expansion | Pod 4 arrives because Pods 1-3 weren't enough. Flat topology to keep things simple (this time). |
 | **[llm time](data/demos/05_llm_time/)** | Munich 🇩🇪 | Spine Expansion | Trojan Horse upgrade: Sneak in extra spines for LLM workloads and plausible deniability. |
 
-Each scenario is a living example of how design-driven automation can handle vendor drama, topology chaos, and the occasional AI hype—while keeping you in control of your data model and your destiny.
+Brace yourself: even more questionable use cases, wild topologies, and vendor drama are coming soon. If you want to see even more chaos, star this repo—so the author can unlock extra GitHub tools and automate his caffeine intake. Your star may be the difference between a new feature and another debugging session at midnight!
 
 ## CI/CD
 This project uses GitHub Actions for continuous integration. All pushes and pull requests are tested for lint, type checks, and unit tests.

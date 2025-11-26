@@ -68,7 +68,7 @@
 
 ## Deployment Strategy (Choose Your Own Adventure)
 
-### Middle Rack Deployment (Pods 1-2: The Bureaucratic Approach)
+### Middle Rack Deployment (Pod 1: The Bureaucratic Approach)
 **Philosophy:** "Why connect directly when you can add another layer?"
 
 **ToR Connectivity:**
@@ -78,6 +78,16 @@
 - Better for hierarchical aggregation (and org charts that look impressive)
 - **Latency:** Slightly higher, but you get bragging rights about "architecture"
 - **Complexity:** Maximum (job security through obscurity)
+
+### Mixed Deployment (Pod 2: The "Best of Both Worlds" Disaster)
+**Philosophy:** "Can't we all just get along?"
+
+- Some racks with middle leafs (bureaucracy lovers)
+- Some racks with direct ToR-to-spine (pragmatists)
+- Demonstrates flexibility (or inability to commit)
+- Perfect for confusing your monitoring team
+- **Latency:** Depends on which path packet took and whether it filed proper paperwork
+- **Complexity:** Yes
 
 ### ToR Deployment (Pod 3: The Rebel Alliance)
 **Philosophy:** "Screw the hierarchy, let's just make it work"
@@ -89,16 +99,6 @@
 - Better for east-west traffic (which is most of your traffic anyway)
 - **Latency:** Lower (physics still works)
 - **Complexity:** Minimal (but where's the fun in that?)
-
-### Mixed Deployment (Pod 2: The "Best of Both Worlds" Disaster)
-**Philosophy:** "Can't we all just get along?"
-
-- Some racks with middle leafs (bureaucracy lovers)
-- Some racks with direct ToR-to-spine (pragmatists)
-- Demonstrates flexibility (or inability to commit)
-- Perfect for confusing your monitoring team
-- **Latency:** Depends on which path packet took and whether it filed proper paperwork
-- **Complexity:** Yes
 
 ---
 
@@ -122,3 +122,14 @@ uv run infrahubctl generator generate_dc name=DC1 --branch you_branch
 ```
 
 Trigger infrastructure generation in InfraHub UI → Actions → Generator Definitions → generate_dc DC1-Fabric-1
+
+Watch the magic happen (or the chaos unfold, depending on your perspective)
+
+Pro tip: Have the InfraHub UI open to see devices spawn like rabbits
+
+## Fun Fact
+The author lives in Munich and has spent years trying to understand the rules of Schafkopf as explained in Bavarian—proof that some network topologies are easier to decipher than local card games.
+
+If you ever win a round, you’re officially more Bavarian than a pretzel at Oktoberfest.
+
+Unknown Munich Fact: The city’s official symbol is the Münchner Kindl—a child in a monk’s robe, which is still less mysterious than Bavarian pronunciation (especially after your second Maß of beer).

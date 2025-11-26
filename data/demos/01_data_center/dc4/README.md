@@ -9,7 +9,7 @@
 
 **Design Pattern:** S-Mixed (Small Mixed Deployment)
 
-**Use Case:** When the architecture team can't agree on middle_rack vs flat ToR and someone says "why not both?" Pod 1 goes full mixed deployment, Pod 2 goes pure flat ToR. It's like having a hybrid car that's also a motorcycle. Confusing? Yes. Flexible? Absolutely.
+**Use Case:** When the architecture team can't agree on mixed vs flat ToR and someone says "why not both?" Pod 1 goes full mixed deployment, Pod 2 goes pure flat ToR. It's like having a hybrid car that's also a motorcycle. Confusing? Yes. Flexible? Absolutely.
 
 ---
 
@@ -52,64 +52,28 @@
 - **Model:** Edgecore 7726-32X-O
 - **Role:** Server connectivity
 
----
-
-## Deployment Strategy (Mixed Mastery)
-
-**Mixed Deployment Mystery:**
-- ToRs in racks WITH leafs connect locally
-- ToRs in racks WITHOUT leafs find the least-utilized leaf in the pod
-- It's like musical chairs, but for network cables
-
-**Why Mixed Deployment Rocks:**
-- ✅ Flexibility for different rack types
-- ✅ Efficient use of leafs
-- ✅ Adaptable to changing requirements
-
-**Trade-offs:**
-- ⚠️ More complex cabling
-- ⚠️ NOC team needs extra coffee
-- ⚠️ Documentation is critical
-
----
-
 ## Quick Start
 
 ```bash
-uv run infrahubctl branch create dc4-test-$(date +%s)
-uv run invoke deploy-dc --scenario dc4 --branch dc4-test-<timestamp>
+# really quick
+uv run inv deploy-dc --scenario dc4 --branch your_branch
+
+# I'm the control nerd
+uv run infrahubctl branch create you_branch
+
+# Load topology (this is the point of no return)
+uv run infrahubctl object load data/demos/01_data_center/dc4/ --branch you_branch
+
+# Generate fabric (grab coffee, this might take a while)
+uv run infrahubctl generator generate_dc name=DC4 --branch you_branch
+
 ```
 
-**What Happens:**
-- Creates super spines, pods, spines, racks, leafs, ToRs, cables, configs
-- Validates connectivity
-
----
-
-## Troubleshooting (When Berlin Goes Full Techno)
-- "Pod disappeared!" → Re-run full deploy, generators now have protection
-- "More racks than expected" → Check branch, clean up extra racks
-- "Configs not generating" → Check templates, branch, logs
-- "Validation failing" → Review messages, check cabling, verify configs
-
----
-
-## Real Talk (Production Conversation)
-- **Production-Ready:** Hardware, patterns, architecture
-- **Demo-Land:** Templates, minimal security, simplified configs
-- **To Go Production:** Harden configs, add policies, integrate monitoring, test failures, document
-
-**Bottom Line:** Use DC4 to learn, not to deploy on Friday afternoon.
-
----
-
-## Related Scenarios
-- **DC1:** The Kitchen Sink (3 pods, 28 racks)
-- **DC2:** The Parisian Café (Middle Rack)
-- **DC3:** The Purist (Flat ToR)
-- **DC5:** The United Nations (Multi-vendor)
-
----
+Trigger infrastructure generation in InfraHub UI → Actions → Generator Definitions → generate_dc DC4-Fabric-1
 
 ## Fun Fact
-Mixed deployment is the "I want my cake and eat it too" of network design. The cost is explaining this to the night shift NOC team.
+The author owns a piece of the Berlin Wall—so if your network ever feels divided, just remember: it can be rebuilt, repurposed, or turned into a conversation starter at tech meetups. It’s a daily reminder that even the toughest partitions eventually fall—sometimes with a little help from automation, sometimes with a sledgehammer.
+
+Bonus: The author proudly benefits from Germany’s Unity Day, enjoying a free holiday every year thanks to history and a chunk of concrete.
+
+Prost to open borders, open networks, and open source!

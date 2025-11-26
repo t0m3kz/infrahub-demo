@@ -69,11 +69,11 @@ ToR → Local Leafs (same rack)
         Spine → Super Spine
 ```
 
-## Quick Start (For the Brave)
+## Quick Start
 
 ```bash
 # really quick
-uv run inv deploy-dc --scenario dc1 --branch your_branch
+uv run inv deploy-dc --scenario dc2 --branch your_branch
 
 # I'm the control nerd
 uv run infrahubctl branch create you_branch
@@ -84,8 +84,13 @@ uv run infrahubctl object load data/demos/01_data_center/dc2/ --branch you_branc
 # Generate fabric (grab coffee, this might take a while)
 uv run infrahubctl generator generate_dc name=DC2 --branch you_branch
 
-# Watch the magic happen (or the chaos unfold, depending on your perspective)
-# Pro tip: Have the InfraHub UI open to see devices spawn like rabbits
 ```
 
-Trigger infrastructure generation in InfraHub UI → Actions → Generator Definitions → generate_dc DC1-Fabric-1
+Trigger infrastructure generation in InfraHub UI → Actions → Generator Definitions → generate_dc DC2-Fabric-1
+
+## Fun Fact
+As a teenager, the author visited La Défense and dreamed of working in one of those shiny Parisian towers. Years later, when the chance finally came, he thanked the God that the dream never came true.
+
+Moral: Sometimes your network is better off outside the business district—and so is your sanity.
+
+Bonus: You’ll avoid rush hour, overpriced coffee, and spontaneous meetings about synergy.
