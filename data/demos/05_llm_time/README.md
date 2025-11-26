@@ -2,8 +2,11 @@
 *The "We Need to Join the LLM Game" Episode*
 
 ## Overview
+
 **Purpose:** Sneak extra spines into your ToR pod like a Trojan Horse—because every network wants to be LLM-ready, and every engineer wants plausible deniability.
+
 **Philosophy:** "Just add more spines!"—the ancient battle cry of those who fear AI will take their jobs (or at least their bandwidth).
+
 **Difficulty:** Easy (unless you have to explain to finance why you need four spines for "machine learning")
 
 ---
