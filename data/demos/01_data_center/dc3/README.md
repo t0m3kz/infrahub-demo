@@ -10,7 +10,9 @@
 **Design Pattern:** S-Flat-ToR (Small Flat Top-of-Rack)
 
 **Use Case:**
-For those who say "I don't want any extra hops" and actually mean it. Pure flat ToR deployment—every ToR switch connects directly to spines, like a networking speed-dating event with zero commitment. No middle aggregation, no leaf layer bureaucracy, just servers talking to ToRs and ToRs talking to spines. It's a minimalist's dream and a cable management team's recurring nightmare. If you love low latency, hate complexity, and enjoy watching your spine ports disappear faster than free beer at a tech conference, this one's for you. Warning: May cause spontaneous outbreaks of optimism and existential dread in equal measure.
+For those who say "I don't want any extra hops" and actually mean it. Pure flat ToR deployment—every ToR switch connects directly to spines, like a networking speed-dating event with zero commitment. No middle aggregation, no leaf layer bureaucracy, just servers talking to ToRs and ToRs talking to spines. It's a minimalist's dream and a cable management team's recurring nightmare. If you love low latency, hate complexity, and enjoy watching your spine ports disappear faster than free beer at a tech conference, this one's for you.
+
+Warning: May cause spontaneous outbreaks of optimism and existential dread in equal measure.
 
 ---
 
@@ -78,6 +80,8 @@ uv run infrahubctl generator generate_dc name=DC3 --branch you_branch
 ```
 
 Trigger infrastructure generation in InfraHub UI → Actions → Generator Definitions → generate_dc DC3-Fabric-1
+
+and follow steps from dc1
 
 ## Fun Fact
 The author still uses the mug he bought 25 years ago in London—proof that some British imports last longer than most celebrity marriages, and definitely longer than any network outage.

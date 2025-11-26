@@ -32,6 +32,8 @@ Perfect for when your team says:
 uv run infrahubctl object load data/demos/02_switch/
 ```
 
+Trigger infrastructure generation in InfraHub UI → Actions → Generator Definitions → generate_rack MUC-1-SUITE-1-R1-5
+
 ---
 
 ## Fun Fact
