@@ -61,10 +61,10 @@ This demo is trying prove it: from topology design to device generation, from co
 - [`menu/`](menu/) – Example menu definition
 - [`queries/`](queries/) – GraphQL queries for Infrahub
 - [`schemas/`](schemas/) – Base and extension schemas
-- [`scripts/`](scripts/) – Helper scripts for automation
 - [`templates/`](templates/) – Jinja2 templates for device configs
 - [`tests/`](tests/) – Unit, integration, and smoke tests
 - [`transforms/`](transforms/) – Python transforms for Infrahub
+- [`utils/`](utils/) – Helper scripts for automation
 
 ## Quickstart
 
