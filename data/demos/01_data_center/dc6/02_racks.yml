@@ -4,6 +4,7 @@ kind: Object
 spec:
   kind: LocationRack
   data:
+    # Pod 1 - Arista Spines with Dell Leafs/ToRs (mixed vendors)
     - index: 1
       row_index: 1
       shortname: par-1-s-1-r-1-1
@@ -12,8 +13,8 @@ spec:
       parent: par-1-s-1
       member_of_groups: [topologies_rack]
       fabric_templates:
-        - [2_CISCO_LEAFS_MR_N9K-C9336C-FX2]
-        - [2_CISCO_TORS_N9K-C9336C-FX2]
+        - [2_DELL_LEAFS_MR_PowerSwitch-S5232F-ON]
+        - [2_DELL_TORS_PowerSwitch-S5224F-ON]
     - index: 1
       row_index: 2
       shortname: par-1-s-1-r-2-1
@@ -22,8 +23,10 @@ spec:
       parent: par-1-s-1
       member_of_groups: [topologies_rack]
       fabric_templates:
-        - [2_CISCO_LEAFS_MR_N9K-C9336C-FX2]
-        - [2_CISCO_TORS_N9K-C9336C-FX2]
+        - [2_DELL_LEAFS_MR_PowerSwitch-S5232F-ON]
+        - [2_DELL_TORS_PowerSwitch-S5224F-ON]
+
+    # Pod 2 - Edgecore Spines with Cisco Leafs/ToRs (mixed vendors)
     - index: 1
       row_index: 1
       shortname: par-1-s-2-r-1-1

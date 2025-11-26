@@ -7,7 +7,7 @@ spec:
     - name: DC6
       index: 1
       amount_of_super_spines: 2
-      super_spine_template: N9K-C9364C-GX_SPINE
+      super_spine_template: N9K_C9336C_FX2_SUPER_SPINE
       fabric_interface_sorting_method: top_down
       design_pattern: M-Standard-MR
       member_of_groups:
@@ -17,7 +17,7 @@ spec:
         data:
           - index: 1
             deployment_type: middle_rack
-            spine_template: N9K-C9364C-GX_SPINE
+            spine_template: DCS-7050CX3-32C-R_SPINE
             amount_of_spines: 2
             number_of_rows: 2
             maximum_leafs_per_row: 2
@@ -26,7 +26,7 @@ spec:
               - topologies_pod
           - index: 2
             deployment_type: middle_rack
-            spine_template: N9K-C9364C-GX_SPINE
+            spine_template: Edgecore-7726_32X_O_SPINE
             amount_of_spines: 2
             number_of_rows: 2
             maximum_leafs_per_row: 2

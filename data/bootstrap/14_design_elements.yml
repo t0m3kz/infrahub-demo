@@ -133,6 +133,29 @@ spec:
       role: leaf
       device_type: DCS-7050SX3-24YC4C-S-R
       template: DCS-7050SX3-24YC4C-S-R_LEAF
+
+    # Arista Middle Rack Leafs
+    - name: 2_ARISTA_LEAFS_MR_DCS-7050CX3-32C-R
+      description: 2 Arista DCS-7050CX3-32C-R MR LEAFS
+      quantity: 2
+      role: leaf
+      device_type: DCS-7050CX3-32C-R
+      template: DCS-7050CX3-32C-R_LEAF_MR
+
+    # Arista ToRs
+    - name: 2_ARISTA_TORS_DCS-7050CX3-32C-R
+      description: 2 Arista DCS-7050CX3-32C-R TORS
+      quantity: 2
+      role: tor
+      device_type: DCS-7050CX3-32C-R
+      template: DCS-7050CX3-32C-R_TOR
+    - name: 2_ARISTA_TORS_DCS-7050SX3-24YC4C-S-R
+      description: 2 Arista DCS-7050SX3-24YC4C-S-R TORS
+      quantity: 2
+      role: tor
+      device_type: DCS-7050SX3-24YC4C-S-R
+      template: DCS-7050SX3-24YC4C-S-R_TOR
+
     # Dell Leafs
     - name: 2_DELL_LEAFS_PowerSwitch-S5224F-ON
       description: 2 Dell PowerSwitch-S5224F-ON LEAFS
@@ -171,6 +194,29 @@ spec:
       role: leaf
       device_type: PowerSwitch S5248F-ON
       template: PowerSwitch-S5248F-ON_LEAF
+
+    # Dell Middle Rack Leafs
+    - name: 2_DELL_LEAFS_MR_PowerSwitch-S5232F-ON
+      description: 2 Dell PowerSwitch-S5232F-ON MR LEAFS
+      quantity: 2
+      role: leaf
+      device_type: PowerSwitch S5232F-ON
+      template: PowerSwitch-S5232F-ON_LEAF_MR
+
+    # Dell ToRs
+    - name: 2_DELL_TORS_PowerSwitch-S5224F-ON
+      description: 2 Dell PowerSwitch-S5224F-ON TORS
+      quantity: 2
+      role: tor
+      device_type: PowerSwitch S5224F-ON
+      template: PowerSwitch-S5224F-ON_TOR
+    - name: 2_DELL_TORS_PowerSwitch-S5248F-ON
+      description: 2 Dell PowerSwitch-S5248F-ON TORS
+      quantity: 2
+      role: tor
+      device_type: PowerSwitch S5248F-ON
+      template: PowerSwitch-S5248F-ON_TOR
+
     # Edgecore Leafs
     - name: 2_EDGECORE_LEAFS_Edgecore-7AS7326-56X-O-48V-F
       description: 2 Edgecore 7AS7326-56X-O-48V-F LEAFS

@@ -26,7 +26,25 @@ spec:
               - topologies_pod
           - index: 2
             deployment_type: middle_rack
-            spine_template: N9K-C9364C-GX_SPINE
+            spine_template: DCS-7050CX3-32C-R_SPINE
+            amount_of_spines: 2
+            number_of_rows: 2
+            maximum_leafs_per_row: 2
+            maximum_tors_per_row: 2
+            member_of_groups:
+              - topologies_pod
+          - index: 3
+            deployment_type: middle_rack
+            spine_template: PowerSwitch-S5232F-ON_SPINE
+            amount_of_spines: 2
+            number_of_rows: 2
+            maximum_leafs_per_row: 2
+            maximum_tors_per_row: 2
+            member_of_groups:
+              - topologies_pod
+          - index: 4
+            deployment_type: middle_rack
+            spine_template: Edgecore-7726_32X_O_SPINE
             amount_of_spines: 2
             number_of_rows: 2
             maximum_leafs_per_row: 2

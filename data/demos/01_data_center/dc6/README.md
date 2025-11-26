@@ -1,148 +1,95 @@
-# DC6 - Medium Multi-Vendor Data Center
+# DC6 - Mixed Vendors Within Pods Data Center (The Polish Efficiency Edition)
 
 ## Overview
-**Location:** Seattle
-**Size:** Medium (M)
-**Platform:** Multi-Vendor (Dell, Cisco, Arista)
-**Design Pattern:** M-Standard-MR (Medium Standard with Middle Rack)
+**Location:** Katowice 🇵🇱 (Poland's industrial powerhouse turned tech hub—where the only thing faster than the fiber is the coffee. Half the cost of Western Europe, double the sarcasm, and the rolada-modro-kapusta-gumiklyjzy-to-latency ratio is unbeatable!)
 
-**Use Case:** Medium-sized **multi-vendor** data center with middle_rack deployment. Demonstrates vendor interoperability at smaller scale. Cost-effective multi-vendor approach for medium enterprises.
+**Size:** Medium (M) - Cost-effective, interoperable, and a little wild. Big enough to cause trouble, small enough to blame someone else.
+
+**Platform:** Multi-Vendor (Cisco, Arista, Dell SONiC, Edgecore SONiC) — because why settle for one vendor's bugs when you can have them all?
+
+**Design Pattern:** M-Multi-Layer-Mixed (Medium Multi-Vendor Mixed Layers) — the architectural equivalent of a buffet: a little bit of everything, and you never know what you'll get next.
+
+**Use Case:**
+Medium-sized multi-vendor data center with middle_rack deployment. It's the perfect playground for engineers who like living dangerously, managers who love vendor bingo, and auditors who enjoy existential dread. Demonstrates vendor interoperability at a scale just big enough to break things, but small enough to blame the intern. Cost-effective multi-vendor approach for medium enterprises—because why settle for one vendor's support hotline when you can have four? If you've ever wanted to see a Cisco, Arista, Dell, and Edgecore device argue about spanning tree, BGP, and whose logo is the ugliest, this is your chance. Warning: May cause spontaneous VLAN migrations, philosophical debates about port-channel naming, and a sudden urge to update your resume.
 
 ---
 
-## Architecture
+## Architecture (Layer-Level Vendor Mix)
 
 ### Fabric Scale
-- **Super Spines:** 2 (Dell PowerSwitch S5232F-ON)
+- **Super Spines:** 2 (Cisco N9K-C9336C-FX2)
 - **Total Pods:** 2
 - **Total Spines:** 4 (2+2 across pods)
-- **Total Racks:** 6
+- **Total Racks:** 4 (2 per pod)
 - **Deployment Type:** middle_rack (all pods)
 
-### Pod Structure - Multi-Vendor
-| Pod | Spines | Vendor | Model | Racks | Deployment |
-|-----|--------|--------|-------|-------|------------|
-| Pod 1 | 2 | Cisco | N9K-C9336C-FX2 | 3 | middle_rack |
-| Pod 2 | 2 | Arista | DCS-7050PX4-32S-R | 3 | middle_rack |
-
-### Design Template Constraints
-- maximum_spines: 2 per pod
-- maximum_pods: 2
-- maximum_leafs: 16
-- maximum_rack_leafs: 6
-- maximum_middle_racks: 4
-- maximum_tors: 24
-- naming_convention: standard
+### Pod Structure (Vendor Mix Table)
+| Pod   | Spines | Vendor                | Leafs/ToRs Vendor | Racks | Deployment   |
+|-------|--------|----------------------|-------------------|-------|--------------|
+| Pod 1 | 2      | Arista (DCS-7050CX3-32C-R) | Dell SONiC      | 2     | middle_rack  |
+| Pod 2 | 2      | Edgecore (7726-32X-O)      | Cisco NX-OS     | 2     | middle_rack  |
 
 ---
 
-## Hardware Stack
+## Hardware Stack (Multi-Vendor Mayhem)
 
 ### Super Spine Layer
-- **Model:** Dell PowerSwitch S5232F-ON
-- **Ports:** 32x100GbE
+- **Model:** Cisco N9K-C9336C-FX2
+- **Ports:** 36x100GbE
 - **Role:** Inter-pod connectivity
-- **OS:** SONiC (open source)
+- **Fun Fact:** The neutral overlords
 
 ### Spine Layer (Multi-Vendor)
-- **Pod 1:** Cisco N9K-C9336C-FX2 (36x100GbE, NX-OS, 2 spines)
-- **Pod 2:** Arista DCS-7050PX4-32S-R (32x100GbE, EOS, 2 spines)
+- **Pod 1:** Arista DCS-7050CX3-32C-R (2 spines)
+- **Pod 2:** Edgecore 7726-32X-O (2 spines)
+- **Ports:** 32x100GbE each
+- **Role:** Pod-level aggregation
 
-### Vendor Distribution
-- **Dell:** Super Spines (SONiC)
-- **Cisco:** Pod 1 Spines (NX-OS)
-- **Arista:** Pod 2 Spines (EOS)
-
----
-
-## Deployment Strategy
-
-### Middle Rack (All Pods)
-**Vendor-Agnostic Pattern:**
-```
-ToR → Local Leafs (within rack)
-ToR → External Leafs (if no local, least utilized)
-```
-
-**Benefits:**
-- Same deployment logic across all vendors
-- Consistent operations
-- Reduced complexity vs. mixed deployment
-- Cost-effective aggregation
-
----
-
-## Use Case Analysis
-
-### ✅ **Strengths**
-- **Tri-Vendor:** Dell, Cisco, Arista in one fabric
-- **Medium Scale:** Right-sized for SMB/departmental
-- **Open + Proprietary:** SONiC (Dell) + NX-OS + EOS
-- **Cost Balanced:** Mix of price points
-- **Interoperability:** Validates multi-vendor middle_rack
-
-### 🎯 **Best For**
-- Medium enterprises (300-700 servers)
-- Organizations transitioning between vendors
-- Testing multi-vendor interoperability
-- Avoiding single-vendor dependency
-- Departmental or regional data centers
-
-### 💡 **Unique Features**
-- **Tri-Vendor Compact:** All 3 major vendors in small footprint
-- **Open Source Super Spine:** Dell SONiC at core
-- **Proprietary Pods:** NX-OS and EOS for feature-rich pods
-- **Balanced Scale:** Not too large, not too small
-
-### ⚠️ **Considerations**
-- Multi-vendor support requirements
-- Different CLI/API per vendor
-- Feature parity challenges
-- Training on 3 platforms
-
-### 📊 **Capacity Estimate**
-- 6 network racks
-- ~12-24 server racks (potential)
-- Supports 300-600 servers
+### Leaf/ToR Layer
+- **Pod 1:** Dell SONiC
+- **Pod 2:** Cisco NX-OS
+- **Role:** Rack-level aggregation and server connectivity
 
 ---
 
 ## Quick Start
 
 ```bash
-# Load topology
-uv run infrahubctl object load data/demos/01_data_center/dc6/
-
-# Generate fabric
-uv run infrahubctl generator create_dc name=DC6 --branch main
+uv run infrahubctl branch create dc6-test-$(date +%s)
+uv run invoke deploy-dc --scenario dc6 --branch dc6-test-<timestamp>
 ```
+
+**What Happens:**
+- Creates super spines, pods, spines, racks, leafs, ToRs, cables, configs
+- Validates connectivity
 
 ---
 
-## Interoperability Testing
-
-### Multi-Vendor Validation
-```bash
-# Generate full fabric
-uv run infrahubctl generator create_dc name=DC6 --branch main
-
-# Test scenarios:
-# 1. Dell SONiC ↔ Cisco NX-OS BGP peering
-# 2. Dell SONiC ↔ Arista EOS BGP peering
-# 3. EVPN route exchange across all vendors
-# 4. Consistent VXLAN behavior
-```
+## Troubleshooting (When Pierogi Meet Packets)
+- "Pod disappeared!" → Re-run full deploy, generators now have protection
+- "More racks than expected" → Check branch, clean up extra racks
+- "Configs not generating" → Check templates, branch, logs
+- "Validation failing" → Review messages, check cabling, verify configs
 
 ---
 
-## Files
-- `00_topology.yml` - Tri-vendor DC and Pod definitions
-- `01_suites.yml` - 2 suites (SEA-1 Room-1/2)
-- `02_racks.yml` - 6 network racks with mixed vendor equipment
+## Real Talk (Production Conversation)
+- **Production-Ready:** Hardware, patterns, architecture
+- **Demo-Land:** Templates, minimal security, simplified configs
+- **To Go Production:** Harden configs, add policies, integrate monitoring, test failures, document
+
+**Bottom Line:** Use DC6 to learn, not to deploy on Friday afternoon.
 
 ---
 
 ## Related Scenarios
-- **DC2:** Similar scale, Arista-only
-- **DC5:** Large multi-vendor (4 vendors)
-- **Comparison:** DC2 (single-vendor) vs DC6 (multi-vendor) at same scale
+- **DC1:** The Kitchen Sink (3 pods, 28 racks)
+- **DC2:** The Parisian Café (Middle Rack)
+- **DC3:** The Purist (Flat ToR)
+- **DC4:** The Variety Pack (Mixed deployments)
+- **DC5:** The United Nations (Multi-vendor)
+
+---
+
+## Fun Fact
+Polish efficiency meets vendor chaos—half Western European cost, full interoperability headaches. The pierogi are always fresh, the troubleshooting never ends.

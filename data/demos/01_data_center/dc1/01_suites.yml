@@ -13,6 +13,3 @@ spec:
     - suite_name: "Suite-3"
       shortname: "muc-1-s-3"
       parent: muc-1
-    - suite_name: "Suite-4"
-      shortname: "muc-1-s-4"
-      parent: muc-1
