@@ -48,8 +48,11 @@ uv run infrahubctl object load data/demos/04_pod/
 ---
 
 ## Fun Fact
-- Pod 4 exists because someone said "just one more."
-- The only thing multiplying faster than pods is documentation debt.
-- If you think Pod 4 is the last, you haven't met your application team.
+
+Pod 4 exists because someone said "just one more."
+
+The only thing multiplying faster than pods is documentation debt (if you're not using Infrahub)
+
+If you think Pod 4 is the last, you haven't met your application team.
 
 **Welcome to pod proliferation! May your OPEX be ever in your favor.**

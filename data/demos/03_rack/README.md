@@ -41,5 +41,7 @@ This rack will outlive your tenure at the company. Plan accordingly. If you labe
 ---
 
 ## Fun Fact
-- Minimal racks are never minimal for long.
-- The only thing more permanent than a temporary rack is a temporary workaround.
+
+inimal racks are never minimal for long.
+
+The only thing more permanent than a temporary rack is a temporary workaround.
