@@ -1,4 +1,4 @@
-# DC3 - Flat ToR Data Center (The Brexit-Proof Minimalist Edition)
+# DC3 - Brexit, No Middle Management, Maximum Sass
 
 ## Overview
 **Location:** London 🇬🇧 (Brexit happened, but your data stays! More fiber under the Thames than umbrellas in the city)

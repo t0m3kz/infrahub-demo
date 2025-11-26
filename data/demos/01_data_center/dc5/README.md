@@ -1,4 +1,4 @@
-# DC5 - Multi-Vendor Per Pod Data Center (The United Nations Edition)
+# DC5 - Multi-Vendor: Eurovision for Switches
 
 ## Overview
 **Location:** New York 🇺🇸 (The city that never sleeps, neither does your infrastructure. Rack space cheaper than a Manhattan studio!)
@@ -76,4 +76,4 @@ uv run infrahubctl generator generate_dc name=DC5 --branch you_branch
 Trigger infrastructure generation in InfraHub UI → Actions → Generator Definitions → generate_dc DC5-Fabric-1
 
 ## Fun Fact
-Four vendors, four pods, infinite inter-vendor compatibility discussions. At least they all speak BGP... mostly.
+After visit in

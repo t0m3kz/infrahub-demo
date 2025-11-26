@@ -1,4 +1,4 @@
-# DC1 - Large Hierarchical Enterprise Data Center (The Kitchen Sink Edition)
+# DC1 - Hierarchy Overkill: The Kitchen Sink Data Center
 
 ## Overview
 **Location:** Munich 🇩🇪 (Home to Oktoberfest and BMW - where beer gardens meet precision engineering)
