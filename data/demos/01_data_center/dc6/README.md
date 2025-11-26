@@ -1,7 +1,7 @@
-# DC6 - Mixed Vendors Within Pods Data Center (The Polish Efficiency Edition)
+# DC6 - Mixed Vendors: Silesian Buffet, Vendor Bingo, Debug & Dine
 
 ## Overview
-**Location:** Katowice 🇵🇱 (Poland's industrial powerhouse turned tech hub—where the only thing faster than the fiber is the coffee. Half the cost of Western Europe, double the sarcasm, and the rolada-modro-kapusta-gumiklyjzy-to-latency ratio is unbeatable!)
+**Location:** Katowice 🇵🇱 (Poland's and Silesian industrial powerhouse turned tech hub—where the only thing faster than the fiber is the coffee. Half the cost of Western Europe, double the sarcasm, and the rolada-modro-kapusta-gumiklyjzy-to-latency ratio is unbeatable!)
 
 **Size:** Medium (M) - Cost-effective, interoperable, and a little wild. Big enough to cause trouble, small enough to blame someone else.
 

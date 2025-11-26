@@ -1,4 +1,4 @@
-# DC4 - Mixed Deployment Data Center (The Berlin Techno Edition)
+# DC4 - Mixed Deployment: Maximum Chaos, Minimum Rules
 
 ## Overview
 **Location:** Berlin 🇩🇪 (The hipster capital - your infrastructure is as edgy as the local techno scene)

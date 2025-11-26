@@ -127,16 +127,16 @@ uv run invoke load-events
 #### Single-Vendor Deployments (DC1-DC4)
 | Scenario | Location | Vendor | Deployment | Description |
 |----------|----------|--------|------------|-------------|
-| **[DC1](data/demos/01_data_center/dc1/)** | Munich 🇩🇪 | Cisco | All (MR+Mixed+ToR) | The Kitchen Sink - 28 racks showcasing ALL deployment types because why choose when you can have it all? |
-| **[DC2](data/demos/01_data_center/dc2/)** | Paris 🇫🇷 | Arista | Middle Rack | Croissant-powered EOS efficiency - proving you don't need a mortgage to build reliable infrastructure |
-| **[DC3](data/demos/01_data_center/dc3/)** | London 🇬🇧 | Dell/SONiC | Flat ToR | Brexit-proof flat topology - more fiber under the Thames than extra hops in your packet path |
-| **[DC4](data/demos/01_data_center/dc4/)** | Berlin 🇩🇪 | Edgecore/SONiC | Mixed + ToR | Hipster open networking - as edgy as the techno scene, vendor-neutral like Berlin's nightlife |
+| **[DC1](data/demos/01_data_center/dc1/)** | Munich 🇩🇪 | Cisco | All (MR+Mixed+ToR) | Hierarchy Overkill: All the racks, all the drama. |
+| **[DC2](data/demos/01_data_center/dc2/)** | Paris 🇫🇷 | Arista | Middle Rack | Croissants & Cheap Packets: Small, efficient, and CFO-approved. |
+| **[DC3](data/demos/01_data_center/dc3/)** | London 🇬🇧 | Dell/SONiC | Flat ToR | Brexit, No Middle Management, Maximum Sass. |
+| **[DC4](data/demos/01_data_center/dc4/)** | Berlin 🇩🇪 | Edgecore/SONiC | Mixed + ToR | Maximum Chaos, Minimum Rules. |
 
 #### Multi-Vendor Deployments (DC5-DC6)
 | Scenario | Location | Architecture | Description |
 |----------|----------|-------------|-------------|
-| **[DC5](data/demos/01_data_center/dc5/)** | New York 🇺🇸 | Different vendor per pod | Wall Street's playground - 4 pods, 4 vendors, cheaper than a Manhattan studio (the racks, not the servers) |
-| **[DC6](data/demos/01_data_center/dc6/)** | Katowice 🇵🇱 | Mixed vendors within pods | Polish efficiency meets vendor chaos - half Western European cost, full interoperability headaches |
+| **[DC5](data/demos/01_data_center/dc5/)** | New York 🇺🇸 | Different vendor per pod | Eurovision for Switches: 4 pods, 4 vendors, 0 peace. |
+| **[DC6](data/demos/01_data_center/dc6/)** | Katowice 🇵🇱 | Mixed vendors within pods | Silesian Buffet, Vendor Bingo, Debug & Dine. |
 
 #### Expansion & Incremental Deployment Scenarios
 
@@ -144,10 +144,10 @@ Explore LLM upgrades and organic growth patterns—all in one place, please make
 
 | Scenario | Location | Type/Architecture | Description |
 |----------|----------|-------------------|-------------|
-| **[switch](data/demos/02_switch/)** | Munich 🇩🇪 | Rack Expansion | "Just TWO more switches" - 2 ToRs to existing rack. How organic growth happens. |
-| **[rack](data/demos/03_rack/)** | Munich 🇩🇪 | Minimal ToR | The minimalist approach - single ToR rack that started as a "test" and became critical infrastructure. |
-| **[pod](data/demos/04_pod/)** | Munich 🇩🇪 | Pod Expansion | Pod 4 arrives because Pods 1-3 weren't enough. Flat topology to keep things simple (this time). |
-| **[llm time](data/demos/05_llm_time/)** | Munich 🇩🇪 | Spine Expansion | Trojan Horse upgrade: Sneak in extra spines for LLM workloads and plausible deniability. |
+| **[switch](data/demos/02_switch/)** | Munich 🇩🇪 | Rack Expansion | "Just TWO more switches"—organic chaos. |
+| **[rack](data/demos/03_rack/)** | Munich 🇩🇪 | Minimal ToR | Minimalist rack: started as a test, now it's critical. |
+| **[pod](data/demos/04_pod/)** | Munich 🇩🇪 | Pod Expansion | Pod 4: because 3 wasn't enough. |
+| **[llm time](data/demos/05_llm_time/)** | Munich 🇩🇪 | Spine Expansion | Extra spines for LLMs—plausible deniability included. |
 
 Brace yourself: even more questionable use cases, wild topologies, and vendor drama are coming soon. If you want to see even more chaos, star this repo—so the author can unlock extra GitHub tools and automate his caffeine intake. Your star may be the difference between a new feature and another debugging session at midnight!
 

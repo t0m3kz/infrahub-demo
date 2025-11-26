@@ -1,4 +1,4 @@
-# DC2 - The "Arista EOS" Edition
+# DC2 - Croissants & Cheap Packets
 *Middle Rack Data Center with Hierarchical Naming Strategy*
 
 ## Overview
