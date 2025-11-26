@@ -89,8 +89,8 @@ uv run infrahubctl generator generate_dc name=DC2 --branch you_branch
 Trigger infrastructure generation in InfraHub UI → Actions → Generator Definitions → generate_dc DC2-Fabric-1
 
 ## Fun Fact
-As a teenager, the author visited La Défense and dreamed of working in one of those shiny Parisian towers. Years later, when the chance finally came, he thanked the God that the dream never came true.
+As a teenager, the author visited La Défense and dreamed of working in one of those shiny Parisian towers.
 
-Moral: Sometimes your network is better off outside the business district—and so is your sanity.
+Years later, when the chance finally came, he realized it was a truly ridiculous dream—and thanked the universe for dodging a lifetime of overpriced coffee, endless PowerPoint meetings, rush hour traffic, and spontaneous synergy sessions.
 
-Bonus: You’ll avoid rush hour, overpriced coffee, and spontaneous meetings about synergy.
+Moral: Sometimes your network (and your sanity) are better off far away from the business district.

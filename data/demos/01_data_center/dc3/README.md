@@ -81,3 +81,5 @@ Trigger infrastructure generation in InfraHub UI → Actions → Generator Defin
 
 ## Fun Fact
 The author still uses the mug he bought 25 years ago in London—proof that some British imports last longer than most celebrity marriages, and definitely longer than any network outage.
+
+Unlike certain monarchs, this mug has never abdicated, and it’s still on the throne of morning coffee—no royal drama, just reliable caffeine delivery.
