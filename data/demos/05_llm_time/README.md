@@ -33,6 +33,9 @@ Perfect for:
 uv run infrahubctl object load data/demos/05_llm_time/
 ```
 
+Here you just sit back, sip your coffee, and watch the magic happen—no clicking, no frantic tab switching, just pure event-driven automation.
+
+It's like Netflix for network engineers, but with fewer cliffhangers.
 ---
 
 ## Fun Fact

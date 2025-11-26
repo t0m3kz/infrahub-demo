@@ -5,12 +5,14 @@
 
 **Size:** Medium (M) - Diverse, resilient, and a little bit chaotic
 
-**Platform:** Multi-Vendor — why settle for one support hotline when you can outsource your problems to Cisco, Arista, Dell, and Edgecore all at once?
+**Platform:** Multi-Vendor — why settle for one when you can pay four support contracts and juggle Cisco, Arista, Dell, and Edgecore all at once?
 
 **Design Pattern:** M-Multi-Pod-MR (Medium Multi-Vendor Per Pod, Middle Rack)
 
 **Use Case:**
-Pod-level vendor diversity for risk mitigation and best-of-breed selection. Each pod pledges allegiance to a different vendor—like a networking version of Eurovision, but with more BGP and fewer sequins. It's middle_rack deployment across all 4 pods because hierarchy transcends vendor boundaries (and so do support tickets). Perfect for testing vendor migration strategies, proving your multi-vendor expertise at parties, and discovering which vendor's CLI makes you question your life choices. Warning: May result in spontaneous protocol debates, inter-vendor blame games, and a sudden urge to update your LinkedIn profile.
+Pod-level vendor diversity for risk mitigation and best-of-breed selection. Each pod pledges allegiance to a different vendor—like a american version of Eurovision, but with more BGP and fewer sequins. It's middle_rack deployment across all 4 pods because hierarchy transcends vendor boundaries (and so do support tickets). Perfect for testing vendor migration strategies, proving your multi-vendor expertise at parties, and discovering which vendor's CLI makes you question your life choices.
+
+Warning: May result in spontaneous protocol debates, inter-vendor blame games, and a sudden urge to update your LinkedIn profile.
 
 ---
 

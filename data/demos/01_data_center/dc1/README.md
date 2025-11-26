@@ -18,7 +18,7 @@
 ### Fabric Scale (Or: How We Learned to Stop Worrying and Love Complexity)
 - **Super Spines:** 2 (Cisco N9K-C9336C-FX2) - The bosses of bosses
 - **Total Pods:** 3 (Each with its own personality disorder)
-- **Total Spines:** 9 (3+3+3 - we believe in equality)
+- **Total Spines:** 8 (3+3+2 - we believe in equality)
 - **Total Racks:** 28 (Because 27 just wasn't chaotic enough)
 - **Deployment Types:** It's complicated (Pods 1-2: middle_rack showing off, Pod 3: ToR keeping it simple)
 
@@ -129,6 +129,8 @@ Trigger infrastructure generation in InfraHub UI → Actions → Generator Defin
 Watch the magic happen (or the chaos unfold, depending on your perspective)
 
 Pro tip: Have the InfraHub UI open to see devices spawn like rabbits
+
+Create a Proposed Change (PC) and watch the chaos unfold in real time.
 
 ## Fun Fact
 The author lives in Munich and has spent years trying to understand the rules of Schafkopf as explained in Bavarian—proof that some network topologies are easier to decipher than local card games.

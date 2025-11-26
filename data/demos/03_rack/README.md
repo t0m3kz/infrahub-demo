@@ -33,6 +33,12 @@ This rack is perfect for:
 uv run infrahubctl object load data/demos/03_rack/
 ```
 
+Trigger infrastructure generation in InfraHub UI → Actions → Generator Definitions → generate_rack MUC-1-SUITE-2-R2-5
+
+Why rack 5 when we're only adding rack 2?
+
+Because in mixed deployments, logic takes a back seat and every ToR rack gets a direct line to the middle switch—like networking bingo, but with more cables and less chance of winning.
+
 ---
 
 ## Pro Tip
@@ -42,6 +48,6 @@ This rack will outlive your tenure at the company. Plan accordingly. If you labe
 
 ## Fun Fact
 
-inimal racks are never minimal for long.
+Minimal racks are never minimal for long.
 
 The only thing more permanent than a temporary rack is a temporary workaround.

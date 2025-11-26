@@ -2,6 +2,7 @@
 *The "We Need More Pods" Episode*
 
 ## Overview
+
 **Purpose:** Add Pod 4 to DC1 because Pods 1-3 weren't enough chaos. Because every good story needs a sequel.
 
 **Philosophy:** If 3 pods are good, 4 pods are... more? Or maybe just more confusing.
@@ -44,6 +45,8 @@ Perfect for:
 # Load data
 uv run infrahubctl object load data/demos/04_pod/
 ```
+
+Trigger infrastructure generation in InfraHub UI → Actions → Generator Definitions → generate_dc DC1
 
 ---
 
