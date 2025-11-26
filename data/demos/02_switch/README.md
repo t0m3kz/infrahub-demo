@@ -35,6 +35,15 @@ uv run infrahubctl object load data/demos/02_switch/
 ---
 
 ## Fun Fact
-- Every "temporary" rack addition is a permanent fixture by next quarter.
-- The only thing multiplying faster than switches is regret.
-- Cable management will require a PhD and a sense of humor.
+
+Every "temporary" rack addition is a permanent fixture by next quarter.
+
+The only thing multiplying faster than switches is regret.
+
+Cable management will require a PhD and a sense of humor.
+
+The only thing more organic than this rack expansion is the panic when someone asks, "Can we add just two more switches?"
+
+If you think this is chaotic, wait until someone suggests moving it all to the cloud.
+
+Tip : Public cloud - because nothing says "future-proof" like paying monthly to rent someone else's chaos.

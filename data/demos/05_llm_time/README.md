@@ -36,6 +36,10 @@ uv run infrahubctl object load data/demos/05_llm_time/
 ---
 
 ## Fun Fact
-- The only thing more mysterious than LLMs is why you suddenly need four spines.
-- Trojan Horse upgrades: because sometimes the best way to get what you want is to hide it in a box labeled "AI".
-- If your spines start writing poetry, it's time to panic.
+The only thing more mysterious than LLMs is why you suddenly need four spines.
+
+Trojan Horse upgrades: because sometimes the best way to get what you want is to hide it in a box labeled "AI".
+
+If your spines start writing poetry, it's time to panic.
+
+Tip: Public cloud - for when you want your AI to be someone else's outage problem.

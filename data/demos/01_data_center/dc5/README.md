@@ -76,4 +76,7 @@ uv run infrahubctl generator generate_dc name=DC5 --branch you_branch
 Trigger infrastructure generation in InfraHub UI → Actions → Generator Definitions → generate_dc DC5-Fabric-1
 
 ## Fun Fact
-After visit in
+
+After a trip to New York and watching movies where people order “the world’s best hot dog” delivered by plane, the author bravely sampled three different vendors—just to validate the multi-vendor strategy.
+
+Verdict: not worth the carbon footprint, and definitely not worth explaining to customs why you’re importing a hot dog.
