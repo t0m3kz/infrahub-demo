@@ -64,7 +64,7 @@ This demo is trying prove it: from topology design to device generation, from co
 - [`templates/`](templates/) – Jinja2 templates for device configs
 - [`tests/`](tests/) – Unit, integration, and smoke tests
 - [`transforms/`](transforms/) – Python transforms for Infrahub
-- [`utils/`](utils/) – Helper scripts for automation
+- [`utils/`](utils/) – Commonly used helpers
 
 ## Quickstart
 
