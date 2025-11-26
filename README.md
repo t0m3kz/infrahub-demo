@@ -36,7 +36,7 @@ This demo is trying prove it: from topology design to device generation, from co
 
 **Special thanks to [OpsMill](https://opsmill.com) for making this happen** – they built Infrahub with the vision that infrastructure teams should have complete control, not be prisoners to vendor constraints. (And yes, I'm bloody jealous I didn't have the power and motivation to come up with such a brilliant idea myself – like Prometheus watching others steal the fire of the gods!)
 
-**To companies/vendors** who may be inspired by ideas from this repository and use them in their customer environments: please consider sponsoring 3 open source communities. It's crucial to ensure that the incredible volunteers who build these tools don't feel like losers. They deserve recognition and support for their outstanding contributions to the tech community. I sincerely hope you've earned enough that a few dollars a month sponsoring open source communities won't cause financial collapse – you can well afford to give back.
+**To companies/vendors** who may borrow ideas from this repo for your customer environments: please sponsor at least 3 open source communities. Odds are, open source powers half your commercial products anyway. The volunteers who build these tools deserve more than just a "thanks" and a GitHub star. And if you’ve ever filed a bug report and then complained about how long it takes to fix, remember: a few dollars a month for open source won’t even dent your coffee budget—so go ahead, give back and help keep these communities caffeinated and strong.
 
 ---
 
