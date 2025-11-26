@@ -22,17 +22,17 @@ These so-called "solutions" arrived festooned with monitoring dashboards and dep
 
 And don't even get me started on YAML files or Terraform configurations so deeply nested and interdependent that changing one variable requires a PhD in archaeology to trace what will explode three modules away.
 
-Infrastructure as Code was supposed to mean **freedom**—not just shuffling YAML incantations into some vendor's inscrutable black box and praying to the Cloud Gods for mercy.
+Infrastructure as Code was supposed to mean freedom—not just shuffling YAML incantations into some vendor's inscrutable black box and praying to the Cloud Gods for mercy.
 
-I wanted **absolute sovereignty over my data model**, the liberty to forge my own relationships, the power to orchestrate everything through code—no "Wizard Step 3 of 47" required, no integration hell spanning multiple vendor portals where you need a Rosetta Stone just to make two systems talk to each other.
+I wanted *absolute sovereignty over my data model*, the liberty to forge my own relationships, the power to orchestrate everything through code—no "Wizard Step 3 of 47" required, no integration hell spanning multiple vendor portals where you need a Rosetta Stone just to make two systems talk to each other.
 
 And I was especially done with external vendor developers who treat automation like a YOLO sport—deploying untested code straight into production, using customer company as their personal test lab, and only realizing what went wrong when the alarms go off. If you dare to question their approach, they escalate to the highest level, as if basic testing is an outrageous demand.
 
 For those blissfully unaware, "YOLO" means "You Only Live Once"—in this context, it’s developer-speak for "deploy now, worry never," and a total disregard for actual results.
 
-Infrahub changed that. It's not another tool forcing strict data definitions or telling me how to think about infrastructure. Instead, it lets me define my own data structures—a new approach that puts me in control of how my infrastructure is modeled and managed. Design-driven automation means I own the schemas, I own the logic, I own the destiny of my network. No more vendor lock-in, no more GUI dependency, no more compromise.
+Infrahub changed that. It's not another tool forcing strict data definitions or telling me how to think about infrastructure. Instead, it lets me define my own data structures—a new approach that puts me in control of how my infrastructure is modeled and managed. Design-driven automation means I own the schemas, I own the logic, I own the destiny of my network. No more vendor lock-in, no more GUI dependency, no more compromise. And best of all, it delivers an easy-to-use approach for unit testing and integration testing—so you can actually trust your automation before it hits production.
 
-This demo is trying prove it: from topology design to device generation, from configuration templates to validation checks—all driven by **my data structures**, all automated through **my code**. That's the infrastructure revolution I was waiting for.
+This demo is trying prove it: from topology design to device generation, from configuration templates to validation checks—all driven by my data structures, all automated through my code. That's the infrastructure revolution I was waiting for.
 
 **Special thanks to [OpsMill](https://opsmill.com) for making this happen** – they built Infrahub with the vision that infrastructure teams should have complete control, not be prisoners to vendor constraints. (And yes, I'm bloody jealous I didn't have the power and motivation to come up with such a brilliant idea myself – like Prometheus watching others steal the fire of the gods!)
 
