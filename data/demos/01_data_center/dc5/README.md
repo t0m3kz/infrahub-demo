@@ -54,63 +54,26 @@ Pod-level vendor diversity for risk mitigation and best-of-breed selection. Each
 - **Model:** Varies by pod
 - **Role:** Server connectivity
 
----
-
-## Deployment Strategy (Hierarchy Obsession)
-
-**Packet Path:**
-Server → ToR → Leaf → Spine → Super Spine
-
-**Why Multi-Vendor Rocks:**
-- ✅ Risk mitigation
-- ✅ Best-of-breed selection
-- ✅ Vendor migration testing
-- ✅ BGP everywhere (mostly)
-
-**Trade-offs:**
-- ⚠️ Inter-vendor compatibility discussions
-- ⚠️ Documentation is critical
-- ⚠️ Support contracts for everyone
-
----
+-
 
 ## Quick Start
 
 ```bash
-uv run infrahubctl branch create dc5-test-$(date +%s)
-uv run invoke deploy-dc --scenario dc5 --branch dc5-test-<timestamp>
+# really quick
+uv run inv deploy-dc --scenario dc5 --branch your_branch
+
+# I'm the control nerd
+uv run infrahubctl branch create you_branch
+
+# Load topology (this is the point of no return)
+uv run infrahubctl object load data/demos/01_data_center/dc5/ --branch you_branch
+
+# Generate fabric (grab coffee, this might take a while)
+uv run infrahubctl generator generate_dc name=DC5 --branch you_branch
+
 ```
 
-**What Happens:**
-- Creates super spines, pods, spines, racks, leafs, ToRs, cables, configs
-- Validates connectivity
-
----
-
-## Troubleshooting (When the UN Security Council Gets Involved)
-- "Pod disappeared!" → Re-run full deploy, generators now have protection
-- "More racks than expected" → Check branch, clean up extra racks
-- "Configs not generating" → Check templates, branch, logs
-- "Validation failing" → Review messages, check cabling, verify configs
-
----
-
-## Real Talk (Production Conversation)
-- **Production-Ready:** Hardware, patterns, architecture
-- **Demo-Land:** Templates, minimal security, simplified configs
-- **To Go Production:** Harden configs, add policies, integrate monitoring, test failures, document
-
-**Bottom Line:** Use DC5 to learn, not to deploy on Friday afternoon.
-
----
-
-## Related Scenarios
-- **DC1:** The Kitchen Sink (3 pods, 28 racks)
-- **DC2:** The Parisian Café (Middle Rack)
-- **DC3:** The Purist (Flat ToR)
-- **DC4:** The Variety Pack (Mixed deployments)
-
----
+Trigger infrastructure generation in InfraHub UI → Actions → Generator Definitions → generate_dc DC5-Fabric-1
 
 ## Fun Fact
 Four vendors, four pods, infinite inter-vendor compatibility discussions. At least they all speak BGP... mostly.

@@ -55,41 +55,26 @@ Medium-sized multi-vendor data center with middle_rack deployment. It's the perf
 ## Quick Start
 
 ```bash
-uv run infrahubctl branch create dc6-test-$(date +%s)
-uv run invoke deploy-dc --scenario dc6 --branch dc6-test-<timestamp>
+# really quick
+uv run inv deploy-dc --scenario dc6 --branch your_branch
+
+# I'm the control nerd
+uv run infrahubctl branch create you_branch
+
+# Load topology (this is the point of no return)
+uv run infrahubctl object load data/demos/01_data_center/dc6/ --branch you_branch
+
+# Generate fabric (grab coffee, this might take a while)
+uv run infrahubctl generator generate_dc name=DC6 --branch you_branch
+
 ```
 
-**What Happens:**
-- Creates super spines, pods, spines, racks, leafs, ToRs, cables, configs
-- Validates connectivity
-
----
-
-## Troubleshooting (When Pierogi Meet Packets)
-- "Pod disappeared!" → Re-run full deploy, generators now have protection
-- "More racks than expected" → Check branch, clean up extra racks
-- "Configs not generating" → Check templates, branch, logs
-- "Validation failing" → Review messages, check cabling, verify configs
-
----
-
-## Real Talk (Production Conversation)
-- **Production-Ready:** Hardware, patterns, architecture
-- **Demo-Land:** Templates, minimal security, simplified configs
-- **To Go Production:** Harden configs, add policies, integrate monitoring, test failures, document
-
-**Bottom Line:** Use DC6 to learn, not to deploy on Friday afternoon.
-
----
-
-## Related Scenarios
-- **DC1:** The Kitchen Sink (3 pods, 28 racks)
-- **DC2:** The Parisian Café (Middle Rack)
-- **DC3:** The Purist (Flat ToR)
-- **DC4:** The Variety Pack (Mixed deployments)
-- **DC5:** The United Nations (Multi-vendor)
-
----
+Trigger infrastructure generation in InfraHub UI → Actions → Generator Definitions → generate_dc DC6-Fabric-1
 
 ## Fun Fact
-Polish efficiency meets vendor chaos—half Western European cost, full interoperability headaches. The pierogi are always fresh, the troubleshooting never ends.
+
+The author of this repo is both Polish and Silesian—which means he can debug BGP while making rolada, modro kapusta, and gumiklyjzy, all before the kettle boils.
+
+If you have no idea what rolada-modro-kapusta-gumiklyjzy is, visit Upper Silesia and prepare to fall in love (and possibly into a food coma).
+
+Warning: After one bite, you may start speaking Silesian and dreaming of working in a coal mine.

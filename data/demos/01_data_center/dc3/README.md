@@ -60,23 +60,24 @@ Server → ToR → Spine → Super Spine
 ```
 ---
 
-## Quick Start (For the Brave)
+## Quick Start
 
 ```bash
 # really quick
-uv run inv deploy-dc --scenario dc1 --branch your_branch
+uv run inv deploy-dc --scenario dc3 --branch your_branch
 
 # I'm the control nerd
 uv run infrahubctl branch create you_branch
 
 # Load topology (this is the point of no return)
-uv run infrahubctl object load data/demos/01_data_center/dc2/ --branch you_branch
+uv run infrahubctl object load data/demos/01_data_center/dc3/ --branch you_branch
 
 # Generate fabric (grab coffee, this might take a while)
-uv run infrahubctl generator generate_dc name=DC2 --branch you_branch
+uv run infrahubctl generator generate_dc name=DC3 --branch you_branch
 
-# Watch the magic happen (or the chaos unfold, depending on your perspective)
-# Pro tip: Have the InfraHub UI open to see devices spawn like rabbits
 ```
 
-Trigger infrastructure generation in InfraHub UI → Actions → Generator Definitions → generate_dc DC1-Fabric-1
+Trigger infrastructure generation in InfraHub UI → Actions → Generator Definitions → generate_dc DC3-Fabric-1
+
+## Fun Fact
+The author still uses the mug he bought 25 years ago in London—proof that some British imports last longer than most celebrity marriages, and definitely longer than any network outage.
