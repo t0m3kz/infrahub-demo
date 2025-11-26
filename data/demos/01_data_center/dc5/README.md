@@ -5,7 +5,7 @@
 
 **Size:** Medium (M) - Diverse, resilient, and a little bit chaotic
 
-**Platform:** Multi-Vendor (Cisco, Arista, Dell SONiC, Edgecore SONiC)
+**Platform:** Multi-Vendor — why settle for one support hotline when you can outsource your problems to Cisco, Arista, Dell, and Edgecore all at once?
 
 **Design Pattern:** M-Multi-Pod-MR (Medium Multi-Vendor Per Pod, Middle Rack)
 

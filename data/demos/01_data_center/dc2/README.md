@@ -6,7 +6,7 @@
 
 **Size:** Small (S) - Efficient, elegant, and budget-friendly
 
-**Platform:** Arista EOS - API-driven modern network OS
+**Platform:** Arista EOS - So API-driven, even your croissant can trigger a config change.
 
 **Design Pattern:** S-Middle-MR (Small Middle Rack)
 

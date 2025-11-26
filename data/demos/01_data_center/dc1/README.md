@@ -2,8 +2,11 @@
 
 ## Overview
 **Location:** Munich 🇩🇪 (Home to Oktoberfest and BMW - where beer gardens meet precision engineering)
+
 **Size:** Large (L) - Like your cloud bill after forgetting to turn off dev instances
+
 **Platform:** Cisco Nexus 9K - The networking equivalent of driving a tank to the grocery store
+
 **Design Pattern:** L-Hierarchical-MR (Large Hierarchical with Middle Rack)
 
 **Use Case:** Enterprise data center suffering from **deployment identity crisis** - featuring both middle_rack and ToR connectivity within the same fabric. This is what happens when the architecture committee couldn't decide, so they chose "all of the above." Perfect for demonstrating that flexibility isn't always a feature; sometimes it's just indecision with a marketing spin.
@@ -22,9 +25,9 @@
 ### Pod Structure (The Family Dysfunction Table)
 | Pod | Spines | Deployment Type | Racks | Personality |
 |-----|--------|----------------|-------|-------------|
-| POD-1 | 3 | middle_rack | 4 middle racks (network type) | The overachiever with hierarchy complex |
+| POD-1 | 3 | middle_rack | 4 middle racks  | The overachiever with hierarchy complex |
 | POD-2 | 3 | mixed | 8 mixed (4 middle + 4 ToR) | The confused middle child trying both strategies |
-| POD-3 | 3 | tor | 12 ToR racks | The minimalist who read "Keep It Simple" once and took it seriously |
+| POD-3 | 2 | tor | 12 ToR racks | The minimalist who read "Keep It Simple" once and took it seriously |
 
 ### Design Template Constraints (Or: The Rules We Pretend to Follow)
 - maximum_super_spines: 4 (but we only use 2 because who needs redundancy, right?)
@@ -40,17 +43,17 @@
 
 ## Hardware Stack (The Expensive Bits)
 
-### Spine Layer (The Middle Management)
-- **Model:** Cisco N9K-C9364C-GX
-- **Ports:** 64x100GbE (that's a lot of cables to accidentally unplug)
-- **Role:** Pod-level aggregation and professional packet shuffler
-- **Fun Fact:** Each port costs more than your car payment
-
 ### Super Spine Layer (The Executive Suite)
 - **Model:** Cisco N9K-C9336C-FX2
 - **Ports:** 36x100GbE (fewer ports, higher paygrade)
 - **Role:** Inter-pod connectivity and being generally superior
 - **Fun Fact:** Only talks to spines, has security escort VLANs
+
+### Spine Layer (The Middle Management)
+- **Model:** Cisco N9K-C9364C-GX
+- **Ports:** 64x100GbE (that's a lot of cables to accidentally unplug)
+- **Role:** Pod-level aggregation and professional packet shuffler
+- **Fun Fact:** Each port costs more than your car payment
 
 ### Leaf Layer (The Worker Bees - Middle Rack Edition)
 - **Model:** Cisco N9K-C9336C-FX2
@@ -132,4 +135,4 @@ The author lives in Munich and has spent years trying to understand the rules of
 
 If you ever win a round, you’re officially more Bavarian than a pretzel at Oktoberfest.
 
-Unknown Munich Fact: The city’s official symbol is the Münchner Kindl—a child in a monk’s robe, which is still less mysterious than Bavarian pronunciation (especially after your second Maß of beer).
+Munich Fact: The city’s official symbol is the Münchner Kindl—a child in a monk’s robe, which is still less mysterious than Bavarian pronunciation (especially after your second Maß of beer).
