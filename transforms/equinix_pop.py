@@ -7,7 +7,7 @@ from .common import get_data
 
 
 class EquinixPOP(InfrahubTransform):
-    query = "equinix_pop_config"
+    query = "topology_pop"
 
     async def transform(self, data: Any) -> Any:
         data = get_data(data)

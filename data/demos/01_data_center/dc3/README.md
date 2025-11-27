@@ -7,7 +7,7 @@
 
 **Platform:** Dell PowerSwitch with SONiC - So open, even your neighbor's cat could SSH in (if it knew the password).
 
-**Design Pattern:** S-Flat-ToR (Small Flat Top-of-Rack)
+**Design Pattern:** M-Flat (Medium with flat naming convention)
 
 **Use Case:**
 For those who say "I don't want any extra hops" and actually mean it. Pure flat ToR deployment—every ToR switch connects directly to spines, like a networking speed-dating event with zero commitment. No middle aggregation, no leaf layer bureaucracy, just servers talking to ToRs and ToRs talking to spines. It's a minimalist's dream and a cable management team's recurring nightmare. If you love low latency, hate complexity, and enjoy watching your spine ports disappear faster than free beer at a tech conference, this one's for you.

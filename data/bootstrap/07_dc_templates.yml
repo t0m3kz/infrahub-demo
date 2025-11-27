@@ -5,215 +5,78 @@ spec:
   kind: TopologyDataCenterDesign
   data:
     # ToR deployment patterns
-    - name: S-Standard-ToR
+    - name: S-Standard
       maximum_super_spines: 2
       maximum_spines: 2
       maximum_pods: 2
-      maximum_leafs: 0
-      maximum_tors: 16
+      maximum_switches: 24
       naming_convention: standard
 
-    - name: S-Hierarchical-ToR
+    - name: S-Hierarchical
       maximum_spines: 2
       maximum_pods: 2
-      maximum_leafs: 0
-      maximum_tors: 16
+      maximum_switches: 24
       naming_convention: hierarchical
 
-    - name: S-Flat-ToR
+    - name: S-Flat
       maximum_spines: 2
       maximum_pods: 2
-      maximum_leafs: 0
-      maximum_tors: 16
+      maximum_switches: 24
       naming_convention: flat
 
-    - name: M-Flat-ToR
+    - name: M-Standard
       maximum_spines: 2
       maximum_pods: 2
-      maximum_leafs: 0
-      maximum_tors: 32
+      maximum_switches: 48
+      naming_convention: standard
+
+    - name: M-Hierarchical
+      maximum_spines: 2
+      maximum_pods: 2
+      maximum_switches: 48
+      naming_convention: hierarchical
+
+    - name: M-Flat
+      maximum_spines: 2
+      maximum_pods: 2
+      maximum_switches: 48
       naming_convention: flat
 
-    - name: L-Flat-ToR
+    - name: L-Standard
       maximum_spines: 4
       maximum_pods: 4
-      maximum_leafs: 0
-      maximum_tors: 64
-      naming_convention: flat
-
-    - name: XL-Flat-ToR
-      maximum_super_spines: 4
-      maximum_spines: 4
-      maximum_pods: 8
-      maximum_leafs: 0
-      maximum_tors: 128
-      naming_convention: flat
-
-    # Middle Rack deployment patterns
-    - name: S-Standard-MR
-      maximum_spines: 2
-      maximum_pods: 2
-      maximum_leafs: 8
-      maximum_tors: 8
+      maximum_switches: 64
       naming_convention: standard
 
-    - name: M-Standard-MR
-      maximum_spines: 2
-      maximum_pods: 2
-      maximum_leafs: 16
-      maximum_tors: 16
-      naming_convention: standard
-
-    - name: L-Standard-MR
+    - name: L-Hierarchical
       maximum_spines: 4
       maximum_pods: 4
-      maximum_leafs: 32
-      maximum_tors: 32
-      naming_convention: standard
-
-    - name: XL-Standard-MR
-      maximum_super_spines: 4
-      maximum_spines: 4
-      maximum_pods: 8
-      maximum_leafs: 64
-      maximum_tors: 64
-      naming_convention: standard
-
-    - name: S-Hierarchical-MR
-      maximum_spines: 2
-      maximum_pods: 2
-      maximum_leafs: 8
-      maximum_tors: 8
+      maximum_switches: 64
       naming_convention: hierarchical
 
-    - name: M-Hierarchical-MR
-      maximum_spines: 2
-      maximum_pods: 2
-      maximum_leafs: 16
-      maximum_tors: 16
-      naming_convention: hierarchical
-
-    - name: L-Hierarchical-MR
+    - name: L-Flat
       maximum_spines: 4
       maximum_pods: 4
-      maximum_leafs: 32
-      maximum_tors: 32
-      naming_convention: hierarchical
+      maximum_switches: 64
+      naming_convention: flat
 
-    - name: XL-Hierarchical-MR
+    - name: XL-Standard
       maximum_super_spines: 4
       maximum_spines: 4
       maximum_pods: 8
-      maximum_leafs: 64
-      maximum_tors: 64
-      naming_convention: hierarchical
-
-    - name: S-Flat-MR
-      maximum_spines: 2
-      maximum_pods: 2
-      maximum_leafs: 8
-      maximum_tors: 8
-      naming_convention: flat
-
-    - name: M-Flat-MR
-      maximum_spines: 2
-      maximum_pods: 2
-      maximum_leafs: 16
-      maximum_tors: 16
-      naming_convention: flat
-
-    - name: L-Flat-MR
-      maximum_spines: 4
-      maximum_pods: 4
-      maximum_leafs: 32
-      maximum_tors: 32
-      naming_convention: flat
-
-    - name: XL-Flat-MR
-      maximum_super_spines: 4
-      maximum_spines: 4
-      maximum_pods: 8
-      maximum_leafs: 64
-      maximum_tors: 64
-      naming_convention: flat
-
-    # Mixed deployment patterns
-    - name: S-Standard-Mixed
-      maximum_spines: 2
-      maximum_pods: 2
-      maximum_leafs: 8
-      maximum_tors: 16
+      maximum_switches: 64
       naming_convention: standard
 
-    - name: M-Standard-Mixed
-      maximum_spines: 2
-      maximum_pods: 2
-      maximum_leafs: 16
-      maximum_tors: 32
-      naming_convention: standard
-
-    - name: L-Standard-Mixed
-      maximum_spines: 4
-      maximum_pods: 4
-      maximum_leafs: 32
-      maximum_tors: 64
-      naming_convention: standard
-
-    - name: XL-Standard-Mixed
+    - name: XL-Hierarchical
       maximum_super_spines: 4
       maximum_spines: 4
       maximum_pods: 8
-      maximum_leafs: 64
-      maximum_tors: 128
-      naming_convention: standard
-
-    - name: S-Hierarchical-Mixed
-      maximum_spines: 2
-      maximum_pods: 2
-      maximum_leafs: 8
-      maximum_tors: 16
+      maximum_switches: 64
       naming_convention: hierarchical
 
-    - name: M-Hierarchical-Mixed
-      maximum_spines: 2
-      maximum_pods: 2
-      maximum_leafs: 16
-      maximum_tors: 32
-      naming_convention: hierarchical
-
-    - name: L-Hierarchical-Mixed
-      maximum_spines: 4
-      maximum_pods: 4
-      maximum_leafs: 32
-      maximum_tors: 64
-      naming_convention: hierarchical
-
-    - name: XL-Hierarchical-Mixed
+    - name: XL-Flat
       maximum_super_spines: 4
       maximum_spines: 4
       maximum_pods: 8
-      maximum_leafs: 64
-      maximum_tors: 128
-      naming_convention: hierarchical
-
-    - name: S-Flat-Mixed
-      maximum_spines: 2
-      maximum_pods: 2
-      maximum_leafs: 8
-      maximum_tors: 16
-      naming_convention: flat
-
-    - name: M-Flat-Mixed
-      maximum_spines: 2
-      maximum_pods: 2
-      maximum_leafs: 16
-      maximum_tors: 32
-      naming_convention: flat
-
-    - name: XL-Flat-Mixed
-      maximum_super_spines: 4
-      maximum_spines: 4
-      maximum_pods: 8
-      maximum_leafs: 64
-      maximum_tors: 128
+      maximum_switches: 64
       naming_convention: flat

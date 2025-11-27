@@ -17,10 +17,7 @@ query DataCenterCapacityValidation($name: String!) {
             maximum_pods {
               value
             }
-            maximum_spines {
-              value
-            }
-            maximum_leafs {
+            maximum_switches {
               value
             }
           }

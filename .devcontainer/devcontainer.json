@@ -47,7 +47,7 @@
       "ghcr.io/devcontainers/features/github-cli:1": "latest"
     },
     "hostRequirements": {
-      "cpus": 4,
+      "cpus": 8,
       "memory": "16gb"
     }
   }

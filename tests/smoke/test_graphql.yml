@@ -116,14 +116,6 @@ infrahub_tests:
           kind: graphql-query-smoke
 
   - resource: GraphQLQuery
-    resource_name: topology_equinix_pop
-    tests:
-      - name: syntax_check
-        spec:
-          path: queries/topology/equinix_pop.gql
-          kind: graphql-query-smoke
-
-  - resource: GraphQLQuery
     resource_name: topology_simulator
     tests:
       - name: syntax_check

@@ -36,10 +36,7 @@ query FabricGeneratorQuery($name: String!) {
               maximum_spines {
                 value
               }
-              maximum_leafs {
-                value
-              }
-              maximum_tors {
+              maximum_switches {
                 value
               }
               naming_convention {
