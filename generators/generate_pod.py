@@ -7,7 +7,6 @@ from utils.data_cleaning import clean_data
 from .common import CommonGenerator
 from .models import PodModel
 from .schema_protocols import LocationRack
-from .validators import validate_pod_capacity
 
 
 class PodTopologyGenerator(CommonGenerator):
@@ -73,16 +72,6 @@ class PodTopologyGenerator(CommonGenerator):
         fabric_name = dc.name.lower()
         design = dc.design_pattern
         indexes: list[int] = [dc.index or 1, self.data.index]
-
-        # Validate capacity before generation using data from GraphQL query
-        # Only validate the desired spine count (leafs/tors come from rack deployments)
-        validate_pod_capacity(
-            pod_name=self.data.name,
-            design_pattern=design.model_dump() if design else {},
-            spine_count=self.data.amount_of_spines,
-            leaf_count=self.data.leaf_count or 0,
-            tor_count=self.data.tor_count or 0,
-        )
 
         await self.allocate_resource_pools(
             id=pod_id,

@@ -146,17 +146,6 @@ class RackGenerator(CommonGenerator):
         current_index = self.data.index
         deployment_type = self.data.pod.deployment_type
 
-        # Calculate device count for THIS rack from fabric templates
-        # device_count: int
-        # if device_type == "tor":
-        #     device_count = sum(tor.quantity or 0 for tor in self.data.tors or []) or 0
-        # else:
-        #     device_count = (
-        #         sum(leaf.quantity or 0 for leaf in self.data.leafs or []) or 0
-        #     )
-
-        # For mixed/middle_rack deployment ToRs: calculate offset within row
-        # ToRs connect to local leafs with 2 uplinks each
         if deployment_type in ("mixed", "middle_rack") and device_type == "tor":
             uplinks_per_tor = 2  # Fixed design: each ToR has 2 uplinks to leafs
             offset = (current_index - 1) * uplinks_per_tor

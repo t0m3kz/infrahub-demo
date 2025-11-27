@@ -1,35 +1,9 @@
-query device($name: String!) {
-  TopologyDeployment(name__value: $name) {
+query pop($name: String!) {
+  TopologyColocation(name__value: $name) {
     edges {
       node {
-        id
         name {
           value
-        }
-        devices {
-          edges {
-            node {
-              name {
-                value
-              }
-              device_type {
-                node {
-                  name {
-                    value
-                  }
-                }
-              }
-              interfaces {
-                edges {
-                  node {
-                    name {
-                      value
-                    }
-                  }
-                }
-              }
-            }
-          }
         }
       }
     }

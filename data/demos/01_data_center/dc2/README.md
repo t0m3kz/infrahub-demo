@@ -8,7 +8,7 @@
 
 **Platform:** Arista EOS - So API-driven, even your croissant can trigger a config change.
 
-**Design Pattern:** S-Middle-MR (Small Middle Rack)
+**Design Pattern:** S-Flat (Small with Flat naming convention)
 
 **Use Case:** When the CFO says "make it work but don't make me cry" and you actually deliver. DC2 proves you don't need four pods and a mortgage to build reliable infrastructure. Just 2 pods, 4 racks, and a healthy respect for hierarchical aggregation. It's the Parisian café of data centers - small, efficient, and everyone knows everyone.
 

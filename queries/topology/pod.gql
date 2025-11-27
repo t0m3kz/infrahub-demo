@@ -33,8 +33,7 @@ fragment DesignPatternFields on TopologyDataCenterDesign {
   maximum_super_spines { value }
   maximum_pods { value }
   maximum_spines { value }
-  maximum_leafs { value }
-  maximum_tors { value }
+  maximum_switches { value }
   naming_convention { value }
 }
 

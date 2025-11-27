@@ -70,10 +70,7 @@ fragment PodFields on TopologyPod {
             naming_convention {
               value
             }
-            maximum_leafs {
-              value
-            }
-            maximum_tors {
+            maximum_switches {
               value
             }
           }

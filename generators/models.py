@@ -28,8 +28,7 @@ class DesignPattern(BaseModel):
     maximum_super_spines: Optional[int] = None
     maximum_pods: Optional[int] = None
     maximum_spines: Optional[int] = None
-    maximum_leafs: Optional[int] = None
-    maximum_tors: Optional[int] = None
+    maximum_switches: Optional[int] = None
     naming_convention: str = "standard"
 
 

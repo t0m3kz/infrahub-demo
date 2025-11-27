@@ -1,0 +1,241 @@
+---
+version: "1.0"
+
+nodes:
+  - name: VirtualCloud
+    namespace: Service
+    description: "Customer virtual cloud deployment with regional presence"
+    label: "Virtual Cloud"
+    icon: "mdi:cloud-outline"
+    include_in_menu: true
+    inherit_from:
+      - CoreArtifactTarget
+      - TopologyDeployment
+    uniqueness_constraints:
+      - ["name__value", "customer"]
+    human_friendly_id:
+      - customer__name__value
+      - name__value
+    display_label: "{{customer__name__value}} - {{name__value}}"
+    order_by: [customer__name__value, name__value]
+    attributes:
+      - name: primary_provider
+        kind: Dropdown
+        label: "Primary Cloud Provider"
+        optional: false
+        order_weight: 200
+        choices:
+          - name: aws
+            label: "Amazon Web Services"
+            description: "AWS public cloud services"
+            color: "#FF9900"
+          - name: azure
+            label: "Microsoft Azure"
+            description: "Microsoft Azure cloud platform"
+            color: "#0078D4"
+          - name: gcp
+            label: "Google Cloud Platform"
+            description: "Google Cloud services"
+            color: "#4285F4"
+          - name: oracle
+            label: "Oracle Cloud"
+            description: "Oracle Cloud Infrastructure"
+            color: "#F80000"
+          - name: ibm
+            label: "IBM Cloud"
+            description: "IBM Cloud platform"
+            color: "#1261FE"
+          - name: multi_cloud
+            label: "Multi-Cloud"
+            description: "Multiple cloud providers"
+            color: "#8E44AD"
+
+      - name: primary_region
+        kind: Text
+        label: "Primary Region"
+        description: "Primary deployment region (e.g., us-east-1, westeurope)"
+        optional: false
+        order_weight: 250
+
+      - name: account_id
+        kind: Text
+        label: "Primary Account/Subscription ID"
+        description: "Primary cloud provider account or subscription identifier"
+        optional: false
+        order_weight: 300
+
+      - name: secondary_accounts
+        kind: Text
+        label: "Secondary Account IDs"
+        description: "List of secondary account/subscription IDs"
+        optional: true
+        order_weight: 350
+
+      - name: environment
+        kind: Dropdown
+        label: "Environment"
+        optional: false
+        default_value: production
+        order_weight: 400
+        choices:
+          - name: development
+            label: Development
+            description: "Development environment"
+            color: "#A9DFBF"
+          - name: staging
+            label: Staging
+            description: "Staging/pre-production environment"
+            color: "#F9E79F"
+          - name: production
+            label: Production
+            description: "Production environment"
+            color: "#A9CCE3"
+          - name: sandbox
+            label: Sandbox
+            description: "Experimental/sandbox environment"
+            color: "#D7DBDD"
+
+      - name: status
+        kind: Dropdown
+        label: "Deployment Status"
+        optional: false
+        default_value: active
+        order_weight: 500
+        choices:
+          - name: active
+            label: Active
+            description: "Cloud deployment is active and operational"
+            color: "#7FBF7F"
+          - name: provisioning
+            label: Provisioning
+            description: "Cloud resources being provisioned"
+            color: "#FFFF7F"
+          - name: maintenance
+            label: Maintenance
+            description: "Undergoing maintenance or updates"
+            color: "#FFD27F"
+          - name: suspended
+            label: Suspended
+            description: "Deployment suspended (billing/compliance)"
+            color: "#F4CCCC"
+          - name: decommissioned
+            label: Decommissioned
+            description: "Resources decommissioned and cleaned up"
+            color: "#BFBFBF"
+
+      # Financial Management
+      - name: cost_center
+        kind: Text
+        label: "Cost Center"
+        description: "Internal cost allocation center"
+        optional: false
+        order_weight: 600
+
+      - name: monthly_budget_usd
+        kind: Number
+        label: "Monthly Budget (USD)"
+        optional: true
+        order_weight: 650
+        parameters:
+          min_value: 0
+          max_value: 1000000
+        description: "Monthly cloud spend budget in USD"
+
+      - name: billing_contact
+        kind: Text
+        label: "Billing Contact"
+        description: "Contact responsible for billing and cost management"
+        optional: true
+        order_weight: 700
+
+      # Governance & Compliance
+      - name: compliance_requirements
+        kind: Text
+        label: "Compliance Requirements"
+        description: "Compliance standards required"
+        optional: true
+        order_weight: 750
+
+      - name: data_residency
+        kind: Text
+        label: "Data Residency Requirements"
+        description: "Geographic data residency requirements"
+        optional: true
+        order_weight: 800
+
+      - name: backup_retention_days
+        kind: Number
+        label: "Backup Retention (Days)"
+        optional: false
+        default_value: 30
+        order_weight: 850
+        parameters:
+          min_value: 1
+          max_value: 2555  # 7 years
+        description: "Backup retention period in days"
+
+      # Access & Security
+      - name: mfa_required
+        kind: Boolean
+        label: "MFA Required"
+        optional: false
+        default_value: true
+        order_weight: 900
+        description: "Whether multi-factor authentication is required"
+
+      - name: access_key_rotation_days
+        kind: Number
+        label: "Access Key Rotation (Days)"
+        optional: false
+        default_value: 90
+        order_weight: 950
+        parameters:
+          min_value: 1
+          max_value: 365
+        description: "Access key rotation interval in days"
+
+      # Regional Presence
+      - name: deployed_regions
+        kind: Text
+        label: "Deployed Regions"
+        description: "List of regions where resources are deployed"
+        optional: true
+        order_weight: 1000
+
+      - name: availability_zones
+        kind: Text
+        label: "Availability Zones"
+        description: "Comma-separated list of availability zones in use"
+        optional: true
+        order_weight: 1050
+
+    relationships:
+      - name: customer
+        peer: OrganizationCustomer
+        cardinality: one
+        kind: Attribute
+        optional: false
+        order_weight: 1100
+        description: "Customer organization owning this deployment"
+
+      - name: location
+        peer: LocationGeneric
+        cardinality: one
+        kind: Attribute
+        optional: true
+        order_weight: 1200
+        description: "Primary geographic location for this cloud deployment"
+
+# Extensions to other nodes
+extensions:
+  nodes:
+    - kind: OrganizationCustomer
+      relationships:
+        - name: virtual_clouds
+          peer: ServiceVirtualCloud
+          cardinality: many
+          kind: Component
+          optional: true
+          order_weight: 2650
+          on_delete: cascade
+          description: "Customer virtual cloud deployments"

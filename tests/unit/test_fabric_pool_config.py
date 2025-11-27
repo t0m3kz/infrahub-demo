@@ -17,16 +17,16 @@ class TestFabricPoolConfigDefaults:
         assert config.maximum_super_spines == 2
         assert config.maximum_pods == 2
         assert config.maximum_spines == 2
-        assert config.maximum_leafs == 8
+        assert config.maximum_switches == 8
         assert config.kind == "fabric"
 
     def test_default_fabric_pools(self) -> None:
         """Test default FABRIC strategy returns expected pool structure."""
         config = FabricPoolConfig()
         pools = config.pools()
-        assert pools["management"] == 26
-        assert pools["technical"] == 23
-        assert pools["loopback"] == 25
+        assert pools["management"] == 27
+        assert pools["technical"] == 25
+        assert pools["loopback"] == 26
         assert pools["super-spine-loopback"] == 29
 
     def test_default_fabric_pools_all_positive(self) -> None:
@@ -50,12 +50,11 @@ class TestFabricPoolConfigFabricStrategy:
                 "maximum_super_spines": 2,
                 "maximum_spines": 2,
                 "maximum_pods": 2,
-                "maximum_leafs": 0,
-                "maximum_tors": 16,
+                "maximum_switches": 16,
             },
             "expected": {
                 "management": 26,
-                "technical": 27,
+                "technical": 24,
                 "loopback": 25,
                 "super-spine-loopback": 29,
             },
@@ -65,12 +64,11 @@ class TestFabricPoolConfigFabricStrategy:
                 "maximum_super_spines": 4,
                 "maximum_spines": 8,
                 "maximum_pods": 3,
-                "maximum_leafs": 12,
-                "maximum_tors": 4,
+                "maximum_switches": 16,
             },
             "expected": {
                 "management": 25,
-                "technical": 21,
+                "technical": 22,
                 "loopback": 24,
                 "super-spine-loopback": 29,
             },
@@ -80,8 +78,7 @@ class TestFabricPoolConfigFabricStrategy:
                 "maximum_super_spines": 1,
                 "maximum_spines": 1,
                 "maximum_pods": 1,
-                "maximum_leafs": 1,
-                "maximum_tors": 1,
+                "maximum_switches": 2,
             },
             "expected": {
                 "management": 28,
@@ -95,12 +92,11 @@ class TestFabricPoolConfigFabricStrategy:
                 "maximum_super_spines": 2,
                 "maximum_spines": 4,
                 "maximum_pods": 5,
-                "maximum_leafs": 8,
-                "maximum_tors": 24,
+                "maximum_switches": 34,
             },
             "expected": {
                 "management": 24,
-                "technical": 20,
+                "technical": 21,
                 "loopback": 23,
                 "super-spine-loopback": 29,
             },
@@ -110,12 +106,11 @@ class TestFabricPoolConfigFabricStrategy:
                 "maximum_super_spines": 2,
                 "maximum_spines": 4,
                 "maximum_pods": 4,
-                "maximum_leafs": 24,
-                "maximum_tors": 48,
+                "maximum_switches": 72,
             },
             "expected": {
                 "management": 23,
-                "technical": 18,
+                "technical": 20,
                 "loopback": 22,
                 "super-spine-loopback": 29,
             },
@@ -146,7 +141,7 @@ class TestFabricPoolConfigFabricStrategy:
             maximum_super_spines=4,
             maximum_pods=3,
             maximum_spines=4,
-            maximum_leafs=16,
+            maximum_switches=16,
             kind="fabric",
         )
         pools = config.pools()
@@ -163,7 +158,7 @@ class TestFabricPoolConfigFabricStrategy:
             maximum_super_spines=10,
             maximum_pods=10,
             maximum_spines=8,
-            maximum_leafs=32,
+            maximum_switches=32,
             kind="fabric",
         )
         pools = config.pools()
@@ -180,7 +175,7 @@ class TestFabricPoolConfigFabricStrategy:
             maximum_super_spines=1,
             maximum_pods=1,
             maximum_spines=1,
-            maximum_leafs=1,
+            maximum_switches=1,
             kind="fabric",
         )
         pools = config.pools()
@@ -214,7 +209,7 @@ class TestFabricPoolConfigPodStrategy:
         """Test POD strategy with custom dimensions."""
         config = FabricPoolConfig(
             maximum_spines=4,
-            maximum_leafs=16,
+            maximum_switches=16,
             kind="pod",
         )
         pools = config.pools()
@@ -239,8 +234,7 @@ class TestFabricPoolConfigPodStrategy:
                 "maximum_super_spines": 2,
                 "maximum_spines": 2,
                 "maximum_pods": 2,
-                "maximum_leafs": 0,
-                "maximum_tors": 16,
+                "maximum_switches": 16,
             },
             "expected": {
                 "technical": 25,
@@ -252,8 +246,7 @@ class TestFabricPoolConfigPodStrategy:
                 "maximum_super_spines": 4,
                 "maximum_spines": 8,
                 "maximum_pods": 3,
-                "maximum_leafs": 12,
-                "maximum_tors": 4,
+                "maximum_switches": 16,
             },
             "expected": {
                 "technical": 23,
@@ -265,8 +258,7 @@ class TestFabricPoolConfigPodStrategy:
                 "maximum_super_spines": 1,
                 "maximum_spines": 1,
                 "maximum_pods": 1,
-                "maximum_leafs": 1,
-                "maximum_tors": 1,
+                "maximum_switches": 2,
             },
             "expected": {
                 "technical": 29,
@@ -278,8 +270,7 @@ class TestFabricPoolConfigPodStrategy:
                 "maximum_super_spines": 2,
                 "maximum_spines": 4,
                 "maximum_pods": 5,
-                "maximum_leafs": 8,
-                "maximum_tors": 24,
+                "maximum_switches": 34,
             },
             "expected": {
                 "technical": 23,
@@ -291,8 +282,7 @@ class TestFabricPoolConfigPodStrategy:
                 "maximum_super_spines": 2,
                 "maximum_spines": 4,
                 "maximum_pods": 4,
-                "maximum_leafs": 24,
-                "maximum_tors": 48,
+                "maximum_switches": 72,
             },
             "expected": {
                 "technical": 22,
@@ -325,10 +315,11 @@ class TestFabricPoolConfigCustomDimensions:
         pools_2 = config_2.pools()
         pools_8 = config_8.pools()
 
-        # super_spines affect super-spine-loopback pool, not management/loopback
-        # Larger super-spine count should result in smaller super-spine-loopback prefix
+        # super_spines affect both super-spine-loopback pool AND management pool
+        # More super-spines means more devices needing management IPs and more super-spine loopbacks
+        # Larger super-spine count should result in smaller prefix lengths for both
         assert pools_2["super-spine-loopback"] > pools_8["super-spine-loopback"]
-        assert pools_2["management"] == pools_8["management"]
+        assert pools_2["management"] > pools_8["management"]
 
     def test_custom_pods(self) -> None:
         """Test custom maximum_pods."""
@@ -355,8 +346,8 @@ class TestFabricPoolConfigCustomDimensions:
 
     def test_custom_leafs(self) -> None:
         """Test custom maximum_leafs."""
-        config_4 = FabricPoolConfig(maximum_leafs=4)
-        config_32 = FabricPoolConfig(maximum_leafs=32)
+        config_4 = FabricPoolConfig(maximum_switches=4)
+        config_32 = FabricPoolConfig(maximum_switches=32)
 
         pools_4 = config_4.pools()
         pools_32 = config_32.pools()
@@ -378,26 +369,26 @@ class TestFabricPoolConfigCalculations:
         # Calculation: 8*2 + 2*2 + 2 = 22 devices
         # bit_length(22) = 5, so 32 - 5 = 27
         config = FabricPoolConfig(
-            maximum_leafs=8,
+            maximum_switches=8,
             maximum_pods=2,
             maximum_spines=2,
             maximum_super_spines=2,
         )
         pools = config.pools()
 
-        assert pools["management"] == 26
+        assert pools["management"] == 27
 
     def test_technical_calculation_fabric(self) -> None:
         """Test technical pool prefix length calculation for FABRIC strategy."""
         config = FabricPoolConfig(
-            maximum_leafs=8,
+            maximum_switches=8,
             maximum_pods=2,
             maximum_spines=2,
             maximum_super_spines=2,
         )
         pools = config.pools()
 
-        assert pools["technical"] == 23
+        assert pools["technical"] == 25
 
     def test_loopback_calculation_fabric(self) -> None:
         """Test loopback pool prefix length calculation for FABRIC strategy."""
@@ -409,14 +400,14 @@ class TestFabricPoolConfigCalculations:
         # bit_length(256) = 9 → /23
         # max(6, 9) = 9 → /23
         config = FabricPoolConfig(
-            maximum_leafs=8,
+            maximum_switches=8,
             maximum_pods=2,
             maximum_spines=2,
             maximum_super_spines=2,
         )
         pools = config.pools()
 
-        assert pools["loopback"] == 25
+        assert pools["loopback"] == 26
 
     def test_super_spine_loopback_calculation(self) -> None:
         """Test super-spine-loopback pool prefix length calculation."""
@@ -436,13 +427,13 @@ class TestFabricPoolConfigCalculations:
         # total_p2p_ips_needed = 20 * 2 = 40
         # bit_length(40) = 6, so 32 - 6 = 26
         config = FabricPoolConfig(
-            maximum_leafs=8,
+            maximum_switches=8,
             maximum_spines=2,
             kind="pod",
         )
         pools = config.pools()
 
-        assert pools["technical"] == 25
+        assert pools["technical"] == 26
 
     def test_loopback_calculation_pod(self) -> None:
         """Test loopback pool prefix length calculation for POD strategy."""
@@ -450,13 +441,13 @@ class TestFabricPoolConfigCalculations:
         # Calculation: 8 + 2 = 10
         # bit_length(10) = 4, so 32 - 4 = 28
         config = FabricPoolConfig(
-            maximum_leafs=8,
+            maximum_switches=8,
             maximum_spines=2,
             kind="pod",
         )
         pools = config.pools()
 
-        assert pools["loopback"] == 27
+        assert pools["loopback"] == 28
 
 
 class TestFabricPoolConfigErrorHandling:
@@ -481,7 +472,7 @@ class TestFabricPoolConfigEdgeCases:
             maximum_super_spines=0,
             maximum_pods=0,
             maximum_spines=0,
-            maximum_leafs=0,
+            maximum_switches=0,
         )
         pools = config.pools()
 
@@ -496,7 +487,7 @@ class TestFabricPoolConfigEdgeCases:
             maximum_super_spines=100,
             maximum_pods=100,
             maximum_spines=100,
-            maximum_leafs=1000,
+            maximum_switches=1000,
         )
         pools = config.pools()
 
@@ -509,7 +500,7 @@ class TestFabricPoolConfigEdgeCases:
             maximum_super_spines=1,
             maximum_pods=100,
             maximum_spines=1,
-            maximum_leafs=1,
+            maximum_switches=1,
         )
         pools = config.pools()
 
@@ -523,7 +514,7 @@ class TestFabricPoolConfigConsistency:
     def test_multiple_calls_same_result(self) -> None:
         """Test that multiple calls return the same result."""
         config = FabricPoolConfig(
-            maximum_leafs=16,
+            maximum_switches=16,
             maximum_pods=4,
         )
 
@@ -535,8 +526,8 @@ class TestFabricPoolConfigConsistency:
 
     def test_independent_configs(self) -> None:
         """Test that independent configs don't interfere."""
-        config_1 = FabricPoolConfig(maximum_leafs=8)
-        config_2 = FabricPoolConfig(maximum_leafs=16)
+        config_1 = FabricPoolConfig(maximum_switches=8)
+        config_2 = FabricPoolConfig(maximum_switches=16)
 
         pools_1 = config_1.pools()
         pools_2 = config_2.pools()
@@ -546,14 +537,14 @@ class TestFabricPoolConfigConsistency:
 
     def test_config_immutability(self) -> None:
         """Test that calling pools() doesn't modify the config."""
-        config = FabricPoolConfig(maximum_leafs=8, maximum_pods=2)
-        original_leafs = config.maximum_leafs
+        config = FabricPoolConfig(maximum_switches=8, maximum_pods=2)
+        original_switches = config.maximum_switches
         original_pods = config.maximum_pods
         original_kind = config.kind
 
         config.pools()
 
-        assert config.maximum_leafs == original_leafs
+        assert config.maximum_switches == original_switches
         assert config.maximum_pods == original_pods
         assert config.kind == original_kind
 
@@ -605,14 +596,14 @@ class TestFabricPoolConfigIPv6:
     def test_ipv6_vs_ipv4_fabric_strategy(self) -> None:
         """Test that IPv6 pools are different from IPv4."""
         config_ipv4 = FabricPoolConfig(
-            maximum_leafs=8,
+            maximum_switches=8,
             maximum_pods=2,
             maximum_spines=2,
             kind="fabric",
             ipv6=False,
         )
         config_ipv6 = FabricPoolConfig(
-            maximum_leafs=8,
+            maximum_switches=8,
             maximum_pods=2,
             maximum_spines=2,
             kind="fabric",
@@ -632,13 +623,13 @@ class TestFabricPoolConfigIPv6:
     def test_ipv6_vs_ipv4_pod_strategy(self) -> None:
         """Test that IPv6 pods are different from IPv4."""
         config_ipv4 = FabricPoolConfig(
-            maximum_leafs=16,
+            maximum_switches=16,
             maximum_spines=4,
             kind="pod",
             ipv6=False,
         )
         config_ipv6 = FabricPoolConfig(
-            maximum_leafs=16,
+            maximum_switches=16,
             maximum_spines=4,
             kind="pod",
             ipv6=True,
@@ -677,7 +668,7 @@ class TestFabricPoolConfigIPv6:
             maximum_super_spines=10,
             maximum_pods=64,  # Support many pods
             maximum_spines=8,
-            maximum_leafs=256,  # Large leaf count
+            maximum_switches=256,  # Large switch count
             kind="fabric",
             ipv6=True,
         )
@@ -693,7 +684,7 @@ class TestFabricPoolConfigIPv6:
         """Test IPv6 loopback pool sizing for pods."""
         # L-Standard design: 4 pods, 64 leafs, 4 spines
         config = FabricPoolConfig(
-            maximum_leafs=64,
+            maximum_switches=64,
             maximum_pods=4,
             maximum_spines=4,
             kind="pod",
@@ -726,7 +717,7 @@ class TestFabricPoolConfigIPv6:
     def test_ipv6_multiple_calls_consistency(self) -> None:
         """Test that multiple IPv6 calls return consistent results."""
         config = FabricPoolConfig(
-            maximum_leafs=32,
+            maximum_switches=32,
             maximum_pods=8,
             ipv6=True,
         )

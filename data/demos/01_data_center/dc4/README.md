@@ -7,7 +7,7 @@
 
 **Platform:** Edgecore with SONiC - So vendor-neutral, even your hipster barista could deploy it between DJ sets.
 
-**Design Pattern:** S-Mixed (Small Mixed Deployment)
+**Design Pattern:** L-Standard (Large with standard naming convention)
 
 **Use Case:** When the architecture team can't agree on mixed vs flat ToR and someone says "why not both?" Pod 1 goes full mixed deployment, Pod 2 goes pure flat ToR. It's like having a hybrid car that's also a motorcycle. Confusing? Yes. Flexible? Absolutely.
 

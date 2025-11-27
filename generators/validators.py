@@ -10,7 +10,7 @@ def validate_dc_capacity(
     design_pattern: dict[str, Any],
     super_spine_count: int,
     pod_count: int,
-) -> None:
+) -> list[str]:
     """Validate datacenter capacity before generation.
 
     Args:
@@ -47,31 +47,16 @@ def validate_dc_capacity(
             f"Requested {pod_count} pods exceeds design pattern maximum of {max_pods}"
         )
 
-    if errors:
-        error_msg = f"Data center '{dc_name}' capacity validation failed:\n"
-        error_msg += "\n".join(f"  - {err}" for err in errors)
-        raise ValidationError(error_msg)
+    return errors
 
 
 def validate_pod_capacity(
     pod_name: str,
     design_pattern: dict[str, Any],
     spine_count: int,
-    leaf_count: int,
-    tor_count: int,
-) -> None:
-    """Validate pod capacity before generation.
-
-    Args:
-        pod_name: Pod name for error messages
-        design_pattern: Design pattern with maximum limits
-        spine_count: Requested spine count
-        leaf_count: Requested leaf count
-        tor_count: Requested ToR count
-
-    Raises:
-        ValidationError: If any capacity limits exceeded
-    """
+    switch_count: int,
+) -> list[str]:
+    """Validate pod capacity before generation."""
     errors = []
 
     if not design_pattern:
@@ -81,8 +66,7 @@ def validate_pod_capacity(
 
     # Get design limits (already extracted as integers by Pydantic)
     max_spines = design_pattern.get("maximum_spines", 0)
-    max_leafs = design_pattern.get("maximum_leafs", 0)
-    max_tors = design_pattern.get("maximum_tors", 0)
+    max_switches = design_pattern.get("maximum_switches", 0)
 
     # Validate spine count
     if spine_count > max_spines:
@@ -91,18 +75,9 @@ def validate_pod_capacity(
         )
 
     # Validate leaf count
-    if leaf_count > max_leafs:
+    if switch_count > max_switches:
         errors.append(
-            f"Requested {leaf_count} leafs exceeds design pattern maximum of {max_leafs}"
+            f"Requested {switch_count} leafs exceeds design pattern maximum of {max_switches}"
         )
 
-    # Validate ToR count
-    if tor_count > max_tors:
-        errors.append(
-            f"Requested {tor_count} ToRs exceeds design pattern maximum of {max_tors}"
-        )
-
-    if errors:
-        error_msg = f"Pod '{pod_name}' capacity validation failed:\n"
-        error_msg += "\n".join(f"  - {err}" for err in errors)
-        raise ValidationError(error_msg)
+    return errors

@@ -7,7 +7,7 @@
 
 **Platform:** Cisco Nexus 9K - The networking equivalent of driving a tank to the grocery store
 
-**Design Pattern:** L-Hierarchical-MR (Large Hierarchical with Middle Rack)
+**Design Pattern:** L-Hierarchical (Large with Hierarchical naming convention)
 
 **Use Case:** Enterprise data center suffering from **deployment identity crisis** - featuring all middle rack, mixed and ToR connectivity within the same fabric. This is what happens when the architecture committee couldn't decide, so they chose "all of the above." Perfect for demonstrating that flexibility isn't always a feature; sometimes it's just indecision with a marketing spin.
 
@@ -18,7 +18,7 @@
 ### Fabric Scale (Or: How We Learned to Stop Worrying and Love Complexity)
 - **Super Spines:** 2 (Cisco N9K-C9336C-FX2) - The bosses of bosses
 - **Total Pods:** 3 (Each with its own personality disorder)
-- **Total Spines:** 8 (3+3+2 - we believe in equality)
+- **Total Spines:** 8 (3+3+2 - we support diversity and inclusiveness)
 - **Total Racks:** 24 (Because stopping at 20 would suggest we had a plan)
 
 **Deployment Types:** It’s complicated—Pod 1: middle_rack (for fans of bureaucracy), Pod 2: mixed (for the indecisive), Pod 3: ToR (for rebels who read “Keep It Simple” and actually believed it).

@@ -9,7 +9,7 @@ spec:
       amount_of_super_spines: 2
       super_spine_template: Edgecore-7726_32X_O_SUPER_SPINE
       fabric_interface_sorting_method: top_down
-      design_pattern: L-Standard-Mixed
+      design_pattern: L-Standard
       member_of_groups:
         - topologies_dc
       children:
