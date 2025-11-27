@@ -157,15 +157,13 @@ def load_data(
     context.run(f"uv run infrahubctl run bootstrap/{name} --branch {branch}", pty=True)
 
 
-@task(optional=["branch"])
 def load_repo(
     context: Context,
     name: str = "https://github.com/t0m3kz/infrahub-demo/",
-    branch: str = "main",
 ) -> None:
     """Load the data from the given path."""
     context.run(
-        f"uv run infrahubctl repository add test {name} --read-only --branch {branch}",
+        f"uv run infrahubctl repository add test {name} --read-only",
         pty=True,
     )
 
