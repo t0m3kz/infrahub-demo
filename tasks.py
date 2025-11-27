@@ -331,15 +331,17 @@ def setup(context: Context) -> None:
     print("  5️⃣  Loading bootstrap data...")
     load_objects(context)
 
-    print("  6️⃣  Adding repository...")
-    load_repo(context)
+    # print("  6️⃣  Adding repository...")
+    # load_repo(context)
 
-    time.sleep(10)
+    # time.sleep(10)
 
-    print("  7️⃣  Loading events...")
-    load_events(context)
+    # print("  7️⃣  Loading events...")
+    # load_events(context)
 
     print("\n✅ Setup complete! Infrahub is ready for fun !!!")
-    print(
-        "💡 Next: Run 'uv run invoke deploy-dc --scenario [dc1 - dc6] --branch your_branch' to load scenario data\n"
-    )
+
+    # print("\n✅ Setup complete! Infrahub is ready for fun !!!")
+    # print(
+    #     "💡 Next: Run 'uv run invoke deploy-dc --scenario [dc1 - dc6] --branch your_branch' to load scenario data\n"
+    # )
