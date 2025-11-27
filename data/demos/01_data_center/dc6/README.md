@@ -10,7 +10,9 @@
 **Design Pattern:** M-Multi-Layer-Mixed (Medium Multi-Vendor Mixed Layers) — the architectural equivalent of a buffet: a little bit of everything, and you never know what you'll get next.
 
 **Use Case:**
-Medium-sized multi-vendor data center with middle_rack deployment. It's the perfect playground for engineers who like living dangerously, managers who love vendor bingo, and auditors who enjoy existential dread. Demonstrates vendor interoperability at a scale just big enough to break things, but small enough to blame the intern. Cost-effective multi-vendor approach for medium enterprises—because why settle for one vendor's support hotline when you can have four? If you've ever wanted to see a Cisco, Arista, Dell, and Edgecore device argue about spanning tree, BGP, and whose logo is the ugliest, this is your chance. Warning: May cause spontaneous VLAN migrations, philosophical debates about port-channel naming, and a sudden urge to update your resume.
+Medium-sized multi-vendor data center with middle_rack deployment. It's the perfect playground for engineers who like living dangerously, managers who love vendor bingo, and auditors who enjoy existential dread. Demonstrates vendor interoperability at a scale just big enough to break things, but small enough to blame the intern. Cost-effective multi-vendor approach for medium enterprises—because why settle for one vendor's support hotline when you can have four? If you've ever wanted to see a Cisco, Arista, Dell, and Edgecore device argue about spanning tree, BGP, and whose logo is the ugliest, this is your chance.
+
+Warning: May cause spontaneous VLAN migrations, philosophical debates about port-channel naming, and a sudden urge to update your resume.
 
 ---
 

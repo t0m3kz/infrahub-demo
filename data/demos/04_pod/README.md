@@ -42,8 +42,8 @@ Perfect for:
 
 ## Deployment
 ```bash
-# Load data
-uv run infrahubctl object load data/demos/04_pod/
+uv run infrahubctl branch create your_branch
+uv run infrahubctl object load data/demos/04_pod/ --branch your_branch
 ```
 
 Trigger infrastructure generation in InfraHub UI → Actions → Generator Definitions → generate_dc DC1

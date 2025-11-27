@@ -4,13 +4,12 @@ kind: Object
 spec:
   kind: TopologyPod
   data:
-    - index: 4
+    - index: 3
       deployment_type: tor
       spine_template: N9K-C9364C-GX_SPINE
-      number_of_rows: 2
+      amount_of_spines: 3
       maximum_leafs_per_row: 0
       maximum_tors_per_row: 12
-      amount_of_spines: 2
       member_of_groups:
         - topologies_pod
       parent: ["DC1", "1"]
