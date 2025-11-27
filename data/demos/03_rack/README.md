@@ -30,7 +30,8 @@ This rack is perfect for:
 
 ## Deployment
 ```bash
-uv run infrahubctl object load data/demos/03_rack/
+uv run infrahubctl branch create your_branch
+uv run infrahubctl object load data/demos/03_rack/ --branch your_branch
 ```
 
 Trigger infrastructure generation in InfraHub UI → Actions → Generator Definitions → generate_rack MUC-1-SUITE-2-R2-5

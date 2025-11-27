@@ -29,8 +29,9 @@ Perfect for:
 
 ## Deployment
 ```bash
-# Edit DC1-1-POD-1 and increase number of Spines to 4
-uv run infrahubctl object load data/demos/05_llm_time/
+uv run infrahubctl branch create your_branch
+# Edit DC1-1-POD-3 and increase number of Spines to 4
+uv run infrahubctl object load data/demos/05_llm_time/ --branch your_branch
 ```
 
 Here you just sit back, sip your coffee, and watch the magic happen—no clicking, no frantic tab switching, just pure event-driven automation.

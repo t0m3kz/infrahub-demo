@@ -9,7 +9,7 @@
 
 **Design Pattern:** L-Hierarchical-MR (Large Hierarchical with Middle Rack)
 
-**Use Case:** Enterprise data center suffering from **deployment identity crisis** - featuring both middle_rack and ToR connectivity within the same fabric. This is what happens when the architecture committee couldn't decide, so they chose "all of the above." Perfect for demonstrating that flexibility isn't always a feature; sometimes it's just indecision with a marketing spin.
+**Use Case:** Enterprise data center suffering from **deployment identity crisis** - featuring all middle rack, mixed and ToR connectivity within the same fabric. This is what happens when the architecture committee couldn't decide, so they chose "all of the above." Perfect for demonstrating that flexibility isn't always a feature; sometimes it's just indecision with a marketing spin.
 
 ---
 
@@ -19,8 +19,9 @@
 - **Super Spines:** 2 (Cisco N9K-C9336C-FX2) - The bosses of bosses
 - **Total Pods:** 3 (Each with its own personality disorder)
 - **Total Spines:** 8 (3+3+2 - we believe in equality)
-- **Total Racks:** 28 (Because 27 just wasn't chaotic enough)
-- **Deployment Types:** It's complicated (Pods 1-2: middle_rack showing off, Pod 3: ToR keeping it simple)
+- **Total Racks:** 24 (Because stopping at 20 would suggest we had a plan)
+
+**Deployment Types:** It’s complicated—Pod 1: middle_rack (for fans of bureaucracy), Pod 2: mixed (for the indecisive), Pod 3: ToR (for rebels who read “Keep It Simple” and actually believed it).
 
 ### Pod Structure (The Family Dysfunction Table)
 | Pod | Spines | Deployment Type | Racks | Personality |
@@ -120,8 +121,6 @@ uv run infrahubctl object load data/demos/01_data_center/dc1/ --branch you_branc
 # Generate fabric (grab coffee, this might take a while)
 uv run infrahubctl generator generate_dc name=DC1 --branch you_branch
 
-# Watch the magic happen (or the chaos unfold, depending on your perspective)
-# Pro tip: Have the InfraHub UI open to see devices spawn like rabbits
 ```
 
 Trigger infrastructure generation in InfraHub UI → Actions → Generator Definitions → generate_dc DC1-Fabric-1

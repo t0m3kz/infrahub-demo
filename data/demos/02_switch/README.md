@@ -29,7 +29,8 @@ Perfect for when your team says:
 
 ## Deployment
 ```bash
-uv run infrahubctl object load data/demos/02_switch/
+uv run infrahubctl branch create your_branch
+uv run infrahubctl object load data/demos/02_switch/ --branch your_branch
 ```
 
 Trigger infrastructure generation in InfraHub UI → Actions → Generator Definitions → generate_rack MUC-1-SUITE-1-R1-5
