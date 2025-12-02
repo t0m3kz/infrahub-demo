@@ -442,7 +442,7 @@ spec:
                   label: "Cloud Security Locations"
                   kind: SecurityCloudSecurityLocation
                   icon: "mdi:cloud-lock"
-                  description: "Cloud security service locations (Zscaler, Prisma, etc.)"
+                  description: "Cloud security service (Zscaler, Prisma, etc.)"
 
 
     # ===================== SERVICES =====================
