@@ -51,6 +51,10 @@ generics:
     namespace: Topology
     include_in_menu: false
     hierarchical: true
+    label: Topology Deployment
+    human_friendly_id:
+      - name__value
+    display_label: "{{name__value}}"
     attributes:
       - name: name
         kind: Text
@@ -467,7 +471,7 @@ nodes:
         peer: LocationRack
         kind: Generic
         cardinality: many
-        identifier: "rack__pod"
+        identifier: "rack__hosting"
         order_weight: 1200
         on_delete: cascade
       - name: loopback_pool
@@ -533,7 +537,7 @@ nodes:
       - TopologyDeployment
       - GeneratorTarget
     parent: TopologyColocationMetro
-    label: Availability Zone
+    label: Colocation Availability Zone
     children: ""
     human_friendly_id:
       - name__value
@@ -565,6 +569,13 @@ nodes:
         cardinality: many
         identifier: "topology__devices"
         order_weight: 7000
+        on_delete: cascade
+      - name: racks
+        peer: LocationRack
+        kind: Generic
+        cardinality: many
+        identifier: "rack__hosting"
+        order_weight: 1200
         on_delete: cascade
 
   - name: Cloud

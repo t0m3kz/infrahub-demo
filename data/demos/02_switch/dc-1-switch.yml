@@ -8,7 +8,7 @@ spec:
       row_index: 1
       shortname: muc-1-s-1-r-1-1
       rack_type: network
-      pod: ["DC1", "1", "1"]
+      pod: DC1-1-POD-1
       parent: muc-1-s-1
       member_of_groups: [topologies_rack]
       fabric_templates:

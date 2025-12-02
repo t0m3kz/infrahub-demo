@@ -269,7 +269,7 @@ nodes:
 
 extensions:
   nodes:
-    - kind: ServiceVirtualFabricDeployment
+    - kind: ServiceVirtualFabric
       relationships:
         - name: design_pattern
           peer: TopologyVirtualFabricDesign

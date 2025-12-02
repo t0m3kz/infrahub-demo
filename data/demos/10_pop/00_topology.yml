@@ -1,0 +1,24 @@
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologyColocation
+  data:
+    - name: EQUINIX
+      children:
+        kind: TopologyColocationMetro
+        data:
+          - name: FR
+            location: ["fra"]
+            children:
+              kind: TopologyColocationAZ
+              data:
+                - name: FR2
+                - name: FR6
+          - name: PA
+            location: ["par"]
+            children:
+              kind: TopologyColocationAZ
+              data:
+                - name: PA4
+                - name: PA6

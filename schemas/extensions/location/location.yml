@@ -156,10 +156,10 @@ nodes:
         optional: true
         cardinality: many
       - name: pod
-        peer: TopologyPod
+        peer: TopologyDeployment
         kind: Attribute
         cardinality: one
-        identifier: "rack__pod"
+        identifier: "rack__hosting"
         optional: true
       - name: devices
         peer: DcimPhysicalDevice
@@ -175,14 +175,14 @@ extensions:
           peer: LocationBuilding
           cardinality: many
           optional: true
-    # - kind: TopologyDeployment
-    #   relationships:
-    #     - name: racks
-    #       peer: LocationRack
-    #       branch: aware
-    #       cardinality: many
-    #       kind: Generic
-    #       identifier: "rack__pod"
+    - kind: TopologyDeployment
+      relationships:
+        - name: racks
+          peer: LocationRack
+          branch: aware
+          cardinality: many
+          kind: Generic
+          identifier: "rack__hosting"
     - kind: DcimPhysicalDevice
       relationships:
         - name: rack

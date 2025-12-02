@@ -1,0 +1,1304 @@
+---
+version: "1.0"
+
+nodes:
+  # ==========================================
+  # Security Zones
+  # ==========================================
+  - name: Zone
+    namespace: Security
+    description: "Security zone with trust level and interface mappings"
+    label: Security Zone
+    icon: "mdi:shield-lock"
+    menu_placement: SecurityZone
+    include_in_menu: true
+    order_by:
+      - name__value
+    display_label: "{{ name__value }}"
+    attributes:
+      - name: name
+        kind: Text
+        label: Name
+        optional: false
+        unique: true
+        order_weight: 1000
+      - name: description
+        kind: Text
+        label: Description
+        optional: true
+        order_weight: 1100
+      - name: trust_level
+        kind: Number
+        label: Trust Level
+        description: "Trust level (0-100) where 0 is untrusted and 100 is fully trusted"
+        optional: false
+        order_weight: 1200
+      - name: zone_type
+        kind: Dropdown
+        label: Zone Type
+        description: "Type of security zone"
+        choices:
+          - name: internal
+            label: Internal
+            description: "Internal trusted network"
+            color: "#2ECC71"
+          - name: dmz
+            label: DMZ
+            description: "Demilitarized zone"
+            color: "#F39C12"
+          - name: external
+            label: External
+            description: "External untrusted network"
+            color: "#E74C3C"
+          - name: management
+            label: Management
+            description: "Management network"
+            color: "#3498DB"
+        default_value: internal
+        optional: false
+        order_weight: 1300
+    relationships:
+      - name: network_segments
+        peer: ServiceNetworkSegment
+        label: Network Segments
+        cardinality: many
+        kind: Generic
+        optional: true
+        order_weight: 2100
+        description: "Network segments assigned to this security zone"
+
+  # ==========================================
+  # Unified Address Objects
+  # ==========================================
+  - name: AddressObject
+    namespace: Security
+    description: "Unified address object supporting IP, prefix, range, and FQDN"
+    label: Address Object
+    icon: "mdi:ip-network"
+    menu_placement: SecurityAddressObject
+    include_in_menu: true
+    order_by:
+      - name__value
+    display_label: "{{ name__value }} ({{ address_type__value }})"
+    attributes:
+      - name: name
+        kind: Text
+        label: Name
+        optional: false
+        unique: true
+        order_weight: 1000
+      - name: description
+        kind: Text
+        label: Description
+        optional: true
+        order_weight: 1100
+      - name: address_type
+        kind: Dropdown
+        label: Address Type
+        description: "Type of address object"
+        choices:
+          - name: ip_address
+            label: IP Address
+            description: "Single IP address"
+            color: "#3498DB"
+          - name: ip_prefix
+            label: IP Prefix/Subnet
+            description: "Network prefix or subnet"
+            color: "#2ECC71"
+          - name: ip_range
+            label: IP Range
+            description: "Range of IP addresses"
+            color: "#F39C12"
+          - name: fqdn
+            label: FQDN
+            description: "Fully qualified domain name"
+            color: "#9B59B6"
+          - name: any
+            label: Any
+            description: "Match any address"
+            color: "#E74C3C"
+        default_value: ip_address
+        optional: false
+        order_weight: 1200
+      - name: address_value
+        kind: Text
+        label: Address Value
+        description: "IP address, prefix, range (start-end), or FQDN - Required for non-IPAM managed addresses"
+        optional: true
+        order_weight: 1300
+      - name: is_ipam_managed
+        kind: Boolean
+        label: IPAM Managed
+        description: "Whether this address is managed by IPAM system"
+        default_value: false
+        optional: true
+        order_weight: 1350
+    relationships:
+      - name: ipam_ip_address
+        peer: IpamIPAddress
+        label: IPAM IP Address
+        cardinality: one
+        kind: Attribute
+        optional: true
+        order_weight: 2000
+        description: "Reference to IPAM IP Address (when IPAM managed)"
+      - name: ipam_prefix
+        peer: IpamPrefix
+        label: IPAM Prefix
+        cardinality: one
+        kind: Attribute
+        optional: true
+        order_weight: 2100
+        description: "Reference to IPAM Prefix (when IPAM managed)"
+      - name: fqdn
+        peer: SecurityFQDN
+        label: FQDN
+        cardinality: one
+        kind: Attribute
+        optional: true
+        order_weight: 2200
+        description: "Reference to FQDN object (when address_type is fqdn)"
+
+  - name: FQDN
+    namespace: Security
+    description: "Fully Qualified Domain Name for web filtering and cloud security"
+    label: FQDN
+    icon: "mdi:web"
+    menu_placement: SecurityFQDN
+    include_in_menu: true
+    order_by:
+      - domain_name__value
+    display_label: "{{ domain_name__value }}"
+    attributes:
+      - name: domain_name
+        kind: Text
+        label: Domain Name
+        description: "Fully qualified domain name (e.g., example.com, *.company.com)"
+        optional: false
+        unique: true
+        order_weight: 1000
+      - name: description
+        kind: Text
+        label: Description
+        optional: true
+        order_weight: 1100
+      - name: domain_type
+        kind: Dropdown
+        label: Domain Type
+        description: "Type of domain matching"
+        choices:
+          - name: exact
+            label: Exact Match
+            description: "Exact domain match only"
+            color: "#3498DB"
+          - name: wildcard
+            label: Wildcard
+            description: "Wildcard domain (*.example.com)"
+            color: "#2ECC71"
+          - name: suffix
+            label: Suffix Match
+            description: "Domain and all subdomains"
+            color: "#F39C12"
+        default_value: exact
+        optional: false
+        order_weight: 1200
+      - name: category
+        kind: Dropdown
+        label: Domain Category
+        description: "General category of this domain"
+        choices:
+          - name: business
+            label: Business
+            description: "Business and productivity sites"
+            color: "#2ECC71"
+          - name: social_media
+            label: Social Media
+            description: "Social networking sites"
+            color: "#3498DB"
+          - name: entertainment
+            label: Entertainment
+            description: "Entertainment and media sites"
+            color: "#F39C12"
+          - name: malicious
+            label: Malicious
+            description: "Known malicious domains"
+            color: "#E74C3C"
+          - name: unknown
+            label: Unknown
+            description: "Uncategorized domain"
+            color: "#95A5A6"
+        default_value: unknown
+        optional: true
+        order_weight: 1300
+      - name: threat_level
+        kind: Dropdown
+        label: Threat Level
+        description: "Security threat level for this domain"
+        choices:
+          - name: safe
+            label: Safe
+            description: "Safe for business use"
+            color: "#2ECC71"
+          - name: low_risk
+            label: Low Risk
+            description: "Low security risk"
+            color: "#58D68D"
+          - name: medium_risk
+            label: Medium Risk
+            description: "Medium security risk"
+            color: "#F39C12"
+          - name: high_risk
+            label: High Risk
+            description: "High security risk"
+            color: "#E67E22"
+          - name: malicious
+            label: Malicious
+            description: "Known malicious domain"
+            color: "#E74C3C"
+        default_value: safe
+        optional: true
+        order_weight: 1400
+    relationships:
+      - name: url_categories
+        peer: SecurityURLCategory
+        label: URL Categories
+        cardinality: many
+        kind: Generic
+        optional: true
+        order_weight: 2000
+        description: "URL categories this domain belongs to"
+
+  - name: AddressGroup
+    namespace: Security
+    description: "Group of address objects"
+    label: Address Group
+    icon: "mdi:folder-network"
+    menu_placement: SecurityAddressGroup
+    include_in_menu: true
+    order_by:
+      - name__value
+    display_label: "{{ name__value }}"
+    attributes:
+      - name: name
+        kind: Text
+        label: Name
+        optional: false
+        unique: true
+        order_weight: 1000
+      - name: description
+        kind: Text
+        label: Description
+        optional: true
+        order_weight: 1100
+    relationships:
+      - name: address_objects
+        peer: SecurityAddressObject
+        label: Address Objects
+        cardinality: many
+        kind: Generic
+        optional: true
+        order_weight: 2000
+      - name: nested_groups
+        peer: SecurityAddressGroup
+        label: Nested Groups
+        cardinality: many
+        kind: Generic
+        optional: true
+        order_weight: 2100
+        description: "Address groups that are members of this group"
+
+  # ==========================================
+  # Unified Service Objects
+  # ==========================================
+  - name: ServiceObject
+    namespace: Security
+    description: "Unified service object supporting single ports, ranges, and protocols"
+    label: Service Object
+    icon: "mdi:network"
+    menu_placement: SecurityServiceObject
+    include_in_menu: true
+    order_by:
+      - name__value
+    display_label: "{{ name__value }}"
+    attributes:
+      - name: name
+        kind: Text
+        label: Name
+        optional: false
+        unique: true
+        order_weight: 1000
+      - name: description
+        kind: Text
+        label: Description
+        optional: true
+        order_weight: 1100
+      - name: service_type
+        kind: Dropdown
+        label: Service Type
+        description: "Type of service definition"
+        choices:
+          - name: single_port
+            label: Single Port
+            description: "Single port number"
+            color: "#3498DB"
+          - name: port_range
+            label: Port Range
+            description: "Range of port numbers"
+            color: "#2ECC71"
+          - name: protocol_only
+            label: Protocol Only
+            description: "Protocol without specific ports"
+            color: "#F39C12"
+          - name: any
+            label: Any
+            description: "Match any service"
+            color: "#E74C3C"
+        default_value: single_port
+        optional: false
+        order_weight: 1200
+      - name: protocol
+        kind: Dropdown
+        label: Protocol
+        description: "Transport protocol"
+        choices:
+          - name: tcp
+            label: TCP
+            description: "Transmission Control Protocol"
+            color: "#3498DB"
+          - name: udp
+            label: UDP
+            description: "User Datagram Protocol"
+            color: "#2ECC71"
+          - name: icmp
+            label: ICMP
+            description: "Internet Control Message Protocol"
+            color: "#F39C12"
+          - name: any
+            label: Any
+            description: "Any protocol"
+            color: "#9B59B6"
+        default_value: tcp
+        optional: false
+        order_weight: 1300
+      - name: port_start
+        kind: Number
+        label: Port Start
+        description: "Starting port number (1-65535)"
+        optional: true
+        order_weight: 1400
+      - name: port_end
+        kind: Number
+        label: Port End
+        description: "Ending port number (for ranges)"
+        optional: true
+        order_weight: 1500
+
+  - name: ServiceGroup
+    namespace: Security
+    description: "Group of service objects"
+    label: Service Group
+    icon: "mdi:folder-network"
+    menu_placement: SecurityServiceGroup
+    include_in_menu: true
+    order_by:
+      - name__value
+    display_label: "{{ name__value }}"
+    attributes:
+      - name: name
+        kind: Text
+        label: Name
+        optional: false
+        unique: true
+        order_weight: 1000
+      - name: description
+        kind: Text
+        label: Description
+        optional: true
+        order_weight: 1100
+    relationships:
+      - name: service_objects
+        peer: SecurityServiceObject
+        label: Service Objects
+        cardinality: many
+        kind: Generic
+        optional: true
+        order_weight: 2000
+      - name: nested_groups
+        peer: SecurityServiceGroup
+        label: Nested Groups
+        cardinality: many
+        kind: Generic
+        optional: true
+        order_weight: 2100
+
+  # ==========================================
+  # Application & URL Objects (Zscaler Support)
+  # ==========================================
+  - name: ApplicationCategory
+    namespace: Security
+    description: "Application category for application-based security and Zscaler"
+    label: Application Category
+    icon: "mdi:application"
+    menu_placement: SecurityAppCategory
+    include_in_menu: true
+    order_by:
+      - name__value
+    display_label: "{{ name__value }}"
+    attributes:
+      - name: name
+        kind: Text
+        label: Name
+        optional: false
+        unique: true
+        order_weight: 1000
+      - name: description
+        kind: Text
+        label: Description
+        optional: true
+        order_weight: 1100
+      - name: risk_level
+        kind: Dropdown
+        label: Risk Level
+        description: "Risk level for this application category"
+        choices:
+          - name: very_low
+            label: Very Low
+            description: "Very low risk - typically business productivity apps"
+            color: "#2ECC71"
+          - name: low
+            label: Low
+            description: "Low risk - standard business applications"
+            color: "#58D68D"
+          - name: medium
+            label: Medium
+            description: "Medium risk - requires monitoring"
+            color: "#F39C12"
+          - name: high
+            label: High
+            description: "High risk - may require additional controls"
+            color: "#E67E22"
+          - name: very_high
+            label: Very High
+            description: "Very high risk - typically blocked by default"
+            color: "#E74C3C"
+        default_value: medium
+        optional: false
+        order_weight: 1200
+      - name: cloud_category
+        kind: Text
+        label: Cloud Security Category
+        description: "Corresponding cloud security service category name"
+        optional: true
+        order_weight: 1300
+
+  - name: URLCategory
+    namespace: Security
+    description: "URL category for web filtering and Zscaler policies"
+    label: URL Category
+    icon: "mdi:web"
+    menu_placement: SecurityURLCategory
+    include_in_menu: true
+    order_by:
+      - name__value
+    display_label: "{{ name__value }}"
+    attributes:
+      - name: name
+        kind: Text
+        label: Name
+        optional: false
+        unique: true
+        order_weight: 1000
+      - name: description
+        kind: Text
+        label: Description
+        optional: true
+        order_weight: 1100
+      - name: risk_level
+        kind: Dropdown
+        label: Risk Level
+        description: "Risk level associated with this category"
+        choices:
+          - name: low
+            label: Low
+            description: "Low risk - business and productivity sites"
+            color: "#2ECC71"
+          - name: medium
+            label: Medium
+            description: "Medium risk - requires monitoring"
+            color: "#F39C12"
+          - name: high
+            label: High
+            description: "High risk - entertainment, social media"
+            color: "#E67E22"
+          - name: critical
+            label: Critical
+            description: "Critical risk - malicious, inappropriate content"
+            color: "#E74C3C"
+        default_value: medium
+        optional: false
+        order_weight: 1200
+      - name: action
+        kind: Dropdown
+        label: Default Action
+        description: "Default action for this URL category"
+        choices:
+          - name: allow
+            label: Allow
+            description: "Allow access"
+            color: "#2ECC71"
+          - name: block
+            label: Block
+            description: "Block access"
+            color: "#E74C3C"
+          - name: caution
+            label: Caution
+            description: "Show warning page"
+            color: "#F39C12"
+          - name: isolate
+            label: Isolate
+            description: "Open in isolated browser"
+            color: "#9B59B6"
+        default_value: allow
+        optional: false
+        order_weight: 1300
+      - name: cloud_category
+        kind: Text
+        label: Cloud Security Category
+        description: "Corresponding cloud security service category name"
+        optional: true
+        order_weight: 1400
+
+  # ==========================================
+  # Security Profiles & Threat Prevention
+  # ==========================================
+  - name: SecurityProfile
+    namespace: Security
+    description: "Security profile with threat prevention features"
+    label: Security Profile
+    icon: "mdi:shield-check"
+    menu_placement: SecurityProfile
+    include_in_menu: true
+    order_by:
+      - name__value
+    display_label: "{{ name__value }}"
+    attributes:
+      - name: name
+        kind: Text
+        label: Name
+        optional: false
+        unique: true
+        order_weight: 1000
+      - name: description
+        kind: Text
+        label: Description
+        optional: true
+        order_weight: 1100
+      - name: antivirus_enabled
+        kind: Boolean
+        label: Antivirus Enabled
+        description: "Enable antivirus scanning"
+        default_value: false
+        optional: true
+        order_weight: 1200
+      - name: ips_enabled
+        kind: Boolean
+        label: IPS Enabled
+        description: "Enable intrusion prevention system"
+        default_value: false
+        optional: true
+        order_weight: 1300
+      - name: url_filtering_enabled
+        kind: Boolean
+        label: URL Filtering Enabled
+        description: "Enable URL filtering"
+        default_value: false
+        optional: true
+        order_weight: 1400
+      - name: ssl_inspection_enabled
+        kind: Boolean
+        label: SSL Inspection Enabled
+        description: "Enable SSL/TLS inspection"
+        default_value: false
+        optional: true
+        order_weight: 1500
+      - name: data_loss_prevention_enabled
+        kind: Boolean
+        label: DLP Enabled
+        description: "Enable data loss prevention"
+        default_value: false
+        optional: true
+        order_weight: 1600
+
+  - name: Schedule
+    namespace: Security
+    description: "Time-based schedule for security policies"
+    label: Security Schedule
+    icon: "mdi:calendar-clock"
+    menu_placement: SecuritySchedule
+    include_in_menu: true
+    order_by:
+      - name__value
+    display_label: "{{ name__value }}"
+    attributes:
+      - name: name
+        kind: Text
+        label: Name
+        optional: false
+        unique: true
+        order_weight: 1000
+      - name: description
+        kind: Text
+        label: Description
+        optional: true
+        order_weight: 1100
+      - name: days_of_week
+        kind: Text
+        label: Days of Week
+        description: "Comma-separated days (e.g., monday,tuesday,wednesday)"
+        optional: false
+        order_weight: 1200
+      - name: start_time
+        kind: Text
+        label: Start Time
+        description: "Start time in HH:MM format"
+        optional: false
+        order_weight: 1300
+      - name: end_time
+        kind: Text
+        label: End Time
+        description: "End time in HH:MM format"
+        optional: false
+        order_weight: 1400
+      - name: timezone
+        kind: Text
+        label: Timezone
+        description: "Timezone (e.g., UTC, America/New_York)"
+        default_value: "UTC"
+        optional: true
+        order_weight: 1500
+
+  # ==========================================
+  # Unified Security Policies
+  # ==========================================
+  - name: Policy
+    namespace: Security
+    description: "Unified security policy supporting firewall rules, switch ACLs, and cloud policies"
+    label: Security Policy
+    icon: "mdi:file-document-outline"
+    menu_placement: SecurityPolicy
+    include_in_menu: true
+    order_by:
+      - name__value
+    display_label: "{{ name__value }}"
+    attributes:
+      - name: name
+        kind: Text
+        label: Name
+        optional: false
+        unique: true
+        order_weight: 1000
+      - name: description
+        kind: Text
+        label: Description
+        optional: true
+        order_weight: 1100
+      - name: policy_type
+        kind: Dropdown
+        label: Policy Type
+        description: "Type of security policy"
+        choices:
+          - name: firewall_policy
+            label: Firewall Policy
+            description: "Zone-based firewall policy"
+            color: "#E74C3C"
+          - name: switch_acl
+            label: Switch ACL
+            description: "Switch access control list"
+            color: "#3498DB"
+          - name: cloud_policy
+            label: Cloud Security Policy
+            description: "Cloud security service policy"
+            color: "#9B59B6"
+          - name: waf_policy
+            label: WAF Policy
+            description: "Web application firewall policy"
+            color: "#E67E22"
+          - name: proxy_policy
+            label: Proxy Policy
+            description: "Web proxy security policy"
+            color: "#16A085"
+        default_value: firewall_policy
+        optional: false
+        order_weight: 1200
+      - name: default_action
+        kind: Dropdown
+        label: Default Action
+        description: "Default action for unmatched traffic"
+        choices:
+          - name: permit
+            label: Permit
+            description: "Allow by default"
+            color: "#2ECC71"
+          - name: deny
+            label: Deny
+            description: "Block by default"
+            color: "#E74C3C"
+        default_value: deny
+        optional: false
+        order_weight: 1300
+      - name: enabled
+        kind: Boolean
+        label: Policy Enabled
+        description: "Whether this policy is active"
+        default_value: true
+        optional: true
+        order_weight: 1400
+    relationships:
+      - name: rules
+        peer: SecurityPolicyRule
+        label: Policy Rules
+        cardinality: many
+        kind: Component
+        optional: true
+        order_weight: 2000
+        description: "Security rules associated with this policy"
+      - name: network_segments
+        peer: ServiceNetworkSegment
+        label: Network Segments
+        cardinality: many
+        kind: Generic
+        optional: true
+        order_weight: 2200
+        description: "Network segments this policy applies to"
+
+  - name: PolicyRule
+    namespace: Security
+    description: "Unified security policy rule supporting firewalls, switches, and cloud services"
+    label: Security Policy Rule
+    icon: "mdi:file-document-edit-outline"
+    menu_placement: SecurityPolicyRule
+    include_in_menu: true
+    order_by:
+      - index__value
+    display_label: "{{ name__value }}"
+    uniqueness_constraints:
+      - [policy, index__value]
+    attributes:
+      - name: index
+        kind: Number
+        label: Rule Index
+        description: "Rule index for ordering (lower numbers processed first)"
+        optional: false
+        order_weight: 1000
+      - name: name
+        kind: Text
+        label: Name
+        optional: false
+        order_weight: 1100
+      - name: action
+        kind: Dropdown
+        label: Action
+        description: "Action to take when rule matches"
+        choices:
+          - name: permit
+            label: Permit
+            description: "Allow the traffic"
+            color: "#2ECC71"
+          - name: deny
+            label: Deny
+            description: "Block the traffic"
+            color: "#E74C3C"
+          - name: drop
+            label: Drop
+            description: "Silently drop the traffic"
+            color: "#95A5A6"
+          - name: reject
+            label: Reject
+            description: "Reject with ICMP response"
+            color: "#E67E22"
+          - name: isolate
+            label: Isolate
+            description: "Isolate traffic (cloud security)"
+            color: "#9B59B6"
+          - name: caution
+            label: Caution
+            description: "Show warning (cloud security)"
+            color: "#F39C12"
+        default_value: deny
+        optional: false
+        order_weight: 1200
+      - name: direction
+        kind: Dropdown
+        label: Direction
+        description: "Traffic direction (for switch ACLs)"
+        choices:
+          - name: any
+            label: Any
+            description: "Any direction (firewall zone-based)"
+            color: "#95A5A6"
+          - name: inbound
+            label: Inbound
+            description: "Inbound traffic"
+            color: "#3498DB"
+          - name: outbound
+            label: Outbound
+            description: "Outbound traffic"
+            color: "#9B59B6"
+        default_value: any
+        optional: true
+        order_weight: 1300
+      - name: log
+        kind: Boolean
+        label: Log
+        description: "Enable logging for this rule"
+        default_value: false
+        optional: true
+        order_weight: 1400
+      - name: description
+        kind: Text
+        label: Description
+        optional: true
+        order_weight: 1500
+      - name: disabled
+        kind: Boolean
+        label: Rule Disabled
+        description: "Disable this rule without deleting it"
+        default_value: false
+        optional: true
+        order_weight: 1550
+      - name: nat_enabled
+        kind: Boolean
+        label: NAT Enabled
+        description: "Enable Network Address Translation for this rule"
+        default_value: false
+        optional: true
+        order_weight: 1600
+      - name: nat_type
+        kind: Dropdown
+        label: NAT Type
+        description: "Type of NAT to perform"
+        choices:
+          - name: source_nat
+            label: Source NAT
+            description: "Translate source address"
+            color: "#3498DB"
+          - name: destination_nat
+            label: Destination NAT
+            description: "Translate destination address"
+            color: "#2ECC71"
+          - name: static_nat
+            label: Static NAT
+            description: "One-to-one address translation"
+            color: "#F39C12"
+        optional: true
+        order_weight: 1650
+    relationships:
+      - name: policy
+        peer: SecurityPolicy
+        label: Policy
+        cardinality: one
+        kind: Attribute
+        optional: false
+        order_weight: 2000
+      - name: source_zone
+        peer: SecurityZone
+        label: Source Zone
+        cardinality: one
+        kind: Attribute
+        optional: true
+        identifier: policyrule_source_zone
+        order_weight: 2100
+        description: "Source security zone (for firewall policies)"
+      - name: destination_zone
+        peer: SecurityZone
+        label: Destination Zone
+        cardinality: one
+        kind: Attribute
+        optional: true
+        identifier: policyrule_destination_zone
+        order_weight: 2200
+        description: "Destination security zone (for firewall policies)"
+      - name: source_addresses
+        peer: SecurityAddressGroup
+        label: Source Addresses
+        cardinality: many
+        kind: Generic
+        optional: true
+        identifier: policyrule_source_addresses
+        order_weight: 2300
+      - name: destination_addresses
+        peer: SecurityAddressGroup
+        label: Destination Addresses
+        cardinality: many
+        kind: Generic
+        optional: true
+        identifier: policyrule_destination_addresses
+        order_weight: 2400
+      - name: services
+        peer: SecurityServiceGroup
+        label: Services
+        cardinality: many
+        kind: Generic
+        optional: true
+        order_weight: 2500
+      - name: application_categories
+        peer: SecurityApplicationCategory
+        label: Application Categories
+        cardinality: many
+        kind: Generic
+        optional: true
+        order_weight: 2600
+        description: "Application categories (for next-gen firewalls and Zscaler)"
+      - name: url_categories
+        peer: SecurityURLCategory
+        label: URL Categories
+        cardinality: many
+        kind: Generic
+        optional: true
+        order_weight: 2700
+        description: "URL categories (for web filtering and Zscaler)"
+      - name: security_profile
+        peer: SecuritySecurityProfile
+        label: Security Profile
+        cardinality: one
+        kind: Attribute
+        optional: true
+        order_weight: 2800
+      - name: schedule
+        peer: SecuritySchedule
+        label: Schedule
+        cardinality: one
+        kind: Attribute
+        optional: true
+        order_weight: 2900
+
+  # ==========================================
+  # Cloud Security Integration (Universal)
+  # ==========================================
+  - name: CloudSecurityLocation
+    namespace: Security
+    description: "Cloud security service location configuration (Zscaler, Prisma, Umbrella, etc.)"
+    label: Cloud Security Location
+    icon: "mdi:cloud-lock"
+    menu_placement: SecurityCloudLocation
+    include_in_menu: true
+    order_by:
+      - name__value
+    display_label: "{{ name__value }}"
+    attributes:
+      - name: name
+        kind: Text
+        label: Name
+        optional: false
+        unique: true
+        order_weight: 1000
+      - name: description
+        kind: Text
+        label: Description
+        optional: true
+        order_weight: 1100
+      - name: provider
+        kind: Dropdown
+        label: Cloud Security Provider
+        description: "Cloud security service provider"
+        choices:
+          - name: zscaler
+            label: Zscaler
+            description: "Zscaler cloud security"
+            color: "#0066CC"
+          - name: palo_alto_prisma
+            label: Palo Alto Prisma
+            description: "Palo Alto Prisma Access"
+            color: "#FA582D"
+          - name: cisco_umbrella
+            label: Cisco Umbrella
+            description: "Cisco Umbrella cloud security"
+            color: "#1BA0D7"
+          - name: fortinet_ztna
+            label: Fortinet ZTNA
+            description: "Fortinet Zero Trust Network Access"
+            color: "#EE3124"
+          - name: cloudflare_ztna
+            label: Cloudflare ZTNA
+            description: "Cloudflare Zero Trust"
+            color: "#F38020"
+          - name: netskope
+            label: Netskope
+            description: "Netskope Security Cloud"
+            color: "#00A1C9"
+          - name: other
+            label: Other
+            description: "Other cloud security provider"
+            color: "#95A5A6"
+        default_value: zscaler
+        optional: false
+        order_weight: 1150
+      - name: connection_type
+        kind: Dropdown
+        label: Connection Type
+        description: "Type of connection to cloud security service"
+        choices:
+          - name: ipsec_tunnel
+            label: IPSec Tunnel
+            description: "IPSec tunnel to cloud service"
+            color: "#3498DB"
+          - name: gre_tunnel
+            label: GRE Tunnel
+            description: "GRE tunnel to cloud service"
+            color: "#2ECC71"
+          - name: ztna_connector
+            label: ZTNA Connector
+            description: "Zero Trust Network Access connector"
+            color: "#9B59B6"
+          - name: pac_file
+            label: PAC File
+            description: "Proxy Auto-Configuration"
+            color: "#F39C12"
+          - name: api_integration
+            label: API Integration
+            description: "API-based integration"
+            color: "#E67E22"
+        default_value: ipsec_tunnel
+        optional: false
+        order_weight: 1200
+      - name: bandwidth_mbps
+        kind: Number
+        label: Bandwidth (Mbps)
+        description: "Allocated bandwidth in Mbps"
+        optional: true
+        order_weight: 1300
+      - name: primary_endpoint
+        kind: Text
+        label: Primary Endpoint
+        description: "Primary cloud security service endpoint"
+        optional: true
+        order_weight: 1400
+      - name: secondary_endpoint
+        kind: Text
+        label: Secondary Endpoint
+        description: "Secondary cloud security service endpoint"
+        optional: true
+        order_weight: 1500
+      - name: service_region
+        kind: Text
+        label: Service Region
+        description: "Cloud service region (e.g., US-East, EU-West)"
+        optional: true
+        order_weight: 1550
+    relationships:
+      - name: physical_location
+        peer: LocationBuilding
+        label: Physical Location
+        cardinality: one
+        kind: Attribute
+        optional: true
+        order_weight: 2000
+      - name: devices
+        peer: DcimGenericDevice
+        label: Devices
+        cardinality: many
+        kind: Generic
+        optional: true
+        order_weight: 2100
+        description: "Devices using this cloud security location"
+
+  # ==========================================
+  # VPN & Certificate Management
+  # ==========================================
+  - name: VPNConnection
+    namespace: Security
+    description: "VPN connection configuration"
+    label: VPN Connection
+    icon: "mdi:vpn"
+    menu_placement: SecurityVPNConnection
+    include_in_menu: true
+    order_by:
+      - name__value
+    display_label: "{{ name__value }}"
+    attributes:
+      - name: name
+        kind: Text
+        label: Name
+        optional: false
+        unique: true
+        order_weight: 1000
+      - name: description
+        kind: Text
+        label: Description
+        optional: true
+        order_weight: 1100
+      - name: vpn_type
+        kind: Dropdown
+        label: VPN Type
+        description: "Type of VPN connection"
+        choices:
+          - name: site_to_site
+            label: Site-to-Site
+            description: "Site-to-site VPN tunnel"
+            color: "#3498DB"
+          - name: remote_access
+            label: Remote Access
+            description: "Remote user VPN access"
+            color: "#2ECC71"
+          - name: ssl_vpn
+            label: SSL VPN
+            description: "SSL/TLS VPN connection"
+            color: "#F39C12"
+          - name: ipsec_vpn
+            label: IPSec VPN
+            description: "IPSec VPN tunnel"
+            color: "#9B59B6"
+        default_value: site_to_site
+        optional: false
+        order_weight: 1200
+      - name: local_endpoint
+        kind: Text
+        label: Local Endpoint
+        description: "Local endpoint IP address"
+        optional: false
+        order_weight: 1300
+      - name: remote_endpoint
+        kind: Text
+        label: Remote Endpoint
+        description: "Remote endpoint IP address"
+        optional: false
+        order_weight: 1400
+      - name: pre_shared_key
+        kind: Text
+        label: Pre-shared Key
+        description: "PSK for authentication (store securely)"
+        optional: true
+        order_weight: 1500
+      - name: status
+        kind: Dropdown
+        label: Connection Status
+        description: "Current VPN connection status"
+        choices:
+          - name: active
+            label: Active
+            description: "VPN is active and connected"
+            color: "#2ECC71"
+          - name: inactive
+            label: Inactive
+            description: "VPN is configured but not active"
+            color: "#95A5A6"
+          - name: failed
+            label: Failed
+            description: "VPN connection has failed"
+            color: "#E74C3C"
+          - name: maintenance
+            label: Maintenance
+            description: "VPN is under maintenance"
+            color: "#F39C12"
+        default_value: inactive
+        optional: true
+        order_weight: 1600
+    relationships:
+      - name: physical_device
+        peer: DcimGenericDevice
+        label: Physical Device
+        cardinality: one
+        kind: Attribute
+        optional: false
+        order_weight: 2000
+        description: "Physical device hosting this VPN connection"
+      - name: remote_networks
+        peer: SecurityAddressGroup
+        label: Remote Networks
+        cardinality: many
+        kind: Generic
+        optional: true
+        order_weight: 2100
+        description: "Remote networks accessible via this VPN"
+
+  - name: Certificate
+    namespace: Security
+    description: "Digital certificate for SSL/TLS and authentication"
+    label: Security Certificate
+    icon: "mdi:certificate"
+    menu_placement: SecurityCertificate
+    include_in_menu: true
+    order_by:
+      - name__value
+    display_label: "{{ name__value }}"
+    attributes:
+      - name: name
+        kind: Text
+        label: Name
+        optional: false
+        unique: true
+        order_weight: 1000
+      - name: description
+        kind: Text
+        label: Description
+        optional: true
+        order_weight: 1100
+      - name: certificate_type
+        kind: Dropdown
+        label: Certificate Type
+        description: "Type of certificate"
+        choices:
+          - name: ssl_tls
+            label: SSL/TLS
+            description: "SSL/TLS server certificate"
+            color: "#2ECC71"
+          - name: ca_certificate
+            label: CA Certificate
+            description: "Certificate Authority certificate"
+            color: "#3498DB"
+          - name: client_certificate
+            label: Client Certificate
+            description: "Client authentication certificate"
+            color: "#F39C12"
+          - name: code_signing
+            label: Code Signing
+            description: "Code signing certificate"
+            color: "#9B59B6"
+        default_value: ssl_tls
+        optional: false
+        order_weight: 1200
+      - name: subject
+        kind: Text
+        label: Subject
+        description: "Certificate subject (CN, O, etc.)"
+        optional: false
+        order_weight: 1300
+      - name: issuer
+        kind: Text
+        label: Issuer
+        description: "Certificate issuer"
+        optional: true
+        order_weight: 1400
+      - name: serial_number
+        kind: Text
+        label: Serial Number
+        description: "Certificate serial number"
+        optional: true
+        order_weight: 1500
+      - name: valid_from
+        kind: DateTime
+        label: Valid From
+        description: "Certificate validity start date"
+        optional: true
+        order_weight: 1600
+      - name: valid_to
+        kind: DateTime
+        label: Valid To
+        description: "Certificate expiration date"
+        optional: true
+        order_weight: 1700
+    relationships:
+      - name: devices
+        peer: DcimGenericDevice
+        label: Devices
+        cardinality: many
+        kind: Generic
+        optional: true
+        order_weight: 2000
+        description: "Devices using this certificate"
+
+
+
+
+
+

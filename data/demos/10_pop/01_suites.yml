@@ -1,0 +1,78 @@
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: LocationBuilding
+  data:
+    - name: EQX-FR
+      shortname: "eqx-fr-1"
+      parent: fra
+      children:
+        kind: LocationSuite
+        data:
+          - suite_name: FR2
+            shortname: "eqx-fr-1-fr2"
+            children:
+              kind: LocationRack
+              data:
+                - name: Rack-1
+                  shortname: "eqx-fr-1-fr2-r-1"
+                  index: 1
+                  row_index: 1
+                  pod: FR2
+                - name: Rack-2
+                  index: 2
+                  row_index: 1
+                  shortname: "eqx-fr-1-fr2-r-2"
+                  pod: FR2
+          - suite_name: FR6
+            shortname: "eqx-fr-1-fr6"
+            children:
+              kind: LocationRack
+              data:
+                - name: Rack-1
+                  shortname: "eqx-fr-1-fr6-r-1"
+                  index: 1
+                  row_index: 1
+                  pod: FR6
+                - name: Rack-2
+                  shortname: "eqx-fr-1-fr6-r-2"
+                  index: 2
+                  row_index: 1
+                  pod: FR6
+    - name: EQX-PA
+      shortname: "eqx-pa-1"
+      parent: par
+      children:
+        kind: LocationSuite
+        data:
+          - suite_name: PA4
+            shortname: "eqx-pa-1-pa4"
+            children:
+              kind: LocationRack
+              data:
+                - name: Rack-1
+                  shortname: "eqx-pa-1-pa4-r-1"
+                  index: 1
+                  row_index: 1
+                  pod: PA4
+                - name: Rack-2
+                  shortname: "eqx-pa-1-pa4-r-2"
+                  index: 2
+                  row_index: 1
+                  pod: PA4
+          - suite_name: PA6
+            shortname: "eqx-pa-1-pa6"
+            children:
+              kind: LocationRack
+              data:
+                - name: Rack-1
+                  shortname: "eqx-pa-1-pa6-r-1"
+                  index: 1
+                  row_index: 1
+                  pod: PA6
+                - name: Rack-2
+                  shortname: "eqx-pa-1-pa6-r-2"
+                  index: 2
+                  row_index: 1
+                  pod: PA6
