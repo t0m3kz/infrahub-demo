@@ -30,7 +30,7 @@ nodes:
       - name: trust_level
         kind: Number
         label: Trust Level
-        description: "Trust level (0-100) where 0 is untrusted and 100 is fully trusted"
+        description: "Trust level (0-100), higher is more trusted"
         optional: false
         order_weight: 1200
       - name: zone_type
@@ -123,7 +123,7 @@ nodes:
       - name: address_value
         kind: Text
         label: Address Value
-        description: "IP address, prefix, range (start-end), or FQDN - Required for non-IPAM managed addresses"
+        description: "IP address, prefix, range (start-end), or FQDN"
         optional: true
         order_weight: 1300
       - name: is_ipam_managed
@@ -161,7 +161,7 @@ nodes:
 
   - name: FQDN
     namespace: Security
-    description: "Fully Qualified Domain Name for web filtering and cloud security"
+    description: "Fully Qualified Domain Name for web filtering"
     label: FQDN
     icon: "mdi:web"
     menu_placement: SecurityFQDN
@@ -173,7 +173,7 @@ nodes:
       - name: domain_name
         kind: Text
         label: Domain Name
-        description: "Fully qualified domain name (e.g., example.com, *.company.com)"
+        description: "Fully qualified domain name (e.g., example.com)"
         optional: false
         unique: true
         order_weight: 1000
@@ -312,7 +312,7 @@ nodes:
   # ==========================================
   - name: ServiceObject
     namespace: Security
-    description: "Unified service object supporting single ports, ranges, and protocols"
+    description: "Unified service object supporting single ports"
     label: Service Object
     icon: "mdi:network"
     menu_placement: SecurityServiceObject
@@ -436,7 +436,7 @@ nodes:
   # ==========================================
   - name: ApplicationCategory
     namespace: Security
-    description: "Application category for application-based security and Zscaler"
+    description: "Application category for application-based security"
     label: Application Category
     icon: "mdi:application"
     menu_placement: SecurityAppCategory
@@ -682,7 +682,7 @@ nodes:
   # ==========================================
   - name: Policy
     namespace: Security
-    description: "Unified security policy supporting firewall rules, switch ACLs, and cloud policies"
+    description: "Unified security policy supporting firewall rules"
     label: Security Policy
     icon: "mdi:file-document-outline"
     menu_placement: SecurityPolicy
@@ -773,7 +773,7 @@ nodes:
 
   - name: PolicyRule
     namespace: Security
-    description: "Unified security policy rule supporting firewalls, switches, and cloud services"
+    description: "Unified security policy rule supporting firewall rules"
     label: Security Policy Rule
     icon: "mdi:file-document-edit-outline"
     menu_placement: SecurityPolicyRule
@@ -948,7 +948,7 @@ nodes:
         kind: Generic
         optional: true
         order_weight: 2600
-        description: "Application categories (for next-gen firewalls and Zscaler)"
+        description: "Application categories (for next-gen firewalls)"
       - name: url_categories
         peer: SecurityURLCategory
         label: URL Categories
@@ -977,7 +977,7 @@ nodes:
   # ==========================================
   - name: CloudSecurityLocation
     namespace: Security
-    description: "Cloud security service location configuration (Zscaler, Prisma, Umbrella, etc.)"
+    description: "Cloud security service (Zscaler, Prisma, Umbrella, etc.)"
     label: Cloud Security Location
     icon: "mdi:cloud-lock"
     menu_placement: SecurityCloudLocation
@@ -1296,9 +1296,3 @@ nodes:
         optional: true
         order_weight: 2000
         description: "Devices using this certificate"
-
-
-
-
-
-
