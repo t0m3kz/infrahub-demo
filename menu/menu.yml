@@ -140,7 +140,7 @@ spec:
                 - name: VirtualFabricDeployment
                   namespace: Service
                   label: Virtual Data Centers
-                  kind: ServiceVirtualFabricDeployment
+                  kind: ServiceVirtualFabric
                   icon: "carbon:ibm-cloud-internet-services"
                   description: "Customer virtual fabric deployments"
 
@@ -323,6 +323,128 @@ spec:
                   kind: ServicePeeringPolicy
                   icon: "carbon:policy"
                   description: "Policies and rules for peer relationships"
+    # ===================== SECURITY =====================
+    - namespace: Security
+      name: SecurityMenu
+      label: Security Management
+      icon: "mdi:shield-lock"
+      children:
+        data:
+          # --------- Objects & Groups ---------
+          - namespace: Security
+            name: ObjectsMenu
+            label: "Objects & Groups"
+            icon: "mdi:folder-network"
+            children:
+              data:
+                - namespace: Security
+                  name: AddressObject
+                  label: "Address Objects"
+                  kind: SecurityAddressObject
+                  icon: "mdi:ip-network"
+                  description: "IP addresses, prefixes, ranges, and FQDNs"
+                - namespace: Security
+                  name: AddressGroup
+                  label: "Address Groups"
+                  kind: SecurityAddressGroup
+                  icon: "mdi:folder-network"
+                  description: "Groups of address objects"
+                - namespace: Security
+                  name: ServiceObject
+                  label: "Service Objects"
+                  kind: SecurityServiceObject
+                  icon: "mdi:network"
+                  description: "Ports, protocols, and services"
+                - namespace: Security
+                  name: ServiceGroup
+                  label: "Service Groups"
+                  kind: SecurityServiceGroup
+                  icon: "mdi:folder-network"
+                  description: "Groups of service objects"
+                - namespace: Security
+                  name: FQDN
+                  label: "Domain Names (FQDN)"
+                  kind: SecurityFQDN
+                  icon: "mdi:web"
+                  description: "Fully qualified domain names for web filtering"
+                - namespace: Security
+                  name: ApplicationCategory
+                  label: "Application Categories"
+                  kind: SecurityApplicationCategory
+                  icon: "mdi:application"
+                  description: "Application categories for next-gen firewalls"
+                - namespace: Security
+                  name: URLCategory
+                  label: "URL Categories"
+                  kind: SecurityURLCategory
+                  icon: "mdi:web"
+                  description: "URL categories for web filtering"
+
+          # --------- Policies & Rules ---------
+          - namespace: Security
+            name: PoliciesMenu
+            label: "Policies & Rules"
+            icon: "mdi:file-document-outline"
+            children:
+              data:
+                - namespace: Security
+                  name: Policy
+                  label: "Security Policies"
+                  kind: SecurityPolicy
+                  icon: "mdi:file-document-outline"
+                  description: "Firewall, ACL, and cloud security policies"
+                - namespace: Security
+                  name: PolicyRule
+                  label: "Policy Rules"
+                  kind: SecurityPolicyRule
+                  icon: "mdi:file-document-edit-outline"
+                  description: "Security rules and access controls"
+                - namespace: Security
+                  name: Zone
+                  label: "Security Zones"
+                  kind: SecurityZone
+                  icon: "mdi:shield-lock"
+                  description: "Network security zones and trust levels"
+                - namespace: Security
+                  name: SecurityProfile
+                  label: "Security Profiles"
+                  kind: SecuritySecurityProfile
+                  icon: "mdi:shield-check"
+                  description: "Threat prevention and security profiles"
+                - namespace: Security
+                  name: Schedule
+                  label: "Security Schedules"
+                  kind: SecuritySchedule
+                  icon: "mdi:calendar-clock"
+                  description: "Time-based security policies"
+
+          # --------- Infrastructure ---------
+          - namespace: Security
+            name: InfrastructureMenu
+            label: "Infrastructure"
+            icon: "mdi:vpn"
+            children:
+              data:
+                - namespace: Security
+                  name: VPNConnection
+                  label: "VPN Connections"
+                  kind: SecurityVPNConnection
+                  icon: "mdi:vpn"
+                  description: "Site-to-site and remote access VPNs"
+                - namespace: Security
+                  name: Certificate
+                  label: "Security Certificates"
+                  kind: SecurityCertificate
+                  icon: "mdi:certificate"
+                  description: "SSL/TLS certificates and lifecycle management"
+                - namespace: Security
+                  name: CloudSecurityLocation
+                  label: "Cloud Security Locations"
+                  kind: SecurityCloudSecurityLocation
+                  icon: "mdi:cloud-lock"
+                  description: "Cloud security service locations (Zscaler, Prisma, etc.)"
+
+
     # ===================== SERVICES =====================
     - namespace: Network
       name: MainMenu

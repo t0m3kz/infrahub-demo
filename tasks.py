@@ -6,7 +6,7 @@ from pathlib import Path
 
 from invoke import Context, task  # type: ignore
 
-INFRAHUB_VERSION = os.getenv("INFRAHUB_VERSION", "latest")
+INFRAHUB_VERSION = os.getenv("VERSION", "latest")
 INFRAHUB_ADDRESS = os.getenv("INFRAHUB_ADDRESS", "http://localhost:8000")
 INFRAHUB_API_TOKEN = os.getenv("INFRAHUB_API_TOKEN", "admin")
 

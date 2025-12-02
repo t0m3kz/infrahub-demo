@@ -10,7 +10,6 @@ nodes:
     include_in_menu: true
     inherit_from:
       - CoreArtifactTarget
-      - TopologyDeployment
     uniqueness_constraints:
       - ["name__value", "customer"]
     human_friendly_id:
@@ -19,6 +18,14 @@ nodes:
     display_label: "{{customer__name__value}} - {{name__value}}"
     order_by: [customer__name__value, name__value]
     attributes:
+      - name: name
+        kind: Text
+        computed_attribute:
+          kind: Jinja2
+          jinja2_template: "{{deployment__name__value}}-{{ customer__name__value }}"  # yamllint disable-line rule:line-length
+        read_only: true
+        optional: false
+        description: "Unique name for the customer deployment"
       - name: primary_provider
         kind: Dropdown
         label: "Primary Cloud Provider"
@@ -194,21 +201,6 @@ nodes:
           max_value: 365
         description: "Access key rotation interval in days"
 
-      # Regional Presence
-      - name: deployed_regions
-        kind: Text
-        label: "Deployed Regions"
-        description: "List of regions where resources are deployed"
-        optional: true
-        order_weight: 1000
-
-      - name: availability_zones
-        kind: Text
-        label: "Availability Zones"
-        description: "Comma-separated list of availability zones in use"
-        optional: true
-        order_weight: 1050
-
     relationships:
       - name: customer
         peer: OrganizationCustomer
@@ -218,13 +210,14 @@ nodes:
         order_weight: 1100
         description: "Customer organization owning this deployment"
 
-      - name: location
-        peer: LocationGeneric
+      - name: deployment
+        peer: TopologyCloudRegion
         cardinality: one
         kind: Attribute
-        optional: true
-        order_weight: 1200
-        description: "Primary geographic location for this cloud deployment"
+        order_weight: 1000
+        optional: false
+        on_delete: no-action
+        description: "The deployment location for customer services"
 
 # Extensions to other nodes
 extensions:
@@ -235,7 +228,7 @@ extensions:
           peer: ServiceVirtualCloud
           cardinality: many
           kind: Component
+          on_delete: cascade
           optional: true
           order_weight: 2650
-          on_delete: cascade
           description: "Customer virtual cloud deployments"

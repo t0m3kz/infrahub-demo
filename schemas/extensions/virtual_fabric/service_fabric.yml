@@ -2,7 +2,7 @@
 version: "1.0"
 
 nodes:
-  - name: VirtualFabricDeployment
+  - name: VirtualFabric
     namespace: Service
     description: Customer virtual fabric deployment with resource limits pattern
     label: "Virtual Fabric Deployment"
@@ -84,7 +84,7 @@ extensions:
     - kind: OrganizationCustomer
       relationships:
         - name: virtual_fabric_deployments
-          peer: ServiceVirtualFabricDeployment
+          peer: ServiceVirtualFabric
           cardinality: many
           kind: Component
           on_delete: cascade
@@ -94,7 +94,7 @@ extensions:
     - kind: TopologyDataCenter
       relationships:
         - name: virtual_fabric_deployments
-          peer: ServiceVirtualFabricDeployment
+          peer: ServiceVirtualFabric
           cardinality: many
           kind: Component
           optional: true

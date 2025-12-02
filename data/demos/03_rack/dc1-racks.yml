@@ -8,7 +8,7 @@ spec:
       row_index: 2
       rack_type: tor
       shortname: muc-1-s-2-r-1-2
-      pod: ["DC1", "1", "2"]
+      pod: DC1-1-POD-2
       parent: muc-1-s-2
       member_of_groups: [topologies_rack]
       fabric_templates:

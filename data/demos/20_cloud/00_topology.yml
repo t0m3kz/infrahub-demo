@@ -1,0 +1,370 @@
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologyCloud
+  data:
+    - name: AWS
+      children:
+        kind: TopologyCloudRegion
+        data:
+          # North America
+          # - region_name: us-east-1
+          #   location: ["nva"]
+
+          #   children:
+          #     kind: TopologyCloudAZ
+          #     data:
+          #       - az_name: us-east-1a
+
+          #       - az_name: us-east-1b
+
+          #       - az_name: us-east-1c
+
+          #       - az_name: us-east-1d
+
+          #       - az_name: us-east-1f
+
+          # - region_name: us-west-2
+          #   location: ["sea"]
+
+          #   children:
+          #     kind: TopologyCloudAZ
+          #     data:
+          #       - az_name: us-west-2a
+
+          #       - az_name: us-west-2b
+
+          #       - az_name: us-west-2c
+
+          #       - az_name: us-west-2d
+
+          # - region_name: ca-central-1
+          #   location: ["tor"]
+
+          #   children:
+          #     kind: TopologyCloudAZ
+          #     data:
+          #       - az_name: ca-central-1a
+
+          #       - az_name: ca-central-1b
+
+          #       - az_name: ca-central-1d
+
+          # Europe
+          # - region_name: eu-west-1
+          #   location: ["dub"]
+
+          #   children:
+          #     kind: TopologyCloudAZ
+          #     data:
+          #       - az_name: eu-west-1a
+
+          #       - az_name: eu-west-1b
+
+          #       - az_name: eu-west-1c
+
+          - region_name: eu-central-1
+            location: ["fra"]
+
+            children:
+              kind: TopologyCloudAZ
+              data:
+                - az_name: eu-central-1a
+
+                - az_name: eu-central-1b
+
+                - az_name: eu-central-1c
+
+          # - region_name: eu-north-1
+          #   location: ["sto"]
+
+          #   children:
+          #     kind: TopologyCloudAZ
+          #     data:
+          #       - az_name: eu-north-1a
+
+          #       - az_name: eu-north-1b
+
+          #       - az_name: eu-north-1c
+
+          # # Asia Pacific
+          # - region_name: ap-northeast-1
+          #   location: ["nrt"]
+
+          #   children:
+          #     kind: TopologyCloudAZ
+          #     data:
+          #       - az_name: ap-northeast-1a
+
+          #       - az_name: ap-northeast-1c
+
+          #       - az_name: ap-northeast-1d
+
+          - region_name: ap-southeast-1
+            location: ["sin"]
+
+            children:
+              kind: TopologyCloudAZ
+              data:
+                - az_name: ap-southeast-1a
+
+                - az_name: ap-southeast-1b
+
+                - az_name: ap-southeast-1c
+
+          - region_name: ap-southeast-2
+            location: ["syd"]
+
+            children:
+              kind: TopologyCloudAZ
+              data:
+                - az_name: ap-southeast-2a
+
+                - az_name: ap-southeast-2b
+
+                - az_name: ap-southeast-2c
+
+    - name: AZURE
+      children:
+        kind: TopologyCloudRegion
+        data:
+          # North America
+          # - region_name: eastus
+          #   location: ["nva"]
+
+          #   children:
+          #     kind: TopologyCloudAZ
+          #     data:
+          #       - az_name: "1"
+
+          #       - az_name: "2"
+
+          #       - az_name: "3"
+
+          # - region_name: westus2
+          #   location: ["sea"]
+
+          #   children:
+          #     kind: TopologyCloudAZ
+          #     data:
+          #       - az_name: "1"
+
+          #       - az_name: "2"
+
+          #       - az_name: "3"
+
+          # - region_name: canadacentral
+          #   location: ["tor"]
+
+          #   children:
+          #     kind: TopologyCloudAZ
+          #     data:
+          #       - az_name: "1"
+
+          #       - az_name: "2"
+
+          #       - az_name: "3"
+
+          # Europe
+          - region_name: westeurope
+            location: ["ams"]
+
+            children:
+              kind: TopologyCloudAZ
+              data:
+                - az_name: "1"
+
+                - az_name: "2"
+
+                - az_name: "3"
+
+          - region_name: northeurope
+            location: ["dub"]
+
+            children:
+              kind: TopologyCloudAZ
+              data:
+                - az_name: "1"
+
+                - az_name: "2"
+
+                - az_name: "3"
+
+          - region_name: germanywestcentral
+            location: ["fra"]
+
+            children:
+              kind: TopologyCloudAZ
+              data:
+                - az_name: "1"
+
+                - az_name: "2"
+
+                - az_name: "3"
+
+          # Asia Pacific
+          # - region_name: japaneast
+          #   location: ["nrt"]
+
+          #   children:
+          #     kind: TopologyCloudAZ
+          #     data:
+          #       - az_name: "1"
+
+          #       - az_name: "2"
+
+          #       - az_name: "3"
+
+          - region_name: southeastasia
+            location: ["sin"]
+
+            children:
+              kind: TopologyCloudAZ
+              data:
+                - az_name: "1"
+
+                - az_name: "2"
+
+                - az_name: "3"
+
+          - region_name: australiaeast
+            location: ["syd"]
+
+            children:
+              kind: TopologyCloudAZ
+              data:
+                - az_name: "1"
+
+                - az_name: "2"
+
+                - az_name: "3"
+
+    - name: GCP
+      children:
+        kind: TopologyCloudRegion
+        data:
+          # North America
+          # - region_name: us-central1
+          #   location: ["chi"]
+
+          #   children:
+          #     kind: TopologyCloudAZ
+          #     data:
+          #       - az_name: us-central1-a
+
+          #       - az_name: us-central1-b
+
+          #       - az_name: us-central1-c
+
+          #       - az_name: us-central1-f
+
+          # - region_name: us-east1
+          #   location: ["nva"]
+
+          #   children:
+          #     kind: TopologyCloudAZ
+          #     data:
+          #       - az_name: us-east1-b
+
+          #       - az_name: us-east1-c
+
+          #       - az_name: us-east1-d
+
+          # - region_name: us-west1
+          #   location: ["lax"]
+
+          #   children:
+          #     kind: TopologyCloudAZ
+          #     data:
+          #       - az_name: us-west1-a
+
+          #       - az_name: us-west1-b
+
+          #       - az_name: us-west1-c
+
+          # - region_name: northamerica-northeast1
+          #   location: ["tor"]
+
+          #   children:
+          #     kind: TopologyCloudAZ
+          #     data:
+          #       - az_name: northamerica-northeast1-a
+
+          #       - az_name: northamerica-northeast1-b
+
+          #       - az_name: northamerica-northeast1-c
+
+          # Europe
+          - region_name: europe-west1
+            location: ["ams"]
+
+            children:
+              kind: TopologyCloudAZ
+              data:
+                - az_name: europe-west1-b
+
+                - az_name: europe-west1-c
+
+                - az_name: europe-west1-d
+
+          - region_name: europe-west3
+            location: ["fra"]
+
+            children:
+              kind: TopologyCloudAZ
+              data:
+                - az_name: europe-west3-a
+
+                - az_name: europe-west3-b
+
+                - az_name: europe-west3-c
+
+          # - region_name: europe-north1
+          #   location: ["hel"]
+
+          #   children:
+          #     kind: TopologyCloudAZ
+          #     data:
+          #       - az_name: europe-north1-a
+
+          #       - az_name: europe-north1-b
+
+          #       - az_name: europe-north1-c
+
+          # Asia Pacific
+          # - region_name: asia-northeast1
+          #   location: ["nrt"]
+
+          #   children:
+          #     kind: TopologyCloudAZ
+          #     data:
+          #       - az_name: asia-northeast1-a
+
+          #       - az_name: asia-northeast1-b
+
+          #       - az_name: asia-northeast1-c
+
+          # - region_name: asia-southeast1
+          #   location: ["sin"]
+
+          #   children:
+          #     kind: TopologyCloudAZ
+          #     data:
+          #       - az_name: asia-southeast1-a
+
+          #       - az_name: asia-southeast1-b
+
+          #       - az_name: asia-southeast1-c
+
+          # - region_name: australia-southeast1
+          #   location: ["syd"]
+
+          #   children:
+          #     kind: TopologyCloudAZ
+          #     data:
+          #       - az_name: australia-southeast1-a
+
+          #       - az_name: australia-southeast1-b
+
+          #       - az_name: australia-southeast1-c
