@@ -1,0 +1,12 @@
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimDeviceType
+  data:
+    # Arista
+    - name: DELL-R740XD2
+      part_number: DELL-R740XD2
+      height: 1
+      full_depth: false
+      manufacturer: Dell

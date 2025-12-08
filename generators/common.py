@@ -35,23 +35,6 @@ class CommonGenerator(InfrahubGenerator):
     An extended InfrahubGenerator with helper methods for creating objects.
     """
 
-    def clean_data(self, data: dict) -> Any:
-        """
-        Recursively transforms the input data by extracting 'value', 'node', or 'edges' from dictionaries.
-
-        This is a wrapper around the shared utils.data_cleaning.clean_data function
-        to maintain compatibility with existing generator code.
-
-        Args:
-            data: The input data to clean.
-
-        Returns:
-            The cleaned data with extracted values.
-        """
-        from utils.data_cleaning import clean_data as _clean_data
-
-        return _clean_data(data)
-
     def calculate_checksum(self) -> str:
         """Calculate a SHA256 checksum based on configuration data.
 
@@ -280,10 +263,11 @@ class CommonGenerator(InfrahubGenerator):
                             data={"description": f"Management IP for {name}"},
                         ),
                         "rack": {"id": rack} if rack else None,
-                        "member_of_groups": [device_group.id],
                     },
                     branch=self.branch,
                 )
+                await obj.member_of_groups.fetch()
+                obj.member_of_groups.add(device_group.id)
                 batch_devices.add(task=obj.save, allow_upsert=True, node=obj)
 
                 if loopback_pool:
@@ -411,28 +395,6 @@ class CommonGenerator(InfrahubGenerator):
         # Process cabling plan - create cables with upsert to ensure idempotency
         # Running generator multiple times will produce same cables
         for src_interface, dst_interface in cabling_plan:
-            # # Check if interface already has a cable - if so, skip to avoid duplicate endpoints error
-            # # When using include=["cable"], check the _peer object directly to avoid triggering lazy load
-            # src_has_cable = False
-            # if hasattr(src_interface, "cable") and src_interface.cable is not None:
-            #     # Access the internal _peer attribute to check if cable exists without triggering .get()
-            #     if hasattr(src_interface.cable, "_peer") and src_interface.cable._peer is not None:
-            #         src_has_cable = True
-
-            # dst_has_cable = False
-            # if hasattr(dst_interface, "cable") and dst_interface.cable is not None:
-            #     # Access the internal _peer attribute to check if cable exists without triggering .get()
-            #     if hasattr(dst_interface.cable, "_peer") and dst_interface.cable._peer is not None:
-            #         dst_has_cable = True
-
-            # if src_has_cable or dst_has_cable:
-            #     self.logger.debug(
-            #         f"Skipping cable - interface(s) already cabled: "
-            #         f"{src_interface.device.display_label}-{src_interface.name.value} (has_cable={src_has_cable}), "
-            #         f"{dst_interface.device.display_label}-{dst_interface.name.value} (has_cable={dst_has_cable})"
-            #     )
-            #     continue
-
             # Create deterministic cable name based on sorted endpoint names
             # This ensures the same cable name is generated every time
             endpoint_names = sorted(

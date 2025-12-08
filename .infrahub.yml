@@ -195,13 +195,15 @@ generator_definitions:
     execute_after_merge: false
     parameters:
       name: name__value
-# - name: connect_endpoint
-#   file_path: generators/generate_server.py
-#   targets: topologies_pod
-#   query: topology_pod
-#   class_name: ServerConnectivityGenerator
-#   parameters:
-#     name: name__value
+  - name: connect_endpoint
+    file_path: generators/endpoint_connectivity.py
+    targets: endpoints
+    query: endpoint_connectivity
+    class_name: EndpointConnectivityGenerator
+    execute_in_proposed_change: false
+    execute_after_merge: false
+    parameters:
+      device_name: name__value
 # - name: create_pop
 #   file_path: generators/generate_pop.py
 #   targets: topologies_pop
@@ -215,8 +217,8 @@ queries:
     file_path: queries/validation/dc_capacity.gql
   - name: virtual_fabric_validation
     file_path: queries/service/virtual_fabric_validation.gql
-  # - name: endpoint_connectivity
-  #   file_path: queries/connectivity/endpoint_connectivity.gql
+  - name: endpoint_connectivity
+    file_path: queries/topology/endpoint.gql
   - name: topology_dc
     file_path: queries/topology/dc.gql
   - name: topology_pod

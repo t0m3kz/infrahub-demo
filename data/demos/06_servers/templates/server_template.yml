@@ -1,0 +1,30 @@
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TemplateDcimPhysicalDevice
+  data:
+    - template_name: DELL-R740XD2-SERVER
+      device_type: DELL-R740XD2
+      platform: linux
+      role: endpoint
+      status: active
+      interfaces:
+        kind: TemplateDcimPhysicalInterface
+        data:
+          - template_name: DELL-R740XD2-SERVER-eth0
+            name: eth0
+            interface_type: 100gbase-x-qsfp28
+            role: uplink
+          - template_name: DELL-R740XD2-SERVER-eth1
+            name: eth1
+            interface_type: 100gbase-x-qsfp28
+            role: uplink
+          - template_name: DELL-R740XD2-SERVER-eth2
+            name: eth2
+            interface_type: 100gbase-x-qsfp28
+            role: uplink
+          - template_name: DELL-R740XD2-SERVER-eth3
+            name: eth3
+            interface_type: 100gbase-x-qsfp28
+            role: uplink

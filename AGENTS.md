@@ -11,6 +11,7 @@ This is the **infrahub-demo** project - a comprehensive demonstration of design-
 - **Key Dependencies**: `infrahub-sdk[all]>=1.7.2,<2.0.0`, `invoke>=2.2.0`
 
 ### Common uv Commands
+
 ```bash
 # Setup project
 uv sync
@@ -27,7 +28,8 @@ uv run invoke start
 ## Project Architecture
 
 ### Directory Structure
-```
+
+```bash
 ├── checks/          # Validation logic for devices and configurations
 ├── data/            # Bootstrap data and demo scenarios
 ├── generators/      # Topology and infrastructure generators
@@ -41,6 +43,7 @@ uv run invoke start
 ```
 
 ### Core Components
+
 1. **Schemas** - Define data models and relationships
 2. **Generators** - Create topology and infrastructure
 3. **Transforms** - Process data for device configurations
@@ -52,6 +55,7 @@ uv run invoke start
 ### InfraHub SDK Usage
 
 #### Generator Pattern
+
 ```python
 from infrahub_sdk.generators import InfrahubGenerator
 
@@ -62,6 +66,7 @@ class MyTopologyGenerator(InfrahubGenerator):
 ```
 
 #### Transform Pattern
+
 ```python
 from infrahub_sdk.transforms import InfrahubTransform
 
@@ -74,6 +79,7 @@ class MyTransform(InfrahubTransform):
 ```
 
 #### Check Pattern
+
 ```python
 from infrahub_sdk.checks import InfrahubCheck
 
@@ -87,10 +93,12 @@ class MyCheck(InfrahubCheck):
 ### Schema Development
 
 #### Base vs Extensions
+
 - **Base schemas** (`schemas/base/`): Core models (DCIM, IPAM, Location, Topology)
 - **Extension schemas** (`schemas/extensions/`): Feature-specific extensions
 
 #### Schema Structure
+
 ```yaml
 nodes:
   - name: MyNode
@@ -109,6 +117,7 @@ nodes:
 ```
 
 #### Common Schema Patterns
+
 - Use `inherit_from` for extending base functionality
 - Set `order_weight` for UI field ordering
 - Include `description` for documentation
@@ -118,12 +127,14 @@ nodes:
 ### Naming Conventions
 
 #### File Naming
+
 - Schemas: `snake_case.yml`
 - Python modules: `snake_case.py`
 - Classes: `PascalCase`
 - Functions/methods: `snake_case`
 
 #### InfraHub Naming
+
 - Nodes: `PascalCase` (e.g., `LocationBuilding`)
 - Attributes: `snake_case` (e.g., `device_type`)
 - Relationships: `snake_case` (e.g., `parent_location`)
@@ -132,6 +143,7 @@ nodes:
 ### Configuration Files
 
 #### .infrahub.yml Structure
+
 ```yaml
 # Define transformations
 jinja2_transforms:
@@ -175,11 +187,13 @@ queries:
 ## Testing Requirements
 
 ### Testing Strategy
+
 - **Unit Tests**: Mock-based testing with `unittest.mock`
 - **Integration Tests**: Full workflow validation
 - **Every functionality MUST be tested**
 
 ### Test Structure
+
 ```python
 # Unit test example
 from unittest.mock import Mock, patch
@@ -194,12 +208,14 @@ class TestMyComponent:
 ```
 
 ### Test Fixtures
+
 - Use `tests/conftest.py` for shared fixtures
 - Mock external dependencies
 - Test both success and failure scenarios
 - Validate schema structures and data formats
 
 ### Running Tests
+
 ```bash
 # Run all tests
 uv run pytest
@@ -217,6 +233,7 @@ uv run pytest --cov=. --cov-report=html
 ## Code Quality Standards
 
 ### Type Hints
+
 - **REQUIRED**: All functions must have type hints
 - Use `from typing import Any, Dict, List, Optional`
 - Return type hints are mandatory
@@ -230,6 +247,7 @@ async def process_data(data: Dict[str, Any]) -> List[str]:
 ```
 
 ### Code Formatting
+
 - **Tool**: `ruff` for formatting and linting
 - **Configuration**: Uses project's `pyproject.toml` settings
 - **Enforcement**: Run before committing
@@ -246,6 +264,7 @@ uv run invoke validate
 ```
 
 ### Documentation
+
 - Use docstrings for classes and functions
 - Include parameter and return value descriptions
 - Add inline comments for complex logic
@@ -366,6 +385,7 @@ class TestMyComponent:
 ## Jinja2 Templates
 
 ### Template Structure
+
 ```jinja2
 {# templates/configs/my_device/config.j2 #}
 ! {{ data.name }} Configuration
@@ -381,6 +401,7 @@ interface {{ interface.name }}
 ```
 
 ### Template Best Practices
+
 - Use descriptive variable names
 - Add comments for clarity
 - Handle missing data gracefully
@@ -389,6 +410,7 @@ interface {{ interface.name }}
 ## GraphQL Queries
 
 ### Query Structure
+
 ```graphql
 # queries/config/my_query.gql
 query GetMyConfiguration($device_name: String!) {
@@ -414,6 +436,7 @@ query GetMyConfiguration($device_name: String!) {
 ## Development Workflow
 
 ### Setup Development Environment
+
 ```bash
 # Clone and setup
 git clone <repository>
@@ -429,6 +452,7 @@ uv run infrahubctl object load data/bootstrap
 ```
 
 ### Making Changes
+
 1. Create feature branch
 2. Implement changes following patterns
 3. Add/update tests
@@ -437,6 +461,7 @@ uv run infrahubctl object load data/bootstrap
 6. Submit pull request
 
 ### Quality Checklist
+
 - [ ] Type hints added to all functions
 - [ ] Tests written and passing
 - [ ] Code formatted with ruff
@@ -447,6 +472,7 @@ uv run infrahubctl object load data/bootstrap
 ## InfraHub-Specific Patterns
 
 ### Data Loading
+
 ```bash
 # Load schemas
 uv run infrahubctl schema load schemas --branch main
@@ -459,6 +485,7 @@ uv run infrahubctl menu load menu --branch main
 ```
 
 ### Branch Management
+
 ```bash
 # Create branch
 uv run infrahubctl branch create feature-branch
@@ -468,6 +495,7 @@ uv run infrahubctl object load data/ --branch feature-branch
 ```
 
 ### Running Generators
+
 ```bash
 # Via CLI
 uv run infrahubctl run generators/my_generator.py
@@ -479,12 +507,14 @@ uv run infrahubctl run generators/my_generator.py
 ## Error Handling
 
 ### Common Issues
+
 1. **Schema conflicts**: Check inheritance and naming
 2. **Type mismatches**: Ensure proper type hints
 3. **Missing dependencies**: Run `uv sync`
 4. **Test failures**: Check mocks and assertions
 
 ### Debugging Tips
+
 - Use logging for troubleshooting
 - Check InfraHub logs for errors
 - Validate GraphQL queries independently

@@ -7,7 +7,7 @@ from utils.data_cleaning import clean_data
 from .common import CommonGenerator
 
 
-class DCTopologyGenerator(CommonGenerator):
+class PopTopologyGenerator(CommonGenerator):
     """Generate data center topology with super-spine infrastructure."""
 
     async def generate(self, data: dict[str, Any]) -> None:

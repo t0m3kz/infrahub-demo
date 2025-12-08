@@ -1,82 +1,99 @@
-query GetEndpointForConnectivity($endpoint_id: ID!) {
-  # Get the endpoint device
-  DcimGenericDevice(ids: [$endpoint_id]) {
+fragment PhysicalInterfaceFields on DcimPhysicalInterface {
+  id
+  name { value }
+  interface_type { value }
+  role { value }
+  status { value }
+  cable {
+    node {
+      id
+      endpoints {
+        edges {
+          node {
+            __typename
+            ... on DcimPhysicalInterface {
+              id
+              name { value }
+              interface_type { value }
+              device {
+                node {
+                  id
+                  name { value }
+                  role { value }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+fragment RackDeviceFields on DcimPhysicalDevice {
+  id
+  name { value }
+  role { value }
+  rack {
+    node {
+      id
+      row_index { value }
+    }
+  }
+  interfaces {
+    edges {
+      node {
+        ...PhysicalInterfaceFields
+      }
+    }
+  }
+}
+
+fragment PodFields on TopologyPod {
+  id
+  name { value }
+  deployment_type { value }
+  index { value }
+}
+
+fragment RackFields on LocationRack {
+  id
+  name { value }
+  index { value }
+  row_index { value }
+  rack_type { value }
+  pod {
+    node {
+      ...PodFields
+    }
+  }
+  devices(role__values: ["leaf", "tor"]) {
+    edges {
+      node {
+        ...RackDeviceFields
+      }
+    }
+  }
+}
+
+query GetEndpointForConnectivity($device_name: String!) {
+  DcimGenericDevice(name__value: $device_name) {
     edges {
       node {
         id
-        name {
-          value
-        }
-        role {
-          value
-        }
+        name { value }
+        role { value }
         ... on DcimPhysicalDevice {
           rack {
             node {
-              id
-              name {
-                value
-              }
-              row_index{
-                value
-              }
-              # Get all devices in the same rack
-              devices (role__values: ["leaf", "tor"]) {
-                edges {
-                  node {
-                    ... on DcimPhysicalDevice {
-                      id
-                      name {
-                        value
-                      }
-                      role {
-                        value
-                      }
-                      # Get all interfaces for rack leafs
-                      interfaces {
-                        edges {
-                          node {
-                            ... on DcimPhysicalInterface {
-                              id
-                              name {
-                                value
-                              }
-                              role {
-                                value
-                              }
-                              cable {
-                                node {
-                                  id
-                                }
-                              }
-                            }
-                          }
-                        }
-                      }
-                    }
-                  }
-                }
-              }
+              ...RackFields
             }
           }
         }
         interfaces {
           edges {
             node {
-              ... on DcimPhysicalInterface {
-                id
-                name {
-                  value
-                }
-                role {
-                  value
-                }
-                cable {
-                  node {
-                    id
-                  }
-                }
-              }
+              ...PhysicalInterfaceFields
             }
           }
         }

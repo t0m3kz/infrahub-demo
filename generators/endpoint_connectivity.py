@@ -1,384 +1,419 @@
-"""Generator for automatic endpoint connectivity to leaf switches."""
+"""Infrastructure generator for endpoint device connectivity.
+
+This generator connects endpoint devices (servers) to network infrastructure
+based on deployment type (middle_rack, tor, mixed). It follows deployment-aware
+routing logic with proper interface type matching and dual-homing support.
+"""
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import Any, Literal
+
+from utils.data_cleaning import clean_data
 
 from .common import CommonGenerator
-
-if TYPE_CHECKING:
-    pass
+from .models import EndpointModel
+from .schema_protocols import DcimPhysicalDevice, DcimPhysicalInterface
 
 
 class EndpointConnectivityGenerator(CommonGenerator):
-    """Automatically connect endpoints to leaf switches with dual-homing redundancy.
+    """Generate connectivity for endpoint devices based on deployment patterns.
 
-    Connection logic:
-    - Endpoints connect to 2 leaf switches for redundancy
-    - Priority 1: Connect to leafs in the same rack
-    - Priority 2: Connect to leafs in the same pod (different rack)
-    - Use first available access ports on leafs
-    - All data fetched in single GraphQL query for efficiency
+    Deployment strategies:
+    - middle_rack: Connect to ToRs in same rack, fallback to ToRs in same row
+    - tor: Connect to ToR switches in same rack, fallback to same row
+    - mixed: Connect to ToR devices in same rack, fallback to middle rack leafs in same row
+
+    Features:
+    - Interface type and role matching (customer ↔ access)
+    - Dual-homing across consecutive device pairs
+    - Idempotency via existing cable detection
+    - Uses CablingPlanner and CommonGenerator.create_cabling()
     """
 
     async def generate(self, data: dict[str, Any]) -> None:
-        """Generate dual-homed endpoint connections to leaf switches.
-
-        Args:
-            data: GraphQL query result with endpoint, rack leafs, and pod leafs
-        """
-        # Extract endpoint from query result
-        endpoint_edges = data.get("endpoint", {}).get("edges", [])
-
-        if not endpoint_edges:
-            self.logger.warning("No endpoint found in query result")
-            return
-
-        endpoint_node = endpoint_edges[0]["node"]
-        endpoint_name = endpoint_node.get("name", {}).get("value", "unknown")
-        endpoint_role = endpoint_node.get("role", {}).get("value", "")
-
-        # Only process endpoint devices (servers)
-        if endpoint_role != "endpoint":
-            self.logger.warning(
-                f"Device {endpoint_name} is not an endpoint (role: {endpoint_role}), skipping"
-            )
-            return
-
-        self.logger.info(f"Processing endpoint connectivity for {endpoint_name}")
-
-        # Get endpoint's rack and pod
-        rack_data = endpoint_node.get("rack", {}).get("node")
-        if not rack_data:
-            self.logger.warning(f"Endpoint {endpoint_name} has no rack assignment")
-            return
-
-        rack_id = rack_data.get("id")
-        rack_name = rack_data.get("name", {}).get("value", "unknown")
-        pod_data = rack_data.get("parent", {}).get("node")
-        pod_id = pod_data.get("id") if pod_data else None
-
-        # Get available endpoint interfaces (not connected)
-        endpoint_interfaces = endpoint_node.get("interfaces", {}).get("edges", [])
-        available_endpoint_intfs = []
-
-        for intf_edge in endpoint_interfaces:
-            intf = intf_edge.get("node", {})
-            if not intf.get("cable"):
-                available_endpoint_intfs.append(intf)
-
-        if len(available_endpoint_intfs) < 2:
-            self.logger.warning(
-                f"Endpoint {endpoint_name} has only {len(available_endpoint_intfs)} available interfaces, need 2 for dual-homing"
-            )
-            if not available_endpoint_intfs:
+        """Generate endpoint device connectivity based on deployment type."""
+        try:
+            deployment_list = clean_data(data).get("DcimGenericDevice", [])
+            if not deployment_list:
+                self.logger.error("No Endpoint Device data found in GraphQL response")
                 return
 
-        # Sort endpoint interfaces by name for consistent ordering
-        available_endpoint_intfs.sort(key=lambda x: x.get("name", {}).get("value", ""))
+            model_data = EndpointModel(endpoint=deployment_list[0])
+            self.data = model_data.endpoint
+        except (ValueError, KeyError, IndexError) as exc:
+            self.logger.error(f"Generation failed due to {exc}")
+            return
 
-        # Calculate how many connections per leaf based on endpoint interface count
-        # For dual-homing: split interfaces evenly between 2 consecutive leafs
-        total_endpoint_intfs = len(available_endpoint_intfs)
-        connections_per_leaf = total_endpoint_intfs // 2
-
-        if connections_per_leaf == 0:
-            self.logger.warning(
-                f"Endpoint {endpoint_name} needs at least 2 interfaces for dual-homing"
+        if not self.data.rack:
+            self.logger.error(
+                f"Endpoint {self.data.name} has no rack assigned - cannot determine connectivity"
             )
             return
 
+        deployment_type = self.data.rack.pod.deployment_type
+        pod_name = self.data.rack.pod.name.lower()
+        pod_id = self.data.rack.pod.id
+
         self.logger.info(
-            f"Endpoint {endpoint_name} has {total_endpoint_intfs} interfaces, "
-            f"will create {connections_per_leaf} connections to each of 2 consecutive leafs"
+            f"Generating connectivity for endpoint {self.data.name} in {deployment_type} deployment"
         )
 
-        # Find 2 consecutive leafs with available ports (e.g., leaf-01 & leaf-02, or leaf-03 & leaf-04)
-        rack_leafs = self._extract_rack_leafs(rack_data, rack_name)
-        rack_leaf_names = [
-            leaf.get("name", {}).get("value")
-            for leaf in rack_leafs
-            if leaf.get("name", {}).get("value")
+        # Update endpoint device to set deployment to pod
+        endpoint_device = await self.client.get(
+            kind=DcimPhysicalDevice, id=self.data.id
+        )
+        current_deployment = (
+            endpoint_device.deployment.id if endpoint_device.deployment._peer else None
+        )  # type: ignore
+        if current_deployment != pod_id:
+            endpoint_device.deployment = pod_id  # type: ignore
+            await endpoint_device.save()
+            self.logger.info(f"Updated {self.data.name} deployment to pod {pod_name}")
+
+        if deployment_type == "middle_rack":
+            await self._connect_middle_rack_deployment()
+        elif deployment_type == "tor":
+            await self._connect_tor_deployment()
+        elif deployment_type == "mixed":
+            await self._connect_mixed_deployment()
+        else:
+            self.logger.error(
+                f"Unknown deployment type '{deployment_type}' for endpoint {self.data.name}"
+            )
+
+    async def _connect_middle_rack_deployment(self) -> None:
+        """Connect endpoint in middle_rack deployment.
+
+        Strategy: Server in compute rack connects to ToRs in the middle rack (network rack) in same row.
+        Middle_rack topology has one network rack per row containing ToR switches that serve compute racks.
+        """
+        # Safe to assert - validated in generate() before calling this method
+        assert self.data.rack is not None, "Rack must be assigned"
+
+        self.logger.info(
+            f"Endpoint {self.data.name} is in {self.data.rack.rack_type} rack "
+            f"(row {self.data.rack.row_index}), searching for ToRs in middle rack (network rack) in same row"
+        )
+
+        # In middle_rack deployment, ToRs are in the network rack, not the compute rack
+        # We need to find ToRs in the middle rack (rack_type=network) in the same row
+        target_devices = await self._get_devices_in_middle_rack(
+            pod_id=self.data.rack.pod.id,
+            row_index=self.data.rack.row_index,
+            role="tor",
+        )
+
+        if not target_devices:
+            self.logger.warning(
+                f"No ToR devices found in middle rack for endpoint {self.data.name} "
+                f"(row {self.data.rack.row_index}, middle_rack deployment)"
+            )
+            return
+
+        await self._create_endpoint_connections(target_devices, "tor")
+
+    async def _connect_tor_deployment(self) -> None:
+        """Connect endpoint in tor deployment.
+
+        Strategy: Connect to ToR switches in same rack, fallback to same row.
+        """
+        # Safe to assert - validated in generate() before calling this method
+        assert self.data.rack is not None, "Rack must be assigned"
+
+        target_devices = self._get_devices_in_rack(role="tor")
+
+        if not target_devices:
+            self.logger.info(
+                f"No ToRs in same rack for {self.data.name}, searching same row {self.data.rack.row_index}"
+            )
+            target_devices = await self._get_devices_in_row(
+                pod_id=self.data.rack.pod.id,
+                row_index=self.data.rack.row_index,
+                role="tor",
+            )
+
+        if not target_devices:
+            self.logger.warning(
+                f"No ToR devices found for endpoint {self.data.name} (tor deployment)"
+            )
+            return
+
+        await self._create_endpoint_connections(target_devices, "tor")
+
+    async def _connect_mixed_deployment(self) -> None:
+        """Connect endpoint in mixed deployment.
+
+        Strategy: Connect to ToR devices in same rack, fallback to middle rack leafs in same row.
+        """
+        # Safe to assert - validated in generate() before calling this method
+        assert self.data.rack is not None, "Rack must be assigned"
+
+        target_devices = self._get_devices_in_rack(role="tor")
+        target_role: Literal["tor", "leaf"] = "tor"
+
+        if not target_devices:
+            self.logger.info(
+                f"No ToRs in same rack for {self.data.name}, searching middle rack leafs in row {self.data.rack.row_index}"
+            )
+            target_devices = await self._get_devices_in_row(
+                pod_id=self.data.rack.pod.id,
+                row_index=self.data.rack.row_index,
+                role="leaf",
+            )
+            target_role = "leaf"
+
+        if not target_devices:
+            self.logger.warning(
+                f"No ToR or middle rack leaf devices found for endpoint {self.data.name} (mixed deployment)"
+            )
+            return
+
+        await self._create_endpoint_connections(target_devices, target_role)
+
+    def _get_devices_in_rack(
+        self, role: Literal["tor", "leaf"]
+    ) -> list[dict[str, Any]]:
+        """Extract devices of specific role from rack data.
+
+        Args:
+            role: Device role to filter by (tor or leaf)
+
+        Returns:
+            List of matching devices with id, name, and role
+        """
+        # Safe to assert - validated in generate() before calling deployment methods
+        assert self.data.rack is not None, "Rack must be assigned"
+
+        matching_devices = []
+
+        for device in self.data.rack.devices:
+            if device.role == role:
+                matching_devices.append(
+                    {
+                        "id": device.id,
+                        "name": {"value": device.name},
+                        "role": {"value": device.role},
+                    }
+                )
+
+        return matching_devices
+
+    async def _get_devices_in_middle_rack(
+        self, pod_id: str, row_index: int, role: Literal["tor", "leaf"]
+    ) -> list[dict[str, Any]]:
+        """Query devices in the middle rack (network rack) of specific row.
+
+        In middle_rack deployments, the network rack contains ToRs and Leafs that
+        serve compute racks in the same row.
+        """
+        from .schema_protocols import LocationRack
+
+        # Find the network rack in this row
+        racks = await self.client.filters(
+            kind=LocationRack,
+            pod__ids=[pod_id],
+            row_index__value=row_index,
+            rack_type__value="network",
+        )
+
+        if not racks:
+            self.logger.warning(
+                f"No network rack found in row {row_index} for middle_rack deployment"
+            )
+            return []
+
+        rack_ids = [rack.id for rack in racks]
+
+        devices = await self.client.filters(
+            kind=DcimPhysicalDevice, role__value=role, rack__ids=rack_ids
+        )
+
+        return [
+            {
+                "id": device.id,
+                "name": {"value": device.name.value},
+                "role": {"value": device.role.value},
+            }
+            for device in devices
         ]
 
-        # Sort rack leafs by name to find consecutive pairs
-        rack_leaf_names.sort()
-
-        # Find consecutive leaf pair with enough available ports
-        selected_leafs = []
-        if len(rack_leaf_names) >= 2:
-            selected_pair = await self._find_consecutive_leaf_pair(
-                rack_leafs,
-                rack_leaf_names,
-                required_ports_per_leaf=connections_per_leaf,
-            )
-            selected_leafs = selected_pair
-
-        # If we didn't find a suitable pair in the rack, check the pod
-        if len(selected_leafs) < 2 and pod_id:
-            pod_leafs_data = data.get("pod_leafs", {}).get("edges", [])
-            pod_leaf_names = []
-            pod_leafs_list = []
-
-            for leaf_edge in pod_leafs_data:
-                leaf = leaf_edge.get("node", {})
-                leaf_rack = leaf.get("rack", {}).get("node", {})
-                leaf_rack_id = leaf_rack.get("id")
-                leaf_pod_id = leaf_rack.get("parent", {}).get("node", {}).get("id")
-
-                # Include leafs from same pod but different rack
-                if leaf_pod_id == pod_id and leaf_rack_id != rack_id:
-                    leaf_name = leaf.get("name", {}).get("value")
-                    if leaf_name and leaf_name not in rack_leaf_names:
-                        pod_leaf_names.append(leaf_name)
-                        pod_leafs_list.append(leaf)
-
-            if len(pod_leaf_names) >= 2:
-                pod_leaf_names.sort()
-                selected_pair = await self._find_consecutive_leaf_pair(
-                    pod_leafs_list,
-                    pod_leaf_names,
-                    required_ports_per_leaf=connections_per_leaf,
-                )
-                selected_leafs = selected_pair
-
-        if len(selected_leafs) < 2:
-            self.logger.warning(
-                f"Could not find 2 consecutive leaf switches with {connections_per_leaf} available ports each for {endpoint_name}"
-            )
-            return
-
-        leaf1, leaf1_ports = selected_leafs[0]
-        leaf2, leaf2_ports = selected_leafs[1]
-        leaf1_name = leaf1.get("name", {}).get("value", "unknown")
-        leaf2_name = leaf2.get("name", {}).get("value", "unknown")
-
-        self.logger.info(
-            f"Selected consecutive leaf pair: {leaf1_name} ({len(leaf1_ports)} ports) and {leaf2_name} ({len(leaf2_ports)} ports)"
-        )
-
-        # Create connections: first half of endpoint interfaces to leaf1, second half to leaf2
-        connection_count = 0
-
-        for i in range(connections_per_leaf):
-            # Connect to leaf1
-            if i < len(leaf1_ports):
-                endpoint_intf = available_endpoint_intfs[i]
-                leaf_intf = leaf1_ports[i]
-
-                endpoint_intf_name = endpoint_intf.get("name", {}).get(
-                    "value", "unknown"
-                )
-                leaf_intf_name = leaf_intf.get("name", {}).get("value", "unknown")
-
-                self.logger.info(
-                    f"Creating connection: {endpoint_name}:{endpoint_intf_name} <-> {leaf1_name}:{leaf_intf_name}"
-                )
-
-                await self._create_cable(endpoint_intf, leaf_intf)
-                connection_count += 1
-
-        for i in range(connections_per_leaf):
-            # Connect to leaf2
-            if i < len(leaf2_ports):
-                endpoint_intf = available_endpoint_intfs[connections_per_leaf + i]
-                leaf_intf = leaf2_ports[i]
-
-                endpoint_intf_name = endpoint_intf.get("name", {}).get(
-                    "value", "unknown"
-                )
-                leaf_intf_name = leaf_intf.get("name", {}).get("value", "unknown")
-
-                self.logger.info(
-                    f"Creating connection: {endpoint_name}:{endpoint_intf_name} <-> {leaf2_name}:{leaf_intf_name}"
-                )
-
-                await self._create_cable(endpoint_intf, leaf_intf)
-                connection_count += 1
-
-        self.logger.info(
-            f"Successfully created {connection_count} connections for {endpoint_name} "
-            f"({connections_per_leaf} to {leaf1_name}, {connections_per_leaf} to {leaf2_name})"
-        )
-
-    def _extract_rack_leafs(
-        self, rack_data: dict[str, Any], rack_name: str
+    async def _get_devices_in_row(
+        self, pod_id: str, row_index: int, role: Literal["tor", "leaf"]
     ) -> list[dict[str, Any]]:
-        """Extract leaf devices from rack data.
+        """Query devices of specific role in same row across all racks."""
+        from .schema_protocols import LocationRack
 
-        Args:
-            rack_data: Rack node data containing devices
-            rack_name: Name of the rack for logging
-
-        Returns:
-            List of leaf device nodes with interfaces
-        """
-        leafs = []
-        devices = rack_data.get("devices", {}).get("edges", [])
-
-        for device_edge in devices:
-            device = device_edge.get("node", {})
-            if device.get("role", {}).get("value") == "leaf":
-                leafs.append(device)
-
-        self.logger.info(f"Found {len(leafs)} leaf switches in rack {rack_name}")
-        return leafs
-
-    async def _find_consecutive_leaf_pair(
-        self,
-        leafs: list[dict[str, Any]],
-        leaf_names: list[str],
-        required_ports_per_leaf: int,
-    ) -> list[tuple[dict[str, Any], list[dict[str, Any]]]]:
-        """Find a pair of consecutive leaf switches with enough available ports.
-
-        Consecutive means adjacent IDs like leaf-01/leaf-02, leaf-03/leaf-04, etc.
-
-        Args:
-            leafs: List of leaf device data
-            leaf_names: Sorted list of leaf names
-            required_ports_per_leaf: Number of available access ports needed per leaf
-
-        Returns:
-            List of 2 tuples: [(leaf1, [port1, port2, ...]), (leaf2, [port1, port2, ...])]
-        """
-        import re
-
-        # Extract numeric IDs from leaf names
-        def extract_id(name: str) -> int | None:
-            """Extract numeric ID from leaf name (e.g., 'leaf-01' -> 1, 'dc1-pod1-leaf-03' -> 3)."""
-            match = re.search(r"leaf-?(\d+)", name, re.IGNORECASE)
-            if match:
-                return int(match.group(1))
-            return None
-
-        # Build map of leaf ID to leaf data
-        leaf_map: dict[int, dict[str, Any]] = {}
-        for leaf in leafs:
-            leaf_name = leaf.get("name", {}).get("value")
-            if leaf_name:
-                leaf_id = extract_id(leaf_name)
-                if leaf_id is not None:
-                    leaf_map[leaf_id] = leaf
-
-        # Find consecutive pairs (1-2, 3-4, 5-6, etc.)
-        sorted_ids = sorted(leaf_map.keys())
-
-        for i in range(len(sorted_ids) - 1):
-            id1 = sorted_ids[i]
-            id2 = sorted_ids[i + 1]
-
-            # Check if consecutive (difference of 1) and odd-even pair
-            if id2 - id1 == 1 and id1 % 2 == 1:
-                leaf1 = leaf_map[id1]
-                leaf2 = leaf_map[id2]
-
-                # Get available ports for each leaf
-                leaf1_ports = self._get_n_available_ports(
-                    leaf1, required_ports_per_leaf
-                )
-                leaf2_ports = self._get_n_available_ports(
-                    leaf2, required_ports_per_leaf
-                )
-
-                # Check if both leafs have enough ports
-                if (
-                    len(leaf1_ports) >= required_ports_per_leaf
-                    and len(leaf2_ports) >= required_ports_per_leaf
-                ):
-                    leaf1_name = leaf1.get("name", {}).get("value", "unknown")
-                    leaf2_name = leaf2.get("name", {}).get("value", "unknown")
-                    self.logger.info(
-                        f"Found consecutive leaf pair: {leaf1_name} (ID {id1}) and {leaf2_name} (ID {id2})"
-                    )
-                    return [(leaf1, leaf1_ports), (leaf2, leaf2_ports)]
-
-        self.logger.warning(
-            f"Could not find consecutive leaf pair with {required_ports_per_leaf} available ports each"
+        racks = await self.client.filters(
+            kind=LocationRack, pod__ids=[pod_id], row_index__value=row_index
         )
-        return []
 
-    def _get_n_available_ports(
+        if not racks:
+            return []
+
+        rack_ids = [rack.id for rack in racks]
+
+        devices = await self.client.filters(
+            kind=DcimPhysicalDevice, role__value=role, rack__ids=rack_ids
+        )
+
+        return [
+            {
+                "id": device.id,
+                "name": {"value": device.name.value},
+                "role": {"value": device.role.value},
+            }
+            for device in devices
+        ]
+
+    async def _create_endpoint_connections(
         self,
-        leaf_device: dict[str, Any],
-        count: int,
-    ) -> list[dict[str, Any]]:
-        """Get N available access ports from a leaf switch.
-
-        Args:
-            leaf_device: Leaf device node with interfaces
-            count: Number of ports needed
-
-        Returns:
-            List of available interface dicts (up to count)
-        """
-        interfaces = leaf_device.get("interfaces", {}).get("edges", [])
-        available_ports: list[dict[str, Any]] = []
-
-        for intf_edge in interfaces:
-            if len(available_ports) >= count:
-                break
-
-            intf = intf_edge.get("node", {})
-
-            # Check if it's an access port and not connected
-            if intf.get("role", {}).get("value") == "access" and not intf.get("cable"):
-                available_ports.append(intf)
-
-        return available_ports
-
-    def _find_available_access_port(
-        self, leaf_device: dict[str, Any]
-    ) -> dict[str, Any] | None:
-        """Find first available access port on a leaf switch.
-
-        Args:
-            leaf_device: Leaf device node with interfaces
-
-        Returns:
-            Available interface dict or None
-        """
-        interfaces = leaf_device.get("interfaces", {}).get("edges", [])
-
-        for intf_edge in interfaces:
-            intf = intf_edge.get("node", {})
-
-            # Check if it's an access port and not connected
-            if intf.get("role", {}).get("value") == "access" and not intf.get("cable"):
-                return intf
-
-        return None
-
-    async def _create_cable(
-        self, interface1: dict[str, Any], interface2: dict[str, Any]
+        target_devices: list[dict[str, Any]],
+        target_role: Literal["tor", "leaf"],
     ) -> None:
-        """Create a cable between two interfaces.
+        """Create dual-homed connections from endpoint to target devices.
 
         Args:
-            interface1: First interface data dict
-            interface2: Second interface data dict
+            target_devices: List of target device dictionaries
+            target_role: Role of target devices (tor or leaf)
         """
-        intf1_id = interface1.get("id")
-        intf2_id = interface2.get("id")
-
-        if not intf1_id or not intf2_id:
-            self.logger.error("Cannot create cable: missing interface IDs")
+        if len(target_devices) < 2:
+            self.logger.warning(
+                f"Need at least 2 {target_role} devices for dual-homing, found {len(target_devices)}"
+            )
             return
 
-        # Fetch the actual interface nodes to create relationship
-        intf1_node = await self.client.get(kind="DcimPhysicalInterface", id=intf1_id)
-        intf2_node = await self.client.get(kind="DcimPhysicalInterface", id=intf2_id)
+        target_pair = self._select_consecutive_device_pair(target_devices, target_role)
+        if len(target_pair) < 2:
+            self.logger.warning(
+                f"Could not find consecutive {target_role} pair with compatible interfaces"
+            )
+            return
 
-        # Create cable
-        cable = await self.client.create(
-            kind="DcimCable",
-            data={
-                "endpoints": [intf1_node, intf2_node],
+        target_device_names = [dev.get("name", {}).get("value") for dev in target_pair]
+
+        self.logger.info(
+            f"Selected {target_role} pair for {self.data.name}: {target_device_names}"
+        )
+
+        # Get endpoint interfaces without existing cables
+        available_endpoint_interfaces = [
+            intf for intf in self.data.interfaces if not intf.cable
+        ]
+
+        if not available_endpoint_interfaces:
+            self.logger.info(f"All interfaces on {self.data.name} already have cables")
+            return
+
+        target_interfaces = await self._query_compatible_interfaces(
+            device_names=target_device_names,
+            endpoint_interfaces=available_endpoint_interfaces,
+        )
+
+        if not target_interfaces:
+            self.logger.warning(
+                f"No compatible access interfaces found on {target_role} devices {target_device_names}"
+            )
+            return
+
+        endpoint_intf_names = [intf.name for intf in available_endpoint_interfaces[:4]]
+        target_intf_names = sorted(set(intf.name.value for intf in target_interfaces))
+
+        await self.create_cabling(
+            bottom_devices=[self.data.name],
+            bottom_interfaces=endpoint_intf_names,
+            top_devices=target_device_names,
+            top_interfaces=target_intf_names,
+            strategy="intra_rack",
+            options={
+                "cabling_offset": 0,
+                "bottom_sorting": "bottom_up",
+                "top_sorting": "bottom_up",
             },
         )
 
-        await cable.save()
+        self.logger.info(
+            f"Successfully created dual-homed connections for {self.data.name} to {target_role}s {target_device_names}"
+        )
+
+    def _select_consecutive_device_pair(
+        self, devices: list[dict[str, Any]], role: str
+    ) -> list[dict[str, Any]]:
+        """Select pair of consecutive devices for dual-homing."""
+        import re
+
+        def extract_id(name: str) -> int | None:
+            match = re.search(r"(\d+)$", name)
+            return int(match.group(1)) if match else None
+
+        device_map = {}
+        for device in devices:
+            name = device.get("name", {}).get("value", "")
+            dev_id = extract_id(name)
+            if dev_id is not None:
+                device_map[dev_id] = device
+
+        sorted_ids = sorted(device_map.keys())
+        for i in range(len(sorted_ids) - 1):
+            id1, id2 = sorted_ids[i], sorted_ids[i + 1]
+            if id2 - id1 == 1 and id1 % 2 == 1:
+                return [device_map[id1], device_map[id2]]
+
+        return devices[:2]
+
+    async def _query_compatible_interfaces(
+        self, device_names: list[str], endpoint_interfaces: list[Any]
+    ) -> list[DcimPhysicalInterface]:
+        """Query compatible interfaces on target devices for endpoint connectivity.
+
+        Args:
+            device_names: Names of target devices (ToRs or Leafs)
+            endpoint_interfaces: Endpoint interface models
+
+        Returns:
+            List of compatible interfaces on target devices
+
+        Note:
+            For ToRs/Leafs connecting to endpoints, we look for:
+            - Interfaces with roles: downlink, customer, access, or peer
+            - Matching interface types if endpoint has specific types
+            - Available interfaces (not already connected)
+        """
+        endpoint_types = set(
+            intf.interface_type for intf in endpoint_interfaces if intf.interface_type
+        )
+
+        # ToR/Leaf interfaces connecting to endpoints typically have these roles
+        acceptable_roles = ["downlink", "customer", "access", "peer"]
+
+        if not endpoint_types:
+            # No specific interface type requirement - query by role only
+            all_interfaces = await self.client.filters(
+                kind=DcimPhysicalInterface,
+                device__name__values=device_names,
+                role__values=acceptable_roles,
+            )
+        else:
+            # Match both interface type and role
+            all_interfaces = await self.client.filters(
+                kind=DcimPhysicalInterface,
+                device__name__values=device_names,
+                interface_type__values=list(endpoint_types),
+                role__values=acceptable_roles,
+            )
 
         self.logger.info(
-            f"Created cable {cable.id} between interfaces {intf1_id} and {intf2_id}"
-        )  # type: ignore
+            f"Query returned {len(all_interfaces)} interfaces matching roles={acceptable_roles}, types={endpoint_types}"
+        )
+
+        # Filter out interfaces that already have cables
+        # Note: cable is a RelatedNode with id=None for uncabled interfaces
+        interfaces = [
+            intf for intf in all_interfaces if not (intf.cable and intf.cable.id)
+        ]
+
+        self.logger.info(
+            f"Found {len(interfaces)} available (uncabled) compatible interfaces on devices {device_names} "
+            f"(interface_types={endpoint_types}, roles={acceptable_roles}, total_compatible={len(all_interfaces)})"
+        )
+        return interfaces

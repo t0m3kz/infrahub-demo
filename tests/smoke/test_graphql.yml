@@ -123,6 +123,14 @@ infrahub_tests:
           path: queries/topology/clab.gql
           kind: graphql-query-smoke
 
+  - resource: GraphQLQuery
+    resource_name: endpoint_connectivity
+    tests:
+      - name: syntax_check
+        spec:
+          path: queries/topology/endpoint.gql
+          kind: graphql-query-smoke
+
   # ==================== SERVICE QUERIES ====================
   - resource: GraphQLQuery
     resource_name: virtual_fabric_validation
