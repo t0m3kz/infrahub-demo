@@ -1,0 +1,11 @@
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimDeviceType
+  data:
+    - name: DELL-R740XD2
+      part_number: R740XD2
+      height: 2
+      full_depth: true
+      manufacturer: Dell
