@@ -1,7 +1,9 @@
 # DC2 - Croissants & Cheap Packets
+
 *Middle Rack Data Center with Hierarchical Naming Strategy*
 
 ## Overview
+
 **Location:** Paris 🇫🇷 (The City of Light - where your packets enjoy croissants and romantic latency)
 
 **Size:** Small (S) - Efficient, elegant, and budget-friendly
@@ -17,6 +19,7 @@
 ## Architecture (Minimalism with a French Accent)
 
 ### Fabric Scale
+
 - **Super Spines:** 2 (Arista DCS-7050CX3-32C-R) - *Your inter-pod highway patrol*
 - **Total Pods:** 2 - *Because symmetry is beautiful and troubleshooting is easier*
 - **Total Spines:** 4 (2 per pod) - *Just enough aggregation, not too much*
@@ -24,6 +27,7 @@
 - **Deployment Type:** middle_rack (both pods) - *Hierarchical all the way down*
 
 ### Pod Structure (The Twin Towers of Efficiency)
+
 | Pod   | Spines | Model                | Racks | Deployment    | Personality                |
 |-------|--------|----------------------|-------|--------------|----------------------------|
 | Pod 1 | 2      | DCS-7050CX3-32C-R   | 2     | middle_rack  | The Responsible Sibling    |
@@ -34,24 +38,28 @@
 ## Hardware Stack (Budget-Conscious Excellence)
 
 ### Super Spine Layer
+
 - **Model:** Cisco Nexus N9K-C9336C-FX2
 - **Ports:** 36×100GbE - *More than you need, exactly what you want*
 - **Role:** Making pods talk to each other without drama
 - **Fun Fact:** These switches cost more than your car but last longer
 
 ### Spine Layer
+
 - **Model:** Arista DCS-7050CX3-32C-R
 - **Ports:** 32x100GbE
 - **Role:** Pod-level aggregation
 - **Deployment:** Identical in both pods
 
 ### Leaf Layer (In Racks)
+
 - **Model:** Arista DCS-7050CX3-32C-R
 - **Count:** 2 per rack
 - **Role:** Rack-level aggregation
 - **Ports:** 36x100GbE
 
 ### ToR Layer
+
 - **Model:** Arista DCS-7050CX3-32C-R
 - **Count:** 2 per rack
 - **Role:** Server connectivity
@@ -61,7 +69,8 @@
 ## Deployment Strategy (Middle Rack Mastery)
 
 **ToR Connectivity Pattern:**
-```
+
+```bash
 ToR → Local Leafs (same rack)
      ↓
    Leaf → Spine
@@ -89,6 +98,7 @@ uv run infrahubctl generator generate_dc name=DC2 --branch you_branch
 Trigger infrastructure generation in InfraHub UI → Actions → Generator Definitions → generate_dc DC2-Fabric-1
 
 ## Fun Fact
+
 As a teenager, the author visited La Défense and dreamed of working in one of those shiny Parisian towers.
 
 Years later, when the chance finally came, he realized it was a truly ridiculous dream—and thanked the universe for dodging a lifetime of overpriced coffee, endless PowerPoint meetings, rush hour traffic, and spontaneous synergy sessions.

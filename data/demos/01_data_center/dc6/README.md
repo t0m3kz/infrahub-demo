@@ -1,6 +1,7 @@
 # DC6 - Mixed Vendors: Silesian Buffet, Vendor Bingo, Debug & Dine
 
 ## Overview
+
 **Location:** Katowice 🇵🇱 (Poland's and Silesian industrial powerhouse turned tech hub—where the only thing faster than the fiber is the coffee. Half the cost of Western Europe, double the sarcasm, and the rolada-modro-kapusta-gumiklyjzy-to-latency ratio is unbeatable!)
 
 **Size:** Medium (M) - Cost-effective, interoperable, and a little wild. Big enough to cause trouble, small enough to blame someone else.
@@ -19,6 +20,7 @@ Warning: May cause spontaneous VLAN migrations, philosophical debates about port
 ## Architecture (Layer-Level Vendor Mix)
 
 ### Fabric Scale
+
 - **Super Spines:** 2 (Cisco N9K-C9336C-FX2)
 - **Total Pods:** 2
 - **Total Spines:** 4 (2+2 across pods)
@@ -26,6 +28,7 @@ Warning: May cause spontaneous VLAN migrations, philosophical debates about port
 - **Deployment Type:** middle_rack (all pods)
 
 ### Pod Structure (Vendor Mix Table)
+
 | Pod   | Spines | Vendor                | Leafs/ToRs Vendor | Racks | Deployment   |
 |-------|--------|----------------------|-------------------|-------|--------------|
 | Pod 1 | 2      | Arista (DCS-7050CX3-32C-R) | Dell SONiC      | 2     | middle_rack  |
@@ -36,18 +39,21 @@ Warning: May cause spontaneous VLAN migrations, philosophical debates about port
 ## Hardware Stack (Multi-Vendor Mayhem)
 
 ### Super Spine Layer
+
 - **Model:** Cisco N9K-C9336C-FX2
 - **Ports:** 36x100GbE
 - **Role:** Inter-pod connectivity
 - **Fun Fact:** The neutral overlords
 
 ### Spine Layer (Multi-Vendor)
+
 - **Pod 1:** Arista DCS-7050CX3-32C-R (2 spines)
 - **Pod 2:** Edgecore 7726-32X-O (2 spines)
 - **Ports:** 32x100GbE each
 - **Role:** Pod-level aggregation
 
 ### Leaf/ToR Layer
+
 - **Pod 1:** Dell SONiC
 - **Pod 2:** Cisco NX-OS
 - **Role:** Rack-level aggregation and server connectivity

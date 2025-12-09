@@ -1,4 +1,5 @@
 # 04 - Pod Expansion Demo
+
 *The "We Need More Pods" Episode*
 
 ## Overview
@@ -12,7 +13,9 @@
 ---
 
 ## What's Inside
+
 **Pod 4 Specifications:**
+
 - **Deployment Type:** ToR (because we already tried middle_rack and mixed in Pods 1-3)
 - **Spines:** 2x Cisco N9K-C9364C-GX (the usual suspects)
 - **Parent:** DC1 (the data center that keeps growing like your to-do list)
@@ -21,6 +24,7 @@
 ---
 
 ## The Pod Creation Story
+
 **Chapter 1:** "We have capacity in Pods 1-3"
 **Chapter 2:** "Maybe we should isolate that new application"
 **Chapter 3:** "Compliance says separate pod"
@@ -31,7 +35,9 @@
 ---
 
 ## Use Case
+
 Perfect for:
+
 - **Application Isolation:** "This app needs its own pod" (translation: politics)
 - **Compliance Theater:** Separate environments that share the same cooling
 - **Growth Planning:** Because Pods 1-3 are somehow full already
@@ -41,6 +47,7 @@ Perfect for:
 ---
 
 ## Deployment
+
 ```bash
 uv run infrahubctl branch create your_branch
 uv run infrahubctl object load data/demos/04_pod/ --branch your_branch

@@ -3,7 +3,6 @@
 import sys
 from pathlib import Path
 
-
 # Add parent directory to path so we can import utils
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
@@ -83,9 +82,7 @@ class TestCleanDataSingleKeyWrappers:
         # Nested 'parent' dict has multiple keys, so it's preserved as-is (recursively cleaned)
         assert result == {"location": {"parent": {"id": "parent-id", "name": "HQ"}}}
 
-    def test_clean_data_edges_wrapper_single_node(
-        self
-    ) -> None:
+    def test_clean_data_edges_wrapper_single_node(self) -> None:
         """Test clean_data unwraps single 'edges' key with node inside."""
         data = {"items": {"edges": [{"node": {"id": "1", "name": "Item 1"}}]}}
         result = clean_data(data)
@@ -104,9 +101,7 @@ class TestCleanDataSingleKeyWrappers:
         # Multi-key dict with value wrappers gets recursively cleaned
         assert result == {"pod": {"name": "Pod-A1", "index": 1, "role": "cpu"}}
 
-    def test_clean_data_deeply_nested_value_wrappers(
-        self
-    ) -> None:
+    def test_clean_data_deeply_nested_value_wrappers(self) -> None:
         """Test clean_data recursively processes deeply nested structures."""
         data = {"level1": {"level2": {"level3": {"value": "deep_value"}}}}
         result = clean_data(data)
@@ -117,18 +112,14 @@ class TestCleanDataSingleKeyWrappers:
 class TestCleanDataMultiKeyDictionaries:
     """Test clean_data with multi-key dictionaries (no single-key unwrapping)."""
 
-    def test_clean_data_multi_key_dict_preserved(
-        self
-    ) -> None:
+    def test_clean_data_multi_key_dict_preserved(self) -> None:
         """Test clean_data with multi-key dict containing 'value' key."""
         data = {"field": {"value": "test", "extra": "data"}}
         result = clean_data(data)
         # Multi-key dict with 'value' extracts just the value
         assert result == {"field": "test"}
 
-    def test_clean_data_node_with_multiple_fields(
-        self
-    ) -> None:
+    def test_clean_data_node_with_multiple_fields(self) -> None:
         """Test clean_data with node containing multiple fields."""
         data = {
             "device": {
@@ -147,9 +138,7 @@ class TestCleanDataMultiKeyDictionaries:
 class TestCleanDataEdgesAndLists:
     """Test clean_data with edges and list structures."""
 
-    def test_clean_data_edges_with_multiple_nodes(
-        self
-    ) -> None:
+    def test_clean_data_edges_with_multiple_nodes(self) -> None:
         """Test clean_data unwraps edges with multiple nodes."""
         data = {
             "devices": {
@@ -170,9 +159,7 @@ class TestCleanDataEdgesAndLists:
         }
         assert result == expected
 
-    def test_clean_data_nested_edges_with_nested_value_wrappers(
-        self
-    ) -> None:
+    def test_clean_data_nested_edges_with_nested_value_wrappers(self) -> None:
         """Test clean_data with edges containing value wrappers."""
         data = {
             "interfaces": {
@@ -191,9 +178,7 @@ class TestCleanDataEdgesAndLists:
         }
         assert result == expected
 
-    def test_clean_data_list_without_node_wrapper(
-        self
-    ) -> None:
+    def test_clean_data_list_without_node_wrapper(self) -> None:
         """Test clean_data with list items without node wrapper."""
         data = {
             "tags": [
@@ -231,9 +216,7 @@ class TestCleanDataGraphQLTypes:
         }
         assert result == expected
 
-    def test_clean_data_multiple_double_underscores_normalized(
-        self
-    ) -> None:
+    def test_clean_data_multiple_double_underscores_normalized(self) -> None:
         """Test clean_data normalizes __typename but not other __ keys in multi-key dict."""
         data = {"__typename": "Query", "__schema": {"node": {"__field": "value"}}}
         result = clean_data(data)
@@ -247,9 +230,7 @@ class TestCleanDataGraphQLTypes:
 class TestCleanDataComplexGraphQLResponse:
     """Test clean_data with complex real-world GraphQL responses."""
 
-    def test_clean_data_complex_topology_pod_response(
-        self
-    ) -> None:
+    def test_clean_data_complex_topology_pod_response(self) -> None:
         """Test clean_data with complex TopologyPod response structure."""
         data = {
             "TopologyPod": {
@@ -356,9 +337,7 @@ class TestCleanDataComplexGraphQLResponse:
         assert result["TopologyDeployment"][0]["id"] == "deploy-1"
         assert result["TopologyDeployment"][0]["name"] == "DC-1"
 
-    def test_clean_data_comprehensive_pod_generation_query(
-        self
-    ) -> None:
+    def test_clean_data_comprehensive_pod_generation_query(self) -> None:
         """Test clean_data with comprehensive pod generation query response."""
         # This is a realistic pod query response with all nested structures
         data = {
@@ -567,9 +546,7 @@ class TestCleanDataEdgeCases:
         assert result["devices"][1]["name"] == "Device-2"
         assert result["devices"][1]["interfaces"][0]["name"] == "Eth2"
 
-    def test_clean_data_single_item_edges_preserved_as_list(
-        self
-    ) -> None:
+    def test_clean_data_single_item_edges_preserved_as_list(self) -> None:
         """Test clean_data preserves single-item edges as a list."""
         data = {"item": {"edges": [{"node": {"id": "single-item"}}]}}
         result = clean_data(data)
@@ -578,9 +555,7 @@ class TestCleanDataEdgeCases:
         assert len(result["item"]) == 1
         assert result["item"][0]["id"] == "single-item"
 
-    def test_clean_data_value_wrapper_with_null(
-        self
-    ) -> None:
+    def test_clean_data_value_wrapper_with_null(self) -> None:
         """Test clean_data with value wrapper containing None."""
         data = {"field": {"value": None}}
         result = clean_data(data)
@@ -589,18 +564,14 @@ class TestCleanDataEdgeCases:
         # returns None for this field
         assert result == {"field": None}
 
-    def test_clean_data_value_wrapper_with_empty_string(
-        self
-    ) -> None:
+    def test_clean_data_value_wrapper_with_empty_string(self) -> None:
         """Test clean_data with value wrapper containing empty string."""
         data = {"field": {"value": ""}}
         result = clean_data(data)
         # Empty string is extracted (uses 'in' check, not truthy)
         assert result == {"field": ""}
 
-    def test_clean_data_deeply_nested_mixed_wrappers(
-        self
-    ) -> None:
+    def test_clean_data_deeply_nested_mixed_wrappers(self) -> None:
         """Test clean_data with deeply nested mixed wrapper types."""
         data = {
             "level1": {
@@ -625,9 +596,7 @@ class TestCleanDataEdgeCases:
 class TestCleanDataIdempotency:
     """Test clean_data idempotency and consistency."""
 
-    def test_clean_data_idempotent_on_cleaned_data(
-        self
-    ) -> None:
+    def test_clean_data_idempotent_on_cleaned_data(self) -> None:
         """Test clean_data applied twice produces same result as once."""
         data = {
             "pod": {
@@ -646,9 +615,7 @@ class TestCleanDataIdempotency:
         # Second clean should not change anything
         assert result1 == result2
 
-    def test_clean_data_consistent_across_calls(
-        self
-    ) -> None:
+    def test_clean_data_consistent_across_calls(self) -> None:
         """Test clean_data produces consistent results across multiple calls."""
         data = {
             "TopologyPod": {

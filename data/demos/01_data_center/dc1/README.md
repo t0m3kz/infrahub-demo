@@ -1,6 +1,7 @@
 # DC1 - Hierarchy Overkill: The Kitchen Sink Data Center
 
 ## Overview
+
 **Location:** Munich 🇩🇪 (Home to Oktoberfest and BMW - where beer gardens meet precision engineering)
 
 **Size:** Large (L) - Like your cloud bill after forgetting to turn off dev instances
@@ -16,6 +17,7 @@
 ## Architecture (AKA: The Magnificent Mess)
 
 ### Fabric Scale (Or: How We Learned to Stop Worrying and Love Complexity)
+
 - **Super Spines:** 2 (Cisco N9K-C9336C-FX2) - The bosses of bosses
 - **Total Pods:** 3 (Each with its own personality disorder)
 - **Total Spines:** 8 (3+3+2 - we support diversity and inclusiveness)
@@ -24,6 +26,7 @@
 **Deployment Types:** It’s complicated—Pod 1: middle_rack (for fans of bureaucracy), Pod 2: mixed (for the indecisive), Pod 3: ToR (for rebels who read “Keep It Simple” and actually believed it).
 
 ### Pod Structure (The Family Dysfunction Table)
+
 | Pod | Spines | Deployment Type | Racks | Personality |
 |-----|--------|----------------|-------|-------------|
 | POD-1 | 3 | middle_rack | 4 middle racks  | The overachiever with hierarchy complex |
@@ -31,6 +34,7 @@
 | POD-3 | 2 | tor | 12 ToR racks | The minimalist who read "Keep It Simple" once and took it seriously |
 
 ### Design Template Constraints (Or: The Rules We Pretend to Follow)
+
 - maximum_super_spines: 4 (but we only use 2 because who needs redundancy, right?)
 - maximum_spines: 4 per pod (democracy in action)
 - maximum_pods: 4 (we're only using 3 - always leave room for "future growth")
@@ -45,24 +49,28 @@
 ## Hardware Stack (The Expensive Bits)
 
 ### Super Spine Layer (The Executive Suite)
+
 - **Model:** Cisco N9K-C9336C-FX2
 - **Ports:** 36x100GbE (fewer ports, higher paygrade)
 - **Role:** Inter-pod connectivity and being generally superior
 - **Fun Fact:** Only talks to spines, has security escort VLANs
 
 ### Spine Layer (The Middle Management)
+
 - **Model:** Cisco N9K-C9364C-GX
 - **Ports:** 64x100GbE (that's a lot of cables to accidentally unplug)
 - **Role:** Pod-level aggregation and professional packet shuffler
 - **Fun Fact:** Each port costs more than your car payment
 
 ### Leaf Layer (The Worker Bees - Middle Rack Edition)
+
 - **Model:** Cisco N9K-C9336C-FX2
 - **Ports:** 36x100GbE (proving that middle management can have nice things too)
 - **Role:** Rack-level aggregation in Pods 1-2
 - **Fun Fact:** Gets to boss ToRs around while taking orders from spines
 
 ### ToR Layer (The Actual Workers)
+
 - **Model:** Various (because vendor diversity is a virtue when you can't decide)
 - **Deployment:** Direct spine connection (Pod 3) or leaf connection (Pods 1-2)
 - **Role:** Connecting servers and pretending not to resent the hierarchy above
@@ -73,9 +81,11 @@
 ## Deployment Strategy (Choose Your Own Adventure)
 
 ### Middle Rack Deployment (Pod 1: The Bureaucratic Approach)
+
 **Philosophy:** "Why connect directly when you can add another layer?"
 
 **ToR Connectivity:**
+
 - ToRs connect to local Leafs in racks (because chain of command matters)
 - If no local Leafs exist, connection attempts external Leafs (the backup plan nobody tested)
 - Reduces spine port consumption (saving ports for "future growth" that never comes)
@@ -84,6 +94,7 @@
 - **Complexity:** Maximum (job security through obscurity)
 
 ### Mixed Deployment (Pod 2: The "Best of Both Worlds" Disaster)
+
 **Philosophy:** "Can't we all just get along?"
 
 - Some racks with middle leafs (bureaucracy lovers)
@@ -94,9 +105,11 @@
 - **Complexity:** Yes
 
 ### ToR Deployment (Pod 3: The Rebel Alliance)
+
 **Philosophy:** "Screw the hierarchy, let's just make it work"
 
 **ToR Connectivity:**
+
 - ToRs connect directly to Spines (radical concept: skip middle management)
 - Simpler, flatter topology (fewer things to break at 3 AM)
 - Lower latency (packets don't need org chart)
@@ -132,6 +145,7 @@ Pro tip: Have the InfraHub UI open to see devices spawn like rabbits
 Create a Proposed Change (PC) and watch the chaos unfold in real time.
 
 ## Fun Fact
+
 The author lives in Munich and has spent years trying to understand the rules of Schafkopf as explained in Bavarian—proof that some network topologies are easier to decipher than local card games.
 
 If you ever win a round, you’re officially more Bavarian than a pretzel at Oktoberfest.

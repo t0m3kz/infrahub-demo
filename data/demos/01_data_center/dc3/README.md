@@ -1,6 +1,7 @@
 # DC3 - Brexit, No Middle Management, Maximum Sass
 
 ## Overview
+
 **Location:** London 🇬🇧 (Brexit happened, but your data stays! More fiber under the Thames than umbrellas in the city)
 
 **Size:** Small (S) - Minimalist, fast, and direct
@@ -19,6 +20,7 @@ Warning: May cause spontaneous outbreaks of optimism and existential dread in eq
 ## Architecture (Flatness with British Charm)
 
 ### Fabric Scale
+
 - **Super Spines:** 2 (Dell PowerSwitch S5232F-ON)
 - **Total Pods:** 2
 - **Total Spines:** 4 (2 per pod)
@@ -26,6 +28,7 @@ Warning: May cause spontaneous outbreaks of optimism and existential dread in eq
 - **Deployment Type:** tor (both pods)
 
 ### Pod Structure (Zero-Middle-Layer Society)
+
 | Pod   | Spines | Model                | Racks | Deployment | Personality         |
 |-------|--------|----------------------|-------|------------|---------------------|
 | Pod 1 | 2      | S5232F-ON           | 2     | tor        | The Speed Racer     |
@@ -36,18 +39,21 @@ Warning: May cause spontaneous outbreaks of optimism and existential dread in eq
 ## Hardware Stack (Simplicity Through SONiC)
 
 ### Super Spine Layer
+
 - **Model:** Dell PowerSwitch S5232F-ON
 - **Ports:** 32x100GbE
 - **Role:** Inter-pod autobahn
 - **Fun Fact:** Flat ToR is how you win arguments about east-west latency
 
 ### Spine Layer
+
 - **Model:** Dell PowerSwitch S5232F-ON
 - **Ports:** 32x100GbE
 - **Role:** Direct ToR aggregation
 - **Deployment:** Identical across pods
 
 ### ToR Layer
+
 - **Model:** Dell PowerSwitch S5232F-ON
 - **Count:** 2 per rack
 - **Role:** Server connectivity
@@ -57,9 +63,11 @@ Warning: May cause spontaneous outbreaks of optimism and existential dread in eq
 ## Deployment Strategy (Flat ToR Mastery)
 
 **ToR Connectivity Pattern:**
-```
+
+```bash
 Server → ToR → Spine → Super Spine
 ```
+
 ---
 
 ## Quick Start
@@ -84,6 +92,7 @@ Trigger infrastructure generation in InfraHub UI → Actions → Generator Defin
 and follow steps from dc1
 
 ## Fun Fact
+
 The author still uses the mug he bought 25 years ago in London—proof that some British imports last longer than most celebrity marriages, and definitely longer than any network outage.
 
 Unlike certain monarchs, this mug has never abdicated, and it’s still on the throne of morning coffee—no royal drama, just reliable caffeine delivery.
