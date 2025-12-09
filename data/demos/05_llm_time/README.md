@@ -1,4 +1,5 @@
 # 05 - Spine Expansion Demo
+
 *The "We Need to Join the LLM Game" Episode*
 
 ## Overview
@@ -12,6 +13,7 @@
 ---
 
 ## What's Inside
+
 - **Spine Count:** 4 (because two is for mortals, four is for LLM gods)
 - **Pod:** DC1-1-POD-1 (the birthplace of your future AI overlords)
 - **Upgrade Method:** Trojan Horse—roll in new spines under the cover of "AI readiness" and hope nobody notices until it's too late
@@ -19,7 +21,9 @@
 ---
 
 ## Use Case
+
 Perfect for:
+
 - "We need to support LLM workloads" (translation: we want to sound cool at conferences)
 - "AI-ready infrastructure" (translation: we have no idea what we're doing, but it looks good on slides)
 - "Future-proofing" (translation: we want to buy more hardware before the budget disappears)
@@ -28,6 +32,7 @@ Perfect for:
 ---
 
 ## Deployment
+
 ```bash
 uv run infrahubctl branch create your_branch
 # Edit DC1-1-POD-3 and increase number of Spines to 4
@@ -37,9 +42,11 @@ uv run infrahubctl object load data/demos/05_llm_time/ --branch your_branch
 Here you just sit back, sip your coffee, and watch the magic happen—no clicking, no frantic tab switching, just pure event-driven automation.
 
 It's like Netflix for network engineers, but with fewer cliffhangers.
+
 ---
 
 ## Fun Fact
+
 The only thing more mysterious than LLMs is why you suddenly need four spines.
 
 Trojan Horse upgrades: because sometimes the best way to get what you want is to hide it in a box labeled "AI".

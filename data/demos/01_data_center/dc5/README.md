@@ -1,6 +1,7 @@
 # DC5 - Multi-Vendor: Eurovision for Switches
 
 ## Overview
+
 **Location:** New York 🇺🇸 (The city that never sleeps, neither does your infrastructure. Rack space cheaper than a Manhattan studio!)
 
 **Size:** Medium (M) - Diverse, resilient, and a little bit chaotic
@@ -19,6 +20,7 @@ Warning: May result in spontaneous protocol debates, inter-vendor blame games, a
 ## Architecture (The United Nations of Networking)
 
 ### Fabric Scale
+
 - **Super Spines:** 2 (Cisco N9K-C9336C-FX2)
 - **Total Pods:** 4 (One vendor per pod)
 - **Total Spines:** 8 (2 per pod)
@@ -26,6 +28,7 @@ Warning: May result in spontaneous protocol debates, inter-vendor blame games, a
 - **Deployment Type:** middle_rack (all pods)
 
 ### Pod Structure (Vendor Diversity Initiative)
+
 | Pod   | Spines | Vendor   | Model                | Racks | Deployment   | Personality                |
 |-------|--------|----------|----------------------|-------|-------------|----------------------------|
 | Pod 1 | 2      | Cisco    | N9K-C9364C-GX        | 2     | middle_rack | The Enterprise Standard    |
@@ -38,21 +41,25 @@ Warning: May result in spontaneous protocol debates, inter-vendor blame games, a
 ## Hardware Stack (Vendor Diversity Champions)
 
 ### Super Spine Layer
+
 - **Model:** Cisco N9K-C9336C-FX2
 - **Ports:** 36x100GbE
 - **Role:** Inter-pod connectivity
 - **Fun Fact:** Top of the food chain
 
 ### Spine Layer
+
 - **Model:** Varies by pod (see table above)
 - **Ports:** 32-36x100GbE
 - **Role:** Pod-level aggregation
 
 ### Leaf Layer
+
 - **Model:** Varies by pod
 - **Role:** Rack-level aggregation
 
 ### ToR Layer
+
 - **Model:** Varies by pod
 - **Role:** Server connectivity
 

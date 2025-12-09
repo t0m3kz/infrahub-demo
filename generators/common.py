@@ -266,7 +266,15 @@ class CommonGenerator(InfrahubGenerator):
                     },
                     branch=self.branch,
                 )
-                await obj.member_of_groups.fetch()
+
+                # Ensure relationship is initialized before adding
+                # For new objects: set initialized flag directly (no ID yet to fetch)
+                # For existing objects: fetch loads current groups, SDK handles duplicates
+                if obj.id:
+                    await obj.member_of_groups.fetch()
+                else:
+                    obj.member_of_groups.initialized = True
+
                 obj.member_of_groups.add(device_group.id)
                 batch_devices.add(task=obj.save, allow_upsert=True, node=obj)
 

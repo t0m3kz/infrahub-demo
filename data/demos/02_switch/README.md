@@ -1,7 +1,9 @@
 # 02 - Additional Switches Demo
+
 *When You Just Need Two More Switches (Famous Last Words)*
 
 ## Overview
+
 **Purpose:** Add 2 ToRs to an existing rack in DC1's Pod 1. Because "temporary" upgrades are forever.
 
 **Philosophy:** "We just need a FEW more switches" - said everyone before their topology doubled and their cable management became performance art.
@@ -11,14 +13,18 @@
 ---
 
 ## What's Inside
+
 Enhancing existing rack (`muc-1-s-1-r-1-1`) with:
+
 - **+2x Cisco ToRs** (N9K-C9336C-FX2) - More ToRs than a fantasy trilogy marathon
 - **Location:** Munich DC1, Pod 1, Suite 1, Row 1 - Where it all began (and will never end)
 
 ---
 
 ## Use Case
+
 Perfect for when your team says:
+
 - "Can we just add TWO more switches?" (Narrator: It's never just two)
 - "The existing rack has capacity" (Until it doesn't)
 - "Quick expansion" (Spoiler: It becomes permanent)
@@ -28,6 +34,7 @@ Perfect for when your team says:
 ---
 
 ## Deployment
+
 ```bash
 uv run infrahubctl branch create your_branch
 uv run infrahubctl object load data/demos/02_switch/ --branch your_branch
