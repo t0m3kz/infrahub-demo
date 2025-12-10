@@ -122,6 +122,7 @@ class CommonGenerator(InfrahubGenerator):
                 resource_pool=parent_pool,
                 identifier=id,
                 prefix_length=pool_size,
+                branch="main",
                 data={
                     "role": f"{pool_name if pool_name in ['management', 'technical', 'loopback'] else pool_name.split('-')[-1]}"
                 },
@@ -283,6 +284,7 @@ class CommonGenerator(InfrahubGenerator):
                             resource_pool=management_pool,
                             identifier=name,
                             prefix_length=32,
+                            branch="main",
                             data={"description": f"Management IP for {name}"},
                         ),
                         "rack": {"id": rack} if rack else None,
@@ -307,6 +309,7 @@ class CommonGenerator(InfrahubGenerator):
                                     resource_pool=loopback_pool,
                                     identifier=name,
                                     prefix_length=32,
+                                    branch="main",
                                     data={"description": f"Loopback IP for {name}"},
                                 )
                             ],
@@ -459,6 +462,7 @@ class CommonGenerator(InfrahubGenerator):
                     identifier=link_identifier,  # Use stable ID-based identifier
                     prefix_length=31,
                     member_type="address",
+                    branch="main",
                     data={
                         "role": "technical",
                         "is_pool": True,
