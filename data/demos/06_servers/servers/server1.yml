@@ -11,6 +11,8 @@ spec:
       position: 10
       device_type: [DELL-R740XD2]
       platform: linux
+      member_of_groups:
+        - endpoints
       interfaces:
         kind: DcimPhysicalInterface
         data:
