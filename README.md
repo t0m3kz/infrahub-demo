@@ -93,11 +93,12 @@ uv sync
 ### Quick Setup (Recommended)
 
 One command to setup everything:
+
 ```bash
 uv run invoke setup
 ```
 
-This loads schemas, bootstrap data, menu, repo and events. Then explore at http://localhost:8000
+This loads schemas, bootstrap data, menu, repo and events. Then explore at <http://localhost:8000>
 
 ### Manual Setup (Alternative)
 
@@ -130,7 +131,6 @@ Load demo events
 ```bash
 uv run invoke load-events
 ```
-
 
 ### Deploy Data Center Scenarios
 
