@@ -7,6 +7,7 @@
 [![GitHub Discussion][github-discussions-badge]][github-discussions-link]
 
 ---
+
 ## Why Infrahub Demo?
 
 > "The machine cannot be blamed. It is doing precisely what it was instructed to do. The real culprits are those who sit idly by, awaiting some miraculous vendor contraption that will magically satisfy all their peculiar requirements—instead of rolling up their sleeves and constructing it themselves."
@@ -41,6 +42,7 @@ This demo is trying prove it: from topology design to device generation, from co
 ---
 
 ## Requirements
+
 - Python 3.10, 3.11, or 3.12
 - [uv](https://github.com/astral-sh/uv) for dependency management
 - Docker (for containerlab and some integration tests)
@@ -49,12 +51,14 @@ This demo is trying prove it: from topology design to device generation, from co
 > **Version Compatibility Note**: This demo is designed for Infrahub 1.5. The data models and generators can be modified to work with previous versions of Infrahub if needed.
 
 ## Features
+
 - Design-driven network automation demo using [Infrahub](https://docs.infrahub.app)
 - Example data, schemas, and menu for rapid onboarding
 - Scripts for bootstrapping, demo use cases, and CI integration
 - Modular structure for easy extension and experimentation
 
 ## Project Structure
+
 - [`checks/`](checks/) – Custom validation logic
 - [`data/`](data/) – Example data for bootstrapping
 - [`generators/`](generators/) – Topology and config generators
@@ -69,6 +73,7 @@ This demo is trying prove it: from topology design to device generation, from co
 ## Quickstart
 
 ### Use GitHub Codespaces
+
 Deploy demo using Codespaces:
 [![Launch in GitHub Codespaces](https://img.shields.io/badge/Launch%20Infrahub%20Demo-0B6581?logo=github)](https://codespaces.new/t0m3kz/infrahub-demo?devcontainer_path=.devcontainer%2Fdevcontainer.json&ref=stable)
 
@@ -80,11 +85,13 @@ export INFRAHUB_API_TOKEN="06438eb2-8019-4776-878c-0941b1f1d1ec"
 ```
 
 ### Install the Infrahub SDK
+
 ```bash
 uv sync
 ```
 
 ### Quick Setup (Recommended)
+
 One command to setup everything:
 ```bash
 uv run invoke setup
@@ -95,26 +102,31 @@ This loads schemas, bootstrap data, menu, repo and events. Then explore at http:
 ### Manual Setup (Alternative)
 
 Load schemas
+
 ```bash
 uv run invoke load-schema
 ```
 
 Load menu
+
 ```bash
 uv run invoke load-menu
 ```
 
 Load demo data
+
 ```bash
 uv run invoke load-objects
 ```
 
 Load demo repo
+
 ```bash
 uv run invoke load-repo
 ```
 
 Load demo events
+
 ```bash
 uv run invoke load-events
 ```
@@ -125,6 +137,7 @@ uv run invoke load-events
 **6 strategic scenarios** demonstrating vendor platforms, naming strategies, multi-vendor architectures.
 
 #### Single-Vendor Deployments (DC1-DC4)
+
 | Scenario | Location | Vendor | Deployment | Description |
 |----------|----------|--------|------------|-------------|
 | **[DC1](data/demos/01_data_center/dc1/)** | Munich 🇩🇪 | Cisco | All (MR+Mixed+ToR) | Hierarchy Overkill: All the racks, all the drama. |
@@ -133,6 +146,7 @@ uv run invoke load-events
 | **[DC4](data/demos/01_data_center/dc4/)** | Berlin 🇩🇪 | Edgecore/SONiC | Mixed + ToR | Maximum Chaos, Minimum Rules. |
 
 #### Multi-Vendor Deployments (DC5-DC6)
+
 | Scenario | Location | Architecture | Description |
 |----------|----------|-------------|-------------|
 | **[DC5](data/demos/01_data_center/dc5/)** | New York 🇺🇸 | Different vendor per pod | Eurovision for Switches: 4 pods, 4 vendors, 0 peace. |
@@ -152,22 +166,28 @@ Explore LLM upgrades and organic growth patterns—all in one place, please make
 Brace yourself: even more questionable use cases, wild topologies, and vendor drama are coming soon. If you want to see even more chaos, star this repo—so the author can unlock extra GitHub tools and automate his caffeine intake. Your star may be the difference between a new feature and another debugging session at midnight!
 
 ## CI/CD
+
 This project uses GitHub Actions for continuous integration. All pushes and pull requests are tested for lint, type checks, and unit tests.
 
 ## Security & Secrets
+
 - Do not commit real API tokens. Use `.env` or GitHub secrets for sensitive data in production.
 - Example tokens in this README are for demo purposes only.
 
 ## Troubleshooting
+
 - If you encounter port conflicts, ensure no other service is running on port 8000.
 - For dependency issues, run `uv sync` again.
 - For Docker/infrahub issues, ensure Docker is running and you have the correct permissions.
 
 ## Testing
+
 Run all tests using:
+
 ```bash
 uv run inv validate
 ```
+
 Or run specific test scripts in the [`tests/`](tests/) directory.
 
 ## 🙏 A Note from a Highly Fallible Carbon-Based Life Form
@@ -175,13 +195,16 @@ Or run specific test scripts in the [`tests/`](tests/) directory.
 > Look, I'm just a human who occasionally writes code between coffee breaks and existential crises. If something explodes, catches fire, or simply refuses to work as advertised—like that one switch that's been "temporarily" in your rack since 2019—please [open an issue](https://github.com/t0m3kz/infrahub-demo/issues). I promise to investigate with the same determination I use to debug production on a Friday afternoon. Your feedback is invaluable, unlike my initial variable naming choices!
 
 ## Contributing
+
 Contributions, questions, and feedback are welcome! Please use [GitHub Discussions][github-discussions-link].
 
 ## References
+
 - [Infrahub Documentation](https://docs.infrahub.app)
 - [Project Discussions](https://github.com/t0m3kz/infrahub-demo/discussions/)
 
 ## License
+
 This project is licensed under the MIT License. See [LICENSE](LICENSE) for details.
 
 [ruff-badge]:

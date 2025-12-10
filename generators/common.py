@@ -242,8 +242,31 @@ class CommonGenerator(InfrahubGenerator):
             kind=CoreStandardGroup, name__value=f"{device_role}s"
         )
         try:
+            # Fetch all existing devices in a single batch to optimize performance
+            existing_devices_list = await self.client.filters(
+                kind=device_kind,
+                name__values=device_names,
+                include=["member_of_groups"],
+                branch=self.branch,
+            )
+            existing_devices_map = {
+                device.name.value: device for device in existing_devices_list
+            }
+
             # Add device objects and related loopback interfaces (if any) to the batch
             for name in device_names:
+                existing_device = existing_devices_map.get(name)
+                if existing_device:
+                    groups = [
+                        peer.id for peer in existing_device.member_of_groups.peers
+                    ]
+                else:
+                    groups = []
+
+                # Ensure the new group is not duplicated
+                if device_group.id not in groups:
+                    groups.append(device_group.id)
+
                 obj = await self.client.create(
                     kind=device_kind,
                     data={
@@ -263,19 +286,10 @@ class CommonGenerator(InfrahubGenerator):
                             data={"description": f"Management IP for {name}"},
                         ),
                         "rack": {"id": rack} if rack else None,
+                        "member_of_groups": [{"id": group_id} for group_id in groups],
                     },
                     branch=self.branch,
                 )
-
-                # Ensure relationship is initialized before adding
-                # For new objects: set initialized flag directly (no ID yet to fetch)
-                # For existing objects: fetch loads current groups, SDK handles duplicates
-                if obj.id:
-                    await obj.member_of_groups.fetch()
-                else:
-                    obj.member_of_groups.initialized = True
-
-                obj.member_of_groups.add(device_group.id)
                 batch_devices.add(task=obj.save, allow_upsert=True, node=obj)
 
                 if loopback_pool:
