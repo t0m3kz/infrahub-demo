@@ -122,7 +122,6 @@ class CommonGenerator(InfrahubGenerator):
                 resource_pool=parent_pool,
                 identifier=id,
                 prefix_length=pool_size,
-                branch="main",
                 data={
                     "role": f"{pool_name if pool_name in ['management', 'technical', 'loopback'] else pool_name.split('-')[-1]}"
                 },
@@ -146,7 +145,6 @@ class CommonGenerator(InfrahubGenerator):
                         "identifier": id,
                         "resources": [allocated_prefix],
                     },
-                    branch="main",
                 )
             else:
                 new_pool = await self.client.create(
@@ -159,7 +157,6 @@ class CommonGenerator(InfrahubGenerator):
                         "identifier": id,
                         "resources": [allocated_prefix],
                     },
-                    branch="main",
                 )
 
             await new_pool.save(allow_upsert=True)
@@ -286,7 +283,6 @@ class CommonGenerator(InfrahubGenerator):
                             resource_pool=management_pool,
                             identifier=name,
                             prefix_length=32,
-                            branch="main",
                             data={"description": f"Management IP for {name}"},
                         ),
                         "rack": {"id": rack} if rack else None,
@@ -311,7 +307,6 @@ class CommonGenerator(InfrahubGenerator):
                                     resource_pool=loopback_pool,
                                     identifier=name,
                                     prefix_length=32,
-                                    branch="main",
                                     data={"description": f"Loopback IP for {name}"},
                                 )
                             ],
@@ -464,7 +459,6 @@ class CommonGenerator(InfrahubGenerator):
                     identifier=link_identifier,  # Use stable ID-based identifier
                     prefix_length=31,
                     member_type="address",
-                    branch="main",
                     data={
                         "role": "technical",
                         "is_pool": True,
@@ -480,7 +474,6 @@ class CommonGenerator(InfrahubGenerator):
                 src_ip = await self.client.create(
                     kind=IpamIPAddress,
                     address=str(next(host_addresses)) + "/31",
-                    branch="main",
                 )
                 await src_ip.save(allow_upsert=True)
                 updated_src_interface.ip_address = src_ip.id  # type: ignore
@@ -488,7 +481,6 @@ class CommonGenerator(InfrahubGenerator):
                 dst_ip = await self.client.create(
                     kind=IpamIPAddress,
                     address=str(next(host_addresses)) + "/31",
-                    branch="main",
                 )
                 await dst_ip.save(allow_upsert=True)
                 updated_dst_interface.ip_address = dst_ip.id  # type: ignore
