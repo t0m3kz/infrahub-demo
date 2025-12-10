@@ -478,6 +478,7 @@ class CommonGenerator(InfrahubGenerator):
                 src_ip = await self.client.create(
                     kind=IpamIPAddress,
                     address=str(next(host_addresses)) + "/31",
+                    branch="main",
                 )
                 await src_ip.save(allow_upsert=True)
                 updated_src_interface.ip_address = src_ip.id  # type: ignore
@@ -485,6 +486,7 @@ class CommonGenerator(InfrahubGenerator):
                 dst_ip = await self.client.create(
                     kind=IpamIPAddress,
                     address=str(next(host_addresses)) + "/31",
+                    branch="main",
                 )
                 await dst_ip.save(allow_upsert=True)
                 updated_dst_interface.ip_address = dst_ip.id  # type: ignore
