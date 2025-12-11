@@ -285,7 +285,7 @@ class CommonGenerator(InfrahubGenerator):
                             resource_pool=management_pool,
                             identifier=name,
                             prefix_length=32,
-                            branch="main",
+                            branch=self.branch,
                             data={"description": f"Management IP for {name}"},
                         ),
                         "rack": {"id": rack} if rack else None,
@@ -310,7 +310,7 @@ class CommonGenerator(InfrahubGenerator):
                                     resource_pool=loopback_pool,
                                     identifier=name,
                                     prefix_length=32,
-                                    branch="main",
+                                    branch=self.branch,
                                     data={"description": f"Loopback IP for {name}"},
                                 )
                             ],
