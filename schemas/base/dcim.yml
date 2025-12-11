@@ -129,7 +129,7 @@ generics:
         optional: true
         cardinality: one
         kind: Component
-        on_delete: no-action
+        on_delete: cascade
         order_weight: 1700
       - name: platform
         peer: DcimPlatform
@@ -587,7 +587,7 @@ nodes:
         optional: true
         cardinality: one
         kind: Component
-        on_delete: no-action
+        on_delete: cascade
 
   - name: VirtualInterface
     namespace: Dcim
