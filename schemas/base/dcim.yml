@@ -503,8 +503,7 @@ nodes:
 
   - name: PhysicalInterface
     namespace: Dcim
-    label: Physical Interface
-    description: "Physical network port on a device"
+    description: A physical network interface
     inherit_from:
       - DcimInterface
       - DcimEndpoint
@@ -592,8 +591,7 @@ nodes:
 
   - name: VirtualInterface
     namespace: Dcim
-    label: Virtual Interface
-    description: "Virtual interface like VLAN or Loopback"
+    description: A virtual network interface
     inherit_from:
       - DcimInterface
       # - DcimSubInterface # Depending if you want your virtual interfaces to have sub interface
@@ -615,7 +613,7 @@ nodes:
   # --------------------  Cables  --------------------
   - name: Cable
     namespace: Dcim
-    description: A cable connecting two endpoints.
+    description: A physical cable that connects two endpoints.
     label: Cable
     icon: mdi:cable-data
     include_in_menu: false
