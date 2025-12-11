@@ -67,19 +67,36 @@ class CommonGenerator(InfrahubGenerator):
         pod_name: Optional[str] = None,
         ipv6: Optional[bool] = False,
     ) -> None:
-        """Ensure required per-pod / fabric pools exist.
+        """Ensure required per-pod / fabric pools exist (idempotent).
+
+        This method implements idempotent pool allocation:
+        - All pools are created on the main branch (branch-agnostic)
+        - Checks for existing pools before creating new ones
+        - Uses pod/fabric ID as consistent identifier for IP allocation
+        - Re-running the generator produces the same pools and IPs
+
+        The schema now uses on_delete: no-action for pool relationships,
+        preventing cascade deletion when branches are merged/deleted.
+
+        Args:
+            strategy: Pool allocation strategy ("fabric" or "pod")
+            pools: Configuration dict with maximum capacities
+            id: Unique identifier for the pod or fabric (used for IP allocation)
+            fabric_name: Name of the fabric
+            pod_name: Optional name of the pod (for pod strategy)
+            ipv6: Whether to use IPv6 addressing
 
         Notes:
-        - This function ensures minimal placeholder pools exist (side-effect).
-        - It accepts a simple strategy name string for `pools` (e.g. "fabric") and
-          normalizes it to a FabricPoolConfig internally for deterministic behavior.
-        - It intentionally returns None: creation is a side-effect. Actual address/prefix
-          allocation is performed later by generators which will fetch pools by name.
+            - This function ensures minimal placeholder pools exist (side-effect).
+            - It accepts a simple strategy name string for `pools` (e.g. "fabric") and
+              normalizes it to a FabricPoolConfig internally for deterministic behavior.
+            - It intentionally returns None: creation is a side-effect. Actual address/prefix
+              allocation is performed later by generators which will fetch pools by name.
         """
         # Local import to avoid runtime cycles during type-checking
         from .helpers import FabricPoolConfig
 
-        self.logger.info("Implementing resource pools")
+        self.logger.info("Implementing resource pools (idempotent)")
 
         pool_prefix = f"{pod_name}" if pod_name else fabric_name
 
@@ -91,7 +108,11 @@ class CommonGenerator(InfrahubGenerator):
             "maximum_switches",
         ]
         filtered_pools = {key: pools[key] for key in valid_keys if key in pools}
-        pod = await self.client.get(kind=TopologyPod, id=id) if pod_name else None
+        pod = (
+            await self.client.get(kind=TopologyPod, id=id, branch=self.branch)
+            if pod_name
+            else None
+        )
         pools_config = FabricPoolConfig(
             **filtered_pools, kind=strategy, ipv6=ipv6 or False
         )
@@ -111,23 +132,6 @@ class CommonGenerator(InfrahubGenerator):
             else:
                 parent_pool_name = f"{fabric_name}-{pool_name}-pool"
 
-            parent_pool = await self.client.get(
-                kind=CoreIPPrefixPool,
-                name__value=parent_pool_name,
-            )
-            self.logger.info(
-                f"Allocating next IP prefix for pool '{pool_name}' (/{pool_size}) in parent '{parent_pool_name}'"
-            )
-            allocated_prefix = await self.client.allocate_next_ip_prefix(
-                resource_pool=parent_pool,
-                identifier=id,
-                prefix_length=pool_size,
-                branch="main",
-                data={
-                    "role": f"{pool_name if pool_name in ['management', 'technical', 'loopback'] else pool_name.split('-')[-1]}"
-                },
-            )
-
             pool_full_name = f"{pool_prefix}-{pool_name}-pool"
 
             # Determine if this is a prefix or address pool
@@ -135,37 +139,72 @@ class CommonGenerator(InfrahubGenerator):
                 strategy == "fabric" and pool_name in ["technical", "loopback"]
             ) or (strategy == "pod" and pool_name == "technical")
 
-            if is_prefix_pool:
-                new_pool = await self.client.create(
-                    kind=CoreIPPrefixPool,
-                    data={
-                        "name": pool_full_name,
-                        "default_prefix_type": "IpamPrefix",
-                        "default_prefix_length": pool_size,
-                        "ip_namespace": {"hfid": ["default"]},
-                        "identifier": id,
-                        "resources": [allocated_prefix],
-                    },
+            pool_kind = CoreIPPrefixPool if is_prefix_pool else CoreIPAddressPool
+
+            # IDEMPOTENCY: Check if pool already exists on main branch
+            existing_pool = await self.client.get(
+                kind=pool_kind,
+                name__value=pool_full_name,
+                branch="main",
+                raise_when_missing=False,
+            )
+
+            if existing_pool:
+                self.logger.info(
+                    f"- Pool [{pool_kind.__name__}] {pool_full_name} already exists, reusing"
                 )
+                new_pool = existing_pool
             else:
-                new_pool = await self.client.create(
-                    kind=CoreIPAddressPool,
+                # Pool doesn't exist, create it on main branch
+                parent_pool = await self.client.get(
+                    kind=CoreIPPrefixPool,
+                    name__value=parent_pool_name,
+                    branch="main",
+                )
+                self.logger.info(
+                    f"Allocating next IP prefix for pool '{pool_name}' (/{pool_size}) in parent '{parent_pool_name}'"
+                )
+                allocated_prefix = await self.client.allocate_next_ip_prefix(
+                    resource_pool=parent_pool,
+                    identifier=id,
+                    prefix_length=pool_size,
+                    branch="main",
                     data={
-                        "name": pool_full_name,
-                        "default_address_type": "IpamIPAddress",
-                        "default_prefix_length": pool_size,
-                        "ip_namespace": {"hfid": ["default"]},
-                        "identifier": id,
-                        "resources": [allocated_prefix],
+                        "role": f"{pool_name if pool_name in ['management', 'technical', 'loopback'] else pool_name.split('-')[-1]}"
                     },
                 )
 
-            await new_pool.save(allow_upsert=True)
+                if is_prefix_pool:
+                    new_pool = await self.client.create(
+                        kind=CoreIPPrefixPool,
+                        branch="main",
+                        data={
+                            "name": pool_full_name,
+                            "default_prefix_type": "IpamPrefix",
+                            "default_prefix_length": pool_size,
+                            "ip_namespace": {"hfid": ["default"]},
+                            "identifier": id,
+                            "resources": [allocated_prefix],
+                        },
+                    )
+                else:
+                    new_pool = await self.client.create(
+                        kind=CoreIPAddressPool,
+                        branch="main",
+                        data={
+                            "name": pool_full_name,
+                            "default_address_type": "IpamIPAddress",
+                            "default_prefix_length": pool_size,
+                            "ip_namespace": {"hfid": ["default"]},
+                            "identifier": id,
+                            "resources": [allocated_prefix],
+                        },
+                    )
+
+                await new_pool.save(allow_upsert=True)
+                self.logger.info(f"- Created [{pool_kind.__name__}] {new_pool.hfid}")
 
             # Map pool names to pod attributes
-            pool_kind = "CoreIPPrefixPool" if is_prefix_pool else "CoreIPAddressPool"
-            self.logger.info(f"- Created [{pool_kind}] {new_pool.hfid}")
-            # Update Pods
             pool_attribute_map = {
                 "loopback": "loopback_pool",
                 "technical": "prefix_pool",
@@ -223,10 +262,11 @@ class CommonGenerator(InfrahubGenerator):
 
         device_kind = DcimVirtualDevice if virtual else DcimPhysicalDevice
 
-        # # Fetch pools once
+        # Fetch pools once from main branch (pools are branch-agnostic)
         management_pool = await self.client.get(
             kind=CoreIPAddressPool,
             name__value=management_pool_name,
+            branch="main",
         )
 
         loopback_pool = None
@@ -234,6 +274,7 @@ class CommonGenerator(InfrahubGenerator):
             loopback_pool = await self.client.get(
                 kind=CoreIPAddressPool,
                 name__value=loopback_pool_name,
+                branch="main",
             )
 
         batch_devices = await self.client.create_batch()
@@ -454,8 +495,9 @@ class CommonGenerator(InfrahubGenerator):
                 DcimPhysicalInterface, id=dst_interface.id
             )
             if pool:
+                # Query technical pool from main branch (pools are branch-agnostic)
                 technical_pool = await self.client.get(
-                    kind=CoreIPPrefixPool, name__value=pool
+                    kind=CoreIPPrefixPool, name__value=pool, branch="main"
                 )
                 p2p_prefix = await self.client.allocate_next_ip_prefix(
                     resource_pool=technical_pool,

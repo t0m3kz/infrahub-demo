@@ -482,7 +482,7 @@ nodes:
         branch: agnostic
         identifier: "pod__loopback_pool"
         order_weight: 6000
-        on_delete: cascade
+        on_delete: no-action
       - name: prefix_pool
         peer: CoreIPPrefixPool
         kind: Attribute
@@ -491,7 +491,7 @@ nodes:
         optional: true
         identifier: "pod__prefix_pool"
         order_weight: 7000
-        on_delete: cascade
+        on_delete: no-action
 
   - name: Colocation
     namespace: Topology

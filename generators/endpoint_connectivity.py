@@ -2,7 +2,7 @@
 
 This generator connects endpoint devices (servers) to network infrastructure
 based on deployment type (middle_rack, tor, mixed). It follows deployment-aware
-routing logic with proper interface type matching and dual-homing support.
+routing logic with strict interface type matching and dual-homing support.
 """
 
 from __future__ import annotations
@@ -19,16 +19,17 @@ from .schema_protocols import DcimPhysicalDevice, DcimPhysicalInterface
 class EndpointConnectivityGenerator(CommonGenerator):
     """Generate connectivity for endpoint devices based on deployment patterns.
 
-    Deployment strategies:
-    - middle_rack: Connect to ToRs in same rack, fallback to ToRs in same row
-    - tor: Connect to ToR switches in same rack, fallback to same row
-    - mixed: Connect to ToR devices in same rack, fallback to middle rack leafs in same row
+    Deployment strategies with strict interface type matching:
+    - middle_rack: Primary: ToRs in same row (any rack) → Fallback: Leafs in network rack same row
+    - tor: Primary: ToRs in same rack → Fallback: ToRs in same row (other racks)
+    - mixed: Primary: ToRs in same rack → Fallback: Leafs in middle rack same row
 
     Features:
-    - Interface type and role matching (customer ↔ access)
+    - Strict interface type matching (e.g., 10gbase-x-sfpp connects only to 10gbase-x-sfpp)
+    - Interface role matching (customer ↔ access/downlink/peer)
     - Dual-homing across consecutive device pairs
-    - Idempotency via existing cable detection
-    - Uses CablingPlanner and CommonGenerator.create_cabling()
+    - Full idempotency via existing cable detection
+    - Enhanced logging with decision tree visibility
     """
 
     async def generate(self, data: dict[str, Any]) -> None:
@@ -85,20 +86,87 @@ class EndpointConnectivityGenerator(CommonGenerator):
     async def _connect_middle_rack_deployment(self) -> None:
         """Connect endpoint in middle_rack deployment.
 
-        Strategy: Server in compute rack connects to ToRs in the middle rack (network rack) in same row.
-        Middle_rack topology has one network rack per row containing ToR switches that serve compute racks.
+        Strategy:
+        1. Primary: Connect to ToRs in same row (any rack type) with strict interface type matching
+        2. Fallback: Connect to Leafs in network rack (middle rack) same row with strict interface type matching
+
+        Middle_rack topology has ToRs distributed across racks and Leafs in network rack.
         """
         # Safe to assert - validated in generate() before calling this method
         assert self.data.rack is not None, "Rack must be assigned"
 
         self.logger.info(
-            f"Endpoint {self.data.name} is in {self.data.rack.rack_type} rack "
-            f"(row {self.data.rack.row_index}), searching for ToRs in middle rack (network rack) in same row"
+            f"[middle_rack] Endpoint {self.data.name} in {self.data.rack.rack_type} rack "
+            f"(row {self.data.rack.row_index})"
         )
 
-        # In middle_rack deployment, ToRs are in the network rack, not the compute rack
-        # We need to find ToRs in the middle rack (rack_type=network) in the same row
+        # Primary: Try ToRs in same row (any rack)
+        self.logger.info(
+            f"[middle_rack] Primary strategy: Searching for ToRs in same row {self.data.rack.row_index}"
+        )
+        target_devices = await self._get_devices_in_row(
+            pod_id=self.data.rack.pod.id,
+            row_index=self.data.rack.row_index,
+            role="tor",
+        )
+
+        if target_devices:
+            self.logger.info(
+                f"[middle_rack] Found {len(target_devices)} ToR(s) in same row"
+            )
+            await self._create_endpoint_connections(target_devices, "tor")
+            return
+
+        # Fallback: Try Leafs in network rack (middle rack) same row
+        self.logger.info(
+            f"[middle_rack] No ToRs found in row. Fallback: Searching for Leafs in network rack (row {self.data.rack.row_index})"
+        )
         target_devices = await self._get_devices_in_middle_rack(
+            pod_id=self.data.rack.pod.id,
+            row_index=self.data.rack.row_index,
+            role="leaf",
+        )
+
+        if not target_devices:
+            self.logger.warning(
+                f"[middle_rack] No ToRs or Leafs found for endpoint {self.data.name} "
+                f"(row {self.data.rack.row_index})"
+            )
+            return
+
+        self.logger.info(
+            f"[middle_rack] Found {len(target_devices)} Leaf(s) in network rack same row"
+        )
+        await self._create_endpoint_connections(target_devices, "leaf")
+
+    async def _connect_tor_deployment(self) -> None:
+        """Connect endpoint in tor deployment.
+
+        Strategy:
+        1. Primary: Connect to ToR switches in same rack with strict interface type matching
+        2. Fallback: Connect to ToRs in same row (other racks) with strict interface type matching
+        """
+        # Safe to assert - validated in generate() before calling this method
+        assert self.data.rack is not None, "Rack must be assigned"
+
+        self.logger.info(
+            f"[tor] Endpoint {self.data.name} in rack {self.data.rack.name} (row {self.data.rack.row_index})"
+        )
+
+        # Primary: Try ToRs in same rack
+        self.logger.info("[tor] Primary strategy: Searching for ToRs in same rack")
+        target_devices = self._get_devices_in_rack(role="tor")
+
+        if target_devices:
+            self.logger.info(f"[tor] Found {len(target_devices)} ToR(s) in same rack")
+            await self._create_endpoint_connections(target_devices, "tor")
+            return
+
+        # Fallback: Try ToRs in same row (other racks)
+        self.logger.info(
+            f"[tor] No ToRs in same rack. Fallback: Searching for ToRs in same row {self.data.rack.row_index}"
+        )
+        target_devices = await self._get_devices_in_row(
             pod_id=self.data.rack.pod.id,
             row_index=self.data.rack.row_index,
             role="tor",
@@ -106,39 +174,11 @@ class EndpointConnectivityGenerator(CommonGenerator):
 
         if not target_devices:
             self.logger.warning(
-                f"No ToR devices found in middle rack for endpoint {self.data.name} "
-                f"(row {self.data.rack.row_index}, middle_rack deployment)"
+                f"[tor] No ToR devices found for endpoint {self.data.name}"
             )
             return
 
-        await self._create_endpoint_connections(target_devices, "tor")
-
-    async def _connect_tor_deployment(self) -> None:
-        """Connect endpoint in tor deployment.
-
-        Strategy: Connect to ToR switches in same rack, fallback to same row.
-        """
-        # Safe to assert - validated in generate() before calling this method
-        assert self.data.rack is not None, "Rack must be assigned"
-
-        target_devices = self._get_devices_in_rack(role="tor")
-
-        if not target_devices:
-            self.logger.info(
-                f"No ToRs in same rack for {self.data.name}, searching same row {self.data.rack.row_index}"
-            )
-            target_devices = await self._get_devices_in_row(
-                pod_id=self.data.rack.pod.id,
-                row_index=self.data.rack.row_index,
-                role="tor",
-            )
-
-        if not target_devices:
-            self.logger.warning(
-                f"No ToR devices found for endpoint {self.data.name} (tor deployment)"
-            )
-            return
-
+        self.logger.info(f"[tor] Found {len(target_devices)} ToR(s) in same row")
         await self._create_endpoint_connections(target_devices, "tor")
 
     async def _connect_mixed_deployment(self) -> None:
