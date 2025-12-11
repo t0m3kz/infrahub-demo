@@ -69,14 +69,18 @@ class CommonGenerator(InfrahubGenerator):
     ) -> None:
         """Ensure required per-pod / fabric pools exist (idempotent).
 
-        This method implements idempotent pool allocation:
-        - All pools are created on the main branch (branch-agnostic)
+        This method implements idempotent pool allocation with branch-aware resources:
+        - Pools and IP addresses are created on the current branch (branch-aware)
         - Checks for existing pools before creating new ones
         - Uses pod/fabric ID as consistent identifier for IP allocation
         - Re-running the generator produces the same pools and IPs
+        - Cascade deletion automatically cleans up pools when pods are deleted
 
-        The schema now uses on_delete: no-action for pool relationships,
-        preventing cascade deletion when branches are merged/deleted.
+        When merging branches, InfraHub handles resource migration:
+        - Resources move from feature branch to main during merge
+        - execute_after_merge flag triggers generator re-run on main
+        - Idempotent allocation reuses migrated resources
+        - No orphaned resources after branch deletion
 
         Args:
             strategy: Pool allocation strategy ("fabric" or "pod")
@@ -141,11 +145,11 @@ class CommonGenerator(InfrahubGenerator):
 
             pool_kind = CoreIPPrefixPool if is_prefix_pool else CoreIPAddressPool
 
-            # IDEMPOTENCY: Check if pool already exists on main branch
+            # IDEMPOTENCY: Check if pool already exists on current branch
             existing_pool = await self.client.get(
                 kind=pool_kind,
                 name__value=pool_full_name,
-                branch="main",
+                branch=self.branch,
                 raise_when_missing=False,
             )
 
@@ -155,11 +159,11 @@ class CommonGenerator(InfrahubGenerator):
                 )
                 new_pool = existing_pool
             else:
-                # Pool doesn't exist, create it on main branch
+                # Pool doesn't exist, create it on current branch
                 parent_pool = await self.client.get(
                     kind=CoreIPPrefixPool,
                     name__value=parent_pool_name,
-                    branch="main",
+                    branch=self.branch,
                 )
                 self.logger.info(
                     f"Allocating next IP prefix for pool '{pool_name}' (/{pool_size}) in parent '{parent_pool_name}'"
@@ -168,7 +172,7 @@ class CommonGenerator(InfrahubGenerator):
                     resource_pool=parent_pool,
                     identifier=id,
                     prefix_length=pool_size,
-                    branch="main",
+                    branch=self.branch,
                     data={
                         "role": f"{pool_name if pool_name in ['management', 'technical', 'loopback'] else pool_name.split('-')[-1]}"
                     },
@@ -177,7 +181,7 @@ class CommonGenerator(InfrahubGenerator):
                 if is_prefix_pool:
                     new_pool = await self.client.create(
                         kind=CoreIPPrefixPool,
-                        branch="main",
+                        branch=self.branch,
                         data={
                             "name": pool_full_name,
                             "default_prefix_type": "IpamPrefix",
@@ -190,7 +194,7 @@ class CommonGenerator(InfrahubGenerator):
                 else:
                     new_pool = await self.client.create(
                         kind=CoreIPAddressPool,
-                        branch="main",
+                        branch=self.branch,
                         data={
                             "name": pool_full_name,
                             "default_address_type": "IpamIPAddress",
@@ -262,11 +266,11 @@ class CommonGenerator(InfrahubGenerator):
 
         device_kind = DcimVirtualDevice if virtual else DcimPhysicalDevice
 
-        # Fetch pools once from main branch (pools are branch-agnostic)
+        # Fetch pools from current branch
         management_pool = await self.client.get(
             kind=CoreIPAddressPool,
             name__value=management_pool_name,
-            branch="main",
+            branch=self.branch,
         )
 
         loopback_pool = None
@@ -274,7 +278,7 @@ class CommonGenerator(InfrahubGenerator):
             loopback_pool = await self.client.get(
                 kind=CoreIPAddressPool,
                 name__value=loopback_pool_name,
-                branch="main",
+                branch=self.branch,
             )
 
         batch_devices = await self.client.create_batch()
@@ -325,7 +329,7 @@ class CommonGenerator(InfrahubGenerator):
                             resource_pool=management_pool,
                             identifier=name,
                             prefix_length=32,
-                            branch="main",
+                            branch=self.branch,
                             data={"description": f"Management IP for {name}"},
                         ),
                         "rack": {"id": rack} if rack else None,
@@ -350,7 +354,7 @@ class CommonGenerator(InfrahubGenerator):
                                     resource_pool=loopback_pool,
                                     identifier=name,
                                     prefix_length=32,
-                                    branch="main",
+                                    branch=self.branch,
                                     data={"description": f"Loopback IP for {name}"},
                                 )
                             ],
@@ -495,16 +499,16 @@ class CommonGenerator(InfrahubGenerator):
                 DcimPhysicalInterface, id=dst_interface.id
             )
             if pool:
-                # Query technical pool from main branch (pools are branch-agnostic)
+                # Query technical pool from current branch
                 technical_pool = await self.client.get(
-                    kind=CoreIPPrefixPool, name__value=pool, branch="main"
+                    kind=CoreIPPrefixPool, name__value=pool, branch=self.branch
                 )
                 p2p_prefix = await self.client.allocate_next_ip_prefix(
                     resource_pool=technical_pool,
                     identifier=link_identifier,
                     prefix_length=31,
                     member_type="address",
-                    branch="main",
+                    branch=self.branch,
                     data={
                         "role": "technical",
                         "is_pool": True,
@@ -520,7 +524,7 @@ class CommonGenerator(InfrahubGenerator):
                 src_ip = await self.client.create(
                     kind=IpamIPAddress,
                     address=str(next(host_addresses)) + "/31",
-                    branch="main",
+                    branch=self.branch,
                 )
                 await src_ip.save(allow_upsert=True)
                 updated_src_interface.ip_address = src_ip.id  # type: ignore
@@ -528,7 +532,7 @@ class CommonGenerator(InfrahubGenerator):
                 dst_ip = await self.client.create(
                     kind=IpamIPAddress,
                     address=str(next(host_addresses)) + "/31",
-                    branch="main",
+                    branch=self.branch,
                 )
                 await dst_ip.save(allow_upsert=True)
                 updated_dst_interface.ip_address = dst_ip.id  # type: ignore

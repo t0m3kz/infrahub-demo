@@ -9,7 +9,6 @@ nodes:
     label: IP Address
     icon: mdi:ip
     include_in_menu: false
-    branch: agnostic
     order_by:
       - address__value
     display_label: "{{address__value}}"
@@ -34,7 +33,6 @@ nodes:
     icon: mdi:ip-network
     include_in_menu: false
     label: Prefix
-    branch: agnostic
     order_by:
       - prefix__value
     display_label: "{{prefix__value}}"

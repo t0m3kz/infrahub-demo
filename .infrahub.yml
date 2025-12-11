@@ -174,7 +174,7 @@ generator_definitions:
     query: topology_dc
     class_name: DCTopologyGenerator
     execute_in_proposed_change: false
-    execute_after_merge: false
+    execute_after_merge: true  # Re-run after merge to update IP-device relationships
     parameters:
       name: name__value
   - name: generate_pod
@@ -183,7 +183,7 @@ generator_definitions:
     query: topology_pod
     class_name: PodTopologyGenerator
     execute_in_proposed_change: false
-    execute_after_merge: false
+    execute_after_merge: true  # Re-run after merge to update IP-device relationships
     parameters:
       name: name__value
   - name: generate_rack
@@ -192,7 +192,7 @@ generator_definitions:
     query: rack
     class_name: RackGenerator
     execute_in_proposed_change: false
-    execute_after_merge: false
+    execute_after_merge: true  # Re-run after merge to update IP-device relationships
     parameters:
       name: name__value
   - name: connect_endpoint
