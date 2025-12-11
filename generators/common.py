@@ -114,7 +114,6 @@ class CommonGenerator(InfrahubGenerator):
             parent_pool = await self.client.get(
                 kind=CoreIPPrefixPool,
                 name__value=parent_pool_name,
-                branch="main",
             )
             self.logger.info(
                 f"Allocating next IP prefix for pool '{pool_name}' (/{pool_size}) in parent '{parent_pool_name}'"
@@ -123,7 +122,6 @@ class CommonGenerator(InfrahubGenerator):
                 resource_pool=parent_pool,
                 identifier=id,
                 prefix_length=pool_size,
-                branch="main",
                 data={
                     "role": f"{pool_name if pool_name in ['management', 'technical', 'loopback'] else pool_name.split('-')[-1]}"
                 },
@@ -249,7 +247,6 @@ class CommonGenerator(InfrahubGenerator):
                 kind=device_kind,
                 name__values=device_names,
                 include=["member_of_groups"],
-                branch=self.branch,
             )
             existing_devices_map = {
                 device.name.value: device for device in existing_devices_list
@@ -285,13 +282,11 @@ class CommonGenerator(InfrahubGenerator):
                             resource_pool=management_pool,
                             identifier=name,
                             prefix_length=32,
-                            branch=self.branch,
                             data={"description": f"Management IP for {name}"},
                         ),
                         "rack": {"id": rack} if rack else None,
                         "member_of_groups": [{"id": group_id} for group_id in groups],
                     },
-                    branch=self.branch,
                 )
                 batch_devices.add(task=obj.save, allow_upsert=True, node=obj)
 
@@ -310,12 +305,10 @@ class CommonGenerator(InfrahubGenerator):
                                     resource_pool=loopback_pool,
                                     identifier=name,
                                     prefix_length=32,
-                                    branch=self.branch,
                                     data={"description": f"Loopback IP for {name}"},
                                 )
                             ],
                         },
-                        branch=self.branch,
                     )
                     batch_loopbacks.add(task=obj.save, allow_upsert=True, node=obj)
 
@@ -456,14 +449,13 @@ class CommonGenerator(InfrahubGenerator):
             )
             if pool:
                 technical_pool = await self.client.get(
-                    kind=CoreIPPrefixPool, name__value=pool, branch="main"
+                    kind=CoreIPPrefixPool, name__value=pool
                 )
                 p2p_prefix = await self.client.allocate_next_ip_prefix(
                     resource_pool=technical_pool,
                     identifier=link_identifier,  # Use stable ID-based identifier
                     prefix_length=31,
                     member_type="address",
-                    branch="main",
                     data={
                         "role": "technical",
                         "is_pool": True,
