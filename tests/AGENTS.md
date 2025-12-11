@@ -33,6 +33,17 @@ async def test_async_operation(httpx_mock: HTTPXMock):
     result = await client.execute(query="...")
     assert result is not None
 
+# Sync test
+def test_sync_operation():
+    client = InfrahubClientSync()
+    # ...
+
+# CLI test
+def test_cli_command():
+    runner = CliRunner()
+    result = runner.invoke(app, ["command", "--flag"])
+    assert result.exit_code == 0
+```
 
 ## Boundaries
 
