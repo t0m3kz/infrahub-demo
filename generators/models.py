@@ -143,8 +143,8 @@ class RackPod(BaseModel):
     amount_of_spines: int
     leaf_interface_sorting_method: str
     spine_interface_sorting_method: str
-    loopback_pool: Pool
-    prefix_pool: Pool
+    loopback_pool: Optional[Pool] = None
+    prefix_pool: Optional[Pool] = None
     deployment_type: str
     spine_template: Template
     maximum_leafs_per_row: Optional[int] = None

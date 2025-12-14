@@ -255,6 +255,15 @@ class RackGenerator(CommonGenerator):
         self.pod_name = pod.name.lower()
         self.fabric_name = dc.name.lower()
 
+        # Validate pools exist - they should be created by pod generator
+        # Failing fast prevents race conditions when multiple racks are created simultaneously
+        if not self.data.pod.loopback_pool or not self.data.pod.prefix_pool:
+            self.logger.error(
+                f"Rack {self.data.name}: Pod {pod.name} pools not found. "
+                f"Run pod generator first: infrahubctl generator generate_pod name={pod.name}"
+            )
+            return
+
         # Indexes for leaf devices (use row_index for middle rack leafs - one middle rack per row)
         leaf_indexes: list[int] = [
             dc.index,
