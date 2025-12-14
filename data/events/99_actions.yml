@@ -5,6 +5,12 @@ spec:
   kind: CoreNodeTriggerRule
   data:
 
+    - name: trigger-dc-generator-on-merge
+      branch_scope: "default_branch"
+      node_kind: TopologyDataCenter
+      mutation_action: "created"
+      action: run-dc-generator
+
     - name: trigger-dc-generator-update-super-spines
       branch_scope: "other_branches"
       node_kind: TopologyDataCenter
@@ -48,6 +54,12 @@ spec:
         data:
           - relationship_name: children
             modification_type: updated
+
+    - name: trigger-pod-generator-on-merge
+      branch_scope: "default_branch"
+      node_kind: TopologyPod
+      mutation_action: "created"
+      action: run-pod-generator
 
     - name: trigger-pod-generator-update-checksum
       branch_scope: "other_branches"
