@@ -13,9 +13,30 @@ class RackGenerator(CommonGenerator):
     """Generator for creating rack infrastructure based on fabric templates."""
 
     async def update_checksum(self) -> None:
-        """Update checksum for racks in the pod with optional filtering."""
+        """Update checksum for ToR racks in same row (mixed mode only).
+        
+        Verifies middle rack leafs exist before updating ToR checksums.
+        """
+        deployment_type = self.data.pod.deployment_type
+        
+        # Only update ToR racks in mixed deployment mode
+        if deployment_type != "mixed":
+            return
 
-        # Query racks, optionally filtered by rack_type
+        # Verify leafs were created in this rack before cascading to ToR racks
+        middle_rack_leafs = await self.client.filters(
+            kind=DcimPhysicalDevice,
+            role__value="leaf",
+            rack__ids=[self.data.id],
+        )
+        
+        if not middle_rack_leafs:
+            self.logger.warning(
+                f"Middle rack {self.data.name} has no leafs - skipping ToR cascade"
+            )
+            return
+
+        # Query ToR racks in same row
         racks = await self.client.filters(
             kind=LocationRack,
             pod__ids=[self.data.pod.id],

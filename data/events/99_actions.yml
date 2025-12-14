@@ -5,6 +5,50 @@ spec:
   kind: CoreNodeTriggerRule
   data:
 
+    - name: trigger-dc-generator-update-checksum
+      branch_scope: "other_branches"
+      node_kind: TopologyDatacenterFabric
+      mutation_action: "updated"
+      action: run-dc-generator
+      matches:
+        kind: CoreNodeTriggerAttributeMatch
+        data:
+          - attribute_name: checksum
+            value_match: any
+
+    - name: trigger-dc-generator-update-super-spines
+      branch_scope: "other_branches"
+      node_kind: TopologyDatacenterFabric
+      mutation_action: "updated"
+      action: run-dc-generator
+      matches:
+        kind: CoreNodeTriggerAttributeMatch
+        data:
+          - attribute_name: amount_of_super_spines
+            value_match: any
+
+    - name: trigger-dc-generator-update-fabric-group
+      branch_scope: "other_branches"
+      node_kind: TopologyDatacenterFabric
+      mutation_action: "updated"
+      action: run-dc-generator
+      matches:
+        kind: CoreNodeTriggerRelationshipMatch
+        data:
+          - relationship_name: fabric_group
+            modification_type: updated
+
+    - name: trigger-dc-generator-update-device-naming
+      branch_scope: "other_branches"
+      node_kind: TopologyDatacenterFabric
+      mutation_action: "updated"
+      action: run-dc-generator
+      matches:
+        kind: CoreNodeTriggerRelationshipMatch
+        data:
+          - relationship_name: device_naming
+            modification_type: updated
+
     - name: trigger-pod-generator-update-checksum
       branch_scope: "other_branches"
       node_kind: TopologyPod
@@ -91,5 +135,37 @@ spec:
         kind: CoreNodeTriggerRelationshipMatch
         data:
           - relationship_name: fabric_templates
-            peer: any
             modification_type: updated
+
+    - name: trigger-endpoint-connectivity-server-placement
+      branch_scope: "other_branches"
+      node_kind: TopologyServer
+      mutation_action: "updated"
+      action: run-endpoint-connectivity
+      matches:
+        kind: CoreNodeTriggerRelationshipMatch
+        data:
+          - relationship_name: placement
+            modification_type: updated
+
+    - name: trigger-endpoint-connectivity-endpoint-placement
+      branch_scope: "other_branches"
+      node_kind: TopologyEndpoint
+      mutation_action: "updated"
+      action: run-endpoint-connectivity
+      matches:
+        kind: CoreNodeTriggerRelationshipMatch
+        data:
+          - relationship_name: placement
+            modification_type: updated
+
+    - name: trigger-endpoint-connectivity-connectivity-type
+      branch_scope: "other_branches"
+      node_kind: TopologyEndpoint
+      mutation_action: "updated"
+      action: run-endpoint-connectivity
+      matches:
+        kind: CoreNodeTriggerAttributeMatch
+        data:
+          - attribute_name: connectivity_type
+            value_match: any
