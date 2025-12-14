@@ -212,6 +212,13 @@ class RackDevice(BaseModel):
     interfaces: List[EndpointInterface] = []
 
 
+class EndpointDataCenter(BaseModel):
+    """Data center information for deployment context."""
+
+    id: str
+    name: str
+
+
 class EndpointPod(BaseModel):
     """Pod information for deployment context."""
 
@@ -219,6 +226,7 @@ class EndpointPod(BaseModel):
     name: str
     deployment_type: str
     index: int
+    parent: EndpointDataCenter
 
 
 class EndpointRack(BaseModel):

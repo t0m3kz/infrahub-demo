@@ -52,8 +52,11 @@ class EndpointConnectivityGenerator(CommonGenerator):
             return
 
         deployment_type = self.data.rack.pod.deployment_type
-        pod_name = self.data.rack.pod.name.lower()
+        self.pod_name = self.data.rack.pod.name.lower()
         pod_id = self.data.rack.pod.id
+        dc = self.data.rack.pod.parent
+        self.deployment_id = dc.id
+        self.fabric_name = dc.name.lower()
 
         self.logger.info(
             f"Generating connectivity for endpoint {self.data.name} in {deployment_type} deployment"
@@ -69,7 +72,9 @@ class EndpointConnectivityGenerator(CommonGenerator):
         if current_deployment != pod_id:
             endpoint_device.deployment = pod_id  # type: ignore
             await endpoint_device.save()
-            self.logger.info(f"Updated {self.data.name} deployment to pod {pod_name}")
+            self.logger.info(
+                f"Updated {self.data.name} deployment to pod {self.pod_name}"
+            )
 
         if deployment_type == "middle_rack":
             await self._connect_middle_rack_deployment()

@@ -652,3 +652,9 @@ nodes:
         max_count: 2
         kind: Attribute
         on_delete: no-action
+      - name: deployment
+        peer: TopologyDeployment
+        cardinality: one
+        optional: true
+        kind: Attribute
+        order_weight: 2000

@@ -14,11 +14,11 @@ class RackGenerator(CommonGenerator):
 
     async def update_checksum(self) -> None:
         """Update checksum for ToR racks in same row (mixed mode only).
-        
+
         Verifies middle rack leafs exist before updating ToR checksums.
         """
         deployment_type = self.data.pod.deployment_type
-        
+
         # Only update ToR racks in mixed deployment mode
         if deployment_type != "mixed":
             return
@@ -29,7 +29,7 @@ class RackGenerator(CommonGenerator):
             role__value="leaf",
             rack__ids=[self.data.id],
         )
-        
+
         if not middle_rack_leafs:
             self.logger.warning(
                 f"Middle rack {self.data.name} has no leafs - skipping ToR cascade"
@@ -250,9 +250,10 @@ class RackGenerator(CommonGenerator):
             self.client.group_context.related_node_ids.append(device.id)
 
         dc = self.data.pod.parent
+        self.deployment_id = dc.id  # Store for cable linking
         pod = self.data.pod
-        pod_name = pod.name.lower()
-        fabric_name = dc.name.lower()
+        self.pod_name = pod.name.lower()
+        self.fabric_name = dc.name.lower()
 
         # Indexes for leaf devices (use row_index for middle rack leafs - one middle rack per row)
         leaf_indexes: list[int] = [
@@ -290,8 +291,6 @@ class RackGenerator(CommonGenerator):
                 template=leaf_role.template.model_dump(),
                 naming_convention=naming_conv,
                 options={
-                    "pod_name": pod_name,
-                    "fabric_name": fabric_name,
                     "indexes": leaf_indexes,
                     "allocate_loopback": True,
                     "rack": self.data.id,
@@ -331,7 +330,6 @@ class RackGenerator(CommonGenerator):
                     "cabling_offset": cabling_offset,
                     "top_sorting": pod.spine_interface_sorting_method,
                     "bottom_sorting": pod.leaf_interface_sorting_method,
-                    "pool": f"{pod_name}-technical-pool",
                 },
             )
 
@@ -347,8 +345,6 @@ class RackGenerator(CommonGenerator):
                 template=tor_role.template.model_dump(),
                 naming_convention=naming_conv,
                 options={
-                    "pod_name": pod_name,
-                    "fabric_name": fabric_name,
                     "indexes": tor_indexes,
                     "allocate_loopback": False,
                     "rack": self.data.id,
@@ -394,7 +390,6 @@ class RackGenerator(CommonGenerator):
                                 "cabling_offset": cabling_offset,
                                 "top_sorting": pod.leaf_interface_sorting_method,
                                 "bottom_sorting": "sequential",
-                                "pool": f"{pod_name}-technical-pool",
                             },
                         )
                     else:
@@ -436,7 +431,6 @@ class RackGenerator(CommonGenerator):
                             "cabling_offset": cabling_offset,
                             "top_sorting": pod.spine_interface_sorting_method,
                             "bottom_sorting": "sequential",
-                            "pool": f"{pod_name}-technical-pool",
                         },
                     )
                 else:
@@ -467,7 +461,6 @@ class RackGenerator(CommonGenerator):
                             "cabling_offset": cabling_offset,
                             "top_sorting": pod.leaf_interface_sorting_method,
                             "bottom_sorting": "sequential",
-                            "pool": f"{pod_name}-technical-pool",
                         },
                     )
                 else:
@@ -504,7 +497,6 @@ class RackGenerator(CommonGenerator):
                                 "cabling_offset": cabling_offset,
                                 "top_sorting": pod.leaf_interface_sorting_method,
                                 "bottom_sorting": "sequential",
-                                "pool": f"{pod_name}-technical-pool",
                             },
                         )
                     else:

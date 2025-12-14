@@ -33,7 +33,17 @@ T = TypeVar("T", bound=BaseModel)
 class CommonGenerator(InfrahubGenerator):
     """
     An extended InfrahubGenerator with helper methods for creating objects.
+
+    Instance variables set during generate() lifecycle:
+        deployment_id: Root deployment (DC/POP) ID for linking cables (required)
+        fabric_name: Fabric/DC name (lowercase) for pool and device naming (required)
+        pod_name: Pod name (lowercase) for pool naming (optional, only in pod/rack generators)
     """
+
+    # Instance variables - must be set in generate() before calling helper methods
+    deployment_id: str = ""  # Required: set to DC/POP ID
+    fabric_name: str = ""  # Required: set to fabric/DC name
+    pod_name: Optional[str] = None  # Optional: only for pod/rack generators
 
     def calculate_checksum(self) -> str:
         """Calculate a SHA256 checksum based on configuration data.
@@ -63,8 +73,6 @@ class CommonGenerator(InfrahubGenerator):
         strategy: Literal["fabric", "pod"],
         pools: dict[str, Any],
         id: str,
-        fabric_name: str,
-        pod_name: Optional[str] = None,
         ipv6: Optional[bool] = False,
     ) -> None:
         """Ensure required per-pod / fabric pools exist.
@@ -75,13 +83,16 @@ class CommonGenerator(InfrahubGenerator):
           normalizes it to a FabricPoolConfig internally for deterministic behavior.
         - It intentionally returns None: creation is a side-effect. Actual address/prefix
           allocation is performed later by generators which will fetch pools by name.
+        - Uses self.fabric_name and self.pod_name (if set) from instance variables.
         """
         # Local import to avoid runtime cycles during type-checking
         from .helpers import FabricPoolConfig
 
         self.logger.info("Implementing resource pools")
 
-        pool_prefix = f"{pod_name}" if pod_name else fabric_name
+        fabric_name = self.fabric_name
+        pod_name = self.pod_name
+        pool_prefix = pod_name if pod_name else fabric_name
 
         # Create a new dictionary with only the keys that FabricPoolConfig expects
         valid_keys = [
@@ -186,11 +197,14 @@ class CommonGenerator(InfrahubGenerator):
         naming_convention: Literal["standard", "hierarchical", "flat"] = "flat",
         options: Optional[dict] = None,
     ) -> list[str]:
-        """Create devices using a consolidated options dict and batch creation."""
+        """Create devices using a consolidated options dict and batch creation.
+
+        Uses self.fabric_name and self.pod_name (if set) from instance variables.
+        """
         # Normalize options
         options = options or {}
-        pod_name: str = options.get("pod_name", "")
-        fabric_name: str = options.get("fabric_name", "")
+        fabric_name = self.fabric_name
+        pod_name = self.pod_name or ""
         virtual: bool = bool(options.get("virtual", False))
         indexes: Optional[list[int]] = options.get("indexes", None)
         allocate_loopback: bool = bool(options.get("allocate_loopback", False))
@@ -350,7 +364,12 @@ class CommonGenerator(InfrahubGenerator):
         bottom_sorting: Literal["top_down", "bottom_up"] = "bottom_up"
         top_sorting: Literal["top_down", "bottom_up"] = "bottom_up"
         cabling_offset: int = int(options.get("cabling_offset", 0))
-        pool: Any = options.get("pool")
+        # Get pool from options or construct from pod_name
+        pool: Any = options.get("pool") or (
+            f"{self.pod_name}-technical-pool" if self.pod_name else None
+        )
+        # Access deployment_id from instance variable (required, set in generate methods)
+        deployment_id = self.deployment_id
 
         self.logger.info(
             f"Creating cabling between {len(bottom_devices)} bottom and {len(top_devices)} top devices "
@@ -436,6 +455,7 @@ class CommonGenerator(InfrahubGenerator):
                     "name": name,
                     "type": "mmf",
                     "endpoints": [src_interface.id, dst_interface.id],
+                    "deployment": deployment_id,
                 },
             )
             await network_link.save(allow_upsert=True)

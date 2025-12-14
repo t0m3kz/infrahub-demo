@@ -13,6 +13,3 @@ spec:
     - name: run-rack-generator
       description: Run Rack Generator
       generator: generate_rack
-    # - name: run-endpoint-connectivity
-    #   description: Run Endpoint Connectivity Generator
-    #   generator: endpoint_connectivity

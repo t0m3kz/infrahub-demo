@@ -54,6 +54,12 @@ fragment PodFields on TopologyPod {
   name { value }
   deployment_type { value }
   index { value }
+  parent {
+    node {
+      id
+      name { value }
+    }
+  }
 }
 
 fragment RackFields on LocationRack {

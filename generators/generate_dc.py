@@ -55,19 +55,21 @@ class DCTopologyGenerator(CommonGenerator):
             self.client.group_context.related_node_ids.append(pod.id)
 
         dc_id = self.data.id
-        dc_name = self.data.name.lower()
+        self.deployment_id = dc_id  # Store for cable linking
+        self.fabric_name = self.data.name.lower()
         dc_index = self.data.index  # Get DC index for unique device naming
         amount_of_super_spines = self.data.amount_of_super_spines
         super_spine_template = self.data.super_spine_template
         design = self.data.design_pattern
-        self.logger.info(f"Generating topology for data center {dc_name.upper()}")
+        self.logger.info(
+            f"Generating topology for data center {self.fabric_name.upper()}"
+        )
         indexes: list[int] = [dc_index]
 
         await self.allocate_resource_pools(
             id=dc_id,
             strategy="fabric",
             pools=design.model_dump(),
-            fabric_name=dc_name,
             ipv6=self.data.underlay,
         )
 
@@ -81,8 +83,6 @@ class DCTopologyGenerator(CommonGenerator):
                 (design.naming_convention or "standard").lower(),
             ),
             options={
-                "name_prefix": dc_name,
-                "fabric_name": dc_name,
                 "indexes": indexes,
                 "allocate_loopback": True,
             },

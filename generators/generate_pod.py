@@ -68,8 +68,9 @@ class PodTopologyGenerator(CommonGenerator):
 
         pod_id = self.data.id
         dc = self.data.parent
-        pod_name = self.data.name.lower()
-        fabric_name = dc.name.lower()
+        self.deployment_id = dc.id  # Store for cable linking
+        self.pod_name = self.data.name.lower()
+        self.fabric_name = dc.name.lower()
         design = dc.design_pattern
         indexes: list[int] = [dc.index or 1, self.data.index]
 
@@ -77,8 +78,6 @@ class PodTopologyGenerator(CommonGenerator):
             id=pod_id,
             strategy="pod",
             pools=design.model_dump() if design else {},
-            pod_name=pod_name,
-            fabric_name=fabric_name,
         )
 
         naming_conv = cast(
@@ -93,9 +92,6 @@ class PodTopologyGenerator(CommonGenerator):
             template=self.data.spine_template.model_dump(),
             naming_convention=naming_conv,
             options={
-                "name_prefix": fabric_name,
-                "fabric_name": fabric_name,
-                "pod_name": pod_name,
                 "indexes": indexes,
                 "allocate_loopback": True,
             },
@@ -136,7 +132,6 @@ class PodTopologyGenerator(CommonGenerator):
                 ),
                 "top_sorting": self.data.spine_interface_sorting_method,
                 "bottom_sorting": self.data.spine_interface_sorting_method,
-                "pool": f"{pod_name}-technical-pool",
             },
         )
 
