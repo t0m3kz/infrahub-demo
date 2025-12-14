@@ -67,6 +67,8 @@ query PodGeneratorQuery($name: String!) {
         leaf_interface_sorting_method { value }
         spine_interface_sorting_method { value }
         spine_template { node { ...DeviceTemplateFields } }
+        loopback_pool { node { id } }
+        prefix_pool { node { id } }
         spine_count: devices(role__value: "spine") {
           count
         }

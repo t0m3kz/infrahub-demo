@@ -82,16 +82,6 @@ spec:
           - attribute_name: deployment_type
             value_match: any
 
-    - name: trigger-rack-generator-on-create
-      branch_scope: "other_branches"
-      node_kind: LocationRack
-      mutation_action: "created"
-      action: run-rack-generator
-      matches:
-        kind: CoreNodeTriggerRelationshipMatch
-        data:
-          - relationship_name: pod
-            modification_type: added
 
     - name: trigger-rack-generator-update-checksum
       branch_scope: "other_branches"
