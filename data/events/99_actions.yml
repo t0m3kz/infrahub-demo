@@ -38,6 +38,17 @@ spec:
           - relationship_name: super_spine_template
             modification_type: updated
 
+    - name: trigger-dc-generator-update-pod
+      branch_scope: "other_branches"
+      node_kind: TopologyDataCenter
+      mutation_action: updated
+      action: run-dc-generator
+      matches:
+        kind: CoreNodeTriggerRelationshipMatch
+        data:
+          - relationship_name: children
+            modification_type: updated
+
     - name: trigger-pod-generator-update-checksum
       branch_scope: "other_branches"
       node_kind: TopologyPod

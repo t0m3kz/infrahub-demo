@@ -182,9 +182,12 @@ class CommonGenerator(InfrahubGenerator):
             }
 
             if pod and pool_name in pool_attribute_map:
-                setattr(pod, pool_attribute_map[pool_name], new_pool.id)
+                # Use hfid (name) reference for merge-safe pool assignment
+                # Pool name is deterministic (e.g., "dc1-pod1-loopback-pool")
+                # After merge, InfraHub resolves hfid to the pool with that name on target branch
+                setattr(pod, pool_attribute_map[pool_name], {"hfid": [pool_full_name]})
                 self.logger.info(
-                    f"- Updated pod {pod.name.value} with {new_pool.name.value} pool"
+                    f"- Updated pod {pod.name.value} with pool {pool_full_name}"
                 )
                 await pod.save(allow_upsert=True)
 
