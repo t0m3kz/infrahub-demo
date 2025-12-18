@@ -94,6 +94,73 @@
 {%- endfor -%}
 {%- endif %}
 
+{%- set vxlan_tunnel = {} -%}
+{%- if vxlan and vxlan.enabled -%}
+{%- set _ = vxlan_tunnel.update({
+  vxlan.vxlan_interface: {
+    'src_ip': vxlan.vtep.ipv4
+  }
+}) -%}
+{%- endif %}
+
+{%- set vxlan_tunnel_map = {} -%}
+{%- if vxlan and vxlan.enabled -%}
+{%- if vxlan.l2_vni_mappings -%}
+{%- for mapping in vxlan.l2_vni_mappings -%}
+{%- set key = vxlan.vxlan_interface + '|map_' + mapping.vni|string + '_Vlan' + mapping.vlan_id|string -%}
+{%- set _ = vxlan_tunnel_map.update({
+  key: {
+    'vlan': 'Vlan' + mapping.vlan_id|string,
+    'vni': mapping.vni|string
+  }
+}) -%}
+{%- endfor -%}
+{%- endif -%}
+{%- if vxlan.l3_vni_mappings -%}
+{%- for mapping in vxlan.l3_vni_mappings -%}
+{%- set key = vxlan.vxlan_interface + '|map_' + mapping.l3_vni|string + '_' + mapping.vrf_name -%}
+{%- set _ = vxlan_tunnel_map.update({
+  key: {
+    'vrf': mapping.vrf_name,
+    'vni': mapping.l3_vni|string
+  }
+}) -%}
+{%- endfor -%}
+{%- endif -%}
+{%- endif %}
+
+{%- set vrf_config = {} -%}
+{%- if vxlan and vxlan.enabled and vxlan.l3_vni_mappings -%}
+{%- for mapping in vxlan.l3_vni_mappings -%}
+{%- set _ = vrf_config.update({
+  mapping.vrf_name: {
+    'vni': mapping.l3_vni|string
+  }
+}) -%}
+{%- endfor -%}
+{%- endif %}
+
+{%- set vrf_loopback_interfaces = {} -%}
+{%- if vxlan and vxlan.enabled and vxlan.vrf_loopbacks -%}
+{%- for loopback in vxlan.vrf_loopbacks -%}
+{%- set key = loopback.name + '|' + loopback.ip + '/32' -%}
+{%- set _ = vrf_loopback_interfaces.update({
+  key: {
+    'vrf_name': loopback.vrf
+  }
+}) -%}
+{%- endfor -%}
+{%- endif %}
+
+{%- set evpn_nvo = {} -%}
+{%- if vxlan and vxlan.enabled and vxlan.evpn and vxlan.evpn.enabled -%}
+{%- set _ = evpn_nvo.update({
+  'nvo1': {
+    'source_vtep': vxlan.vxlan_interface
+  }
+}) -%}
+{%- endif %}
+
 {{ {
   'DEVICE_METADATA': device_metadata,
   'VLAN': vlan_config,
@@ -103,5 +170,10 @@
   'VLAN_INTERFACE': vlan_interfaces,
   'BGP_NEIGHBOR': bgp_neighbors,
   'BGP_GLOBALS': bgp_globals,
-  'OSPF_ROUTER': ospf_router
+  'OSPF_ROUTER': ospf_router,
+  'VXLAN_TUNNEL': vxlan_tunnel,
+  'VXLAN_TUNNEL_MAP': vxlan_tunnel_map,
+  'VRF': vrf_config,
+  'LOOPBACK_INTERFACE': dict(list(loopback_interfaces.items()) + list(vrf_loopback_interfaces.items())),
+  'EVPN_NVO': evpn_nvo
 } | tojson(indent=2) }}

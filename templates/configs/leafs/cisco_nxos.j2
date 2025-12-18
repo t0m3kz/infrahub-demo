@@ -92,6 +92,51 @@ router bgp {{ bgp_config.local_as.asn }}
 !
 {%- endfor %}
 !
+{%- if vxlan and vxlan.enabled %}
+!
+! VXLAN Configuration (netlab-style multivendor)
+!
+{%- for feature in vxlan.features %}
+feature {{ feature }}
+{%- endfor %}
+!
+interface {{ vxlan.nve_interface }}
+{%- if vxlan.vtep.ipv4 %}
+  source-interface {{ vxlan.vtep.source_interface }}
+{%- endif %}
+{%- for mapping in vxlan.vni_mappings %}
+  member vni {{ mapping.vni }}
+    {%- if vxlan.evpn and vxlan.evpn.enabled %}
+    ingress-replication protocol bgp
+    {%- elif vxlan.flooding == "static" and vxlan.remote_vteps %}
+    ingress-replication protocol static
+      peer-list {{ vxlan.remote_vteps | join(' ') }}
+    {%- endif %}
+{%- endfor %}
+  no shutdown
+!
+{%- if vxlan.evpn and vxlan.evpn.enabled %}
+!
+! EVPN Configuration
+!
+evpn
+{%- for mapping in vxlan.vni_mappings %}
+  vni {{ mapping.vni }} l2
+    rd {{ vxlan.evpn.rd_format }}
+    route-target import {{ bgp[0].local_as.asn }}:{{ mapping.vni }}
+    route-target export {{ bgp[0].local_as.asn }}:{{ mapping.vni }}
+{%- endfor %}
+!
+{%- endif %}
+!
+! VLAN to VNI mapping
+!
+{%- for mapping in vxlan.vni_mappings %}
+vlan {{ mapping.vlan_id }}
+  vn-segment {{ mapping.vni }}
+{%- endfor %}
+{%- endif %}
+!
 ! Management
 line console
 line vty

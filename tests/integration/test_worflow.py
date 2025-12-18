@@ -1,3 +1,78 @@
+"""Integration smoke workflow.
+
+This revives the previously-disabled workflow test with a minimal, reliable set
+of assertions:
+- load schemas (base + extensions)
+- load menu
+- load bootstrap objects
+- verify a known bootstrap object exists
+
+The test is intentionally opt-in. Enable with either:
+- env var: INFRAHUB_RUN_INTEGRATION=1
+- pytest flag: --run-integration
+"""
+
+from __future__ import annotations
+
+import logging
+
+import pytest
+from infrahub_sdk import InfrahubClientSync
+
+from .conftest import TestInfrahubDockerWithClient
+
+
+pytestmark = pytest.mark.integration
+
+
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+
+
+class TestWorkflowSmoke(TestInfrahubDockerWithClient):
+	"""Smoke test: bootstrap the demo into a fresh Infrahub."""
+
+	def test_01_load_schemas(self, client_main: InfrahubClientSync) -> None:
+		"""Load schemas (base + extensions)."""
+
+		for cmd in (
+			"uv run infrahubctl schema load schemas/base --branch main --wait 120",
+			"uv run infrahubctl schema load schemas/extensions --branch main --wait 120",
+		):
+			result = self.execute_command(cmd, address=client_main.config.address)
+			logging.info("Schema load stdout: %s", result.stdout)
+			logging.info("Schema load stderr: %s", result.stderr)
+			assert result.returncode == 0, (
+				f"Schema load failed for command: {cmd}\n{result.stdout}\n{result.stderr}"
+			)
+
+	def test_02_load_menu(self, client_main: InfrahubClientSync) -> None:
+		"""Load menu definitions."""
+
+		cmd = "uv run infrahubctl menu load menu --branch main"
+		result = self.execute_command(cmd, address=client_main.config.address)
+		logging.info("Menu load stdout: %s", result.stdout)
+		logging.info("Menu load stderr: %s", result.stderr)
+		assert result.returncode == 0, f"Menu load failed:\n{result.stdout}\n{result.stderr}"
+
+	def test_03_load_bootstrap(self, client_main: InfrahubClientSync) -> None:
+		"""Load bootstrap objects (groups/locations/etc)."""
+
+		cmd = "uv run infrahubctl object load data/bootstrap/ --branch main"
+		result = self.execute_command(cmd, address=client_main.config.address)
+		logging.info("Bootstrap load stdout: %s", result.stdout)
+		logging.info("Bootstrap load stderr: %s", result.stderr)
+		assert result.returncode == 0, (
+			f"Bootstrap load failed:\n{result.stdout}\n{result.stderr}"
+		)
+
+	def test_04_verify_bootstrap_group(self, client_main: InfrahubClientSync) -> None:
+		"""Verify a known bootstrap object exists."""
+
+		group = client_main.get("CoreStandardGroup", name__value="leafs")
+		assert group is not None
+		assert group.name.value == "leafs"
+
+
 # # pyright: reportAttributeAccessIssue=false
 # """Integration test for the DC-3 demo workflow.
 

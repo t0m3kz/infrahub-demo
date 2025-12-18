@@ -83,6 +83,91 @@ router bgp {{ bgp_config.local_as.asn }}
 {% endfor %}
 {%- endif %}
 
+{%- if vxlan and vxlan.enabled %}
+!
+! VXLAN Configuration with Microsegmentation (VRF-aware VNIs)
+!
+{%- if vxlan.microsegmentation and vxlan.microsegmentation.enabled %}
+! Microsegmentation enabled: {{ vxlan.microsegmentation.vrf_count }} VRF(s) for tenant isolation
+{%- endif %}
+!
+interface {{ vxlan.vxlan_interface }}
+{%- if vxlan.vtep.ipv4 %}
+  source {{ vxlan.vtep.source_interface }}
+{%- endif %}
+{%- if vxlan.l2_vni_mappings %}
+  !
+  ! L2 VNI Mappings (VLAN segments)
+{%- for mapping in vxlan.l2_vni_mappings %}
+  map vni {{ mapping.vni }} vlan {{ mapping.vlan_id }}
+{%- endfor %}
+{%- endif %}
+{%- if vxlan.l3_vni_mappings %}
+  !
+  ! L3 VNI Mappings (VRF segments for microsegmentation)
+{%- for mapping in vxlan.l3_vni_mappings %}
+  map vni {{ mapping.l3_vni }} vrf {{ mapping.vrf_name }}
+{%- endfor %}
+{%- endif %}
+  no shutdown
+!
+{%- if vxlan.l3_vni_mappings %}
+!
+! VRF Definitions (Microsegmentation)
+!
+{%- for mapping in vxlan.l3_vni_mappings %}
+vrf {{ mapping.vrf_name }}
+  description {{ mapping.description | default('Tenant VRF for microsegmentation') }}
+!
+{%- endfor %}
+{%- endif %}
+{%- if vxlan.vrf_loopbacks %}
+!
+! VRF Loopback Interfaces
+!
+{%- for loopback in vxlan.vrf_loopbacks %}
+interface {{ loopback.name }}
+  description VRF {{ loopback.vrf }} L3VNI {{ loopback.l3_vni }}
+  vrf forwarding {{ loopback.vrf }}
+{%- if loopback.ip %}
+  ip address {{ loopback.ip }}/32
+{%- endif %}
+  no shutdown
+!
+{%- endfor %}
+{%- endif %}
+{%- if vxlan.evpn and vxlan.evpn.enabled %}
+!
+! EVPN Configuration (FRR)
+!
+router bgp {{ bgp[0].local_as.asn }}
+  address-family l2vpn evpn
+    advertise-all-vni
+{%- if vxlan.l2_vni_mappings %}
+    !
+    ! L2 VNI EVPN Configuration
+{%- for mapping in vxlan.l2_vni_mappings %}
+    vni {{ mapping.vni }}
+      rd {{ vxlan.evpn.rd_format | replace('{vni}', mapping.vni | string) }}
+      route-target import {{ bgp[0].local_as.asn }}:{{ mapping.vni }}
+      route-target export {{ bgp[0].local_as.asn }}:{{ mapping.vni }}
+{%- endfor %}
+{%- endif %}
+{%- if vxlan.l3_vni_mappings %}
+    !
+    ! L3 VNI EVPN Configuration (VRF-aware)
+{%- for mapping in vxlan.l3_vni_mappings %}
+    vni {{ mapping.l3_vni }}
+      rd {{ vxlan.evpn.rd_format | replace('{vni}', mapping.l3_vni | string) }}
+      route-target import {{ bgp[0].local_as.asn }}:{{ mapping.l3_vni }}
+      route-target export {{ bgp[0].local_as.asn }}:{{ mapping.l3_vni }}
+{%- endfor %}
+{%- endif %}
+  exit-address-family
+!
+{%- endif %}
+{%- endif %}
+
 ! Configure route-maps
 route-map RM-CONN-2-BGP permit 10
   match interface Loopback0

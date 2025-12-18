@@ -337,32 +337,21 @@ class CablingPlanner:
         if num_top_devices == 0:
             return cabling_plan
 
-        # Detect existing connections for idempotency
+        # Detect existing connections for idempotency.
+        #
+        # Previous implementation was both expensive (nested scans across all top interfaces)
+        # and could mis-identify connections. We instead leverage the deterministic cable
+        # naming format produced by CommonGenerator.create_cabling():
+        #   "<devA>-<intfA>__<devB>-<intfB>"
+        # and extract the peer device names directly from the cable name.
         existing_top_devices_per_bottom: dict[str, set[str]] = {}
+        top_device_set = set(sorted_top_devices)
 
         for bottom_device in sorted_bottom_devices:
-            connected_top_devices = set()
-            bottom_interfaces = self.bottom_by_device[bottom_device]
-
-            for bottom_intf in bottom_interfaces:
-                if hasattr(bottom_intf, "cable") and bottom_intf.cable is not None:
-                    if (
-                        hasattr(bottom_intf.cable, "_peer")
-                        and bottom_intf.cable._peer is not None
-                    ):
-                        for top_device in sorted_top_devices:
-                            top_interfaces = self.top_by_device[top_device]
-                            for top_intf in top_interfaces:
-                                if (
-                                    hasattr(top_intf, "cable")
-                                    and top_intf.cable is not None
-                                ):
-                                    if (
-                                        hasattr(top_intf.cable, "_peer")
-                                        and top_intf.cable._peer is not None
-                                    ):
-                                        connected_top_devices.add(top_device)
-                                        break
+            connected_top_devices = self._extract_connected_peer_devices(
+                interfaces=self.bottom_by_device[bottom_device],
+                candidate_peers=top_device_set,
+            )
 
             if connected_top_devices:
                 existing_top_devices_per_bottom[bottom_device] = connected_top_devices
@@ -441,6 +430,51 @@ class CablingPlanner:
             tor_index += 1
 
         return cabling_plan
+
+    def _extract_connected_peer_devices(
+        self,
+        interfaces: list[DcimPhysicalInterface],
+        candidate_peers: set[str],
+    ) -> set[str]:
+        """Extract connected peer device names from interface cable names.
+
+        This is designed to be:
+        - Fast: O(number_of_interfaces)
+        - Robust: works with mocks in unit tests and with real SDK nodes
+        - Conservative: only returns peers present in candidate_peers
+        """
+
+        peers: set[str] = set()
+
+        for intf in interfaces:
+            cable = getattr(intf, "cable", None)
+            if cable is None:
+                continue
+
+            cable_peer = getattr(cable, "_peer", None) or cable
+            if cable_peer is None:
+                continue
+
+            # Pull cable name string in a way that works for both SDK nodes and mocks.
+            raw_name = getattr(cable_peer, "name", None)
+            if raw_name is None:
+                continue
+
+            cable_name = getattr(raw_name, "value", None) or raw_name
+            if not isinstance(cable_name, str) or "__" not in cable_name:
+                continue
+
+            for endpoint in cable_name.split("__"):
+                # Endpoint format: "<device_display_label>-<interface_name>"
+                # Device names typically contain '-' while interface names rarely do.
+                # We therefore split from the right.
+                if "-" not in endpoint:
+                    continue
+                device_name, _ = endpoint.rsplit("-", 1)
+                if device_name in candidate_peers:
+                    peers.add(device_name)
+
+        return peers
 
     def _build_intra_rack_middle_cabling_plan(
         self,

@@ -6,7 +6,14 @@ from infrahub_sdk.transforms import InfrahubTransform
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 from netutils.utils import jinja2_convenience_function
 
-from .common import get_bgp_profile, get_data, get_interfaces, get_ospf, get_vlans
+from .common import (
+    get_bgp_profile,
+    get_data,
+    get_interfaces,
+    get_ospf,
+    get_vlans,
+    get_vxlan_config,
+)
 
 
 class BorderLeaf(InfrahubTransform):
@@ -58,6 +65,8 @@ class BorderLeaf(InfrahubTransform):
             "bgp": bgp,
             "ospf": get_ospf(data.get("device_services")),
             "interfaces": interfaces_list,
+            # Unified VXLAN config (border_leaf role)
+            "vxlan": get_vxlan_config(data, platform_name, device_role="border_leaf"),
             "vlans": get_vlans(data.get("interfaces")),
         }
 

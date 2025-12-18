@@ -1,4 +1,12 @@
-"""Pytest fixtures for integration tests."""
+"""Pytest fixtures for integration tests.
+
+Integration tests are intentionally opt-in because they require Docker and can
+take longer (schemas + bootstrap load).
+
+Enable with either:
+- env var: INFRAHUB_RUN_INTEGRATION=1
+- pytest flag: --run-integration
+"""
 
 import os
 import subprocess
@@ -10,6 +18,52 @@ from infrahub_testcontainers.helpers import TestInfrahubDocker
 
 TEST_DIRECTORY = Path(__file__).parent
 PROJECT_DIRECTORY = TEST_DIRECTORY.parent.parent
+
+
+def pytest_addoption(parser: pytest.Parser) -> None:
+    """Add an opt-in flag for integration tests."""
+
+    parser.addoption(
+        "--run-integration",
+        action="store_true",
+        default=False,
+        help="Run integration tests that require Docker/Infrahub",
+    )
+
+
+def pytest_configure(config: pytest.Config) -> None:
+    config.addinivalue_line(
+        "markers",
+        "integration: requires Docker and a running Infrahub testcontainer (opt-in)",
+    )
+
+
+def _integration_enabled(config: pytest.Config) -> bool:
+    return bool(config.getoption("--run-integration")) or os.getenv(
+        "INFRAHUB_RUN_INTEGRATION", "0"
+    ) in {"1", "true", "yes"}
+
+
+def pytest_collection_modifyitems(
+    config: pytest.Config, items: list[pytest.Item]
+) -> None:
+    """Skip integration tests unless explicitly enabled."""
+
+    if _integration_enabled(config):
+        return
+
+    skip_marker = pytest.mark.skip(
+        reason=(
+            "Integration tests are disabled by default. "
+            "Set INFRAHUB_RUN_INTEGRATION=1 or pass --run-integration."
+        )
+    )
+
+    integration_root = str(TEST_DIRECTORY)
+    for item in items:
+        # Hooks in conftest are global once loaded; only apply to this folder.
+        if str(getattr(item, "fspath", "")).startswith(integration_root):
+            item.add_marker(skip_marker)
 
 
 class TestInfrahubDockerWithClient(TestInfrahubDocker):
@@ -55,6 +109,7 @@ class TestInfrahubDockerWithClient(TestInfrahubDocker):
         """Execute a shell command with Infrahub environment variables."""
         env = os.environ.copy()
         env["INFRAHUB_ADDRESS"] = address
+        env.setdefault("INFRAHUB_API_TOKEN", "admin")
         env["INFRAHUB_MAX_CONCURRENT_EXECUTION"] = "10"
 
         result = subprocess.run(

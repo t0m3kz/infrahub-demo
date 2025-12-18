@@ -207,3 +207,40 @@ class TestCablingPlannerIntraRackScenario:
             )
             assert connection_tuple not in connection_set
             connection_set.add(connection_tuple)
+
+    def test_intra_rack_reuses_existing_connections_by_cable_name(self) -> None:
+        """Reuse the same top devices when existing cables are present.
+
+        The planner should detect existing cabling via deterministic cable names and
+        keep the same ToR->Leaf pairing (idempotency across runs).
+        """
+
+        tor1 = create_mock_interfaces("tor-01", ["Ethernet1/31", "Ethernet1/32"])
+        tor2 = create_mock_interfaces("tor-02", ["Ethernet1/31", "Ethernet1/32"])
+
+        leaf1 = create_mock_interfaces("leaf-01", ["Ethernet1/25", "Ethernet1/26"])
+        leaf2 = create_mock_interfaces("leaf-02", ["Ethernet1/25", "Ethernet1/26"])
+
+        # Pretend ToR-01 is already connected to Leaf-02 on both uplinks.
+        # This matches CommonGenerator.create_cabling() cable name format.
+        existing_cable_name_1 = "leaf-02-Ethernet1/25__tor-01-Ethernet1/31"
+        existing_cable_name_2 = "leaf-02-Ethernet1/26__tor-01-Ethernet1/32"
+
+        for intf, cable_name in zip(
+            tor1, [existing_cable_name_1, existing_cable_name_2]
+        ):
+            cable_peer = type("CablePeer", (), {})()
+            setattr(cable_peer, "name", type("Name", (), {"value": cable_name})())
+            intf.cable = type("CableRef", (), {"_peer": cable_peer})()
+
+        planner = CablingPlanner(tor1 + tor2, leaf1 + leaf2)  # type: ignore
+        cabling_plan = planner.build_cabling_plan(scenario="intra_rack")
+
+        # All connections originating from tor-01 should target leaf-02.
+        tor1_targets = [
+            dst.device.display_label
+            for src, dst in cabling_plan
+            if src.device.display_label == "tor-01"
+        ]
+        assert tor1_targets
+        assert set(tor1_targets) == {"leaf-02"}

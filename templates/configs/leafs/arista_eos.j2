@@ -87,4 +87,107 @@ router bgp {{ bgp_config.local_as.asn }}
 route-map RM-CONN-2-BGP permit 10
    match interface Loopback0
 
+{%- if vxlan and vxlan.enabled %}
+!
+! VXLAN Configuration with Microsegmentation (VRF-aware VNIs)
+!
+{%- if vxlan.microsegmentation and vxlan.microsegmentation.enabled %}
+! Microsegmentation enabled: {{ vxlan.microsegmentation.vrf_count }} VRF(s) for tenant isolation
+{%- endif %}
+!
+interface {{ vxlan.vxlan_interface }}
+{%- if vxlan.vtep.ipv4 %}
+   vxlan source-interface {{ vxlan.vtep.source_interface }}
+{%- endif %}
+{%- if vxlan.vtep.udp_port != 4789 %}
+   vxlan udp-port {{ vxlan.vtep.udp_port }}
+{%- endif %}
+{%- if vxlan.l2_vni_mappings %}
+   !
+   ! L2 VNI Mappings (VLAN segments)
+{%- for mapping in vxlan.l2_vni_mappings %}
+   vxlan vlan {{ mapping.vlan_id }} vni {{ mapping.vni }}
+{%- endfor %}
+{%- endif %}
+{%- if vxlan.l3_vni_mappings %}
+   !
+   ! L3 VNI Mappings (VRF segments for microsegmentation)
+{%- for mapping in vxlan.l3_vni_mappings %}
+   vxlan vrf {{ mapping.vrf_name }} vni {{ mapping.l3_vni }}
+{%- endfor %}
+{%- endif %}
+{%- if vxlan.flooding == "static" and vxlan.remote_vteps and vxlan.l2_vni_mappings %}
+{%- for mapping in vxlan.l2_vni_mappings %}
+   vxlan vlan {{ mapping.vlan_id }} flood vtep {{ vxlan.remote_vteps | join(' ') }}
+{%- endfor %}
+{%- endif %}
+!
+{%- if vxlan.l3_vni_mappings %}
+!
+! VRF Definitions (Microsegmentation)
+!
+{%- for mapping in vxlan.l3_vni_mappings %}
+vrf instance {{ mapping.vrf_name }}
+   description {{ mapping.description | default('Tenant VRF for microsegmentation') }}
+   rd {{ vxlan.evpn.rd_format | replace('{vni}', mapping.l3_vni | string) }}
+!
+{%- endfor %}
+{%- endif %}
+{%- if vxlan.vrf_loopbacks %}
+!
+! VRF Loopback Interfaces
+!
+{%- for loopback in vxlan.vrf_loopbacks %}
+interface {{ loopback.name }}
+   description VRF {{ loopback.vrf }} L3VNI {{ loopback.l3_vni }}
+   vrf {{ loopback.vrf }}
+{%- if loopback.ip %}
+   ip address {{ loopback.ip }}/32
+{%- endif %}
+!
+{%- endfor %}
+{%- endif %}
+{%- if vxlan.evpn and vxlan.evpn.enabled and bgp %}
+!
+! EVPN Configuration (L2 + L3 VNI)
+!
+{%- for bgp_config in bgp %}
+router bgp {{ bgp_config.local_as.asn }}
+{%- if vxlan.l2_vni_mappings %}
+   !
+   ! L2 EVPN (VLAN-based)
+{%- for mapping in vxlan.l2_vni_mappings %}
+   vlan {{ mapping.vlan_id }}
+      rd {{ vxlan.evpn.rd_format | replace('{vni}', mapping.vni | string) }}
+      route-target both {{ vxlan.evpn.rt_format | replace('{vni}', mapping.vni | string) }}
+      redistribute learned
+{%- endfor %}
+{%- endif %}
+{%- if vxlan.l3_vni_mappings %}
+   !
+   ! L3 EVPN (VRF-based for microsegmentation)
+{%- for mapping in vxlan.l3_vni_mappings %}
+   vrf {{ mapping.vrf_name }}
+      rd {{ vxlan.evpn.rd_format | replace('{vni}', mapping.l3_vni | string) }}
+      route-target import evpn {{ vxlan.evpn.rt_format | replace('{vni}', mapping.l3_vni | string) }}
+      route-target export evpn {{ vxlan.evpn.rt_format | replace('{vni}', mapping.l3_vni | string) }}
+      redistribute connected
+{%- endfor %}
+{%- endif %}
+{% endfor %}
+{%- endif %}
+{%- if vxlan.features.anycast_gateway %}
+!
+! Anycast Gateway Configuration
+!
+ip virtual-router mac-address 00:1c:73:00:dc:01
+{%- for vlan in vlans %}
+{%- if vlan.gateway_ip %}
+interface Vlan{{ vlan.vlan_id }}
+   ip address virtual {{ vlan.gateway_ip }}
+{%- endif %}
+{%- endfor %}
+{%- endif %}
+{%- endif %}
+
 ! End of configuration

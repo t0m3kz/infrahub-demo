@@ -6,7 +6,13 @@ from infrahub_sdk.transforms import InfrahubTransform
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 from netutils.utils import jinja2_convenience_function
 
-from .common import get_bgp_profile, get_data, get_interfaces, get_ospf
+from .common import (
+    get_bgp_profile,
+    get_data,
+    get_interfaces,
+    get_ospf,
+    get_vxlan_config,
+)
 
 
 class SuperSpine(InfrahubTransform):
@@ -57,6 +63,8 @@ class SuperSpine(InfrahubTransform):
             "bgp": bgp,
             "ospf": get_ospf(data.get("device_services")),
             "interfaces": interfaces_list,
+            # Unified VXLAN config (super-spine = route-reflector role)
+            "vxlan": get_vxlan_config(data, platform_name, device_role="super_spine"),
         }
 
         return template.render(**config)

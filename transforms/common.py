@@ -19,6 +19,7 @@ __all__ = [
     "get_interfaces",
     "get_ospf",
     "get_vlans",
+    "get_vxlan_config",
 ]
 
 
@@ -175,3 +176,339 @@ def get_interfaces(data: list) -> list[dict[str, Any]]:
     return [
         name_to_interface[name] for name in sorted_names if name in name_to_interface
     ]
+
+
+# ============================================================================
+# VXLAN Configuration (Unified across all device types)
+# ============================================================================
+# Following netlab's approach: single implementation, platform-agnostic data model
+
+
+def get_vxlan_config(
+    data: dict, platform: str, device_role: str = "leaf"
+) -> dict | None:
+    """Get VXLAN configuration with microsegmentation support (netlab-inspired).
+
+    Unified VXLAN implementation for all device types (leaf, spine, border_leaf, tor).
+
+    Convention-based approach (no separate VXLAN schema needed):
+    - L2VNI = 10000 + VLAN_ID (Layer 2 segments)
+    - L3VNI = 50000 + VRF_ID (Layer 3 VRF segments for microsegmentation)
+    - VTEP source = Loopback0 (data plane)
+    - VRF loopbacks = Loopback1+ with description containing "VRF"/"tenant"
+    - RD format: {router_id}:{vni} (auto-generated)
+    - RT format: {as}:{vni} (auto-generated)
+
+    Device role behavior:
+    - leaf/tor/border_leaf: Full VXLAN config (VTEP, L2VNI, L3VNI)
+    - spine: VXLAN transit only (no VTEP config, EVPN route-reflector)
+
+    Args:
+        data: Device data from GraphQL query
+        platform: Platform name (arista_eos, cisco_nxos, dell_sonic, etc.)
+        device_role: Device role (leaf, spine, border_leaf, tor)
+
+    Returns:
+        VXLAN configuration dict or None if VXLAN not needed
+    """
+    interfaces = data.get("interfaces", [])
+
+    # Extract L2 VNI mappings (VLAN-based)
+    l2_vni_mappings = _extract_l2_vni_mappings(interfaces)
+
+    # Extract L3 VNI mappings (VRF-based for microsegmentation)
+    l3_vni_mappings, vrf_loopbacks = _extract_l3_vni_mappings(interfaces)
+
+    # Spines don't need VXLAN if they're just transport (no VTEPs)
+    # But they may need EVPN route-reflector config
+    if device_role == "spine":
+        device_services = data.get("device_services", [])
+        bgp_services = [
+            svc for svc in device_services if svc.get("service_type") == "bgp"
+        ]
+
+        if bgp_services:
+            # Spine with BGP = EVPN route-reflector
+            return {
+                "enabled": False,  # No VTEP on spine
+                "role": "route_reflector",
+                "evpn": {
+                    "enabled": True,
+                    "route_reflector": True,
+                },
+            }
+        return None
+
+    # For leaf/tor/border_leaf: need VLANs or VRFs to enable VXLAN
+    if not l2_vni_mappings and not l3_vni_mappings:
+        return None
+
+    # Extract VTEP configuration from Loopback0 (data plane)
+    loopback_interfaces = [
+        iface for iface in interfaces if "Loopback0" in iface.get("name", "")
+    ]
+    vtep_ipv4 = None
+    vtep_source = "Loopback0"  # Convention: Loopback0 for VTEP
+
+    if loopback_interfaces:
+        ip_addresses = loopback_interfaces[0].get("ip_addresses", [])
+        if ip_addresses:
+            vtep_ipv4 = ip_addresses[0].get("address", "").split("/")[0]
+
+    # Get BGP config for EVPN
+    device_services = data.get("device_services", [])
+    bgp_services = [svc for svc in device_services if svc.get("service_type") == "bgp"]
+    local_as = None
+    router_id = vtep_ipv4  # Use VTEP IP as router ID
+
+    if bgp_services:
+        local_as = bgp_services[0].get("local_as", {}).get("asn")
+        # Try to get explicit router_id if configured
+        bgp_router_id = bgp_services[0].get("router_id", {})
+        if bgp_router_id:
+            router_id = bgp_router_id.get("address", "").split("/")[0] or vtep_ipv4
+
+    # Base VXLAN config with microsegmentation support (platform-agnostic)
+    base_config = {
+        "enabled": True,
+        "role": device_role,
+        "vtep": {
+            "source_interface": vtep_source,
+            "ipv4": vtep_ipv4,
+            "udp_port": 4789,
+        },
+        # L2 VNIs for VLAN segments
+        "l2_vni_mappings": l2_vni_mappings,
+        # L3 VNIs for VRF segments (microsegmentation)
+        "l3_vni_mappings": l3_vni_mappings,
+        "vrf_loopbacks": vrf_loopbacks,
+        "flooding": "evpn",  # Use EVPN when BGP is available
+        "evpn": {
+            "enabled": bool(bgp_services),
+            # Auto-generate RD: {router_id}:{vni}
+            "rd_format": f"{router_id}:{{vni}}" if router_id else "auto",
+            # Auto-generate RT: {as}:{vni}
+            "rt_format": f"{local_as}:{{vni}}" if local_as else "auto",
+        },
+        # Microsegmentation metadata
+        "microsegmentation": {
+            "enabled": bool(l3_vni_mappings),
+            "vrf_count": len(l3_vni_mappings),
+            "tenant_isolation": True,  # VRFs provide tenant isolation
+        },
+    }
+
+    # Platform-specific transformations (netlab style)
+    return _transform_vxlan_platform(base_config, platform, local_as)
+
+
+def _extract_l2_vni_mappings(interfaces: list) -> list[dict]:
+    """Extract VLAN to L2VNI mappings using convention: L2VNI = 10000 + VLAN_ID.
+
+    This eliminates the need for a separate VXLAN schema - we calculate VNIs
+    automatically from existing VLAN data.
+    """
+    vni_mappings = []
+    seen_vlans = set()
+
+    for iface in interfaces:
+        vlans = iface.get("vlans", [])
+        for vlan in vlans:
+            vlan_id = vlan.get("vlan_id")
+            if vlan_id and vlan_id not in seen_vlans:
+                # Convention: L2VNI = 10000 + VLAN ID
+                vni = 10000 + vlan_id
+                vni_mappings.append(
+                    {
+                        "vlan_id": vlan_id,
+                        "vni": vni,
+                        "name": vlan.get("name", f"VLAN_{vlan_id}"),
+                    }
+                )
+                seen_vlans.add(vlan_id)
+
+    return vni_mappings
+
+
+def _extract_l3_vni_mappings(interfaces: list) -> tuple[list[dict], list[dict]]:
+    """Extract VRF to L3VNI mappings for microsegmentation.
+
+    Convention for VRF detection:
+    - Loopback interfaces with description containing "VRF" or "vrf"
+    - OR interfaces with role="vrf" or kind="vrf"
+    - L3VNI = 50000 + VRF_ID (sequential)
+
+    Returns:
+        tuple: (l3_vni_mappings, vrf_loopback_details)
+    """
+    l3_vni_mappings = []
+    vrf_loopbacks = []
+    vrf_id = 1  # Start with VRF ID 1
+
+    for iface in interfaces:
+        iface_name = iface.get("name", "")
+        description = iface.get("description", "").lower()
+        role = iface.get("role", {}).get("value", "").lower()
+        kind = iface.get("kind", {}).get("value", "").lower()
+
+        # Detect VRF loopbacks (Loopback1+)
+        is_vrf_loopback = (
+            "loopback" in iface_name.lower()
+            and iface_name != "Loopback0"  # Exclude VTEP loopback
+            and (
+                "vrf" in description
+                or "vrf" in role
+                or "vrf" in kind
+                or "tenant" in description
+            )
+        )
+
+        if is_vrf_loopback:
+            # Extract VRF name from description or generate from loopback number
+            vrf_name = _extract_vrf_name(iface_name, iface.get("description", ""))
+
+            # Get VRF IP address
+            vrf_ip = None
+            ip_addresses = iface.get("ip_addresses", [])
+            if ip_addresses:
+                vrf_ip = ip_addresses[0].get("address", "").split("/")[0]
+
+            # Calculate L3VNI: 50000 + VRF_ID
+            l3_vni = 50000 + vrf_id
+
+            l3_vni_mappings.append(
+                {
+                    "vrf_name": vrf_name,
+                    "vrf_id": vrf_id,
+                    "l3_vni": l3_vni,
+                    "loopback_interface": iface_name,
+                    "vrf_ip": vrf_ip,
+                    "description": iface.get("description", ""),
+                }
+            )
+
+            vrf_loopbacks.append(
+                {
+                    "name": iface_name,
+                    "vrf": vrf_name,
+                    "ip": vrf_ip,
+                    "l3_vni": l3_vni,
+                }
+            )
+
+            vrf_id += 1
+
+    return l3_vni_mappings, vrf_loopbacks
+
+
+def _extract_vrf_name(loopback_name: str, description: str) -> str:
+    """Extract or generate VRF name from loopback interface.
+
+    Priority:
+    1. Extract from description if it contains VRF name
+    2. Generate from loopback number (e.g., Loopback1 → VRF_1)
+    """
+    import re
+
+    # Try to extract VRF name from description
+    if description:
+        desc_upper = description.upper()
+        # Pattern 1: "VRF_CUSTOMER_A" or "VRF CUSTOMER_A"
+        if "VRF" in desc_upper:
+            # Find VRF keyword and take the next meaningful word
+            words = desc_upper.replace("_", " ").split()
+            vrf_idx = next((i for i, w in enumerate(words) if "VRF" in w), -1)
+            if vrf_idx >= 0 and vrf_idx + 1 < len(words):
+                next_word = words[vrf_idx + 1]
+                if next_word and len(next_word) > 1:
+                    return f"VRF_{next_word}"
+            # If just "VRF" alone, continue to fallback
+
+        # Pattern 2: "Tenant: CustomerA"
+        if "TENANT" in desc_upper:
+            words = desc_upper.replace(":", " ").split()
+            tenant_idx = next((i for i, w in enumerate(words) if "TENANT" in w), -1)
+            if tenant_idx >= 0 and tenant_idx + 1 < len(words):
+                next_word = words[tenant_idx + 1]
+                if next_word and len(next_word) > 1:
+                    return f"VRF_{next_word}"
+
+    # Fallback: generate from loopback number
+    match = re.search(r"(\d+)$", loopback_name)
+    if match:
+        loopback_num = match.group(1)
+        return f"VRF_{loopback_num}"
+
+    return "VRF_UNKNOWN"
+
+
+def _transform_vxlan_platform(
+    base_config: dict, platform: str, local_as: str | None
+) -> dict:
+    """Apply platform-specific VXLAN transformations (netlab style).
+
+    Args:
+        base_config: Platform-agnostic VXLAN config
+        platform: Platform name
+        local_as: BGP AS number
+
+    Returns:
+        Platform-specific VXLAN config
+    """
+    platform_lower = platform.lower()
+
+    if "arista" in platform_lower or "eos" in platform_lower:
+        return _transform_vxlan_arista(base_config, local_as)
+    elif "cisco" in platform_lower and "nxos" in platform_lower:
+        return _transform_vxlan_nxos(base_config, local_as)
+    elif "dell" in platform_lower or "sonic" in platform_lower:
+        return _transform_vxlan_sonic(base_config, local_as)
+    else:
+        # Return base config for unsupported platforms
+        return base_config
+
+
+def _transform_vxlan_arista(vxlan_base: dict, local_as: str | None) -> dict:
+    """Transform VXLAN config for Arista EOS platform.
+
+    All config derived from existing data - no VXLAN schema needed.
+    """
+    config = vxlan_base.copy()
+    config["interface"] = "Vxlan1"  # EOS convention
+
+    # Anycast gateway (optional - could be added as device attribute if needed)
+    config["anycast_gateway"] = {
+        "enabled": False,  # Could be enabled via device attribute
+        "mac": "00:1c:73:00:00:01",  # Standard anycast MAC
+    }
+
+    return config
+
+
+def _transform_vxlan_nxos(vxlan_base: dict, local_as: str | None) -> dict:
+    """Transform VXLAN config for Cisco NX-OS platform.
+
+    All config derived from existing data - no VXLAN schema needed.
+    """
+    config = vxlan_base.copy()
+    config["nve_interface"] = "nve1"  # NX-OS convention
+
+    # NX-OS specific features
+    config["features"] = [
+        "nv overlay",
+        "vn-segment-vlan-based",
+        "nve",
+    ]
+
+    return config
+
+
+def _transform_vxlan_sonic(vxlan_base: dict, local_as: str | None) -> dict:
+    """Transform VXLAN config for Dell SONiC platform.
+
+    All config derived from existing data - no VXLAN schema needed.
+    """
+    config = vxlan_base.copy()
+    config["interface"] = "vtep"  # SONiC convention
+
+    return config

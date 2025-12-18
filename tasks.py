@@ -340,8 +340,3 @@ def setup(context: Context) -> None:
     # load_events(context)
 
     print("\n✅ Setup complete! Infrahub is ready for fun !!!")
-
-    # print("\n✅ Setup complete! Infrahub is ready for fun !!!")
-    # print(
-    #     "💡 Next: Run 'uv run invoke deploy-dc --scenario [dc1 - dc6] --branch your_branch' to load scenario data\n"
-    # )
