@@ -61,9 +61,12 @@ jobs:
         run: |
           RUNNER_NAME=$(echo "${{ runner.name }}" | grep -o 'ghrunner[0-9]\+' | sed 's/ghrunner\([0-9]\+\)/ghrunner_\1/')
           echo "PYTEST_DEBUG_TEMPROOT=/var/lib/github/${RUNNER_NAME}/_temp" >> $GITHUB_ENV
-      - name: Run pytest
+      - name: Run smoke tests
         run: |
-          uv run pytest tests/ -vv
+          uv run pytest tests/smoke -vv
+      - name: Run unit tests
+        run: |
+          uv run pytest tests/unit -vv
 
   release:
     if: ${{ github.ref == 'refs/heads/main' }}
