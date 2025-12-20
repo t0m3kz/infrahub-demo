@@ -221,6 +221,43 @@ def run_tests(context: Context) -> None:
     context.run("pytest -vv tests", pty=True)
 
 
+@task
+def clean_testcontainers(context: Context) -> None:
+    """Remove leftover resources created by integration testcontainers.
+
+    This deletes containers, networks, and volumes created by the infrahub_testcontainers
+    harness (project names like 'infrahub-test-<id>'). Useful after an interrupted or
+    failed integration test run.
+    """
+    # Containers
+    context.run(
+        "docker ps -aq --filter 'name=infrahub-test-' | xargs -r docker rm -f",
+        pty=True,
+        warn=True,
+    )
+
+    # Networks
+    context.run(
+        "docker network ls -q --filter 'name=infrahub-test-' | xargs -r docker network rm",
+        pty=True,
+        warn=True,
+    )
+
+    # Volumes
+    context.run(
+        "docker volume ls -q | grep '^infrahub-test-' | xargs -r docker volume rm",
+        pty=True,
+        warn=True,
+    )
+
+    # Optional: cleanup the testcontainers reaper container if it got stuck
+    context.run(
+        "docker ps -aq --filter 'name=testcontainers-ryuk-' | xargs -r docker rm -f",
+        pty=True,
+        warn=True,
+    )
+
+
 def _ensure_pytest_basetemp(basetemp: str) -> Path:
     path = Path(basetemp).expanduser()
     if not path.is_absolute():
@@ -244,17 +281,22 @@ def test_unit(context: Context, basetemp: str = ".pytest-tmp") -> None:
     context.run(f"uv run pytest -vv tests/unit --basetemp {base}", pty=True)
 
 
-@task(optional=["basetemp"])
-def test_integration(context: Context, basetemp: str = ".pytest-tmp") -> None:
+@task(optional=["basetemp", "server_port"])
+def test_integration(
+    context: Context,
+    basetemp: str = "~/.pytest-tmp/infrahub-demo",
+    server_port: int = 8000,
+) -> None:
     """Run integration tests with a stable pytest temp dir (Colima-safe).
 
     Example:
         uv run invoke test-integration
-        uv run invoke test-integration --basetemp .pytest-tmp
+        uv run invoke test-integration --basetemp ~/.pytest-tmp/infrahub-demo
     """
     base = _ensure_pytest_basetemp(basetemp)
     env = {
         "INFRAHUB_TESTING_ENABLE_INTEGRATION": "1",
+        "INFRAHUB_TESTING_SERVER_PORT": str(server_port),
     }
     context.run(
         f"uv run pytest -vv tests/integration --basetemp {base}",

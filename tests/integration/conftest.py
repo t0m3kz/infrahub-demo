@@ -2,12 +2,16 @@
 
 import os
 import subprocess
+import warnings
 from collections.abc import Generator
 from pathlib import Path
 
 import pytest
 from infrahub_sdk import Config, InfrahubClient, InfrahubClientSync
-from infrahub_testcontainers.container import PROJECT_ENV_VARIABLES
+from infrahub_testcontainers.container import (
+    PROJECT_ENV_VARIABLES,
+    InfrahubDockerCompose,
+)
 from infrahub_testcontainers.helpers import TestInfrahubDocker
 
 TEST_DIRECTORY = Path(__file__).parent
@@ -16,6 +20,55 @@ PROJECT_DIRECTORY = TEST_DIRECTORY.parent.parent
 
 class TestInfrahubDockerWithClient(TestInfrahubDocker):
     """Base test class with Infrahub Docker container and clients."""
+
+    @pytest.fixture(scope="class")
+    def infrahub_app(
+        self, request: pytest.FixtureRequest, infrahub_compose: InfrahubDockerCompose
+    ) -> dict[str, int]:
+        """Start the Infrahub docker-compose stack.
+
+        This overrides the upstream fixture to avoid teardown failures when
+        fetching logs (e.g. compose project already gone or services renamed).
+        """
+        tests_failed_before_class = request.session.testsfailed
+
+        def cleanup() -> None:
+            tests_failed_during_class = (
+                request.session.testsfailed - tests_failed_before_class
+            )
+            if tests_failed_during_class > 0:
+                try:
+                    stdout, stderr = infrahub_compose.get_logs(
+                        "infrahub-server", "task-worker"
+                    )
+                    warnings.warn(
+                        f"Container logs:\nStdout:\n{stdout}\nStderr:\n{stderr}",
+                        stacklevel=2,
+                    )
+                except Exception as exc:  # noqa: BLE001
+                    warnings.warn(
+                        f"Failed to collect container logs during cleanup: {exc}",
+                        stacklevel=2,
+                    )
+            try:
+                infrahub_compose.stop()
+            except Exception as exc:  # noqa: BLE001
+                warnings.warn(f"Failed to stop docker compose: {exc}", stacklevel=2)
+
+        request.addfinalizer(cleanup)
+
+        try:
+            infrahub_compose.start()
+        except Exception as exc:
+            try:
+                stdout, stderr = infrahub_compose.get_logs()
+            except Exception as log_exc:  # noqa: BLE001
+                stdout, stderr = "", f"Failed to fetch logs: {log_exc}"
+            raise Exception(
+                f"Failed to start docker compose:\nStdout:\n{stdout}\nStderr:\n{stderr}"
+            ) from exc
+
+        return infrahub_compose.get_services_port()
 
     @pytest.fixture(scope="class")
     def async_client_main(

@@ -139,7 +139,7 @@ uv run invoke load-events
 #### Single-Vendor Deployments (DC1-DC4)
 
 | Scenario | Location | Vendor | Deployment | Description |
-|----------|----------|--------|------------|-------------|
+| ---------- | ---------- | -------- | ------------ | ------------- |
 | **[DC1](data/demos/01_data_center/dc1/)** | Munich 🇩🇪 | Cisco | All (MR+Mixed+ToR) | Hierarchy Overkill: All the racks, all the drama. |
 | **[DC2](data/demos/01_data_center/dc2/)** | Paris 🇫🇷 | Arista | Middle Rack | Croissants & Cheap Packets: Small, efficient, and CFO-approved. |
 | **[DC3](data/demos/01_data_center/dc3/)** | London 🇬🇧 | Dell/SONiC | Flat ToR | Brexit, No Middle Management, Maximum Sass. |
@@ -148,7 +148,7 @@ uv run invoke load-events
 #### Multi-Vendor Deployments (DC5-DC6)
 
 | Scenario | Location | Architecture | Description |
-|----------|----------|-------------|-------------|
+| ---------- | ---------- | ------------- | ------------- |
 | **[DC5](data/demos/01_data_center/dc5/)** | New York 🇺🇸 | Different vendor per pod | Eurovision for Switches: 4 pods, 4 vendors, 0 peace. |
 | **[DC6](data/demos/01_data_center/dc6/)** | Katowice 🇵🇱 | Mixed vendors within pods | Silesian Buffet, Vendor Bingo, Debug & Dine. |
 
@@ -157,7 +157,7 @@ uv run invoke load-events
 Explore LLM upgrades and organic growth patterns—all in one place, please make sure DC1 is alredy deployed:
 
 | Scenario | Location | Type/Architecture | Description |
-|----------|----------|-------------------|-------------|
+| ---------- | ---------- | ------------------- | ------------- |
 | **[switch](data/demos/02_switch/)** | Munich 🇩🇪 | Rack Expansion | "Just TWO more switches"—organic chaos. |
 | **[rack](data/demos/03_rack/)** | Munich 🇩🇪 | Minimal ToR | Minimalist rack: started as a test, now it's critical. |
 | **[pod](data/demos/04_pod/)** | Munich 🇩🇪 | Pod Expansion | Pod 4: because 3 wasn't enough. |
