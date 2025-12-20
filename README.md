@@ -179,6 +179,9 @@ This project uses GitHub Actions for continuous integration. All pushes and pull
 - If you encounter port conflicts, ensure no other service is running on port 8000.
 - For dependency issues, run `uv sync` again.
 - For Docker/infrahub issues, ensure Docker is running and you have the correct permissions.
+- **macOS + Colima + integration tests**: Colima often does not share the system temp folder (e.g. `/var/folders/...`) into the VM.
+Some integration tests start Docker Compose stacks from a pytest temp directory, and missing file sharing can break bind mounts (notably `haproxy.cfg`), causing the stack to fail with `Failed to start docker compose`.
+Use a repo-local pytest temp directory via `--basetemp` (see Testing below).
 
 ## Testing
 
@@ -189,6 +192,30 @@ uv run inv validate
 ```
 
 Or run specific test scripts in the [`tests/`](tests/) directory.
+
+### macOS + Colima
+
+If you run Docker via Colima, prefer a repo-local pytest temp directory so Docker bind mounts always come from a shared path:
+
+```bash
+uv run invoke test-unit
+uv run invoke test-integration
+```
+
+These tasks run pytest with `--basetemp .pytest-tmp`.
+
+Alternative (manual):
+
+```bash
+INFRAHUB_TESTING_ENABLE_INTEGRATION=1 uv run pytest -vv tests/integration --basetemp .pytest-tmp
+```
+
+If you want a VM-wide fix instead, start Colima with `/var/folders` mounted (heavier/less portable):
+
+```bash
+colima stop
+colima start --mount type=virtiofs,source=/var/folders,destination=/var/folders
+```
 
 ## 🙏 A Note from a Highly Fallible Carbon-Based Life Form
 

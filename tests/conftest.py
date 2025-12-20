@@ -34,6 +34,7 @@ class MockInterface:
         """
         self.name: Any = Mock(value=name)
         self.device: Any = Mock(display_label=device_label)
+        self.cable: Any = None
 
 
 def create_mock_interfaces(

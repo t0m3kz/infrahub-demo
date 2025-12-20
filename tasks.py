@@ -221,16 +221,59 @@ def run_tests(context: Context) -> None:
     context.run("pytest -vv tests", pty=True)
 
 
+def _ensure_pytest_basetemp(basetemp: str) -> Path:
+    path = Path(basetemp).expanduser()
+    if not path.is_absolute():
+        path = Path.cwd() / path
+    path.mkdir(parents=True, exist_ok=True)
+    return path
+
+
+@task(optional=["basetemp"])
+def test_unit(context: Context, basetemp: str = ".pytest-tmp") -> None:
+    """Run unit tests with a stable pytest temp dir.
+
+    On macOS+Colima, using a repo-local basetemp avoids bind-mount issues caused by
+    system temp directories (e.g. /var/folders) not being shared into the Colima VM.
+
+    Example:
+        uv run invoke test-unit
+        uv run invoke test-unit --basetemp .pytest-tmp
+    """
+    base = _ensure_pytest_basetemp(basetemp)
+    context.run(f"uv run pytest -vv tests/unit --basetemp {base}", pty=True)
+
+
+@task(optional=["basetemp"])
+def test_integration(context: Context, basetemp: str = ".pytest-tmp") -> None:
+    """Run integration tests with a stable pytest temp dir (Colima-safe).
+
+    Example:
+        uv run invoke test-integration
+        uv run invoke test-integration --basetemp .pytest-tmp
+    """
+    base = _ensure_pytest_basetemp(basetemp)
+    env = {
+        "INFRAHUB_TESTING_ENABLE_INTEGRATION": "1",
+    }
+    context.run(
+        f"uv run pytest -vv tests/integration --basetemp {base}",
+        pty=True,
+        env=env,
+    )
+
+
 @task
 def validate(context: Context) -> None:
     """Run all code quality tests."""
     context.run("ruff check . --fix", pty=True)
     context.run("mypy .", pty=True)
     context.run(
-        'uv run yamllint -d "{extends: default, ignore: [.github/, .venv/ , .dev/, .ai/] }" .',
+        'uv run yamllint -d "{extends: default, ignore: [.github/, .venv/ , .dev/, .ai/, .pytest-tmp/] }" .',
         pty=True,
     )
-    context.run("pytest -vv tests", pty=True)
+    context.run("pytest -vv tests/smoke", pty=True)
+    context.run("pytest -vv tests/unit", pty=True)
 
 
 # ============================================================================

@@ -490,7 +490,9 @@ class CommonGenerator(InfrahubGenerator):
                     "deployment": deployment_id,
                 },
             )
-            batch_cables.add(task=network_link.save, allow_upsert=True, node=network_link)
+            batch_cables.add(
+                task=network_link.save, allow_upsert=True, node=network_link
+            )
 
             if technical_pool:
                 p2p_prefix = await self.client.allocate_next_ip_prefix(
