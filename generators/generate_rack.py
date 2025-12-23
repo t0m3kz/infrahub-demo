@@ -398,7 +398,7 @@ class RackGenerator(CommonGenerator):
                             options={
                                 "cabling_offset": cabling_offset,
                                 "top_sorting": pod.leaf_interface_sorting_method,
-                                "bottom_sorting": "sequential",
+                                "bottom_sorting": "bottom_up",
                             },
                         )
                     else:
@@ -439,7 +439,7 @@ class RackGenerator(CommonGenerator):
                         options={
                             "cabling_offset": cabling_offset,
                             "top_sorting": pod.spine_interface_sorting_method,
-                            "bottom_sorting": "sequential",
+                            "bottom_sorting": "bottom_up",
                         },
                     )
                 else:
@@ -469,7 +469,7 @@ class RackGenerator(CommonGenerator):
                         options={
                             "cabling_offset": cabling_offset,
                             "top_sorting": pod.leaf_interface_sorting_method,
-                            "bottom_sorting": "sequential",
+                            "bottom_sorting": "bottom_up",
                         },
                     )
                 else:
@@ -505,7 +505,7 @@ class RackGenerator(CommonGenerator):
                             options={
                                 "cabling_offset": cabling_offset,
                                 "top_sorting": pod.leaf_interface_sorting_method,
-                                "bottom_sorting": "sequential",
+                                "bottom_sorting": "bottom_up",
                             },
                         )
                     else:

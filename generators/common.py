@@ -460,6 +460,8 @@ class CommonGenerator(InfrahubGenerator):
         ip_address_by_interface_id: dict[str, str] = {}
         has_ips_to_save = False
 
+        pending_cables: list[tuple[str, str, str]] = []
+
         # Process cabling plan - create cables with upsert to ensure idempotency
         # Running generator multiple times will produce same cables
         for src_interface, dst_interface in cabling_plan:
@@ -479,20 +481,11 @@ class CommonGenerator(InfrahubGenerator):
             # This ensures same link always gets same IP prefix, even after merge
             link_identifier = "__".join(endpoint_names)
 
-            # Create or update the cable using upsert
-            # If cable already exists with same endpoints, it will be updated (no-op)
-            network_link = await self.client.create(
-                kind=DcimCable,
-                data={
-                    "name": name,
-                    "type": "mmf",
-                    "endpoints": [src_interface.id, dst_interface.id],
-                    "deployment": deployment_id,
-                },
-            )
-            batch_cables.add(
-                task=network_link.save, allow_upsert=True, node=network_link
-            )
+            # Do NOT create/save cables yet.
+            # Saving a cable sets interface.cable on endpoints, but our interface objects still have
+            # cable=None in-memory; later interface upserts would send cable:null and detach endpoints,
+            # potentially leaving the cable with 0 endpoints (schema requires exactly 2).
+            pending_cables.append((name, src_interface.id, dst_interface.id))
 
             if technical_pool:
                 p2p_prefix = await self.client.allocate_next_ip_prefix(
@@ -540,12 +533,9 @@ class CommonGenerator(InfrahubGenerator):
             interfaces_by_id[dst_interface.id] = dst_interface
 
         # Execute batched saves in dependency order:
-        # 1) cables (idempotent upsert)
-        # 2) IPs (needed to attach to interfaces)
-        # 3) interfaces
-        async for node, _ in batch_cables.execute():
-            self.logger.info(f"- Created [{node.get_kind()}] {node.hfid}")
-
+        # 1) IPs (needed to attach to interfaces)
+        # 2) interfaces
+        # 3) cables (idempotent upsert)
         ip_id_by_address: dict[str, str] = {}
         if has_ips_to_save:
             async for node, _ in batch_ips.execute():
@@ -565,3 +555,20 @@ class CommonGenerator(InfrahubGenerator):
         async for _node, _ in batch_interfaces.execute():
             # Keep interface updates quiet unless debugging
             pass
+
+        for name, src_id, dst_id in pending_cables:
+            network_link = await self.client.create(
+                kind=DcimCable,
+                data={
+                    "name": name,
+                    "type": "mmf",
+                    "endpoints": [src_id, dst_id],
+                    "deployment": deployment_id,
+                },
+            )
+            batch_cables.add(
+                task=network_link.save, allow_upsert=True, node=network_link
+            )
+
+        async for node, _ in batch_cables.execute():
+            self.logger.info(f"- Created [{node.get_kind()}] {node.hfid}")

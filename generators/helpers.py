@@ -202,8 +202,8 @@ class CablingPlanner:
         self,
         bottom_interfaces: list[DcimPhysicalInterface],
         top_interfaces: list[DcimPhysicalInterface],
-        bottom_sorting: Literal["top_down", "bottom_up"] = "bottom_up",
-        top_sorting: Literal["top_down", "bottom_up"] = "bottom_up",
+        bottom_sorting: Literal["top_down", "bottom_up"] | str = "bottom_up",
+        top_sorting: Literal["top_down", "bottom_up"] | str = "bottom_up",
     ) -> None:
         """Initialize and set up the CablingPlanner.
 
@@ -229,13 +229,20 @@ class CablingPlanner:
     def _create_device_interface_map(
         self,
         interfaces: list[DcimPhysicalInterface],
-        sorting: Literal["top_down", "bottom_up"] = "top_down",
+        sorting: Literal["top_down", "bottom_up"] | str = "top_down",
     ) -> dict[DcimPhysicalDevice, list[DcimPhysicalInterface]]:
         """Return a mapping of device peer -> list of its interfaces sorted."""
 
+        # Normalize legacy aliases that may still exist in stored data.
+        # Public API supports only: "top_down" and "bottom_up".
+        if sorting == "sequential":
+            sorting = "bottom_up"
+        elif sorting == "up_down":
+            sorting = "top_down"
+
         if sorting not in {"top_down", "bottom_up"}:
             msg = (
-                f"Unsupported sorting value '{sorting}'. Use 'up_down' or 'bottom_up'."
+                f"Unsupported sorting value '{sorting}'. Use 'top_down' or 'bottom_up'."
             )
             raise ValueError(msg)
 

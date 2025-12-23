@@ -108,6 +108,28 @@ class TestCablingPlannerDeviceInterfaceMapping:
         leaf_interfaces = planner.bottom_by_device["leaf-01"]
         assert len(leaf_interfaces) == 4
 
+    def test_interface_sorting_legacy_sequential_is_normalized(self) -> None:
+        """Test that legacy sorting value 'sequential' is normalized."""
+        interfaces = create_mock_interfaces(
+            "leaf-01", ["Ethernet1/4", "Ethernet1/3", "Ethernet1/2", "Ethernet1/1"]
+        )
+
+        planner = CablingPlanner(interfaces, [], bottom_sorting="sequential")  # type: ignore
+
+        leaf_interfaces = planner.bottom_by_device["leaf-01"]
+        assert len(leaf_interfaces) == 4
+
+    def test_interface_sorting_legacy_up_down_is_normalized(self) -> None:
+        """Test that legacy sorting value 'up_down' is normalized."""
+        interfaces = create_mock_interfaces(
+            "leaf-01", ["Ethernet1/1", "Ethernet1/2", "Ethernet1/3", "Ethernet1/4"]
+        )
+
+        planner = CablingPlanner(interfaces, [], bottom_sorting="up_down")  # type: ignore
+
+        leaf_interfaces = planner.bottom_by_device["leaf-01"]
+        assert len(leaf_interfaces) == 4
+
     def test_invalid_sorting_direction(self) -> None:
         """Test that invalid sorting direction raises ValueError."""
         interfaces = create_mock_interfaces("leaf-01", ["Ethernet1/1"])
