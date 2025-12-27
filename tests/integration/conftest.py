@@ -126,12 +126,19 @@ class TestInfrahubDockerWithClient(TestInfrahubDocker):
         yield client
 
     @staticmethod
-    def execute_command(command: str, address: str) -> subprocess.CompletedProcess[str]:
+    def execute_command(
+        command: str,
+        address: str,
+        concurrent_execution: int = 10,
+        pagination_size: int = 50,
+    ) -> subprocess.CompletedProcess[str]:
         """Execute a shell command with Infrahub environment variables.
 
         Args:
             command: The shell command to execute.
             address: The Infrahub server address.
+            concurrent_execution: Max concurrent execution value.
+            pagination_size: Pagination size for API calls.
 
         Returns:
             CompletedProcess with stdout, stderr, and returncode.
@@ -141,7 +148,8 @@ class TestInfrahubDockerWithClient(TestInfrahubDocker):
         env["INFRAHUB_API_TOKEN"] = PROJECT_ENV_VARIABLES[
             "INFRAHUB_TESTING_INITIAL_ADMIN_TOKEN"
         ]
-        env["INFRAHUB_MAX_CONCURRENT_EXECUTION"] = "10"
+        env["INFRAHUB_MAX_CONCURRENT_EXECUTION"] = str(concurrent_execution)
+        env["INFRAHUB_PAGINATION_SIZE"] = str(pagination_size)
 
         result = subprocess.run(
             command,

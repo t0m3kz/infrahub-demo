@@ -126,7 +126,7 @@ def start(context: Context) -> None:
     Sets required environment variables:
     - INFRAHUB_ADDRESS: Infrahub server address (default: http://localhost:8000)
     - INFRAHUB_API_TOKEN: API token for infrahubctl (default: admin)
-    - INFRAHUB_VERSION: Docker image version (default: 1.5.0b1)
+    - INFRAHUB_VERSION: Docker image version (default: latest)
     """
     # Set environment variables for infrahubctl
     os.environ["INFRAHUB_ADDRESS"] = INFRAHUB_ADDRESS
@@ -285,7 +285,7 @@ def test_unit(context: Context, basetemp: str = ".pytest-tmp") -> None:
 def test_integration(
     context: Context,
     basetemp: str = "~/.pytest-tmp/infrahub-demo",
-    server_port: int = 8000,
+    server_port: int = 8100,
 ) -> None:
     """Run integration tests with a stable pytest temp dir (Colima-safe).
 
@@ -309,7 +309,7 @@ def test_integration(
 def validate(context: Context) -> None:
     """Run all code quality tests."""
     context.run("ruff check . --fix", pty=True)
-    context.run("mypy .", pty=True)
+    context.run("ty check", pty=True)
     context.run(
         'uv run yamllint -d "{extends: default, ignore: [.github/, .venv/ , .dev/, .ai/, .pytest-tmp/] }" .',
         pty=True,
