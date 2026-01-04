@@ -83,7 +83,7 @@ fragment RackFields on LocationRack {
 }
 
 query GetEndpointForConnectivity($device_name: String!) {
-  DcimGenericDevice(name__value: $device_name) {
+  DcimDevice(name__value: $device_name) {
     edges {
       node {
         id

@@ -171,15 +171,13 @@ class TestGetData:
     def test_complex_query_response(self) -> None:
         """Test realistic GraphQL query response."""
         data = {
-            "DcimGenericDevice": {
+            "DcimDevice": {
                 "edges": [
                     {
                         "node": {
                             "id": "device-123",
                             "name": {"value": "leaf-01"},
-                            "platform": {
-                                "node": {"name": {"value": "arista_eos"}}
-                            },
+                            "platform": {"node": {"name": {"value": "arista_eos"}}},
                             "interfaces": {
                                 "count": 48,
                                 "edges": [

@@ -69,7 +69,7 @@ generics:
         order_weight: 110
     relationships:
       - name: devices
-        peer: DcimGenericDevice
+        peer: DcimDevice
         kind: Component
         cardinality: many
         identifier: "topology__devices"
@@ -354,6 +354,7 @@ nodes:
       - GeneratorTarget
     parent: TopologyDataCenter
     children: ""
+    label: Pod
     human_friendly_id:
       - parent__name__value
       - parent__index__value
@@ -563,7 +564,7 @@ nodes:
         default_value: physical
     relationships:
       - name: devices
-        peer: DcimGenericDevice
+        peer: DcimDevice
         kind: Component
         cardinality: many
         identifier: "topology__devices"
@@ -681,7 +682,7 @@ nodes:
         order_weight: 200
     relationships:
       - name: devices
-        peer: DcimGenericDevice
+        peer: DcimDevice
         kind: Component
         cardinality: many
         identifier: "topology__devices"
@@ -690,7 +691,7 @@ nodes:
 
 extensions:
   nodes:
-    - kind: DcimGenericDevice
+    - kind: DcimDevice
       relationships:
         - name: deployment
           peer: TopologyDeployment

@@ -81,7 +81,7 @@ nodes:
         kind: Attribute
         description: The IP address for this VIP service.
       - name: frontend_servers
-        peer: DcimGenericDevice
+        peer: DcimDevice
         optional: false
         cardinality: many
         kind: Generic

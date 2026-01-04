@@ -1094,7 +1094,7 @@ nodes:
         optional: true
         order_weight: 2000
       - name: devices
-        peer: DcimGenericDevice
+        peer: DcimDevice
         label: Devices
         cardinality: many
         kind: Generic
@@ -1195,7 +1195,7 @@ nodes:
         order_weight: 1600
     relationships:
       - name: physical_device
-        peer: DcimGenericDevice
+        peer: DcimDevice
         label: Physical Device
         cardinality: one
         kind: Attribute
@@ -1289,7 +1289,7 @@ nodes:
         order_weight: 1700
     relationships:
       - name: devices
-        peer: DcimGenericDevice
+        peer: DcimDevice
         label: Devices
         cardinality: many
         kind: Generic

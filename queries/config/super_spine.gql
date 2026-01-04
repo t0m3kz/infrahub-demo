@@ -1,5 +1,5 @@
 query super_spine_config($device: String!) {
-  DcimGenericDevice(name__value: $device) {
+  DcimDevice(name__value: $device) {
     edges {
       node {
         id

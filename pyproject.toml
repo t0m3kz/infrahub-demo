@@ -27,16 +27,13 @@ dev = [
     "yamllint>=1.37.1",
 ]
 
-[tool.mypy]
-pretty = true
-ignore_missing_imports = true
-disallow_untyped_defs = true
-
-[[tool.mypy.overrides]]
-module = ["untyped_package.*"]
-follow_untyped_imports = true
+[tool.ruff]
+line-length = 120
+exclude = [".venv/", ".dev/"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
 asyncio_default_fixture_loop_scope = "function"
+log_cli = 1
+log_cli_level = "INFO"

@@ -1,5 +1,5 @@
 query border_leaf_config($device: String!) {
-  DcimGenericDevice(name__value: $device) {
+  DcimDevice(name__value: $device) {
     edges {
       node {
         __typename

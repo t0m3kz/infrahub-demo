@@ -34,7 +34,7 @@ class EndpointConnectivityGenerator(CommonGenerator):
     async def generate(self, data: dict[str, Any]) -> None:
         """Generate endpoint device connectivity based on deployment type."""
         try:
-            deployment_list = clean_data(data).get("DcimGenericDevice", [])
+            deployment_list = clean_data(data).get("DcimDevice", [])
             if not deployment_list:
                 self.logger.error("No Endpoint Device data found in GraphQL response")
                 return
@@ -46,9 +46,7 @@ class EndpointConnectivityGenerator(CommonGenerator):
             return
 
         if not self.data.rack:
-            self.logger.error(
-                f"Endpoint {self.data.name} has no rack assigned - cannot determine connectivity"
-            )
+            self.logger.error(f"Endpoint {self.data.name} has no rack assigned - cannot determine connectivity")
             return
 
         deployment_type = self.data.rack.pod.deployment_type
@@ -58,23 +56,15 @@ class EndpointConnectivityGenerator(CommonGenerator):
         self.deployment_id = dc.id
         self.fabric_name = dc.name.lower()
 
-        self.logger.info(
-            f"Generating connectivity for endpoint {self.data.name} in {deployment_type} deployment"
-        )
+        self.logger.info(f"Generating connectivity for endpoint {self.data.name} in {deployment_type} deployment")
 
         # Update endpoint device to set deployment to pod
-        endpoint_device = await self.client.get(
-            kind=DcimPhysicalDevice, id=self.data.id
-        )
-        current_deployment = (
-            endpoint_device.deployment.id if endpoint_device.deployment._peer else None
-        )  # type: ignore
+        endpoint_device = await self.client.get(kind=DcimPhysicalDevice, id=self.data.id)
+        current_deployment = endpoint_device.deployment.id if endpoint_device.deployment._peer else None  # type: ignore
         if current_deployment != pod_id:
             endpoint_device.deployment = pod_id  # type: ignore
             await endpoint_device.save()
-            self.logger.info(
-                f"Updated {self.data.name} deployment to pod {self.pod_name}"
-            )
+            self.logger.info(f"Updated {self.data.name} deployment to pod {self.pod_name}")
 
         if deployment_type == "middle_rack":
             await self._connect_middle_rack_deployment()
@@ -83,9 +73,7 @@ class EndpointConnectivityGenerator(CommonGenerator):
         elif deployment_type == "mixed":
             await self._connect_mixed_deployment()
         else:
-            self.logger.error(
-                f"Unknown deployment type '{deployment_type}' for endpoint {self.data.name}"
-            )
+            self.logger.error(f"Unknown deployment type '{deployment_type}' for endpoint {self.data.name}")
 
     async def _connect_middle_rack_deployment(self) -> None:
         """Connect endpoint in middle_rack deployment.
@@ -139,9 +127,7 @@ class EndpointConnectivityGenerator(CommonGenerator):
             )
 
         if not target_devices:
-            self.logger.warning(
-                f"No ToR devices found for endpoint {self.data.name} (tor deployment)"
-            )
+            self.logger.warning(f"No ToR devices found for endpoint {self.data.name} (tor deployment)")
             return
 
         await self._create_endpoint_connections(target_devices, "tor")
@@ -176,9 +162,7 @@ class EndpointConnectivityGenerator(CommonGenerator):
 
         await self._create_endpoint_connections(target_devices, target_role)
 
-    def _get_devices_in_rack(
-        self, role: Literal["tor", "leaf"]
-    ) -> list[dict[str, Any]]:
+    def _get_devices_in_rack(self, role: Literal["tor", "leaf"]) -> list[dict[str, Any]]:
         """Extract devices of specific role from rack data.
 
         Args:
@@ -223,16 +207,12 @@ class EndpointConnectivityGenerator(CommonGenerator):
         )
 
         if not racks:
-            self.logger.warning(
-                f"No network rack found in row {row_index} for middle_rack deployment"
-            )
+            self.logger.warning(f"No network rack found in row {row_index} for middle_rack deployment")
             return []
 
         rack_ids = [rack.id for rack in racks]
 
-        devices = await self.client.filters(
-            kind=DcimPhysicalDevice, role__value=role, rack__ids=rack_ids
-        )
+        devices = await self.client.filters(kind=DcimPhysicalDevice, role__value=role, rack__ids=rack_ids)
 
         return [
             {
@@ -249,18 +229,14 @@ class EndpointConnectivityGenerator(CommonGenerator):
         """Query devices of specific role in same row across all racks."""
         from .schema_protocols import LocationRack
 
-        racks = await self.client.filters(
-            kind=LocationRack, pod__ids=[pod_id], row_index__value=row_index
-        )
+        racks = await self.client.filters(kind=LocationRack, pod__ids=[pod_id], row_index__value=row_index)
 
         if not racks:
             return []
 
         rack_ids = [rack.id for rack in racks]
 
-        devices = await self.client.filters(
-            kind=DcimPhysicalDevice, role__value=role, rack__ids=rack_ids
-        )
+        devices = await self.client.filters(kind=DcimPhysicalDevice, role__value=role, rack__ids=rack_ids)
 
         return [
             {
@@ -283,28 +259,20 @@ class EndpointConnectivityGenerator(CommonGenerator):
             target_role: Role of target devices (tor or leaf)
         """
         if len(target_devices) < 2:
-            self.logger.warning(
-                f"Need at least 2 {target_role} devices for dual-homing, found {len(target_devices)}"
-            )
+            self.logger.warning(f"Need at least 2 {target_role} devices for dual-homing, found {len(target_devices)}")
             return
 
         target_pair = self._select_consecutive_device_pair(target_devices, target_role)
         if len(target_pair) < 2:
-            self.logger.warning(
-                f"Could not find consecutive {target_role} pair with compatible interfaces"
-            )
+            self.logger.warning(f"Could not find consecutive {target_role} pair with compatible interfaces")
             return
 
         target_device_names = [dev.get("name", {}).get("value") for dev in target_pair]
 
-        self.logger.info(
-            f"Selected {target_role} pair for {self.data.name}: {target_device_names}"
-        )
+        self.logger.info(f"Selected {target_role} pair for {self.data.name}: {target_device_names}")
 
         # Get endpoint interfaces without existing cables
-        available_endpoint_interfaces = [
-            intf for intf in self.data.interfaces if not intf.cable
-        ]
+        available_endpoint_interfaces = [intf for intf in self.data.interfaces if not intf.cable]
 
         if not available_endpoint_interfaces:
             self.logger.info(f"All interfaces on {self.data.name} already have cables")
@@ -316,9 +284,7 @@ class EndpointConnectivityGenerator(CommonGenerator):
         )
 
         if not target_interfaces:
-            self.logger.warning(
-                f"No compatible access interfaces found on {target_role} devices {target_device_names}"
-            )
+            self.logger.warning(f"No compatible access interfaces found on {target_role} devices {target_device_names}")
             return
 
         endpoint_intf_names = [intf.name for intf in available_endpoint_interfaces[:4]]
@@ -341,9 +307,7 @@ class EndpointConnectivityGenerator(CommonGenerator):
             f"Successfully created dual-homed connections for {self.data.name} to {target_role}s {target_device_names}"
         )
 
-    def _select_consecutive_device_pair(
-        self, devices: list[dict[str, Any]], role: str
-    ) -> list[dict[str, Any]]:
+    def _select_consecutive_device_pair(self, devices: list[dict[str, Any]], role: str) -> list[dict[str, Any]]:
         """Select pair of consecutive devices for dual-homing."""
         import re
 
@@ -384,9 +348,7 @@ class EndpointConnectivityGenerator(CommonGenerator):
             - Matching interface types if endpoint has specific types
             - Available interfaces (not already connected)
         """
-        endpoint_types = set(
-            intf.interface_type for intf in endpoint_interfaces if intf.interface_type
-        )
+        endpoint_types = set(intf.interface_type for intf in endpoint_interfaces if intf.interface_type)
 
         # ToR/Leaf interfaces connecting to endpoints typically have these roles
         acceptable_roles = ["downlink", "customer", "access", "peer"]
@@ -413,9 +375,7 @@ class EndpointConnectivityGenerator(CommonGenerator):
 
         # Filter out interfaces that already have cables
         # Note: cable is a RelatedNode with id=None for uncabled interfaces
-        interfaces = [
-            intf for intf in all_interfaces if not (intf.cable and intf.cable.id)
-        ]
+        interfaces = [intf for intf in all_interfaces if not (intf.cable and intf.cable.id)]
 
         self.logger.info(
             f"Found {len(interfaces)} available (uncabled) compatible interfaces on devices {device_names} "

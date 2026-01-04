@@ -6,12 +6,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from infrahub_sdk.protocols import (
-    BuiltinIPAddress,
-    BuiltinIPPrefix,
-    CoreArtifactTarget,
-    CoreNode,
-)
+from infrahub_sdk.protocols import BuiltinIPAddress, BuiltinIPPrefix, CoreArtifactTarget, CoreNode
 
 if TYPE_CHECKING:
     from infrahub_sdk.node import RelatedNode, RelationshipManager
@@ -93,7 +88,7 @@ class SecurityGenericAddressGroup(CoreNode):
     addresses: RelationshipManager
 
 
-class DcimGenericDevice(CoreNode):
+class DcimDevice(CoreNode):
     name: String
     os_version: StringOptional
     role: DropdownOptional
@@ -491,7 +486,7 @@ class ServiceOSPFInterface(ServiceGeneric):
     settings_interfaces: RelationshipManager
 
 
-class DcimPhysicalDevice(CoreArtifactTarget, DcimGenericDevice):
+class DcimPhysicalDevice(CoreArtifactTarget, DcimDevice):
     name: String
     os_version: StringOptional
     position: IntegerOptional
@@ -718,7 +713,7 @@ class DesignTopology(CoreArtifactTarget):
     elements: RelationshipManager
 
 
-class DcimVirtualDevice(CoreArtifactTarget, DcimGenericDevice):
+class DcimVirtualDevice(CoreArtifactTarget, DcimDevice):
     cpu: IntegerOptional
     memory: IntegerOptional
     name: String

@@ -168,7 +168,7 @@ spec:
                 - namespace: Dcim
                   name: GenericDevice
                   label: Devices
-                  kind: DcimGenericDevice
+                  kind: DcimDevice
                   icon: "mdi:server"
                   description: "All physical and virtual devices"
 

@@ -210,7 +210,7 @@ uv run pytest --cov=.
 ## Code Quality Standards
 
 - **Formatting**: Run `uv run ruff check . --fix` before committing.
-- **Type Checking**: Run `uv run mypy .` to ensure type safety.
+- **Type Checking**: Run `uv run py check .` to ensure type safety.
 - **Validation**: Run `uv run invoke validate` to execute all quality checks.
 
 ## Common Pitfalls

@@ -35,7 +35,7 @@ generics:
         order_weight: 1150
     relationships:
       - name: device
-        peer: DcimGenericDevice
+        peer: DcimDevice
         optional: false
         cardinality: one
         kind: Parent

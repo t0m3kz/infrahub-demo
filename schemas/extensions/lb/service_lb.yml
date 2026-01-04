@@ -95,7 +95,7 @@ nodes:
         order_weight: 22
         on_delete: no-action
       - name: frontend_servers
-        peer: DcimGenericDevice
+        peer: DcimDevice
         optional: false
         cardinality: many
         kind: Component

@@ -2,7 +2,7 @@
 version: "1.0"
 
 generics:
-  - name: GenericDevice
+  - name: Device
     namespace: Dcim
     description: Generic Device object.
     label: Device
@@ -284,7 +284,7 @@ generics:
         order_weight: 20000
     relationships:
       - name: device
-        peer: DcimGenericDevice
+        peer: DcimDevice
         identifier: device__interface
         optional: false
         cardinality: one
@@ -420,7 +420,7 @@ nodes:
         order_weight: 1900
     relationships:
       - name: devices
-        peer: DcimGenericDevice
+        peer: DcimDevice
         optional: true
         cardinality: many
         order_weight: 1350
@@ -439,7 +439,7 @@ nodes:
     generate_template: true
     inherit_from:
       - CoreArtifactTarget
-      - DcimGenericDevice
+      - DcimDevice
     attributes:
       - name: position
         label: Position (U)
@@ -477,7 +477,7 @@ nodes:
     generate_template: true
     inherit_from:
       - CoreArtifactTarget
-      - DcimGenericDevice
+      - DcimDevice
     attributes:
       - name: cpu
         label: CPU Number

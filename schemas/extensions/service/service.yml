@@ -54,7 +54,7 @@ generics:
     # This is only owning relationships toward various services for interfaces
     relationships:
       - name: device
-        peer: DcimGenericDevice
+        peer: DcimDevice
         optional: false
         cardinality: one
         kind: Generic
@@ -77,7 +77,7 @@ generics:
 
 extensions:
   nodes:
-    - kind: DcimGenericDevice
+    - kind: DcimDevice
       relationships:
         - name: device_services
           peer: ServiceGeneric
