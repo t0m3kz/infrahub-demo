@@ -28,7 +28,7 @@ jobs:
           uv run ruff check
       - run: |
           echo "Running type checks"
-          uv run mypy .
+          uv run ty check
       - run: |
           echo "Running validation"
           uv run yamllint -d "{extends: default, ignore: [.github/, .venv/ , .dev/, .ai/] }" .
