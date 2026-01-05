@@ -236,6 +236,7 @@ class CommonGenerator(InfrahubGenerator):
         management_pool = await self.client.get(
             kind=CoreIPAddressPool,
             name__value=management_pool_name,
+            branch="main",
         )
 
         loopback_pool = None
@@ -243,6 +244,7 @@ class CommonGenerator(InfrahubGenerator):
             loopback_pool = await self.client.get(
                 kind=CoreIPAddressPool,
                 name__value=loopback_pool_name,
+                branch="main",
             )
 
         batch_devices = await self.client.create_batch()
@@ -285,6 +287,7 @@ class CommonGenerator(InfrahubGenerator):
                             identifier=name,
                             prefix_length=32,
                             data={"description": f"Management IP for {name}"},
+                            branch="main",
                         ),
                         "rack": {"id": rack} if rack else None,
                         "member_of_groups": [{"id": group_id} for group_id in groups],
@@ -308,6 +311,7 @@ class CommonGenerator(InfrahubGenerator):
                                     identifier=name,
                                     prefix_length=32,
                                     data={"description": f"Loopback IP for {name}"},
+                                    branch="main",
                                 )
                             ],
                         },
