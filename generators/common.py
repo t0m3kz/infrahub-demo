@@ -7,6 +7,7 @@ from infrahub_sdk.exceptions import ValidationError
 from infrahub_sdk.generator import InfrahubGenerator
 from infrahub_sdk.protocols import CoreIPAddressPool, CoreIPPrefixPool, CoreStandardGroup
 from pydantic import BaseModel
+from regex import B
 
 from .helpers import CablingPlanner, DeviceNamingConfig
 
@@ -116,6 +117,7 @@ class CommonGenerator(InfrahubGenerator):
             parent_pool = await self.client.get(
                 kind=CoreIPPrefixPool,
                 name__value=parent_pool_name,
+                branch="main",
             )
             self.logger.info(
                 f"Allocating next IP prefix for pool '{pool_name}' (/{pool_size}) in parent '{parent_pool_name}'"
@@ -130,6 +132,7 @@ class CommonGenerator(InfrahubGenerator):
                 data={
                     "role": f"{pool_name if pool_name in ['management', 'technical', 'loopback'] else pool_name.split('-')[-1]}"
                 },
+                branch="main",
             )
 
             # Determine if this is a prefix or address pool
