@@ -83,6 +83,10 @@ generics:
             label: Endpoint device
             description: Endpoint Device/Server part of a Fabric.
             color: "#38a7fb"
+          - name: controller
+            label: Controller device
+            description: Controller.
+            color: "#f5a623"
       - name: status
         kind: Dropdown
         optional: false

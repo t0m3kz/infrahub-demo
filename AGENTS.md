@@ -1,4 +1,4 @@
-# GitHub Copilot Instructions for InfraHub Demo
+# Universal guidance for AI coding assistants working in this repository
 
 ## Guiding Principles
 
@@ -13,9 +13,10 @@ This is the **infrahub-demo** project - a comprehensive demonstration of design-
 
 Key use cases demonstrated:
 
-- Building a data center topology from scratch based on design principles.
-- Automating device configuration generation.
-- Validating infrastructure state against the intended design.
+- Composable data center, POP and Cloud topology generation
+- Configuration management with Jinja2 templates
+- Validation checks for network devices
+- Infrastructure-as-code patterns
 
 ## Package Manager & Dependencies
 
@@ -63,6 +64,20 @@ uv run invoke start
 4. **Checks** - Validate configurations and connectivity.
 5. **Templates** - Generate device-specific configurations.
 
+### Data Flow
+
+```text
+Schema Definition → Data Loading → Generator Execution → Transform Processing → Configuration Generation
+                                         ↓
+                                   Validation Checks
+```
+
+### Key Files
+
+- `.infrahub.yml` - Central registry for all components (transforms, generators, checks, queries)
+- `tasks.py` - Invoke task definitions for automation
+- `pyproject.toml` - Project dependencies and tool configuration
+
 ## Development Workflow
 
 When implementing a new feature or making a change, follow this thought process:
@@ -73,6 +88,7 @@ When implementing a new feature or making a change, follow this thought process:
 4. **Implement the Change**: Write the code, following the established patterns in this document.
 5. **Write/Update Tests**: Create new tests in `tests/` or update existing ones to cover all changes.
 6. **Run Validation**: Execute `uv run invoke validate` to ensure all quality checks pass before committing.
+7. **Do not auto-commit**: only commit when explicitly requested
 
 ## Development Patterns
 
@@ -207,10 +223,17 @@ uv run pytest --cov=.
 - Mock the Infrahub SDK and GraphQL responses in unit tests. Store mock data in `tests/unit/simulators/`.
 - Avoid hardcoded paths; use fixtures like `root_dir`.
 
+## Security Considerations
+
+- Never commit `.env` files or credentials
+- API tokens in documentation are demo tokens for local development only
+- Avoid introducing OWASP top 10 vulnerabilities (XSS, SQL injection, command injection)
+- Validate external inputs at system boundaries
+
 ## Code Quality Standards
 
 - **Formatting**: Run `uv run ruff check . --fix` before committing.
-- **Type Checking**: Run `uv run py check .` to ensure type safety.
+- **Type Checking**: Run `uv run ty check .` to ensure type safety.
 - **Validation**: Run `uv run invoke validate` to execute all quality checks.
 
 ## Common Pitfalls

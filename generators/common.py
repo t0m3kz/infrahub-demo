@@ -5,11 +5,7 @@ from typing import TYPE_CHECKING, Any, Literal, Optional, TypeVar, cast
 
 from infrahub_sdk.exceptions import ValidationError
 from infrahub_sdk.generator import InfrahubGenerator
-from infrahub_sdk.protocols import (
-    CoreIPAddressPool,
-    CoreIPPrefixPool,
-    CoreStandardGroup,
-)
+from infrahub_sdk.protocols import CoreIPAddressPool, CoreIPPrefixPool, CoreStandardGroup
 from pydantic import BaseModel
 
 from .helpers import CablingPlanner, DeviceNamingConfig
@@ -60,10 +56,7 @@ class CommonGenerator(InfrahubGenerator):
         """
         # import json
 
-        related_ids = (
-            self.client.group_context.related_group_ids
-            + self.client.group_context.related_node_ids
-        )
+        related_ids = self.client.group_context.related_group_ids + self.client.group_context.related_node_ids
         sorted_ids = sorted(related_ids)
         joined = ",".join(sorted_ids)
         return hashlib.sha256(joined.encode("utf-8")).hexdigest()
@@ -103,9 +96,7 @@ class CommonGenerator(InfrahubGenerator):
         ]
         filtered_pools = {key: pools[key] for key in valid_keys if key in pools}
         pod = await self.client.get(kind=TopologyPod, id=id) if pod_name else None
-        pools_config = FabricPoolConfig(
-            **filtered_pools, kind=strategy, ipv6=ipv6 or False
-        )
+        pools_config = FabricPoolConfig(**filtered_pools, kind=strategy, ipv6=ipv6 or False)
         for pool_name, pool_size in pools_config.pools().items():
             if strategy == "fabric" and pool_name in [
                 "management",
@@ -141,9 +132,9 @@ class CommonGenerator(InfrahubGenerator):
             pool_full_name = f"{pool_prefix}-{pool_name}-pool"
 
             # Determine if this is a prefix or address pool
-            is_prefix_pool = (
-                strategy == "fabric" and pool_name in ["technical", "loopback"]
-            ) or (strategy == "pod" and pool_name == "technical")
+            is_prefix_pool = (strategy == "fabric" and pool_name in ["technical", "loopback"]) or (
+                strategy == "pod" and pool_name == "technical"
+            )
 
             if is_prefix_pool:
                 new_pool = await self.client.create(
@@ -182,12 +173,10 @@ class CommonGenerator(InfrahubGenerator):
             }
 
             if pod and pool_name in pool_attribute_map:
-                # Use direct ID reference - InfraHub merge will handle pool object relationships
-                # Pool has identifier=pod-id, ensuring consistent allocation from parent pools
-                setattr(pod, pool_attribute_map[pool_name], new_pool.id)
-                self.logger.info(
-                    f"- Updated pod {pod.name.value} with pool {pool_full_name} (id: {new_pool.id})"
-                )
+                # Attach using explicit node reference to avoid merge-time drops on CoreIPAddressPool links
+                pool_ref = {"id": new_pool.id, "hfid": [new_pool.hfid]}
+                setattr(pod, pool_attribute_map[pool_name], pool_ref)
+                self.logger.info(f"- Updated pod {pod.name.value} with pool {pool_full_name} (id: {new_pool.id})")
                 await pod.save(allow_upsert=True)
 
     async def create_devices(
@@ -254,9 +243,7 @@ class CommonGenerator(InfrahubGenerator):
         batch_devices = await self.client.create_batch()
         batch_loopbacks = await self.client.create_batch()
 
-        device_group = await self.client.get(
-            kind=CoreStandardGroup, name__value=f"{device_role}s"
-        )
+        device_group = await self.client.get(kind=CoreStandardGroup, name__value=f"{device_role}s")
         try:
             # Fetch all existing devices in a single batch to optimize performance
             existing_devices_list = await self.client.filters(
@@ -264,17 +251,13 @@ class CommonGenerator(InfrahubGenerator):
                 name__values=device_names,
                 include=["member_of_groups"],
             )
-            existing_devices_map = {
-                device.name.value: device for device in existing_devices_list
-            }
+            existing_devices_map = {device.name.value: device for device in existing_devices_list}
 
             # Add device objects and related loopback interfaces (if any) to the batch
             for name in device_names:
                 existing_device = existing_devices_map.get(name)
                 if existing_device:
-                    groups = [
-                        peer.id for peer in existing_device.member_of_groups.peers
-                    ]
+                    groups = [peer.id for peer in existing_device.member_of_groups.peers]
                 else:
                     groups = []
 
@@ -286,9 +269,7 @@ class CommonGenerator(InfrahubGenerator):
                     kind=device_kind,
                     data={
                         "name": name,
-                        "object_template": {
-                            "id": template.get("id") if template else None
-                        },
+                        "object_template": {"id": template.get("id") if template else None},
                         "status": "active",
                         "role": device_role,
                         "deployment": {"id": deployment_id} if deployment_id else None,
@@ -332,9 +313,7 @@ class CommonGenerator(InfrahubGenerator):
             async for node, _ in batch_devices.execute():
                 self.logger.info(f"- Created [{node.get_kind()}] {node.hfid}")
             async for node, _ in batch_loopbacks.execute():
-                self.logger.info(
-                    f"- Created [{node.get_kind()}] {node.device.hfid} {node.name.value}"
-                )
+                self.logger.info(f"- Created [{node.get_kind()}] {node.device.hfid} {node.name.value}")
         except ValidationError as exc:
             self.logger.error("Batch creation failed with validation error: %s", exc)
             raise
@@ -373,9 +352,7 @@ class CommonGenerator(InfrahubGenerator):
         )
         cabling_offset: int = int(options.get("cabling_offset", 0))
         # Get pool from options or construct from pod_name
-        pool: Any = options.get("pool") or (
-            f"{self.pod_name}-technical-pool" if self.pod_name else None
-        )
+        pool: Any = options.get("pool") or (f"{self.pod_name}-technical-pool" if self.pod_name else None)
         # Access deployment_id from instance variable (required, set in generate methods)
         deployment_id = self.deployment_id
 
@@ -443,16 +420,12 @@ class CommonGenerator(InfrahubGenerator):
         )
 
         if not cabling_plan:
-            self.logger.warning(
-                "No cabling connections planned; skipping cable creation"
-            )
+            self.logger.warning("No cabling connections planned; skipping cable creation")
             return
 
         technical_pool = None
         if pool:
-            technical_pool = await self.client.get(
-                kind=CoreIPPrefixPool, name__value=pool
-            )
+            technical_pool = await self.client.get(kind=CoreIPPrefixPool, name__value=pool)
 
         batch_cables = await self.client.create_batch()
         batch_ips = await self.client.create_batch()
@@ -498,9 +471,7 @@ class CommonGenerator(InfrahubGenerator):
                         "is_pool": True,
                     },
                 )
-                self.logger.info(
-                    f"- Allocated prefix {p2p_prefix.display_label} for {name}"
-                )
+                self.logger.info(f"- Allocated prefix {p2p_prefix.display_label} for {name}")
 
                 # Create a temporary address pool from the p2p prefix
                 host_addresses = p2p_prefix.prefix.value.hosts()  # type: ignore
@@ -566,9 +537,7 @@ class CommonGenerator(InfrahubGenerator):
                     "deployment": deployment_id,
                 },
             )
-            batch_cables.add(
-                task=network_link.save, allow_upsert=True, node=network_link
-            )
+            batch_cables.add(task=network_link.save, allow_upsert=True, node=network_link)
 
         async for node, _ in batch_cables.execute():
             self.logger.info(f"- Created [{node.get_kind()}] {node.hfid}")
