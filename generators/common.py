@@ -256,6 +256,15 @@ class CommonGenerator(InfrahubGenerator):
                 if device_group.id not in groups:
                     groups.append(device_group.id)
 
+                primary_ip = await self.client.allocate_next_ip_address(
+                    resource_pool=management_pool,
+                    identifier=name,
+                    prefix_length=32,
+                    branch=default_branch,
+                    data={"description": f"Management IP for {name}"},
+                )
+                await primary_ip.save(allow_upsert=True)
+
                 obj = await self.client.create(
                     kind=device_kind,
                     data={
@@ -266,13 +275,7 @@ class CommonGenerator(InfrahubGenerator):
                         "deployment": {"id": deployment_id} if deployment_id else None,
                         "device_type": template.get("device_type"),
                         "platform": template.get("platform"),
-                        "primary_address": await self.client.allocate_next_ip_address(
-                            resource_pool=management_pool,
-                            identifier=name,
-                            prefix_length=32,
-                            branch=default_branch,
-                            data={"description": f"Management IP for {name}"},
-                        ),
+                        "primary_address": {"id": primary_ip.id},
                         "rack": {"id": rack} if rack else None,
                         "member_of_groups": [{"id": group_id} for group_id in groups],
                     },
@@ -280,6 +283,15 @@ class CommonGenerator(InfrahubGenerator):
                 batch_devices.add(task=obj.save, allow_upsert=True, node=obj)
 
                 if loopback_pool:
+                    loopback_ip = await self.client.allocate_next_ip_address(
+                        resource_pool=loopback_pool,
+                        identifier=name,
+                        prefix_length=32,
+                        branch=default_branch,
+                        data={"description": f"Loopback IP for {name}"},
+                    )
+                    await loopback_ip.save(allow_upsert=True)
+
                     obj = await self.client.create(
                         kind=DcimVirtualInterface,
                         data={
@@ -288,15 +300,7 @@ class CommonGenerator(InfrahubGenerator):
                             "device": {"hfid": name},
                             "status": "active",
                             "role": "loopback",
-                            "ip_addresses": [
-                                await self.client.allocate_next_ip_address(
-                                    resource_pool=loopback_pool,
-                                    identifier=name,
-                                    prefix_length=32,
-                                    branch=default_branch,
-                                    data={"description": f"Loopback IP for {name}"},
-                                )
-                            ],
+                            "ip_addresses": [{"id": loopback_ip.id}],
                         },
                     )
                     batch_loopbacks.add(task=obj.save, allow_upsert=True, node=obj)
