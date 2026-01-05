@@ -41,11 +41,7 @@ def get_bgp_profile(device_services: list[dict[str, Any]]) -> list[dict[str, Any
     for sessions in peer_groups.values():
         if not sessions:
             continue
-        base_settings = {
-            k: v
-            for k, v in sessions[0].items()
-            if k not in unique_keys and k != "peer_group"
-        }
+        base_settings = {k: v for k, v in sessions[0].items() if k not in unique_keys and k != "peer_group"}
         for session in sessions[1:]:
             keys_to_remove = []
             for k in base_settings:
@@ -115,9 +111,7 @@ def get_interfaces(data: list) -> list[dict[str, Any]]:
     if not data:
         return []
 
-    sorted_names = sort_interface_list(
-        [iface.get("name") for iface in data if iface.get("name")]
-    )
+    sorted_names = sort_interface_list([iface.get("name") for iface in data if iface.get("name")])
     name_to_interface = {}
     for iface in data:
         name = iface.get("name")
@@ -149,12 +143,7 @@ def get_interfaces(data: list) -> list[dict[str, Any]]:
         # For PhysicalInterface: ip_address is a single address object
         # Only add if it exists, is not None, and has an 'address' field
         physical_ip = iface.get("ip_address")
-        if (
-            physical_ip
-            and isinstance(physical_ip, dict)
-            and physical_ip.get("address")
-            and not ip_addresses
-        ):
+        if physical_ip and isinstance(physical_ip, dict) and physical_ip.get("address") and not ip_addresses:
             ip_addresses.append(physical_ip)
 
         iface_dict = {
@@ -173,9 +162,7 @@ def get_interfaces(data: list) -> list[dict[str, Any]]:
 
         name_to_interface[name] = iface_dict
 
-    return [
-        name_to_interface[name] for name in sorted_names if name in name_to_interface
-    ]
+    return [name_to_interface[name] for name in sorted_names if name in name_to_interface]
 
 
 # ============================================================================
@@ -184,9 +171,7 @@ def get_interfaces(data: list) -> list[dict[str, Any]]:
 # Following netlab's approach: single implementation, platform-agnostic data model
 
 
-def get_vxlan_config(
-    data: dict, platform: str, device_role: str = "leaf"
-) -> dict | None:
+def get_vxlan_config(data: dict, platform: str, device_role: str = "leaf") -> dict | None:
     """Get VXLAN configuration with microsegmentation support (netlab-inspired).
 
     Unified VXLAN implementation for all device types (leaf, spine, border_leaf, tor).
@@ -223,9 +208,7 @@ def get_vxlan_config(
     # But they may need EVPN route-reflector config
     if device_role == "spine":
         device_services = data.get("device_services", [])
-        bgp_services = [
-            svc for svc in device_services if svc.get("service_type") == "bgp"
-        ]
+        bgp_services = [svc for svc in device_services if svc.get("service_type") == "bgp"]
 
         if bgp_services:
             # Spine with BGP = EVPN route-reflector
@@ -244,9 +227,7 @@ def get_vxlan_config(
         return None
 
     # Extract VTEP configuration from Loopback0 (data plane)
-    loopback_interfaces = [
-        iface for iface in interfaces if "Loopback0" in iface.get("name", "")
-    ]
+    loopback_interfaces = [iface for iface in interfaces if "Loopback0" in iface.get("name", "")]
     vtep_ipv4 = None
     vtep_source = "Loopback0"  # Convention: Loopback0 for VTEP
 
@@ -370,12 +351,7 @@ def _extract_l3_vni_mappings(interfaces: list) -> tuple[list[dict], list[dict]]:
         is_vrf_loopback = (
             "loopback" in iface_name.lower()
             and iface_name != "Loopback0"  # Exclude VTEP loopback
-            and (
-                "vrf" in description
-                or "vrf" in role
-                or "vrf" in kind
-                or "tenant" in description
-            )
+            and ("vrf" in description or "vrf" in role or "vrf" in kind or "tenant" in description)
         )
 
         if is_vrf_loopback:
@@ -457,9 +433,7 @@ def _extract_vrf_name(loopback_name: str, description: str) -> str:
     return "VRF_UNKNOWN"
 
 
-def _transform_vxlan_platform(
-    base_config: dict, platform: str, local_as: str | None
-) -> dict:
+def _transform_vxlan_platform(base_config: dict, platform: str, local_as: str | None) -> dict:
     """Apply platform-specific VXLAN transformations (netlab style).
 
     Args:

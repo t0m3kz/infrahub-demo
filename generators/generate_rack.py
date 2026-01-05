@@ -31,9 +31,7 @@ class RackGenerator(CommonGenerator):
         )
 
         if not middle_rack_leafs:
-            self.logger.warning(
-                f"Middle rack {self.data.name} has no leafs - skipping ToR cascade"
-            )
+            self.logger.warning(f"Middle rack {self.data.name} has no leafs - skipping ToR cascade")
             return
 
         # Query ToR racks in same row
@@ -95,9 +93,7 @@ class RackGenerator(CommonGenerator):
         )
         return device_names, interface_names
 
-    async def _get_leaf_devices_in_row(
-        self, pod_id: str, row_index: int
-    ) -> tuple[list[str], list[str]]:
+    async def _get_leaf_devices_in_row(self, pod_id: str, row_index: int) -> tuple[list[str], list[str]]:
         """Query leaf devices in same row and their interfaces for ToR-to-leaf cabling.
 
         Args:
@@ -107,11 +103,7 @@ class RackGenerator(CommonGenerator):
         Returns:
             Tuple of (device_names, interface_names) for create_cabling
         """
-        from .schema_protocols import (
-            DcimPhysicalDevice,
-            DcimPhysicalInterface,
-            LocationRack,
-        )
+        from .schema_protocols import DcimPhysicalDevice, DcimPhysicalInterface, LocationRack
 
         # Step 1: Query racks in same row
         racks_in_row = await self.client.filters(
@@ -146,9 +138,7 @@ class RackGenerator(CommonGenerator):
         )
 
         if not leaf_interfaces:
-            self.logger.warning(
-                f"No downlink interfaces found on leaf devices in row {row_index}"
-            )
+            self.logger.warning(f"No downlink interfaces found on leaf devices in row {row_index}")
             return [], []
 
         # Extract unique interface names
@@ -159,9 +149,7 @@ class RackGenerator(CommonGenerator):
         )
         return device_names, interface_names
 
-    def _calculate_cumulative_cabling_offset(
-        self, device_count: int, device_type: str = "leaf"
-    ) -> int:
+    def _calculate_cumulative_cabling_offset(self, device_count: int, device_type: str = "leaf") -> int:
         """Calculate cabling offset using simple formula based on rack position."""
 
         current_index = self.data.index
@@ -210,9 +198,7 @@ class RackGenerator(CommonGenerator):
         else:
             # Other cases: no offset needed
             offset = 0
-            self.logger.info(
-                f"No offset needed for {device_type} in rack {self.data.name} (mode={deployment_type})"
-            )
+            self.logger.info(f"No offset needed for {device_type} in rack {self.data.name} (mode={deployment_type})")
 
         return offset
 
@@ -284,9 +270,7 @@ class RackGenerator(CommonGenerator):
         dc_design = pod.parent.design_pattern
         naming_conv = cast(
             Literal["standard", "hierarchical", "flat"],
-            (dc_design.naming_convention or "standard").lower()
-            if dc_design
-            else "standard",
+            (dc_design.naming_convention or "standard").lower() if dc_design else "standard",
         )
 
         created_leaf_devices = []
@@ -309,21 +293,15 @@ class RackGenerator(CommonGenerator):
 
             created_leaf_devices.extend(leaf_devices)
 
-            leaf_interfaces = [
-                interface.name for interface in leaf_role.template.interfaces
-            ]
+            leaf_interfaces = [interface.name for interface in leaf_role.template.interfaces]
 
             # Query spine devices in pod for leaf-to-spine cabling
-            spine_device_names, spine_interfaces = await self._get_spine_devices(
-                pod_id=pod.id
-            )
+            spine_device_names, spine_interfaces = await self._get_spine_devices(pod_id=pod.id)
             if not spine_device_names:
                 self.logger.error("No spine devices found in pod for leaf cabling")
                 continue
 
-            self.logger.info(
-                f"Found {len(spine_device_names)} spine devices: {spine_device_names}"
-            )
+            self.logger.info(f"Found {len(spine_device_names)} spine devices: {spine_device_names}")
 
             # Calculate cumulative offset for leaf cabling based on actual leaf counts from previous racks
             cabling_offset = self._calculate_cumulative_cabling_offset(
@@ -364,9 +342,7 @@ class RackGenerator(CommonGenerator):
 
             # Get only uplink interfaces from ToR template (role="uplink")
             tor_interfaces = [
-                interface.name
-                for interface in tor_role.template.interfaces
-                if interface.role == "uplink"
+                interface.name for interface in tor_role.template.interfaces if interface.role == "uplink"
             ]
 
             # Deployment type: middle_rack - ToRs connect to local leafs in same rack
@@ -387,9 +363,7 @@ class RackGenerator(CommonGenerator):
                     )
 
                     if leaf_interfaces_objects:
-                        leaf_interfaces = sorted(
-                            set(iface.name.value for iface in leaf_interfaces_objects)
-                        )
+                        leaf_interfaces = sorted(set(iface.name.value for iface in leaf_interfaces_objects))
 
                         await self.create_cabling(
                             bottom_devices=tor_devices,
@@ -409,29 +383,21 @@ class RackGenerator(CommonGenerator):
                             f"middle_rack deployment for {self.data.name}: No downlink interfaces found on leaf devices"
                         )
                 else:
-                    self.logger.warning(
-                        f"middle_rack deployment for {self.data.name} has ToRs but no leafs"
-                    )
+                    self.logger.warning(f"middle_rack deployment for {self.data.name} has ToRs but no leafs")
 
             # Deployment type: tor - ToRs connect directly to spines
             elif deployment_type == "tor":
                 # Calculate cumulative offset for ToR cabling (all ToRs connect to spines)
                 cabling_offset = self._calculate_cumulative_cabling_offset(
-                    device_count=sum(
-                        tor_role.quantity or 0 for tor_role in self.data.tors or []
-                    ),
+                    device_count=sum(tor_role.quantity or 0 for tor_role in self.data.tors or []),
                     device_type="tor",
                 )
 
                 # Query spine devices in pod
-                spine_device_names, spine_interfaces = await self._get_spine_devices(
-                    pod_id=pod.id
-                )
+                spine_device_names, spine_interfaces = await self._get_spine_devices(pod_id=pod.id)
 
                 if spine_device_names:
-                    self.logger.info(
-                        f"ToR deployment: Found {len(spine_device_names)} spine devices for cabling"
-                    )
+                    self.logger.info(f"ToR deployment: Found {len(spine_device_names)} spine devices for cabling")
 
                     await self.create_cabling(
                         bottom_devices=tor_devices,
@@ -481,9 +447,7 @@ class RackGenerator(CommonGenerator):
                     # This is a ToR-only rack - connect to middle rack leafs in same row
                     # Calculate offset based on ALL ToRs in previous racks within the same row
                     cabling_offset = self._calculate_cumulative_cabling_offset(
-                        device_count=sum(
-                            tor_role.quantity or 0 for tor_role in self.data.tors or []
-                        ),
+                        device_count=sum(tor_role.quantity or 0 for tor_role in self.data.tors or []),
                         device_type="tor",
                     )
 
@@ -491,9 +455,7 @@ class RackGenerator(CommonGenerator):
                     (
                         leaf_device_names,
                         leaf_interfaces,
-                    ) = await self._get_leaf_devices_in_row(
-                        pod_id=pod.id, row_index=self.data.row_index
-                    )
+                    ) = await self._get_leaf_devices_in_row(pod_id=pod.id, row_index=self.data.row_index)
 
                     if leaf_device_names:
                         self.logger.info(
@@ -520,9 +482,7 @@ class RackGenerator(CommonGenerator):
                         )
 
             else:
-                self.logger.warning(
-                    f"Unknown deployment_type '{deployment_type}' for rack {self.data.name}"
-                )
+                self.logger.warning(f"Unknown deployment_type '{deployment_type}' for rack {self.data.name}")
 
         # For mixed deployment with middle rack: trigger ToR rack checksum updates
         # This ensures ToR racks in the same row are generated after middle rack completes

@@ -339,64 +339,35 @@ class CommonGenerator(InfrahubGenerator):
         ] = "rack",
         options: Optional[dict[str, Any]] = None,
     ) -> None:
-        """Create cabling connections between device layers with enhanced hierarchical support."""
+        """Create cabling connections between device layers (simple per-link flow)."""
 
         options = options or {}
-        bottom_sorting: Literal["top_down", "bottom_up"] = cast(
-            Literal["top_down", "bottom_up"],
-            options.get("bottom_sorting", "bottom_up"),
-        )
-        top_sorting: Literal["top_down", "bottom_up"] = cast(
-            Literal["top_down", "bottom_up"],
-            options.get("top_sorting", "bottom_up"),
-        )
         cabling_offset: int = int(options.get("cabling_offset", 0))
-        # Get pool from options or construct from pod_name
         pool: Any = options.get("pool") or (f"{self.pod_name}-technical-pool" if self.pod_name else None)
-        # Access deployment_id from instance variable (required, set in generate methods)
-        deployment_id = self.deployment_id
+
+        bottom_sorting: Literal["top_down", "bottom_up"] = "bottom_up"
+        top_sorting: Literal["top_down", "bottom_up"] = "bottom_up"
 
         self.logger.info(
             f"Creating cabling between {len(bottom_devices)} bottom and {len(top_devices)} top devices "
             f"(strategy: {strategy}, bottom: {bottom_sorting}, top: {top_sorting})"
         )
 
-        # Fetch interfaces in batch, ensuring the related device and cable data is included
-        # Using include=["cable"] to get cable information in a single query
-        # This allows the cabling planner to detect and match existing connections
         import asyncio
 
-        # Templates create interfaces asynchronously in Infrahub.
-        # Avoid a fixed sleep: poll a few times and proceed as soon as interfaces exist.
-        max_attempts = 5
-        delay_s = 0.5
+        await asyncio.sleep(2.0)
 
-        src_interfaces: list[DcimPhysicalInterface] = []
-        dst_interfaces: list[DcimPhysicalInterface] = []
+        src_interfaces = await self.client.filters(
+            kind=DcimPhysicalInterface,
+            device__name__values=bottom_devices,
+            name__values=bottom_interfaces,
+        )
 
-        for attempt in range(1, max_attempts + 1):
-            # Query interfaces and include cable relation so CablingPlanner can preserve
-            # existing wiring deterministically (idempotency).
-            src_interfaces = await self.client.filters(
-                kind=DcimPhysicalInterface,
-                device__name__values=bottom_devices,
-                name__values=bottom_interfaces,
-                include=["cable"],
-            )
-
-            dst_interfaces = await self.client.filters(
-                kind=DcimPhysicalInterface,
-                device__name__values=top_devices,
-                name__values=top_interfaces,
-                include=["cable"],
-            )
-
-            if src_interfaces and dst_interfaces:
-                break
-
-            if attempt < max_attempts:
-                await asyncio.sleep(delay_s)
-                delay_s *= 1.5
+        dst_interfaces = await self.client.filters(
+            kind=DcimPhysicalInterface,
+            device__name__values=top_devices,
+            name__values=top_interfaces,
+        )
 
         if not src_interfaces or not dst_interfaces:
             self.logger.warning(
@@ -413,7 +384,6 @@ class CommonGenerator(InfrahubGenerator):
             top_sorting=top_sorting,
         )
 
-        # Build cabling plan based on strategy
         cabling_plan = planner.build_cabling_plan(
             scenario=strategy,
             cabling_offset=cabling_offset,
@@ -423,23 +393,7 @@ class CommonGenerator(InfrahubGenerator):
             self.logger.warning("No cabling connections planned; skipping cable creation")
             return
 
-        technical_pool = None
-        if pool:
-            technical_pool = await self.client.get(kind=CoreIPPrefixPool, name__value=pool)
-
-        batch_cables = await self.client.create_batch()
-        batch_ips = await self.client.create_batch()
-        interfaces_by_id: dict[str, DcimPhysicalInterface] = {}
-        ip_address_by_interface_id: dict[str, str] = {}
-        has_ips_to_save = False
-
-        pending_cables: list[tuple[str, str, str]] = []
-
-        # Process cabling plan - create cables with upsert to ensure idempotency
-        # Running generator multiple times will produce same cables
         for src_interface, dst_interface in cabling_plan:
-            # Create deterministic cable name based on sorted endpoint names
-            # This ensures the same cable name is generated every time
             endpoint_names = sorted(
                 [
                     f"{src_interface.device.display_label}-{src_interface.name.value}",
@@ -447,97 +401,42 @@ class CommonGenerator(InfrahubGenerator):
                 ]
             )
             name = "__".join(endpoint_names)
+            link_identifier = "__".join(sorted([src_interface.id, dst_interface.id]))
 
-            # Create a stable identifier for the p2p link based on device+interface names (not IDs!)
-            # Using names instead of IDs ensures the identifier is stable across branches/merges
-            # Device names are unique and persistent, interface names are unique per device
-            # This ensures same link always gets same IP prefix, even after merge
-            link_identifier = "__".join(endpoint_names)
+            network_link = await self.client.create(
+                kind=DcimCable,
+                data={"name": name, "type": "mmf", "endpoints": [src_interface.id, dst_interface.id]},
+            )
+            await network_link.save(allow_upsert=True)
 
-            # Do NOT create/save cables yet.
-            # Saving a cable sets interface.cable on endpoints, but our interface objects still have
-            # cable=None in-memory; later interface upserts would send cable:null and detach endpoints,
-            # potentially leaving the cable with 0 endpoints (schema requires exactly 2).
-            pending_cables.append((name, src_interface.id, dst_interface.id))
+            updated_src = await self.client.get(DcimPhysicalInterface, id=src_interface.id)
+            updated_dst = await self.client.get(DcimPhysicalInterface, id=dst_interface.id)
 
-            if technical_pool:
+            if pool:
+                technical_pool = await self.client.get(kind=CoreIPPrefixPool, name__value=pool)
                 p2p_prefix = await self.client.allocate_next_ip_prefix(
                     resource_pool=technical_pool,
-                    identifier=link_identifier,  # Use stable ID-based identifier
+                    identifier=link_identifier,
                     prefix_length=31,
                     member_type="address",
-                    data={
-                        "role": "technical",
-                        "is_pool": True,
-                    },
+                    data={"role": "technical", "is_pool": True},
                 )
                 self.logger.info(f"- Allocated prefix {p2p_prefix.display_label} for {name}")
 
-                # Create a temporary address pool from the p2p prefix
                 host_addresses = p2p_prefix.prefix.value.hosts()  # type: ignore
 
-                src_address = str(next(host_addresses)) + "/31"
-                dst_address = str(next(host_addresses)) + "/31"
+                src_ip = await self.client.create(kind=IpamIPAddress, address=str(next(host_addresses)) + "/31")
+                await src_ip.save(allow_upsert=True)
+                updated_src.ip_address = src_ip.id  # type: ignore
 
-                src_ip = await self.client.create(
-                    kind=IpamIPAddress,
-                    address=src_address,
-                )
-                batch_ips.add(task=src_ip.save, allow_upsert=True, node=src_ip)
-                has_ips_to_save = True
-                ip_address_by_interface_id[src_interface.id] = src_address
+                dst_ip = await self.client.create(kind=IpamIPAddress, address=str(next(host_addresses)) + "/31")
+                await dst_ip.save(allow_upsert=True)
+                updated_dst.ip_address = dst_ip.id  # type: ignore
 
-                dst_ip = await self.client.create(
-                    kind=IpamIPAddress,
-                    address=dst_address,
-                )
-                batch_ips.add(task=dst_ip.save, allow_upsert=True, node=dst_ip)
-                has_ips_to_save = True
-                ip_address_by_interface_id[dst_interface.id] = dst_address
-
-            src_interface.description.value = name
-            dst_interface.description.value = name
-            src_interface.status.value = "active"
-            dst_interface.status.value = "active"
-
-            interfaces_by_id[src_interface.id] = src_interface
-            interfaces_by_id[dst_interface.id] = dst_interface
-
-        # Execute batched saves in dependency order:
-        # 1) IPs (needed to attach to interfaces)
-        # 2) interfaces
-        # 3) cables (idempotent upsert)
-        ip_id_by_address: dict[str, str] = {}
-        if has_ips_to_save:
-            async for node, _ in batch_ips.execute():
-                address_value = getattr(getattr(node, "address", None), "value", None)
-                if isinstance(address_value, str):
-                    ip_id_by_address[address_value] = node.id
-
-            for interface_id, address_value in ip_address_by_interface_id.items():
-                ip_id = ip_id_by_address.get(address_value)
-                if ip_id and interface_id in interfaces_by_id:
-                    interfaces_by_id[interface_id].ip_address = ip_id  # type: ignore
-
-        batch_interfaces = await self.client.create_batch()
-        for intf in interfaces_by_id.values():
-            batch_interfaces.add(task=intf.save, allow_upsert=True, node=intf)
-
-        async for _node, _ in batch_interfaces.execute():
-            # Keep interface updates quiet unless debugging
-            pass
-
-        for name, src_id, dst_id in pending_cables:
-            network_link = await self.client.create(
-                kind=DcimCable,
-                data={
-                    "name": name,
-                    "type": "mmf",
-                    "endpoints": [src_id, dst_id],
-                    "deployment": deployment_id,
-                },
-            )
-            batch_cables.add(task=network_link.save, allow_upsert=True, node=network_link)
-
-        async for node, _ in batch_cables.execute():
-            self.logger.info(f"- Created [{node.get_kind()}] {node.hfid}")
+            updated_src.description.value = name
+            updated_dst.description.value = name
+            updated_src.status.value = "active"
+            updated_dst.status.value = "active"
+            await updated_src.save()
+            await updated_dst.save()
+            self.logger.info(f"- Created connection {name}")

@@ -39,16 +39,13 @@ class PodTopologyGenerator(CommonGenerator):
 
             # Determine if this rack's checksum should be updated based on deployment type
             should_update = self.data.deployment_type in ["tor", "middle_rack"] or (
-                self.data.deployment_type == "mixed"
-                and rack.rack_type.value == "network"
+                self.data.deployment_type == "mixed" and rack.rack_type.value == "network"
             )
 
             if should_update and rack.checksum.value != pod_checksum:
                 rack.checksum.value = pod_checksum
                 await rack.save(allow_upsert=True)
-                self.logger.info(
-                    f"Rack {rack.name.value} has been updated to checksum {pod_checksum}"
-                )
+                self.logger.info(f"Rack {rack.name.value} has been updated to checksum {pod_checksum}")
 
     async def generate(self, data: dict[str, Any]) -> None:
         """Generate pod topology infrastructure."""
@@ -101,23 +98,16 @@ class PodTopologyGenerator(CommonGenerator):
         spine_interfaces_data = spine_switch_template.interfaces
         spine_interfaces = [iface.name for iface in spine_interfaces_data]
         if not spine_interfaces:
-            self.logger.warning(
-                "No interfaces with role 'uplink' found in spine template"
-            )
+            self.logger.warning("No interfaces with role 'uplink' found in spine template")
 
         parent = self.data.parent
         super_spine_devices = [device.name for device in (parent.devices or [])]
         super_spine_template = parent.super_spine_template
         super_spine_interfaces = [
-            iface.name
-            for iface in (
-                super_spine_template.interfaces if super_spine_template else []
-            )
+            iface.name for iface in (super_spine_template.interfaces if super_spine_template else [])
         ]
         if not super_spine_interfaces:
-            self.logger.warning(
-                "No interfaces with role 'spine' found in super-spine template"
-            )
+            self.logger.warning("No interfaces with role 'spine' found in super-spine template")
 
         await self.create_cabling(
             bottom_devices=spines,
@@ -126,10 +116,7 @@ class PodTopologyGenerator(CommonGenerator):
             top_interfaces=super_spine_interfaces,
             strategy="pod",
             options={
-                "cabling_offset": (
-                    (self.data.index - 1)
-                    * ((design.maximum_spines if design else None) or 2)
-                ),
+                "cabling_offset": ((self.data.index - 1) * ((design.maximum_spines if design else None) or 2)),
                 "top_sorting": self.data.spine_interface_sorting_method,
                 "bottom_sorting": self.data.spine_interface_sorting_method,
                 "pool": f"{self.pod_name}-technical-pool",
@@ -138,7 +125,5 @@ class PodTopologyGenerator(CommonGenerator):
 
         # Update checksums for middle racks first (rack_type="network" with leafs)
         # This triggers middle rack generation before ToR racks in mixed deployments
-        self.logger.info(
-            "Updating checksums for middle racks (network type) to trigger their generation first"
-        )
+        self.logger.info("Updating checksums for middle racks (network type) to trigger their generation first")
         await self.update_checksum()
