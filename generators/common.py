@@ -41,6 +41,27 @@ class CommonGenerator(InfrahubGenerator):
     fabric_name: str = ""  # Required: set to fabric/DC name
     pod_name: Optional[str] = None  # Optional: only for pod/rack generators
 
+    async def _get_default_branch(self) -> str:
+        """Best-effort discovery of the default branch name.
+
+        Falls back to "main" if the SDK does not expose a helper or the call fails.
+        """
+
+        branch_manager = getattr(self.client, "branch", None)
+        if branch_manager:
+            get_default = getattr(branch_manager, "get_default", None)
+            if callable(get_default):
+                try:
+                    return await get_default()
+                except Exception:
+                    pass
+
+            default_attr = getattr(branch_manager, "default", None)
+            if isinstance(default_attr, str) and default_attr:
+                return default_attr
+
+        return "main"
+
     def calculate_checksum(self) -> str:
         """Calculate a SHA256 checksum based on configuration data.
 
@@ -68,17 +89,8 @@ class CommonGenerator(InfrahubGenerator):
         id: str,
         ipv6: Optional[bool] = False,
     ) -> None:
-        """Ensure required per-pod / fabric pools exist.
+        """Ensure required per-pod / fabric pools exist on the default branch."""
 
-        Notes:
-        - This function ensures minimal placeholder pools exist (side-effect).
-        - It accepts a simple strategy name string for `pools` (e.g. "fabric") and
-          normalizes it to a FabricPoolConfig internally for deterministic behavior.
-        - It intentionally returns None: creation is a side-effect. Actual address/prefix
-          allocation is performed later by generators which will fetch pools by name.
-        - Uses self.fabric_name and self.pod_name (if set) from instance variables.
-        """
-        # Local import to avoid runtime cycles during type-checking
         from .helpers import FabricPoolConfig
 
         self.logger.info("Implementing resource pools")
@@ -86,23 +98,15 @@ class CommonGenerator(InfrahubGenerator):
         fabric_name = self.fabric_name
         pod_name = self.pod_name
         pool_prefix = pod_name if pod_name else fabric_name
+        default_branch = await self._get_default_branch()
 
-        # Create a new dictionary with only the keys that FabricPoolConfig expects
-        valid_keys = [
-            "maximum_super_spines",
-            "maximum_pods",
-            "maximum_spines",
-            "maximum_switches",
-        ]
+        valid_keys = ["maximum_super_spines", "maximum_pods", "maximum_spines", "maximum_switches"]
         filtered_pools = {key: pools[key] for key in valid_keys if key in pools}
         pod = await self.client.get(kind=TopologyPod, id=id) if pod_name else None
         pools_config = FabricPoolConfig(**filtered_pools, kind=strategy, ipv6=ipv6 or False)
+
         for pool_name, pool_size in pools_config.pools().items():
-            if strategy == "fabric" and pool_name in [
-                "management",
-                "technical",
-                "loopback",
-            ]:
+            if strategy == "fabric" and pool_name in ["management", "technical", "loopback"]:
                 parent_pool_name = (
                     f"{pool_name.capitalize()}-IPv4"
                     if not ipv6 or pool_name == "management"
@@ -116,23 +120,25 @@ class CommonGenerator(InfrahubGenerator):
             parent_pool = await self.client.get(
                 kind=CoreIPPrefixPool,
                 name__value=parent_pool_name,
+                branch=default_branch,
             )
+
             self.logger.info(
                 f"Allocating next IP prefix for pool '{pool_name}' (/{pool_size}) in parent '{parent_pool_name}'"
             )
             pool_full_name = f"{pool_prefix}-{pool_name}-pool"
-            pool_identifier = pool_full_name  # stable across branches for merge safety
+            pool_identifier = pool_full_name
 
             allocated_prefix = await self.client.allocate_next_ip_prefix(
                 resource_pool=parent_pool,
                 identifier=pool_identifier,
                 prefix_length=pool_size,
+                branch=default_branch,
                 data={
                     "role": f"{pool_name if pool_name in ['management', 'technical', 'loopback'] else pool_name.split('-')[-1]}"
                 },
             )
 
-            # Determine if this is a prefix or address pool
             is_prefix_pool = (strategy == "fabric" and pool_name in ["technical", "loopback"]) or (
                 strategy == "pod" and pool_name == "technical"
             )
@@ -146,8 +152,9 @@ class CommonGenerator(InfrahubGenerator):
                         "default_prefix_length": pool_size,
                         "ip_namespace": {"hfid": ["default"]},
                         "identifier": pool_identifier,
-                        "resources": [allocated_prefix],
+                        "resources": [{"id": allocated_prefix.id}],
                     },
+                    branch=default_branch,
                 )
             else:
                 new_pool = await self.client.create(
@@ -158,23 +165,15 @@ class CommonGenerator(InfrahubGenerator):
                         "default_prefix_length": pool_size,
                         "ip_namespace": {"hfid": ["default"]},
                         "identifier": pool_identifier,
-                        "resources": [allocated_prefix],
+                        "resources": [{"id": allocated_prefix.id}],
                     },
+                    branch=default_branch,
                 )
 
             await new_pool.save(allow_upsert=True)
 
-            # Map pool names to pod attributes
-            pool_kind = "CoreIPPrefixPool" if is_prefix_pool else "CoreIPAddressPool"
-            self.logger.info(f"- Created [{pool_kind}] {new_pool.hfid}")
-            # Update Pods
-            pool_attribute_map = {
-                "loopback": "loopback_pool",
-                "technical": "prefix_pool",
-            }
-
+            pool_attribute_map = {"loopback": "loopback_pool", "technical": "prefix_pool"}
             if pod and pool_name in pool_attribute_map:
-                # Attach using explicit node reference to avoid merge-time drops on CoreIPAddressPool links
                 pool_ref = {"id": new_pool.id, "hfid": [new_pool.hfid]}
                 setattr(pod, pool_attribute_map[pool_name], pool_ref)
                 self.logger.info(f"- Updated pod {pod.name.value} with pool {pool_full_name} (id: {new_pool.id})")
@@ -193,10 +192,10 @@ class CommonGenerator(InfrahubGenerator):
 
         Uses self.fabric_name and self.pod_name (if set) from instance variables.
         """
-        # Normalize options
         options = options or {}
         fabric_name = self.fabric_name
         pod_name = self.pod_name or ""
+        default_branch = await self._get_default_branch()
         virtual: bool = bool(options.get("virtual", False))
         indexes: Optional[list[int]] = options.get("indexes", None)
         allocate_loopback: bool = bool(options.get("allocate_loopback", False))
@@ -219,19 +218,16 @@ class CommonGenerator(InfrahubGenerator):
         management_pool_name = f"{fabric_name}-management-pool"
 
         if device_role == "super-spine":
-            # Super-spine devices use fabric-level super-spine-loopback pool
             loopback_pool_name = f"{fabric_name}-{device_role}-loopback-pool"
         else:
-            # Other devices (spine, leaf, etc.) use pod-level loopback pool
-            # device_prefix already includes fabric-pod combination when pod_name is present
             loopback_pool_name = f"{device_prefix}-loopback-pool"
 
         device_kind = DcimVirtualDevice if virtual else DcimPhysicalDevice
 
-        # # Fetch pools once
         management_pool = await self.client.get(
             kind=CoreIPAddressPool,
             name__value=management_pool_name,
+            branch=default_branch,
         )
 
         loopback_pool = None
@@ -239,6 +235,7 @@ class CommonGenerator(InfrahubGenerator):
             loopback_pool = await self.client.get(
                 kind=CoreIPAddressPool,
                 name__value=loopback_pool_name,
+                branch=default_branch,
             )
 
         batch_devices = await self.client.create_batch()
@@ -246,7 +243,6 @@ class CommonGenerator(InfrahubGenerator):
 
         device_group = await self.client.get(kind=CoreStandardGroup, name__value=f"{device_role}s")
         try:
-            # Fetch all existing devices in a single batch to optimize performance
             existing_devices_list = await self.client.filters(
                 kind=device_kind,
                 name__values=device_names,
@@ -254,15 +250,9 @@ class CommonGenerator(InfrahubGenerator):
             )
             existing_devices_map = {device.name.value: device for device in existing_devices_list}
 
-            # Add device objects and related loopback interfaces (if any) to the batch
             for name in device_names:
                 existing_device = existing_devices_map.get(name)
-                if existing_device:
-                    groups = [peer.id for peer in existing_device.member_of_groups.peers]
-                else:
-                    groups = []
-
-                # Ensure the new group is not duplicated
+                groups = [peer.id for peer in existing_device.member_of_groups.peers] if existing_device else []
                 if device_group.id not in groups:
                     groups.append(device_group.id)
 
@@ -280,6 +270,7 @@ class CommonGenerator(InfrahubGenerator):
                             resource_pool=management_pool,
                             identifier=name,
                             prefix_length=32,
+                            branch=default_branch,
                             data={"description": f"Management IP for {name}"},
                         ),
                         "rack": {"id": rack} if rack else None,
@@ -294,7 +285,6 @@ class CommonGenerator(InfrahubGenerator):
                         data={
                             "name": "Loopback0",
                             "description": "Loopback interface",
-                            # refer to device by unique name; server should resolve references on apply
                             "device": {"hfid": name},
                             "status": "active",
                             "role": "loopback",
@@ -303,6 +293,7 @@ class CommonGenerator(InfrahubGenerator):
                                     resource_pool=loopback_pool,
                                     identifier=name,
                                     prefix_length=32,
+                                    branch=default_branch,
                                     data={"description": f"Loopback IP for {name}"},
                                 )
                             ],
@@ -310,7 +301,6 @@ class CommonGenerator(InfrahubGenerator):
                     )
                     batch_loopbacks.add(task=obj.save, allow_upsert=True, node=obj)
 
-            # Execute batch and collect created nodes
             async for node, _ in batch_devices.execute():
                 self.logger.info(f"- Created [{node.get_kind()}] {node.hfid}")
             async for node, _ in batch_loopbacks.execute():
@@ -345,6 +335,7 @@ class CommonGenerator(InfrahubGenerator):
         options = options or {}
         cabling_offset: int = int(options.get("cabling_offset", 0))
         pool: Any = options.get("pool") or (f"{self.pod_name}-technical-pool" if self.pod_name else None)
+        default_branch = await self._get_default_branch()
 
         bottom_sorting: Literal["top_down", "bottom_up"] = "bottom_up"
         top_sorting: Literal["top_down", "bottom_up"] = "bottom_up"
@@ -407,37 +398,47 @@ class CommonGenerator(InfrahubGenerator):
             network_link = await self.client.create(
                 kind=DcimCable,
                 data={"name": name, "type": "mmf", "endpoints": [src_interface.id, dst_interface.id]},
+                branch=default_branch,
             )
             await network_link.save(allow_upsert=True)
 
-            updated_src = await self.client.get(DcimPhysicalInterface, id=src_interface.id)
-            updated_dst = await self.client.get(DcimPhysicalInterface, id=dst_interface.id)
+            updated_src = await self.client.get(DcimPhysicalInterface, id=src_interface.id, branch=default_branch)
+            updated_dst = await self.client.get(DcimPhysicalInterface, id=dst_interface.id, branch=default_branch)
 
             if pool:
-                technical_pool = await self.client.get(kind=CoreIPPrefixPool, name__value=pool)
+                technical_pool = await self.client.get(kind=CoreIPPrefixPool, name__value=pool, branch=default_branch)
                 p2p_prefix = await self.client.allocate_next_ip_prefix(
                     resource_pool=technical_pool,
                     identifier=link_identifier,
                     prefix_length=31,
                     member_type="address",
+                    branch=default_branch,
                     data={"role": "technical", "is_pool": True},
                 )
                 self.logger.info(f"- Allocated prefix {p2p_prefix.display_label} for {name}")
 
                 host_addresses = p2p_prefix.prefix.value.hosts()  # type: ignore
 
-                src_ip = await self.client.create(kind=IpamIPAddress, address=str(next(host_addresses)) + "/31")
+                src_ip = await self.client.create(
+                    kind=IpamIPAddress,
+                    address=str(next(host_addresses)) + "/31",
+                    branch=default_branch,
+                )
                 await src_ip.save(allow_upsert=True)
-                updated_src.ip_address = src_ip.id  # type: ignore
+                updated_src.ip_address = {"id": src_ip.id}  # type: ignore
 
-                dst_ip = await self.client.create(kind=IpamIPAddress, address=str(next(host_addresses)) + "/31")
+                dst_ip = await self.client.create(
+                    kind=IpamIPAddress,
+                    address=str(next(host_addresses)) + "/31",
+                    branch=default_branch,
+                )
                 await dst_ip.save(allow_upsert=True)
-                updated_dst.ip_address = dst_ip.id  # type: ignore
+                updated_dst.ip_address = {"id": dst_ip.id}  # type: ignore
 
             updated_src.description.value = name
             updated_dst.description.value = name
             updated_src.status.value = "active"
             updated_dst.status.value = "active"
-            await updated_src.save()
-            await updated_dst.save()
+            await updated_src.save(allow_upsert=True)
+            await updated_dst.save(allow_upsert=True)
             self.logger.info(f"- Created connection {name}")
