@@ -148,6 +148,7 @@ class CommonGenerator(InfrahubGenerator):
                         "identifier": pool_identifier,
                         "resources": [allocated_prefix],
                     },
+                    branch="main",
                 )
             else:
                 new_pool = await self.client.create(
@@ -160,6 +161,7 @@ class CommonGenerator(InfrahubGenerator):
                         "identifier": pool_identifier,
                         "resources": [allocated_prefix],
                     },
+                    branch="main",
                 )
 
             await new_pool.save(allow_upsert=True)
