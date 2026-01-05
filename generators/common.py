@@ -120,16 +120,17 @@ class CommonGenerator(InfrahubGenerator):
             self.logger.info(
                 f"Allocating next IP prefix for pool '{pool_name}' (/{pool_size}) in parent '{parent_pool_name}'"
             )
+            pool_full_name = f"{pool_prefix}-{pool_name}-pool"
+            pool_identifier = pool_full_name  # stable across branches for merge safety
+
             allocated_prefix = await self.client.allocate_next_ip_prefix(
                 resource_pool=parent_pool,
-                identifier=id,
+                identifier=pool_identifier,
                 prefix_length=pool_size,
                 data={
                     "role": f"{pool_name if pool_name in ['management', 'technical', 'loopback'] else pool_name.split('-')[-1]}"
                 },
             )
-
-            pool_full_name = f"{pool_prefix}-{pool_name}-pool"
 
             # Determine if this is a prefix or address pool
             is_prefix_pool = (strategy == "fabric" and pool_name in ["technical", "loopback"]) or (
@@ -144,7 +145,7 @@ class CommonGenerator(InfrahubGenerator):
                         "default_prefix_type": "IpamPrefix",
                         "default_prefix_length": pool_size,
                         "ip_namespace": {"hfid": ["default"]},
-                        "identifier": id,
+                        "identifier": pool_identifier,
                         "resources": [allocated_prefix],
                     },
                 )
@@ -156,7 +157,7 @@ class CommonGenerator(InfrahubGenerator):
                         "default_address_type": "IpamIPAddress",
                         "default_prefix_length": pool_size,
                         "ip_namespace": {"hfid": ["default"]},
-                        "identifier": id,
+                        "identifier": pool_identifier,
                         "resources": [allocated_prefix],
                     },
                 )
