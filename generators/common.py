@@ -1,13 +1,12 @@
 from __future__ import annotations
 
 import hashlib
-from typing import TYPE_CHECKING, Any, Literal, Optional, TypeVar, cast
+from typing import TYPE_CHECKING, Any, Literal, Optional, TypeVar
 
 from infrahub_sdk.exceptions import ValidationError
 from infrahub_sdk.generator import InfrahubGenerator
 from infrahub_sdk.protocols import CoreIPAddressPool, CoreIPPrefixPool, CoreStandardGroup
 from pydantic import BaseModel
-from regex import B
 
 from .helpers import CablingPlanner, DeviceNamingConfig
 
