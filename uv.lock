@@ -535,6 +535,7 @@ source = { virtual = "." }
 dependencies = [
     { name = "infrahub-sdk", extra = ["all"] },
     { name = "invoke" },
+    { name = "netutils" },
 ]
 
 [package.dev-dependencies]
@@ -556,6 +557,7 @@ dev = [
 requires-dist = [
     { name = "infrahub-sdk", extras = ["all"], specifier = ">=1.15.0b0,<2.0.0" },
     { name = "invoke", specifier = ">=2.2.0,<3.0.0" },
+    { name = "netutils", specifier = ">=1.8.0" },
 ]
 
 [package.metadata.requires-dev]

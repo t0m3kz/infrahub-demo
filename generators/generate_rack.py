@@ -254,6 +254,7 @@ class RackGenerator(CommonGenerator):
         pod = self.data.pod
         self.pod_name = pod.name.lower()
         self.fabric_name = dc.name.lower()
+        technical_pool_name = f"{self.pod_name}-technical-pool"
 
         # Validate pools exist - they should be created by pod generator
         # Failing fast prevents race conditions when multiple racks are created simultaneously
@@ -339,6 +340,7 @@ class RackGenerator(CommonGenerator):
                     "cabling_offset": cabling_offset,
                     "top_sorting": pod.spine_interface_sorting_method,
                     "bottom_sorting": pod.leaf_interface_sorting_method,
+                    "pool": technical_pool_name,
                 },
             )
 
@@ -399,6 +401,7 @@ class RackGenerator(CommonGenerator):
                                 "cabling_offset": cabling_offset,
                                 "top_sorting": pod.leaf_interface_sorting_method,
                                 "bottom_sorting": "bottom_up",
+                                "pool": technical_pool_name,
                             },
                         )
                     else:
@@ -440,6 +443,7 @@ class RackGenerator(CommonGenerator):
                             "cabling_offset": cabling_offset,
                             "top_sorting": pod.spine_interface_sorting_method,
                             "bottom_sorting": "bottom_up",
+                            "pool": technical_pool_name,
                         },
                     )
                 else:
@@ -470,6 +474,7 @@ class RackGenerator(CommonGenerator):
                             "cabling_offset": cabling_offset,
                             "top_sorting": pod.leaf_interface_sorting_method,
                             "bottom_sorting": "bottom_up",
+                            "pool": technical_pool_name,
                         },
                     )
                 else:
@@ -506,6 +511,7 @@ class RackGenerator(CommonGenerator):
                                 "cabling_offset": cabling_offset,
                                 "top_sorting": pod.leaf_interface_sorting_method,
                                 "bottom_sorting": "bottom_up",
+                                "pool": technical_pool_name,
                             },
                         )
                     else:

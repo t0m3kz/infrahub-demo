@@ -312,8 +312,12 @@ def _extract_l2_vni_mappings(interfaces: list) -> list[dict]:
     seen_vlans = set()
 
     for iface in interfaces:
-        vlans = iface.get("vlans", [])
+        if not isinstance(iface, dict):
+            continue
+        vlans = iface.get("vlans", []) or []
         for vlan in vlans:
+            if not isinstance(vlan, dict):
+                continue
             vlan_id = vlan.get("vlan_id")
             if vlan_id and vlan_id not in seen_vlans:
                 # Convention: L2VNI = 10000 + VLAN ID
@@ -345,11 +349,22 @@ def _extract_l3_vni_mappings(interfaces: list) -> tuple[list[dict], list[dict]]:
     vrf_loopbacks = []
     vrf_id = 1  # Start with VRF ID 1
 
+    def _val(field: Any) -> str:
+        """Safely unwrap role/kind which may arrive as dict or raw string."""
+        if isinstance(field, dict):
+            return str(field.get("value") or "").lower()
+        if isinstance(field, str):
+            return field.lower()
+        return ""
+
     for iface in interfaces:
+        if not isinstance(iface, dict):
+            continue
         iface_name = iface.get("name", "")
-        description = iface.get("description", "").lower()
-        role = iface.get("role", {}).get("value", "").lower()
-        kind = iface.get("kind", {}).get("value", "").lower()
+        description_raw = iface.get("description") or ""
+        description = str(description_raw).lower()
+        role = _val(iface.get("role"))
+        kind = _val(iface.get("kind"))
 
         # Detect VRF loopbacks (Loopback1+)
         is_vrf_loopback = (
@@ -369,8 +384,8 @@ def _extract_l3_vni_mappings(interfaces: list) -> tuple[list[dict], list[dict]]:
 
             # Get VRF IP address
             vrf_ip = None
-            ip_addresses = iface.get("ip_addresses", [])
-            if ip_addresses:
+            ip_addresses = iface.get("ip_addresses", []) or []
+            if ip_addresses and isinstance(ip_addresses[0], dict):
                 vrf_ip = ip_addresses[0].get("address", "").split("/")[0]
 
             # Calculate L3VNI: 50000 + VRF_ID

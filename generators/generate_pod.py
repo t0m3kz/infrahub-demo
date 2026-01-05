@@ -132,6 +132,7 @@ class PodTopologyGenerator(CommonGenerator):
                 ),
                 "top_sorting": self.data.spine_interface_sorting_method,
                 "bottom_sorting": self.data.spine_interface_sorting_method,
+                "pool": f"{self.pod_name}-technical-pool",
             },
         )
 
