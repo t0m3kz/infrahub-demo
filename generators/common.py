@@ -116,7 +116,6 @@ class CommonGenerator(InfrahubGenerator):
             parent_pool = await self.client.get(
                 kind=CoreIPPrefixPool,
                 name__value=parent_pool_name,
-                branch="main",
             )
             self.logger.info(
                 f"Allocating next IP prefix for pool '{pool_name}' (/{pool_size}) in parent '{parent_pool_name}'"
@@ -131,7 +130,6 @@ class CommonGenerator(InfrahubGenerator):
                 data={
                     "role": f"{pool_name if pool_name in ['management', 'technical', 'loopback'] else pool_name.split('-')[-1]}"
                 },
-                branch="main",
             )
 
             # Determine if this is a prefix or address pool
@@ -150,7 +148,6 @@ class CommonGenerator(InfrahubGenerator):
                         "identifier": pool_identifier,
                         "resources": [allocated_prefix],
                     },
-                    branch="main",
                 )
             else:
                 new_pool = await self.client.create(
@@ -163,7 +160,6 @@ class CommonGenerator(InfrahubGenerator):
                         "identifier": pool_identifier,
                         "resources": [allocated_prefix],
                     },
-                    branch="main",
                 )
 
             await new_pool.save(allow_upsert=True)
@@ -236,7 +232,6 @@ class CommonGenerator(InfrahubGenerator):
         management_pool = await self.client.get(
             kind=CoreIPAddressPool,
             name__value=management_pool_name,
-            branch="main",
         )
 
         loopback_pool = None
@@ -244,7 +239,6 @@ class CommonGenerator(InfrahubGenerator):
             loopback_pool = await self.client.get(
                 kind=CoreIPAddressPool,
                 name__value=loopback_pool_name,
-                branch="main",
             )
 
         batch_devices = await self.client.create_batch()
@@ -287,7 +281,6 @@ class CommonGenerator(InfrahubGenerator):
                             identifier=name,
                             prefix_length=32,
                             data={"description": f"Management IP for {name}"},
-                            branch="main",
                         ),
                         "rack": {"id": rack} if rack else None,
                         "member_of_groups": [{"id": group_id} for group_id in groups],
@@ -311,7 +304,6 @@ class CommonGenerator(InfrahubGenerator):
                                     identifier=name,
                                     prefix_length=32,
                                     data={"description": f"Loopback IP for {name}"},
-                                    branch="main",
                                 )
                             ],
                         },
