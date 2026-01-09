@@ -17,6 +17,7 @@ fragment PhysicalInterfaceFields on DcimPhysicalInterface {
 fragment CableFields on DcimCable {
   __typename
   id
+  display_label
   type { value }
   endpoints {
     edges {
@@ -31,24 +32,100 @@ query FabricCablingPlanQuery($name: String!) {
   TopologyDeployment(name__value: $name) {
     edges {
       node {
-        children {
-          edges {
-            node {
-              ... on TopologyPod {
+        name { value }
+        # Direct devices on concrete deployment types (fabric-level devices)
+        ... on TopologyDataCenter {
+          devices {
+            edges {
+              node {
                 name { value }
-                devices {
+                interfaces {
                   edges {
                     node {
-                      interfaces {
-                        edges {
+                      name { value }
+                      ... on DcimPhysicalInterface {
+                        cable {
                           node {
-                            ... on DcimPhysicalInterface {
-                              cable {
-                                node {
-                                  ...CableFields
+                            ...CableFields
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+          # Pod children with their devices
+          children {
+            edges {
+              node {
+                ... on TopologyPod {
+                  name { value }
+                  devices {
+                    edges {
+                      node {
+                        name { value }
+                        interfaces {
+                          edges {
+                            node {
+                              name { value }
+                              ... on DcimPhysicalInterface {
+                                cable {
+                                  node {
+                                    ...CableFields
+                                  }
                                 }
                               }
                             }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+
+        # Other deployment variants that can carry devices directly
+        ... on TopologyPod {
+          devices {
+            edges {
+              node {
+                name { value }
+                interfaces {
+                  edges {
+                    node {
+                      name { value }
+                      ... on DcimPhysicalInterface {
+                        cable {
+                          node {
+                            ...CableFields
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+        ... on TopologyColocationAZ {
+          devices {
+            edges {
+              node {
+                name { value }
+                interfaces {
+                  edges {
+                    node {
+                      name { value }
+                      ... on DcimPhysicalInterface {
+                        cable {
+                          node {
+                            ...CableFields
                           }
                         }
                       }

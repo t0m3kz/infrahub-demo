@@ -37,9 +37,7 @@ class CheckLoadBalancer(InfrahubCheck):
 
                 # Check service status
                 if service_status != "active":
-                    errors.append(
-                        f"VIP service '{service_name}' is not active (status: {service_status})"
-                    )
+                    errors.append(f"VIP service '{service_name}' is not active (status: {service_status})")
                     continue
 
                 # Get VIP IP from this service (single IP per service)
@@ -55,9 +53,7 @@ class CheckLoadBalancer(InfrahubCheck):
                     # VIP service is properly configured with an IP
                     vip_services_count += 1
                 else:
-                    errors.append(
-                        f"VIP service '{service_name}' has invalid IP configuration"
-                    )
+                    errors.append(f"VIP service '{service_name}' has invalid IP configuration")
                 if backend_servers == 0:
                     errors.append(
                         f"Load balancer '{device_name}' has {vip_services_count} VIP service(s) but no backend servers configured yet"
@@ -69,9 +65,7 @@ class CheckLoadBalancer(InfrahubCheck):
 
         # Check if load balancer has any VIP services
         if vip_services_count == 0:
-            errors.append(
-                f"Load balancer '{device_name}' has no VIP services configured"
-            )
+            errors.append(f"Load balancer '{device_name}' has no VIP services configured")
 
         # Display all errors and warnings
         if errors:
@@ -100,13 +94,10 @@ class CheckLoadBalancer(InfrahubCheck):
             resolved_ip = socket.gethostbyname(server_name)
             if server_ip and server_ip != "unknown" and resolved_ip != server_ip:
                 dns_errors.append(
-                    f"DNS mismatch for '{server_name}'{context}: "
-                    f"configured IP {server_ip} != resolved IP {resolved_ip}"
+                    f"DNS mismatch for '{server_name}'{context}: configured IP {server_ip} != resolved IP {resolved_ip}"
                 )
         except socket.gaierror as e:
-            dns_errors.append(
-                f"DNS resolution test for '{server_name}'{context}: {str(e)} (expected for test data)"
-            )
+            dns_errors.append(f"DNS resolution test for '{server_name}'{context}: {str(e)} (expected for test data)")
         except Exception as e:
             dns_errors.append(f"DNS check error for '{server_name}'{context}: {str(e)}")
 
@@ -135,12 +126,8 @@ class CheckLoadBalancer(InfrahubCheck):
                             f"Network unreachable (simulated - external range)"
                         )
                 else:
-                    ping_errors.append(
-                        f"Invalid IP format for '{server_name}'{context}: {server_ip}"
-                    )
+                    ping_errors.append(f"Invalid IP format for '{server_name}'{context}: {server_ip}")
             except Exception as e:
-                ping_errors.append(
-                    f"Ping check error for '{server_name}' ({server_ip}){context}: {str(e)}"
-                )
+                ping_errors.append(f"Ping check error for '{server_name}' ({server_ip}){context}: {str(e)}")
 
         return dns_errors, ping_errors

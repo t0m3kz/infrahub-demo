@@ -34,18 +34,14 @@ class TestCablingPlannerIntraRackScenario:
         tor_interfaces = []
         for tor_num in range(1, 5):
             tor_interfaces.extend(
-                create_mock_interfaces(
-                    f"tor-{tor_num:02d}", [f"Ethernet1/{i}" for i in range(31, 33)]
-                )
+                create_mock_interfaces(f"tor-{tor_num:02d}", [f"Ethernet1/{i}" for i in range(31, 33)])
             )
 
         # 4 Leafs with 4 leaf-role interfaces each (Ethernet1/25-28)
         leaf_interfaces = []
         for leaf_num in range(1, 5):
             leaf_interfaces.extend(
-                create_mock_interfaces(
-                    f"leaf-{leaf_num:02d}", [f"Ethernet1/{i}" for i in range(25, 29)]
-                )
+                create_mock_interfaces(f"leaf-{leaf_num:02d}", [f"Ethernet1/{i}" for i in range(25, 29)])
             )
 
         planner = CablingPlanner(tor_interfaces, leaf_interfaces)  # type: ignore
@@ -60,18 +56,14 @@ class TestCablingPlannerIntraRackScenario:
         tor_interfaces = []
         for tor_num in range(1, 5):
             tor_interfaces.extend(
-                create_mock_interfaces(
-                    f"tor-{tor_num:02d}", [f"Ethernet1/{i}" for i in range(31, 37)]
-                )
+                create_mock_interfaces(f"tor-{tor_num:02d}", [f"Ethernet1/{i}" for i in range(31, 37)])
             )
 
         # 4 Leafs with 6 leaf-role interfaces each
         leaf_interfaces = []
         for leaf_num in range(1, 5):
             leaf_interfaces.extend(
-                create_mock_interfaces(
-                    f"leaf-{leaf_num:02d}", [f"Ethernet1/{i}" for i in range(25, 31)]
-                )
+                create_mock_interfaces(f"leaf-{leaf_num:02d}", [f"Ethernet1/{i}" for i in range(25, 31)])
             )
 
         planner = CablingPlanner(tor_interfaces, leaf_interfaces)  # type: ignore
@@ -116,9 +108,7 @@ class TestCablingPlannerIntraRackScenario:
         leaf_connection_count: dict[str, int] = {}
         for src, dst in cabling_plan:
             leaf_name = dst.device.display_label
-            leaf_connection_count[leaf_name] = (
-                leaf_connection_count.get(leaf_name, 0) + 1
-            )
+            leaf_connection_count[leaf_name] = leaf_connection_count.get(leaf_name, 0) + 1
 
         # Each Leaf should have exactly 2 connections (4 ToRs × 2 uplinks = 8 total / 4 Leafs)
         assert all(count == 2 for count in leaf_connection_count.values())
@@ -171,9 +161,7 @@ class TestCablingPlannerIntraRackScenario:
         """Test INTRA_RACK with different interface counts per device."""
         # 2 ToRs with different interface counts
         tor1 = create_mock_interfaces("tor-01", ["Ethernet1/31", "Ethernet1/32"])
-        tor2 = create_mock_interfaces(
-            "tor-02", ["Ethernet1/31", "Ethernet1/32", "Ethernet1/33"]
-        )
+        tor2 = create_mock_interfaces("tor-02", ["Ethernet1/31", "Ethernet1/32", "Ethernet1/33"])
 
         # 2 Leafs with different interface counts
         leaf1 = create_mock_interfaces("leaf-01", ["Ethernet1/25"])
@@ -226,9 +214,7 @@ class TestCablingPlannerIntraRackScenario:
         existing_cable_name_1 = "leaf-02-Ethernet1/25__tor-01-Ethernet1/31"
         existing_cable_name_2 = "leaf-02-Ethernet1/26__tor-01-Ethernet1/32"
 
-        for intf, cable_name in zip(
-            tor1, [existing_cable_name_1, existing_cable_name_2]
-        ):
+        for intf, cable_name in zip(tor1, [existing_cable_name_1, existing_cable_name_2]):
             cable_peer = type("CablePeer", (), {})()
             setattr(cable_peer, "name", type("Name", (), {"value": cable_name})())
             intf.cable = type("CableRef", (), {"_peer": cable_peer})()
@@ -237,10 +223,6 @@ class TestCablingPlannerIntraRackScenario:
         cabling_plan = planner.build_cabling_plan(scenario="intra_rack")
 
         # All connections originating from tor-01 should target leaf-02.
-        tor1_targets = [
-            dst.device.display_label
-            for src, dst in cabling_plan
-            if src.device.display_label == "tor-01"
-        ]
+        tor1_targets = [dst.device.display_label for src, dst in cabling_plan if src.device.display_label == "tor-01"]
         assert tor1_targets
         assert set(tor1_targets) == {"leaf-02"}

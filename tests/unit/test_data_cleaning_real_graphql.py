@@ -86,7 +86,7 @@ class TestRealGraphQLResponses:
         # Verify children structure with mixed count and edges
         assert "children" in dc
         children = dc["children"]
-        
+
         # When both count and edges are present, edges should take priority
         assert isinstance(children, list)
         assert len(children) == 3
@@ -278,7 +278,7 @@ class TestRealGraphQLResponses:
         # pods should be list (edges takes priority)
         assert isinstance(result["datacenter"]["pods"], list)
         assert len(result["datacenter"]["pods"]) == 1
-        
+
         # devices should be count value (no edges present)
         assert result["datacenter"]["pods"][0]["name"] == "pod-1"
         assert result["datacenter"]["pods"][0]["devices"] == 5
@@ -301,9 +301,7 @@ class TestRealGraphQLResponses:
                                                     {
                                                         "node": {
                                                             "name": {"value": "rack-1"},
-                                                            "devices": {
-                                                                "count": 10
-                                                            },
+                                                            "devices": {"count": 10},
                                                         }
                                                     }
                                                 ]

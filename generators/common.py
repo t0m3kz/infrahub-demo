@@ -406,7 +406,13 @@ class CommonGenerator(InfrahubGenerator):
 
             network_link = await self.client.create(
                 kind=DcimCable,
-                data={"name": name, "type": "mmf", "endpoints": [src_interface.id, dst_interface.id]},
+                data={
+                    "name": name,
+                    "type": "mmf",
+                    "endpoints": [src_interface.id, dst_interface.id],
+                    # Attach cables to the deployment so inventory is scoped correctly
+                    "deployment": {"id": self.deployment_id} if self.deployment_id else None,
+                },
             )
             await network_link.save(allow_upsert=True)
 

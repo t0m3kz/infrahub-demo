@@ -22,9 +22,7 @@ class TestInfrahubDockerWithClient(TestInfrahubDocker):
     """Base test class with Infrahub Docker container and clients."""
 
     @pytest.fixture(scope="class")
-    def infrahub_app(
-        self, request: pytest.FixtureRequest, infrahub_compose: InfrahubDockerCompose
-    ) -> dict[str, int]:
+    def infrahub_app(self, request: pytest.FixtureRequest, infrahub_compose: InfrahubDockerCompose) -> dict[str, int]:
         """Start the Infrahub docker-compose stack.
 
         This overrides the upstream fixture to avoid teardown failures when
@@ -33,14 +31,10 @@ class TestInfrahubDockerWithClient(TestInfrahubDocker):
         tests_failed_before_class = request.session.testsfailed
 
         def cleanup() -> None:
-            tests_failed_during_class = (
-                request.session.testsfailed - tests_failed_before_class
-            )
+            tests_failed_during_class = request.session.testsfailed - tests_failed_before_class
             if tests_failed_during_class > 0:
                 try:
-                    stdout, stderr = infrahub_compose.get_logs(
-                        "infrahub-server", "task-worker"
-                    )
+                    stdout, stderr = infrahub_compose.get_logs("infrahub-server", "task-worker")
                     warnings.warn(
                         f"Container logs:\nStdout:\n{stdout}\nStderr:\n{stderr}",
                         stacklevel=2,
@@ -64,16 +58,12 @@ class TestInfrahubDockerWithClient(TestInfrahubDocker):
                 stdout, stderr = infrahub_compose.get_logs()
             except Exception as log_exc:  # noqa: BLE001
                 stdout, stderr = "", f"Failed to fetch logs: {log_exc}"
-            raise Exception(
-                f"Failed to start docker compose:\nStdout:\n{stdout}\nStderr:\n{stderr}"
-            ) from exc
+            raise Exception(f"Failed to start docker compose:\nStdout:\n{stdout}\nStderr:\n{stderr}") from exc
 
         return infrahub_compose.get_services_port()
 
     @pytest.fixture(scope="class")
-    def async_client_main(
-        self, infrahub_port: int
-    ) -> Generator[InfrahubClient, None, None]:
+    def async_client_main(self, infrahub_port: int) -> Generator[InfrahubClient, None, None]:
         """Async Infrahub client on main branch.
 
         Yields:
@@ -87,9 +77,7 @@ class TestInfrahubDockerWithClient(TestInfrahubDocker):
         yield client
 
     @pytest.fixture(scope="class")
-    def client_main(
-        self, infrahub_port: int
-    ) -> Generator[InfrahubClientSync, None, None]:
+    def client_main(self, infrahub_port: int) -> Generator[InfrahubClientSync, None, None]:
         """Sync Infrahub client on main branch.
 
         Yields:
@@ -103,9 +91,7 @@ class TestInfrahubDockerWithClient(TestInfrahubDocker):
         yield client
 
     @pytest.fixture(scope="class")
-    def client(
-        self, infrahub_port: int, default_branch: str
-    ) -> Generator[InfrahubClientSync, None, None]:
+    def client(self, infrahub_port: int, default_branch: str) -> Generator[InfrahubClientSync, None, None]:
         """Sync Infrahub client on the default test branch.
 
         Creates the branch if it doesn't exist and sets it as default.
@@ -145,9 +131,7 @@ class TestInfrahubDockerWithClient(TestInfrahubDocker):
         """
         env = os.environ.copy()
         env["INFRAHUB_ADDRESS"] = address
-        env["INFRAHUB_API_TOKEN"] = PROJECT_ENV_VARIABLES[
-            "INFRAHUB_TESTING_INITIAL_ADMIN_TOKEN"
-        ]
+        env["INFRAHUB_API_TOKEN"] = PROJECT_ENV_VARIABLES["INFRAHUB_TESTING_INITIAL_ADMIN_TOKEN"]
         env["INFRAHUB_MAX_CONCURRENT_EXECUTION"] = str(concurrent_execution)
         env["INFRAHUB_PAGINATION_SIZE"] = str(pagination_size)
 

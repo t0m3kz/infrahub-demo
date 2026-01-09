@@ -124,9 +124,7 @@ class TestFabricPoolConfigFabricStrategy:
         assert isinstance(pools, dict)
         for key, expected_value in params["expected"].items():
             assert key in pools
-            assert pools[key] == expected_value, (
-                f"{key}: expected {expected_value}, got {pools[key]}"
-            )
+            assert pools[key] == expected_value, f"{key}: expected {expected_value}, got {pools[key]}"
         assert len(pools) == 4
 
     def test_fabric_strategy_explicit(self) -> None:
@@ -298,9 +296,7 @@ class TestFabricPoolConfigPodStrategy:
         assert isinstance(pools, dict)
         for key, expected_value in params["expected"].items():
             assert key in pools
-            assert pools[key] == expected_value, (
-                f"{key}: expected {expected_value}, got {pools[key]}"
-            )
+            assert pools[key] == expected_value, f"{key}: expected {expected_value}, got {pools[key]}"
         assert len(pools) == 2
 
 

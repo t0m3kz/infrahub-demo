@@ -62,9 +62,7 @@ class LoadBalancer(InfrahubTransform):
                     vip = {
                         "hostname": service.get(
                             "hostname",
-                            service.get(
-                                "name", f"vip-{vip_ip.get('address', 'unknown')}"
-                            ),
+                            service.get("name", f"vip-{vip_ip.get('address', 'unknown')}"),
                         ),
                         "mode": service.get("mode", "http"),
                         "status": service.get("status", "active"),
@@ -81,13 +79,9 @@ class LoadBalancer(InfrahubTransform):
                     backend_servers_edges = service.get("backend_servers", [])
                     for server in backend_servers_edges:
                         # Handle both edge format and direct format
-                        server_data = (
-                            server.get("node", server) if "node" in server else server
-                        )
+                        server_data = server.get("node", server) if "node" in server else server
                         server_ip = (
-                            server_data.get("ip_address", {})
-                            .get("address", "")
-                            .split("/")[0]
+                            server_data.get("ip_address", {}).get("address", "").split("/")[0]
                             if server_data.get("ip_address")
                             else None
                         )
@@ -108,9 +102,7 @@ class LoadBalancer(InfrahubTransform):
                     health_checks_edges = service.get("health_checks", [])
                     for check in health_checks_edges:
                         # Handle both edge format and direct format
-                        check_data = (
-                            check.get("node", check) if "node" in check else check
-                        )
+                        check_data = check.get("node", check) if "node" in check else check
                         health_check_config = {
                             "check": check_data.get("check"),
                             "check_type": check_data.get("check"),
@@ -154,9 +146,7 @@ class LoadBalancer(InfrahubTransform):
 
         # Determine platform and manufacturer for template selection
         platform = data["device_type"]["platform"]["netmiko_device_type"]
-        manufacturer = (
-            data["device_type"]["manufacturer"]["name"].lower().replace(" ", "_")
-        )
+        manufacturer = data["device_type"]["manufacturer"]["name"].lower().replace(" ", "_")
 
         # Set up Jinja2 environment to load templates from the loadbalancers subfolder
         template_path = f"{self.root_directory}/templates/configs/loadbalancers"

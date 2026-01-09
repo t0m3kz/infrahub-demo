@@ -20,9 +20,7 @@ class PopTopologyGenerator(CommonGenerator):
         try:
             deployment_list = clean_data(data).get("TopologyDeployment", [])
             if not deployment_list:
-                self.logger.error(
-                    "No TopologyDeployment data found in GraphQL response"
-                )
+                self.logger.error("No TopologyDeployment data found in GraphQL response")
                 return
 
             self.data = deployment_list[0]
@@ -38,9 +36,7 @@ class PopTopologyGenerator(CommonGenerator):
         amount_of_super_spines = self.data.get("amount_of_super_spines", 4)
         super_spine_template = self.data.get("super_spine_template", {})
         design = self.data.get("design_pattern", {})
-        self.logger.info(
-            f"Generating topology for data center {self.fabric_name.upper()}"
-        )
+        self.logger.info(f"Generating topology for data center {self.fabric_name.upper()}")
         indexes: list[int] = [dc_index]
 
         await self.allocate_resource_pools(

@@ -25,9 +25,7 @@ class DCTopologyGenerator(CommonGenerator):
             if pod.checksum.value != fabric_checksum:
                 pod.checksum.value = fabric_checksum
                 await pod.save(allow_upsert=True)
-                self.logger.info(
-                    f"Pod {pod.name.value} has been updated to checksum {fabric_checksum}"
-                )
+                self.logger.info(f"Pod {pod.name.value} has been updated to checksum {fabric_checksum}")
 
     async def generate(self, data: dict[str, Any]) -> None:
         """Generate data center topology."""
@@ -35,9 +33,7 @@ class DCTopologyGenerator(CommonGenerator):
         try:
             deployment_list = clean_data(data).get("TopologyDeployment", [])
             if not deployment_list:
-                self.logger.error(
-                    "No TopologyDeployment data found in GraphQL response"
-                )
+                self.logger.error("No TopologyDeployment data found in GraphQL response")
                 return
 
             self.data = DCModel(**deployment_list[0])
@@ -48,9 +44,7 @@ class DCTopologyGenerator(CommonGenerator):
         self.logger.info(f"Processing Data Center: {self.data.name}")
 
         # Add existing pods to group context to prevent deletion
-        existing_pods = await self.client.filters(
-            kind=TopologyPod, parent__ids=[self.data.id]
-        )
+        existing_pods = await self.client.filters(kind=TopologyPod, parent__ids=[self.data.id])
         for pod in existing_pods:
             self.client.group_context.related_node_ids.append(pod.id)
 
@@ -61,9 +55,7 @@ class DCTopologyGenerator(CommonGenerator):
         amount_of_super_spines = self.data.amount_of_super_spines
         super_spine_template = self.data.super_spine_template
         design = self.data.design_pattern
-        self.logger.info(
-            f"Generating topology for data center {self.fabric_name.upper()}"
-        )
+        self.logger.info(f"Generating topology for data center {self.fabric_name.upper()}")
         indexes: list[int] = [dc_index]
 
         await self.allocate_resource_pools(

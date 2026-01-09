@@ -38,9 +38,7 @@ class CheckDataCenterCapacity(InfrahubCheck):
         design_pattern = data.get("design_pattern", {})
 
         if not design_pattern:
-            self.log_error(
-                message=f"Data center '{dc_name}' has no design pattern assigned"
-            )
+            self.log_error(message=f"Data center '{dc_name}' has no design pattern assigned")
             return
 
         # Get design limits
@@ -57,15 +55,11 @@ class CheckDataCenterCapacity(InfrahubCheck):
 
         # Validate super spines
         if actual_super_spines > max_super_spines:
-            errors.append(
-                f"Super spine count ({actual_super_spines}) exceeds design maximum ({max_super_spines})"
-            )
+            errors.append(f"Super spine count ({actual_super_spines}) exceeds design maximum ({max_super_spines})")
 
         # Validate pod count
         if actual_pod_count > max_pods:
-            errors.append(
-                f"Pod count ({actual_pod_count}) exceeds design maximum ({max_pods})"
-            )
+            errors.append(f"Pod count ({actual_pod_count}) exceeds design maximum ({max_pods})")
 
         # Validate each pod
         for pod in pods:
@@ -78,19 +72,13 @@ class CheckDataCenterCapacity(InfrahubCheck):
 
             # Validate against design
             if spine_count > max_spines:
-                errors.append(
-                    f"Pod '{pod_name}': Spine count ({spine_count}) exceeds design maximum ({max_spines})"
-                )
+                errors.append(f"Pod '{pod_name}': Spine count ({spine_count}) exceeds design maximum ({max_spines})")
 
             if leaf_count > max_leafs:
-                errors.append(
-                    f"Pod '{pod_name}': Leaf count ({leaf_count}) exceeds design maximum ({max_leafs})"
-                )
+                errors.append(f"Pod '{pod_name}': Leaf count ({leaf_count}) exceeds design maximum ({max_leafs})")
 
             if tor_count > max_tors:
-                errors.append(
-                    f"Pod '{pod_name}': ToR count ({tor_count}) exceeds design maximum ({max_tors})"
-                )
+                errors.append(f"Pod '{pod_name}': ToR count ({tor_count}) exceeds design maximum ({max_tors})")
 
         # Display all errors
         if errors:

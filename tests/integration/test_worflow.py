@@ -19,8 +19,6 @@ The Infrahub SDK uses dynamic attribute generation at runtime.
 
 import asyncio
 import logging
-import shutil
-import tempfile
 import time
 from collections.abc import Awaitable, Callable, Generator
 from pathlib import Path
@@ -49,6 +47,27 @@ VALIDATION_MAX_ATTEMPTS = 30
 VALIDATION_POLL_INTERVAL = 30  # seconds
 DATA_PROPAGATION_DELAY = 5  # seconds
 MERGE_PROPAGATION_DELAY = 10  # seconds
+SCENARIO_TASK_POLL_INTERVAL = 5  # seconds
+
+DATA_CENTER_SCENARIOS = [
+    "data/demos/01_data_center/dc1/",
+    "data/demos/01_data_center/dc2/",
+    "data/demos/01_data_center/dc3/",
+    "data/demos/01_data_center/dc4/",
+    "data/demos/01_data_center/dc5/",
+    "data/demos/01_data_center/dc6/",
+]
+
+DC1_INCREMENTAL_SCENARIOS = [
+    "data/demos/02_switch/",
+    "data/demos/03_rack/",
+    "data/demos/04_pod/",
+    "data/demos/05_llm_time/",
+    "data/demos/06_servers/",
+    "data/demos/08_segments/",
+    "data/demos/10_pop/",
+    "data/demos/20_cloud/",
+]
 
 T = TypeVar("T")
 
@@ -133,6 +152,43 @@ class TestDCWorkflow(TestInfrahubDockerWithClient):
 
         raise TimeoutError(
             f"Timeout waiting for {description} after {max_attempts} attempts ({max_attempts * poll_interval} seconds)"
+        )
+
+    async def wait_for_branch_to_be_idle(
+        self,
+        client: InfrahubClient,
+        branch: str,
+        timeout: int = GENERATOR_TASK_TIMEOUT,
+        poll_interval: int = SCENARIO_TASK_POLL_INTERVAL,
+    ) -> None:
+        """Wait until all tasks for a branch finish and assert none failed."""
+
+        active_states = [TaskState.RUNNING, TaskState.PENDING, TaskState.SCHEDULED]
+        failure_states = [TaskState.FAILED, TaskState.CANCELLED, TaskState.CRASHED]
+        deadline = time.time() + timeout
+
+        while True:
+            remaining_tasks = await client.task.filter(filter=TaskFilter(state=active_states, branch=branch))
+            if not remaining_tasks:
+                break
+
+            if time.time() >= deadline:
+                raise AssertionError(
+                    "Timeout waiting for background tasks to finish. "
+                    f"Active tasks: {[f'{t.id}:{t.state}' for t in remaining_tasks]}"
+                )
+
+            logging.info(
+                "Waiting for %d background tasks to finish on %s: %s",
+                len(remaining_tasks),
+                branch,
+                ", ".join(f"{t.id}:{t.state}" for t in remaining_tasks),
+            )
+            await asyncio.sleep(poll_interval)
+
+        failed_tasks = await client.task.filter(filter=TaskFilter(state=failure_states, branch=branch))
+        assert not failed_tasks, "Background tasks finished but some failed: " + ", ".join(
+            f"{t.id}:{t.state}" for t in failed_tasks
         )
 
     @pytest.mark.order(1)
@@ -223,52 +279,38 @@ class TestDCWorkflow(TestInfrahubDockerWithClient):
 
         client = async_client_main
 
+        src_directory = PROJECT_DIRECTORY
+
         # NOTE: GitRepo copies the source directory into the remote repo mount.
         # If the source tree contains a previous `.pytest-tmp/` (or other caches),
         # that directory may itself contain nested repo copies and cause path
-        # recursion / "File name too long" errors on subsequent runs.
-        ignore_patterns = shutil.ignore_patterns(
-            ".git",
-            ".pytest-tmp",
-            ".pytest_cache",
-            ".ruff_cache",
-            ".mypy_cache",
-            "__pycache__",
-            ".venv",
-            ".DS_Store",
+        git_repository = GitRepo(
+            name="demo_repo",
+            src_directory=src_directory,
+            dst_directory=Path(remote_repos_dir),
         )
 
-        with tempfile.TemporaryDirectory(prefix="infrahub-demo-src-") as tmpdir:
-            src_directory = Path(tmpdir) / "repo"
-            shutil.copytree(PROJECT_DIRECTORY, src_directory, ignore=ignore_patterns)
-
-            git_repository = GitRepo(
-                name="demo_repo",
-                src_directory=src_directory,
-                dst_directory=Path(remote_repos_dir),
+        # Create repository (idempotent: reuse if it already exists)
+        existing_repo = await client.get(
+            kind=git_repository.type.value,
+            name__value=git_repository.name,
+            raise_when_missing=False,
+        )
+        if existing_repo:
+            workflow_state["repository_id"] = existing_repo.id
+            logging.info(
+                "Repository %s already exists (ID: %s)",
+                git_repository.name,
+                existing_repo.id,
             )
-
-            # Create repository (idempotent: reuse if it already exists)
-            existing_repo = await client.get(
-                kind=git_repository.type.value,
-                name__value=git_repository.name,
-                raise_when_missing=False,
+        else:
+            response = await git_repository.add_to_infrahub(client=client)
+            assert response.get(f"{git_repository.type.value}Create", {}).get("ok"), (
+                f"Failed to add repository to Infrahub.\n"
+                f"  Repository name: {git_repository.name}\n"
+                f"  Source directory: {src_directory}\n"
+                f"  Response: {response}"
             )
-            if existing_repo:
-                workflow_state["repository_id"] = existing_repo.id
-                logging.info(
-                    "Repository %s already exists (ID: %s)",
-                    git_repository.name,
-                    existing_repo.id,
-                )
-            else:
-                response = await git_repository.add_to_infrahub(client=client)
-                assert response.get(f"{git_repository.type.value}Create", {}).get("ok"), (
-                    f"Failed to add repository to Infrahub.\n"
-                    f"  Repository name: {git_repository.name}\n"
-                    f"  Source directory: {src_directory}\n"
-                    f"  Response: {response}"
-                )
 
             # Use wait_for_condition helper for repository sync
             async def check_repo_sync() -> tuple[bool, Any]:
@@ -335,11 +377,9 @@ class TestDCWorkflow(TestInfrahubDockerWithClient):
         if default_branch in existing_branches:
             logging.info("Branch %s already exists", default_branch)
         else:
-            # Pass background_execution=None to avoid deprecation warning in SDK
             client_main.branch.create(
                 default_branch,
                 wait_until_completion=True,
-                background_execution=None,
             )
             logging.info("Created branch: %s", default_branch)
 
@@ -361,9 +401,7 @@ class TestDCWorkflow(TestInfrahubDockerWithClient):
                 break
             except Exception as exc:  # noqa: BLE001 - we want to catch URL errors here
                 if time.time() > branch_deadline:
-                    raise AssertionError(
-                        f"Branch endpoint for {default_branch} not reachable in time: {exc}"
-                    ) from exc
+                    raise AssertionError(f"Branch endpoint for {default_branch} not reachable in time: {exc}") from exc
                 logging.info(
                     "Branch %s endpoint not ready yet (%s); retrying...",
                     default_branch,
@@ -537,38 +575,6 @@ class TestDCWorkflow(TestInfrahubDockerWithClient):
         task = await client.task.wait_for_completion(id=task_id, timeout=GENERATOR_TASK_TIMEOUT)
         workflow_state["generator_task_state"] = str(task.state)
 
-        async def wait_for_all_active_tasks() -> None:
-            active_states = [TaskState.RUNNING, TaskState.PENDING, TaskState.SCHEDULED]
-            failure_states = [TaskState.FAILED, TaskState.CANCELLED, TaskState.CRASHED]
-            deadline = time.time() + GENERATOR_TASK_TIMEOUT
-            while True:
-                remaining_tasks = await client.task.filter(
-                    filter=TaskFilter(state=active_states, branch=default_branch)
-                )
-                if not remaining_tasks:
-                    break
-
-                if time.time() >= deadline:
-                    raise AssertionError(
-                        "Timeout waiting for background tasks to finish. "
-                        f"Active tasks: {[f'{t.id}:{t.state}' for t in remaining_tasks]}"
-                    )
-
-                logging.info(
-                    "Waiting for %d background tasks to finish: %s",
-                    len(remaining_tasks),
-                    ", ".join(f"{t.id}:{t.state}" for t in remaining_tasks),
-                )
-                await asyncio.sleep(5)
-
-            # After the queue is clear, verify no tasks failed on this branch
-            failed_tasks = await client.task.filter(filter=TaskFilter(state=failure_states, branch=default_branch))
-            if failed_tasks:
-                raise AssertionError(
-                    "Background tasks finished but some failed: "
-                    + ", ".join(f"{t.id}:{t.state}" for t in failed_tasks)
-                )
-
         # The generator task can fail due to post-processing issues (like GraphQL
         # query group updates) even if devices were created successfully.
         # So we check if the task completed OR if devices exist (test_10 will verify).
@@ -582,7 +588,7 @@ class TestDCWorkflow(TestInfrahubDockerWithClient):
             logging.info("Generator completed successfully")
 
         # Ensure no other tasks are still running before proceeding
-        await wait_for_all_active_tasks()
+        await self.wait_for_branch_to_be_idle(client=client, branch=default_branch)
 
     @pytest.mark.order(10)
     @pytest.mark.dependency(name="verify_devices_created", depends=["run_generator"])
@@ -623,6 +629,101 @@ class TestDCWorkflow(TestInfrahubDockerWithClient):
         spine_count = sum(1 for name in device_names if "spine" in name.lower())
         leaf_count = sum(1 for name in device_names if "leaf" in name.lower())
         logging.info("Device breakdown: %d spines, %d leafs", spine_count, leaf_count)
+
+    @pytest.mark.order(11)
+    @pytest.mark.dependency(name="load_all_data_centers", depends=["load_events"])
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("scenario_path", DATA_CENTER_SCENARIOS)
+    async def test_11_load_all_data_center_scenarios(
+        self,
+        client_main: InfrahubClientSync,
+        async_client_main: InfrahubClient,
+        scenario_path: str,
+    ) -> None:
+        """Load every data center scenario and wait for all event-driven tasks to finish."""
+
+        branch_name = f"demo-{Path(scenario_path.rstrip('/')).name}"
+        existing_branches = client_main.branch.all()
+        if branch_name in existing_branches:
+            client_main.branch.delete(branch_name)
+        client_main.branch.create(branch_name, wait_until_completion=True)
+
+        load_result = self.execute_command(
+            f"infrahubctl object load {scenario_path} --branch {branch_name}",
+            address=client_main.config.address,
+        )
+
+        assert load_result.returncode == 0, (
+            f"Demo scenario load failed for {scenario_path}.\n"
+            f"  Branch: {branch_name}\n"
+            f"  Return code: {load_result.returncode}\n"
+            f"  stdout: {load_result.stdout}\n"
+            f"  stderr: {load_result.stderr}"
+        )
+
+        async_client_main.default_branch = branch_name
+        await self.wait_for_branch_to_be_idle(async_client_main, branch_name)
+
+        datacenters = await async_client_main.all(kind=TopologyDataCenter)
+        assert datacenters, (
+            f"No data centers found after loading {scenario_path}.\n"
+            f"  Branch: {branch_name}\n"
+            f"  Tasks may have failed silently or events did not execute."
+        )
+
+    @pytest.mark.order(12)
+    @pytest.mark.dependency(name="dc1_incremental_demos", depends=["load_events"])
+    @pytest.mark.asyncio
+    async def test_12_apply_incremental_dc1_demos(
+        self,
+        client_main: InfrahubClientSync,
+        async_client_main: InfrahubClient,
+    ) -> None:
+        """Exercise all DC1 incremental demo scenarios and wait for task queues to drain."""
+
+        branch_name = f"demo-dc1-addons-{int(time.time())}"
+
+        existing_branches = client_main.branch.all()
+        if branch_name in existing_branches:
+            client_main.branch.delete(branch_name)
+        client_main.branch.create(branch_name, wait_until_completion=True)
+
+        load_base = self.execute_command(
+            f"infrahubctl object load data/demos/01_data_center/dc1/ --branch {branch_name}",
+            address=client_main.config.address,
+        )
+        assert load_base.returncode == 0, (
+            "Failed to load base DC1 demo before incremental scenarios.\n"
+            f"  Branch: {branch_name}\n"
+            f"  Return code: {load_base.returncode}\n"
+            f"  stdout: {load_base.stdout}\n"
+            f"  stderr: {load_base.stderr}"
+        )
+
+        async_client_main.default_branch = branch_name
+        await self.wait_for_branch_to_be_idle(async_client_main, branch_name)
+
+        for scenario_path in DC1_INCREMENTAL_SCENARIOS:
+            load_result = self.execute_command(
+                f"infrahubctl object load {scenario_path} --branch {branch_name}",
+                address=client_main.config.address,
+            )
+            assert load_result.returncode == 0, (
+                f"Demo scenario load failed for {scenario_path}.\n"
+                f"  Branch: {branch_name}\n"
+                f"  Return code: {load_result.returncode}\n"
+                f"  stdout: {load_result.stdout}\n"
+                f"  stderr: {load_result.stderr}"
+            )
+
+            await self.wait_for_branch_to_be_idle(async_client_main, branch_name)
+
+        devices = await async_client_main.all(kind=DcimPhysicalDevice)
+        assert devices, (
+            "No physical devices present after applying incremental demos.\n"
+            f"  Branch: {branch_name}\n"
+            "  Event-driven generators may not have produced inventory."
+        )
 
     # @pytest.mark.order(5)
     # @pytest.mark.dependency(name="add_events", depends=["add_repository"])
@@ -829,7 +930,7 @@ class TestDCWorkflow(TestInfrahubDockerWithClient):
     #             for g in await client.all("CoreGeneratorDefinition", branch="main")
     #         ]
     #         raise AssertionError(
-    #             f"Generator definition 'create_dc' not available after waiting.\n"
+    #             g.name.value if hasattr(g, "name") and hasattr(getattr(g, "name"), "value") else str(g)
     #             f"  Available generators: {available_generators}\n"
     #             f"  Timeout: {GENERATOR_DEFINITION_MAX_ATTEMPTS * GENERATOR_DEFINITION_POLL_INTERVAL}s\n"
     #             f"  Repository may not have synced properly in test_05."

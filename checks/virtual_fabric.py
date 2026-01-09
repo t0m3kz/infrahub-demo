@@ -35,9 +35,7 @@ class CheckVirtualFabricCapacity(InfrahubCheck):
         design_pattern = data.get("design_pattern", {})
 
         if not design_pattern:
-            self.log_error(
-                message=f"Virtual fabric '{fabric_name}' has no design pattern assigned"
-            )
+            self.log_error(message=f"Virtual fabric '{fabric_name}' has no design pattern assigned")
             return
 
         # Get design limits
@@ -62,15 +60,11 @@ class CheckVirtualFabricCapacity(InfrahubCheck):
 
         # Validate network segments
         if actual_segments > max_segments:
-            errors.append(
-                f"Network segment count ({actual_segments}) exceeds design maximum ({max_segments})"
-            )
+            errors.append(f"Network segment count ({actual_segments}) exceeds design maximum ({max_segments})")
 
         # Validate IP prefixes
         if actual_prefixes > max_ip_prefixes:
-            errors.append(
-                f"IP prefix count ({actual_prefixes}) exceeds design maximum ({max_ip_prefixes})"
-            )
+            errors.append(f"IP prefix count ({actual_prefixes}) exceeds design maximum ({max_ip_prefixes})")
 
         # Validate external connections
         if actual_external_conns > max_external_conns:
@@ -80,9 +74,7 @@ class CheckVirtualFabricCapacity(InfrahubCheck):
 
         # Validate BGP sessions
         if actual_bgp_sessions > max_bgp_sessions:
-            errors.append(
-                f"BGP session count ({actual_bgp_sessions}) exceeds design maximum ({max_bgp_sessions})"
-            )
+            errors.append(f"BGP session count ({actual_bgp_sessions}) exceeds design maximum ({max_bgp_sessions})")
 
         # Validate load balancers
         if actual_load_balancers > max_load_balancers:
@@ -98,15 +90,11 @@ class CheckVirtualFabricCapacity(InfrahubCheck):
 
         # Validate endpoints
         if actual_endpoints > max_endpoints:
-            errors.append(
-                f"Endpoint count ({actual_endpoints}) exceeds design maximum ({max_endpoints})"
-            )
+            errors.append(f"Endpoint count ({actual_endpoints}) exceeds design maximum ({max_endpoints})")
 
         # Validate bandwidth
         if actual_bandwidth > max_bandwidth:
-            errors.append(
-                f"Total bandwidth ({actual_bandwidth} Mbps) exceeds design maximum ({max_bandwidth} Mbps)"
-            )
+            errors.append(f"Total bandwidth ({actual_bandwidth} Mbps) exceeds design maximum ({max_bandwidth} Mbps)")
 
         # Display all errors
         if errors:

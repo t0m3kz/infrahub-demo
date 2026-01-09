@@ -37,9 +37,7 @@ class DeviceNamingConfig:
         """Format device name according to configured strategy."""
         index = kwargs.get("index")
         formatted_idx = (
-            str(index).zfill(self.pad_width)
-            if (index is not None and self.zero_padded)
-            else str(index or "00")
+            str(index).zfill(self.pad_width) if (index is not None and self.zero_padded) else str(index or "00")
         )
 
         fabric_name = kwargs.get("fabric_name", prefix)
@@ -47,18 +45,12 @@ class DeviceNamingConfig:
 
         # Build strategy-specific components
         if self.strategy == "standard":
-            components = self._build_standard_components(
-                fabric_name, indexes, device_type, formatted_idx
-            )
+            components = self._build_standard_components(fabric_name, indexes, device_type, formatted_idx)
         elif self.strategy == "hierarchical":
-            components = self._build_hierarchical_components(
-                fabric_name, indexes, device_type, formatted_idx
-            )
+            components = self._build_hierarchical_components(fabric_name, indexes, device_type, formatted_idx)
         elif self.strategy == "flat":
             self.separator = ""
-            components = self._build_flat_components(
-                fabric_name, indexes, device_type, formatted_idx
-            )
+            components = self._build_flat_components(fabric_name, indexes, device_type, formatted_idx)
         else:
             raise ValueError(f"Unknown naming strategy: {self.strategy}")
 
@@ -94,9 +86,7 @@ class DeviceNamingConfig:
         """Build components for FLAT naming (no separators)."""
         components = [fabric_name]
         if indexes:
-            components.extend(
-                [device_type, "".join(str(idx) for idx in indexes), formatted_idx]
-            )
+            components.extend([device_type, "".join(str(idx) for idx in indexes), formatted_idx])
         return components
 
 
@@ -139,15 +129,11 @@ class FabricPoolConfig:
 
         raise ValueError(f"Unknown naming type: {self.kind}")
 
-    def _calculate_fabric_pools(
-        self, management_max_prefix: int, data_max_prefix: int
-    ) -> dict[str, int]:
+    def _calculate_fabric_pools(self, management_max_prefix: int, data_max_prefix: int) -> dict[str, int]:
         """Calculate pool prefixes for the entire fabric."""
         # Management pool: one address per physical device + buffer
         maximum_devices = (
-            (self.maximum_switches + self.maximum_spines + 2) * self.maximum_pods
-            + self.maximum_super_spines
-            + 2
+            (self.maximum_switches + self.maximum_spines + 2) * self.maximum_pods + self.maximum_super_spines + 2
         )
 
         # Technical (P2P) pool: based on the sum of all connections
@@ -164,8 +150,7 @@ class FabricPoolConfig:
             "management": management_max_prefix - maximum_devices.bit_length(),
             "technical": data_max_prefix - total_p2p_ips_needed.bit_length(),
             "loopback": data_max_prefix - maximum_devices.bit_length() - 1,
-            "super-spine-loopback": data_max_prefix
-            - (self.maximum_super_spines + 2).bit_length(),
+            "super-spine-loopback": data_max_prefix - (self.maximum_super_spines + 2).bit_length(),
         }
 
     def _calculate_pod_pools(self, data_max_prefix: int) -> dict[str, int]:
@@ -218,13 +203,9 @@ class CablingPlanner:
 
         self.logger = logging.getLogger(__name__)
 
-        self.bottom_by_device: dict = self._create_device_interface_map(
-            bottom_interfaces, bottom_sorting
-        )
+        self.bottom_by_device: dict = self._create_device_interface_map(bottom_interfaces, bottom_sorting)
 
-        self.top_by_device: dict = self._create_device_interface_map(
-            top_interfaces, top_sorting
-        )
+        self.top_by_device: dict = self._create_device_interface_map(top_interfaces, top_sorting)
 
     def _create_device_interface_map(
         self,
@@ -241,9 +222,7 @@ class CablingPlanner:
             sorting = "top_down"
 
         if sorting not in {"top_down", "bottom_up"}:
-            msg = (
-                f"Unsupported sorting value '{sorting}'. Use 'top_down' or 'bottom_up'."
-            )
+            msg = f"Unsupported sorting value '{sorting}'. Use 'top_down' or 'bottom_up'."
             raise ValueError(msg)
 
         device_interface_map = defaultdict(list)
@@ -258,9 +237,7 @@ class CablingPlanner:
             sorted_names = sort_interface_list(list(interface_map.keys()))
             if sorting == "top_down":
                 sorted_names.reverse()
-            device_interface_map[device] = [
-                interface_map[name] for name in sorted_names
-            ]
+            device_interface_map[device] = [interface_map[name] for name in sorted_names]
 
         return device_interface_map
 
@@ -276,12 +253,8 @@ class CablingPlanner:
         cabling_plan: list[tuple[DcimPhysicalInterface, DcimPhysicalInterface]] = []
 
         for top_index, top_device in enumerate(sorted(self.top_by_device.keys())):
-            for bottom_index, bottom_device in enumerate(
-                sorted(self.bottom_by_device.keys())
-            ):
-                top_intf = self.top_by_device[top_device][
-                    (bottom_index + cabling_offset)
-                ]
+            for bottom_index, bottom_device in enumerate(sorted(self.bottom_by_device.keys())):
+                top_intf = self.top_by_device[top_device][(bottom_index + cabling_offset)]
                 bottom_intf = self.bottom_by_device[bottom_device][(top_index)]
 
                 cabling_plan.append((top_intf, bottom_intf))
@@ -307,21 +280,15 @@ class CablingPlanner:
 
         for bottom_index, bottom_device in enumerate(bottom_devices):
             # Each bottom device uses the same port position on ALL top devices
-            top_interface_index = (bottom_index + cabling_offset) % len(
-                self.top_by_device[top_devices[0]]
-            )
+            top_interface_index = (bottom_index + cabling_offset) % len(self.top_by_device[top_devices[0]])
 
             for top_index, top_device in enumerate(top_devices):
                 # All top devices use the SAME interface index for this bottom device
                 top_intf = self.top_by_device[top_device][top_interface_index]
 
                 # Bottom device uses interfaces in order (one per top device)
-                bottom_interface_index = top_index % len(
-                    self.bottom_by_device[bottom_device]
-                )
-                bottom_intf = self.bottom_by_device[bottom_device][
-                    bottom_interface_index
-                ]
+                bottom_interface_index = top_index % len(self.bottom_by_device[bottom_device])
+                bottom_intf = self.bottom_by_device[bottom_device][bottom_interface_index]
 
                 cabling_plan.append((bottom_intf, top_intf))
 
@@ -397,9 +364,7 @@ class CablingPlanner:
                     bottom_intf = bottom_interfaces[uplink_idx]
 
                     # Round-robin distribution across all top devices
-                    top_device_idx = (
-                        tor_index * uplinks_per_tor + uplink_idx
-                    ) % num_top_devices
+                    top_device_idx = (tor_index * uplinks_per_tor + uplink_idx) % num_top_devices
                     top_device = sorted_top_devices[top_device_idx]
                     top_interfaces = self.top_by_device[top_device]
 
@@ -407,22 +372,15 @@ class CablingPlanner:
                     connections_to_this_top = sum(
                         1
                         for ti in range(tor_index)
-                        for ui in range(
-                            len(self.bottom_by_device[sorted_bottom_devices[ti]])
-                        )
-                        if (
-                            ti * len(self.bottom_by_device[sorted_bottom_devices[ti]])
-                            + ui
-                        )
-                        % num_top_devices
+                        for ui in range(len(self.bottom_by_device[sorted_bottom_devices[ti]]))
+                        if (ti * len(self.bottom_by_device[sorted_bottom_devices[ti]]) + ui) % num_top_devices
                         == top_device_idx
                     )
 
                     connections_to_this_top += sum(
                         1
                         for ui in range(uplink_idx)
-                        if (tor_index * uplinks_per_tor + ui) % num_top_devices
-                        == top_device_idx
+                        if (tor_index * uplinks_per_tor + ui) % num_top_devices == top_device_idx
                     )
 
                     if connections_to_this_top < len(top_interfaces):
@@ -498,9 +456,7 @@ class CablingPlanner:
 
         num_top_devices = len(sorted_top_devices)
         if num_top_devices < 2:
-            self.logger.warning(
-                f"Middle rack cabling requires at least 2 leaf devices, found {num_top_devices}"
-            )
+            self.logger.warning(f"Middle rack cabling requires at least 2 leaf devices, found {num_top_devices}")
             return cabling_plan
 
         # Each ToR uses exactly 2 uplinks
@@ -530,9 +486,7 @@ class CablingPlanner:
             tors_using_same_pair = tor_index // num_pairs
 
             # Connect using first 2 uplink interfaces from ToR
-            for uplink_idx in range(
-                min(uplinks_per_tor_to_use, len(bottom_interfaces))
-            ):
+            for uplink_idx in range(min(uplinks_per_tor_to_use, len(bottom_interfaces))):
                 bottom_intf = bottom_interfaces[uplink_idx]
 
                 # Connect to the two leafs in the pair
@@ -569,9 +523,7 @@ class CablingPlanner:
 
         num_top_devices = len(sorted_top_devices)
         if num_top_devices < 2:
-            self.logger.warning(
-                f"Mixed rack cabling requires at least 2 leaf devices, found {num_top_devices}"
-            )
+            self.logger.warning(f"Mixed rack cabling requires at least 2 leaf devices, found {num_top_devices}")
             return cabling_plan
 
         # Each ToR uses exactly 2 uplinks
@@ -604,9 +556,7 @@ class CablingPlanner:
             tors_using_same_pair = global_tor_index // num_pairs
 
             # Connect using first 2 uplink interfaces from ToR
-            for uplink_idx in range(
-                min(uplinks_per_tor_to_use, len(bottom_interfaces))
-            ):
+            for uplink_idx in range(min(uplinks_per_tor_to_use, len(bottom_interfaces))):
                 bottom_intf = bottom_interfaces[uplink_idx]
 
                 # Connect to the two leafs in the pair
@@ -652,8 +602,6 @@ class CablingPlanner:
         elif scenario == "intra_rack_middle":
             return self._build_intra_rack_middle_cabling_plan()
         elif scenario == "intra_rack_mixed":
-            return self._build_intra_rack_mixed_cabling_plan(
-                cabling_offset=cabling_offset
-            )
+            return self._build_intra_rack_mixed_cabling_plan(cabling_offset=cabling_offset)
         else:
             raise ValueError(f"Unknown cabling scenario: {scenario}")

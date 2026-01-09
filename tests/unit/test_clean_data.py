@@ -211,9 +211,7 @@ class TestCleanDataGraphQLTypes:
             }
         }
         result = clean_data(data)
-        expected = {
-            "device": {"typename": "DcimPhysicalDevice", "id": "1", "name": "Device-1"}
-        }
+        expected = {"device": {"typename": "DcimPhysicalDevice", "id": "1", "name": "Device-1"}}
         assert result == expected
 
     def test_clean_data_multiple_double_underscores_normalized(self) -> None:
@@ -248,23 +246,13 @@ class TestCleanDataComplexGraphQLResponse:
                                     "id": "template-uuid-1",
                                     "interfaces": {
                                         "edges": [
-                                            {
-                                                "node": {
-                                                    "name": {"value": "Ethernet1/31"}
-                                                }
-                                            },
-                                            {
-                                                "node": {
-                                                    "name": {"value": "Ethernet1/32"}
-                                                }
-                                            },
+                                            {"node": {"name": {"value": "Ethernet1/31"}}},
+                                            {"node": {"name": {"value": "Ethernet1/32"}}},
                                         ]
                                     },
                                 }
                             },
-                            "parent": {
-                                "node": {"id": "dc-uuid-1", "name": {"value": "DC-1"}}
-                            },
+                            "parent": {"node": {"id": "dc-uuid-1", "name": {"value": "DC-1"}}},
                         }
                     }
                 ]
@@ -325,11 +313,7 @@ class TestCleanDataComplexGraphQLResponse:
 
     def test_clean_data_wrapped_response(self) -> None:
         """Test clean_data with TopologyDeployment edges query."""
-        data = {
-            "TopologyDeployment": {
-                "edges": [{"node": {"id": "deploy-1", "name": {"value": "DC-1"}}}]
-            }
-        }
+        data = {"TopologyDeployment": {"edges": [{"node": {"id": "deploy-1", "name": {"value": "DC-1"}}}]}}
         result = clean_data(data)
 
         # Edges are unwrapped and nodes are cleaned
@@ -348,9 +332,7 @@ class TestCleanDataComplexGraphQLResponse:
                             "id": "1871d83c-3313-5b7d-3029-c51b776edc7e",
                             "amount_of_spines": {"value": 4},
                             "name": {"value": "Pod-A1"},
-                            "checksum": {
-                                "value": "251b527b42bbf34e0dbbdc5e6577aa132bde9a6a1e72fffecd7c1225482d1936"
-                            },
+                            "checksum": {"value": "251b527b42bbf34e0dbbdc5e6577aa132bde9a6a1e72fffecd7c1225482d1936"},
                             "index": {"value": 1},
                             "role": {"value": "cpu"},
                             "spine_switch_template": {
@@ -358,36 +340,12 @@ class TestCleanDataComplexGraphQLResponse:
                                     "id": "1871d302-6519-7020-3022-c51818a0c08b",
                                     "interfaces": {
                                         "edges": [
-                                            {
-                                                "node": {
-                                                    "name": {"value": "Ethernet1/31"}
-                                                }
-                                            },
-                                            {
-                                                "node": {
-                                                    "name": {"value": "Ethernet1/32"}
-                                                }
-                                            },
-                                            {
-                                                "node": {
-                                                    "name": {"value": "Ethernet1/33"}
-                                                }
-                                            },
-                                            {
-                                                "node": {
-                                                    "name": {"value": "Ethernet1/34"}
-                                                }
-                                            },
-                                            {
-                                                "node": {
-                                                    "name": {"value": "Ethernet1/35"}
-                                                }
-                                            },
-                                            {
-                                                "node": {
-                                                    "name": {"value": "Ethernet1/36"}
-                                                }
-                                            },
+                                            {"node": {"name": {"value": "Ethernet1/31"}}},
+                                            {"node": {"name": {"value": "Ethernet1/32"}}},
+                                            {"node": {"name": {"value": "Ethernet1/33"}}},
+                                            {"node": {"name": {"value": "Ethernet1/34"}}},
+                                            {"node": {"name": {"value": "Ethernet1/35"}}},
+                                            {"node": {"name": {"value": "Ethernet1/36"}}},
                                         ]
                                     },
                                 }
@@ -397,37 +355,15 @@ class TestCleanDataComplexGraphQLResponse:
                                     "id": "1871d5de-d149-c98d-3025-c515100cb750",
                                     "name": {"value": "DC-1"},
                                     "amount_of_super_spines": {"value": 6},
-                                    "fabric_interface_sorting_method": {
-                                        "value": "top_down"
-                                    },
-                                    "spine_interface_sorting_method": {
-                                        "value": "bottom_up"
-                                    },
+                                    "fabric_interface_sorting_method": {"value": "top_down"},
+                                    "spine_interface_sorting_method": {"value": "bottom_up"},
                                     "super_spine_switch_template": {
                                         "node": {
                                             "interfaces": {
                                                 "edges": [
-                                                    {
-                                                        "node": {
-                                                            "name": {
-                                                                "value": "Ethernet1/1"
-                                                            }
-                                                        }
-                                                    },
-                                                    {
-                                                        "node": {
-                                                            "name": {
-                                                                "value": "Ethernet1/2"
-                                                            }
-                                                        }
-                                                    },
-                                                    {
-                                                        "node": {
-                                                            "name": {
-                                                                "value": "Ethernet1/3"
-                                                            }
-                                                        }
-                                                    },
+                                                    {"node": {"name": {"value": "Ethernet1/1"}}},
+                                                    {"node": {"name": {"value": "Ethernet1/2"}}},
+                                                    {"node": {"name": {"value": "Ethernet1/3"}}},
                                                 ]
                                             }
                                         }
@@ -617,11 +553,7 @@ class TestCleanDataIdempotency:
 
     def test_clean_data_consistent_across_calls(self) -> None:
         """Test clean_data produces consistent results across multiple calls."""
-        data = {
-            "TopologyPod": {
-                "edges": [{"node": {"id": "pod-1", "name": {"value": "Pod-A1"}}}]
-            }
-        }
+        data = {"TopologyPod": {"edges": [{"node": {"id": "pod-1", "name": {"value": "Pod-A1"}}}]}}
 
         result1 = clean_data(data)
         result2 = clean_data(data)

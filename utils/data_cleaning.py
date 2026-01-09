@@ -55,7 +55,7 @@ def clean_data(data: Any) -> Any:
             if isinstance(value, dict):
                 # Extract common GraphQL wrapper fields in priority order
                 # Use 'in' to check for key presence, then check if value is not None
-                
+
                 # Single-key wrappers: extract the wrapped value
                 if "value" in value and len(value) == 1:
                     dict_result[key] = value["value"]

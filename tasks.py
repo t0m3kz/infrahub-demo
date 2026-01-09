@@ -47,22 +47,16 @@ def check_container_running(context: Context, max_attempts: int = 60) -> bool:
             output = result.stdout.strip()  # type: ignore
             # Check if output contains "(healthy)" - the actual health status
             if "(healthy)" in output:
-                print(
-                    f"     ✅ Infrahub server is healthy (attempt {attempt + 1}/{max_attempts})"
-                )
+                print(f"     ✅ Infrahub server is healthy (attempt {attempt + 1}/{max_attempts})")
                 return True
 
         if attempt < max_attempts - 1:
             time.sleep(2)
             # Show progress every 10 attempts
             if (attempt + 1) % 10 == 0:
-                print(
-                    f"     Still waiting for healthy status... ({(attempt + 1) * 2} seconds elapsed)"
-                )
+                print(f"     Still waiting for healthy status... ({(attempt + 1) * 2} seconds elapsed)")
 
-    print(
-        f"     ❌ Infrahub server failed to reach (healthy) status after {max_attempts * 2} seconds"
-    )
+    print(f"     ❌ Infrahub server failed to reach (healthy) status after {max_attempts * 2} seconds")
     return False
 
 
@@ -85,9 +79,7 @@ def ensure_branch_exists(context: Context, branch: str) -> bool:
     print(f"  📍 Ensuring branch '{branch}' exists...")
 
     # Try to create the branch first
-    create_result = context.run(
-        f"infrahubctl branch create {branch}", warn=True, pty=True, hide=True
-    )
+    create_result = context.run(f"infrahubctl branch create {branch}", warn=True, pty=True, hide=True)
 
     if create_result.return_code == 0:  # type: ignore
         print(f"     ✅ Branch '{branch}' created successfully")
@@ -103,9 +95,7 @@ def ensure_branch_exists(context: Context, branch: str) -> bool:
         print(f"     ✅ Branch '{branch}' already exists")
         # Rebase branch to ensure it's up to date with main
         print(f"     🔄 Rebasing branch '{branch}' with main...")
-        rebase_result = context.run(
-            f"infrahubctl branch rebase {branch}", warn=True, pty=True, hide=True
-        )
+        rebase_result = context.run(f"infrahubctl branch rebase {branch}", warn=True, pty=True, hide=True)
         if rebase_result.return_code == 0:  # type: ignore
             print(f"     ✅ Branch '{branch}' rebased successfully")
         else:
@@ -136,13 +126,9 @@ def start(context: Context) -> None:
 
 
 @task(optional=["schema", "branch"])
-def load_schema(
-    context: Context, schema: str = "./schemas/", branch: str = "main"
-) -> None:
+def load_schema(context: Context, schema: str = "./schemas/", branch: str = "main") -> None:
     """Load the schemas from the given path."""
-    context.run(
-        f"uv run infrahubctl schema load {schema}/base --branch {branch}", pty=True
-    )
+    context.run(f"uv run infrahubctl schema load {schema}/base --branch {branch}", pty=True)
     context.run(
         f"uv run infrahubctl schema load {schema}/extensions --branch {branch}",
         pty=True,
@@ -150,9 +136,7 @@ def load_schema(
 
 
 @task(optional=["branch"])
-def load_data(
-    context: Context, name: str = "bootstrap.py", branch: str = "main"
-) -> None:
+def load_data(context: Context, name: str = "bootstrap.py", branch: str = "main") -> None:
     """Load the data from the given path."""
     context.run(f"uv run infrahubctl run bootstrap/{name} --branch {branch}", pty=True)
 
@@ -186,9 +170,7 @@ def load_menu(context: Context, menu: str = "menu", branch: str = "main") -> Non
 
 
 @task(optional=["branch"])
-def load_objects(
-    context: Context, path: str = "data/bootstrap/", branch: str = "main"
-) -> None:
+def load_objects(context: Context, path: str = "data/bootstrap/", branch: str = "main") -> None:
     """Load objects from the given path."""
     context.run(f"infrahubctl object load {path} --branch {branch}", pty=True)
 
@@ -356,9 +338,7 @@ def deploy_dc(
     context.run(cmd, pty=True)
 
     print(f"✅ Data loaded into branch '{branch}'")
-    print(
-        "💡 Trigger infrastructure generation in InfraHub UI → Actions → Generator Definitions → generate_dc \n"
-    )
+    print("💡 Trigger infrastructure generation in InfraHub UI → Actions → Generator Definitions → generate_dc \n")
 
 
 @task

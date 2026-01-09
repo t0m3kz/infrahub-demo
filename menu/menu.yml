@@ -166,7 +166,7 @@ spec:
             children:
               data:
                 - namespace: Dcim
-                  name: GenericDevice
+                  name: Device
                   label: Devices
                   kind: DcimDevice
                   icon: "mdi:server"

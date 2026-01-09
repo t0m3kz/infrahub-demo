@@ -54,20 +54,12 @@ class TestIntraRackIdempotency:
         # 4 ToRs with 2 uplinks each
         tors = []
         for i in range(1, 5):
-            tors.extend(
-                create_mock_interfaces_with_cables(
-                    f"tor-{i:02d}", ["Ethernet1/31", "Ethernet1/32"]
-                )
-            )
+            tors.extend(create_mock_interfaces_with_cables(f"tor-{i:02d}", ["Ethernet1/31", "Ethernet1/32"]))
 
         # 4 Spines with 4 ports each
         spines = []
         for i in range(1, 5):
-            spines.extend(
-                create_mock_interfaces_with_cables(
-                    f"spine-{i:02d}", [f"Ethernet1/{j}" for j in range(1, 5)]
-                )
-            )
+            spines.extend(create_mock_interfaces_with_cables(f"spine-{i:02d}", [f"Ethernet1/{j}" for j in range(1, 5)]))
 
         planner = CablingPlanner(tors, spines)  # type: ignore
         plan1 = planner.build_cabling_plan(scenario="intra_rack")
@@ -91,26 +83,14 @@ class TestIntraRackIdempotency:
     def test_intra_rack_with_existing_cables_unchanged(self) -> None:
         """Test that existing cables are included in plan (idempotent re-run)."""
         # 2 ToRs with 2 uplinks each - ALREADY CONNECTED
-        tor1 = create_mock_interfaces_with_cables(
-            "tor-01", ["Ethernet1/31", "Ethernet1/32"], connected=True
-        )
-        tor2 = create_mock_interfaces_with_cables(
-            "tor-02", ["Ethernet1/31", "Ethernet1/32"], connected=True
-        )
+        tor1 = create_mock_interfaces_with_cables("tor-01", ["Ethernet1/31", "Ethernet1/32"], connected=True)
+        tor2 = create_mock_interfaces_with_cables("tor-02", ["Ethernet1/31", "Ethernet1/32"], connected=True)
 
         # 4 Spines with 2 ports each - SOME CONNECTED
-        spine1 = create_mock_interfaces_with_cables(
-            "spine-01", ["Ethernet1/1", "Ethernet1/2"], connected=True
-        )
-        spine2 = create_mock_interfaces_with_cables(
-            "spine-02", ["Ethernet1/1", "Ethernet1/2"], connected=True
-        )
-        spine3 = create_mock_interfaces_with_cables(
-            "spine-03", ["Ethernet1/1", "Ethernet1/2"], connected=False
-        )
-        spine4 = create_mock_interfaces_with_cables(
-            "spine-04", ["Ethernet1/1", "Ethernet1/2"], connected=False
-        )
+        spine1 = create_mock_interfaces_with_cables("spine-01", ["Ethernet1/1", "Ethernet1/2"], connected=True)
+        spine2 = create_mock_interfaces_with_cables("spine-02", ["Ethernet1/1", "Ethernet1/2"], connected=True)
+        spine3 = create_mock_interfaces_with_cables("spine-03", ["Ethernet1/1", "Ethernet1/2"], connected=False)
+        spine4 = create_mock_interfaces_with_cables("spine-04", ["Ethernet1/1", "Ethernet1/2"], connected=False)
 
         planner = CablingPlanner(
             tor1 + tor2,  # type: ignore
@@ -132,20 +112,12 @@ class TestIntraRackIdempotency:
         # 4 ToRs with 2 uplinks each
         tors = []
         for i in range(1, 5):
-            tors.extend(
-                create_mock_interfaces_with_cables(
-                    f"tor-{i:02d}", ["Ethernet1/31", "Ethernet1/32"]
-                )
-            )
+            tors.extend(create_mock_interfaces_with_cables(f"tor-{i:02d}", ["Ethernet1/31", "Ethernet1/32"]))
 
         # 4 Spines with 2 ports each
         spines = []
         for i in range(1, 5):
-            spines.extend(
-                create_mock_interfaces_with_cables(
-                    f"spine-{i:02d}", ["Ethernet1/1", "Ethernet1/2"]
-                )
-            )
+            spines.extend(create_mock_interfaces_with_cables(f"spine-{i:02d}", ["Ethernet1/1", "Ethernet1/2"]))
 
         planner = CablingPlanner(tors, spines)  # type: ignore
         plan = planner.build_cabling_plan(scenario="intra_rack")
@@ -195,18 +167,14 @@ class TestToRDeploymentIdempotency:
         tors = []
         for i in range(1, 5):
             tors.extend(
-                create_mock_interfaces_with_cables(
-                    f"dc1-pod1-rack1-tor-{i:02d}", ["Ethernet1/31", "Ethernet1/32"]
-                )
+                create_mock_interfaces_with_cables(f"dc1-pod1-rack1-tor-{i:02d}", ["Ethernet1/31", "Ethernet1/32"])
             )
 
         # 4 Spines with 8 ports each (enough for multiple racks)
         spines = []
         for i in range(1, 5):
             spines.extend(
-                create_mock_interfaces_with_cables(
-                    f"dc1-pod1-spine-{i:02d}", [f"Ethernet1/{j}" for j in range(1, 9)]
-                )
+                create_mock_interfaces_with_cables(f"dc1-pod1-spine-{i:02d}", [f"Ethernet1/{j}" for j in range(1, 9)])
             )
 
         planner = CablingPlanner(tors, spines)  # type: ignore
@@ -216,9 +184,7 @@ class TestToRDeploymentIdempotency:
         assert len(plan) == 8
 
         # Verify ToR-1 connects to Spine-1 and Spine-2 on their first ports
-        tor1_connections = [
-            (src, dst) for src, dst in plan if "tor-01" in src.device.display_label
-        ]
+        tor1_connections = [(src, dst) for src, dst in plan if "tor-01" in src.device.display_label]
         assert len(tor1_connections) == 2
 
     def test_tor_deployment_second_rack_uses_next_ports(self) -> None:
@@ -238,9 +204,7 @@ class TestToRDeploymentIdempotency:
         rack2_tors = []
         for i in range(1, 5):
             rack2_tors.extend(
-                create_mock_interfaces_with_cables(
-                    f"dc1-pod1-rack2-tor-{i:02d}", ["Ethernet1/31", "Ethernet1/32"]
-                )
+                create_mock_interfaces_with_cables(f"dc1-pod1-rack2-tor-{i:02d}", ["Ethernet1/31", "Ethernet1/32"])
             )
 
         # 4 Spines with 8 ports each
@@ -267,9 +231,7 @@ class TestToRDeploymentIdempotency:
         assert len(plan) == 16
 
         # Verify Rack-2 ToRs use ports 3-4 on spines (next available)
-        rack2_connections = [
-            (src, dst) for src, dst in plan if "rack2" in src.device.display_label
-        ]
+        rack2_connections = [(src, dst) for src, dst in plan if "rack2" in src.device.display_label]
         assert len(rack2_connections) == 8
 
     def test_tor_deployment_rerun_unchanged(self) -> None:
@@ -278,18 +240,14 @@ class TestToRDeploymentIdempotency:
         tors = []
         for i in range(1, 3):
             tors.extend(
-                create_mock_interfaces_with_cables(
-                    f"tor-{i:02d}", ["Ethernet1/31", "Ethernet1/32"], connected=True
-                )
+                create_mock_interfaces_with_cables(f"tor-{i:02d}", ["Ethernet1/31", "Ethernet1/32"], connected=True)
             )
 
         # 4 Spines, first 2 ports connected
         spines = []
         for i in range(1, 5):
             spines.extend(
-                create_mock_interfaces_with_cables(
-                    f"spine-{i:02d}", ["Ethernet1/1", "Ethernet1/2"], connected=True
-                )
+                create_mock_interfaces_with_cables(f"spine-{i:02d}", ["Ethernet1/1", "Ethernet1/2"], connected=True)
             )
 
         # Run 1
@@ -326,9 +284,7 @@ class TestMiddleRackIdempotency:
         tors = []
         for i in range(1, 5):
             tors.extend(
-                create_mock_interfaces_with_cables(
-                    f"dc1-pod1-rack1-tor-{i:02d}", ["Ethernet1/31", "Ethernet1/32"]
-                )
+                create_mock_interfaces_with_cables(f"dc1-pod1-rack1-tor-{i:02d}", ["Ethernet1/31", "Ethernet1/32"])
             )
 
         planner = CablingPlanner(tors, leafs)  # type: ignore
@@ -347,16 +303,12 @@ class TestMiddleRackIdempotency:
         # 2 Leafs with 2 ports each
         leafs = create_mock_interfaces_with_cables(
             "leaf-01", ["Ethernet1/25", "Ethernet1/26"]
-        ) + create_mock_interfaces_with_cables(
-            "leaf-02", ["Ethernet1/25", "Ethernet1/26"]
-        )
+        ) + create_mock_interfaces_with_cables("leaf-02", ["Ethernet1/25", "Ethernet1/26"])
 
         # 2 ToRs with 2 uplinks each
         tors = create_mock_interfaces_with_cables(
             "tor-01", ["Ethernet1/31", "Ethernet1/32"]
-        ) + create_mock_interfaces_with_cables(
-            "tor-02", ["Ethernet1/31", "Ethernet1/32"]
-        )
+        ) + create_mock_interfaces_with_cables("tor-02", ["Ethernet1/31", "Ethernet1/32"])
 
         # Run 1
         planner1 = CablingPlanner(tors, leafs)  # type: ignore
@@ -382,18 +334,12 @@ class TestMixedDeploymentIdempotency:
         leafs = []
         for i in range(1, 5):
             leafs.extend(
-                create_mock_interfaces_with_cables(
-                    f"rack1-leaf-{i:02d}", [f"Ethernet1/{j}" for j in range(25, 29)]
-                )
+                create_mock_interfaces_with_cables(f"rack1-leaf-{i:02d}", [f"Ethernet1/{j}" for j in range(25, 29)])
             )
 
         tors = []
         for i in range(1, 3):
-            tors.extend(
-                create_mock_interfaces_with_cables(
-                    f"rack1-tor-{i:02d}", ["Ethernet1/31", "Ethernet1/32"]
-                )
-            )
+            tors.extend(create_mock_interfaces_with_cables(f"rack1-tor-{i:02d}", ["Ethernet1/31", "Ethernet1/32"]))
 
         planner = CablingPlanner(tors, leafs)  # type: ignore
         plan = planner.build_cabling_plan(scenario="intra_rack")
@@ -412,18 +358,14 @@ class TestMixedDeploymentIdempotency:
         rack1_leafs = []
         for i in range(1, 5):
             rack1_leafs.extend(
-                create_mock_interfaces_with_cables(
-                    f"rack1-leaf-{i:02d}", [f"Ethernet1/{j}" for j in range(25, 31)]
-                )
+                create_mock_interfaces_with_cables(f"rack1-leaf-{i:02d}", [f"Ethernet1/{j}" for j in range(25, 31)])
             )
 
         # Rack-2: 4 ToRs (no local leafs, will connect to Rack-1 leafs)
         rack2_tors = []
         for i in range(1, 5):
             rack2_tors.extend(
-                create_mock_interfaces_with_cables(
-                    f"rack2-tor-{i:02d}", ["Ethernet1/31", "Ethernet1/32"]
-                )
+                create_mock_interfaces_with_cables(f"rack2-tor-{i:02d}", ["Ethernet1/31", "Ethernet1/32"])
             )
 
         planner = CablingPlanner(rack2_tors, rack1_leafs)  # type: ignore
@@ -443,12 +385,8 @@ class TestEdgeCasesIdempotency:
 
     def test_single_tor_single_spine(self) -> None:
         """Test minimal deployment: 1 ToR, 1 Spine."""
-        tor = create_mock_interfaces_with_cables(
-            "tor-01", ["Ethernet1/31", "Ethernet1/32"]
-        )
-        spine = create_mock_interfaces_with_cables(
-            "spine-01", ["Ethernet1/1", "Ethernet1/2"]
-        )
+        tor = create_mock_interfaces_with_cables("tor-01", ["Ethernet1/31", "Ethernet1/32"])
+        spine = create_mock_interfaces_with_cables("spine-01", ["Ethernet1/1", "Ethernet1/2"])
 
         planner = CablingPlanner(tor, spine)  # type: ignore
         plan = planner.build_cabling_plan(scenario="intra_rack")
@@ -461,20 +399,12 @@ class TestEdgeCasesIdempotency:
         # 10 ToRs with 2 uplinks each = 20 connections needed
         tors = []
         for i in range(1, 11):
-            tors.extend(
-                create_mock_interfaces_with_cables(
-                    f"tor-{i:02d}", ["Ethernet1/31", "Ethernet1/32"]
-                )
-            )
+            tors.extend(create_mock_interfaces_with_cables(f"tor-{i:02d}", ["Ethernet1/31", "Ethernet1/32"]))
 
         # 2 Spines with 8 ports each = 16 available ports total
         spines = []
         for i in range(1, 3):
-            spines.extend(
-                create_mock_interfaces_with_cables(
-                    f"spine-{i:02d}", [f"Ethernet1/{j}" for j in range(1, 9)]
-                )
-            )
+            spines.extend(create_mock_interfaces_with_cables(f"spine-{i:02d}", [f"Ethernet1/{j}" for j in range(1, 9)]))
 
         planner = CablingPlanner(tors, spines)  # type: ignore
         plan = planner.build_cabling_plan(scenario="intra_rack")
@@ -487,30 +417,16 @@ class TestEdgeCasesIdempotency:
         """Test that device sorting is alphabetical and consistent."""
         # Deliberately create devices in non-alphabetical order
         tors = (
-            create_mock_interfaces_with_cables(
-                "tor-03", ["Ethernet1/31", "Ethernet1/32"]
-            )
-            + create_mock_interfaces_with_cables(
-                "tor-01", ["Ethernet1/31", "Ethernet1/32"]
-            )
-            + create_mock_interfaces_with_cables(
-                "tor-02", ["Ethernet1/31", "Ethernet1/32"]
-            )
+            create_mock_interfaces_with_cables("tor-03", ["Ethernet1/31", "Ethernet1/32"])
+            + create_mock_interfaces_with_cables("tor-01", ["Ethernet1/31", "Ethernet1/32"])
+            + create_mock_interfaces_with_cables("tor-02", ["Ethernet1/31", "Ethernet1/32"])
         )
 
         spines = (
-            create_mock_interfaces_with_cables(
-                "spine-04", ["Ethernet1/1", "Ethernet1/2"]
-            )
-            + create_mock_interfaces_with_cables(
-                "spine-02", ["Ethernet1/1", "Ethernet1/2"]
-            )
-            + create_mock_interfaces_with_cables(
-                "spine-01", ["Ethernet1/1", "Ethernet1/2"]
-            )
-            + create_mock_interfaces_with_cables(
-                "spine-03", ["Ethernet1/1", "Ethernet1/2"]
-            )
+            create_mock_interfaces_with_cables("spine-04", ["Ethernet1/1", "Ethernet1/2"])
+            + create_mock_interfaces_with_cables("spine-02", ["Ethernet1/1", "Ethernet1/2"])
+            + create_mock_interfaces_with_cables("spine-01", ["Ethernet1/1", "Ethernet1/2"])
+            + create_mock_interfaces_with_cables("spine-03", ["Ethernet1/1", "Ethernet1/2"])
         )
 
         planner = CablingPlanner(tors, spines)  # type: ignore
@@ -525,19 +441,11 @@ class TestEdgeCasesIdempotency:
         """Test that 10 consecutive runs produce identical plans."""
         tors = []
         for i in range(1, 5):
-            tors.extend(
-                create_mock_interfaces_with_cables(
-                    f"tor-{i:02d}", ["Ethernet1/31", "Ethernet1/32"]
-                )
-            )
+            tors.extend(create_mock_interfaces_with_cables(f"tor-{i:02d}", ["Ethernet1/31", "Ethernet1/32"]))
 
         spines = []
         for i in range(1, 5):
-            spines.extend(
-                create_mock_interfaces_with_cables(
-                    f"spine-{i:02d}", [f"Ethernet1/{j}" for j in range(1, 5)]
-                )
-            )
+            spines.extend(create_mock_interfaces_with_cables(f"spine-{i:02d}", [f"Ethernet1/{j}" for j in range(1, 5)]))
 
         plans = []
         for _ in range(10):
@@ -550,9 +458,5 @@ class TestEdgeCasesIdempotency:
         for run_num, plan in enumerate(plans[1:], start=2):
             assert len(plan) == len(first_plan), f"Run {run_num}: length mismatch"
             for i, ((src1, dst1), (src2, dst2)) in enumerate(zip(first_plan, plan)):
-                assert src1.id == src2.id, (
-                    f"Run {run_num}, connection {i}: source mismatch"
-                )
-                assert dst1.id == dst2.id, (
-                    f"Run {run_num}, connection {i}: destination mismatch"
-                )
+                assert src1.id == src2.id, f"Run {run_num}, connection {i}: source mismatch"
+                assert dst1.id == dst2.id, f"Run {run_num}, connection {i}: destination mismatch"

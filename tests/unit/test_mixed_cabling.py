@@ -29,18 +29,14 @@ class TestIntraRackMixedCabling:
         leaf_interfaces = []
         for leaf_idx in range(1, 5):
             for port_idx in range(3):
-                intf = self._create_mock_interface(
-                    f"LEAF-{leaf_idx}", f"Ethernet{port_idx + 1}"
-                )
+                intf = self._create_mock_interface(f"LEAF-{leaf_idx}", f"Ethernet{port_idx + 1}")
                 leaf_interfaces.append(intf)
 
         # Create mock ToRs for Rack 1 (2 ToRs, 2 uplinks each)
         tor_interfaces = []
         for tor_idx in range(1, 3):
             for uplink_idx in range(2):
-                intf = self._create_mock_interface(
-                    f"TOR-R1-{tor_idx}", f"Ethernet{uplink_idx + 1}"
-                )
+                intf = self._create_mock_interface(f"TOR-R1-{tor_idx}", f"Ethernet{uplink_idx + 1}")
                 tor_interfaces.append(intf)
 
         # Create planner
@@ -92,18 +88,14 @@ class TestIntraRackMixedCabling:
         leaf_interfaces = []
         for leaf_idx in range(1, 5):
             for port_idx in range(3):
-                intf = self._create_mock_interface(
-                    f"LEAF-{leaf_idx}", f"Ethernet{port_idx + 1}"
-                )
+                intf = self._create_mock_interface(f"LEAF-{leaf_idx}", f"Ethernet{port_idx + 1}")
                 leaf_interfaces.append(intf)
 
         # Create mock ToRs for Rack 2 (2 ToRs, 2 uplinks each)
         tor_interfaces = []
         for tor_idx in range(3, 5):
             for uplink_idx in range(2):
-                intf = self._create_mock_interface(
-                    f"TOR-R2-{tor_idx}", f"Ethernet{uplink_idx + 1}"
-                )
+                intf = self._create_mock_interface(f"TOR-R2-{tor_idx}", f"Ethernet{uplink_idx + 1}")
                 tor_interfaces.append(intf)
 
         # Create planner
@@ -151,18 +143,14 @@ class TestIntraRackMixedCabling:
         leaf_interfaces = []
         for leaf_idx in range(1, 5):
             for port_idx in range(3):
-                intf = self._create_mock_interface(
-                    f"LEAF-{leaf_idx}", f"Ethernet{port_idx + 1}"
-                )
+                intf = self._create_mock_interface(f"LEAF-{leaf_idx}", f"Ethernet{port_idx + 1}")
                 leaf_interfaces.append(intf)
 
         # Create mock ToRs for Rack 3 (2 ToRs, 2 uplinks each)
         tor_interfaces = []
         for tor_idx in range(5, 7):
             for uplink_idx in range(2):
-                intf = self._create_mock_interface(
-                    f"TOR-R3-{tor_idx}", f"Ethernet{uplink_idx + 1}"
-                )
+                intf = self._create_mock_interface(f"TOR-R3-{tor_idx}", f"Ethernet{uplink_idx + 1}")
                 tor_interfaces.append(intf)
 
         # Create planner
@@ -204,17 +192,13 @@ class TestIntraRackMixedCabling:
         leaf_interfaces = []
         for leaf_idx in range(1, 5):
             for port_idx in range(3):
-                intf = self._create_mock_interface(
-                    f"LEAF-{leaf_idx}", f"Ethernet{port_idx + 1}"
-                )
+                intf = self._create_mock_interface(f"LEAF-{leaf_idx}", f"Ethernet{port_idx + 1}")
                 leaf_interfaces.append(intf)
 
         tor_interfaces = []
         for tor_idx in range(1, 3):
             for uplink_idx in range(2):
-                intf = self._create_mock_interface(
-                    f"TOR-{tor_idx}", f"Ethernet{uplink_idx + 1}"
-                )
+                intf = self._create_mock_interface(f"TOR-{tor_idx}", f"Ethernet{uplink_idx + 1}")
                 tor_interfaces.append(intf)
 
         # Run cabling plan twice
@@ -242,15 +226,11 @@ class TestIntraRackMixedCabling:
             assert conn1[0].device.display_label == conn2[0].device.display_label, (
                 f"Connection {idx} bottom device mismatch"
             )
-            assert conn1[0].name.value == conn2[0].name.value, (
-                f"Connection {idx} bottom interface mismatch"
-            )
+            assert conn1[0].name.value == conn2[0].name.value, f"Connection {idx} bottom interface mismatch"
             assert conn1[1].device.display_label == conn2[1].device.display_label, (
                 f"Connection {idx} top device mismatch"
             )
-            assert conn1[1].name.value == conn2[1].name.value, (
-                f"Connection {idx} top interface mismatch"
-            )
+            assert conn1[1].name.value == conn2[1].name.value, f"Connection {idx} top interface mismatch"
 
     def test_mixed_cabling_with_2_leafs(self) -> None:
         """Test mixed deployment with only 2 leafs (edge case).
@@ -261,18 +241,14 @@ class TestIntraRackMixedCabling:
         leaf_interfaces = []
         for leaf_idx in range(1, 3):
             for port_idx in range(4):
-                intf = self._create_mock_interface(
-                    f"LEAF-{leaf_idx}", f"Ethernet{port_idx + 1}"
-                )
+                intf = self._create_mock_interface(f"LEAF-{leaf_idx}", f"Ethernet{port_idx + 1}")
                 leaf_interfaces.append(intf)
 
         # Create mock ToRs (4 ToRs, 2 uplinks each)
         tor_interfaces = []
         for tor_idx in range(1, 5):
             for uplink_idx in range(2):
-                intf = self._create_mock_interface(
-                    f"TOR-{tor_idx}", f"Ethernet{uplink_idx + 1}"
-                )
+                intf = self._create_mock_interface(f"TOR-{tor_idx}", f"Ethernet{uplink_idx + 1}")
                 tor_interfaces.append(intf)
 
         # Create planner
@@ -293,15 +269,10 @@ class TestIntraRackMixedCabling:
         # Each ToR should connect to both L1 and L2
         for tor_idx in range(4):
             base_idx = tor_idx * 2
-            assert (
-                cabling_plan[base_idx][0].device.display_label == f"TOR-{tor_idx + 1}"
-            )
+            assert cabling_plan[base_idx][0].device.display_label == f"TOR-{tor_idx + 1}"
             assert cabling_plan[base_idx][1].device.display_label == "LEAF-1"
             assert cabling_plan[base_idx][1].name.value == f"Ethernet{tor_idx + 1}"
 
-            assert (
-                cabling_plan[base_idx + 1][0].device.display_label
-                == f"TOR-{tor_idx + 1}"
-            )
+            assert cabling_plan[base_idx + 1][0].device.display_label == f"TOR-{tor_idx + 1}"
             assert cabling_plan[base_idx + 1][1].device.display_label == "LEAF-2"
             assert cabling_plan[base_idx + 1][1].name.value == f"Ethernet{tor_idx + 1}"

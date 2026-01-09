@@ -45,9 +45,7 @@ class TopologyCabling(InfrahubTransform):
         except (ValueError, KeyError, TypeError) as e:
             raise ValueError(f"Failed to transform cabling data: {e}") from e
 
-    def _extract_unique_cables(
-        self, topology_data: dict[str, Any]
-    ) -> list[dict[str, Any]]:
+    def _extract_unique_cables(self, topology_data: dict[str, Any]) -> list[dict[str, Any]]:
         """Extract unique cables from topology data, avoiding duplicates.
 
         Each cable appears twice in the GraphQL response (once from each endpoint),
@@ -61,51 +59,58 @@ class TopologyCabling(InfrahubTransform):
         """
         cables_by_id: dict[str, dict[str, Any]] = {}
 
-        # Handle both TopologyDeployment wrapper and direct children structure
-        children = topology_data.get("children", [])
-
-        # If topology_data is from TopologyDeployment, get the node
+        # Normalize root (may be raw or wrapped in TopologyDeployment)
+        root = topology_data
         if "TopologyDeployment" in topology_data:
             deployments = topology_data.get("TopologyDeployment", [])
             if deployments and isinstance(deployments, list):
-                children = deployments[0].get("children", [])
+                root = deployments[0]
 
-        # Process each pod
-        for pod in children:
-            if not isinstance(pod, dict):
-                continue
-
-            pod_name = self._get_safe_value(pod, "name", "Not applicable")
-
-            # Process devices in each pod
-            for device in pod.get("devices", []):
-                if not isinstance(device, dict):
+        # Prefer pod children when present; otherwise use deployment-level devices
+        pods = root.get("children", []) if isinstance(root, dict) else []
+        if pods:
+            for pod in pods:
+                if not isinstance(pod, dict):
                     continue
-
-                # Process interfaces for each device
-                for interface in device.get("interfaces", []):
-                    if not isinstance(interface, dict):
-                        continue
-
-                    cable_info = interface.get("cable")
-                    if not cable_info or not isinstance(cable_info, dict):
-                        continue
-
-                    cable_id = cable_info.get("id")
-                    if not cable_id or cable_id in cables_by_id:
-                        # Skip if no ID or already processed
-                        continue
-
-                    # Extract cable data
-                    cable_data = self._extract_cable_data(cable_info, pod_name)
-                    if cable_data:
-                        cables_by_id[cable_id] = cable_data
+                pod_name = self._get_safe_value(pod, "name", "Not applicable")
+                devices = pod.get("devices", [])
+                self._collect_cables_from_devices(devices, pod_name, cables_by_id)
+        else:
+            pod_name = self._get_safe_value(root, "name", "Not applicable") if isinstance(root, dict) else ""
+            devices = root.get("devices", []) if isinstance(root, dict) else []
+            self._collect_cables_from_devices(devices, pod_name, cables_by_id)
 
         return list(cables_by_id.values())
 
-    def _extract_cable_data(
-        self, cable_info: dict[str, Any], pod_name: str
-    ) -> dict[str, Any] | None:
+    def _collect_cables_from_devices(
+        self,
+        devices: list[dict[str, Any]],
+        pod_name: str,
+        cables_by_id: dict[str, dict[str, Any]],
+    ) -> None:
+        """Extract cables from a list of devices for a given pod/context."""
+
+        for device in devices:
+            if not isinstance(device, dict):
+                continue
+
+            for interface in device.get("interfaces", []):
+                if not isinstance(interface, dict):
+                    continue
+
+                cable_info = interface.get("cable")
+                if not cable_info or not isinstance(cable_info, dict):
+                    continue
+
+                cable_id = cable_info.get("id")
+                if not cable_id or cable_id in cables_by_id:
+                    continue
+
+                cable_data = self._extract_cable_data(cable_info, pod_name)
+                if cable_data:
+                    cables_by_id[cable_id] = cable_data
+
+    def _extract_cable_data(self, cable_info: dict[str, Any], pod_name: str) -> dict[str, Any] | None:
         """Extract cable connection data from cable information.
 
         Parses cable endpoints to extract source and destination device/interface
@@ -128,9 +133,7 @@ class TopologyCabling(InfrahubTransform):
         dest_endpoint = endpoints[1]
 
         # Parse endpoint HFID to extract device and interface names
-        source_device, source_interface = self._parse_hfid(
-            source_endpoint.get("hfid", [])
-        )
+        source_device, source_interface = self._parse_hfid(source_endpoint.get("hfid", []))
         dest_device, dest_interface = self._parse_hfid(dest_endpoint.get("hfid", []))
 
         if not all([source_device, source_interface, dest_device, dest_interface]):
