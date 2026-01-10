@@ -217,11 +217,41 @@ class RackGenerator(CommonGenerator):
 
         # Validate checksum is set (required for proper generation ordering in mixed deployments)
         if not self.data.checksum:
-            self.logger.warning(
-                f"Rack {self.data.name} has no checksum set - skipping generation. "
-                "Checksum will be set by pod or middle rack generator."
-            )
-            return
+            # Special case: ToR racks in mixed deployments can inherit checksum from middle rack
+            deployment_type = self.data.pod.deployment_type
+            if deployment_type == "mixed" and self.data.rack_type == "tor":
+                # Query middle rack in same row to get checksum
+                middle_racks = await self.client.filters(
+                    kind=LocationRack,
+                    pod__ids=[self.data.pod.id],
+                    row_index__value=self.data.row_index,
+                    rack_type__value="network",  # Middle racks have network type
+                )
+                
+                if middle_racks and middle_racks[0].checksum.value:
+                    # Inherit checksum from middle rack
+                    rack_obj = await self.client.get(kind=LocationRack, id=self.data.id)
+                    rack_obj.checksum.value = middle_racks[0].checksum.value
+                    await rack_obj.save(allow_upsert=True)
+                    self.logger.info(
+                        f"ToR rack {self.data.name} inherited checksum {middle_racks[0].checksum.value} "
+                        f"from middle rack {middle_racks[0].name.value}. "
+                        "Checksum update will trigger generator again to create devices."
+                    )
+                    # Return here - checksum update will trigger this generator again
+                    return
+                else:
+                    self.logger.warning(
+                        f"ToR rack {self.data.name} has no checksum and no middle rack found "
+                        f"in row {self.data.row_index} - skipping generation."
+                    )
+                    return
+            else:
+                self.logger.warning(
+                    f"Rack {self.data.name} has no checksum set - skipping generation. "
+                    "Checksum will be set by pod or middle rack generator."
+                )
+                return
 
         self.logger.info(f"Generating topology for rack {self.data.name}")
 

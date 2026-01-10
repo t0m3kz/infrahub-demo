@@ -40,7 +40,11 @@ uv run infrahubctl branch create your_branch
 uv run infrahubctl object load data/demos/02_switch/ --branch your_branch
 ```
 
-Trigger infrastructure generation in InfraHub UI → Actions → Generator Definitions → generate_rack MUC-1-SUITE-1-R1-5
+The rack generator will trigger **automatically** when the rack fabric_templates are updated! ✨
+
+**Note:** After the rack generator completes, manually regenerate the cabling artifact:
+- In InfraHub UI → Artifacts → Find "Cable matrix for DC" (DC1) → Click "Regenerate"
+- Or run: `uv run infrahubctl artifact generate "Cable matrix for DC" DC1 --branch your_branch`
 
 ---
 

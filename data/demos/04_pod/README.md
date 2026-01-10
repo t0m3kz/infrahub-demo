@@ -53,7 +53,58 @@ uv run infrahubctl branch create your_branch
 uv run infrahubctl object load data/demos/04_pod/ --branch your_branch
 ```
 
+The generators will trigger **automatically** in sequence:
+1. **DC generator** (children relationship updated) → sets Pod checksum
+2. **Pod generator** (checksum set) → creates spines, sets rack checksums
+3. **Rack generators** (checksums set) → create ToR devices
+
+**After all generators complete,** manually regenerate the cabling artifact:
+```bash
+uv run infrahubctl artifact generate "Cable matrix for DC" DC1 --branch your_branch
+```
+
+---
+
+## What Actually Happens
+
+**Step 1: Pod Creation**
+- Pod 4 added to DC1 as child
+- DC generator triggers (children updated)
+- DC generator calculates and sets Pod 4 checksum
+
+**Step 2: Pod Generation**  
+- Pod checksum update triggers pod generator
+- Creates 2 spines
+- Calculates and sets checksums for all racks
+
+**Step 3: Rack Generation**
+- Each rack checksum update triggers rack generator
+- Creates ToR devices per rack
+- All racks generate in parallel (ToR deployment = no dependencies)
+
+---
+
+## Old Manual Instructions (No Longer Needed)
+
+~~Trigger infrastructure generation in InfraHub UI:~~
+~~1. Actions → Generator Definitions → generate_dc DC1~~
+~~2. Wait for completion~~
+~~3. Actions → Generator Definitions → generate_pod DC1-1-POD-4~~
+~~4. Wait for completion~~  
+~~5. Trigger each rack generator individually~~
+
+**Now everything auto-triggers!** Just load the data and wait. ☕
+
+```bash
+uv run infrahubctl branch create your_branch
+uv run infrahubctl object load data/demos/04_pod/ --branch your_branch
+```
+
 Trigger infrastructure generation in InfraHub UI → Actions → Generator Definitions → generate_dc DC1
+
+**Note:** After the DC generator completes, the cabling artifact is automatically regenerated. For pod-only changes without DC regeneration, manually regenerate:
+- In InfraHub UI → Artifacts → Find "Cable matrix for DC" (DC1) → Click "Regenerate"
+- Or run: `uv run infrahubctl artifact generate "Cable matrix for DC" DC1 --branch your_branch`
 
 ---
 

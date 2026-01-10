@@ -155,7 +155,7 @@ class RackPod(BaseModel):
 class RackModel(BaseModel):
     id: str
     name: str
-    checksum: str
+    checksum: Optional[str] = None
     index: int
     rack_type: str
     row_index: int

@@ -29,25 +29,25 @@ fragment CableFields on DcimCable {
 }
 
 query FabricCablingPlanQuery($name: String!) {
-  TopologyDeployment(name__value: $name) {
+  TopologyDataCenter(name__value: $name) {
     edges {
       node {
         name { value }
-        # Direct devices on concrete deployment types (fabric-level devices)
-        ... on TopologyDataCenter {
-          devices {
-            edges {
-              node {
-                name { value }
-                interfaces {
-                  edges {
-                    node {
-                      name { value }
-                      ... on DcimPhysicalInterface {
-                        cable {
-                          node {
-                            ...CableFields
-                          }
+        cables {
+          count
+        }
+        devices {
+          edges {
+            node {
+              name { value }
+              interfaces {
+                edges {
+                  node {
+                    name { value }
+                    ... on DcimPhysicalInterface {
+                      cable {
+                        node {
+                          ...CableFields
                         }
                       }
                     }
@@ -56,76 +56,28 @@ query FabricCablingPlanQuery($name: String!) {
               }
             }
           }
-          # Pod children with their devices
-          children {
-            edges {
-              node {
-                ... on TopologyPod {
-                  name { value }
-                  devices {
-                    edges {
-                      node {
-                        name { value }
-                        interfaces {
-                          edges {
-                            node {
-                              name { value }
-                              ... on DcimPhysicalInterface {
-                                cable {
-                                  node {
-                                    ...CableFields
-                                  }
+        }
+        # Pod children with their devices
+        children {
+          edges {
+            node {
+              ... on TopologyPod {
+                name { value }
+                devices {
+                  edges {
+                    node {
+                      name { value }
+                      interfaces {
+                        edges {
+                          node {
+                            name { value }
+                            ... on DcimPhysicalInterface {
+                              cable {
+                                node {
+                                  ...CableFields
                                 }
                               }
                             }
-                          }
-                        }
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          }
-        }
-
-        # Other deployment variants that can carry devices directly
-        ... on TopologyPod {
-          devices {
-            edges {
-              node {
-                name { value }
-                interfaces {
-                  edges {
-                    node {
-                      name { value }
-                      ... on DcimPhysicalInterface {
-                        cable {
-                          node {
-                            ...CableFields
-                          }
-                        }
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          }
-        }
-        ... on TopologyColocationAZ {
-          devices {
-            edges {
-              node {
-                name { value }
-                interfaces {
-                  edges {
-                    node {
-                      name { value }
-                      ... on DcimPhysicalInterface {
-                        cable {
-                          node {
-                            ...CableFields
                           }
                         }
                       }
