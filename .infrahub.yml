@@ -204,6 +204,17 @@ generator_definitions:
     execute_after_merge: false
     parameters:
       name: name__value
+  - name: replace_device_type
+    file_path: generators/replace_device_type.py
+    targets: devices
+    query: device_replace
+    class_name: DeviceTypeReplacementGenerator
+    execute_in_proposed_change: false
+    execute_after_merge: false
+    parameters:
+      name: name__value
+      device_type: device_type__value
+      role: role__value
   - name: generate_rack
     file_path: generators/generate_rack.py
     targets: topologies_rack
@@ -263,6 +274,8 @@ queries:
     file_path: queries/config/loadbalancer.gql
   - name: oob_config
     file_path: queries/config/oob.gql
+  - name: device_replace
+    file_path: queries/config/device_replace.gql
 # schemas:
 #   - schemas/
 # menus:

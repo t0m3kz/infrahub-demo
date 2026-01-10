@@ -160,6 +160,18 @@ spec:
           - relationship_name: fabric_templates
             modification_type: updated
 
+    # Device retype: when device_type changes
+    - name: trigger-device-retype
+      branch_scope: "other_branches"
+      node_kind: DcimPhysicalDevice
+      mutation_action: "updated"
+      action: run-retype-device
+      matches:
+        kind: CoreNodeTriggerRelationshipMatch
+        data:
+          - relationship_name: device_type
+            modification_type: updated
+
     # Device decommission: when status set to decommissioned
     - name: trigger-device-decommission
       branch_scope: "other_branches"
