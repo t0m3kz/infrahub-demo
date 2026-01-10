@@ -107,8 +107,8 @@ spec:
             value_match: any
 
 
-    # Racks trigger on creation (generator skips if no checksum, waits for update)
-    # or on checksum update (when pod/middle rack generator calculates and sets it)
+    # Racks trigger on creation (skips if no checksum, waits for update)
+    # or on checksum update (when pod/middle rack generator sets it)
     # Checksum is NEVER set manually - always calculated by generators
     - name: trigger-rack-generator-on-create
       branch_scope: "other_branches"
@@ -159,3 +159,27 @@ spec:
         data:
           - relationship_name: fabric_templates
             modification_type: updated
+
+    # Device decommission: when status set to decommissioned
+    - name: trigger-device-decommission
+      branch_scope: "other_branches"
+      node_kind: DcimPhysicalDevice
+      mutation_action: "updated"
+      action: run-decommission-device
+      matches:
+        kind: CoreNodeTriggerAttributeMatch
+        data:
+          - attribute_name: status
+            value_match: decommissioned
+
+    # Pod decommission: when status set to decommissioned
+    - name: trigger-pod-decommission
+      branch_scope: "other_branches"
+      node_kind: TopologyPod
+      mutation_action: "updated"
+      action: run-decommission-pod
+      matches:
+        kind: CoreNodeTriggerAttributeMatch
+        data:
+          - attribute_name: status
+            value_match: decommissioned

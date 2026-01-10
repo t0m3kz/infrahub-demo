@@ -1,0 +1,10 @@
+query device_decommission($name: String!) {
+  DcimPhysicalDevice(name__value: $name) {
+    edges {
+      node {
+        id
+        name { value }
+      }
+    }
+  }
+}

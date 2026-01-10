@@ -108,6 +108,10 @@ generics:
             label: Drained
             description: Temporarily taken out of service.
             color: "#bfbfbf"
+          - name: decommissioned
+            label: Decommissioned
+            description: Removed from service but retained for audit/history.
+            color: "#8c8c8c"
     relationships:
       - name: device_type
         peer: DcimDeviceType

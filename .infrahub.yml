@@ -186,6 +186,24 @@ generator_definitions:
     execute_after_merge: true
     parameters:
       name: name__value
+  - name: decommission_pod
+    file_path: generators/decommission_pod.py
+    targets: topologies_pod
+    query: topology_pod
+    class_name: PodDecommissionGenerator
+    execute_in_proposed_change: false
+    execute_after_merge: false
+    parameters:
+      name: name__value
+  - name: decommission_device
+    file_path: generators/decommission_device.py
+    targets: devices
+    query: device_decommission
+    class_name: DeviceDecommissionGenerator
+    execute_in_proposed_change: false
+    execute_after_merge: false
+    parameters:
+      name: name__value
   - name: generate_rack
     file_path: generators/generate_rack.py
     targets: topologies_rack
