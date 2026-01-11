@@ -160,29 +160,17 @@ spec:
           - relationship_name: fabric_templates
             modification_type: updated
 
-    # Device retype: when device_type changes
-    - name: trigger-device-retype
-      branch_scope: "other_branches"
-      node_kind: DcimPhysicalDevice
-      mutation_action: "updated"
-      action: run-retype-device
-      matches:
-        kind: CoreNodeTriggerRelationshipMatch
-        data:
-          - relationship_name: device_type
-            modification_type: updated
-
-    # Device decommission: when status set to decommissioned
-    - name: trigger-device-decommission
-      branch_scope: "other_branches"
-      node_kind: DcimPhysicalDevice
-      mutation_action: "updated"
-      action: run-decommission-device
-      matches:
-        kind: CoreNodeTriggerAttributeMatch
-        data:
-          - attribute_name: status
-            value_match: decommissioned
+    # # Device decommission: when status set to decommissioned
+    # - name: trigger-device-decommission
+    #   branch_scope: "other_branches"
+    #   node_kind: DcimPhysicalDevice
+    #   mutation_action: "updated"
+    #   action: run-decommission-device
+    #   matches:
+    #     kind: CoreNodeTriggerAttributeMatch
+    #     data:
+    #       - attribute_name: status
+    #         value_match: decommissioned
 
     # Pod decommission: when status set to decommissioned
     - name: trigger-pod-decommission
@@ -194,4 +182,7 @@ spec:
         kind: CoreNodeTriggerAttributeMatch
         data:
           - attribute_name: status
-            value_match: decommissioned
+            value_match: value_full
+            value: decommissioned
+            value_previous: active
+            # match_type: exact

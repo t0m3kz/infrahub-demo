@@ -227,7 +227,7 @@ class RackGenerator(CommonGenerator):
                     row_index__value=self.data.row_index,
                     rack_type__value="network",  # Middle racks have network type
                 )
-                
+
                 if middle_racks and middle_racks[0].checksum.value:
                     # Inherit checksum from middle rack
                     rack_obj = await self.client.get(kind=LocationRack, id=self.data.id)

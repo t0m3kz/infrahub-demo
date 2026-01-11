@@ -259,6 +259,29 @@ nodes:
       - index__value
     display_label: "{{ name__value}} - Fabric {{index__value}}"
     attributes:
+      - name: status
+        kind: Dropdown
+        label: Status
+        optional: false
+        default_value: provisioning
+        order_weight: 550
+        choices:
+          - name: active
+            label: Active
+            description: "Operational and in service."
+            color: "#7FBF7F"
+          - name: provisioning
+            label: Provisioning
+            description: "Being built or staged."
+            color: "#FFFF7F"
+          - name: maintenance
+            label: Maintenance
+            description: "Temporarily under maintenance."
+            color: "#FFD27F"
+          - name: decommissioned
+            label: Decommissioned
+            description: "Removed from active service."
+            color: "#BFBFBF"
       - name: fully_managed
         label: Fully Managed
         kind: Boolean
@@ -371,6 +394,29 @@ nodes:
       - ["name__value", "index__value"]
     include_in_menu: false
     attributes:
+      - name: status
+        kind: Dropdown
+        label: Status
+        optional: false
+        default_value: provisioning
+        order_weight: 140
+        choices:
+          - name: active
+            label: Active
+            description: "Operational and in service."
+            color: "#7FBF7F"
+          - name: provisioning
+            label: Provisioning
+            description: "Being built or staged."
+            color: "#FFFF7F"
+          - name: maintenance
+            label: Maintenance
+            description: "Temporarily under maintenance."
+            color: "#FFD27F"
+          - name: decommissioned
+            label: Decommissioned
+            description: "Removed from active service."
+            color: "#BFBFBF"
       # - name: capacity_summary
       #   label: Capacity Summary
       #   kind: Text

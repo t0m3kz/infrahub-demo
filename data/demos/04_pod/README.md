@@ -72,7 +72,7 @@ uv run infrahubctl artifact generate "Cable matrix for DC" DC1 --branch your_bra
 - DC generator triggers (children updated)
 - DC generator calculates and sets Pod 4 checksum
 
-**Step 2: Pod Generation**  
+**Step 2: Pod Generation**
 - Pod checksum update triggers pod generator
 - Creates 2 spines
 - Calculates and sets checksums for all racks
@@ -90,7 +90,7 @@ uv run infrahubctl artifact generate "Cable matrix for DC" DC1 --branch your_bra
 ~~1. Actions → Generator Definitions → generate_dc DC1~~
 ~~2. Wait for completion~~
 ~~3. Actions → Generator Definitions → generate_pod DC1-1-POD-4~~
-~~4. Wait for completion~~  
+~~4. Wait for completion~~
 ~~5. Trigger each rack generator individually~~
 
 **Now everything auto-triggers!** Just load the data and wait. ☕

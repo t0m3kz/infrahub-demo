@@ -1,0 +1,77 @@
+query pod_decommission($name: String!) {
+  TopologyPod(name__value: $name) {
+    edges {
+      node {
+        id
+        name { value }
+        loopback_pool { node { id resources {edges{node{prefix{id}}}}} }
+        prefix_pool { node { id resources {edges{node{prefix{id}}}}} }
+        devices {
+          edges {
+            node {
+              id
+              role { value }
+              status { value }
+              primary_address { node { id } }
+              interfaces {
+                edges {
+                  node {
+                    __typename
+                    id
+                    description { value }
+                    status { value }
+                    ... on DcimPhysicalInterface {
+                      ip_address {
+                        node {
+                          id
+                          address { value }
+                          ip_namespace { node { name { value } } }
+                          ip_prefix {node{id prefix { value } } }
+                        }
+                      }
+                      cable {
+                        node {
+                          id
+                          endpoints {
+                            edges {
+                              node {
+                                id
+                                ... on DcimPhysicalInterface {
+                                  name { value }
+                                  ip_address {
+                                    node {
+                                      id
+                                      ip_prefix { node { id } }
+                                    }
+                                  }
+
+                                  device { node { role { value } } }
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                    ... on DcimVirtualInterface {
+                      ip_addresses {
+                        edges {
+                          node {
+                            id
+                            address { value }
+                            ip_namespace { node { name { value } } }
+                            ip_prefix {node{id }}
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

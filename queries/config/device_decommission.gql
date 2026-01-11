@@ -4,6 +4,42 @@ query device_decommission($name: String!) {
       node {
         id
         name { value }
+        role { value }
+        status { value }
+        primary_address { node { id } }
+        interfaces {
+          edges {
+            node {
+              __typename
+              id
+              name { value }
+              status { value }
+              description { value }
+              ... on DcimPhysicalInterface {
+                ip_address { node { id ip_prefix { node { id prefix { value } } } } }
+                cable {
+                  node {
+                    id
+                    endpoints {
+                      edges {
+                        node {
+                          id
+                          ... on DcimPhysicalInterface {
+                            ip_address { node { id } }
+                            device { node { role { value } name { value } } }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+              ... on DcimVirtualInterface {
+                ip_addresses { edges { node { id ip_prefix { node { id prefix { value } } } } } }
+              }
+            }
+          }
+        }
       }
     }
   }

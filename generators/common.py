@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import hashlib
+import time
 from typing import TYPE_CHECKING, Any, Literal, Optional, TypeVar
 
 from infrahub_sdk.exceptions import ValidationError
 from infrahub_sdk.generator import InfrahubGenerator
 from infrahub_sdk.protocols import CoreIPAddressPool, CoreIPPrefixPool, CoreStandardGroup
+from infrahub_sdk.task.models import TaskFilter, TaskState
 from pydantic import BaseModel
 
 from .helpers import CablingPlanner, DeviceNamingConfig
@@ -447,3 +449,62 @@ class CommonGenerator(InfrahubGenerator):
             await updated_src.save()
             await updated_dst.save()
             self.logger.info(f"- Created connection {name}")
+
+    async def wait_for_branch_tasks_since_now(
+        self,
+        branch: Optional[str] = None,
+        timeout: int = 300,
+        poll_interval: float = 2.0,
+    ) -> None:
+        """Wait for tasks started after now on a branch to finish (fail fast on errors).
+
+        Captures the set of tasks already active when called and ignores them, so only
+        tasks that start after this point block the wait. Raises on timeout or when any
+        new task ends in a failure state. Defaults to the client's branch when not
+        provided.
+        """
+
+        branch_name = branch or getattr(self.client, "branch", None)
+        if not branch_name:
+            raise ValueError("Branch is required to wait for tasks (explicit or client default)")
+
+        active_states = [TaskState.RUNNING, TaskState.PENDING, TaskState.SCHEDULED]
+        failure_states = [TaskState.FAILED, TaskState.CANCELLED, TaskState.CRASHED]
+
+        baseline_tasks = await self.client.task.filter(filter=TaskFilter(state=active_states, branch=branch_name))
+        baseline_ids = {task.id for task in baseline_tasks}
+
+        deadline = time.time() + timeout
+
+        while True:
+            current_active = await self.client.task.filter(filter=TaskFilter(state=active_states, branch=branch_name))
+            new_active = [task for task in current_active if task.id not in baseline_ids]
+
+            if not new_active:
+                break
+
+            if time.time() >= deadline:
+                raise TimeoutError(
+                    "Timeout waiting for new tasks to finish on branch "
+                    f"{branch_name}: {[f'{t.id}:{t.state}' for t in new_active]}"
+                )
+
+            self.logger.info(
+                "Waiting for %d new tasks on %s: %s",
+                len(new_active),
+                branch_name,
+                ", ".join(f"{t.id}:{t.state}" for t in new_active),
+            )
+            await self._sleep(poll_interval)
+
+        failing = await self.client.task.filter(filter=TaskFilter(state=failure_states, branch=branch_name))
+        new_failures = [task for task in failing if task.id not in baseline_ids]
+        if new_failures:
+            raise RuntimeError("New tasks on branch failed: " + ", ".join(f"{t.id}:{t.state}" for t in new_failures))
+
+    async def _sleep(self, seconds: float) -> None:
+        """Isolated sleep for easier testing/mocking."""
+
+        import asyncio
+
+        await asyncio.sleep(seconds)

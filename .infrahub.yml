@@ -167,6 +167,45 @@ python_transforms:
     class_name: EquinixPOP
     file_path: transforms/equinix_pop.py
 
+queries:
+  - name: dc_validation
+    file_path: queries/validation/dc_capacity.gql
+  - name: virtual_fabric_validation
+    file_path: queries/service/virtual_fabric_validation.gql
+  - name: endpoint_connectivity
+    file_path: queries/topology/add/endpoint.gql
+  - name: topology_dc
+    file_path: queries/topology/add/dc.gql
+  - name: topology_pod
+    file_path: queries/topology/add/pod.gql
+  - name: rack
+    file_path: queries/topology/add/rack.gql
+  - name: topology_pop
+    file_path: queries/topology/add/pop.gql
+  - name: topology_simulator
+    file_path: queries/topology/clab.gql
+  - name: topology_cabling
+    file_path: queries/topology/cabling.gql
+  - name: leaf_config
+    file_path: queries/config/leaf.gql
+  - name: border_leaf_config
+    file_path: queries/config/border_leaf.gql
+  - name: spine_config
+    file_path: queries/config/spine.gql
+  - name: super_spine_config
+    file_path: queries/config/super_spine.gql
+  - name: edge_config
+    file_path: queries/config/edge.gql
+  - name: loadbalancer_config
+    file_path: queries/config/loadbalancer.gql
+  - name: oob_config
+    file_path: queries/config/oob.gql
+  - name: device_decommission
+    file_path: queries/config/device_decommission.gql
+  - name: pod_decommission
+    file_path: queries/topology/decomission/pod.gql
+
+
 generator_definitions:
   - name: generate_dc
     file_path: generators/generate_dc.py
@@ -189,32 +228,57 @@ generator_definitions:
   - name: decommission_pod
     file_path: generators/decommission_pod.py
     targets: topologies_pod
-    query: topology_pod
+    query: pod_decommission
     class_name: PodDecommissionGenerator
     execute_in_proposed_change: false
     execute_after_merge: false
     parameters:
       name: name__value
-  - name: decommission_device
+  - name: decommission_leaf
     file_path: generators/decommission_device.py
-    targets: devices
+    targets: leafs
     query: device_decommission
-    class_name: DeviceDecommissionGenerator
+    class_name: LeafDecommissionGenerator
     execute_in_proposed_change: false
     execute_after_merge: false
     parameters:
       name: name__value
-  - name: replace_device_type
-    file_path: generators/replace_device_type.py
-    targets: devices
-    query: device_replace
-    class_name: DeviceTypeReplacementGenerator
+  - name: decommission_spine
+    file_path: generators/decommission_device.py
+    targets: spines
+    query: device_decommission
+    class_name: SpineDecommissionGenerator
     execute_in_proposed_change: false
     execute_after_merge: false
     parameters:
       name: name__value
-      device_type: device_type__value
-      role: role__value
+  - name: decommission_tor
+    file_path: generators/decommission_device.py
+    targets: tors
+    query: device_decommission
+    class_name: TorDecommissionGenerator
+    execute_in_proposed_change: false
+    execute_after_merge: false
+    parameters:
+      name: name__value
+  - name: decommission_endpoint
+    file_path: generators/decommission_device.py
+    targets: endpoints
+    query: device_decommission
+    class_name: EndpointDecommissionGenerator
+    execute_in_proposed_change: false
+    execute_after_merge: false
+    parameters:
+      name: name__value
+  # - name: decommission_device
+  #   file_path: generators/decommission_device.py
+  #   targets: devices
+  #   query: device_decommission
+  #   class_name: DeviceDecommissionGenerator
+  #   execute_in_proposed_change: false
+  #   execute_after_merge: false
+  #   parameters:
+  #     name: name__value
   - name: generate_rack
     file_path: generators/generate_rack.py
     targets: topologies_rack
@@ -241,41 +305,6 @@ generator_definitions:
 #   parameters:
 #     name: name__value
 
-queries:
-  - name: dc_validation
-    file_path: queries/validation/dc_capacity.gql
-  - name: virtual_fabric_validation
-    file_path: queries/service/virtual_fabric_validation.gql
-  - name: endpoint_connectivity
-    file_path: queries/topology/endpoint.gql
-  - name: topology_dc
-    file_path: queries/topology/dc.gql
-  - name: topology_pod
-    file_path: queries/topology/pod.gql
-  - name: rack
-    file_path: queries/topology/rack.gql
-  - name: topology_pop
-    file_path: queries/topology/pop.gql
-  - name: topology_simulator
-    file_path: queries/topology/clab.gql
-  - name: topology_cabling
-    file_path: queries/topology/cabling.gql
-  - name: leaf_config
-    file_path: queries/config/leaf.gql
-  - name: border_leaf_config
-    file_path: queries/config/border_leaf.gql
-  - name: spine_config
-    file_path: queries/config/spine.gql
-  - name: super_spine_config
-    file_path: queries/config/super_spine.gql
-  - name: edge_config
-    file_path: queries/config/edge.gql
-  - name: loadbalancer_config
-    file_path: queries/config/loadbalancer.gql
-  - name: oob_config
-    file_path: queries/config/oob.gql
-  - name: device_replace
-    file_path: queries/config/device_replace.gql
 # schemas:
 #   - schemas/
 # menus:

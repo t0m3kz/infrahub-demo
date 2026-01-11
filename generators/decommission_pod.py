@@ -4,95 +4,200 @@ Sets all devices associated with the pod deployment to status "decommissioned".
 Idempotent: re-running on the same pod simply reaffirms the status.
 """
 
-from typing import Any, Set
+from typing import Any
+
+from infrahub_sdk.batch import InfrahubBatch
 
 from utils.data_cleaning import clean_data
 
 from .common import CommonGenerator
-from .models import PodModel
-from .schema_protocols import DcimCable, DcimPhysicalDevice, DcimPhysicalInterface
+from .schema_protocols import (
+    DcimCable,
+    DcimPhysicalDevice,
+    DcimPhysicalInterface,
+    DcimVirtualInterface,
+    IpamIPAddress,
+    IpamPrefix,
+)
 
 
 class PodDecommissionGenerator(CommonGenerator):
     async def generate(self, data: dict[str, Any]) -> None:
         try:
-            deployment_list = clean_data(data).get("TopologyPod", [])
-            if not deployment_list:
+            pod_list_clean = clean_data(data).get("TopologyPod", [])
+            if not pod_list_clean:
                 self.logger.error("No Pod data found in GraphQL response")
                 return
 
-            self.data = PodModel(**deployment_list[0])
+            raw_pod = pod_list_clean[0]
+            # Keep raw pod dict; only id/name are required for decommission workflow.
+            self.data = raw_pod
         except (ValueError, KeyError, IndexError) as exc:
             self.logger.error("Generation failed due to %s", exc)
             return
 
-        pod_id = self.data.id
-        pod_name = self.data.name
-        self.logger.info("Decommissioning pod %s (%s)", pod_name, pod_id)
+        # self.logger.info("Decommissioning pod: %s", json.dumps(self.data, indent=2))
 
-        # Fetch all devices tied to this pod via deployment relation (spines, leafs, tors, etc.)
-        devices = await self.client.filters(
+        devices: list = [device.get("id") for device in raw_pod.get("devices", []) if device.get("status") == "active"]
+
+        physical_interfaces: list[str] = [
+            interface.get("id")
+            for device in self.data.get("devices", []) or []
+            for interface in device.get("interfaces", []) or []
+            if interface.get("status", {}) == "active" and interface.get("typename") == "DcimPhysicalInterface"
+        ]
+
+        super_spine_interfaces: list[str] = [
+            endpoint.get("id")
+            for device in self.data.get("devices", []) or []
+            for interface in device.get("interfaces", []) or []
+            if interface.get("typename") == "DcimPhysicalInterface"
+            for endpoint in (interface.get("cable", {}) or {}).get("endpoints", []) or []
+            if endpoint.get("id") and endpoint.get("device", {}).get("role") == "super-spine"
+        ]
+
+        virtual_interfaces: list[str] = [
+            interface.get("id")
+            for device in self.data.get("devices", []) or []
+            for interface in device.get("interfaces", []) or []
+            if interface.get("status", {}) == "active" and interface.get("typename") == "DcimVirtualInterface"
+        ]
+
+        p2p_addresses: list[str] = [
+            id
+            for device in self.data.get("devices", []) or []
+            for interface in device.get("interfaces", []) or []
+            if interface.get("typename") == "DcimPhysicalInterface"
+            for id in [interface.get("ip_address", {}).get("id")]
+            if isinstance(id, str)
+        ]
+
+        super_spine_p2p_addresses: list[str] = [
+            endpoint_ip_id
+            for device in self.data.get("devices", []) or []
+            for interface in device.get("interfaces", []) or []
+            if interface.get("status") == "active" and interface.get("typename") == "DcimPhysicalInterface"
+            for endpoint in (interface.get("cable", {}) or {}).get("endpoints", []) or []
+            if endpoint.get("device", {}).get("role") == "super-spine"
+            for endpoint_ip_id in [endpoint.get("ip_address", {}).get("id")]
+            if isinstance(endpoint_ip_id, str)
+        ]
+
+        virtual_interface_addresses: list[str] = [
+            id
+            for device in self.data.get("devices", []) or []
+            for interface in device.get("interfaces", []) or []
+            if interface.get("typename") == "DcimVirtualInterface"
+            for interface_ip in interface.get("ip_addresses", []) or []
+            for id in [interface_ip.get("id")]
+            if isinstance(id, str)
+        ]
+
+        device_primary_addresses: list[str] = [
+            id
+            for device in self.data.get("devices", []) or []
+            for id in [device.get("primary_address", {}).get("id")]
+            if isinstance(id, str)
+        ]
+
+        cables: list[str] = [
+            interface.get("cable", {}).get("id")
+            for device in self.data.get("devices", []) or []
+            for interface in device.get("interfaces", []) or []
+            if interface.get("cable", {}).get("id")
+        ]
+
+        p2p_preffixes: list[str] = [
+            interface.get("ip_address", {}).get("ip_prefix", {}).get("prefix")
+            for device in self.data.get("devices", []) or []
+            for interface in device.get("interfaces", []) or []
+            if interface.get("typename") == "DcimPhysicalInterface"
+            and interface.get("ip_address", {}).get("ip_prefix", {}).get("id")
+        ]
+
+        # loopback_pool_prefixes: list[str] = list(
+        #     {prefix.get("prefix", {}) for prefix in self.data.get("loopback_pool", {}).get("resources", []) or []}
+        # )
+
+        # technical_pool_prefixes: list[str] = list(
+        #     {prefix.get("prefix", {}) for prefix in self.data.get("prefix_pool", {}).get("resources", []) or []}
+        # )
+
+        execute_batch: InfrahubBatch = await self.client.create_batch()
+
+        device_objs: list[DcimPhysicalDevice] = await self.client.filters(
             kind=DcimPhysicalDevice,
-            deployment__ids=[pod_id],
+            ids=devices,
         )
 
-        if not devices:
-            self.logger.info("No devices found for pod %s", pod_name)
-            return
+        for device_obj in device_objs:
+            device_obj.status.value = "decommissioned"
+            execute_batch.add(task=device_obj.save, allow_upsert=True, node=device_obj)
 
-        device_ids = [d.id for d in devices]
+        async for _node, _ in execute_batch.execute():
+            self.logger.info(f"Decomissioned {_node.name.value}")
 
-        # Fetch all physical interfaces for these devices (with cable relationship)
-        interfaces = await self.client.filters(
+        # Set all physical interfaces to free and remove descriptions
+        execute_batch: InfrahubBatch = await self.client.create_batch()
+
+        interface_objs: list[DcimPhysicalInterface] = await self.client.filters(
             kind=DcimPhysicalInterface,
-            device__ids=device_ids,
-            include=["cable"],
+            ids=list(physical_interfaces + super_spine_interfaces),
         )
 
-        cables_to_delete: Set[str] = set()
-        remote_interfaces_to_free: Set[str] = set()
+        for interface_obj in interface_objs:
+            interface_obj.status.value = "free"
+            interface_obj.description.value = ""
+            execute_batch.add(task=interface_obj.save, allow_upsert=True, node=interface_obj)
 
-        # Collect cables and remote interfaces
-        for iface in interfaces:
-            cable = iface.cable.peer if iface.cable else None
-            cable_id = cable.id if cable and cable.id else None
-            if not cable_id:
-                continue
+        async for _node, _ in execute_batch.execute():
+            self.logger.info(
+                f"Cleaned interface {_node.device.display_label} - {_node.name.value} status and description"
+            )
 
-            cables_to_delete.add(cable_id)
-
-            # Fetch cable endpoints to find remote interface
-            cable_full = await self.client.get(DcimCable, id=cable_id, include=["endpoints"])
-            endpoints = cable_full.endpoints.peers if cable_full and cable_full.endpoints else []
-            for endpoint in endpoints:
-                if endpoint.id and endpoint.id != iface.id:
-                    remote_interfaces_to_free.add(endpoint.id)
-
-        # Delete cables
-        for cable_id in cables_to_delete:
-            cable_obj = await self.client.get(DcimCable, id=cable_id)
-            if cable_obj:
-                await cable_obj.delete()
-
-        # Free remote interfaces that were connected to decommissioned pod devices
-        for iface_id in remote_interfaces_to_free:
-            remote_iface = await self.client.get(DcimPhysicalInterface, id=iface_id)
-            if remote_iface and remote_iface.status.value != "free":
-                remote_iface.status.value = "free"
-                await remote_iface.save(allow_upsert=True)
-
-        # Finally, mark pod devices as decommissioned
-        updated = 0
-        for device in devices:
-            if device.status.value != "decommissioned":
-                device.status.value = "decommissioned"
-                await device.save(allow_upsert=True)
-                updated += 1
-
-        self.logger.info(
-            "Decommissioned %s devices for pod %s, removed %s cables, freed %s remote interfaces",
-            updated,
-            pod_name,
-            len(cables_to_delete),
-            len(remote_interfaces_to_free),
+        # Remove all virtual interfaces
+        intefaces_objs: list[DcimVirtualInterface] = await self.client.filters(
+            kind=DcimVirtualInterface,
+            ids=virtual_interfaces,
         )
+        for interface_obj in intefaces_objs:
+            await interface_obj.delete()
+            self.logger.info(f"deleted virtual interface {interface_obj.hfid}")
+
+        # Remove all ip addresses
+        address_objs: list[IpamIPAddress] = await self.client.filters(
+            kind=IpamIPAddress,
+            ids=list(
+                p2p_addresses + super_spine_p2p_addresses + virtual_interface_addresses + device_primary_addresses
+            ),
+        )
+        for address_obj in address_objs:
+            await address_obj.delete()
+            self.logger.info(f"deleted address {address_obj.address.value}")
+
+        # Remove all cables attached to pod interfaces (after cleaning interfaces/IPs)
+        cable_objs: list[DcimCable] = await self.client.filters(
+            kind=DcimCable,
+            ids=cables,
+        )
+        for cable_obj in cable_objs:
+            await cable_obj.delete()
+            self.logger.info(f"deleted cable {cable_obj.name.value}")
+
+        # Remove all p2p prefixes from pools
+        prefix_objs: list[IpamPrefix] = await self.client.filters(
+            kind=IpamPrefix,
+            prefix__values=p2p_preffixes,
+        )
+        for prefix_obj in prefix_objs:
+            await prefix_obj.delete()
+            self.logger.info(f"deleted prefix {prefix_obj.prefix.value}")
+
+        # Remove all pool prefixes
+        # prefix_objs: list[IpamPrefix] = await self.client.filters(
+        #     kind=IpamPrefix,
+        #     ids=list(set(loopback_pool_prefixes + technical_pool_prefixes)),
+        # )
+        # for prefix_obj in prefix_objs:
+        #     await prefix_obj.delete()
+        #     self.logger.info(f"deleted prefix {prefix_obj.prefix.value}")
