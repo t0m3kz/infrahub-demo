@@ -1,6 +1,6 @@
 # 02 - Additional Switches Demo
 
-*When You Just Need Two More Switches (Famous Last Words)*
+When you just need two more switches (famous last words)
 
 ## Overview
 
@@ -43,6 +43,7 @@ uv run infrahubctl object load data/demos/02_switch/ --branch your_branch
 The rack generator will trigger **automatically** when the rack fabric_templates are updated! ✨
 
 **Note:** After the rack generator completes, manually regenerate the cabling artifact:
+
 - In InfraHub UI → Artifacts → Find "Cable matrix for DC" (DC1) → Click "Regenerate"
 - Or run: `uv run infrahubctl artifact generate "Cable matrix for DC" DC1 --branch your_branch`
 

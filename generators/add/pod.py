@@ -6,7 +6,7 @@ from utils.data_cleaning import clean_data
 
 from ..common import CommonGenerator
 from ..models import PodModel
-from ..schema_protocols import LocationRack
+from ..protocols import LocationRack
 
 
 class PodTopologyGenerator(CommonGenerator):

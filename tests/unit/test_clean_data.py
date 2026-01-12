@@ -14,27 +14,27 @@ class TestCleanDataBasic:
 
     def test_clean_data_scalar_string(self) -> None:
         """Test clean_data with scalar string value."""
-        result = clean_data({"value": "test_value"})  # type: ignore[arg-type]
+        result = clean_data({"value": "test_value"})
         assert isinstance(result, dict)
 
     def test_clean_data_scalar_int(self) -> None:
         """Test clean_data with scalar integer value."""
-        result = clean_data({"num": 42})  # type: ignore[arg-type]
+        result = clean_data({"num": 42})
         assert isinstance(result, dict)
 
     def test_clean_data_scalar_float(self) -> None:
         """Test clean_data with scalar float value."""
-        result = clean_data({"val": 3.14})  # type: ignore[arg-type]
+        result = clean_data({"val": 3.14})
         assert isinstance(result, dict)
 
     def test_clean_data_scalar_bool(self) -> None:
         """Test clean_data with scalar boolean value."""
-        result = clean_data({"flag": True})  # type: ignore[arg-type]
+        result = clean_data({"flag": True})
         assert isinstance(result, dict)
 
     def test_clean_data_scalar_none(self) -> None:
         """Test clean_data with None value."""
-        result = clean_data({"nothing": None})  # type: ignore[arg-type]
+        result = clean_data({"nothing": None})
         assert isinstance(result, dict)
 
     def test_clean_data_empty_dict(self) -> None:
@@ -44,7 +44,7 @@ class TestCleanDataBasic:
 
     def test_clean_data_empty_list(self) -> None:
         """Test clean_data with empty list."""
-        result = clean_data({"items": []})  # type: ignore[arg-type]
+        result = clean_data({"items": []})
         assert isinstance(result, dict)
 
     def test_clean_data_simple_dict(self) -> None:
@@ -55,7 +55,7 @@ class TestCleanDataBasic:
 
     def test_clean_data_simple_list(self) -> None:
         """Test clean_data with simple list of scalars."""
-        data = {"values": [1, 2, 3, 4, 5]}  # type: ignore[arg-type]
+        data = {"values": [1, 2, 3, 4, 5]}
         result = clean_data(data)
         assert isinstance(result, dict)
 

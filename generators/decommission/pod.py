@@ -11,7 +11,7 @@ from infrahub_sdk.batch import InfrahubBatch
 from utils.data_cleaning import clean_data
 
 from ..common import CommonGenerator
-from ..schema_protocols import (
+from ..protocols import (
     DcimCable,
     DcimPhysicalDevice,
     DcimPhysicalInterface,

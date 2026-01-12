@@ -15,10 +15,10 @@ class TestCablingPlannerInitialization:
 
     def test_initialization_basic(self) -> None:
         """Test basic CablingPlanner initialization."""
-        bottom_interfaces = create_mock_interfaces("leaf-01", ["Ethernet1/1"])
-        top_interfaces = create_mock_interfaces("spine-01", ["Ethernet1/1"])
+        bottom_interfaces: list[Any] = create_mock_interfaces("leaf-01", ["Ethernet1/1"])
+        top_interfaces: list[Any] = create_mock_interfaces("spine-01", ["Ethernet1/1"])
 
-        planner = CablingPlanner(bottom_interfaces, top_interfaces)  # type: ignore
+        planner = CablingPlanner(bottom_interfaces, top_interfaces)
 
         assert planner.bottom_by_device is not None
         assert planner.top_by_device is not None
@@ -140,7 +140,7 @@ class TestCablingPlannerDeviceGrouping:
         leaf2 = create_mock_interfaces("leaf-02", ["Ethernet1/1"])
         spine1 = create_mock_interfaces("spine-01", ["Ethernet1/1"])
 
-        planner = CablingPlanner(leaf1 + leaf2, spine1)  # type: ignore
+        planner = CablingPlanner(leaf1 + leaf2, spine1)
 
         # Bottom devices
         assert len(planner.bottom_by_device) == 2

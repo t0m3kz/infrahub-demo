@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import pytest
+from typing import cast
+
 from conftest import create_mock_interfaces
 
 from generators.helpers import CablingPlanner
@@ -16,7 +18,10 @@ class TestCablingPlannerCablingPlanStructure:
         bottom = create_mock_interfaces("leaf-01", ["Ethernet1/1"])
         top = create_mock_interfaces("spine-01", ["Ethernet1/1"])
 
-        planner = CablingPlanner(bottom, top)  # type: ignore
+        planner = CablingPlanner(
+            cast(list, bottom),
+            cast(list, top),
+        )
         cabling_plan = planner.build_cabling_plan()
 
         assert isinstance(cabling_plan, list)
@@ -37,10 +42,13 @@ class TestCablingPlannerInvalidScenario:
         bottom = create_mock_interfaces("leaf-01", ["Ethernet1/1"])
         top = create_mock_interfaces("spine-01", ["Ethernet1/1"])
 
-        planner = CablingPlanner(bottom, top)  # type: ignore
+        planner = CablingPlanner(
+            cast(list, bottom),
+            cast(list, top),
+        )
 
         with pytest.raises(ValueError, match="Unknown cabling scenario"):
-            planner.build_cabling_plan(scenario="invalid")  # type: ignore
+            planner.build_cabling_plan(scenario="custom")
 
 
 class TestCablingPlannerEdgeCases:
@@ -48,7 +56,7 @@ class TestCablingPlannerEdgeCases:
 
     def test_empty_interfaces(self) -> None:
         """Test with empty interface lists."""
-        planner = CablingPlanner([], [])  # type: ignore
+        planner = CablingPlanner([], [])
 
         assert planner.bottom_by_device == {}
         assert planner.top_by_device == {}
@@ -58,7 +66,10 @@ class TestCablingPlannerEdgeCases:
         bottom = create_mock_interfaces("leaf-01", ["Ethernet1/1", "Ethernet1/2"])
         top = create_mock_interfaces("spine-01", ["Ethernet1/1"])
 
-        planner = CablingPlanner(bottom, top)  # type: ignore
+        planner = CablingPlanner(
+            cast(list, bottom),
+            cast(list, top),
+        )
         cabling_plan = planner.build_cabling_plan()
 
         assert isinstance(cabling_plan, list)

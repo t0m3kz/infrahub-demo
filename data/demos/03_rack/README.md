@@ -1,6 +1,6 @@
 # 03 - Single Rack Demo
 
-*The Minimalist's Approach (Or "I Ran Out of Budget")*
+The minimalist's approach (or "I ran out of budget")
 
 ## Overview
 
@@ -44,12 +44,14 @@ uv run infrahubctl object load data/demos/03_rack/ --branch your_branch
 The rack generator will trigger **automatically** when the rack object is created! ✨
 
 The generator will:
+
 1. **Detect mixed deployment** and existing middle rack in row 2
 2. **Automatically inherit checksum** from middle rack
 3. **Generate ToR devices** immediately
 4. **Connect to next available ports** on middle rack leafs
 
 **After generator completes,** manually regenerate the cabling artifact:
+
 ```bash
 uv run infrahubctl artifact generate "Cable matrix for DC" DC1 --branch your_branch
 ```
@@ -63,10 +65,12 @@ Or in InfraHub UI → Artifacts → "Cable matrix for DC" (DC1) → Regenerate
 **Prerequisite:** Pod 2 must already exist with mixed deployment (created via Scenario 01).
 
 Pod 2's mixed deployment means:
+
 - Some racks have leafs (middle racks at index=5 in each row)
 - Some racks have only ToRs that connect to those middle rack leafs
 
 When you add this ToR rack to row 2:
+
 1. **ToR generator runs** (automatic trigger on create)
 2. **Queries existing middle rack leafs** in row 2 (at index=5)
 3. **Calculates cabling offset** based on existing ToRs in row 2
@@ -81,13 +85,15 @@ When you add this ToR rack to row 2:
 
 The system ensures middle racks are created before ToR racks can connect to them:
 
-**Scenario 1: Middle rack exists before ToR (normal flow)**
+Scenario 1: Middle rack exists before ToR (normal flow)
+
 1. Middle rack creates first with leafs
 2. Middle rack sets checksums on all ToR racks in same row
 3. Checksum update triggers ToR rack generation
 4. ToRs connect to middle rack leafs
 
-**Scenario 2: ToR added to existing middle rack (Scenario 03)**
+Scenario 2: ToR added to existing middle rack (Scenario 03)
+
 1. New ToR rack created without checksum
 2. ToR generator detects mixed deployment + existing middle rack
 3. **Automatically inherits checksum** from middle rack in same row

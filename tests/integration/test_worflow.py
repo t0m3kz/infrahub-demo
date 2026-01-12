@@ -30,7 +30,7 @@ from infrahub_sdk.graphql import Mutation
 from infrahub_sdk.protocols import CoreGeneratorDefinition
 from infrahub_sdk.task.models import TaskFilter, TaskState
 
-from generators.schema_protocols import DcimPhysicalDevice, TopologyDataCenter
+from generators.protocols import DcimPhysicalDevice, TopologyDataCenter
 
 from .conftest import PROJECT_DIRECTORY, TestInfrahubDockerWithClient
 from .git_repo import GitRepo

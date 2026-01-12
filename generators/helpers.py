@@ -4,11 +4,11 @@ from __future__ import annotations
 
 from collections import defaultdict
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING, Any, Literal, Sequence
 
 from netutils.interface import sort_interface_list
 
-from .schema_protocols import DcimPhysicalDevice, DcimPhysicalInterface
+from .protocols import DcimPhysicalInterface
 
 if TYPE_CHECKING:
     pass
@@ -185,8 +185,8 @@ class CablingPlanner:
 
     def __init__(
         self,
-        bottom_interfaces: list[DcimPhysicalInterface],
-        top_interfaces: list[DcimPhysicalInterface],
+        bottom_interfaces: Sequence[Any],
+        top_interfaces: Sequence[Any],
         bottom_sorting: Literal["top_down", "bottom_up"] | str = "bottom_up",
         top_sorting: Literal["top_down", "bottom_up"] | str = "bottom_up",
     ) -> None:
@@ -209,9 +209,9 @@ class CablingPlanner:
 
     def _create_device_interface_map(
         self,
-        interfaces: list[DcimPhysicalInterface],
+        interfaces: Sequence[Any],
         sorting: Literal["top_down", "bottom_up"] | str = "top_down",
-    ) -> dict[DcimPhysicalDevice, list[DcimPhysicalInterface]]:
+    ) -> dict[Any, list[Any]]:
         """Return a mapping of device peer -> list of its interfaces sorted."""
 
         # Normalize legacy aliases that may still exist in stored data.

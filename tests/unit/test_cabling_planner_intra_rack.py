@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import cast
+
 from conftest import create_mock_interfaces
 
 from generators.helpers import CablingPlanner
@@ -20,7 +22,7 @@ class TestCablingPlannerIntraRackScenario:
         leaf1 = create_mock_interfaces("leaf-01", ["Ethernet1/25", "Ethernet1/26"])
         leaf2 = create_mock_interfaces("leaf-02", ["Ethernet1/25", "Ethernet1/26"])
 
-        planner = CablingPlanner(tor1 + tor2, leaf1 + leaf2)  # type: ignore
+        planner = CablingPlanner(cast(list, tor1 + tor2), cast(list, leaf1 + leaf2))
         cabling_plan = planner.build_cabling_plan(scenario="intra_rack")
 
         # Each ToR connects to 2 Leafs (least loaded)
@@ -44,7 +46,7 @@ class TestCablingPlannerIntraRackScenario:
                 create_mock_interfaces(f"leaf-{leaf_num:02d}", [f"Ethernet1/{i}" for i in range(25, 29)])
             )
 
-        planner = CablingPlanner(tor_interfaces, leaf_interfaces)  # type: ignore
+        planner = CablingPlanner(cast(list, tor_interfaces), cast(list, leaf_interfaces))
         cabling_plan = planner.build_cabling_plan(scenario="intra_rack")
 
         # Each ToR connects to 2 Leafs: 4 ToRs × 2 uplinks = 8 connections
@@ -66,7 +68,7 @@ class TestCablingPlannerIntraRackScenario:
                 create_mock_interfaces(f"leaf-{leaf_num:02d}", [f"Ethernet1/{i}" for i in range(25, 31)])
             )
 
-        planner = CablingPlanner(tor_interfaces, leaf_interfaces)  # type: ignore
+        planner = CablingPlanner(cast(list, tor_interfaces), cast(list, leaf_interfaces))
         cabling_plan = planner.build_cabling_plan(scenario="intra_rack")
 
         # Verify no interface is used more than once
@@ -99,9 +101,9 @@ class TestCablingPlannerIntraRackScenario:
         leaf4 = create_mock_interfaces("leaf-04", ["Ethernet1/25", "Ethernet1/26"])
 
         planner = CablingPlanner(
-            tor1 + tor2 + tor3 + tor4,  # type: ignore
-            leaf1 + leaf2 + leaf3 + leaf4,  # type: ignore
-        )  # type: ignore
+            cast(list, tor1 + tor2 + tor3 + tor4),
+            cast(list, leaf1 + leaf2 + leaf3 + leaf4),
+        )
         cabling_plan = planner.build_cabling_plan(scenario="intra_rack")
 
         # Count connections per Leaf to verify load balancing
@@ -124,7 +126,7 @@ class TestCablingPlannerIntraRackScenario:
         leaf2 = create_mock_interfaces("leaf-02", ["Ethernet1/25"])
         leaf3 = create_mock_interfaces("leaf-03", ["Ethernet1/25"])
 
-        planner = CablingPlanner(tor, leaf1 + leaf2 + leaf3)  # type: ignore
+        planner = CablingPlanner(cast(list, tor), cast(list, leaf1 + leaf2 + leaf3))
         cabling_plan = planner.build_cabling_plan(scenario="intra_rack")
 
         # 1 ToR with 2 uplinks connects to 2 Leafs with least connections
@@ -150,7 +152,7 @@ class TestCablingPlannerIntraRackScenario:
             ],
         )
 
-        planner = CablingPlanner(tor1 + tor2 + tor3, leaf)  # type: ignore
+        planner = CablingPlanner(cast(list, tor1 + tor2 + tor3), cast(list, leaf))
         cabling_plan = planner.build_cabling_plan(scenario="intra_rack")
 
         # With deterministic round-robin, all ToRs use both uplinks to single Leaf
@@ -167,7 +169,7 @@ class TestCablingPlannerIntraRackScenario:
         leaf1 = create_mock_interfaces("leaf-01", ["Ethernet1/25"])
         leaf2 = create_mock_interfaces("leaf-02", ["Ethernet1/25", "Ethernet1/26"])
 
-        planner = CablingPlanner(tor1 + tor2, leaf1 + leaf2)  # type: ignore
+        planner = CablingPlanner(cast(list, tor1 + tor2), cast(list, leaf1 + leaf2))
         cabling_plan = planner.build_cabling_plan(scenario="intra_rack")
 
         # Should create connections without errors
@@ -181,7 +183,7 @@ class TestCablingPlannerIntraRackScenario:
         leaf1 = create_mock_interfaces("leaf-01", ["Ethernet1/25", "Ethernet1/26"])
         leaf2 = create_mock_interfaces("leaf-02", ["Ethernet1/25", "Ethernet1/26"])
 
-        planner = CablingPlanner(tor1 + tor2, leaf1 + leaf2)  # type: ignore
+        planner = CablingPlanner(cast(list, tor1 + tor2), cast(list, leaf1 + leaf2))
         cabling_plan = planner.build_cabling_plan(scenario="intra_rack")
 
         # Check for duplicate connections
@@ -219,7 +221,7 @@ class TestCablingPlannerIntraRackScenario:
             setattr(cable_peer, "name", type("Name", (), {"value": cable_name})())
             intf.cable = type("CableRef", (), {"_peer": cable_peer})()
 
-        planner = CablingPlanner(tor1 + tor2, leaf1 + leaf2)  # type: ignore
+        planner = CablingPlanner(cast(list, tor1 + tor2), cast(list, leaf1 + leaf2))
         cabling_plan = planner.build_cabling_plan(scenario="intra_rack")
 
         # All connections originating from tor-01 should target leaf-02.

@@ -15,7 +15,7 @@ from .helpers import CablingPlanner, DeviceNamingConfig
 if TYPE_CHECKING:
     pass
 
-from .schema_protocols import (
+from .protocols import (
     DcimCable,
     DcimPhysicalDevice,
     DcimPhysicalInterface,

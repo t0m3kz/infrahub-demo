@@ -370,7 +370,7 @@ def setup(context: Context) -> None:
         pty=True,
     )
 
-    containers_running = result is not None and result.stdout and result.stdout.strip()  # type: ignore
+    containers_running = result is not None and result.stdout and result.stdout.strip()
 
     if containers_running:
         print("     ✅ Infrahub containers already running")
