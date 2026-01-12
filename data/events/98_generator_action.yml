@@ -6,13 +6,13 @@ spec:
   data:
     - name: run-dc-generator
       description: Run Data Center Generator
-      generator: generate_dc
+      generator: add_dc
     - name: run-pod-generator
       description: Run Pod Generator
-      generator: generate_pod
+      generator: add_pod
     - name: run-rack-generator
       description: Run Rack Generator
-      generator: generate_rack
+      generator: add_rack
     # - name: run-decommission-device
     #   description: Decommission a single device
     #   generator: decommission_device
