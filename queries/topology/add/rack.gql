@@ -27,9 +27,6 @@ fragment TemplateDeviceFields on TemplateDcimPhysicalDevice {
 }
 
 fragment FabricTemplateFields on TopologyElement {
-  name {
-    value
-  }
   role {
     value
   }

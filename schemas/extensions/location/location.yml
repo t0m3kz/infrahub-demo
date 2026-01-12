@@ -153,8 +153,10 @@ nodes:
         cardinality: one
       - name: fabric_templates
         peer: TopologyElement
+        label: Network Elements
         optional: true
         cardinality: many
+        kind: Attribute
       - name: pod
         peer: TopologyDeployment
         kind: Attribute
@@ -163,6 +165,7 @@ nodes:
         optional: true
       - name: devices
         peer: DcimPhysicalDevice
+        label: Devices in Rack
         optional: true
         cardinality: many
         kind: Generic

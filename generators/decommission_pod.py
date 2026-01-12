@@ -164,6 +164,9 @@ class PodDecommissionGenerator(CommonGenerator):
             await interface_obj.delete()
             self.logger.info(f"deleted virtual interface {interface_obj.hfid}")
 
+        # Wait for other branch tasks triggered by this event before deleting IPs/prefixes
+        await self.wait_for_branch_tasks_since_now()
+
         # Remove all ip addresses
         address_objs: list[IpamIPAddress] = await self.client.filters(
             kind=IpamIPAddress,

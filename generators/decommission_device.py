@@ -5,13 +5,7 @@ from typing import Any, Iterable, Optional, Set
 from utils.data_cleaning import clean_data
 
 from .common import CommonGenerator
-from .schema_protocols import (
-    DcimCable,
-    DcimPhysicalDevice,
-    DcimPhysicalInterface,
-    DcimVirtualInterface,
-    IpamIPAddress,
-)
+from .schema_protocols import DcimCable, DcimPhysicalDevice, DcimPhysicalInterface, DcimVirtualInterface, IpamIPAddress
 
 
 class BaseDeviceDecommissionGenerator(CommonGenerator):
@@ -107,15 +101,15 @@ class BaseDeviceDecommissionGenerator(CommonGenerator):
         # Remove IP addresses after interfaces are detached
         await self._delete_ip_addresses(ip_ids)
 
-        # Clear primary address and remove device
+        # Clear primary address and mark device as decommissioned (retain for audit)
         device_obj = await self.client.get(DcimPhysicalDevice, id=device_id)
         if device_obj:
             device_obj.primary_address = None  # type: ignore
+            device_obj.status.value = "decommissioned"
             await device_obj.save(allow_upsert=True)
-            await device_obj.delete()
 
         self.logger.info(
-            "Device %s decommissioned: %s cables, %s interfaces, %s IPs",
+            "Device %s decommissioned (retained): %s cables, %s interfaces, %s IPs",
             device_id,
             len(cable_ids),
             len(physical_iface_ids) + len(virtual_iface_ids),

@@ -5,268 +5,169 @@ spec:
   kind: TopologyElement
   data:
     # Cisco Leafs
-    - name: 2_CISCO_LEAFS_N9K-C9336C-FX2
-      description: 2 Cisco C9336C-FX2 leafs
-      quantity: 2
+    - quantity: 2
       role: leaf
-      device_type: N9K-C9336C-FX2
       template: N9K_C9336C_FX2_LEAF
-    - name: 4_CISCO_LEAFS_N9K-C9336C-FX2
-      description: 4 Cisco C9336C-FX2 leafs
-      quantity: 4
+    - quantity: 4
       role: leaf
-      device_type: N9K-C9336C-FX2
       template: N9K_C9336C_FX2_LEAF
-    - name: 8_CISCO_LEAFS_N9K-C9336C-FX2
-      description: 8 Cisco C9336C-FX2 leafs
-      quantity: 8
+    - quantity: 8
       role: leaf
-      device_type: N9K-C9336C-FX2
       template: N9K_C9336C_FX2_LEAF
 
-    - name: 2_CISCO_LEAFS_MR_N9K-C9336C-FX2
-      description: 2 Cisco C9336C-FX2 leafs
-      quantity: 2
+    - quantity: 2
       role: leaf
-      device_type: N9K-C9336C-FX2
       template: N9K_C9336C_FX2_LEAF_MR
-    - name: 4_CISCO_LEAFS_MR_N9K-C9336C-FX2
-      description: 4 Cisco C9336C-FX2 leafs
-      quantity: 4
+    - quantity: 4
       role: leaf
-      device_type: N9K-C9336C-FX2
       template: N9K_C9336C_FX2_LEAF_MR
-    - name: 8_CISCO_LEAFS_MR_N9K-C9336C-FX2
-      description: 8 Cisco C9336C-FX2 leafs
-      quantity: 8
+    - quantity: 8
       role: leaf
-      device_type: N9K-C9336C-FX2
+      template: N9K_C9336C_FX2_LEAF_MR
+    - quantity: 8
+      role: leaf
       template: N9K_C9336C_FX2_LEAF_MR
 
-    - name: 2_CISCO_LEAFS_MIXED_N9K-C9336C-FX2
-      description: 2 Cisco C9336C-FX2 leafs
-      quantity: 2
+    - quantity: 2
       role: leaf
-      device_type: N9K-C9336C-FX2
       template: N9K_C9336C_FX2_LEAF_MIXED
 
     # Cisco ToR
-    - name: 2_CISCO_TORS_N9K-C9336C-FX2
-      description: 2 Cisco C9336C-FX2 leafs
-      quantity: 2
+    - quantity: 2
       role: tor
-      device_type: N9K-C9336C-FX2
       template: N9K_C9336C_FX2_TOR
-    - name: 4_CISCO_TORS_N9K-C9336C-FX2
-      description: 2 Cisco C9336C-FX2 leafs
-      quantity: 4
+    - quantity: 4
       role: tor
-      device_type: N9K-C9336C-FX2
       template: N9K_C9336C_FX2_TOR
     # Cisco OOB
-    - name: 2_CISCO_OOB_SWITCHES_C9200L-24P-4G
-      description: 2 Cisco C9200L-24P-4G OOB switches
-      quantity: 2
+    - quantity: 2
       role: oob
-      device_type: C9200L-24P-4G
       template: C9200L_24P_4G_OOB
-    - name: 2_CISCO_OOB_SWITCHES_C9200L-48P-4G
-      description: 2 Cisco C9200L-48P-4G OOB switches
-      quantity: 2
+    - quantity: 2
       role: oob
-      device_type: C9200L-24P-4G
       template: C9200L_48P_4G_OOB
     # Arista Leafs
-    - name: 2_ARISTA_LEAFS_DCS-7050CX3-32C-R
-      description: 2 Arista DCS-7050CX3-32C-R LEAFS
-      quantity: 2
+    - quantity: 2
       role: leaf
-      device_type: DCS-7050CX3-32C-R
       template: DCS-7050CX3-32C-R_LEAF
-    - name: 4_ARISTA_LEAFS_DCS-7050CX3-32C-R
-      description: 4 Arista DCS-7050CX3-32C-R LEAFS
-      quantity: 4
+    - quantity: 4
       role: leaf
-      device_type: DCS-7050CX3-32C-R
       template: DCS-7050CX3-32C-R_LEAF
-    - name: 8_ARISTA_LEAFS_DCS-7050CX3-32C-R
-      description: 8 Arista DCS-7050CX3-32C-R LEAFS
-      quantity: 8
+    - quantity: 4
       role: leaf
-      device_type: DCS-7050CX3-32C-R
+      template: DCS-7050CX3-32C-R_LEAF
+    - quantity: 8
+      role: leaf
+      template: DCS-7050CX3-32C-R_LEAF
+    - quantity: 8
+      role: leaf
       template: DCS-7050CX3-32C-R_LEAF
 
-    - name: 2_ARISTA_LEAFS_DCS-7050CX4M-48D8-F
-      description: 2 AristaDCS-7050CX4M-48D8-F LEAFS
-      quantity: 2
+    - quantity: 2
       role: leaf
-      device_type: DCS-7050CX4M-48D8-F
       template: DCS-7050CX4M-48D8-F_LEAF
-    - name: 4_ARISTA_LEAFS_DCS-7050CX4M-48D8-F
-      description: 4 AristaDCS-7050CX4M-48D8-F LEAFS
-      quantity: 4
+    - quantity: 4
       role: leaf
-      device_type: DCS-7050CX4M-48D8-F
       template: DCS-7050CX4M-48D8-F_LEAF
-    - name: 8_ARISTA_LEAFS_DCS-7050CX4M-48D8-F
-      description: 8 Arista DCS-7050CX4M-48D8-F LEAFS
-      quantity: 8
+    - quantity: 8
       role: leaf
-      device_type: DCS-7050CX4M-48D8-F
+      template: DCS-7050CX4M-48D8-F_LEAF
+    - quantity: 8
+      role: leaf
       template: DCS-7050CX4M-48D8-F_LEAF
 
-    - name: 2_ARISTA_LEAFS_DCS-7050SX3-24YC4C-S-R
-      description: 2 Arista DCS-7050SX3-24YC4C-S-R LEAFS
-      quantity: 2
+    - quantity: 2
       role: leaf
-      device_type: DCS-7050SX3-24YC4C-S-R
       template: DCS-7050SX3-24YC4C-S-R_LEAF
-    - name: 4_ARISTA_LEAFS_DCS-7050SX3-24YC4C-S-R
-      description: 4 Arista DCS-7050SX3-24YC4C-S-R LEAFS
-      quantity: 4
+    - quantity: 4
       role: leaf
-      device_type: DCS-7050SX3-24YC4C-S-R
       template: DCS-7050SX3-24YC4C-S-R_LEAF
-    - name: 8_ARISTA_LEAFS_DCS-7050SX3-24YC4C-S-R
-      description: 8 Arista DCS-7050SX3-24YC4C-S-R LEAFS
-      quantity: 8
+    - quantity: 8
       role: leaf
-      device_type: DCS-7050SX3-24YC4C-S-R
+      template: DCS-7050SX3-24YC4C-S-R_LEAF
+    - quantity: 8
+      role: leaf
       template: DCS-7050SX3-24YC4C-S-R_LEAF
 
     # Arista Middle Rack Leafs
-    - name: 2_ARISTA_LEAFS_MR_DCS-7050CX3-32C-R
-      description: 2 Arista DCS-7050CX3-32C-R MR LEAFS
-      quantity: 2
+    - quantity: 2
       role: leaf
-      device_type: DCS-7050CX3-32C-R
       template: DCS-7050CX3-32C-R_LEAF_MR
 
     # Arista ToRs
-    - name: 2_ARISTA_TORS_DCS-7050CX3-32C-R
-      description: 2 Arista DCS-7050CX3-32C-R TORS
-      quantity: 2
+    - quantity: 2
       role: tor
-      device_type: DCS-7050CX3-32C-R
       template: DCS-7050CX3-32C-R_TOR
-    - name: 2_ARISTA_TORS_DCS-7050SX3-24YC4C-S-R
-      description: 2 Arista DCS-7050SX3-24YC4C-S-R TORS
-      quantity: 2
+    - quantity: 2
       role: tor
-      device_type: DCS-7050SX3-24YC4C-S-R
       template: DCS-7050SX3-24YC4C-S-R_TOR
 
     # Dell Leafs
-    - name: 2_DELL_LEAFS_PowerSwitch-S5224F-ON
-      description: 2 Dell PowerSwitch-S5224F-ON LEAFS
-      quantity: 2
+    - quantity: 2
       role: leaf
-      device_type: PowerSwitch S5224F-ON
       template: PowerSwitch-S5224F-ON_LEAF
-    - name: 4_DELL_LEAFS_PowerSwitch-S5224F-ON
-      description: 4 Dell PowerSwitch-S5224F-ON LEAFS
-      quantity: 4
+    - quantity: 4
       role: leaf
-      device_type: PowerSwitch S5224F-ON
       template: PowerSwitch-S5224F-ON_LEAF
-    - name: 8_DELL_LEAFS_PowerSwitch-S5224F-ON
-      description: 8 Dell PowerSwitch-S5224F-ON LEAFS
-      quantity: 8
+    - quantity: 4
       role: leaf
-      device_type: PowerSwitch S5224F-ON
+      template: PowerSwitch-S5224F-ON_LEAF
+    - quantity: 8
+      role: leaf
       template: PowerSwitch-S5224F-ON_LEAF
 
-    - name: 2_DELL_LEAFS_PowerSwitch-S5248F-ON
-      description: 2 Dell PowerSwitch-S5248F-ON LEAFS
-      quantity: 2
+    - quantity: 2
       role: leaf
-      device_type: PowerSwitch S5248F-ON
       template: PowerSwitch-S5248F-ON_LEAF
-    - name: 4_DELL_LEAFS_PowerSwitch-S5248F-ON
-      description: 4 Dell PowerSwitch-S5248F-ON LEAFS
-      quantity: 4
+    - quantity: 4
       role: leaf
-      device_type: PowerSwitch S5248F-ON
       template: PowerSwitch-S5248F-ON_LEAF
-    - name: 8_DELL_LEAFS_PowerSwitch-S5248F-ON
-      description: 8 Dell PowerSwitch-S5248F-ON LEAFS
-      quantity: 8
+    - quantity: 8
       role: leaf
-      device_type: PowerSwitch S5248F-ON
       template: PowerSwitch-S5248F-ON_LEAF
 
     # Dell Middle Rack Leafs
-    - name: 2_DELL_LEAFS_MR_PowerSwitch-S5232F-ON
-      description: 2 Dell PowerSwitch-S5232F-ON MR LEAFS
-      quantity: 2
+    - quantity: 2
       role: leaf
-      device_type: PowerSwitch S5232F-ON
       template: PowerSwitch-S5232F-ON_LEAF_MR
 
     # Dell ToRs
-    - name: 2_DELL_TORS_PowerSwitch-S5224F-ON
-      description: 2 Dell PowerSwitch-S5224F-ON TORS
-      quantity: 2
+    - quantity: 2
       role: tor
-      device_type: PowerSwitch S5224F-ON
       template: PowerSwitch-S5224F-ON_TOR
-    - name: 2_DELL_TORS_PowerSwitch-S5248F-ON
-      description: 2 Dell PowerSwitch-S5248F-ON TORS
-      quantity: 2
+    - quantity: 2
       role: tor
-      device_type: PowerSwitch S5248F-ON
       template: PowerSwitch-S5248F-ON_TOR
 
     # Edgecore Leafs
-    - name: 2_EDGECORE_LEAFS_Edgecore-7AS7326-56X-O-48V-F
-      description: 2 Edgecore 7AS7326-56X-O-48V-F LEAFS
-      quantity: 2
+    - quantity: 2
       role: leaf
-      device_type: 7AS7326-56X-O-48V-F
       template: Edgecore-7AS7326-56X-O-48V-F_LEAF
-    - name: 4_EDGECORE_LEAFS_Edgecore-7AS7326-56X-O-48V-F
-      description: 4 Edgecore 7AS7326-56X-O-48V-F LEAFS
-      quantity: 4
+    - quantity: 4
       role: leaf
-      device_type: 7AS7326-56X-O-48V-F
       template: Edgecore-7AS7326-56X-O-48V-F_LEAF
-    - name: 8_EDGECORE_LEAFS_Edgecore-7AS7326-56X-O-48V-F
-      description: 8 Edgecore 7AS7326-56X-O-48V-F LEAFS
-      quantity: 8
+    - quantity: 8
       role: leaf
-      device_type: 7AS7326-56X-O-48V-F
       template: Edgecore-7AS7326-56X-O-48V-F_LEAF
-    - name: 2_EDGECORE_LEAFS_MR_Edgecore-7726_32X_O
-      description: 2 Edgecore Edgecore-7726_32X_O MR LEAFS
-      quantity: 2
+    - quantity: 8
       role: leaf
-      device_type: 7726-32X-O
+      template: Edgecore-7AS7326-56X-O-48V-F_LEAF
+    - quantity: 2
+      role: leaf
       template: Edgecore-7726_32X_O_LEAF_MR
-    - name: 2_EDGECORE_TORS_Edgecore-7AS7326-56X-O-48V-F
-      description: 2 Edgecore Edgecore-7AS7326-56X-O-48V-F TORS
-      quantity: 2
+    - quantity: 2
       role: tor
-      device_type: 7AS7326-56X-O-48V-F
       template: Edgecore-7AS7326-56X-O-48V-F_TOR
 
 
     # Juniper Firewalls
-    - name: 2_JUNIPER_EDGE_FIREWALLS_SRX-1500
-      description: 2 Juniper EDGE SRX-1500 firewalls
-      quantity: 2
+    - quantity: 2
       role: firewall
-      device_type: SRX-1500
       template: SRX_1500_EDGE_FIREWALL
-    - name: 2_JUNIPER_DC_FIREWALLS_SRX-1500
-      description: 2 Juniper DC SRX-1500 firewalls
-      quantity: 2
+    - quantity: 2
       role: firewall
-      device_type: SRX-1500
       template: SRX_1500_DC_FIREWALL
     # Perle Consoles
-    - name: 2_PERLE_CONSOLE_SCG50R
-      description: 2 Perle SCG50R console servers
-      quantity: 2
+    - quantity: 2
       role: console
-      device_type: SCG50R
       template: SCG50R_CONSOLE

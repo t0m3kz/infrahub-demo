@@ -106,7 +106,7 @@ class PodModel(BaseModel):
 
 # Rack model
 class DeviceRole(BaseModel):
-    name: str
+    # name: str
     role: str
     quantity: int
     template: Template
@@ -149,7 +149,9 @@ class RackPod(BaseModel):
     spine_template: Template
     maximum_leafs_per_row: Optional[int] = None
     maximum_tors_per_row: Optional[int] = None
-    # Spine and leaf devices queried separately when needed (on-demand for specific deployment types)
+
+
+# Spine and leaf devices queried separately when needed (on-demand for specific deployment types)
 
 
 class RackModel(BaseModel):
