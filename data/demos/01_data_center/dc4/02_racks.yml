@@ -10,45 +10,45 @@ spec:
       row_index: 1
       shortname: ber-1-s-1-r-1-1
       rack_type: network
-      pod: ["DC4", "1", "1"]
+      pod: DC4-1-POD-1
       parent: ber-1-s-1
       member_of_groups: [topologies_rack]
       fabric_templates:
-        - [2_EDGECORE_LEAFS_MR_Edgecore-7726_32X_O]
+        - ["2", "leaf", "Edgecore-7726_32X_O_LEAF_MR"]
     - index: 2
       row_index: 1
       shortname: ber-1-s-1-r-1-2
       rack_type: tor
-      pod: ["DC4", "1", "1"]
+      pod: DC4-1-POD-1
       parent: ber-1-s-1
       member_of_groups: [topologies_rack]
       fabric_templates:
-        - [2_EDGECORE_TORS_Edgecore-7AS7326-56X-O-48V-F]
+        - ["2", "tor", "Edgecore-7AS7326-56X-O-48V-F_TOR"]
     - index: 1
       row_index: 2
       shortname: ber-1-s-1-r-2-1
       rack_type: network
-      pod: ["DC4", "1", "1"]
+      pod: DC4-1-POD-1
       parent: ber-1-s-1
       member_of_groups: [topologies_rack]
       fabric_templates:
-        - [2_EDGECORE_LEAFS_MR_Edgecore-7726_32X_O]
+        - ["2", "leaf", "Edgecore-7726_32X_O_LEAF_MR"]
     # Pod 2 - ToR
     - index: 1
       row_index: 1
       shortname: ber-1-s-2-r-1-1
       rack_type: tor
-      pod: ["DC4", "1", "2"]
+      pod: DC4-1-POD-2
       parent: ber-1-s-2
       member_of_groups: [topologies_rack]
       fabric_templates:
-        - [2_EDGECORE_TORS_Edgecore-7AS7326-56X-O-48V-F]
+        - ["2", "tor", "Edgecore-7AS7326-56X-O-48V-F_TOR"]
     - index: 1
       row_index: 2
       shortname: ber-1-s-2-r-2-1
       rack_type: tor
-      pod: ["DC4", "1", "2"]
+      pod: DC4-1-POD-2
       parent: ber-1-s-2
       member_of_groups: [topologies_rack]
       fabric_templates:
-        - [2_EDGECORE_TORS_Edgecore-7AS7326-56X-O-48V-F]
+        - ["2", "tor", "Edgecore-7AS7326-56X-O-48V-F_TOR"]

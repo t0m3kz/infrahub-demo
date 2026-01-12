@@ -24,9 +24,7 @@ spec:
     - quantity: 8
       role: leaf
       template: N9K_C9336C_FX2_LEAF_MR
-    - quantity: 8
-      role: leaf
-      template: N9K_C9336C_FX2_LEAF_MR
+
 
     - quantity: 2
       role: leaf
@@ -53,12 +51,6 @@ spec:
     - quantity: 4
       role: leaf
       template: DCS-7050CX3-32C-R_LEAF
-    - quantity: 4
-      role: leaf
-      template: DCS-7050CX3-32C-R_LEAF
-    - quantity: 8
-      role: leaf
-      template: DCS-7050CX3-32C-R_LEAF
     - quantity: 8
       role: leaf
       template: DCS-7050CX3-32C-R_LEAF
@@ -72,17 +64,11 @@ spec:
     - quantity: 8
       role: leaf
       template: DCS-7050CX4M-48D8-F_LEAF
-    - quantity: 8
-      role: leaf
-      template: DCS-7050CX4M-48D8-F_LEAF
 
     - quantity: 2
       role: leaf
       template: DCS-7050SX3-24YC4C-S-R_LEAF
     - quantity: 4
-      role: leaf
-      template: DCS-7050SX3-24YC4C-S-R_LEAF
-    - quantity: 8
       role: leaf
       template: DCS-7050SX3-24YC4C-S-R_LEAF
     - quantity: 8
@@ -104,9 +90,6 @@ spec:
 
     # Dell Leafs
     - quantity: 2
-      role: leaf
-      template: PowerSwitch-S5224F-ON_LEAF
-    - quantity: 4
       role: leaf
       template: PowerSwitch-S5224F-ON_LEAF
     - quantity: 4
@@ -144,9 +127,6 @@ spec:
       role: leaf
       template: Edgecore-7AS7326-56X-O-48V-F_LEAF
     - quantity: 4
-      role: leaf
-      template: Edgecore-7AS7326-56X-O-48V-F_LEAF
-    - quantity: 8
       role: leaf
       template: Edgecore-7AS7326-56X-O-48V-F_LEAF
     - quantity: 8

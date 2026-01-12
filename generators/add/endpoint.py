@@ -11,9 +11,9 @@ from typing import Any, Literal
 
 from utils.data_cleaning import clean_data
 
-from .common import CommonGenerator
-from .models import EndpointModel
-from .schema_protocols import DcimPhysicalDevice, DcimPhysicalInterface
+from ..common import CommonGenerator
+from ..models import EndpointModel
+from ..schema_protocols import DcimPhysicalDevice, DcimPhysicalInterface
 
 
 class EndpointConnectivityGenerator(CommonGenerator):
@@ -196,7 +196,7 @@ class EndpointConnectivityGenerator(CommonGenerator):
         In middle_rack deployments, the network rack contains ToRs and Leafs that
         serve compute racks in the same row.
         """
-        from .schema_protocols import LocationRack
+        from ..schema_protocols import LocationRack
 
         # Find the network rack in this row
         racks = await self.client.filters(
@@ -227,7 +227,7 @@ class EndpointConnectivityGenerator(CommonGenerator):
         self, pod_id: str, row_index: int, role: Literal["tor", "leaf"]
     ) -> list[dict[str, Any]]:
         """Query devices of specific role in same row across all racks."""
-        from .schema_protocols import LocationRack
+        from ..schema_protocols import LocationRack
 
         racks = await self.client.filters(kind=LocationRack, pod__ids=[pod_id], row_index__value=row_index)
 

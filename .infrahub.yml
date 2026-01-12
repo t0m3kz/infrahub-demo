@@ -200,15 +200,13 @@ queries:
     file_path: queries/config/loadbalancer.gql
   - name: oob_config
     file_path: queries/config/oob.gql
-  - name: device_decommission
-    file_path: queries/config/device_decommission.gql
   - name: pod_decommission
     file_path: queries/topology/decomission/pod.gql
 
 
 generator_definitions:
-  - name: generate_dc
-    file_path: generators/generate_dc.py
+  - name: add_dc
+    file_path: generators/add/dc.py
     targets: topologies_dc
     query: topology_dc
     class_name: DCTopologyGenerator
@@ -216,8 +214,8 @@ generator_definitions:
     execute_after_merge: false
     parameters:
       name: name__value
-  - name: generate_pod
-    file_path: generators/generate_pod.py
+  - name: add_pod
+    file_path: generators/add/pod.py
     targets: topologies_pod
     query: topology_pod
     class_name: PodTopologyGenerator
@@ -226,46 +224,10 @@ generator_definitions:
     parameters:
       name: name__value
   - name: decommission_pod
-    file_path: generators/decommission_pod.py
+    file_path: generators/decommission/pod.py
     targets: topologies_pod
     query: pod_decommission
     class_name: PodDecommissionGenerator
-    execute_in_proposed_change: false
-    execute_after_merge: false
-    parameters:
-      name: name__value
-  - name: decommission_leaf
-    file_path: generators/decommission_device.py
-    targets: leafs
-    query: device_decommission
-    class_name: LeafDecommissionGenerator
-    execute_in_proposed_change: false
-    execute_after_merge: false
-    parameters:
-      name: name__value
-  - name: decommission_spine
-    file_path: generators/decommission_device.py
-    targets: spines
-    query: device_decommission
-    class_name: SpineDecommissionGenerator
-    execute_in_proposed_change: false
-    execute_after_merge: false
-    parameters:
-      name: name__value
-  - name: decommission_tor
-    file_path: generators/decommission_device.py
-    targets: tors
-    query: device_decommission
-    class_name: TorDecommissionGenerator
-    execute_in_proposed_change: false
-    execute_after_merge: false
-    parameters:
-      name: name__value
-  - name: decommission_endpoint
-    file_path: generators/decommission_device.py
-    targets: endpoints
-    query: device_decommission
-    class_name: EndpointDecommissionGenerator
     execute_in_proposed_change: false
     execute_after_merge: false
     parameters:
@@ -279,8 +241,8 @@ generator_definitions:
   #   execute_after_merge: false
   #   parameters:
   #     name: name__value
-  - name: generate_rack
-    file_path: generators/generate_rack.py
+  - name: add_rack
+    file_path: generators/add/rack.py
     targets: topologies_rack
     query: rack
     class_name: RackGenerator
@@ -288,8 +250,8 @@ generator_definitions:
     execute_after_merge: false
     parameters:
       name: name__value
-  - name: connect_endpoint
-    file_path: generators/endpoint_connectivity.py
+  - name: add_endpoint
+    file_path: generators/add/endpoint.py
     targets: endpoints
     query: endpoint_connectivity
     class_name: EndpointConnectivityGenerator

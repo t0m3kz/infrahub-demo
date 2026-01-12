@@ -163,19 +163,14 @@ nodes:
     icon: "carbon:network-3-reference"
     menu_placement: "DesignTopology"
     human_friendly_id:
-      - name__value
-    order_by: [name__value]
-    display_label: "{{name__value}}"
+      - quantity__value
+      - role__value
+      - template__template_name__value
+    order_by: [role__value, quantity__value, template__template_name__value]
+    display_label: "{{quantity__value}} x {{role__value|upper}} {{template__template_name__value}}"  # yamllint disable-line rule:line-length
     uniqueness_constraints:
-      - ["name__value"]
+      - ["template", "quantity__value", "role__value"]
     attributes:
-      - name: name
-        kind: Text
-        computed_attribute:
-          kind: Jinja2
-          jinja2_template: "{{quantity__value}} x {{template__template_name__value}}"  # yamllint disable-line rule:line-length
-        read_only: true
-        optional: false
       - name: quantity
         kind: Number
         order_weight: 1200

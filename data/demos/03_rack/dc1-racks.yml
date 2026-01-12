@@ -12,4 +12,4 @@ spec:
       parent: muc-1-s-2
       member_of_groups: [topologies_rack]
       fabric_templates:
-        - [2_CISCO_TORS_N9K-C9336C-FX2]
+        - ["2", "tor", "N9K_C9336C_FX2_TOR"]

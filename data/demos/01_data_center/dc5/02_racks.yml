@@ -9,85 +9,85 @@ spec:
       row_index: 1
       shortname: ny-1-s-1-r-1-1
       rack_type: network
-      pod: ["DC5", "1", "1"]
+      pod: DC5-1-POD-1
       parent: ny-1-s-1
       member_of_groups: [topologies_rack]
       fabric_templates:
-        - [2_CISCO_LEAFS_MR_N9K-C9336C-FX2]
-        - [2_CISCO_TORS_N9K-C9336C-FX2]
+        - ["2", "leaf", "N9K_C9336C_FX2_LEAF_MR"]
+        - ["2", "tor", "N9K_C9336C_FX2_TOR"]
     - index: 1
       row_index: 2
       shortname: ny-1-s-1-r-2-1
       rack_type: network
-      pod: ["DC5", "1", "1"]
+      pod: DC5-1-POD-1
       parent: ny-1-s-1
       member_of_groups: [topologies_rack]
       fabric_templates:
-        - [2_CISCO_LEAFS_MR_N9K-C9336C-FX2]
-        - [2_CISCO_TORS_N9K-C9336C-FX2]
+        - ["2", "leaf", "N9K_C9336C_FX2_LEAF_MR"]
+        - ["2", "tor", "N9K_C9336C_FX2_TOR"]
 
     # Pod 2 - Arista
     - index: 1
       row_index: 1
       shortname: ny-1-s-2-r-1-1
       rack_type: network
-      pod: ["DC5", "1", "2"]
+      pod: DC5-1-POD-2
       parent: ny-1-s-2
       member_of_groups: [topologies_rack]
       fabric_templates:
-        - [2_ARISTA_LEAFS_MR_DCS-7050CX3-32C-R]
-        - [2_ARISTA_TORS_DCS-7050CX3-32C-R]
+        - ["2", "leaf", "DCS-7050CX3-32C-R_LEAF_MR"]
+        - ["2", "tor", "DCS-7050CX3-32C-R_TOR"]
     - index: 1
       row_index: 2
       shortname: ny-1-s-2-r-2-1
       rack_type: network
-      pod: ["DC5", "1", "2"]
+      pod: DC5-1-POD-2
       parent: ny-1-s-2
       member_of_groups: [topologies_rack]
       fabric_templates:
-        - [2_ARISTA_LEAFS_MR_DCS-7050CX3-32C-R]
-        - [2_ARISTA_TORS_DCS-7050CX3-32C-R]
+        - ["2", "leaf", "DCS-7050CX3-32C-R_LEAF_MR"]
+        - ["2", "tor", "DCS-7050CX3-32C-R_TOR"]
 
     # Pod 3 - Dell
     - index: 1
       row_index: 1
       shortname: ny-1-s-3-r-1-1
       rack_type: network
-      pod: ["DC5", "1", "3"]
+      pod: DC5-1-POD-3
       parent: ny-1-s-3
       member_of_groups: [topologies_rack]
       fabric_templates:
-        - [2_DELL_LEAFS_MR_PowerSwitch-S5232F-ON]
-        - [2_DELL_TORS_PowerSwitch-S5224F-ON]
+        - ["2", "leaf", "PowerSwitch-S5232F-ON_LEAF_MR"]
+        - ["2", "tor", "PowerSwitch-S5224F-ON_TOR"]
     - index: 1
       row_index: 2
       shortname: ny-1-s-3-r-2-1
       rack_type: network
-      pod: ["DC5", "1", "3"]
+      pod: DC5-1-POD-3
       parent: ny-1-s-3
       member_of_groups: [topologies_rack]
       fabric_templates:
-        - [2_DELL_LEAFS_MR_PowerSwitch-S5232F-ON]
-        - [2_DELL_TORS_PowerSwitch-S5224F-ON]
+        - ["2", "leaf", "PowerSwitch-S5232F-ON_LEAF_MR"]
+        - ["2", "tor", "PowerSwitch-S5224F-ON_TOR"]
 
     # Pod 4 - Edgecore
     - index: 1
       row_index: 1
       shortname: ny-1-s-4-r-1-1
       rack_type: network
-      pod: ["DC5", "1", "4"]
+      pod: DC5-1-POD-4
       parent: ny-1-s-4
       member_of_groups: [topologies_rack]
       fabric_templates:
-        - [2_EDGECORE_LEAFS_MR_Edgecore-7726_32X_O]
-        - [2_EDGECORE_TORS_Edgecore-7AS7326-56X-O-48V-F]
+        - ["2", "leaf", "Edgecore-7726_32X_O_LEAF_MR"]
+        - ["2", "tor", "Edgecore-7AS7326-56X-O-48V-F_TOR"]
     - index: 1
       row_index: 2
       shortname: ny-1-s-4-r-2-1
       rack_type: network
-      pod: ["DC5", "1", "4"]
+      pod: DC5-1-POD-4
       parent: ny-1-s-4
       member_of_groups: [topologies_rack]
       fabric_templates:
-        - [2_EDGECORE_LEAFS_MR_Edgecore-7726_32X_O]
-        - [2_EDGECORE_TORS_Edgecore-7AS7326-56X-O-48V-F]
+        - ["2", "leaf", "Edgecore-7726_32X_O_LEAF_MR"]
+        - ["2", "tor", "Edgecore-7AS7326-56X-O-48V-F_TOR"]

@@ -14,7 +14,7 @@ spec:
       parent: muc-1-s-4
       member_of_groups: [topologies_rack]
       fabric_templates:
-        - [2_CISCO_TORS_N9K-C9336C-FX2]
+        - ["2", "tor", "N9K_C9336C_FX2_TOR"]
     - index: 2
       rack_type: tor
       row_index: 1
@@ -23,7 +23,7 @@ spec:
       parent: muc-1-s-4
       member_of_groups: [topologies_rack]
       fabric_templates:
-        - [2_CISCO_TORS_N9K-C9336C-FX2]
+        - ["2", "tor", "N9K_C9336C_FX2_TOR"]
     - index: 3
       rack_type: tor
       row_index: 1
@@ -32,7 +32,7 @@ spec:
       parent: muc-1-s-4
       member_of_groups: [topologies_rack]
       fabric_templates:
-        - [2_CISCO_TORS_N9K-C9336C-FX2]
+        - ["2", "tor", "N9K_C9336C_FX2_TOR"]
     - index: 4
       rack_type: tor
       row_index: 1
@@ -41,7 +41,7 @@ spec:
       parent: muc-1-s-4
       member_of_groups: [topologies_rack]
       fabric_templates:
-        - [2_CISCO_TORS_N9K-C9336C-FX2]
+        - ["2", "tor", "N9K_C9336C_FX2_TOR"]
     - index: 5
       rack_type: tor
       row_index: 1
@@ -50,7 +50,7 @@ spec:
       parent: muc-1-s-4
       member_of_groups: [topologies_rack]
       fabric_templates:
-        - [2_CISCO_TORS_N9K-C9336C-FX2]
+        - ["2", "tor", "N9K_C9336C_FX2_TOR"]
     - index: 6
       rack_type: tor
       row_index: 1
@@ -59,7 +59,7 @@ spec:
       parent: muc-1-s-4
       member_of_groups: [topologies_rack]
       fabric_templates:
-        - [2_CISCO_TORS_N9K-C9336C-FX2]
+        - ["2", "tor", "N9K_C9336C_FX2_TOR"]
     # Row 2
     - index: 1
       rack_type: tor
@@ -69,7 +69,7 @@ spec:
       parent: muc-1-s-4
       member_of_groups: [topologies_rack]
       fabric_templates:
-        - [2_CISCO_TORS_N9K-C9336C-FX2]
+        - ["2", "tor", "N9K_C9336C_FX2_TOR"]
     - index: 2
       rack_type: tor
       row_index: 2
@@ -78,7 +78,7 @@ spec:
       parent: muc-1-s-4
       member_of_groups: [topologies_rack]
       fabric_templates:
-        - [2_CISCO_TORS_N9K-C9336C-FX2]
+        - ["2", "tor", "N9K_C9336C_FX2_TOR"]
     - index: 3
       rack_type: tor
       row_index: 2
@@ -87,7 +87,7 @@ spec:
       parent: muc-1-s-4
       member_of_groups: [topologies_rack]
       fabric_templates:
-        - [2_CISCO_TORS_N9K-C9336C-FX2]
+        - ["2", "tor", "N9K_C9336C_FX2_TOR"]
     - index: 4
       rack_type: tor
       row_index: 2
@@ -96,7 +96,7 @@ spec:
       parent: muc-1-s-4
       member_of_groups: [topologies_rack]
       fabric_templates:
-        - [2_CISCO_TORS_N9K-C9336C-FX2]
+        - ["2", "tor", "N9K_C9336C_FX2_TOR"]
     - index: 5
       rack_type: tor
       row_index: 2
@@ -105,7 +105,7 @@ spec:
       parent: muc-1-s-4
       member_of_groups: [topologies_rack]
       fabric_templates:
-        - [2_CISCO_TORS_N9K-C9336C-FX2]
+        - ["2", "tor", "N9K_C9336C_FX2_TOR"]
     - index: 6
       rack_type: tor
       row_index: 2
@@ -114,4 +114,4 @@ spec:
       parent: muc-1-s-4
       member_of_groups: [topologies_rack]
       fabric_templates:
-        - [2_CISCO_TORS_N9K-C9336C-FX2]
+        - ["2", "tor", "N9K_C9336C_FX2_TOR"]

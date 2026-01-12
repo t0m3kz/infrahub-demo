@@ -10,8 +10,8 @@ from infrahub_sdk.batch import InfrahubBatch
 
 from utils.data_cleaning import clean_data
 
-from .common import CommonGenerator
-from .schema_protocols import (
+from ..common import CommonGenerator
+from ..schema_protocols import (
     DcimCable,
     DcimPhysicalDevice,
     DcimPhysicalInterface,
@@ -163,9 +163,6 @@ class PodDecommissionGenerator(CommonGenerator):
         for interface_obj in intefaces_objs:
             await interface_obj.delete()
             self.logger.info(f"deleted virtual interface {interface_obj.hfid}")
-
-        # Wait for other branch tasks triggered by this event before deleting IPs/prefixes
-        await self.wait_for_branch_tasks_since_now()
 
         # Remove all ip addresses
         address_objs: list[IpamIPAddress] = await self.client.filters(

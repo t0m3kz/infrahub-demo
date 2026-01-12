@@ -4,9 +4,9 @@ from typing import Literal, cast
 
 from utils.data_cleaning import clean_data
 
-from .common import CommonGenerator
-from .models import RackModel
-from .schema_protocols import DcimPhysicalDevice, LocationRack
+from ..common import CommonGenerator
+from ..models import RackModel
+from ..schema_protocols import DcimPhysicalDevice, LocationRack
 
 
 class RackGenerator(CommonGenerator):
@@ -60,7 +60,7 @@ class RackGenerator(CommonGenerator):
         Returns:
             Tuple of (device_names, interface_names) for create_cabling
         """
-        from .schema_protocols import DcimPhysicalDevice, DcimPhysicalInterface
+        from ..schema_protocols import DcimPhysicalDevice, DcimPhysicalInterface
 
         # Step 1: Query spine devices in pod
         spine_devices = await self.client.filters(
@@ -103,7 +103,7 @@ class RackGenerator(CommonGenerator):
         Returns:
             Tuple of (device_names, interface_names) for create_cabling
         """
-        from .schema_protocols import DcimPhysicalDevice, DcimPhysicalInterface, LocationRack
+        from ..schema_protocols import DcimPhysicalDevice, DcimPhysicalInterface, LocationRack
 
         # Step 1: Query racks in same row
         racks_in_row = await self.client.filters(
@@ -381,7 +381,7 @@ class RackGenerator(CommonGenerator):
                 cabling_offset = 0
 
                 if created_leaf_devices:
-                    from .schema_protocols import DcimPhysicalInterface
+                    from ..schema_protocols import DcimPhysicalInterface
 
                     leaf_device_names = created_leaf_devices
 

@@ -9,40 +9,40 @@ spec:
       row_index: 1
       shortname: par-1-s-1-r-1-1
       rack_type: network
-      pod: ["DC2", "1", "1"]
+      pod: DC2-1-POD-1
       parent: par-1-s-1
       member_of_groups: [topologies_rack]
       fabric_templates:
-        - [2_ARISTA_LEAFS_MR_DCS-7050CX3-32C-R]
-        - [2_ARISTA_TORS_DCS-7050CX3-32C-R]
+        - ["2", "leaf", "DCS-7050CX3-32C-R_LEAF"]
+        - ["2", "tor", "DCS-7050CX3-32C-R_TOR"]
     - index: 1
       row_index: 2
       shortname: par-1-s-1-r-2-1
       rack_type: network
-      pod: ["DC2", "1", "1"]
+      pod: DC2-1-POD-1
       parent: par-1-s-1
       member_of_groups: [topologies_rack]
       fabric_templates:
-        - [2_ARISTA_LEAFS_MR_DCS-7050CX3-32C-R]
-        - [2_ARISTA_TORS_DCS-7050CX3-32C-R]
+        - ["2", "leaf", "DCS-7050CX3-32C-R_LEAF"]
+        - ["2", "tor", "DCS-7050CX3-32C-R_TOR"]
     # Pod 2 - Middle Rack
     - index: 1
       row_index: 1
       shortname: par-1-s-2-r-1-1
       rack_type: network
-      pod: ["DC2", "1", "2"]
+      pod: DC2-1-POD-2
       parent: par-1-s-2
       member_of_groups: [topologies_rack]
       fabric_templates:
-        - [2_ARISTA_LEAFS_MR_DCS-7050CX3-32C-R]
-        - [2_ARISTA_TORS_DCS-7050CX3-32C-R]
+        - ["2", "leaf", "DCS-7050CX3-32C-R_LEAF"]
+        - ["2", "tor", "DCS-7050CX3-32C-R_TOR"]
     - index: 1
       row_index: 2
       shortname: par-1-s-2-r-2-1
       rack_type: network
-      pod: ["DC2", "1", "2"]
+      pod: DC2-1-POD-2
       parent: par-1-s-2
       member_of_groups: [topologies_rack]
       fabric_templates:
-        - [2_ARISTA_LEAFS_MR_DCS-7050CX3-32C-R]
-        - [2_ARISTA_TORS_DCS-7050CX3-32C-R]
+        - ["2", "leaf", "DCS-7050CX3-32C-R_LEAF"]
+        - ["2", "tor", "DCS-7050CX3-32C-R_TOR"]
