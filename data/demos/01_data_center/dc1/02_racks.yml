@@ -214,7 +214,7 @@ spec:
       parent: muc-1-s-3
       member_of_groups: [topologies_rack]
       fabric_templates:
-         - ["2 x N9K_C9336C_FX2_TOR"]
+        - ["2 x N9K_C9336C_FX2_TOR"]
     - index: 5
       rack_type: tor
       row_index: 2

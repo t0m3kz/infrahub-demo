@@ -173,7 +173,7 @@ nodes:
         kind: Text
         computed_attribute:
           kind: Jinja2
-          jinja2_template: "{{quantity__value}} x {{template__template_name__value}}"
+          jinja2_template: "{{quantity__value}} x {{template__template_name__value}}"  # yamllint disable-line rule:line-length
         read_only: true
         optional: false
       - name: quantity
