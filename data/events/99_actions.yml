@@ -44,16 +44,18 @@ spec:
           - relationship_name: super_spine_template
             modification_type: updated
 
-    - name: trigger-dc-generator-update-pod
+    - name: trigger-dc-generator-status
       branch_scope: "other_branches"
       node_kind: TopologyDataCenter
       mutation_action: updated
       action: run-dc-generator
       matches:
-        kind: CoreNodeTriggerRelationshipMatch
+        kind: CoreNodeTriggerAttributeMatch
         data:
-          - relationship_name: children
-            modification_type: updated
+          - attribute_name: status
+            value_match: value_full
+            value: active
+            value_previous: provisioning
 
     # Pod triggers on creation (DC generator sets checksum) or updates
     - name: trigger-pod-generator-on-create

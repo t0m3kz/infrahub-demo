@@ -61,7 +61,7 @@ class TestIntraRackIdempotency:
         for i in range(1, 5):
             spines.extend(create_mock_interfaces_with_cables(f"spine-{i:02d}", [f"Ethernet1/{j}" for j in range(1, 5)]))
 
-        planner = CablingPlanner(tors, spines)  # type: ignore
+        planner = CablingPlanner(tors, spines)
         plan1 = planner.build_cabling_plan(scenario="intra_rack")
 
         # Verify deterministic ordering
@@ -69,7 +69,7 @@ class TestIntraRackIdempotency:
         assert all(isinstance(conn, tuple) for conn in plan1)
 
         # Run again with same input
-        planner2 = CablingPlanner(tors, spines)  # type: ignore
+        planner2 = CablingPlanner(tors, spines)
         plan2 = planner2.build_cabling_plan(scenario="intra_rack")
 
         # Plans must be identical
@@ -93,9 +93,9 @@ class TestIntraRackIdempotency:
         spine4 = create_mock_interfaces_with_cables("spine-04", ["Ethernet1/1", "Ethernet1/2"], connected=False)
 
         planner = CablingPlanner(
-            tor1 + tor2,  # type: ignore
-            spine1 + spine2 + spine3 + spine4,  # type: ignore
-        )  # type: ignore
+            tor1 + tor2,
+            spine1 + spine2 + spine3 + spine4,
+        )
         cabling_plan = planner.build_cabling_plan(scenario="intra_rack")
 
         # Should still return all 4 connections (2 existing + 2 new in deterministic plan)
@@ -119,7 +119,7 @@ class TestIntraRackIdempotency:
         for i in range(1, 5):
             spines.extend(create_mock_interfaces_with_cables(f"spine-{i:02d}", ["Ethernet1/1", "Ethernet1/2"]))
 
-        planner = CablingPlanner(tors, spines)  # type: ignore
+        planner = CablingPlanner(tors, spines)
         plan = planner.build_cabling_plan(scenario="intra_rack")
 
         # Expected pattern (deterministic round-robin):
@@ -177,7 +177,7 @@ class TestToRDeploymentIdempotency:
                 create_mock_interfaces_with_cables(f"dc1-pod1-spine-{i:02d}", [f"Ethernet1/{j}" for j in range(1, 9)])
             )
 
-        planner = CablingPlanner(tors, spines)  # type: ignore
+        planner = CablingPlanner(tors, spines)
         plan = planner.build_cabling_plan(scenario="intra_rack")
 
         # Should use first ports on each spine
@@ -224,7 +224,7 @@ class TestToRDeploymentIdempotency:
             spines.extend(spine_interfaces)
 
         # Build plan for ALL ToRs (Rack-1 + Rack-2)
-        planner = CablingPlanner(rack1_tors + rack2_tors, spines)  # type: ignore
+        planner = CablingPlanner(rack1_tors + rack2_tors, spines)
         plan = planner.build_cabling_plan(scenario="intra_rack")
 
         # Should have 16 connections total (8 from Rack-1 + 8 from Rack-2)
@@ -251,11 +251,11 @@ class TestToRDeploymentIdempotency:
             )
 
         # Run 1
-        planner1 = CablingPlanner(tors, spines)  # type: ignore
+        planner1 = CablingPlanner(tors, spines)
         plan1 = planner1.build_cabling_plan(scenario="intra_rack")
 
         # Run 2 (simulating generator re-run)
-        planner2 = CablingPlanner(tors, spines)  # type: ignore
+        planner2 = CablingPlanner(tors, spines)
         plan2 = planner2.build_cabling_plan(scenario="intra_rack")
 
         # Plans must be identical
@@ -287,7 +287,7 @@ class TestMiddleRackIdempotency:
                 create_mock_interfaces_with_cables(f"dc1-pod1-rack1-tor-{i:02d}", ["Ethernet1/31", "Ethernet1/32"])
             )
 
-        planner = CablingPlanner(tors, leafs)  # type: ignore
+        planner = CablingPlanner(tors, leafs)
         plan = planner.build_cabling_plan(scenario="intra_rack")
 
         # 4 ToRs × 2 uplinks = 8 connections
@@ -311,11 +311,11 @@ class TestMiddleRackIdempotency:
         ) + create_mock_interfaces_with_cables("tor-02", ["Ethernet1/31", "Ethernet1/32"])
 
         # Run 1
-        planner1 = CablingPlanner(tors, leafs)  # type: ignore
+        planner1 = CablingPlanner(tors, leafs)
         plan1 = planner1.build_cabling_plan(scenario="intra_rack")
 
         # Run 2
-        planner2 = CablingPlanner(tors, leafs)  # type: ignore
+        planner2 = CablingPlanner(tors, leafs)
         plan2 = planner2.build_cabling_plan(scenario="intra_rack")
 
         # Verify identical
@@ -341,7 +341,7 @@ class TestMixedDeploymentIdempotency:
         for i in range(1, 3):
             tors.extend(create_mock_interfaces_with_cables(f"rack1-tor-{i:02d}", ["Ethernet1/31", "Ethernet1/32"]))
 
-        planner = CablingPlanner(tors, leafs)  # type: ignore
+        planner = CablingPlanner(tors, leafs)
         plan = planner.build_cabling_plan(scenario="intra_rack")
 
         # 2 ToRs × 2 uplinks = 4 connections
@@ -368,7 +368,7 @@ class TestMixedDeploymentIdempotency:
                 create_mock_interfaces_with_cables(f"rack2-tor-{i:02d}", ["Ethernet1/31", "Ethernet1/32"])
             )
 
-        planner = CablingPlanner(rack2_tors, rack1_leafs)  # type: ignore
+        planner = CablingPlanner(rack2_tors, rack1_leafs)
         plan = planner.build_cabling_plan(scenario="intra_rack")
 
         # 4 ToRs × 2 uplinks = 8 connections
@@ -388,7 +388,7 @@ class TestEdgeCasesIdempotency:
         tor = create_mock_interfaces_with_cables("tor-01", ["Ethernet1/31", "Ethernet1/32"])
         spine = create_mock_interfaces_with_cables("spine-01", ["Ethernet1/1", "Ethernet1/2"])
 
-        planner = CablingPlanner(tor, spine)  # type: ignore
+        planner = CablingPlanner(tor, spine)
         plan = planner.build_cabling_plan(scenario="intra_rack")
 
         # 1 ToR × 2 uplinks to 1 Spine = 2 connections
@@ -406,7 +406,7 @@ class TestEdgeCasesIdempotency:
         for i in range(1, 3):
             spines.extend(create_mock_interfaces_with_cables(f"spine-{i:02d}", [f"Ethernet1/{j}" for j in range(1, 9)]))
 
-        planner = CablingPlanner(tors, spines)  # type: ignore
+        planner = CablingPlanner(tors, spines)
         plan = planner.build_cabling_plan(scenario="intra_rack")
 
         # Should only create connections for available ports (16 out of 20 needed)
@@ -429,7 +429,7 @@ class TestEdgeCasesIdempotency:
             + create_mock_interfaces_with_cables("spine-03", ["Ethernet1/1", "Ethernet1/2"])
         )
 
-        planner = CablingPlanner(tors, spines)  # type: ignore
+        planner = CablingPlanner(tors, spines)
         plan = planner.build_cabling_plan(scenario="intra_rack")
 
         # First connection should be tor-01 to spine-01 (alphabetically first)
@@ -449,7 +449,7 @@ class TestEdgeCasesIdempotency:
 
         plans = []
         for _ in range(10):
-            planner = CablingPlanner(tors, spines)  # type: ignore
+            planner = CablingPlanner(tors, spines)
             plan = planner.build_cabling_plan(scenario="intra_rack")
             plans.append(plan)
 

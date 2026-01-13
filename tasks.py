@@ -4,7 +4,7 @@ import os
 import time
 from pathlib import Path
 
-from invoke import Context, task  # type: ignore
+from invoke import Context, task
 
 INFRAHUB_VERSION = os.getenv("VERSION", "latest")
 INFRAHUB_ADDRESS = os.getenv("INFRAHUB_ADDRESS", "http://localhost:8000")
@@ -43,8 +43,8 @@ def check_container_running(context: Context, max_attempts: int = 60) -> bool:
             pty=True,
         )
 
-        if result is not None and result.stdout:  # type: ignore
-            output = result.stdout.strip()  # type: ignore
+        if result is not None and result.stdout:
+            output = result.stdout.strip()
             # Check if output contains "(healthy)" - the actual health status
             if "(healthy)" in output:
                 print(f"     ✅ Infrahub server is healthy (attempt {attempt + 1}/{max_attempts})")

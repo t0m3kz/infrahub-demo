@@ -454,7 +454,7 @@ class TestDCWorkflow(TestInfrahubDockerWithClient):
             populate_store=True,
             raise_when_missing=False,
         )
-        dc = dc if dc is None or isinstance(dc, TopologyDataCenter) else None  # type: ignore
+        dc = dc if dc is None or isinstance(dc, TopologyDataCenter) else None
 
         assert dc, (
             f"DC1 topology not found.\n"
@@ -588,7 +588,12 @@ class TestDCWorkflow(TestInfrahubDockerWithClient):
             logging.info("Generator completed successfully")
 
         # Ensure no other tasks are still running before proceeding
-        await self.wait_for_branch_to_be_idle(client=client, branch=default_branch)
+        await self.wait_for_branch_to_be_idle(
+            client=client,
+            branch=default_branch,
+            timeout=GENERATOR_TASK_TIMEOUT,
+            poll_interval=SCENARIO_TASK_POLL_INTERVAL,
+        )
 
     @pytest.mark.order(10)
     @pytest.mark.dependency(name="verify_devices_created", depends=["run_generator"])

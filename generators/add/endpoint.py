@@ -60,7 +60,7 @@ class EndpointConnectivityGenerator(CommonGenerator):
 
         # Update endpoint device to set deployment to pod
         endpoint_device = await self.client.get(kind=DcimPhysicalDevice, id=self.data.id)
-        current_deployment = endpoint_device.deployment.id if endpoint_device.deployment._peer else None  # type: ignore
+        current_deployment = endpoint_device.deployment.id
         if current_deployment != pod_id:
             endpoint_device.deployment = pod_id  # type: ignore
             await endpoint_device.save()

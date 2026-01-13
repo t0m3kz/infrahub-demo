@@ -8,7 +8,6 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from dulwich import porcelain
-
 from infrahub_sdk.graphql import Mutation
 from infrahub_sdk.protocols import CoreGenericRepository
 from infrahub_sdk.repository import GitRepoManager
@@ -118,7 +117,7 @@ class GitRepo:
     ) -> bool:
         for _ in range(retries):
             repo = await client.get(
-                kind=CoreGenericRepository,  # type: ignore[type-abstract]
+                kind=CoreGenericRepository,
                 name__value=self.name,
                 branch=branch or self.initial_branch,
             )

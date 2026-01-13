@@ -28,14 +28,14 @@ class TestCablingPlannerInitialization:
         bottom_interfaces = create_mock_interfaces("leaf-01", ["Ethernet1/2", "Ethernet1/1"])
         top_interfaces = create_mock_interfaces("spine-01", ["Ethernet1/2", "Ethernet1/1"])
 
-        planner = CablingPlanner(bottom_interfaces, top_interfaces)  # type: ignore
+        planner = CablingPlanner(bottom_interfaces, top_interfaces)
 
         assert "leaf-01" in planner.bottom_by_device
         assert "spine-01" in planner.top_by_device
 
     def test_initialization_empty_interfaces(self) -> None:
         """Test initialization with empty interface lists."""
-        planner = CablingPlanner([], [])  # type: ignore
+        planner = CablingPlanner([], [])
 
         assert planner.bottom_by_device == {}
         assert planner.top_by_device == {}
@@ -45,9 +45,9 @@ class TestCablingPlannerInitialization:
         bottom_interfaces = create_mock_interfaces("leaf-01", ["Ethernet1/1"])
         top_interfaces = create_mock_interfaces("spine-01", ["Ethernet1/1"])
 
-        planner: Any = CablingPlanner(  # type: ignore[arg-type]
-            bottom_interfaces,  # type: ignore[arg-type]
-            top_interfaces,  # type: ignore[arg-type]
+        planner: Any = CablingPlanner(
+            bottom_interfaces,
+            top_interfaces,
             bottom_sorting="top_down",
             top_sorting="top_down",
         )
@@ -62,7 +62,7 @@ class TestCablingPlannerDeviceInterfaceMapping:
     def test_single_device_mapping(self) -> None:
         """Test mapping single device with multiple interfaces."""
         interfaces = create_mock_interfaces("leaf-01", ["Ethernet1/1", "Ethernet1/2"])
-        planner = CablingPlanner(interfaces, [])  # type: ignore
+        planner = CablingPlanner(interfaces, [])
 
         assert "leaf-01" in planner.bottom_by_device
         assert len(planner.bottom_by_device["leaf-01"]) == 2
@@ -72,7 +72,7 @@ class TestCablingPlannerDeviceInterfaceMapping:
         leaf1_interfaces = create_mock_interfaces("leaf-01", ["Ethernet1/1", "Ethernet1/2"])
         leaf2_interfaces = create_mock_interfaces("leaf-02", ["Ethernet1/1", "Ethernet1/2"])
 
-        planner = CablingPlanner(leaf1_interfaces + leaf2_interfaces, [])  # type: ignore
+        planner = CablingPlanner(leaf1_interfaces + leaf2_interfaces, [])
 
         assert "leaf-01" in planner.bottom_by_device
         assert "leaf-02" in planner.bottom_by_device
@@ -83,7 +83,7 @@ class TestCablingPlannerDeviceInterfaceMapping:
         """Test interface sorting with bottom_up direction."""
         # Create interfaces in reverse order
         interfaces = create_mock_interfaces("leaf-01", ["Ethernet1/4", "Ethernet1/3", "Ethernet1/2", "Ethernet1/1"])
-        planner = CablingPlanner(interfaces, [], bottom_sorting="bottom_up")  # type: ignore
+        planner = CablingPlanner(interfaces, [], bottom_sorting="bottom_up")
 
         leaf_interfaces = planner.bottom_by_device["leaf-01"]
         assert len(leaf_interfaces) == 4
@@ -91,7 +91,7 @@ class TestCablingPlannerDeviceInterfaceMapping:
     def test_interface_sorting_top_down(self) -> None:
         """Test interface sorting with top_down direction."""
         interfaces = create_mock_interfaces("leaf-01", ["Ethernet1/1", "Ethernet1/2", "Ethernet1/3", "Ethernet1/4"])
-        planner = CablingPlanner(interfaces, [], bottom_sorting="top_down")  # type: ignore
+        planner = CablingPlanner(interfaces, [], bottom_sorting="top_down")
 
         leaf_interfaces = planner.bottom_by_device["leaf-01"]
         assert len(leaf_interfaces) == 4
@@ -100,7 +100,7 @@ class TestCablingPlannerDeviceInterfaceMapping:
         """Test that legacy sorting value 'sequential' is normalized."""
         interfaces = create_mock_interfaces("leaf-01", ["Ethernet1/4", "Ethernet1/3", "Ethernet1/2", "Ethernet1/1"])
 
-        planner = CablingPlanner(interfaces, [], bottom_sorting="sequential")  # type: ignore
+        planner = CablingPlanner(interfaces, [], bottom_sorting="sequential")
 
         leaf_interfaces = planner.bottom_by_device["leaf-01"]
         assert len(leaf_interfaces) == 4
@@ -109,7 +109,7 @@ class TestCablingPlannerDeviceInterfaceMapping:
         """Test that legacy sorting value 'up_down' is normalized."""
         interfaces = create_mock_interfaces("leaf-01", ["Ethernet1/1", "Ethernet1/2", "Ethernet1/3", "Ethernet1/4"])
 
-        planner = CablingPlanner(interfaces, [], bottom_sorting="up_down")  # type: ignore
+        planner = CablingPlanner(interfaces, [], bottom_sorting="up_down")
 
         leaf_interfaces = planner.bottom_by_device["leaf-01"]
         assert len(leaf_interfaces) == 4
@@ -119,7 +119,7 @@ class TestCablingPlannerDeviceInterfaceMapping:
         interfaces = create_mock_interfaces("leaf-01", ["Ethernet1/1"])
 
         with pytest.raises(ValueError, match="Unsupported sorting value"):
-            CablingPlanner(interfaces, [], bottom_sorting="invalid")  # type: ignore
+            CablingPlanner(interfaces, [], bottom_sorting="invalid")
 
 
 class TestCablingPlannerDeviceGrouping:
@@ -128,7 +128,7 @@ class TestCablingPlannerDeviceGrouping:
     def test_devices_grouped_by_label(self) -> None:
         """Test that interfaces are correctly grouped by device label."""
         interfaces = create_mock_interfaces("leaf-01", ["Ethernet1/1", "Ethernet1/2"])
-        planner = CablingPlanner(interfaces, [])  # type: ignore
+        planner = CablingPlanner(interfaces, [])
 
         assert len(planner.bottom_by_device) == 1
         assert "leaf-01" in planner.bottom_by_device
@@ -160,7 +160,7 @@ class TestCablingPlannerOffsetBasics:
         bottom = create_mock_interfaces("leaf-01", ["Ethernet1/1", "Ethernet1/2"])
         top = create_mock_interfaces("spine-01", ["Ethernet1/1", "Ethernet1/2"])
 
-        planner = CablingPlanner(bottom, top)  # type: ignore
+        planner = CablingPlanner(bottom, top)
         plan = planner.build_cabling_plan(scenario="rack", cabling_offset=0)
 
         assert len(plan) >= 1
@@ -171,7 +171,7 @@ class TestCablingPlannerOffsetBasics:
         bottom = create_mock_interfaces("leaf-01", ["Ethernet1/1", "Ethernet1/2"])
         top = create_mock_interfaces("spine-01", ["Ethernet1/1", "Ethernet1/2"])
 
-        planner = CablingPlanner(bottom, top)  # type: ignore
+        planner = CablingPlanner(bottom, top)
 
         plan1 = planner.build_cabling_plan(scenario="rack", cabling_offset=1)
         plan2 = planner.build_cabling_plan(scenario="rack", cabling_offset=1)
