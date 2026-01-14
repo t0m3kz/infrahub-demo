@@ -374,7 +374,7 @@ class TestDCWorkflow(TestInfrahubDockerWithClient):
         logging.info("Starting test: test_07_load_dc_design")
 
         load_dc = self.execute_command(
-            f"infrahubctl object load data/demos/01_data_center/dc1/ --branch {default_branch}",
+            f"infrahubctl object load tests/integration/data/dc --branch {default_branch}",
             address=client_main.config.address,
         )
 

@@ -261,7 +261,9 @@ class TestWaitForBranchTasks:
 
         # Simulate a task that never completes
         active_task = MockTask(task_id="task-1", state=TaskState.PENDING)
-        client.task.filter = AsyncMock(side_effect=lambda **kwargs: [] if kwargs["filter"].state[0] == TaskState.FAILED else [active_task])
+        client.task.filter = AsyncMock(
+            side_effect=lambda **kwargs: [] if kwargs["filter"].state[0] == TaskState.FAILED else [active_task]
+        )
 
         with pytest.raises(TimeoutError, match="Timeout waiting for tasks"):
             await wait_for_branch_tasks(client=client, branch="test-branch", timeout=0.2, poll_interval=0.05)  # type: ignore
@@ -322,7 +324,11 @@ class TestWaitForBranchTasks:
         client.task.filter = mock_filter
 
         await wait_for_branch_tasks(
-            client=client, branch="test-branch", timeout=5, poll_interval=0.1, logger=logger  # type: ignore
+            client=client,  # type: ignore
+            branch="test-branch",
+            timeout=5,
+            poll_interval=0.1,
+            logger=logger,
         )
 
         # Logger should have been called for stability checks
@@ -353,11 +359,11 @@ class TestWaitForBranchTasks:
         async def mock_filter(**kwargs):
             nonlocal call_count
             call_count += 1
-            
+
             # Failure checks always return empty
             if kwargs["filter"].state[0] == TaskState.FAILED:
                 return []
-            
+
             # Active checks: first stable, then new task, then stable again
             if call_count <= 2:
                 return []  # First stable check
@@ -371,7 +377,11 @@ class TestWaitForBranchTasks:
         client.task.filter = mock_filter
 
         await wait_for_branch_tasks(
-            client=client, branch="test-branch", timeout=5, poll_interval=0.05, logger=logger  # type: ignore
+            client=client,  # type: ignore
+            branch="test-branch",
+            timeout=5,
+            poll_interval=0.05,
+            logger=logger,
         )
 
         # Should have logged about resetting stability
@@ -410,4 +420,3 @@ class TestEdgeCases:
             timeout=0.5,
             poll_interval=0.05,
         )
-

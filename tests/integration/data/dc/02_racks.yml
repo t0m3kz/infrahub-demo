@@ -1,0 +1,122 @@
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: LocationRack
+  data:
+    # Pod 1 - Arista Spines with Dell Leafs/ToRs (mixed vendors)
+    - index: 5
+      row_index: 1
+      shortname: ktw-1-s-1-r-1-5
+      rack_type: network
+      pod: DC1-1-POD-1
+      parent: ktw-1-s-1
+      member_of_groups: [topologies_rack]
+      fabric_templates:
+        - ["2", "leaf", "PowerSwitch-S5232F-ON_LEAF_MR"]
+        - ["2", "tor", "PowerSwitch-S5224F-ON_TOR"]
+    - index: 5
+      row_index: 2
+      shortname: ktw-1-s-1-r-2-5
+      rack_type: network
+      pod: DC1-1-POD-1
+      parent: ktw-1-s-1
+      member_of_groups: [topologies_rack]
+      fabric_templates:
+        - ["2", "leaf", "PowerSwitch-S5232F-ON_LEAF_MR"]
+        - ["2", "tor", "PowerSwitch-S5224F-ON_TOR"]
+
+    # Pod 2
+    - index: 1
+      row_index: 1
+      shortname: ktw-1-s-2-r-1-1
+      rack_type: network
+      pod: DC1-1-POD-2
+      parent: ktw-1-s-2
+      member_of_groups: [topologies_rack]
+      fabric_templates:
+        - ["2", "tor", "N9K_C9336C_FX2_TOR"]
+    - index: 6
+      row_index: 1
+      shortname: ktw-1-s-2-r-1-6
+      rack_type: network
+      pod: DC1-1-POD-2
+      parent: ktw-1-s-2
+      member_of_groups: [topologies_rack]
+      fabric_templates:
+        - ["2", "tor", "N9K_C9336C_FX2_TOR"]
+    - index: 1
+      row_index: 2
+      shortname: ktw-1-s-2-r-2-1
+      rack_type: network
+      pod: DC1-1-POD-2
+      parent: ktw-1-s-2
+      member_of_groups: [topologies_rack]
+      fabric_templates:
+        - ["2", "tor", "PowerSwitch-S5224F-ON_TOR"]
+    - index: 6
+      row_index: 2
+      shortname: ktw-1-s-2-r-2-6
+      rack_type: network
+      pod: DC1-1-POD-2
+      parent: ktw-1-s-2
+      member_of_groups: [topologies_rack]
+      fabric_templates:
+        - ["2", "tor", "PowerSwitch-S5224F-ON_TOR"]
+    # Pod 3
+    - index: 1
+      row_index: 1
+      shortname: ktw-1-s-3-r-1-1
+      rack_type: network
+      pod: DC1-1-POD-3
+      parent: ktw-1-s-3
+      member_of_groups: [topologies_rack]
+      fabric_templates:
+        - ["2", "tor", "DCS-7050CX3-32C-R_TOR"]
+    - index: 4
+      row_index: 1
+      shortname: ktw-1-s-3-r-1-4
+      rack_type: network
+      pod: DC1-1-POD-3
+      parent: ktw-1-s-3
+      member_of_groups: [topologies_rack]
+      fabric_templates:
+        - ["2", "leaf", "DCS-7050CX3-32C-R_LEAF_MR"]
+        - ["2", "tor", "DCS-7050CX3-32C-R_TOR"]
+    - index: 7
+      row_index: 1
+      shortname: ktw-1-s-3-r-1-7
+      rack_type: network
+      pod: DC1-1-POD-3
+      parent: ktw-1-s-3
+      member_of_groups: [topologies_rack]
+      fabric_templates:
+        - ["2", "tor", "DCS-7050CX3-32C-R_TOR"]
+
+    - index: 1
+      row_index: 2
+      shortname: ktw-1-s-3-r-2-1
+      rack_type: network
+      pod: DC1-1-POD-3
+      parent: ktw-1-s-3
+      member_of_groups: [topologies_rack]
+      fabric_templates:
+        - ["2", "tor", "DCS-7050CX3-32C-R_TOR"]
+    - index: 4
+      row_index: 2
+      shortname: ktw-1-s-3-r-2-4
+      rack_type: network
+      pod: DC1-1-POD-3
+      parent: ktw-1-s-3
+      member_of_groups: [topologies_rack]
+      fabric_templates:
+        - ["2", "leaf", "DCS-7050CX3-32C-R_LEAF_MR"]
+    - index: 7
+      row_index: 2
+      shortname: ktw-1-s-3-r-2-7
+      rack_type: network
+      pod: DC1-1-POD-3
+      parent: ktw-1-s-3
+      member_of_groups: [topologies_rack]
+      fabric_templates:
+        - ["2", "tor", "DCS-7050CX3-32C-R_TOR"]
