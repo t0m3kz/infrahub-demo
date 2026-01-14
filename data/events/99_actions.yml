@@ -57,12 +57,15 @@ spec:
             value: active
             value_previous: provisioning
 
-    # Pod triggers on creation (DC generator sets checksum) or updates
-    - name: trigger-pod-generator-on-create
-      branch_scope: "other_branches"
-      node_kind: TopologyPod
-      mutation_action: "created"
-      action: run-pod-generator
+    # Auto-trigger for pod generator on creation commented out to
+    # prevent race conditions. Pod updates are still active and safe
+
+    # # Pod triggers on creation (DC generator sets checksum) or updates
+    # - name: trigger-pod-generator-on-create
+    #   branch_scope: "other_branches"
+    #   node_kind: TopologyPod
+    #   mutation_action: "created"
+    #   action: run-pod-generator
 
     - name: trigger-pod-generator-update-checksum
       branch_scope: "other_branches"
@@ -109,14 +112,17 @@ spec:
             value_match: any
 
 
-    # Racks trigger on creation (skips if no checksum, waits for update)
-    # or on checksum update (when pod/middle rack generator sets it)
-    # Checksum is NEVER set manually - always calculated by generators
-    - name: trigger-rack-generator-on-create
-      branch_scope: "other_branches"
-      node_kind: LocationRack
-      mutation_action: "created"
-      action: run-rack-generator
+    # Auto-trigger for rack generator on creation commented out to
+    # prevent race conditions. Rack updates are still active and safe
+
+    # # Racks trigger on creation (skips if no checksum, waits for update)
+    # # or on checksum update (when pod/middle rack generator sets it)
+    # # Checksum is NEVER set manually - always calculated by generators
+    # - name: trigger-rack-generator-on-create
+    #   branch_scope: "other_branches"
+    #   node_kind: LocationRack
+    #   mutation_action: "created"
+    #   action: run-rack-generator
 
     - name: trigger-rack-generator-update-checksum
       branch_scope: "other_branches"

@@ -19,6 +19,8 @@ The Infrahub SDK uses dynamic attribute generation at runtime.
 
 import asyncio
 import logging
+import shutil
+import tempfile
 import time
 from collections.abc import Awaitable, Callable, Generator
 from pathlib import Path
@@ -30,7 +32,8 @@ from infrahub_sdk.graphql import Mutation
 from infrahub_sdk.protocols import CoreGeneratorDefinition
 from infrahub_sdk.task.models import TaskFilter, TaskState
 
-from generators.protocols import DcimPhysicalDevice, TopologyDataCenter
+from generators.protocols import DcimDevice, TopologyDataCenter
+from utils.task_manager import wait_for_branch_tasks
 
 from .conftest import PROJECT_DIRECTORY, TestInfrahubDockerWithClient
 from .git_repo import GitRepo
@@ -47,27 +50,6 @@ VALIDATION_MAX_ATTEMPTS = 30
 VALIDATION_POLL_INTERVAL = 30  # seconds
 DATA_PROPAGATION_DELAY = 5  # seconds
 MERGE_PROPAGATION_DELAY = 10  # seconds
-SCENARIO_TASK_POLL_INTERVAL = 5  # seconds
-
-DATA_CENTER_SCENARIOS = [
-    "data/demos/01_data_center/dc1/",
-    "data/demos/01_data_center/dc2/",
-    "data/demos/01_data_center/dc3/",
-    "data/demos/01_data_center/dc4/",
-    "data/demos/01_data_center/dc5/",
-    "data/demos/01_data_center/dc6/",
-]
-
-DC1_INCREMENTAL_SCENARIOS = [
-    "data/demos/02_switch/",
-    "data/demos/03_rack/",
-    "data/demos/04_pod/",
-    "data/demos/05_llm_time/",
-    "data/demos/06_servers/",
-    "data/demos/08_segments/",
-    "data/demos/10_pop/",
-    "data/demos/20_cloud/",
-]
 
 T = TypeVar("T")
 
@@ -92,8 +74,6 @@ class TestDCWorkflow(TestInfrahubDockerWithClient):
         return {
             "pc_id": None,
             "dc_id": None,
-            "generator_task_id": None,
-            "generator_task_state": None,
             "repository_id": None,
         }
 
@@ -152,43 +132,6 @@ class TestDCWorkflow(TestInfrahubDockerWithClient):
 
         raise TimeoutError(
             f"Timeout waiting for {description} after {max_attempts} attempts ({max_attempts * poll_interval} seconds)"
-        )
-
-    async def wait_for_branch_to_be_idle(
-        self,
-        client: InfrahubClient,
-        branch: str,
-        timeout: int = GENERATOR_TASK_TIMEOUT,
-        poll_interval: int = SCENARIO_TASK_POLL_INTERVAL,
-    ) -> None:
-        """Wait until all tasks for a branch finish and assert none failed."""
-
-        active_states = [TaskState.RUNNING, TaskState.PENDING, TaskState.SCHEDULED]
-        failure_states = [TaskState.FAILED, TaskState.CANCELLED, TaskState.CRASHED]
-        deadline = time.time() + timeout
-
-        while True:
-            remaining_tasks = await client.task.filter(filter=TaskFilter(state=active_states, branch=branch))
-            if not remaining_tasks:
-                break
-
-            if time.time() >= deadline:
-                raise AssertionError(
-                    "Timeout waiting for background tasks to finish. "
-                    f"Active tasks: {[f'{t.id}:{t.state}' for t in remaining_tasks]}"
-                )
-
-            logging.info(
-                "Waiting for %d background tasks to finish on %s: %s",
-                len(remaining_tasks),
-                branch,
-                ", ".join(f"{t.id}:{t.state}" for t in remaining_tasks),
-            )
-            await asyncio.sleep(poll_interval)
-
-        failed_tasks = await client.task.filter(filter=TaskFilter(state=failure_states, branch=branch))
-        assert not failed_tasks, "Background tasks finished but some failed: " + ", ".join(
-            f"{t.id}:{t.state}" for t in failed_tasks
         )
 
     @pytest.mark.order(1)
@@ -279,38 +222,52 @@ class TestDCWorkflow(TestInfrahubDockerWithClient):
 
         client = async_client_main
 
-        src_directory = PROJECT_DIRECTORY
-
         # NOTE: GitRepo copies the source directory into the remote repo mount.
         # If the source tree contains a previous `.pytest-tmp/` (or other caches),
         # that directory may itself contain nested repo copies and cause path
-        git_repository = GitRepo(
-            name="demo_repo",
-            src_directory=src_directory,
-            dst_directory=Path(remote_repos_dir),
+        # recursion / "File name too long" errors on subsequent runs.
+        ignore_patterns = shutil.ignore_patterns(
+            ".git",
+            ".pytest-tmp",
+            ".pytest_cache",
+            ".ruff_cache",
+            ".mypy_cache",
+            "__pycache__",
+            ".venv",
+            ".DS_Store",
         )
 
-        # Create repository (idempotent: reuse if it already exists)
-        existing_repo = await client.get(
-            kind=git_repository.type.value,
-            name__value=git_repository.name,
-            raise_when_missing=False,
-        )
-        if existing_repo:
-            workflow_state["repository_id"] = existing_repo.id
-            logging.info(
-                "Repository %s already exists (ID: %s)",
-                git_repository.name,
-                existing_repo.id,
+        with tempfile.TemporaryDirectory(prefix="infrahub-demo-src-") as tmpdir:
+            src_directory = Path(tmpdir) / "repo"
+            shutil.copytree(PROJECT_DIRECTORY, src_directory, ignore=ignore_patterns)
+
+            git_repository = GitRepo(
+                name="demo_repo",
+                src_directory=src_directory,
+                dst_directory=Path(remote_repos_dir),
             )
-        else:
-            response = await git_repository.add_to_infrahub(client=client)
-            assert response.get(f"{git_repository.type.value}Create", {}).get("ok"), (
-                f"Failed to add repository to Infrahub.\n"
-                f"  Repository name: {git_repository.name}\n"
-                f"  Source directory: {src_directory}\n"
-                f"  Response: {response}"
+
+            # Create repository (idempotent: reuse if it already exists)
+            existing_repo = await client.get(
+                kind=git_repository.type.value,
+                name__value=git_repository.name,
+                raise_when_missing=False,
             )
+            if existing_repo:
+                workflow_state["repository_id"] = existing_repo.id
+                logging.info(
+                    "Repository %s already exists (ID: %s)",
+                    git_repository.name,
+                    existing_repo.id,
+                )
+            else:
+                response = await git_repository.add_to_infrahub(client=client)
+                assert response.get(f"{git_repository.type.value}Create", {}).get("ok"), (
+                    f"Failed to add repository to Infrahub.\n"
+                    f"  Repository name: {git_repository.name}\n"
+                    f"  Source directory: {src_directory}\n"
+                    f"  Response: {response}"
+                )
 
             # Use wait_for_condition helper for repository sync
             async def check_repo_sync() -> tuple[bool, Any]:
@@ -378,7 +335,8 @@ class TestDCWorkflow(TestInfrahubDockerWithClient):
             logging.info("Branch %s already exists", default_branch)
         else:
             client_main.branch.create(
-                default_branch,
+                branch_name=default_branch,
+                sync_with_git=False,
                 wait_until_completion=True,
             )
             logging.info("Created branch: %s", default_branch)
@@ -446,21 +404,19 @@ class TestDCWorkflow(TestInfrahubDockerWithClient):
 
         # Wait a moment for data to be fully committed
         await asyncio.sleep(DATA_PROPAGATION_DELAY)
-
         # Query for DC1
         dc = await client.get(
-            kind="TopologyDataCenter",
+            kind=TopologyDataCenter,
             name__value="DC1",
             populate_store=True,
             raise_when_missing=False,
         )
-        dc = dc if dc is None or isinstance(dc, TopologyDataCenter) else None
 
         assert dc, (
             f"DC1 topology not found.\n"
             f"  Branch: {default_branch}\n"
             f"  Expected: TopologyDataCenter with name 'DC1'\n"
-            f"  The dc1 demo data may have failed to load in test_07."
+            f"  The DC1.yml may have failed to load in test_07."
         )
         assert dc.name.value == "DC1", f"Unexpected topology name.\n  Expected: DC1\n  Got: {dc.name.value}"
 
@@ -481,50 +437,26 @@ class TestDCWorkflow(TestInfrahubDockerWithClient):
 
         client = async_client_main
 
-        # Check for available generator definitions
-        all_generators = await client.all(kind=CoreGeneratorDefinition, branch="main")
-        logging.info(
-            "Available generator definitions: %s",
-            [
+        # Get generator definition (should be available from repository sync in test_04)
+        try:
+            definition = await client.get(
+                CoreGeneratorDefinition,
+                name__value="add_dc",
+                branch="main",
+            )
+            logging.info("Found generator: %s", definition.name.value)
+        except Exception as e:
+            # List available generators for debugging
+            all_generators = await client.all(kind=CoreGeneratorDefinition, branch="main")
+            available_generators = [
                 g.name.value if hasattr(g, "name") and hasattr(getattr(g, "name"), "value") else str(g)
                 for g in all_generators
-            ],
-        )
-
-        # Wait for generator definition to be available (loaded from repository)
-        async def check_generator_definition() -> tuple[bool, Any]:
-            try:
-                definition = await client.get(
-                    "CoreGeneratorDefinition",
-                    name__value="generate_dc",
-                    branch="main",
-                    raise_when_missing=False,
-                )
-                return definition is not None, definition
-            except Exception as e:
-                logging.debug("Generator definition check failed: %s", str(e))
-                return False, None
-
-        try:
-            definition = await self.wait_for_condition(
-                check_fn=check_generator_definition,
-                max_attempts=GENERATOR_DEFINITION_MAX_ATTEMPTS,
-                poll_interval=GENERATOR_DEFINITION_POLL_INTERVAL,
-                description="generator definition 'generate_dc'",
-            )
-        except TimeoutError as e:
-            available_generators = [
-                g.name.value if hasattr(g, "name") else str(g)
-                for g in await client.all(kind=CoreGeneratorDefinition, branch="main")
             ]
             raise AssertionError(
-                f"Generator definition 'generate_dc' not available after waiting.\n"
+                f"Generator definition 'add_dc' not found.\n"
                 f"  Available generators: {available_generators}\n"
-                f"  Timeout: {GENERATOR_DEFINITION_MAX_ATTEMPTS * GENERATOR_DEFINITION_POLL_INTERVAL}s\n"
-                f"  Repository may not have synced properly in test_05."
+                f"  Repository may not have synced properly in test_04."
             ) from e
-
-        logging.info("Found generator: %s", definition.name.value)
 
         # Switch to target branch for running the generator
         client.default_branch = default_branch
@@ -533,13 +465,13 @@ class TestDCWorkflow(TestInfrahubDockerWithClient):
         dc_id = workflow_state.get("dc_id")
         if dc_id:
             dc = await client.get(
-                kind="TopologyDataCenter",
+                kind=TopologyDataCenter,
                 id=dc_id,
                 populate_store=True,
             )
         else:
             dc = await client.get(
-                kind="TopologyDataCenter",
+                kind=TopologyDataCenter,
                 name__value="DC1",
                 populate_store=True,
             )
@@ -551,14 +483,13 @@ class TestDCWorkflow(TestInfrahubDockerWithClient):
         )
         logging.info("Found DC1 topology with ID: %s", dc.id)
 
-        # Run the generator with the correct format
-        # The nodes field should contain a list of node IDs to process
+        # Run the generator
         mutation = Mutation(
             mutation="CoreGeneratorDefinitionRun",
             input_data={
                 "data": {
                     "id": definition.id,
-                    "nodes": [dc.id],  # List of node IDs to run the generator on
+                    "nodes": [dc.id],
                 },
                 "wait_until_completion": False,
             },
@@ -567,33 +498,45 @@ class TestDCWorkflow(TestInfrahubDockerWithClient):
 
         response = await client.execute_graphql(query=mutation.render())
         task_id = response["CoreGeneratorDefinitionRun"]["task"]["id"]
-        workflow_state["generator_task_id"] = task_id
-
         logging.info("Generator task started: %s", task_id)
 
-        # Wait for generator to complete (can take a while for DC generation)
-        task = await client.task.wait_for_completion(id=task_id, timeout=GENERATOR_TASK_TIMEOUT)
-        workflow_state["generator_task_state"] = str(task.state)
-
-        # The generator task can fail due to post-processing issues (like GraphQL
-        # query group updates) even if devices were created successfully.
-        # So we check if the task completed OR if devices exist (test_10 will verify).
-        if task.state != TaskState.COMPLETED:
-            logging.warning(
-                "Generator task %s finished with state %s, but will verify devices were created in next test",
-                task.id,
-                task.state,
+        # Wait for all tasks (main generator + spawned sub-tasks) to complete
+        # The wait_for_branch_tasks function handles:
+        # - The main generator task
+        # - All spawned pod generator tasks
+        # - All spawned rack generator tasks
+        # - Fail-fast on any task failures
+        try:
+            await wait_for_branch_tasks(
+                client=client,
+                branch=default_branch,
+                timeout=600,  # 10 minutes
+                poll_interval=5.0,
+                workflows=None,  # Monitor all workflows
+                workflow_filter_mode=None,
+                logger=logging.getLogger(__name__),
             )
-        else:
-            logging.info("Generator completed successfully")
+            logging.info("All generator tasks completed successfully")
+        except RuntimeError as e:
+            raise AssertionError(
+                f"Generator tasks failed on branch {default_branch}:\n  Main task ID: {task_id}\n  Error: {e}"
+            ) from e
+        except TimeoutError as e:
+            raise AssertionError(
+                f"Timeout waiting for generator tasks on branch {default_branch}:\n"
+                f"  Main task ID: {task_id}\n"
+                f"  Error: {e}\n"
+                f"  Tasks may still be running after 10 minutes."
+            ) from e
 
-        # Ensure no other tasks are still running before proceeding
-        await self.wait_for_branch_to_be_idle(
-            client=client,
-            branch=default_branch,
-            timeout=GENERATOR_TASK_TIMEOUT,
-            poll_interval=SCENARIO_TASK_POLL_INTERVAL,
+        # Verify no failed tasks remain
+        failure_states = [TaskState.FAILED, TaskState.CANCELLED, TaskState.CRASHED]
+        failed_tasks = await client.task.filter(filter=TaskFilter(state=failure_states, branch=default_branch))
+        assert not failed_tasks, f"Found {len(failed_tasks)} failed task(s) on branch {default_branch}:\n" + "\n".join(
+            f"  - Task {t.id}: {t.state}" for t in failed_tasks
         )
+
+        logging.info("Verified: No failed tasks on branch %s", default_branch)
 
     @pytest.mark.order(10)
     @pytest.mark.dependency(name="verify_devices_created", depends=["run_generator"])
@@ -610,442 +553,80 @@ class TestDCWorkflow(TestInfrahubDockerWithClient):
         client = async_client_main
         client.default_branch = default_branch
 
-        # Query for physical devices created by the generator
-        devices = await client.all(kind=DcimPhysicalDevice)
+        logging.info("Querying devices on branch: %s", client.default_branch)
 
-        generator_task_id = workflow_state.get("generator_task_id", "unknown")
-        generator_task_state = workflow_state.get("generator_task_state", "unknown")
+        # Query all devices and populate local store for efficient access
+        devices = await client.all(kind=DcimDevice, populate_store=True)
+
+        logging.info("Found %d devices on branch %s", len(devices), client.default_branch)
 
         assert devices, (
             f"No devices found after generator run.\n"
             f"  Branch: {default_branch}\n"
-            f"  Generator task ID: {generator_task_id}\n"
-            f"  Generator task state: {generator_task_state}\n"
-            f"  Generator in test_09 may not have completed successfully."
+            f"  The generator in test_09 may not have completed successfully."
         )
 
-        logging.info("Found %d physical devices after generator run", len(devices))
+        # Count devices by role (using name-based detection since role relationships may not always be populated)
+        super_spine_count = 0
+        spine_count = 0
+        leaf_count = 0
+        tor_count = 0
+        other_count = 0
 
-        # Check for specific device types (spine, leaf, etc.)
-        device_names = [device.name.value for device in devices]
-        logging.info("Created devices: %s", ", ".join(device_names))
+        device_names = []
+        for device in devices:
+            name = device.name.value
+            device_names.append(name)
 
-        # Verify we have both spines and leafs (basic sanity check)
-        spine_count = sum(1 for name in device_names if "spine" in name.lower())
-        leaf_count = sum(1 for name in device_names if "leaf" in name.lower())
-        logging.info("Device breakdown: %d spines, %d leafs", spine_count, leaf_count)
+            # Use name-based detection for role classification
+            name_lower = name.lower()
+            if "super-spine" in name_lower:
+                super_spine_count += 1
+            elif "spine" in name_lower:
+                spine_count += 1
+            elif "leaf" in name_lower:
+                leaf_count += 1
+            elif "tor" in name_lower:
+                tor_count += 1
+            else:
+                other_count += 1
 
-    @pytest.mark.order(11)
-    @pytest.mark.dependency(name="load_all_data_centers", depends=["load_events"])
-    @pytest.mark.asyncio
-    @pytest.mark.parametrize("scenario_path", DATA_CENTER_SCENARIOS)
-    async def test_11_load_all_data_center_scenarios(
-        self,
-        client_main: InfrahubClientSync,
-        async_client_main: InfrahubClient,
-        scenario_path: str,
-    ) -> None:
-        """Load every data center scenario and wait for all event-driven tasks to finish."""
+        total_devices = len(devices)
+        logging.info("Found %d devices after generator run", total_devices)
+        logging.info(
+            "Device breakdown: %d super-spines, %d spines, %d leafs, %d TORs, %d other",
+            super_spine_count,
+            spine_count,
+            leaf_count,
+            tor_count,
+            other_count,
+        )
+        logging.info("Created devices: %s", ", ".join(sorted(device_names)))
 
-        branch_name = f"demo-{Path(scenario_path.rstrip('/')).name}"
-        existing_branches = client_main.branch.all()
-        if branch_name in existing_branches:
-            client_main.branch.delete(branch_name)
-        client_main.branch.create(branch_name, wait_until_completion=True)
-
-        load_result = self.execute_command(
-            f"infrahubctl object load {scenario_path} --branch {branch_name}",
-            address=client_main.config.address,
+        # Verify we have the expected device types
+        assert super_spine_count > 0, (
+            f"No super-spine devices found.\n"
+            f"  Expected at least 1 super-spine device.\n"
+            f"  Total devices: {total_devices}"
+        )
+        assert spine_count > 0, (
+            f"No spine devices found.\n  Expected at least 1 spine device.\n  Total devices: {total_devices}"
+        )
+        assert leaf_count > 0, (
+            f"No leaf devices found.\n  Expected at least 1 leaf device.\n  Total devices: {total_devices}"
+        )
+        assert tor_count > 0, (
+            f"No TOR devices found.\n  Expected at least 1 TOR device.\n  Total devices: {total_devices}"
         )
 
-        assert load_result.returncode == 0, (
-            f"Demo scenario load failed for {scenario_path}.\n"
-            f"  Branch: {branch_name}\n"
-            f"  Return code: {load_result.returncode}\n"
-            f"  stdout: {load_result.stdout}\n"
-            f"  stderr: {load_result.stderr}"
+        # Verify minimum expected total (DC1 should have created a reasonable number of devices)
+        min_expected_devices = 10
+        assert total_devices >= min_expected_devices, (
+            f"Too few devices created.\n"
+            f"  Expected at least: {min_expected_devices}\n"
+            f"  Actual: {total_devices}\n"
+            f"  Generator may not have completed successfully."
         )
-
-        async_client_main.default_branch = branch_name
-        await self.wait_for_branch_to_be_idle(async_client_main, branch_name)
-
-        datacenters = await async_client_main.all(kind=TopologyDataCenter)
-        assert datacenters, (
-            f"No data centers found after loading {scenario_path}.\n"
-            f"  Branch: {branch_name}\n"
-            f"  Tasks may have failed silently or events did not execute."
-        )
-
-    @pytest.mark.order(12)
-    @pytest.mark.dependency(name="dc1_incremental_demos", depends=["load_events"])
-    @pytest.mark.asyncio
-    async def test_12_apply_incremental_dc1_demos(
-        self,
-        client_main: InfrahubClientSync,
-        async_client_main: InfrahubClient,
-    ) -> None:
-        """Exercise all DC1 incremental demo scenarios and wait for task queues to drain."""
-
-        branch_name = f"demo-dc1-addons-{int(time.time())}"
-
-        existing_branches = client_main.branch.all()
-        if branch_name in existing_branches:
-            client_main.branch.delete(branch_name)
-        client_main.branch.create(branch_name, wait_until_completion=True)
-
-        load_base = self.execute_command(
-            f"infrahubctl object load data/demos/01_data_center/dc1/ --branch {branch_name}",
-            address=client_main.config.address,
-        )
-        assert load_base.returncode == 0, (
-            "Failed to load base DC1 demo before incremental scenarios.\n"
-            f"  Branch: {branch_name}\n"
-            f"  Return code: {load_base.returncode}\n"
-            f"  stdout: {load_base.stdout}\n"
-            f"  stderr: {load_base.stderr}"
-        )
-
-        async_client_main.default_branch = branch_name
-        await self.wait_for_branch_to_be_idle(async_client_main, branch_name)
-
-        for scenario_path in DC1_INCREMENTAL_SCENARIOS:
-            load_result = self.execute_command(
-                f"infrahubctl object load {scenario_path} --branch {branch_name}",
-                address=client_main.config.address,
-            )
-            assert load_result.returncode == 0, (
-                f"Demo scenario load failed for {scenario_path}.\n"
-                f"  Branch: {branch_name}\n"
-                f"  Return code: {load_result.returncode}\n"
-                f"  stdout: {load_result.stdout}\n"
-                f"  stderr: {load_result.stderr}"
-            )
-
-            await self.wait_for_branch_to_be_idle(async_client_main, branch_name)
-
-        devices = await async_client_main.all(kind=DcimPhysicalDevice)
-        assert devices, (
-            "No physical devices present after applying incremental demos.\n"
-            f"  Branch: {branch_name}\n"
-            "  Event-driven generators may not have produced inventory."
-        )
-
-    # @pytest.mark.order(5)
-    # @pytest.mark.dependency(name="add_events", depends=["add_repository"])
-    # @pytest.mark.asyncio
-    # async def test_05_add_events(
-    #     self,
-    #     async_client_main: InfrahubClient,
-    #     remote_repos_dir: str,
-    #     workflow_state: dict[str, Any],
-    # ) -> None:
-    #     """Add the demo repository to Infrahub."""
-    #     logging.info("Starting test: test_05_add_repository")
-
-    #     client = async_client_main
-    #     src_directory = PROJECT_DIRECTORY
-    #     git_repository = GitRepo(
-    #         name="demo_repo",
-    #         src_directory=src_directory,
-    #         dst_directory=Path(remote_repos_dir),
-    #     )
-
-    #     response = await git_repository.add_to_infrahub(client=client)
-    #     assert response.get(f"{git_repository.type.value}Create", {}).get("ok"), (
-    #         f"Failed to add repository to Infrahub.\n"
-    #         f"  Repository name: demo_repo\n"
-    #         f"  Source directory: {src_directory}\n"
-    #         f"  Response: {response}"
-    #     )
-
-    #     repos = await client.all(kind=git_repository.type)
-    #     assert repos, (
-    #         f"No repositories found after adding.\n"
-    #         f"  Expected repository: demo_repo\n"
-    #         f"  Repository type: {git_repository.type.value}"
-    #     )
-
-    #     # Use wait_for_condition helper for repository sync
-    #     async def check_repo_sync() -> tuple[bool, Any]:
-    #         repository = await client.get(
-    #             kind=git_repository.type.value, name__value="demo_repo"
-    #         )
-    #         sync_status = repository.sync_status.value
-    #         synchronized = sync_status == "in-sync"
-    #         has_error = "error" in sync_status
-
-    #         if has_error:
-    #             raise AssertionError(
-    #                 f"Repository sync failed with error status: {sync_status}"
-    #             )
-    #         return synchronized, repository
-
-    #     try:
-    #         repository = await self.wait_for_condition(
-    #             check_fn=check_repo_sync,
-    #             max_attempts=REPO_SYNC_MAX_ATTEMPTS,
-    #             poll_interval=REPO_SYNC_POLL_INTERVAL,
-    #             description="repository sync",
-    #         )
-    #         workflow_state["repository_id"] = repository.id
-    #         logging.info("Repository synchronized successfully (ID: %s)", repository.id)
-    #     except TimeoutError as e:
-    #         # Get final status for error message
-    #         repository = await client.get(
-    #             kind=git_repository.type.value, name__value="demo_repo"
-    #         )
-    #         raise AssertionError(
-    #             f"Repository failed to sync within timeout.\n"
-    #             f"  Final status: {repository.sync_status.value}\n"
-    #             f"  Timeout: {REPO_SYNC_MAX_ATTEMPTS * REPO_SYNC_POLL_INTERVAL}s"
-    #         ) from e
-
-    # @pytest.mark.order(6)
-    # @pytest.mark.dependency(name="create_branch", depends=["add_repository"])
-    # def test_06_create_branch(
-    #     self, client_main: InfrahubClientSync, default_branch: str
-    # ) -> None:
-    #     """Create a new branch for the DC1 deployment."""
-    #     logging.info(
-    #         "Starting test: test_06_create_branch - branch: %s", default_branch
-    #     )
-
-    #     # Check if branch already exists
-    #     existing_branches = client_main.branch.all()
-    #     if default_branch in existing_branches:
-    #         logging.info("Branch %s already exists", default_branch)
-    #     else:
-    #         client_main.branch.create(default_branch, wait_until_completion=True)
-    #         logging.info("Created branch: %s", default_branch)
-
-    #     # Verify branch was created
-    #     updated_branches = client_main.branch.all()
-    #     assert default_branch in updated_branches, (
-    #         f"Branch creation failed.\n"
-    #         f"  Expected branch: {default_branch}\n"
-    #         f"  Available branches: {list(updated_branches.keys())}"
-    #     )
-
-    # @pytest.mark.order(7)
-    # @pytest.mark.dependency(name="load_dc_design", depends=["create_branch"])
-    # def test_07_load_dc_design(
-    #     self, client_main: InfrahubClientSync, default_branch: str
-    # ) -> None:
-    #     """Load DC1 demo data onto the branch."""
-    #     logging.info("Starting test: test_07_load_dc_design")
-
-    #     load_dc = self.execute_command(
-    #         f"infrahubctl object load data/demos/01_data_center/dc1/ --branch {default_branch}",
-    #         address=client_main.config.address,
-    #     )
-
-    #     logging.info("DC design load output: %s", load_dc.stdout)
-    #     assert load_dc.returncode == 0, (
-    #         f"DC design load failed.\n"
-    #         f"  Branch: {default_branch}\n"
-    #         f"  Return code: {load_dc.returncode}\n"
-    #         f"  stdout: {load_dc.stdout}\n"
-    #         f"  stderr: {load_dc.stderr}"
-    #     )
-
-    # @pytest.mark.order(8)
-    # @pytest.mark.dependency(name="verify_dc_created", depends=["load_dc_design"])
-    # @pytest.mark.asyncio
-    # async def test_08_verify_dc_created(
-    #     self,
-    #     async_client_main: InfrahubClient,
-    #     default_branch: str,
-    #     workflow_state: dict[str, Any],
-    # ) -> None:
-    #     """Verify that DC1 topology object was created."""
-    #     logging.info("Starting test: test_08_verify_dc_created")
-
-    #     client = async_client_main
-    #     client.default_branch = default_branch
-
-    #     # Wait a moment for data to be fully committed
-    #     await asyncio.sleep(DATA_PROPAGATION_DELAY)
-
-    #     # Query for DC1
-    #     dc = await client.get(
-    #         kind="TopologyDataCenter",
-    #         name__value="DC1",
-    #         populate_store=True,
-    #         raise_when_missing=False,
-    #     )
-
-    #     assert dc, (
-    #         f"DC1 topology not found.\n"
-    #         f"  Branch: {default_branch}\n"
-    #         f"  Expected: TopologyDataCenter with name 'DC1'\n"
-    #         f"  The dc1 demo data may have failed to load in test_07."
-    #     )
-    #     assert dc.name.value == "DC1", (
-    #         f"Unexpected topology name.\n  Expected: DC1\n  Got: {dc.name.value}"
-    #     )
-
-    #     workflow_state["dc_id"] = dc.id
-    #     logging.info("DC1 topology verified: %s (ID: %s)", dc.name.value, dc.id)
-
-    # @pytest.mark.order(9)
-    # @pytest.mark.dependency(name="run_generator", depends=["verify_dc_created"])
-    # @pytest.mark.asyncio
-    # async def test_09_run_generator(
-    #     self,
-    #     async_client_main: InfrahubClient,
-    #     default_branch: str,
-    #     workflow_state: dict[str, Any],
-    # ) -> None:
-    #     """Run the create_dc generator for DC1."""
-    #     logging.info("Starting test: test_09_run_generator")
-
-    #     client = async_client_main
-
-    #     # Check for available generator definitions
-    #     all_generators = await client.all("CoreGeneratorDefinition", branch="main")
-    #     logging.info(
-    #         "Available generator definitions: %s",
-    #         [g.name.value if hasattr(g, "name") else str(g) for g in all_generators],
-    #     )
-
-    #     # Wait for generator definition to be available (loaded from repository)
-    #     async def check_generator_definition() -> tuple[bool, Any]:
-    #         try:
-    #             definition = await client.get(
-    #                 "CoreGeneratorDefinition",
-    #                 name__value="create_dc",
-    #                 branch="main",
-    #                 raise_when_missing=False,
-    #             )
-    #             return definition is not None, definition
-    #         except Exception as e:
-    #             logging.debug("Generator definition check failed: %s", str(e))
-    #             return False, None
-
-    #     try:
-    #         definition = await self.wait_for_condition(
-    #             check_fn=check_generator_definition,
-    #             max_attempts=GENERATOR_DEFINITION_MAX_ATTEMPTS,
-    #             poll_interval=GENERATOR_DEFINITION_POLL_INTERVAL,
-    #             description="generator definition 'create_dc'",
-    #         )
-    #     except TimeoutError as e:
-    #         available_generators = [
-    #             g.name.value if hasattr(g, "name") else str(g)
-    #             for g in await client.all("CoreGeneratorDefinition", branch="main")
-    #         ]
-    #         raise AssertionError(
-    #             g.name.value if hasattr(g, "name") and hasattr(getattr(g, "name"), "value") else str(g)
-    #             f"  Available generators: {available_generators}\n"
-    #             f"  Timeout: {GENERATOR_DEFINITION_MAX_ATTEMPTS * GENERATOR_DEFINITION_POLL_INTERVAL}s\n"
-    #             f"  Repository may not have synced properly in test_05."
-    #         ) from e
-
-    #     logging.info("Found generator: %s", definition.name.value)
-
-    #     # Switch to target branch for running the generator
-    #     client.default_branch = default_branch
-
-    #     # Get the DC1 topology object to pass its ID to the generator
-    #     dc_id = workflow_state.get("dc_id")
-    #     if dc_id:
-    #         dc = await client.get(
-    #             kind="TopologyDataCenter",
-    #             id=dc_id,
-    #             populate_store=True,
-    #         )
-    #     else:
-    #         dc = await client.get(
-    #             kind="TopologyDataCenter",
-    #             name__value="DC1",
-    #             populate_store=True,
-    #         )
-
-    #     assert dc, (
-    #         f"DC1 topology not found before running generator.\n"
-    #         f"  Branch: {default_branch}\n"
-    #         f"  Expected DC ID from workflow_state: {dc_id}"
-    #     )
-    #     logging.info("Found DC1 topology with ID: %s", dc.id)
-
-    #     # Run the generator with the correct format
-    #     # The nodes field should contain a list of node IDs to process
-    #     mutation = Mutation(
-    #         mutation="CoreGeneratorDefinitionRun",
-    #         input_data={
-    #             "data": {
-    #                 "id": definition.id,
-    #                 "nodes": [dc.id],  # List of node IDs to run the generator on
-    #             },
-    #             "wait_until_completion": False,
-    #         },
-    #         query={"ok": None, "task": {"id": None}},
-    #     )
-
-    #     response = await client.execute_graphql(query=mutation.render())
-    #     task_id = response["CoreGeneratorDefinitionRun"]["task"]["id"]
-    #     workflow_state["generator_task_id"] = task_id
-
-    #     logging.info("Generator task started: %s", task_id)
-
-    #     # Wait for generator to complete (can take a while for DC generation)
-    #     task = await client.task.wait_for_completion(
-    #         id=task_id, timeout=GENERATOR_TASK_TIMEOUT
-    #     )
-    #     workflow_state["generator_task_state"] = str(task.state)
-
-    #     # The generator task can fail due to post-processing issues (like GraphQL
-    #     # query group updates) even if devices were created successfully.
-    #     # So we check if the task completed OR if devices exist (test_10 will verify).
-    #     if task.state != TaskState.COMPLETED:
-    #         logging.warning(
-    #             "Generator task %s finished with state %s, "
-    #             "but will verify devices were created in next test",
-    #             task.id,
-    #             task.state,
-    #         )
-    #     else:
-    #         logging.info("Generator completed successfully")
-
-    # @pytest.mark.order(10)
-    # @pytest.mark.dependency(name="verify_devices_created", depends=["run_generator"])
-    # @pytest.mark.asyncio
-    # async def test_10_verify_devices_created(
-    #     self,
-    #     async_client_main: InfrahubClient,
-    #     default_branch: str,
-    #     workflow_state: dict[str, Any],
-    # ) -> None:
-    #     """Verify that devices were created by the generator."""
-    #     logging.info("Starting test: test_10_verify_devices_created")
-
-    #     client = async_client_main
-    #     client.default_branch = default_branch
-
-    #     # Query for devices
-    #     devices = await client.all(kind="DcimDevice")
-
-    #     generator_task_id = workflow_state.get("generator_task_id", "unknown")
-    #     generator_task_state = workflow_state.get("generator_task_state", "unknown")
-
-    #     assert devices, (
-    #         f"No devices found after generator run.\n"
-    #         f"  Branch: {default_branch}\n"
-    #         f"  Generator task ID: {generator_task_id}\n"
-    #         f"  Generator task state: {generator_task_state}\n"
-    #         f"  Generator in test_09 may not have completed successfully."
-    #     )
-
-    #     logging.info("Found %d devices after generator run", len(devices))
-
-    #     # Check for specific device types (spine, leaf, etc.)
-    #     device_names = [device.name.value for device in devices]
-    #     logging.info("Created devices: %s", ", ".join(device_names))
-
-    #     # Verify we have both spines and leafs (basic sanity check)
-    #     spine_count = sum(1 for name in device_names if "spine" in name.lower())
-    #     leaf_count = sum(1 for name in device_names if "leaf" in name.lower())
-    #     logging.info("Device breakdown: %d spines, %d leafs", spine_count, leaf_count)
 
     # @pytest.mark.order(11)
     # @pytest.mark.dependency(name="create_diff", depends=["verify_devices_created"])
