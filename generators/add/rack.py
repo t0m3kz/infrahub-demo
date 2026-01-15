@@ -156,12 +156,13 @@ class RackGenerator(CommonGenerator):
         deployment_type = self.data.pod.deployment_type
 
         if deployment_type in ("mixed", "middle_rack") and device_type == "tor":
-            uplinks_per_tor = 2  # Fixed design: each ToR has 2 uplinks to leafs
-            offset = (current_index - 1) * uplinks_per_tor
+            # For ToRs in mixed deployment: reserve ports based on rack index (future racks may fill gaps)
+            # Rack 7 with 2 ToRs → offset = (7-1) × 2 = 12 (reserves ports for potential racks 2-6)
+            offset = (current_index - 1) * device_count
 
             self.logger.info(
                 f"Calculated {device_type} offset={offset} for rack {self.data.name} "
-                f"(index={current_index}, uplinks_per_tor={uplinks_per_tor}, mode={deployment_type})"
+                f"(index={current_index}, tors_per_rack={device_count}, mode={deployment_type})"
             )
 
         # For mixed/middle_rack deployment leafs: calculate offset based on row position

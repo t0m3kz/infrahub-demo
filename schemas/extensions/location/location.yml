@@ -161,7 +161,7 @@ nodes:
         peer: TopologyRackHosting
         kind: Attribute
         cardinality: one
-        identifier: "topology_racks"
+        identifier: "rack__pod"
         optional: true
       - name: devices
         peer: DcimPhysicalDevice
