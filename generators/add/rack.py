@@ -149,7 +149,7 @@ class RackGenerator(CommonGenerator):
         )
         return device_names, interface_names
 
-    def _calculate_cumulative_cabling_offset(self, device_count: int, device_type: str = "leaf") -> int:
+    def calculate_cabling_offsets(self, device_count: int, device_type: str = "leaf") -> int:
         """Calculate cabling offset using simple formula based on rack position."""
 
         current_index = self.data.index
@@ -334,9 +334,7 @@ class RackGenerator(CommonGenerator):
             self.logger.info(f"Found {len(spine_device_names)} spine devices: {spine_device_names}")
 
             # Calculate cumulative offset for leaf cabling based on actual leaf counts from previous racks
-            cabling_offset = self._calculate_cumulative_cabling_offset(
-                device_count=leaf_role.quantity, device_type="leaf"
-            )
+            cabling_offset = self.calculate_cabling_offsets(device_count=leaf_role.quantity, device_type="leaf")
 
             await self.create_cabling(
                 bottom_devices=leaf_devices,
@@ -418,7 +416,7 @@ class RackGenerator(CommonGenerator):
             # Deployment type: tor - ToRs connect directly to spines
             elif deployment_type == "tor":
                 # Calculate cumulative offset for ToR cabling (all ToRs connect to spines)
-                cabling_offset = self._calculate_cumulative_cabling_offset(
+                cabling_offset = self.calculate_cabling_offsets(
                     device_count=sum(tor_role.quantity or 0 for tor_role in self.data.tors or []),
                     device_type="tor",
                 )
@@ -476,7 +474,7 @@ class RackGenerator(CommonGenerator):
                 else:
                     # This is a ToR-only rack - connect to middle rack leafs in same row
                     # Calculate offset based on ALL ToRs in previous racks within the same row
-                    cabling_offset = self._calculate_cumulative_cabling_offset(
+                    cabling_offset = self.calculate_cabling_offsets(
                         device_count=sum(tor_role.quantity or 0 for tor_role in self.data.tors or []),
                         device_type="tor",
                     )

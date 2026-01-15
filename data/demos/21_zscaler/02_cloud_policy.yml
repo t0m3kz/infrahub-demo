@@ -1,0 +1,46 @@
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: SecurityPolicy
+  data:
+    - name: "zscaler-web-policy"
+      description: "Cloud web security policy for branch internet breakout"
+      policy_type: "cloud_policy"
+      default_action: "deny"
+      enabled: true
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: SecurityPolicyRule
+  data:
+    - index: 100
+      name: "allow-business-web"
+      action: "permit"
+      log: true
+      policy: "zscaler-web-policy"
+      direction: "outbound"
+      url_categories:
+        - "business-news"
+        - "productivity"
+        - "cloud-services"
+    - index: 200
+      name: "caution-social-media"
+      action: "caution"
+      log: true
+      policy: "zscaler-web-policy"
+      direction: "outbound"
+      url_categories:
+        - "social-media"
+        - "streaming-media"
+    - index: 300
+      name: "deny-malware-phishing"
+      action: "deny"
+      log: true
+      policy: "zscaler-web-policy"
+      direction: "outbound"
+      url_categories:
+        - "malware"
+        - "phishing"
+        - "weapons"

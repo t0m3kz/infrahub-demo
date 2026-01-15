@@ -129,6 +129,14 @@ spec:
             icon: "mdi:cloud"
             description: "Public cloud topology deployments"
 
+          # --------- Saas Clouds ---------
+          - namespace: Topology
+            name: Saas
+            label: Saas Topology
+            kind: TopologySaas
+            icon: "mdi:cloud"
+            description: "Public cloud topology deployments"
+
           - name: VirtualisationMenu
             namespace: Service
             label: Customer Deployments

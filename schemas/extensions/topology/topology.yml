@@ -60,21 +60,21 @@ generics:
         kind: Text
         order_weight: 100
 
-  - name: OnPrem
-    namespace: Topology
-    include_in_menu: false
-    attributes:
-      - name: index
-        kind: Number
-        order_weight: 110
-    relationships:
-      - name: devices
-        peer: DcimDevice
-        kind: Component
-        cardinality: many
-        identifier: "topology__devices"
-        order_weight: 7000
-        on_delete: cascade
+  # - name: OnPrem
+  #   namespace: Topology
+  #   include_in_menu: false
+  #   attributes:
+  #     - name: index
+  #       kind: Number
+  #       order_weight: 110
+  #   relationships:
+  #     - name: devices
+  #       peer: DcimDevice
+  #       kind: Component
+  #       cardinality: many
+  #       identifier: "topology__devices"
+  #       order_weight: 7000
+  #       on_delete: cascade
 
   - name: Design
     namespace: Topology
@@ -89,6 +89,38 @@ generics:
         kind: Text
         unique: true
         order_weight: 100
+
+  - name: RackHosting
+    namespace: Topology
+    include_in_menu: false
+    attributes:
+      - name: name
+        kind: Text
+        order_weight: 100
+    relationships:
+      - name: racks
+        peer: LocationRack
+        kind: Generic
+        cardinality: many
+        identifier: "topology__racks"
+        order_weight: 1200
+        on_delete: cascade
+
+  - name: DeviceHosting
+    namespace: Topology
+    include_in_menu: false
+    attributes:
+      - name: name
+        kind: Text
+        order_weight: 100
+    relationships:
+      - name: devices
+        peer: DcimDevice
+        kind: Generic
+        cardinality: many
+        identifier: "topology__devices"
+        order_weight: 1200
+        on_delete: cascade
 
 nodes:
   # --------------------  Elements  --------------------
@@ -237,8 +269,8 @@ nodes:
     inherit_from:
       - CoreArtifactTarget
       - TopologyDeployment
-      - TopologyOnPrem
       - GeneratorTarget
+      - TopologyDeviceHosting
     label: Data Center
     include_in_menu: true
     children: TopologyPod
@@ -249,6 +281,9 @@ nodes:
       - index__value
     display_label: "{{ name__value}} - Fabric {{index__value}}"
     attributes:
+      - name: index
+        kind: Number
+        order_weight: 110
       - name: status
         kind: Dropdown
         label: Status
@@ -370,8 +405,9 @@ nodes:
     namespace: Topology
     inherit_from:
       - TopologyDeployment
-      - TopologyOnPrem
       - GeneratorTarget
+      - TopologyRackHosting
+      - TopologyDeviceHosting
     parent: TopologyDataCenter
     children: ""
     label: Pod
@@ -384,6 +420,9 @@ nodes:
       - ["name__value", "index__value"]
     include_in_menu: false
     attributes:
+      - name: index
+        kind: Number
+        order_weight: 110
       - name: status
         kind: Dropdown
         label: Status
@@ -516,7 +555,7 @@ nodes:
         peer: LocationRack
         kind: Generic
         cardinality: many
-        identifier: "rack__hosting"
+        identifier: "topology__racks"
         order_weight: 1200
         on_delete: cascade
       - name: loopback_pool
@@ -579,6 +618,8 @@ nodes:
     inherit_from:
       - TopologyDeployment
       - GeneratorTarget
+      - TopologyRackHosting
+      - TopologyDeviceHosting
     parent: TopologyColocationMetro
     label: Colocation Availability Zone
     children: ""
@@ -617,7 +658,7 @@ nodes:
         peer: LocationRack
         kind: Generic
         cardinality: many
-        identifier: "rack__hosting"
+        identifier: "topology__racks"
         order_weight: 1200
         on_delete: cascade
 
@@ -732,12 +773,175 @@ nodes:
         order_weight: 7000
         on_delete: cascade
 
+  # SaaS / third-party clouds (e.g., Webex, Zoom, Zscaler) anchored in topology
+  - name: Saas
+    namespace: Topology
+    inherit_from:
+      - TopologyDeployment
+      - CoreArtifactTarget
+    label: SaaS Cloud
+    include_in_menu: true
+    children: TopologySaasRegion
+    uniqueness_constraints:
+      - ["name__value"]
+    human_friendly_id:
+      - name__value
+    display_label: "{{ name__value|upper}} SAAS"
+    attributes:
+      - name: provider
+        kind: Dropdown
+        label: Provider
+        optional: false
+        default_value: other
+        order_weight: 200
+        choices:
+          - name: cisco
+            label: Cisco
+            description: Cisco SaaS (Webex, Umbrella)
+            color: "#1BA0D7"
+          - name: zoom
+            label: Zoom
+            description: Zoom conferencing
+            color: "#2D8CFF"
+          - name: zscaler
+            label: Zscaler
+            description: Zscaler cloud security
+            color: "#0066CC"
+          - name: palo_alto
+            label: Palo Alto
+            description: Palo Alto (Prisma, other)
+            color: "#FA582D"
+          - name: microsoft
+            label: Microsoft
+            description: Microsoft cloud apps
+            color: "#6264A7"
+          - name: salesforce
+            label: Salesforce
+            description: Salesforce cloud services
+            color: "#00A1E0"
+          - name: other
+            label: Other
+            description: Other provider
+            color: "#95A5A6"
+      - name: service_type
+        kind: Dropdown
+        label: Service Type
+        optional: false
+        default_value: other
+        order_weight: 300
+        choices:
+          - name: sase
+            label: SASE / SWG
+            color: "#3498DB"
+          - name: conferencing
+            label: Conferencing
+            color: "#2ECC71"
+          - name: crm
+            label: CRM
+            color: "#9B59B6"
+          - name: storage
+            label: Storage
+            color: "#F39C12"
+          - name: api
+            label: API Integration
+            color: "#16A085"
+          - name: other
+            label: Other
+            color: "#95A5A6"
+      - name: status
+        kind: Dropdown
+        label: Status
+        optional: false
+        default_value: active
+        order_weight: 400
+        choices:
+          - name: active
+            label: Active
+            color: "#7FBF7F"
+          - name: provisioning
+            label: Provisioning
+            color: "#FFFF7F"
+          - name: maintenance
+            label: Maintenance
+            color: "#FFD27F"
+          - name: decommissioned
+            label: Decommissioned
+            color: "#BFBFBF"
+      - name: description
+        kind: Text
+        label: Description
+        optional: true
+        order_weight: 500
+
+  - name: SaasRegion
+    namespace: Topology
+    inherit_from:
+      - TopologyDeployment
+    parent: TopologySaas
+    children: ""
+    human_friendly_id:
+      - region_name__value
+    display_label: "{{ name__value }}"
+    uniqueness_constraints:
+      - ["region_name__value"]
+    include_in_menu: false
+    attributes:
+      - name: name
+        kind: Text
+        computed_attribute:
+          kind: Jinja2
+          jinja2_template: "{{parent__name__value|upper}}-{{region_name__value|upper}}"  # yamllint disable-line rule:line-length
+        read_only: true
+        optional: false
+      - name: region_name
+        kind: Text
+        label: "Region Name"
+        description: "Provider region identifier (e.g., us-east-1, eu-west, emea)"
+        optional: false
+        order_weight: 200
+      - name: status
+        kind: Dropdown
+        label: "Region Status"
+        optional: false
+        default_value: active
+        order_weight: 300
+        choices:
+          - name: active
+            label: Active
+            description: "Region is active and operational"
+            color: "#7FBF7F"
+          - name: provisioning
+            label: Provisioning
+            description: "Region is being provisioned"
+            color: "#FFFF7F"
+          - name: maintenance
+            label: Maintenance
+            description: "Region is under maintenance"
+            color: "#FFD27F"
+          - name: constrained
+            label: Constrained
+            description: "Region has capacity constraints"
+            color: "#F4CCCC"
+          - name: deprecated
+            label: Deprecated
+            description: "Region is deprecated"
+            color: "#BFBFBF"
+    relationships:
+      - name: location
+        peer: LocationMetro
+        cardinality: one
+        kind: Attribute
+        optional: true
+        order_weight: 1000
+        identifier: "saas__region__location"
+        description: "Geographic mapping for this provider region"
+
 extensions:
   nodes:
     - kind: DcimDevice
       relationships:
         - name: deployment
-          peer: TopologyDeployment
+          peer: TopologyDeviceHosting
           cardinality: one
           identifier: "topology__devices"
     - kind: DcimCable
@@ -749,3 +953,12 @@ extensions:
           kind: Attribute
           order_weight: 2000
           identifier: "dc__cables"
+    - kind: LocationRack
+      relationships:
+        - name: deployment
+          peer: TopologyRackHosting
+          cardinality: one
+          optional: true
+          kind: Attribute
+          order_weight: 2000
+          identifier: "rack__hosting"

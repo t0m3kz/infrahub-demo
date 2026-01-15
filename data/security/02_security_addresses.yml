@@ -2,73 +2,72 @@
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
-  kind: SecurityIPAddress
+  kind: SecurityAddressObject
   data:
     - name: "web-server-01"
-      address: "10.1.1.10"
       description: "Primary web server"
+      address_type: "ip_address"
+      address_value: "10.1.1.10"
 
     - name: "web-server-02"
-      address: "10.1.1.11"
       description: "Secondary web server"
+      address_type: "ip_address"
+      address_value: "10.1.1.11"
 
     - name: "db-server-01"
-      address: "10.1.2.10"
       description: "Primary database server"
+      address_type: "ip_address"
+      address_value: "10.1.2.10"
 
     - name: "mail-server"
-      address: "10.1.1.20"
       description: "Mail server"
+      address_type: "ip_address"
+      address_value: "10.1.1.20"
 
     - name: "dns-server-01"
-      address: "10.1.3.10"
       description: "Primary DNS server"
+      address_type: "ip_address"
+      address_value: "10.1.3.10"
 
     - name: "ntp-server"
-      address: "10.1.3.20"
       description: "Network Time Protocol server"
+      address_type: "ip_address"
+      address_value: "10.1.3.20"
 
----
-apiVersion: infrahub.app/v1
-kind: Object
-spec:
-  kind: SecurityPrefix
-  data:
     - name: "dmz-network"
-      prefix: "10.1.1.0/24"
       description: "DMZ network segment"
+      address_type: "ip_prefix"
+      address_value: "10.1.1.0/24"
 
     - name: "internal-network"
-      prefix: "192.168.1.0/24"
       description: "Internal corporate network"
+      address_type: "ip_prefix"
+      address_value: "192.168.1.0/24"
 
     - name: "guest-network"
-      prefix: "172.16.1.0/24"
       description: "Guest network segment"
+      address_type: "ip_prefix"
+      address_value: "172.16.1.0/24"
 
     - name: "management-network"
-      prefix: "10.1.3.0/24"
       description: "Management network segment"
+      address_type: "ip_prefix"
+      address_value: "10.1.3.0/24"
 
     - name: "server-network"
-      prefix: "10.1.2.0/24"
       description: "Server network segment"
+      address_type: "ip_prefix"
+      address_value: "10.1.2.0/24"
 
----
-apiVersion: infrahub.app/v1
-kind: Object
-spec:
-  kind: SecurityIPRange
-  data:
     - name: "dhcp-pool-guest"
-      start: "172.16.1.100"
-      end: "172.16.1.200"
       description: "DHCP pool for guest network"
+      address_type: "ip_range"
+      address_value: "172.16.1.100-172.16.1.200"
 
     - name: "dhcp-pool-internal"
-      start: "192.168.1.100"
-      end: "192.168.1.200"
       description: "DHCP pool for internal network"
+      address_type: "ip_range"
+      address_value: "192.168.1.100-192.168.1.200"
 
 ---
 apiVersion: infrahub.app/v1
@@ -76,14 +75,11 @@ kind: Object
 spec:
   kind: SecurityFQDN
   data:
-    - name: "company-website"
-      fqdn: "www.company.com"
+    - domain_name: "www.company.com"
       description: "Company public website"
 
-    - name: "mail-server-fqdn"
-      fqdn: "mail.company.com"
+    - domain_name: "mail.company.com"
       description: "Company mail server"
 
-    - name: "intranet-portal"
-      fqdn: "intranet.company.local"
+    - domain_name: "intranet.company.local"
       description: "Internal company portal"

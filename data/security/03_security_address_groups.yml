@@ -6,27 +6,35 @@ spec:
   data:
     - name: "web-servers"
       description: "All web servers"
+      address_objects: []
 
     - name: "database-servers"
       description: "All database servers"
+      address_objects: []
 
     - name: "mail-servers"
       description: "All mail servers"
+      address_objects: []
 
     - name: "dns-servers"
       description: "All DNS servers"
+      address_objects: []
 
     - name: "critical-servers"
       description: "Mission critical servers"
+      address_objects: []
 
     - name: "internal-networks"
       description: "All internal network segments"
+      address_objects: []
 
     - name: "public-services"
       description: "Publicly accessible services"
+      address_objects: []
 
     - name: "management-servers"
       description: "Management and monitoring servers"
+      address_objects: []
 
     - name: "development-servers"
       description: "Development environment servers"

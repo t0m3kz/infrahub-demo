@@ -6,24 +6,48 @@ spec:
   data:
     - name: "corporate-firewall-policy"
       description: "Main corporate firewall security policy"
+      policy_type: "firewall_policy"
+      default_action: "deny"
+      enabled: true
 
     - name: "guest-network-policy"
       description: "Security policy for guest network access"
+      policy_type: "firewall_policy"
+      default_action: "deny"
+      enabled: true
 
     - name: "server-access-policy"
       description: "Policy for server farm access controls"
+      policy_type: "firewall_policy"
+      default_action: "deny"
+      enabled: true
 
     - name: "dmz-policy"
       description: "Security policy for DMZ services"
+      policy_type: "firewall_policy"
+      default_action: "deny"
+      enabled: true
 
     - name: "management-policy"
       description: "Policy for network management access"
+      policy_type: "firewall_policy"
+      default_action: "deny"
+      enabled: true
 
     - name: "remote-access-policy"
       description: "Policy for remote worker access"
+      policy_type: "firewall_policy"
+      default_action: "deny"
+      enabled: true
 
     - name: "database-access-policy"
       description: "Policy for database tier access"
+      policy_type: "firewall_policy"
+      default_action: "deny"
+      enabled: true
 
     - name: "development-policy"
       description: "Policy for development environment"
+      policy_type: "firewall_policy"
+      default_action: "deny"
+      enabled: true

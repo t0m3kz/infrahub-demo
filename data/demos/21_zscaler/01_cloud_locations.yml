@@ -1,0 +1,22 @@
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: SecurityCloudSecurityLocation
+  data:
+    - name: "zscaler-fra"
+      description: "Zscaler EU Central POP (Frankfurt)"
+      provider: "zscaler"
+      connection_type: "ipsec_tunnel"
+      bandwidth_mbps: 500
+      primary_endpoint: "fra.zscaler.net"
+      secondary_endpoint: "fra2.zscaler.net"
+      service_region: "EU-Central"
+    - name: "zscaler-muc"
+      description: "Zscaler EU South POP (Munich)"
+      provider: "zscaler"
+      connection_type: "gre_tunnel"
+      bandwidth_mbps: 250
+      primary_endpoint: "muc.zscaler.net"
+      secondary_endpoint: "muc2.zscaler.net"
+      service_region: "EU-South"

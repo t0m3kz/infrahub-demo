@@ -2,39 +2,39 @@
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
-  kind: SecuritySegmentSecurityZone
+  kind: SecurityZone
   data:
     - name: "WEB-TIER-ZONE"
       description: "Security zone for web tier network segments"
       trust_level: 50
-      isolation_level: "controlled"
+      zone_type: "dmz"
 
     - name: "APP-TIER-ZONE"
       description: "Security zone for application tier network segments"
       trust_level: 70
-      isolation_level: "controlled"
+      zone_type: "internal"
 
     - name: "DB-TIER-ZONE"
       description: "Security zone for database tier network segments"
       trust_level: 95
-      isolation_level: "strict"
+      zone_type: "internal"
 
     - name: "TENANT-ZONE"
       description: "Security zone for tenant dedicated segments"
       trust_level: 60
-      isolation_level: "strict"
+      zone_type: "internal"
 
     - name: "MANAGEMENT-ZONE"
       description: "Security zone for network management segments"
       trust_level: 90
-      isolation_level: "strict"
+      zone_type: "management"
 
     - name: "GUEST-ZONE"
       description: "Security zone for guest network segments"
       trust_level: 10
-      isolation_level: "strict"
+      zone_type: "external"
 
     - name: "DMZ-ZONE"
       description: "Security zone for DMZ network segments"
       trust_level: 30
-      isolation_level: "controlled"
+      zone_type: "dmz"

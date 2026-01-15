@@ -1,0 +1,30 @@
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: SecurityURLCategory
+  data:
+    - name: "business-news"
+      description: "Business and financial news"
+      risk_level: "low"
+    - name: "productivity"
+      description: "Business productivity tools"
+      risk_level: "low"
+    - name: "cloud-services"
+      description: "Cloud computing and SaaS services"
+      risk_level: "low"
+    - name: "social-media"
+      description: "Social media and networking"
+      risk_level: "medium"
+    - name: "streaming-media"
+      description: "Video/audio streaming"
+      risk_level: "low"
+    - name: "malware"
+      description: "Known malware sites"
+      risk_level: "critical"
+    - name: "phishing"
+      description: "Phishing and fraud"
+      risk_level: "critical"
+    - name: "weapons"
+      description: "Weapons and violence"
+      risk_level: "high"

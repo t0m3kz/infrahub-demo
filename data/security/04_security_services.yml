@@ -2,78 +2,85 @@
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
-  kind: SecurityService
+  kind: SecurityServiceObject
   data:
     - name: "http"
       description: "HTTP web traffic"
-      port: 80
+      service_type: "single_port"
       protocol: "tcp"
+      port_start: 80
 
     - name: "https"
       description: "HTTPS secure web traffic"
-      port: 443
+      service_type: "single_port"
       protocol: "tcp"
+      port_start: 443
 
     - name: "ssh"
       description: "Secure Shell"
-      port: 22
+      service_type: "single_port"
       protocol: "tcp"
+      port_start: 22
 
     - name: "ftp"
       description: "File Transfer Protocol"
-      port: 21
+      service_type: "single_port"
       protocol: "tcp"
+      port_start: 21
 
     - name: "smtp"
       description: "Simple Mail Transfer Protocol"
-      port: 25
+      service_type: "single_port"
       protocol: "tcp"
+      port_start: 25
 
     - name: "dns"
       description: "Domain Name System"
-      port: 53
+      service_type: "single_port"
       protocol: "udp"
+      port_start: 53
 
     - name: "ntp"
       description: "Network Time Protocol"
-      port: 123
+      service_type: "single_port"
       protocol: "udp"
+      port_start: 123
 
     - name: "snmp"
       description: "Simple Network Management Protocol"
-      port: 161
+      service_type: "single_port"
       protocol: "udp"
+      port_start: 161
 
     - name: "ldap"
       description: "Lightweight Directory Access Protocol"
-      port: 389
+      service_type: "single_port"
       protocol: "tcp"
+      port_start: 389
 
     - name: "ldaps"
       description: "LDAP over SSL"
-      port: 636
+      service_type: "single_port"
       protocol: "tcp"
+      port_start: 636
 
----
-apiVersion: infrahub.app/v1
-kind: Object
-spec:
-  kind: SecurityServiceRange
-  data:
     - name: "ephemeral-ports"
       description: "Ephemeral port range"
-      start: 32768
-      end: 65535
+      service_type: "port_range"
       protocol: "tcp"
+      port_start: 32768
+      port_end: 65535
 
     - name: "ftp-data-range"
       description: "FTP passive data ports"
-      start: 20000
-      end: 20100
+      service_type: "port_range"
       protocol: "tcp"
+      port_start: 20000
+      port_end: 20100
 
     - name: "rpc-range"
       description: "RPC dynamic port range"
-      start: 1024
-      end: 5000
+      service_type: "port_range"
       protocol: "tcp"
+      port_start: 1024
+      port_end: 5000

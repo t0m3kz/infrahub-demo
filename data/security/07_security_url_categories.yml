@@ -7,47 +7,59 @@ spec:
     - name: "social-media"
       description: "Social media and networking sites"
       risk_level: "medium"
+      action: "caution"
 
     - name: "malware"
       description: "Known malware and malicious sites"
       risk_level: "critical"
+      action: "block"
 
     - name: "phishing"
       description: "Phishing and fraud sites"
       risk_level: "critical"
+      action: "block"
 
     - name: "adult-content"
       description: "Adult and mature content"
       risk_level: "high"
+      action: "block"
 
     - name: "gambling"
       description: "Gambling and betting sites"
       risk_level: "medium"
+      action: "caution"
 
     - name: "streaming-media"
       description: "Video and audio streaming services"
       risk_level: "low"
+      action: "caution"
 
     - name: "business-news"
       description: "Business and financial news"
       risk_level: "low"
+      action: "allow"
 
     - name: "file-sharing"
       description: "File sharing and storage services"
       risk_level: "medium"
+      action: "caution"
 
     - name: "weapons"
       description: "Weapons and violence content"
       risk_level: "high"
+      action: "block"
 
     - name: "education"
       description: "Educational and reference sites"
       risk_level: "low"
+      action: "allow"
 
     - name: "productivity"
       description: "Business productivity tools"
       risk_level: "low"
+      action: "allow"
 
     - name: "cloud-services"
       description: "Cloud computing and storage services"
       risk_level: "low"
+      action: "allow"

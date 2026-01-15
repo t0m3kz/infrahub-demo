@@ -1,0 +1,43 @@
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: ConnectivityExternalCloudService
+  data:
+    - name: "zscaler-swg"
+      provider: "zscaler"
+      service_type: "sase"
+      region: "EU"
+      data_classification: "internal"
+      sla_tier: "gold"
+      status: "active"
+      description: "Zscaler Secure Web Gateway"
+      locations:
+        - "Frankfurt"
+        - "Munich"
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: ConnectivityExternalCloudConnection
+  data:
+    - name: "zscaler-fra-conn"
+      service: "zscaler-swg"
+      connection_type: "ipsec_tunnel"
+      bandwidth_mbps: 500
+      primary_endpoint: "fra.zscaler.net"
+      secondary_endpoint: "fra2.zscaler.net"
+      auth_method: "preshared_key"
+      redundancy_class: "dual"
+      status: "active"
+      topology_region: "ZSCALER-FRA"
+    - name: "zscaler-muc-conn"
+      service: "zscaler-swg"
+      connection_type: "gre_tunnel"
+      bandwidth_mbps: 250
+      primary_endpoint: "muc.zscaler.net"
+      secondary_endpoint: "muc2.zscaler.net"
+      auth_method: "preshared_key"
+      redundancy_class: "dual"
+      status: "active"
+      topology_region: "ZSCALER-MUC"

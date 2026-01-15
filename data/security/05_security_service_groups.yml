@@ -6,24 +6,31 @@ spec:
   data:
     - name: "web-services"
       description: "Web-related services"
+      service_objects: []
 
     - name: "mail-services"
       description: "Email-related services"
+      service_objects: []
 
     - name: "management-services"
       description: "Network management services"
+      service_objects: []
 
     - name: "file-transfer"
       description: "File transfer services"
+      service_objects: []
 
     - name: "infrastructure-services"
       description: "Core infrastructure services"
+      service_objects: []
 
     - name: "directory-services"
       description: "Directory and authentication services"
+      service_objects: []
 
     - name: "database-services"
       description: "Database access services"
 
     - name: "monitoring-services"
       description: "Network monitoring services"
+      service_objects: []
