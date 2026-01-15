@@ -896,7 +896,7 @@ nodes:
       - name: region_name
         kind: Text
         label: "Region Name"
-        description: "Provider region identifier (e.g., us-east-1, eu-west, emea)"
+        description: "Provider region identifier"
         optional: false
         order_weight: 200
       - name: status
@@ -934,7 +934,7 @@ nodes:
         optional: true
         order_weight: 1000
         identifier: "saas__region__location"
-        description: "Geographic mapping for this provider region"
+        description: "Geographic mapping for provider region"
 
 extensions:
   nodes:
@@ -961,4 +961,4 @@ extensions:
           optional: true
           kind: Attribute
           order_weight: 2000
-          identifier: "rack__hosting"
+          identifier: "topology__racks"
