@@ -6,7 +6,7 @@ class TestDeviceNamingSimplified:
     """Test simplified device naming logic."""
 
     def test_standard_naming_with_three_indexes(self) -> None:
-        """Test STANDARD strategy with dc, pod, rack indexes."""
+        """Test STANDARD strategy with dc, pod, row indexes."""
         config = DeviceNamingConfig(
             strategy="standard",
             separator="-",
@@ -21,7 +21,25 @@ class TestDeviceNamingSimplified:
             indexes=[1, 2, 3],
         )
 
-        assert result == "fab1-fab1-pod2-rack3-leaf-05"
+        assert result == "fab1-fab1-pod2-row3-leaf-05"
+
+    def test_standard_naming_with_four_indexes(self) -> None:
+        """Test STANDARD strategy with dc, pod, row, rack indexes (full hierarchy)."""
+        config = DeviceNamingConfig(
+            strategy="standard",
+            separator="-",
+            zero_padded=True,
+            pad_width=2,
+        )
+
+        result = config.format_device_name(
+            prefix="fab1",
+            device_type="leaf",
+            index=5,
+            indexes=[1, 2, 3, 7],
+        )
+
+        assert result == "fab1-fab1-pod2-row3-rack7-leaf-05"
 
     def test_standard_naming_with_single_index(self) -> None:
         """Test STANDARD strategy with only dc index."""

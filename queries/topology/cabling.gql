@@ -4,6 +4,7 @@ fragment PhysicalInterfaceFields on DcimPhysicalInterface {
   device {
     node {
       ... on DcimPhysicalDevice {
+        name { value }
         rack {
           node {
             name { value }
@@ -38,15 +39,18 @@ query FabricCablingPlanQuery($name: String!) {
           devices {
             edges {
               node {
-                name { value }
-                interfaces {
-                  edges {
-                    node {
-                      name { value }
-                      ... on DcimPhysicalInterface {
-                        cable {
-                          node {
-                            ...CableFields
+                __typename
+                ... on DcimPhysicalDevice {
+                  name { value }
+                  interfaces {
+                    edges {
+                      node {
+                        name { value }
+                        ... on DcimPhysicalInterface {
+                          cable {
+                            node {
+                              ...CableFields
+                            }
                           }
                         }
                       }
@@ -65,15 +69,18 @@ query FabricCablingPlanQuery($name: String!) {
                   devices {
                     edges {
                       node {
-                        name { value }
-                        interfaces {
-                          edges {
-                            node {
-                              name { value }
-                              ... on DcimPhysicalInterface {
-                                cable {
-                                  node {
-                                    ...CableFields
+                        __typename
+                        ... on DcimPhysicalDevice {
+                          name { value }
+                          interfaces {
+                            edges {
+                              node {
+                                name { value }
+                                ... on DcimPhysicalInterface {
+                                  cable {
+                                    node {
+                                      ...CableFields
+                                    }
                                   }
                                 }
                               }
@@ -94,15 +101,18 @@ query FabricCablingPlanQuery($name: String!) {
           devices {
             edges {
               node {
-                name { value }
-                interfaces {
-                  edges {
-                    node {
-                      name { value }
-                      ... on DcimPhysicalInterface {
-                        cable {
-                          node {
-                            ...CableFields
+                __typename
+                ... on DcimPhysicalDevice {
+                  name { value }
+                  interfaces {
+                    edges {
+                      node {
+                        name { value }
+                        ... on DcimPhysicalInterface {
+                          cable {
+                            node {
+                              ...CableFields
+                            }
                           }
                         }
                       }
@@ -117,15 +127,18 @@ query FabricCablingPlanQuery($name: String!) {
           devices {
             edges {
               node {
-                name { value }
-                interfaces {
-                  edges {
-                    node {
-                      name { value }
-                      ... on DcimPhysicalInterface {
-                        cable {
-                          node {
-                            ...CableFields
+                __typename
+                ... on DcimPhysicalDevice {
+                  name { value }
+                  interfaces {
+                    edges {
+                      node {
+                        name { value }
+                        ... on DcimPhysicalInterface {
+                          cable {
+                            node {
+                              ...CableFields
+                            }
                           }
                         }
                       }

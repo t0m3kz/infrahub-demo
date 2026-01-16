@@ -19,8 +19,8 @@ class RackGenerator(CommonGenerator):
         """
         deployment_type = self.data.pod.deployment_type
 
-        # Only update ToR racks in mixed deployment mode
-        if deployment_type != "mixed":
+        # Only update ToR racks in mixed deployment mode, and only from middle/network racks
+        if deployment_type != "mixed" or self.data.rack_type != "network":
             return
 
         # Verify leafs were created in this rack before cascading to ToR racks
@@ -155,14 +155,21 @@ class RackGenerator(CommonGenerator):
         current_index = self.data.index
         deployment_type = self.data.pod.deployment_type
 
-        if deployment_type in ("mixed", "middle_rack") and device_type == "tor":
-            # For ToRs in mixed deployment: reserve ports based on rack index (future racks may fill gaps)
-            # Rack 7 with 2 ToRs → offset = (7-1) × 2 = 12 (reserves ports for potential racks 2-6)
-            offset = (current_index - 1) * device_count
-
+        # For middle_rack deployment ToRs: always offset=0 (ToRs connect to leafs in same rack)
+        if deployment_type == "middle_rack" and device_type == "tor":
+            offset = 0
             self.logger.info(
                 f"Calculated {device_type} offset={offset} for rack {self.data.name} "
-                f"(index={current_index}, tors_per_rack={device_count}, mode={deployment_type})"
+                f"(mode=middle_rack) - intra-rack cabling"
+            )
+
+        # For mixed deployment ToRs: static offset based on rack index
+        # Formula: (rack_index - 1) × tors_per_rack
+        elif deployment_type == "mixed" and device_type == "tor":
+            offset = (current_index - 1) * device_count
+            self.logger.info(
+                f"Calculated {device_type} offset={offset} for rack {self.data.name} "
+                f"(index={current_index}, tors_per_rack={device_count}, mode=mixed)"
             )
 
         # For mixed/middle_rack deployment leafs: calculate offset based on row position
@@ -177,22 +184,21 @@ class RackGenerator(CommonGenerator):
 
         # For tor deployment ToRs: calculate cumulative offset across pod
         # ToRs connect to spines, need cumulative offset across all rows
-        # Formula: offset = (max_tors_per_row × (row - 1)) + (tors_per_rack × (index - 1))
+        # Formula: offset = (max_tors_per_row × (row - 1)) + (device_count × (index - 1))
         elif deployment_type == "tor" and device_type == "tor":
             maximum_tors_per_row = self.data.pod.maximum_tors_per_row or 8
-            tors_per_rack = device_count
 
-            # Offset from all previous rows (all ToRs in previous rows)
+            # Offset from all previous rows (reserve space for max ToRs per row)
             offset_from_previous_rows = maximum_tors_per_row * (self.data.row_index - 1)
 
-            # Offset from previous racks in current row
-            offset_in_current_row = tors_per_rack * (current_index - 1)
+            # Offset from previous racks in current row (reserve space based on rack position)
+            offset_in_current_row = device_count * (current_index - 1)
 
             offset = offset_from_previous_rows + offset_in_current_row
 
             self.logger.info(
                 f"Calculated {device_type} offset={offset} for rack {self.data.name} "
-                f"(row={self.data.row_index}, index={current_index}, tors_per_rack={tors_per_rack}, "
+                f"(row={self.data.row_index}, index={current_index}, tors_in_rack={device_count}, "
                 f"max_tors_per_row={maximum_tors_per_row}, mode={deployment_type})"
             )
 
@@ -206,12 +212,33 @@ class RackGenerator(CommonGenerator):
     async def generate(self, data: dict) -> None:
         """Generate rack topology with special handling for OOB and console devices."""
         try:
-            deployment_list = clean_data(data).get("LocationRack", [])
-            if not deployment_list:
-                self.logger.error("No Rack Deployment data found in GraphQL response")
+            # Handle two scenarios:
+            # 1. Direct node data (automatic trigger): {'name': {...}, 'id': '...', ...}
+            # 2. Query result (manual invocation): {'LocationRack': {'edges': [{'node': {...}}]}}
+
+            if not data:
+                self.logger.error("Generator received empty data")
                 return
 
-            self.data = RackModel(**deployment_list[0])
+            # Check if this is direct node data (has 'name' key directly)
+            if "name" in data and isinstance(data.get("name"), dict):
+                # Direct node data from automatic trigger
+                self.logger.info("Processing direct node data from automatic trigger")
+                self.data = RackModel(**data)
+            elif "LocationRack" in data:
+                # Query result structure
+                deployment_list = clean_data(data).get("LocationRack", [])
+                if not deployment_list:
+                    self.logger.error(
+                        "No Rack Deployment data found in GraphQL query response. "
+                        "This typically means the generator was called manually without a valid 'name' parameter."
+                    )
+                    return
+                self.logger.info("Processing query result from manual invocation")
+                self.data = RackModel(**deployment_list[0])
+            else:
+                self.logger.error(f"Unknown data structure. Keys: {list(data.keys())}")
+                return
         except (ValueError, KeyError, IndexError) as exc:
             self.logger.error(f"Generation failed due to {exc}")
             return
@@ -282,20 +309,40 @@ class RackGenerator(CommonGenerator):
             )
             return
 
-        # Indexes for leaf devices (use row_index for middle rack leafs - one middle rack per row)
+        # Indexes for leaf devices (include row for unique naming across pod)
+        # Device name pattern: dc1-fab1-pod1-row1-rack5-leaf-01
         leaf_indexes: list[int] = [
-            dc.index,
-            pod.index,
-            self.data.row_index,
-        ]
-
-        # Indexes for ToR devices (include both row_index and rack index for unique naming)
-        tor_indexes: list[int] = [
             dc.index,
             pod.index,
             self.data.row_index,
             self.data.index,
         ]
+
+        # Get deployment type once for reuse
+        deployment_type = pod.deployment_type
+
+        # For ToR deployment: include both row and rack index for unique naming
+        # Device name pattern: dc1-fab1-pod2-row1-rack1-tor-01
+        if deployment_type == "tor":
+            self.logger.info(
+                f"ToR rack {self.data.name}: using row={self.data.row_index}, rack_index={self.data.index}"
+            )
+
+            # Indexes for ToR devices (include row and rack for unique naming)
+            tor_indexes: list[int] = [
+                dc.index,
+                pod.index,
+                self.data.row_index,
+                self.data.index,
+            ]
+        else:
+            # Indexes for ToR devices in mixed/middle_rack deployment (same as leaf)
+            tor_indexes: list[int] = [
+                dc.index,
+                pod.index,
+                self.data.row_index,
+                self.data.index,
+            ]
 
         # Use DC design's naming convention (fabric-wide consistency)
         dc_design = pod.parent.design_pattern
@@ -352,8 +399,6 @@ class RackGenerator(CommonGenerator):
             )
 
         # Process ToR devices with specific connectivity logic based on deployment_type
-        deployment_type = pod.deployment_type
-
         for tor_role in self.data.tors or []:
             # Create ToR devices
             tor_devices = await self.create_devices(
@@ -473,12 +518,10 @@ class RackGenerator(CommonGenerator):
                         },
                     )
                 else:
-                    # This is a ToR-only rack - connect to middle rack leafs in same row
-                    # Calculate offset based on ALL ToRs in previous racks within the same row
-                    cabling_offset = self.calculate_cabling_offsets(
-                        device_count=sum(tor_role.quantity or 0 for tor_role in self.data.tors or []),
-                        device_type="tor",
-                    )
+                    # ToR-only rack - connect to middle rack leafs in same row
+                    # Static offset based on rack index
+                    tors_per_rack = len(tor_devices)
+                    cabling_offset = (self.data.index - 1) * tors_per_rack
 
                     # Query leaf devices in same row
                     (
@@ -488,8 +531,8 @@ class RackGenerator(CommonGenerator):
 
                     if leaf_device_names:
                         self.logger.info(
-                            f"Mixed deployment (ToR rack): Found {len(leaf_device_names)} middle rack leafs in row {self.data.row_index} for ToR cabling. "
-                            f"Using cabling_offset={cabling_offset} to account for {cabling_offset} ToRs from previous racks."
+                            f"Mixed deployment: Cabling {len(tor_devices)} ToRs in rack {self.data.index} "
+                            f"to {len(leaf_device_names)} leafs in row {self.data.row_index} with offset={cabling_offset}"
                         )
 
                         await self.create_cabling(

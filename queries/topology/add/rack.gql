@@ -119,7 +119,7 @@ fragment PodFields on TopologyPod {
   }
 }
 
-query RackGenerator($name: String!) {
+query RackGenerator($name: String) {
   LocationRack(name__value: $name) {
     edges {
       node {

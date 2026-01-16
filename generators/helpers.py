@@ -66,7 +66,9 @@ class DeviceNamingConfig:
             if len(indexes) >= 2:
                 components.append(f"pod{indexes[1]}")
             if len(indexes) >= 3:
-                components.append(f"rack{indexes[2]}")
+                components.append(f"row{indexes[2]}")
+            if len(indexes) >= 4:
+                components.append(f"rack{indexes[3]}")
         components.extend([device_type, formatted_idx])
         return components
 

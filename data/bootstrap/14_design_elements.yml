@@ -79,7 +79,10 @@ spec:
     - quantity: 2
       role: leaf
       template: DCS-7050CX3-32C-R_LEAF_MR
-
+    # Arista Mixed Rack Leafs
+    - quantity: 2
+      role: leaf
+      template: DCS-7050CX3-32C-R_LEAF_MIXED
     # Arista ToRs
     - quantity: 2
       role: tor

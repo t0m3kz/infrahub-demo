@@ -289,13 +289,13 @@ class CommonGenerator(InfrahubGenerator):
                 batch_devices.add(task=obj.save, allow_upsert=True, node=obj)
 
                 if loopback_pool:
-                    obj = await self.client.create(
+                    loopback_obj = await self.client.create(
                         kind=DcimVirtualInterface,
                         data={
                             "name": "Loopback0",
                             "description": "Loopback interface",
-                            # refer to device by unique name; server should resolve references on apply
-                            "device": {"hfid": name},
+                            # Reference device object directly
+                            "device": obj,
                             "status": "active",
                             "role": "loopback",
                             "ip_addresses": [
@@ -308,7 +308,7 @@ class CommonGenerator(InfrahubGenerator):
                             ],
                         },
                     )
-                    batch_loopbacks.add(task=obj.save, allow_upsert=True, node=obj)
+                    batch_loopbacks.add(task=loopback_obj.save, allow_upsert=True, node=loopback_obj)
 
             # Execute batch and collect created nodes
             async for node, _ in batch_devices.execute():

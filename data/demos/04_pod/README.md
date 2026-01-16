@@ -69,7 +69,7 @@ uv run infrahubctl artifact generate "Cable matrix for DC" DC1 --branch your_bra
 
 ## What Actually Happens
 
- 
+
 ### Step 1: Pod Creation
 
 - Pod 4 added to DC1 as child

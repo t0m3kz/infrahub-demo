@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-import pytest
 from typing import cast
 
+import pytest
 from conftest import create_mock_interfaces
 
 from generators.helpers import CablingPlanner

@@ -170,6 +170,37 @@ spec:
             role: management
             interface_type: 1000base-t
 
+    - template_name: DCS-7050CX3-32C-R_LEAF_MIXED
+      device_type: DCS-7050CX3-32C-R
+      platform: arista_eos
+      role: leaf
+      status: provisioning
+      interfaces:
+        kind: TemplateDcimPhysicalInterface
+        parameters:
+          expand_range: true
+        data:
+          - template_name: DCS-7050CX3-32C-R_LEAF_MIXED_Ethernet[1-10]/1
+            name: Ethernet[1-10]/1
+            role: customer
+            interface_type: 100gbase-x-qsfp28
+          - template_name: DCS-7050CX3-32C-R_LEAF_MIXED_Ethernet[11-28]/1
+            name: Ethernet[11-28]/1
+            role: leaf
+            interface_type: 100gbase-x-qsfp28
+          - template_name: DCS-7050CX3-32C-R_LEAF_MIXED_Ethernet[29-32]/1
+            name: Ethernet[29-32]/1
+            role: uplink
+            interface_type: 100gbase-x-qsfp28
+          - template_name: DCS-7050CX3-32C-R_LEAF_MIXED_Ethernet[33-34]
+            name: Ethernet[33-34]
+            role: management
+            interface_type: 10gbase-x-sfpp
+          - template_name: DCS-7050CX3-32C-R_LEAF_Management1
+            name: Management1
+            role: management
+            interface_type: 1000base-t
+
     - template_name: DCS-7050CX3-32C-R_TOR
       device_type: DCS-7050CX3-32C-R
       platform: arista_eos
