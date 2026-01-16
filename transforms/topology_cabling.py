@@ -46,10 +46,11 @@ class TopologyCabling(InfrahubTransform):
             raise ValueError(f"Failed to transform cabling data: {e}") from e
 
     def _extract_unique_cables(self, topology_data: dict[str, Any]) -> list[dict[str, Any]]:
-        """Extract unique cables from topology data, avoiding duplicates.
+        """Extract unique cables from topology data.
 
-        Each cable appears twice in the GraphQL response (once from each endpoint),
-        so we deduplicate by cable ID.
+        Supports two query formats:
+        1. New: Cables queried directly via deployment's cables relationship (efficient)
+        2. Legacy: Cables traversed via devices->interfaces->cable (backward compatibility)
 
         Args:
             topology_data: Cleaned topology deployment data from GraphQL
@@ -66,19 +67,39 @@ class TopologyCabling(InfrahubTransform):
             if deployments and isinstance(deployments, list):
                 root = deployments[0]
 
-        # Prefer pod children when present; otherwise use deployment-level devices
-        pods = root.get("children", []) if isinstance(root, dict) else []
-        if pods:
-            for pod in pods:
-                if not isinstance(pod, dict):
+        if not isinstance(root, dict):
+            return []
+
+        deployment_name = self._get_safe_value(root, "name", "Not applicable")
+
+        # Try new format first: direct cables relationship (more efficient)
+        cables = root.get("cables", [])
+        if cables:
+            for cable in cables:
+                if not isinstance(cable, dict):
                     continue
-                pod_name = self._get_safe_value(pod, "name", "Not applicable")
-                devices = pod.get("devices", [])
-                self._collect_cables_from_devices(devices, pod_name, cables_by_id)
+
+                cable_id = cable.get("id")
+                if not cable_id or cable_id in cables_by_id:
+                    continue
+
+                cable_data = self._extract_cable_data(cable, deployment_name)
+                if cable_data:
+                    cables_by_id[cable_id] = cable_data
         else:
-            pod_name = self._get_safe_value(root, "name", "Not applicable") if isinstance(root, dict) else ""
-            devices = root.get("devices", []) if isinstance(root, dict) else []
-            self._collect_cables_from_devices(devices, pod_name, cables_by_id)
+            # Fall back to legacy format: traverse devices->interfaces->cable
+            pods = root.get("children", [])
+            if pods:
+                for pod in pods:
+                    if not isinstance(pod, dict):
+                        continue
+                    pod_name = self._get_safe_value(pod, "name", "Not applicable")
+                    devices = pod.get("devices", [])
+                    self._collect_cables_from_devices(devices, pod_name, cables_by_id)
+            else:
+                # Try deployment-level devices
+                devices = root.get("devices", [])
+                self._collect_cables_from_devices(devices, deployment_name, cables_by_id)
 
         return list(cables_by_id.values())
 
@@ -88,7 +109,7 @@ class TopologyCabling(InfrahubTransform):
         pod_name: str,
         cables_by_id: dict[str, dict[str, Any]],
     ) -> None:
-        """Extract cables from a list of devices for a given pod/context."""
+        """Extract cables from device interfaces (legacy format support)."""
 
         for device in devices:
             if not isinstance(device, dict):
@@ -110,7 +131,7 @@ class TopologyCabling(InfrahubTransform):
                 if cable_data:
                     cables_by_id[cable_id] = cable_data
 
-    def _extract_cable_data(self, cable_info: dict[str, Any], pod_name: str) -> dict[str, Any] | None:
+    def _extract_cable_data(self, cable_info: dict[str, Any], deployment_name: str) -> dict[str, Any] | None:
         """Extract cable connection data from cable information.
 
         Parses cable endpoints to extract source and destination device/interface
@@ -118,7 +139,7 @@ class TopologyCabling(InfrahubTransform):
 
         Args:
             cable_info: Cable information containing type and endpoints
-            pod_name: Pod name for the cable
+            deployment_name: Deployment name for context
 
         Returns:
             Cable record dictionary or None if extraction fails
@@ -149,7 +170,7 @@ class TopologyCabling(InfrahubTransform):
             cable_type = cable_type.get("value", "Unknown")
 
         return {
-            "pod": pod_name,
+            "pod": deployment_name,
             "source_rack": source_rack,
             "source_device": source_device,
             "source_interface": source_interface,
