@@ -29,24 +29,28 @@ cabling_offset = 0  # No cumulative offset needed
 
 ```text
 Pod 1 (middle_rack deployment)
-├── DC1-fab1-pod1-spine-01 ────────┐
-├── DC1-fab1-pod1-spine-02 ────────┤
-│                                  │
-├── Row 1                          │
-│   └── Rack 5 (network rack)      │
-│       ├── DC1-fab1-pod1-row1-rack5-leaf-01 ◄──┬───┐
-│       ├── DC1-fab1-pod1-row1-rack5-leaf-02 ◄──┤   │ (leafs connect to spines)
-│       │   (ports 0-15 available)              │   │
-│       ├── DC1-fab1-pod1-row1-rack5-tor-01 ────┴───┘ (connects to local leafs, offset=0)
-│       └── DC1-fab1-pod1-row1-rack5-tor-02 ────────┘ (connects to local leafs, offset=0)
-│
-└── Row 2
-    └── Rack 5 (network rack)
-        ├── DC1-fab1-pod1-row2-rack5-leaf-01 ◄──┬───┐
-        ├── DC1-fab1-pod1-row2-rack5-leaf-02 ◄──┤   │ (leafs connect to spines)
-        │   (ports 0-15 available)              │   │
-        ├── DC1-fab1-pod1-row2-rack5-tor-01 ────┴───┘ (connects to local leafs, offset=0)
-        └── DC1-fab1-pod1-row2-rack5-tor-02 ────────┘ (connects to local leafs, offset=0)
+├── DC1-fab1-pod1-spine-01 ──────────────────────────┬──┬───┬──┐
+├── DC1-fab1-pod1-spine-02 ──────────────────────────┤──┤───┤──┤
+│                                                    │  │   │  │
+├── Row 1                                            │  │   │  │
+│   └── Rack 5 (network rack)                        │  │   │  │
+│       ├── DC1-fab1-pod1-row1-rack5-leaf-01 ──┬───┐─┘  │   │  │
+│       ├── DC1-fab1-pod1-row1-rack5-leaf-02 ──┤───│────┘   │  │
+│       │   (ports 0-15 available)             │   │        │  │
+│       ├── DC1-fab1-pod1-row1-rack5-tor-01 ───┘   │        │  │
+│       │ (connects to local leafs, offset=0)      │        │  │
+│       └── DC1-fab1-pod1-row1-rack5-tor-02 ───────┘        │  │
+│          (connects to local leafs, offset=1)              │  │
+└── Row 2                                                   │  │
+    └── Rack 5 (network rack)                               │  │
+        ├── DC1-fab1-pod1-row2-rack5-leaf-01 ──┬───┐────────┘  │
+        ├── DC1-fab1-pod1-row2-rack5-leaf-02 ──┤───│───────────┘
+        │   (ports 0-15 available)             │   │
+        ├── DC1-fab1-pod1-row2-rack5-tor-01 ───┘   │
+        │  (connects to local leafs, offset=1)     │
+        │                                          │
+        └── DC1-fab1-pod1-row2-rack5-tor-02 ───────┘
+           (connects to local leafs, offset=1)
 ```
 
 **Key Points**:
@@ -85,31 +89,31 @@ offset = (maximum_tors_per_row × (row_index - 1)) + (tors_in_rack × (rack_inde
 ```text
 Pod 2 (tor deployment - all ToRs connect to spines)
 ├── DC1-fab1-pod2-spine-01 (32 ports) ────┬───┬─┬──┬─┬──┬─┬──┬─┐
-├── DC1-fab1-pod2-spine-02 (32 ports) ────┘   │ |  │ |  │ |  | |
-│                                             │ |  │ |  │ |  | |
-├── Row 1                                     │ |  │ |  │ |  | |
-│   ├── Rack 1 (tor-only)                     │ |  │ |  │ |  | |
-│   │   ├── DC1-fab1-pod2-row1-rack1-tor-01 ──┘ |  │ |  │ |  | |
-│   │   │   (offset=0, spine ports 0-1)         |  │ |  │ |  | |
-│   │   └── DC1-fab1-pod2-row1-rack1-tor-02 ────┘  │ |  │ |  | |
-│   │       (offset=0, spine ports 2-3)            │ |  │ |  | |
-│   │                                              │ |  │ |  | |
-│   └── Rack 5 (tor-only)                          │ |  │ |  | |
-│       ├── DC1-fab1-pod2-row1-rack5-tor-01 ───────┘ |  │ |  | |
-│       │   (offset=8, spine ports 16-17).           |  │ |  | |
-│       └── DC1-fab1-pod2-row1-rack5-tor-02 ─────────┘  │ |  | |
-│           (offset=8, spine ports 18-19)               │ |  | |
-│                                                       │ |  | |
-└── Row 2                                               │ |  | |
-    ├── Rack 1 (tor-only)                               | |  | |
-    │   ├── DC1-fab1-pod2-row2-rack1-tor-01 ────────────┘ |  | |
-    │   │   (offset=10, spine ports 20-21)                │  | |
-    │   └── DC1-fab1-pod2-row2-rack1-tor-02 ──────────────┘  | |
-    │       (offset=10, spine ports 22-23)                   | |
-    │                                                        | |
-    └── Rack 5 (tor-only)                                    | |
-        ├── DC1-fab1-pod2-row2-rack5-tor-01 ─────────────────┘ |
-        │   (offset=18, spine ports 36-37)                     |
+├── DC1-fab1-pod2-spine-02 (32 ports) ────┘   │ │  │ │  │ │  │ │
+│                                             │ │  │ │  │ │  │ │
+├── Row 1                                     │ │  │ │  │ │  │ │
+│   ├── Rack 1 (tor-only)                     │ │  │ │  │ │  │ │
+│   │   ├── DC1-fab1-pod2-row1-rack1-tor-01 ──┘ │  │ │  │ │  │ │
+│   │   │   (offset=0, spine ports 0-1)         │  │ │  │ │  │ │
+│   │   └── DC1-fab1-pod2-row1-rack1-tor-02 ────┘  │ │  │ │  │ │
+│   │       (offset=0, spine ports 2-3)            │ │  │ │  │ │
+│   │                                              │ │  │ │  │ │
+│   └── Rack 5 (tor-only)                          │ │  │ │  │ │
+│       ├── DC1-fab1-pod2-row1-rack5-tor-01 ───────┘ │  │ │  │ │
+│       │   (offset=8, spine ports 16-17).           │  │ │  │ │
+│       └── DC1-fab1-pod2-row1-rack5-tor-02 ─────────┘  │ │  │ │
+│           (offset=8, spine ports 18-19)               │ │  │ │
+│                                                       │ │  │ │
+└── Row 2                                               │ │  │ │
+    ├── Rack 1 (tor-only)                               │ │  │ │
+    │   ├── DC1-fab1-pod2-row2-rack1-tor-01 ────────────┘ │  │ │
+    │   │   (offset=10, spine ports 20-21)                │  │ │
+    │   └── DC1-fab1-pod2-row2-rack1-tor-02 ──────────────┘  │ │
+    │       (offset=10, spine ports 22-23)                   │ │
+    │                                                        │ │
+    └── Rack 5 (tor-only)                                    │ │
+        ├── DC1-fab1-pod2-row2-rack5-tor-01 ─────────────────┘ │
+        │   (offset=18, spine ports 36-37)                     │
         └── DC1-fab1-pod2-row2-rack5-tor-02 ───────────────────┘
             (offset=18, spine ports 38-39)
 ```
