@@ -76,14 +76,11 @@ query loadbalancer_config($device: String!) {
               status {
                 value
               }
-              ... on ServiceVIP {
+              ... on OnpremLoadBalancer {
                 hostname {
                   value
                 }
-                mode {
-                  value
-                }
-                balance {
+                haproxy_mode {
                   value
                 }
                 ssl_certificate {
@@ -96,7 +93,7 @@ query loadbalancer_config($device: String!) {
                     }
                   }
                 }
-                backend_servers{
+                backends{
                   edges{
                     node{
                       hostname{

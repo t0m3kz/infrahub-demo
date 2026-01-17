@@ -1,0 +1,28 @@
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: CloudNetworkACL
+  data:
+    # AWS Network ACL for public subnet
+    - name: cust1-public-nacl
+      vpc: cust1-eu-west-1
+      subnets:
+        - cust1-eu-west-1a-public
+        - cust1-eu-west-1b-public
+      description: Network ACL for public subnets - allows HTTP/HTTPS ingress
+
+    # AWS Network ACL for private subnet
+    - name: cust1-private-nacl
+      vpc: cust1-eu-west-1
+      subnets:
+        - cust1-eu-west-1a-private
+        - cust1-eu-west-1b-private
+      description: Network ACL for private subnets - restricts external access
+
+    # Azure Network Security Group (NSG) as ACL
+    - name: cust2-app-nacl
+      vpc: cust2-westeurope
+      subnets:
+        - cust2-westeurope-1
+      description: Network ACL for Azure app subnet

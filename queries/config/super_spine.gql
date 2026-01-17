@@ -5,14 +5,6 @@ query super_spine_config($device: String!) {
         id
         name { value }
         role { value }
-        deployment {
-          node{
-            id
-            name {
-              value
-            }
-          }
-        }
         device_type {
           node {
             name { value }
@@ -48,7 +40,7 @@ query super_spine_config($device: String!) {
               name { value }
               status { value }
 
-              ... on ServiceBGP {
+              ... on OnpremBGP {
                 session_type { value }
                 multipath { value }
                 graceful_restart { value }
@@ -75,7 +67,7 @@ query super_spine_config($device: String!) {
                   }
                 }
               }
-              ... on ServicePIM {
+              ... on OnpremPIM {
                 dr_priority { value }
                 rp_mode { value }
                 rp_address {
@@ -85,7 +77,7 @@ query super_spine_config($device: String!) {
                   }
                 }
               }
-              ... on ServiceOSPF {
+              ... on OnpremOSPF {
                 process_id { value }
                 version { value }
                 router_type { value }
@@ -138,7 +130,7 @@ query super_spine_config($device: String!) {
               interface_services{
                 edges{
                   node{
-                    ... on ServiceOSPF{
+                    ... on OnpremOSPF{
                       area { node {area {value}}}
                       ospf_interface_profile{node{
                         metric{value}

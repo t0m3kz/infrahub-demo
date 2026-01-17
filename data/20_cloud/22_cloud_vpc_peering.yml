@@ -1,0 +1,21 @@
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: CloudVirtualNetworkPeering
+  data:
+    # VPC Peering within same region (AWS)
+    - name: cust1-vpc-peering-dev-prod
+      peering_status: active
+      requester_vpc: cust1-eu-west-1
+      accepter_vpc: cust1-eu-west-1-dev
+      requester_route_table: cust1-public-rt
+      accepter_route_table: cust1-dev-rt
+      description: Peering between production and development VPCs
+
+    # VNet Peering (Azure)
+    - name: cust2-vnet-peering-hub-spoke
+      peering_status: active
+      requester_vpc: cust2-westeurope
+      accepter_vpc: cust2-northeurope
+      description: Hub and spoke VNet peering

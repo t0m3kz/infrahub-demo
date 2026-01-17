@@ -1,0 +1,76 @@
+---
+version: "1.0"
+
+nodes:
+  - name: Colocation
+    namespace: Topology
+    inherit_from:
+      - CoreArtifactTarget
+      - TopologyDeployment
+    uniqueness_constraints:
+      - ["name__value"]
+    human_friendly_id:
+      - name__value
+    include_in_menu: true
+    display_label: "{{ name__value}}"
+    label: Colocation Center
+    children: TopologyColocationMetro
+
+  - name: ColocationMetro
+    namespace: Topology
+    inherit_from:
+      - CoreArtifactTarget
+      - TopologyDeployment
+    uniqueness_constraints:
+      - ["name__value"]
+    human_friendly_id:
+      - name__value
+    include_in_menu: false
+    display_label: "{{ name__value}}"
+    label: Colocation Center
+    parent: TopologyColocation
+    children: TopologyColocationAZ
+    relationships:
+      - name: location
+        peer: LocationMetro
+        cardinality: one
+        kind: Attribute
+        optional: true
+        identifier: "colocation__metro__location"
+        order_weight: 1000
+        description: "Geographic location mapping for this region"
+
+  - name: ColocationAZ
+    namespace: Topology
+    inherit_from:
+      - TopologyDeployment
+      - TopologyPhysicalDeployment
+      - GeneratorTarget
+      - TopologyRackHosting
+      - TopologyDeviceHosting
+    parent: TopologyColocationMetro
+    label: Colocation Availability Zone
+    children: ""
+    human_friendly_id:
+      - name__value
+    display_label: "{{ name__value }}"
+    uniqueness_constraints:
+      - [name__value]
+    include_in_menu: false
+    attributes:
+      - name: deployment_type
+        kind: Dropdown
+        label: Strategy
+        optional: false
+        order_weight: 650
+        choices:
+          - name: virtual
+            label: Virtual
+            color: "#aedcee"
+          - name: physical
+            label: Physical
+            color: "#7f7fff"
+          - name: hybrid
+            label: Hybrid
+            color: "#38e7fb"
+        default_value: physical

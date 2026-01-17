@@ -1,0 +1,10 @@
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: CloudSecurityGroup
+  data:
+    - name: cust1-web-sg
+      vpc: cust1-eu-west-1
+    - name: cust2-app-sg
+      vpc: cust2-westeurope

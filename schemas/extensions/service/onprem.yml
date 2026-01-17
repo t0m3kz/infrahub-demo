@@ -1,9 +1,12 @@
 ---
 version: "1.0"
+
 generics:
   - name: Generic
-    namespace: Service
-    description: "Services"
+    namespace: Onprem
+    description: "Base for on-premises infrastructure services and resources"
+    label: "On-Premises Resource"
+    icon: "mdi:server-network"
     include_in_menu: false
     order_by:
       - name__value
@@ -14,7 +17,13 @@ generics:
         label: Name
         optional: false
         order_weight: 1
-        description: Service Name
+        description: "Resource name"
+      - name: description
+        kind: Text
+        label: Description
+        optional: true
+        order_weight: 2
+        description: "Resource description"
       - name: status
         order_weight: 30
         optional: false
@@ -30,7 +39,7 @@ generics:
             color: "#7fbf7f"
           - name: decommissioning
             label: Decommissioning
-            description: "In the process of beeing taken out of service."
+            description: "In the process of being taken out of service."
             color: "#fbfbfb"
           - name: decommissioned
             label: Decommissioned
@@ -45,13 +54,20 @@ generics:
         order_weight: 100
         optional: false
         on_delete: no-action
+      - name: deployment
+        peer: TopologyDeployment
+        cardinality: one
+        kind: Attribute
+        order_weight: 110
+        optional: false
+        on_delete: no-action
+        description: "The deployment location for this resource"
 
   - name: GenericDevice
-    namespace: Service
-    description: "Services"
-    # state: absent
+    namespace: Onprem
+    description: "On-premises resources attached to physical devices"
+    label: "Device-based Resource"
     include_in_menu: false
-    # This is only owning relationships toward various services for interfaces
     relationships:
       - name: device
         peer: DcimDevice
@@ -63,8 +79,9 @@ generics:
         order_weight: 1000
 
   - name: GenericInterfaces
-    namespace: Service
-    description: "Services"
+    namespace: Onprem
+    description: "On-premises resources attached to device interfaces"
+    label: "Interface-based Resource"
     include_in_menu: false
     relationships:
       - name: interfaces
@@ -80,24 +97,21 @@ extensions:
     - kind: DcimDevice
       relationships:
         - name: device_services
-          peer: ServiceGeneric
-          label: Services
+          peer: OnpremGeneric
+          label: On-Premises Services
           optional: true
           direction: outbound
           cardinality: many
           kind: Generic
-          # order_weight: 1400
           on_delete: no-action
           identifier: device_services
     - kind: DcimInterface
       relationships:
         - name: interface_services
-          peer: ServiceGeneric
-          label: Interface Services
+          peer: OnpremGeneric
+          label: On-Premises Interface Services
           identifier: interface_services
           optional: true
           cardinality: many
           kind: Generic
-          # order_weight: 1400
           on_delete: no-action
-          # read_only: true

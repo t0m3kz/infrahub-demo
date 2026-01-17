@@ -32,9 +32,7 @@ query border_leaf_config($device: String!) {
             node {
               __typename
               name { value }
-              status { value }
-
-              ... on ServiceBGP {
+              ... on OnpremBGP {
                 session_type { value }
                 multipath { value }
                 graceful_restart { value }
@@ -61,7 +59,12 @@ query border_leaf_config($device: String!) {
                   }
                 }
               }
-              ... on ServiceOSPF {
+              ... on OnpremPIM {
+                dr_priority { value }
+                rp_mode { value }
+                rp_address { node { address { value } } }
+              }
+              ... on OnpremOSPF {
                 process_id { value }
                 version { value }
                 router_type { value }
@@ -114,7 +117,7 @@ query border_leaf_config($device: String!) {
                 edges {
                   node {
                     __typename
-                    ... on ServiceOSPF {
+                    ... on OnpremOSPF {
                       area { node { area { value } } }
                       ospf_interface_profile {
                         node {
@@ -125,7 +128,7 @@ query border_leaf_config($device: String!) {
                         }
                       }
                     }
-                    ... on ServiceNetworkSegment {
+                    ... on OnpremNetworkSegment {
                       vlan_id { value }
                       name { value }
                     }

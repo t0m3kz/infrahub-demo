@@ -8,7 +8,7 @@ nodes:
     label: "Virtual Fabric Design Pattern"
     icon: "mdi:cloud-outline"
     include_in_menu: true
-    menu_placement: "ServiceGeneric"
+    menu_placement: "OnpremGeneric"
     uniqueness_constraints:
       - [name__value]
     human_friendly_id:
@@ -269,7 +269,7 @@ nodes:
 
 extensions:
   nodes:
-    - kind: ServiceVirtualFabric
+    - kind: CustomerVirtualFabric
       relationships:
         - name: design_pattern
           peer: TopologyVirtualFabricDesign

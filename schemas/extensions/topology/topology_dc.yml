@@ -1,0 +1,425 @@
+---
+version: "1.0"
+
+nodes:
+  - name: DataCenterDesign
+    namespace: Topology
+    description: "Design aspect for data center topology - DC-level parameters"
+    label: "Data Center Design"
+    inherit_from:
+      - TopologyDesign
+    attributes:
+      - name: maximum_super_spines
+        order_weight: 200
+        label: "Maximum Super Spines"
+        kind: Number
+        default_value: 2
+        optional: false
+        parameters:
+          min_value: 1
+          max_value: 4
+      - name: maximum_pods
+        order_weight: 300
+        label: "Maximum Pods"
+        kind: Number
+        parameters:
+          min_value: 2
+          max_value: 8
+        default_value: 2
+        optional: false
+      - name: maximum_spines
+        order_weight: 350
+        label: "Maximum Spine Switches per Pod"
+        kind: Number
+        default_value: 2
+        optional: false
+        parameters:
+          min_value: 2
+          max_value: 4
+      - name: maximum_switches
+        order_weight: 400
+        label: "Maximum Fabric Switches per Pod"
+        kind: Number
+        default_value: 16
+        optional: false
+      - name: naming_convention
+        order_weight: 500
+        label: "Device Naming Convention"
+        kind: Dropdown
+        default_value: standard
+        optional: true
+        choices:
+          - name: standard
+            label: Standard
+            description: "Standard device naming (e.g., DC1-1-R01-L01)"
+          - name: hierarchical
+            label: Hierarchical
+            description: "Hierarchical naming with full path"
+          - name: flat
+            label: Flat
+            description: "Flat naming without hierarchy"
+    relationships:
+      - name: deployments
+        peer: TopologyDataCenter
+        kind: Generic
+        cardinality: many
+        identifier: "dc__deployments"
+        order_weight: 5000
+
+  - name: Element
+    namespace: Topology
+    description: "Physical aspect of topology elements."
+    label: "Network Elements"
+    icon: "carbon:network-3-reference"
+    menu_placement: "DesignTopology"
+    human_friendly_id:
+      - quantity__value
+      - role__value
+      - template__template_name__value
+    order_by: [role__value, quantity__value, template__template_name__value]
+    display_label: >
+      {{quantity__value}} x {{role__value|upper}}
+      {{template__template_name__value}}
+    uniqueness_constraints:
+      - ["template", "quantity__value", "role__value"]
+    attributes:
+      - name: quantity
+        kind: Number
+        order_weight: 1200
+      - name: role
+        kind: Dropdown
+        optional: true
+        order_weight: 1000
+        choices:
+          - name: core
+            label: Core Router
+            description: Central part of the network.
+            color: "#7f7fff"
+          - name: edge
+            label: Edge Router
+            description: Network boundary with external networks.
+            color: "#bf7fbf"
+          - name: cpe
+            label: Customer Premise Equipment
+            description: >
+              Devices located at the customer's premises.
+            color: "#bf7f7f"
+          - name: leaf
+            label: Leaf Switch
+            description: Leaf Switch part of a Pod.
+            color: "#e6e6fa"
+          - name: tor
+            label: ToR/Level2 Switch
+            description: Top of Rack  or Lavel2 leaf part of a Pod.
+            color: "#e6e6fa"
+          - name: border-leaf
+            label: Border Leaf Switch
+            description: Border Leaf providing external connectivity in a Pod.
+            color: "#dda0dd"
+          - name: firewall
+            label: Firewall
+            description: "Security boundary with external network"
+            color: "#6e5abd"
+          - name: load-balancer
+            label: Load Balancer
+            description: Load Balancer part of a Fabric.
+            color: "#38e7fb"
+          - name: oob
+            label: OOB Switch
+            description: Out of Band Switch part of a Fabric.
+            color: "#e3e7fd"
+          - name: console
+            label: Console Server
+            description: Console Server part of a Fabric.
+            color: "#e9ebfd"
+    relationships:
+      - name: template
+        label: Device Template
+        peer: CoreObjectTemplate
+        optional: false
+        cardinality: one
+        kind: Attribute
+        order_weight: 1500
+
+  - name: DataCenter
+    namespace: Topology
+    inherit_from:
+      - CoreArtifactTarget
+      - TopologyDeployment
+      - TopologyPhysicalDeployment
+      - GeneratorTarget
+      - TopologyDeviceHosting
+    label: Data Center
+    include_in_menu: true
+    children: TopologyPod
+    uniqueness_constraints:
+      - ["name__value", "index__value"]
+    human_friendly_id:
+      - name__value
+      - index__value
+    display_label: "{{ name__value}} - Fabric {{index__value}}"
+    attributes:
+      - name: index
+        kind: Number
+        order_weight: 110
+      - name: status
+        kind: Dropdown
+        label: Status
+        optional: false
+        default_value: provisioning
+        order_weight: 550
+        choices:
+          - name: active
+            label: Active
+            description: "Operational and in service."
+            color: "#7FBF7F"
+          - name: provisioning
+            label: Provisioning
+            description: "Being built or staged."
+            color: "#FFFF7F"
+          - name: maintenance
+            label: Maintenance
+            description: "Temporarily under maintenance."
+            color: "#FFD27F"
+          - name: decommissioned
+            label: Decommissioned
+            description: "Removed from active service."
+            color: "#BFBFBF"
+      - name: fully_managed
+        label: Fully Managed
+        kind: Boolean
+        optional: false
+        default_value: true
+        order_weight: 600
+      - name: strategy
+        kind: Dropdown
+        label: Strategy
+        optional: false
+        order_weight: 650
+        choices:
+          - name: ospf-ibgp
+            label: ospf-ibgp
+            color: "#aedcee"
+          - name: ebgp-ibgp
+            label: ebgp-ibgp
+            color: "#7f7fff"
+        default_value: ebgp-ibgp
+      - name: underlay
+        label: IPV6 underlay
+        kind: Boolean
+        optional: false
+        default_value: false
+        order_weight: 660
+      - name: amount_of_super_spines
+        label: Amount of Super Spine switches
+        kind: Number
+        optional: false
+        default_value: 2
+        order_weight: 1000
+        parameters:
+          min_value: 1
+          max_value: 4
+      - name: fabric_interface_sorting_method
+        kind: Dropdown
+        label: Fabric interface assignment
+        choices:
+          - name: bottom_up
+            label: Bottom Up
+            description: Assign interfaces bottom-up.
+            color: "#869FB3"
+          - name: top_down
+            label: Top Down
+            description: Assign interfaces top-down.
+            color: "#004E64"
+        default_value: bottom_up
+        order_weight: 1200
+      - name: spine_interface_sorting_method
+        kind: Dropdown
+        label: Spine interface assignment
+        choices:
+          - name: bottom_up
+            label: Bottom Up
+            description: Assign interfaces bottom-up.
+            color: "#869FB3"
+          - name: top_down
+            label: Top Down
+            description: Assign interfaces top-down.
+            color: "#004E64"
+        default_value: bottom_up
+        order_weight: 1300
+    relationships:
+      - name: design_pattern
+        peer: TopologyDataCenterDesign
+        kind: Generic
+        cardinality: one
+        identifier: "dc__design_pattern"
+        order_weight: 500
+        on_delete: no-action
+      - name: super_spine_template
+        peer: TemplateDcimPhysicalDevice
+        kind: Attribute
+        cardinality: one
+        identifier: "fabric__super_spine_template"
+        order_weight: 1100
+        on_delete: no-action
+
+  - name: Pod
+    namespace: Topology
+    inherit_from:
+      - TopologyDeployment
+      - GeneratorTarget
+      - TopologyRackHosting
+      - TopologyDeviceHosting
+    parent: TopologyDataCenter
+    children: ""
+    label: Pod
+    human_friendly_id:
+      - parent__name__value
+      - parent__index__value
+      - index__value
+    display_label: "{{ name__value }}"
+    uniqueness_constraints:
+      - ["name__value", "index__value"]
+    include_in_menu: false
+    attributes:
+      - name: index
+        kind: Number
+        order_weight: 110
+      - name: status
+        kind: Dropdown
+        label: Status
+        optional: false
+        default_value: provisioning
+        order_weight: 140
+        choices:
+          - name: active
+            label: Active
+            description: "Operational and in service."
+            color: "#7FBF7F"
+          - name: provisioning
+            label: Provisioning
+            description: "Being built or staged."
+            color: "#FFFF7F"
+          - name: maintenance
+            label: Maintenance
+            description: "Temporarily under maintenance."
+            color: "#FFD27F"
+          - name: decommissioned
+            label: Decommissioned
+            description: "Removed from active service."
+            color: "#BFBFBF"
+      - name: name
+        kind: Text
+        computed_attribute:
+          kind: Jinja2
+          jinja2_template: >
+            {{parent__name__value|upper}}-{{parent__index__value}}-POD-{{
+            index__value }}
+        read_only: true
+        optional: false
+      - name: amount_of_spines
+        label: Amount of Spine switches
+        kind: Number
+        optional: false
+        default_value: 4
+        order_weight: 1000
+        parameters:
+          min_value: 1
+          max_value: 4
+      - name: number_of_rows
+        order_weight: 1050
+        label: "Number of Rows"
+        description: "Number of rack rows in this pod (for layout planning)"
+        kind: Number
+        default_value: 1
+        optional: true
+        parameters:
+          min_value: 1
+          max_value: 20
+      - name: maximum_leafs_per_row
+        order_weight: 1110
+        label: "Maximum Leafs per Row"
+        description: >
+          Maximum leaf switches per row for offset calculation
+        kind: Number
+        optional: true
+        parameters:
+          min_value: 0
+          max_value: 100
+      - name: maximum_tors_per_row
+        order_weight: 1120
+        label: "Maximum ToRs per Row"
+        description: "Maximum ToR switches per row for offset calculation"
+        kind: Number
+        optional: true
+        parameters:
+          min_value: 0
+          max_value: 100
+      - name: deployment_type
+        kind: Dropdown
+        optional: false
+        order_weight: 150
+        choices:
+          - name: middle_rack
+            label: Middle Rack
+            description: Middle Rack deployment
+            color: "#7f7fff"
+          - name: tor
+            label: Top of Rack
+            description: Top of Rack deployment
+            color: "#bf7fbf"
+          - name: mixed
+            label: ToR and Middle Rack
+            description: Mix of ToR and Middle Rack deployment
+            color: "#bf7f7f"
+        default_value: tor
+      - name: leaf_interface_sorting_method
+        kind: Dropdown
+        choices:
+          - name: bottom_up
+            color: "#869FB3"
+            description: Assign interfaces bottom-up.
+          - name: top_down
+            color: "#004E64"
+            description: Assign interfaces top-down.
+        default_value: bottom_up
+        order_weight: 3000
+      - name: spine_interface_sorting_method
+        kind: Dropdown
+        choices:
+          - name: bottom_up
+            color: "#869FB3"
+            description: Assign interfaces bottom-up.
+          - name: top_down
+            color: "#004E64"
+            description: Assign interfaces top-down.
+        default_value: bottom_up
+        order_weight: 4000
+      - name: usage
+        kind: Text
+        read_only: true
+        optional: true
+    relationships:
+      - name: spine_template
+        peer: TemplateDcimPhysicalDevice
+        kind: Attribute
+        cardinality: one
+        identifier: "pod__spine_template"
+        order_weight: 1100
+        on_delete: no-action
+      - name: loopback_pool
+        peer: CoreIPAddressPool
+        kind: Attribute
+        cardinality: one
+        optional: true
+        identifier: "pod__loopback_pool"
+        order_weight: 6000
+        on_delete: cascade
+      - name: prefix_pool
+        peer: CoreIPPrefixPool
+        kind: Attribute
+        cardinality: one
+        optional: true
+        identifier: "pod__prefix_pool"
+        order_weight: 7000
+        on_delete: cascade

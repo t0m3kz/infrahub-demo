@@ -3,8 +3,8 @@ version: "1.0"
 
 nodes:
   - name: VirtualFabric
-    namespace: Service
-    description: Customer virtual fabric deployment with resource limits pattern
+    namespace: Customer
+    description: Customer's virtual fabric deployment with resource limits
     label: "Virtual Fabric Deployment"
     icon: "mdi:cloud-network"
     include_in_menu: false
@@ -84,7 +84,7 @@ extensions:
     - kind: OrganizationCustomer
       relationships:
         - name: virtual_fabric_deployments
-          peer: ServiceVirtualFabric
+          peer: CustomerVirtualFabric
           cardinality: many
           kind: Component
           on_delete: cascade
@@ -94,7 +94,7 @@ extensions:
     - kind: TopologyDataCenter
       relationships:
         - name: virtual_fabric_deployments
-          peer: ServiceVirtualFabric
+          peer: CustomerVirtualFabric
           cardinality: many
           kind: Component
           optional: true

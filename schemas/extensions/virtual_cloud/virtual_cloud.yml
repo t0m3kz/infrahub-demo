@@ -3,8 +3,8 @@ version: "1.0"
 
 nodes:
   - name: VirtualCloud
-    namespace: Service
-    description: "Customer virtual cloud deployment with regional presence"
+    namespace: Customer
+    description: "Customer's virtual cloud deployment with regional presence"
     label: "Virtual Cloud"
     icon: "mdi:cloud-outline"
     include_in_menu: true
@@ -12,6 +12,7 @@ nodes:
       - CoreArtifactTarget
     uniqueness_constraints:
       - ["name__value", "customer"]
+      - ["customer", "primary_region"]
     human_friendly_id:
       - customer__name__value
       - name__value
@@ -22,7 +23,8 @@ nodes:
         kind: Text
         computed_attribute:
           kind: Jinja2
-          jinja2_template: "{{deployment__name__value}}-{{ customer__name__value }}"  # yamllint disable-line rule:line-length
+          jinja2_template: >
+            {{primary_region__name__value}}-{{ customer__name__value }}
         read_only: true
         optional: false
         description: "Unique name for the customer deployment"
@@ -56,13 +58,6 @@ nodes:
             label: "Multi-Cloud"
             description: "Multiple cloud providers"
             color: "#8E44AD"
-
-      - name: primary_region
-        kind: Text
-        label: "Primary Region"
-        description: "Primary deployment region (e.g., us-east-1, westeurope)"
-        optional: false
-        order_weight: 250
 
       - name: account_id
         kind: Text
@@ -201,7 +196,39 @@ nodes:
           max_value: 365
         description: "Access key rotation interval in days"
 
+      - name: internet_exposed
+        kind: Boolean
+        label: "Internet Exposed"
+        optional: true
+        default_value: false
+        order_weight: 960
+        description: "Whether workloads are reachable from the internet"
+
+      - name: requires_private_connectivity
+        kind: Boolean
+        label: "Requires Private Connectivity"
+        optional: true
+        default_value: true
+        order_weight: 970
+        description: >
+          Indicates need for private links/VPN/Direct Connect/ExpressRoute
+
+      - name: tags
+        kind: List
+        optional: true
+        order_weight: 980
+
     relationships:
+      - name: primary_region
+        peer: TopologyCloudRegion
+        cardinality: one
+        kind: Attribute
+        identifier: "virtualcloud__primary_region"
+        label: "Primary Region"
+        description: "Primary deployment region (linked to cloud regions)"
+        optional: false
+        order_weight: 250
+
       - name: customer
         peer: OrganizationCustomer
         cardinality: one
@@ -210,14 +237,22 @@ nodes:
         order_weight: 1100
         description: "Customer organization owning this deployment"
 
-      - name: deployment
+      - name: secondary_regions
         peer: TopologyCloudRegion
+        cardinality: many
+        kind: Attribute
+        identifier: "virtualcloud__secondary_regions"
+        optional: true
+        order_weight: 1050
+        description: "Optional secondary regions for multi-region deployments"
+
+      - name: cloud_account
+        peer: CloudAccount
         cardinality: one
         kind: Attribute
-        order_weight: 1000
-        optional: false
-        on_delete: no-action
-        description: "The deployment location for customer services"
+        optional: true
+        order_weight: 1200
+        description: "Optional binding to a concrete cloud account"
 
 # Extensions to other nodes
 extensions:
@@ -225,7 +260,7 @@ extensions:
     - kind: OrganizationCustomer
       relationships:
         - name: virtual_clouds
-          peer: ServiceVirtualCloud
+          peer: CustomerVirtualCloud
           cardinality: many
           kind: Component
           on_delete: cascade

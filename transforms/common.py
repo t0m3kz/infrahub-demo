@@ -33,7 +33,7 @@ def get_bgp_profile(device_services: list[dict[str, Any]]) -> list[dict[str, Any
     unique_keys = {"name", "remote_ip", "remote_as"}
     peer_groups = defaultdict(list)
     for service in device_services:
-        if service.get("typename") == "ServiceBGP":
+        if service.get("typename") == "OnpremBGP":
             peer_group_name = service.get("peer_group", {}).get("name", "unknown")
             peer_groups[peer_group_name].append(service)
 
@@ -71,7 +71,7 @@ def get_ospf(device_services: list[dict[str, Any]]) -> list[dict[str, Any]]:
     ospf_configs: list[dict[str, Any]] = []
 
     for service in device_services:
-        if service.get("typename") == "ServiceOSPF":
+        if service.get("typename") == "OnpremOSPF":
             ospf_config = {
                 "process_id": service.get("process_id", 1),
                 "router_id": service.get("router_id", {}).get("address", ""),
@@ -97,7 +97,7 @@ def get_vlans(data: list) -> list[dict[str, Any]]:
             (segment.get("vlan_id"), segment.get("name"))
             for interface in data
             for segment in (interface.get("interface_services") or [])
-            if segment.get("typename") == "ServiceNetworkSegment"
+            if segment.get("typename") == "OnpremNetworkSegment"
         }
     ]
 
@@ -121,12 +121,12 @@ def get_interfaces(data: list) -> list[dict[str, Any]]:
         vlans = [
             s.get("vlan_id")
             for s in (iface.get("interface_services") or [])
-            if s.get("typename") == "ServiceNetworkSegment"
+            if s.get("typename") == "OnpremNetworkSegment"
         ]
         ospf_areas = [
             s.get("area", {}).get("area")
             for s in (iface.get("interface_services") or [])
-            if s.get("typename") == "ServiceOSPF"
+            if s.get("typename") == "OnpremOSPF"
         ]
 
         # Extract IP addresses - after clean_data, these are dicts with 'address' and 'ip_namespace'

@@ -37,7 +37,7 @@ extensions:
           kind: Generic
           cardinality: many
 
-    - kind: ServiceBGP
+    - kind: OnpremBGP
       relationships:
         - name: import_routing_policies
           label: Import Routing Policies

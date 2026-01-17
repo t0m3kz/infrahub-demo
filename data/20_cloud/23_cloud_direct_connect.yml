@@ -1,0 +1,25 @@
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: CloudDirectConnect
+  data:
+    # AWS Direct Connect in Equinix London
+    - name: cust1-dx-lon
+      bandwidth: 10Gbps
+      connection_type: dedicated
+      vlan_id: 100
+      account: cust1-aws
+      region: aws-cloud-eu-west-1
+      location: Equinix LD5
+      description: Direct Connect from Equinix London to AWS eu-west-1
+
+    # Azure ExpressRoute in Amsterdam
+    - name: cust2-er-ams
+      bandwidth: 1Gbps
+      connection_type: hosted
+      vlan_id: 200
+      account: cust2-azure
+      region: azure-cloud-westeurope
+      location: Equinix AM3
+      description: ExpressRoute from Equinix Amsterdam to Azure West Europe

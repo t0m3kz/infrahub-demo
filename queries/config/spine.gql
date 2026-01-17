@@ -31,7 +31,7 @@ query edge_config($device: String!) {
               name { value }
               status { value }
 
-              ... on ServiceBGP {
+              ... on OnpremBGP {
                 session_type { value }
                 multipath { value }
                 graceful_restart { value }
@@ -58,7 +58,7 @@ query edge_config($device: String!) {
                   }
                 }
               }
-              ... on ServicePIM {
+              ... on OnpremPIM {
                 dr_priority { value }
                 rp_mode { value }
                 rp_address {
@@ -68,7 +68,7 @@ query edge_config($device: String!) {
                   }
                 }
               }
-              ... on ServiceOSPF {
+              ... on OnpremOSPF {
                 process_id { value }
                 version { value }
                 router_type { value }
@@ -121,7 +121,7 @@ query edge_config($device: String!) {
                 edges {
                   node {
                     __typename
-                    ... on ServiceOSPF {
+                    ... on OnpremOSPF {
                       area { node { area { value } } }
                       ospf_interface_profile {
                         node {
@@ -132,7 +132,7 @@ query edge_config($device: String!) {
                         }
                       }
                     }
-                    ... on ServiceNetworkSegment {
+                    ... on OnpremNetworkSegment {
                       vlan_id { value }
                       name { value }
                     }

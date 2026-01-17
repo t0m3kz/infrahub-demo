@@ -134,8 +134,225 @@ class MyCheck(InfrahubCheck):
 
 #### Base vs Extensions
 
-- **Base schemas** (`schemas/base/`): Core models (DCIM, IPAM, Location, Topology).
-- **Extension schemas** (`schemas/extensions/`): Feature-specific extensions.
+- **Base schemas** (`schemas/base/`): Core models (DCIM, IPAM, Location, Topology, Platform generics).
+- **Extension schemas** (`schemas/extensions/`): Feature-specific extensions and implementations.
+
+#### Schema Architecture & Namespace Strategy
+
+This project follows a **layered architecture** with clear separation between platform abstractions and technology implementations:
+
+```text
+┌─────────────────────────────────────────────────────────────┐
+│                    PLATFORM LAYER                           │
+│  Technology-agnostic base abstractions (schemas/base/)      │
+├─────────────────────────────────────────────────────────────┤
+│  Platform.NetworkSegment    # Base for all segments        │
+│  Platform.LoadBalancer      # Base for all LBs             │
+├─────────────────────────────────────────────────────────────┤
+│              CUSTOMER ABSTRACTIONS                          │
+│  Customer-facing logical views (schemas/extensions/)        │
+├─────────────────────────────────────────────────────────────┤
+│  Customer.*                 # Customer logical abstractions │
+│    Customer.VirtualCloud    # Multi-region cloud deployment│
+│    Customer.VirtualFabric   # Virtual data center slice    │
+├─────────────────────────────────────────────────────────────┤
+│              IMPLEMENTATION LAYERS                          │
+│  Technology-specific implementations (schemas/extensions/)  │
+├─────────────────────────────────────────────────────────────┤
+│  OnPrem.*                   # On-premises infrastructure    │
+│    OnPrem.NetworkSegment    # VLANs, VXLANs, VRFs         │
+│    OnPrem.LoadBalancer      # VIP/HAProxy/F5/Nginx        │
+│                                                             │
+│  Cloud.*                    # Public cloud resources        │
+│    Cloud.Subnet             # Cloud network segments        │
+│    Cloud.LoadBalancer       # ALB/NLB/Azure LB             │
+│                                                             │
+│  Hybrid.*                   # Cross-platform (future)       │
+│  Edge.*                     # Edge computing (future)       │
+├─────────────────────────────────────────────────────────────┤
+│              FUNCTIONAL DOMAINS                             │
+│  Routing.*, Security.*, Loadbalancer.*, Service.*          │
+└─────────────────────────────────────────────────────────────┘
+```
+
+**Namespace Guidelines**:
+
+- **Platform**: Technology-agnostic base generics that provide common classification (segment_type, lb_type)
+- **Customer**: Customer-facing logical abstractions that span multiple technologies (VirtualCloud, VirtualFabric)
+- **OnPrem**: On-premises/self-hosted infrastructure (physical data centers, private cloud)
+- **Cloud**: Public cloud providers (AWS, Azure, GCP, Oracle Cloud)
+- **Dcim**: Physical infrastructure and devices
+- **Ipam**: IP address management
+- **Location**: Geographic hierarchy
+- **Topology**: Deployment structures and hierarchies
+- **Routing**: Routing protocols and configurations
+- **Security**: Security policies, zones, and objects
+- **Service**: Running service instances (OSPF, BGP, PIM services)
+- **Loadbalancer**: Load balancing support objects (Server, HealthCheck)
+
+**Naming Convention Best Practice**:
+
+- `Service.*` → `OnPrem.*` for clarity (recommended for future refactoring)
+- Alternatives considered: `Private.*`, `SelfHosted.*`, `Enterprise.*`
+- **Recommended**: `OnPrem` (clearest distinction from Cloud)
+
+#### Schema Best Practices
+
+**1. Generic Design Pattern**:
+
+```yaml
+# Base generic (schemas/base/)
+generics:
+  - name: NetworkSegment
+    namespace: Platform
+    description: "Base for all network segmentation"
+    attributes:
+      - name: segment_type  # Classification only
+        kind: Dropdown
+        choices:
+          - vlan
+          - vxlan
+          - vpc
+          - subnet
+      - name: status        # Common lifecycle
+        kind: Dropdown
+    relationships:
+      - name: ip_prefixes   # Common relationships
+        peer: IpamPrefix
+        cardinality: many
+
+# On-prem implementation (schemas/extensions/)
+nodes:
+  - name: NetworkSegment
+    namespace: OnPrem  # or Service (current)
+    inherit_from:
+      - PlatformNetworkSegment  # Gets segment_type, status, ip_prefixes
+      - OnPremGeneric           # Gets deployment, owner metadata
+    attributes:
+      - name: vlan_id         # Technology-specific
+        kind: Number
+      - name: vni             # Technology-specific
+        kind: Number
+
+# Cloud implementation
+nodes:
+  - name: Subnet
+    namespace: Cloud
+    inherit_from:
+      - PlatformNetworkSegment  # Gets segment_type, status, ip_prefixes
+      - CloudResource            # Gets cloud_id, account metadata
+    attributes:
+      - name: is_public       # Cloud-specific
+        kind: Boolean
+    relationships:
+      - name: availability_zone  # Cloud-specific
+        peer: TopologyCloudAZ
+```
+
+**2. Avoid Attribute Conflicts**:
+
+- Base generics should NOT define attributes that technology-specific parents already provide
+- Example: Don't define `name`, `description`, `status` in Platform generics if CloudResource or ServiceGeneric already provide them
+- Only define attributes truly unique to the concept (e.g., `segment_type` for NetworkSegment, `lb_type` for LoadBalancer)
+
+**3. Multiple Inheritance Order**:
+
+```yaml
+inherit_from:
+  - PlatformGeneric      # Provides classification (segment_type, lb_type)
+  - TechnologyGeneric    # Provides metadata (name, description, cloud_id, deployment)
+  - FeatureGeneric       # Provides domain features (interfaces, services)
+```
+
+**4. Uniqueness Constraints**:
+
+```yaml
+uniqueness_constraints:
+  - [account, name__value]           # For cloud resources
+  - [deployment, owner, name__value] # For on-prem resources
+  - [vpc, cidr]                      # For technical uniqueness
+```
+
+Note: Use `__value` suffix for attributes, `__id` suffix for relationships
+
+**5. Relationship Identifiers**:
+
+When a node has multiple relationships to the same peer, use unique identifiers:
+
+```yaml
+relationships:
+  - name: requester_vpc
+    peer: CloudVirtualNetwork
+    identifier: "cloud_peering_requester"  # Unique identifier
+  - name: accepter_vpc
+    peer: CloudVirtualNetwork
+    identifier: "cloud_peering_accepter"   # Different identifier
+```
+
+**6. Order Weights**:
+
+- Organize attributes logically in the UI
+- Use increments of 50-100 to allow insertions
+- Standard ranges:
+  - 1-200: Core identification (name, description)
+  - 200-500: Classification and status
+  - 500-1000: Technical attributes
+  - 1000+: Relationships
+
+**7. Selective Relationship Inheritance**:
+
+Use intermediate generics to add relationships only to specific node types:
+
+```yaml
+# Problem: Want cables on physical deployments (DC, Colocation) but NOT on cloud
+# Solution: Create an intermediate generic
+
+# Base deployment (all types inherit)
+generics:
+  - name: Deployment
+    namespace: Topology
+    # Common deployment attributes
+
+  # Physical deployment only
+  - name: PhysicalDeployment
+    namespace: Topology
+    relationships:
+      - name: cables
+        peer: DcimCable
+        identifier: "physical_deployment__cables"
+
+# Implementations
+nodes:
+  - name: DataCenter
+    inherit_from:
+      - TopologyDeployment
+      - TopologyPhysicalDeployment  # Gets cables relationship
+  
+  - name: ColocationAZ
+    inherit_from:
+      - TopologyDeployment
+      - TopologyPhysicalDeployment  # Gets cables relationship
+  
+  - name: CloudRegion
+    inherit_from:
+      - TopologyDeployment           # NO cables relationship
+
+# Cable extension (single field, not multiple)
+extensions:
+  nodes:
+    - kind: DcimCable
+      relationships:
+        - name: deployment
+          peer: TopologyPhysicalDeployment  # Points to intermediate generic
+          identifier: "physical_deployment__cables"
+```
+
+**Benefits**:
+- Single `deployment` field on DcimCable (not `dc_deployment`, `colocation_deployment`, etc.)
+- Cables only appear on physical infrastructure
+- Cloud deployments remain clean
+- Easy to add new physical deployment types
+
 
 #### Schema Structure
 
@@ -144,17 +361,40 @@ nodes:
   - name: MyNode
     namespace: MyNamespace
     description: "Description of the node"
+    label: "Display Label"
+    icon: "mdi:icon-name"
+    include_in_menu: false
     inherit_from:
-      - BaseNode
+      - PlatformGeneric
+      - TechnologyGeneric
     attributes:
       - name: my_attribute
         kind: Text
+        optional: false
         order_weight: 1000
+        description: "Attribute description"
     relationships:
       - name: my_relation
         peer: RelatedNode
         cardinality: many
+        optional: true
+        order_weight: 2000
+        identifier: "unique_rel_id"  # If multiple relations to same peer
+    uniqueness_constraints:
+      - [peer_relationship, name__value]
 ```
+
+#### Attribute Kinds
+
+Valid attribute kinds (case-sensitive):
+
+- `Text` - String values
+- `Number` - Numeric values (integer or float)
+- `Boolean` - True/False
+- `Dropdown` - Single selection from choices
+- `List` - Multiple values (NOT `Tags`)
+
+**Never use**: `String`, `Tags`, `Array`
 
 ### Naming Conventions
 
@@ -167,10 +407,31 @@ nodes:
 
 #### InfraHub Naming
 
-- **Nodes**: `PascalCase` (e.g., `LocationBuilding`, `TopologyPod`)
-- **Attributes**: `snake_case` (e.g., `device_type`, `serial_number`)
-- **Relationships**: `snake_case` (e.g., `parent_location`, `connected_to`)
-- **Namespaces**: `PascalCase` (e.g., `Dcim`, `Ipam`, `Service`)
+- **Nodes**: `PascalCase` (e.g., `LocationBuilding`, `TopologyPod`, `NetworkSegment`)
+- **Attributes**: `snake_case` (e.g., `device_type`, `serial_number`, `segment_type`)
+- **Relationships**: `snake_case` (e.g., `parent_location`, `connected_to`, `ip_prefixes`)
+- **Namespaces**: `PascalCase` (e.g., `Platform`, `OnPrem`, `Cloud`, `Dcim`, `Ipam`, `Routing`)
+
+**Namespace Naming Conventions**:
+
+- Use singular form for technology domains: `Onprem`, `Cloud`, `Edge` (not `Onprems`, `Clouds`)
+- Functional domains: `Routing`, `Security`, `Loadbalancer`, `Service`
+- Avoid abbreviations unless industry-standard: `Dcim` (ok), `Ipam` (ok), `LB` (avoid - use `Loadbalancer`)
+
+**Node Naming Conventions**:
+
+- OnPrem resources: Use generic business names (`NetworkSegment`, `LoadBalancer`, `Firewall`)
+- Cloud resources: Use provider-agnostic names (`Subnet`, `LoadBalancer`, `VPC`)
+- Customer abstractions: Use logical names (`VirtualCloud`, `VirtualFabric`)
+- Avoid technology-specific prefixes in node names (`NetworkSegment` not `VLANSegment`)
+
+**Implementation Status**:
+
+- ✅ `Platform.*` - Base generics for classification
+- ✅ `Customer.*` - Customer-facing logical abstractions (VirtualCloud, VirtualFabric)
+- ✅ `OnPrem.*` - On-premises infrastructure (NetworkSegment, LoadBalancer)
+- ✅ `Cloud.*` - Public cloud resources (Subnet, LoadBalancer, VPC)
+- ✅ `Service.*` - Running service instances (OSPF, BGP, PIM)
 
 ## Testing Requirements
 
@@ -242,6 +503,69 @@ uv run pytest --cov=.
 - **Hardcoded paths in tests**: Always use fixtures like `root_dir` to build paths dynamically.
 - **Non-idempotent generators**: Ensure generators can be run multiple times without creating duplicate objects or causing errors.
 - **Ignoring `order_weight`**: Forgetting to set `order_weight` in schemas can lead to an inconsistent UI.
+- **Attribute conflicts in generics**: Base generics (Platform.*) should NOT redefine attributes from technology generics (CloudResource, ServiceGeneric)
+- **Missing relationship identifiers**: When multiple relationships point to the same peer, always specify unique `identifier` values
+
+## Architecture Decision Records
+
+### Namespace Strategy (2026-01)
+
+**Decision**: Use technology-based namespaces (`OnPrem`, `Cloud`) rather than functional (`Service`, `Connectivity`)
+
+**Rationale**:
+
+1. **Operational alignment** - Teams typically manage "cloud resources" or "on-prem infrastructure" separately
+2. **Clear boundaries** - Easy to apply different policies, generators, or transforms per technology
+3. **Query simplicity** - `kind=Cloud*` gets all cloud resources, `kind=OnPrem*` gets all on-premises
+4. **Future extensibility** - Easy to add `Container.*`, `Edge.*`, `IoT.*` namespaces
+5. **RBAC granularity** - Can assign permissions by technology domain
+
+**Current State** (transition in progress):
+
+- `Service.*` → Rename to `OnPrem.*` (recommended)
+- `Cloud.*` → Keep as-is ✅
+- `Platform.*` → Base generics ✅
+
+**Alternatives considered**:
+
+- `Private.*` - Too vague, could mean security level
+- `SelfHosted.*` - Too long, less common terminology
+- `Enterprise.*` - Doesn't distinguish from cloud enterprise features
+- `OnPrem.*` - ✅ **Selected**: Clear, industry-standard, distinguishable from Cloud
+
+### Generic Pattern (2026-01)
+
+**Decision**: Platform generics provide ONLY classification attributes specific to the concept
+
+**Rationale**:
+
+1. Avoid attribute conflicts when inheriting from multiple generics
+2. Technology generics (CloudResource, ServiceGeneric) already provide name, description, status
+3. Platform generics should add value through classification (segment_type, lb_type) not duplication
+
+**Pattern**:
+
+```yaml
+# ✅ Good: Platform generic adds classification
+Platform.NetworkSegment:
+  - segment_type (vlan/vxlan/vpc/subnet)
+  - ip_prefixes (relationship)
+
+# ✅ Good: Platform generic adds classification
+Platform.LoadBalancer:
+  - lb_type (application/network/hardware/software)
+
+# ❌ Bad: Platform generic duplicates common attributes
+Platform.NetworkSegment:
+  - name, description, status  # Already in CloudResource/ServiceGeneric
+  - segment_type
+```
+
+**Implementation Guide**:
+
+- Platform generics: Classification attributes only
+- Technology generics (CloudResource, OnPremGeneric): Metadata (name, description, cloud_id, deployment)
+- Feature generics (ServiceGenericInterfaces): Domain-specific features
 
 ## Resources
 

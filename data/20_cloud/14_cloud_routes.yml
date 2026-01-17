@@ -1,0 +1,14 @@
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: CloudRoute
+  data:
+    - name: cust1-public-igw-default
+      route_table: cust1-public-rt
+      destination: 0.0.0.0/0
+      internet_gateway: cust1-eu-west-1-igw
+    - name: cust1-private-nat-default
+      route_table: cust1-private-rt
+      destination: 0.0.0.0/0
+      nat_gateway: cust1-eu-west-1a-nat

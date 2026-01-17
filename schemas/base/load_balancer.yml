@@ -1,0 +1,154 @@
+---
+version: "1.0"
+generics:
+  - name: LoadBalancer
+    namespace: Platform
+    description: "Base for all load balancers"
+    label: Load Balancer
+    include_in_menu: false
+    attributes:
+      - name: status
+        kind: Dropdown
+        optional: false
+        order_weight: 200
+        description: "Operational status of the load balancer"
+        choices:
+          - name: provisioning
+            label: Provisioning
+            description: "Load balancer is being provisioned"
+            color: "#7f7fff"
+          - name: active
+            label: Active
+            description: "Load balancer is active and operational"
+            color: "#7FBF7F"
+          - name: maintenance
+            label: Maintenance
+            description: "Load balancer is under maintenance"
+            color: "#FFF2CC"
+          - name: error
+            label: Error
+            description: "Load balancer is in an error state"
+            color: "#ff7f7f"
+          - name: disabled
+            label: Disabled
+            description: "Load balancer has been disabled"
+            color: "#D3D3D3"
+          - name: decommissioning
+            label: Decommissioning
+            description: "Load balancer is being decommissioned"
+            color: "#E8DAEF"
+          - name: retired
+            label: Retired
+            description: "Load balancer is retired and inactive"
+            color: "#BFBFBF"
+        default_value: provisioning
+      - name: lb_type
+        kind: Dropdown
+        optional: true
+        order_weight: 250
+        description: "Type of load balancer"
+        choices:
+          - name: application
+            label: Application (Layer 7)
+            description: "HTTP/HTTPS load balancer"
+            color: "#7FBF7F"
+          - name: network
+            label: Network (Layer 4)
+            description: "TCP/UDP load balancer"
+            color: "#7FA7FF"
+          - name: gateway
+            label: Gateway
+            description: "Gateway load balancer"
+            color: "#BF7FBF"
+          - name: hardware
+            label: Hardware
+            description: "Hardware load balancer (F5, Citrix)"
+            color: "#E67E22"
+          - name: software
+            label: Software
+            description: "Software load balancer (HAProxy, Nginx)"
+            color: "#9B59B6"
+          - name: classic
+            label: Classic
+            description: "Classic/legacy load balancer"
+            color: "#BFBFBF"
+      - name: scheme
+        kind: Dropdown
+        optional: true
+        order_weight: 310
+        description: "Accessibility scheme for the load balancer"
+        choices:
+          - name: internet_facing
+            label: Internet-facing
+            description: "Publicly accessible load balancer"
+            color: "#7FBF7F"
+          - name: internal
+            label: Internal
+            description: "Internal-only load balancer"
+            color: "#7FA7FF"
+          - name: external
+            label: External
+            description: "External network facing"
+            color: "#9FBF9F"
+      - name: protocol
+        kind: Dropdown
+        optional: true
+        order_weight: 320
+        description: "Primary protocol handled by the load balancer"
+        choices:
+          - name: http
+            label: HTTP
+            description: "HTTP protocol"
+            color: "#7FBF7F"
+          - name: https
+            label: HTTPS
+            description: "HTTPS protocol with SSL/TLS"
+            color: "#5F9F5F"
+          - name: tcp
+            label: TCP
+            description: "TCP protocol"
+            color: "#7FA7FF"
+          - name: udp
+            label: UDP
+            description: "UDP protocol"
+            color: "#7F7FBF"
+          - name: tls
+            label: TLS
+            description: "TLS protocol"
+            color: "#9F7F9F"
+      - name: dns_name
+        kind: Text
+        optional: true
+        order_weight: 300
+        description: "DNS name for the load balancer"
+      - name: port
+        kind: Number
+        optional: true
+        order_weight: 330
+        description: "Primary listening port for the load balancer"
+      - name: load_balancing_algorithm
+        kind: Dropdown
+        optional: true
+        order_weight: 340
+        description: "Load balancing algorithm"
+        choices:
+          - name: round_robin
+            label: Round Robin
+            description: "Distributes traffic evenly across backends"
+            color: "#A9CCE3"
+          - name: least_connections
+            label: Least Connections
+            description: "Routes to backend with fewest connections"
+            color: "#A9DFBF"
+          - name: ip_hash
+            label: IP Hash
+            description: "Routes based on client IP hash"
+            color: "#D2B4DE"
+          - name: weighted
+            label: Weighted
+            description: "Distributes based on backend weights"
+            color: "#F9E79F"
+          - name: random
+            label: Random
+            description: "Random distribution across backends"
+            color: "#CDEACC"

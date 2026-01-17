@@ -1,0 +1,15 @@
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: CloudRouteTable
+  data:
+    - name: cust1-public-rt
+      vpc: cust1-eu-west-1
+      subnets: [cust1-eu-west-1a-public]
+    - name: cust1-private-rt
+      vpc: cust1-eu-west-1
+      subnets: [cust1-eu-west-1b-private]
+    - name: cust2-westeurope-rt
+      vpc: cust2-westeurope
+      subnets: [cust2-westeurope-1]

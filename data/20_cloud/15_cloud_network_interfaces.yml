@@ -1,0 +1,17 @@
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: CloudNetworkInterface
+  data:
+    - name: cust1-web-eni1
+      subnet: cust1-eu-west-1b-private
+      security_groups: [cust1-web-sg]
+      private_ip: 10.101.20.10
+      is_primary: true
+    - name: cust2-app-eni1
+      subnet: cust2-westeurope-1
+      security_groups: [cust2-app-sg]
+      private_ip: 10.201.10.10
+      public_ip: cust2-westeurope-eip
+      is_primary: true

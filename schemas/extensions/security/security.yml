@@ -59,7 +59,7 @@ nodes:
         order_weight: 1300
     relationships:
       - name: network_segments
-        peer: ServiceNetworkSegment
+        peer: OnpremNetworkSegment
         label: Network Segments
         cardinality: many
         kind: Generic
@@ -763,7 +763,7 @@ nodes:
         order_weight: 2000
         description: "Security rules associated with this policy"
       - name: network_segments
-        peer: ServiceNetworkSegment
+        peer: OnpremNetworkSegment
         label: Network Segments
         cardinality: many
         kind: Generic

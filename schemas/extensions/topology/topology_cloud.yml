@@ -1,0 +1,918 @@
+---
+version: "1.0"
+generics:
+  - name: Resource
+    namespace: Cloud
+    description: Base for cloud resources with common metadata.
+    include_in_menu: false
+    attributes:
+      - name: name
+        kind: Text
+        order_weight: 100
+      - name: description
+        kind: Text
+        optional: true
+        order_weight: 200
+      - name: cloud_id
+        kind: Text
+        optional: true
+        order_weight: 300
+      - name: status
+        kind: Dropdown
+        optional: true
+        order_weight: 400
+        choices:
+          - name: active
+            label: Active
+            description: Resource is active and operational.
+            color: "#7FBF7F"
+          - name: provisioning
+            label: Provisioning
+            description: Resource is being provisioned.
+            color: "#7f7fff"
+          - name: error
+            label: Error
+            description: Resource is in an error state.
+            color: "#ff7f7f"
+          - name: retired
+            label: Retired
+            description: Resource is retired and inactive.
+            color: "#BFBFBF"
+
+nodes:
+  - name: Cloud
+    namespace: Topology
+    inherit_from:
+      - TopologyDeployment
+    include_in_menu: true
+    children: TopologyCloudRegion
+    uniqueness_constraints:
+      - ["name__value"]
+    human_friendly_id:
+      - name__value
+    display_label: "{{ name__value|upper}} CLOUD"
+
+  - name: CloudRegion
+    namespace: Topology
+    inherit_from:
+      - TopologyDeployment
+    parent: TopologyCloud
+    children: TopologyCloudAZ
+    human_friendly_id:
+      - region_name__value
+    display_label: "{{ name__value }}"
+    uniqueness_constraints:
+      - ["region_name__value"]
+    include_in_menu: false
+    attributes:
+      - name: name
+        kind: Text
+        computed_attribute:
+          kind: Jinja2
+          jinja2_template: >
+            {{parent__name__value|upper}}-{{region_name__value|upper}}
+        read_only: true
+        optional: false
+      - name: region_name
+        kind: Text
+        label: "Region Name"
+        description: >
+          Cloud provider region identifier (e.g., us-east-1, westeurope)
+        optional: false
+        order_weight: 200
+      - name: status
+        kind: Dropdown
+        label: "Region Status"
+        optional: false
+        default_value: active
+        order_weight: 300
+        choices:
+          - name: active
+            label: Active
+            description: "Region is active and operational"
+            color: "#7FBF7F"
+          - name: provisioning
+            label: Provisioning
+            description: "Region is being provisioned"
+            color: "#FFFF7F"
+          - name: maintenance
+            label: Maintenance
+            description: "Region is under maintenance"
+            color: "#FFD27F"
+          - name: constrained
+            label: Constrained
+            description: "Region has capacity constraints"
+            color: "#F4CCCC"
+          - name: deprecated
+            label: Deprecated
+            description: "Region is deprecated"
+            color: "#BFBFBF"
+    relationships:
+      - name: location
+        peer: LocationMetro
+        cardinality: one
+        kind: Attribute
+        optional: true
+        order_weight: 1000
+        identifier: "cloud__region__location"
+        description: >
+          Geographic location mapping for this region
+
+  - name: CloudAZ
+    namespace: Topology
+    inherit_from:
+      - TopologyDeployment
+    parent: TopologyCloudRegion
+    label: Availability Zone
+    children: ""
+    human_friendly_id:
+      - az_name__value
+    display_label: "{{ name__value }}"
+    uniqueness_constraints:
+      - ["az_name__value"]
+    include_in_menu: false
+    attributes:
+      - name: name
+        kind: Text
+        computed_attribute:
+          kind: Jinja2
+          jinja2_template: >
+            {{parent__name__value|upper}}-{{az_name__value|upper}}
+        read_only: true
+        optional: false
+      - name: az_name
+        kind: Text
+        label: "Availability Zone Name"
+        description: >
+          Cloud provider availability zone identifier
+        optional: false
+        order_weight: 200
+    relationships:
+      - name: devices
+        peer: DcimDevice
+        kind: Component
+        cardinality: many
+        identifier: "topology__devices"
+        order_weight: 7000
+        on_delete: cascade
+
+
+  - name: Account
+    namespace: Cloud
+    label: Cloud Account
+    description: Cloud account/subscription/project scoped to a provider.
+    include_in_menu: false
+    inherit_from:
+      - CloudResource
+    attributes:
+      - name: account_id
+        kind: Text
+        order_weight: 250
+        optional: true
+    relationships:
+      - name: provider
+        peer: OrganizationProvider
+        cardinality: one
+        optional: false
+        order_weight: 600
+      - name: owner
+        peer: OrganizationCustomer
+        cardinality: one
+        optional: true
+        order_weight: 700
+    uniqueness_constraints:
+      - [provider, name__value]
+      - [account_id__value]
+
+
+  - name: VirtualNetwork
+    namespace: Cloud
+    label: Virtual Network
+    description: Provider-agnostic virtual network container
+    include_in_menu: false
+    inherit_from:
+      - CloudResource
+    attributes:
+      - name: is_shared
+        kind: Boolean
+        order_weight: 350
+        optional: true
+    relationships:
+      - name: account
+        peer: CloudAccount
+        cardinality: one
+        optional: false
+        order_weight: 600
+      - name: region
+        peer: TopologyCloudRegion
+        cardinality: one
+        order_weight: 650
+      - name: cidrs
+        peer: IpamPrefix
+        cardinality: many
+        order_weight: 700
+    uniqueness_constraints:
+      - [account, name__value]
+
+  - name: NetworkSegment
+    namespace: Cloud
+    label: Network Segment
+    description: Network segment (subnet) within a virtual network.
+    include_in_menu: false
+    inherit_from:
+      - PlatformNetworkSegment
+      - CloudResource
+    attributes:
+      - name: is_public
+        kind: Boolean
+        optional: true
+        order_weight: 350
+    relationships:
+      - name: vpc
+        peer: CloudVirtualNetwork
+        cardinality: one
+        optional: false
+        order_weight: 600
+      - name: region
+        peer: TopologyCloudRegion
+        cardinality: one
+        order_weight: 650
+      - name: availability_zone
+        peer: TopologyCloudAZ
+        cardinality: one
+        optional: true
+        order_weight: 675
+      - name: cidr
+        peer: IpamPrefix
+        cardinality: one
+        optional: false
+        order_weight: 700
+      - name: route_table
+        peer: CloudRouteTable
+        cardinality: one
+        optional: true
+        order_weight: 800
+    uniqueness_constraints:
+      - [vpc, name__value]
+
+  - name: SecurityGroup
+    namespace: Cloud
+    label: Security Group
+    description: Security group for instances or interfaces.
+    include_in_menu: false
+    inherit_from:
+      - CloudResource
+    relationships:
+      - name: vpc
+        peer: CloudVirtualNetwork
+        cardinality: one
+        optional: false
+        order_weight: 600
+    uniqueness_constraints:
+      - [vpc, name__value]
+
+  - name: RouteTable
+    namespace: Cloud
+    label: Route Table
+    description: Route table associated with a virtual network.
+    include_in_menu: false
+    inherit_from:
+      - CloudResource
+    relationships:
+      - name: vpc
+        peer: CloudVirtualNetwork
+        cardinality: one
+        optional: false
+        order_weight: 600
+      - name: subnets
+        peer: CloudNetworkSegment
+        cardinality: many
+        optional: true
+        order_weight: 700
+      - name: routes
+        peer: CloudRoute
+        cardinality: many
+        optional: true
+        order_weight: 800
+    uniqueness_constraints:
+      - [vpc, name__value]
+
+  - name: InternetGateway
+    namespace: Cloud
+    label: Internet Gateway
+    description: Internet gateway attached to a virtual network.
+    include_in_menu: false
+    inherit_from:
+      - CloudResource
+    relationships:
+      - name: vpc
+        peer: CloudVirtualNetwork
+        cardinality: one
+        optional: false
+        order_weight: 600
+    uniqueness_constraints:
+      - [vpc, name__value]
+
+  - name: NatGateway
+    namespace: Cloud
+    label: NAT Gateway
+    description: NAT gateway placed in a subnet.
+    include_in_menu: false
+    inherit_from:
+      - CloudResource
+    relationships:
+      - name: subnet
+        peer: CloudNetworkSegment
+        cardinality: one
+        optional: false
+        order_weight: 600
+      - name: public_ip
+        peer: CloudPublicIP
+        cardinality: one
+        optional: true
+        order_weight: 650
+    uniqueness_constraints:
+      - [subnet, name__value]
+
+  - name: PublicIP
+    namespace: Cloud
+    label: Public IP
+    description: Provider-agnostic public IP address.
+    include_in_menu: false
+    inherit_from:
+      - CloudResource
+    attributes:
+      - name: name
+        kind: Text
+        computed_attribute:
+          kind: Jinja2
+          jinja2_template: >
+            {{account__name__value}}-{{address__address__value}}
+        read_only: true
+        optional: false
+        order_weight: 100
+    relationships:
+      - name: region
+        peer: TopologyCloudRegion
+        cardinality: one
+        optional: false
+        order_weight: 600
+      - name: account
+        peer: CloudAccount
+        cardinality: one
+        optional: false
+        order_weight: 650
+      - name: address
+        peer: IpamIPAddress
+        cardinality: one
+        optional: false
+        order_weight: 700
+    uniqueness_constraints:
+      - [account, address]
+      - [region, address]
+
+  - name: LoadBalancer
+    namespace: Cloud
+    label: Load Balancer
+    description: Cloud load balancer (ALB/NLB/ELB/Azure LB/GCP LB).
+    include_in_menu: false
+    uniqueness_constraints:
+      - [account, name__value, protocol__value, port__value]
+    inherit_from:
+      - PlatformLoadBalancer
+      - CloudResource
+    relationships:
+      - name: account
+        peer: CloudAccount
+        cardinality: one
+        optional: false
+        order_weight: 600
+      - name: vpc
+        peer: CloudVirtualNetwork
+        cardinality: one
+        optional: false
+        order_weight: 650
+      - name: subnets
+        peer: CloudNetworkSegment
+        cardinality: many
+        optional: false
+        order_weight: 700
+      - name: security_groups
+        peer: CloudSecurityGroup
+        cardinality: many
+        optional: true
+        order_weight: 750
+      - name: public_ips
+        peer: CloudPublicIP
+        cardinality: many
+        optional: true
+        order_weight: 800
+      - name: backends
+        peer: CloudInstance
+        label: Backend Instances
+        cardinality: many
+        optional: true
+        order_weight: 850
+        identifier: cloudloadbalancer__backends
+        description: "Backend instances receiving load balanced traffic"
+      - name: backend_interfaces
+        peer: CloudNetworkInterface
+        label: Backend Network Interfaces
+        cardinality: many
+        optional: true
+        order_weight: 900
+        description: "Specific network interfaces for backend routing"
+
+  - name: NetworkInterface
+    namespace: Cloud
+    label: Network Interface
+    description: Network interface attached to instances.
+    include_in_menu: false
+    inherit_from:
+      - CloudResource
+    attributes:
+      - name: is_primary
+        kind: Boolean
+        optional: true
+        order_weight: 550
+    relationships:
+      - name: subnet
+        peer: CloudNetworkSegment
+        cardinality: one
+        optional: false
+        order_weight: 600
+      - name: security_groups
+        peer: CloudSecurityGroup
+        cardinality: many
+        optional: false
+        order_weight: 650
+      - name: private_ip
+        peer: IpamIPAddress
+        cardinality: one
+        optional: false
+        order_weight: 700
+      - name: public_ip
+        peer: CloudPublicIP
+        cardinality: one
+        optional: true
+        order_weight: 750
+    uniqueness_constraints:
+      - [subnet, private_ip]
+
+  - name: Route
+    namespace: Cloud
+    label: Route
+    description: Route entry within a route table.
+    include_in_menu: false
+    inherit_from:
+      - CloudResource
+    relationships:
+      - name: route_table
+        peer: CloudRouteTable
+        cardinality: one
+        optional: false
+        order_weight: 600
+      - name: destination
+        peer: IpamPrefix
+        cardinality: one
+        optional: false
+        order_weight: 650
+      - name: internet_gateway
+        peer: CloudInternetGateway
+        cardinality: one
+        optional: true
+        order_weight: 700
+      - name: nat_gateway
+        peer: CloudNatGateway
+        cardinality: one
+        optional: true
+        order_weight: 750
+      - name: instance
+        peer: CloudInstance
+        cardinality: one
+        optional: true
+        order_weight: 800
+      - name: network_interface
+        peer: CloudNetworkInterface
+        cardinality: one
+        optional: true
+        order_weight: 850
+    uniqueness_constraints:
+      - [route_table, destination]
+
+  - name: Instance
+    namespace: Cloud
+    label: Cloud Instance
+    description: Compute instance in a cloud AZ.
+    include_in_menu: false
+    inherit_from:
+      - CloudResource
+    attributes:
+      - name: instance_type
+        kind: Text
+        optional: true
+        order_weight: 300
+      - name: image
+        kind: Text
+        optional: true
+        order_weight: 350
+    relationships:
+      - name: account
+        peer: CloudAccount
+        cardinality: one
+        optional: false
+        order_weight: 600
+      - name: region
+        peer: TopologyCloudRegion
+        cardinality: one
+        optional: false
+        order_weight: 650
+      - name: availability_zone
+        peer: TopologyCloudAZ
+        cardinality: one
+        optional: false
+        order_weight: 675
+      - name: subnet
+        peer: CloudNetworkSegment
+        cardinality: one
+        optional: false
+        order_weight: 700
+      - name: security_groups
+        peer: CloudSecurityGroup
+        cardinality: many
+        optional: true
+        order_weight: 750
+      - name: interfaces
+        peer: CloudNetworkInterface
+        cardinality: many
+        optional: true
+        order_weight: 800
+    uniqueness_constraints:
+      - [account, name__value]
+
+  - name: NetworkACL
+    namespace: Cloud
+    label: Network ACL
+    description: Subnet-level network access control list (stateless firewall).
+    include_in_menu: false
+    inherit_from:
+      - CloudResource
+    relationships:
+      - name: vpc
+        peer: CloudVirtualNetwork
+        cardinality: one
+        optional: false
+        order_weight: 600
+      - name: subnets
+        peer: CloudNetworkSegment
+        cardinality: many
+        optional: true
+        order_weight: 700
+      - name: security_policies
+        peer: SecurityPolicy
+        cardinality: many
+        optional: true
+        order_weight: 800
+        description: "Security policies that define ACL rules"
+    uniqueness_constraints:
+      - [vpc, name__value]
+
+  - name: TransitGateway
+    namespace: Cloud
+    label: Transit Gateway
+    description: Multi-region virtual network transit hub for routing.
+    include_in_menu: false
+    inherit_from:
+      - CloudResource
+    attributes:
+      - name: asn
+        kind: Number
+        label: "BGP ASN"
+        optional: true
+        order_weight: 300
+      - name: default_route_table
+        kind: Boolean
+        label: "Default Route Table Association"
+        optional: true
+        default_value: true
+        order_weight: 350
+      - name: dns_support
+        kind: Boolean
+        label: "DNS Support"
+        optional: true
+        default_value: true
+        order_weight: 400
+      - name: vpn_ecmp_support
+        kind: Boolean
+        label: "VPN ECMP Support"
+        optional: true
+        default_value: false
+        order_weight: 450
+    relationships:
+      - name: account
+        peer: CloudAccount
+        cardinality: one
+        optional: false
+        order_weight: 600
+      - name: region
+        peer: TopologyCloudRegion
+        cardinality: one
+        optional: false
+        order_weight: 650
+      - name: attached_vpcs
+        peer: CloudVirtualNetwork
+        cardinality: many
+        optional: true
+        order_weight: 700
+        description: "VPCs attached to this transit gateway"
+      - name: bgp_peer_group
+        peer: RoutingBGPPeerGroup
+        cardinality: one
+        optional: true
+        kind: Attribute
+        order_weight: 750
+        description: "BGP peer group for transit gateway"
+    uniqueness_constraints:
+      - [account, name__value]
+
+  - name: VPNGateway
+    namespace: Cloud
+    label: VPN Gateway
+    description: VPN gateway for site-to-site and client VPN connections.
+    include_in_menu: false
+    inherit_from:
+      - CloudResource
+    attributes:
+      - name: vpn_type
+        kind: Dropdown
+        order_weight: 300
+        optional: false
+        choices:
+          - name: site_to_site
+            label: Site-to-Site
+            description: IPsec VPN between sites
+            color: "#3498DB"
+          - name: client_vpn
+            label: Client VPN
+            description: Remote access VPN for clients
+            color: "#2ECC71"
+    relationships:
+      - name: asn
+        peer: RoutingAutonomousSystem
+        cardinality: one
+        optional: true
+        kind: Attribute
+        order_weight: 350
+      - name: vpc
+        peer: CloudVirtualNetwork
+        cardinality: one
+        optional: false
+        order_weight: 600
+      - name: transit_gateway
+        peer: CloudTransitGateway
+        cardinality: one
+        optional: true
+        order_weight: 650
+        description: "Transit gateway attachment (if applicable)"
+      - name: customer_gateway
+        peer: CloudCustomerGateway
+        cardinality: one
+        optional: true
+        order_weight: 700
+        description: "Remote customer gateway"
+      - name: bgp_peer_group
+        peer: RoutingBGPPeerGroup
+        cardinality: one
+        optional: true
+        kind: Attribute
+        order_weight: 750
+        description: "BGP peer group configuration for VPN tunnels"
+    uniqueness_constraints:
+      - [vpc, name__value]
+
+  - name: CustomerGateway
+    namespace: Cloud
+    label: Customer Gateway
+    description: Customer/remote gateway for VPN connections.
+    include_in_menu: false
+    inherit_from:
+      - CloudResource
+    attributes:
+      - name: device_type
+        kind: Dropdown
+        order_weight: 350
+        optional: true
+        choices:
+          - name: cisco
+            label: Cisco
+          - name: juniper
+            label: Juniper
+          - name: palo_alto
+            label: Palo Alto
+          - name: fortinet
+            label: Fortinet
+          - name: other
+            label: Other
+    relationships:
+      - name: asn
+        peer: RoutingAutonomousSystem
+        cardinality: one
+        optional: false
+        kind: Attribute
+        order_weight: 300
+      - name: account
+        peer: CloudAccount
+        cardinality: one
+        optional: false
+        order_weight: 600
+      - name: ip_address
+        peer: IpamIPAddress
+        cardinality: one
+        optional: false
+        order_weight: 700
+      - name: physical_device
+        peer: DcimDevice
+        cardinality: one
+        optional: true
+        order_weight: 800
+        description: "Physical device representing this customer gateway"
+    uniqueness_constraints:
+      - [account, name__value]
+
+  - name: VirtualNetworkPeering
+    namespace: Cloud
+    label: Virtual Network Peering
+    description: Direct virtual network peering connection between two networks.
+    include_in_menu: false
+    inherit_from:
+      - CloudResource
+    attributes:
+      - name: peering_status
+        kind: Dropdown
+        order_weight: 300
+        optional: false
+        choices:
+          - name: initiating_request
+            label: Initiating Request
+            color: "#F39C12"
+          - name: pending_acceptance
+            label: Pending Acceptance
+            color: "#FFD27F"
+          - name: active
+            label: Active
+            color: "#7FBF7F"
+          - name: rejected
+            label: Rejected
+            color: "#E74C3C"
+          - name: failed
+            label: Failed
+            color: "#C0392B"
+          - name: deleted
+            label: Deleted
+            color: "#BFBFBF"
+    relationships:
+      - name: requester_vpc
+        peer: CloudVirtualNetwork
+        cardinality: one
+        optional: false
+        order_weight: 600
+        identifier: "cloud_peering_requester"
+      - name: accepter_vpc
+        peer: CloudVirtualNetwork
+        cardinality: one
+        optional: false
+        order_weight: 650
+        identifier: "cloud_peering_accepter"
+      - name: requester_route_table
+        peer: CloudRouteTable
+        cardinality: one
+        optional: true
+        order_weight: 700
+        identifier: "cloud_peering_requester_rt"
+      - name: accepter_route_table
+        peer: CloudRouteTable
+        cardinality: one
+        optional: true
+        order_weight: 750
+        identifier: "cloud_peering_accepter_rt"
+    uniqueness_constraints:
+      - [requester_vpc, accepter_vpc]
+
+  - name: DirectConnect
+    namespace: Cloud
+    label: Direct Connect
+    description: Dedicated physical connection to cloud provider.
+    include_in_menu: false
+    inherit_from:
+      - CloudResource
+    attributes:
+      - name: bandwidth
+        kind: Text
+        label: "Bandwidth"
+        description: "Connection bandwidth (e.g., 1Gbps, 10Gbps)"
+        optional: false
+        order_weight: 300
+      - name: connection_type
+        kind: Dropdown
+        order_weight: 350
+        optional: false
+        choices:
+          - name: dedicated
+            label: Dedicated
+            description: Physical connection at colocation
+            color: "#3498DB"
+          - name: hosted
+            label: Hosted
+            description: Hosted connection via partner
+            color: "#2ECC71"
+      - name: vlan_id
+        kind: Number
+        label: "VLAN ID"
+        optional: true
+        order_weight: 400
+    relationships:
+      - name: account
+        peer: CloudAccount
+        cardinality: one
+        optional: false
+        order_weight: 600
+      - name: physical_devices
+        peer: DcimPhysicalDevice
+        cardinality: many
+        optional: true
+        kind: Attribute
+        order_weight: 625
+        description: "Physical routers/switches for direct connect"
+      - name: region
+        peer: TopologyCloudRegion
+        cardinality: one
+        optional: false
+        order_weight: 650
+      - name: location
+        peer: LocationBuilding
+        cardinality: one
+        optional: true
+        order_weight: 700
+        description: "Physical location/data center"
+      - name: virtual_interfaces
+        peer: CloudVirtualInterface
+        cardinality: many
+        optional: true
+        order_weight: 800
+    uniqueness_constraints:
+      - [account, name__value]
+
+  - name: VirtualInterface
+    namespace: Cloud
+    label: Virtual Interface
+    description: Virtual interface on Direct Connect/ExpressRoute.
+    include_in_menu: false
+    inherit_from:
+      - CloudResource
+    attributes:
+      - name: vif_type
+        kind: Dropdown
+        order_weight: 300
+        optional: false
+        choices:
+          - name: private
+            label: Private
+            description: Access to virtual network resources
+            color: "#3498DB"
+          - name: public
+            label: Public
+            description: Access to public endpoints
+            color: "#2ECC71"
+          - name: transit
+            label: Transit
+            description: Transit gateway attachment
+            color: "#9B59B6"
+      - name: vlan_id
+        kind: Number
+        label: "VLAN ID"
+        optional: false
+        order_weight: 350
+    relationships:
+      - name: asn
+        peer: RoutingAutonomousSystem
+        cardinality: one
+        optional: true
+        kind: Attribute
+        order_weight: 400
+      - name: direct_connect
+        peer: CloudDirectConnect
+        cardinality: one
+        optional: false
+        order_weight: 600
+      - name: vpc
+        peer: CloudVirtualNetwork
+        cardinality: one
+        optional: true
+        order_weight: 650
+      - name: transit_gateway
+        peer: CloudTransitGateway
+        cardinality: one
+        optional: true
+        order_weight: 700
+    uniqueness_constraints:
+      - [direct_connect, vlan_id__value]

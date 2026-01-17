@@ -70,7 +70,7 @@ class OrganizationGeneric(CoreNode):
     tags: RelationshipManager
 
 
-class ServiceGeneric(CoreNode):
+class OnpremGeneric(CoreNode):
     description: StringOptional
     name: String
     status: Dropdown
@@ -181,13 +181,13 @@ class SecurityAddressGroup(SecurityGenericAddressGroup):
     pass
 
 
-class ServiceAutonomousSystem(ServiceGeneric):
+class ServiceAutonomousSystem(OnpremGeneric):
     asn: Integer
     devices: RelationshipManager
     provider: RelatedNode
 
 
-class ServiceBGPCommunity(CoreNode):
+class OnpremBGPCommunity(CoreNode):
     community: String
     description: StringOptional
     name: String
@@ -195,7 +195,7 @@ class ServiceBGPCommunity(CoreNode):
     tags: RelationshipManager
 
 
-class ServiceBGPPeerGroup(ServiceGeneric):
+class OnpremBGPPeerGroup(OnpremGeneric):
     address_family: Dropdown
     local_pref: IntegerOptional
     maximum_routes: IntegerOptional
@@ -206,7 +206,7 @@ class ServiceBGPPeerGroup(ServiceGeneric):
     remote_as: RelatedNode
 
 
-class ServiceBGPSession(ServiceGeneric):
+class OnpremBGPSession(OnpremGeneric):
     local_pref: IntegerOptional
     role: Dropdown
     session_type: String
@@ -421,12 +421,12 @@ class SecurityIPRange(SecurityGenericAddress):
     start: IPHost
 
 
-class ServiceLayer2Network(ServiceGeneric):
+class ServiceLayer2Network(OnpremGeneric):
     vlan: Integer
     interfaces: RelationshipManager
 
 
-class ServiceLayer3Gateway(ServiceGeneric):
+class ServiceLayer3Gateway(OnpremGeneric):
     is_anycast: Boolean
     interfaces: RelationshipManager
     prefix: RelatedNode
@@ -462,7 +462,7 @@ class NetworkNameServer(NetworkManagementServer):
     pass
 
 
-class ServiceOSPF(ServiceGeneric):
+class OnpremOSPF(OnpremGeneric):
     reference_bandwidth: IntegerOptional
     version: Dropdown
     area: RelatedNode
@@ -472,13 +472,13 @@ class ServiceOSPF(ServiceGeneric):
     router_id: RelatedNode
 
 
-class ServiceOSPFArea(ServiceGeneric):
+class OnpremOSPFArea(OnpremGeneric):
     area: Integer
     namespace: RelatedNode
     ospf_interfaces: RelationshipManager
 
 
-class ServiceOSPFInterface(ServiceGeneric):
+class OnpremOSPFInterface(OnpremGeneric):
     authentication_key: StringOptional
     authentication_mode: DropdownOptional
     metric: IntegerOptional

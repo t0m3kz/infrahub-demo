@@ -1,0 +1,16 @@
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: CloudVirtualNetwork
+  data:
+    - name: cust1-eu-west-1
+      account: cust1-aws
+      region: aws-cloud-eu-west-1
+      cidrs: [10.101.0.0/16]
+      is_shared: false
+    - name: cust2-westeurope
+      account: cust2-azure
+      region: azure-cloud-westeurope
+      cidrs: [10.201.0.0/16]
+      is_shared: false

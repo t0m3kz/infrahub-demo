@@ -1,5 +1,5 @@
 query VirtualFabricValidation($fabric_id: ID!) {
-  ServiceVirtualFabric(ids: [$fabric_id]) {
+  CustomerVirtualFabric(ids: [$fabric_id]) {
     edges {
       node {
         id

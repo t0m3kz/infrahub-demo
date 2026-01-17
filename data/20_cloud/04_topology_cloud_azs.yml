@@ -1,0 +1,18 @@
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologyCloudAZ
+  data:
+    - name: aws-cloud-eu-west-1-a
+      az_name: a
+      parent: aws-cloud-eu-west-1
+      status: active
+    - name: aws-cloud-eu-west-1-b
+      az_name: b
+      parent: aws-cloud-eu-west-1
+      status: active
+    - name: azure-cloud-westeurope-1
+      az_name: "1"
+      parent: azure-cloud-westeurope
+      status: active

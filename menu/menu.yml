@@ -24,6 +24,13 @@ spec:
             icon: "mdi:cloud-outline"
 
           - namespace: Organization
+            name: CloudProvider
+            label: Cloud Providers
+            kind: OrganizationProvider
+            icon: "mdi:cloud"
+            description: "Cloud service providers (AWS, Azure, GCP)"
+
+          - namespace: Organization
             name: Customer
             label: Customers
             kind: OrganizationCustomer
@@ -146,16 +153,16 @@ spec:
               data:
                 # --------- Virtual Fabric Deployments ---------
                 - name: VirtualFabricDeployment
-                  namespace: Service
+                  namespace: Customer
                   label: Virtual Data Centers
-                  kind: ServiceVirtualFabric
+                  kind: CustomerVirtualFabric
                   icon: "carbon:ibm-cloud-internet-services"
                   description: "Customer virtual fabric deployments"
 
-                - namespace: Service
+                - namespace: Customer
                   name: VirtualCloud
                   label: Virtual Clouds
-                  kind: ServiceVirtualCloud
+                  kind: CustomerVirtualCloud
                   icon: "carbon:ibm-cloud-internet-services"
                   description: "Customer virtual cloud deployments"
     # ===================== INVENTORY =====================
@@ -221,6 +228,13 @@ spec:
                   kind: DcimPlatform
                   icon: "mdi:chip"
                   description: "Operating system and firmware platforms"
+          # --------- Cloud Inventory ---------
+          - namespace: Cloud
+            name: Resource
+            label: Cloud Resources
+            kind: CloudResource
+            icon: "mdi:cloud"
+            description: "All cloud resources"
     # ===================== ROUTING =====================
     - namespace: Routing
       name: MainMenu
@@ -244,7 +258,7 @@ spec:
                 - namespace: Routing
                   name: BGPService
                   label: BGP Services
-                  kind: ServiceBGP
+                  kind: OnpremBGP
                   icon: "carbon:ibm-cloud-internet-services"
                   description: "BGP service instances"
 
@@ -265,7 +279,7 @@ spec:
                 - namespace: Routing
                   name: BGPPeering
                   label: BGP Peering Sessions
-                  kind: ServiceBGPPeering
+                  kind: OnpremBGPPeering
                   icon: "carbon:network-4-reference"
                   description: "BGP peer with internal and external networks"
 
@@ -286,7 +300,7 @@ spec:
                 - namespace: Routing
                   name: OSPFService
                   label: OSPF Services
-                  kind: ServiceOSPF
+                  kind: OnpremOSPF
                   icon: "carbon:ibm-cloud-internet-services"
                   description: "OSPF service instances"
 
@@ -300,7 +314,7 @@ spec:
                 - namespace: Routing
                   name: OSPFPeering
                   label: OSPF Peering Sessions
-                  kind: ServiceOSPFPeering
+                  kind: OnpremOSPFPeering
                   icon: "carbon:network-4-reference"
                   description: "OSPF neighbor relationships"
 
@@ -314,7 +328,7 @@ spec:
                 - namespace: Routing
                   name: PIMService
                   label: PIM Services
-                  kind: ServicePIM
+                  kind: OnpremPIM
                   icon: "carbon:ibm-cloud-internet-services"
                   description: "PIM service instances"
 
@@ -325,12 +339,13 @@ spec:
                   icon: "mdi:ethernet"
                   description: "PIM interface configurations"
 
-                - namespace: Service
-                  name: PeeringPolicy
-                  label: Peering Policies
-                  kind: ServicePeeringPolicy
-                  icon: "carbon:policy"
-                  description: "Policies and rules for peer relationships"
+          # --------- Cloud Routing ---------
+          - namespace: Cloud
+            name: RouteTable
+            label: Cloud Route Tables
+            kind: CloudRouteTable
+            icon: "mdi:routes"
+            description: "Cloud routing tables"
     # ===================== SECURITY =====================
     - namespace: Security
       name: SecurityMenu
@@ -357,6 +372,7 @@ spec:
                   kind: SecurityAddressGroup
                   icon: "mdi:folder-network"
                   description: "Groups of address objects"
+
                 - namespace: Security
                   name: ServiceObject
                   label: "Service Objects"
@@ -468,12 +484,12 @@ spec:
             description: "Network segments, load balancers, and DNS/NTP"
             children:
               data:
-                - namespace: Service
+                - namespace: Platform
                   name: NetworkSegment
                   label: Network Segments
-                  kind: ServiceNetworkSegment
+                  kind: PlatformNetworkSegment
                   icon: "mdi:lan"
-                  description: "VLANs, VXLANs, and network overlays"
+                  description: "All network segments"
 
                 - namespace: Service
                   name: NTPServer
@@ -497,12 +513,12 @@ spec:
             description: "Health checks and backend servers"
             children:
               data:
-                - namespace: Service
-                  name: Loadbalancer
+                - namespace: Platform
+                  name: LoadBalancer
                   label: Load Balancers
-                  kind: ServiceVIP
-                  icon: "carbon:floating-ip"
-                  description: "Load balancers and virtual IPs"
+                  kind: PlatformLoadBalancer
+                  icon: "carbon:load-balancer-global"
+                  description: "All load balancers (on-prem, cloud)"
 
                 - namespace: Loadbalancing
                   name: HealthCheck
