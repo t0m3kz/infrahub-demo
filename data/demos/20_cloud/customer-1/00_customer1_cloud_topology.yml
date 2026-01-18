@@ -1,0 +1,67 @@
+# Customer 1 - Cloud Topology Hierarchy
+# Top-level cloud deployments, regions, and availability zones
+# AWS: us-east-1 (Virginia/New York) - E-Commerce Production
+# GCP: us-central1 (Chicago) - Analytics Platform
+# Azure: eastus (New York) - Customer Portal
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologyCloud
+  data:
+    - name: "aws"
+      children:
+        kind: TopologyCloudRegion
+        data:
+          - name: "us-east-1"
+            location: ["ny"]
+            children:
+              kind: TopologyCloudZone
+              data:
+                - name: "us-east-1a"
+                - name: "us-east-1b"
+                - name: "us-east-1c"
+
+    - name: "gcp"
+      children:
+        kind: TopologyCloudRegion
+        data:
+          - name: "us-central1"
+            location: ["chi"]
+            children:
+              kind: TopologyCloudZone
+              data:
+                - name: "us-central1-a"
+                - name: "us-central1-b"
+                - name: "us-central1-c"
+
+          - name: "us-west1"
+            location: ["sf"]
+            children:
+              kind: TopologyCloudZone
+              data:
+                - name: "us-west1-a"
+                - name: "us-west1-b"
+                - name: "us-west1-c"
+
+    - name: "azure"
+      children:
+        kind: TopologyCloudRegion
+        data:
+          - name: "eastus"
+            location: ["ny"]
+            children:
+              kind: TopologyCloudZone
+              data:
+                - name: "eastus-1"
+                - name: "eastus-2"
+                - name: "eastus-3"
+
+          - name: "westus2"
+            location: ["sf"]
+            children:
+              kind: TopologyCloudZone
+              data:
+                - name: "westus2-1"
+                - name: "westus2-2"
+                - name: "westus2-3"

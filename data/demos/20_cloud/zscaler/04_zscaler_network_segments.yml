@@ -1,0 +1,124 @@
+# Zscaler Network Segments - Multi-Cloud Subnets
+# AWS: 10.10.0.0/16 (eu-central-1)
+# GCP: 10.20.0.0/16 (europe-west1)
+# Azure: 10.30.0.0/16 (westeurope)
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: CloudNetworkSegment
+  data:
+    # ========== AWS eu-central-1 ==========
+
+    - name: "zscaler-aws-service-subnet-1a"
+      description: "Zscaler service subnet - AWS AZ-A"
+      status: active
+      virtual_network: "zscaler-aws-vpc"
+      availability_zone: "eu-central-1a"
+      ip_prefixes:
+        data:
+          - prefix: "10.10.1.0/27"
+            ip_namespace: "default"
+      auto_assign_public_ip: false
+      owner: "Customer 2"
+      cloud_id: "subnet-zscaler-aws-service-1a"
+
+    - name: "zscaler-aws-service-subnet-1b"
+      description: "Zscaler service subnet - AWS AZ-B"
+      status: active
+      virtual_network: "zscaler-aws-vpc"
+      availability_zone: "eu-central-1b"
+      ip_prefixes:
+        data:
+          - prefix: "10.10.2.0/27"
+            ip_namespace: "default"
+      auto_assign_public_ip: false
+      owner: "Customer 2"
+      cloud_id: "subnet-zscaler-aws-service-1b"
+
+    - name: "zscaler-aws-mgmt-subnet"
+      description: "Zscaler management subnet - AWS"
+      status: active
+      virtual_network: "zscaler-aws-vpc"
+      availability_zone: "eu-central-1a"
+      ip_prefixes:
+        data:
+          - prefix: "10.10.10.0/27"
+            ip_namespace: "default"
+      auto_assign_public_ip: false
+      owner: "Customer 2"
+      cloud_id: "subnet-zscaler-aws-mgmt"
+
+    # ========== GCP europe-west1 ==========
+
+    - name: "zscaler-gcp-service-subnet-b"
+      description: "Zscaler service subnet - GCP Zone-B"
+      status: active
+      virtual_network: "zscaler-gcp-vpc"
+      availability_zone: "europe-west1-b"
+      ip_prefixes:
+        data:
+          - prefix: "10.20.1.0/27"
+            ip_namespace: "default"
+      auto_assign_public_ip: false
+      owner: "Customer 2"
+      cloud_id: >
+        projects/zscaler-prod-456789/regions/europe-west1/subnetworks/zscaler-gcp-service-b
+
+    - name: "zscaler-gcp-service-subnet-c"
+      description: "Zscaler service subnet - GCP Zone-C"
+      status: active
+      virtual_network: "zscaler-gcp-vpc"
+      availability_zone: "europe-west1-c"
+      ip_prefixes:
+        data:
+          - prefix: "10.20.2.0/27"
+            ip_namespace: "default"
+      auto_assign_public_ip: false
+      owner: "Customer 2"
+      cloud_id: >
+        projects/zscaler-prod-456789/regions/europe-west1/subnetworks/zscaler-gcp-service-c
+
+    - name: "zscaler-gcp-mgmt-subnet"
+      description: "Zscaler management subnet - GCP"
+      status: active
+      virtual_network: "zscaler-gcp-vpc"
+      availability_zone: "europe-west1-b"
+      ip_prefixes:
+        data:
+          - prefix: "10.20.10.0/27"
+            ip_namespace: "default"
+      auto_assign_public_ip: false
+      owner: "Customer 2"
+      cloud_id: >
+        projects/zscaler-prod-456789/regions/europe-west1/subnetworks/zscaler-gcp-mgmt
+
+    # ========== Azure westeurope ==========
+
+    - name: "zscaler-azure-service-subnet"
+      description: "Zscaler service subnet - Azure"
+      status: active
+      virtual_network: "zscaler-azure-vnet"
+      availability_zone: "westeurope-1"
+      ip_prefixes:
+        data:
+          - prefix: "10.30.1.0/27"
+            ip_namespace: "default"
+      auto_assign_public_ip: false
+      owner: "Customer 2"
+      cloud_id: >
+        /subscriptions/789012ab-cdef-4567-89ab-cdef01234567/resourceGroups/zscaler-westeu-rg/providers/Microsoft.Network/virtualNetworks/zscaler-azure-vnet/subnets/service
+
+    - name: "zscaler-azure-mgmt-subnet"
+      description: "Zscaler management subnet - Azure"
+      status: active
+      virtual_network: "zscaler-azure-vnet"
+      availability_zone: "westeurope-1"
+      ip_prefixes:
+        data:
+          - prefix: "10.30.10.0/27"
+            ip_namespace: "default"
+      auto_assign_public_ip: false
+      owner: "Customer 2"
+      cloud_id: >
+        /subscriptions/789012ab-cdef-4567-89ab-cdef01234567/resourceGroups/zscaler-westeu-rg/providers/Microsoft.Network/virtualNetworks/zscaler-azure-vnet/subnets/mgmt

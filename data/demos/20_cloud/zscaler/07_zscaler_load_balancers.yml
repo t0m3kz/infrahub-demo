@@ -1,0 +1,54 @@
+# Zscaler Load Balancers - Multi-Cloud Deployment
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: CloudLoadBalancer
+  data:
+    # ========== AWS Network Load Balancer ==========
+
+    - name: "zscaler-aws-nlb"
+      description: "Zscaler Internal NLB - AWS"
+      status: active
+      lb_type: network
+      lb_vendor: aws_nlb
+      scheme: internal
+      virtual_network: "zscaler-aws-vpc"
+      network_segments:
+        - ["zscaler-aws-service-subnet-1a"]
+        - ["zscaler-aws-service-subnet-1b"]
+      security_groups:
+        - ["zscaler-aws-connector-sg"]
+      cloud_id: >
+        arn:aws:elasticloadbalancing:eu-central-1:123456789012:loadbalancer/net/zscaler-aws-nlb
+
+    # ========== GCP Internal Load Balancer ==========
+
+    - name: "zscaler-gcp-lb"
+      description: "Zscaler Internal Load Balancer - GCP"
+      status: active
+      lb_type: network
+      lb_vendor: gcp_lb
+      scheme: internal
+      virtual_network: "zscaler-gcp-vpc"
+      network_segments:
+        - ["zscaler-gcp-service-subnet-b"]
+        - ["zscaler-gcp-service-subnet-c"]
+      cloud_id: >
+        projects/zscaler-prod-456789/regions/europe-west1/forwardingRules/zscaler-gcp-lb
+
+    # ========== Azure Internal Load Balancer ==========
+
+    - name: "zscaler-azure-lb"
+      description: "Zscaler Internal Load Balancer - Azure"
+      status: active
+      lb_type: network
+      lb_vendor: azure_lb
+      scheme: internal
+      virtual_network: "zscaler-azure-vnet"
+      network_segments:
+        - ["zscaler-azure-service-subnet"]
+      security_groups:
+        - ["zscaler-azure-connector-nsg"]
+      cloud_id: >
+        /subscriptions/789012ab-cdef-4567-89ab-cdef01234567/resourceGroups/zscaler-westeu-rg/providers/Microsoft.Network/loadBalancers/zscaler-azure-lb

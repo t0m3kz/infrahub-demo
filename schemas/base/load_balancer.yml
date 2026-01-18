@@ -6,7 +6,20 @@ generics:
     description: "Base for all load balancers"
     label: Load Balancer
     include_in_menu: false
+    human_friendly_id:
+      - name__value
     attributes:
+      - name: name
+        kind: Text
+        optional: false
+        unique: true
+        order_weight: 100
+        description: "Name of the load balancer"
+      - name: description
+        kind: Text
+        optional: true
+        order_weight: 110
+        description: "Description of the load balancer"
       - name: status
         kind: Dropdown
         optional: false
@@ -72,6 +85,97 @@ generics:
             label: Classic
             description: "Classic/legacy load balancer"
             color: "#BFBFBF"
+      - name: lb_vendor
+        kind: Dropdown
+        optional: true
+        order_weight: 260
+        description: "Load balancer vendor/product"
+        choices:
+          # Cloud Providers
+          - name: aws_alb
+            label: AWS Application Load Balancer
+            description: "AWS Application Load Balancer (ALB)"
+            color: "#FF9900"
+          - name: aws_nlb
+            label: AWS Network Load Balancer
+            description: "AWS Network Load Balancer (NLB)"
+            color: "#FF9900"
+          - name: aws_clb
+            label: AWS Classic Load Balancer
+            description: "AWS Classic Load Balancer (ELB)"
+            color: "#FF9900"
+          - name: aws_gwlb
+            label: AWS Gateway Load Balancer
+            description: "AWS Gateway Load Balancer (GWLB)"
+            color: "#FF9900"
+          - name: azure_lb
+            label: Azure Load Balancer
+            description: "Azure Load Balancer"
+            color: "#0078D4"
+          - name: azure_app_gateway
+            label: Azure Application Gateway
+            description: "Azure Application Gateway"
+            color: "#0078D4"
+          - name: gcp_lb
+            label: GCP Load Balancer
+            description: "Google Cloud Load Balancer"
+            color: "#4285F4"
+          - name: gcp_alb
+            label: GCP Application Load Balancer
+            description: "Google Cloud Application Load Balancer"
+            color: "#4285F4"
+          # Software/Open Source
+          - name: haproxy
+            label: HAProxy
+            description: "HAProxy Open Source Load Balancer"
+            color: "#9B59B6"
+          - name: nginx
+            label: Nginx
+            description: "Nginx / Nginx Plus Load Balancer"
+            color: "#009639"
+          - name: envoy
+            label: Envoy
+            description: "Envoy Proxy Load Balancer"
+            color: "#AC6199"
+          - name: traefik
+            label: Traefik
+            description: "Traefik Load Balancer"
+            color: "#24A1C1"
+          # Hardware/Enterprise
+          - name: f5_bigip
+            label: F5 BIG-IP
+            description: "F5 BIG-IP Hardware/Virtual Load Balancer"
+            color: "#E67E22"
+          - name: citrix_netscaler
+            label: Citrix NetScaler/ADC
+            description: "Citrix NetScaler/ADC Load Balancer"
+            color: "#E67E22"
+          - name: citrix_cpx
+            label: Citrix CPX
+            description: "Citrix CPX Container Load Balancer"
+            color: "#E67E22"
+          - name: a10_networks
+            label: A10 Networks
+            description: "A10 Networks Thunder ADC"
+            color: "#E67E22"
+          - name: kemp
+            label: Kemp LoadMaster
+            description: "Kemp LoadMaster"
+            color: "#E67E22"
+          # Service Mesh
+          - name: istio
+            label: Istio
+            description: "Istio Service Mesh Load Balancer"
+            color: "#466BB0"
+          - name: linkerd
+            label: Linkerd
+            description: "Linkerd Service Mesh Load Balancer"
+            color: "#2DCEAA"
+          # Other
+          - name: other
+            label: Other
+            description: "Other/Custom Load Balancer"
+            color: "#95A5A6"
       - name: scheme
         kind: Dropdown
         optional: true
@@ -90,65 +194,3 @@ generics:
             label: External
             description: "External network facing"
             color: "#9FBF9F"
-      - name: protocol
-        kind: Dropdown
-        optional: true
-        order_weight: 320
-        description: "Primary protocol handled by the load balancer"
-        choices:
-          - name: http
-            label: HTTP
-            description: "HTTP protocol"
-            color: "#7FBF7F"
-          - name: https
-            label: HTTPS
-            description: "HTTPS protocol with SSL/TLS"
-            color: "#5F9F5F"
-          - name: tcp
-            label: TCP
-            description: "TCP protocol"
-            color: "#7FA7FF"
-          - name: udp
-            label: UDP
-            description: "UDP protocol"
-            color: "#7F7FBF"
-          - name: tls
-            label: TLS
-            description: "TLS protocol"
-            color: "#9F7F9F"
-      - name: dns_name
-        kind: Text
-        optional: true
-        order_weight: 300
-        description: "DNS name for the load balancer"
-      - name: port
-        kind: Number
-        optional: true
-        order_weight: 330
-        description: "Primary listening port for the load balancer"
-      - name: load_balancing_algorithm
-        kind: Dropdown
-        optional: true
-        order_weight: 340
-        description: "Load balancing algorithm"
-        choices:
-          - name: round_robin
-            label: Round Robin
-            description: "Distributes traffic evenly across backends"
-            color: "#A9CCE3"
-          - name: least_connections
-            label: Least Connections
-            description: "Routes to backend with fewest connections"
-            color: "#A9DFBF"
-          - name: ip_hash
-            label: IP Hash
-            description: "Routes based on client IP hash"
-            color: "#D2B4DE"
-          - name: weighted
-            label: Weighted
-            description: "Distributes based on backend weights"
-            color: "#F9E79F"
-          - name: random
-            label: Random
-            description: "Random distribution across backends"
-            color: "#CDEACC"

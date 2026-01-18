@@ -1,0 +1,19 @@
+# Load Balancer
+# Note: This references devices that should already exist
+# The device and frontend_servers fields reference DcimDevice objects
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: OnpremLoadBalancer
+  data:
+    - name: "demo-dc1-haproxy-lb"
+      status: active
+      lb_type: software
+      lb_vendor: haproxy
+      scheme: internal
+      haproxy_mode: http
+      deployment: "DC1"
+      device: "dc-1-pod1-lb-1"
+      frontend_servers:
+        - ["dc-1-pod1-lb-1"]

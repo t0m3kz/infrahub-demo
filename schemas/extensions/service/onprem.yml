@@ -47,13 +47,6 @@ generics:
             color: "#bfbfbf"
         default_value: provisioning
     relationships:
-      - name: owner
-        peer: OrganizationGeneric
-        cardinality: one
-        kind: Generic
-        order_weight: 100
-        optional: false
-        on_delete: no-action
       - name: deployment
         peer: TopologyDeployment
         cardinality: one
@@ -71,7 +64,7 @@ generics:
     relationships:
       - name: device
         peer: DcimDevice
-        optional: false
+        optional: true
         cardinality: one
         kind: Generic
         direction: inbound

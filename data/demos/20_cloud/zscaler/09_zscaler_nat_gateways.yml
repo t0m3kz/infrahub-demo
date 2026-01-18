@@ -1,0 +1,51 @@
+# Zscaler NAT Gateways - Multi-Cloud Outbound Connectivity
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: CloudNATGateway
+  data:
+    # ========== AWS NAT Gateways ==========
+
+    - name: "zscaler-aws-nat-1a"
+      description: "NAT Gateway for Zscaler connectors - AWS AZ-A"
+      status: active
+      account: "zscaler-aws-prod"
+      virtual_network: "zscaler-aws-vpc"
+      network_segments:
+        - ["zscaler-aws-service-subnet-1a"]
+      cloud_id: "nat-aws-zscaler-1a"
+
+    - name: "zscaler-aws-nat-1b"
+      description: "NAT Gateway for Zscaler connectors - AWS AZ-B"
+      status: active
+      account: "zscaler-aws-prod"
+      virtual_network: "zscaler-aws-vpc"
+      network_segments:
+        - ["zscaler-aws-service-subnet-1b"]
+      cloud_id: "nat-aws-zscaler-1b"
+
+    # ========== GCP Cloud NAT ==========
+
+    - name: "zscaler-gcp-nat"
+      description: "Cloud NAT for Zscaler connectors - GCP"
+      status: active
+      account: "zscaler-gcp-prod"
+      virtual_network: "zscaler-gcp-vpc"
+      network_segments:
+        - ["zscaler-gcp-service-subnet-b"]
+        - ["zscaler-gcp-service-subnet-c"]
+      cloud_id: >
+        projects/zscaler-prod-456789/regions/europe-west1/routers/zscaler-router/nats/zscaler-nat
+
+    # ========== Azure NAT Gateway ==========
+
+    - name: "zscaler-azure-nat"
+      description: "NAT Gateway for Zscaler connectors - Azure"
+      status: active
+      account: "zscaler-azure-prod"
+      virtual_network: "zscaler-azure-vnet"
+      network_segments:
+        - ["zscaler-azure-service-subnet"]
+      cloud_id: >
+        /subscriptions/789012ab-cdef-4567-89ab-cdef01234567/resourceGroups/zscaler-westeu-rg/providers/Microsoft.Network/natGateways/zscaler-azure-nat

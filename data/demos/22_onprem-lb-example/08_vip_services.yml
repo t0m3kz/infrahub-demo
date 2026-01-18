@@ -1,0 +1,54 @@
+# VIP Services (Listeners)
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: ServiceLoadBalancerVIP
+  data:
+    # Web Frontend - HTTPS
+    - hostname: "www.demo.local"
+      description: "Demo Web Frontend HTTPS"
+      status: active
+      protocol: https
+      port: 443
+      ssl_certificate: "demo-wildcard"
+      ssl_redirect: true
+      timeout_client: 50000
+      timeout_server: 50000
+      max_connections: 10000
+      load_balancer: "demo-dc1-haproxy-lb"
+      vip_ip:
+        data:
+          address: "10.10.1.10"
+      health_checks:
+        - ["http", "3", "3", "2000"]
+
+    # Web Frontend - HTTP (redirects to HTTPS)
+    - hostname: "www.demo.local"
+      description: "Demo Web Frontend HTTP"
+      status: active
+      protocol: http
+      port: 80
+      ssl_redirect: true
+      timeout_client: 50000
+      timeout_server: 50000
+      load_balancer: "demo-dc1-haproxy-lb"
+      vip_ip:
+        data:
+          address: "10.10.1.10"
+      health_checks:
+        - ["http", "3", "3", "2000"]
+    # App Tier - TCP
+    - hostname: "app.demo.local"
+      description: "Demo App Tier TCP"
+      status: active
+      protocol: tcp
+      port: 8080
+      timeout_client: 30000
+      timeout_server: 30000
+      load_balancer: "demo-dc1-haproxy-lb"
+      vip_ip:
+        data:
+          address: "10.10.1.11"
+      health_checks:
+        - ["tcp", "2", "2", "1000"]

@@ -1,0 +1,141 @@
+# Customer 1 - NAT Gateways
+# NAT gateways for outbound connectivity from private subnets
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: CloudNATGateway
+  data:
+    # ========== E-Commerce Platform - Production (AWS) ==========
+
+    - name: "customer-1-ecommerce-prod-nat-1a"
+      description: "Customer 1 E-Commerce Production NAT Gateway AZ-A"
+      cloud_id: >-
+        arn:aws:ec2:eu-central-1:123456789012:natgateway/nat-ecom-prod-1a
+      status: active
+      public_ip: "54.123.10.1"
+      virtual_network: "customer-1-ecommerce-prod-vpc"
+      network_segments:
+        - ["customer-1-ecommerce-prod-app-1a"]
+        - ["customer-1-ecommerce-prod-data-1a"]
+      account: "customer-1-aws-production"
+
+    - name: "customer-1-ecommerce-prod-nat-1b"
+      description: "Customer 1 E-Commerce Production NAT Gateway AZ-B"
+      cloud_id: >-
+        arn:aws:ec2:eu-central-1:123456789012:natgateway/nat-ecom-prod-1b
+      status: active
+      public_ip: "54.123.10.2"
+      virtual_network: "customer-1-ecommerce-prod-vpc"
+      network_segments:
+        - ["customer-1-ecommerce-prod-app-1b"]
+        - ["customer-1-ecommerce-prod-data-1b"]
+      account: "customer-1-aws-production"
+
+    # ========== E-Commerce Platform - Staging (GCP) ==========
+
+    - name: "customer-1-ecommerce-staging-nat"
+      description: "Customer 1 E-Commerce Staging Cloud NAT"
+      cloud_id: >
+        projects/customer-1-staging-456790/regions/europe-west3/routers/ecom-staging-router/nats/ecom-staging-nat
+      status: active
+      public_ip: "35.200.50.10"
+      virtual_network: "customer-1-ecommerce-staging-vpc"
+      network_segments:
+        - ["customer-1-ecommerce-staging-app"]
+        - ["customer-1-ecommerce-staging-data"]
+      account: "customer-1-gcp-staging"
+
+    # ========== E-Commerce Platform - Development (Azure) ==========
+
+    - name: "customer-1-ecommerce-dev-nat"
+      description: "Customer 1 E-Commerce Development NAT Gateway"
+      cloud_id: >
+        /subscriptions/c3d4e5f6-a7b8-9012-cdef-333333333333/resourceGroups/ecommerce-dev-rg/providers/Microsoft.Network/natGateways/ecom-dev-nat
+      status: active
+      public_ip: "20.50.10.1"
+      virtual_network: "customer-1-ecommerce-dev-vnet"
+      network_segments:
+        - ["customer-1-ecommerce-dev-app"]
+      account: "customer-1-azure-development"
+
+    # ========== Analytics Dashboard - Production (GCP) ==========
+
+    - name: "customer-1-analytics-prod-nat"
+      description: "Customer 1 Analytics Production Cloud NAT"
+      cloud_id: >
+        projects/customer-1-prod-456789/regions/europe-west1/routers/analytics-prod-router/nats/analytics-prod-nat
+      status: active
+      public_ip: "35.200.100.10"
+      virtual_network: "customer-1-analytics-prod-vpc"
+      network_segments:
+        - ["customer-1-analytics-prod-app"]
+        - ["customer-1-analytics-prod-data"]
+      account: "customer-1-gcp-production"
+
+    # ========== Analytics Dashboard - Staging (Azure) ==========
+
+    - name: "customer-1-analytics-staging-nat"
+      description: "Customer 1 Analytics Staging NAT Gateway"
+      cloud_id: >
+        /subscriptions/b2c3d4e5-f6a7-8901-bcde-222222222222/resourceGroups/analytics-staging-rg/providers/Microsoft.Network/natGateways/analytics-staging-nat
+      status: active
+      public_ip: "20.50.20.1"
+      virtual_network: "customer-1-analytics-staging-vnet"
+      network_segments:
+        - ["customer-1-analytics-staging-app"]
+      account: "customer-1-azure-staging"
+
+    # ========== Analytics Dashboard - Development (AWS) ==========
+
+    - name: "customer-1-analytics-dev-nat"
+      description: "Customer 1 Analytics Development NAT Gateway"
+      cloud_id: >-
+        arn:aws:ec2:eu-central-1:123456789014:natgateway/nat-analytics-dev
+      status: active
+      public_ip: "54.123.20.1"
+      virtual_network: "customer-1-analytics-dev-vpc"
+      network_segments:
+        - ["customer-1-analytics-dev-app"]
+      account: "customer-1-aws-development"
+
+    # ========== Customer Portal - Production (Azure) ==========
+
+    - name: "customer-1-portal-prod-nat"
+      description: "Customer 1 Portal Production NAT Gateway"
+      cloud_id: >
+        /subscriptions/a1b2c3d4-e5f6-7890-abcd-111111111111/resourceGroups/portal-prod-rg/providers/Microsoft.Network/natGateways/portal-prod-nat
+      status: active
+      public_ip: "20.50.30.1"
+      virtual_network: "customer-1-portal-prod-vnet"
+      network_segments:
+        - ["customer-1-portal-prod-app-1"]
+        - ["customer-1-portal-prod-app-2"]
+        - ["customer-1-portal-prod-data"]
+      account: "customer-1-azure-production"
+
+    # ========== Customer Portal - Staging (AWS) ==========
+
+    - name: "customer-1-portal-staging-nat"
+      description: "Customer 1 Portal Staging NAT Gateway"
+      cloud_id: >-
+        arn:aws:ec2:eu-central-1:123456789013:natgateway/nat-portal-staging
+      status: active
+      public_ip: "54.123.30.1"
+      virtual_network: "customer-1-portal-staging-vpc"
+      network_segments:
+        - ["customer-1-portal-staging-app"]
+      account: "customer-1-aws-staging"
+
+    # ========== Customer Portal - Development (GCP) ==========
+
+    - name: "customer-1-portal-dev-nat"
+      description: "Customer 1 Portal Development Cloud NAT"
+      cloud_id: >
+        projects/customer-1-dev-456791/regions/europe-west3/routers/portal-dev-router/nats/portal-dev-nat
+      status: active
+      public_ip: "35.200.200.10"
+      virtual_network: "customer-1-portal-dev-vpc"
+      network_segments:
+        - ["customer-1-portal-dev-app"]
+      account: "customer-1-gcp-development"

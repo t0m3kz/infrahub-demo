@@ -1,0 +1,202 @@
+# Customer 1 - Security Groups
+# Application-specific security groups per environment
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: CloudSecurityGroup
+  data:
+    # ========== E-Commerce Platform - Production (AWS) ==========
+
+    - name: "customer-1-ecommerce-prod-web-sg"
+      description: "Customer 1 E-Commerce Production Web Tier Security Group"
+      cloud_id: >-
+        arn:aws:ec2:eu-central-1:123456789012:security-group/sg-ecom-web-prod
+      status: active
+      virtual_network: "customer-1-ecommerce-prod-vpc"
+      account: "customer-1-aws-production"
+
+    - name: "customer-1-ecommerce-prod-app-sg"
+      description: "Customer 1 E-Commerce Production App Tier Security Group"
+      cloud_id: >-
+        arn:aws:ec2:eu-central-1:123456789012:security-group/sg-ecom-app-prod
+      status: active
+      virtual_network: "customer-1-ecommerce-prod-vpc"
+      account: "customer-1-aws-production"
+
+    - name: "customer-1-ecommerce-prod-data-sg"
+      description: "Customer 1 E-Commerce Production Data Tier Security Group"
+      cloud_id: >
+        arn:aws:ec2:eu-central-1:123456789012:security-group/sg-ecom-data-prod
+      status: active
+      virtual_network: "customer-1-ecommerce-prod-vpc"
+      account: "customer-1-aws-production"
+
+    - name: "customer-1-ecommerce-prod-lb-sg"
+      description: >-
+        Customer 1 E-Commerce Production Load Balancer Security Group
+      cloud_id: >-
+        arn:aws:ec2:eu-central-1:123456789012:security-group/sg-ecom-lb-prod
+      status: active
+      virtual_network: "customer-1-ecommerce-prod-vpc"
+      account: "customer-1-aws-production"
+
+    # ========== E-Commerce Platform - Staging (GCP) ==========
+
+    - name: "customer-1-ecommerce-staging-web-firewall"
+      description: "Customer 1 E-Commerce Staging Web Tier Firewall Rules"
+      cloud_id: >-
+        projects/customer-1-staging-456790/global/firewalls/ecom-staging-web
+      status: active
+      virtual_network: "customer-1-ecommerce-staging-vpc"
+      account: "customer-1-gcp-staging"
+
+    - name: "customer-1-ecommerce-staging-internal-firewall"
+      description: >-
+        Customer 1 E-Commerce Staging Internal Communication Firewall
+      cloud_id: >
+        projects/customer-1-staging-456790/global/firewalls/ecom-staging-internal
+      status: active
+      virtual_network: "customer-1-ecommerce-staging-vpc"
+      account: "customer-1-gcp-staging"
+
+    # ========== E-Commerce Platform - Development (Azure) ==========
+
+    - name: "customer-1-ecommerce-dev-web-nsg"
+      description: "Customer 1 E-Commerce Development Web Tier NSG"
+      cloud_id: >
+        /subscriptions/c3d4e5f6-a7b8-9012-cdef-333333333333/resourceGroups/ecommerce-dev-rg/providers/Microsoft.Network/networkSecurityGroups/web-nsg
+      status: active
+      virtual_network: "customer-1-ecommerce-dev-vnet"
+      account: "customer-1-azure-development"
+
+    - name: "customer-1-ecommerce-dev-app-nsg"
+      description: "Customer 1 E-Commerce Development App Tier NSG"
+      cloud_id: >
+        /subscriptions/c3d4e5f6-a7b8-9012-cdef-333333333333/resourceGroups/ecommerce-dev-rg/providers/Microsoft.Network/networkSecurityGroups/app-nsg
+      status: active
+      virtual_network: "customer-1-ecommerce-dev-vnet"
+      account: "customer-1-azure-development"
+
+    # ========== Analytics Dashboard - Production (GCP) ==========
+
+    - name: "customer-1-analytics-prod-web-firewall"
+      description: "Customer 1 Analytics Production Web Tier Firewall Rules"
+      cloud_id: >-
+        projects/customer-1-prod-456789/global/firewalls/analytics-prod-web
+      status: active
+      virtual_network: "customer-1-analytics-prod-vpc"
+      account: "customer-1-gcp-production"
+
+    - name: "customer-1-analytics-prod-app-firewall"
+      description: "Customer 1 Analytics Production App Tier Firewall Rules"
+      cloud_id: >-
+        projects/customer-1-prod-456789/global/firewalls/analytics-prod-app
+      status: active
+      virtual_network: "customer-1-analytics-prod-vpc"
+      account: "customer-1-gcp-production"
+
+    - name: "customer-1-analytics-prod-data-firewall"
+      description: "Customer 1 Analytics Production Data Tier Firewall Rules"
+      cloud_id: >-
+        projects/customer-1-prod-456789/global/firewalls/analytics-prod-data
+      status: active
+      virtual_network: "customer-1-analytics-prod-vpc"
+      account: "customer-1-gcp-production"
+
+    # ========== Analytics Dashboard - Staging (Azure) ==========
+
+    - name: "customer-1-analytics-staging-web-nsg"
+      description: "Customer 1 Analytics Staging Web Tier NSG"
+      cloud_id: >
+        /subscriptions/b2c3d4e5-f6a7-8901-bcde-222222222222/resourceGroups/analytics-staging-rg/providers/Microsoft.Network/networkSecurityGroups/web-nsg
+      status: active
+      virtual_network: "customer-1-analytics-staging-vnet"
+      account: "customer-1-azure-staging"
+
+    - name: "customer-1-analytics-staging-app-nsg"
+      description: "Customer 1 Analytics Staging App Tier NSG"
+      cloud_id: >
+        /subscriptions/b2c3d4e5-f6a7-8901-bcde-222222222222/resourceGroups/analytics-staging-rg/providers/Microsoft.Network/networkSecurityGroups/app-nsg
+      status: active
+      virtual_network: "customer-1-analytics-staging-vnet"
+      account: "customer-1-azure-staging"
+
+    # ========== Analytics Dashboard - Development (AWS) ==========
+
+    - name: "customer-1-analytics-dev-web-sg"
+      description: "Customer 1 Analytics Development Web Tier Security Group"
+      cloud_id: >
+        arn:aws:ec2:eu-central-1:123456789014:security-group/sg-analytics-dev-web
+      status: active
+      virtual_network: "customer-1-analytics-dev-vpc"
+      account: "customer-1-aws-development"
+
+    - name: "customer-1-analytics-dev-app-sg"
+      description: "Customer 1 Analytics Development App Tier Security Group"
+      cloud_id: >
+        arn:aws:ec2:eu-central-1:123456789014:security-group/sg-analytics-dev-app
+      status: active
+      virtual_network: "customer-1-analytics-dev-vpc"
+      account: "customer-1-aws-development"
+
+    # ========== Customer Portal - Production (Azure) ==========
+
+    - name: "customer-1-portal-prod-web-nsg"
+      description: "Customer 1 Portal Production Web Tier NSG"
+      cloud_id: >
+        /subscriptions/a1b2c3d4-e5f6-7890-abcd-111111111111/resourceGroups/portal-prod-rg/providers/Microsoft.Network/networkSecurityGroups/web-nsg
+      status: active
+      virtual_network: "customer-1-portal-prod-vnet"
+      account: "customer-1-azure-production"
+
+    - name: "customer-1-portal-prod-app-nsg"
+      description: "Customer 1 Portal Production App Tier NSG"
+      cloud_id: >
+        /subscriptions/a1b2c3d4-e5f6-7890-abcd-111111111111/resourceGroups/portal-prod-rg/providers/Microsoft.Network/networkSecurityGroups/app-nsg
+      status: active
+      virtual_network: "customer-1-portal-prod-vnet"
+      account: "customer-1-azure-production"
+
+    - name: "customer-1-portal-prod-data-nsg"
+      description: "Customer 1 Portal Production Data Tier NSG"
+      cloud_id: >
+        /subscriptions/a1b2c3d4-e5f6-7890-abcd-111111111111/resourceGroups/portal-prod-rg/providers/Microsoft.Network/networkSecurityGroups/data-nsg
+      status: active
+      virtual_network: "customer-1-portal-prod-vnet"
+      account: "customer-1-azure-production"
+
+    # ========== Customer Portal - Staging (AWS) ==========
+
+    - name: "customer-1-portal-staging-web-sg"
+      description: "Customer 1 Portal Staging Web Tier Security Group"
+      cloud_id: >
+        arn:aws:ec2:eu-central-1:123456789013:security-group/sg-portal-staging-web
+      status: active
+      virtual_network: "customer-1-portal-staging-vpc"
+      account: "customer-1-aws-staging"
+
+    - name: "customer-1-portal-staging-app-sg"
+      description: "Customer 1 Portal Staging App Tier Security Group"
+      cloud_id: >
+        arn:aws:ec2:eu-central-1:123456789013:security-group/sg-portal-staging-app
+      status: active
+      virtual_network: "customer-1-portal-staging-vpc"
+      account: "customer-1-aws-staging"
+
+    # ========== Customer Portal - Development (GCP) ==========
+
+    - name: "customer-1-portal-dev-web-firewall"
+      description: "Customer 1 Portal Development Web Tier Firewall Rules"
+      cloud_id: "projects/customer-1-dev-456791/global/firewalls/portal-dev-web"
+      status: active
+      virtual_network: "customer-1-portal-dev-vpc"
+      account: "customer-1-gcp-development"
+
+    - name: "customer-1-portal-dev-internal-firewall"
+      description: "Customer 1 Portal Development Internal Firewall Rules"
+      cloud_id: >-
+        projects/customer-1-dev-456791/global/firewalls/portal-dev-internal
+      status: active
+      virtual_network: "customer-1-portal-dev-vpc"
+      account: "customer-1-gcp-development"

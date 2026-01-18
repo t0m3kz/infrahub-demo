@@ -1,0 +1,36 @@
+# Backend Servers
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: LoadbalancerServer
+  data:
+    # Web Tier Servers
+    - hostname: "demo-web-01"
+      description: "Demo Web Server 01"
+      status: active
+      ip_address:
+        data:
+          address: "10.10.10.11/24"
+
+    - hostname: "demo-web-02"
+      description: "Demo Web Server 02"
+      status: active
+      ip_address:
+        data:
+          address: "10.10.10.12/24"
+
+    # App Tier Servers
+    - hostname: "demo-app-01"
+      description: "Demo App Server 01"
+      status: active
+      ip_address:
+        data:
+          address: "10.10.20.11/24"
+
+    - hostname: "demo-app-02"
+      description: "Demo App Server 02"
+      status: active
+      ip_address:
+        data:
+          address: "10.10.20.12/24"

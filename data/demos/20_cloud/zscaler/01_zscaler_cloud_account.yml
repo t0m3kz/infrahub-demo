@@ -1,0 +1,34 @@
+# Zscaler Cloud Accounts - Multi-Cloud Deployment
+# Demonstrates Zscaler deployment across AWS, GCP, and Azure
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: CloudAccount
+  data:
+    - name: "zscaler-aws-prod"
+      description: "Zscaler AWS Production Account"
+      account_id: "zs-aws-prod-123456"
+      provider: AWS
+      environment: production
+      owner: "Customer 2"
+      status: active
+      cloud_id: "123456789012"
+
+    - name: "zscaler-gcp-prod"
+      description: "Zscaler GCP Production Account"
+      account_id: "zs-gcp-prod-456789"
+      provider: Google Cloud
+      environment: production
+      owner: "Customer 2"
+      status: active
+      cloud_id: "zscaler-prod-456789"
+
+    - name: "zscaler-azure-prod"
+      description: "Zscaler Azure Production Subscription for Cloud Connectors"
+      account_id: "zs-azure-prod-789012"
+      provider: Azure
+      status: active
+      environment: production
+      owner: "Customer 2"
+      cloud_id: "/subscriptions/789012ab-cdef-4567-89ab-cdef01234567"

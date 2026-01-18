@@ -1,9 +1,0 @@
----
-apiVersion: infrahub.app/v1
-kind: Object
-spec:
-  kind: CloudNatGateway
-  data:
-    - name: cust1-eu-west-1a-nat
-      subnet: cust1-eu-west-1a-public
-      elastic_ip: cust1-eu-west-1a-eip

@@ -67,9 +67,12 @@ nodes:
     order_by:
       - check__value
     uniqueness_constraints:
-      - [description__value]
+      - [check__value, rise__value, fall__value, timeout__value]
     human_friendly_id:
-      - description__value
+      - check__value
+      - rise__value
+      - fall__value
+      - timeout__value
     display_label: "{{description__value}}"
     attributes:
       - name: check
@@ -122,29 +125,13 @@ nodes:
     label: "Load Balancer"
     icon: carbon:floating-ip
     include_in_menu: false
-    uniqueness_constraints:
-      - [hostname__value, protocol__value, port__value]
+    human_friendly_id:
+      - name__value
     inherit_from:
-      - OnpremGeneric
       - PlatformLoadBalancer
+      - OnpremGeneric
       - OnpremGenericDevice
     attributes:
-      - name: name
-        kind: Text
-        computed_attribute:
-          kind: Jinja2
-          jinja2_template: "{{ hostname__value}} - {{ vip_ip__address__value }}"
-        read_only: true
-        optional: false
-      - name: hostname
-        kind: Text
-        description: The unique identifier for the VIP.
-        regex: "(?=^.{1,253}$)(^(((?!-)[a-zA-Z0-9-]{1,63}(?<!-))|((?!-)[a-zA-Z0-9-]{1,63}(?<!-)\\.)+[a-zA-Z]{2,63})$)"  # yamllint disable-line rule:line-length
-        order_weight: 11
-      - name: description
-        kind: Text
-        order_weight: 12
-        description: A brief description of the VIP.
       - name: haproxy_mode
         kind: Dropdown
         order_weight: 15
@@ -165,60 +152,45 @@ nodes:
         optional: true
         order_weight: 19
     relationships:
-      - name: vip_ip
-        peer: IpamIPAddress
-        identifier: vip_service__ip
+      - name: deployment
+        peer: TopologyDeployment
         cardinality: one
         kind: Attribute
-        description: The IP address for this VIP service.
-        order_weight: 22
+        order_weight: 500
+        optional: false
         on_delete: no-action
+        description: "The deployment location for this load balancer"
       - name: frontend_servers
         peer: DcimDevice
         label: Frontend Servers
-        optional: false
+        optional: true
         cardinality: many
         kind: Component
         identifier: device_service
         on_delete: no-action
         order_weight: 1000
         description: "HAProxy/Nginx frontend servers running the LB software"
-      - name: backends
-        peer: LoadbalancerServer
-        label: Backend Servers
-        identifier: onpremloadbalancer__backends
-        cardinality: many
-        kind: Generic
-        description: "Backend servers receiving load balanced traffic"
-        order_weight: 1100
-        on_delete: no-action
-      - name: health_checks
-        peer: LoadbalancerHealthCheck
-        identifier: vip__health_checks
-        cardinality: many
-        kind: Generic
-        description: Health checks for VIP service.
-        order_weight: 1200
-        on_delete: no-action
 extensions:
   nodes:
     - kind: LoadbalancerServer
       relationships:
-        - name: virtual_ips
-          label: Virtual IPs
-          kind: Component
+        - name: backend_pools
+          label: Backend Pools
+          kind: Generic
           cardinality: many
           optional: true
-          peer: OnpremLoadBalancer
-          order_weight: 2000
-          identifier: onpremloadbalancer__backends
+          peer: ServiceBackendPool
+          order_weight: 2100
+          identifier: backend_pool__onprem_servers
+          description: "Backend pools this server belongs to"
     - kind: LoadbalancerHealthCheck
       relationships:
-        - name: health_checks
-          label: Health Checks
-          kind: Component
+        - name: vip_services
+          label: VIP Services
+          kind: Generic
           cardinality: many
           optional: true
-          peer: OnpremLoadBalancer
-          order_weight: 2000
-          identifier: vip__health_checks
+          peer: ServiceLoadBalancerVIP
+          order_weight: 2100
+          identifier: vip_service__health_checks
+          description: "VIP services using this health check"

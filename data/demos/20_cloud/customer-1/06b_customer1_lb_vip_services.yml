@@ -1,0 +1,151 @@
+# Customer 1 - Load Balancer VIP Services and Backend Pools
+# Demonstrates the three-tier architecture:
+#   LoadBalancer → VIP Service (Listener) → Backend Pool → Backend Servers
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  # ============================================================================
+  # VIP Services (Listeners)
+  # ============================================================================
+  kind: ServiceLoadBalancerVIP
+  data:
+    # ========== E-Commerce Platform - Production (AWS) ==========
+
+    - hostname: "www.ecommerce.customer1.com"
+      description: "E-Commerce Web Frontend HTTPS Listener"
+      status: active
+      protocol: https
+      port: 443
+      ssl_certificate: "ecommerce-prod-wildcard"
+      timeout_client: 50000
+      timeout_server: 50000
+      max_connections: 10000
+      load_balancer: "customer-1-ecommerce-prod-alb"
+
+    - hostname: "app.ecommerce.customer1.com"
+      description: "E-Commerce App Tier TCP Listener"
+      status: active
+      protocol: tcp
+      port: 8080
+      timeout_client: 30000
+      timeout_server: 30000
+      load_balancer: "customer-1-ecommerce-prod-nlb"
+
+    # ========== Analytics Dashboard - Production (GCP) ==========
+
+    - hostname: "analytics.customer1.com"
+      description: "Analytics Web Frontend HTTPS Listener"
+      status: active
+      protocol: https
+      port: 443
+      ssl_certificate: "analytics-prod-cert"
+      timeout_client: 60000
+      timeout_server: 60000
+      load_balancer: "customer-1-analytics-prod-lb"
+
+    - hostname: "analytics-api.internal"
+      description: "Analytics Internal API TCP Listener"
+      status: active
+      protocol: tcp
+      port: 8080
+      timeout_client: 30000
+      timeout_server: 30000
+      load_balancer: "customer-1-analytics-prod-internal-lb"
+
+    # ========== Customer Portal - Production (Azure) ==========
+
+    - hostname: "portal.customer1.com"
+      description: "Portal Web Frontend HTTPS Listener"
+      status: active
+      protocol: https
+      port: 443
+      ssl_certificate: "portal-prod-cert"
+      ssl_redirect: true
+      timeout_client: 50000
+      timeout_server: 50000
+      max_connections: 5000
+      load_balancer: "customer-1-portal-prod-lb"
+
+    - hostname: "portal-api.internal"
+      description: "Portal Internal API TCP Listener"
+      status: active
+      protocol: tcp
+      port: 8080
+      timeout_client: 30000
+      timeout_server: 30000
+      load_balancer: "customer-1-portal-prod-internal-lb"
+
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  # ============================================================================
+  # Backend Pools
+  # ============================================================================
+  kind: ServiceBackendPool
+  data:
+    # ========== E-Commerce Platform - Production (AWS) ==========
+
+    - name: "ecommerce-web-pool"
+      description: "E-Commerce web tier backend pool"
+      load_balancing_algorithm: round_robin
+      session_persistence: none
+      drain_timeout: 300
+      vip_service: ["www.ecommerce.customer1.com", "https", "443"]
+      cloud_instances:
+        - ["customer-1-ecommerce-prod-web-01"]
+        - ["customer-1-ecommerce-prod-web-02"]
+
+    - name: "ecommerce-app-pool"
+      description: "E-Commerce app tier backend pool"
+      load_balancing_algorithm: least_connections
+      session_persistence: source_ip
+      drain_timeout: 300
+      vip_service: ["app.ecommerce.customer1.com", "tcp", "8080"]
+      cloud_instances:
+        - ["customer-1-ecommerce-prod-app-01"]
+        - ["customer-1-ecommerce-prod-app-02"]
+
+    # ========== Analytics Dashboard - Production (GCP) ==========
+
+    - name: "analytics-web-pool"
+      description: "Analytics web tier backend pool"
+      load_balancing_algorithm: round_robin
+      session_persistence: cookie
+      drain_timeout: 300
+      vip_service: ["analytics.customer1.com", "https", "443"]
+      cloud_instances:
+        - ["customer-1-analytics-prod-web-01"]
+
+    - name: "analytics-app-pool"
+      description: "Analytics app tier backend pool"
+      load_balancing_algorithm: round_robin
+      session_persistence: none
+      drain_timeout: 300
+      vip_service: ["analytics-api.internal", "tcp", "8080"]
+      cloud_instances:
+        - ["customer-1-analytics-prod-app-01"]
+        - ["customer-1-analytics-prod-app-02"]
+
+    # ========== Customer Portal - Production (Azure) ==========
+
+    - name: "portal-web-pool"
+      description: "Portal web tier backend pool"
+      load_balancing_algorithm: round_robin
+      session_persistence: cookie
+      drain_timeout: 300
+      vip_service: ["portal.customer1.com", "https", "443"]
+      cloud_instances:
+        - ["customer-1-portal-prod-web-01"]
+        - ["customer-1-portal-prod-web-02"]
+
+    - name: "portal-app-pool"
+      description: "Portal app tier backend pool"
+      load_balancing_algorithm: least_connections
+      session_persistence: source_ip
+      drain_timeout: 300
+      vip_service: ["portal-api.internal", "tcp", "8080"]
+      cloud_instances:
+        - ["customer-1-portal-prod-app-01"]
+        - ["customer-1-portal-prod-app-02"]

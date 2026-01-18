@@ -24,13 +24,6 @@ spec:
             icon: "mdi:cloud-outline"
 
           - namespace: Organization
-            name: CloudProvider
-            label: Cloud Providers
-            kind: OrganizationProvider
-            icon: "mdi:cloud"
-            description: "Cloud service providers (AWS, Azure, GCP)"
-
-          - namespace: Organization
             name: Customer
             label: Customers
             kind: OrganizationCustomer
@@ -510,7 +503,7 @@ spec:
             name: LBMenu
             label: Load Balancing
             icon: "carbon:load-balancer-global"
-            description: "Health checks and backend servers"
+            description: "Load balancers, VIP services, and backend pools"
             children:
               data:
                 - namespace: Platform
@@ -519,6 +512,22 @@ spec:
                   kind: PlatformLoadBalancer
                   icon: "carbon:load-balancer-global"
                   description: "All load balancers (on-prem, cloud)"
+
+                - namespace: Service
+                  name: LoadBalancerVIP
+                  label: VIP Services / Listeners
+                  kind: ServiceLoadBalancerVIP
+                  icon: "mdi:ip-network"
+                  description: >
+                    Frontend VIP services and listeners (protocol/port)
+
+                - namespace: Service
+                  name: BackendPool
+                  label: Backend Pools
+                  kind: ServiceBackendPool
+                  icon: "mdi:server-network"
+                  description: >
+                    Backend server pools with load balancing algorithms
 
                 - namespace: Loadbalancing
                   name: HealthCheck

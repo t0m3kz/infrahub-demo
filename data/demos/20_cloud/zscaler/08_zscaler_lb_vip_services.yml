@@ -1,0 +1,77 @@
+# Zscaler Load Balancer VIP Services and Backend Pools - Multi-Cloud
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: ServiceLoadBalancerVIP
+  data:
+    # ========== AWS VIP Service ==========
+
+    - hostname: "zscaler.aws.internal"
+      description: "Zscaler Connector Service - AWS"
+      status: active
+      protocol: tcp
+      port: 9000
+      timeout_client: 60000
+      timeout_server: 60000
+      load_balancer: "zscaler-aws-nlb"
+
+    # ========== GCP VIP Service ==========
+
+    - hostname: "zscaler.gcp.internal"
+      description: "Zscaler Connector Service - GCP"
+      status: active
+      protocol: tcp
+      port: 9000
+      timeout_client: 60000
+      timeout_server: 60000
+      load_balancer: "zscaler-gcp-lb"
+
+    # ========== Azure VIP Service ==========
+
+    - hostname: "zscaler.azure.internal"
+      description: "Zscaler Connector Service - Azure"
+      status: active
+      protocol: tcp
+      port: 9000
+      timeout_client: 60000
+      timeout_server: 60000
+      load_balancer: "zscaler-azure-lb"
+
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: ServiceBackendPool
+  data:
+    # ========== AWS Backend Pool ==========
+
+    - name: "zscaler-aws-cc-pool"
+      description: "Backend pool for Zscaler Cloud Connectors (ZIA) in AWS"
+      vip_service: ["zscaler.aws.internal", "tcp", "9000"]
+      load_balancing_algorithm: "round_robin"
+      session_persistence: "source_ip"
+      cloud_instances:
+        - ["zscaler-aws-cc-01"]
+        - ["zscaler-aws-cc-02"]
+
+    # ========== GCP Backend Pool ==========
+
+    - name: "zscaler-gcp-cc-pool"
+      description: "Backend pool for Zscaler Cloud Connectors (ZIA) in GCP"
+      vip_service: ["zscaler.gcp.internal", "tcp", "9000"]
+      load_balancing_algorithm: "round_robin"
+      session_persistence: "source_ip"
+      cloud_instances:
+        - ["zscaler-gcp-cc-01"]
+        - ["zscaler-gcp-cc-02"]
+
+    # ========== Azure Backend Pool ==========
+
+    - name: "zscaler-azure-cc-pool"
+      description: "Backend pool for Zscaler Cloud Connector (ZIA) in Azure"
+      vip_service: ["zscaler.azure.internal", "tcp", "9000"]
+      load_balancing_algorithm: "round_robin"
+      session_persistence: "source_ip"
+      cloud_instances:
+        - ["zscaler-azure-cc-01"]

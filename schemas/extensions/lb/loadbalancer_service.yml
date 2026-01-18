@@ -1,0 +1,342 @@
+---
+version: "1.0"
+
+# ============================================================================
+# Load Balancer VIP Service / Listener Model
+# ============================================================================
+# This schema defines a unified VIP Service model that works for both:
+# - OnPrem Load Balancers (HAProxy, Nginx, F5)
+# - Cloud Load Balancers (AWS ALB/NLB, Azure LB, GCP LB)
+#
+# Architecture:
+#   LoadBalancer (1) -> VIPService (many)
+#     -> BackendPool (1) -> BackendServer (many)
+#
+# Benefits:
+# - Single load balancer can have multiple VIP services (listeners)
+# - Each VIP service has its own protocol, port, SSL config
+# - Clean separation between frontend (VIP) and backend (pool)
+# - Compatible across OnPrem and Cloud deployments
+# ============================================================================
+
+nodes:
+  # ==========================================================================
+  # VIP Service / Listener
+  # ==========================================================================
+  - name: LoadBalancerVIP
+    namespace: Service
+    label: Load Balancer VIP / Listener
+    description: >-
+      Frontend service configuration for a load balancer
+      (VIP address, protocol, port)
+    icon: mdi:ip-network
+    include_in_menu: false
+    menu_placement: ServiceLoadBalancerVIP
+    uniqueness_constraints:
+      - [load_balancer, protocol__value, port__value]
+    human_friendly_id:
+      - hostname__value
+      - protocol__value
+      - port__value
+    display_label: >
+      {{ hostname__value }} ({{ protocol__value|upper }}:{{ port__value }})
+    attributes:
+      - name: hostname
+        kind: Text
+        description: "DNS name or VIP identifier"
+        order_weight: 100
+        regex: '(?=^.{1,253}$)(^(((?!-)[a-zA-Z0-9-]{1,63}(?<!-)|((?!-)[a-zA-Z0-9-]{1,63}(?<!-)\.)+[a-zA-Z]{2,63})$))'  # yamllint disable-line rule:line-length
+      - name: description
+        kind: Text
+        optional: true
+        order_weight: 110
+        description: "Description of this VIP service"
+      - name: status
+        kind: Dropdown
+        optional: false
+        default_value: active
+        order_weight: 200
+        choices:
+          - name: provisioning
+            label: Provisioning
+            description: "Service is being provisioned"
+            color: "#7f7fff"
+          - name: active
+            label: Active
+            description: "Service is active and operational"
+            color: "#7FBF7F"
+          - name: maintenance
+            label: Maintenance
+            description: "Service is under maintenance"
+            color: "#FFF2CC"
+          - name: disabled
+            label: Disabled
+            description: "Service has been disabled"
+            color: "#D3D3D3"
+      - name: protocol
+        kind: Dropdown
+        optional: false
+        order_weight: 300
+        description: "Protocol for this VIP service"
+        choices:
+          - name: http
+            label: HTTP
+            description: "HTTP protocol"
+            color: "#7FBF7F"
+          - name: https
+            label: HTTPS
+            description: "HTTPS protocol with SSL/TLS"
+            color: "#5F9F5F"
+          - name: tcp
+            label: TCP
+            description: "TCP protocol"
+            color: "#7FA7FF"
+          - name: udp
+            label: UDP
+            description: "UDP protocol"
+            color: "#7F7FBF"
+          - name: tls
+            label: TLS
+            description: "TLS protocol"
+            color: "#9F7F9F"
+      - name: port
+        kind: Number
+        optional: false
+        order_weight: 310
+        description: "Listening port for this service"
+      - name: ssl_certificate
+        kind: Text
+        optional: true
+        order_weight: 320
+        description: "SSL/TLS certificate name for HTTPS/TLS services"
+      - name: ssl_redirect
+        kind: Boolean
+        optional: true
+        default_value: false
+        order_weight: 330
+        description: "Redirect HTTP to HTTPS"
+      - name: timeout_client
+        kind: Number
+        optional: true
+        order_weight: 400
+        description: "Client timeout in milliseconds"
+      - name: timeout_server
+        kind: Number
+        optional: true
+        order_weight: 410
+        description: "Server timeout in milliseconds"
+      - name: max_connections
+        kind: Number
+        optional: true
+        order_weight: 420
+        description: "Maximum concurrent connections"
+    relationships:
+      # Parent load balancer (OnPrem or Cloud)
+      - name: load_balancer
+        peer: PlatformLoadBalancer
+        cardinality: one
+        optional: false
+        order_weight: 500
+        identifier: load_balancer__vip_services
+        description: "Load balancer hosting this VIP service"
+
+      # VIP IP address (for OnPrem typically)
+      - name: vip_ip
+        peer: IpamIPAddress
+        cardinality: one
+        kind: Attribute
+        optional: true
+        order_weight: 600
+        identifier: vip_service__ip
+        description: "Virtual IP address for this service"
+
+      # Backend pool
+      - name: backend_pool
+        peer: ServiceBackendPool
+        cardinality: one
+        optional: true
+        order_weight: 700
+        identifier: vip_service__backend_pool
+        description: "Backend pool serving this VIP service"
+
+      # Health checks
+      - name: health_checks
+        peer: LoadbalancerHealthCheck
+        cardinality: many
+        kind: Generic
+        optional: true
+        order_weight: 800
+        identifier: vip_service__health_checks
+        description: "Health checks for this VIP service"
+
+  # ==========================================================================
+  # Backend Pool
+  # ==========================================================================
+  - name: BackendPool
+    namespace: Service
+    label: Backend Pool
+    description: "Pool of backend servers receiving load balanced traffic"
+    icon: mdi:server-network
+    include_in_menu: false
+    uniqueness_constraints:
+      - [vip_service, name__value]
+    human_friendly_id:
+      - name__value
+    display_label: "{{ name__value }}"
+    attributes:
+      - name: name
+        kind: Text
+        optional: false
+        order_weight: 100
+        description: "Backend pool name"
+      - name: description
+        kind: Text
+        optional: true
+        order_weight: 110
+        description: "Backend pool description"
+      - name: load_balancing_algorithm
+        kind: Dropdown
+        optional: false
+        default_value: round_robin
+        order_weight: 200
+        description: "Load balancing algorithm"
+        choices:
+          - name: round_robin
+            label: Round Robin
+            description: "Distributes traffic evenly across backends"
+            color: "#A9CCE3"
+          - name: least_connections
+            label: Least Connections
+            description: "Routes to backend with fewest connections"
+            color: "#A9DFBF"
+          - name: ip_hash
+            label: IP Hash
+            description: "Routes based on client IP hash"
+            color: "#D2B4DE"
+          - name: weighted
+            label: Weighted
+            description: "Distributes based on backend weights"
+            color: "#F9E79F"
+          - name: random
+            label: Random
+            description: "Random distribution across backends"
+            color: "#CDEACC"
+      - name: session_persistence
+        kind: Dropdown
+        optional: true
+        order_weight: 300
+        description: "Session persistence/sticky sessions"
+        choices:
+          - name: none
+            label: None
+            description: "No session persistence"
+            color: "#D3D3D3"
+          - name: source_ip
+            label: Source IP
+            description: "Based on client source IP"
+            color: "#A9CCE3"
+          - name: cookie
+            label: Cookie
+            description: "Based on HTTP cookie"
+            color: "#A9DFBF"
+          - name: application
+            label: Application
+            description: "Application-defined persistence"
+            color: "#D2B4DE"
+      - name: drain_timeout
+        kind: Number
+        optional: true
+        order_weight: 400
+        description: "Connection draining timeout in seconds"
+    relationships:
+      # Parent VIP service
+      - name: vip_service
+        peer: ServiceLoadBalancerVIP
+        cardinality: one
+        optional: false
+        order_weight: 500
+        identifier: vip_service__backend_pool
+        description: "VIP service using this backend pool"
+
+      # Backend servers (OnPrem)
+      - name: onprem_servers
+        peer: LoadbalancerServer
+        cardinality: many
+        kind: Generic
+        optional: true
+        order_weight: 600
+        identifier: backend_pool__onprem_servers
+        description: "On-premises backend servers"
+
+      # Backend instances (Cloud)
+      - name: cloud_instances
+        peer: CloudInstance
+        cardinality: many
+        optional: true
+        order_weight: 610
+        identifier: backend_pool__cloud_instances
+        description: "Cloud compute instances"
+
+# ==============================================================================
+# Extensions - Update existing nodes to use VIP Services
+# ==============================================================================
+extensions:
+  nodes:
+    # Update OnpremLoadBalancer to host VIP services
+    - kind: OnpremLoadBalancer
+      relationships:
+        - name: vip_services
+          peer: ServiceLoadBalancerVIP
+          cardinality: many
+          kind: Component
+          optional: true
+          order_weight: 2000
+          identifier: load_balancer__vip_services
+          description: "VIP services hosted on this load balancer"
+
+    # Update CloudLoadBalancer to host VIP services
+    - kind: CloudLoadBalancer
+      relationships:
+        - name: vip_services
+          peer: ServiceLoadBalancerVIP
+          cardinality: many
+          kind: Component
+          optional: true
+          order_weight: 2000
+          identifier: load_balancer__vip_services
+          description: "VIP services (listeners) hosted on this load balancer"
+
+    # Update LoadbalancerServer to be part of backend pools
+    - kind: LoadbalancerServer
+      relationships:
+        - name: backend_pools
+          peer: ServiceBackendPool
+          cardinality: many
+          kind: Generic
+          optional: true
+          order_weight: 2100
+          identifier: backend_pool__onprem_servers
+          description: "Backend pools this server belongs to"
+
+    # Update LoadbalancerHealthCheck to be attached to VIP services
+    - kind: LoadbalancerHealthCheck
+      relationships:
+        - name: vip_services
+          peer: ServiceLoadBalancerVIP
+          cardinality: many
+          kind: Generic
+          optional: true
+          order_weight: 2100
+          identifier: vip_service__health_checks
+          description: "VIP services using this health check"
+
+    # Update CloudInstance to be part of backend pools
+    - kind: CloudInstance
+      relationships:
+        - name: backend_pools
+          peer: ServiceBackendPool
+          cardinality: many
+          optional: true
+          order_weight: 2500
+          identifier: backend_pool__cloud_instances
+          description: "Load balancer backend pools this instance belongs to"

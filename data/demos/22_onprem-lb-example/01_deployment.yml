@@ -1,0 +1,90 @@
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologyDataCenter
+  data:
+    - name: DC1
+      index: 1
+      amount_of_super_spines: 2
+      super_spine_template: N9K_C9336C_FX2_SUPER_SPINE
+      fabric_interface_sorting_method: top_down
+      design_pattern: L-Hierarchical
+      devices:
+        - kind: DcimPhysicalDevice
+          data:
+            name: dc-1-super-spine-1
+            role: super-spine
+            device_type: N9K-C9336C-FX2
+            status: active
+        - kind: DcimPhysicalDevice
+          data:
+            name: dc-1-super-spine-2
+            role: super-spine
+            device_type: N9K-C9336C-FX2
+            status: active
+      children:
+        kind: TopologyPod
+        data:
+          - index: 1
+            deployment_type: middle_rack
+            spine_template: N9K-C9364C-GX_SPINE
+            amount_of_spines: 3
+            number_of_rows: 4
+            maximum_leafs_per_row: 4
+            maximum_tors_per_row: 4
+            member_of_groups:
+              - topologies_pod
+            devices:
+              - kind: DcimPhysicalDevice
+                data:
+                  name: dc-1-pod1-spine-1
+                  role: spine
+                  device_type: N9K-C9364C-GX
+                  status: active
+              - kind: DcimPhysicalDevice
+                data:
+                  name: dc-1-pod1-leaf-1
+                  role: leaf
+                  device_type: N9K-C9364C-GX
+                  status: active
+              - kind: DcimPhysicalDevice
+                data:
+                  name: dc-1-pod1-leaf-2
+                  role: leaf
+                  device_type: N9K-C9364C-GX
+                  status: active
+              - kind: DcimPhysicalDevice
+                data:
+                  name: dc-1-pod1-lb-1
+                  role: load-balancer
+                  device_type: NGINX
+                  status: active
+          - index: 2
+            deployment_type: mixed
+            spine_template: N9K-C9364C-GX_SPINE
+            amount_of_spines: 3
+            number_of_rows: 4
+            maximum_leafs_per_row: 4
+            maximum_tors_per_row: 10
+            member_of_groups:
+              - topologies_pod
+            devices:
+              - kind: DcimPhysicalDevice
+                data:
+                  name: dc-1-pod2-spine-1
+                  role: spine
+                  device_type: N9K-C9364C-GX
+                  status: active
+              - kind: DcimPhysicalDevice
+                data:
+                  name: dc-1-pod2-leaf-1
+                  role: leaf
+                  device_type: N9K-C9364C-GX
+                  status: active
+              - kind: DcimPhysicalDevice
+                data:
+                  name: dc-1-pod2-leaf-2
+                  role: leaf
+                  device_type: N9K-C9364C-GX
+                  status: active

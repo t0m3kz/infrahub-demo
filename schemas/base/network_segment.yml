@@ -31,14 +31,10 @@ generics:
             label: VXLAN
             description: "Virtual Extensible LAN"
             color: "#2ECC71"
-          - name: vpc
-            label: VPC
-            description: "Virtual Private Cloud"
+          - name: cloud
+            label: Public Cloud
+            description: "Public Cloud"
             color: "#9B59B6"
-          - name: subnet
-            label: Subnet
-            description: "IP Subnet"
-            color: "#E67E22"
           - name: vrf
             label: VRF
             description: "Virtual Routing and Forwarding"
@@ -78,6 +74,15 @@ generics:
             description: Segment is retired and inactive
             color: "#BFBFBF"
     relationships:
+      - name: owner
+        peer: OrganizationGeneric
+        cardinality: one
+        kind: Generic
+        order_weight: 100
+        optional: false
+        on_delete: no-action
+        description: "Owner of the network segment"
+        identifier: network_segment__owner
       - name: ip_prefixes
         peer: IpamPrefix
         cardinality: many

@@ -1,0 +1,33 @@
+# IP Addresses
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: IpamIPAddress
+  data:
+    # VIP Addresses
+    - address: "10.10.1.10/32"
+      description: "VIP for web frontend (HTTP/HTTPS)"
+      ip_namespace: "default"
+
+    - address: "10.10.1.11/32"
+      description: "VIP for app tier (TCP 8080)"
+      ip_namespace: "default"
+
+    # Web Tier Backend IPs
+    - address: "10.10.10.11/24"
+      description: "Web server 01 IP"
+      ip_namespace: "default"
+
+    - address: "10.10.10.12/24"
+      description: "Web server 02 IP"
+      ip_namespace: "default"
+
+    # App Tier Backend IPs
+    - address: "10.10.20.11/24"
+      description: "App server 01 IP"
+      ip_namespace: "default"
+
+    - address: "10.10.20.12/24"
+      description: "App server 02 IP"
+      ip_namespace: "default"

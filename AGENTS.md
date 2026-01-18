@@ -327,12 +327,12 @@ nodes:
     inherit_from:
       - TopologyDeployment
       - TopologyPhysicalDeployment  # Gets cables relationship
-  
+
   - name: ColocationAZ
     inherit_from:
       - TopologyDeployment
       - TopologyPhysicalDeployment  # Gets cables relationship
-  
+
   - name: CloudRegion
     inherit_from:
       - TopologyDeployment           # NO cables relationship
@@ -505,6 +505,251 @@ uv run pytest --cov=.
 - **Ignoring `order_weight`**: Forgetting to set `order_weight` in schemas can lead to an inconsistent UI.
 - **Attribute conflicts in generics**: Base generics (Platform.*) should NOT redefine attributes from technology generics (CloudResource, ServiceGeneric)
 - **Missing relationship identifiers**: When multiple relationships point to the same peer, always specify unique `identifier` values
+- **Object file HFID errors**: Ensure all values in HFID arrays are strings, even for Number attributes (e.g., `["value1", "3", "443"]`)
+- **Generic HFID lookup failures**: Generics used as relationship peers must have `human_friendly_id` defined if data files reference them via HFID strings
+
+## Object File Format Guide
+
+### Overview
+
+Object files are YAML files that provide a declarative way to load data into Infrahub. They work best with idempotent operations and models that have Human Friendly IDs (HFIDs) defined.
+
+**Documentation**: [Infrahub Object File Format](https://docs.infrahub.app/python-sdk/topics/object_file)
+
+### File Structure
+
+All object files must follow this structure:
+
+```yaml
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: NamespaceName  # The schema kind (e.g., DcimDevice, IpamIPAddress)
+  parameters:           # Optional
+    expand_range: false  # Enable range expansion [1-5] → 1,2,3,4,5
+  data:
+    - # First object
+      attribute1: value1
+      relationship1: "HFID-reference"
+    - # Second object
+      attribute2: value2
+```
+
+**Multiple documents**: Separate with `---` to load multiple kinds in one file.
+
+### HFID Requirements
+
+**What is an HFID?**
+A Human Friendly ID is a unique identifier for objects, defined in the schema's `human_friendly_id` field. It allows referencing objects across files without knowing their internal database IDs.
+
+**Critical Rules**:
+
+1. All HFID values must be **strings**, even for Number attributes
+2. Multi-value HFIDs use **array format**: `["value1", "value2", "value3"]`
+3. Single-value HFIDs can use string format: `"value"`
+4. Generic types used as relationship peers **must have HFID defined** for string references to work
+
+**Examples**:
+
+```yaml
+# ✅ Correct: All values as strings
+health_check: ["http", "3", "3", "2000"]  # Even though rise/fall/timeout are Numbers
+
+# ❌ Wrong: Number values not quoted
+health_check: ["http", 3, 3, 2000]  # Will fail HFID lookup
+
+# ✅ Correct: Single-value HFID
+device: "dc-1-spine-1"
+
+# ✅ Correct: Two-value HFID
+ip_address: ["192.168.1.10/24", "default"]  # [address, namespace]
+```
+
+### Relationship Formats
+
+#### Cardinality One
+
+**Option 1**: **Reference existing by HFID (string)**
+
+```yaml
+site: "Paris"  # References existing site with HFID "Paris"
+```
+
+**Option 2**: **Nested object (will create if doesn't exist)**
+
+```yaml
+primary_ip:
+  data:
+    address: "192.168.1.1/24"
+    ip_namespace: "default"
+```
+
+**Option 3**: **Nested object with explicit kind (for generics)**
+
+```yaml
+load_balancer:
+  kind: OnpremLoadBalancer  # Specify concrete type when peer is generic
+  data:
+    name: "my-lb"
+```
+
+#### Cardinality Many
+
+**Option 1**: **Array of HFID strings**
+
+```yaml
+tags:
+  - "blue"
+  - "production"
+  - "critical"
+```
+
+**Option 2**: **Array of multi-value HFIDs**
+
+```yaml
+backend_pools:
+  - ["www.example.com", "https", "443"]  # Three-part HFID
+  - ["api.example.com", "tcp", "8080"]
+```
+
+**Option 3**: **Nested objects (dictionary format)**
+
+```yaml
+tags:
+  data:
+    - name: "blue"
+      description: "Blue environment"
+    - name: "green"
+      description: "Green environment"
+```
+
+**Option 4**: **Nested objects (list format with explicit kinds)**
+
+```yaml
+devices:
+  - kind: DcimPhysicalDevice
+    data:
+      name: "spine-1"
+      role: "spine"
+  - kind: DcimPhysicalDevice
+    data:
+      name: "spine-2"
+      role: "spine"
+```
+
+### Common Patterns
+
+#### Loading Devices with Nested Components
+
+```yaml
+spec:
+  kind: TopologyDataCenter
+  data:
+    - name: "DC1"
+      devices:
+        - kind: DcimPhysicalDevice
+          data:
+            name: "dc1-spine-1"
+            role: "spine"
+            device_type: "N9K-C9336C-FX2"
+            status: "active"
+```
+
+#### VIP Services with HFID References
+
+```yaml
+spec:
+  kind: ServiceLoadBalancerVIP
+  data:
+    - hostname: "www.example.com"
+      protocol: "https"
+      port: 443
+      load_balancer: "my-haproxy-lb"  # Simple HFID reference
+      vip_ip: ["10.1.1.10/32", "default"]  # Two-part HFID
+      health_checks:
+        - ["http", "3", "3", "2000"]  # Four-part HFID (all strings!)
+```
+
+#### Backend Pools with Three-Part HFID
+
+```yaml
+spec:
+  kind: ServiceBackendPool
+  data:
+    - name: "web-pool"
+      vip_service: ["www.example.com", "https", "443"]  # Port as string!
+      load_balancing_algorithm: "round_robin"
+      onprem_servers:
+        - ["web-01", "10.1.10.11/24", "default"]
+```
+
+### Range Expansion
+
+Enable with `expand_range: true` to automatically expand patterns:
+
+```yaml
+spec:
+  kind: DcimDevice
+  parameters:
+    expand_range: true
+  data:
+    - name: "spine-[1-4]"  # Creates spine-1, spine-2, spine-3, spine-4
+      role: "spine"
+```
+
+**Rules**:
+
+- All expanded fields must have **matching lengths**
+- Supports patterns: `[1-5]`, `[10-15]`, `[1,3,5]`, `[A-C]`
+- Only works for **string fields**
+
+### Validation and Loading
+
+```bash
+# Validate object file format
+uv run infrahubctl object validate data/demos/my-demo/
+
+# Load objects into Infrahub
+uv run infrahubctl object load data/demos/my-demo/ --branch my-branch
+
+# Load specific file
+uv run infrahubctl object load data/demos/my-demo/01_devices.yml
+```
+
+### Troubleshooting
+
+**Error**: "Unable to lookup node by HFID, schema 'X' does not have a HFID defined"
+
+- **Cause**: Relationship peer is a generic without `human_friendly_id` defined
+- **Solution 1**: Add `human_friendly_id` to the generic schema
+- **Solution 2**: Use nested object format with explicit `kind` instead of HFID string
+
+**Error**: **"HFID mismatch" or "Expected X values but got Y"**
+
+- **Cause**: HFID array length doesn't match schema definition
+- **Solution**: Check schema's `human_friendly_id` field and ensure array matches exactly
+
+**Error**: **"Type mismatch" or GraphQL validation errors**
+
+- **Cause**: Number values in HFID array not quoted as strings
+- **Solution**: Quote all HFID values: `["hostname", "443"]` not `["hostname", 443]`
+
+**Objects not created**
+- Verify YAML syntax with `yamllint`
+- Check that all referenced HFIDs exist (or use nested objects)
+- Load dependencies first (e.g., device_types before devices)
+
+### Best Practices
+
+1. **Use HFIDs consistently**: Define `human_friendly_id` on all schemas where objects will be referenced
+2. **Quote all HFID values**: Always use strings in HFID arrays, even for numbers
+3. **Load order matters**: Load base data (locations, device types) before dependent objects
+4. **Validate before loading**: Always run `infrahubctl object validate` first
+5. **Use nested objects for components**: Prefer nested format for tightly coupled data
+6. **Explicit kinds for generics**: When referencing generic peers, specify concrete `kind`
+7. **Comments for clarity**: Document complex relationships and dependencies
+8. **Organize by purpose**: Keep related objects in the same file or directory
 
 ## Architecture Decision Records
 
