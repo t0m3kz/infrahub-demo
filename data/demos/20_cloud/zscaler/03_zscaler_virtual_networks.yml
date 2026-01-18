@@ -18,6 +18,13 @@ spec:
       dns_support: true
       dns_hostnames: true
       cloud_id: "vpc-zscaler-aws-123456"
+      cidr_blocks:
+        data:
+          - prefix: "10.10.0.0/16"
+            ip_namespace: "default"
+            status: active
+            role: customer
+            description: "Zscaler AWS VPC primary CIDR"
 
     # GCP europe-west1 (Belgium)
     - name: "zscaler-gcp-vpc"
@@ -28,7 +35,15 @@ spec:
       is_default: false
       dns_support: true
       dns_hostnames: false
-      cloud_id: "projects/zscaler-prod-456789/global/networks/zscaler-gcp-vpc"
+      cloud_id: >-
+        projects/zscaler-prod-456789/global/networks/zscaler-gcp-vpc
+      cidr_blocks:
+        data:
+          - prefix: "10.20.0.0/16"
+            ip_namespace: "default"
+            status: active
+            role: customer
+            description: "Zscaler GCP VPC primary CIDR"
 
     # Azure westeurope (Netherlands)
     - name: "zscaler-azure-vnet"
@@ -39,5 +54,12 @@ spec:
       is_default: false
       dns_support: true
       dns_hostnames: false
-      cloud_id: >
+      cloud_id: >-
         /subscriptions/789012ab-cdef-4567-89ab-cdef01234567/resourceGroups/zscaler-westeu-rg/providers/Microsoft.Network/virtualNetworks/zscaler-azure-vnet
+      cidr_blocks:
+        data:
+          - prefix: "10.30.0.0/16"
+            ip_namespace: "default"
+            status: active
+            role: customer
+            description: "Zscaler Azure VNet primary CIDR"

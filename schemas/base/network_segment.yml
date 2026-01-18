@@ -31,10 +31,6 @@ generics:
             label: VXLAN
             description: "Virtual Extensible LAN"
             color: "#2ECC71"
-          - name: cloud
-            label: Public Cloud
-            description: "Public Cloud"
-            color: "#9B59B6"
           - name: vrf
             label: VRF
             description: "Virtual Routing and Forwarding"
@@ -43,6 +39,18 @@ generics:
             label: EVPN
             description: "Ethernet VPN"
             color: "#1ABC9C"
+          - name: aws_vpc_subnet
+            label: AWS VPC Subnet
+            description: "AWS VPC Subnet"
+            color: "#FF9900"
+          - name: gcp_vpc_subnet
+            label: GCP VPC Subnet
+            description: "Google Cloud VPC Subnet"
+            color: "#4285F4"
+          - name: azure_vnet_subnet
+            label: Azure VNet Subnet
+            description: "Azure Virtual Network Subnet"
+            color: "#0078D4"
           - name: other
             label: Other
             description: "Other segment type"

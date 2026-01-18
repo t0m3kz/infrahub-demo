@@ -23,9 +23,6 @@ spec:
         - ["customer-1-ecommerce-prod-web-1b"]
       security_groups:
         - ["customer-1-ecommerce-prod-lb-sg"]
-      public_ips:
-        - "customer-1-ecommerce-prod-alb-ip-1"
-        - "customer-1-ecommerce-prod-alb-ip-2"
 
     - name: "customer-1-ecommerce-prod-nlb"
       description: >
@@ -57,8 +54,6 @@ spec:
         - ["customer-1-analytics-prod-web"]
       security_groups:
         - ["customer-1-analytics-prod-web-firewall"]
-      public_ips:
-        - "customer-1-analytics-prod-lb-ip"
 
     - name: "customer-1-analytics-prod-internal-lb"
       description: "Customer 1 Analytics Production Internal Load Balancer"
@@ -90,8 +85,6 @@ spec:
         - ["customer-1-portal-prod-web-2"]
       security_groups:
         - ["customer-1-portal-prod-web-nsg"]
-      public_ips:
-        - "customer-1-portal-prod-lb-ip"
 
     - name: "customer-1-portal-prod-internal-lb"
       description: "Customer 1 Portal Production Internal Load Balancer"

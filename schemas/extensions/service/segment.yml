@@ -42,24 +42,6 @@ nodes:
             color: "#A9DFBF"
         default_value: production
         order_weight: 2
-      - name: segment_type
-        kind: Dropdown
-        description: "Type of network segment"
-        choices:
-          - name: l2_only
-            label: L2 Only
-            description: "Layer 2 segment only"
-            color: "#A9CCE3"
-          - name: l3_gateway
-            label: L3 Gateway
-            description: "Layer 2 segment with L3 gateway"
-            color: "#A9DFBF"
-          - name: l3_vrf
-            label: L3 VRF
-            description: "Layer 3 VRF segment"
-            color: "#D2B4DE"
-        default_value: "l2_only"
-        order_weight: 3
       - name: tenant_isolation
         kind: Dropdown
         description: "Level of tenant isolation for this segment"
