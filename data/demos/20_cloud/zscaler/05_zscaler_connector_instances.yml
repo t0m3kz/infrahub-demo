@@ -1,147 +1,116 @@
-# Zscaler Connector Instances - Multi-Cloud Deployment
-# AWS: 4 instances (2 Cloud Connectors + 2 App Connectors across AZs)
-# GCP: 4 instances (2 Cloud Connectors + 2 App Connectors across zones)
-# Azure: 2 instances (1 Cloud Connector + 1 App Connector)
 ---
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
   kind: CloudInstance
   data:
-    # ========== AWS eu-central-1 - Cloud Connectors (ZIA) ==========
-
-    - name: "zscaler-aws-cc-01"
-      description: "Zscaler Cloud Connector 1 (ZIA) - AWS AZ-A"
+    - name: zscaler-aws-cc-01
+      description: Zscaler Cloud Connector 1 (ZIA) - AWS AZ-A
       status: active
-      instance_type: "m5.xlarge"
-      image: "ami-zscaler-cloud-connector-6.2"
-      account: "zscaler-aws-prod"
-      availability_zone: "eu-central-1a"
-      network_segment: "zscaler-aws-service-subnet-1a"
+      instance_type: m5.xlarge
+      image: ami-zscaler-cloud-connector-6.2
+      account: zscaler-aws-prod
+      availability_zone: eu-central-1a
+      network_segment: zscaler-aws-service-subnet-1a
       security_groups:
-        - ["zscaler-aws-connector-sg"]
-      cloud_id: "i-aws-zscaler-cc-01"
-
-    - name: "zscaler-aws-cc-02"
-      description: "Zscaler Cloud Connector 2 (ZIA) - AWS AZ-B"
+        - zscaler-aws-connector-sg
+      cloud_id: i-c095cfac3de147f08
+    - name: zscaler-aws-cc-02
+      description: Zscaler Cloud Connector 2 (ZIA) - AWS AZ-B
       status: active
-      instance_type: "m5.xlarge"
-      image: "ami-zscaler-cloud-connector-6.2"
-      account: "zscaler-aws-prod"
-      availability_zone: "eu-central-1b"
-      network_segment: "zscaler-aws-service-subnet-1b"
+      instance_type: m5.xlarge
+      image: ami-zscaler-cloud-connector-6.2
+      account: zscaler-aws-prod
+      availability_zone: eu-central-1b
+      network_segment: zscaler-aws-service-subnet-1b
       security_groups:
-        - ["zscaler-aws-connector-sg"]
-      cloud_id: "i-aws-zscaler-cc-02"
-
-    # ========== AWS - App Connectors (ZTNA) ==========
-
-    - name: "zscaler-aws-ac-01"
-      description: "Zscaler App Connector 1 (ZTNA) - AWS AZ-A"
+        - zscaler-aws-connector-sg
+      cloud_id: i-ade72ebc98f3b0b35
+    - name: zscaler-aws-ac-01
+      description: Zscaler App Connector 1 (ZTNA) - AWS AZ-A
       status: active
-      instance_type: "m5.large"
-      image: "ami-zscaler-app-connector-1.5"
-      account: "zscaler-aws-prod"
-      availability_zone: "eu-central-1a"
-      network_segment: "zscaler-aws-service-subnet-1a"
+      instance_type: m5.large
+      image: ami-zscaler-app-connector-1.5
+      account: zscaler-aws-prod
+      availability_zone: eu-central-1a
+      network_segment: zscaler-aws-service-subnet-1a
       security_groups:
-        - ["zscaler-aws-connector-sg"]
-      cloud_id: "i-aws-zscaler-ac-01"
-
-    - name: "zscaler-aws-ac-02"
-      description: "Zscaler App Connector 2 (ZTNA) - AWS AZ-B"
+        - zscaler-aws-connector-sg
+      cloud_id: i-556fce437322a5973
+    - name: zscaler-aws-ac-02
+      description: Zscaler App Connector 2 (ZTNA) - AWS AZ-B
       status: active
-      instance_type: "m5.large"
-      image: "ami-zscaler-app-connector-1.5"
-      account: "zscaler-aws-prod"
-      availability_zone: "eu-central-1b"
-      network_segment: "zscaler-aws-service-subnet-1b"
+      instance_type: m5.large
+      image: ami-zscaler-app-connector-1.5
+      account: zscaler-aws-prod
+      availability_zone: eu-central-1b
+      network_segment: zscaler-aws-service-subnet-1b
       security_groups:
-        - ["zscaler-aws-connector-sg"]
-      cloud_id: "i-aws-zscaler-ac-02"
-
-    # ========== GCP europe-west1 - Cloud Connectors (ZIA) ==========
-
-    - name: "zscaler-gcp-cc-01"
-      description: "Zscaler Cloud Connector 1 (ZIA) - GCP Zone-B"
+        - zscaler-aws-connector-sg
+      cloud_id: i-9a20a20e4a3af2ba4
+    - name: zscaler-gcp-cc-01
+      description: Zscaler Cloud Connector 1 (ZIA) - GCP Zone-B
       status: active
-      instance_type: "n2-standard-4"
-      image: "zscaler-cloud-connector-6-2"
-      account: "zscaler-gcp-prod"
-      availability_zone: "europe-west1-b"
-      network_segment: "zscaler-gcp-service-subnet-b"
+      instance_type: n2-standard-4
+      image: zscaler-cloud-connector-6-2
+      account: zscaler-gcp-prod
+      availability_zone: europe-west1-b
+      network_segment: zscaler-gcp-service-subnet-b
       security_groups:
-        - ["zscaler-gcp-connector-fw"]
-      cloud_id: >
-        projects/zscaler-prod-456789/zones/europe-west1-b/instances/zscaler-gcp-cc-01
-
-    - name: "zscaler-gcp-cc-02"
-      description: "Zscaler Cloud Connector 2 (ZIA) - GCP Zone-C"
+        - zscaler-gcp-connector-fw
+      cloud_id: zscaler-gcp-cc-01
+    - name: zscaler-gcp-cc-02
+      description: Zscaler Cloud Connector 2 (ZIA) - GCP Zone-C
       status: active
-      instance_type: "n2-standard-4"
-      image: "zscaler-cloud-connector-6-2"
-      account: "zscaler-gcp-prod"
-      availability_zone: "europe-west1-c"
-      network_segment: "zscaler-gcp-service-subnet-c"
+      instance_type: n2-standard-4
+      image: zscaler-cloud-connector-6-2
+      account: zscaler-gcp-prod
+      availability_zone: europe-west1-c
+      network_segment: zscaler-gcp-service-subnet-c
       security_groups:
-        - ["zscaler-gcp-connector-fw"]
-      cloud_id: >
-        projects/zscaler-prod-456789/zones/europe-west1-c/instances/zscaler-gcp-cc-02
-
-    # ========== GCP - App Connectors (ZTNA) ==========
-
-    - name: "zscaler-gcp-ac-01"
-      description: "Zscaler App Connector 1 (ZTNA) - GCP Zone-B"
+        - zscaler-gcp-connector-fw
+      cloud_id: zscaler-gcp-cc-02
+    - name: zscaler-gcp-ac-01
+      description: Zscaler App Connector 1 (ZTNA) - GCP Zone-B
       status: active
-      instance_type: "n2-standard-2"
-      image: "zscaler-app-connector-1-5"
-      account: "zscaler-gcp-prod"
-      availability_zone: "europe-west1-b"
-      network_segment: "zscaler-gcp-service-subnet-b"
+      instance_type: n2-standard-2
+      image: zscaler-app-connector-1-5
+      account: zscaler-gcp-prod
+      availability_zone: europe-west1-b
+      network_segment: zscaler-gcp-service-subnet-b
       security_groups:
-        - ["zscaler-gcp-connector-fw"]
-      cloud_id: >
-        projects/zscaler-prod-456789/zones/europe-west1-b/instances/zscaler-gcp-ac-01
-
-    - name: "zscaler-gcp-ac-02"
-      description: "Zscaler App Connector 2 (ZTNA) - GCP Zone-C"
+        - zscaler-gcp-connector-fw
+      cloud_id: zscaler-gcp-ac-01
+    - name: zscaler-gcp-ac-02
+      description: Zscaler App Connector 2 (ZTNA) - GCP Zone-C
       status: active
-      instance_type: "n2-standard-2"
-      image: "zscaler-app-connector-1-5"
-      account: "zscaler-gcp-prod"
-      availability_zone: "europe-west1-c"
-      network_segment: "zscaler-gcp-service-subnet-c"
+      instance_type: n2-standard-2
+      image: zscaler-app-connector-1-5
+      account: zscaler-gcp-prod
+      availability_zone: europe-west1-c
+      network_segment: zscaler-gcp-service-subnet-c
       security_groups:
-        - ["zscaler-gcp-connector-fw"]
-      cloud_id: >
-        projects/zscaler-prod-456789/zones/europe-west1-c/instances/zscaler-gcp-ac-02
-
-    # ========== Azure westeurope - Cloud Connector (ZIA) ==========
-
-    - name: "zscaler-azure-cc-01"
-      description: "Zscaler Cloud Connector 1 (ZIA) - Azure"
+        - zscaler-gcp-connector-fw
+      cloud_id: zscaler-gcp-ac-02
+    - name: zscaler-azure-cc-01
+      description: Zscaler Cloud Connector 1 (ZIA) - Azure
       status: active
-      instance_type: "Standard_D4s_v3"
-      image: "zscaler-cloud-connector-6.2"
-      account: "zscaler-azure-prod"
-      availability_zone: "westeurope-1"
-      network_segment: "zscaler-azure-service-subnet"
+      instance_type: Standard_D4s_v3
+      image: zscaler-cloud-connector-6.2
+      account: zscaler-azure-prod
+      availability_zone: westeurope-1
+      network_segment: zscaler-azure-service-subnet
       security_groups:
-        - ["zscaler-azure-connector-nsg"]
-      cloud_id: >
-        /subscriptions/789012ab-cdef-4567-89ab-cdef01234567/resourceGroups/zscaler-westeu-rg/providers/Microsoft.Compute/virtualMachines/zscaler-azure-cc-01
-
-    # ========== Azure - App Connector (ZTNA) ==========
-
-    - name: "zscaler-azure-ac-01"
-      description: "Zscaler App Connector 1 (ZTNA) - Azure"
+        - zscaler-azure-connector-nsg
+      cloud_id: zscaler-azure-cc-01
+    - name: zscaler-azure-ac-01
+      description: Zscaler App Connector 1 (ZTNA) - Azure
       status: active
-      instance_type: "Standard_D2s_v3"
-      image: "zscaler-app-connector-1.5"
-      account: "zscaler-azure-prod"
-      availability_zone: "westeurope-1"
-      network_segment: "zscaler-azure-service-subnet"
+      instance_type: Standard_D2s_v3
+      image: zscaler-app-connector-1.5
+      account: zscaler-azure-prod
+      availability_zone: westeurope-1
+      network_segment: zscaler-azure-service-subnet
       security_groups:
-        - ["zscaler-azure-connector-nsg"]
-      cloud_id: >
-        /subscriptions/789012ab-cdef-4567-89ab-cdef01234567/resourceGroups/zscaler-westeu-rg/providers/Microsoft.Compute/virtualMachines/zscaler-azure-ac-01
+        - zscaler-azure-connector-nsg
+      cloud_id: zscaler-azure-ac-01

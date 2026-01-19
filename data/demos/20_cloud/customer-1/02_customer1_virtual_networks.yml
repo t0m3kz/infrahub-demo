@@ -1,182 +1,150 @@
-# Customer 1 - Virtual Networks (VPCs/VNets)
-# Organized by Application and Environment
 ---
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
   kind: CloudVirtualNetwork
   data:
-    # ========== E-Commerce Platform ==========
-
-    # Production - AWS EU Central
-    - name: "customer-1-ecommerce-prod-vpc"
-      description: "Customer 1 E-Commerce Platform Production VPC (AWS)"
-      cloud_id: "arn:aws:ec2:eu-central-1:123456789012:vpc/vpc-ecom-prod-001"
+    - name: customer-1-ecommerce-prod-vpc
+      description: Customer 1 E-Commerce Platform Production VPC (AWS)
+      cloud_id: vpc-0ecafa450627c4731
       status: active
-      account: "customer-1-aws-production"
-      region: "eu-central-1"
+      account: customer-1-aws-production
+      region: eu-central-1
       is_default: false
       dns_support: true
       dns_hostnames: true
       cidr_blocks:
         data:
-          - prefix: "10.100.0.0/16"
-            ip_namespace: "default"
+          - prefix: 10.100.0.0/16
+            ip_namespace: default
             status: active
             role: customer
-            description: "Customer 1 E-Commerce Production VPC CIDR"
-
-    # Staging - GCP Europe West
-    - name: "customer-1-ecommerce-staging-vpc"
-      description: "Customer 1 E-Commerce Platform Staging VPC (GCP)"
-      cloud_id: >
-        projects/customer-1-staging-456790/global/networks/ecommerce-staging-vpc
+            description: Customer 1 E-Commerce Production VPC CIDR
+    - name: customer-1-ecommerce-staging-vpc
+      description: Customer 1 E-Commerce Platform Staging VPC (GCP)
+      cloud_id: ecommerce-staging-vpc
       status: active
-      account: "customer-1-gcp-staging"
-      region: "europe-west3"
+      account: customer-1-gcp-staging
+      region: europe-west3
       is_default: false
       dns_support: true
       dns_hostnames: true
       cidr_blocks:
         data:
-          - prefix: "10.101.0.0/16"
-            ip_namespace: "default"
+          - prefix: 10.101.0.0/16
+            ip_namespace: default
             status: active
             role: customer
-            description: "Customer 1 E-Commerce Staging VPC CIDR"
-
-    # Development - Azure Germany West Central
-    - name: "customer-1-ecommerce-dev-vnet"
-      description: "Customer 1 E-Commerce Platform Development VNet (Azure)"
-      cloud_id: >
-        /subscriptions/c3d4e5f6-a7b8-9012-cdef-333333333333/resourceGroups/ecommerce-dev-rg/providers/Microsoft.Network/virtualNetworks/ecommerce-dev-vnet
+            description: Customer 1 E-Commerce Staging VPC CIDR
+    - name: customer-1-ecommerce-dev-vnet
+      description: Customer 1 E-Commerce Platform Development VNet (Azure)
+      cloud_id: ecommerce-dev-vnet
       status: active
-      account: "customer-1-azure-development"
-      region: "germanywestcentral"
+      account: customer-1-azure-development
+      region: germanywestcentral
       is_default: false
       dns_support: true
       dns_hostnames: false
       cidr_blocks:
         data:
-          - prefix: "10.102.0.0/16"
-            ip_namespace: "default"
+          - prefix: 10.102.0.0/16
+            ip_namespace: default
             status: active
             role: customer
-            description: "Customer 1 E-Commerce Development VNet CIDR"
-
-    # ========== Analytics Dashboard ==========
-
-    # Production - GCP Europe West
-    - name: "customer-1-analytics-prod-vpc"
-      description: "Customer 1 Analytics Dashboard Production VPC (GCP)"
-      cloud_id: >-
-        projects/customer-1-prod-456789/global/networks/analytics-prod-vpc
+            description: Customer 1 E-Commerce Development VNet CIDR
+    - name: customer-1-analytics-prod-vpc
+      description: Customer 1 Analytics Dashboard Production VPC (GCP)
+      cloud_id: analytics-prod-vpc
       status: active
-      account: "customer-1-gcp-production"
-      region: "europe-west1"
+      account: customer-1-gcp-production
+      region: europe-west1
       is_default: false
       dns_support: true
       dns_hostnames: true
       cidr_blocks:
         data:
-          - prefix: "10.110.0.0/16"
-            ip_namespace: "default"
+          - prefix: 10.110.0.0/16
+            ip_namespace: default
             status: active
             role: customer
-            description: "Customer 1 Analytics Production VPC CIDR"
-
-    # Staging - Azure West Europe
-    - name: "customer-1-analytics-staging-vnet"
-      description: "Customer 1 Analytics Dashboard Staging VNet (Azure)"
-      cloud_id: >
-        /subscriptions/b2c3d4e5-f6a7-8901-bcde-222222222222/resourceGroups/analytics-staging-rg/providers/Microsoft.Network/virtualNetworks/analytics-staging-vnet
+            description: Customer 1 Analytics Production VPC CIDR
+    - name: customer-1-analytics-staging-vnet
+      description: Customer 1 Analytics Dashboard Staging VNet (Azure)
+      cloud_id: analytics-staging-vnet
       status: active
-      account: "customer-1-azure-staging"
-      region: "westeurope"
+      account: customer-1-azure-staging
+      region: westeurope
       is_default: false
       dns_support: true
       dns_hostnames: false
       cidr_blocks:
         data:
-          - prefix: "10.111.0.0/16"
-            ip_namespace: "default"
+          - prefix: 10.111.0.0/16
+            ip_namespace: default
             status: active
             role: customer
-            description: "Customer 1 Analytics Staging VNet CIDR"
-
-    # Development - AWS EU Central
-    - name: "customer-1-analytics-dev-vpc"
-      description: "Customer 1 Analytics Dashboard Development VPC (AWS)"
-      cloud_id: >-
-        arn:aws:ec2:eu-central-1:123456789014:vpc/vpc-analytics-dev-001
+            description: Customer 1 Analytics Staging VNet CIDR
+    - name: customer-1-analytics-dev-vpc
+      description: Customer 1 Analytics Dashboard Development VPC (AWS)
+      cloud_id: vpc-191ce3519cf1adcf7
       status: active
-      account: "customer-1-aws-development"
-      region: "eu-central-1"
+      account: customer-1-aws-development
+      region: eu-central-1
       is_default: false
       dns_support: true
       dns_hostnames: false
       cidr_blocks:
         data:
-          - prefix: "10.112.0.0/16"
-            ip_namespace: "default"
+          - prefix: 10.112.0.0/16
+            ip_namespace: default
             status: active
             role: customer
-            description: "Customer 1 Analytics Development VPC CIDR"
-
-    # ========== Customer Portal ==========
-
-    # Production - Azure West Europe
-    - name: "customer-1-portal-prod-vnet"
-      description: "Customer 1 Customer Portal Production VNet (Azure)"
-      cloud_id: >
-        /subscriptions/a1b2c3d4-e5f6-7890-abcd-111111111111/resourceGroups/portal-prod-rg/providers/Microsoft.Network/virtualNetworks/portal-prod-vnet
+            description: Customer 1 Analytics Development VPC CIDR
+    - name: customer-1-portal-prod-vnet
+      description: Customer 1 Customer Portal Production VNet (Azure)
+      cloud_id: portal-prod-vnet
       status: active
-      account: "customer-1-azure-production"
-      region: "westeurope"
+      account: customer-1-azure-production
+      region: westeurope
       is_default: false
       dns_support: true
       dns_hostnames: true
       cidr_blocks:
         data:
-          - prefix: "10.120.0.0/16"
-            ip_namespace: "default"
+          - prefix: 10.120.0.0/16
+            ip_namespace: default
             status: active
             role: customer
-            description: "Customer 1 Portal Production VNet CIDR"
-
-    # Staging - AWS EU Central
-    - name: "customer-1-portal-staging-vpc"
-      description: "Customer 1 Customer Portal Staging VPC (AWS)"
-      cloud_id: >-
-        arn:aws:ec2:eu-central-1:123456789013:vpc/vpc-portal-staging-001
+            description: Customer 1 Portal Production VNet CIDR
+    - name: customer-1-portal-staging-vpc
+      description: Customer 1 Customer Portal Staging VPC (AWS)
+      cloud_id: vpc-bce74e0d2fc47e5a1
       status: active
-      account: "customer-1-aws-staging"
-      region: "eu-central-1"
+      account: customer-1-aws-staging
+      region: eu-central-1
       is_default: false
       dns_support: true
       dns_hostnames: false
       cidr_blocks:
         data:
-          - prefix: "10.121.0.0/16"
-            ip_namespace: "default"
+          - prefix: 10.121.0.0/16
+            ip_namespace: default
             status: active
             role: customer
-            description: "Customer 1 Portal Staging VPC CIDR"
-
-    # Development - GCP Europe West
-    - name: "customer-1-portal-dev-vpc"
-      description: "Customer 1 Customer Portal Development VPC (GCP)"
-      cloud_id: "projects/customer-1-dev-456791/global/networks/portal-dev-vpc"
+            description: Customer 1 Portal Staging VPC CIDR
+    - name: customer-1-portal-dev-vpc
+      description: Customer 1 Customer Portal Development VPC (GCP)
+      cloud_id: portal-dev-vpc
       status: active
-      account: "customer-1-gcp-development"
-      region: "europe-west3"
+      account: customer-1-gcp-development
+      region: europe-west3
       is_default: false
       dns_support: true
       dns_hostnames: false
       cidr_blocks:
         data:
-          - prefix: "10.122.0.0/16"
-            ip_namespace: "default"
+          - prefix: 10.122.0.0/16
+            ip_namespace: default
             status: active
             role: customer
-            description: "Customer 1 Portal Development VPC CIDR"
+            description: Customer 1 Portal Development VPC CIDR

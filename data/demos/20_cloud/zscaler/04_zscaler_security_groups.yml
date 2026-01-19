@@ -1,56 +1,42 @@
-# Zscaler Security Groups - Multi-Cloud Firewall Rules
 ---
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
   kind: CloudSecurityGroup
   data:
-    # ========== AWS Security Groups ==========
-
-    - name: "zscaler-aws-connector-sg"
-      description: "Security group for Zscaler connectors - AWS"
+    - name: zscaler-aws-connector-sg
+      description: Security group for Zscaler connectors - AWS
       status: active
-      account: "zscaler-aws-prod"
-      virtual_network: "zscaler-aws-vpc"
-      cloud_id: "sg-zscaler-aws-connector"
-
-    - name: "zscaler-aws-mgmt-sg"
-      description: "Security group for Zscaler management - AWS"
+      account: zscaler-aws-prod
+      virtual_network: zscaler-aws-vpc
+      cloud_id: sg-b45a4b61274830cb5
+    - name: zscaler-aws-mgmt-sg
+      description: Security group for Zscaler management - AWS
       status: active
-      account: "zscaler-aws-prod"
-      virtual_network: "zscaler-aws-vpc"
-      cloud_id: "sg-zscaler-aws-mgmt"
-
-    # ========== GCP Firewall Rules ==========
-
-    - name: "zscaler-gcp-connector-fw"
-      description: "Firewall rules for Zscaler connectors - GCP"
+      account: zscaler-aws-prod
+      virtual_network: zscaler-aws-vpc
+      cloud_id: sg-715b30f2dccd16398
+    - name: zscaler-gcp-connector-fw
+      description: Firewall rules for Zscaler connectors - GCP
       status: active
-      account: "zscaler-gcp-prod"
-      virtual_network: "zscaler-gcp-vpc"
-      cloud_id: "projects/zscaler-prod-45/global/firewalls/zscaler-connector-fw"
-
-    - name: "zscaler-gcp-mgmt-fw"
-      description: "Firewall rules for Zscaler management - GCP"
+      account: zscaler-gcp-prod
+      virtual_network: zscaler-gcp-vpc
+      cloud_id: zscaler-connector-fw
+    - name: zscaler-gcp-mgmt-fw
+      description: Firewall rules for Zscaler management - GCP
       status: active
-      account: "zscaler-gcp-prod"
-      virtual_network: "zscaler-gcp-vpc"
-      cloud_id: "projects/zscaler-prod-456789/global/firewalls/zscaler-mgmt-fw"
-
-    # ========== Azure Network Security Groups ==========
-
-    - name: "zscaler-azure-connector-nsg"
-      description: "NSG for Zscaler connectors - Azure"
+      account: zscaler-gcp-prod
+      virtual_network: zscaler-gcp-vpc
+      cloud_id: zscaler-mgmt-fw
+    - name: zscaler-azure-connector-nsg
+      description: NSG for Zscaler connectors - Azure
       status: active
-      account: "zscaler-azure-prod"
-      virtual_network: "zscaler-azure-vnet"
-      cloud_id: >
-        /subscriptions/789012ab-cdef-4567-89ab-cdef01234567/resourceGroups/zscaler-westeu-rg/providers/Microsoft.Network/networkSecurityGroups/zscaler-connector-nsg
-
-    - name: "zscaler-azure-mgmt-nsg"
-      description: "NSG for Zscaler management - Azure"
+      account: zscaler-azure-prod
+      virtual_network: zscaler-azure-vnet
+      cloud_id: zscaler-connector-nsg
+    - name: zscaler-azure-mgmt-nsg
+      description: NSG for Zscaler management - Azure
       status: active
-      account: "zscaler-azure-prod"
-      virtual_network: "zscaler-azure-vnet"
-      cloud_id: >
-        /subscriptions/789012ab-cdef-4567-89ab-cdef01234567/resourceGroups/zscaler-westeu-rg/providers/Microsoft.Network/networkSecurityGroups/zscaler-mgmt-nsg
+      account: zscaler-azure-prod
+      virtual_network: zscaler-azure-vnet
+      cloud_id: zscaler-mgmt-nsg

@@ -1,383 +1,314 @@
-# Customer 1 - Compute Instances
-# Multi-tier applications across cloud providers
 ---
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
   kind: CloudInstance
   data:
-    # ========== E-Commerce Platform - Production (AWS) ==========
-
-    - name: "customer-1-ecommerce-prod-web-01"
-      description: "Customer 1 E-Commerce Production Web Server 1"
-      cloud_id: "arn:aws:ec2:eu-central-1:123456789012:instance/i-ecom-web-01"
+    - name: customer-1-ecommerce-prod-web-01
+      description: Customer 1 E-Commerce Production Web Server 1
+      cloud_id: i-7338e2de9e96a73c4
       status: active
-      instance_type: "t3.large"
-      image: "ami-amazon-linux-2023"
-      account: "customer-1-aws-production"
-      availability_zone: "eu-central-1a"
-      network_segment: "customer-1-ecommerce-prod-web-1a"
+      instance_type: t3.large
+      image: ami-amazon-linux-2023
+      account: customer-1-aws-production
+      availability_zone: eu-central-1a
+      network_segment: customer-1-ecommerce-prod-web-1a
       security_groups:
-        - ["customer-1-ecommerce-prod-web-sg"]
-
-    - name: "customer-1-ecommerce-prod-web-02"
-      description: "Customer 1 E-Commerce Production Web Server 2"
-      cloud_id: "arn:aws:ec2:eu-central-1:123456789012:instance/i-ecom-web-02"
+        - customer-1-ecommerce-prod-web-sg
+    - name: customer-1-ecommerce-prod-web-02
+      description: Customer 1 E-Commerce Production Web Server 2
+      cloud_id: i-34983e3d4a5e60fe0
       status: active
-      instance_type: "t3.large"
-      image: "ami-amazon-linux-2023"
-      account: "customer-1-aws-production"
-      availability_zone: "eu-central-1b"
-      network_segment: "customer-1-ecommerce-prod-web-1b"
+      instance_type: t3.large
+      image: ami-amazon-linux-2023
+      account: customer-1-aws-production
+      availability_zone: eu-central-1b
+      network_segment: customer-1-ecommerce-prod-web-1b
       security_groups:
-        - ["customer-1-ecommerce-prod-web-sg"]
-
-    - name: "customer-1-ecommerce-prod-app-01"
-      description: "Customer 1 E-Commerce Production App Server 1"
-      cloud_id: "arn:aws:ec2:eu-central-1:123456789012:instance/i-ecom-app-01"
+        - customer-1-ecommerce-prod-web-sg
+    - name: customer-1-ecommerce-prod-app-01
+      description: Customer 1 E-Commerce Production App Server 1
+      cloud_id: i-8ba0555339fdaab9b
       status: active
-      instance_type: "t3.xlarge"
-      image: "ami-amazon-linux-2023"
-      account: "customer-1-aws-production"
-      availability_zone: "eu-central-1a"
-      network_segment: "customer-1-ecommerce-prod-app-1a"
+      instance_type: t3.xlarge
+      image: ami-amazon-linux-2023
+      account: customer-1-aws-production
+      availability_zone: eu-central-1a
+      network_segment: customer-1-ecommerce-prod-app-1a
       security_groups:
-        - ["customer-1-ecommerce-prod-app-sg"]
-
-    - name: "customer-1-ecommerce-prod-app-02"
-      description: "Customer 1 E-Commerce Production App Server 2"
-      cloud_id: "arn:aws:ec2:eu-central-1:123456789012:instance/i-ecom-app-02"
+        - customer-1-ecommerce-prod-app-sg
+    - name: customer-1-ecommerce-prod-app-02
+      description: Customer 1 E-Commerce Production App Server 2
+      cloud_id: i-86c4fce99b4e31120
       status: active
-      instance_type: "t3.xlarge"
-      image: "ami-amazon-linux-2023"
-      account: "customer-1-aws-production"
-      availability_zone: "eu-central-1b"
-      network_segment: "customer-1-ecommerce-prod-app-1b"
+      instance_type: t3.xlarge
+      image: ami-amazon-linux-2023
+      account: customer-1-aws-production
+      availability_zone: eu-central-1b
+      network_segment: customer-1-ecommerce-prod-app-1b
       security_groups:
-        - ["customer-1-ecommerce-prod-app-sg"]
-
-    - name: "customer-1-ecommerce-prod-db-01"
-      description: "Customer 1 E-Commerce Production Database Primary"
-      cloud_id: "arn:aws:ec2:eu-central-1:123456789012:instance/i-ecom-db-01"
+        - customer-1-ecommerce-prod-app-sg
+    - name: customer-1-ecommerce-prod-db-01
+      description: Customer 1 E-Commerce Production Database Primary
+      cloud_id: i-824273770682fb199
       status: active
-      instance_type: "r5.xlarge"
-      image: "ami-amazon-linux-2023"
-      account: "customer-1-aws-production"
-      availability_zone: "eu-central-1a"
-      network_segment: "customer-1-ecommerce-prod-data-1a"
+      instance_type: r5.xlarge
+      image: ami-amazon-linux-2023
+      account: customer-1-aws-production
+      availability_zone: eu-central-1a
+      network_segment: customer-1-ecommerce-prod-data-1a
       security_groups:
-        - ["customer-1-ecommerce-prod-data-sg"]
-
-    - name: "customer-1-ecommerce-prod-db-02"
-      description: "Customer 1 E-Commerce Production Database Replica"
-      cloud_id: "arn:aws:ec2:eu-central-1:123456789012:instance/i-ecom-db-02"
+        - customer-1-ecommerce-prod-data-sg
+    - name: customer-1-ecommerce-prod-db-02
+      description: Customer 1 E-Commerce Production Database Replica
+      cloud_id: i-dad66fc4ff769bbb8
       status: active
-      instance_type: "r5.xlarge"
-      image: "ami-amazon-linux-2023"
-      account: "customer-1-aws-production"
-      availability_zone: "eu-central-1b"
-      network_segment: "customer-1-ecommerce-prod-data-1b"
+      instance_type: r5.xlarge
+      image: ami-amazon-linux-2023
+      account: customer-1-aws-production
+      availability_zone: eu-central-1b
+      network_segment: customer-1-ecommerce-prod-data-1b
       security_groups:
-        - ["customer-1-ecommerce-prod-data-sg"]
-
-    # ========== E-Commerce Platform - Staging (GCP) ==========
-
-    - name: "customer-1-ecommerce-staging-web-01"
-      description: "Customer 1 E-Commerce Staging Web Server"
-      cloud_id: >
-        projects/customer-1-staging-456790/zones/europe-west3-a/instances/ecom-staging-web-01
+        - customer-1-ecommerce-prod-data-sg
+    - name: customer-1-ecommerce-staging-web-01
+      description: Customer 1 E-Commerce Staging Web Server
+      cloud_id: ecom-staging-web-01
       status: active
-      instance_type: "n2-standard-2"
-      image: "debian-11"
-      account: "customer-1-gcp-staging"
-      availability_zone: "europe-west3-a"
-      network_segment: "customer-1-ecommerce-staging-web"
+      instance_type: n2-standard-2
+      image: debian-11
+      account: customer-1-gcp-staging
+      availability_zone: europe-west3-a
+      network_segment: customer-1-ecommerce-staging-web
       security_groups:
-        - ["customer-1-ecommerce-staging-web-firewall"]
-
-    - name: "customer-1-ecommerce-staging-app-01"
-      description: "Customer 1 E-Commerce Staging App Server"
-      cloud_id: >
-        projects/customer-1-staging-456790/zones/europe-west3-b/instances/ecom-staging-app-01
+        - customer-1-ecommerce-staging-web-firewall
+    - name: customer-1-ecommerce-staging-app-01
+      description: Customer 1 E-Commerce Staging App Server
+      cloud_id: ecom-staging-app-01
       status: active
-      instance_type: "n2-standard-4"
-      image: "debian-11"
-      account: "customer-1-gcp-staging"
-      availability_zone: "europe-west3-b"
-      network_segment: "customer-1-ecommerce-staging-app"
+      instance_type: n2-standard-4
+      image: debian-11
+      account: customer-1-gcp-staging
+      availability_zone: europe-west3-b
+      network_segment: customer-1-ecommerce-staging-app
       security_groups:
-        - ["customer-1-ecommerce-staging-internal-firewall"]
-
-    - name: "customer-1-ecommerce-staging-db-01"
-      description: "Customer 1 E-Commerce Staging Database"
-      cloud_id: >
-        projects/customer-1-staging-456790/zones/europe-west3-c/instances/ecom-staging-db-01
+        - customer-1-ecommerce-staging-internal-firewall
+    - name: customer-1-ecommerce-staging-db-01
+      description: Customer 1 E-Commerce Staging Database
+      cloud_id: ecom-staging-db-01
       status: active
-      instance_type: "n2-highmem-4"
-      image: "debian-11"
-      account: "customer-1-gcp-staging"
-      availability_zone: "europe-west3-c"
-      network_segment: "customer-1-ecommerce-staging-data"
+      instance_type: n2-highmem-4
+      image: debian-11
+      account: customer-1-gcp-staging
+      availability_zone: europe-west3-c
+      network_segment: customer-1-ecommerce-staging-data
       security_groups:
-        - ["customer-1-ecommerce-staging-internal-firewall"]
-
-    # ========== E-Commerce Platform - Development (Azure) ==========
-
-    - name: "customer-1-ecommerce-dev-web-01"
-      description: "Customer 1 E-Commerce Development Web Server"
-      cloud_id: >
-        /subscriptions/c3d4e5f6-a7b8-9012-cdef-333333333333/resourceGroups/ecommerce-dev-rg/providers/Microsoft.Compute/virtualMachines/ecom-dev-web-01
+        - customer-1-ecommerce-staging-internal-firewall
+    - name: customer-1-ecommerce-dev-web-01
+      description: Customer 1 E-Commerce Development Web Server
+      cloud_id: ecom-dev-web-01
       status: active
-      instance_type: "Standard_B2s"
-      image: "Ubuntu 22.04 LTS"
-      account: "customer-1-azure-development"
-      availability_zone: "germanywestcentral-1"
-      network_segment: "customer-1-ecommerce-dev-web"
+      instance_type: Standard_B2s
+      image: Ubuntu 22.04 LTS
+      account: customer-1-azure-development
+      availability_zone: germanywestcentral-1
+      network_segment: customer-1-ecommerce-dev-web
       security_groups:
-        - ["customer-1-ecommerce-dev-web-nsg"]
-
-    - name: "customer-1-ecommerce-dev-app-01"
-      description: "Customer 1 E-Commerce Development App Server"
-      cloud_id: >
-        /subscriptions/c3d4e5f6-a7b8-9012-cdef-333333333333/resourceGroups/ecommerce-dev-rg/providers/Microsoft.Compute/virtualMachines/ecom-dev-app-01
+        - customer-1-ecommerce-dev-web-nsg
+    - name: customer-1-ecommerce-dev-app-01
+      description: Customer 1 E-Commerce Development App Server
+      cloud_id: ecom-dev-app-01
       status: active
-      instance_type: "Standard_B4ms"
-      image: "Ubuntu 22.04 LTS"
-      account: "customer-1-azure-development"
-      availability_zone: "germanywestcentral-2"
-      network_segment: "customer-1-ecommerce-dev-app"
+      instance_type: Standard_B4ms
+      image: Ubuntu 22.04 LTS
+      account: customer-1-azure-development
+      availability_zone: germanywestcentral-2
+      network_segment: customer-1-ecommerce-dev-app
       security_groups:
-        - ["customer-1-ecommerce-dev-app-nsg"]
-
-    # ========== Analytics Dashboard - Production (GCP) ==========
-
-    - name: "customer-1-analytics-prod-web-01"
-      description: "Customer 1 Analytics Production Web Server"
-      cloud_id: >
-        projects/customer-1-prod-456789/zones/europe-west1-b/instances/analytics-prod-web-01
+        - customer-1-ecommerce-dev-app-nsg
+    - name: customer-1-analytics-prod-web-01
+      description: Customer 1 Analytics Production Web Server
+      cloud_id: analytics-prod-web-01
       status: active
-      instance_type: "n2-standard-2"
-      image: "debian-11"
-      account: "customer-1-gcp-production"
-      availability_zone: "europe-west1-b"
-      network_segment: "customer-1-analytics-prod-web"
+      instance_type: n2-standard-2
+      image: debian-11
+      account: customer-1-gcp-production
+      availability_zone: europe-west1-b
+      network_segment: customer-1-analytics-prod-web
       security_groups:
-        - ["customer-1-analytics-prod-web-firewall"]
-
-    - name: "customer-1-analytics-prod-app-01"
-      description: "Customer 1 Analytics Production App Server 1"
-      cloud_id: >
-        projects/customer-1-prod-456789/zones/europe-west1-c/instances/analytics-prod-app-01
+        - customer-1-analytics-prod-web-firewall
+    - name: customer-1-analytics-prod-app-01
+      description: Customer 1 Analytics Production App Server 1
+      cloud_id: analytics-prod-app-01
       status: active
-      instance_type: "n2-standard-8"
-      image: "debian-11"
-      account: "customer-1-gcp-production"
-      availability_zone: "europe-west1-c"
-      network_segment: "customer-1-analytics-prod-app"
+      instance_type: n2-standard-8
+      image: debian-11
+      account: customer-1-gcp-production
+      availability_zone: europe-west1-c
+      network_segment: customer-1-analytics-prod-app
       security_groups:
-        - ["customer-1-analytics-prod-app-firewall"]
-
-    - name: "customer-1-analytics-prod-app-02"
-      description: "Customer 1 Analytics Production App Server 2"
-      cloud_id: >
-        projects/customer-1-prod-456789/zones/europe-west1-c/instances/analytics-prod-app-02
+        - customer-1-analytics-prod-app-firewall
+    - name: customer-1-analytics-prod-app-02
+      description: Customer 1 Analytics Production App Server 2
+      cloud_id: analytics-prod-app-02
       status: active
-      instance_type: "n2-standard-8"
-      image: "debian-11"
-      account: "customer-1-gcp-production"
-      availability_zone: "europe-west1-c"
-      network_segment: "customer-1-analytics-prod-app"
+      instance_type: n2-standard-8
+      image: debian-11
+      account: customer-1-gcp-production
+      availability_zone: europe-west1-c
+      network_segment: customer-1-analytics-prod-app
       security_groups:
-        - ["customer-1-analytics-prod-app-firewall"]
-
-    - name: "customer-1-analytics-prod-db-01"
-      description: "Customer 1 Analytics Production Database"
-      cloud_id: >
-        projects/customer-1-prod-456789/zones/europe-west1-d/instances/analytics-prod-db-01
+        - customer-1-analytics-prod-app-firewall
+    - name: customer-1-analytics-prod-db-01
+      description: Customer 1 Analytics Production Database
+      cloud_id: analytics-prod-db-01
       status: active
-      instance_type: "n2-highmem-8"
-      image: "debian-11"
-      account: "customer-1-gcp-production"
-      availability_zone: "europe-west1-d"
-      network_segment: "customer-1-analytics-prod-data"
+      instance_type: n2-highmem-8
+      image: debian-11
+      account: customer-1-gcp-production
+      availability_zone: europe-west1-d
+      network_segment: customer-1-analytics-prod-data
       security_groups:
-        - ["customer-1-analytics-prod-data-firewall"]
-
-    # ========== Analytics Dashboard - Staging (Azure) ==========
-
-    - name: "customer-1-analytics-staging-web-01"
-      description: "Customer 1 Analytics Staging Web Server"
-      cloud_id: >
-        /subscriptions/b2c3d4e5-f6a7-8901-bcde-222222222222/resourceGroups/analytics-staging-rg/providers/Microsoft.Compute/virtualMachines/analytics-staging-web-01
+        - customer-1-analytics-prod-data-firewall
+    - name: customer-1-analytics-staging-web-01
+      description: Customer 1 Analytics Staging Web Server
+      cloud_id: analytics-staging-web-01
       status: active
-      instance_type: "Standard_B2ms"
-      image: "Ubuntu 22.04 LTS"
-      account: "customer-1-azure-staging"
-      availability_zone: "westeurope-1"
-      network_segment: "customer-1-analytics-staging-web"
+      instance_type: Standard_B2ms
+      image: Ubuntu 22.04 LTS
+      account: customer-1-azure-staging
+      availability_zone: westeurope-1
+      network_segment: customer-1-analytics-staging-web
       security_groups:
-        - ["customer-1-analytics-staging-web-nsg"]
-
-    - name: "customer-1-analytics-staging-app-01"
-      description: "Customer 1 Analytics Staging App Server"
-      cloud_id: >
-        /subscriptions/b2c3d4e5-f6a7-8901-bcde-222222222222/resourceGroups/analytics-staging-rg/providers/Microsoft.Compute/virtualMachines/analytics-staging-app-01
+        - customer-1-analytics-staging-web-nsg
+    - name: customer-1-analytics-staging-app-01
+      description: Customer 1 Analytics Staging App Server
+      cloud_id: analytics-staging-app-01
       status: active
-      instance_type: "Standard_D4s_v3"
-      image: "Ubuntu 22.04 LTS"
-      account: "customer-1-azure-staging"
-      availability_zone: "westeurope-2"
-      network_segment: "customer-1-analytics-staging-app"
+      instance_type: Standard_D4s_v3
+      image: Ubuntu 22.04 LTS
+      account: customer-1-azure-staging
+      availability_zone: westeurope-2
+      network_segment: customer-1-analytics-staging-app
       security_groups:
-        - ["customer-1-analytics-staging-app-nsg"]
-
-    # ========== Analytics Dashboard - Development (AWS) ==========
-
-    - name: "customer-1-analytics-dev-web-01"
-      description: "Customer 1 Analytics Development Web Server"
-      cloud_id: >-
-        arn:aws:ec2:eu-central-1:123456789014:instance/i-analytics-dev-web-01
+        - customer-1-analytics-staging-app-nsg
+    - name: customer-1-analytics-dev-web-01
+      description: Customer 1 Analytics Development Web Server
+      cloud_id: i-72c8a95b213cc19a8
       status: active
-      instance_type: "t3.small"
-      image: "ami-amazon-linux-2023"
-      account: "customer-1-aws-development"
-      availability_zone: "eu-central-1a"
-      network_segment: "customer-1-analytics-dev-web"
+      instance_type: t3.small
+      image: ami-amazon-linux-2023
+      account: customer-1-aws-development
+      availability_zone: eu-central-1a
+      network_segment: customer-1-analytics-dev-web
       security_groups:
-        - ["customer-1-analytics-dev-web-sg"]
-
-    - name: "customer-1-analytics-dev-app-01"
-      description: "Customer 1 Analytics Development App Server"
-      cloud_id: >-
-        arn:aws:ec2:eu-central-1:123456789014:instance/i-analytics-dev-app-01
+        - customer-1-analytics-dev-web-sg
+    - name: customer-1-analytics-dev-app-01
+      description: Customer 1 Analytics Development App Server
+      cloud_id: i-25736ec5e963a5723
       status: active
-      instance_type: "t3.medium"
-      image: "ami-amazon-linux-2023"
-      account: "customer-1-aws-development"
-      availability_zone: "eu-central-1a"
-      network_segment: "customer-1-analytics-dev-app"
+      instance_type: t3.medium
+      image: ami-amazon-linux-2023
+      account: customer-1-aws-development
+      availability_zone: eu-central-1a
+      network_segment: customer-1-analytics-dev-app
       security_groups:
-        - ["customer-1-analytics-dev-app-sg"]
-
-    # ========== Customer Portal - Production (Azure) ==========
-
-    - name: "customer-1-portal-prod-web-01"
-      description: "Customer 1 Portal Production Web Server 1"
-      cloud_id: >
-        /subscriptions/a1b2c3d4-e5f6-7890-abcd-111111111111/resourceGroups/portal-prod-rg/providers/Microsoft.Compute/virtualMachines/portal-prod-web-01
+        - customer-1-analytics-dev-app-sg
+    - name: customer-1-portal-prod-web-01
+      description: Customer 1 Portal Production Web Server 1
+      cloud_id: portal-prod-web-01
       status: active
-      instance_type: "Standard_D2s_v3"
-      image: "Windows Server 2022"
-      account: "customer-1-azure-production"
-      availability_zone: "westeurope-1"
-      network_segment: "customer-1-portal-prod-web-1"
+      instance_type: Standard_D2s_v3
+      image: Windows Server 2022
+      account: customer-1-azure-production
+      availability_zone: westeurope-1
+      network_segment: customer-1-portal-prod-web-1
       security_groups:
-        - ["customer-1-portal-prod-web-nsg"]
-
-    - name: "customer-1-portal-prod-web-02"
-      description: "Customer 1 Portal Production Web Server 2"
-      cloud_id: >
-        /subscriptions/a1b2c3d4-e5f6-7890-abcd-111111111111/resourceGroups/portal-prod-rg/providers/Microsoft.Compute/virtualMachines/portal-prod-web-02
+        - customer-1-portal-prod-web-nsg
+    - name: customer-1-portal-prod-web-02
+      description: Customer 1 Portal Production Web Server 2
+      cloud_id: portal-prod-web-02
       status: active
-      instance_type: "Standard_D2s_v3"
-      image: "Windows Server 2022"
-      account: "customer-1-azure-production"
-      availability_zone: "westeurope-2"
-      network_segment: "customer-1-portal-prod-web-2"
+      instance_type: Standard_D2s_v3
+      image: Windows Server 2022
+      account: customer-1-azure-production
+      availability_zone: westeurope-2
+      network_segment: customer-1-portal-prod-web-2
       security_groups:
-        - ["customer-1-portal-prod-web-nsg"]
-
-    - name: "customer-1-portal-prod-app-01"
-      description: "Customer 1 Portal Production App Server 1"
-      cloud_id: >
-        /subscriptions/a1b2c3d4-e5f6-7890-abcd-111111111111/resourceGroups/portal-prod-rg/providers/Microsoft.Compute/virtualMachines/portal-prod-app-01
+        - customer-1-portal-prod-web-nsg
+    - name: customer-1-portal-prod-app-01
+      description: Customer 1 Portal Production App Server 1
+      cloud_id: portal-prod-app-01
       status: active
-      instance_type: "Standard_D4s_v3"
-      image: "Windows Server 2022"
-      account: "customer-1-azure-production"
-      availability_zone: "westeurope-1"
-      network_segment: "customer-1-portal-prod-app-1"
+      instance_type: Standard_D4s_v3
+      image: Windows Server 2022
+      account: customer-1-azure-production
+      availability_zone: westeurope-1
+      network_segment: customer-1-portal-prod-app-1
       security_groups:
-        - ["customer-1-portal-prod-app-nsg"]
-
-    - name: "customer-1-portal-prod-app-02"
-      description: "Customer 1 Portal Production App Server 2"
-      cloud_id: >
-        /subscriptions/a1b2c3d4-e5f6-7890-abcd-111111111111/resourceGroups/portal-prod-rg/providers/Microsoft.Compute/virtualMachines/portal-prod-app-02
+        - customer-1-portal-prod-app-nsg
+    - name: customer-1-portal-prod-app-02
+      description: Customer 1 Portal Production App Server 2
+      cloud_id: portal-prod-app-02
       status: active
-      instance_type: "Standard_D4s_v3"
-      image: "Windows Server 2022"
-      account: "customer-1-azure-production"
-      availability_zone: "westeurope-2"
-      network_segment: "customer-1-portal-prod-app-2"
+      instance_type: Standard_D4s_v3
+      image: Windows Server 2022
+      account: customer-1-azure-production
+      availability_zone: westeurope-2
+      network_segment: customer-1-portal-prod-app-2
       security_groups:
-        - ["customer-1-portal-prod-app-nsg"]
-
-    - name: "customer-1-portal-prod-db-01"
-      description: "Customer 1 Portal Production Database Server"
-      cloud_id: >
-        /subscriptions/a1b2c3d4-e5f6-7890-abcd-111111111111/resourceGroups/portal-prod-rg/providers/Microsoft.Compute/virtualMachines/portal-prod-db-01
+        - customer-1-portal-prod-app-nsg
+    - name: customer-1-portal-prod-db-01
+      description: Customer 1 Portal Production Database Server
+      cloud_id: portal-prod-db-01
       status: active
-      instance_type: "Standard_E8s_v3"
-      image: "Windows Server 2022"
-      account: "customer-1-azure-production"
-      availability_zone: "westeurope-3"
-      network_segment: "customer-1-portal-prod-data"
+      instance_type: Standard_E8s_v3
+      image: Windows Server 2022
+      account: customer-1-azure-production
+      availability_zone: westeurope-3
+      network_segment: customer-1-portal-prod-data
       security_groups:
-        - ["customer-1-portal-prod-data-nsg"]
-
-    # ========== Customer Portal - Staging (AWS) ==========
-
-    - name: "customer-1-portal-staging-web-01"
-      description: "Customer 1 Portal Staging Web Server"
-      cloud_id: >
-        arn:aws:ec2:eu-central-1:123456789013:instance/i-portal-staging-web-01
+        - customer-1-portal-prod-data-nsg
+    - name: customer-1-portal-staging-web-01
+      description: Customer 1 Portal Staging Web Server
+      cloud_id: i-059675990a5941db9
       status: active
-      instance_type: "t3.medium"
-      image: "ami-windows-server-2022"
-      account: "customer-1-aws-staging"
-      availability_zone: "eu-central-1a"
-      network_segment: "customer-1-portal-staging-web"
+      instance_type: t3.medium
+      image: ami-windows-server-2022
+      account: customer-1-aws-staging
+      availability_zone: eu-central-1a
+      network_segment: customer-1-portal-staging-web
       security_groups:
-        - ["customer-1-portal-staging-web-sg"]
-
-    - name: "customer-1-portal-staging-app-01"
-      description: "Customer 1 Portal Staging App Server"
-      cloud_id: >
-        arn:aws:ec2:eu-central-1:123456789013:instance/i-portal-staging-app-01
+        - customer-1-portal-staging-web-sg
+    - name: customer-1-portal-staging-app-01
+      description: Customer 1 Portal Staging App Server
+      cloud_id: i-a7bb98a9a20a69f99
       status: active
-      instance_type: "t3.large"
-      image: "ami-windows-server-2022"
-      account: "customer-1-aws-staging"
-      availability_zone: "eu-central-1a"
-      network_segment: "customer-1-portal-staging-app"
+      instance_type: t3.large
+      image: ami-windows-server-2022
+      account: customer-1-aws-staging
+      availability_zone: eu-central-1a
+      network_segment: customer-1-portal-staging-app
       security_groups:
-        - ["customer-1-portal-staging-app-sg"]
-
-    # ========== Customer Portal - Development (GCP) ==========
-
-    - name: "customer-1-portal-dev-web-01"
-      description: "Customer 1 Portal Development Web Server"
-      cloud_id: >
-        projects/customer-1-dev-456791/zones/europe-west3-a/instances/portal-dev-web-01
+        - customer-1-portal-staging-app-sg
+    - name: customer-1-portal-dev-web-01
+      description: Customer 1 Portal Development Web Server
+      cloud_id: portal-dev-web-01
       status: active
-      instance_type: "n2-standard-2"
-      image: "windows-server-2022"
-      account: "customer-1-gcp-development"
-      availability_zone: "europe-west3-a"
-      network_segment: "customer-1-portal-dev-web"
+      instance_type: n2-standard-2
+      image: windows-server-2022
+      account: customer-1-gcp-development
+      availability_zone: europe-west3-a
+      network_segment: customer-1-portal-dev-web
       security_groups:
-        - ["customer-1-portal-dev-web-firewall"]
-
-    - name: "customer-1-portal-dev-app-01"
-      description: "Customer 1 Portal Development App Server"
-      cloud_id: >
-        projects/customer-1-dev-456791/zones/europe-west3-b/instances/portal-dev-app-01
+        - customer-1-portal-dev-web-firewall
+    - name: customer-1-portal-dev-app-01
+      description: Customer 1 Portal Development App Server
+      cloud_id: portal-dev-app-01
       status: active
-      instance_type: "n2-standard-4"
-      image: "windows-server-2022"
-      account: "customer-1-gcp-development"
-      availability_zone: "europe-west3-b"
-      network_segment: "customer-1-portal-dev-app"
+      instance_type: n2-standard-4
+      image: windows-server-2022
+      account: customer-1-gcp-development
+      availability_zone: europe-west3-b
+      network_segment: customer-1-portal-dev-app
       security_groups:
-        - ["customer-1-portal-dev-internal-firewall"]
+        - customer-1-portal-dev-internal-firewall

@@ -40,16 +40,16 @@ generics:
             description: "Ethernet VPN"
             color: "#1ABC9C"
           - name: aws_vpc_subnet
-            label: AWS VPC Subnet
-            description: "AWS VPC Subnet"
+            label: AWS VPC
+            description: "AWS VPC"
             color: "#FF9900"
           - name: gcp_vpc_subnet
-            label: GCP VPC Subnet
-            description: "Google Cloud VPC Subnet"
+            label: GCP VPC
+            description: "Google Cloud VPC"
             color: "#4285F4"
           - name: azure_vnet_subnet
-            label: Azure VNet Subnet
-            description: "Azure Virtual Network Subnet"
+            label: Azure VNet
+            description: "Azure Virtual Network"
             color: "#0078D4"
           - name: other
             label: Other

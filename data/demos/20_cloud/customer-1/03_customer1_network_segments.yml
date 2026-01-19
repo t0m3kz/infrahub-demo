@@ -1,322 +1,276 @@
-# Customer 1 - Network Segments (Subnets)
-# Multi-tier architecture: Web, App, Data tiers per application
 ---
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
   kind: CloudNetworkSegment
   data:
-    # ========== E-Commerce Platform - Production (AWS) ==========
-
-    - name: "customer-1-ecommerce-prod-web-1a"
-      description: "Customer 1 E-Commerce Production Web Tier Subnet AZ-A"
-      cloud_id: >-
-        arn:aws:ec2:eu-central-1:123456789012:subnet/subnet-ecom-web-1a
+    - name: customer-1-ecommerce-prod-web-1a
+      description: Customer 1 E-Commerce Production Web Tier Subnet AZ-A
+      cloud_id: subnet-b4e110ca565dd9352
       status: active
       is_public: true
       auto_assign_public_ip: true
-      virtual_network: "customer-1-ecommerce-prod-vpc"
-      availability_zone: "eu-central-1a"
-      owner: "Customer 1"
-
-    - name: "customer-1-ecommerce-prod-web-1b"
-      description: "Customer 1 E-Commerce Production Web Tier Subnet AZ-B"
-      cloud_id: >-
-        arn:aws:ec2:eu-central-1:123456789012:subnet/subnet-ecom-web-1b
+      virtual_network: customer-1-ecommerce-prod-vpc
+      availability_zone: eu-central-1a
+      owner: Customer 1
+      segment_type: aws_vpc_subnet
+    - name: customer-1-ecommerce-prod-web-1b
+      description: Customer 1 E-Commerce Production Web Tier Subnet AZ-B
+      cloud_id: subnet-ed403760011a2990a
       status: active
       is_public: true
       auto_assign_public_ip: true
-      virtual_network: "customer-1-ecommerce-prod-vpc"
-      availability_zone: "eu-central-1b"
-      owner: "Customer 1"
-
-    - name: "customer-1-ecommerce-prod-app-1a"
-      description: "Customer 1 E-Commerce Production App Tier Subnet AZ-A"
-      cloud_id: >-
-        arn:aws:ec2:eu-central-1:123456789012:subnet/subnet-ecom-app-1a
+      virtual_network: customer-1-ecommerce-prod-vpc
+      availability_zone: eu-central-1b
+      owner: Customer 1
+      segment_type: aws_vpc_subnet
+    - name: customer-1-ecommerce-prod-app-1a
+      description: Customer 1 E-Commerce Production App Tier Subnet AZ-A
+      cloud_id: subnet-c7713788280cfdab2
       status: active
       is_public: false
       auto_assign_public_ip: false
-      virtual_network: "customer-1-ecommerce-prod-vpc"
-      availability_zone: "eu-central-1a"
-      owner: "Customer 1"
-
-    - name: "customer-1-ecommerce-prod-app-1b"
-      description: "Customer 1 E-Commerce Production App Tier Subnet AZ-B"
-      cloud_id: >-
-        arn:aws:ec2:eu-central-1:123456789012:subnet/subnet-ecom-app-1b
+      virtual_network: customer-1-ecommerce-prod-vpc
+      availability_zone: eu-central-1a
+      owner: Customer 1
+      segment_type: aws_vpc_subnet
+    - name: customer-1-ecommerce-prod-app-1b
+      description: Customer 1 E-Commerce Production App Tier Subnet AZ-B
+      cloud_id: subnet-ac0e723c8b6642827
       status: active
       is_public: false
       auto_assign_public_ip: false
-      virtual_network: "customer-1-ecommerce-prod-vpc"
-      availability_zone: "eu-central-1b"
-      owner: "Customer 1"
-
-    - name: "customer-1-ecommerce-prod-data-1a"
-      description: "Customer 1 E-Commerce Production Data Tier Subnet AZ-A"
-      cloud_id: >-
-        arn:aws:ec2:eu-central-1:123456789012:subnet/subnet-ecom-data-1a
+      virtual_network: customer-1-ecommerce-prod-vpc
+      availability_zone: eu-central-1b
+      owner: Customer 1
+      segment_type: aws_vpc_subnet
+    - name: customer-1-ecommerce-prod-data-1a
+      description: Customer 1 E-Commerce Production Data Tier Subnet AZ-A
+      cloud_id: subnet-cd9e978a871f200ca
       status: active
       is_public: false
       auto_assign_public_ip: false
-      virtual_network: "customer-1-ecommerce-prod-vpc"
-      availability_zone: "eu-central-1a"
-      owner: "Customer 1"
-
-    - name: "customer-1-ecommerce-prod-data-1b"
-      description: "Customer 1 E-Commerce Production Data Tier Subnet AZ-B"
-      cloud_id: >-
-        arn:aws:ec2:eu-central-1:123456789012:subnet/subnet-ecom-data-1b
+      virtual_network: customer-1-ecommerce-prod-vpc
+      availability_zone: eu-central-1a
+      owner: Customer 1
+      segment_type: aws_vpc_subnet
+    - name: customer-1-ecommerce-prod-data-1b
+      description: Customer 1 E-Commerce Production Data Tier Subnet AZ-B
+      cloud_id: subnet-856e1dcfdd9759725
       status: active
       is_public: false
       auto_assign_public_ip: false
-      virtual_network: "customer-1-ecommerce-prod-vpc"
-      availability_zone: "eu-central-1b"
-      owner: "Customer 1"
-
-    # ========== E-Commerce Platform - Staging (GCP) ==========
-
-    - name: "customer-1-ecommerce-staging-web"
-      description: "Customer 1 E-Commerce Staging Web Tier Subnet"
-      cloud_id: >
-        projects/customer-1-staging-456790/regions/europe-west3/subnetworks/ecom-staging-web
+      virtual_network: customer-1-ecommerce-prod-vpc
+      availability_zone: eu-central-1b
+      owner: Customer 1
+      segment_type: aws_vpc_subnet
+    - name: customer-1-ecommerce-staging-web
+      description: Customer 1 E-Commerce Staging Web Tier Subnet
+      cloud_id: "ecom-staging-web"
       status: active
       is_public: true
       auto_assign_public_ip: false
-      virtual_network: "customer-1-ecommerce-staging-vpc"
-      availability_zone: "europe-west3-a"
-      owner: "Customer 1"
-
-    - name: "customer-1-ecommerce-staging-app"
-      description: "Customer 1 E-Commerce Staging App Tier Subnet"
-      cloud_id: >
-        projects/customer-1-staging-456790/regions/europe-west3/subnetworks/ecom-staging-app
+      virtual_network: customer-1-ecommerce-staging-vpc
+      availability_zone: europe-west3-a
+      owner: Customer 1
+      segment_type: gcp_vpc_subnet
+    - name: customer-1-ecommerce-staging-app
+      description: Customer 1 E-Commerce Staging App Tier Subnet
+      cloud_id: "ecom-staging-app"
       status: active
       is_public: false
       auto_assign_public_ip: false
-      virtual_network: "customer-1-ecommerce-staging-vpc"
-      availability_zone: "europe-west3-b"
-      owner: "Customer 1"
-
-    - name: "customer-1-ecommerce-staging-data"
-      description: "Customer 1 E-Commerce Staging Data Tier Subnet"
-      cloud_id: >
-        projects/customer-1-staging-456790/regions/europe-west3/subnetworks/ecom-staging-data
+      virtual_network: customer-1-ecommerce-staging-vpc
+      availability_zone: europe-west3-b
+      owner: Customer 1
+      segment_type: gcp_vpc_subnet
+    - name: customer-1-ecommerce-staging-data
+      description: Customer 1 E-Commerce Staging Data Tier Subnet
+      cloud_id: "ecom-staging-data"
       status: active
       is_public: false
       auto_assign_public_ip: false
-      virtual_network: "customer-1-ecommerce-staging-vpc"
-      availability_zone: "europe-west3-c"
-      owner: "Customer 1"
-
-    # ========== E-Commerce Platform - Development (Azure) ==========
-
-    - name: "customer-1-ecommerce-dev-web"
-      description: "Customer 1 E-Commerce Development Web Tier Subnet"
-      cloud_id: >
-        /subscriptions/c3d4e5f6-a7b8-9012-cdef-333333333333/resourceGroups/ecommerce-dev-rg/providers/Microsoft.Network/subnets/web-subnet
+      virtual_network: customer-1-ecommerce-staging-vpc
+      availability_zone: europe-west3-c
+      owner: Customer 1
+      segment_type: gcp_vpc_subnet
+    - name: customer-1-ecommerce-dev-web
+      description: Customer 1 E-Commerce Development Web Tier Subnet
+      cloud_id: web-subnet
       status: active
       is_public: true
       auto_assign_public_ip: false
-      virtual_network: "customer-1-ecommerce-dev-vnet"
-      availability_zone: "germanywestcentral-1"
-      owner: "Customer 1"
-
-    - name: "customer-1-ecommerce-dev-app"
-      description: "Customer 1 E-Commerce Development App Tier Subnet"
-      cloud_id: >
-        /subscriptions/c3d4e5f6-a7b8-9012-cdef-333333333333/resourceGroups/ecommerce-dev-rg/providers/Microsoft.Network/subnets/app-subnet
+      virtual_network: customer-1-ecommerce-dev-vnet
+      availability_zone: germanywestcentral-1
+      owner: Customer 1
+      segment_type: azure_vnet_subnet
+    - name: customer-1-ecommerce-dev-app
+      description: Customer 1 E-Commerce Development App Tier Subnet
+      cloud_id: app-99cb09b9808ec11bb
       status: active
       is_public: false
       auto_assign_public_ip: false
-      virtual_network: "customer-1-ecommerce-dev-vnet"
-      availability_zone: "germanywestcentral-2"
-      owner: "Customer 1"
-
-    # ========== Analytics Dashboard - Production (GCP) ==========
-
-    - name: "customer-1-analytics-prod-web"
-      description: "Customer 1 Analytics Production Web Tier Subnet"
-      cloud_id: >
-        projects/customer-1-prod-456789/regions/europe-west1/subnetworks/analytics-prod-web
+      virtual_network: customer-1-ecommerce-dev-vnet
+      availability_zone: germanywestcentral-2
+      owner: Customer 1
+      segment_type: azure_vnet_subnet
+    - name: customer-1-analytics-prod-web
+      description: Customer 1 Analytics Production Web Tier Subnet
+      cloud_id: "analytics-prod-web"
       status: active
       is_public: true
       auto_assign_public_ip: false
-      virtual_network: "customer-1-analytics-prod-vpc"
-      availability_zone: "europe-west1-b"
-      owner: "Customer 1"
-
-    - name: "customer-1-analytics-prod-app"
-      description: "Customer 1 Analytics Production App Tier Subnet"
-      cloud_id: >
-        projects/customer-1-prod-456789/regions/europe-west1/subnetworks/analytics-prod-app
+      virtual_network: customer-1-analytics-prod-vpc
+      availability_zone: europe-west1-b
+      owner: Customer 1
+      segment_type: gcp_vpc_subnet
+    - name: customer-1-analytics-prod-app
+      description: Customer 1 Analytics Production App Tier Subnet
+      cloud_id: "analytics-prod-app"
       status: active
       is_public: false
       auto_assign_public_ip: false
-      virtual_network: "customer-1-analytics-prod-vpc"
-      availability_zone: "europe-west1-c"
-      owner: "Customer 1"
-
-    - name: "customer-1-analytics-prod-data"
-      description: "Customer 1 Analytics Production Data Tier Subnet"
-      cloud_id: >
-        projects/customer-1-prod-456789/regions/europe-west1/subnetworks/analytics-prod-data
+      virtual_network: customer-1-analytics-prod-vpc
+      availability_zone: europe-west1-c
+      owner: Customer 1
+      segment_type: gcp_vpc_subnet
+    - name: customer-1-analytics-prod-data
+      description: Customer 1 Analytics Production Data Tier Subnet
+      cloud_id: "analytics-prod-data"
       status: active
       is_public: false
       auto_assign_public_ip: false
-      virtual_network: "customer-1-analytics-prod-vpc"
-      availability_zone: "europe-west1-d"
-      owner: "Customer 1"
-
-    # ========== Analytics Dashboard - Staging (Azure) ==========
-
-    - name: "customer-1-analytics-staging-web"
-      description: "Customer 1 Analytics Staging Web Tier Subnet"
-      cloud_id: >
-        /subscriptions/b2c3d4e5-f6a7-8901-bcde-222222222222/resourceGroups/analytics-staging-rg/providers/Microsoft.Network/subnets/web-subnet
+      virtual_network: customer-1-analytics-prod-vpc
+      availability_zone: europe-west1-d
+      owner: Customer 1
+      segment_type: gcp_vpc_subnet
+    - name: customer-1-analytics-staging-web
+      description: Customer 1 Analytics Staging Web Tier Subnet
+      cloud_id: web-subnet
       status: active
       is_public: true
       auto_assign_public_ip: false
-      virtual_network: "customer-1-analytics-staging-vnet"
-      availability_zone: "westeurope-1"
-      owner: "Customer 1"
-
-    - name: "customer-1-analytics-staging-app"
-      description: "Customer 1 Analytics Staging App Tier Subnet"
-      cloud_id: >
-        /subscriptions/b2c3d4e5-f6a7-8901-bcde-222222222222/resourceGroups/analytics-staging-rg/providers/Microsoft.Network/subnets/app-subnet
+      virtual_network: customer-1-analytics-staging-vnet
+      availability_zone: westeurope-1
+      owner: Customer 1
+      segment_type: azure_vnet_subnet
+    - name: customer-1-analytics-staging-app
+      description: Customer 1 Analytics Staging App Tier Subnet
+      cloud_id: app-3b34c991f0fc67b86
       status: active
       is_public: false
       auto_assign_public_ip: false
-      virtual_network: "customer-1-analytics-staging-vnet"
-      availability_zone: "westeurope-2"
-      owner: "Customer 1"
-
-    # ========== Analytics Dashboard - Development (AWS) ==========
-
-    - name: "customer-1-analytics-dev-web"
-      description: "Customer 1 Analytics Development Web Tier Subnet"
-      cloud_id: >-
-        arn:aws:ec2:eu-central-1:123456789014:subnet/subnet-analytics-dev-web
+      virtual_network: customer-1-analytics-staging-vnet
+      availability_zone: westeurope-2
+      owner: Customer 1
+      segment_type: azure_vnet_subnet
+    - name: customer-1-analytics-dev-web
+      description: Customer 1 Analytics Development Web Tier Subnet
+      cloud_id: subnet-96e9250edd2c9d3d8
       status: active
       is_public: true
       auto_assign_public_ip: true
-      virtual_network: "customer-1-analytics-dev-vpc"
-      availability_zone: "eu-central-1a"
-      owner: "Customer 1"
-
-    - name: "customer-1-analytics-dev-app"
-      description: "Customer 1 Analytics Development App Tier Subnet"
-      cloud_id: >-
-        arn:aws:ec2:eu-central-1:123456789014:subnet/subnet-analytics-dev-app
+      virtual_network: customer-1-analytics-dev-vpc
+      availability_zone: eu-central-1a
+      owner: Customer 1
+      segment_type: aws_vpc_subnet
+    - name: customer-1-analytics-dev-app
+      description: Customer 1 Analytics Development App Tier Subnet
+      cloud_id: subnet-035956f99e6b74e42
       status: active
       is_public: false
       auto_assign_public_ip: false
-      virtual_network: "customer-1-analytics-dev-vpc"
-      availability_zone: "eu-central-1a"
-      owner: "Customer 1"
-
-    # ========== Customer Portal - Production (Azure) ==========
-
-    - name: "customer-1-portal-prod-web-1"
-      description: "Customer 1 Portal Production Web Tier Subnet Zone 1"
-      cloud_id: >
-        /subscriptions/a1b2c3d4-e5f6-7890-abcd-111111111111/resourceGroups/portal-prod-rg/providers/Microsoft.Network/subnets/web-subnet-1
+      virtual_network: customer-1-analytics-dev-vpc
+      availability_zone: eu-central-1a
+      owner: Customer 1
+      segment_type: aws_vpc_subnet
+    - name: customer-1-portal-prod-web-1
+      description: Customer 1 Portal Production Web Tier Subnet Zone 1
+      cloud_id: web-subnet-1
       status: active
       is_public: true
       auto_assign_public_ip: false
-      virtual_network: "customer-1-portal-prod-vnet"
-      availability_zone: "westeurope-1"
-      owner: "Customer 1"
-
-    - name: "customer-1-portal-prod-web-2"
-      description: "Customer 1 Portal Production Web Tier Subnet Zone 2"
-      cloud_id: >
-        /subscriptions/a1b2c3d4-e5f6-7890-abcd-111111111111/resourceGroups/portal-prod-rg/providers/Microsoft.Network/subnets/web-subnet-2
+      virtual_network: customer-1-portal-prod-vnet
+      availability_zone: westeurope-1
+      owner: Customer 1
+      segment_type: azure_vnet_subnet
+    - name: customer-1-portal-prod-web-2
+      description: Customer 1 Portal Production Web Tier Subnet Zone 2
+      cloud_id: web-subnet-2
       status: active
       is_public: true
       auto_assign_public_ip: false
-      virtual_network: "customer-1-portal-prod-vnet"
-      availability_zone: "westeurope-2"
-      owner: "Customer 1"
-
-    - name: "customer-1-portal-prod-app-1"
-      description: "Customer 1 Portal Production App Tier Subnet Zone 1"
-      cloud_id: >
-        /subscriptions/a1b2c3d4-e5f6-7890-abcd-111111111111/resourceGroups/portal-prod-rg/providers/Microsoft.Network/subnets/app-subnet-1
+      virtual_network: customer-1-portal-prod-vnet
+      availability_zone: westeurope-2
+      owner: Customer 1
+      segment_type: azure_vnet_subnet
+    - name: customer-1-portal-prod-app-1
+      description: Customer 1 Portal Production App Tier Subnet Zone 1
+      cloud_id: app-00fc9cce395bfdd90
       status: active
       is_public: false
       auto_assign_public_ip: false
-      virtual_network: "customer-1-portal-prod-vnet"
-      availability_zone: "westeurope-1"
-      owner: "Customer 1"
-
-    - name: "customer-1-portal-prod-app-2"
-      description: "Customer 1 Portal Production App Tier Subnet Zone 2"
-      cloud_id: >
-        /subscriptions/a1b2c3d4-e5f6-7890-abcd-111111111111/resourceGroups/portal-prod-rg/providers/Microsoft.Network/subnets/app-subnet-2
+      virtual_network: customer-1-portal-prod-vnet
+      availability_zone: westeurope-1
+      owner: Customer 1
+      segment_type: azure_vnet_subnet
+    - name: customer-1-portal-prod-app-2
+      description: Customer 1 Portal Production App Tier Subnet Zone 2
+      cloud_id: app-4d11af99b62439ebb
       status: active
       is_public: false
       auto_assign_public_ip: false
-      virtual_network: "customer-1-portal-prod-vnet"
-      availability_zone: "westeurope-2"
-      owner: "Customer 1"
-
-    - name: "customer-1-portal-prod-data"
-      description: "Customer 1 Portal Production Data Tier Subnet"
-      cloud_id: >
-        /subscriptions/a1b2c3d4-e5f6-7890-abcd-111111111111/resourceGroups/portal-prod-rg/providers/Microsoft.Network/subnets/data-subnet
+      virtual_network: customer-1-portal-prod-vnet
+      availability_zone: westeurope-2
+      owner: Customer 1
+      segment_type: azure_vnet_subnet
+    - name: customer-1-portal-prod-data
+      description: Customer 1 Portal Production Data Tier Subnet
+      cloud_id: data-subnet
       status: active
       is_public: false
       auto_assign_public_ip: false
-      virtual_network: "customer-1-portal-prod-vnet"
-      availability_zone: "westeurope-3"
-      owner: "Customer 1"
-
-    # ========== Customer Portal - Staging (AWS) ==========
-
-    - name: "customer-1-portal-staging-web"
-      description: "Customer 1 Portal Staging Web Tier Subnet"
-      cloud_id: >
-        arn:aws:ec2:eu-central-1:123456789013:subnet/subnet-portal-staging-web
+      virtual_network: customer-1-portal-prod-vnet
+      availability_zone: westeurope-3
+      owner: Customer 1
+      segment_type: azure_vnet_subnet
+    - name: customer-1-portal-staging-web
+      description: Customer 1 Portal Staging Web Tier Subnet
+      cloud_id: subnet-0c0697eb5d303b0dc
       status: active
       is_public: true
       auto_assign_public_ip: true
-      virtual_network: "customer-1-portal-staging-vpc"
-      availability_zone: "eu-central-1a"
-      owner: "Customer 1"
-
-    - name: "customer-1-portal-staging-app"
-      description: "Customer 1 Portal Staging App Tier Subnet"
-      cloud_id: >
-        arn:aws:ec2:eu-central-1:123456789013:subnet/subnet-portal-staging-app
+      virtual_network: customer-1-portal-staging-vpc
+      availability_zone: eu-central-1a
+      owner: Customer 1
+      segment_type: aws_vpc_subnet
+    - name: customer-1-portal-staging-app
+      description: Customer 1 Portal Staging App Tier Subnet
+      cloud_id: subnet-7e23328d3eaef50a4
       status: active
       is_public: false
       auto_assign_public_ip: false
-      virtual_network: "customer-1-portal-staging-vpc"
-      availability_zone: "eu-central-1a"
-      owner: "Customer 1"
-
-    # ========== Customer Portal - Development (GCP) ==========
-
-    - name: "customer-1-portal-dev-web"
-      description: "Customer 1 Portal Development Web Tier Subnet"
-      cloud_id: >
-        projects/customer-1-dev-456791/regions/europe-west3/subnetworks/portal-dev-web
+      virtual_network: customer-1-portal-staging-vpc
+      availability_zone: eu-central-1a
+      owner: Customer 1
+      segment_type: aws_vpc_subnet
+    - name: customer-1-portal-dev-web
+      description: Customer 1 Portal Development Web Tier Subnet
+      cloud_id: "portal-dev-web"
       status: active
       is_public: true
       auto_assign_public_ip: false
-      virtual_network: "customer-1-portal-dev-vpc"
-      availability_zone: "europe-west3-a"
-      owner: "Customer 1"
-
-    - name: "customer-1-portal-dev-app"
-      description: "Customer 1 Portal Development App Tier Subnet"
-      cloud_id: >
-        projects/customer-1-dev-456791/regions/europe-west3/subnetworks/portal-dev-app
+      virtual_network: customer-1-portal-dev-vpc
+      availability_zone: europe-west3-a
+      owner: Customer 1
+      segment_type: gcp_vpc_subnet
+    - name: customer-1-portal-dev-app
+      description: Customer 1 Portal Development App Tier Subnet
+      cloud_id: "portal-dev-app"
       status: active
       is_public: false
       auto_assign_public_ip: false
-      virtual_network: "customer-1-portal-dev-vpc"
-      availability_zone: "europe-west3-b"
-      owner: "Customer 1"
+      virtual_network: customer-1-portal-dev-vpc
+      availability_zone: europe-west3-b
+      owner: Customer 1
+      segment_type: gcp_vpc_subnet

@@ -1,65 +1,54 @@
-# Zscaler Virtual Networks - Multi-Cloud Deployment
-# AWS: VPC in eu-central-1
-# GCP: VPC in europe-west1
-# Azure: VNet in westeurope
 ---
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
   kind: CloudVirtualNetwork
   data:
-    # AWS eu-central-1 (Frankfurt)
-    - name: "zscaler-aws-vpc"
-      description: "Zscaler AWS VPC - Frankfurt"
+    - name: zscaler-aws-vpc
+      description: Zscaler AWS VPC - Frankfurt
       status: active
-      account: "zscaler-aws-prod"
+      account: zscaler-aws-prod
       region: eu-central-1
       is_default: false
       dns_support: true
       dns_hostnames: true
-      cloud_id: "vpc-zscaler-aws-123456"
+      cloud_id: vpc-830e2d56c285c8b59
       cidr_blocks:
         data:
-          - prefix: "10.10.0.0/16"
-            ip_namespace: "default"
+          - prefix: 10.10.0.0/16
+            ip_namespace: default
             status: active
             role: customer
-            description: "Zscaler AWS VPC primary CIDR"
-
-    # GCP europe-west1 (Belgium)
-    - name: "zscaler-gcp-vpc"
-      description: "Zscaler GCP VPC - Belgium"
+            description: Zscaler AWS VPC primary CIDR
+    - name: zscaler-gcp-vpc
+      description: Zscaler GCP VPC - Belgium
       status: active
-      account: "zscaler-gcp-prod"
+      account: zscaler-gcp-prod
       region: europe-west1
       is_default: false
       dns_support: true
       dns_hostnames: false
-      cloud_id: >-
-        projects/zscaler-prod-456789/global/networks/zscaler-gcp-vpc
+      cloud_id: zscaler-gcp-vpc
       cidr_blocks:
         data:
-          - prefix: "10.20.0.0/16"
-            ip_namespace: "default"
+          - prefix: 10.20.0.0/16
+            ip_namespace: default
             status: active
             role: customer
-            description: "Zscaler GCP VPC primary CIDR"
-
-    # Azure westeurope (Netherlands)
-    - name: "zscaler-azure-vnet"
-      description: "Zscaler Azure VNet - Netherlands"
+            description: Zscaler GCP VPC primary CIDR
+    - name: zscaler-azure-vnet
+      description: Zscaler Azure VNet - Netherlands
       status: active
-      account: "zscaler-azure-prod"
+      account: zscaler-azure-prod
       region: westeurope
       is_default: false
       dns_support: true
       dns_hostnames: false
-      cloud_id: >-
-        /subscriptions/789012ab-cdef-4567-89ab-cdef01234567/resourceGroups/zscaler-westeu-rg/providers/Microsoft.Network/virtualNetworks/zscaler-azure-vnet
+      cloud_id: zscaler-azure-vnet
       cidr_blocks:
         data:
-          - prefix: "10.30.0.0/16"
-            ip_namespace: "default"
+          - prefix: 10.30.0.0/16
+            ip_namespace: default
             status: active
             role: customer
-            description: "Zscaler Azure VNet primary CIDR"
+            description: Zscaler Azure VNet primary CIDR

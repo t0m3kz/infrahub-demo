@@ -1,85 +1,60 @@
-# Customer 1 - Internet Gateways
-# Gateways for public internet connectivity
 ---
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
   kind: CloudInternetGateway
   data:
-    # ========== E-Commerce Platform ==========
-
-    - name: "customer-1-ecommerce-prod-igw"
-      description: "Customer 1 E-Commerce Production Internet Gateway (AWS)"
-      cloud_id: >-
-        arn:aws:ec2:eu-central-1:123456789012:internet-gateway/igw-ecom-prod
+    - name: customer-1-ecommerce-prod-igw
+      description: Customer 1 E-Commerce Production Internet Gateway (AWS)
+      cloud_id: igw-e3c8a571744d82ba0
       status: active
-      virtual_network: "customer-1-ecommerce-prod-vpc"
-      account: "customer-1-aws-production"
-
-    - name: "customer-1-ecommerce-staging-router"
-      description: "Customer 1 E-Commerce Staging Cloud Router (GCP)"
-      cloud_id: >
-        projects/customer-1-staging-456790/regions/europe-west3/routers/ecom-staging-router
+      virtual_network: customer-1-ecommerce-prod-vpc
+      account: customer-1-aws-production
+    - name: customer-1-ecommerce-staging-router
+      description: Customer 1 E-Commerce Staging Cloud Router (GCP)
+      cloud_id: ecom-staging-router
       status: active
-      virtual_network: "customer-1-ecommerce-staging-vpc"
-      account: "customer-1-gcp-staging"
-
-    - name: "customer-1-ecommerce-dev-igw"
-      description: "Customer 1 E-Commerce Development Internet Gateway (Azure)"
-      cloud_id: >
-        /subscriptions/c3d4e5f6-a7b8-9012-cdef-333333333333/resourceGroups/ecommerce-dev-rg/providers/Microsoft.Network/virtualNetworkGateways/ecom-dev-igw
+      virtual_network: customer-1-ecommerce-staging-vpc
+      account: customer-1-gcp-staging
+    - name: customer-1-ecommerce-dev-igw
+      description: Customer 1 E-Commerce Development Internet Gateway (Azure)
+      cloud_id: ecom-dev-igw
       status: active
-      virtual_network: "customer-1-ecommerce-dev-vnet"
-      account: "customer-1-azure-development"
-
-    # ========== Analytics Dashboard ==========
-
-    - name: "customer-1-analytics-prod-router"
-      description: "Customer 1 Analytics Production Cloud Router (GCP)"
-      cloud_id: >
-        projects/customer-1-prod-456789/regions/europe-west1/routers/analytics-prod-router
+      virtual_network: customer-1-ecommerce-dev-vnet
+      account: customer-1-azure-development
+    - name: customer-1-analytics-prod-router
+      description: Customer 1 Analytics Production Cloud Router (GCP)
+      cloud_id: analytics-prod-router
       status: active
-      virtual_network: "customer-1-analytics-prod-vpc"
-      account: "customer-1-gcp-production"
-
-    - name: "customer-1-analytics-staging-igw"
-      description: "Customer 1 Analytics Staging Internet Gateway (Azure)"
-      cloud_id: >
-        /subscriptions/b2c3d4e5-f6a7-8901-bcde-222222222222/resourceGroups/analytics-staging-rg/providers/Microsoft.Network/virtualNetworkGateways/analytics-staging-igw
+      virtual_network: customer-1-analytics-prod-vpc
+      account: customer-1-gcp-production
+    - name: customer-1-analytics-staging-igw
+      description: Customer 1 Analytics Staging Internet Gateway (Azure)
+      cloud_id: analytics-staging-igw
       status: active
-      virtual_network: "customer-1-analytics-staging-vnet"
-      account: "customer-1-azure-staging"
-
-    - name: "customer-1-analytics-dev-igw"
-      description: "Customer 1 Analytics Development Internet Gateway (AWS)"
-      cloud_id: >
-        arn:aws:ec2:eu-central-1:123456789014:internet-gateway/igw-analytics-dev
+      virtual_network: customer-1-analytics-staging-vnet
+      account: customer-1-azure-staging
+    - name: customer-1-analytics-dev-igw
+      description: Customer 1 Analytics Development Internet Gateway (AWS)
+      cloud_id: igw-10b26855be1d99838
       status: active
-      virtual_network: "customer-1-analytics-dev-vpc"
-      account: "customer-1-aws-development"
-
-    # ========== Customer Portal ==========
-
-    - name: "customer-1-portal-prod-igw"
-      description: "Customer 1 Portal Production Internet Gateway (Azure)"
-      cloud_id: >
-        /subscriptions/a1b2c3d4-e5f6-7890-abcd-111111111111/resourceGroups/portal-prod-rg/providers/Microsoft.Network/virtualNetworkGateways/portal-prod-igw
+      virtual_network: customer-1-analytics-dev-vpc
+      account: customer-1-aws-development
+    - name: customer-1-portal-prod-igw
+      description: Customer 1 Portal Production Internet Gateway (Azure)
+      cloud_id: portal-prod-igw
       status: active
-      virtual_network: "customer-1-portal-prod-vnet"
-      account: "customer-1-azure-production"
-
-    - name: "customer-1-portal-staging-igw"
-      description: "Customer 1 Portal Staging Internet Gateway (AWS)"
-      cloud_id: >
-        arn:aws:ec2:eu-central-1:123456789013:internet-gateway/igw-portal-staging
+      virtual_network: customer-1-portal-prod-vnet
+      account: customer-1-azure-production
+    - name: customer-1-portal-staging-igw
+      description: Customer 1 Portal Staging Internet Gateway (AWS)
+      cloud_id: igw-e5f9a3ed43c01ef38
       status: active
-      virtual_network: "customer-1-portal-staging-vpc"
-      account: "customer-1-aws-staging"
-
-    - name: "customer-1-portal-dev-router"
-      description: "Customer 1 Portal Development Cloud Router (GCP)"
-      cloud_id: >
-        projects/customer-1-dev-456791/regions/europe-west3/routers/portal-dev-router
+      virtual_network: customer-1-portal-staging-vpc
+      account: customer-1-aws-staging
+    - name: customer-1-portal-dev-router
+      description: Customer 1 Portal Development Cloud Router (GCP)
+      cloud_id: portal-dev-router
       status: active
-      virtual_network: "customer-1-portal-dev-vpc"
-      account: "customer-1-gcp-development"
+      virtual_network: customer-1-portal-dev-vpc
+      account: customer-1-gcp-development

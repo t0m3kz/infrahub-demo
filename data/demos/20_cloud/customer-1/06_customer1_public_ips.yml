@@ -1,87 +1,62 @@
-# Customer 1 - Public IP Addresses
-# Static public IPs for internet-facing services
 ---
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
   kind: CloudPublicIP
   data:
-    # ========== E-Commerce Platform - Production (AWS) ==========
-
-    - name: "customer-1-ecommerce-prod-alb-ip-1"
-      description: "E-Commerce Production ALB Public IP 1"
-      public_ip: "52.29.123.45"
+    - name: customer-1-ecommerce-prod-alb-ip-1
+      description: E-Commerce Production ALB Public IP 1
+      public_ip: 52.29.123.45
       status: active
-      account: "customer-1-aws-production"
-      region: "eu-central-1"
-      cloud_id: >-
-        arn:aws:ec2:eu-central-1:123456789012:eip/eipalloc-ecom-alb-001
-
-    - name: "customer-1-ecommerce-prod-alb-ip-2"
-      description: "E-Commerce Production ALB Public IP 2"
-      public_ip: "52.29.123.46"
+      account: customer-1-aws-production
+      region: eu-central-1
+      cloud_id: resource-98991cdc05bcd0f10
+    - name: customer-1-ecommerce-prod-alb-ip-2
+      description: E-Commerce Production ALB Public IP 2
+      public_ip: 52.29.123.46
       status: active
-      account: "customer-1-aws-production"
-      region: "eu-central-1"
-      cloud_id: >-
-        arn:aws:ec2:eu-central-1:123456789012:eip/eipalloc-ecom-alb-002
-
-    # ========== Analytics Dashboard - Production (GCP) ==========
-
-    - name: "customer-1-analytics-prod-lb-ip"
-      description: "Analytics Production Load Balancer Public IP"
-      public_ip: "34.107.45.67"
+      account: customer-1-aws-production
+      region: eu-central-1
+      cloud_id: resource-a2680209f816e15ae
+    - name: customer-1-analytics-prod-lb-ip
+      description: Analytics Production Load Balancer Public IP
+      public_ip: 34.107.45.67
       status: active
-      account: "customer-1-gcp-production"
-      region: "europe-west1"
-      cloud_id: >-
-        projects/customer-1-prod-456789/regions/europe-west1/addresses/analytics-prod-lb-ip
-
-    # ========== Customer Portal - Production (Azure) ==========
-
-    - name: "customer-1-portal-prod-lb-ip"
-      description: "Portal Production Load Balancer Public IP"
-      public_ip: "20.93.67.89"
+      account: customer-1-gcp-production
+      region: europe-west1
+      cloud_id: analytics-prod-lb-ip
+    - name: customer-1-portal-prod-lb-ip
+      description: Portal Production Load Balancer Public IP
+      public_ip: 20.93.67.89
       status: active
-      account: "customer-1-azure-production"
-      region: "westeurope"
-      cloud_id: >-
-        /subscriptions/a1b2c3d4-e5f6-7890-abcd-111111111111/resourceGroups/portal-prod-rg/providers/Microsoft.Network/publicIPAddresses/portal-prod-lb-ip
-
-    # ========== NAT Gateway Public IPs ==========
-
-    - name: "customer-1-ecommerce-nat-ip-1a"
-      description: "E-Commerce NAT Gateway Public IP AZ-A"
-      public_ip: "52.29.234.11"
+      account: customer-1-azure-production
+      region: westeurope
+      cloud_id: portal-prod-lb-ip
+    - name: customer-1-ecommerce-nat-ip-1a
+      description: E-Commerce NAT Gateway Public IP AZ-A
+      public_ip: 52.29.234.11
       status: active
-      account: "customer-1-aws-production"
-      region: "eu-central-1"
-      cloud_id: >-
-        arn:aws:ec2:eu-central-1:123456789012:eip/eipalloc-ecom-nat-1a
-
-    - name: "customer-1-ecommerce-nat-ip-1b"
-      description: "E-Commerce NAT Gateway Public IP AZ-B"
-      public_ip: "52.29.234.12"
+      account: customer-1-aws-production
+      region: eu-central-1
+      cloud_id: resource-c902312b7a1eb6c10
+    - name: customer-1-ecommerce-nat-ip-1b
+      description: E-Commerce NAT Gateway Public IP AZ-B
+      public_ip: 52.29.234.12
       status: active
-      account: "customer-1-aws-production"
-      region: "eu-central-1"
-      cloud_id: >-
-        arn:aws:ec2:eu-central-1:123456789012:eip/eipalloc-ecom-nat-1b
-
-    - name: "customer-1-analytics-nat-ip"
-      description: "Analytics NAT Gateway Public IP"
-      public_ip: "34.107.89.23"
+      account: customer-1-aws-production
+      region: eu-central-1
+      cloud_id: resource-c80c6f04dfed73ac6
+    - name: customer-1-analytics-nat-ip
+      description: Analytics NAT Gateway Public IP
+      public_ip: 34.107.89.23
       status: active
-      account: "customer-1-gcp-production"
-      region: "europe-west1"
-      cloud_id: >-
-        projects/customer-1-prod-456789/regions/europe-west1/addresses/analytics-nat-ip
-
-    - name: "customer-1-portal-nat-ip"
-      description: "Portal NAT Gateway Public IP"
-      public_ip: "20.93.112.45"
+      account: customer-1-gcp-production
+      region: europe-west1
+      cloud_id: analytics-nat-ip
+    - name: customer-1-portal-nat-ip
+      description: Portal NAT Gateway Public IP
+      public_ip: 20.93.112.45
       status: active
-      account: "customer-1-azure-production"
-      region: "westeurope"
-      cloud_id: >-
-        /subscriptions/a1b2c3d4-e5f6-7890-abcd-111111111111/resourceGroups/portal-prod-rg/providers/Microsoft.Network/publicIPAddresses/portal-nat-ip
+      account: customer-1-azure-production
+      region: westeurope
+      cloud_id: portal-nat-ip
