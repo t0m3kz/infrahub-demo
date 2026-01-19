@@ -15,10 +15,10 @@ spec:
       scheme: internet_facing
       virtual_network: customer-1-ecommerce-prod-vpc
       network_segments:
-        - customer-1-ecommerce-prod-web-1a
-        - customer-1-ecommerce-prod-web-1b
+        - [customer-1-ecommerce-prod-web-1a]
+        - [customer-1-ecommerce-prod-web-1b]
       security_groups:
-        - customer-1-ecommerce-prod-lb-sg
+        - [customer-1-ecommerce-prod-lb-sg]
     - name: customer-1-ecommerce-prod-nlb
       member_of_groups:
         - cloud_loadbalancers
@@ -30,8 +30,8 @@ spec:
       scheme: internal
       virtual_network: customer-1-ecommerce-prod-vpc
       network_segments:
-        - customer-1-ecommerce-prod-app-1a
-        - customer-1-ecommerce-prod-app-1b
+        - [customer-1-ecommerce-prod-app-1a]
+        - [customer-1-ecommerce-prod-app-1b]
     - name: customer-1-analytics-prod-lb
       member_of_groups:
         - cloud_loadbalancers
@@ -43,9 +43,9 @@ spec:
       scheme: internet_facing
       virtual_network: customer-1-analytics-prod-vpc
       network_segments:
-        - customer-1-analytics-prod-web
+        - [customer-1-analytics-prod-web]
       security_groups:
-        - customer-1-analytics-prod-web-firewall
+        - [customer-1-analytics-prod-web-firewall]
     - name: customer-1-analytics-prod-internal-lb
       member_of_groups:
         - cloud_loadbalancers
@@ -57,9 +57,9 @@ spec:
       scheme: internal
       virtual_network: customer-1-analytics-prod-vpc
       network_segments:
-        - customer-1-analytics-prod-app
+        - [customer-1-analytics-prod-app]
       security_groups:
-        - customer-1-analytics-prod-app-firewall
+        - [customer-1-analytics-prod-app-firewall]
     - name: customer-1-portal-prod-lb
       member_of_groups:
         - cloud_loadbalancers
@@ -71,10 +71,10 @@ spec:
       scheme: internet_facing
       virtual_network: customer-1-portal-prod-vnet
       network_segments:
-        - customer-1-portal-prod-web-1
-        - customer-1-portal-prod-web-2
+        - [customer-1-portal-prod-web-1]
+        - [customer-1-portal-prod-web-2]
       security_groups:
-        - customer-1-portal-prod-web-nsg
+        - [customer-1-portal-prod-web-nsg]
     - name: customer-1-portal-prod-internal-lb
       member_of_groups:
         - cloud_loadbalancers
@@ -86,7 +86,7 @@ spec:
       scheme: internal
       virtual_network: customer-1-portal-prod-vnet
       network_segments:
-        - customer-1-portal-prod-app-1
-        - customer-1-portal-prod-app-2
+        - [customer-1-portal-prod-app-1]
+        - [customer-1-portal-prod-app-2]
       security_groups:
-        - customer-1-portal-prod-app-nsg
+        - [customer-1-portal-prod-app-nsg]

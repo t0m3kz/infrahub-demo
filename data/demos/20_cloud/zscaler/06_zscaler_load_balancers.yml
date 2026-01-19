@@ -14,10 +14,10 @@ spec:
       scheme: internal
       virtual_network: zscaler-aws-vpc
       network_segments:
-        - zscaler-aws-service-subnet-1a
-        - zscaler-aws-service-subnet-1b
+        - [zscaler-aws-service-subnet-1a]
+        - [zscaler-aws-service-subnet-1b]
       security_groups:
-        - zscaler-aws-connector-sg
+        - [zscaler-aws-connector-sg]
       cloud_id: net-0ce184e21f1ee9418
     - name: zscaler-gcp-lb
       member_of_groups:
@@ -29,8 +29,8 @@ spec:
       scheme: internal
       virtual_network: zscaler-gcp-vpc
       network_segments:
-        - zscaler-gcp-service-subnet-b
-        - zscaler-gcp-service-subnet-c
+        - [zscaler-gcp-service-subnet-b]
+        - [zscaler-gcp-service-subnet-c]
       cloud_id: zscaler-gcp-lb
     - name: zscaler-azure-lb
       member_of_groups:
@@ -42,7 +42,7 @@ spec:
       scheme: internal
       virtual_network: zscaler-azure-vnet
       network_segments:
-        - zscaler-azure-service-subnet
+        - [zscaler-azure-service-subnet]
       security_groups:
-        - zscaler-azure-connector-nsg
+        - [zscaler-azure-connector-nsg]
       cloud_id: zscaler-azure-lb

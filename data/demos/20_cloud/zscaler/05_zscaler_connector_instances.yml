@@ -13,7 +13,7 @@ spec:
       availability_zone: eu-central-1a
       network_segment: zscaler-aws-service-subnet-1a
       security_groups:
-        - zscaler-aws-connector-sg
+        - [zscaler-aws-connector-sg]
       cloud_id: i-c095cfac3de147f08
     - name: zscaler-aws-cc-02
       description: Zscaler Cloud Connector 2 (ZIA) - AWS AZ-B
@@ -24,7 +24,7 @@ spec:
       availability_zone: eu-central-1b
       network_segment: zscaler-aws-service-subnet-1b
       security_groups:
-        - zscaler-aws-connector-sg
+        - [zscaler-aws-connector-sg]
       cloud_id: i-ade72ebc98f3b0b35
     - name: zscaler-aws-ac-01
       description: Zscaler App Connector 1 (ZTNA) - AWS AZ-A
@@ -35,7 +35,7 @@ spec:
       availability_zone: eu-central-1a
       network_segment: zscaler-aws-service-subnet-1a
       security_groups:
-        - zscaler-aws-connector-sg
+        - [zscaler-aws-connector-sg]
       cloud_id: i-556fce437322a5973
     - name: zscaler-aws-ac-02
       description: Zscaler App Connector 2 (ZTNA) - AWS AZ-B
@@ -46,7 +46,7 @@ spec:
       availability_zone: eu-central-1b
       network_segment: zscaler-aws-service-subnet-1b
       security_groups:
-        - zscaler-aws-connector-sg
+        - [zscaler-aws-connector-sg]
       cloud_id: i-9a20a20e4a3af2ba4
     - name: zscaler-gcp-cc-01
       description: Zscaler Cloud Connector 1 (ZIA) - GCP Zone-B
@@ -57,7 +57,7 @@ spec:
       availability_zone: europe-west1-b
       network_segment: zscaler-gcp-service-subnet-b
       security_groups:
-        - zscaler-gcp-connector-fw
+        - [zscaler-gcp-connector-fw]
       cloud_id: zscaler-gcp-cc-01
     - name: zscaler-gcp-cc-02
       description: Zscaler Cloud Connector 2 (ZIA) - GCP Zone-C
@@ -68,7 +68,7 @@ spec:
       availability_zone: europe-west1-c
       network_segment: zscaler-gcp-service-subnet-c
       security_groups:
-        - zscaler-gcp-connector-fw
+        - [zscaler-gcp-connector-fw]
       cloud_id: zscaler-gcp-cc-02
     - name: zscaler-gcp-ac-01
       description: Zscaler App Connector 1 (ZTNA) - GCP Zone-B
@@ -79,7 +79,7 @@ spec:
       availability_zone: europe-west1-b
       network_segment: zscaler-gcp-service-subnet-b
       security_groups:
-        - zscaler-gcp-connector-fw
+        - [zscaler-gcp-connector-fw]
       cloud_id: zscaler-gcp-ac-01
     - name: zscaler-gcp-ac-02
       description: Zscaler App Connector 2 (ZTNA) - GCP Zone-C
@@ -90,7 +90,7 @@ spec:
       availability_zone: europe-west1-c
       network_segment: zscaler-gcp-service-subnet-c
       security_groups:
-        - zscaler-gcp-connector-fw
+        - [zscaler-gcp-connector-fw]
       cloud_id: zscaler-gcp-ac-02
     - name: zscaler-azure-cc-01
       description: Zscaler Cloud Connector 1 (ZIA) - Azure
@@ -101,7 +101,7 @@ spec:
       availability_zone: westeurope-1
       network_segment: zscaler-azure-service-subnet
       security_groups:
-        - zscaler-azure-connector-nsg
+        - [zscaler-azure-connector-nsg]
       cloud_id: zscaler-azure-cc-01
     - name: zscaler-azure-ac-01
       description: Zscaler App Connector 1 (ZTNA) - Azure
@@ -112,5 +112,5 @@ spec:
       availability_zone: westeurope-1
       network_segment: zscaler-azure-service-subnet
       security_groups:
-        - zscaler-azure-connector-nsg
+        - [zscaler-azure-connector-nsg]
       cloud_id: zscaler-azure-ac-01

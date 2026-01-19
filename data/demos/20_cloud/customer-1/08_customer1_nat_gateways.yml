@@ -11,8 +11,8 @@ spec:
       public_ip: 54.123.10.1
       virtual_network: customer-1-ecommerce-prod-vpc
       network_segments:
-        - customer-1-ecommerce-prod-app-1a
-        - customer-1-ecommerce-prod-data-1a
+        - [customer-1-ecommerce-prod-app-1a]
+        - [customer-1-ecommerce-prod-data-1a]
       account: customer-1-aws-production
     - name: customer-1-ecommerce-prod-nat-1b
       description: Customer 1 E-Commerce Production NAT Gateway AZ-B
@@ -21,8 +21,8 @@ spec:
       public_ip: 54.123.10.2
       virtual_network: customer-1-ecommerce-prod-vpc
       network_segments:
-        - customer-1-ecommerce-prod-app-1b
-        - customer-1-ecommerce-prod-data-1b
+        - [customer-1-ecommerce-prod-app-1b]
+        - [customer-1-ecommerce-prod-data-1b]
       account: customer-1-aws-production
     - name: customer-1-ecommerce-staging-nat
       description: Customer 1 E-Commerce Staging Cloud NAT
@@ -31,8 +31,8 @@ spec:
       public_ip: 35.200.50.10
       virtual_network: customer-1-ecommerce-staging-vpc
       network_segments:
-        - customer-1-ecommerce-staging-app
-        - customer-1-ecommerce-staging-data
+        - [customer-1-ecommerce-staging-app]
+        - [customer-1-ecommerce-staging-data]
       account: customer-1-gcp-staging
     - name: customer-1-ecommerce-dev-nat
       description: Customer 1 E-Commerce Development NAT Gateway
@@ -41,7 +41,7 @@ spec:
       public_ip: 20.50.10.1
       virtual_network: customer-1-ecommerce-dev-vnet
       network_segments:
-        - customer-1-ecommerce-dev-app
+        - [customer-1-ecommerce-dev-app]
       account: customer-1-azure-development
     - name: customer-1-analytics-prod-nat
       description: Customer 1 Analytics Production Cloud NAT
@@ -50,8 +50,8 @@ spec:
       public_ip: 35.200.100.10
       virtual_network: customer-1-analytics-prod-vpc
       network_segments:
-        - customer-1-analytics-prod-app
-        - customer-1-analytics-prod-data
+        - [customer-1-analytics-prod-app]
+        - [customer-1-analytics-prod-data]
       account: customer-1-gcp-production
     - name: customer-1-analytics-staging-nat
       description: Customer 1 Analytics Staging NAT Gateway
@@ -60,7 +60,7 @@ spec:
       public_ip: 20.50.20.1
       virtual_network: customer-1-analytics-staging-vnet
       network_segments:
-        - customer-1-analytics-staging-app
+        - [customer-1-analytics-staging-app]
       account: customer-1-azure-staging
     - name: customer-1-analytics-dev-nat
       description: Customer 1 Analytics Development NAT Gateway
@@ -69,7 +69,7 @@ spec:
       public_ip: 54.123.20.1
       virtual_network: customer-1-analytics-dev-vpc
       network_segments:
-        - customer-1-analytics-dev-app
+        - [customer-1-analytics-dev-app]
       account: customer-1-aws-development
     - name: customer-1-portal-prod-nat
       description: Customer 1 Portal Production NAT Gateway
@@ -78,9 +78,9 @@ spec:
       public_ip: 20.50.30.1
       virtual_network: customer-1-portal-prod-vnet
       network_segments:
-        - customer-1-portal-prod-app-1
-        - customer-1-portal-prod-app-2
-        - customer-1-portal-prod-data
+        - [customer-1-portal-prod-app-1]
+        - [customer-1-portal-prod-app-2]
+        - [customer-1-portal-prod-data]
       account: customer-1-azure-production
     - name: customer-1-portal-staging-nat
       description: Customer 1 Portal Staging NAT Gateway
@@ -89,7 +89,7 @@ spec:
       public_ip: 54.123.30.1
       virtual_network: customer-1-portal-staging-vpc
       network_segments:
-        - customer-1-portal-staging-app
+        - [customer-1-portal-staging-app]
       account: customer-1-aws-staging
     - name: customer-1-portal-dev-nat
       description: Customer 1 Portal Development Cloud NAT
@@ -98,5 +98,5 @@ spec:
       public_ip: 35.200.200.10
       virtual_network: customer-1-portal-dev-vpc
       network_segments:
-        - customer-1-portal-dev-app
+        - [customer-1-portal-dev-app]
       account: customer-1-gcp-development

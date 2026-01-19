@@ -14,7 +14,7 @@ spec:
       availability_zone: eu-central-1a
       network_segment: customer-1-ecommerce-prod-web-1a
       security_groups:
-        - customer-1-ecommerce-prod-web-sg
+        - [customer-1-ecommerce-prod-web-sg]
     - name: customer-1-ecommerce-prod-web-02
       description: Customer 1 E-Commerce Production Web Server 2
       cloud_id: i-34983e3d4a5e60fe0
@@ -25,7 +25,7 @@ spec:
       availability_zone: eu-central-1b
       network_segment: customer-1-ecommerce-prod-web-1b
       security_groups:
-        - customer-1-ecommerce-prod-web-sg
+        - [customer-1-ecommerce-prod-web-sg]
     - name: customer-1-ecommerce-prod-app-01
       description: Customer 1 E-Commerce Production App Server 1
       cloud_id: i-8ba0555339fdaab9b
@@ -36,7 +36,7 @@ spec:
       availability_zone: eu-central-1a
       network_segment: customer-1-ecommerce-prod-app-1a
       security_groups:
-        - customer-1-ecommerce-prod-app-sg
+        - [customer-1-ecommerce-prod-app-sg]
     - name: customer-1-ecommerce-prod-app-02
       description: Customer 1 E-Commerce Production App Server 2
       cloud_id: i-86c4fce99b4e31120
@@ -47,7 +47,7 @@ spec:
       availability_zone: eu-central-1b
       network_segment: customer-1-ecommerce-prod-app-1b
       security_groups:
-        - customer-1-ecommerce-prod-app-sg
+        - [customer-1-ecommerce-prod-app-sg]
     - name: customer-1-ecommerce-prod-db-01
       description: Customer 1 E-Commerce Production Database Primary
       cloud_id: i-824273770682fb199
@@ -58,7 +58,7 @@ spec:
       availability_zone: eu-central-1a
       network_segment: customer-1-ecommerce-prod-data-1a
       security_groups:
-        - customer-1-ecommerce-prod-data-sg
+        - [customer-1-ecommerce-prod-data-sg]
     - name: customer-1-ecommerce-prod-db-02
       description: Customer 1 E-Commerce Production Database Replica
       cloud_id: i-dad66fc4ff769bbb8
@@ -69,7 +69,7 @@ spec:
       availability_zone: eu-central-1b
       network_segment: customer-1-ecommerce-prod-data-1b
       security_groups:
-        - customer-1-ecommerce-prod-data-sg
+        - [customer-1-ecommerce-prod-data-sg]
     - name: customer-1-ecommerce-staging-web-01
       description: Customer 1 E-Commerce Staging Web Server
       cloud_id: ecom-staging-web-01
@@ -80,7 +80,7 @@ spec:
       availability_zone: europe-west3-a
       network_segment: customer-1-ecommerce-staging-web
       security_groups:
-        - customer-1-ecommerce-staging-web-firewall
+        - [customer-1-ecommerce-staging-web-firewall]
     - name: customer-1-ecommerce-staging-app-01
       description: Customer 1 E-Commerce Staging App Server
       cloud_id: ecom-staging-app-01
@@ -91,7 +91,7 @@ spec:
       availability_zone: europe-west3-b
       network_segment: customer-1-ecommerce-staging-app
       security_groups:
-        - customer-1-ecommerce-staging-internal-firewall
+        - [customer-1-ecommerce-staging-internal-firewall]
     - name: customer-1-ecommerce-staging-db-01
       description: Customer 1 E-Commerce Staging Database
       cloud_id: ecom-staging-db-01
@@ -102,7 +102,7 @@ spec:
       availability_zone: europe-west3-c
       network_segment: customer-1-ecommerce-staging-data
       security_groups:
-        - customer-1-ecommerce-staging-internal-firewall
+        - [customer-1-ecommerce-staging-internal-firewall]
     - name: customer-1-ecommerce-dev-web-01
       description: Customer 1 E-Commerce Development Web Server
       cloud_id: ecom-dev-web-01
@@ -113,7 +113,7 @@ spec:
       availability_zone: germanywestcentral-1
       network_segment: customer-1-ecommerce-dev-web
       security_groups:
-        - customer-1-ecommerce-dev-web-nsg
+        - [customer-1-ecommerce-dev-web-nsg]
     - name: customer-1-ecommerce-dev-app-01
       description: Customer 1 E-Commerce Development App Server
       cloud_id: ecom-dev-app-01
@@ -124,7 +124,7 @@ spec:
       availability_zone: germanywestcentral-2
       network_segment: customer-1-ecommerce-dev-app
       security_groups:
-        - customer-1-ecommerce-dev-app-nsg
+        - [customer-1-ecommerce-dev-app-nsg]
     - name: customer-1-analytics-prod-web-01
       description: Customer 1 Analytics Production Web Server
       cloud_id: analytics-prod-web-01
@@ -135,7 +135,7 @@ spec:
       availability_zone: europe-west1-b
       network_segment: customer-1-analytics-prod-web
       security_groups:
-        - customer-1-analytics-prod-web-firewall
+        - [customer-1-analytics-prod-web-firewall]
     - name: customer-1-analytics-prod-app-01
       description: Customer 1 Analytics Production App Server 1
       cloud_id: analytics-prod-app-01
@@ -146,7 +146,7 @@ spec:
       availability_zone: europe-west1-c
       network_segment: customer-1-analytics-prod-app
       security_groups:
-        - customer-1-analytics-prod-app-firewall
+        - [customer-1-analytics-prod-app-firewall]
     - name: customer-1-analytics-prod-app-02
       description: Customer 1 Analytics Production App Server 2
       cloud_id: analytics-prod-app-02
@@ -157,7 +157,7 @@ spec:
       availability_zone: europe-west1-c
       network_segment: customer-1-analytics-prod-app
       security_groups:
-        - customer-1-analytics-prod-app-firewall
+        - [customer-1-analytics-prod-app-firewall]
     - name: customer-1-analytics-prod-db-01
       description: Customer 1 Analytics Production Database
       cloud_id: analytics-prod-db-01
@@ -168,7 +168,7 @@ spec:
       availability_zone: europe-west1-d
       network_segment: customer-1-analytics-prod-data
       security_groups:
-        - customer-1-analytics-prod-data-firewall
+        - [customer-1-analytics-prod-data-firewall]
     - name: customer-1-analytics-staging-web-01
       description: Customer 1 Analytics Staging Web Server
       cloud_id: analytics-staging-web-01
@@ -179,7 +179,7 @@ spec:
       availability_zone: westeurope-1
       network_segment: customer-1-analytics-staging-web
       security_groups:
-        - customer-1-analytics-staging-web-nsg
+        - [customer-1-analytics-staging-web-nsg]
     - name: customer-1-analytics-staging-app-01
       description: Customer 1 Analytics Staging App Server
       cloud_id: analytics-staging-app-01
@@ -190,7 +190,7 @@ spec:
       availability_zone: westeurope-2
       network_segment: customer-1-analytics-staging-app
       security_groups:
-        - customer-1-analytics-staging-app-nsg
+        - [customer-1-analytics-staging-app-nsg]
     - name: customer-1-analytics-dev-web-01
       description: Customer 1 Analytics Development Web Server
       cloud_id: i-72c8a95b213cc19a8
@@ -201,7 +201,7 @@ spec:
       availability_zone: eu-central-1a
       network_segment: customer-1-analytics-dev-web
       security_groups:
-        - customer-1-analytics-dev-web-sg
+        - [customer-1-analytics-dev-web-sg]
     - name: customer-1-analytics-dev-app-01
       description: Customer 1 Analytics Development App Server
       cloud_id: i-25736ec5e963a5723
@@ -212,7 +212,7 @@ spec:
       availability_zone: eu-central-1a
       network_segment: customer-1-analytics-dev-app
       security_groups:
-        - customer-1-analytics-dev-app-sg
+        - [customer-1-analytics-dev-app-sg]
     - name: customer-1-portal-prod-web-01
       description: Customer 1 Portal Production Web Server 1
       cloud_id: portal-prod-web-01
@@ -223,7 +223,7 @@ spec:
       availability_zone: westeurope-1
       network_segment: customer-1-portal-prod-web-1
       security_groups:
-        - customer-1-portal-prod-web-nsg
+        - [customer-1-portal-prod-web-nsg]
     - name: customer-1-portal-prod-web-02
       description: Customer 1 Portal Production Web Server 2
       cloud_id: portal-prod-web-02
@@ -234,7 +234,7 @@ spec:
       availability_zone: westeurope-2
       network_segment: customer-1-portal-prod-web-2
       security_groups:
-        - customer-1-portal-prod-web-nsg
+        - [customer-1-portal-prod-web-nsg]
     - name: customer-1-portal-prod-app-01
       description: Customer 1 Portal Production App Server 1
       cloud_id: portal-prod-app-01
@@ -245,7 +245,7 @@ spec:
       availability_zone: westeurope-1
       network_segment: customer-1-portal-prod-app-1
       security_groups:
-        - customer-1-portal-prod-app-nsg
+        - [customer-1-portal-prod-app-nsg]
     - name: customer-1-portal-prod-app-02
       description: Customer 1 Portal Production App Server 2
       cloud_id: portal-prod-app-02
@@ -256,7 +256,7 @@ spec:
       availability_zone: westeurope-2
       network_segment: customer-1-portal-prod-app-2
       security_groups:
-        - customer-1-portal-prod-app-nsg
+        - [customer-1-portal-prod-app-nsg]
     - name: customer-1-portal-prod-db-01
       description: Customer 1 Portal Production Database Server
       cloud_id: portal-prod-db-01
@@ -267,7 +267,7 @@ spec:
       availability_zone: westeurope-3
       network_segment: customer-1-portal-prod-data
       security_groups:
-        - customer-1-portal-prod-data-nsg
+        - [customer-1-portal-prod-data-nsg]
     - name: customer-1-portal-staging-web-01
       description: Customer 1 Portal Staging Web Server
       cloud_id: i-059675990a5941db9
@@ -278,7 +278,7 @@ spec:
       availability_zone: eu-central-1a
       network_segment: customer-1-portal-staging-web
       security_groups:
-        - customer-1-portal-staging-web-sg
+        - [customer-1-portal-staging-web-sg]
     - name: customer-1-portal-staging-app-01
       description: Customer 1 Portal Staging App Server
       cloud_id: i-a7bb98a9a20a69f99
@@ -289,7 +289,7 @@ spec:
       availability_zone: eu-central-1a
       network_segment: customer-1-portal-staging-app
       security_groups:
-        - customer-1-portal-staging-app-sg
+        - [customer-1-portal-staging-app-sg]
     - name: customer-1-portal-dev-web-01
       description: Customer 1 Portal Development Web Server
       cloud_id: portal-dev-web-01
@@ -300,7 +300,7 @@ spec:
       availability_zone: europe-west3-a
       network_segment: customer-1-portal-dev-web
       security_groups:
-        - customer-1-portal-dev-web-firewall
+        - [customer-1-portal-dev-web-firewall]
     - name: customer-1-portal-dev-app-01
       description: Customer 1 Portal Development App Server
       cloud_id: portal-dev-app-01
@@ -311,4 +311,4 @@ spec:
       availability_zone: europe-west3-b
       network_segment: customer-1-portal-dev-app
       security_groups:
-        - customer-1-portal-dev-internal-firewall
+        - [customer-1-portal-dev-internal-firewall]
