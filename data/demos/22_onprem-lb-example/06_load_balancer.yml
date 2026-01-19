@@ -8,6 +8,8 @@ spec:
   kind: OnpremLoadBalancer
   data:
     - name: "demo-dc1-haproxy-lb"
+      member_of_groups:
+        - "loadbalancers"
       status: active
       lb_type: software
       lb_vendor: haproxy

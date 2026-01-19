@@ -8,6 +8,8 @@ spec:
     # ========== AWS Network Load Balancer ==========
 
     - name: "zscaler-aws-nlb"
+      member_of_groups:
+        - "cloud_loadbalancers"
       description: "Zscaler Internal NLB - AWS"
       status: active
       lb_type: network
@@ -25,6 +27,8 @@ spec:
     # ========== GCP Internal Load Balancer ==========
 
     - name: "zscaler-gcp-lb"
+      member_of_groups:
+        - "cloud_loadbalancers"
       description: "Zscaler Internal Load Balancer - GCP"
       status: active
       lb_type: network
@@ -40,6 +44,8 @@ spec:
     # ========== Azure Internal Load Balancer ==========
 
     - name: "zscaler-azure-lb"
+      member_of_groups:
+        - "cloud_loadbalancers"
       description: "Zscaler Internal Load Balancer - Azure"
       status: active
       lb_type: network

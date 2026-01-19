@@ -9,6 +9,8 @@ spec:
     # ========== E-Commerce Platform - Production (AWS) ==========
 
     - name: "customer-1-ecommerce-prod-alb"
+      member_of_groups:
+        - "cloud_loadbalancers"
       description: >
         Customer 1 E-Commerce Production Application Load Balancer
       cloud_id: >
@@ -25,6 +27,8 @@ spec:
         - ["customer-1-ecommerce-prod-lb-sg"]
 
     - name: "customer-1-ecommerce-prod-nlb"
+      member_of_groups:
+        - "cloud_loadbalancers"
       description: >
         Customer 1 E-Commerce Production Network Load Balancer
         for App Tier
@@ -42,6 +46,8 @@ spec:
     # ========== Analytics Dashboard - Production (GCP) ==========
 
     - name: "customer-1-analytics-prod-lb"
+      member_of_groups:
+        - "cloud_loadbalancers"
       description: "Customer 1 Analytics Production Load Balancer"
       cloud_id: >
         projects/customer-1-prod-456789/global/forwardingRules/analytics-prod-lb
@@ -56,6 +62,8 @@ spec:
         - ["customer-1-analytics-prod-web-firewall"]
 
     - name: "customer-1-analytics-prod-internal-lb"
+      member_of_groups:
+        - "cloud_loadbalancers"
       description: "Customer 1 Analytics Production Internal Load Balancer"
       cloud_id: >
         projects/customer-1-prod-456789/regions/europe-west1/forwardingRules/analytics-prod-internal-lb
@@ -72,6 +80,8 @@ spec:
     # ========== Customer Portal - Production (Azure) ==========
 
     - name: "customer-1-portal-prod-lb"
+      member_of_groups:
+        - "cloud_loadbalancers"
       description: "Customer 1 Portal Production Application Gateway"
       cloud_id: >
         /subscriptions/a1b2c3d4-e5f6-7890-abcd-111111111111/resourceGroups/portal-prod-rg/providers/Microsoft.Network/applicationGateways/portal-prod-agw
@@ -87,6 +97,8 @@ spec:
         - ["customer-1-portal-prod-web-nsg"]
 
     - name: "customer-1-portal-prod-internal-lb"
+      member_of_groups:
+        - "cloud_loadbalancers"
       description: "Customer 1 Portal Production Internal Load Balancer"
       cloud_id: >
         /subscriptions/a1b2c3d4-e5f6-7890-abcd-111111111111/resourceGroups/portal-prod-rg/providers/Microsoft.Network/loadBalancers/portal-prod-internal-lb
