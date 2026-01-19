@@ -166,6 +166,9 @@ python_transforms:
   - name: equinix_pop
     class_name: EquinixPOP
     file_path: transforms/equinix_pop.py
+  - name: loadbalancer-cloud
+    class_name: LoadBalancerCloud
+    file_path: transforms/loadbalancer_cloud.py
 
 queries:
   - name: dc_validation
@@ -198,6 +201,8 @@ queries:
     file_path: queries/config/edge.gql
   - name: loadbalancer_config
     file_path: queries/config/loadbalancer.gql
+  - name: loadbalancer_cloud
+    file_path: queries/config/loadbalancer_cloud.gql
   - name: oob_config
     file_path: queries/config/oob.gql
   - name: pod_decommission

@@ -747,6 +747,7 @@ nodes:
     inherit_from:
       - PlatformLoadBalancer
       - CloudResource
+      - CoreArtifactTarget
     relationships:
       - name: virtual_network
         peer: CloudVirtualNetwork

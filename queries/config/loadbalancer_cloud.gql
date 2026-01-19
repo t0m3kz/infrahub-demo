@@ -1,0 +1,130 @@
+query loadbalancer_cloud($lb_name: String!) {
+  CloudLoadBalancer(name__value: $lb_name) {
+    edges {
+      node {
+        id
+        name {
+          value
+        }
+        lb_type {
+          value
+        }
+        scheme {
+          value
+        }
+        virtual_network {
+          node {
+            id
+            name {
+              value
+            }
+            account {
+              node {
+                name {
+                  value
+                }
+                provider {
+                  node {
+                    name {
+                      value
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+        network_segments {
+          edges {
+            node {
+              id
+              name {
+                value
+              }
+              availability_zone {
+                node {
+                  name {
+                    value
+                  }
+                }
+              }
+            }
+          }
+        }
+        vip_services {
+          edges {
+            node {
+              id
+              hostname {
+                value
+              }
+              protocol {
+                value
+              }
+              port {
+                value
+              }
+              ssl_certificate {
+                value
+              }
+              health_checks {
+                edges {
+                  node {
+                    check {
+                      value
+                    }
+                    rise {
+                      value
+                    }
+                    fall {
+                      value
+                    }
+                    timeout {
+                      value
+                    }
+                  }
+                }
+              }
+              backend_pool {
+                node {
+                  id
+                  name {
+                    value
+                  }
+                  load_balancing_algorithm {
+                    value
+                  }
+                  onprem_servers {
+                    edges {
+                      node {
+                        hostname {
+                          value
+                        }
+                        ip_address {
+                          node {
+                            address {
+                              value
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                  cloud_instances {
+                    edges {
+                      node {
+                        name {
+                          value
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
