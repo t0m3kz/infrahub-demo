@@ -96,6 +96,10 @@ generics:
             label: Active
             description: Fully operational and currently in service.
             color: "#7fbf7f"
+          - name: free
+            label: Free
+            description: Available and ready to be provisioned.
+            color: "#a8d5ba"
           - name: provisioning
             label: Provisioning
             description: In the process of being set up and configured.

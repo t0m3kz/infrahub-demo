@@ -28,7 +28,7 @@ class EndpointConnectivityGenerator(CommonGenerator):
     """Generate connectivity for endpoint devices based on deployment patterns.
 
     Deployment strategies:
-    - middle_rack: Connect to ToRs in same rack, fallback to ToRs in same row
+    - middle_rack: Connect to Leaf switches in network rack in same row
     - tor: Connect to ToR switches in same rack, fallback to same row
     - mixed: Connect to ToR devices in same rack, fallback to middle rack leafs in same row
 
@@ -106,33 +106,51 @@ class EndpointConnectivityGenerator(CommonGenerator):
     async def _connect_middle_rack_deployment(self) -> None:
         """Connect endpoint in middle_rack deployment.
 
-        Strategy: Server in compute rack connects to ToRs in the middle rack (network rack) in same row.
-        Middle_rack topology has one network rack per row containing ToR switches that serve compute racks.
+        Strategy: Server in compute rack connects to Leaf switches in the middle rack (network rack) in same row.
+        Middle_rack topology has one network rack per row containing Leaf switches that serve compute racks.
         """
         # Safe to assert - validated in generate() before calling this method
         assert self.data.rack is not None, "Rack must be assigned"
 
         self.logger.info(
             f"Endpoint {self.data.name} is in {self.data.rack.rack_type} rack "
-            f"(row {self.data.rack.row_index}), searching for ToRs in middle rack (network rack) in same row"
+            f"(row {self.data.rack.row_index}), searching for Leafs in middle rack (network rack) in same row"
         )
 
-        # In middle_rack deployment, ToRs are in the network rack, not the compute rack
-        # We need to find ToRs in the middle rack (rack_type=network) in the same row
-        target_devices = await self._get_devices_in_middle_rack(
-            pod_id=self.data.rack.pod.id,
-            row_index=self.data.rack.row_index,
-            role="tor",
+        # Query interfaces directly on Leaf devices in network rack
+        from ..protocols import LocationRack
+
+        racks = await self.client.filters(
+            kind=LocationRack,
+            pod__ids=[self.data.rack.pod.id],
+            row_index__value=self.data.rack.row_index,
+            rack_type__value="network",
         )
 
-        if not target_devices:
+        if not racks:
+            self.logger.error(
+                f"Endpoint {self.data.name}: No network rack found in row {self.data.rack.row_index} for middle_rack deployment."
+            )
+            raise RuntimeError(
+                f"Endpoint {self.data.name}: Cannot connect - no network rack in row {self.data.rack.row_index}"
+            )
+
+        rack_ids = [rack.id for rack in racks]
+
+        # Query free interfaces on Leaf devices in network rack
+        all_target_interfaces = await self._query_interfaces_by_location(
+            rack_ids=rack_ids,
+            device_role="leaf",
+            endpoint_interfaces=self.data.interfaces,
+        )
+
+        if not all_target_interfaces:
             self.logger.warning(
-                f"No ToR devices found in middle rack for endpoint {self.data.name} "
-                f"(row {self.data.rack.row_index}, middle_rack deployment)"
+                f"No free interfaces found on Leaf devices in middle rack for endpoint {self.data.name}"
             )
             return
 
-        await self._create_endpoint_connections(target_devices, "tor")
+        await self._process_endpoint_connections(all_target_interfaces)
 
     async def _connect_tor_deployment(self) -> None:
         """Connect endpoint in tor deployment.
@@ -142,26 +160,46 @@ class EndpointConnectivityGenerator(CommonGenerator):
         # Safe to assert - validated in generate() before calling this method
         assert self.data.rack is not None, "Rack must be assigned"
 
-        target_devices = self._get_devices_in_rack(role="tor")
+        # First try to query interfaces in same rack
+        from ..protocols import LocationRack
 
-        if not target_devices:
+        rack_ids = [self.data.rack.id]
+
+        # Query free interfaces on ToR devices in same rack
+        all_target_interfaces = await self._query_interfaces_by_location(
+            rack_ids=rack_ids,
+            device_role="tor",
+            endpoint_interfaces=self.data.interfaces,
+        )
+
+        # Fallback to same row if no interfaces found in rack
+        if not all_target_interfaces:
             self.logger.info(
-                f"No ToRs in same rack for {self.data.name}, searching same row {self.data.rack.row_index}"
-            )
-            target_devices = await self._get_devices_in_row(
-                pod_id=self.data.rack.pod.id,
-                row_index=self.data.rack.row_index,
-                role="tor",
+                f"No ToR interfaces in same rack for {self.data.name}, searching same row {self.data.rack.row_index}"
             )
 
-        if not target_devices:
+            racks = await self.client.filters(
+                kind=LocationRack,
+                pod__ids=[self.data.rack.pod.id],
+                row_index__value=self.data.rack.row_index,
+            )
+
+            if racks:
+                rack_ids = [rack.id for rack in racks]
+                all_target_interfaces = await self._query_interfaces_by_location(
+                    rack_ids=rack_ids,
+                    device_role="tor",
+                    endpoint_interfaces=self.data.interfaces,
+                )
+
+        if not all_target_interfaces:
             self.logger.error(
-                f"Endpoint {self.data.name}: No ToR devices found in tor deployment. "
+                f"Endpoint {self.data.name}: No ToR interfaces found in tor deployment. "
                 "Cannot create endpoint connectivity."
             )
-            raise RuntimeError(f"Endpoint {self.data.name}: Cannot connect - no ToR devices found in deployment")
+            raise RuntimeError(f"Endpoint {self.data.name}: Cannot connect - no ToR interfaces found in deployment")
 
-        await self._create_endpoint_connections(target_devices, "tor")
+        await self._process_endpoint_connections(all_target_interfaces)
 
     async def _connect_mixed_deployment(self) -> None:
         """Connect endpoint in mixed deployment.
@@ -171,188 +209,98 @@ class EndpointConnectivityGenerator(CommonGenerator):
         # Safe to assert - validated in generate() before calling this method
         assert self.data.rack is not None, "Rack must be assigned"
 
-        target_devices = self._get_devices_in_rack(role="tor")
-        target_role: Literal["tor", "leaf"] = "tor"
-
-        if not target_devices:
-            self.logger.info(
-                f"No ToRs in same rack for {self.data.name}, searching middle rack leafs in row {self.data.rack.row_index}"
-            )
-            target_devices = await self._get_devices_in_row(
-                pod_id=self.data.rack.pod.id,
-                row_index=self.data.rack.row_index,
-                role="leaf",
-            )
-            target_role = "leaf"
-
-        if not target_devices:
-            self.logger.warning(
-                f"No ToR or middle rack leaf devices found for endpoint {self.data.name} (mixed deployment)"
-            )
-            return
-
-        await self._create_endpoint_connections(target_devices, target_role)
-
-    def _get_devices_in_rack(self, role: Literal["tor", "leaf"]) -> list[dict[str, Any]]:
-        """Extract devices of specific role from rack data.
-
-        Args:
-            role: Device role to filter by (tor or leaf)
-
-        Returns:
-            List of matching devices with id, name, and role
-        """
-        # Safe to assert - validated in generate() before calling deployment methods
-        assert self.data.rack is not None, "Rack must be assigned"
-
-        matching_devices = []
-
-        for device in self.data.rack.devices:
-            if device.role == role:
-                matching_devices.append(
-                    {
-                        "id": device.id,
-                        "name": {"value": device.name},
-                        "role": {"value": device.role},
-                    }
-                )
-
-        return matching_devices
-
-    async def _get_devices_in_middle_rack(
-        self, pod_id: str, row_index: int, role: Literal["tor", "leaf"]
-    ) -> list[dict[str, Any]]:
-        """Query devices in the middle rack (network rack) of specific row.
-
-        In middle_rack deployments, the network rack contains ToRs and Leafs that
-        serve compute racks in the same row.
-        """
         from ..protocols import LocationRack
 
-        # Find the network rack in this row
-        racks = await self.client.filters(
-            kind=LocationRack,
-            pod__ids=[pod_id],
-            row_index__value=row_index,
-            rack_type__value="network",
+        # First try ToR interfaces in same rack
+        rack_ids = [self.data.rack.id]
+
+        all_target_interfaces = await self._query_interfaces_by_location(
+            rack_ids=rack_ids,
+            device_role="tor",
+            endpoint_interfaces=self.data.interfaces,
         )
 
-        if not racks:
-            self.logger.error(
-                f"Endpoint {self.data.name}: No network rack found in row {row_index} for middle_rack deployment. "
-                "Cannot create endpoint connectivity."
+        # Fallback to Leaf interfaces in middle rack
+        if not all_target_interfaces:
+            self.logger.info(
+                f"No ToR interfaces in same rack for {self.data.name}, searching middle rack leafs in row {self.data.rack.row_index}"
             )
-            raise RuntimeError(f"Endpoint {self.data.name}: Cannot connect - no network rack in row {row_index}")
 
-        rack_ids = [rack.id for rack in racks]
+            racks = await self.client.filters(
+                kind=LocationRack,
+                pod__ids=[self.data.rack.pod.id],
+                row_index__value=self.data.rack.row_index,
+                rack_type__value="network",
+            )
 
-        devices = await self.client.filters(kind=DcimPhysicalDevice, role__value=role, rack__ids=rack_ids)
+            if racks:
+                rack_ids = [rack.id for rack in racks]
+                all_target_interfaces = await self._query_interfaces_by_location(
+                    rack_ids=rack_ids,
+                    device_role="leaf",
+                    endpoint_interfaces=self.data.interfaces,
+                )
 
-        return [
-            {
-                "id": device.id,
-                "name": {"value": device.name.value},
-                "role": {"value": device.role.value},
-            }
-            for device in devices
-        ]
+        if not all_target_interfaces:
+            self.logger.warning(f"No ToR or Leaf interfaces found for endpoint {self.data.name} (mixed deployment)")
+            return
 
-    async def _get_devices_in_row(
-        self, pod_id: str, row_index: int, role: Literal["tor", "leaf"]
-    ) -> list[dict[str, Any]]:
-        """Query devices of specific role in same row across all racks."""
-        from ..protocols import LocationRack
+        await self._process_endpoint_connections(all_target_interfaces)
 
-        racks = await self.client.filters(kind=LocationRack, pod__ids=[pod_id], row_index__value=row_index)
-
-        if not racks:
-            return []
-
-        rack_ids = [rack.id for rack in racks]
-
-        devices = await self.client.filters(kind=DcimPhysicalDevice, role__value=role, rack__ids=rack_ids)
-
-        return [
-            {
-                "id": device.id,
-                "name": {"value": device.name.value},
-                "role": {"value": device.role.value},
-            }
-            for device in devices
-        ]
-
-    async def _get_devices_in_suite(self, suite_id: str, role: Literal["tor", "leaf"]) -> list[dict[str, Any]]:
-        """Query devices of specific role across all racks in a suite.
-
-        Suite-level distribution ensures servers distributed across multiple
-        racks in the same suite connect to appropriate switches.
+    async def _query_interfaces_by_location(
+        self,
+        rack_ids: list[str],
+        device_role: Literal["tor", "leaf"],
+        endpoint_interfaces: list[Any],
+    ) -> list[DcimPhysicalInterface]:
+        """Query free interfaces on devices in specific racks.
 
         Args:
-            suite_id: LocationSuite ID
-            role: Device role to filter by (tor or leaf)
+            rack_ids: List of rack IDs to search
+            device_role: Device role to filter (tor or leaf)
+            endpoint_interfaces: Endpoint interface models for type matching
 
         Returns:
-            List of matching devices with id, name, and role
+            List of free interfaces on target devices
         """
-        from ..protocols import LocationRack
+        endpoint_types = set(intf.interface_type for intf in endpoint_interfaces if intf.interface_type)
+        acceptable_roles = ["downlink", "customer"]
 
-        # Get all racks in this suite
-        racks = await self.client.filters(kind=LocationRack, suite__ids=[suite_id])
+        # Build query filters
+        filters: dict[str, Any] = {
+            "device__role__value": device_role,
+            "device__rack__ids": rack_ids,
+            "device__status__values": ["active", "free", "provisioning"],
+            "role__values": acceptable_roles,
+            "status__value": "free",
+            "include": ["device"],
+        }
 
-        if not racks:
-            self.logger.error(
-                f"Endpoint {self.data.name}: No racks found in suite {suite_id}. Cannot create endpoint connectivity."
-            )
-            raise RuntimeError(f"Endpoint {self.data.name}: Cannot connect - no racks in suite {suite_id}")
+        # Add interface type filter if endpoint has specific types
+        if endpoint_types:
+            filters["interface_type__values"] = list(endpoint_types)
 
-        rack_ids = [rack.id for rack in racks]
+        all_interfaces: list[Any] = await self.client.filters(kind=DcimPhysicalInterface, **filters)
 
-        # Query devices across all racks in suite
-        devices = await self.client.filters(kind=DcimPhysicalDevice, role__value=role, rack__ids=rack_ids)
+        # Filter out interfaces that already have cables
+        interfaces = [intf for intf in all_interfaces if not (intf.cable and intf.cable.id)]
 
-        return [
-            {
-                "id": device.id,
-                "name": {"value": device.name.value},
-                "role": {"value": device.role.value},
-            }
-            for device in devices
-        ]
+        self.logger.info(
+            f"Found {len(interfaces)} free interfaces on {device_role} devices in {len(rack_ids)} rack(s) "
+            f"(interface_types={endpoint_types}, roles={acceptable_roles}, total_queried={len(all_interfaces)})"
+        )
 
-    async def _create_endpoint_connections(
+        return interfaces
+
+    async def _process_endpoint_connections(
         self,
-        target_devices: list[dict[str, Any]],
-        target_role: Literal["tor", "leaf"],
+        all_target_interfaces: list[DcimPhysicalInterface],
     ) -> None:
-        """Create dual-homed connections from endpoint to target devices.
-
-        Features:
-        - Flexible speed handling (speed-aware or validation-only modes)
-        - Connection fingerprinting for idempotency
-        - Pre-execution validation
-
-        Speed Handling:
-        - speed_aware=True (default): Group by speed first, only connect matching speeds
-        - speed_aware=False: Connect regardless of speed, validate afterward
-        - validate_speeds=True: Check speed compatibility, log warnings
-        - strict_speed_validation=True: Remove mismatched pairs from plan
+        """Process endpoint connections using available interfaces.
 
         Args:
-            target_devices: List of target device dictionaries
-            target_role: Role of target devices (tor or leaf)
+            all_target_interfaces: List of available target interfaces
         """
-        if len(target_devices) < 2:
-            self.logger.warning(f"Need at least 2 {target_role} devices for dual-homing, found {len(target_devices)}")
-            return
-
-        target_pair = self._select_consecutive_device_pair(target_devices, target_role)
-        if len(target_pair) < 2:
-            self.logger.warning(f"Could not find consecutive {target_role} pair with compatible interfaces")
-            return
-
-        target_device_names = [dev.get("name", {}).get("value") for dev in target_pair]
-        self.logger.info(f"Selected {target_role} pair for {self.data.name}: {target_device_names}")
-
         # Get endpoint interfaces without existing cables
         available_endpoint_interfaces = [intf for intf in self.data.interfaces if not intf.cable]
 
@@ -360,35 +308,47 @@ class EndpointConnectivityGenerator(CommonGenerator):
             self.logger.info(f"All interfaces on {self.data.name} already have cables")
             return
 
-        # Query ALL compatible interfaces first (no speed filter)
-        all_target_interfaces = await self._query_compatible_interfaces(
-            device_names=target_device_names,
-            endpoint_interfaces=available_endpoint_interfaces,
-        )
-
         if not all_target_interfaces:
             self.logger.error(
-                f"Endpoint {self.data.name}: No compatible interfaces found on {target_role} devices {target_device_names}. "
+                f"Endpoint {self.data.name}: No compatible interfaces found on target devices. "
                 "Cannot create endpoint connectivity."
             )
-            raise RuntimeError(
-                f"Endpoint {self.data.name}: Cannot connect - no compatible interfaces on {target_role} devices"
-            )
+            raise RuntimeError(f"Endpoint {self.data.name}: Cannot connect - no compatible interfaces")
+
+        # Group interfaces by device for dual-homing
+        device_groups = {}
+        for intf in all_target_interfaces:
+            device_name = intf.device.name.value if hasattr(intf.device, "name") and hasattr(intf.device.name, "value") else str(intf.device)
+            if device_name not in device_groups:
+                device_groups[device_name] = []
+            device_groups[device_name].append(intf)
+
+        # Select consecutive device pair
+        device_names = list(device_groups.keys())
+        if len(device_names) < 2:
+            self.logger.warning(f"Need at least 2 devices for dual-homing, found {len(device_names)}")
+            return
+
+        # For simplicity, take first two devices (can be enhanced with consecutive pair selection)
+        selected_devices = device_names[:2]
+        selected_interfaces = []
+        for dev_name in selected_devices:
+            selected_interfaces.extend(device_groups[dev_name])
+
+        self.logger.info(f"Selected device pair for {self.data.name}: {selected_devices}")
 
         # Choose processing mode based on configuration
         if self.speed_aware:
-            # Speed-aware mode: Group by speed first, only connect matching speeds
             await self._process_speed_aware(
                 available_endpoint_interfaces=available_endpoint_interfaces,
-                all_target_interfaces=all_target_interfaces,
-                target_device_names=target_device_names,
+                all_target_interfaces=selected_interfaces,
+                target_device_names=selected_devices,
             )
         else:
-            # Validation-only mode: Connect all interfaces, validate speeds afterward
             await self._process_with_validation(
                 available_endpoint_interfaces=available_endpoint_interfaces,
-                all_target_interfaces=all_target_interfaces,
-                target_device_names=target_device_names,
+                all_target_interfaces=selected_interfaces,
+                target_device_names=selected_devices,
             )
 
         self.logger.info(
@@ -683,75 +643,3 @@ class EndpointConnectivityGenerator(CommonGenerator):
                 return [device_map[id1], device_map[id2]]
 
         return devices[:2]
-
-    async def _query_compatible_interfaces(
-        self,
-        device_names: list[str],
-        endpoint_interfaces: list[Any],
-        speed_filter: int | None = None,
-    ) -> list[DcimPhysicalInterface]:
-        """Query compatible interfaces on target devices for endpoint connectivity.
-
-        Args:
-            device_names: Names of target devices (ToRs or Leafs)
-            endpoint_interfaces: Endpoint interface models
-            speed_filter: Optional speed filter in Gbps (25, 100, etc.)
-
-        Returns:
-            List of compatible interfaces on target devices
-
-        Note:
-            For ToRs/Leafs connecting to endpoints, we look for:
-            - Interfaces with roles: downlink, customer, access, or peer
-            - Matching interface types if endpoint has specific types
-            - Available interfaces (not already connected)
-            - Optionally filtered by speed for mixed-speed deployments
-        """
-        endpoint_types = set(intf.interface_type for intf in endpoint_interfaces if intf.interface_type)
-
-        # ToR/Leaf interfaces connecting to endpoints typically have these roles
-        acceptable_roles = ["downlink", "customer"]
-
-        if not endpoint_types:
-            # No specific interface type requirement - query by role only
-            all_interfaces = await self.client.filters(
-                kind=DcimPhysicalInterface,
-                device__name__values=device_names,
-                role__values=acceptable_roles,
-                include=["device"],
-            )
-        else:
-            # Match both interface type and role
-            all_interfaces = await self.client.filters(
-                kind=DcimPhysicalInterface,
-                device__name__values=device_names,
-                interface_type__values=list(endpoint_types),
-                role__values=acceptable_roles,
-                include=["device"],
-            )
-
-        # Apply speed filter if specified
-        if speed_filter:
-            all_interfaces = [
-                intf
-                for intf in all_interfaces
-                if intf.interface_type
-                and intf.interface_type.value
-                and InterfaceSpeedMatcher.extract_speed(intf.interface_type.value) == speed_filter
-            ]
-
-        self.logger.info(
-            f"Query returned {len(all_interfaces)} interfaces matching roles={acceptable_roles}, "
-            f"types={endpoint_types}, speed={speed_filter}Gbps"
-        )
-
-        # Filter out interfaces that already have cables
-        # Note: cable is a RelatedNode with id=None for uncabled interfaces
-        interfaces = [intf for intf in all_interfaces if not (intf.cable and intf.cable.id)]
-
-        self.logger.info(
-            f"Found {len(interfaces)} available (uncabled) compatible interfaces on devices {device_names} "
-            f"(interface_types={endpoint_types}, roles={acceptable_roles}, speed={speed_filter}Gbps, "
-            f"total_compatible={len(all_interfaces)})"
-        )
-        return interfaces

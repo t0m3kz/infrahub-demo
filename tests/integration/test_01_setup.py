@@ -99,3 +99,22 @@ class TestSetup(TestInfrahubDockerWithClient):
             f"  stdout: {load_data.stdout}\n"
             f"  stderr: {load_data.stderr}"
         )
+
+    @pytest.mark.order(9)
+    @pytest.mark.dependency(name="events_data", depends=["repository_sync"])
+    def test_05_load_events_data(self, client_main: InfrahubClientSync) -> None:
+        """Load event/action definitions for the demo (requires repository)."""
+        logging.info("Starting test: test_05_load_events_data")
+
+        load_data = self.execute_command(
+            "infrahubctl object load data/events/",
+            address=client_main.config.address,
+        )
+
+        logging.info("Events data load output: %s", load_data.stdout)
+        assert load_data.returncode == 0, (
+            f"Events data load failed.\n"
+            f"  Return code: {load_data.returncode}\n"
+            f"  stdout: {load_data.stdout}\n"
+            f"  stderr: {load_data.stderr}"
+        )

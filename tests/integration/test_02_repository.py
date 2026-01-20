@@ -28,7 +28,7 @@ class TestRepository(TestInfrahubDockerWithClient):
     """Test repository management."""
 
     @pytest.mark.order(6)
-    @pytest.mark.dependency(name="add_repository", depends=["events_data"])
+    @pytest.mark.dependency(name="add_repository", depends=["bootstrap_data"])
     @pytest.mark.asyncio
     async def test_01_add_repository(
         self,
@@ -36,7 +36,7 @@ class TestRepository(TestInfrahubDockerWithClient):
         remote_repos_dir: str,
         workflow_state: dict[str, Any],
     ) -> None:
-        """Add the demo repository to Infrahub."""
+        """Add the demo repository to Infrahub (must run after bootstrap data)."""
         logging.info("Starting test: test_01_add_repository")
 
         client = async_client_main

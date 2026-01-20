@@ -1,6 +1,6 @@
 ---
-# Endpoint Servers with 25G interfaces matching ToR switch capabilities
-# ToRs in DC1-1-POD-2 have 48x 25gbase-x-sfp28 customer ports (xe[1-48])
+# Endpoint Servers with 25G interfaces matching Leaf switch capabilities
+# Leafs in DC1-1-POD-1 have 25G customer ports for server connectivity
 # NOTE: member_of_groups removed to prevent race conditions.
 # Integration test will manually invoke generators sequentially for each server.
 apiVersion: infrahub.app/v1
@@ -13,8 +13,8 @@ spec:
       device_type: "PowerEdge-R640"
       role: "endpoint"
       status: "active"
-      rack: "ktw-1-s-2-r-1-10"
-      deployment: "DC1-1-POD-2"
+      rack: "ktw-1-s-1-r-1-10"
+      deployment: "DC1-1-POD-1"
       position: 10
       interfaces:
         - kind: DcimPhysicalInterface
@@ -47,8 +47,8 @@ spec:
       device_type: "PowerEdge-R640"
       role: "endpoint"
       status: "active"
-      rack: "ktw-1-s-2-r-1-10"
-      deployment: "DC1-1-POD-2"
+      rack: "ktw-1-s-1-r-1-10"
+      deployment: "DC1-1-POD-1"
       position: 11
       interfaces:
         - kind: DcimPhysicalInterface
@@ -81,8 +81,8 @@ spec:
       device_type: "PowerEdge-R740"
       role: "endpoint"
       status: "active"
-      rack: "ktw-1-s-2-r-2-10"
-      deployment: "DC1-1-POD-2"
+      rack: "ktw-1-s-1-r-2-10"
+      deployment: "DC1-1-POD-1"
       position: 10
       interfaces:
         - kind: DcimPhysicalInterface
@@ -115,8 +115,8 @@ spec:
       device_type: "PowerEdge-R740"
       role: "endpoint"
       status: "active"
-      rack: "ktw-1-s-2-r-2-10"
-      deployment: "DC1-1-POD-2"
+      rack: "ktw-1-s-1-r-2-10"
+      deployment: "DC1-1-POD-1"
       position: 11
       interfaces:
         - kind: DcimPhysicalInterface
@@ -149,8 +149,8 @@ spec:
       device_type: "ProLiant-DL380"
       role: "endpoint"
       status: "active"
-      rack: "ktw-1-s-2-r-1-10"
-      deployment: "DC1-1-POD-2"
+      rack: "ktw-1-s-1-r-1-10"
+      deployment: "DC1-1-POD-1"
       position: 12
       interfaces:
         - kind: DcimPhysicalInterface
