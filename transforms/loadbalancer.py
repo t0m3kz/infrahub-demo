@@ -5,7 +5,6 @@ from jinja2 import Environment, FileSystemLoader, select_autoescape
 from netutils.utils import jinja2_convenience_function
 
 
-
 class LoadBalancer(InfrahubTransform):
     query = "loadbalancer_config"
 

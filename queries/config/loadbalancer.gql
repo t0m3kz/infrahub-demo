@@ -1,5 +1,5 @@
-query loadbalancer_config($device: String!) {
-  ManagedLoadBalancer(name__value: $device) {
+query loadbalancer_config($instance: String!) {
+  ManagedLoadBalancer(name__value: $instance) {
     edges {
       node {
         id

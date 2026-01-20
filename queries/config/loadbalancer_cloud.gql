@@ -1,5 +1,5 @@
-query loadbalancer_cloud($lb_name: String!) {
-  CloudLoadBalancer(name__value: $lb_name) {
+query loadbalancer_cloud($instance: String!) {
+  CloudLoadBalancer(name__value: $instance) {
     edges {
       node {
         id

@@ -742,6 +742,7 @@ nodes:
     include_in_menu: false
     human_friendly_id:
       - name__value
+    display_label: "{{ name__value }}"
     uniqueness_constraints:
       - [virtual_network, name__value]
     inherit_from:

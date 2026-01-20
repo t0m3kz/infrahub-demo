@@ -55,7 +55,7 @@ artifact_definitions:
     targets: loadbalancers
     transformation: loadbalancer
     parameters:
-      device: device__name__value
+      instance: name__value
   # Cloud Load Balancer Terraform vars
   - name: cloud_lb_terraform
     artifact_name: terraform-vars
@@ -63,7 +63,7 @@ artifact_definitions:
     targets: cloud_loadbalancers
     transformation: loadbalancer-cloud
     parameters:
-      lb_name: name__value
+      instance: name__value
   # Containerlab
   - name: Containerlab Topology
     artifact_name: containerlab-topology
@@ -120,7 +120,7 @@ check_definitions:
     file_path: checks/loadbalancer.py
     targets: loadbalancers
     parameters:
-      device: name__value
+      instance: name__value
   - name: validate_tor
     class_name: CheckToR
     file_path: checks/tor.py

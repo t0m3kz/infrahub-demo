@@ -22,6 +22,8 @@ spec:
       description: All firewalls
     - name: loadbalancers
       description: All load balancers
+    - name: loadbalancer_devices
+      description: Physical devices running load balancer software
     - name: cloud_loadbalancers
       description: All cloud load balancers (AWS/Azure/GCP)
     - name: oobs
