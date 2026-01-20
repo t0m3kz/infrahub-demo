@@ -311,10 +311,22 @@ class CommonGenerator(InfrahubGenerator):
                     batch_loopbacks.add(task=loopback_obj.save, allow_upsert=True, node=loopback_obj)
 
             # Execute batch and collect created nodes
+            created_devices = []
+            created_loopbacks = []
+            
             async for node, _ in batch_devices.execute():
-                self.logger.info(f"- Created [{node.get_kind()}] {node.hfid}")
+                created_devices.append(node)
+                self.logger.info(f"  - Created [{node.get_kind()}] {node.hfid}")
+            
             async for node, _ in batch_loopbacks.execute():
-                self.logger.info(f"- Created [{node.get_kind()}] {node.device.hfid} {node.name.value}")
+                created_loopbacks.append(node)
+                self.logger.info(f"  - Created [{node.get_kind()}] {node.device.hfid} {node.name.value}")
+            
+            # Summary logging
+            self.logger.info(
+                f"Device creation completed: {len(created_devices)} {device_role}(s) created"
+                + (f" with {len(created_loopbacks)} loopback interface(s)" if created_loopbacks else "")
+            )
         except ValidationError as exc:
             self.logger.error("Batch creation failed with validation error: %s", exc)
             raise
@@ -348,8 +360,8 @@ class CommonGenerator(InfrahubGenerator):
         top_sorting: Literal["top_down", "bottom_up"] = "bottom_up"
 
         self.logger.info(
-            f"Creating cabling between {len(bottom_devices)} bottom and {len(top_devices)} top devices "
-            f"(strategy: {strategy}, bottom: {bottom_sorting}, top: {top_sorting})"
+            f"Initiating cabling: {len(bottom_devices)} bottom device(s) → {len(top_devices)} top device(s) "
+            f"[strategy={strategy}, offset={cabling_offset}, pool={pool or 'none'}]"
         )
 
         import asyncio
@@ -369,10 +381,11 @@ class CommonGenerator(InfrahubGenerator):
         )
 
         if not src_interfaces or not dst_interfaces:
-            self.logger.warning(
-                f"No available interfaces found; skipping cabling "
-                f"(src: {len(src_interfaces) if src_interfaces else 0}, "
-                f"dst: {len(dst_interfaces) if dst_interfaces else 0})"
+            self.logger.error(
+                f"CABLING ABORTED - Insufficient interfaces available: "
+                f"Bottom interfaces: {len(src_interfaces) if src_interfaces else 0}/{len(bottom_devices) * len(bottom_interfaces)}, "
+                f"Top interfaces: {len(dst_interfaces) if dst_interfaces else 0}/{len(top_devices) * len(top_interfaces)}. "
+                f"Check device templates and interface roles."
             )
             return
 
@@ -387,6 +400,16 @@ class CommonGenerator(InfrahubGenerator):
             scenario=strategy,
             cabling_offset=cabling_offset,
         )
+        
+        planned_connections = len(cabling_plan)
+        if planned_connections == 0:
+            self.logger.warning(
+                "Cabling plan produced 0 connections - no cables will be created. "
+                "Check interface availability and compatibility."
+            )
+            return
+        
+        self.logger.info(f"Cabling plan generated: {planned_connections} connection(s) planned")
 
         if not cabling_plan:
             self.logger.warning("No cabling connections planned; skipping cable creation")
@@ -444,4 +467,10 @@ class CommonGenerator(InfrahubGenerator):
             updated_dst.status.value = "active"
             await updated_src.save()
             await updated_dst.save()
-            self.logger.info(f"- Created connection {name}")
+            self.logger.info(f"  - Created connection {name}")
+        
+        # Summary logging
+        self.logger.info(
+            f"Cabling completed: {len(cabling_plan)} connection(s) established successfully "
+            f"[{len(bottom_devices)} bottom ↔ {len(top_devices)} top devices]"
+        )

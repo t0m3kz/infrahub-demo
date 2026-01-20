@@ -395,7 +395,7 @@ class EndpointConnectivityGenerator(CommonGenerator):
             )
 
         self.logger.info(
-            f"Completed all connectivity for {self.data.name}: {len(self.planned_connections)} total connections"
+            f"Completed all connectivity for {self.data.name}: {len(self.planned_connections)} total connection(s) established"
         )
 
     async def _process_speed_aware(

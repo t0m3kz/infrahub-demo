@@ -360,8 +360,9 @@ class CablingPlanner:
                         top_intf = top_interfaces[uplink_idx]
                         cabling_plan.append((bottom_intf, top_intf))
                     else:
-                        self.logger.warning(
-                            f"Insufficient interfaces on {top_device} for {bottom_device} uplink {uplink_idx}"
+                        self.logger.error(
+                            f"INSUFFICIENT INTERFACES - Cannot create connection from {bottom_device} uplink {uplink_idx} to {top_device}. "
+                            f"Required interface index {uplink_idx} but only {len(top_interfaces)} interface(s) available."
                         )
             else:
                 # First run: use round-robin distribution
@@ -387,9 +388,10 @@ class CablingPlanner:
                         top_intf = top_interfaces[port_offset]
                         cabling_plan.append((bottom_intf, top_intf))
                     else:
-                        self.logger.warning(
-                            f"Insufficient interfaces on {top_device} for connection from "
-                            f"{bottom_intf.device.display_label}:{bottom_intf.name.value}"
+                        self.logger.error(
+                            f"INSUFFICIENT INTERFACES - Cannot create connection from "
+                            f"{bottom_intf.device.display_label}:{bottom_intf.name.value} to {top_device}. "
+                            f"Required port offset {port_offset} but only {len(top_interfaces)} interface(s) available."
                         )
 
             tor_index += 1
@@ -560,9 +562,10 @@ class CablingPlanner:
                 top_intf = top_interfaces[tors_using_same_pair]
                 cabling_plan.append((bottom_intf, top_intf))
             else:
-                self.logger.warning(
-                    f"Insufficient interfaces on {top_device} for connection from "
-                    f"{bottom_intf.device.display_label}:{bottom_intf.name.value}"
+                self.logger.error(
+                    f"INSUFFICIENT INTERFACES - Cannot create connection from "
+                    f"{bottom_intf.device.display_label}:{bottom_intf.name.value} to {top_device}. "
+                    f"Leaf pair slot {tors_using_same_pair} required but only {len(top_interfaces)} interface(s) available."
                 )
 
     def _build_intra_rack_middle_cabling_plan(
@@ -643,29 +646,53 @@ class CablingPlanner:
         """
         validated_plan = []
         mismatches = []
+        skipped_connections = []
 
         for bottom_intf, top_intf in cabling_plan:
             bottom_speed = self._get_interface_speed(bottom_intf)
             top_speed = self._get_interface_speed(top_intf)
+            
+            # Get interface types for detailed logging
+            bottom_type = getattr(bottom_intf.interface_type, 'value', bottom_intf.interface_type) if hasattr(bottom_intf, 'interface_type') else 'unknown'
+            top_type = getattr(top_intf.interface_type, 'value', top_intf.interface_type) if hasattr(top_intf, 'interface_type') else 'unknown'
 
             # Check compatibility
             if bottom_speed and top_speed and bottom_speed != top_speed:
                 mismatch_msg = (
-                    f"Speed mismatch: {bottom_intf.device.display_label}:{bottom_intf.name.value} "
-                    f"({bottom_speed}G) ↔ {top_intf.device.display_label}:{top_intf.name.value} ({top_speed}G)"
+                    f"{bottom_intf.device.display_label}:{bottom_intf.name.value} ({bottom_type}, {bottom_speed}Gbps) "
+                    f"↔ {top_intf.device.display_label}:{top_intf.name.value} ({top_type}, {top_speed}Gbps)"
                 )
                 mismatches.append(mismatch_msg)
 
                 if strict:
-                    self.logger.warning(f"Skipping connection due to speed mismatch: {mismatch_msg}")
+                    self.logger.error(
+                        f"INTERFACE TYPE MISMATCH - Connection skipped: {mismatch_msg}"
+                    )
+                    skipped_connections.append(mismatch_msg)
                     continue
                 else:
-                    self.logger.warning(f"Speed mismatch detected (connection will proceed): {mismatch_msg}")
+                    self.logger.error(
+                        f"INTERFACE TYPE MISMATCH - Connection will be created but may not work: {mismatch_msg}"
+                    )
 
             validated_plan.append((bottom_intf, top_intf))
 
+        # Summary logging
         if mismatches:
-            self.logger.info(f"Speed validation found {len(mismatches)} mismatches")
+            total_attempted = len(cabling_plan)
+            total_created = len(validated_plan)
+            total_mismatches = len(mismatches)
+            
+            if strict:
+                self.logger.error(
+                    f"Speed validation summary: {total_mismatches} incompatible interface type(s) detected. "
+                    f"{len(skipped_connections)} connection(s) skipped. {total_created}/{total_attempted} connections will be created."
+                )
+            else:
+                self.logger.error(
+                    f"Speed validation summary: {total_mismatches} incompatible interface type(s) detected. "
+                    f"All {total_attempted} connections will be created but may not function correctly."
+                )
 
         return validated_plan
 
@@ -714,7 +741,17 @@ class CablingPlanner:
         speed_groups = InterfaceSpeedMatcher.group_by_speed(all_bottom_intfs, all_top_intfs)
 
         if not speed_groups:
-            self.logger.warning("No matching speed groups found for speed-aware cabling")
+            # Extract speeds from both sides for detailed error
+            bottom_speeds = {self._get_interface_speed(i) for i in all_bottom_intfs if self._get_interface_speed(i)}
+            top_speeds = {self._get_interface_speed(i) for i in all_top_intfs if self._get_interface_speed(i)}
+            
+            bottom_speeds_str = ", ".join(str(s) for s in sorted([s for s in bottom_speeds if s is not None]))
+            top_speeds_str = ", ".join(str(s) for s in sorted([s for s in top_speeds if s is not None]))
+            self.logger.error(
+                f"INTERFACE TYPE MISMATCH - No matching speed groups found for speed-aware cabling. "
+                f"Bottom devices have: {bottom_speeds_str}Gbps, Top devices have: {top_speeds_str}Gbps. "
+                f"Cannot create any connections."
+            )
             return []
 
         combined_plan = []

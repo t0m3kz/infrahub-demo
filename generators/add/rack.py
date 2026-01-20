@@ -260,6 +260,11 @@ class RackGenerator(CommonGenerator):
             self.logger.error(f"Generation failed due to {exc}")
             return
 
+        self.logger.info(
+            f"Starting rack generation: {self.data.name} "
+            f"[type={self.data.rack_type}, deployment={self.data.pod.deployment_type}]"
+        )
+
         # Validate checksum is set (required for proper generation ordering in mixed deployments)
         if not self.data.checksum:
             # Special case: ToR racks in mixed deployments can inherit checksum from middle rack
@@ -590,6 +595,14 @@ class RackGenerator(CommonGenerator):
 
             else:
                 self.logger.warning(f"Unknown deployment_type '{deployment_type}' for rack {self.data.name}")
+
+        # Generation completion summary
+        total_devices = len(created_leaf_devices or []) + sum(
+            tor_role.quantity for tor_role in (self.data.tors or [])
+        )
+        self.logger.info(
+            f"Rack generation completed: {self.data.name} - {total_devices} device(s) created with connectivity"
+        )
 
         # For mixed deployment with middle rack: trigger ToR rack checksum updates
         # This ensures ToR racks in the same row are generated after middle rack completes

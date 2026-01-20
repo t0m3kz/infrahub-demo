@@ -45,7 +45,9 @@ class PodTopologyGenerator(CommonGenerator):
             if should_update and rack.checksum.value != pod_checksum:
                 rack.checksum.value = pod_checksum
                 await rack.save(allow_upsert=True)
-                self.logger.info(f"Rack {rack.name.value} has been updated to checksum {pod_checksum}")
+                self.logger.info(
+                    f"Checksum updated: {rack.name.value} → {pod_checksum} (triggers rack re-generation)"
+                )
 
     async def generate(self, data: dict[str, Any]) -> None:
         """Generate pod topology infrastructure."""
