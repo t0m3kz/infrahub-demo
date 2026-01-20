@@ -78,7 +78,7 @@ class RackGenerator(CommonGenerator):
         spine_interfaces = await self.client.filters(
             kind=DcimPhysicalInterface,
             device__name__values=device_names,
-            role__value="leaf",  # Downlink interfaces to leafs/tors
+            role__value="downlink",  # Downlink interfaces to leafs/tors
         )
 
         if not spine_interfaces:
@@ -134,7 +134,7 @@ class RackGenerator(CommonGenerator):
         leaf_interfaces = await self.client.filters(
             kind=DcimPhysicalInterface,
             device__name__values=device_names,
-            role__value="leaf",  # Downlink interfaces to ToRs
+            role__value="downlink",  # Downlink interfaces to ToRs
         )
 
         if not leaf_interfaces:
@@ -309,11 +309,13 @@ class RackGenerator(CommonGenerator):
             )
             return
 
-        # Indexes for leaf devices (include row for unique naming across pod)
-        # Device name pattern: dc1-fab1-pod1-row1-rack5-leaf-01
+        # Indexes for leaf devices (include suite, row, rack for unique naming across pod)
+        # Device name pattern: dc1-fab1-pod1-suite1-row1-rack5-leaf-01
+        suite = self.data.parent  # LocationSuite
         leaf_indexes: list[int] = [
             dc.index,
             pod.index,
+            suite.index,
             self.data.row_index,
             self.data.index,
         ]
@@ -321,17 +323,18 @@ class RackGenerator(CommonGenerator):
         # Get deployment type once for reuse
         deployment_type = pod.deployment_type
 
-        # For ToR deployment: include both row and rack index for unique naming
-        # Device name pattern: dc1-fab1-pod2-row1-rack1-tor-01
+        # For ToR deployment: include suite, row, rack index for unique naming
+        # Device name pattern: dc1-fab1-pod2-suite1-row1-rack1-tor-01
         if deployment_type == "tor":
             self.logger.info(
-                f"ToR rack {self.data.name}: using row={self.data.row_index}, rack_index={self.data.index}"
+                f"ToR rack {self.data.name}: using suite={suite.index}, row={self.data.row_index}, rack_index={self.data.index}"
             )
 
-            # Indexes for ToR devices (include row and rack for unique naming)
+            # Indexes for ToR devices (include suite, row and rack for unique naming)
             tor_indexes: list[int] = [
                 dc.index,
                 pod.index,
+                suite.index,
                 self.data.row_index,
                 self.data.index,
             ]
@@ -340,6 +343,7 @@ class RackGenerator(CommonGenerator):
             tor_indexes: list[int] = [
                 dc.index,
                 pod.index,
+                suite.index,
                 self.data.row_index,
                 self.data.index,
             ]

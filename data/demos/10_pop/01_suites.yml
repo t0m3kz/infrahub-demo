@@ -11,6 +11,7 @@ spec:
         kind: LocationSuite
         data:
           - suite_name: FR2
+            index: 2
             shortname: "eqx-fr-1-fr2"
             children:
               kind: LocationRack
@@ -26,6 +27,7 @@ spec:
                   shortname: "eqx-fr-1-fr2-r-2"
                   pod: FR2
           - suite_name: FR6
+            index: 6
             shortname: "eqx-fr-1-fr6"
             children:
               kind: LocationRack
@@ -47,6 +49,7 @@ spec:
         kind: LocationSuite
         data:
           - suite_name: PA4
+            index: 4
             shortname: "eqx-pa-1-pa4"
             children:
               kind: LocationRack
@@ -62,6 +65,7 @@ spec:
                   row_index: 1
                   pod: PA4
           - suite_name: PA6
+            index: 6
             shortname: "eqx-pa-1-pa6"
             children:
               kind: LocationRack

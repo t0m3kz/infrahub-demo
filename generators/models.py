@@ -154,6 +154,16 @@ class RackPod(BaseModel):
 # Spine and leaf devices queried separately when needed (on-demand for specific deployment types)
 
 
+class LocationSuiteModel(BaseModel):
+    """LocationSuite model for rack parent hierarchy."""
+
+    index: int  # Required for device naming
+    id: Optional[str] = None
+    name: Optional[str] = None
+    shortname: Optional[str] = None
+    suite_name: Optional[str] = None
+
+
 class RackModel(BaseModel):
     id: str
     name: str
@@ -161,6 +171,7 @@ class RackModel(BaseModel):
     index: int
     rack_type: str
     row_index: int
+    parent: LocationSuiteModel
     leafs: Optional[List[DeviceRole]] = []
     tors: Optional[List[DeviceRole]] = []
     pod: RackPod

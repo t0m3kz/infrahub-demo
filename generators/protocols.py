@@ -694,6 +694,7 @@ class DcimStandardSFP(DcimGenericSFP):
 
 
 class LocationSuite(LocationGeneric):
+    index: Integer
     name: String
     shortname: String
     suite_name: String

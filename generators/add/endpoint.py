@@ -351,7 +351,7 @@ class EndpointConnectivityGenerator(CommonGenerator):
         endpoint_types = set(intf.interface_type for intf in endpoint_interfaces if intf.interface_type)
 
         # ToR/Leaf interfaces connecting to endpoints typically have these roles
-        acceptable_roles = ["downlink", "customer", "access", "peer"]
+        acceptable_roles = ["downlink", "customer"]
 
         if not endpoint_types:
             # No specific interface type requirement - query by role only

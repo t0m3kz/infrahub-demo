@@ -66,9 +66,11 @@ class DeviceNamingConfig:
             if len(indexes) >= 2:
                 components.append(f"pod{indexes[1]}")
             if len(indexes) >= 3:
-                components.append(f"row{indexes[2]}")
+                components.append(f"suite{indexes[2]}")
             if len(indexes) >= 4:
-                components.append(f"rack{indexes[3]}")
+                components.append(f"row{indexes[3]}")
+            if len(indexes) >= 5:
+                components.append(f"rack{indexes[4]}")
         components.extend([device_type, formatted_idx])
         return components
 
@@ -607,3 +609,4 @@ class CablingPlanner:
             return self._build_intra_rack_mixed_cabling_plan(cabling_offset=cabling_offset)
         else:
             raise ValueError(f"Unknown cabling scenario: {scenario}")
+

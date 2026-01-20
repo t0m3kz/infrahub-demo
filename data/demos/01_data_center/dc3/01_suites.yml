@@ -5,8 +5,10 @@ spec:
   kind: LocationSuite
   data:
     - suite_name: "Room-1"
+      index: 1
       shortname: "lon-1-s-1"
       parent: lon-1
     - suite_name: "Room-2"
+      index: 2
       shortname: "lon-1-s-2"
       parent: lon-1

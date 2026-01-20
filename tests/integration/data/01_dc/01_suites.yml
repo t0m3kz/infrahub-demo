@@ -5,11 +5,14 @@ spec:
   kind: LocationSuite
   data:
     - suite_name: "Suite-1"
+      index: 1
       shortname: "ktw-1-s-1"
       parent: ktw-1
     - suite_name: "Suite-2"
+      index: 2
       shortname: "ktw-1-s-2"
       parent: ktw-1
     - suite_name: "Suite-3"
+      index: 3
       shortname: "ktw-1-s-3"
       parent: ktw-1

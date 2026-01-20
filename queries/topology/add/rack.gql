@@ -142,6 +142,15 @@ query RackGenerator($name: String) {
         row_index {
           value
         }
+        parent {
+          node {
+            ... on LocationSuite {
+              index {
+                value
+              }
+            }
+          }
+        }
         leafs: fabric_templates(role__value: "leaf") {
           edges {
             node {

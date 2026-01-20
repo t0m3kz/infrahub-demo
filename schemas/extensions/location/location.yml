@@ -96,6 +96,10 @@ nodes:
       - name: suite_name
         kind: Text
         optional: false
+      - name: index
+        kind: Number
+        optional: false
+        order_weight: 120
     relationships:
       - name: owner
         peer: OrganizationGeneric

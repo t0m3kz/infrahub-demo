@@ -98,7 +98,7 @@ class PodTopologyGenerator(CommonGenerator):
         spine_interfaces_data = spine_switch_template.interfaces
         spine_interfaces = [iface.name for iface in spine_interfaces_data]
         if not spine_interfaces:
-            self.logger.warning("No interfaces with role 'uplink' found in spine template")
+            self.logger.warning("No uplink interfaces found in spine template")
 
         parent = self.data.parent
         super_spine_devices = [device.name for device in (parent.devices or [])]
@@ -107,7 +107,7 @@ class PodTopologyGenerator(CommonGenerator):
             iface.name for iface in (super_spine_template.interfaces if super_spine_template else [])
         ]
         if not super_spine_interfaces:
-            self.logger.warning("No interfaces with role 'spine' found in super-spine template")
+            self.logger.warning("No downlink interfaces found in super-spine template")
 
         await self.create_cabling(
             bottom_devices=spines,

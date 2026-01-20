@@ -20,7 +20,7 @@ spec:
             interface_type: 1000base-t
           - template_name: SRX-1500_DC_FIREWALL_ge-0/0/[0-3]
             name: ge-0/0/[0-3]
-            role: leaf
+            role: downlink
             interface_type: 1000base-t
 
     - template_name: SRX_1500_DC_FIREWALL
@@ -39,7 +39,7 @@ spec:
             interface_type: 1000base-t
           - template_name: SRX-1500_DC_FIREWALL_ge-0/0/[0-3]
             name: ge-0/0/[0-3]
-            role: leaf
+            role: downlink
             interface_type: 1000base-t
     # console
     - template_name: SRX_1500_EDGE_FIREWALL

@@ -228,58 +228,43 @@ generics:
         optional: true
         description: "The role of the interface in the network"
         choices:
-          - name: lag
-            label: Lag
-            description: "Link Aggregation Group (LAG) interface."
-            color: "#60A5FA"
-          - name: core
-            label: Core
-            description: "Interface used in the core of the network."
-            color: "#1E3A8A"
-          - name: customer
-            label: Customer
-            description: "Interface used for customer-facing connections."
-            color: "#F472B6"
-          - name: access
-            label: Access
-            description: "Access port connecting endpoint devices."
-            color: "#10B981"
-          - name: management
-            label: Management
-            description: "Interface dedicated to device management traffic."
-            color: "#F59E0B"
-          - name: upstream
-            label: Upstream
-            description: "Upstream interface toward aggregation or core."
-            color: "#38BDF8"
-          - name: leaf
-            label: Leaf
-            description: "Interface connecting towards leaf switches."
-            color: "#34D399"
-          - name: spine
-            label: Spine
-            description: "Interface connecting towards spine switches."
-            color: "#06B6D4"
-          - name: console
-            label: Console
-            description: "Console management interface (out-of-band access)."
-            color: "#9CA3AF"
+          # Infrastructure connectivity (hierarchical)
           - name: uplink
             label: Uplink
-            description: "Uplink used to connect to upstream switches."
+            description: "Interface toward higher hierarchy layer"
             color: "#FCA5A5"
-          - name: peering
-            label: Peering
-            description: "Peering interface with external networks."
-            color: "#FDE68A"
+          - name: downlink
+            label: Downlink
+            description: "Interface toward lower hierarchy layer"
+            color: "#34D399"
+
+          # Edge connectivity
+          - name: customer
+            label: Customer/Access
+            description: "Customer-facing, endpoint access, or external"
+            color: "#F472B6"
+
+          # Special interface types
+          - name: management
+            label: Management
+            description: "Out-of-band management interface"
+            color: "#F59E0B"
+          - name: console
+            label: Console
+            description: "Console management interface"
+            color: "#9CA3AF"
           - name: loopback
             label: Loopback
-            description: "Loopback used for stable addressing on the device."
+            description: "Loopback interface for stable addressing"
             color: "#C7D2FE"
           - name: loopback-vtep
             label: Loopback VTEP
-            description: "Loopback used as a VTEP VXLAN/overlay tunneling."
+            description: "Loopback used as VTEP for VXLAN/overlay tunneling"
             color: "#E9D5FF"
+          - name: lag
+            label: LAG Member
+            description: "Link Aggregation Group member interface"
+            color: "#60A5FA"
         order_weight: 1250
       - name: index
         kind: Text

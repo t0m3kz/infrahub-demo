@@ -7,7 +7,7 @@ spec:
     - template_name: SCG50R_CONSOLE
       device_type: SCG50R
       platform: perle_iolan
-      role: console
+      role: edge
       status: provisioning
       interfaces:
         kind: TemplateDcimConsoleInterface

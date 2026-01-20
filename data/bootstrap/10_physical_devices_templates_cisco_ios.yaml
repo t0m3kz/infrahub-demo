@@ -25,7 +25,7 @@ spec:
     - template_name: C9200L_48P_4G_OOB
       device_type: C9200L-24P-4G
       platform: cisco_ios
-      role: oob
+      role: edge
       status: provisioning
       interfaces:
         kind: TemplateDcimPhysicalInterface
@@ -44,7 +44,7 @@ spec:
     - template_name: C9200L_24P_4G_OOB
       device_type: C9200L-24P-4G
       platform: cisco_ios
-      role: oob
+      role: edge
       status: provisioning
       interfaces:
         kind: TemplateDcimConsoleInterface
@@ -55,7 +55,7 @@ spec:
     - template_name: C9200L_48P_4G_OOB
       device_type: C9200L-48P-4G
       platform: cisco_ios
-      role: oob
+      role: edge
       status: provisioning
       interfaces:
         kind: TemplateDcimConsoleInterface
