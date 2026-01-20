@@ -70,8 +70,11 @@ class RackGenerator(CommonGenerator):
         )
 
         if not spine_devices:
-            self.logger.warning(f"No spine devices found in pod {pod_id}")
-            return [], []
+            self.logger.error(
+                f"Rack {self.data.name}: No spine devices found in pod {pod_id}. "
+                "Cannot create ToR-to-spine cabling."
+            )
+            raise RuntimeError(f"Rack {self.data.name}: Cannot cable to spines - no spine devices in pod")
 
         # Step 2: Get device names and query all their downlink interfaces in one query
         device_names = [device.name.value for device in spine_devices]
@@ -82,8 +85,11 @@ class RackGenerator(CommonGenerator):
         )
 
         if not spine_interfaces:
-            self.logger.warning("No downlink interfaces found on spine devices")
-            return [], []
+            self.logger.error(
+                f"Rack {self.data.name}: No downlink interfaces found on spine devices. "
+                "Cannot create ToR-to-spine cabling."
+            )
+            raise RuntimeError(f"Rack {self.data.name}: Cannot cable to spines - no downlink interfaces on spines")
 
         # Extract unique interface names
         interface_names = sorted(set(iface.name.value for iface in spine_interfaces))
@@ -113,8 +119,11 @@ class RackGenerator(CommonGenerator):
         )
 
         if not racks_in_row:
-            self.logger.warning(f"No racks found in row {row_index}")
-            return [], []
+            self.logger.error(
+                f"Rack {self.data.name}: No racks found in row {row_index}. "
+                "Cannot create ToR-to-leaf cabling for mixed deployment."
+            )
+            raise RuntimeError(f"Rack {self.data.name}: Cannot cable ToRs - no racks in row {row_index}")
 
         rack_ids = [rack.id for rack in racks_in_row]
 
@@ -126,8 +135,11 @@ class RackGenerator(CommonGenerator):
         )
 
         if not leaf_devices:
-            self.logger.warning(f"No leaf devices found in row {row_index}")
-            return [], []
+            self.logger.error(
+                f"Rack {self.data.name}: No leaf devices found in row {row_index}. "
+                "Cannot create ToR-to-leaf cabling for mixed deployment."
+            )
+            raise RuntimeError(f"Rack {self.data.name}: Cannot cable ToRs - no leaf devices in row {row_index}")
 
         # Step 3: Get device names and query all their downlink interfaces in one query
         device_names = [device.name.value for device in leaf_devices]
@@ -138,8 +150,13 @@ class RackGenerator(CommonGenerator):
         )
 
         if not leaf_interfaces:
-            self.logger.warning(f"No downlink interfaces found on leaf devices in row {row_index}")
-            return [], []
+            self.logger.error(
+                f"Rack {self.data.name}: No downlink interfaces found on leaf devices in row {row_index}. "
+                "Cannot create ToR-to-leaf cabling for mixed deployment."
+            )
+            raise RuntimeError(
+                f"Rack {self.data.name}: Cannot cable ToRs - no downlink interfaces on leafs in row {row_index}"
+            )
 
         # Extract unique interface names
         interface_names = sorted(set(iface.name.value for iface in leaf_interfaces))
@@ -433,11 +450,11 @@ class RackGenerator(CommonGenerator):
 
                     leaf_device_names = created_leaf_devices
 
-                    # Query actual leaf interfaces with role="leaf" (downlink to ToRs)
+                    # Query actual leaf interfaces with role="downlink" (downlink to ToRs)
                     leaf_interfaces_objects = await self.client.filters(
                         kind=DcimPhysicalInterface,
                         device__name__values=leaf_device_names,
-                        role__value="leaf",
+                        role__value="downlink",
                     )
 
                     if leaf_interfaces_objects:
@@ -457,11 +474,19 @@ class RackGenerator(CommonGenerator):
                             },
                         )
                     else:
-                        self.logger.warning(
-                            f"middle_rack deployment for {self.data.name}: No downlink interfaces found on leaf devices"
+                        self.logger.error(
+                            f"middle_rack deployment for {self.data.name}: No downlink interfaces found on leaf devices. "
+                            "Cannot create ToR-to-leaf cabling."
+                        )
+                        raise RuntimeError(
+                            f"Rack {self.data.name}: Cannot cable ToRs - no downlink interfaces on leaf devices"
                         )
                 else:
-                    self.logger.warning(f"middle_rack deployment for {self.data.name} has ToRs but no leafs")
+                    self.logger.error(
+                        f"middle_rack deployment for {self.data.name} has ToRs but no leafs. "
+                        "Cannot create ToR-to-leaf cabling."
+                    )
+                    raise RuntimeError(f"Rack {self.data.name}: Cannot cable ToRs - no leaf devices in rack")
 
             # Deployment type: tor - ToRs connect directly to spines
             elif deployment_type == "tor":
@@ -491,9 +516,11 @@ class RackGenerator(CommonGenerator):
                         },
                     )
                 else:
-                    self.logger.warning(
-                        f"tor deployment for {self.data.name}: No spine devices found in pod, cannot cable ToRs"
+                    self.logger.error(
+                        f"tor deployment for {self.data.name}: No spine devices found in pod. "
+                        "Cannot create ToR-to-spine cabling."
                     )
+                    raise RuntimeError(f"Rack {self.data.name}: Cannot cable ToRs - no spine devices in pod")
 
             # Deployment type: mixed - ToRs connect to local leafs if present, otherwise middle rack leafs
             elif deployment_type == "mixed":
@@ -505,7 +532,7 @@ class RackGenerator(CommonGenerator):
                         iface.name
                         for leaf_role in self.data.leafs or []
                         for iface in leaf_role.template.interfaces
-                        if iface.role == "leaf"
+                        if iface.role == "downlink"
                     ]
 
                     await self.create_cabling(
@@ -553,8 +580,12 @@ class RackGenerator(CommonGenerator):
                             },
                         )
                     else:
-                        self.logger.warning(
-                            f"Mixed deployment for rack {self.data.name}: No middle rack leafs found in pod, cannot cable ToRs"
+                        self.logger.error(
+                            f"Mixed deployment for rack {self.data.name}: No middle rack leafs found in row {self.data.row_index}. "
+                            "Cannot create ToR-to-leaf cabling."
+                        )
+                        raise RuntimeError(
+                            f"Rack {self.data.name}: Cannot cable ToRs - no leaf devices found in row {self.data.row_index}"
                         )
 
             else:

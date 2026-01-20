@@ -155,8 +155,11 @@ class EndpointConnectivityGenerator(CommonGenerator):
             )
 
         if not target_devices:
-            self.logger.warning(f"No ToR devices found for endpoint {self.data.name} (tor deployment)")
-            return
+            self.logger.error(
+                f"Endpoint {self.data.name}: No ToR devices found in tor deployment. "
+                "Cannot create endpoint connectivity."
+            )
+            raise RuntimeError(f"Endpoint {self.data.name}: Cannot connect - no ToR devices found in deployment")
 
         await self._create_endpoint_connections(target_devices, "tor")
 
@@ -235,8 +238,13 @@ class EndpointConnectivityGenerator(CommonGenerator):
         )
 
         if not racks:
-            self.logger.warning(f"No network rack found in row {row_index} for middle_rack deployment")
-            return []
+            self.logger.error(
+                f"Endpoint {self.data.name}: No network rack found in row {row_index} for middle_rack deployment. "
+                "Cannot create endpoint connectivity."
+            )
+            raise RuntimeError(
+                f"Endpoint {self.data.name}: Cannot connect - no network rack in row {row_index}"
+            )
 
         rack_ids = [rack.id for rack in racks]
 
@@ -294,8 +302,11 @@ class EndpointConnectivityGenerator(CommonGenerator):
         racks = await self.client.filters(kind=LocationRack, suite__ids=[suite_id])
 
         if not racks:
-            self.logger.warning(f"No racks found in suite {suite_id}")
-            return []
+            self.logger.error(
+                f"Endpoint {self.data.name}: No racks found in suite {suite_id}. "
+                "Cannot create endpoint connectivity."
+            )
+            raise RuntimeError(f"Endpoint {self.data.name}: Cannot connect - no racks in suite {suite_id}")
 
         rack_ids = [rack.id for rack in racks]
 
@@ -359,8 +370,13 @@ class EndpointConnectivityGenerator(CommonGenerator):
         )
 
         if not all_target_interfaces:
-            self.logger.warning(f"No compatible interfaces found on {target_role} devices {target_device_names}")
-            return
+            self.logger.error(
+                f"Endpoint {self.data.name}: No compatible interfaces found on {target_role} devices {target_device_names}. "
+                "Cannot create endpoint connectivity."
+            )
+            raise RuntimeError(
+                f"Endpoint {self.data.name}: Cannot connect - no compatible interfaces on {target_role} devices"
+            )
 
         # Choose processing mode based on configuration
         if self.speed_aware:
@@ -399,8 +415,13 @@ class EndpointConnectivityGenerator(CommonGenerator):
         )
 
         if not speed_groups:
-            self.logger.warning(f"No matching speed groups found between {self.data.name} and {target_device_names}")
-            return
+            self.logger.error(
+                f"Endpoint {self.data.name}: No matching speed groups found between endpoint and {target_device_names}. "
+                "Cannot create endpoint connectivity (speed-aware mode)."
+            )
+            raise RuntimeError(
+                f"Endpoint {self.data.name}: Cannot connect - no matching interface speeds with {target_device_names}"
+            )
 
         self.logger.info(f"Found {len(speed_groups)} speed group(s): {sorted(speed_groups.keys())}Gbps")
 
