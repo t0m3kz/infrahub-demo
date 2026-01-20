@@ -110,14 +110,24 @@ class PodTopologyGenerator(CommonGenerator):
         super_spine_interfaces = [
             iface.name for iface in (super_spine_template.interfaces if super_spine_template else [])
         ]
-        if not super_spine_interfaces:
+        
+        # Only fail if super-spines exist but template/interfaces are missing
+        # Single-pod DCs with no super-spines are valid and should skip cabling
+        if super_spine_devices and not super_spine_interfaces:
             self.logger.error(
-                f"Pod {self.data.name}: No downlink interfaces found in super-spine template. "
+                f"Pod {self.data.name}: Super-spine devices exist but no downlink interfaces found in template. "
                 "Cannot create super-spine-to-spine cabling."
             )
             raise RuntimeError(
                 f"Pod {self.data.name}: Cannot cable to super-spines - no downlink interfaces in template"
             )
+        
+        # Skip cabling if no super-spines (single-pod DC scenario)
+        if not super_spine_devices or not super_spine_interfaces:
+            self.logger.info(
+                f"Pod {self.data.name}: Skipping spine-to-super-spine cabling (single-pod DC or no super-spines)"
+            )
+            return
 
         await self.create_cabling(
             bottom_devices=spines,

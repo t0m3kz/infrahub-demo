@@ -106,7 +106,7 @@ fragment PodFields on TopologyPod {
   spine_template {
     node {
       id
-      interfaces(role__value: "leaf") {
+      interfaces(role__value: "downlink") {
         edges {
           node {
             name {

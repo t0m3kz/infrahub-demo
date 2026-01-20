@@ -24,7 +24,7 @@ fragment SuperSpineTemplateFields on TemplateDcimPhysicalDevice {
   id
   platform { node { id } }
   device_type { node { id } }
-  interfaces(role__value: "spine") {
+  interfaces(role__value: "downlink") {
     edges { node { name { value } } }
   }
 }
