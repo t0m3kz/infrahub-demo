@@ -1,0 +1,80 @@
+---
+# Network Devices: ToRs in middle rack with mixed interface speeds
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimPhysicalDevice
+  data:
+    # ToR-1: Mix of 25G and 100G interfaces
+    - name: "tor-1"
+      description: "ToR switch 1 with mixed 25G/100G interfaces"
+      device_type: "N9K-C93180YC-FX"
+      role: "tor"
+      status: "active"
+      rack: "Rack-1-Network"
+      deployment: "Pod-1"
+      position: 1
+
+    # ToR-2: Mix of 25G and 100G interfaces (dual-homing pair)
+    - name: "tor-2"
+      description: "ToR switch 2 with mixed 25G/100G interfaces"
+      device_type: "N9K-C93180YC-FX"
+      role: "tor"
+      status: "active"
+      rack: "Rack-1-Network"
+      deployment: "Pod-1"
+      position: 2
+---
+# Endpoint Servers: Distributed across compute racks with mixed interface speeds
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimPhysicalDevice
+  data:
+    # Rack 2: Servers with 100G interfaces
+    - name: "server-01"
+      description: "Server 01 with 100G interfaces in rack 2"
+      device_type: "PowerEdge-R640"
+      role: "server"
+      status: "active"
+      rack: "Rack-2-Compute"
+      deployment: "Pod-1"
+      position: 10
+
+    - name: "server-02"
+      description: "Server 02 with 100G interfaces in rack 2"
+      device_type: "PowerEdge-R640"
+      role: "server"
+      status: "active"
+      rack: "Rack-2-Compute"
+      deployment: "Pod-1"
+      position: 11
+
+    # Rack 3: Servers with 25G interfaces
+    - name: "server-03"
+      description: "Server 03 with 25G interfaces in rack 3"
+      device_type: "PowerEdge-R740"
+      role: "server"
+      status: "active"
+      rack: "Rack-3-Compute"
+      deployment: "Pod-1"
+      position: 10
+
+    - name: "server-04"
+      description: "Server 04 with 25G interfaces in rack 3"
+      device_type: "PowerEdge-R740"
+      role: "server"
+      status: "active"
+      rack: "Rack-3-Compute"
+      deployment: "Pod-1"
+      position: 11
+
+    # Rack 2: Mixed server with both 25G and 100G
+    - name: "server-05"
+      description: "Server 05 with mixed 25G/100G interfaces in rack 2"
+      device_type: "ProLiant-DL380"
+      role: "server"
+      status: "active"
+      rack: "Rack-2-Compute"
+      deployment: "Pod-1"
+      position: 12

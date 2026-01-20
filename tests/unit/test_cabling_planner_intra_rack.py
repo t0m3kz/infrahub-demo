@@ -110,6 +110,7 @@ class TestCablingPlannerIntraRackScenario:
         leaf_connection_count: dict[str, int] = {}
         for src, dst in cabling_plan:
             leaf_name = dst.device.display_label
+            assert leaf_name is not None, "Leaf device must have display_label"
             leaf_connection_count[leaf_name] = leaf_connection_count.get(leaf_name, 0) + 1
 
         # Each Leaf should have exactly 2 connections (4 ToRs × 2 uplinks = 8 total / 4 Leafs)

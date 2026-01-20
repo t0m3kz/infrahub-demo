@@ -1,0 +1,300 @@
+---
+# ToR-1 Interfaces: Mixed 25G and 100G downlink ports
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimPhysicalInterface
+  data:
+    # 100G interfaces (Eth1/1 - Eth1/8)
+    - name: "Ethernet1/1"
+      device: "tor-1"
+      interface_type: "100gbase-x-qsfp28"
+      role: "downlink"
+      enabled: true
+      status: "active"
+
+    - name: "Ethernet1/2"
+      device: "tor-1"
+      interface_type: "100gbase-x-qsfp28"
+      role: "downlink"
+      enabled: true
+      status: "active"
+
+    - name: "Ethernet1/3"
+      device: "tor-1"
+      interface_type: "100gbase-x-qsfp28"
+      role: "downlink"
+      enabled: true
+      status: "active"
+
+    - name: "Ethernet1/4"
+      device: "tor-1"
+      interface_type: "100gbase-x-qsfp28"
+      role: "downlink"
+      enabled: true
+      status: "active"
+
+    # 25G interfaces (Eth1/9 - Eth1/16)
+    - name: "Ethernet1/9"
+      device: "tor-1"
+      interface_type: "25gbase-x-sfp28"
+      role: "downlink"
+      enabled: true
+      status: "active"
+
+    - name: "Ethernet1/10"
+      device: "tor-1"
+      interface_type: "25gbase-x-sfp28"
+      role: "downlink"
+      enabled: true
+      status: "active"
+
+    - name: "Ethernet1/11"
+      device: "tor-1"
+      interface_type: "25gbase-x-sfp28"
+      role: "downlink"
+      enabled: true
+      status: "active"
+
+    - name: "Ethernet1/12"
+      device: "tor-1"
+      interface_type: "25gbase-x-sfp28"
+      role: "downlink"
+      enabled: true
+      status: "active"
+---
+# ToR-2 Interfaces: Mixed 25G and 100G downlink ports
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimPhysicalInterface
+  data:
+    # 100G interfaces (Eth1/1 - Eth1/8)
+    - name: "Ethernet1/1"
+      device: "tor-2"
+      interface_type: "100gbase-x-qsfp28"
+      role: "downlink"
+      enabled: true
+      status: "active"
+
+    - name: "Ethernet1/2"
+      device: "tor-2"
+      interface_type: "100gbase-x-qsfp28"
+      role: "downlink"
+      enabled: true
+      status: "active"
+
+    - name: "Ethernet1/3"
+      device: "tor-2"
+      interface_type: "100gbase-x-qsfp28"
+      role: "downlink"
+      enabled: true
+      status: "active"
+
+    - name: "Ethernet1/4"
+      device: "tor-2"
+      interface_type: "100gbase-x-qsfp28"
+      role: "downlink"
+      enabled: true
+      status: "active"
+
+    # 25G interfaces (Eth1/9 - Eth1/16)
+    - name: "Ethernet1/9"
+      device: "tor-2"
+      interface_type: "25gbase-x-sfp28"
+      role: "downlink"
+      enabled: true
+      status: "active"
+
+    - name: "Ethernet1/10"
+      device: "tor-2"
+      interface_type: "25gbase-x-sfp28"
+      role: "downlink"
+      enabled: true
+      status: "active"
+
+    - name: "Ethernet1/11"
+      device: "tor-2"
+      interface_type: "25gbase-x-sfp28"
+      role: "downlink"
+      enabled: true
+      status: "active"
+
+    - name: "Ethernet1/12"
+      device: "tor-2"
+      interface_type: "25gbase-x-sfp28"
+      role: "downlink"
+      enabled: true
+      status: "active"
+---
+# Server-01 Interfaces: 100G uplinks
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimPhysicalInterface
+  data:
+    - name: "ens1f0"
+      device: "server-01"
+      interface_type: "100gbase-x-qsfp28"
+      role: "uplink"
+      enabled: true
+      status: "active"
+
+    - name: "ens1f1"
+      device: "server-01"
+      interface_type: "100gbase-x-qsfp28"
+      role: "uplink"
+      enabled: true
+      status: "active"
+
+    - name: "ens2f0"
+      device: "server-01"
+      interface_type: "100gbase-x-qsfp28"
+      role: "uplink"
+      enabled: true
+      status: "active"
+
+    - name: "ens2f1"
+      device: "server-01"
+      interface_type: "100gbase-x-qsfp28"
+      role: "uplink"
+      enabled: true
+      status: "active"
+---
+# Server-02 Interfaces: 100G uplinks
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimPhysicalInterface
+  data:
+    - name: "ens1f0"
+      device: "server-02"
+      interface_type: "100gbase-x-qsfp28"
+      role: "uplink"
+      enabled: true
+      status: "active"
+
+    - name: "ens1f1"
+      device: "server-02"
+      interface_type: "100gbase-x-qsfp28"
+      role: "uplink"
+      enabled: true
+      status: "active"
+
+    - name: "ens2f0"
+      device: "server-02"
+      interface_type: "100gbase-x-qsfp28"
+      role: "uplink"
+      enabled: true
+      status: "active"
+
+    - name: "ens2f1"
+      device: "server-02"
+      interface_type: "100gbase-x-qsfp28"
+      role: "uplink"
+      enabled: true
+      status: "active"
+---
+# Server-03 Interfaces: 25G uplinks
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimPhysicalInterface
+  data:
+    - name: "eno1"
+      device: "server-03"
+      interface_type: "25gbase-x-sfp28"
+      role: "uplink"
+      enabled: true
+      status: "active"
+
+    - name: "eno2"
+      device: "server-03"
+      interface_type: "25gbase-x-sfp28"
+      role: "uplink"
+      enabled: true
+      status: "active"
+
+    - name: "eno3"
+      device: "server-03"
+      interface_type: "25gbase-x-sfp28"
+      role: "uplink"
+      enabled: true
+      status: "active"
+
+    - name: "eno4"
+      device: "server-03"
+      interface_type: "25gbase-x-sfp28"
+      role: "uplink"
+      enabled: true
+      status: "active"
+---
+# Server-04 Interfaces: 25G uplinks
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimPhysicalInterface
+  data:
+    - name: "eno1"
+      device: "server-04"
+      interface_type: "25gbase-x-sfp28"
+      role: "uplink"
+      enabled: true
+      status: "active"
+
+    - name: "eno2"
+      device: "server-04"
+      interface_type: "25gbase-x-sfp28"
+      role: "uplink"
+      enabled: true
+      status: "active"
+
+    - name: "eno3"
+      device: "server-04"
+      interface_type: "25gbase-x-sfp28"
+      role: "uplink"
+      enabled: true
+      status: "active"
+
+    - name: "eno4"
+      device: "server-04"
+      interface_type: "25gbase-x-sfp28"
+      role: "uplink"
+      enabled: true
+      status: "active"
+---
+# Server-05 Interfaces: Mixed 25G and 100G uplinks
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimPhysicalInterface
+  data:
+    # 100G interfaces
+    - name: "eth0"
+      device: "server-05"
+      interface_type: "100gbase-x-qsfp28"
+      role: "uplink"
+      enabled: true
+      status: "active"
+
+    - name: "eth1"
+      device: "server-05"
+      interface_type: "100gbase-x-qsfp28"
+      role: "uplink"
+      enabled: true
+      status: "active"
+
+    # 25G interfaces
+    - name: "eth2"
+      device: "server-05"
+      interface_type: "25gbase-x-sfp28"
+      role: "uplink"
+      enabled: true
+      status: "active"
+
+    - name: "eth3"
+      device: "server-05"
+      interface_type: "25gbase-x-sfp28"
+      role: "uplink"
+      enabled: true
+      status: "active"

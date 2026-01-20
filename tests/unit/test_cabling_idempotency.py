@@ -184,7 +184,9 @@ class TestToRDeploymentIdempotency:
         assert len(plan) == 8
 
         # Verify ToR-1 connects to Spine-1 and Spine-2 on their first ports
-        tor1_connections = [(src, dst) for src, dst in plan if "tor-01" in src.device.display_label]
+        tor1_connections = [
+            (src, dst) for src, dst in plan if src.device.display_label and "tor-01" in src.device.display_label
+        ]
         assert len(tor1_connections) == 2
 
     def test_tor_deployment_second_rack_uses_next_ports(self) -> None:
@@ -231,7 +233,9 @@ class TestToRDeploymentIdempotency:
         assert len(plan) == 16
 
         # Verify Rack-2 ToRs use ports 3-4 on spines (next available)
-        rack2_connections = [(src, dst) for src, dst in plan if "rack2" in src.device.display_label]
+        rack2_connections = [
+            (src, dst) for src, dst in plan if src.device.display_label and "rack2" in src.device.display_label
+        ]
         assert len(rack2_connections) == 8
 
     def test_tor_deployment_rerun_unchanged(self) -> None:
@@ -295,8 +299,8 @@ class TestMiddleRackIdempotency:
 
         # Verify all connections stay within rack (same rack in device name)
         for src, dst in plan:
-            assert "rack1" in src.device.display_label
-            assert "rack1" in dst.device.display_label
+            assert src.device.display_label and "rack1" in src.device.display_label
+            assert dst.device.display_label and "rack1" in dst.device.display_label
 
     def test_middle_rack_rerun_identical(self) -> None:
         """Test middle rack re-run produces identical plan."""
@@ -349,8 +353,8 @@ class TestMixedDeploymentIdempotency:
 
         # All connections within rack1
         for src, dst in plan:
-            assert "rack1" in src.device.display_label
-            assert "rack1" in dst.device.display_label
+            assert src.device.display_label and "rack1" in src.device.display_label
+            assert dst.device.display_label and "rack1" in dst.device.display_label
 
     def test_mixed_external_tors_connect_to_rack_leafs(self) -> None:
         """Test mixed: external ToRs connect to rack's Leafs."""
@@ -376,8 +380,8 @@ class TestMixedDeploymentIdempotency:
 
         # Verify cross-rack connections (Rack-2 ToRs to Rack-1 Leafs)
         for src, dst in plan:
-            assert "rack2" in src.device.display_label
-            assert "rack1" in dst.device.display_label
+            assert src.device.display_label and "rack2" in src.device.display_label
+            assert dst.device.display_label and "rack1" in dst.device.display_label
 
 
 class TestEdgeCasesIdempotency:

@@ -1,0 +1,94 @@
+---
+# Endpoint Connectivity Test Topology
+# Tests: Suite-level distribution, mixed speeds (25G + 100G), idempotency
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: LocationBuilding
+  data:
+    - name: "TestBuilding-EP"
+      description: "Test building for endpoint connectivity"
+      address: "123 Test St"
+      city: "Test City"
+      country: "US"
+      status: "active"
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: LocationSuite
+  data:
+    - name: "Suite-A"
+      description: "Test suite with multiple racks for endpoint distribution"
+      building: "TestBuilding-EP"
+      status: "active"
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologyDataCenter
+  data:
+    - name: "TestDC-EP"
+      description: "Test data center for endpoint connectivity"
+      location: "TestBuilding-EP"
+      design: "5-stage-routed"
+      strategy: "ospf-ibgp"
+      provider: "Technology Partner"
+      emulation: false
+      technical_subnet: "1.1.0.0/24"
+      management_subnet: "172.20.1.0/24"
+      customer_subnet: "10.1.0.0/16"
+      status: "active"
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologyPod
+  data:
+    - name: "Pod-1"
+      description: "Test pod with mixed deployment for endpoint testing"
+      parent: "TestDC-EP"
+      deployment_type: "middle_rack"
+      num_racks: 3
+      num_rows: 1
+      technical_subnet: "1.1.1.0/24"
+      management_subnet: "172.20.1.0/24"
+      customer_subnet: "10.1.1.0/24"
+      status: "active"
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: LocationRack
+  data:
+    # Network rack (middle rack) with ToRs
+    - name: "Rack-1-Network"
+      description: "Network rack with ToRs for middle_rack deployment"
+      suite: "Suite-A"
+      pod: "Pod-1"
+      rack_type: "network"
+      row_index: 1
+      position: 1
+      height: 42
+      status: "active"
+
+    # Compute racks with servers
+    - name: "Rack-2-Compute"
+      description: "Compute rack with servers (rack 2)"
+      suite: "Suite-A"
+      pod: "Pod-1"
+      rack_type: "compute"
+      row_index: 1
+      position: 2
+      height: 42
+      status: "active"
+
+    - name: "Rack-3-Compute"
+      description: "Compute rack with servers (rack 3)"
+      suite: "Suite-A"
+      pod: "Pod-1"
+      rack_type: "compute"
+      row_index: 1
+      position: 3
+      height: 42
+      status: "active"

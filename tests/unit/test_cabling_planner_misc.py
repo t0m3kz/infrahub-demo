@@ -48,7 +48,7 @@ class TestCablingPlannerInvalidScenario:
         )
 
         with pytest.raises(ValueError, match="Unknown cabling scenario"):
-            planner.build_cabling_plan(scenario="custom")
+            planner.build_cabling_plan(scenario="custom")  # type: ignore[arg-type]  # Testing invalid input
 
 
 class TestCablingPlannerEdgeCases:

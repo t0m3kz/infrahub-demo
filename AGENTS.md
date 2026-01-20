@@ -353,7 +353,6 @@ extensions:
 - Cloud deployments remain clean
 - Easy to add new physical deployment types
 
-
 #### Schema Structure
 
 ```yaml
@@ -496,6 +495,60 @@ uv run pytest --cov=.
 - **Formatting**: Run `uv run ruff check . --fix` before committing.
 - **Type Checking**: Run `uv run ty check .` to ensure type safety.
 - **Validation**: Run `uv run invoke validate` to execute all quality checks.
+
+### Markdown Documentation Standards
+
+When creating or editing Markdown documentation files, follow these linting rules:
+
+- **MD031 (blanks-around-fences)**: Always add blank lines before and after fenced code blocks
+- **MD032 (blanks-around-lists)**: Always add blank lines before and after lists
+- **MD060 (table-column-style)**: Always add spaces around pipe characters in table separator rows
+
+**Examples**:
+
+```markdown
+<!-- ✅ Correct: Blank line before code fence -->
+**Connection Pattern**:
+
+```text
+topology diagram
+```
+
+<!-- ❌ Wrong: No blank line before code fence -->
+**Connection Pattern**:
+
+```text
+topology diagram
+```
+
+<!-- ✅ Correct: Table separator with spaces -->
+| Column1 | Column2 | Column3 |
+| ------- | ------- | ------- |
+| Value1  | Value2  | Value3  |
+
+<!-- ❌ Wrong: Table separator without spaces -->
+| Column1 | Column2 | Column3 |
+|---------|---------|---------|
+| Value1  | Value2  | Value3  |
+
+<!-- ✅ Correct: Blank lines around lists -->
+**Characteristics**:
+
+- First item
+- Second item
+- Third item
+
+Next paragraph.
+
+<!-- ❌ Wrong: No blank lines around lists -->
+**Characteristics**:
+- First item
+- Second item
+- Third item
+
+Next paragraph.
+
+```markdown
 
 ## Common Pitfalls
 

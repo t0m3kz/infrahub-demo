@@ -1,437 +1,430 @@
 # Infrahub-Demo Implementation Guide
 
+This guide explains the key concepts and deployment patterns for network automation in Infrahub-demo. It's designed for network architects and operators who need to understand how different topology types work.
+
 ## Table of Contents
 
-1. [Offset Calculation for Pod Deployment Types](#offset-calculation-for-pod-deployment-types)
-2. [Naming Convention Types](#naming-convention-types)
+1. [Pod Deployment Types](#pod-deployment-types)
+2. [Device Naming Conventions](#device-naming-conventions)
+3. [Cable Type Detection](#cable-type-detection)
 
 ---
 
-## Offset Calculation for Pod Deployment Types
+## Pod Deployment Types
 
-### Overview
-
-The offset calculation determines which spine/leaf ports ToR devices connect to, ensuring proper load distribution and avoiding port conflicts. The calculation varies by deployment type.
-
-### Deployment Types
-
-#### 1. `middle_rack` Deployment
-
-**Description**: Each rack contains both leafs and ToRs. ToRs connect to leafs within the same rack.
-
-**Offset Calculation**:
-
-```python
-cabling_offset = 0  # No cumulative offset needed
-```
-
-**Visual Representation**:
-
-```text
-Pod 1 (middle_rack deployment)
-├── DC1-fab1-pod1-spine-01 ──────────────────────────┬──┬───┬──┐
-├── DC1-fab1-pod1-spine-02 ──────────────────────────┤──┤───┤──┤
-│                                                    │  │   │  │
-├── Row 1                                            │  │   │  │
-│   └── Rack 5 (network rack)                        │  │   │  │
-│       ├── DC1-fab1-pod1-row1-rack5-leaf-01 ──┬───┐─┘  │   │  │
-│       ├── DC1-fab1-pod1-row1-rack5-leaf-02 ──┤───│────┘   │  │
-│       │   (ports 0-15 available)             │   │        │  │
-│       ├── DC1-fab1-pod1-row1-rack5-tor-01 ───┘   │        │  │
-│       │ (connects to local leafs, offset=0)      │        │  │
-│       └── DC1-fab1-pod1-row1-rack5-tor-02 ───────┘        │  │
-│          (connects to local leafs, offset=1)              │  │
-└── Row 2                                                   │  │
-    └── Rack 5 (network rack)                               │  │
-        ├── DC1-fab1-pod1-row2-rack5-leaf-01 ──┬───┐────────┘  │
-        ├── DC1-fab1-pod1-row2-rack5-leaf-02 ──┤───│───────────┘
-        │   (ports 0-15 available)             │   │
-        ├── DC1-fab1-pod1-row2-rack5-tor-01 ───┘   │
-        │  (connects to local leafs, offset=1)     │
-        │                                          │
-        └── DC1-fab1-pod1-row2-rack5-tor-02 ───────┘
-           (connects to local leafs, offset=1)
-```
-
-**Key Points**:
-
-- Each rack is self-contained
-- ToRs only connect to leafs in the same rack
-- No need for cumulative offset tracking
-- Simple intra-rack cabling pattern
-
-**Example from tests/integration/data/dc**:
-
-```yaml
-- index: 1
-  deployment_type: middle_rack
-  amount_of_spines: 2
-  number_of_rows: 2
-  maximum_leafs_per_row: 2
-  maximum_tors_per_row: 2
-```
+Infrahub-demo supports three deployment patterns for data center pods, each optimized for different use cases. The deployment type determines how ToR (Top-of-Rack) switches connect to the spine/leaf fabric and how port offsets are calculated to avoid conflicts.
 
 ---
 
-#### 2. `tor` Deployment
+### 1. Middle Rack Deployment
 
-**Description**: Racks contain only ToRs (no leafs). All ToRs connect directly to pod spines.
+**Use Case**: Dense deployments where each rack is self-contained with its own leaf switches.
 
-**Offset Calculation**:
+**Topology**:
 
-```python
-# Cumulative offset based on rack position
-offset = (maximum_tors_per_row × (row_index - 1)) + (tors_in_rack × (rack_index - 1))
-```
+- Each network rack contains both leaf switches AND ToR switches
+- ToRs connect only to leafs within the same rack
+- Leafs connect upward to pod spines
+- No cross-rack ToR connections
 
-**Visual Representation**:
+**Port Allocation**:
 
-```text
-Pod 2 (tor deployment - all ToRs connect to spines)
-├── DC1-fab1-pod2-spine-01 (32 ports) ────┬───┬─┬──┬─┬──┬─┬──┬─┐
-├── DC1-fab1-pod2-spine-02 (32 ports) ────┘   │ │  │ │  │ │  │ │
-│                                             │ │  │ │  │ │  │ │
-├── Row 1                                     │ │  │ │  │ │  │ │
-│   ├── Rack 1 (tor-only)                     │ │  │ │  │ │  │ │
-│   │   ├── DC1-fab1-pod2-row1-rack1-tor-01 ──┘ │  │ │  │ │  │ │
-│   │   │   (offset=0, spine ports 0-1)         │  │ │  │ │  │ │
-│   │   └── DC1-fab1-pod2-row1-rack1-tor-02 ────┘  │ │  │ │  │ │
-│   │       (offset=0, spine ports 2-3)            │ │  │ │  │ │
-│   │                                              │ │  │ │  │ │
-│   └── Rack 5 (tor-only)                          │ │  │ │  │ │
-│       ├── DC1-fab1-pod2-row1-rack5-tor-01 ───────┘ │  │ │  │ │
-│       │   (offset=8, spine ports 16-17).           │  │ │  │ │
-│       └── DC1-fab1-pod2-row1-rack5-tor-02 ─────────┘  │ │  │ │
-│           (offset=8, spine ports 18-19)               │ │  │ │
-│                                                       │ │  │ │
-└── Row 2                                               │ │  │ │
-    ├── Rack 1 (tor-only)                               │ │  │ │
-    │   ├── DC1-fab1-pod2-row2-rack1-tor-01 ────────────┘ │  │ │
-    │   │   (offset=10, spine ports 20-21)                │  │ │
-    │   └── DC1-fab1-pod2-row2-rack1-tor-02 ──────────────┘  │ │
-    │       (offset=10, spine ports 22-23)                   │ │
-    │                                                        │ │
-    └── Rack 5 (tor-only)                                    │ │
-        ├── DC1-fab1-pod2-row2-rack5-tor-01 ─────────────────┘ │
-        │   (offset=18, spine ports 36-37)                     │
-        └── DC1-fab1-pod2-row2-rack5-tor-02 ───────────────────┘
-            (offset=18, spine ports 38-39)
-```
+- **ToR Offset**: Always 0 (intra-rack connections)
+- **Leaf Offset**: Based on row position to avoid spine port conflicts
 
-**Offset Calculation Example**:
-
-- Row 1, Rack 1: `offset = (10 × (1-1)) + (2 × (1-1)) = 0 + 0 = 0`
-- Row 1, Rack 5: `offset = (10 × (1-1)) + (2 × (5-1)) = 0 + 8 = 8`
-- Row 2, Rack 1: `offset = (10 × (2-1)) + (2 × (1-1)) = 10 + 0 = 10`
-- Row 2, Rack 5: `offset = (10 × (2-1)) + (2 × (5-1)) = 10 + 8 = 18`
-
-**Key Points**:
-
-- All ToRs connect to pod spines
-- Offset accumulates across rows and racks
-- Prevents port conflicts on spines
-- Maximizes spine port utilization
-
-**Example from tests/integration/data/dc**:
-
-```yaml
-- index: 2
-  deployment_type: tor
-  amount_of_spines: 2
-  number_of_rows: 2
-  maximum_leafs_per_row: 0
-  maximum_tors_per_row: 10
-```
-
----
-
-#### 3. `mixed` Deployment
-
-**Description**: Hybrid approach with both middle racks (containing leafs) and ToR-only racks.
-
-**Offset Calculation** (depends on rack type):
-
-```python
-# Middle racks (network type, contains leafs)
-if rack_type == "network":
-    cabling_offset = 0  # ToRs connect to local leafs
-
-# ToR-only racks
-else:
-    cabling_offset = (rack_index - 1) × tors_per_rack  # ToRs connect to middle rack leafs
-```
-
-**Visual Representation**:
+**Connection Pattern**:
 
 ```text
-Pod 3 (mixed deployment)
-├── DC1-fab1-pod3-spine-01 ───────────────────────────┐
-├── DC1-fab1-pod3-spine-02 ───────────────────────────┤
-│                                                     │
-├── Row 1                                             │
-│   ├── Rack 1 (tor-only)                             │
-│   │   ├── DC1-fab1-pod3-row1-rack1-tor-01 ───────┐  │
-│   │   │   (offset=0, connects to Rack 4 leaf) │  │  │
-│   │   └── DC1-fab1-pod3-row1-rack1-tor-02 ────┤  │  │
-│   │       (offset=0, ports 0-3)               │  │  │
-│   │                                           │  │  │
-│   ├── Rack 4 (network - middle rack)          │  │  │
-│   │   ├── DC1-fab1-pod3-row1-rack4-leaf-01 ───┼──┤──│
-│   │   │   (ports 0-15, receives ToRs)         │  │  │ (leafs connect to spines)
-│   │   └── DC1-fab1-pod3-row1-rack4-leaf-02 ───┼──┤──│
-│   │                                           │  │  │
-│   └── Rack 7 (tor-only)                       │  │  │
-│       ├── DC1-fab1-pod3-row1-rack7-tor-01 ────┘  │  │
-│       │   (offset=12, connects to Rack 4 leaf)   │  │
-│       └── DC1-fab1-pod3-row1-rack7-tor-02 ───────┘  │
-│           (offset=12, ports 24-27)                  │
-│                                                     │
-└── Row 2                                             │
-│   ├── Rack 1 (tor-only)                             │
-│   │   ├── DC1-fab1-pod3-row2-rack1-tor-01 ───────┐  │
-│   │   │   (offset=0, connects to Rack 4 leaf) │  │  │
-│   │   └── DC1-fab1-pod3-row2-rack1-tor-02 ────┤  │  │
-│   │       (offset=0, ports 0-3)               │  │  │
-│   │                                           │  │  │
-│   ├── Rack 4 (network - middle rack)          │  │  │
-│   │   ├── DC1-fab1-pod3-row2-rack4-leaf-01 ───┼──┤──│
-│   │   │   (ports 0-15, receives ToRs)         │  │  │ (leafs connect to spines)
-│   │   └── DC1-fab1-pod3-row2-rack4-leaf-02 ───┼──┤──┘
-│   │                                           │  │
-│   └── Rack 7 (tor-only)                       │  │
-│       ├── DC1-fab1-pod3-row2-rack7-tor-01 ────┘  │
-│       │   (offset=12, connects to Rack 4 leaf)   │
-│       └── DC1-fab1-pod3-row2-rack7-tor-02 ───────┘
-│           (offset=12, ports 24-27)
+Pod Structure
+├── Spine Layer (connects to all leafs)
+│   ├── spine-01
+│   └── spine-02
 │
+├── Row 1
+│   └── Rack 5 (network rack)
+│       ├── leaf-01 ──────────── connects to spines
+│       ├── leaf-02 ──────────── connects to spines
+│       ├── tor-01 ───┐
+│       └── tor-02 ───┴────────── both connect to local leafs only
+│
+└── Row 2
+    └── Rack 5 (network rack)
+        ├── leaf-01 ──────────── connects to spines
+        ├── leaf-02 ──────────── connects to spines
+        ├── tor-01 ───┐
+        └── tor-02 ───┴────────── both connect to local leafs only
 ```
 
-**Offset Logic**:
+**End Device Connectivity**:
 
-```python
-# For middle rack leafs (offsets for connecting to pod spines)
-leaf_offset = (row_index - 1) × maximum_leafs_per_row
+- Servers in compute racks connect to ToRs in the same row's network rack
+- ToRs provide L2/L3 access
+- Leafs aggregate traffic from ToRs to spines
 
-# For ToRs in middle racks (not used in test data - middle racks have only leafs)
-tor_offset = 0  # Would connect to local rack leafs
+**When to Use**:
 
-# For ToRs in ToR-only racks (connect to middle rack leafs in same row)
-tor_offset = (rack_index - 1) × tors_per_rack
-# Rack 1: (1-1) × 2 = 0
-# Rack 7: (7-1) × 2 = 12
-```
-
-**Key Points**:
-
-- Middle racks (R1-4, R2-4): Contain only leafs that connect to spines
-- ToR-only racks (R1-1, R1-7, R2-1, R2-7): ToRs connect to middle rack leafs in the same row
-- Offset is based on absolute rack index (not row position)
-  - Rack 1: offset = 0
-  - Rack 7: offset = 12 (reserves ports 0-23 for racks 1-6)
-- Each row has independent middle rack, so offsets can repeat across rows
-- More complex but maximizes density
-
-**Example from tests/integration/data/dc**:
-
-```yaml
-- index: 3
-  deployment_type: mixed
-  amount_of_spines: 2
-  number_of_rows: 2
-  maximum_leafs_per_row: 2
-  maximum_tors_per_row: 12
-```
+- High rack density with many server racks per row
+- Each row needs dedicated leaf switches
+- Simplified cabling (no cross-rack connections)
+- Easier troubleshooting (isolated per rack)
 
 ---
 
-### Offset Calculation Code Reference
+### 2. ToR Deployment
 
-**File**: `generators/add/rack.py`
+**Use Case**: Simplified deployments where ToRs connect directly to spines without intermediate leaf layer.
 
-**Method**: `calculate_cabling_offsets()`
+**Topology**:
 
-```python
-def calculate_cabling_offsets(self, device_count: int, device_type: str = "leaf") -> int:
-    """Calculate cabling offset using simple formula based on rack position."""
+- Racks contain ONLY ToR switches (no leafs)
+- All ToRs connect directly to pod spines
+- Two-tier architecture (spine-ToR)
 
-    current_index = self.data.index
-    deployment_type = self.data.pod.deployment_type
+**Port Allocation**:
 
-    # For middle_rack deployment ToRs: always offset=0 (intra-rack)
-    if deployment_type == "middle_rack" and device_type == "tor":
-        offset = 0
+- **ToR Offset**: Cumulative across rows and racks
+- Formula: `(max_tors_per_row × (row - 1)) + (tors_in_rack × (rack - 1))`
+- Prevents port conflicts on shared spines
 
-    # For mixed deployment ToRs: static offset based on rack index
-    elif deployment_type == "mixed" and device_type == "tor":
-        offset = (current_index - 1) * device_count
+**Connection Pattern**:
 
-    # For mixed/middle_rack deployment leafs: offset based on row
-    elif deployment_type in ("mixed", "middle_rack") and device_type == "leaf":
-        offset = (self.data.row_index - 1) * device_count
-
-    # For tor deployment: cumulative offset across rows and racks
-    elif deployment_type == "tor" and device_type == "tor":
-        # Complex formula accounting for rows and rack position
-        offset = calculate_tor_deployment_offset(...)
-
-    return offset
+```text
+Pod Structure
+├── Spine Layer (connects to all ToRs)
+│   ├── spine-01 (ports 0-31)
+│   └── spine-02 (ports 0-31)
+│       │
+├── Row 1
+│   ├── Rack 1 (tor-only)
+│   │   ├── tor-01 ────────────── spine ports 0-1 (offset=0)
+│   │   └── tor-02 ────────────── spine ports 2-3 (offset=0)
+│   │
+│   └── Rack 2 (tor-only)
+│       ├── tor-01 ────────────── spine ports 4-5 (offset=4)
+│       └── tor-02 ────────────── spine ports 6-7 (offset=4)
+│
+└── Row 2
+    ├── Rack 1 (tor-only)
+    │   ├── tor-01 ────────────── spine ports 8-9 (offset=8)
+    │   └── tor-02 ────────────── spine ports 10-11 (offset=8)
+    │
+    └── Rack 2 (tor-only)
+        ├── tor-01 ────────────── spine ports 12-13 (offset=12)
+        └── tor-02 ────────────── spine ports 14-15 (offset=12)
 ```
+
+**End Device Connectivity**:
+
+- Servers connect directly to ToRs in their rack
+- ToRs provide L2/L3 access and uplink to spines
+- No intermediate aggregation layer
+
+**When to Use**:
+
+- Smaller deployments (few racks)
+- Simplified architecture (fewer switch tiers)
+- Lower cost (no leaf switches)
+- Sufficient spine port density
 
 ---
 
-## Naming Convention Types
+### 3. Mixed Deployment
 
-Infrahub-demo supports three device naming strategies, each suitable for different organizational preferences and automation requirements.
+**Use Case**: Hybrid approach combining middle rack leafs for aggregation with ToR-only racks for compute.
 
-### 1. Standard Naming Convention
+**Topology**:
+
+- Some racks have leafs only (middle racks) - these aggregate traffic
+- Other racks have ToRs only (compute racks) - these connect to middle rack leafs
+- ToRs in the same row connect to leafs in that row's middle rack
+
+**Port Allocation**:
+
+- **Leaf Offset**: Based on row position (for spine connections)
+- **ToR Offset**: Based on rack position within the row (for leaf connections)
+- Allows flexible mix of network and compute racks per row
+
+**Connection Pattern**:
+
+```text
+Pod Structure
+├── Spine Layer
+│   ├── spine-01
+│   └── spine-02
+│       │
+├── Row 1
+│   ├── Rack 4 (middle rack - network)
+│   │   ├── leaf-01 ──────────── connects to spines (offset=0)
+│   │   └── leaf-02 ──────────── connects to spines (offset=0)
+│   │       │
+│   ├── Rack 1 (tor-only - compute) ┘
+│   │   ├── tor-01 ────────────── connects to Row 1 leafs (offset=0)
+│   │   └── tor-02 ────────────── connects to Row 1 leafs (offset=0)
+│   │
+│   └── Rack 7 (tor-only - compute)
+│       ├── tor-01 ────────────── connects to Row 1 leafs (offset=12)
+│       └── tor-02 ────────────── connects to Row 1 leafs (offset=12)
+│
+└── Row 2
+    ├── Rack 4 (middle rack - network)
+    │   ├── leaf-01 ──────────── connects to spines (offset=4)
+    │   └── leaf-02 ──────────── connects to spines (offset=4)
+    │       │
+    ├── Rack 1 (tor-only - compute) ┘
+    │   ├── tor-01 ────────────── connects to Row 2 leafs (offset=0)
+    │   └── tor-02 ────────────── connects to Row 2 leafs (offset=0)
+    │
+    └── Rack 7 (tor-only - compute)
+        ├── tor-01 ────────────── connects to Row 2 leafs (offset=12)
+        └── tor-02 ────────────── connects to Row 2 leafs (offset=12)
+```
+
+**End Device Connectivity**:
+
+- Servers in compute racks (R1, R7) connect to ToRs
+- ToRs connect to middle rack leafs in the same row (R4)
+- Leafs aggregate traffic and connect to spines
+- Each row operates independently
+
+**When to Use**:
+
+- Large deployments with many compute racks
+- Need for traffic aggregation before spine layer
+- Flexible rack placement (mix network and compute)
+- Maximizes port efficiency on spines
+
+---
+
+### Deployment Type Comparison
+
+| Feature | Middle Rack | ToR | Mixed |
+| ------- | ----------- | --- | ----- |
+| **Architecture** | 3-tier (spine-leaf-tor) | 2-tier (spine-tor) | 3-tier (spine-leaf-tor) |
+| **Rack Density** | Medium | Low | High |
+| **Complexity** | Low | Very Low | Medium |
+| **Port Efficiency** | Good | Fair | Excellent |
+| **Scalability** | Good | Limited | Excellent |
+| **Best For** | Standard pods | Small pods | Large pods |
+| **Cabling** | Intra-rack only | All to spines | Row-based |
+
+---
+
+## Device Naming Conventions
+
+Infrahub-demo supports three naming strategies for network devices. Choose the one that matches your organization's standards and automation requirements.
+
+### 1. Standard Naming (Recommended)
 
 **Format**: `{fabric}-fab{dc_index}-pod{pod_index}-row{row_index}-rack{rack_index}-{role}-{device_index}`
 
 **Characteristics**:
 
 - Most verbose and descriptive
-- Includes explicit hierarchy labels
-- Easy to understand at a glance
-- Recommended for large, complex fabrics
+- Every hierarchy level explicitly labeled
+- Easy to parse and understand
+- Best for large, complex environments
 
 **Examples**:
 
 ```text
-# Data Center level (super-spines)
+# Super-spines (data center level)
 DC1-fab1-super-spine-01
 DC1-fab1-super-spine-02
 
-# Pod level (spines)
+# Spines (pod level)
 DC1-fab1-pod1-spine-01
-DC1-fab1-pod1-spine-02
-DC1-fab1-pod2-spine-01
+DC1-fab1-pod2-spine-02
 
-# Rack level (leafs and ToRs)
-DC1-fab1-pod1-row1-rack1-leaf-01
-DC1-fab1-pod1-row1-rack1-leaf-02
+# Leafs (row level)
+DC1-fab1-pod1-row1-rack4-leaf-01
+DC1-fab1-pod1-row2-rack4-leaf-02
+
+# ToRs (rack level)
 DC1-fab1-pod1-row1-rack1-tor-01
-DC1-fab1-pod1-row2-rack5-leaf-01
-DC1-fab1-pod2-row1-rack1-tor-01
-
-# Edge devices
-DC1-fab1-pod1-edge-01
-DC1-fab1-pod1-firewall-01
-DC1-fab1-pod1-loadbalancer-01
+DC1-fab1-pod1-row1-rack7-tor-02
 ```
 
-**Configuration**:
+**Benefits**:
 
-```yaml
-design_pattern:
-  naming_convention: standard
-```
+- Self-documenting device location
+- Easy to filter in automation (e.g., all row1 devices)
+- Clear hierarchy for troubleshooting
+- No ambiguity in device placement
 
-**When to Use**:
+**Use When**:
 
-- Multi-datacenter deployments
-- Complex hierarchies with many pods and rows
-- Teams new to the infrastructure
-- Compliance/audit requirements needing explicit naming
+- You have multiple data centers or fabrics
+- Large scale (many pods, rows, racks)
+- Need clear hierarchy visibility
+- Automation relies on structured names
 
 ---
 
-### 2. Hierarchical Naming Convention
+### 2. Hierarchical Naming
 
-**Format**: `{fabric}-{dc_index}-{pod_index}-{row_index}-{rack_index}-{role}-{device_index}`
+**Format**: `{fabric}-fab{dc_index}-pod{pod_index}-{role}-{device_index}`
 
 **Characteristics**:
 
-- Numeric hierarchy without labels
-- More concise than standard
-- Still preserves full hierarchy
-- Good balance of brevity and clarity
+- Shorter names than Standard
+- Omits row and rack information
+- Focuses on fabric hierarchy (DC → Pod → Device)
+- Good for medium-sized environments
 
 **Examples**:
 
 ```text
-# Data Center level (super-spines)
-DC1-1-super-spine-01
-DC1-1-super-spine-02
+# Super-spines
+DC1-fab1-super-spine-01
+DC1-fab1-super-spine-02
 
-# Pod level (spines)
-DC1-1-1-spine-01
-DC1-1-1-spine-02
-DC1-1-2-spine-01
+# Spines
+DC1-fab1-pod1-spine-01
+DC1-fab1-pod2-spine-02
 
-# Rack level (leafs and ToRs)
-DC1-1-1-1-1-leaf-01
-DC1-1-1-1-1-leaf-02
-DC1-1-1-1-1-tor-01
-DC1-1-1-2-5-leaf-01
-DC1-1-2-1-1-tor-01
+# Leafs (no row/rack in name)
+DC1-fab1-pod1-leaf-01
+DC1-fab1-pod1-leaf-02
 
-# Edge devices
-DC1-1-1-edge-01
-DC1-1-1-firewall-01
+# ToRs (no row/rack in name)
+DC1-fab1-pod1-tor-01
+DC1-fab1-pod1-tor-02
 ```
 
-**Configuration**:
+**Benefits**:
 
-```yaml
-design_pattern:
-  naming_convention: hierarchical
-```
+- Shorter device names
+- Simpler naming scheme
+- Still maintains fabric context
+- Easier for humans to remember
 
-**When to Use**:
+**Use When**:
 
-- Automation-heavy environments
-- Shorter hostnames preferred
-- Clear numeric hierarchy is acceptable
-- Programmatic device identification
+- Medium-sized deployments
+- Row/rack info not critical in device name
+- You prefer shorter hostnames
+- FQDN length is a concern
 
 ---
 
-### 3. Flat Naming Convention
+### 3. Flat Naming
 
-**Format**: `{fabric}{role}{dc_index}{pod_index}{row_index}{rack_index}{device_index}`
+**Format**: `{fabric}-{role}-{device_index}`
 
 **Characteristics**:
 
-- No separators (except before role)
-- Most compact format
-- All numeric indices concatenated
-- Requires familiarity with structure
+- Shortest possible names
+- No hierarchy information in name
+- Relies on inventory system for location
+- Best for small or simple environments
 
 **Examples**:
 
 ```text
-# Data Center level (super-spines)
-DC1superspine101
-DC1superspine102
-
-# Pod level (spines)
-DC1spine11101
-DC1spine11102
-DC1spine12101
-
-# Rack level (leafs and ToRs)
-DC1leaf1111101
-DC1leaf1111102
-DC1tor1111101
-DC1leaf1125101
-DC1tor121101
-
-# Edge devices
-DC1edge1101
-DC1firewall1101
-DC1loadbalancer1101
+# All devices use simple flat naming
+DC1-super-spine-01
+DC1-super-spine-02
+DC1-spine-01
+DC1-spine-02
+DC1-leaf-01
+DC1-leaf-02
+DC1-tor-01
+DC1-tor-02
 ```
 
-**Configuration**:
+**Benefits**:
 
-```yaml
-design_pattern:
-  naming_convention: flat
+- Very short device names
+- Simplest naming scheme
+- Easy to type and remember
+- Good for lab/test environments
+
+**Use When**:
+
+- Small deployments (single pod)
+- Lab or proof-of-concept environments
+- Inventory system tracks device location
+- You prioritize name simplicity
+
+---
+
+### Naming Strategy Comparison
+
+| Strategy | Name Length | Hierarchy Info | Readability | Best For |
+| -------- | ----------- | -------------- | ----------- | -------- |
+| **Standard** | Longest | Complete | Excellent | Production, Large Scale |
+| **Hierarchical** | Medium | Partial | Good | Medium Scale |
+| **Flat** | Shortest | None | Fair | Small Scale, Labs |
+
+**Recommendation**: Use **Standard** for production deployments. The longer names provide valuable context for troubleshooting and automation without relying on external systems.
+
+---
+
+## Cable Type Detection
+
+Infrahub-demo automatically detects and sets appropriate cable types based on interface characteristics. This ensures accurate inventory and proper media selection for your physical infrastructure.
+
+### Supported Cable Types
+
+1. **Copper** - Cat6a/Cat7 patch cables for base-t interfaces
+2. **MMF** (Multi-Mode Fiber) - OM3/OM4 fiber for most data center links (<300m)
+3. **SMF** (Single-Mode Fiber) - OS2 fiber for long-distance links (>300m)
+
+### Detection Logic
+
+The system analyzes interface types on both ends of a connection:
+
+**Both Copper** (e.g., `10gbase-t` ↔ `10gbase-t`)
+
+- **Result**: Copper patch cable
+- **Use Case**: Server NICs with copper, legacy ToR switches
+
+**Both Fiber** (e.g., `100gbase-x-qsfp28` ↔ `100gbase-x-qsfp28`)
+
+- **Result**: Multi-mode fiber (MMF) patch cable
+- **Use Case**: Most spine-leaf, leaf-tor connections in modern DCs
+
+**Mixed** (e.g., `10gbase-t` ↔ `10gbase-x-sfp+`)
+
+- **Result**: DAC (Direct Attach Copper) or AOC (Active Optical Cable)
+- **Use Case**: Copper server NICs connecting to fiber switch ports
+
+### Common Scenarios
+
+#### Data Center Infrastructure (Typical)
+
+**Spine ↔ Leaf**: All fiber interfaces
+
+```text
+spine-01:100gbase-x-qsfp28 ↔ leaf-01:100gbase-x-qsfp28
+Cable Type: MMF (multi-mode fiber patch)
 ```
 
-**When to Use**:
+**Leaf ↔ ToR**: All fiber interfaces
 
-- Space-constrained environments (hostname length limits)
-- Highly automated environments
-- Consistent device positioning/indexing
-- Teams familiar with the numbering scheme
+```text
+leaf-01:25gbase-x-sfp28 ↔ tor-01:25gbase-x-sfp28
+Cable Type: MMF (multi-mode fiber patch)
+```
+
+#### Server Connectivity
+
+**Server ↔ ToR**: Mixed (copper NIC to fiber switch)
+
+```text
+server-01:10gbase-t ↔ tor-01:10gbase-x-sfp+
+Cable Type: MMF (DAC or AOC cable)
+```
+
+#### Legacy Infrastructure
+
+**Old Equipment**: All copper
+
+```text
+tor-01:10gbase-t ↔ aggregation-sw:10gbase-t
+Cable Type: Copper (Cat6a patch)
+```
+
+---
+
+*This guide is maintained as part of the infrahub-demo project. For implementation details, see the source code in `generators/` directory.*

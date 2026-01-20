@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Any, List, Optional
 
 from pydantic import BaseModel, field_validator
@@ -268,3 +269,24 @@ class EndpointModel(BaseModel):
     """Complete endpoint connectivity model."""
 
     endpoint: EndpointDevice
+
+
+# Endpoint connectivity models
+@dataclass(frozen=True)
+class ConnectionFingerprint:
+    """Unique identifier for a server-to-switch connection.
+
+    Provides idempotency by uniquely identifying each connection regardless
+    of execution order or multiple generator runs.
+    """
+
+    server_name: str
+    server_interface: str
+    switch_name: str
+    switch_interface: str
+
+    def __hash__(self) -> int:
+        return hash((self.server_name, self.server_interface, self.switch_name, self.switch_interface))
+
+    def __repr__(self) -> str:
+        return f"{self.server_name}:{self.server_interface} → {self.switch_name}:{self.switch_interface}"
