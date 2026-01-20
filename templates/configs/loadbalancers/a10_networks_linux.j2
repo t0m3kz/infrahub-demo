@@ -1,10 +1,11 @@
 !
 ! A10 Thunder Load Balancer Configuration
 ! Device: {{ name }}
-! Generated for {{ device_type.manufacturer.name }} {{ device_type.platform.netmiko_device_type }}
-! Management IP: {{ load-balancer_config.management_ip }}
-! Device Role: {{ load-balancer_config.device_role }}
-! Device Status: {{ load-balancer_config.device_status }}
+! Type: {{ lb_type|default('software') }} Load Balancer
+! Scheme: {{ scheme|default('internal') }}
+! Management IP: {{ loadbalancer_config.management_ip }}
+! Device Role: {{ loadbalancer_config.device_role }}
+! Device Status: {{ loadbalancer_config.device_status }}
 !
 
 ! System Configuration
@@ -88,7 +89,7 @@ slb service-group {{ vip.hostname | replace('.', '_') | replace('-', '_') }}_sg
 !
 ! Virtual Server configuration for {{ vip.hostname }}
 !
-slb virtual-server {{ vip.hostname | replace('.', '_') | replace('-', '_') }}_vs {{ vip.ip_address.split('/')[0] }}
+slb virtual-server {{ vip.hostname | replace('.', '_') | replace('-', '_') }}_vs {{ vip.vip_ip }}
 {%- if vip.ssl_certificate %}
     port 443 {{ vip.mode | upper }}
         source-nat auto
@@ -147,7 +148,7 @@ slb template connection-reuse {{ vip.hostname | replace('.', '_') | replace('-',
 !
 ! Access-list for management
 !
-access-list 10 permit {{ load-balancer_config.management_network | default('10.0.0.0') }} {{ load-balancer_config.management_netmask | default('0.255.255.255') }}
+access-list 10 permit {{ loadbalancer_config.management_network | default('10.0.0.0') }} {{ loadbalancer_config.management_netmask | default('0.255.255.255') }}
 access-list 10 deny any
 
 !

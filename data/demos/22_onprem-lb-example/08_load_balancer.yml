@@ -18,4 +18,5 @@ spec:
       deployment: "DC1"
       device: "dc-1-pod1-lb-1"
       frontend_servers:
-        - ["dc-1-pod1-lb-1"]
+        - ["demo-haproxy-frontend-01"]
+        - ["demo-haproxy-frontend-02"]

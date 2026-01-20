@@ -1,220 +1,107 @@
 query loadbalancer_config($device: String!) {
-  DcimDevice(name__value: $device) {
+  ManagedLoadBalancer(name__value: $device) {
     edges {
       node {
+        id
         name {
           value
         }
-        device_type {
-          node {
-            platform {
-              node {
-                netmiko_device_type {
-                  value
-                }
-              }
-            }
-            manufacturer {
-              node {
-                name {
-                  value
-                }
-              }
-            }
-          }
-        }
-        role {
+        lb_type {
           value
         }
-        status {
+        lb_vendor {
           value
         }
-        interfaces {
+        scheme {
+          value
+        }
+        frontend_servers {
+          count
           edges {
             node {
-              __typename
+              id
               name {
-                value
-              }
-              description {
                 value
               }
               status {
                 value
               }
-              role {
-                value
-              }
-              ... on DcimVirtualInterface {
-                ip_addresses {
-                  edges {
-                    node {
-                      address {
-                        value
-                      }
-                      ip_namespace {
-                        node {
-                          name {
-                            value
-                          }
-                        }
-                      }
-                    }
-                  }
-                }
-              }
             }
           }
         }
-        # Load Balancer service instance (ManagedLoadBalancer)
-        device_services {
+        vip_services {
           edges {
             node {
-              __typename
-              ... on ManagedLoadBalancer {
-                name {
-                  value
+              id
+              hostname {
+                value
+              }
+              protocol {
+                value
+              }
+              port {
+                value
+              }
+              ssl_certificate {
+                value
+              }
+              vip_ip {
+                node {
+                  address {
+                    value
+                  }
                 }
-                description {
-                  value
-                }
-                status {
-                  value
-                }
-                lb_type {
-                  value
-                }
-                lb_vendor {
-                  value
-                }
-                scheme {
-                  value
-                }
-                deployment {
+              }
+              health_checks {
+                edges {
                   node {
-                    name {
+                    check {
+                      value
+                    }
+                    rise {
+                      value
+                    }
+                    fall {
+                      value
+                    }
+                    timeout {
                       value
                     }
                   }
                 }
-                haproxy_mode {
-                  value
-                }
-                ssl_certificate {
-                  value
-                }
-                # Frontend servers (HA cluster members)
-                frontend_servers {
-                  edges {
-                    node {
-                      name {
-                        value
+              }
+              backend_pool {
+                node {
+                  id
+                  name {
+                    value
+                  }
+                  load_balancing_algorithm {
+                    value
+                  }
+                  onprem_servers {
+                    count
+                    edges {
+                      node {
+                        hostname {
+                          value
+                        }
+                        ip_address {
+                          node {
+                            address {
+                              value
+                            }
+                          }
+                        }
                       }
                     }
                   }
-                }
-                # VIP Services (Listeners)
-                vip_services {
-                  edges {
-                    node {
-                      hostname {
-                        value
-                      }
-                      description {
-                        value
-                      }
-                      status {
-                        value
-                      }
-                      protocol {
-                        value
-                      }
-                      port {
-                        value
-                      }
-                      ssl_certificate {
-                        value
-                      }
-                      ssl_redirect {
-                        value
-                      }
-                      timeout_client {
-                        value
-                      }
-                      timeout_server {
-                        value
-                      }
-                      max_connections {
-                        value
-                      }
-                      # VIP IP address (for Managed)
-                      vip_ip {
-                        node {
-                          address {
-                            value
-                          }
-                        }
-                      }
-                      # Backend Pool
-                      backend_pool {
-                        node {
-                          name {
-                            value
-                          }
-                          load_balancing_algorithm {
-                            value
-                          }
-                          session_persistence {
-                            value
-                          }
-                          drain_timeout {
-                            value
-                          }
-                          # Managed backend servers
-                          onprem_servers {
-                            edges {
-                              node {
-                                hostname {
-                                  value
-                                }
-                                description {
-                                  value
-                                }
-                                ip_address {
-                                  node {
-                                    address {
-                                      value
-                                    }
-                                  }
-                                }
-                                status {
-                                  value
-                                }
-                              }
-                            }
-                          }
-                        }
-                      }
-                      # Health checks for this VIP
-                      health_checks {
-                        edges {
-                          node {
-                            check {
-                              value
-                            }
-                            rise {
-                              value
-                            }
-                            fall {
-                              value
-                            }
-                            timeout {
-                              value
-                            }
-                            description {
-                              value
-                            }
-                          }
+                  cloud_instances {
+                    count
+                    edges {
+                      node {
+                        name {
+                          value
                         }
                       }
                     }

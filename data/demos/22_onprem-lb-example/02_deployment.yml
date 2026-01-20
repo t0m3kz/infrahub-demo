@@ -58,7 +58,19 @@ spec:
                 data:
                   name: dc-1-pod1-lb-1
                   role: load-balancer
-                  device_type: NGINX
+                  device_type: HA-PROXY
+                  status: active
+              - kind: DcimPhysicalDevice
+                data:
+                  name: dc-1-pod1-lb-2
+                  role: load-balancer
+                  device_type: BIG-IP
+                  status: active
+              - kind: DcimPhysicalDevice
+                data:
+                  name: dc-1-pod1-lb-3
+                  role: load-balancer
+                  device_type: Thunder
                   status: active
           - index: 2
             deployment_type: mixed

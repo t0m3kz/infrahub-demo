@@ -1,0 +1,64 @@
+# Frontend Server Devices
+# Physical devices that run the LB software
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimPhysicalDevice
+  data:
+    # HAProxy Frontend Devices
+    - name: "demo-haproxy-frontend-01"
+      status: active
+      role: "load-balancer"
+      device_type: "HA-PROXY"
+
+    - name: "demo-haproxy-frontend-02"
+      status: active
+      role: "load-balancer"
+      device_type: "HA-PROXY"
+
+    # F5 BIG-IP Frontend Devices
+    - name: "demo-f5-frontend-01"
+      status: active
+      role: "load-balancer"
+      device_type: "BIG-IP"
+
+    - name: "demo-f5-frontend-02"
+      status: active
+      role: "load-balancer"
+      device_type: "BIG-IP"
+
+    # A10 Thunder Frontend Devices
+    - name: "demo-a10-frontend-01"
+      status: active
+      role: "load-balancer"
+      device_type: "Thunder"
+
+    - name: "demo-a10-frontend-02"
+      status: active
+      role: "load-balancer"
+      device_type: "Thunder"
+
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: IpamIPAddress
+  data:
+    # HAProxy Frontend IPs
+    - address: "10.10.1.11/24"
+      ip_namespace: "default"
+    - address: "10.10.1.12/24"
+      ip_namespace: "default"
+
+    # F5 BIG-IP Frontend IPs
+    - address: "10.10.2.11/24"
+      ip_namespace: "default"
+    - address: "10.10.2.12/24"
+      ip_namespace: "default"
+
+    # A10 Thunder Frontend IPs
+    - address: "10.10.3.11/24"
+      ip_namespace: "default"
+    - address: "10.10.3.12/24"
+      ip_namespace: "default"

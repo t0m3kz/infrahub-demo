@@ -1,0 +1,35 @@
+# Additional Load Balancers for F5 and A10 vendors
+# These demonstrate support for different load balancer vendors
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: ManagedLoadBalancer
+  data:
+    # F5 BIG-IP Load Balancer
+    - name: "demo-dc1-f5-lb"
+      member_of_groups:
+        - "loadbalancers"
+      status: active
+      lb_type: hardware
+      lb_vendor: f5_bigip
+      scheme: internal
+      deployment: "DC1"
+      device: "dc-1-pod1-lb-2"
+      frontend_servers:
+        - ["demo-f5-frontend-01"]
+        - ["demo-f5-frontend-02"]
+
+    # A10 Networks Thunder Load Balancer
+    - name: "demo-dc1-a10-lb"
+      member_of_groups:
+        - "loadbalancers"
+      status: active
+      lb_type: hardware
+      lb_vendor: a10_networks
+      scheme: internal
+      deployment: "DC1"
+      device: "dc-1-pod1-lb-3"
+      frontend_servers:
+        - ["demo-a10-frontend-01"]
+        - ["demo-a10-frontend-02"]

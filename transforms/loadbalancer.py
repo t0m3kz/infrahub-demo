@@ -4,134 +4,122 @@ from infrahub_sdk.transforms import InfrahubTransform
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 from netutils.utils import jinja2_convenience_function
 
-from .common import get_data
 
 
 class LoadBalancer(InfrahubTransform):
     query = "loadbalancer_config"
 
     async def transform(self, data: Any) -> Any:
-        data = get_data(data)
+        # Clean the data
+        from utils.data_cleaning import clean_data
+
+        cleaned_data = clean_data(data)
+
+        # Get load balancer data
+        lb_data = None
+        for key, value in cleaned_data.items():
+            if key == "ManagedLoadBalancer":
+                if isinstance(value, list) and value:
+                    lb_data = value[0]
+                else:
+                    lb_data = value
+                break
+
+        if not lb_data:
+            raise ValueError("No ManagedLoadBalancer data found in response")
+
         # Extract VIPs and process them for load balancer configuration
         vips = []
 
-        # Process backend servers first
-        backend_servers = {}
-        backend_server_list = []
+        # Process VIP services (backend_pool is now nested in each VIP)
+        vip_services = lb_data.get("vip_services", [])
+        for vip_service in vip_services:
+            # Get backend pool from nested relationship
+            backend_pool = vip_service.get("backend_pool", {})
 
-        # Get backend servers from the separate query
-        for server_edge in data.get("backend_servers", []):
-            server = server_edge.get("node", {})
-            server_name = server.get("name", "unknown")
-            server_status = server.get("status", "unknown")
+            if not backend_pool or not backend_pool.get("name"):
+                continue
 
-            # Get server IP address
-            server_ip = None
-            for interface in server.get("interfaces", []):
-                if interface.get("role") == "server" and interface.get("ip_addresses"):
-                    for ip_edge in interface["ip_addresses"]:
-                        ip_node = ip_edge.get("node", {})
-                        server_ip = ip_node.get("address", "").split("/")[0]
-                        break
-                    if server_ip:
-                        break
+            # Extract values - already flattened by clean_data
+            hostname = vip_service.get("hostname", "unknown")
+            protocol = vip_service.get("protocol", "http")
+            port = vip_service.get("port", 80)
+            ssl_cert = vip_service.get("ssl_certificate")
+            lb_algorithm = backend_pool.get("load_balancing_algorithm", "roundrobin")
 
-            if server_ip and server_status == "active":
-                server_config = {
-                    "name": server_name,
-                    "ip": server_ip,
-                    "port": 80,  # Default HTTP port
-                    "status": server_status,
-                    "weight": 1,
-                    "max_fails": 3,
-                    "fail_timeout": "30s",
-                }
-                backend_servers[server_name] = server_config
-                backend_server_list.append(server_config)
+            # Get VIP IP address
+            vip_ip_node = vip_service.get("vip_ip", {})
+            vip_ip = vip_ip_node.get("address", "") if vip_ip_node else ""
 
-        # Process VIPs from device services (new schema structure)
-        device_services = data.get("device_service", [])
-        for service in device_services:
-            service_type = service.get("__typename") or service.get("typename")
-            if service_type == "ServiceVIP":
-                # ServiceVIP has a vip_ip reference to IpamIPAddress
-                vip_ip = service.get("vip_ip")
+            # Create VIP entry with typed lists
+            backend_servers: list[dict[str, Any]] = []
+            health_checks_list: list[dict[str, Any]] = []
 
-                if vip_ip:
-                    # Create a VIP entry using actual values from the schema
-                    vip = {
-                        "hostname": service.get(
-                            "hostname",
-                            service.get("name", f"vip-{vip_ip.get('address', 'unknown')}"),
-                        ),
-                        "mode": service.get("mode", "http"),
-                        "status": service.get("status", "active"),
-                        "balance": service.get("balance", "roundrobin"),
-                        "ssl_certificate": service.get("ssl_certificate"),
-                        "ip_address": vip_ip.get("address"),
-                        "backend_servers": [],
-                        "health_checks": [],
-                        "service_name": service.get("name", "Unknown Service"),
-                        "service_description": service.get("description", ""),
+            vip = {
+                "hostname": hostname,
+                "protocol": protocol,
+                "port": port,
+                "vip_ip": vip_ip.split("/")[0] if vip_ip else "*",  # Remove CIDR, fallback to wildcard
+                "mode": "tcp" if protocol == "tcp" else "http",
+                "balance": lb_algorithm.replace("_", ""),
+                "ssl_certificate": ssl_cert,
+                "backend_servers": backend_servers,
+                "health_checks": health_checks_list,
+            }
+
+            # Process onprem backend servers
+            onprem_servers = backend_pool.get("onprem_servers", [])
+            for server in onprem_servers:
+                hostname_val = server.get("hostname", "unknown")
+                server_ip = server.get("ip_address", {}).get("address", "").split("/")[0]
+
+                if server_ip:
+                    backend_config = {
+                        "hostname": hostname_val,
+                        "ip_address": server_ip,
+                        "port": port,
+                        "status": "active",
                     }
+                    backend_servers.append(backend_config)
 
-                    # Process backend servers
-                    backend_servers_edges = service.get("backend_servers", [])
-                    for server in backend_servers_edges:
-                        # Handle both edge format and direct format
-                        server_data = server.get("node", server) if "node" in server else server
-                        server_ip = (
-                            server_data.get("ip_address", {}).get("address", "").split("/")[0]
-                            if server_data.get("ip_address")
-                            else None
-                        )
+            # Process cloud backend instances
+            cloud_instances = backend_pool.get("cloud_instances", [])
+            for instance in cloud_instances:
+                instance_name = instance.get("name", "unknown")
 
-                        if server_ip:
-                            backend_config = {
-                                "hostname": server_data.get("hostname"),
-                                "ip_address": server_ip,
-                                "port": 80,  # Default HTTP port
-                                "status": "active",
-                                "weight": 1,
-                                "max_fails": 3,
-                                "fail_timeout": "30s",
-                            }
-                            vip["backend_servers"].append(backend_config)
+                # For cloud instances, use name as identifier
+                backend_config = {
+                    "hostname": instance_name,
+                    "ip_address": "10.0.0.1",  # Placeholder - would need primary_ip from schema
+                    "port": port,
+                    "status": "active",
+                }
+                backend_servers.append(backend_config)
 
-                    # Process health checks
-                    health_checks_edges = service.get("health_checks", [])
-                    for check in health_checks_edges:
-                        # Handle both edge format and direct format
-                        check_data = check.get("node", check) if "node" in check else check
-                        health_check_config = {
-                            "check": check_data.get("check"),
-                            "check_type": check_data.get("check"),
-                            "rise": check_data.get("rise", 3),
-                            "fall": check_data.get("fall", 3),
-                            "timeout": check_data.get("timeout", 1000),
-                        }
-                        vip["health_checks"].append(health_check_config)
+            # Process health checks
+            health_checks = vip_service.get("health_checks", [])
+            for check in health_checks:
+                health_check_config = {
+                    "check": check.get("check", "http"),
+                    "check_type": check.get("check", "http"),
+                    "rise": check.get("rise", 3),
+                    "fall": check.get("fall", 3),
+                    "timeout": check.get("timeout", 1000),
+                }
+                health_checks_list.append(health_check_config)
 
-                    vips.append(vip)
+            vips.append(vip)
 
-        # Find management IP from interfaces
-        management_ip = None
-        for interface in data.get("interfaces", []):
-            if interface.get("role") == "management" and interface.get("ip_addresses"):
-                for ip in interface["ip_addresses"]:
-                    management_ip = ip.get("address", "").split("/")[0]
-                    break
-                if management_ip:
-                    break
+        # Set management IP placeholder
+        management_ip = "192.168.1.100"  # Placeholder - ManagedLoadBalancer doesn't have interfaces
 
-        # Extract device information
-        device_role = data.get("role", "load-balancer")
-        device_status = data.get("status", "active")
+        # Extract device information from ManagedLoadBalancer
+        device_role = "load-balancer"
+        device_status = lb_data.get("status", "active")
 
         # Add processed data to template context
-        data["vips"] = vips
-        data["backend_servers"] = backend_servers
-        data["load-balancer_config"] = {
+        lb_data["vips"] = vips
+        lb_data["loadbalancer_config"] = {
             "device_role": device_role,
             "device_status": device_status,
             "management_ip": management_ip or "192.168.1.100",  # fallback
@@ -144,9 +132,20 @@ class LoadBalancer(InfrahubTransform):
             "default_timeout_server": "50000ms",
         }
 
-        # Determine platform and manufacturer for template selection
-        platform = data["device_type"]["platform"]["netmiko_device_type"]
-        manufacturer = data["device_type"]["manufacturer"]["name"].lower().replace(" ", "_")
+        # Use lb_vendor to select the appropriate template for ManagedLoadBalancer
+        lb_vendor = lb_data.get("lb_vendor", "haproxy")
+
+        # Map lb_vendor to template name
+        template_map = {
+            "haproxy": "haproxy_technologies_linux.j2",
+            "nginx": "haproxy_technologies_linux.j2",  # Use HAProxy template for Nginx (similar syntax)
+            "f5_bigip": "f5_networks_linux.j2",
+            "a10_networks": "a10_networks_linux.j2",
+            "kemp": "haproxy_technologies_linux.j2",  # Use HAProxy template as fallback
+        }
+
+        # Get template name or default to HAProxy
+        template_name = template_map.get(lb_vendor, "haproxy_technologies_linux.j2")
 
         # Set up Jinja2 environment to load templates from the loadbalancers subfolder
         template_path = f"{self.root_directory}/templates/configs/loadbalancers"
@@ -156,12 +155,10 @@ class LoadBalancer(InfrahubTransform):
         )
         env.filters.update(jinja2_convenience_function())
 
-        # Select the template for load balancer devices
-        # Try manufacturer_platform.j2 first, fallback to platform.j2
-        template_name = f"{manufacturer}_{platform}.j2"
+        # Load the selected template
         template = env.get_template(template_name)
         # Render the template with the processed data
-        rendered_config = template.render(**data)
+        rendered_config = template.render(**lb_data)
 
         # Return the rendered result
         return rendered_config

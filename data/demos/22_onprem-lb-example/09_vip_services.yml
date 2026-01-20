@@ -19,7 +19,8 @@ spec:
       load_balancer: "demo-dc1-haproxy-lb"
       vip_ip:
         data:
-          address: "10.10.1.10"
+          address: "10.10.1.10/32"
+          ip_namespace: "default"
       health_checks:
         - ["http", "3", "3", "2000"]
 
@@ -35,7 +36,8 @@ spec:
       load_balancer: "demo-dc1-haproxy-lb"
       vip_ip:
         data:
-          address: "10.10.1.10"
+          address: "10.10.1.10/32"
+          ip_namespace: "default"
       health_checks:
         - ["http", "3", "3", "2000"]
     # App Tier - TCP
@@ -49,6 +51,7 @@ spec:
       load_balancer: "demo-dc1-haproxy-lb"
       vip_ip:
         data:
-          address: "10.10.1.11"
+          address: "10.10.1.11/32"
+          ip_namespace: "default"
       health_checks:
         - ["tcp", "2", "2", "1000"]

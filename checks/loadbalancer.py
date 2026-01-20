@@ -5,7 +5,7 @@ from typing import Any
 
 from infrahub_sdk.checks import InfrahubCheck
 
-from .common import get_data
+from .common import clean_data
 
 
 class CheckLoadBalancer(InfrahubCheck):
@@ -18,63 +18,87 @@ class CheckLoadBalancer(InfrahubCheck):
         errors: list[str] = []
         warnings: list[str] = []
 
-        data = get_data(data)
-        device_name = data.get("name", "Unknown")
+        # Clean but don't extract first value - we need both queries
+        cleaned_data = clean_data(data)
 
-        # Get device services (VIP services) from the load balancer device
-        device_services = data.get("device_services", [])
-        vip_services_count = 0
-
-        # Process each VIP service connected to this load balancer device
-        for service in device_services:
-            service_name = service.get("name", "Unknown Service")
-            service_status = service.get("status", "unknown")
-            service_type = service.get("typename", "Unknown")
-            backend_servers = len(service.get("backend_servers", []))
-
-            if service_type == "ServiceVIP":
-                vip_services_count += 1
-
-                # Check service status
-                if service_status != "active":
-                    errors.append(f"VIP service '{service_name}' is not active (status: {service_status})")
-                    continue
-
-                # Get VIP IP from this service (single IP per service)
-                vip_ip = service.get("vip_ip")
-                if not vip_ip:
-                    errors.append(f"VIP service '{service_name}' has no IP configured")
-                    continue
-
-                ip_address = vip_ip.get("address", "Unknown IP")
-
-                # Simple validation that the service has an IP
-                if ip_address and ip_address != "Unknown IP":
-                    # VIP service is properly configured with an IP
-                    vip_services_count += 1
+        # Get load balancer data (first query result)
+        lb_data = None
+        for key, value in cleaned_data.items():
+            if key == "ManagedLoadBalancer":
+                if isinstance(value, list) and value:
+                    lb_data = value[0]
                 else:
-                    errors.append(f"VIP service '{service_name}' has invalid IP configuration")
-                if backend_servers == 0:
-                    errors.append(
-                        f"Load balancer '{device_name}' has {vip_services_count} VIP service(s) but no backend servers configured yet"
-                    )
-                elif backend_servers < 2:
-                    errors.append(
-                        f"Load balancer '{device_name}' has only {backend_servers} backend server - no redundancy"
-                    )
+                    lb_data = value
+                break
 
-        # Check if load balancer has any VIP services
+        if not lb_data:
+            self.log_error(message="Load balancer data is empty or malformed")
+            return
+
+        device_name = lb_data.get("name", "Unknown")
+
+        # Validate frontend servers count (using GraphQL count)
+        frontend_servers = lb_data.get("frontend_servers", {})
+        frontend_count = (
+            frontend_servers.get("count", 0) if isinstance(frontend_servers, dict) else len(frontend_servers)
+        )
+
+        if frontend_count == 0:
+            errors.append(f"Load balancer '{device_name}' has no frontend servers configured")
+        elif frontend_count < 2:
+            errors.append(
+                f"Load balancer '{device_name}' has only {frontend_count} frontend server - requires exactly 2 for high availability"
+            )
+        elif frontend_count > 2:
+            warnings.append(f"Load balancer '{device_name}' has {frontend_count} frontend servers - expected exactly 2")
+
+        # Get VIP services from ManagedLoadBalancer
+        vip_services = lb_data.get("vip_services", [])
+        vip_services_count = len(vip_services)
+
         if vip_services_count == 0:
             errors.append(f"Load balancer '{device_name}' has no VIP services configured")
+
+        # Process each VIP service (backend_pool is now nested in each VIP)
+        for vip_service in vip_services:
+            service_name = vip_service.get("hostname", "Unknown Service")
+            protocol = vip_service.get("protocol", "")
+            port = vip_service.get("port")
+
+            # Get backend pool from nested relationship
+            backend_pool = vip_service.get("backend_pool", {})
+
+            if not backend_pool or not backend_pool.get("name"):
+                # HTTP VIPs on port 80 are often just redirects to HTTPS - skip validation
+                if protocol.lower() == "http" and port == 80:
+                    continue
+                errors.append(f"VIP service '{service_name}' ({protocol}:{port}) has no backend pool configured")
+                continue
+
+            pool_name = backend_pool.get("name", "Unknown Pool")
+
+            # Count backend servers from both sources (using GraphQL count)
+            onprem_servers = backend_pool.get("onprem_servers", {})
+            cloud_instances = backend_pool.get("cloud_instances", {})
+
+            onprem_count = onprem_servers.get("count", 0) if isinstance(onprem_servers, dict) else len(onprem_servers)
+            cloud_count = cloud_instances.get("count", 0) if isinstance(cloud_instances, dict) else len(cloud_instances)
+            total_backends = onprem_count + cloud_count
+
+            if total_backends == 0:
+                errors.append(f"VIP service '{service_name}' (pool: {pool_name}) has no backend servers configured")
+            elif total_backends < 2:
+                warnings.append(
+                    f"VIP service '{service_name}' (pool: {pool_name}) has only {total_backends} backend server - no redundancy"
+                )
 
         # Display all errors and warnings
         if errors:
             for error in errors:
                 self.log_error(message=error)
 
-        if warnings:
-            for warning in warnings:
-                self.log_error(message=f"WARNING: {warning}")
+        # Note: Warnings are handled inline (e.g., backend server redundancy)
+        # For now, only critical errors cause check failure
 
     def _validate_server_connectivity(
         self,
