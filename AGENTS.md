@@ -159,9 +159,9 @@ This project follows a **layered architecture** with clear separation between pl
 │              IMPLEMENTATION LAYERS                          │
 │  Technology-specific implementations (schemas/extensions/)  │
 ├─────────────────────────────────────────────────────────────┤
-│  OnPrem.*                   # On-premises infrastructure    │
-│    OnPrem.NetworkSegment    # VLANs, VXLANs, VRFs         │
-│    OnPrem.LoadBalancer      # VIP/HAProxy/F5/Nginx        │
+│  Managed.*                   # On-premises infrastructure    │
+│    Managed.NetworkSegment    # VLANs, VXLANs, VRFs         │
+│    Managed.LoadBalancer      # VIP/HAProxy/F5/Nginx        │
 │                                                             │
 │  Cloud.*                    # Public cloud resources        │
 │    Cloud.Subnet             # Cloud network segments        │
@@ -179,7 +179,7 @@ This project follows a **layered architecture** with clear separation between pl
 
 - **Platform**: Technology-agnostic base generics that provide common classification (segment_type, lb_type)
 - **Customer**: Customer-facing logical abstractions that span multiple technologies (VirtualCloud, VirtualFabric)
-- **OnPrem**: On-premises/self-hosted infrastructure (physical data centers, private cloud)
+- **Managed**: On-premises/self-hosted infrastructure (physical data centers, private cloud)
 - **Cloud**: Public cloud providers (AWS, Azure, GCP, Oracle Cloud)
 - **Dcim**: Physical infrastructure and devices
 - **Ipam**: IP address management
@@ -192,9 +192,9 @@ This project follows a **layered architecture** with clear separation between pl
 
 **Naming Convention Best Practice**:
 
-- `Service.*` → `OnPrem.*` for clarity (recommended for future refactoring)
+- `Service.*` → `Managed.*` for clarity (recommended for future refactoring)
 - Alternatives considered: `Private.*`, `SelfHosted.*`, `Enterprise.*`
-- **Recommended**: `OnPrem` (clearest distinction from Cloud)
+- **Recommended**: `Managed` (clearest distinction from Cloud)
 
 #### Schema Best Practices
 
@@ -224,10 +224,10 @@ generics:
 # On-prem implementation (schemas/extensions/)
 nodes:
   - name: NetworkSegment
-    namespace: OnPrem  # or Service (current)
+    namespace: Managed  # or Service (current)
     inherit_from:
       - PlatformNetworkSegment  # Gets segment_type, status, ip_prefixes
-      - OnPremGeneric           # Gets deployment, owner metadata
+      - ManagedGeneric           # Gets deployment, owner metadata
     attributes:
       - name: vlan_id         # Technology-specific
         kind: Number
@@ -410,17 +410,17 @@ Valid attribute kinds (case-sensitive):
 - **Nodes**: `PascalCase` (e.g., `LocationBuilding`, `TopologyPod`, `NetworkSegment`)
 - **Attributes**: `snake_case` (e.g., `device_type`, `serial_number`, `segment_type`)
 - **Relationships**: `snake_case` (e.g., `parent_location`, `connected_to`, `ip_prefixes`)
-- **Namespaces**: `PascalCase` (e.g., `Platform`, `OnPrem`, `Cloud`, `Dcim`, `Ipam`, `Routing`)
+- **Namespaces**: `PascalCase` (e.g., `Platform`, `Managed`, `Cloud`, `Dcim`, `Ipam`, `Routing`)
 
 **Namespace Naming Conventions**:
 
-- Use singular form for technology domains: `Onprem`, `Cloud`, `Edge` (not `Onprems`, `Clouds`)
+- Use singular form for technology domains: `Managed`, `Cloud`, `Edge` (not `Manageds`, `Clouds`)
 - Functional domains: `Routing`, `Security`, `Loadbalancer`, `Service`
 - Avoid abbreviations unless industry-standard: `Dcim` (ok), `Ipam` (ok), `LB` (avoid - use `Loadbalancer`)
 
 **Node Naming Conventions**:
 
-- OnPrem resources: Use generic business names (`NetworkSegment`, `LoadBalancer`, `Firewall`)
+- Managed resources: Use generic business names (`NetworkSegment`, `LoadBalancer`, `Firewall`)
 - Cloud resources: Use provider-agnostic names (`Subnet`, `LoadBalancer`, `VPC`)
 - Customer abstractions: Use logical names (`VirtualCloud`, `VirtualFabric`)
 - Avoid technology-specific prefixes in node names (`NetworkSegment` not `VLANSegment`)
@@ -429,7 +429,7 @@ Valid attribute kinds (case-sensitive):
 
 - ✅ `Platform.*` - Base generics for classification
 - ✅ `Customer.*` - Customer-facing logical abstractions (VirtualCloud, VirtualFabric)
-- ✅ `OnPrem.*` - On-premises infrastructure (NetworkSegment, LoadBalancer)
+- ✅ `Managed.*` - On-premises infrastructure (NetworkSegment, LoadBalancer)
 - ✅ `Cloud.*` - Public cloud resources (Subnet, LoadBalancer, VPC)
 - ✅ `Service.*` - Running service instances (OSPF, BGP, PIM)
 
@@ -589,7 +589,7 @@ primary_ip:
 
 ```yaml
 load_balancer:
-  kind: OnpremLoadBalancer  # Specify concrete type when peer is generic
+  kind: ManagedLoadBalancer  # Specify concrete type when peer is generic
   data:
     name: "my-lb"
 ```
@@ -680,7 +680,7 @@ spec:
     - name: "web-pool"
       vip_service: ["www.example.com", "https", "443"]  # Port as string!
       load_balancing_algorithm: "round_robin"
-      onprem_servers:
+      Managed_servers:
         - ["web-01", "10.1.10.11/24", "default"]
 ```
 
@@ -755,19 +755,19 @@ uv run infrahubctl object load data/demos/my-demo/01_devices.yml
 
 ### Namespace Strategy (2026-01)
 
-**Decision**: Use technology-based namespaces (`OnPrem`, `Cloud`) rather than functional (`Service`, `Connectivity`)
+**Decision**: Use technology-based namespaces (`Managed`, `Cloud`) rather than functional (`Service`, `Connectivity`)
 
 **Rationale**:
 
 1. **Operational alignment** - Teams typically manage "cloud resources" or "on-prem infrastructure" separately
 2. **Clear boundaries** - Easy to apply different policies, generators, or transforms per technology
-3. **Query simplicity** - `kind=Cloud*` gets all cloud resources, `kind=OnPrem*` gets all on-premises
+3. **Query simplicity** - `kind=Cloud*` gets all cloud resources, `kind=Managed*` gets all on-premises
 4. **Future extensibility** - Easy to add `Container.*`, `Edge.*`, `IoT.*` namespaces
 5. **RBAC granularity** - Can assign permissions by technology domain
 
 **Current State** (transition in progress):
 
-- `Service.*` → Rename to `OnPrem.*` (recommended)
+- `Service.*` → Rename to `Managed.*` (recommended)
 - `Cloud.*` → Keep as-is ✅
 - `Platform.*` → Base generics ✅
 
@@ -776,7 +776,7 @@ uv run infrahubctl object load data/demos/my-demo/01_devices.yml
 - `Private.*` - Too vague, could mean security level
 - `SelfHosted.*` - Too long, less common terminology
 - `Enterprise.*` - Doesn't distinguish from cloud enterprise features
-- `OnPrem.*` - ✅ **Selected**: Clear, industry-standard, distinguishable from Cloud
+- `Managed.*` - ✅ **Selected**: Clear, industry-standard, distinguishable from Cloud
 
 ### Generic Pattern (2026-01)
 
@@ -809,8 +809,42 @@ Platform.NetworkSegment:
 **Implementation Guide**:
 
 - Platform generics: Classification attributes only
-- Technology generics (CloudResource, OnPremGeneric): Metadata (name, description, cloud_id, deployment)
+- Technology generics (CloudResource, ManagedGeneric): Metadata (name, description, cloud_id, deployment)
 - Feature generics (ServiceGenericInterfaces): Domain-specific features
+
+### Deployment Model Pattern (2026-01)
+
+**Decision**: Use `deployment_model` attribute to distinguish operational responsibility, not namespace separation
+
+**Context**: In mixed environments (e.g., colocation), resources can be either self-managed or provider-managed within the same location.
+
+**Pattern**:
+
+```yaml
+# Added to ManagedGeneric and PlatformLoadBalancer
+deployment_model:
+  - self_managed      # Managed DC - full control, generates device configs
+  - provider_managed  # Colocation - managed by facility provider
+  - cloud_native      # Cloud - managed via APIs/Terraform
+```
+
+**Use Cases**:
+
+1. **Managed Data Center**: All resources are `self_managed`
+2. **Colocation Facility**: Mix of `self_managed` (your equipment) and `provider_managed` (provider services)
+3. **Cloud Deployments**: All resources are `cloud_native`
+
+**Benefits**:
+
+- Single namespace (Managed) with operational classification
+- Query flexibility: "Show all provider_managed LoadBalancers in colocation"
+- Avoids namespace explosion (Managed.*, SelfManaged.*, etc.)
+- Clear separation of concerns: location (namespace) vs. operation (attribute)
+
+**Alternatives Rejected**:
+
+- `Managed.*` namespace - Ambiguous, conflicts with "managed services" terminology
+- Separate namespaces per operational model - Creates unnecessary complexity for mixed environments
 
 ## Resources
 

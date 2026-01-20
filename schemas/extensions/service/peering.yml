@@ -3,7 +3,7 @@ version: "1.0"
 
 generics:
   - name: Peering
-    namespace: Onprem
+    namespace: Managed
     description: "Base service for peering protocols on devices."
     label: Network Peering Service
     icon: "carbon:network-2"
@@ -54,17 +54,17 @@ generics:
 
 nodes:
   - name: BGPPeering
-    namespace: Onprem
+    namespace: Managed
     description: "BGP peering to devices or external partners"
     label: BGP Peering Service
     icon: "carbon:network-4-reference"
-    menu_placement: OnpremGeneric
+    menu_placement: ManagedGeneric
     include_in_menu: false
     human_friendly_id:
       - "name__value"
     inherit_from:
-      - OnpremGeneric
-      - OnpremPeering
+      - ManagedGeneric
+      - ManagedPeering
     attributes:
       - name: session_type
         kind: Dropdown
@@ -140,17 +140,17 @@ nodes:
         regex: "^[0-9]+$"
 
   - name: OSPFPeering
-    namespace: Onprem
+    namespace: Managed
     description: "OSPF peering attached to devices or external partners"
     label: OSPF Peering Service
     icon: "carbon:network-4-reference"
-    menu_placement: OnpremGeneric
+    menu_placement: ManagedGeneric
     include_in_menu: false
     human_friendly_id:
       - "name__value"
     inherit_from:
-      - OnpremGeneric
-      - OnpremPeering
+      - ManagedGeneric
+      - ManagedPeering
     attributes:
       - name: area_type
         kind: Dropdown

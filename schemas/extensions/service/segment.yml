@@ -3,18 +3,18 @@ version: "1.0"
 
 nodes:
   - name: NetworkSegment
-    namespace: Onprem
+    namespace: Managed
     description: "Network segment with automated VLAN, VNI, and RD assignment"
     label: Network Segment
     icon: "carbon:network-3"
-    menu_placement: OnpremGenericDevice
+    menu_placement: ManagedGenericDevice
     uniqueness_constraints:
       - [deployment, owner, environment__value, customer_name__value]
     include_in_menu: true
     inherit_from:
-      - OnpremGeneric
+      - ManagedGeneric
       - PlatformNetworkSegment
-      - OnpremGenericInterfaces
+      - ManagedGenericInterfaces
     attributes:
       - name: name
         kind: Text

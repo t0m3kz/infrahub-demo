@@ -40,7 +40,7 @@ query super_spine_config($device: String!) {
               name { value }
               status { value }
 
-              ... on OnpremBGP {
+              ... on ManagedBGP {
                 session_type { value }
                 multipath { value }
                 graceful_restart { value }
@@ -67,7 +67,7 @@ query super_spine_config($device: String!) {
                   }
                 }
               }
-              ... on OnpremPIM {
+              ... on ManagedPIM {
                 dr_priority { value }
                 rp_mode { value }
                 rp_address {
@@ -77,7 +77,7 @@ query super_spine_config($device: String!) {
                   }
                 }
               }
-              ... on OnpremOSPF {
+              ... on ManagedOSPF {
                 process_id { value }
                 version { value }
                 router_type { value }
@@ -130,7 +130,7 @@ query super_spine_config($device: String!) {
               interface_services{
                 edges{
                   node{
-                    ... on OnpremOSPF{
+                    ... on ManagedOSPF{
                       area { node {area {value}}}
                       ospf_interface_profile{node{
                         metric{value}

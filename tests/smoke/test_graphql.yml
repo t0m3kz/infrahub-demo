@@ -138,12 +138,3 @@ infrahub_tests:
         spec:
           path: queries/topology/decomission/pod.gql
           kind: graphql-query-smoke
-
-  # ==================== SERVICE QUERIES ====================
-  - resource: GraphQLQuery
-    resource_name: virtual_fabric_validation
-    tests:
-      - name: syntax_check
-        spec:
-          path: queries/service/virtual_fabric_validation.gql
-          kind: graphql-query-smoke

@@ -5,7 +5,7 @@
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
-  kind: OnpremLoadBalancer
+  kind: ManagedLoadBalancer
   data:
     - name: "demo-dc1-haproxy-lb"
       member_of_groups:

@@ -2,7 +2,7 @@
 version: "1.0"
 generics:
   - name: Routing
-    namespace: Onprem
+    namespace: Managed
     description: "Base service for all routing protocols."
     label: Network Routing Service
     icon: "carbon:network-4"
@@ -33,19 +33,19 @@ generics:
 
 nodes:
   - name: OSPF
-    namespace: Onprem
+    namespace: Managed
     description: "OSPF routing service that can be attached to devices"
     label: OSPF Service
     icon: "carbon:network-4-reference"
-    menu_placement: OnpremGeneric
+    menu_placement: ManagedGeneric
     include_in_menu: false
     human_friendly_id:
       - "name__value"
     inherit_from:
-      - OnpremGeneric
-      - OnpremGenericDevice
-      - OnpremGenericInterfaces
-      - OnpremRouting
+      - ManagedGeneric
+      - ManagedGenericDevice
+      - ManagedGenericInterfaces
+      - ManagedRouting
     attributes:
       - name: process_id
         kind: Text
@@ -114,17 +114,17 @@ nodes:
         on_delete: no-action
 
   - name: BGP
-    namespace: Onprem
+    namespace: Managed
     description: "BGP routing service that can be attached to devices"
     label: BGP Service
     icon: "carbon:network-4-reference"
-    menu_placement: OnpremGeneric
+    menu_placement: ManagedGeneric
     include_in_menu: false
     inherit_from:
-      - OnpremGeneric
-      - OnpremGenericDevice
-      - OnpremGenericInterfaces
-      - OnpremRouting
+      - ManagedGeneric
+      - ManagedGenericDevice
+      - ManagedGenericInterfaces
+      - ManagedRouting
     human_friendly_id:
       - "name__value"
     attributes:
@@ -196,17 +196,17 @@ nodes:
         description: "BGP peer group for common parameters"
 
   - name: PIM
-    namespace: Onprem
+    namespace: Managed
     description: "PIM routing service that can be attached to devices"
     label: PIM Service
     icon: "carbon:network-4-reference"
-    menu_placement: OnpremGeneric
+    menu_placement: ManagedGeneric
     include_in_menu: false
     inherit_from:
-      - OnpremGeneric
-      - OnpremGenericDevice
-      - OnpremGenericInterfaces
-      - OnpremRouting
+      - ManagedGeneric
+      - ManagedGenericDevice
+      - ManagedGenericInterfaces
+      - ManagedRouting
     attributes:
       - name: dr_priority
         kind: Number
@@ -258,7 +258,7 @@ extensions:
           kind: Generic
           cardinality: many
           optional: true
-          peer: OnpremOSPF
+          peer: ManagedOSPF
           order_weight: 2000
     - kind: RoutingPIMInterface
       relationships:
@@ -267,7 +267,7 @@ extensions:
           kind: Generic
           cardinality: many
           optional: true
-          peer: OnpremPIM
+          peer: ManagedPIM
           order_weight: 2000
     - kind: OrganizationProvider
       relationships:

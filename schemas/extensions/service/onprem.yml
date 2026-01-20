@@ -3,7 +3,7 @@ version: "1.0"
 
 generics:
   - name: Generic
-    namespace: Onprem
+    namespace: Managed
     description: "Base for on-premises infrastructure services and resources"
     label: "On-Premises Resource"
     icon: "mdi:server-network"
@@ -57,7 +57,7 @@ generics:
         description: "The deployment location for this resource"
 
   - name: GenericDevice
-    namespace: Onprem
+    namespace: Managed
     description: "On-premises resources attached to physical devices"
     label: "Device-based Resource"
     include_in_menu: false
@@ -72,7 +72,7 @@ generics:
         order_weight: 1000
 
   - name: GenericInterfaces
-    namespace: Onprem
+    namespace: Managed
     description: "On-premises resources attached to device interfaces"
     label: "Interface-based Resource"
     include_in_menu: false
@@ -90,7 +90,7 @@ extensions:
     - kind: DcimDevice
       relationships:
         - name: device_services
-          peer: OnpremGeneric
+          peer: ManagedGeneric
           label: On-Premises Services
           optional: true
           direction: outbound
@@ -101,7 +101,7 @@ extensions:
     - kind: DcimInterface
       relationships:
         - name: interface_services
-          peer: OnpremGeneric
+          peer: ManagedGeneric
           label: On-Premises Interface Services
           identifier: interface_services
           optional: true

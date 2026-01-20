@@ -66,12 +66,12 @@ query loadbalancer_config($device: String!) {
             }
           }
         }
-        # Load Balancer service instance (OnpremLoadBalancer)
+        # Load Balancer service instance (ManagedLoadBalancer)
         device_services {
           edges {
             node {
               __typename
-              ... on OnpremLoadBalancer {
+              ... on ManagedLoadBalancer {
                 name {
                   value
                 }
@@ -147,7 +147,7 @@ query loadbalancer_config($device: String!) {
                       max_connections {
                         value
                       }
-                      # VIP IP address (for OnPrem)
+                      # VIP IP address (for Managed)
                       vip_ip {
                         node {
                           address {
@@ -170,7 +170,7 @@ query loadbalancer_config($device: String!) {
                           drain_timeout {
                             value
                           }
-                          # OnPrem backend servers
+                          # Managed backend servers
                           onprem_servers {
                             edges {
                               node {

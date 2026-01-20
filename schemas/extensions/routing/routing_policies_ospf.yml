@@ -13,7 +13,7 @@ nodes:
 
 extensions:
   nodes:
-    - kind: OnpremOSPF
+    - kind: ManagedOSPF
       relationships:
         - name: import_routing_policies
           label: Import Routing Policies

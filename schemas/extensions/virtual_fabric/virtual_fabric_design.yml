@@ -8,7 +8,7 @@ nodes:
     label: "Virtual Fabric Design Pattern"
     icon: "mdi:cloud-outline"
     include_in_menu: true
-    menu_placement: "OnpremGeneric"
+    menu_placement: "ManagedGeneric"
     uniqueness_constraints:
       - [name__value]
     human_friendly_id:

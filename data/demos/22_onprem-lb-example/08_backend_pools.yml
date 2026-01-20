@@ -12,7 +12,7 @@ spec:
       session_persistence: cookie
       drain_timeout: 300
       vip_service: ["www.demo.local", "https", "443"]  # References HTTPS VIP
-      onprem_servers:
+      Managed_servers:
         - ["demo-web-01"]
         - ["demo-web-02"]
 
@@ -23,6 +23,6 @@ spec:
       session_persistence: source_ip
       drain_timeout: 300
       vip_service: ["app.demo.local", "tcp", "8080"]
-      onprem_servers:
+      Managed_servers:
         - ["demo-app-01"]
         - ["demo-app-02"]

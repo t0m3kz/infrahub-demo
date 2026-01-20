@@ -1,0 +1,202 @@
+---
+version: "1.0"
+
+# ============================================================================
+# Application Catalogue - Base Schemas
+# ============================================================================
+
+generics:
+  # --------------------------------------------------------------------------
+  # AppGeneric - Base for all application entities
+  # --------------------------------------------------------------------------
+  - name: Generic
+    namespace: App
+    description: "Base generic for application catalogue entities"
+    include_in_menu: false
+    attributes:
+      - name: name
+        kind: Text
+        order_weight: 100
+        unique: true
+      - name: description
+        kind: Text
+        optional: true
+        order_weight: 200
+
+nodes:
+  # --------------------------------------------------------------------------
+  # Application - Top-level application entity
+  # --------------------------------------------------------------------------
+  - name: Application
+    namespace: App
+    description: "Business application or service requiring infrastructure"
+    label: "Application"
+    icon: "mdi:application"
+    menu_placement: "AppGeneric"
+    include_in_menu: true
+    inherit_from:
+      - AppGeneric
+    human_friendly_id:
+      - name__value
+    order_by:
+      - name__value
+    display_label: "{{ name__value|upper }} - {{ environment__value|upper }}"
+    uniqueness_constraints:
+      - [name__value]
+    attributes:
+      - name: environment
+        kind: Dropdown
+        optional: false
+        description: "Deployment environment"
+        order_weight: 500
+        choices:
+          - name: development
+            label: "Development"
+            color: "#7f7fff"
+          - name: staging
+            label: "Staging"
+            color: "#FFA500"
+          - name: production
+            label: "Production"
+            color: "#7FBF7F"
+        default_value: development
+      - name: criticality
+        kind: Dropdown
+        optional: true
+        description: "Business criticality level"
+        order_weight: 600
+        choices:
+          - name: low
+            label: "Low"
+            description: "Low business impact if unavailable"
+            color: "#90EE90"
+          - name: medium
+            label: "Medium"
+            description: "Medium business impact"
+            color: "#FFD700"
+          - name: high
+            label: "High"
+            description: "High business impact"
+            color: "#FF8C00"
+          - name: critical
+            label: "Critical"
+            description: "Mission-critical, severe business impact"
+            color: "#FF0000"
+        default_value: medium
+      - name: cost_center
+        kind: Text
+        optional: true
+        description: "Cost center or budget code"
+        order_weight: 700
+    relationships:
+      - name: owner
+        peer: CoreAccount
+        cardinality: one
+        kind: Attribute
+        optional: false
+        description: "Application owner or team"
+        order_weight: 1000
+      - name: customer
+        peer: OrganizationCustomer
+        cardinality: one
+        kind: Attribute
+        optional: false
+        description: "Customer this application belongs to"
+        order_weight: 1100
+        identifier: "customer_applications"
+      - name: components
+        peer: AppComponent
+        cardinality: many
+        kind: Component
+        optional: true
+        description: "Application components (frontend, backend, etc.)"
+        order_weight: 2000
+
+  # --------------------------------------------------------------------------
+  # AppComponent - Logical component of an application
+  # --------------------------------------------------------------------------
+  - name: Component
+    namespace: App
+    description: "Logical component of an application (frontend, backend, etc.)"
+    label: "Application Component"
+    icon: "mdi:cube-outline"
+    menu_placement: "AppGeneric"
+    include_in_menu: true
+    inherit_from:
+      - AppGeneric
+    order_by:
+      - name__value
+    human_friendly_id:
+      - name__value
+    display_label: "{{ application__name__value }} {{ application__environment__value|upper }} - {{ name__value|upper }}"  # yamllint disable-line rule:line-length
+    uniqueness_constraints:
+      - [name__value]
+    attributes:
+      - name: component_type
+        kind: Dropdown
+        optional: false
+        description: "Type of component"
+        order_weight: 400
+        choices:
+          - name: frontend
+            label: "Frontend"
+            color: "#61DAFB"
+          - name: backend
+            label: "Backend"
+            color: "#68A063"
+          - name: database
+            label: "Database"
+            color: "#336791"
+          - name: cache
+            label: "Cache"
+            color: "#DC382D"
+          - name: message_queue
+            label: "Message Queue"
+            color: "#FF6600"
+          - name: worker
+            label: "Worker"
+            color: "#777777"
+      - name: deployment_type
+        kind: Dropdown
+        optional: true
+        description: "Deployment infrastructure type"
+        order_weight: 700
+        choices:
+          - name: cloud
+            label: "Cloud"
+            color: "#0078D4"
+          - name: Managed
+            label: "On-Premises"
+            color: "#68A063"
+          - name: hybrid
+            label: "Hybrid"
+            color: "#FF8C00"
+    relationships:
+      - name: application
+        peer: AppApplication
+        cardinality: one
+        kind: Parent
+        optional: false
+        description: "Parent application"
+        order_weight: 1000
+      - name: network_segments
+        peer: PlatformNetworkSegment
+        cardinality: many
+        kind: Attribute
+        optional: true
+        identifier: "app_component_network_segments"
+        description: "Network segments used by this component"
+        order_weight: 9000
+
+extensions:
+  nodes:
+    - kind: OrganizationCustomer
+      relationships:
+        - name: applications
+          peer: AppApplication
+          cardinality: many
+          kind: Component
+          optional: true
+          description: "Applications owned by this customer"
+          order_weight: 2000
+          identifier: "customer_applications"

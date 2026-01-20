@@ -1,0 +1,196 @@
+---
+# ============================================================================
+# Infrastructure Mappings - Component Deployments
+# ============================================================================
+# Maps application components to actual cloud infrastructure
+
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: AppComponent
+  data:
+    # ========================================================================
+    # E-Commerce Platform - AWS Deployments
+    # ========================================================================
+    - name: "ecommerce-web-prod"
+      application: ["e-commerce-platform"]
+      component_type: frontend
+      deployment_type: cloud
+      network_segments:
+        - ["customer-1-ecommerce-prod-web-1a"]
+        - ["customer-1-ecommerce-prod-web-1b"]
+
+    - name: "ecommerce-app-prod"
+      application: ["e-commerce-platform"]
+      component_type: backend
+      deployment_type: cloud
+      network_segments:
+        - ["customer-1-ecommerce-prod-app-1a"]
+        - ["customer-1-ecommerce-prod-app-1b"]
+
+    - name: "ecommerce-db-prod"
+      application: ["e-commerce-platform"]
+      component_type: database
+      deployment_type: cloud
+      network_segments:
+        - ["customer-1-ecommerce-prod-data-1a"]
+        - ["customer-1-ecommerce-prod-data-1b"]
+
+    # ========================================================================
+    # E-Commerce Platform - GCP Staging
+    # ========================================================================
+    - name: "ecommerce-web-staging"
+      application: ["e-commerce-platform-staging"]
+      component_type: frontend
+      deployment_type: cloud
+      network_segments:
+        - ["customer-1-ecommerce-staging-web"]
+
+    - name: "ecommerce-app-staging"
+      application: ["e-commerce-platform-staging"]
+      component_type: backend
+      deployment_type: cloud
+      network_segments:
+        - ["customer-1-ecommerce-staging-app"]
+
+    - name: "ecommerce-db-staging"
+      application: ["e-commerce-platform-staging"]
+      component_type: database
+      deployment_type: cloud
+      network_segments:
+        - ["customer-1-ecommerce-staging-data"]
+
+    # ========================================================================
+    # E-Commerce Platform - Azure Development
+    # ========================================================================
+    - name: "ecommerce-web-dev"
+      application: ["e-commerce-platform-dev"]
+      component_type: frontend
+      deployment_type: cloud
+      network_segments:
+        - ["customer-1-ecommerce-dev-web"]
+
+    - name: "ecommerce-app-dev"
+      application: ["e-commerce-platform-dev"]
+      component_type: backend
+      deployment_type: cloud
+      network_segments:
+        - ["customer-1-ecommerce-dev-app"]
+
+    # ========================================================================
+    # Analytics Dashboard - GCP Deployments
+    # ========================================================================
+    - name: "analytics-web-prod"
+      application: ["analytics-dashboard"]
+      component_type: frontend
+      deployment_type: cloud
+      network_segments:
+        - ["customer-1-analytics-prod-web"]
+
+    - name: "analytics-api-prod"
+      application: ["analytics-dashboard"]
+      component_type: backend
+      deployment_type: cloud
+      network_segments:
+        - ["customer-1-analytics-prod-app"]
+
+    - name: "analytics-db-prod"
+      application: ["analytics-dashboard"]
+      component_type: database
+      deployment_type: cloud
+      network_segments:
+        - ["customer-1-analytics-prod-data"]
+
+    # ========================================================================
+    # Analytics Dashboard - Azure Staging
+    # ========================================================================
+    - name: "analytics-web-staging"
+      application: ["analytics-dashboard-staging"]
+      component_type: frontend
+      deployment_type: cloud
+      network_segments:
+        - ["customer-1-analytics-staging-web"]
+
+    - name: "analytics-api-staging"
+      application: ["analytics-dashboard-staging"]
+      component_type: backend
+      deployment_type: cloud
+      network_segments:
+        - ["customer-1-analytics-staging-app"]
+
+    # ========================================================================
+    # Analytics Dashboard - AWS Development
+    # ========================================================================
+    - name: "analytics-web-dev"
+      application: ["analytics-dashboard-dev"]
+      component_type: frontend
+      deployment_type: cloud
+      network_segments:
+        - ["customer-1-analytics-dev-web"]
+
+    - name: "analytics-api-dev"
+      application: ["analytics-dashboard-dev"]
+      component_type: backend
+      deployment_type: cloud
+      network_segments:
+        - ["customer-1-analytics-dev-app"]
+
+    # ========================================================================
+    # Customer Portal - Azure Deployments
+    # ========================================================================
+    - name: "portal-web-prod"
+      application: ["customer-portal"]
+      component_type: frontend
+      deployment_type: cloud
+      network_segments:
+        - ["customer-1-portal-prod-web-1"]
+        - ["customer-1-portal-prod-web-2"]
+
+    - name: "portal-api-prod"
+      application: ["customer-portal"]
+      component_type: backend
+      deployment_type: cloud
+      network_segments:
+        - ["customer-1-portal-prod-app-1"]
+        - ["customer-1-portal-prod-app-2"]
+
+    - name: "portal-db-prod"
+      application: ["customer-portal"]
+      component_type: database
+      deployment_type: cloud
+      network_segments:
+        - ["customer-1-portal-prod-data"]
+
+    # ========================================================================
+    # Customer Portal - AWS Staging
+    # ========================================================================
+    - name: "portal-web-staging"
+      application: ["customer-portal-staging"]
+      component_type: frontend
+      deployment_type: cloud
+      network_segments:
+        - ["customer-1-portal-staging-web"]
+
+    - name: "portal-api-staging"
+      application: ["customer-portal-staging"]
+      component_type: backend
+      deployment_type: cloud
+      network_segments:
+        - ["customer-1-portal-staging-app"]
+
+    # ========================================================================
+    # Customer Portal - GCP Development
+    # ========================================================================
+    - name: "portal-web-dev"
+      application: ["customer-portal-dev"]
+      component_type: frontend
+      deployment_type: cloud
+      network_segments:
+        - ["customer-1-portal-dev-web"]
+
+    - name: "portal-api-dev"
+      application: ["customer-portal-dev"]
+      component_type: backend
+      deployment_type: cloud
+      network_segments:
+        - ["customer-1-portal-dev-app"]

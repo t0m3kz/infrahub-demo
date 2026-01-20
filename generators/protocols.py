@@ -70,7 +70,7 @@ class OrganizationGeneric(CoreNode):
     tags: RelationshipManager
 
 
-class OnpremGeneric(CoreNode):
+class ManagedGeneric(CoreNode):
     description: StringOptional
     name: String
     status: Dropdown
@@ -181,13 +181,13 @@ class SecurityAddressGroup(SecurityGenericAddressGroup):
     pass
 
 
-class ServiceAutonomousSystem(OnpremGeneric):
+class ServiceAutonomousSystem(ManagedGeneric):
     asn: Integer
     devices: RelationshipManager
     provider: RelatedNode
 
 
-class OnpremBGPCommunity(CoreNode):
+class ManagedBGPCommunity(CoreNode):
     community: String
     description: StringOptional
     name: String
@@ -195,7 +195,7 @@ class OnpremBGPCommunity(CoreNode):
     tags: RelationshipManager
 
 
-class OnpremBGPPeerGroup(OnpremGeneric):
+class ManagedBGPPeerGroup(ManagedGeneric):
     address_family: Dropdown
     local_pref: IntegerOptional
     maximum_routes: IntegerOptional
@@ -206,7 +206,7 @@ class OnpremBGPPeerGroup(OnpremGeneric):
     remote_as: RelatedNode
 
 
-class OnpremBGPSession(OnpremGeneric):
+class ManagedBGPSession(ManagedGeneric):
     local_pref: IntegerOptional
     role: Dropdown
     session_type: String
@@ -421,12 +421,12 @@ class SecurityIPRange(SecurityGenericAddress):
     start: IPHost
 
 
-class ServiceLayer2Network(OnpremGeneric):
+class ServiceLayer2Network(ManagedGeneric):
     vlan: Integer
     interfaces: RelationshipManager
 
 
-class ServiceLayer3Gateway(OnpremGeneric):
+class ServiceLayer3Gateway(ManagedGeneric):
     is_anycast: Boolean
     interfaces: RelationshipManager
     prefix: RelatedNode
@@ -462,7 +462,7 @@ class NetworkNameServer(NetworkManagementServer):
     pass
 
 
-class OnpremOSPF(OnpremGeneric):
+class ManagedOSPF(ManagedGeneric):
     reference_bandwidth: IntegerOptional
     version: Dropdown
     area: RelatedNode
@@ -472,13 +472,13 @@ class OnpremOSPF(OnpremGeneric):
     router_id: RelatedNode
 
 
-class OnpremOSPFArea(OnpremGeneric):
+class ManagedOSPFArea(ManagedGeneric):
     area: Integer
     namespace: RelatedNode
     ospf_interfaces: RelationshipManager
 
 
-class OnpremOSPFInterface(OnpremGeneric):
+class ManagedOSPFInterface(ManagedGeneric):
     authentication_key: StringOptional
     authentication_mode: DropdownOptional
     metric: IntegerOptional

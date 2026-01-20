@@ -68,7 +68,7 @@ nodes:
     description: "OSPF area configuration"
     label: OSPF Area
     icon: "carbon:area"
-    menu_placement: OnpremGeneric
+    menu_placement: ManagedGeneric
     include_in_menu: true
     uniqueness_constraints:
       - ["name__value", "area__value"]

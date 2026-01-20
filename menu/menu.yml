@@ -28,6 +28,31 @@ spec:
             label: Customers
             kind: OrganizationCustomer
             icon: "mdi:account-group"
+    # ===================== APPLICATION =====================
+    - namespace: App
+      name: MainMenu
+      label: Application Catalogue
+      icon: "mdi:application"
+      kind: AppGeneric
+      children:
+        data:
+          - namespace: App
+            name: Application
+            label: Applications
+            kind: AppApplication
+            icon: "mdi:application-outline"
+
+          - namespace: App
+            name: Component
+            label: Components
+            kind: AppComponent
+            icon: "mdi:puzzle"
+
+          - namespace: App
+            name: SecurityPolicy
+            label: Security Policies
+            kind: AppSecurityPolicy
+            icon: "mdi:shield-lock"
     # ===================== LOCATION =====================
     - namespace: Location
       name: Generic
@@ -251,7 +276,7 @@ spec:
                 - namespace: Routing
                   name: BGPService
                   label: BGP Services
-                  kind: OnpremBGP
+                  kind: ManagedBGP
                   icon: "carbon:ibm-cloud-internet-services"
                   description: "BGP service instances"
 
@@ -272,7 +297,7 @@ spec:
                 - namespace: Routing
                   name: BGPPeering
                   label: BGP Peering Sessions
-                  kind: OnpremBGPPeering
+                  kind: ManagedBGPPeering
                   icon: "carbon:network-4-reference"
                   description: "BGP peer with internal and external networks"
 
@@ -293,7 +318,7 @@ spec:
                 - namespace: Routing
                   name: OSPFService
                   label: OSPF Services
-                  kind: OnpremOSPF
+                  kind: ManagedOSPF
                   icon: "carbon:ibm-cloud-internet-services"
                   description: "OSPF service instances"
 
@@ -307,7 +332,7 @@ spec:
                 - namespace: Routing
                   name: OSPFPeering
                   label: OSPF Peering Sessions
-                  kind: OnpremOSPFPeering
+                  kind: ManagedOSPFPeering
                   icon: "carbon:network-4-reference"
                   description: "OSPF neighbor relationships"
 
@@ -321,7 +346,7 @@ spec:
                 - namespace: Routing
                   name: PIMService
                   label: PIM Services
-                  kind: OnpremPIM
+                  kind: ManagedPIM
                   icon: "carbon:ibm-cloud-internet-services"
                   description: "PIM service instances"
 

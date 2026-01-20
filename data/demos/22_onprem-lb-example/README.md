@@ -5,7 +5,7 @@ This demo shows a complete on-premises HAProxy load balancer setup with the new 
 ## Architecture
 
 ```
-OnpremLoadBalancer (demo-dc1-haproxy-lb)
+ManagedLoadBalancer (demo-dc1-haproxy-lb)
   ├─> Frontend Servers: [demo-haproxy-01, demo-haproxy-02]
   └─> VIP Services:
       ├─> www.demo.local:443 (HTTPS)
@@ -39,5 +39,5 @@ OnpremLoadBalancer (demo-dc1-haproxy-lb)
 ## Load Command
 
 ```bash
-uv run infrahubctl object load data/demos/onprem-lb-example --branch test
+uv run infrahubctl object load data/demos/Managed-lb-example --branch test
 ```

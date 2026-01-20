@@ -120,7 +120,7 @@ nodes:
         optional: false
 
   - name: LoadBalancer
-    namespace: Onprem
+    namespace: Managed
     description: "Distributes network traffic via Virtual IPs to servers."
     label: "Load Balancer"
     icon: carbon:floating-ip
@@ -129,8 +129,8 @@ nodes:
       - name__value
     inherit_from:
       - PlatformLoadBalancer
-      - OnpremGeneric
-      - OnpremGenericDevice
+      - ManagedGeneric
+      - ManagedGenericDevice
     attributes:
       - name: haproxy_mode
         kind: Dropdown

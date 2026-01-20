@@ -7,6 +7,11 @@ generics:
       Base for all network segmentation (VLANs, VXLANs, VPCs, subnets, VRFs)
     label: Network Segment
     include_in_menu: false
+    human_friendly_id:
+      - name__value
+    display_label: "{{name__value}}"
+    order_by:
+      - name__value
     attributes:
       - name: name
         kind: Text

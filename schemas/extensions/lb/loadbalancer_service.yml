@@ -282,8 +282,8 @@ nodes:
 # ==============================================================================
 extensions:
   nodes:
-    # Update OnpremLoadBalancer to host VIP services
-    - kind: OnpremLoadBalancer
+    # Update ManagedLoadBalancer to host VIP services
+    - kind: ManagedLoadBalancer
       relationships:
         - name: vip_services
           peer: ServiceLoadBalancerVIP
