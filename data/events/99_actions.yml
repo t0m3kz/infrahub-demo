@@ -194,3 +194,15 @@ spec:
             value: decommissioned
             value_previous: active
             # match_type: exact
+
+    # Endpoint connectivity: trigger when server device added to endpoints group
+    - name: trigger-endpoint-generator-on-group-membership
+      branch_scope: "other_branches"
+      node_kind: DcimPhysicalDevice
+      mutation_action: "updated"
+      action: run-endpoint-generator
+      matches:
+        kind: CoreNodeTriggerRelationshipMatch
+        data:
+          - relationship_name: member_of_groups
+            modification_type: updated

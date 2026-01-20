@@ -1,21 +1,22 @@
 """Pytest fixtures for integration tests."""
 
+import logging
 import os
 import subprocess
 import warnings
 from collections.abc import Generator
 from pathlib import Path
+from typing import Any
 
 import pytest
 from infrahub_sdk import Config, InfrahubClient, InfrahubClientSync
-from infrahub_testcontainers.container import (
-    PROJECT_ENV_VARIABLES,
-    InfrahubDockerCompose,
-)
+from infrahub_testcontainers.container import PROJECT_ENV_VARIABLES, InfrahubDockerCompose
 from infrahub_testcontainers.helpers import TestInfrahubDocker
 
 TEST_DIRECTORY = Path(__file__).parent
 PROJECT_DIRECTORY = TEST_DIRECTORY.parent.parent
+
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
 
 class TestInfrahubDockerWithClient(TestInfrahubDocker):
@@ -145,3 +146,43 @@ class TestInfrahubDockerWithClient(TestInfrahubDocker):
             cwd=PROJECT_DIRECTORY,
         )
         return result
+
+    @pytest.fixture(scope="class")
+    def default_branch(self) -> str:
+        """Default branch for testing."""
+        return "add-dc1"
+
+    @pytest.fixture(scope="class")
+    def workflow_state(self) -> dict[str, Any]:
+        """Shared state across workflow tests.
+
+        This fixture allows tests to share information like IDs
+        that are created during the workflow.
+        """
+        return {
+            "pc_id": None,
+            "dc_id": None,
+            "repository_id": None,
+            "generator_task_id": None,
+            "generator_task_state": None,
+        }
+
+    @pytest.fixture(scope="class", autouse=True)
+    def cleanup_on_failure(
+        self,
+        request: pytest.FixtureRequest,
+        client_main: InfrahubClientSync,
+        default_branch: str,
+    ) -> Generator[None, None, None]:
+        """Cleanup branch if tests failed."""
+        yield
+        # Cleanup branch if tests failed
+        if request.session.testsfailed:
+            logging.warning("Tests failed, attempting to clean up branch: %s", default_branch)
+            try:
+                existing_branches = client_main.branch.all()
+                if default_branch in existing_branches:
+                    client_main.branch.delete(default_branch)
+                    logging.info("Cleaned up branch: %s", default_branch)
+            except Exception as e:
+                logging.warning("Failed to clean up branch %s: %s", default_branch, e)

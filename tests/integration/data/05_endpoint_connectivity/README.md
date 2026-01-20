@@ -1,21 +1,42 @@
 # Endpoint Connectivity Test Data
 
-This dataset tests the greenfield endpoint connectivity generator with advanced features:
+This scenario demonstrates adding endpoint devices (servers) and testing connectivity to existing network infrastructure in DC1-1-POD-2.
+
+## Purpose
+
+Tests the `add_endpoint` generator's ability to:
+- Connect servers to ToR switches based on deployment type
+- Match interface speeds (25G/100G) correctly
+- Handle dual-homing across consecutive ToR pairs
+- Maintain idempotency when run multiple times
+
+## Prerequisites
+
+- **DC1** exists (from scenario 1) with POD-2 (tor deployment)
+- **POD-2** has existing ToR racks with fabric devices created by DC generator
+- This scenario adds **compute racks** to POD-2 for server placement
+
+## Data Files
+
+- **00_racks.yml**: Adds 2 compute racks to DC1-1-POD-2
+- **01_devices.yml**: Server definitions and all interface definitions (ToRs + Servers)
 
 ## Test Scenario
 
-**Topology**: Suite-level distribution with mixed interface speeds
+**Topology**: DC1-1-POD-2 with compute racks for servers
 
 ```
-Suite-A
-├── Rack-1-Network (network rack)
-│   ├── tor-1 (mixed 25G/100G downlink interfaces)
-│   └── tor-2 (mixed 25G/100G downlink interfaces)
-├── Rack-2-Compute
+DC1-1-POD-2 (tor deployment)
+├── Existing ToR racks (from scenario 1)
+│   ├── ktw-1-s-2-r-1-1 (2x ToR switches)
+│   ├── ktw-1-s-2-r-1-5 (2x ToR switches)
+│   ├── ktw-1-s-2-r-2-1 (2x ToR switches)
+│   └── ktw-1-s-2-r-2-5 (2x ToR switches)
+├── NEW: ktw-1-s-2-r-1-10 (compute rack)
 │   ├── server-01 (4x 100G uplinks)
 │   ├── server-02 (4x 100G uplinks)
 │   └── server-05 (2x 100G + 2x 25G uplinks)
-└── Rack-3-Compute
+└── NEW: ktw-1-s-2-r-2-10 (compute rack)
     ├── server-03 (4x 25G uplinks)
     └── server-04 (4x 25G uplinks)
 ```

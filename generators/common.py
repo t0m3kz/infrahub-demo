@@ -313,15 +313,15 @@ class CommonGenerator(InfrahubGenerator):
             # Execute batch and collect created nodes
             created_devices = []
             created_loopbacks = []
-            
+
             async for node, _ in batch_devices.execute():
                 created_devices.append(node)
                 self.logger.info(f"  - Created [{node.get_kind()}] {node.hfid}")
-            
+
             async for node, _ in batch_loopbacks.execute():
                 created_loopbacks.append(node)
                 self.logger.info(f"  - Created [{node.get_kind()}] {node.device.hfid} {node.name.value}")
-            
+
             # Summary logging
             self.logger.info(
                 f"Device creation completed: {len(created_devices)} {device_role}(s) created"
@@ -400,7 +400,7 @@ class CommonGenerator(InfrahubGenerator):
             scenario=strategy,
             cabling_offset=cabling_offset,
         )
-        
+
         planned_connections = len(cabling_plan)
         if planned_connections == 0:
             self.logger.warning(
@@ -408,7 +408,7 @@ class CommonGenerator(InfrahubGenerator):
                 "Check interface availability and compatibility."
             )
             return
-        
+
         self.logger.info(f"Cabling plan generated: {planned_connections} connection(s) planned")
 
         if not cabling_plan:
@@ -468,7 +468,7 @@ class CommonGenerator(InfrahubGenerator):
             await updated_src.save()
             await updated_dst.save()
             self.logger.info(f"  - Created connection {name}")
-        
+
         # Summary logging
         self.logger.info(
             f"Cabling completed: {len(cabling_plan)} connection(s) established successfully "

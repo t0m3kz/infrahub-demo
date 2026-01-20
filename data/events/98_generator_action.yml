@@ -19,3 +19,6 @@ spec:
     - name: run-decommission-pod
       description: Decommission all devices within a pod
       generator: decommission_pod
+    - name: run-endpoint-generator
+      description: Run Endpoint Connectivity Generator
+      generator: add_endpoint

@@ -242,9 +242,7 @@ class EndpointConnectivityGenerator(CommonGenerator):
                 f"Endpoint {self.data.name}: No network rack found in row {row_index} for middle_rack deployment. "
                 "Cannot create endpoint connectivity."
             )
-            raise RuntimeError(
-                f"Endpoint {self.data.name}: Cannot connect - no network rack in row {row_index}"
-            )
+            raise RuntimeError(f"Endpoint {self.data.name}: Cannot connect - no network rack in row {row_index}")
 
         rack_ids = [rack.id for rack in racks]
 
@@ -303,8 +301,7 @@ class EndpointConnectivityGenerator(CommonGenerator):
 
         if not racks:
             self.logger.error(
-                f"Endpoint {self.data.name}: No racks found in suite {suite_id}. "
-                "Cannot create endpoint connectivity."
+                f"Endpoint {self.data.name}: No racks found in suite {suite_id}. Cannot create endpoint connectivity."
             )
             raise RuntimeError(f"Endpoint {self.data.name}: Cannot connect - no racks in suite {suite_id}")
 
@@ -607,14 +604,33 @@ class EndpointConnectivityGenerator(CommonGenerator):
         switch_by_device: dict[str, list[DcimPhysicalInterface]] = {}
         for intf in switch_interfaces:
             device_name: str | None = None
-            if intf.device and intf.device.name:
-                device_name = cast(
-                    str, intf.device.name.value if hasattr(intf.device.name, "value") else str(intf.device.name)
-                )
-            if device_name is not None:
-                if device_name not in switch_by_device:
-                    switch_by_device[device_name] = []
-                switch_by_device[device_name].append(intf)
+
+            # Try to extract device name from the interface's device relationship
+            if intf.device:
+                if hasattr(intf.device, "name"):
+                    if hasattr(intf.device.name, "value"):
+                        device_name = cast(str, intf.device.name.value)
+                    else:
+                        device_name = str(intf.device.name)
+                elif hasattr(intf.device, "id"):
+                    # Fallback: use device ID if name not available
+                    self.logger.warning(f"Interface {intf.name.value} device has no name, using ID")
+                    device_name = cast(str, intf.device.id)
+
+            if device_name is None:
+                self.logger.warning(f"Could not determine device name for interface {intf.name.value}")
+                continue
+
+            if device_name not in switch_by_device:
+                switch_by_device[device_name] = []
+            switch_by_device[device_name].append(intf)
+
+        # Debug: log device grouping
+        self.logger.info(
+            f"Grouped {len(switch_interfaces)} interfaces into {len(switch_by_device)} devices: {list(switch_by_device.keys())}"
+        )
+        for dev_name, intfs in switch_by_device.items():
+            self.logger.debug(f"  {dev_name}: {len(intfs)} interfaces")
 
         # Take up to 4 server interfaces (2 per switch for dual-homing)
         server_intfs = server_interfaces[:4]
@@ -702,6 +718,7 @@ class EndpointConnectivityGenerator(CommonGenerator):
                 kind=DcimPhysicalInterface,
                 device__name__values=device_names,
                 role__values=acceptable_roles,
+                include=["device"],
             )
         else:
             # Match both interface type and role
@@ -710,6 +727,7 @@ class EndpointConnectivityGenerator(CommonGenerator):
                 device__name__values=device_names,
                 interface_type__values=list(endpoint_types),
                 role__values=acceptable_roles,
+                include=["device"],
             )
 
         # Apply speed filter if specified

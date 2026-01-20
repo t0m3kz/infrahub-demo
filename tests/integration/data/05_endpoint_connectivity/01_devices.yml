@@ -1,0 +1,179 @@
+---
+# Endpoint Servers with 25G interfaces matching ToR switch capabilities
+# ToRs in DC1-1-POD-2 have 48x 25gbase-x-sfp28 customer ports (xe[1-48])
+# NOTE: member_of_groups removed to prevent race conditions.
+# Integration test will manually invoke generators sequentially for each server.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimPhysicalDevice
+  data:
+    # Server-01: 25G interfaces (eno1, eno2, eno3, eno4)
+    - name: "server-01"
+      device_type: "PowerEdge-R640"
+      role: "endpoint"
+      status: "active"
+      rack: "ktw-1-s-2-r-1-10"
+      deployment: "DC1-1-POD-2"
+      position: 10
+      interfaces:
+        - kind: DcimPhysicalInterface
+          data:
+            name: "eno1"
+            interface_type: "25gbase-x-sfp28"
+            role: "uplink"
+            status: "active"
+        - kind: DcimPhysicalInterface
+          data:
+            name: "eno2"
+            interface_type: "25gbase-x-sfp28"
+            role: "uplink"
+            status: "active"
+        - kind: DcimPhysicalInterface
+          data:
+            name: "eno3"
+            interface_type: "25gbase-x-sfp28"
+            role: "uplink"
+            status: "active"
+        - kind: DcimPhysicalInterface
+          data:
+            name: "eno4"
+            interface_type: "25gbase-x-sfp28"
+            role: "uplink"
+            status: "active"
+
+    # Server-02: 25G interfaces (eno1, eno2, eno3, eno4)
+    - name: "server-02"
+      device_type: "PowerEdge-R640"
+      role: "endpoint"
+      status: "active"
+      rack: "ktw-1-s-2-r-1-10"
+      deployment: "DC1-1-POD-2"
+      position: 11
+      interfaces:
+        - kind: DcimPhysicalInterface
+          data:
+            name: "eno1"
+            interface_type: "25gbase-x-sfp28"
+            role: "uplink"
+            status: "active"
+        - kind: DcimPhysicalInterface
+          data:
+            name: "eno2"
+            interface_type: "25gbase-x-sfp28"
+            role: "uplink"
+            status: "active"
+        - kind: DcimPhysicalInterface
+          data:
+            name: "eno3"
+            interface_type: "25gbase-x-sfp28"
+            role: "uplink"
+            status: "active"
+        - kind: DcimPhysicalInterface
+          data:
+            name: "eno4"
+            interface_type: "25gbase-x-sfp28"
+            role: "uplink"
+            status: "active"
+
+    # Server-03: 25G interfaces (eno1, eno2, eno3, eno4)
+    - name: "server-03"
+      device_type: "PowerEdge-R740"
+      role: "endpoint"
+      status: "active"
+      rack: "ktw-1-s-2-r-2-10"
+      deployment: "DC1-1-POD-2"
+      position: 10
+      interfaces:
+        - kind: DcimPhysicalInterface
+          data:
+            name: "eno1"
+            interface_type: "25gbase-x-sfp28"
+            role: "uplink"
+            status: "active"
+        - kind: DcimPhysicalInterface
+          data:
+            name: "eno2"
+            interface_type: "25gbase-x-sfp28"
+            role: "uplink"
+            status: "active"
+        - kind: DcimPhysicalInterface
+          data:
+            name: "eno3"
+            interface_type: "25gbase-x-sfp28"
+            role: "uplink"
+            status: "active"
+        - kind: DcimPhysicalInterface
+          data:
+            name: "eno4"
+            interface_type: "25gbase-x-sfp28"
+            role: "uplink"
+            status: "active"
+
+    # Server-04: 25G interfaces (eno1, eno2, eno3, eno4)
+    - name: "server-04"
+      device_type: "PowerEdge-R740"
+      role: "endpoint"
+      status: "active"
+      rack: "ktw-1-s-2-r-2-10"
+      deployment: "DC1-1-POD-2"
+      position: 11
+      interfaces:
+        - kind: DcimPhysicalInterface
+          data:
+            name: "eno1"
+            interface_type: "25gbase-x-sfp28"
+            role: "uplink"
+            status: "active"
+        - kind: DcimPhysicalInterface
+          data:
+            name: "eno2"
+            interface_type: "25gbase-x-sfp28"
+            role: "uplink"
+            status: "active"
+        - kind: DcimPhysicalInterface
+          data:
+            name: "eno3"
+            interface_type: "25gbase-x-sfp28"
+            role: "uplink"
+            status: "active"
+        - kind: DcimPhysicalInterface
+          data:
+            name: "eno4"
+            interface_type: "25gbase-x-sfp28"
+            role: "uplink"
+            status: "active"
+
+    # Server-05: 25G interfaces (eno1, eno2, eno3, eno4)
+    - name: "server-05"
+      device_type: "ProLiant-DL380"
+      role: "endpoint"
+      status: "active"
+      rack: "ktw-1-s-2-r-1-10"
+      deployment: "DC1-1-POD-2"
+      position: 12
+      interfaces:
+        - kind: DcimPhysicalInterface
+          data:
+            name: "eno1"
+            interface_type: "25gbase-x-sfp28"
+            role: "uplink"
+            status: "active"
+        - kind: DcimPhysicalInterface
+          data:
+            name: "eno2"
+            interface_type: "25gbase-x-sfp28"
+            role: "uplink"
+            status: "active"
+        - kind: DcimPhysicalInterface
+          data:
+            name: "eno3"
+            interface_type: "25gbase-x-sfp28"
+            role: "uplink"
+            status: "active"
+        - kind: DcimPhysicalInterface
+          data:
+            name: "eno4"
+            interface_type: "25gbase-x-sfp28"
+            role: "uplink"
+            status: "active"

@@ -651,10 +651,18 @@ class CablingPlanner:
         for bottom_intf, top_intf in cabling_plan:
             bottom_speed = self._get_interface_speed(bottom_intf)
             top_speed = self._get_interface_speed(top_intf)
-            
+
             # Get interface types for detailed logging
-            bottom_type = getattr(bottom_intf.interface_type, 'value', bottom_intf.interface_type) if hasattr(bottom_intf, 'interface_type') else 'unknown'
-            top_type = getattr(top_intf.interface_type, 'value', top_intf.interface_type) if hasattr(top_intf, 'interface_type') else 'unknown'
+            bottom_type = (
+                getattr(bottom_intf.interface_type, "value", bottom_intf.interface_type)
+                if hasattr(bottom_intf, "interface_type")
+                else "unknown"
+            )
+            top_type = (
+                getattr(top_intf.interface_type, "value", top_intf.interface_type)
+                if hasattr(top_intf, "interface_type")
+                else "unknown"
+            )
 
             # Check compatibility
             if bottom_speed and top_speed and bottom_speed != top_speed:
@@ -665,9 +673,7 @@ class CablingPlanner:
                 mismatches.append(mismatch_msg)
 
                 if strict:
-                    self.logger.error(
-                        f"INTERFACE TYPE MISMATCH - Connection skipped: {mismatch_msg}"
-                    )
+                    self.logger.error(f"INTERFACE TYPE MISMATCH - Connection skipped: {mismatch_msg}")
                     skipped_connections.append(mismatch_msg)
                     continue
                 else:
@@ -682,7 +688,7 @@ class CablingPlanner:
             total_attempted = len(cabling_plan)
             total_created = len(validated_plan)
             total_mismatches = len(mismatches)
-            
+
             if strict:
                 self.logger.error(
                     f"Speed validation summary: {total_mismatches} incompatible interface type(s) detected. "
@@ -744,7 +750,7 @@ class CablingPlanner:
             # Extract speeds from both sides for detailed error
             bottom_speeds = {self._get_interface_speed(i) for i in all_bottom_intfs if self._get_interface_speed(i)}
             top_speeds = {self._get_interface_speed(i) for i in all_top_intfs if self._get_interface_speed(i)}
-            
+
             bottom_speeds_str = ", ".join(str(s) for s in sorted([s for s in bottom_speeds if s is not None]))
             top_speeds_str = ", ".join(str(s) for s in sorted([s for s in top_speeds if s is not None]))
             self.logger.error(

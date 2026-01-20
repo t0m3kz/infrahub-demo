@@ -25,10 +25,8 @@ class DCTopologyGenerator(CommonGenerator):
             if pod.checksum.value != fabric_checksum:
                 pod.checksum.value = fabric_checksum
                 await pod.save(allow_upsert=True)
-                self.logger.info(
-                    f"Checksum updated: {pod.name.value} → {fabric_checksum} (triggers pod re-generation)"
-                )
-        
+                self.logger.info(f"Checksum updated: {pod.name.value} → {fabric_checksum} (triggers pod re-generation)")
+
         self.logger.info(
             f"DC checksum propagation completed: {len([p for p in pods if p.checksum.value == fabric_checksum])} "
             f"pod(s) updated to checksum {fabric_checksum}"

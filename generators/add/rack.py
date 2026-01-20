@@ -71,8 +71,7 @@ class RackGenerator(CommonGenerator):
 
         if not spine_devices:
             self.logger.error(
-                f"Rack {self.data.name}: No spine devices found in pod {pod_id}. "
-                "Cannot create ToR-to-spine cabling."
+                f"Rack {self.data.name}: No spine devices found in pod {pod_id}. Cannot create ToR-to-spine cabling."
             )
             raise RuntimeError(f"Rack {self.data.name}: Cannot cable to spines - no spine devices in pod")
 
@@ -597,9 +596,7 @@ class RackGenerator(CommonGenerator):
                 self.logger.warning(f"Unknown deployment_type '{deployment_type}' for rack {self.data.name}")
 
         # Generation completion summary
-        total_devices = len(created_leaf_devices or []) + sum(
-            tor_role.quantity for tor_role in (self.data.tors or [])
-        )
+        total_devices = len(created_leaf_devices or []) + sum(tor_role.quantity for tor_role in (self.data.tors or []))
         self.logger.info(
             f"Rack generation completed: {self.data.name} - {total_devices} device(s) created with connectivity"
         )

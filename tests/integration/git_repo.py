@@ -32,6 +32,9 @@ class GitRepoType(str, Enum):
 class GitRepo:
     """Test repository helper.
 
+    DEPRECATED: Prefer using `infrahub_sdk.testing.repository.GitRepo` instead.
+    This class is kept for backward compatibility with existing tests.
+
     This is intentionally similar to `infrahub_sdk.testing.repository.GitRepo`, but it
     avoids calling the deprecated `dulwich.porcelain.checkout_branch`.
     """

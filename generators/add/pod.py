@@ -45,9 +45,7 @@ class PodTopologyGenerator(CommonGenerator):
             if should_update and rack.checksum.value != pod_checksum:
                 rack.checksum.value = pod_checksum
                 await rack.save(allow_upsert=True)
-                self.logger.info(
-                    f"Checksum updated: {rack.name.value} → {pod_checksum} (triggers rack re-generation)"
-                )
+                self.logger.info(f"Checksum updated: {rack.name.value} → {pod_checksum} (triggers rack re-generation)")
 
     async def generate(self, data: dict[str, Any]) -> None:
         """Generate pod topology infrastructure."""
@@ -112,7 +110,7 @@ class PodTopologyGenerator(CommonGenerator):
         super_spine_interfaces = [
             iface.name for iface in (super_spine_template.interfaces if super_spine_template else [])
         ]
-        
+
         # Only fail if super-spines exist but template/interfaces are missing
         # Single-pod DCs with no super-spines are valid and should skip cabling
         if super_spine_devices and not super_spine_interfaces:
@@ -123,7 +121,7 @@ class PodTopologyGenerator(CommonGenerator):
             raise RuntimeError(
                 f"Pod {self.data.name}: Cannot cable to super-spines - no downlink interfaces in template"
             )
-        
+
         # Skip cabling if no super-spines (single-pod DC scenario)
         if not super_spine_devices or not super_spine_interfaces:
             self.logger.info(
