@@ -8,42 +8,47 @@
 
 **Platform:** Cisco Nexus 9K - The networking equivalent of driving a tank to the grocery store
 
-**Design Pattern:** L-Hierarchical (Large with Hierarchical naming convention)
+**Design Patterns:** Mixed bag of 4-spine designs (because consistency is overrated and we needed to showcase every possible topology variation in one place)
 
-**Use Case:** Enterprise data center suffering from **deployment identity crisis** - featuring all middle rack, mixed and ToR connectivity within the same fabric. This is what happens when the architecture committee couldn't decide, so they chose "all of the above." Perfect for demonstrating that flexibility isn't always a feature; sometimes it's just indecision with a marketing spin.
+- **Pod 1:** `spine-leaf-middlerack-4spine` (large-dc-layout) - Maximum bureaucracy, 4 spines orchestrating middle rack harmony
+- **Pod 2:** `spine-leaf-mixed-4spine` (large-dc-layout) - Identity crisis incarnate, can't decide between ToR and middle rack life
+- **Pod 3:** `spine-leaf-tor-4spine` (medium-dc-layout) - The rebel pod that skipped middle management entirely
+
+**Use Case:** Enterprise data center suffering from **deployment identity crisis** - featuring all middle rack, mixed and ToR connectivity within the same fabric. This is what happens when the architecture committee couldn't decide, so they chose "all of the above." Perfect for demonstrating that flexibility isn't always a feature; sometimes it's just indecision with a marketing spin. Now with **mandatory 4-spine designs** because apparently 2-spine and 3-spine variants were "just figments of someone's imagination" and never actually existed in bootstrap data. Who knew?
 
 ---
 
 ## Architecture (AKA: The Magnificent Mess)
 
-### Fabric Scale (Or: How We Learned to Stop Worrying and Love Complexity)
+### Fabric Scale (Or: How We Learned to Stop Worrying and Love 4-Spine Everything)
 
 - **Super Spines:** 2 (Cisco N9K-C9336C-FX2) - The bosses of bosses
-- **Total Pods:** 3 (Each with its own personality disorder)
-- **Total Spines:** 8 (3+3+2 - we support diversity and inclusiveness)
+- **Total Pods:** 3 (Each with its own personality disorder, but all sharing the same spine count fetish)
+- **Total Spines:** 12 (4+4+4 - because uniformity in spine count is the ONE thing we got right)
 - **Total Racks:** 24 (Because stopping at 20 would suggest we had a plan)
 
-**Deployment Types:** It’s complicated—Pod 1: middle_rack (for fans of bureaucracy), Pod 2: mixed (for the indecisive), Pod 3: ToR (for rebels who read “Keep It Simple” and actually believed it).
+**Deployment Types:** It's complicated—Pod 1: middle_rack (for fans of bureaucracy), Pod 2: mixed (for the indecisive), Pod 3: ToR (for rebels who read "Keep It Simple" and actually believed it). But at least they all have 4 spines now. Small victories.
 
-### Pod Structure (The Family Dysfunction Table)
+### Pod Structure (The Family Dysfunction Table - Now With Uniform Spine Counts!)
 
-| Pod | Spines | Deployment Type | Racks | Personality |
-| ----- | -------- | ---------------- | ------- | ------------- |
+| Pod   | Spines | Design                        | Site Layout | Personality                                                      |
+| ----- | ------ | ----------------------------- | ----------- | ---------------------------------------------------------------- |
+| POD-1 | 4      | spine-leaf-middlerack-4spine  | large-dc    | The overachiever with hierarchy complex and 4 spines to prove it |
+| POD-2 | 4      | spine-leaf-mixed-4spine       | large-dc    | The confused middle child with 4 spines trying both strategies   |
+| POD-3 | 4      | spine-leaf-tor-4spine         | medium-dc   | The minimalist with—you guessed it—4 spines                      |
 
-| POD-1 | 3 | middle_rack | 4 middle racks  | The overachiever with hierarchy complex |
-| POD-2 | 3 | mixed | 8 mixed (4 middle + 4 ToR) | The confused middle child trying both strategies |
-| POD-3 | 2 | tor | 12 ToR racks | The minimalist who read "Keep It Simple" once and took it seriously |
+### Design Template Constraints (Or: The Rules We ACTUALLY Follow Now)
 
-### Design Template Constraints (Or: The Rules We Pretend to Follow)
+- **Site Layouts:** `small-dc-layout` (2 rows), `medium-dc-layout` (4 rows), `large-dc-layout` (8 rows)
+- **Pod Designs:** Only 4-spine variants exist (surprise! 2-spine and 3-spine were never real)
+  - `spine-leaf-tor-4spine` - Direct ToR to spine, 4 spines, because flat is life
+  - `spine-leaf-mixed-4spine` - Some ToR, some middle rack, 4 spines holding it together
+  - `spine-leaf-middlerack-4spine` - Full hierarchy, 4 spines managing the chaos
+- **Spine Count:** 4 per pod (non-negotiable, according to bootstrap reality)
+- **Super Spine Template:** `N9K_C9336C_FX2_SUPER_SPINE` (not the imaginary edition)
+- **Fabric Sorting:** `top_down` (because someone had to make a decision)
 
-- maximum_super_spines: 4 (but we only use 2 because who needs redundancy, right?)
-- maximum_spines: 4 per pod (democracy in action)
-- maximum_pods: 4 (we're only using 3 - always leave room for "future growth")
-- maximum_leafs: 24 (enough to make your monitoring dashboard look like a Christmas tree)
-- maximum_rack_leafs: 8 (per rack, because why keep it simple?)
-- maximum_middle_racks: 8 (bureaucracy loves middle management)
-- maximum_tors: 48 (that's a lot of Top-of-Racks, or as we call them, "spine port consumers")
-- naming_convention: hierarchical (because `device_42` was too obvious)
+**Breaking News:** Turns out those 2-spine and 3-spine designs were just wishful thinking. Bootstrap data doesn't lie, even when our YAML files do. We've learned an important lesson: always check `data/bootstrap/11_pod_designs.yml` before inventing your own reality.
 
 ---
 

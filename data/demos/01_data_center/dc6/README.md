@@ -1,62 +1,33 @@
-# DC6 - Mixed Vendors: Silesian Buffet, Vendor Bingo, Debug & Dine
+# DC6 - Mixed Vendors: Debug & Dine, Silesian Edition
 
 ## Overview
 
-**Location:** Katowice 🇵🇱 (Poland's and Silesian industrial powerhouse turned tech hub—where the only thing faster than the fiber is the coffee. Half the cost of Western Europe, double the sarcasm, and the rolada-modro-kapusta-gumiklyjzy-to-latency ratio is unbeatable!)
+**Location:** Katowice 🇵🇱 | **Size:** Medium | **Platform:** Multi-Vendor (Layer-Mix) | **Design:** `spine-leaf-middlerack-4spine`
 
-**Size:** Medium (M) - Cost-effective, interoperable, and a little wild. Big enough to cause trouble, small enough to blame someone else.
+Half the cost of Western Europe, double the sarcasm. Multi-vendor at LAYER level—Arista spines with Dell leafs, Edgecore spines with Cisco leafs. If you've ever wanted to watch vendors argue about port-channel naming, this is your chance.
 
-**Platform:** Multi-Vendor (Cisco, Arista, Dell SONiC, Edgecore SONiC) — because why settle for one vendor's bugs when you can have them all?
+**Motto:** "Why settle for one vendor's bugs when you can have them all?"
 
-**Design Pattern:** M-Standard (Medium with standard naming convention) — the architectural equivalent of a buffet: a little bit of everything, and you never know what you'll get next.
-
-**Use Case:**
-Medium-sized multi-vendor data center with middle_rack deployment. It's the perfect playground for engineers who like living dangerously, managers who love vendor bingo, and auditors who enjoy existential dread. Demonstrates vendor interoperability at a scale just big enough to break things, but small enough to blame the intern. Cost-effective multi-vendor approach for medium enterprises—because why settle for one vendor's support hotline when you can have four? If you've ever wanted to see a Cisco, Arista, Dell, and Edgecore device argue about spanning tree, BGP, and whose logo is the ugliest, this is your chance.
-
-Warning: May cause spontaneous VLAN migrations, philosophical debates about port-channel naming, and a sudden urge to update your resume.
-
----
-
-## Architecture (Layer-Level Vendor Mix)
-
-### Fabric Scale
+## Architecture
 
 - **Super Spines:** 2 (Cisco N9K-C9336C-FX2)
-- **Total Pods:** 2
-- **Total Spines:** 4 (2+2 across pods)
-- **Total Racks:** 4 (2 per pod)
-- **Deployment Type:** middle_rack (all pods)
+- **Pods:** 2 | **Spines:** 8 (4+4) | **Racks:** 4
+- **Deployment:** `middle_rack` (both pods) - Mixed vendors per layer because chaos breeds character
 
-### Pod Structure (Vendor Mix Table)
+| Pod | Spines | Spine Vendor | Leaf/ToR Vendor | Design                       | Site Layout |
+| --- | ------ | ------------ | --------------- | ---------------------------- | ----------- |
+| 1   | 4      | Arista       | Dell SONiC      | spine-leaf-middlerack-4spine | small-dc    |
+| 2   | 4      | Edgecore     | Cisco NX-OS     | spine-leaf-middlerack-4spine | small-dc    |
 
-| Pod   | Spines | Vendor                | Leafs/ToRs Vendor | Racks | Deployment   |
-|-------|--------|----------------------|-------------------|-------|--------------|
-| Pod 1 | 2      | Arista (DCS-7050CX3-32C-R) | Dell SONiC      | 2     | middle_rack  |
-| Pod 2 | 2      | Edgecore (7726-32X-O)      | Cisco NX-OS     | 2     | middle_rack  |
+## Quick Start
 
----
+```bash
+uv run inv deploy-dc --scenario dc6 --branch your_branch
+```
 
-## Hardware Stack (Multi-Vendor Mayhem)
+**Warning:** Vendor interop at scale. May cause spontaneous VLAN migrations and philosophical debates.
 
-### Super Spine Layer
-
-- **Model:** Cisco N9K-C9336C-FX2
-- **Ports:** 36x100GbE
-- **Role:** Inter-pod connectivity
-- **Fun Fact:** The neutral overlords
-
-### Spine Layer (Multi-Vendor)
-
-- **Pod 1:** Arista DCS-7050CX3-32C-R (2 spines)
-- **Pod 2:** Edgecore 7726-32X-O (2 spines)
-- **Ports:** 32x100GbE each
-- **Role:** Pod-level aggregation
-
-### Leaf/ToR Layer
-
-- **Pod 1:** Dell SONiC
-- **Pod 2:** Cisco NX-OS
-- **Role:** Rack-level aggregation and server connectivity
+**Silesian Fact:** The rolada-to-latency ratio here is unbeatable. Also, we have 4 spines per pod because bootstrap data doesn't negotiate
 
 ---
 

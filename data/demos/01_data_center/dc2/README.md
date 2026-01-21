@@ -1,62 +1,31 @@
-# DC2 - Croissants & Cheap Packets
-
-*Middle Rack Data Center with Hierarchical Naming Strategy*
+# DC2 - Croissants & 4-Spine Reality
 
 ## Overview
 
-**Location:** Paris 🇫🇷 (The City of Light - where your packets enjoy croissants and romantic latency)
+**Location:** Paris 🇫🇷 | **Size:** Small | **Platform:** Arista EOS | **Design:** `spine-leaf-middlerack-4spine`
 
-**Size:** Small (S) - Efficient, elegant, and budget-friendly
+When the CFO says "make it work but don't make me cry" and you actually deliver. 2 pods, 4 racks, hierarchical aggregation—because middle management isn't just for org charts. The Parisian café of data centers: elegant, efficient, surprisingly good at packet forwarding.
 
-**Platform:** Arista EOS - So API-driven, even your croissant can trigger a config change.
+**Fun Fact:** Bootstrap data says 4 spines or nothing. We chose 4. Revolutionary, we know.
 
-**Design Pattern:** S-Flat (Small with Flat naming convention)
+## Architecture
 
-**Use Case:** When the CFO says "make it work but don't make me cry" and you actually deliver. DC2 proves you don't need four pods and a mortgage to build reliable infrastructure. Just 2 pods, 4 racks, and a healthy respect for hierarchical aggregation. It's the Parisian café of data centers - small, efficient, and everyone knows everyone.
+- **Super Spines:** 2 (Arista DCS-7050CX3-32C-R)
+- **Pods:** 2 | **Spines:** 8 (4+4) | **Racks:** 4
+- **Deployment:** `middle_rack` (both pods) - Direct ToR was too mainstream
 
----
+| Pod | Spines | Design                       | Site Layout | Personality          |
+| --- | ------ | ---------------------------- | ----------- | -------------------- |
+| 1   | 4      | spine-leaf-middlerack-4spine | small-dc    | Responsible Twin     |
+| 2   | 4      | spine-leaf-middlerack-4spine | small-dc    | Copy-Paste Twin      |
 
-## Architecture (Minimalism with a French Accent)
+## Quick Start
 
-### Fabric Scale
+```bash
+uv run inv deploy-dc --scenario dc2 --branch your_branch
+```
 
-- **Super Spines:** 2 (Arista DCS-7050CX3-32C-R) - *Your inter-pod highway patrol*
-- **Total Pods:** 2 - *Because symmetry is beautiful and troubleshooting is easier*
-- **Total Spines:** 4 (2 per pod) - *Just enough aggregation, not too much*
-- **Total Racks:** 4 - *Count them: FOUR. Not six. Not three. FOUR.*
-- **Deployment Type:** middle_rack (both pods) - *Hierarchical all the way down*
-
-### Pod Structure (The Twin Towers of Efficiency)
-
-| Pod   | Spines | Model                | Racks | Deployment    | Personality                |
-|-------|--------|----------------------|-------|--------------|----------------------------|
-| Pod 1 | 2      | DCS-7050CX3-32C-R   | 2     | middle_rack  | The Responsible Sibling    |
-| Pod 2 | 2      | DCS-7050CX3-32C-R   | 2     | middle_rack  | The Copy-Paste Sibling     |
-
----
-
-## Hardware Stack (Budget-Conscious Excellence)
-
-### Super Spine Layer
-
-- **Model:** Cisco Nexus N9K-C9336C-FX2
-- **Ports:** 36×100GbE - *More than you need, exactly what you want*
-- **Role:** Making pods talk to each other without drama
-- **Fun Fact:** These switches cost more than your car but last longer
-
-### Spine Layer
-
-- **Model:** Arista DCS-7050CX3-32C-R
-- **Ports:** 32x100GbE
-- **Role:** Pod-level aggregation
-- **Deployment:** Identical in both pods
-
-### Leaf Layer (In Racks)
-
-- **Model:** Arista DCS-7050CX3-32C-R
-- **Count:** 2 per rack
-- **Role:** Rack-level aggregation
-- **Ports:** 36x100GbE
+**Warning:** May cause spontaneous optimization and French food cravings
 
 ### ToR Layer
 

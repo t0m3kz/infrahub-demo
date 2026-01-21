@@ -6,14 +6,17 @@ spec:
   data:
     - suite_name: "Suite-1"
       index: 1
-      shortname: "sin-1-s-1"
+      shortname: "ny-1-s-1"
       parent: ny-1
     - suite_name: "Suite-2"
+      index: 2
       shortname: "ny-1-s-2"
       parent: ny-1
     - suite_name: "Suite-3"
+      index: 3
       shortname: "ny-1-s-3"
       parent: ny-1
     - suite_name: "Suite-4"
+      index: 4
       shortname: "ny-1-s-4"
       parent: ny-1

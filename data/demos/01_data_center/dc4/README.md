@@ -1,63 +1,31 @@
-# DC4 - Mixed Deployment: Maximum Chaos, Minimum Rules
+# DC4 - Mixed Chaos: Can't Decide? Deploy Both!
 
 ## Overview
 
-**Location:** Berlin 🇩🇪 (The hipster capital - your infrastructure is as edgy as the local techno scene)
+**Location:** Berlin 🇩🇪 | **Size:** Small | **Platform:** Edgecore SONiC | **Design:** Mixed bag
 
-**Size:** Small (S) - Flexible, creative, and a little chaotic
+When the architecture team can't agree and someone says "why not both?" Pod 1 goes `mixed`, Pod 2 goes flat `tor`. It's the networking equivalent of a hipster café menu—confused but oddly functional.
 
-**Platform:** Edgecore with SONiC - So vendor-neutral, even your hipster barista could deploy it between DJ sets.
+**Use Case:** Flexibility through indecision. Now with mandatory 4 spines per pod!
 
-**Design Pattern:** L-Standard (Large with standard naming convention)
-
-**Use Case:** When the architecture team can't agree on mixed vs flat ToR and someone says "why not both?" Pod 1 goes full mixed deployment, Pod 2 goes pure flat ToR. It's like having a hybrid car that's also a motorcycle. Confusing? Yes. Flexible? Absolutely.
-
----
-
-## Architecture (Identity Crisis with a Beat)
-
-### Fabric Scale
+## Architecture
 
 - **Super Spines:** 2 (Edgecore 7726-32X-O)
-- **Total Pods:** 2
-- **Total Spines:** 5 (3 in Pod 1, 2 in Pod 2)
-- **Total Racks:** 5
-- **Deployment Types:** mixed (Pod 1), tor (Pod 2)
+- **Pods:** 2 | **Spines:** 8 (4+4) | **Racks:** 5
+- **Deployment:** `mixed` (Pod 1), `tor` (Pod 2) - Because commitment is overrated
 
-### Pod Structure (Split Personality Disorder)
+| Pod | Spines | Design                  | Site Layout | Personality  |
+| --- | ------ | ----------------------- | ----------- | ------------ |
+| 1   | 4      | spine-leaf-mixed-4spine | small-dc    | Overachiever |
+| 2   | 4      | spine-leaf-tor-4spine   | small-dc    | Minimalist   |
 
-| Pod   | Spines | Racks | Deployment | Personality                |
-|-------|--------|-------|------------|----------------------------|
-| Pod 1 | 3      | 2     | mixed      | The Sophisticated Engineer |
-| Pod 2 | 2      | 3     | tor        | The Pragmatic Minimalist   |
+## Quick Start
 
----
+```bash
+uv run inv deploy-dc --scenario dc4 --branch your_branch
+```
 
-## Hardware Stack (Edgecore All the Things)
-
-### Super Spine Layer
-
-- **Model:** Edgecore 7726-32X-O
-- **Ports:** 32x100GbE
-- **Role:** Inter-pod negotiators
-- **SONiC OS:** Open networking for the brave
-
-### Spine Layer
-
-- **Pod 1:** Edgecore 7726-32X-O × 3 spines
-- **Pod 2:** Edgecore 7726-32X-O × 2 spines
-- **Ports:** 32x100GbE each
-- **Role:** Aggregating both leafs AND direct ToR connections (mixed life)
-
-### Leaf Layer (Pod 1 Only)
-
-- **Model:** Edgecore 7726-32X-O
-- **Role:** Rack-level aggregation
-
-### ToR Layer
-
-- **Model:** Edgecore 7726-32X-O
-- **Role:** Server connectivity
+**Warning:** May cause identity crisis. Perfect for flexing multi-deployment skills
 
 ## Quick Start
 

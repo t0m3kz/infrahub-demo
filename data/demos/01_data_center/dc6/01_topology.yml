@@ -6,30 +6,27 @@ spec:
   data:
     - name: DC6
       index: 1
+      site_layout: large-dc-layout
       amount_of_super_spines: 2
       super_spine_template: N9K_C9336C_FX2_SUPER_SPINE
       fabric_interface_sorting_method: top_down
-      design_pattern: M-Standard
       member_of_groups:
         - topologies_dc
       children:
         kind: TopologyPod
         data:
           - index: 1
-            deployment_type: middle_rack
-            spine_template: DCS-7050CX3-32C-R_SPINE
-            amount_of_spines: 2
-            number_of_rows: 2
-            maximum_leafs_per_row: 2
-            maximum_tors_per_row: 2
+            site_layout: medium-dc-layout
+            design: spine-leaf-middlerack-4spine
             member_of_groups:
               - topologies_pod
           - index: 2
-            deployment_type: middle_rack
-            spine_template: Edgecore-7726_32X_O_SPINE
-            amount_of_spines: 2
-            number_of_rows: 2
-            maximum_leafs_per_row: 2
-            maximum_tors_per_row: 2
+            site_layout: small-dc-layout
+            design: spine-leaf-tor-4spine
+            member_of_groups:
+              - topologies_pod
+          - index: 3
+            site_layout: medium-dc-layout
+            design: spine-leaf-mixed-4spine
             member_of_groups:
               - topologies_pod

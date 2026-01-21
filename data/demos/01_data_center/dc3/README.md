@@ -1,62 +1,31 @@
-# DC3 - Brexit, No Middle Management, Maximum Sass
+# DC3 - Brexit, Flat ToR, Maximum Speed
 
 ## Overview
 
-**Location:** London 🇬🇧 (Brexit happened, but your data stays! More fiber under the Thames than umbrellas in the city)
+**Location:** London 🇬🇧 | **Size:** Small | **Platform:** Dell SONiC | **Design:** `spine-leaf-tor-4spine`
 
-**Size:** Small (S) - Minimalist, fast, and direct
+Brexit happened, but your data stays! Pure flat ToR—every ToR connects directly to spines, zero middle layers, zero bureaucracy. Networking speed dating with commitment issues. If you love low latency and hate explaining why you need a leaf layer, this is your DC.
 
-**Platform:** Dell PowerSwitch with SONiC - So open, even your neighbor's cat could SSH in (if it knew the password).
+**Philosophy:** "I don't want any extra hops" (and we mean it).
 
-**Design Pattern:** M-Flat (Medium with flat naming convention)
+## Architecture
 
-**Use Case:**
-For those who say "I don't want any extra hops" and actually mean it. Pure flat ToR deployment—every ToR switch connects directly to spines, like a networking speed-dating event with zero commitment. No middle aggregation, no leaf layer bureaucracy, just servers talking to ToRs and ToRs talking to spines. It's a minimalist's dream and a cable management team's recurring nightmare. If you love low latency, hate complexity, and enjoy watching your spine ports disappear faster than free beer at a tech conference, this one's for you.
+- **Super Spines:** 2 (Dell S5232F-ON)
+- **Pods:** 2 | **Spines:** 8 (4+4) | **Racks:** 4
+- **Deployment:** `tor` (both pods) - Direct spine connections or bust
 
-Warning: May cause spontaneous outbreaks of optimism and existential dread in equal measure.
+| Pod | Spines | Design                | Site Layout | Personality         |
+| --- | ------ | --------------------- | ----------- | ------------------- |
+| 1   | 4      | spine-leaf-tor-4spine | small-dc    | Speed Demon         |
+| 2   | 4      | spine-leaf-tor-4spine | small-dc    | Speed Demon's Clone |
 
----
+## Quick Start
 
-## Architecture (Flatness with British Charm)
+```bash
+uv run inv deploy-dc --scenario dc3 --branch your_branch
+```
 
-### Fabric Scale
-
-- **Super Spines:** 2 (Dell PowerSwitch S5232F-ON)
-- **Total Pods:** 2
-- **Total Spines:** 4 (2 per pod)
-- **Total Racks:** 4
-- **Deployment Type:** tor (both pods)
-
-### Pod Structure (Zero-Middle-Layer Society)
-
-| Pod   | Spines | Model                | Racks | Deployment | Personality         |
-|-------|--------|----------------------|-------|------------|---------------------|
-| Pod 1 | 2      | S5232F-ON           | 2     | tor        | The Speed Racer     |
-| Pod 2 | 2      | S5232F-ON           | 2     | tor        | The Speed Racer's Twin |
-
----
-
-## Hardware Stack (Simplicity Through SONiC)
-
-### Super Spine Layer
-
-- **Model:** Dell PowerSwitch S5232F-ON
-- **Ports:** 32x100GbE
-- **Role:** Inter-pod autobahn
-- **Fun Fact:** Flat ToR is how you win arguments about east-west latency
-
-### Spine Layer
-
-- **Model:** Dell PowerSwitch S5232F-ON
-- **Ports:** 32x100GbE
-- **Role:** Direct ToR aggregation
-- **Deployment:** Identical across pods
-
-### ToR Layer
-
-- **Model:** Dell PowerSwitch S5232F-ON
-- **Count:** 2 per rack
-- **Role:** Server connectivity
+**Warning:** Spine port consumption rates may cause existential dread. Low latency worth it
 
 ---
 

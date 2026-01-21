@@ -6,11 +6,13 @@ spec:
   data:
     - suite_name: "Suite-1"
       index: 1
-      shortname: "ord-1-s-1"
-      parent: ord-1
+      shortname: "ktw-1-s-1"
+      parent: ktw-1
     - suite_name: "Suite-2"
-      shortname: "ber-1-s-2"
-      parent: ber-1
+      index: 2
+      shortname: "ktw-1-s-2"
+      parent: ktw-1
     - suite_name: "Suite-3"
-      shortname: "ber-1-s-3"
-      parent: ber-1
+      index: 3
+      shortname: "ktw-1-s-3"
+      parent: ktw-1

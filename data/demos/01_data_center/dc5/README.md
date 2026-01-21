@@ -1,62 +1,33 @@
-# DC5 - Multi-Vendor: Eurovision for Switches
+# DC5 - Multi-Vendor: Four Vendors, One Fabric, Infinite Support Tickets
 
 ## Overview
 
-**Location:** New York 🇺🇸 (The city that never sleeps, neither does your infrastructure. Rack space cheaper than a Manhattan studio!)
+**Location:** New York 🇺🇸 | **Size:** Medium | **Platform:** Multi-Vendor | **Design:** `spine-leaf-middlerack-4spine`
 
-**Size:** Medium (M) - Diverse, resilient, and a little bit chaotic
+Pod-level vendor diversity—because why settle for one support contract when you can juggle four? Cisco, Arista, Dell, Edgecore, all in one fabric. Eurovision for switches, but with more BGP and fewer sequins.
 
-**Platform:** Multi-Vendor — why settle for one when you can pay four support contracts and juggle Cisco, Arista, Dell, and Edgecore all at once?
+**Fun Fact:** Each pod speaks a different CLI dialect. Polyglot networking at its finest.
 
-**Design Pattern:** M-Hierarchical (Medium with hierachical naming convention)
-
-**Use Case:**
-Pod-level vendor diversity for risk mitigation and best-of-breed selection. Each pod pledges allegiance to a different vendor—like a american version of Eurovision, but with more BGP and fewer sequins. It's middle_rack deployment across all 4 pods because hierarchy transcends vendor boundaries (and so do support tickets). Perfect for testing vendor migration strategies, proving your multi-vendor expertise at parties, and discovering which vendor's CLI makes you question your life choices.
-
-Warning: May result in spontaneous protocol debates, inter-vendor blame games, and a sudden urge to update your LinkedIn profile.
-
----
-
-## Architecture (The United Nations of Networking)
-
-### Fabric Scale
+## Architecture
 
 - **Super Spines:** 2 (Cisco N9K-C9336C-FX2)
-- **Total Pods:** 4 (One vendor per pod)
-- **Total Spines:** 8 (2 per pod)
-- **Total Racks:** 8 (2 per pod)
-- **Deployment Type:** middle_rack (all pods)
+- **Pods:** 4 | **Spines:** 16 (4+4+4+4) | **Racks:** 8
+- **Deployment:** `middle_rack` (all pods) - Hierarchy transcends vendor boundaries
 
-### Pod Structure (Vendor Diversity Initiative)
+| Pod | Spines | Vendor   | Design                       | Site Layout | Personality          |
+| --- | ------ | -------- | ---------------------------- | ----------- | -------------------- |
+| 1   | 4      | Cisco    | spine-leaf-middlerack-4spine | small-dc    | Enterprise Standard  |
+| 2   | 4      | Arista   | spine-leaf-middlerack-4spine | small-dc    | API Enthusiast       |
+| 3   | 4      | Dell     | spine-leaf-middlerack-4spine | small-dc    | Open Source Advocate |
+| 4   | 4      | Edgecore | spine-leaf-middlerack-4spine | small-dc    | Vendor-Neutral Rebel |
 
-| Pod   | Spines | Vendor   | Model                | Racks | Deployment   | Personality                |
-|-------|--------|----------|----------------------|-------|-------------|----------------------------|
-| Pod 1 | 2      | Cisco    | N9K-C9364C-GX        | 2     | middle_rack | The Enterprise Standard    |
-| Pod 2 | 2      | Arista   | DCS-7050CX3-32C-R    | 2     | middle_rack | The API Enthusiast         |
-| Pod 3 | 2      | Dell     | S5232F-ON            | 2     | middle_rack | The Open Source Advocate   |
-| Pod 4 | 2      | Edgecore | 7726-32X-O           | 2     | middle_rack | The Vendor-Neutral Rebel   |
+## Quick Start
 
----
+```bash
+uv run inv deploy-dc --scenario dc5 --branch your_branch
+```
 
-## Hardware Stack (Vendor Diversity Champions)
-
-### Super Spine Layer
-
-- **Model:** Cisco N9K-C9336C-FX2
-- **Ports:** 36x100GbE
-- **Role:** Inter-pod connectivity
-- **Fun Fact:** Top of the food chain
-
-### Spine Layer
-
-- **Model:** Varies by pod (see table above)
-- **Ports:** 32-36x100GbE
-- **Role:** Pod-level aggregation
-
-### Leaf Layer
-
-- **Model:** Varies by pod
-- **Role:** Rack-level aggregation
+**Warning:** Vendor blame games sold separately. Update your LinkedIn profile accordingly
 
 ### ToR Layer
 

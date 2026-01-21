@@ -13,12 +13,12 @@ spec:
     - name: run-rack-generator
       description: Run Rack Generator
       generator: add_rack
-    # - name: run-decommission-device
-    #   description: Decommission a single device
-    #   generator: decommission_device
+      # - name: run-decommission-device
+      #   description: Decommission a single device
+      #   generator: decommission_device
     - name: run-decommission-pod
       description: Decommission all devices within a pod
       generator: decommission_pod
-    - name: run-endpoint-generator
-      description: Run Endpoint Connectivity Generator
-      generator: add_endpoint
+      # - name: run-endpoint-generator
+      #   description: Run Endpoint Connectivity Generator
+      #   generator: add_endpoint

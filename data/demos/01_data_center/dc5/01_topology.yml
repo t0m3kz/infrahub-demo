@@ -1,0 +1,37 @@
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologyDataCenter
+  data:
+    - name: DC5
+      index: 1
+      site_layout: large-dc-layout
+      amount_of_super_spines: 2
+      super_spine_template: N9K_C9336C_FX2_SUPER_SPINE
+      fabric_interface_sorting_method: top_down
+      member_of_groups:
+        - topologies_dc
+      children:
+        kind: TopologyPod
+        data:
+          - index: 1
+            site_layout: small-dc-layout
+            design: spine-leaf-middlerack-4spine
+            member_of_groups:
+              - topologies_pod
+          - index: 2
+            site_layout: small-dc-layout
+            design: spine-leaf-middlerack-4spine
+            member_of_groups:
+              - topologies_pod
+          - index: 3
+            site_layout: small-dc-layout
+            design: spine-leaf-middlerack-4spine
+            member_of_groups:
+              - topologies_pod
+          - index: 4
+            site_layout: small-dc-layout
+            design: spine-leaf-middlerack-4spine
+            member_of_groups:
+              - topologies_pod
