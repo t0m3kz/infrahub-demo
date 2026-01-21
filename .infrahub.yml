@@ -10,42 +10,42 @@ artifact_definitions:
   - name: edge_config
     artifact_name: edge
     content_type: text/plain
-    targets: edges-cables
+    targets: edges
     transformation: edge
     parameters:
       device: name__value
   - name: leaf_config
     artifact_name: leaf
     content_type: text/plain
-    targets: leafs-cables
+    targets: leafs
     transformation: leaf
     parameters:
       device: name__value
   - name: borderleaf_config
     artifact_name: border-leaf
     content_type: text/plain
-    targets: border-leafs-cables
+    targets: border-leafs
     transformation: border_leaf
     parameters:
       device: name__value
   - name: tor_config
     artifact_name: tor
     content_type: text/plain
-    targets: tors-cables
+    targets: tors
     transformation: tor
     parameters:
       device: name__value
   - name: spine_config
     artifact_name: spine
     content_type: text/plain
-    targets: spines-cables
+    targets: spines
     transformation: spine
     parameters:
       device: name__value
   - name: super_spine_config
     artifact_name: super-spine
     content_type: text/plain
-    targets: super-spines-cables
+    targets: super-spines
     transformation: super_spine
     parameters:
       device: name__value
@@ -100,19 +100,19 @@ check_definitions:
   - name: validate_spine
     class_name: CheckSpine
     file_path: checks/spine.py
-    targets: spines-cables
+    targets: spines
     parameters:
       device: name__value
   - name: validate_leaf
     class_name: CheckLeaf
     file_path: checks/leaf.py
-    targets: leafs-cables
+    targets: leafs
     parameters:
       device: name__value
   - name: validate_edge
     class_name: CheckEdge
     file_path: checks/edge.py
-    targets: edges-cables
+    targets: edges
     parameters:
       device: name__value
   - name: validate_loadbalancer
@@ -124,19 +124,19 @@ check_definitions:
   - name: validate_tor
     class_name: CheckToR
     file_path: checks/tor.py
-    targets: border-leafs
+    targets: tors
     parameters:
       device: name__value
   - name: validate_border_leaf
     class_name: CheckBorderLeaf
     file_path: checks/border_leaf.py
-    targets: border-leafs-cables
+    targets: border-leafs
     parameters:
       device: name__value
   - name: validate_super_spine
     class_name: CheckSuperSpine
     file_path: checks/super_spine.py
-    targets: super-spines-cables
+    targets: super-spines
     parameters:
       device: name__value
 
@@ -257,7 +257,7 @@ generator_definitions:
       name: name__value
   - name: add_endpoint
     file_path: generators/add/endpoint.py
-    targets: endpoints-cables
+    targets: endpoints
     query: endpoint_connectivity
     class_name: EndpointConnectivityGenerator
     execute_in_proposed_change: false
