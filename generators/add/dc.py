@@ -63,10 +63,23 @@ class DCTopologyGenerator(CommonGenerator):
         self.logger.info(f"Generating topology for data center {self.fabric_name.upper()}")
         indexes: list[int] = [dc_index]
 
+        # Calculate pool sizes based on DC capacity
+        # Increase pool sizes to accommodate explicit pod design requirements:
+        # - POD-1: technical /24, loopback /28, management /26
+        # - POD-2: technical /24, loopback /28, management /26
+        # - POD-3: technical /23, loopback /27, management /26
+        # Parent pools need: technical /22, loopback /25, management /24
+        pool_params = {
+            "maximum_super_spines": amount_of_super_spines,
+            "maximum_pods": 6,  # Increased to ensure large enough parent pools
+            "maximum_spines": 4,
+            "maximum_switches": 16,  # Increased for larger technical pool
+        }
+
         await self.allocate_resource_pools(
             id=dc_id,
             strategy="fabric",
-            pools={},  # No DC-level design pattern
+            pools=pool_params,
             ipv6=self.data.underlay,
         )
 

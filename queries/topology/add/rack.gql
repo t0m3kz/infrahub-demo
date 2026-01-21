@@ -73,8 +73,6 @@ fragment PodDesignFields on TopologyPodDesign {
       }
     }
   }
-  leaf_template { node { id ...TemplateDeviceFields } }
-  tor_template { node { id ...TemplateDeviceFields } }
 }
 
 fragment PodFields on TopologyPod {
@@ -106,12 +104,6 @@ fragment PodFields on TopologyPod {
     }
   }
   amount_of_spines {
-    value
-  }
-  maximum_leafs_per_row {
-    value
-  }
-  maximum_tors_per_row {
     value
   }
   leaf_interface_sorting_method {

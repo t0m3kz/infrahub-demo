@@ -53,12 +53,12 @@ class EndpointConnectivitySimulator:
 
     def __init__(self, deployment_type: str = "middle_rack") -> None:
         """Initialize simulator with test data.
-        
+
         Args:
             deployment_type: Type of deployment ('middle_rack', 'tor', 'mixed')
         """
         self.deployment_type = deployment_type
-        
+
         # Racks from test data
         if deployment_type == "middle_rack":
             self.racks = {
@@ -253,7 +253,7 @@ class EndpointConnectivitySimulator:
         """Get available switch interfaces in given rack."""
         available = []
         switches = self.leafs if device_role == "leaf" else self.tors
-        
+
         for switch_name, switch in switches.items():
             if switch.rack == rack_name and switch.status in ["active", "free"]:
                 for interface in self.switch_interfaces.get(switch_name, []):
@@ -330,9 +330,7 @@ class EndpointConnectivitySimulator:
             row_racks = [rack for rack in self.racks.values() if rack.row_index == server_rack.row_index]
             for rack in row_racks:
                 if rack.name != server_rack.name:
-                    available_interfaces.extend(
-                        self.get_switch_interfaces_in_rack(rack.name, "tor", interface_type)
-                    )
+                    available_interfaces.extend(self.get_switch_interfaces_in_rack(rack.name, "tor", interface_type))
 
         if len(available_interfaces) < len(server_interfaces):
             return {
@@ -627,7 +625,9 @@ class TestToRDeploymentSimulation:
 
         # Verify total connections
         total_connections = sum(r["connection_count"] for r in results)
-        assert total_connections == 16, f"Expected 16 total connections (4 servers × 4 interfaces), got {total_connections}"
+        assert total_connections == 16, (
+            f"Expected 16 total connections (4 servers × 4 interfaces), got {total_connections}"
+        )
 
     def test_tor_deployment_strategy(self, simulator: EndpointConnectivitySimulator) -> None:
         """Verify ToR deployment strategy is correct."""
@@ -688,7 +688,9 @@ class TestMixedDeploymentSimulation:
         leaf_connections = sum(1 for conn in result["connections"] if "l-" in conn["switch"])
 
         # With only 2 ToR ports available, needs 2 from ToR + 2 from Leaf
-        assert leaf_connections > 0, f"Expected fallback to Leaf connections, got {leaf_connections} leaf, {tor_connections} tor"
+        assert leaf_connections > 0, (
+            f"Expected fallback to Leaf connections, got {leaf_connections} leaf, {tor_connections} tor"
+        )
         assert tor_connections == 2, f"Expected 2 ToR connections, got {tor_connections}"
         assert leaf_connections == 2, f"Expected 2 Leaf connections, got {leaf_connections}"
 
@@ -701,7 +703,7 @@ class TestMixedDeploymentSimulation:
         print("\n✅ Mixed Deployment Strategy Verified:")
         print(f"  Server: {result['server']} uses both ToRs and Leafs")
         print(f"  Total connections: {result['connection_count']}")
-        
+
         tor_count = sum(1 for conn in result["connections"] if "t-" in conn["switch"])
         leaf_count = sum(1 for conn in result["connections"] if "l-" in conn["switch"])
         print(f"  ToR connections: {tor_count}")
@@ -714,17 +716,17 @@ class TestDeploymentTypeComparison:
     def test_all_deployment_types_work(self) -> None:
         """Verify all deployment types can connect servers."""
         results = {}
-        
+
         for deployment_type in ["middle_rack", "tor", "mixed"]:
             simulator = EndpointConnectivitySimulator(deployment_type=deployment_type)
-            
+
             if deployment_type == "middle_rack":
                 result = simulator.simulate_middle_rack_connectivity("server-01")
             elif deployment_type == "tor":
                 result = simulator.simulate_tor_connectivity("server-01")
             else:
                 result = simulator.simulate_mixed_connectivity("server-01")
-            
+
             results[deployment_type] = result
 
         # All should succeed

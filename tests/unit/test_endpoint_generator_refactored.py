@@ -17,6 +17,17 @@ import pytest
 from generators.add.endpoint import EndpointConnectivityGenerator
 
 
+class MockDevice:
+    """Mock physical device with basic attributes."""
+
+    def __init__(self, id: str, name: str, role: str = "leaf", status: str = "active") -> None:
+        """Initialize mock device."""
+        self.id = id
+        self.name = name
+        self.role = role
+        self.status = status
+
+
 class MockInterface:
     """Mock physical interface with all required attributes."""
 
@@ -64,6 +75,7 @@ class MockEndpointData:
         self.name = name
         self.rack = rack
         self.interfaces = []
+        self._free_interfaces = []  # Dynamic attribute added during idempotency check
 
 
 @pytest.fixture
@@ -113,7 +125,13 @@ class TestQueryInterfacesByLocation:
         rack_ids = ["rack-1", "rack-2"]
         endpoint_interfaces = []
 
-        # Mock return: 4 free interfaces on Leaf devices
+        # Mock devices query (first call)
+        mock_devices = [
+            MockDevice(id="device-1", name="leaf-01"),
+            MockDevice(id="device-2", name="leaf-02"),
+        ]
+
+        # Mock return: 4 free interfaces on Leaf devices (second call)
         mock_interfaces = [
             MockInterface("Ethernet1/1", "leaf-01", device_role="leaf", status="free"),
             MockInterface("Ethernet1/2", "leaf-01", device_role="leaf", status="free"),
@@ -121,7 +139,8 @@ class TestQueryInterfacesByLocation:
             MockInterface("Ethernet1/2", "leaf-02", device_role="leaf", status="free"),
         ]
 
-        mock_client.filters.return_value = mock_interfaces
+        # Side effect: first call returns devices, second returns interfaces
+        mock_client.filters.side_effect = [mock_devices, mock_interfaces]
 
         # Execute
         result = await generator._query_interfaces_by_location(
@@ -135,13 +154,20 @@ class TestQueryInterfacesByLocation:
         assert all(intf.status.value == "free" for intf in result)
         assert all(hasattr(intf.device, "role") and intf.device.role.value == "leaf" for intf in result)  # type: ignore[attr-defined]
 
-        # Verify client.filters was called with correct parameters
-        call_kwargs = mock_client.filters.call_args.kwargs
-        assert call_kwargs["device__role__value"] == "leaf"
-        assert call_kwargs["device__rack__ids"] == rack_ids
-        assert call_kwargs["device__status__values"] == ["active", "free", "provisioning"]
-        assert call_kwargs["status__value"] == "free"
-        assert call_kwargs["role__values"] == ["downlink", "customer"]
+        # Verify client.filters was called twice
+        assert mock_client.filters.call_count == 2
+
+        # First call: query devices
+        first_call_kwargs = mock_client.filters.call_args_list[0].kwargs
+        assert first_call_kwargs["role__value"] == "leaf"
+        assert first_call_kwargs["rack__ids"] == rack_ids
+        assert first_call_kwargs["status__values"] == ["active", "free", "provisioning"]
+
+        # Second call: query interfaces
+        second_call_kwargs = mock_client.filters.call_args_list[1].kwargs
+        assert second_call_kwargs["device__ids"] == ["device-1", "device-2"]
+        assert second_call_kwargs["status__value"] == "free"
+        assert second_call_kwargs["role__values"] == ["downlink", "customer"]
 
     @pytest.mark.asyncio
     async def test_query_filters_out_cabled_interfaces(
@@ -152,7 +178,10 @@ class TestQueryInterfacesByLocation:
         rack_ids = ["rack-1"]
         endpoint_interfaces = []
 
-        # Mock return: mix of cabled and uncabled interfaces
+        # Mock devices (first call)
+        mock_devices = [MockDevice(id="device-1", name="leaf-01")]
+
+        # Mock return: mix of cabled and uncabled interfaces (second call)
         mock_interfaces = [
             MockInterface("Ethernet1/1", "leaf-01", status="free", has_cable=False),
             MockInterface("Ethernet1/2", "leaf-01", status="free", has_cable=True),  # Cabled
@@ -160,7 +189,7 @@ class TestQueryInterfacesByLocation:
             MockInterface("Ethernet1/4", "leaf-01", status="free", has_cable=True),  # Cabled
         ]
 
-        mock_client.filters.return_value = mock_interfaces
+        mock_client.filters.side_effect = [mock_devices, mock_interfaces]
 
         # Execute
         result = await generator._query_interfaces_by_location(
@@ -244,9 +273,11 @@ class TestMiddleRackDeployment:
 
         # Mock network rack query
         network_rack = MockRack("rack-network", "pod-1", row_index=1, rack_type="network")
+        mock_devices = [MockDevice(id="device-1", name="leaf-01", role="leaf")]
         mock_client.filters.side_effect = [
             [network_rack],  # First call: find network rack
-            [  # Second call: query interfaces on Leaf devices
+            mock_devices,  # Second call: find devices in rack
+            [  # Third call: query interfaces on Leaf devices
                 MockInterface("Ethernet1/1", "leaf-01", device_role="leaf", status="free"),
                 MockInterface("Ethernet1/2", "leaf-01", device_role="leaf", status="free"),
             ],
@@ -298,20 +329,21 @@ class TestToRDeployment:
         generator.data.rack = rack  # type: ignore[assignment]
         generator.data.interfaces = []
 
-        # Mock: interfaces found in same rack
+        # Mock: devices and interfaces found in same rack
+        mock_devices = [MockDevice(id="device-1", name="tor-01", role="tor")]
         mock_interfaces = [
             MockInterface("Ethernet1/1", "tor-01", device_role="tor", status="free"),
             MockInterface("Ethernet1/2", "tor-01", device_role="tor", status="free"),
         ]
 
-        mock_client.filters.return_value = mock_interfaces
+        mock_client.filters.side_effect = [mock_devices, mock_interfaces]
 
         with patch.object(generator, "_process_endpoint_connections", new=AsyncMock()) as mock_process:
             # Execute
             await generator._connect_tor_deployment()
 
-            # Verify: Only one query (same rack succeeded)
-            assert mock_client.filters.call_count == 1
+            # Verify: Two queries (devices + interfaces in same rack)
+            assert mock_client.filters.call_count == 2
 
             # Verify interfaces passed to processor
             mock_process.assert_called_once()
@@ -330,10 +362,12 @@ class TestToRDeployment:
 
         # Mock: First query (same rack) returns empty, second query (same row) returns interfaces
         row_rack = MockRack("rack-2", "pod-1", row_index=1, rack_type="compute")
+        mock_devices = [MockDevice(id="device-2", name="tor-02", role="tor")]
         mock_client.filters.side_effect = [
-            [],  # First call: no interfaces in same rack
+            [],  # First call: no devices in same rack (skip interface query)
             [row_rack],  # Second call: find racks in same row
-            [  # Third call: query interfaces in row racks
+            mock_devices,  # Third call: find devices in row racks
+            [  # Fourth call: query interfaces in row racks
                 MockInterface("Ethernet1/1", "tor-02", device_role="tor", status="free"),
                 MockInterface("Ethernet1/2", "tor-02", device_role="tor", status="free"),
             ],
@@ -343,8 +377,8 @@ class TestToRDeployment:
             # Execute
             await generator._connect_tor_deployment()
 
-            # Verify: Fallback occurred (3 calls total)
-            assert mock_client.filters.call_count == 3
+            # Verify: Fallback occurred (4 calls: no devices in rack, find row racks, find devices, get interfaces)
+            assert mock_client.filters.call_count == 4
 
             # Verify interfaces from row were used
             mock_process.assert_called_once()
@@ -363,20 +397,21 @@ class TestMixedDeployment:
         generator.data.rack = rack  # type: ignore[assignment]
         generator.data.interfaces = []
 
-        # Mock: ToR interfaces found in same rack
+        # Mock: ToR devices and interfaces found in same rack
+        mock_devices = [MockDevice(id="device-1", name="tor-01", role="tor")]
         mock_interfaces = [
             MockInterface("Ethernet1/1", "tor-01", device_role="tor", status="free"),
             MockInterface("Ethernet1/2", "tor-01", device_role="tor", status="free"),
         ]
 
-        mock_client.filters.return_value = mock_interfaces
+        mock_client.filters.side_effect = [mock_devices, mock_interfaces]
 
         with patch.object(generator, "_process_endpoint_connections", new=AsyncMock()) as mock_process:
             # Execute
             await generator._connect_mixed_deployment()
 
-            # Verify: Only one query (ToR in same rack succeeded)
-            assert mock_client.filters.call_count == 1
+            # Verify: Two queries (devices + interfaces in same rack)
+            assert mock_client.filters.call_count == 2
 
             # Verify ToR interfaces used
             interfaces_arg = mock_process.call_args[0][0]
@@ -394,10 +429,12 @@ class TestMixedDeployment:
 
         # Mock: No ToR in same rack, but Leaf in network rack
         network_rack = MockRack("rack-network", "pod-1", row_index=1, rack_type="network")
+        mock_devices = [MockDevice(id="device-1", name="leaf-01", role="leaf")]
         mock_client.filters.side_effect = [
-            [],  # First call: no ToR interfaces in same rack
+            [],  # First call: no ToR devices in same rack (skip interface query)
             [network_rack],  # Second call: find network rack
-            [  # Third call: query Leaf interfaces in network rack
+            mock_devices,  # Third call: find Leaf devices
+            [  # Fourth call: query Leaf interfaces in network rack
                 MockInterface("Ethernet1/1", "leaf-01", device_role="leaf", status="free"),
                 MockInterface("Ethernet1/2", "leaf-01", device_role="leaf", status="free"),
             ],
@@ -407,8 +444,8 @@ class TestMixedDeployment:
             # Execute
             await generator._connect_mixed_deployment()
 
-            # Verify: Fallback occurred (3 calls)
-            assert mock_client.filters.call_count == 3
+            # Verify: Fallback occurred (4 calls: no devices, find rack, find devices, get interfaces)
+            assert mock_client.filters.call_count == 4
 
             # Verify Leaf interfaces used
             interfaces_arg = mock_process.call_args[0][0]
@@ -426,7 +463,7 @@ class TestStatusFiltering:
         rack_ids = ["rack-1"]
         endpoint_interfaces = []
 
-        mock_client.filters.return_value = []
+        mock_client.filters.side_effect = [[], []]
 
         # Execute
         await generator._query_interfaces_by_location(
@@ -435,9 +472,9 @@ class TestStatusFiltering:
             endpoint_interfaces=endpoint_interfaces,
         )
 
-        # Verify device status filter
-        call_kwargs = mock_client.filters.call_args.kwargs
-        assert set(call_kwargs["device__status__values"]) == {"active", "free", "provisioning"}
+        # Verify device status filter (first call)
+        first_call_kwargs = mock_client.filters.call_args_list[0].kwargs
+        assert set(first_call_kwargs["status__values"]) == {"active", "free", "provisioning"}
 
     @pytest.mark.asyncio
     async def test_interface_status_only_free(
@@ -447,7 +484,7 @@ class TestStatusFiltering:
         rack_ids = ["rack-1"]
         endpoint_interfaces = []
 
-        mock_client.filters.return_value = []
+        mock_client.filters.side_effect = [[MockDevice(id="d1", name="leaf-01")], []]
 
         # Execute
         await generator._query_interfaces_by_location(
@@ -456,6 +493,6 @@ class TestStatusFiltering:
             endpoint_interfaces=endpoint_interfaces,
         )
 
-        # Verify interface status filter
-        call_kwargs = mock_client.filters.call_args.kwargs
-        assert call_kwargs["status__value"] == "free"
+        # Verify interface status filter (second call)
+        second_call_kwargs = mock_client.filters.call_args_list[1].kwargs
+        assert second_call_kwargs["status__value"] == "free"

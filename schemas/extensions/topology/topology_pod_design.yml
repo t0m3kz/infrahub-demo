@@ -22,7 +22,7 @@ nodes:
         optional: true
         order_weight: 150
         description: "Description of this pod design"
-      
+
       - name: deployment_type
         label: "Deployment Type"
         description: "Network architecture deployment pattern"
@@ -32,7 +32,7 @@ nodes:
         choices:
           - name: middle_rack
             label: Middle Rack
-            description: "Leaf switches in middle rack serving ToRs on both sides"
+            description: "Leafs in middle rack serving ToRs on sides"
             color: "#7F7FFF"
           - name: tor
             label: Top of Rack
@@ -42,7 +42,7 @@ nodes:
             label: ToR and Middle Rack
             description: "Mix of ToR and middle rack deployment"
             color: "#BF7F7F"
-      
+
       - name: spine_count
         label: "Number of Spine Switches"
         description: "Number of spine switches in this design"
@@ -53,7 +53,7 @@ nodes:
         parameters:
           min_value: 1
           max_value: 8
-      
+
       - name: max_leafs_per_row
         label: "Maximum Leafs per Row"
         description: "Maximum leaf switches per row for capacity planning"
@@ -63,7 +63,7 @@ nodes:
         parameters:
           min_value: 0
           max_value: 100
-      
+
       - name: max_tors_per_row
         label: "Maximum ToRs per Row"
         description: "Maximum ToR switches per row for capacity planning"
@@ -73,7 +73,29 @@ nodes:
         parameters:
           min_value: 0
           max_value: 100
-      
+
+      - name: technical_pool_size
+        label: "Technical Pool Prefix Size"
+        description: "Prefix length for technical P2P pool (e.g., 24)"
+        kind: Number
+        optional: false
+        default_value: 24
+        order_weight: 1300
+        parameters:
+          min_value: 16
+          max_value: 29
+
+      - name: loopback_pool_size
+        label: "Loopback Pool Prefix Size"
+        description: "Prefix length for loopback pool (e.g., 28)"
+        kind: Number
+        optional: false
+        default_value: 28
+        order_weight: 1400
+        parameters:
+          min_value: 16
+          max_value: 29
+
       - name: naming_convention
         label: "Naming Convention"
         description: "Device naming convention for this design"
@@ -94,7 +116,7 @@ nodes:
             label: Flat
             description: "ROLE-INDEX"
             color: "#BF7FBF"
-      
+
       - name: leaf_interface_sorting_method
         label: "Leaf Interface Sorting"
         description: "How interfaces are assigned on leaf switches"
@@ -109,7 +131,7 @@ nodes:
           - name: top_down
             color: "#004E64"
             description: "Assign interfaces top-down"
-      
+
       - name: spine_interface_sorting_method
         label: "Spine Interface Sorting"
         description: "How interfaces are assigned on spine switches"
@@ -124,7 +146,7 @@ nodes:
           - name: top_down
             color: "#004E64"
             description: "Assign interfaces top-down"
-      
+
       - name: loopback_prefix_size
         label: "Loopback Prefix Size"
         description: "IP prefix size for loopback interfaces (/32 or /128)"
@@ -135,7 +157,7 @@ nodes:
         parameters:
           min_value: 24
           max_value: 128
-      
+
       - name: p2p_prefix_size
         label: "Point-to-Point Prefix Size"
         description: "IP prefix size for P2P links (/30, /31, /127)"
@@ -146,7 +168,7 @@ nodes:
         parameters:
           min_value: 24
           max_value: 128
-      
+
       - name: management_prefix_size
         label: "Management Prefix Size"
         description: "IP prefix size for management interfaces"
@@ -157,7 +179,7 @@ nodes:
         parameters:
           min_value: 16
           max_value: 32
-    
+
     relationships:
       - name: spine_template
         label: "Spine Device Template"
@@ -169,32 +191,11 @@ nodes:
         identifier: "pod_design__spine_template"
         order_weight: 3000
         on_delete: no-action
-      
-      - name: leaf_template
-        label: "Leaf Device Template"
-        description: "Device template for leaf switches (middle rack)"
-        peer: TemplateDcimPhysicalDevice
-        kind: Attribute
-        cardinality: one
-        optional: true
-        identifier: "pod_design__leaf_template"
-        order_weight: 3100
-        on_delete: no-action
-      
-      - name: tor_template
-        label: "ToR Device Template"
-        description: "Device template for ToR switches"
-        peer: TemplateDcimPhysicalDevice
-        kind: Attribute
-        cardinality: one
-        optional: true
-        identifier: "pod_design__tor_template"
-        order_weight: 3200
-        on_delete: no-action
-      
+
       - name: compatible_layouts
         label: "Compatible Site Layouts"
-        description: "Site layouts that work with this design"
+        description: |
+          Optional whitelist of site layouts compatible with this design.
         peer: TopologySiteLayout
         kind: Attribute
         cardinality: many

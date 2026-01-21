@@ -46,6 +46,8 @@ fragment PodDesignFields on TopologyPodDesign {
   spine_count { value }
   max_leafs_per_row { value }
   max_tors_per_row { value }
+  technical_pool_size { value }
+  loopback_pool_size { value }
   naming_convention { value }
   leaf_interface_sorting_method { value }
   spine_interface_sorting_method { value }
@@ -53,8 +55,6 @@ fragment PodDesignFields on TopologyPodDesign {
   p2p_prefix_size { value }
   management_prefix_size { value }
   spine_template { node { ...DeviceTemplateFields } }
-  leaf_template { node { ...DeviceTemplateFields } }
-  tor_template { node { ...DeviceTemplateFields } }
 }
 
 fragment DataCenterFields on TopologyDataCenter {
@@ -84,9 +84,6 @@ query PodGeneratorQuery($name: String!) {
         # Legacy attributes (for backward compatibility)
         deployment_type { value }
         amount_of_spines { value }
-        number_of_rows { value }
-        maximum_leafs_per_row { value }
-        maximum_tors_per_row { value }
         leaf_interface_sorting_method { value }
         spine_interface_sorting_method { value }
         spine_template { node { ...DeviceTemplateFields } }

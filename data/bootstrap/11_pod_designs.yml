@@ -13,6 +13,8 @@ spec:
       deployment_type: "tor"
       spine_count: 4
       max_tors_per_row: 10
+      technical_pool_size: 24
+      loopback_pool_size: 28
       naming_convention: "standard"
       leaf_interface_sorting_method: "bottom_up"
       spine_interface_sorting_method: "bottom_up"
@@ -20,7 +22,6 @@ spec:
       p2p_prefix_size: 31
       management_prefix_size: 24
       spine_template: "N9K_C9336C_FX2_SPINE"
-      tor_template: "N9K_C9336C_FX2_LEAF"
 
     - name: "spine-leaf-mixed-4spine"
       description: "Mixed deployment: middle rack leafs + ToRs"
@@ -28,6 +29,8 @@ spec:
       spine_count: 4
       max_tors_per_row: 8
       max_leafs_per_row: 4
+      technical_pool_size: 23
+      loopback_pool_size: 27
       naming_convention: "standard"
       leaf_interface_sorting_method: "bottom_up"
       spine_interface_sorting_method: "bottom_up"
@@ -35,14 +38,14 @@ spec:
       p2p_prefix_size: 31
       management_prefix_size: 24
       spine_template: "N9K_C9336C_FX2_SPINE"
-      leaf_template: "N9K_C9336C_FX2_LEAF_MR"
-      tor_template: "N9K_C9336C_FX2_LEAF"
 
     - name: "spine-leaf-middlerack-4spine"
       description: "Middle rack deployment: leafs only (no ToRs)"
       deployment_type: "middle_rack"
       spine_count: 4
       max_leafs_per_row: 8
+      technical_pool_size: 24
+      loopback_pool_size: 28
       naming_convention: "standard"
       leaf_interface_sorting_method: "bottom_up"
       spine_interface_sorting_method: "bottom_up"
@@ -50,4 +53,3 @@ spec:
       p2p_prefix_size: 31
       management_prefix_size: 24
       spine_template: "N9K_C9336C_FX2_SPINE"
-      leaf_template: "N9K_C9336C_FX2_LEAF_MR"

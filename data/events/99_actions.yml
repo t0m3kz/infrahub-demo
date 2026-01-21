@@ -22,17 +22,6 @@ spec:
           - attribute_name: amount_of_super_spines
             value_match: any
 
-    - name: trigger-dc-generator-update-design-pattern
-      branch_scope: "other_branches"
-      node_kind: TopologyDataCenter
-      mutation_action: "updated"
-      action: run-dc-generator
-      matches:
-        kind: CoreNodeTriggerRelationshipMatch
-        data:
-          - relationship_name: design_pattern
-            modification_type: updated
-
     - name: trigger-dc-generator-update-super-spine-template
       branch_scope: "other_branches"
       node_kind: TopologyDataCenter

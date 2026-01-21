@@ -7,6 +7,7 @@ This guide explains the key concepts and deployment patterns for network automat
 1. [Pod Deployment Types](#pod-deployment-types)
 2. [Device Naming Conventions](#device-naming-conventions)
 3. [Cable Type Detection](#cable-type-detection)
+4. [Layout-Design Compatibility Validation](#layout-design-compatibility-validation)
 
 ---
 
@@ -424,6 +425,120 @@ Cable Type: MMF (DAC or AOC cable)
 tor-01:10gbase-t ↔ aggregation-sw:10gbase-t
 Cable Type: Copper (Cat6a patch)
 ```
+
+---
+
+## Layout-Design Compatibility Validation
+
+The pod generator validates that the selected site layout can accommodate the pod design before resource allocation begins. This prevents wasted effort and ensures configurations are viable.
+
+### Validation Mechanism
+
+**TopologyPodDesign** has an optional `compatible_layouts` field that acts as a whitelist for governance and audit control.
+
+**Behavior:**
+
+- **When empty (default)**: Any layout allowed if capacity checks pass
+- **When populated**: Layout must be in whitelist AND pass capacity checks
+
+### Capacity Checks (Always Applied)
+
+Regardless of whitelist, these validations always occur:
+
+1. **ToR Capacity**: `max_tors_per_row ≤ layout.compute_racks_per_row`
+2. **Leaf Capacity**: `max_leafs_per_row ≤ layout.network_racks_per_row × 4`
+
+### Use Cases for Whitelist
+
+**1. Governance & Compliance**
+
+Enforce organizational policies about which designs work with which layouts:
+
+```yaml
+# Pod Design: enterprise-high-density
+compatible_layouts:
+  - large-dc-layout
+  - xlarge-dc-layout
+# Blocks usage with small-dc-layout even if capacity fits
+```
+
+**2. Prevent Configuration Errors**
+
+Stop invalid combinations before they cause issues:
+
+```yaml
+# Pod Design: 8-spine-design
+compatible_layouts:
+  - large-dc-layout
+# Prevents deploying 8 spines in small layout with insufficient power/cooling
+```
+
+**3. Document Tested Configurations**
+
+Create an audit trail of validated combinations:
+
+```yaml
+# Pod Design: prod-standard-4spine
+compatible_layouts:
+  - medium-dc-layout
+  - large-dc-layout
+# Only layouts that passed certification
+```
+
+### Implementation Example
+
+**Without Whitelist (Permissive)**:
+
+```yaml
+# data/bootstrap/11_pod_designs.yml
+nodes:
+  - name: spine-leaf-tor-4spine
+    deployment_type: tor
+    spine_count: 4
+    max_tors_per_row: 10
+    # compatible_layouts: <not set>
+    # ✅ Works with any layout if capacity fits
+```
+
+**With Whitelist (Restricted)**:
+
+```yaml
+nodes:
+  - name: enterprise-spine-leaf-8spine
+    deployment_type: mixed
+    spine_count: 8
+    max_tors_per_row: 16
+    max_leafs_per_row: 8
+    compatible_layouts:
+      - large-dc-layout
+      - xlarge-dc-layout
+    # ❌ Blocks small-dc-layout even if capacity sufficient
+    # ✅ Audit trail: only certified for large deployments
+```
+
+### Validation Errors
+
+**Whitelist Violation**:
+
+```text
+RuntimeError: Pod design 'enterprise-spine-leaf-8spine' not compatible with
+site layout 'small-dc-layout'.
+Compatible layouts: large-dc-layout, xlarge-dc-layout
+```
+
+**Capacity Violation**:
+
+```text
+RuntimeError: Design 'spine-leaf-tor-4spine' requires 12 ToRs/row
+but layout 'small-dc-layout' only has 8 compute racks/row
+```
+
+### Recommendations
+
+- **Development/Testing**: Leave `compatible_layouts` empty for flexibility
+- **Production**: Define whitelist for critical designs
+- **Documentation**: Use whitelist as living documentation of tested combos
+- **Auditing**: Track which designs are restricted and why
 
 ---
 

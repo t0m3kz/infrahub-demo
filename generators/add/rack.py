@@ -12,44 +12,149 @@ from ..protocols import DcimPhysicalDevice, LocationRack
 class RackGenerator(CommonGenerator):
     """Generator for creating rack infrastructure based on fabric templates."""
 
+    async def fetch_rack_devices_with_interfaces(
+        self,
+        rack: LocationRack | None = None,
+        role_filter: str | None = None,
+        interface_role: str = "downlink",
+    ) -> list[dict]:
+        """Fetch devices and their interfaces from a rack using single GraphQL query.
+
+        Args:
+            rack: Optional SDK rack object. If None, uses self.data context (pod + row)
+            role_filter: Optional device role to filter by (e.g., "leaf", "spine")
+            interface_role: Interface role filter (default: "downlink")
+
+        Returns:
+            List of dicts with device name, interfaces list, and role
+        """
+        # Build GraphQL query with nested devices and interfaces
+        device_filter = f'(role__value: "{role_filter}")' if role_filter else ""
+
+        query = f"""
+        query RackDevicesWithInterfaces($pod_id: ID!, $row_index: BigInt!) {{
+          LocationRack(row_index__value: $row_index, pod__ids: [$pod_id]) {{
+            edges {{
+              node {{
+                id
+                name {{ value }}
+                devices{device_filter} {{
+                  edges {{
+                    node {{
+                      id
+                      name {{ value }}
+                      role {{ value }}
+                      interfaces(role__value: "{interface_role}") {{
+                        edges {{
+                          node {{
+                            id
+                            name {{ value }}
+                          }}
+                        }}
+                      }}
+                    }}
+                  }}
+                }}
+              }}
+            }}
+          }}
+        }}
+        """
+
+        # Prepare variables
+        if rack:
+            # Use provided rack's pod and row_index (need to fetch these from rack)
+            rack_obj = await self.client.get(kind=LocationRack, id=rack.id)
+            pod_id = rack_obj.pod.id
+            row_index = rack_obj.row_index.value
+        else:
+            # Use current rack's context
+            pod_id = self.data.pod.id
+            row_index = self.data.row_index
+
+        # Execute query
+        result = await self.client.execute_graphql(query=query, variables={"pod_id": pod_id, "row_index": row_index})
+
+        # Parse nested response
+        devices_with_interfaces = []
+        racks = result.get("LocationRack", {}).get("edges", [])
+
+        for rack_edge in racks:
+            rack_node = rack_edge.get("node", {})
+            device_edges = rack_node.get("devices", {}).get("edges", [])
+
+            for device_edge in device_edges:
+                device_node = device_edge.get("node", {})
+                interface_edges = device_node.get("interfaces", {}).get("edges", [])
+
+                interfaces = [iface_edge.get("node", {}).get("name", {}).get("value") for iface_edge in interface_edges]
+
+                devices_with_interfaces.append(
+                    {
+                        "device_id": device_node.get("id"),
+                        "device_name": device_node.get("name", {}).get("value"),
+                        "role": device_node.get("role", {}).get("value"),
+                        "interfaces": interfaces,
+                        "interface_count": len(interfaces),
+                    }
+                )
+
+        return devices_with_interfaces
+
     async def update_checksum(self) -> None:
         """Update checksum for ToR racks in same row (mixed mode only).
 
         Verifies middle rack leafs exist before updating ToR checksums.
+        Queries network rack checksum to handle cases where ToR racks are added later.
         """
-        deployment_type = self.data.pod.deployment_type
+        deployment_type = (
+            self.data.pod.design.deployment_type if self.data.pod.design else self.data.pod.deployment_type
+        )
 
         # Only update ToR racks in mixed deployment mode, and only from middle/network racks
         if deployment_type != "mixed" or self.data.rack_type != "network":
             return
 
         # Verify leafs were created in this rack before cascading to ToR racks
-        middle_rack_leafs = await self.client.filters(
-            kind=DcimPhysicalDevice,
-            role__value="leaf",
-            rack__ids=[self.data.id],
-        )
+        # Use helper to fetch devices with interfaces (data ready for future connection building)
+        leaf_data = await self.fetch_rack_devices_with_interfaces(role_filter="leaf")
 
-        if not middle_rack_leafs:
+        if not leaf_data:
             self.logger.warning(f"Middle rack {self.data.name} has no leafs - skipping ToR cascade")
             return
 
+        # Query network rack to get its checksum (in case we need it for newly added ToR racks)
+        network_racks = await self.client.filters(
+            kind=LocationRack,
+            pod__ids=[self.data.pod.id],
+            row_index__value=self.data.row_index,
+            rack_type__value="network",
+        )
+
+        if not network_racks:
+            self.logger.warning(f"No network rack found in row {self.data.row_index} - skipping ToR cascade")
+            return
+
+        # Get checksum from network rack
+        network_checksum = network_racks[0].checksum.value if network_racks[0].checksum else self.data.checksum
+
         # Query ToR racks in same row
-        racks = await self.client.filters(
+        tor_racks = await self.client.filters(
             kind=LocationRack,
             pod__ids=[self.data.pod.id],
             row_index__value=self.data.row_index,
             rack_type__value="tor",
         )
 
-        for rack in racks:
-            # Skip if checksum already matches
-            if rack.checksum.value != self.data.checksum:
-                rack.checksum.value = self.data.checksum
-                await rack.save(allow_upsert=True)
-                self.logger.info(
-                    f"Rack {rack.name.value} (type={rack.rack_type.value}) has been updated to checksum {self.data.checksum}"
-                )
+        for rack in tor_racks:
+            # Always update checksum (don't skip even if it matches)
+            # This ensures ToR racks are triggered even in idempotent runs
+            # Use network rack checksum for newly added ToR racks with empty checksum
+            rack.checksum.value = network_checksum
+            await rack.save(allow_upsert=True)
+            self.logger.info(
+                f"Rack {rack.name.value} (type={rack.rack_type.value}) has been updated to checksum {network_checksum}"
+            )
 
     async def _get_spine_devices(self, pod_id: str) -> tuple[list[str], list[str]]:
         """Query spine devices and their interfaces for leaf/tor-to-spine cabling.
@@ -169,16 +274,20 @@ class RackGenerator(CommonGenerator):
         """Calculate cabling offset using simple formula based on rack position."""
 
         current_index = self.data.index
-        
+
         # Get deployment_type from new design or fallback to old attribute
         pod = self.data.pod
-        if hasattr(pod, 'design') and pod.design:
-            deployment_type = pod.design.deployment_type.value if hasattr(pod.design.deployment_type, 'value') else pod.design.deployment_type
-            max_tors_per_row = (pod.design.max_tors_per_row.value if hasattr(pod.design.max_tors_per_row, 'value') else pod.design.max_tors_per_row) if hasattr(pod.design, 'max_tors_per_row') and pod.design.max_tors_per_row else 8
+
+        # Pydantic models properly convert design to PodDesign type
+        if pod.design is not None:
+            deployment_type = pod.design.deployment_type
+            max_tors_per_row = pod.design.max_tors_per_row or 8
+            self.logger.debug(f"Offset calc: Using design deployment_type: {deployment_type}")
         else:
             # Backward compatibility
-            deployment_type = pod.deployment_type.value if hasattr(pod.deployment_type, 'value') else pod.deployment_type
-            max_tors_per_row = (pod.maximum_tors_per_row.value if hasattr(pod.maximum_tors_per_row, 'value') else pod.maximum_tors_per_row) if hasattr(pod, 'maximum_tors_per_row') and pod.maximum_tors_per_row else 8
+            deployment_type = pod.deployment_type
+            max_tors_per_row = pod.maximum_tors_per_row or 8
+            self.logger.debug(f"Offset calc: Using legacy pod deployment_type: {deployment_type}")
 
         # For middle_rack deployment ToRs: always offset=0 (ToRs connect to leafs in same rack)
         if deployment_type == "middle_rack" and device_type == "tor":
@@ -212,7 +321,9 @@ class RackGenerator(CommonGenerator):
         # Formula: offset = (max_tors_per_row × (row - 1)) + (device_count × (index - 1))
         elif deployment_type == "tor" and device_type == "tor":
             # Offset from all previous rows (reserve space for max ToRs per row)
-            offset_from_previous_rows = max_tors_per_row * (self.data.row_index - 1)
+            # Ensure max_tors_per_row is an integer for multiplication
+            max_tors_int = int(max_tors_per_row) if max_tors_per_row is not None else 8
+            offset_from_previous_rows = max_tors_int * (self.data.row_index - 1)
 
             # Offset from previous racks in current row (reserve space based on rack position)
             offset_in_current_row = device_count * (current_index - 1)
@@ -250,11 +361,25 @@ class RackGenerator(CommonGenerator):
                 self.data = RackModel(**data)
             elif "LocationRack" in data:
                 # Query result structure
+                raw_data = data.get("LocationRack", {})
+
+                # Debug: Check if we have edges
+                if isinstance(raw_data, dict) and "edges" in raw_data:
+                    edges = raw_data.get("edges", [])
+                    if not edges:
+                        # Try to provide helpful context about what was queried
+                        self.logger.error(
+                            "GraphQL query returned no edges for LocationRack. "
+                            "The rack may not exist in the database, or the query parameters may be incorrect."
+                        )
+                        return
+
                 deployment_list = clean_data(data).get("LocationRack", [])
+
                 if not deployment_list:
                     self.logger.error(
-                        "No Rack Deployment data found in GraphQL query response. "
-                        "This typically means the generator was called manually without a valid 'name' parameter."
+                        "No Rack Deployment data found after clean_data processing. "
+                        "This may happen if the rack exists but has an invalid data structure."
                     )
                     return
                 self.logger.info("Processing query result from manual invocation")
@@ -266,15 +391,24 @@ class RackGenerator(CommonGenerator):
             self.logger.error(f"Generation failed due to {exc}")
             return
 
+        # Get deployment_type from design or fall back to legacy pod attribute
+        pod = self.data.pod
+
+        # Since Pydantic now properly converts design to PodDesign model, access attributes directly
+        if pod.design is not None:
+            deployment_type = pod.design.deployment_type
+            self.logger.info(f"✓ Using design deployment_type: {deployment_type}")
+        else:
+            deployment_type = pod.deployment_type
+            self.logger.warning(f"✗ Design not found, using legacy pod deployment_type: {deployment_type}")
+
         self.logger.info(
-            f"Starting rack generation: {self.data.name} "
-            f"[type={self.data.rack_type}, deployment={self.data.pod.deployment_type}]"
+            f"Starting rack generation: {self.data.name} [type={self.data.rack_type}, deployment={deployment_type}]"
         )
 
         # Validate checksum is set (required for proper generation ordering in mixed deployments)
         if not self.data.checksum:
             # Special case: ToR racks in mixed deployments can inherit checksum from middle rack
-            deployment_type = self.data.pod.deployment_type
             if deployment_type == "mixed" and self.data.rack_type == "tor":
                 # Query middle rack in same row to get checksum
                 middle_racks = await self.client.filters(
@@ -309,10 +443,47 @@ class RackGenerator(CommonGenerator):
                 )
                 return
 
+        # In mixed deployment, ToR racks should wait for middle rack to generate leafs first
+        if deployment_type == "mixed" and self.data.rack_type == "tor":
+            # Query network rack(s) in same pod and row
+            network_racks = await self.client.filters(
+                kind=LocationRack,
+                pod__ids=[self.data.pod.id],
+                row_index__value=self.data.row_index,
+                rack_type__value="network",
+            )
+
+            if not network_racks:
+                self.logger.info(
+                    f"ToR rack {self.data.name} waiting for network rack in row {self.data.row_index} - skipping this run."
+                )
+                return
+
+            # Fetch leaf devices with interfaces from network rack
+            leaf_data = await self.fetch_rack_devices_with_interfaces(
+                rack=network_racks[0],
+                role_filter="leaf",
+            )
+
+            if leaf_data:
+                # Leafs exist with interfaces ready - proceed with ToR generation
+                self.logger.info(
+                    f"ToR rack {self.data.name} found {len(leaf_data)} leaf devices in row {self.data.row_index} "
+                    "- proceeding with ToR generation"
+                )
+            else:
+                # No leafs yet - wait for middle rack to generate them
+                self.logger.info(
+                    f"ToR rack {self.data.name} waiting for leafs to be generated in row {self.data.row_index} - skipping this run."
+                )
+                return
+
         self.logger.info(f"Generating topology for rack {self.data.name}")
 
         # Add existing devices in this rack to group context to prevent deletion
         # This protects devices created in previous runs when generator runs manually
+        # Note: This is different from the idempotency check at the top which exits early
+        # This code path is for when we're regenerating/updating existing racks
 
         existing_devices = await self.client.filters(
             kind=DcimPhysicalDevice,
@@ -349,7 +520,7 @@ class RackGenerator(CommonGenerator):
         ]
 
         # Get deployment type once for reuse
-        deployment_type = pod.deployment_type
+        deployment_type = pod.design.deployment_type if pod.design else pod.deployment_type
 
         # For ToR deployment: include suite, row, rack index for unique naming
         # Device name pattern: dc1-fab1-pod2-suite1-row1-rack1-tor-01
@@ -378,11 +549,11 @@ class RackGenerator(CommonGenerator):
 
         # Use naming convention from pod's site_layout, or default to standard
         naming_conv = "standard"
-        if hasattr(pod, 'site_layout') and pod.site_layout and hasattr(pod.site_layout, 'naming_convention'):
+        if hasattr(pod, "site_layout") and pod.site_layout and hasattr(pod.site_layout, "naming_convention"):
             naming_conv = pod.site_layout.naming_convention or "standard"
         naming_conv = cast(
             Literal["standard", "hierarchical", "flat"],
-            naming_conv.lower(),
+            naming_conv,
         )
 
         created_leaf_devices = []
@@ -610,7 +781,7 @@ class RackGenerator(CommonGenerator):
             f"Rack generation completed: {self.data.name} - {total_devices} device(s) created with connectivity"
         )
 
-        # For mixed deployment with middle rack: trigger ToR rack checksum updates
-        # This ensures ToR racks in the same row are generated after middle rack completes
-        if deployment_type == "mixed":
+        # For mixed deployment with network rack: trigger ToR rack checksum updates
+        # This ensures ToR racks in the same row are generated after network rack completes
+        if deployment_type == "mixed" and self.data.rack_type == "network":
             await self.update_checksum()

@@ -14,14 +14,31 @@ Features:
 from __future__ import annotations
 
 import re
-from typing import Any, Literal, cast
+from dataclasses import dataclass
+from typing import Any, Literal
+
+from netutils.interface import sort_interface_list
 
 from utils.data_cleaning import clean_data
 
 from ..common import CommonGenerator
 from ..helpers import ConnectionValidator, InterfaceSpeedMatcher
 from ..models import ConnectionFingerprint, EndpointModel
-from ..protocols import DcimPhysicalDevice, DcimPhysicalInterface
+from ..protocols import DcimPhysicalDevice, DcimPhysicalInterface, LocationRack
+
+
+@dataclass
+class InterfaceData:
+    """Simple interface data container for GraphQL results."""
+
+    id: str
+    name: str
+    role: str
+    status: str
+    interface_type: str | None
+    speed: int | None
+    device_id: str
+    device_name: str
 
 
 class EndpointConnectivityGenerator(CommonGenerator):
@@ -51,6 +68,7 @@ class EndpointConnectivityGenerator(CommonGenerator):
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
         self.planned_connections: set[ConnectionFingerprint] = set()
+        self._free_interfaces: list[DcimPhysicalInterface] = []  # Free interfaces without cables
 
         # Speed validation configuration (matching CablingPlanner pattern)
         self.speed_aware: bool = kwargs.get("speed_aware", True)  # Group by speed first (default: True)
@@ -90,9 +108,45 @@ class EndpointConnectivityGenerator(CommonGenerator):
         endpoint_device = await self.client.get(kind=DcimPhysicalDevice, id=self.data.id)
         current_deployment = endpoint_device.deployment.id
         if current_deployment != pod_id:
-            endpoint_device.deployment = pod_id  # type: ignore
-            await endpoint_device.save()
+            endpoint_device.deployment: str = pod_id
+            await endpoint_device.save(allow_upsert=True)
             self.logger.info(f"Updated {self.data.name} deployment to pod {self.pod_name}")
+
+        # Get all uplink interfaces from endpoint device (idempotency)
+        # Note: Endpoint devices use "uplink" role, ToR/Leaf devices use "customer" role
+        all_endpoint_interfaces: list[DcimPhysicalInterface] = await self.client.filters(
+            kind=DcimPhysicalInterface,
+            device__ids=[self.data.id],
+            role__value="uplink",
+            status__values=["free", "planned", "active"],
+            include=["device", "interface_type", "cable"],
+        )
+
+        # Filter to only interfaces without cables (for idempotency - only connect new interfaces)
+        endpoint_interfaces: list[DcimPhysicalInterface] = [
+            intf for intf in all_endpoint_interfaces if not (intf.cable and intf.cable.id)
+        ]
+
+        existing_connections = len(all_endpoint_interfaces) - len(endpoint_interfaces)
+
+        if not endpoint_interfaces:
+            if existing_connections > 0:
+                self.logger.info(
+                    f"Endpoint {self.data.name} already has {existing_connections} connection(s) - "
+                    "all interfaces connected, skipping"
+                )
+            else:
+                self.logger.info(f"Endpoint {self.data.name} has no uplink interfaces, skipping")
+            return
+
+        if existing_connections > 0:
+            self.logger.info(
+                f"Endpoint {self.data.name} already has {existing_connections} connection(s) - "
+                f"will create connections for {len(endpoint_interfaces)} free interface(s)"
+            )
+
+        # Store free interfaces for use in connection methods
+        self._free_interfaces = endpoint_interfaces
 
         if deployment_type == "middle_rack":
             await self._connect_middle_rack_deployment()
@@ -118,8 +172,6 @@ class EndpointConnectivityGenerator(CommonGenerator):
         )
 
         # Query interfaces directly on Leaf devices in network rack
-        from ..protocols import LocationRack
-
         racks = await self.client.filters(
             kind=LocationRack,
             pod__ids=[self.data.rack.pod.id],
@@ -141,7 +193,7 @@ class EndpointConnectivityGenerator(CommonGenerator):
         all_target_interfaces = await self._query_interfaces_by_location(
             rack_ids=rack_ids,
             device_role="leaf",
-            endpoint_interfaces=self.data.interfaces,
+            endpoint_interfaces=self._free_interfaces,
         )
 
         if not all_target_interfaces:
@@ -161,15 +213,13 @@ class EndpointConnectivityGenerator(CommonGenerator):
         assert self.data.rack is not None, "Rack must be assigned"
 
         # First try to query interfaces in same rack
-        from ..protocols import LocationRack
-
         rack_ids = [self.data.rack.id]
 
         # Query free interfaces on ToR devices in same rack
         all_target_interfaces = await self._query_interfaces_by_location(
             rack_ids=rack_ids,
             device_role="tor",
-            endpoint_interfaces=self.data.interfaces,
+            endpoint_interfaces=self._free_interfaces,
         )
 
         # Fallback to same row if no interfaces found in rack
@@ -189,7 +239,7 @@ class EndpointConnectivityGenerator(CommonGenerator):
                 all_target_interfaces = await self._query_interfaces_by_location(
                     rack_ids=rack_ids,
                     device_role="tor",
-                    endpoint_interfaces=self.data.interfaces,
+                    endpoint_interfaces=self._free_interfaces,
                 )
 
         if not all_target_interfaces:
@@ -209,15 +259,13 @@ class EndpointConnectivityGenerator(CommonGenerator):
         # Safe to assert - validated in generate() before calling this method
         assert self.data.rack is not None, "Rack must be assigned"
 
-        from ..protocols import LocationRack
-
         # First try ToR interfaces in same rack
         rack_ids = [self.data.rack.id]
 
         all_target_interfaces = await self._query_interfaces_by_location(
             rack_ids=rack_ids,
             device_role="tor",
-            endpoint_interfaces=self.data.interfaces,
+            endpoint_interfaces=self._free_interfaces,
         )
 
         # Fallback to Leaf interfaces in middle rack
@@ -238,7 +286,7 @@ class EndpointConnectivityGenerator(CommonGenerator):
                 all_target_interfaces = await self._query_interfaces_by_location(
                     rack_ids=rack_ids,
                     device_role="leaf",
-                    endpoint_interfaces=self.data.interfaces,
+                    endpoint_interfaces=self._free_interfaces,
                 )
 
         if not all_target_interfaces:
@@ -263,34 +311,62 @@ class EndpointConnectivityGenerator(CommonGenerator):
         Returns:
             List of free interfaces on target devices
         """
-        endpoint_types = set(intf.interface_type for intf in endpoint_interfaces if intf.interface_type)
-        acceptable_roles = ["downlink", "customer"]
-
-        # Build query filters
-        filters: dict[str, Any] = {
-            "device__role__value": device_role,
-            "device__rack__ids": rack_ids,
-            "device__status__values": ["active", "free", "provisioning"],
-            "role__values": acceptable_roles,
-            "status__value": "free",
-            "include": ["device"],
-        }
-
-        # Add interface type filter if endpoint has specific types
-        if endpoint_types:
-            filters["interface_type__values"] = list(endpoint_types)
-
-        all_interfaces: list[Any] = await self.client.filters(kind=DcimPhysicalInterface, **filters)
-
-        # Filter out interfaces that already have cables
-        interfaces = [intf for intf in all_interfaces if not (intf.cable and intf.cable.id)]
-
-        self.logger.info(
-            f"Found {len(interfaces)} free interfaces on {device_role} devices in {len(rack_ids)} rack(s) "
-            f"(interface_types={endpoint_types}, roles={acceptable_roles}, total_queried={len(all_interfaces)})"
+        # First, query devices in the specified racks
+        devices = await self.client.filters(
+            kind=DcimPhysicalDevice,
+            rack__ids=rack_ids,
+            role__value=device_role,
+            status__values=["active", "free", "provisioning"],
         )
 
-        return interfaces
+        if not devices:
+            self.logger.info(f"No {device_role} devices found in {len(rack_ids)} rack(s)")
+            return []
+
+        device_ids = [dev.id for dev in devices]
+
+        # Extract interface types - handle both string and object attributes
+        endpoint_types = []
+        for intf in endpoint_interfaces:
+            if intf.interface_type:
+                # Handle both string and object types
+                intf_type = (
+                    intf.interface_type.value if hasattr(intf.interface_type, "value") else str(intf.interface_type)
+                )
+                if intf_type:
+                    endpoint_types.append(intf_type)
+
+        # ToR/Leaf devices have "customer" interfaces that connect to server's "uplink" interfaces
+        acceptable_roles = ["downlink", "customer"]
+
+        # Query interfaces on those devices
+        if endpoint_types:
+            all_interfaces = await self.client.filters(
+                kind=DcimPhysicalInterface,
+                device__ids=device_ids,
+                status__value="free",
+                role__values=acceptable_roles,
+                interface_type__values=endpoint_types,
+                include=["device", "interface_type", "cable"],
+            )
+        else:
+            all_interfaces = await self.client.filters(
+                kind=DcimPhysicalInterface,
+                device__ids=device_ids,
+                status__value="free",
+                role__values=acceptable_roles,
+                include=["device", "interface_type", "cable"],
+            )
+
+        # Filter out interfaces that already have cables
+        free_interfaces = [intf for intf in all_interfaces if not (intf.cable and intf.cable.id)]
+
+        self.logger.info(
+            f"Found {len(free_interfaces)} free interfaces on {len(devices)} {device_role} device(s) in {len(rack_ids)} rack(s) "
+            f"(interface_types={endpoint_types or 'any'}, roles={acceptable_roles})"
+        )
+
+        return free_interfaces
 
     async def _process_endpoint_connections(
         self,
@@ -301,8 +377,10 @@ class EndpointConnectivityGenerator(CommonGenerator):
         Args:
             all_target_interfaces: List of available target interfaces
         """
-        # Get endpoint interfaces without existing cables
-        available_endpoint_interfaces = [intf for intf in self.data.interfaces if not intf.cable]
+        # Filter endpoint interfaces to only those without cables
+        available_endpoint_interfaces: list[DcimPhysicalInterface] = [
+            intf for intf in self._free_interfaces if not (intf.cable and intf.cable.id)
+        ]
 
         if not available_endpoint_interfaces:
             self.logger.info(f"All interfaces on {self.data.name} already have cables")
@@ -318,7 +396,23 @@ class EndpointConnectivityGenerator(CommonGenerator):
         # Group interfaces by device for dual-homing
         device_groups = {}
         for intf in all_target_interfaces:
-            device_name = intf.device.name.value if hasattr(intf.device, "name") and hasattr(intf.device.name, "value") else str(intf.device)
+            # Extract device name from RelatedNode
+            device_name = None
+            if hasattr(intf, "_device_name_for_grouping"):
+                device_name = intf._device_name_for_grouping
+            elif hasattr(intf.device, "peer"):
+                # It's a RelatedNode, get the peer object
+                device_obj = intf.device.peer
+                if device_obj and hasattr(device_obj, "name"):
+                    device_name = device_obj.name.value if hasattr(device_obj.name, "value") else str(device_obj.name)
+            elif hasattr(intf.device, "name"):
+                # Direct access to name attribute
+                device_name = intf.device.name.value if hasattr(intf.device.name, "value") else str(intf.device.name)
+
+            if not device_name:
+                self.logger.warning(f"Could not extract device name for interface {intf.name.value}")
+                continue
+
             if device_name not in device_groups:
                 device_groups[device_name] = []
             device_groups[device_name].append(intf)
@@ -526,8 +620,9 @@ class EndpointConnectivityGenerator(CommonGenerator):
         target_device_names: list[str],
     ) -> None:
         """Execute cabling for a connection plan."""
-        endpoint_intf_names = [conn.server_interface for conn in connection_plan]
-        target_intf_names = sorted(set(conn.switch_interface for conn in connection_plan))
+        # Sort interfaces using netutils for proper ordering
+        endpoint_intf_names = sort_interface_list([conn.server_interface for conn in connection_plan])
+        target_intf_names = sort_interface_list(list(set(conn.switch_interface for conn in connection_plan)))
 
         await self.create_cabling(
             bottom_devices=[self.data.name],
@@ -539,6 +634,7 @@ class EndpointConnectivityGenerator(CommonGenerator):
                 "cabling_offset": 0,
                 "bottom_sorting": "bottom_up",
                 "top_sorting": "bottom_up",
+                "pool": None,  # No IP allocation for endpoint connections
             },
         )
 
@@ -563,27 +659,31 @@ class EndpointConnectivityGenerator(CommonGenerator):
         # Group switch interfaces by device for dual-homing
         switch_by_device: dict[str, list[DcimPhysicalInterface]] = {}
         for intf in switch_interfaces:
+            # Extract device name from RelatedNode
             device_name: str | None = None
+            if hasattr(intf, "_device_name_for_grouping"):
+                device_name = str(intf._device_name_for_grouping)
+            elif hasattr(intf.device, "peer"):
+                # It's a RelatedNode, get the peer object
+                device_obj = intf.device.peer
+                if device_obj and hasattr(device_obj, "name"):
+                    device_name = str(device_obj.name.value if hasattr(device_obj.name, "value") else device_obj.name)
+            elif intf.device and hasattr(intf.device, "name"):
+                device_name = str(intf.device.name.value if hasattr(intf.device.name, "value") else intf.device.name)
 
-            # Try to extract device name from the interface's device relationship
-            if intf.device:
-                if hasattr(intf.device, "name"):
-                    if hasattr(intf.device.name, "value"):
-                        device_name = cast(str, intf.device.name.value)
-                    else:
-                        device_name = str(intf.device.name)
-                elif hasattr(intf.device, "id"):
-                    # Fallback: use device ID if name not available
-                    self.logger.warning(f"Interface {intf.name.value} device has no name, using ID")
-                    device_name = cast(str, intf.device.id)
-
-            if device_name is None:
+            if not device_name:
                 self.logger.warning(f"Could not determine device name for interface {intf.name.value}")
                 continue
 
             if device_name not in switch_by_device:
                 switch_by_device[device_name] = []
             switch_by_device[device_name].append(intf)
+
+        # Sort interfaces within each device using netutils for proper ordering
+        for device_name, intfs in switch_by_device.items():
+            interface_map = {intf.name.value: intf for intf in intfs}
+            sorted_names = sort_interface_list(list(interface_map.keys()))
+            switch_by_device[device_name] = [interface_map[name] for name in sorted_names]
 
         # Debug: log device grouping
         self.logger.info(
@@ -595,21 +695,26 @@ class EndpointConnectivityGenerator(CommonGenerator):
         # Take up to 4 server interfaces (2 per switch for dual-homing)
         server_intfs = server_interfaces[:4]
 
+        self.logger.debug(f"Planning connections for {len(server_intfs)} server interfaces")
+        self.logger.debug(f"Target devices: {target_device_names}")
+
         # Alternate between switches for dual-homing
         for idx, server_intf in enumerate(server_intfs):
-            switch_name = target_device_names[idx % 2]  # Alternate between two switches
+            switch_name = target_device_names[idx % 2]
             available_switch_intfs = switch_by_device.get(switch_name, [])
+
+            server_intf_name = server_intf.name.value if hasattr(server_intf.name, "value") else str(server_intf.name)
 
             if not available_switch_intfs:
                 self.logger.warning(f"No available interfaces on {switch_name} for {server_intf.name}")
                 continue
 
-            # Take first available interface
+            # Take first available interface from sorted list
             switch_intf = available_switch_intfs.pop(0)
 
             fingerprint = ConnectionFingerprint(
                 server_name=self.data.name,
-                server_interface=server_intf.name,
+                server_interface=server_intf_name,
                 switch_name=switch_name,
                 switch_interface=switch_intf.name.value,
             )
@@ -617,8 +722,6 @@ class EndpointConnectivityGenerator(CommonGenerator):
             # Check if already planned (idempotency within this run)
             if fingerprint not in self.planned_connections:
                 plan.append(fingerprint)
-            else:
-                self.logger.debug(f"Skipping duplicate connection: {fingerprint}")
 
         return plan
 

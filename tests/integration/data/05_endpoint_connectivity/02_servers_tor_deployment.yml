@@ -1,0 +1,76 @@
+---
+# Test servers for TOR deployment (DC1-1-POD-1)
+# ToR deployment: Servers connect to ToR switches in same rack,
+# fallback to same row
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimPhysicalDevice
+  data:
+    # Server-TOR-01: ToR deployment, Rack 5, Row 1 (4x 25G interfaces)
+    - name: "server-tor-01"
+      device_type: "PowerEdge-R640"
+      role: "endpoint"
+      status: "provisioning"
+      rack: "ktw-1-s-1-r-1-5"
+      deployment: "DC1-1-POD-1"
+      position: 10
+      interfaces:
+        - kind: DcimPhysicalInterface
+          data:
+            name: "eno1"
+            interface_type: "25gbase-x-sfp28"
+            role: "uplink"
+            status: "free"
+        - kind: DcimPhysicalInterface
+          data:
+            name: "eno2"
+            interface_type: "25gbase-x-sfp28"
+            role: "uplink"
+            status: "free"
+        - kind: DcimPhysicalInterface
+          data:
+            name: "eno3"
+            interface_type: "25gbase-x-sfp28"
+            role: "uplink"
+            status: "free"
+        - kind: DcimPhysicalInterface
+          data:
+            name: "eno4"
+            interface_type: "25gbase-x-sfp28"
+            role: "uplink"
+            status: "free"
+
+    # Server-TOR-02: ToR deployment, Rack 5, Row 2 (4x 25G interfaces)
+    - name: "server-tor-02"
+      device_type: "PowerEdge-R640"
+      role: "endpoint"
+      status: "provisioning"
+      rack: "ktw-1-s-1-r-2-5"
+      deployment: "DC1-1-POD-1"
+      position: 11
+      interfaces:
+        - kind: DcimPhysicalInterface
+          data:
+            name: "eno1"
+            interface_type: "25gbase-x-sfp28"
+            role: "uplink"
+            status: "free"
+        - kind: DcimPhysicalInterface
+          data:
+            name: "eno2"
+            interface_type: "25gbase-x-sfp28"
+            role: "uplink"
+            status: "free"
+        - kind: DcimPhysicalInterface
+          data:
+            name: "eno3"
+            interface_type: "25gbase-x-sfp28"
+            role: "uplink"
+            status: "free"
+        - kind: DcimPhysicalInterface
+          data:
+            name: "eno4"
+            interface_type: "25gbase-x-sfp28"
+            role: "uplink"
+            status: "free"

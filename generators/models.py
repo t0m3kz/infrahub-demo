@@ -49,6 +49,48 @@ class Pool(BaseModel):
     id: str
 
 
+# Site Layout model (three-layer architecture)
+class SiteLayout(BaseModel):
+    """TopologySiteLayout model for physical floor plan."""
+
+    id: str
+    name: Optional[str] = None
+    number_of_rows: Optional[int] = 1
+    racks_per_row: Optional[int] = None
+    rack_numbering_scheme: Optional[str] = None
+    naming_convention: Optional[str] = None
+
+
+# Pod Design model (three-layer architecture)
+class PodDesign(BaseModel):
+    """TopologyPodDesign model for logical topology design."""
+
+    id: str
+    name: Optional[str] = None
+    deployment_type: Optional[str] = None
+    spine_count: Optional[int] = None
+    max_leafs_per_row: Optional[int] = None
+    max_tors_per_row: Optional[int] = None
+    maximum_spines: Optional[int] = None
+    technical_pool_size: Optional[int] = None  # CIDR prefix length (e.g., 24 for /24)
+    loopback_pool_size: Optional[int] = None  # CIDR prefix length (e.g., 28 for /28)
+    naming_convention: Optional[str] = None
+    leaf_interface_sorting_method: Optional[str] = None
+    spine_interface_sorting_method: Optional[str] = None
+    spine_template: Optional[Template] = None
+
+    @field_validator("spine_template", mode="before")
+    @classmethod
+    def handle_empty_node(cls, v: Any) -> Any:
+        """Convert {'node': None} to None, or extract node if present."""
+        if isinstance(v, dict) and "node" in v:
+            node = v.get("node")
+            if node is None:
+                return None
+            return node
+        return v
+
+
 # DC model
 class DCPod(BaseModel):
     id: str
@@ -79,18 +121,37 @@ class PodModel(BaseModel):
     name: str
     checksum: Optional[str] = None
     index: int
-    deployment_type: str
-    amount_of_spines: int
+    # New three-layer architecture
+    site_layout: Optional[SiteLayout] = None
+    design: Optional[PodDesign] = None
+    # Legacy attributes (backward compatibility)
+    deployment_type: Optional[str] = None
+    amount_of_spines: Optional[int] = None
     number_of_rows: Optional[int] = 1
     maximum_leafs_per_row: Optional[int] = None
     maximum_tors_per_row: Optional[int] = None
-    leaf_interface_sorting_method: str
-    spine_interface_sorting_method: str
-    spine_template: Template
+    leaf_interface_sorting_method: Optional[str] = None
+    spine_interface_sorting_method: Optional[str] = None
+    spine_template: Optional[Template] = None
     spine_count: Optional[int] = 0
     leaf_count: Optional[int] = 0
     tor_count: Optional[int] = 0
     parent: PodParent
+    loopback_pool: Optional[Pool] = None
+    prefix_pool: Optional[Pool] = None
+
+    @field_validator("site_layout", "design", "spine_template", "loopback_pool", "prefix_pool", mode="before")
+    @classmethod
+    def handle_empty_node(cls, v: Any) -> Any:
+        """Convert {'node': None} to None, or extract node if present."""
+        if isinstance(v, dict) and "node" in v:
+            # Only process if it's a GraphQL node wrapper
+            node = v.get("node")
+            if node is None:
+                return None
+            return node
+        # Return as-is if not a node wrapper (already cleaned by clean_data)
+        return v
 
 
 # Rack model
@@ -133,10 +194,28 @@ class RackPod(BaseModel):
     spine_interface_sorting_method: str
     loopback_pool: Optional[Pool] = None
     prefix_pool: Optional[Pool] = None
+    # New three-layer architecture
+    site_layout: Optional[SiteLayout] = None
+    design: Optional[PodDesign] = None
+    # Legacy attributes (backward compatibility)
     deployment_type: str
-    spine_template: Template
+    spine_template: Optional[Template] = None
     maximum_leafs_per_row: Optional[int] = None
     maximum_tors_per_row: Optional[int] = None
+
+    @field_validator("site_layout", "design", "spine_template", "loopback_pool", "prefix_pool", mode="before")
+    @classmethod
+    def handle_empty_node(cls, v: Any) -> Any:
+        """Convert {'node': None} to None, or extract node if present."""
+        if isinstance(v, dict) and "node" in v:
+            # Only process if it's a GraphQL node wrapper
+            node = v.get("node")
+            if node is None:
+                return None
+            # Return the node content (which should have id, etc.)
+            return node
+        # Return as-is if not a node wrapper (already cleaned by clean_data)
+        return v
 
 
 # Spine and leaf devices queried separately when needed (on-demand for specific deployment types)

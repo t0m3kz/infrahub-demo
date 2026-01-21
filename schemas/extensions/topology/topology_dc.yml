@@ -265,35 +265,6 @@ nodes:
         parameters:
           min_value: 1
           max_value: 4
-      - name: number_of_rows
-        order_weight: 1050
-        label: "Number of Rows"
-        description: "Number of rack rows in this pod (for layout planning) - DEPRECATED: Use site_layout instead"
-        kind: Number
-        default_value: 1
-        optional: true
-        parameters:
-          min_value: 1
-          max_value: 20
-      - name: maximum_leafs_per_row
-        order_weight: 1110
-        label: "Maximum Leafs per Row"
-        description: >
-          Maximum leaf switches per row for offset calculation - DEPRECATED: Use design instead
-        kind: Number
-        optional: true
-        parameters:
-          min_value: 0
-          max_value: 100
-      - name: maximum_tors_per_row
-        order_weight: 1120
-        label: "Maximum ToRs per Row"
-        description: "Maximum ToR switches per row for offset calculation - DEPRECATED: Use design instead"
-        kind: Number
-        optional: true
-        parameters:
-          min_value: 0
-          max_value: 100
       - name: deployment_type
         kind: Dropdown
         optional: true

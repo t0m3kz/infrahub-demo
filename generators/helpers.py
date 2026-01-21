@@ -852,7 +852,7 @@ class InterfaceSpeedMatcher:
     SPEED_PATTERN = __import__("re").compile(r"(\d+)gbase", __import__("re").IGNORECASE)
 
     @classmethod
-    def extract_speed(cls, interface_type: str) -> int | None:
+    def extract_speed(cls, interface_type: Any) -> int | None:
         """Extract speed in Gbps from interface type.
 
         Examples:
@@ -863,6 +863,13 @@ class InterfaceSpeedMatcher:
         Note: Different physical interface types (e.g., 10gbase-t vs 10gbase-x-sfp+)
         are normalized to the same speed for compatibility grouping.
         """
+        # Extract string value from Attribute object if needed
+        if hasattr(interface_type, "value"):
+            interface_type = str(interface_type.value)
+
+        if not isinstance(interface_type, str):
+            return None
+
         match = cls.SPEED_PATTERN.search(interface_type)
         return int(match.group(1)) if match else None
 
@@ -1015,10 +1022,10 @@ class ConnectionValidator:
             duplicates = [intf for intf in server_interfaces if server_interfaces.count(intf) > 1]
             return False, f"Duplicate server interfaces detected: {duplicates}"
 
-        # Check for duplicate switch interfaces
-        switch_interfaces = [conn.switch_interface for conn in plan]
-        if len(switch_interfaces) != len(set(switch_interfaces)):
-            duplicates = [intf for intf in switch_interfaces if switch_interfaces.count(intf) > 1]
-            return False, f"Duplicate switch interfaces detected: {duplicates}"
+        # Check for duplicate (switch_name, switch_interface) pairs (not just interface names)
+        switch_endpoints = [(conn.switch_name, conn.switch_interface) for conn in plan]
+        if len(switch_endpoints) != len(set(switch_endpoints)):
+            duplicates = [ep for ep in switch_endpoints if switch_endpoints.count(ep) > 1]
+            return False, f"Duplicate switch endpoints detected: {duplicates}"
 
         return True, f"Plan validated: {len(plan)} connections"

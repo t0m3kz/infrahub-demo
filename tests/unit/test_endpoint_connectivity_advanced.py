@@ -284,7 +284,7 @@ class TestConnectionValidator:
         is_valid, message = ConnectionValidator.validate_plan(plan)
 
         assert is_valid is False
-        assert "Duplicate switch interfaces" in message
+        assert "Duplicate switch endpoints detected" in message
         assert "Ethernet1/1" in message
 
     def test_validate_plan_default_min_connections(self) -> None:

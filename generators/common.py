@@ -67,16 +67,21 @@ class CommonGenerator(InfrahubGenerator):
         pools: dict[str, Any],
         id: str,
         ipv6: Optional[bool] = False,
-    ) -> None:
+    ) -> dict[str, Any]:
         """Ensure required per-pod / fabric pools exist.
 
+        Args:
+            strategy: "fabric" for DC-level pools, "pod" for pod-level pools
+            pools: Either explicit pool sizes {pool_name: size} or FabricPoolConfig parameters
+            id: DC or Pod ID
+            ipv6: Use IPv6 for data pools
+
+        Returns:
+            Dictionary mapping pool names to pool objects: {"loopback": pool_obj, "technical": pool_obj}
+
         Notes:
-        - This function ensures minimal placeholder pools exist (side-effect).
-        - It accepts a simple strategy name string for `pools` (e.g. "fabric") and
-          normalizes it to a FabricPoolConfig internally for deterministic behavior.
-        - It intentionally returns None: creation is a side-effect. Actual address/prefix
-          allocation is performed later by generators which will fetch pools by name.
-        - Uses self.fabric_name and self.pod_name (if set) from instance variables.
+        - For pod strategy: accepts explicit pool sizes like {"technical": 24, "loopback": 28}
+        - For fabric strategy: uses FabricPoolConfig with maximum_* parameters
         """
         # Local import to avoid runtime cycles during type-checking
         from .helpers import FabricPoolConfig
@@ -87,17 +92,31 @@ class CommonGenerator(InfrahubGenerator):
         pod_name = self.pod_name
         pool_prefix = pod_name if pod_name else fabric_name
 
-        # Create a new dictionary with only the keys that FabricPoolConfig expects
-        valid_keys = [
-            "maximum_super_spines",
-            "maximum_pods",
-            "maximum_spines",
-            "maximum_switches",
-        ]
-        filtered_pools = {key: pools[key] for key in valid_keys if key in pools}
+        # Get pod object if working with pod strategy (needed for updating pool references)
         pod = await self.client.get(kind=TopologyPod, id=id) if pod_name else None
-        pools_config = FabricPoolConfig(**filtered_pools, kind=strategy, ipv6=ipv6 or False)
-        for pool_name, pool_size in pools_config.pools().items():
+
+        # Store created pools to return
+        created_pools = {}
+
+        # Determine if pools dict contains explicit sizes or config parameters
+        has_explicit_sizes = any(k in ["technical", "loopback", "management"] for k in pools.keys())
+
+        if has_explicit_sizes and strategy == "pod":
+            # Use explicit pool sizes (new approach for pods)
+            pool_sizes = pools
+        else:
+            # Calculate pool sizes using FabricPoolConfig (for fabric or legacy pod configs)
+            valid_keys = [
+                "maximum_super_spines",
+                "maximum_pods",
+                "maximum_spines",
+                "maximum_switches",
+            ]
+            filtered_pools = {key: pools[key] for key in valid_keys if key in pools}
+            pools_config = FabricPoolConfig(**filtered_pools, kind=strategy, ipv6=ipv6 or False)
+            pool_sizes = pools_config.pools()
+
+        for pool_name, pool_size in pool_sizes.items():
             if strategy == "fabric" and pool_name in [
                 "management",
                 "technical",
@@ -167,6 +186,10 @@ class CommonGenerator(InfrahubGenerator):
             # Map pool names to pod attributes
             pool_kind = "CoreIPPrefixPool" if is_prefix_pool else "CoreIPAddressPool"
             self.logger.info(f"- Created [{pool_kind}] {new_pool.hfid}")
+
+            # Store in return dict
+            created_pools[pool_name] = new_pool
+
             # Update Pods
             pool_attribute_map = {
                 "loopback": "loopback_pool",
@@ -174,11 +197,13 @@ class CommonGenerator(InfrahubGenerator):
             }
 
             if pod and pool_name in pool_attribute_map:
-                # Attach using explicit node reference to avoid merge-time drops on CoreIPAddressPool links
+                # Attach using explicit node reference with both id and hfid
                 pool_ref = {"id": new_pool.id, "hfid": [new_pool.hfid]}
                 setattr(pod, pool_attribute_map[pool_name], pool_ref)
                 self.logger.info(f"- Updated pod {pod.name.value} with pool {pool_full_name} (id: {new_pool.id})")
                 await pod.save(allow_upsert=True)
+
+        return created_pools
 
     async def create_devices(
         self,
@@ -201,6 +226,9 @@ class CommonGenerator(InfrahubGenerator):
         indexes: Optional[list[int]] = options.get("indexes", None)
         allocate_loopback: bool = bool(options.get("allocate_loopback", False))
         rack: str = options.get("rack", "")
+
+        # Accept pool objects directly from options (avoids re-querying)
+        provided_loopback_pool = options.get("loopback_pool")
 
         device_prefix: str = fabric_name if not pod_name else pod_name
 
@@ -228,7 +256,7 @@ class CommonGenerator(InfrahubGenerator):
 
         device_kind = DcimVirtualDevice if virtual else DcimPhysicalDevice
 
-        # # Fetch pools once
+        # Fetch pools once (use provided pools if available, otherwise query)
         management_pool = await self.client.get(
             kind=CoreIPAddressPool,
             name__value=management_pool_name,
@@ -236,10 +264,15 @@ class CommonGenerator(InfrahubGenerator):
 
         loopback_pool = None
         if allocate_loopback:
-            loopback_pool = await self.client.get(
-                kind=CoreIPAddressPool,
-                name__value=loopback_pool_name,
-            )
+            if provided_loopback_pool:
+                # Use the pool object passed in options (avoids re-querying)
+                loopback_pool = provided_loopback_pool
+            else:
+                # Fallback to querying by name
+                loopback_pool = await self.client.get(
+                    kind=CoreIPAddressPool,
+                    name__value=loopback_pool_name,
+                )
 
         batch_devices = await self.client.create_batch()
         batch_loopbacks = await self.client.create_batch()
@@ -354,7 +387,10 @@ class CommonGenerator(InfrahubGenerator):
 
         options = options or {}
         cabling_offset: int = int(options.get("cabling_offset", 0))
-        pool: Any = options.get("pool") or (f"{self.pod_name}-technical-pool" if self.pod_name else None)
+        # Allow explicit None to disable pool allocation (check if key exists, not just value)
+        pool: Any = (
+            options["pool"] if "pool" in options else (f"{self.pod_name}-technical-pool" if self.pod_name else None)
+        )
 
         bottom_sorting: Literal["top_down", "bottom_up"] = "bottom_up"
         top_sorting: Literal["top_down", "bottom_up"] = "bottom_up"
@@ -465,8 +501,8 @@ class CommonGenerator(InfrahubGenerator):
             updated_dst.description.value = name
             updated_src.status.value = "active"
             updated_dst.status.value = "active"
-            await updated_src.save()
-            await updated_dst.save()
+            await updated_src.save(allow_upsert=True)
+            await updated_dst.save(allow_upsert=True)
             self.logger.info(f"  - Created connection {name}")
 
         # Summary logging

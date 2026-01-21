@@ -3,7 +3,7 @@ version: "1.0"
 nodes:
   - name: SiteLayout
     namespace: Topology
-    description: "Physical floor plan layout defining data center or colocation space organization"
+    description: "Physical floor plan defining DC or colocation space"
     label: Site Layout
     icon: "mdi:floor-plan"
     inherit_from:
@@ -22,7 +22,7 @@ nodes:
         optional: true
         order_weight: 150
         description: "Description of this site layout"
-      
+
       - name: rows
         label: "Number of Rows"
         description: "Total number of rack rows in this layout"
@@ -32,7 +32,7 @@ nodes:
         parameters:
           min_value: 1
           max_value: 50
-      
+
       - name: compute_racks_per_row
         label: "Compute Racks per Row"
         description: "Number of compute/server racks per row"
@@ -42,7 +42,7 @@ nodes:
         parameters:
           min_value: 0
           max_value: 100
-      
+
       - name: network_racks_per_row
         label: "Network Racks per Row"
         description: "Number of network equipment racks per row"
@@ -52,7 +52,7 @@ nodes:
         parameters:
           min_value: 0
           max_value: 50
-      
+
       - name: rack_numbering_scheme
         label: "Rack Numbering Scheme"
         description: "How racks are numbered within this layout"
@@ -67,13 +67,13 @@ nodes:
             color: "#7FBF7F"
           - name: row_based
             label: Row-Based
-            description: "Racks numbered by row: R01-01, R01-02, R02-01..."
+            description: "Racks numbered by row: R01-01, R01-02..."
             color: "#7F7FBF"
           - name: custom
             label: Custom
             description: "Custom numbering scheme defined elsewhere"
             color: "#BF7FBF"
-      
+
       - name: naming_convention
         label: "Device Naming Convention"
         description: "Device naming convention for this site"
@@ -84,7 +84,7 @@ nodes:
         choices:
           - name: standard
             label: Standard
-            description: "Standard device naming (e.g., DC1-1-R01-L01)"
+            description: "Standard naming (e.g., DC1-1-R01-L01)"
             color: "#7FBF7F"
           - name: hierarchical
             label: Hierarchical
@@ -94,7 +94,7 @@ nodes:
             label: Flat
             description: "Flat naming without hierarchy"
             color: "#BF7F7F"
-      
+
       - name: total_rack_capacity
         label: "Total Rack Capacity"
         description: "Total number of racks in this layout"
@@ -102,11 +102,13 @@ nodes:
         computed_attribute:
           kind: Jinja2
           jinja2_template: >
-            {{ (rows__value * (compute_racks_per_row__value + network_racks_per_row__value)) }}
+            {{ (rows__value *
+            (compute_racks_per_row__value +
+            network_racks_per_row__value)) }}
         read_only: true
         optional: true
         order_weight: 1400
-      
+
       - name: compute_rack_capacity
         label: "Total Compute Rack Capacity"
         description: "Total compute racks across all rows"
@@ -118,7 +120,7 @@ nodes:
         read_only: true
         optional: true
         order_weight: 1410
-      
+
       - name: network_rack_capacity
         label: "Total Network Rack Capacity"
         description: "Total network racks across all rows"
@@ -130,10 +132,10 @@ nodes:
         read_only: true
         optional: true
         order_weight: 1420
-      
+
       - name: layout_notes
         label: "Layout Notes"
-        description: "Additional notes about physical layout, power, cooling, etc."
+        description: "Notes about physical layout, power, cooling, etc."
         kind: Text
         optional: true
         order_weight: 2000

@@ -72,8 +72,12 @@ def clean_data(data: Any) -> Any:
                     dict_result[key] = clean_data(value["edges"])
                 elif "count" in value and value.get("count") is not None:
                     dict_result[key] = value["count"]
-                elif "node" in value and value.get("node") is not None:
-                    dict_result[key] = clean_data(value["node"])
+                elif "node" in value:
+                    # Handle node relationships - extract if present, None if null
+                    if value.get("node") is not None:
+                        dict_result[key] = clean_data(value["node"])
+                    else:
+                        dict_result[key] = None
                 else:
                     # Recursively clean nested objects
                     dict_result[key] = clean_data(value)
