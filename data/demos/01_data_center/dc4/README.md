@@ -2,13 +2,17 @@
 
 ## Overview
 
-**Location:** Berlin 🇩🇪 | **Size:** Small | **Platform:** Edgecore SONiC | **Design:** Mixed bag
+**Location:** Berlin 🇩🇪 (The hipster capital - your infrastructure is as edgy as the local techno scene)
 
-When the architecture team can't agree and someone says "why not both?" Pod 1 goes `mixed`, Pod 2 goes flat `tor`. It's the networking equivalent of a hipster café menu—confused but oddly functional.
+**Platform:** Edgecore with SONiC - So vendor-neutral, even your hipster barista could deploy it between DJ sets.
 
-**Use Case:** Flexibility through indecision. Now with mandatory 4 spines per pod!
+**Use Case:** When the architecture team can't agree on mixed vs flat ToR and someone says "why not both?" Pod 1 goes full mixed deployment, Pod 2 goes pure flat ToR. It's like having a hybrid car that's also a motorcycle. Confusing? Yes. Flexible? Absolutely.
 
-## Architecture
+---
+
+## Architecture (Identity Crisis with a Beat)
+
+### Fabric Scale
 
 - **Super Spines:** 2 (Edgecore 7726-32X-O)
 - **Pods:** 2 | **Spines:** 8 (4+4) | **Racks:** 5

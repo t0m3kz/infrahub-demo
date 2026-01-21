@@ -4,8 +4,6 @@
 
 **Location:** Munich 🇩🇪 (Home to Oktoberfest and BMW - where beer gardens meet precision engineering)
 
-**Size:** Large (L) - Like your cloud bill after forgetting to turn off dev instances
-
 **Platform:** Cisco Nexus 9K - The networking equivalent of driving a tank to the grocery store
 
 **Design Patterns:** Mixed bag of 4-spine designs (because consistency is overrated and we needed to showcase every possible topology variation in one place)

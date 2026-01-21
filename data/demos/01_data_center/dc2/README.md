@@ -2,13 +2,17 @@
 
 ## Overview
 
-**Location:** Paris 🇫🇷 | **Size:** Small | **Platform:** Arista EOS | **Design:** `spine-leaf-middlerack-4spine`
+**Location:** Paris 🇫🇷 (The City of Light - where your packets enjoy croissants and romantic latency)
 
-When the CFO says "make it work but don't make me cry" and you actually deliver. 2 pods, 4 racks, hierarchical aggregation—because middle management isn't just for org charts. The Parisian café of data centers: elegant, efficient, surprisingly good at packet forwarding.
+**Platform:** Arista EOS - So API-driven, even your croissant can trigger a config change.
 
-**Fun Fact:** Bootstrap data says 4 spines or nothing. We chose 4. Revolutionary, we know.
+**Use Case:** When the CFO says "make it work but don't make me cry" and you actually deliver. DC2 proves you don't need four pods and a mortgage to build reliable infrastructure. Just 2 pods, 4 racks, and a healthy respect for hierarchical aggregation. It's the Parisian café of data centers - small, efficient, and everyone knows everyone.
 
-## Architecture
+---
+
+## Architecture (Minimalism with a French Accent)
+
+### Fabric Scale
 
 - **Super Spines:** 2 (Arista DCS-7050CX3-32C-R)
 - **Pods:** 2 | **Spines:** 8 (4+4) | **Racks:** 4

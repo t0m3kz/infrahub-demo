@@ -2,13 +2,20 @@
 
 ## Overview
 
-**Location:** New York 🇺🇸 | **Size:** Medium | **Platform:** Multi-Vendor | **Design:** `spine-leaf-middlerack-4spine`
+**Location:** New York 🇺🇸 (The city that never sleeps, neither does your infrastructure. Rack space cheaper than a Manhattan studio!)
 
-Pod-level vendor diversity—because why settle for one support contract when you can juggle four? Cisco, Arista, Dell, Edgecore, all in one fabric. Eurovision for switches, but with more BGP and fewer sequins.
+**Platform:** Multi-Vendor — why settle for one when you can pay four support contracts and juggle Cisco, Arista, Dell, and Edgecore all at once?
 
-**Fun Fact:** Each pod speaks a different CLI dialect. Polyglot networking at its finest.
+**Use Case:**
+Pod-level vendor diversity for risk mitigation and best-of-breed selection. Each pod pledges allegiance to a different vendor—like a american version of Eurovision, but with more BGP and fewer sequins. It's middle_rack deployment across all 4 pods because hierarchy transcends vendor boundaries (and so do support tickets). Perfect for testing vendor migration strategies, proving your multi-vendor expertise at parties, and discovering which vendor's CLI makes you question your life choices.
 
-## Architecture
+Warning: May result in spontaneous protocol debates, inter-vendor blame games, and a sudden urge to update your LinkedIn profile.
+
+---
+
+## Architecture (The United Nations of Networking)
+
+### Fabric Scale
 
 - **Super Spines:** 2 (Cisco N9K-C9336C-FX2)
 - **Pods:** 4 | **Spines:** 16 (4+4+4+4) | **Racks:** 8
