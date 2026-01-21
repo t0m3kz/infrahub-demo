@@ -1,4 +1,4 @@
-query FabricGeneratorQuery($name: String!) {
+query topology_dc($name: String!) {
   TopologyDeployment(name__value: $name) {
     edges {
       node {

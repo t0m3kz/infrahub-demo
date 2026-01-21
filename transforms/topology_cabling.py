@@ -60,10 +60,14 @@ class TopologyCabling(InfrahubTransform):
         """
         cables_by_id: dict[str, dict[str, Any]] = {}
 
-        # Normalize root (may be raw or wrapped in TopologyDeployment)
+        # Normalize root (may be raw or wrapped in TopologyDeployment/TopologyPhysicalDeployment)
         root = topology_data
         if "TopologyDeployment" in topology_data:
             deployments = topology_data.get("TopologyDeployment", [])
+            if deployments and isinstance(deployments, list):
+                root = deployments[0]
+        elif "TopologyPhysicalDeployment" in topology_data:
+            deployments = topology_data.get("TopologyPhysicalDeployment", [])
             if deployments and isinstance(deployments, list):
                 root = deployments[0]
 
