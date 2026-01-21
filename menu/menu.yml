@@ -73,12 +73,19 @@ spec:
             icon: "mdi:pencil-ruler"
             children:
               data:
-                - name: DataCenterDesign
+                - name: SiteLayout
                   namespace: Topology
-                  label: Data Center Templates
-                  kind: TopologyDataCenterDesign
+                  label: Site Layouts
+                  kind: TopologySiteLayout
+                  icon: "mdi:floor-plan"
+                  description: "Physical floor plan layouts for data centers"
+
+                - name: PodDesign
+                  namespace: Topology
+                  label: Pod Designs
+                  kind: TopologyPodDesign
                   icon: "mdi:vector-arrange-above"
-                  description: "Data center design templates and patterns"
+                  description: "Logical network topology designs for pods"
 
                 - name: PopDesign
                   namespace: Topology

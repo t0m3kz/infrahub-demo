@@ -2,70 +2,6 @@
 version: "1.0"
 
 nodes:
-  - name: DataCenterDesign
-    namespace: Topology
-    description: "Design aspect for data center topology - DC-level parameters"
-    label: "Data Center Design"
-    inherit_from:
-      - TopologyDesign
-    attributes:
-      - name: maximum_super_spines
-        order_weight: 200
-        label: "Maximum Super Spines"
-        kind: Number
-        default_value: 2
-        optional: false
-        parameters:
-          min_value: 1
-          max_value: 4
-      - name: maximum_pods
-        order_weight: 300
-        label: "Maximum Pods"
-        kind: Number
-        parameters:
-          min_value: 2
-          max_value: 8
-        default_value: 2
-        optional: false
-      - name: maximum_spines
-        order_weight: 350
-        label: "Maximum Spine Switches per Pod"
-        kind: Number
-        default_value: 2
-        optional: false
-        parameters:
-          min_value: 2
-          max_value: 4
-      - name: maximum_switches
-        order_weight: 400
-        label: "Maximum Fabric Switches per Pod"
-        kind: Number
-        default_value: 16
-        optional: false
-      - name: naming_convention
-        order_weight: 500
-        label: "Device Naming Convention"
-        kind: Dropdown
-        default_value: standard
-        optional: true
-        choices:
-          - name: standard
-            label: Standard
-            description: "Standard device naming (e.g., DC1-1-R01-L01)"
-          - name: hierarchical
-            label: Hierarchical
-            description: "Hierarchical naming with full path"
-          - name: flat
-            label: Flat
-            description: "Flat naming without hierarchy"
-    relationships:
-      - name: deployments
-        peer: TopologyDataCenter
-        kind: Generic
-        cardinality: many
-        identifier: "dc__deployments"
-        order_weight: 5000
-
   - name: Element
     namespace: Topology
     description: "Physical aspect of topology elements."
@@ -248,12 +184,15 @@ nodes:
         default_value: bottom_up
         order_weight: 1300
     relationships:
-      - name: design_pattern
-        peer: TopologyDataCenterDesign
-        kind: Generic
+      - name: site_layout
+        label: "Site Layout"
+        description: "Physical floor plan layout for this data center"
+        peer: TopologySiteLayout
+        kind: Attribute
         cardinality: one
-        identifier: "dc__design_pattern"
-        order_weight: 500
+        optional: true
+        identifier: "dc__site_layout"
+        order_weight: 900
         on_delete: no-action
       - name: super_spine_template
         peer: TemplateDcimPhysicalDevice
@@ -320,7 +259,7 @@ nodes:
       - name: amount_of_spines
         label: Amount of Spine switches
         kind: Number
-        optional: false
+        optional: true
         default_value: 4
         order_weight: 1000
         parameters:
@@ -329,7 +268,7 @@ nodes:
       - name: number_of_rows
         order_weight: 1050
         label: "Number of Rows"
-        description: "Number of rack rows in this pod (for layout planning)"
+        description: "Number of rack rows in this pod (for layout planning) - DEPRECATED: Use site_layout instead"
         kind: Number
         default_value: 1
         optional: true
@@ -340,7 +279,7 @@ nodes:
         order_weight: 1110
         label: "Maximum Leafs per Row"
         description: >
-          Maximum leaf switches per row for offset calculation
+          Maximum leaf switches per row for offset calculation - DEPRECATED: Use design instead
         kind: Number
         optional: true
         parameters:
@@ -349,7 +288,7 @@ nodes:
       - name: maximum_tors_per_row
         order_weight: 1120
         label: "Maximum ToRs per Row"
-        description: "Maximum ToR switches per row for offset calculation"
+        description: "Maximum ToR switches per row for offset calculation - DEPRECATED: Use design instead"
         kind: Number
         optional: true
         parameters:
@@ -357,7 +296,7 @@ nodes:
           max_value: 100
       - name: deployment_type
         kind: Dropdown
-        optional: false
+        optional: true
         order_weight: 150
         choices:
           - name: middle_rack
@@ -400,10 +339,31 @@ nodes:
         read_only: true
         optional: true
     relationships:
+      - name: site_layout
+        label: "Site Layout"
+        description: "Physical floor plan layout for this pod"
+        peer: TopologySiteLayout
+        kind: Attribute
+        cardinality: one
+        optional: true
+        identifier: "pod__site_layout"
+        order_weight: 900
+        on_delete: no-action
+      - name: design
+        label: "Pod Design"
+        description: "Logical network topology design for this pod"
+        peer: TopologyPodDesign
+        kind: Attribute
+        cardinality: one
+        optional: true
+        identifier: "pod__design"
+        order_weight: 950
+        on_delete: no-action
       - name: spine_template
         peer: TemplateDcimPhysicalDevice
         kind: Attribute
         cardinality: one
+        optional: true
         identifier: "pod__spine_template"
         order_weight: 1100
         on_delete: no-action

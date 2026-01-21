@@ -59,14 +59,14 @@ class DCTopologyGenerator(CommonGenerator):
         dc_index = self.data.index  # Get DC index for unique device naming
         amount_of_super_spines = self.data.amount_of_super_spines
         super_spine_template = self.data.super_spine_template
-        design = self.data.design_pattern
+        naming_convention = "standard"  # Default naming convention
         self.logger.info(f"Generating topology for data center {self.fabric_name.upper()}")
         indexes: list[int] = [dc_index]
 
         await self.allocate_resource_pools(
             id=dc_id,
             strategy="fabric",
-            pools=design.model_dump(),
+            pools={},  # No DC-level design pattern
             ipv6=self.data.underlay,
         )
 
@@ -77,7 +77,7 @@ class DCTopologyGenerator(CommonGenerator):
             template=super_spine_template.model_dump(),
             naming_convention=cast(
                 Literal["standard", "hierarchical", "flat"],
-                (design.naming_convention or "standard").lower(),
+                naming_convention.lower(),
             ),
             options={
                 "indexes": indexes,

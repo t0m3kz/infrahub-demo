@@ -16,6 +16,53 @@ class PodTopologyGenerator(CommonGenerator):
     within a pod topology.
     """
 
+    def _validate_layout_design_compatibility(self, layout: Any, design: Any) -> None:
+        """Validate site layout is compatible with pod design.
+        
+        Args:
+            layout: TopologySiteLayout instance
+            design: TopologyPodDesign instance
+            
+        Raises:
+            RuntimeError: If layout and design are incompatible
+        """
+        # Check explicit compatibility list
+        if hasattr(design, 'compatible_layouts') and design.compatible_layouts:
+            layout_names = [l.name.value if hasattr(l.name, 'value') else l.name for l in design.compatible_layouts]
+            layout_name = layout.name.value if hasattr(layout.name, 'value') else layout.name
+            if layout_name not in layout_names:
+                raise RuntimeError(
+                    f"Pod design '{design.name.value}' not compatible with "
+                    f"site layout '{layout_name}'. "
+                    f"Compatible layouts: {', '.join(layout_names)}"
+                )
+        
+        # Check ToR capacity
+        if hasattr(design, 'max_tors_per_row') and design.max_tors_per_row:
+            max_tors = design.max_tors_per_row.value if hasattr(design.max_tors_per_row, 'value') else design.max_tors_per_row
+            compute_racks = layout.compute_racks_per_row.value if hasattr(layout.compute_racks_per_row, 'value') else layout.compute_racks_per_row
+            if max_tors > compute_racks:
+                raise RuntimeError(
+                    f"Design '{design.name.value}' requires {max_tors} ToRs/row "
+                    f"but layout '{layout.name.value}' only has {compute_racks} compute racks/row"
+                )
+        
+        # Check Leaf capacity (assuming 4 leafs per network rack)
+        if hasattr(design, 'max_leafs_per_row') and design.max_leafs_per_row:
+            max_leafs = design.max_leafs_per_row.value if hasattr(design.max_leafs_per_row, 'value') else design.max_leafs_per_row
+            network_racks = layout.network_racks_per_row.value if hasattr(layout.network_racks_per_row, 'value') else layout.network_racks_per_row
+            leafs_capacity = network_racks * 4
+            if max_leafs > leafs_capacity:
+                raise RuntimeError(
+                    f"Design '{design.name.value}' requires {max_leafs} Leafs/row "
+                    f"but layout '{layout.name.value}' only supports {leafs_capacity} leafs/row "
+                    f"({network_racks} network racks × 4 leafs)"
+                )
+        
+        self.logger.info(
+            f"✓ Layout '{layout.name.value}' compatible with design '{design.name.value}'"
+        )
+
     async def update_checksum(self) -> None:
         """Update checksum for racks in the pod and add them to group context for protection.
 
@@ -68,7 +115,31 @@ class PodTopologyGenerator(CommonGenerator):
         self.deployment_id = dc.id  # Store for cable linking
         self.pod_name = self.data.name.lower()
         self.fabric_name = dc.name.lower()
-        design = dc.design_pattern
+        
+        # Use new design/layout architecture
+        if self.data.design:
+            design = self.data.design
+            # Get naming convention from site_layout first, fallback to design, then default
+            if self.data.site_layout and hasattr(self.data.site_layout, 'naming_convention'):
+                naming_conv = cast(
+                    Literal["standard", "hierarchical", "flat"],
+                    (self.data.site_layout.naming_convention or "standard").lower(),
+                )
+            else:
+                naming_conv = "standard"
+            spine_count = design.spine_count
+            spine_template = design.spine_template
+            
+            # Validate layout compatibility if both are present
+            if self.data.site_layout:
+                self._validate_layout_design_compatibility(self.data.site_layout, design)
+        else:
+            # Backward compatibility: Use pod attributes
+            design = None
+            naming_conv = "standard"
+            spine_count = self.data.amount_of_spines
+            spine_template = self.data.spine_template
+        
         indexes: list[int] = [dc.index or 1, self.data.index]
 
         await self.allocate_resource_pools(
@@ -77,16 +148,11 @@ class PodTopologyGenerator(CommonGenerator):
             pools=design.model_dump() if design else {},
         )
 
-        naming_conv = cast(
-            Literal["standard", "hierarchical", "flat"],
-            ((design.naming_convention if design else None) or "standard").lower(),
-        )
-
         spines = await self.create_devices(
             deployment_id=self.data.id,
             device_role="spine",
-            amount=self.data.amount_of_spines,
-            template=self.data.spine_template.model_dump(),
+            amount=spine_count,
+            template=spine_template.model_dump(),
             naming_convention=naming_conv,
             options={
                 "indexes": indexes,
@@ -94,8 +160,7 @@ class PodTopologyGenerator(CommonGenerator):
             },
         )
 
-        spine_switch_template = self.data.spine_template
-        spine_interfaces_data = spine_switch_template.interfaces
+        spine_interfaces_data = spine_template.interfaces
         spine_interfaces = [iface.name for iface in spine_interfaces_data]
         if not spine_interfaces:
             self.logger.error(

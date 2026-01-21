@@ -1,0 +1,204 @@
+---
+version: "1.0"
+nodes:
+  - name: PodDesign
+    namespace: Topology
+    description: "Logical network topology design for pod deployment"
+    label: Pod Design
+    icon: "mdi:sitemap"
+    inherit_from:
+      - TopologyDesign
+    include_in_menu: true
+    menu_placement: "TopologyDataCenter"
+    human_friendly_id:
+      - name__value
+    display_label: "{{ name__value }}"
+    uniqueness_constraints:
+      - [name__value]
+    order_by: [name__value]
+    attributes:
+      - name: description
+        kind: Text
+        optional: true
+        order_weight: 150
+        description: "Description of this pod design"
+      
+      - name: deployment_type
+        label: "Deployment Type"
+        description: "Network architecture deployment pattern"
+        kind: Dropdown
+        optional: false
+        order_weight: 200
+        choices:
+          - name: middle_rack
+            label: Middle Rack
+            description: "Leaf switches in middle rack serving ToRs on both sides"
+            color: "#7F7FFF"
+          - name: tor
+            label: Top of Rack
+            description: "ToR switches in each rack connecting to spine"
+            color: "#BF7FBF"
+          - name: mixed
+            label: ToR and Middle Rack
+            description: "Mix of ToR and middle rack deployment"
+            color: "#BF7F7F"
+      
+      - name: spine_count
+        label: "Number of Spine Switches"
+        description: "Number of spine switches in this design"
+        kind: Number
+        optional: false
+        default_value: 4
+        order_weight: 1000
+        parameters:
+          min_value: 1
+          max_value: 8
+      
+      - name: max_leafs_per_row
+        label: "Maximum Leafs per Row"
+        description: "Maximum leaf switches per row for capacity planning"
+        kind: Number
+        optional: true
+        order_weight: 1100
+        parameters:
+          min_value: 0
+          max_value: 100
+      
+      - name: max_tors_per_row
+        label: "Maximum ToRs per Row"
+        description: "Maximum ToR switches per row for capacity planning"
+        kind: Number
+        optional: true
+        order_weight: 1200
+        parameters:
+          min_value: 0
+          max_value: 100
+      
+      - name: naming_convention
+        label: "Naming Convention"
+        description: "Device naming convention for this design"
+        kind: Dropdown
+        optional: false
+        default_value: standard
+        order_weight: 300
+        choices:
+          - name: standard
+            label: Standard
+            description: "DC-POD-ROLE-INDEX"
+            color: "#7FBF7F"
+          - name: hierarchical
+            label: Hierarchical
+            description: "DC/FABRIC/POD/ROLE/INDEX"
+            color: "#7F7FBF"
+          - name: flat
+            label: Flat
+            description: "ROLE-INDEX"
+            color: "#BF7FBF"
+      
+      - name: leaf_interface_sorting_method
+        label: "Leaf Interface Sorting"
+        description: "How interfaces are assigned on leaf switches"
+        kind: Dropdown
+        optional: false
+        default_value: bottom_up
+        order_weight: 1300
+        choices:
+          - name: bottom_up
+            color: "#869FB3"
+            description: "Assign interfaces bottom-up"
+          - name: top_down
+            color: "#004E64"
+            description: "Assign interfaces top-down"
+      
+      - name: spine_interface_sorting_method
+        label: "Spine Interface Sorting"
+        description: "How interfaces are assigned on spine switches"
+        kind: Dropdown
+        optional: false
+        default_value: bottom_up
+        order_weight: 1400
+        choices:
+          - name: bottom_up
+            color: "#869FB3"
+            description: "Assign interfaces bottom-up"
+          - name: top_down
+            color: "#004E64"
+            description: "Assign interfaces top-down"
+      
+      - name: loopback_prefix_size
+        label: "Loopback Prefix Size"
+        description: "IP prefix size for loopback interfaces (/32 or /128)"
+        kind: Number
+        optional: true
+        default_value: 32
+        order_weight: 2000
+        parameters:
+          min_value: 24
+          max_value: 128
+      
+      - name: p2p_prefix_size
+        label: "Point-to-Point Prefix Size"
+        description: "IP prefix size for P2P links (/30, /31, /127)"
+        kind: Number
+        optional: true
+        default_value: 31
+        order_weight: 2100
+        parameters:
+          min_value: 24
+          max_value: 128
+      
+      - name: management_prefix_size
+        label: "Management Prefix Size"
+        description: "IP prefix size for management interfaces"
+        kind: Number
+        optional: true
+        default_value: 24
+        order_weight: 2200
+        parameters:
+          min_value: 16
+          max_value: 32
+    
+    relationships:
+      - name: spine_template
+        label: "Spine Device Template"
+        description: "Device template for spine switches"
+        peer: TemplateDcimPhysicalDevice
+        kind: Attribute
+        cardinality: one
+        optional: false
+        identifier: "pod_design__spine_template"
+        order_weight: 3000
+        on_delete: no-action
+      
+      - name: leaf_template
+        label: "Leaf Device Template"
+        description: "Device template for leaf switches (middle rack)"
+        peer: TemplateDcimPhysicalDevice
+        kind: Attribute
+        cardinality: one
+        optional: true
+        identifier: "pod_design__leaf_template"
+        order_weight: 3100
+        on_delete: no-action
+      
+      - name: tor_template
+        label: "ToR Device Template"
+        description: "Device template for ToR switches"
+        peer: TemplateDcimPhysicalDevice
+        kind: Attribute
+        cardinality: one
+        optional: true
+        identifier: "pod_design__tor_template"
+        order_weight: 3200
+        on_delete: no-action
+      
+      - name: compatible_layouts
+        label: "Compatible Site Layouts"
+        description: "Site layouts that work with this design"
+        peer: TopologySiteLayout
+        kind: Attribute
+        cardinality: many
+        optional: true
+        identifier: "pod_design__compatible_layouts"
+        order_weight: 4000
+        on_delete: no-action

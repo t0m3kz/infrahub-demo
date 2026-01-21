@@ -9,19 +9,6 @@ query DataCenterCapacityValidation($name: String!) {
         amount_of_super_spines {
           value
         }
-        design_pattern {
-          node {
-            maximum_super_spines {
-              value
-            }
-            maximum_pods {
-              value
-            }
-            maximum_switches {
-              value
-            }
-          }
-        }
         children {
           edges {
             node {

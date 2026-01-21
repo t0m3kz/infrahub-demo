@@ -1,0 +1,63 @@
+---
+# Site Layout Templates - Physical Floor Plans
+# These define the physical data center or colocation space organization
+# Loaded at bootstrap time, referenced by pods at deployment time
+
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologySiteLayout
+  data:
+    - name: "small-dc-layout"
+      description: "Small data center: 2 rows, 10 compute + 2 network racks per row"
+      rows: 2
+      compute_racks_per_row: 10
+      network_racks_per_row: 2
+      rack_numbering_scheme: "sequential"
+      naming_convention: "standard"
+      layout_notes: "24 total racks (20 compute + 4 network). Suitable for 1-2 pods."
+
+    - name: "medium-dc-layout"
+      description: "Medium data center: 4 rows, 20 compute + 4 network racks per row"
+      rows: 4
+      compute_racks_per_row: 20
+      network_racks_per_row: 4
+      rack_numbering_scheme: "row_based"
+      naming_convention: "standard"
+      layout_notes: "96 total racks (80 compute + 16 network). Suitable for 2-4 pods."
+
+    - name: "large-dc-layout"
+      description: "Large data center: 8 rows, 30 compute + 6 network racks per row"
+      rows: 8
+      compute_racks_per_row: 30
+      network_racks_per_row: 6
+      rack_numbering_scheme: "row_based"
+      naming_convention: "standard"
+      layout_notes: "288 total racks (240 compute + 48 network). Suitable for 4-8 pods."
+
+    - name: "colocation-cage-small"
+      description: "Colocation cage: 1 row, 6 compute + 1 network rack"
+      rows: 1
+      compute_racks_per_row: 6
+      network_racks_per_row: 1
+      rack_numbering_scheme: "sequential"
+      naming_convention: "standard"
+      layout_notes: "7 total racks (6 compute + 1 network). Single pod deployment."
+
+    - name: "colocation-cage-medium"
+      description: "Colocation cage: 2 rows, 12 compute + 2 network racks per row"
+      rows: 2
+      compute_racks_per_row: 12
+      network_racks_per_row: 2
+      rack_numbering_scheme: "sequential"
+      naming_convention: "standard"
+      layout_notes: "28 total racks (24 compute + 4 network). 1-2 pods."
+
+    - name: "hyperscale-dc-layout"
+      description: "Hyperscale data center: 16 rows, 50 compute + 10 network racks per row"
+      rows: 16
+      compute_racks_per_row: 50
+      network_racks_per_row: 10
+      rack_numbering_scheme: "row_based"
+      naming_convention: "standard"
+      layout_notes: "960 total racks (800 compute + 160 network). 8-16 pods."

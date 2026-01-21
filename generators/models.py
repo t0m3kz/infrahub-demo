@@ -23,16 +23,6 @@ class Interface(BaseModel):
     role: Optional[str] = None
 
 
-class DesignPattern(BaseModel):
-    """Data Center design pattern - DC-level parameters only."""
-
-    maximum_super_spines: Optional[int] = None
-    maximum_pods: Optional[int] = None
-    maximum_spines: Optional[int] = None
-    maximum_switches: Optional[int] = None
-    naming_convention: str = "standard"
-
-
 class Template(BaseModel):
     id: str
     platform: Optional[Platform] = None
@@ -70,7 +60,6 @@ class DCModel(BaseModel):
     name: str
     index: int
     underlay: Optional[bool] = False
-    design_pattern: DesignPattern
     amount_of_super_spines: int
     super_spine_template: Template
     children: List[DCPod] = []
@@ -82,7 +71,6 @@ class PodParent(BaseModel):
     devices: List[Device]
     name: str
     index: Optional[int] = None
-    design_pattern: Optional[DesignPattern] = None
     super_spine_template: Optional[Template] = None
 
 
@@ -117,7 +105,6 @@ class RackParent(BaseModel):
     id: str
     name: str
     index: int
-    design_pattern: DesignPattern
 
 
 class QuantityOnly(BaseModel):

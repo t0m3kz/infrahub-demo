@@ -29,12 +29,32 @@ fragment SuperSpineTemplateFields on TemplateDcimPhysicalDevice {
   }
 }
 
-fragment DesignPatternFields on TopologyDataCenterDesign {
-  maximum_super_spines { value }
-  maximum_pods { value }
-  maximum_spines { value }
-  maximum_switches { value }
+fragment SiteLayoutFields on TopologySiteLayout {
+  id
+  name { value }
+  rows { value }
+  compute_racks_per_row { value }
+  network_racks_per_row { value }
+  rack_numbering_scheme { value }
   naming_convention { value }
+}
+
+fragment PodDesignFields on TopologyPodDesign {
+  id
+  name { value }
+  deployment_type { value }
+  spine_count { value }
+  max_leafs_per_row { value }
+  max_tors_per_row { value }
+  naming_convention { value }
+  leaf_interface_sorting_method { value }
+  spine_interface_sorting_method { value }
+  loopback_prefix_size { value }
+  p2p_prefix_size { value }
+  management_prefix_size { value }
+  spine_template { node { ...DeviceTemplateFields } }
+  leaf_template { node { ...DeviceTemplateFields } }
+  tor_template { node { ...DeviceTemplateFields } }
 }
 
 fragment DataCenterFields on TopologyDataCenter {
@@ -44,7 +64,6 @@ fragment DataCenterFields on TopologyDataCenter {
   }
   name { value }
   index { value }
-  design_pattern { node { ...DesignPatternFields } }
   amount_of_super_spines { value }
   fabric_interface_sorting_method { value }
   spine_interface_sorting_method { value }
@@ -59,6 +78,10 @@ query PodGeneratorQuery($name: String!) {
         name { value }
         checksum { value }
         index { value }
+        # New three-layer architecture
+        site_layout { node { ...SiteLayoutFields } }
+        design { node { ...PodDesignFields } }
+        # Legacy attributes (for backward compatibility)
         deployment_type { value }
         amount_of_spines { value }
         number_of_rows { value }

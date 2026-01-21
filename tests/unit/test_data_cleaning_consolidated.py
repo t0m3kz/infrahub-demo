@@ -239,16 +239,6 @@ class TestRealGraphQLResponses:
                                 },
                                 "name": {"value": "DC1"},
                                 "amount_of_super_spines": {"value": 2},
-                                "design_pattern": {
-                                    "node": {
-                                        "id": "187a1c22-ea67-42d9-3100-c51744dc5c08",
-                                        "maximum_super_spines": {"value": 2},
-                                        "maximum_pods": {"value": 4},
-                                        "maximum_spines": {"value": 4},
-                                        "maximum_leafs": {"value": 32},
-                                        "maximum_tors": {"value": 96},
-                                    }
-                                },
                             }
                         }
                     ]
@@ -287,15 +277,6 @@ class TestRealGraphQLResponses:
         assert pod1["spine_count"] == 3  # count extracted
         assert pod1["leaf_count"] == 32  # count extracted
         assert pod1["tor_count"] == 0  # count extracted (0 is not treated as falsy)
-
-        # Verify design_pattern nested node
-        design = dc["design_pattern"]
-        assert design["id"] == "187a1c22-ea67-42d9-3100-c51744dc5c08"
-        assert design["maximum_super_spines"] == 2
-        assert design["maximum_pods"] == 4
-        assert design["maximum_spines"] == 4
-        assert design["maximum_leafs"] == 32
-        assert design["maximum_tors"] == 96
 
     def test_complex_topology_pod_response(self) -> None:
         """Test clean_data with complex TopologyPod response structure."""
@@ -487,12 +468,6 @@ class TestGetData:
                                     }
                                 ],
                             },
-                            "design_pattern": {
-                                "node": {
-                                    "maximum_pods": {"value": 4},
-                                    "maximum_spines": {"value": 4},
-                                }
-                            },
                         }
                     }
                 ]
@@ -511,7 +486,3 @@ class TestGetData:
         assert len(result["children"]) == 1
         assert result["children"][0]["spine_count"] == 3
         assert result["children"][0]["leaf_count"] == 32
-
-        # Verify nested design_pattern
-        assert result["design_pattern"]["maximum_pods"] == 4
-        assert result["design_pattern"]["maximum_spines"] == 4

@@ -41,6 +41,42 @@ fragment FabricTemplateFields on TopologyElement {
   }
 }
 
+fragment SiteLayoutFields on TopologySiteLayout {
+  id
+  name { value }
+  rows { value }
+  compute_racks_per_row { value }
+  network_racks_per_row { value }
+  rack_numbering_scheme { value }
+  naming_convention { value }
+}
+
+fragment PodDesignFields on TopologyPodDesign {
+  id
+  name { value }
+  deployment_type { value }
+  spine_count { value }
+  max_leafs_per_row { value }
+  max_tors_per_row { value }
+  naming_convention { value }
+  leaf_interface_sorting_method { value }
+  spine_interface_sorting_method { value }
+  spine_template {
+    node {
+      id
+      interfaces(role__value: "downlink") {
+        edges {
+          node {
+            name { value }
+          }
+        }
+      }
+    }
+  }
+  leaf_template { node { id ...TemplateDeviceFields } }
+  tor_template { node { id ...TemplateDeviceFields } }
+}
+
 fragment PodFields on TopologyPod {
   id
   name {
@@ -49,6 +85,10 @@ fragment PodFields on TopologyPod {
   index {
     value
   }
+  # New three-layer architecture
+  site_layout { node { ...SiteLayoutFields } }
+  design { node { ...PodDesignFields } }
+  # Legacy attributes (for backward compatibility)
   deployment_type {
     value
   }
@@ -61,16 +101,6 @@ fragment PodFields on TopologyPod {
         }
         index {
           value
-        }
-        design_pattern {
-          node {
-            naming_convention {
-              value
-            }
-            maximum_switches {
-              value
-            }
-          }
         }
       }
     }
@@ -99,9 +129,6 @@ fragment PodFields on TopologyPod {
     node {
       id
     }
-  }
-  deployment_type {
-    value
   }
   spine_template {
     node {

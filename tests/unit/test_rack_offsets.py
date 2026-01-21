@@ -7,7 +7,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from generators.add.rack import RackGenerator
-from generators.models import DesignPattern, LocationSuiteModel, RackModel, RackParent, RackPod, Template
+from generators.models import LocationSuiteModel, RackModel, RackParent, RackPod, Template
 
 
 def _build_generator(
@@ -23,7 +23,6 @@ def _build_generator(
         id="parent-1",
         name="DC1",
         index=1,
-        design_pattern=DesignPattern(),
     )
 
     pod = RackPod(

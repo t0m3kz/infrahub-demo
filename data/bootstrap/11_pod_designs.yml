@@ -1,0 +1,53 @@
+---
+# Pod Design Templates - Logical Network Topologies
+# These define the network architecture and device configurations
+# Loaded at bootstrap time, referenced by pods at deployment time
+
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologyPodDesign
+  data:
+    - name: "spine-leaf-tor-4spine"
+      description: "Standard ToR deployment with 4 spines"
+      deployment_type: "tor"
+      spine_count: 4
+      max_tors_per_row: 10
+      naming_convention: "standard"
+      leaf_interface_sorting_method: "bottom_up"
+      spine_interface_sorting_method: "bottom_up"
+      loopback_prefix_size: 32
+      p2p_prefix_size: 31
+      management_prefix_size: 24
+      spine_template: "N9K_C9336C_FX2_SPINE"
+      tor_template: "N9K_C9336C_FX2_LEAF"
+
+    - name: "spine-leaf-mixed-4spine"
+      description: "Mixed deployment: middle rack leafs + ToRs"
+      deployment_type: "mixed"
+      spine_count: 4
+      max_tors_per_row: 8
+      max_leafs_per_row: 4
+      naming_convention: "standard"
+      leaf_interface_sorting_method: "bottom_up"
+      spine_interface_sorting_method: "bottom_up"
+      loopback_prefix_size: 32
+      p2p_prefix_size: 31
+      management_prefix_size: 24
+      spine_template: "N9K_C9336C_FX2_SPINE"
+      leaf_template: "N9K_C9336C_FX2_LEAF_MR"
+      tor_template: "N9K_C9336C_FX2_LEAF"
+
+    - name: "spine-leaf-middlerack-4spine"
+      description: "Middle rack deployment: leafs only (no ToRs)"
+      deployment_type: "middle_rack"
+      spine_count: 4
+      max_leafs_per_row: 8
+      naming_convention: "standard"
+      leaf_interface_sorting_method: "bottom_up"
+      spine_interface_sorting_method: "bottom_up"
+      loopback_prefix_size: 32
+      p2p_prefix_size: 31
+      management_prefix_size: 24
+      spine_template: "N9K_C9336C_FX2_SPINE"
+      leaf_template: "N9K_C9336C_FX2_LEAF_MR"

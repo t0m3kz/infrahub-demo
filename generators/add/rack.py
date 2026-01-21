@@ -169,7 +169,16 @@ class RackGenerator(CommonGenerator):
         """Calculate cabling offset using simple formula based on rack position."""
 
         current_index = self.data.index
-        deployment_type = self.data.pod.deployment_type
+        
+        # Get deployment_type from new design or fallback to old attribute
+        pod = self.data.pod
+        if hasattr(pod, 'design') and pod.design:
+            deployment_type = pod.design.deployment_type.value if hasattr(pod.design.deployment_type, 'value') else pod.design.deployment_type
+            max_tors_per_row = (pod.design.max_tors_per_row.value if hasattr(pod.design.max_tors_per_row, 'value') else pod.design.max_tors_per_row) if hasattr(pod.design, 'max_tors_per_row') and pod.design.max_tors_per_row else 8
+        else:
+            # Backward compatibility
+            deployment_type = pod.deployment_type.value if hasattr(pod.deployment_type, 'value') else pod.deployment_type
+            max_tors_per_row = (pod.maximum_tors_per_row.value if hasattr(pod.maximum_tors_per_row, 'value') else pod.maximum_tors_per_row) if hasattr(pod, 'maximum_tors_per_row') and pod.maximum_tors_per_row else 8
 
         # For middle_rack deployment ToRs: always offset=0 (ToRs connect to leafs in same rack)
         if deployment_type == "middle_rack" and device_type == "tor":
@@ -202,10 +211,8 @@ class RackGenerator(CommonGenerator):
         # ToRs connect to spines, need cumulative offset across all rows
         # Formula: offset = (max_tors_per_row × (row - 1)) + (device_count × (index - 1))
         elif deployment_type == "tor" and device_type == "tor":
-            maximum_tors_per_row = self.data.pod.maximum_tors_per_row or 8
-
             # Offset from all previous rows (reserve space for max ToRs per row)
-            offset_from_previous_rows = maximum_tors_per_row * (self.data.row_index - 1)
+            offset_from_previous_rows = max_tors_per_row * (self.data.row_index - 1)
 
             # Offset from previous racks in current row (reserve space based on rack position)
             offset_in_current_row = device_count * (current_index - 1)
@@ -215,7 +222,7 @@ class RackGenerator(CommonGenerator):
             self.logger.info(
                 f"Calculated {device_type} offset={offset} for rack {self.data.name} "
                 f"(row={self.data.row_index}, index={current_index}, tors_in_rack={device_count}, "
-                f"max_tors_per_row={maximum_tors_per_row}, mode={deployment_type})"
+                f"max_tors_per_row={max_tors_per_row}, mode={deployment_type})"
             )
 
         else:
@@ -369,11 +376,13 @@ class RackGenerator(CommonGenerator):
                 self.data.index,
             ]
 
-        # Use DC design's naming convention (fabric-wide consistency)
-        dc_design = pod.parent.design_pattern
+        # Use naming convention from pod's site_layout, or default to standard
+        naming_conv = "standard"
+        if hasattr(pod, 'site_layout') and pod.site_layout and hasattr(pod.site_layout, 'naming_convention'):
+            naming_conv = pod.site_layout.naming_convention or "standard"
         naming_conv = cast(
             Literal["standard", "hierarchical", "flat"],
-            (dc_design.naming_convention or "standard").lower() if dc_design else "standard",
+            naming_conv.lower(),
         )
 
         created_leaf_devices = []

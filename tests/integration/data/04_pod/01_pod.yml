@@ -6,12 +6,8 @@ spec:
   kind: TopologyPod
   data:
     - index: 4
-      deployment_type: middle_rack
-      spine_template: N9K-C9364C-GX_SPINE
-      amount_of_spines: 2
-      number_of_rows: 3
-      maximum_leafs_per_row: 3
-      maximum_tors_per_row: 0
+      site_layout: medium-dc-layout
+      design: spine-leaf-middlerack-4spine
       parent: DC1
       member_of_groups:
         - topologies_pod
