@@ -95,6 +95,7 @@ class EndpointConnectivityGenerator(CommonGenerator):
             self.logger.error(f"Endpoint {self.data.name} has no rack assigned - cannot determine connectivity")
             return
 
+        # Access deployment_type directly from pod (not through design)
         deployment_type = self.data.rack.pod.deployment_type
         self.pod_name = self.data.rack.pod.name.lower()
         pod_id = self.data.rack.pod.id

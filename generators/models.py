@@ -68,27 +68,28 @@ class PodDesign(BaseModel):
     id: str
     name: Optional[str] = None
     deployment_type: Optional[str] = None
-    spine_count: Optional[int] = None
+    spine_count: Optional[int] = None  # Deprecated: use max_spine_count
+    max_spine_count: Optional[int] = None
     max_leafs_per_row: Optional[int] = None
     max_tors_per_row: Optional[int] = None
-    maximum_spines: Optional[int] = None
+    maximum_spines: Optional[int] = None  # Deprecated: use max_spine_count
     technical_pool_size: Optional[int] = None  # CIDR prefix length (e.g., 24 for /24)
     loopback_pool_size: Optional[int] = None  # CIDR prefix length (e.g., 28 for /28)
     naming_convention: Optional[str] = None
-    leaf_interface_sorting_method: Optional[str] = None
-    spine_interface_sorting_method: Optional[str] = None
-    spine_template: Optional[Template] = None
 
-    @field_validator("spine_template", mode="before")
-    @classmethod
-    def handle_empty_node(cls, v: Any) -> Any:
-        """Convert {'node': None} to None, or extract node if present."""
-        if isinstance(v, dict) and "node" in v:
-            node = v.get("node")
-            if node is None:
-                return None
-            return node
-        return v
+
+# Data Center Design model (fabric-wide architectural principles)
+class DataCenterDesignData(BaseModel):
+    """Data Center Design model for architectural principles."""
+    strategy: Optional[str] = None
+    underlay: Optional[bool] = False
+    max_super_spine_count: Optional[int] = None
+    max_pod_count: Optional[int] = None
+    naming_convention: Optional[str] = None
+    dc_loopback_parent_size: Optional[int] = None
+    dc_technical_parent_size: Optional[int] = None
+    loopback_prefix_size: Optional[int] = None
+    p2p_prefix_size: Optional[int] = None
 
 
 # DC model
@@ -101,7 +102,7 @@ class DCModel(BaseModel):
     id: str
     name: str
     index: int
-    underlay: Optional[bool] = False
+    design: Optional[DataCenterDesignData] = None
     amount_of_super_spines: int
     super_spine_template: Template
     children: List[DCPod] = []

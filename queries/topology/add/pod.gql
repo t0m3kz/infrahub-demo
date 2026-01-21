@@ -43,18 +43,15 @@ fragment PodDesignFields on TopologyPodDesign {
   id
   name { value }
   deployment_type { value }
-  spine_count { value }
+  max_spine_count { value }
   max_leafs_per_row { value }
   max_tors_per_row { value }
   technical_pool_size { value }
   loopback_pool_size { value }
   naming_convention { value }
-  leaf_interface_sorting_method { value }
-  spine_interface_sorting_method { value }
   loopback_prefix_size { value }
   p2p_prefix_size { value }
   management_prefix_size { value }
-  spine_template { node { ...DeviceTemplateFields } }
 }
 
 fragment DataCenterFields on TopologyDataCenter {
@@ -66,7 +63,6 @@ fragment DataCenterFields on TopologyDataCenter {
   index { value }
   amount_of_super_spines { value }
   fabric_interface_sorting_method { value }
-  spine_interface_sorting_method { value }
   super_spine_template { node { ...SuperSpineTemplateFields } }
 }
 

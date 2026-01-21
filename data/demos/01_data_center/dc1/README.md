@@ -6,6 +6,8 @@
 
 **Platform:** Cisco Nexus 9K - The networking equivalent of driving a tank to the grocery store
 
+**Fabric Design:** `ebgp-ipv4-standard` - The safe corporate choice (works everywhere, excites no one)
+
 **Design Patterns:** Mixed bag of 4-spine designs (because consistency is overrated and we needed to showcase every possible topology variation in one place)
 
 - **Pod 1:** `spine-leaf-middlerack-4spine` (large-dc-layout) - Maximum bureaucracy, 4 spines orchestrating middle rack harmony

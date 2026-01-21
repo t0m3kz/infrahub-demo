@@ -1,0 +1,14 @@
+---
+# POD-4 with middle_rack deployment
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologyPod
+  data:
+    - index: 4
+      site_layout: medium-dc-layout
+      design: spine-leaf-middlerack-4spine
+      spine_template: N9K_C9336C_FX2_SPINE
+      parent: [DC6, "1"]
+      member_of_groups:
+        - topologies_pod

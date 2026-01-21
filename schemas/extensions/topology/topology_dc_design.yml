@@ -1,0 +1,138 @@
+---
+version: "1.0"
+nodes:
+  - name: DataCenterDesign
+    namespace: Topology
+    description: "Logical network architecture design for data center fabrics"
+    label: Data Center Design
+    icon: "mdi:lan"
+    inherit_from:
+      - TopologyDesign
+    include_in_menu: true
+    menu_placement: "TopologyDataCenter"
+    human_friendly_id:
+      - name__value
+    display_label: "{{ name__value }}"
+    uniqueness_constraints:
+      - [name__value]
+    order_by: [name__value]
+    attributes:
+      - name: description
+        kind: Text
+        optional: true
+        order_weight: 150
+        description: "Description of this data center design"
+
+      - name: strategy
+        kind: Dropdown
+        label: Routing Strategy
+        description: "Fabric routing protocol strategy"
+        optional: false
+        default_value: ebgp-ibgp
+        order_weight: 1000
+        choices:
+          - name: ospf-ibgp
+            label: OSPF-iBGP
+            description: "OSPF underlay with iBGP overlay"
+            color: "#aedcee"
+          - name: ebgp-ibgp
+            label: eBGP-iBGP
+            description: "eBGP underlay with iBGP overlay"
+            color: "#7f7fff"
+
+      - name: underlay
+        label: IPv6 Underlay
+        description: "Use IPv6 for underlay routing (false = IPv4)"
+        kind: Boolean
+        optional: false
+        default_value: false
+        order_weight: 1100
+
+      - name: max_super_spine_count
+        label: "Maximum Super Spine Count"
+        description: "Maximum number of super-spine switches allowed"
+        kind: Number
+        optional: false
+        default_value: 4
+        order_weight: 1200
+        parameters:
+          min_value: 1
+          max_value: 8
+
+      - name: max_pod_count
+        label: "Maximum Pod Count"
+        description: "Maximum number of pods allowed in this fabric"
+        kind: Number
+        optional: false
+        default_value: 16
+        order_weight: 1300
+        parameters:
+          min_value: 1
+          max_value: 64
+
+      - name: naming_convention
+        label: "Device Naming Convention"
+        description: "Device naming convention for fabric devices"
+        kind: Dropdown
+        optional: true
+        default_value: standard
+        order_weight: 1400
+        choices:
+          - name: standard
+            label: Standard
+            description: "DC/FABRIC/ROLE/INDEX"
+            color: "#7FBF7F"
+          - name: hierarchical
+            label: Hierarchical
+            description: "LOCATION/DC/FABRIC/ROLE/INDEX"
+            color: "#7F7FBF"
+          - name: flat
+            label: Flat
+            description: "ROLE-INDEX"
+            color: "#BF7FBF"
+
+      - name: dc_loopback_parent_size
+        label: "DC Loopback Parent Pool Size"
+        description: "Parent IP pool size for all loopbacks in DC
+         (super-spines + all pods)"
+        kind: Number
+        optional: true
+        default_value: 24
+        order_weight: 2000
+        parameters:
+          min_value: 16
+          max_value: 128
+
+      - name: dc_technical_parent_size
+        label: "DC Technical Parent Pool Size"
+        description: "Parent IP pool size for all P2P links in DC
+         (fabric + all pods)"
+        kind: Number
+        optional: true
+        default_value: 20
+        order_weight: 2100
+        parameters:
+          min_value: 16
+          max_value: 128
+
+      - name: loopback_prefix_size
+        label: "Loopback Prefix Size"
+        description: "IP prefix size for individual loopback interfaces"
+        kind: Number
+        optional: true
+        default_value: 32
+        order_weight: 2200
+        parameters:
+          min_value: 24
+          max_value: 128
+
+      - name: p2p_prefix_size
+        label: "Point-to-Point Prefix Size"
+        description: "IP prefix size for individual P2P links"
+        kind: Number
+        optional: true
+        default_value: 31
+        order_weight: 2300
+        parameters:
+          min_value: 24
+          max_value: 128

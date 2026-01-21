@@ -127,25 +127,6 @@ nodes:
         optional: false
         default_value: true
         order_weight: 600
-      - name: strategy
-        kind: Dropdown
-        label: Strategy
-        optional: false
-        order_weight: 650
-        choices:
-          - name: ospf-ibgp
-            label: ospf-ibgp
-            color: "#aedcee"
-          - name: ebgp-ibgp
-            label: ebgp-ibgp
-            color: "#7f7fff"
-        default_value: ebgp-ibgp
-      - name: underlay
-        label: IPV6 underlay
-        kind: Boolean
-        optional: false
-        default_value: false
-        order_weight: 660
       - name: amount_of_super_spines
         label: Amount of Super Spine switches
         kind: Number
@@ -193,6 +174,16 @@ nodes:
         optional: true
         identifier: "dc__site_layout"
         order_weight: 900
+        on_delete: no-action
+      - name: design
+        label: "Data Center Design"
+        description: "Logical network topology design for this data center"
+        peer: TopologyDataCenterDesign
+        kind: Attribute
+        cardinality: one
+        optional: true
+        identifier: "dc__design"
+        order_weight: 950
         on_delete: no-action
       - name: super_spine_template
         peer: TemplateDcimPhysicalDevice
@@ -334,7 +325,7 @@ nodes:
         peer: TemplateDcimPhysicalDevice
         kind: Attribute
         cardinality: one
-        optional: true
+        optional: false
         identifier: "pod__spine_template"
         order_weight: 1100
         on_delete: no-action

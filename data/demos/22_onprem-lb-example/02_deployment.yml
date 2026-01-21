@@ -6,10 +6,10 @@ spec:
   data:
     - name: DC1
       index: 1
+      site_layout: large-dc-layout
       amount_of_super_spines: 2
       super_spine_template: N9K_C9336C_FX2_SUPER_SPINE
       fabric_interface_sorting_method: top_down
-      design_pattern: L-Hierarchical
       devices:
         - kind: DcimPhysicalDevice
           data:
@@ -27,12 +27,9 @@ spec:
         kind: TopologyPod
         data:
           - index: 1
-            deployment_type: middle_rack
-            spine_template: N9K-C9364C-GX_SPINE
-            amount_of_spines: 3
-            number_of_rows: 4
-            maximum_leafs_per_row: 4
-            maximum_tors_per_row: 4
+            site_layout: medium-dc-layout
+            design: spine-leaf-middlerack-4spine
+            spine_template: N9K_C9336C_FX2_SPINE
             member_of_groups:
               - topologies_pod
             devices:
@@ -73,12 +70,9 @@ spec:
                   device_type: Thunder
                   status: active
           - index: 2
-            deployment_type: mixed
-            spine_template: N9K-C9364C-GX_SPINE
-            amount_of_spines: 3
-            number_of_rows: 4
-            maximum_leafs_per_row: 4
-            maximum_tors_per_row: 10
+            site_layout: medium-dc-layout
+            design: spine-leaf-middlerack-4spine
+            spine_template: N9K_C9336C_FX2_SPINE
             member_of_groups:
               - topologies_pod
             devices:

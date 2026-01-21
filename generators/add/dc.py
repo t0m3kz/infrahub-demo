@@ -76,11 +76,14 @@ class DCTopologyGenerator(CommonGenerator):
             "maximum_switches": 16,  # Increased for larger technical pool
         }
 
+        # Get underlay from design (fallback to False for backward compatibility)
+        ipv6_underlay = self.data.design.underlay if self.data.design else False
+
         await self.allocate_resource_pools(
             id=dc_id,
             strategy="fabric",
             pools=pool_params,
-            ipv6=self.data.underlay,
+            ipv6=ipv6_underlay,
         )
 
         await self.create_devices(

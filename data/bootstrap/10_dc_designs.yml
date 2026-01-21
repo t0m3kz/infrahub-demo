@@ -1,0 +1,65 @@
+---
+# Data Center Design Templates - Fabric Architecture Principles
+# These define the logical network architecture for data center fabrics
+# Loaded at bootstrap time, referenced by DC instances at deployment time
+
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologyDataCenterDesign
+  data:
+    - name: "ebgp-ipv4-standard"
+      description: "Standard eBGP underlay with iBGP overlay, IPv4
+       - The 'it just works' option for people who value
+       sleep over innovation"
+      strategy: "ebgp-ibgp"
+      underlay: false
+      max_super_spine_count: 4
+      max_pod_count: 16
+      naming_convention: "standard"
+      dc_loopback_parent_size: 24
+      dc_technical_parent_size: 20
+      loopback_prefix_size: 32
+      p2p_prefix_size: 31
+
+    - name: "ebgp-ipv6-standard"
+      description: "eBGP underlay with iBGP overlay, IPv6
+       - For hipsters who think 128-bit addresses
+       make them special"
+      strategy: "ebgp-ibgp"
+      underlay: true
+      max_super_spine_count: 4
+      max_pod_count: 16
+      naming_convention: "standard"
+      dc_loopback_parent_size: 120
+      dc_technical_parent_size: 116
+      loopback_prefix_size: 128
+      p2p_prefix_size: 127
+
+    - name: "ospf-ipv4-standard"
+      description: "OSPF underlay with iBGP overlay, IPv4
+       - Because some people still believe in link-state
+       databases and vendor lock-in"
+      strategy: "ospf-ibgp"
+      underlay: false
+      max_super_spine_count: 4
+      max_pod_count: 16
+      naming_convention: "standard"
+      dc_loopback_parent_size: 24
+      dc_technical_parent_size: 20
+      loopback_prefix_size: 32
+      p2p_prefix_size: 31
+
+    - name: "ebgp-ipv4-large"
+      description: "Large-scale eBGP fabric (up to 64 pods)
+       - For when 16 pods isn't enough to justify
+       your salary"
+      strategy: "ebgp-ibgp"
+      underlay: false
+      max_super_spine_count: 8
+      max_pod_count: 64
+      naming_convention: "hierarchical"
+      dc_loopback_parent_size: 22
+      dc_technical_parent_size: 18
+      loopback_prefix_size: 32
+      p2p_prefix_size: 31

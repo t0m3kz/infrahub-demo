@@ -43,9 +43,9 @@ nodes:
             description: "Mix of ToR and middle rack deployment"
             color: "#BF7F7F"
 
-      - name: spine_count
-        label: "Number of Spine Switches"
-        description: "Number of spine switches in this design"
+      - name: max_spine_count
+        label: "Maximum Spine Switches"
+        description: "Maximum number of spine switches allowed in this design"
         kind: Number
         optional: false
         default_value: 4
@@ -117,36 +117,6 @@ nodes:
             description: "ROLE-INDEX"
             color: "#BF7FBF"
 
-      - name: leaf_interface_sorting_method
-        label: "Leaf Interface Sorting"
-        description: "How interfaces are assigned on leaf switches"
-        kind: Dropdown
-        optional: false
-        default_value: bottom_up
-        order_weight: 1300
-        choices:
-          - name: bottom_up
-            color: "#869FB3"
-            description: "Assign interfaces bottom-up"
-          - name: top_down
-            color: "#004E64"
-            description: "Assign interfaces top-down"
-
-      - name: spine_interface_sorting_method
-        label: "Spine Interface Sorting"
-        description: "How interfaces are assigned on spine switches"
-        kind: Dropdown
-        optional: false
-        default_value: bottom_up
-        order_weight: 1400
-        choices:
-          - name: bottom_up
-            color: "#869FB3"
-            description: "Assign interfaces bottom-up"
-          - name: top_down
-            color: "#004E64"
-            description: "Assign interfaces top-down"
-
       - name: loopback_prefix_size
         label: "Loopback Prefix Size"
         description: "IP prefix size for loopback interfaces (/32 or /128)"
@@ -181,17 +151,6 @@ nodes:
           max_value: 32
 
     relationships:
-      - name: spine_template
-        label: "Spine Device Template"
-        description: "Device template for spine switches"
-        peer: TemplateDcimPhysicalDevice
-        kind: Attribute
-        cardinality: one
-        optional: false
-        identifier: "pod_design__spine_template"
-        order_weight: 3000
-        on_delete: no-action
-
       - name: compatible_layouts
         label: "Compatible Site Layouts"
         description: |

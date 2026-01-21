@@ -4,6 +4,8 @@
 
 **Location:** London 🇬🇧 | **Size:** Small | **Platform:** Dell SONiC | **Design:** `spine-leaf-tor-4spine`
 
+**Fabric Design:** `ebgp-ipv4-standard` - eBGP for flat topologies (because hierarchy is so last decade)
+
 Brexit happened, but your data stays! Pure flat ToR—every ToR connects directly to spines, zero middle layers, zero bureaucracy. Networking speed dating with commitment issues. If you love low latency and hate explaining why you need a leaf layer, this is your DC.
 
 **Philosophy:** "I don't want any extra hops" (and we mean it).

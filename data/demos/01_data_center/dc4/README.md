@@ -6,6 +6,8 @@
 
 **Platform:** Edgecore with SONiC - So vendor-neutral, even your hipster barista could deploy it between DJ sets.
 
+**Fabric Design:** `ebgp-ipv6-standard` - IPv6 underlay because Berlin is too cool for legacy protocols
+
 **Use Case:** When the architecture team can't agree on mixed vs flat ToR and someone says "why not both?" Pod 1 goes full mixed deployment, Pod 2 goes pure flat ToR. It's like having a hybrid car that's also a motorcycle. Confusing? Yes. Flexible? Absolutely.
 
 ---

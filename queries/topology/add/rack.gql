@@ -55,24 +55,12 @@ fragment PodDesignFields on TopologyPodDesign {
   id
   name { value }
   deployment_type { value }
-  spine_count { value }
+  max_spine_count { value }
   max_leafs_per_row { value }
   max_tors_per_row { value }
   naming_convention { value }
-  leaf_interface_sorting_method { value }
-  spine_interface_sorting_method { value }
-  spine_template {
-    node {
-      id
-      interfaces(role__value: "downlink") {
-        edges {
-          node {
-            name { value }
-          }
-        }
-      }
-    }
-  }
+  technical_pool_size { value }
+  loopback_pool_size { value }
 }
 
 fragment PodFields on TopologyPod {

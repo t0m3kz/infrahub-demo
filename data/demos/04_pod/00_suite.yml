@@ -1,4 +1,5 @@
 ---
+# Suite-4 for POD-4
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
@@ -6,5 +7,5 @@ spec:
   data:
     - suite_name: "Suite-4"
       index: 4
-      shortname: "muc-1-s-4"
-      parent: muc-1
+      shortname: ktw-1-s-4
+      parent: ktw-1

@@ -80,9 +80,17 @@ spec:
                   icon: "mdi:floor-plan"
                   description: "Physical floor plan layouts for data centers"
 
+                - name: DataCenterDesign
+                  namespace: Topology
+                  label: Data Center Designs
+                  kind: TopologyDataCenterDesign
+                  icon: "mdi:server-network"
+                  description: "Logical fabric architecture designs
+                   for data centers"
+
                 - name: PodDesign
                   namespace: Topology
-                  label: Pod Designs
+                  label: Pod Templates
                   kind: TopologyPodDesign
                   icon: "mdi:vector-arrange-above"
                   description: "Logical network topology designs for pods"

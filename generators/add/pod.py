@@ -133,8 +133,15 @@ class PodTopologyGenerator(CommonGenerator):
                 naming_conv = "standard"
 
             # Design is now properly typed as PodDesign model
-            spine_count = design.spine_count
-            spine_template = design.spine_template
+            # Use actual spine count from pod, validate against design maximum
+            spine_count = self.data.amount_of_spines
+            max_spine_count = design.max_spine_count
+            # Type narrowing: validate both are not None before comparison
+            if spine_count is not None and max_spine_count is not None and max_spine_count > 0:
+                if spine_count > max_spine_count:
+                    raise RuntimeError(
+                        f"Pod {self.data.name} has {spine_count} spines, exceeds design maximum of {max_spine_count}"
+                    )
 
             # Validate layout compatibility if both are present
             if self.data.site_layout:
@@ -144,7 +151,9 @@ class PodTopologyGenerator(CommonGenerator):
             design = None
             naming_conv = "standard"
             spine_count = self.data.amount_of_spines
-            spine_template = self.data.spine_template
+
+        # Always get spine_template from pod instance (implementation detail)
+        spine_template = self.data.spine_template
 
         indexes: list[int] = [dc.index or 1, self.data.index]
 
@@ -223,13 +232,9 @@ class PodTopologyGenerator(CommonGenerator):
             )
             return
 
-        # Extract maximum_spines from design, default to spine_count if None
-        maximum_spines = (
-            design.maximum_spines
-            if design and design.maximum_spines is not None
-            else (design.spine_count if design else 2)
-        )
-
+        # Use actual spine count for offset calculation
+        # Offset = (pod_index - 1) * spines_per_pod
+        # This assumes all pods have the same number of spines
         await self.create_cabling(
             bottom_devices=spines,
             bottom_interfaces=spine_interfaces,
@@ -237,7 +242,7 @@ class PodTopologyGenerator(CommonGenerator):
             top_interfaces=super_spine_interfaces,
             strategy="pod",
             options={
-                "cabling_offset": ((self.data.index - 1) * (maximum_spines or 0)),
+                "cabling_offset": ((self.data.index - 1) * spine_count),
                 "top_sorting": self.data.spine_interface_sorting_method,
                 "bottom_sorting": self.data.spine_interface_sorting_method,
                 "pool": f"{self.pod_name}-technical-pool",

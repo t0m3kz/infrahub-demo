@@ -7,6 +7,7 @@ spec:
     - name: DC2
       index: 1
       site_layout: small-dc-layout
+      design: ospf-ipv4-standard
       amount_of_super_spines: 2
       super_spine_template: DCS-7050CX3-32C-R_SUPER_SPINE
       fabric_interface_sorting_method: top_down
@@ -18,10 +19,12 @@ spec:
           - index: 1
             site_layout: small-dc-layout
             design: spine-leaf-middlerack-4spine
+            spine_template: DCS-7050CX3-32C-R_SPINE
             member_of_groups:
               - topologies_pod
           - index: 2
             site_layout: small-dc-layout
             design: spine-leaf-middlerack-4spine
+            spine_template: DCS-7050CX3-32C-R_SPINE
             member_of_groups:
               - topologies_pod

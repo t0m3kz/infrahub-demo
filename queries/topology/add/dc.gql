@@ -10,8 +10,18 @@ query topology_dc($name: String!) {
           index {
             value
           }
-          underlay{
-            value
+          design {
+            node {
+              strategy { value }
+              underlay { value }
+              max_super_spine_count { value }
+              max_pod_count { value }
+              naming_convention { value }
+              dc_loopback_parent_size { value }
+              dc_technical_parent_size { value }
+              loopback_prefix_size { value }
+              p2p_prefix_size { value }
+            }
           }
           children {
             edges {
