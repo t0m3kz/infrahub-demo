@@ -35,6 +35,8 @@ nodes:
     namespace: Organization
     description: Device Manufacturer
     icon: mdi:domain
+    inherit_from:
+      - OrganizationGeneric
     include_in_menu: true
     menu_placement: OrganizationGeneric
     human_friendly_id:
@@ -42,15 +44,6 @@ nodes:
     order_by:
       - name__value
     display_label: "{{name__value}}"
-    attributes:
-      - name: name
-        kind: Text
-        unique: true
-        order_weight: 1000
-      - name: description
-        kind: Text
-        optional: true
-        order_weight: 1200
     relationships:
       - name: device_type
         peer: DcimDeviceType
