@@ -28,6 +28,13 @@ spec:
             label: Customers
             kind: OrganizationCustomer
             icon: "mdi:account-group"
+
+          - namespace: Organization
+            name: Contact
+            label: Contacts
+            kind: OrganizationContact
+            icon: "mdi:user"
+
     # ===================== LOCATION =====================
     - namespace: Location
       name: Generic
