@@ -220,6 +220,7 @@ def run_tests(context: Context) -> None:
     """Run all tests."""
     context.run("pytest -vv tests", pty=True)
 
+
 @task
 def clean(context: Context) -> None:
     """Remove all build, test, coverage and Python artifacts."""
