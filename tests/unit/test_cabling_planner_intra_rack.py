@@ -114,7 +114,7 @@ class TestCablingPlannerIntraRackScenario:
 
         # Count connections per Leaf to verify load balancing
         leaf_connection_count: dict[str, int] = {}
-        for src, dst in cabling_plan:
+        for _src, dst in cabling_plan:
             leaf_name = dst.device.display_label
             leaf_connection_count[leaf_name] = (
                 leaf_connection_count.get(leaf_name, 0) + 1

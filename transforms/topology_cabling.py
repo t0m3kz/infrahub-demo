@@ -170,7 +170,7 @@ class TopologyCabling(InfrahubTransform):
         """
         if isinstance(hfid, list) and len(hfid) >= 2:
             return hfid[0], hfid[1]
-        elif isinstance(hfid, str):
+        if isinstance(hfid, str):
             parts = hfid.split("/")
             if len(parts) >= 2:
                 return parts[0], "/".join(parts[1:])

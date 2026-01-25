@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import hashlib
-from typing import TYPE_CHECKING, Any, Literal, Optional, TypeVar
+from typing import TYPE_CHECKING, Any, Literal, TypeVar
 
 from infrahub_sdk.exceptions import ValidationError
 from infrahub_sdk.generator import InfrahubGenerator
@@ -13,10 +13,6 @@ from infrahub_sdk.protocols import (
 from pydantic import BaseModel
 
 from .helpers import CablingPlanner, DeviceNamingConfig
-
-if TYPE_CHECKING:
-    pass
-
 from .schema_protocols import (
     DcimCable,
     DcimPhysicalDevice,
@@ -64,8 +60,8 @@ class CommonGenerator(InfrahubGenerator):
         pools: dict[str, Any],
         id: str,
         fabric_name: str,
-        pod_name: Optional[str] = None,
-        ipv6: Optional[bool] = False,
+        pod_name: str | None = None,
+        ipv6: bool = False,
     ) -> None:
         """Ensure required per-pod / fabric pools exist.
 
@@ -184,7 +180,7 @@ class CommonGenerator(InfrahubGenerator):
         deployment_id: str,
         template: dict[str, Any],
         naming_convention: Literal["standard", "hierarchical", "flat"] = "flat",
-        options: Optional[dict] = None,
+        options: dict | None = None,
     ) -> list[str]:
         """Create devices using a consolidated options dict and batch creation."""
         # Normalize options
@@ -192,11 +188,11 @@ class CommonGenerator(InfrahubGenerator):
         pod_name: str = options.get("pod_name", "")
         fabric_name: str = options.get("fabric_name", "")
         virtual: bool = bool(options.get("virtual", False))
-        indexes: Optional[list[int]] = options.get("indexes", None)
+        indexes: list[int] | None = options.get("indexes", None)
         allocate_loopback: bool = bool(options.get("allocate_loopback", False))
         rack: str = options.get("rack", "")
 
-        device_prefix: str = fabric_name if not pod_name else pod_name
+        device_prefix: str = pod_name or fabric_name
 
         device_names: list[str] = sorted(
             [
@@ -342,7 +338,7 @@ class CommonGenerator(InfrahubGenerator):
             "intra_rack_mixed",
             "custom",
         ] = "rack",
-        options: Optional[dict[str, Any]] = None,
+        options: dict[str, Any] | None = None,
     ) -> None:
         """Create cabling connections between device layers with enhanced hierarchical support."""
 

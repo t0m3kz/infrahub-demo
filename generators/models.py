@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, List, Optional
+from typing import Any
 
 from pydantic import BaseModel, field_validator
 
@@ -10,7 +10,7 @@ from pydantic import BaseModel, field_validator
 # Shared models
 class Platform(BaseModel):
     id: str
-    name: Optional[str] = None
+    name: str | None = None
 
 
 class DeviceType(BaseModel):
@@ -19,24 +19,24 @@ class DeviceType(BaseModel):
 
 class Interface(BaseModel):
     name: str
-    role: Optional[str] = None
+    role: str | None = None
 
 
 class DesignPattern(BaseModel):
     """Data Center design pattern - DC-level parameters only."""
 
-    maximum_super_spines: Optional[int] = None
-    maximum_pods: Optional[int] = None
-    maximum_spines: Optional[int] = None
-    maximum_switches: Optional[int] = None
+    maximum_super_spines: int | None = None
+    maximum_pods: int | None = None
+    maximum_spines: int | None = None
+    maximum_switches: int | None = None
     naming_convention: str = "standard"
 
 
 class Template(BaseModel):
     id: str
-    platform: Optional[Platform] = None
-    device_type: Optional[DeviceType] = None
-    interfaces: List[Interface] = []
+    platform: Platform | None = None
+    device_type: DeviceType | None = None
+    interfaces: list[Interface] = []
 
 
 class DeviceRack(BaseModel):
@@ -49,9 +49,9 @@ class DeviceRack(BaseModel):
 
 class Device(BaseModel):
     name: str
-    role: Optional[str] = None
-    rack: Optional[DeviceRack] = None  # For leaf devices in mixed deployment
-    interfaces: List[Interface] = []
+    role: str | None = None
+    rack: DeviceRack | None = None  # For leaf devices in mixed deployment
+    interfaces: list[Interface] = []
 
 
 class Pool(BaseModel):
@@ -61,46 +61,46 @@ class Pool(BaseModel):
 # DC model
 class DCPod(BaseModel):
     id: str
-    checksum: Optional[str] = None
+    checksum: str | None = None
 
 
 class DCModel(BaseModel):
     id: str
     name: str
     index: int
-    underlay: Optional[bool] = False
+    underlay: bool | None = False
     design_pattern: DesignPattern
     amount_of_super_spines: int
     super_spine_template: Template
-    children: List[DCPod] = []
+    children: list[DCPod] = []
 
 
 # Pod model
 class PodParent(BaseModel):
     id: str
-    devices: List[Device]
+    devices: list[Device]
     name: str
-    index: Optional[int] = None
-    design_pattern: Optional[DesignPattern] = None
-    super_spine_template: Optional[Template] = None
+    index: int | None = None
+    design_pattern: DesignPattern | None = None
+    super_spine_template: Template | None = None
 
 
 class PodModel(BaseModel):
     id: str
     name: str
-    checksum: Optional[str] = None
+    checksum: str | None = None
     index: int
     deployment_type: str
     amount_of_spines: int
-    number_of_rows: Optional[int] = 1
-    maximum_leafs_per_row: Optional[int] = None
-    maximum_tors_per_row: Optional[int] = None
+    number_of_rows: int | None = 1
+    maximum_leafs_per_row: int | None = None
+    maximum_tors_per_row: int | None = None
     leaf_interface_sorting_method: str
     spine_interface_sorting_method: str
     spine_template: Template
-    spine_count: Optional[int] = 0
-    leaf_count: Optional[int] = 0
-    tor_count: Optional[int] = 0
+    spine_count: int | None = 0
+    leaf_count: int | None = 0
+    tor_count: int | None = 0
     parent: PodParent
 
 
@@ -131,8 +131,8 @@ class SimpleRack(BaseModel):
     id: str
     index: int
     row_index: int
-    leafs: Optional[List[QuantityOnly]] = []
-    tors: Optional[List[QuantityOnly]] = []
+    leafs: list[QuantityOnly] | None = []
+    tors: list[QuantityOnly] | None = []
 
 
 class RackPod(BaseModel):
@@ -147,8 +147,8 @@ class RackPod(BaseModel):
     prefix_pool: Pool
     deployment_type: str
     spine_template: Template
-    maximum_leafs_per_row: Optional[int] = None
-    maximum_tors_per_row: Optional[int] = None
+    maximum_leafs_per_row: int | None = None
+    maximum_tors_per_row: int | None = None
     # Spine and leaf devices queried separately when needed (on-demand for specific deployment types)
 
 
@@ -159,8 +159,8 @@ class RackModel(BaseModel):
     index: int
     rack_type: str
     row_index: int
-    leafs: Optional[List[DeviceRole]] = []
-    tors: Optional[List[DeviceRole]] = []
+    leafs: list[DeviceRole] | None = []
+    tors: list[DeviceRole] | None = []
     pod: RackPod
 
 
@@ -170,17 +170,17 @@ class CableEndpoint(BaseModel):
 
     id: str
     name: str
-    interface_type: Optional[str] = None
+    interface_type: str | None = None
     device_id: str
     device_name: str
-    device_role: Optional[str] = None
+    device_role: str | None = None
 
 
 class Cable(BaseModel):
     """Cable information including both endpoints."""
 
     id: str
-    endpoints: List[CableEndpoint] = []
+    endpoints: list[CableEndpoint] = []
 
 
 class EndpointInterface(BaseModel):
@@ -188,10 +188,10 @@ class EndpointInterface(BaseModel):
 
     id: str
     name: str
-    interface_type: Optional[str] = None
-    role: Optional[str] = None
-    status: Optional[str] = None
-    cable: Optional[Cable] = None
+    interface_type: str | None = None
+    role: str | None = None
+    status: str | None = None
+    cable: Cable | None = None
 
     @field_validator("cable", mode="before")
     @classmethod
@@ -207,9 +207,9 @@ class RackDevice(BaseModel):
 
     id: str
     name: str
-    role: Optional[str] = None
-    rack_row_index: Optional[int] = None
-    interfaces: List[EndpointInterface] = []
+    role: str | None = None
+    rack_row_index: int | None = None
+    interfaces: list[EndpointInterface] = []
 
 
 class EndpointPod(BaseModel):
@@ -230,7 +230,7 @@ class EndpointRack(BaseModel):
     row_index: int
     rack_type: str
     pod: EndpointPod
-    devices: List[RackDevice] = []  # Leafs and ToRs in same rack
+    devices: list[RackDevice] = []  # Leafs and ToRs in same rack
 
 
 class EndpointDevice(BaseModel):
@@ -238,9 +238,9 @@ class EndpointDevice(BaseModel):
 
     id: str
     name: str
-    role: Optional[str] = None
-    rack: Optional[EndpointRack] = None
-    interfaces: List[EndpointInterface] = []
+    role: str | None = None
+    rack: EndpointRack | None = None
+    interfaces: list[EndpointInterface] = []
 
 
 class EndpointModel(BaseModel):

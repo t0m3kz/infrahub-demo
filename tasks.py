@@ -95,8 +95,8 @@ def ensure_branch_exists(context: Context, branch: str) -> bool:
 
     # Check if error is "already exists"
     error_output = (
-        (create_result.stderr if create_result.stderr else "")  # type: ignore
-        + (create_result.stdout if create_result.stdout else "")  # type: ignore
+        (create_result.stderr or "")  # type: ignore
+        + (create_result.stdout or "")  # type: ignore
     ).lower()
 
     if "already exists" in error_output:

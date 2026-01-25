@@ -18,22 +18,20 @@ class TestInfrahubDockerWithClient(TestInfrahubDocker):
     @pytest.fixture(scope="class")
     def async_client_main(self, infrahub_port: int) -> InfrahubClient:
         """Async Infrahub client on main branch."""
-        client = InfrahubClient(
+        return InfrahubClient(
             config=Config(
                 address=f"http://localhost:{infrahub_port}",
             )
         )
-        return client
 
     @pytest.fixture(scope="class")
     def client_main(self, infrahub_port: int) -> InfrahubClientSync:
         """Sync Infrahub client on main branch."""
-        client = InfrahubClientSync(
+        return InfrahubClientSync(
             config=Config(
                 address=f"http://localhost:{infrahub_port}",
             )
         )
-        return client
 
     @pytest.fixture(scope="class")
     def client(self, infrahub_port: int, default_branch: str) -> InfrahubClientSync:
@@ -57,7 +55,7 @@ class TestInfrahubDockerWithClient(TestInfrahubDocker):
         env["INFRAHUB_ADDRESS"] = address
         env["INFRAHUB_MAX_CONCURRENT_EXECUTION"] = "10"
 
-        result = subprocess.run(
+        return subprocess.run(
             command,
             shell=True,
             capture_output=True,
@@ -66,4 +64,3 @@ class TestInfrahubDockerWithClient(TestInfrahubDocker):
             check=False,
             cwd=PROJECT_DIRECTORY,
         )
-        return result

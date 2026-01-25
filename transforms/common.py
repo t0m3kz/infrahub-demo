@@ -14,8 +14,8 @@ from utils.data_cleaning import clean_data, get_data
 
 __all__ = [
     "clean_data",
-    "get_data",
     "get_bgp_profile",
+    "get_data",
     "get_interfaces",
     "get_ospf",
     "get_vlans",

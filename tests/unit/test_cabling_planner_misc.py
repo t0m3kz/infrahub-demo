@@ -25,8 +25,10 @@ class TestCablingPlannerCablingPlanStructure:
             assert isinstance(connection, tuple)
             assert len(connection) == 2
             src, dst = connection
-            assert hasattr(src, "name") and hasattr(src, "device")
-            assert hasattr(dst, "name") and hasattr(dst, "device")
+            assert hasattr(src, "name")
+            assert hasattr(src, "device")
+            assert hasattr(dst, "name")
+            assert hasattr(dst, "device")
 
 
 class TestCablingPlannerInvalidScenario:
