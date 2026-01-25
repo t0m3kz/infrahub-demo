@@ -560,11 +560,11 @@ requires-dist = [
 dev = [
     { name = "datamodel-code-generator", specifier = ">=0.35.0" },
     { name = "infrahub-testcontainers", specifier = ">=1.5.2" },
-    { name = "invoke", specifier = ">=2.2.0" },
+    { name = "invoke", specifier = ">=2.2.1" },
     { name = "mypy", specifier = ">=1.15.0" },
     { name = "pytest", specifier = ">=8.3.5,<9.0.0" },
     { name = "pytest-asyncio", specifier = ">=0.26.0" },
-    { name = "ruff", specifier = ">=0.11.4" },
+    { name = "ruff", specifier = ">=0.14.8" },
     { name = "types-pyyaml", specifier = ">=6.0.12.20250809" },
     { name = "yamllint", specifier = ">=1.37.1" },
 ]
