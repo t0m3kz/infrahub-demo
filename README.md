@@ -165,6 +165,44 @@ Explore LLM upgrades and organic growth patterns—all in one place, please make
 
 Brace yourself: even more questionable use cases, wild topologies, and vendor drama are coming soon. If you want to see even more chaos, star this repo—so the author can unlock extra GitHub tools and automate his caffeine intake. Your star may be the difference between a new feature and another debugging session at midnight!
 
+## Development Workflow
+
+To ensure code quality and a smooth development experience, this project uses `prek` (modern replacement for pre-commit) and `invoke` tasks.
+
+### 1. Setup Environment
+
+Copy the example environment file:
+
+```bash
+cp .env.example .env
+```
+
+### 2. Install Development Dependencies
+
+```bash
+uv sync
+```
+
+### 3. Lint/Format the repo
+
+Run checks against all files
+
+```bash
+uv run prek --all-files
+```
+
+Run checks against against what changed
+
+```bash
+uv run prek
+```
+
+Update pre-commit repo versions
+
+```bash
+uv run prek auto-update
+```
+
 ## CI/CD
 
 This project uses GitHub Actions for continuous integration. All pushes and pull requests are tested for lint, type checks, and unit tests.

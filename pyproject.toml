@@ -18,6 +18,7 @@ dev = [
     "infrahub-testcontainers>=1.5.2",
     "invoke>=2.2.1",
     "mypy>=1.15.0",
+    "prek>=0.3.0",
     "pytest>=8.3.5,<9.0.0",
     "pytest-asyncio>=0.26.0",
     "ruff>=0.14.8",
