@@ -220,6 +220,20 @@ def run_tests(context: Context) -> None:
     """Run all tests."""
     context.run("pytest -vv tests", pty=True)
 
+@task
+def clean(context: Context) -> None:
+    """Remove all build, test, coverage and Python artifacts."""
+    dirs = [
+        "__pycache__",
+        ".ruff_cache",
+        ".mypy_cache",
+        ".pytest_cache",
+        ".coverage",
+    ]
+    for d in dirs:
+        context.run(f"find . -name '{d}' -exec rm -rf {{}} +", warn=True)
+    print("✨ Cleaned up project artifacts.")
+
 
 @task
 def validate(context: Context) -> None:
