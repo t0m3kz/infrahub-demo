@@ -1,4 +1,5 @@
 ---
+# yaml-language-server: $schema=https://schema.infrahub.app/python-sdk/repository-config/latest.json
 jinja2_transforms:
   # Containerlab
   - name: topology_clab
