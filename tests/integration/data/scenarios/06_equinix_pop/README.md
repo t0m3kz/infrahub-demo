@@ -7,6 +7,7 @@ Deploy distributed Points of Presence across multiple locations like the Federat
 ## What Gets Created
 
 **Infrahub Objects Created:**
+
 - TopologyPOP
 - LocationBuilding
 - EquinixFacility
@@ -45,6 +46,7 @@ Each Point of Presence includes:
 ## Multi-Location Deployment
 
 Deploy POPs in multiple locations:
+
 - North America
 - Europe
 - Asia Pacific
@@ -59,6 +61,7 @@ uv run invoke clab up --pop
 ```
 
 This simulates:
+
 - Multiple POPs
 - Network connectivity
 - Routing protocols
@@ -75,7 +78,8 @@ This simulates:
 ## Data Requirements
 
 Place your POP definitions in:
-```
+
+```text
 demos/equinix_pop/data/
 ├── locations/
 ├── facilities/
@@ -85,6 +89,7 @@ demos/equinix_pop/data/
 ## Configuration
 
 Each POP includes:
+
 - BGP peering setup
 - Routing policies
 - Firewall rules
@@ -93,6 +98,7 @@ Each POP includes:
 ## Troubleshooting
 
 Verify POP connectivity:
+
 ```bash
 uv run infrahubctl query topology --pop
 ```
@@ -100,6 +106,7 @@ uv run infrahubctl query topology --pop
 ## Related Services
 
 This demo integrates with:
+
 - Data Center infrastructure
 - Multi-tenant networks
 - Security policies

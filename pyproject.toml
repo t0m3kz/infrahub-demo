@@ -2,9 +2,9 @@
 authors = [
     {name = "Tomek Zajac", email = "tomek@mastuazi.com"},
 ]
-requires-python = "<3.13,>=3.10"
+requires-python = ">=3.10,<3.13"
 dependencies = [
-    "invoke<3.0.0,>=2.2.0",
+    "invoke>=2.2.0,<3.0.0",
     "infrahub-sdk[all]>=1.15.0b0,<2.0.0",
 ]
 name = "infrahub-demo"
@@ -16,11 +16,12 @@ readme = "README.md"
 dev = [
     "datamodel-code-generator>=0.35.0",
     "infrahub-testcontainers>=1.5.2",
-    "invoke>=2.2.0",
+    "invoke>=2.2.1",
     "mypy>=1.15.0",
+    "prek>=0.3.0",
     "pytest>=8.3.5,<9.0.0",
     "pytest-asyncio>=0.26.0",
-    "ruff>=0.11.4",
+    "ruff>=0.14.8",
     "types-pyyaml>=6.0.12.20250809",
     "yamllint>=1.37.1",
 ]
@@ -38,3 +39,45 @@ follow_untyped_imports = true
 asyncio_mode = "auto"
 testpaths = ["tests"]
 asyncio_default_fixture_loop_scope = "function"
+
+[tool.ruff]
+#line-length = 120
+target-version = "py310"
+
+[tool.ruff.lint]
+preview = true
+
+task-tags = ["FIXME", "TODO", "XXX"]
+
+select = [
+    "B",
+    "FBT",
+    "FURB",
+    "I",
+    "PT",
+    "PTH",
+    "RET",
+    "SIM",
+    "TC",
+    "TID",
+    "UP",
+    "YTT",
+]
+
+ignore = [
+    "B905",
+    "FBT001",
+    "FBT002",
+    "FBT003",
+    "FURB152",
+    "SIM102",
+    "SIM113",
+    "TC006",
+]
+
+#https://docs.astral.sh/ruff/formatter/black/
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+skip-magic-trailing-comma = false
+line-ending = "auto"

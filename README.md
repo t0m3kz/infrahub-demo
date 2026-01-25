@@ -138,32 +138,70 @@ uv run invoke load-events
 
 #### Single-Vendor Deployments (DC1-DC4)
 
-| Scenario | Location | Vendor | Deployment | Description |
-|----------|----------|--------|------------|-------------|
-| **[DC1](data/demos/01_data_center/dc1/)** | Munich 🇩🇪 | Cisco | All (MR+Mixed+ToR) | Hierarchy Overkill: All the racks, all the drama. |
-| **[DC2](data/demos/01_data_center/dc2/)** | Paris 🇫🇷 | Arista | Middle Rack | Croissants & Cheap Packets: Small, efficient, and CFO-approved. |
-| **[DC3](data/demos/01_data_center/dc3/)** | London 🇬🇧 | Dell/SONiC | Flat ToR | Brexit, No Middle Management, Maximum Sass. |
-| **[DC4](data/demos/01_data_center/dc4/)** | Berlin 🇩🇪 | Edgecore/SONiC | Mixed + ToR | Maximum Chaos, Minimum Rules. |
+| Scenario                                  | Location  | Vendor         | Deployment         | Description                                                     |
+|-------------------------------------------|-----------|----------------|--------------------|-----------------------------------------------------------------|
+| **[DC1](data/demos/01_data_center/dc1/)** | Munich 🇩🇪 | Cisco          | All (MR+Mixed+ToR) | Hierarchy Overkill: All the racks, all the drama.               |
+| **[DC2](data/demos/01_data_center/dc2/)** | Paris 🇫🇷  | Arista         | Middle Rack        | Croissants & Cheap Packets: Small, efficient, and CFO-approved. |
+| **[DC3](data/demos/01_data_center/dc3/)** | London 🇬🇧 | Dell/SONiC     | Flat ToR           | Brexit, No Middle Management, Maximum Sass.                     |
+| **[DC4](data/demos/01_data_center/dc4/)** | Berlin 🇩🇪 | Edgecore/SONiC | Mixed + ToR        | Maximum Chaos, Minimum Rules.                                   |
 
 #### Multi-Vendor Deployments (DC5-DC6)
 
-| Scenario | Location | Architecture | Description |
-|----------|----------|-------------|-------------|
-| **[DC5](data/demos/01_data_center/dc5/)** | New York 🇺🇸 | Different vendor per pod | Eurovision for Switches: 4 pods, 4 vendors, 0 peace. |
-| **[DC6](data/demos/01_data_center/dc6/)** | Katowice 🇵🇱 | Mixed vendors within pods | Silesian Buffet, Vendor Bingo, Debug & Dine. |
+| Scenario                                  | Location    | Architecture              | Description                                          |
+|-------------------------------------------|-------------|---------------------------|------------------------------------------------------|
+| **[DC5](data/demos/01_data_center/dc5/)** | New York 🇺🇸 | Different vendor per pod  | Eurovision for Switches: 4 pods, 4 vendors, 0 peace. |
+| **[DC6](data/demos/01_data_center/dc6/)** | Katowice 🇵🇱 | Mixed vendors within pods | Silesian Buffet, Vendor Bingo, Debug & Dine.         |
 
 #### Expansion & Incremental Deployment Scenarios
 
-Explore LLM upgrades and organic growth patterns—all in one place, please make sure DC1 is alredy deployed:
+Explore LLM upgrades and organic growth patterns—all in one place, please make sure DC1 is already deployed:
 
-| Scenario | Location | Type/Architecture | Description |
-|----------|----------|-------------------|-------------|
-| **[switch](data/demos/02_switch/)** | Munich 🇩🇪 | Rack Expansion | "Just TWO more switches"—organic chaos. |
-| **[rack](data/demos/03_rack/)** | Munich 🇩🇪 | Minimal ToR | Minimalist rack: started as a test, now it's critical. |
-| **[pod](data/demos/04_pod/)** | Munich 🇩🇪 | Pod Expansion | Pod 4: because 3 wasn't enough. |
-| **[llm time](data/demos/05_llm_time/)** | Munich 🇩🇪 | Spine Expansion | Extra spines for LLMs—plausible deniability included. |
+| Scenario                                | Location  | Type/Architecture | Description                                            |
+|-----------------------------------------|-----------|-------------------|--------------------------------------------------------|
+| **[switch](data/demos/02_switch/)**     | Munich 🇩🇪 | Rack Expansion    | "Just TWO more switches"—organic chaos.                |
+| **[rack](data/demos/03_rack/)**         | Munich 🇩🇪 | Minimal ToR       | Minimalist rack: started as a test, now it's critical. |
+| **[pod](data/demos/04_pod/)**           | Munich 🇩🇪 | Pod Expansion     | Pod 4: because 3 wasn't enough.                        |
+| **[llm time](data/demos/05_llm_time/)** | Munich 🇩🇪 | Spine Expansion   | Extra spines for LLMs—plausible deniability included.  |
 
 Brace yourself: even more questionable use cases, wild topologies, and vendor drama are coming soon. If you want to see even more chaos, star this repo—so the author can unlock extra GitHub tools and automate his caffeine intake. Your star may be the difference between a new feature and another debugging session at midnight!
+
+## Development Workflow
+
+To ensure code quality and a smooth development experience, this project uses `prek` (modern replacement for pre-commit) and `invoke` tasks.
+
+### 1. Setup Environment
+
+Copy the example environment file:
+
+```bash
+cp .env.example .env
+```
+
+### 2. Install Development Dependencies
+
+```bash
+uv sync
+```
+
+### 3. Lint/Format the repo
+
+Run checks against all files
+
+```bash
+uv run prek --all-files
+```
+
+Run checks against against what changed
+
+```bash
+uv run prek
+```
+
+Update pre-commit repo versions
+
+```bash
+uv run prek auto-update
+```
 
 ## CI/CD
 

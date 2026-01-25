@@ -95,8 +95,8 @@ def ensure_branch_exists(context: Context, branch: str) -> bool:
 
     # Check if error is "already exists"
     error_output = (
-        (create_result.stderr if create_result.stderr else "")  # type: ignore
-        + (create_result.stdout if create_result.stdout else "")  # type: ignore
+        (create_result.stderr or "")  # type: ignore
+        + (create_result.stdout or "")  # type: ignore
     ).lower()
 
     if "already exists" in error_output:
@@ -219,6 +219,21 @@ def restart(context: Context, component: str = "") -> None:
 def run_tests(context: Context) -> None:
     """Run all tests."""
     context.run("pytest -vv tests", pty=True)
+
+
+@task
+def clean(context: Context) -> None:
+    """Remove all build, test, coverage and Python artifacts."""
+    dirs = [
+        "__pycache__",
+        ".ruff_cache",
+        ".mypy_cache",
+        ".pytest_cache",
+        ".coverage",
+    ]
+    for d in dirs:
+        context.run(f"find . -name '{d}' -exec rm -rf {{}} +", warn=True)
+    print("✨ Cleaned up project artifacts.")
 
 
 @task

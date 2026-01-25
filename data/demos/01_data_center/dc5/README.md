@@ -8,7 +8,7 @@
 
 **Platform:** Multi-Vendor — why settle for one when you can pay four support contracts and juggle Cisco, Arista, Dell, and Edgecore all at once?
 
-**Design Pattern:** M-Hierarchical (Medium with hierachical naming convention)
+**Design Pattern:** M-Hierarchical (Medium with hierarchical naming convention)
 
 **Use Case:**
 Pod-level vendor diversity for risk mitigation and best-of-breed selection. Each pod pledges allegiance to a different vendor—like a american version of Eurovision, but with more BGP and fewer sequins. It's middle_rack deployment across all 4 pods because hierarchy transcends vendor boundaries (and so do support tickets). Perfect for testing vendor migration strategies, proving your multi-vendor expertise at parties, and discovering which vendor's CLI makes you question your life choices.
@@ -29,12 +29,12 @@ Warning: May result in spontaneous protocol debates, inter-vendor blame games, a
 
 ### Pod Structure (Vendor Diversity Initiative)
 
-| Pod   | Spines | Vendor   | Model                | Racks | Deployment   | Personality                |
-|-------|--------|----------|----------------------|-------|-------------|----------------------------|
-| Pod 1 | 2      | Cisco    | N9K-C9364C-GX        | 2     | middle_rack | The Enterprise Standard    |
-| Pod 2 | 2      | Arista   | DCS-7050CX3-32C-R    | 2     | middle_rack | The API Enthusiast         |
-| Pod 3 | 2      | Dell     | S5232F-ON            | 2     | middle_rack | The Open Source Advocate   |
-| Pod 4 | 2      | Edgecore | 7726-32X-O           | 2     | middle_rack | The Vendor-Neutral Rebel   |
+| Pod   | Spines | Vendor   | Model             | Racks | Deployment  | Personality              |
+|-------|--------|----------|-------------------|-------|-------------|--------------------------|
+| Pod 1 | 2      | Cisco    | N9K-C9364C-GX     | 2     | middle_rack | The Enterprise Standard  |
+| Pod 2 | 2      | Arista   | DCS-7050CX3-32C-R | 2     | middle_rack | The API Enthusiast       |
+| Pod 3 | 2      | Dell     | S5232F-ON         | 2     | middle_rack | The Open Source Advocate |
+| Pod 4 | 2      | Edgecore | 7726-32X-O        | 2     | middle_rack | The Vendor-Neutral Rebel |
 
 ---
 

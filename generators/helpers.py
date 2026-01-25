@@ -8,9 +8,9 @@ from typing import TYPE_CHECKING, Any, Literal
 
 from netutils.interface import sort_interface_list
 
-from .schema_protocols import DcimPhysicalDevice, DcimPhysicalInterface
-
 if TYPE_CHECKING:
+    from .schema_protocols import DcimPhysicalDevice, DcimPhysicalInterface
+
     pass
 
 
@@ -356,13 +356,12 @@ class CablingPlanner:
                                 if (
                                     hasattr(top_intf, "cable")
                                     and top_intf.cable is not None
+                                ) and (
+                                    hasattr(top_intf.cable, "_peer")
+                                    and top_intf.cable._peer is not None
                                 ):
-                                    if (
-                                        hasattr(top_intf.cable, "_peer")
-                                        and top_intf.cable._peer is not None
-                                    ):
-                                        connected_top_devices.add(top_device)
-                                        break
+                                    connected_top_devices.add(top_device)
+                                    break
 
             if connected_top_devices:
                 existing_top_devices_per_bottom[bottom_device] = connected_top_devices
@@ -604,15 +603,14 @@ class CablingPlanner:
 
         if scenario == "pod":
             return self._build_pod_cabling_plan(cabling_offset=cabling_offset)
-        elif scenario == "rack":
+        if scenario == "rack":
             return self._build_rack_cabling_plan(cabling_offset=cabling_offset)
-        elif scenario == "intra_rack":
+        if scenario == "intra_rack":
             return self._build_intra_rack_cabling_plan()
-        elif scenario == "intra_rack_middle":
+        if scenario == "intra_rack_middle":
             return self._build_intra_rack_middle_cabling_plan()
-        elif scenario == "intra_rack_mixed":
+        if scenario == "intra_rack_mixed":
             return self._build_intra_rack_mixed_cabling_plan(
                 cabling_offset=cabling_offset
             )
-        else:
-            raise ValueError(f"Unknown cabling scenario: {scenario}")
+        raise ValueError(f"Unknown cabling scenario: {scenario}")

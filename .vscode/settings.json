@@ -1,0 +1,17 @@
+{
+    "yaml.schemas": {
+        "https://schema.infrahub.app/infrahub/schema/latest.json": "schemas/*",
+        "https://schema.infrahub.app/python-sdk/repository-config/latest.json": [
+            ".infrahub.yml",
+            ".infrahub.yaml"
+        ]
+    },
+    "[python]": {
+        "editor.defaultFormatter": "charliermarsh.ruff",
+        "editor.formatOnSave": true,
+        "editor.codeActionsOnSave": {
+            "source.fixAll": "explicit",
+            "source.organizeImports": "explicit"
+        }
+    }
+}

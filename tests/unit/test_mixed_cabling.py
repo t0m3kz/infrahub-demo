@@ -2,7 +2,6 @@
 
 from unittest.mock import Mock
 
-
 from generators.helpers import CablingPlanner
 
 

@@ -29,10 +29,10 @@ Warning: May cause spontaneous outbreaks of optimism and existential dread in eq
 
 ### Pod Structure (Zero-Middle-Layer Society)
 
-| Pod   | Spines | Model                | Racks | Deployment | Personality         |
-|-------|--------|----------------------|-------|------------|---------------------|
-| Pod 1 | 2      | S5232F-ON           | 2     | tor        | The Speed Racer     |
-| Pod 2 | 2      | S5232F-ON           | 2     | tor        | The Speed Racer's Twin |
+| Pod   | Spines | Model     | Racks | Deployment | Personality            |
+|-------|--------|-----------|-------|------------|------------------------|
+| Pod 1 | 2      | S5232F-ON | 2     | tor        | The Speed Racer        |
+| Pod 2 | 2      | S5232F-ON | 2     | tor        | The Speed Racer's Twin |
 
 ---
 

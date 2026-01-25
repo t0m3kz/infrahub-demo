@@ -177,9 +177,7 @@ class TestGetData:
                         "node": {
                             "id": "device-123",
                             "name": {"value": "leaf-01"},
-                            "platform": {
-                                "node": {"name": {"value": "arista_eos"}}
-                            },
+                            "platform": {"node": {"name": {"value": "arista_eos"}}},
                             "interfaces": {
                                 "count": 48,
                                 "edges": [
