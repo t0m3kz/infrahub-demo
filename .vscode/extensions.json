@@ -1,0 +1,14 @@
+{
+  "recommendations": [
+        "pomdtr.excalidraw-editor",
+        "wholroyd.jinja",
+        "ms-python.vscode-pylance",
+        "shardulm94.trailing-spaces",
+        "nickmillerdev.pytest-fixtures",
+        "yzhang.markdown-all-in-one",
+        "GraphQL.vscode-graphql-syntax",
+        "MS-vsliveshare.vsliveshare",
+        "charliermarsh.ruff",
+        "redhat.vscode-yaml"
+  ]
+}
