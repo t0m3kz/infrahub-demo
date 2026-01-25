@@ -1,3 +1,4 @@
+# hadolint global ignore=DL3004,DL3008,DL3009,DL3013,DL3015,DL3042,DL3059,DL4006,SC2046,SC2086
 FROM python:3.12-bookworm
 
 RUN apt-get remove -yq docker.io docker-doc docker-compose podman-docker containerd runc 2>&1 || true
