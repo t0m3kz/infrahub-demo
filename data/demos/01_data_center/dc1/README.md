@@ -27,11 +27,11 @@
 
 ### Pod Structure (The Family Dysfunction Table)
 
-| Pod | Spines | Deployment Type | Racks | Personality |
-|-----|--------|----------------|-------|-------------|
-| POD-1 | 3 | middle_rack | 4 middle racks  | The overachiever with hierarchy complex |
-| POD-2 | 3 | mixed | 8 mixed (4 middle + 4 ToR) | The confused middle child trying both strategies |
-| POD-3 | 2 | tor | 12 ToR racks | The minimalist who read "Keep It Simple" once and took it seriously |
+| Pod   | Spines | Deployment Type | Racks                      | Personality                                                         |
+|-------|--------|-----------------|----------------------------|---------------------------------------------------------------------|
+| POD-1 | 3      | middle_rack     | 4 middle racks             | The overachiever with hierarchy complex                             |
+| POD-2 | 3      | mixed           | 8 mixed (4 middle + 4 ToR) | The confused middle child trying both strategies                    |
+| POD-3 | 2      | tor             | 12 ToR racks               | The minimalist who read "Keep It Simple" once and took it seriously |
 
 ### Design Template Constraints (Or: The Rules We Pretend to Follow)
 

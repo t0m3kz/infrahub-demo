@@ -29,10 +29,10 @@ Warning: May cause spontaneous VLAN migrations, philosophical debates about port
 
 ### Pod Structure (Vendor Mix Table)
 
-| Pod   | Spines | Vendor                | Leafs/ToRs Vendor | Racks | Deployment   |
-|-------|--------|----------------------|-------------------|-------|--------------|
-| Pod 1 | 2      | Arista (DCS-7050CX3-32C-R) | Dell SONiC      | 2     | middle_rack  |
-| Pod 2 | 2      | Edgecore (7726-32X-O)      | Cisco NX-OS     | 2     | middle_rack  |
+| Pod   | Spines | Vendor                     | Leafs/ToRs Vendor | Racks | Deployment   |
+|-------|--------|----------------------------|-------------------|-------|--------------|
+| Pod 1 | 2      | Arista (DCS-7050CX3-32C-R) | Dell SONiC        | 2     | middle_rack  |
+| Pod 2 | 2      | Edgecore (7726-32X-O)      | Cisco NX-OS       | 2     | middle_rack  |
 
 ---
 

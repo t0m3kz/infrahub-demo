@@ -139,18 +139,21 @@ cd equinix_pop
 Before running any demo:
 
 1. **Start Infrahub**
+
    ```bash
    cd ..
    uv run invoke start
    ```
 
 2. **Set environment variables** (optional)
+
    ```bash
    export INFRAHUB_ADDRESS="http://localhost:8000"
    export INFRAHUB_API_TOKEN="06438eb2-8019-4776-878c-0941b1f1d1ec"
    ```
 
 3. **Load initial setup** (from root directory)
+
    ```bash
    uv run infrahubctl schema load schemas
    uv run infrahubctl menu load menu
@@ -177,6 +180,7 @@ Most demos support these flags:
 - `--branch {name}` - Deploy to specific branch
 
 Example:
+
 ```bash
 ./data_center_topology/deploy.sh --scenario dc3 --with-servers --with-security
 ```
@@ -185,7 +189,7 @@ Example:
 
 Each demo has its own `data/` folder:
 
-```
+```text
 demos/
 ├── data_center_topology/data/
 ├── pod_rack_generation/data/
@@ -260,22 +264,26 @@ uv run invoke clab up --pop
 ## Troubleshooting
 
 **Infrahub not running:**
+
 ```bash
 uv run invoke start
 ```
 
 **Connection refused:**
+
 ```bash
 export INFRAHUB_ADDRESS="http://localhost:8000"
 export INFRAHUB_API_TOKEN="06438eb2-8019-4776-878c-0941b1f1d1ec"
 ```
 
 **Schema load errors:**
+
 ```bash
 uv run infrahubctl schema load ../schemas
 ```
 
 **Data load errors:**
+
 ```bash
 uv run infrahubctl object load data/ --branch main
 ```
@@ -289,6 +297,7 @@ uv run infrahubctl object load data/ --branch main
 ## Continuous Learning
 
 Each demo includes:
+
 - Detailed README with architecture explanations
 - Example deployment scripts
 - Sample data configurations

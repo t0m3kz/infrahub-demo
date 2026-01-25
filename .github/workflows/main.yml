@@ -20,7 +20,7 @@ jobs:
           pip install uv
           uv sync
       - run: |
-          echo "Formating code"
+          echo "Formatting code"
           uv run ruff format
           uv run ruff check --select I --fix .
       - run: |

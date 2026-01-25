@@ -7,6 +7,7 @@
 ## What Gets Created
 
 **Infrahub Objects Created:**
+
 - CheckDefinition
 - ValidationResult
 
@@ -29,6 +30,7 @@
 ## Validation Process
 
 Each check validates:
+
 - Device presence and status
 - Interface configuration
 - Connectivity paths
@@ -38,6 +40,7 @@ Each check validates:
 ## Output
 
 Validation results include:
+
 - ✅ Passed checks
 - ⚠️ Warnings
 - ❌ Failed checks
@@ -46,26 +49,31 @@ Validation results include:
 ## Check Details
 
 ### Spine Validation
+
 - Device count verification
 - Interface configuration
 - Routing protocol status
 
 ### Leaf Validation
+
 - Device count verification
 - VLAN configuration
 - Spanning tree status
 
 ### Server Connectivity
+
 - Server connections verified
 - Redundancy confirmed
 - Interface status
 
 ### Interface Health
+
 - Physical link status
 - MTU configuration
 - Error counts
 
 ### Configuration Accuracy
+
 - Device naming compliance
 - IP addressing validation
 - Policy enforcement
@@ -81,4 +89,5 @@ uv run infrahubctl check run --check-name spine_validation
 ## Reports
 
 Access validation reports in Infrahub UI:
+
 - Services → Health Checks → [Device Name]

@@ -11,6 +11,7 @@ This demo **deploys servers to the existing DC-1 topology**. Make sure DC-1 is d
 ## What Gets Created
 
 **Infrahub Objects Created:**
+
 - DcimPhysicalDevice (servers added to DC-1)
 - DcimInterface (server connections)
 - DcimCable (cabling connections)
@@ -18,6 +19,7 @@ This demo **deploys servers to the existing DC-1 topology**. Make sure DC-1 is d
 ## Prerequisites
 
 Deploy DC-1 first:
+
 ```bash
 cd ../data_center_topology
 ./deploy.sh --scenario dc1
@@ -41,6 +43,7 @@ After DC-1 is deployed, add servers:
 ## Generated Connectivity
 
 Each server connection includes:
+
 - Dual connections to leaf switches
 - Round-robin interface allocation
 - Proper cable documentation
@@ -49,6 +52,7 @@ Each server connection includes:
 ## Architecture
 
 The cabling strategy ensures:
+
 1. Every server is connected to 2 leaf switches (redundancy)
 2. Interfaces are distributed evenly using round-robin
 3. No interface reuse or conflicts
@@ -57,6 +61,7 @@ The cabling strategy ensures:
 ## Troubleshooting
 
 If servers aren't connecting:
+
 1. Verify DC-1 topology is deployed
 2. Check leaf switch availability in DC-1
 3. Review interface allocation in logs

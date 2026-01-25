@@ -28,10 +28,10 @@
 
 ### Pod Structure (The Twin Towers of Efficiency)
 
-| Pod   | Spines | Model                | Racks | Deployment    | Personality                |
-|-------|--------|----------------------|-------|--------------|----------------------------|
-| Pod 1 | 2      | DCS-7050CX3-32C-R   | 2     | middle_rack  | The Responsible Sibling    |
-| Pod 2 | 2      | DCS-7050CX3-32C-R   | 2     | middle_rack  | The Copy-Paste Sibling     |
+| Pod   | Spines | Model             | Racks | Deployment   | Personality             |
+|-------|--------|-------------------|-------|--------------|-------------------------|
+| Pod 1 | 2      | DCS-7050CX3-32C-R | 2     | middle_rack  | The Responsible Sibling |
+| Pod 2 | 2      | DCS-7050CX3-32C-R | 2     | middle_rack  | The Copy-Paste Sibling  |
 
 ---
 
