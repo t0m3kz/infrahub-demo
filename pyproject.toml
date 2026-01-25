@@ -39,3 +39,45 @@ follow_untyped_imports = true
 asyncio_mode = "auto"
 testpaths = ["tests"]
 asyncio_default_fixture_loop_scope = "function"
+
+[tool.ruff]
+#line-length = 120
+target-version = "py310"
+
+[tool.ruff.lint]
+preview = true
+
+task-tags = ["FIXME", "TODO", "XXX"]
+
+select = [
+    "B",
+    "FBT",
+    "FURB",
+    "I",
+    "PT",
+    "PTH",
+    "RET",
+    "SIM",
+    "TC",
+    "TID",
+    "UP",
+    "YTT",
+]
+
+ignore = [
+    "B905",
+    "FBT001",
+    "FBT002",
+    "FBT003",
+    "FURB152",
+    "SIM102",
+    "SIM113",
+    "TC006",
+]
+
+#https://docs.astral.sh/ruff/formatter/black/
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+skip-magic-trailing-comma = false
+line-ending = "auto"
