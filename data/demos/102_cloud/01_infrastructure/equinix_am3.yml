@@ -1,0 +1,63 @@
+---
+# Equinix AM3 Infrastructure
+# Edge routers in colocation cage
+
+# First create the top-level colocation provider
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologyColocation
+  data:
+    - name: Equinix
+
+---
+# Then create the metro
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologyColocationMetro
+  data:
+    - name: Equinix-Amsterdam
+      location: ["ams"]
+      parent: Equinix
+
+---
+# Then create the AZ with devices
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologyColocationZone
+  data:
+    - name: Equinix-AM3
+      parent: Equinix-Amsterdam
+      deployment_type: physical
+      devices:
+        kind: DcimPhysicalDevice
+        data:
+          # Edge routers for WAN connectivity
+          - name: am3-edge-01
+            role: edge
+            device_type: C8000V
+            status: active
+            interfaces:
+              kind: DcimPhysicalInterface
+              parameters:
+                expand_range: true
+              data:
+                - name: "GigabitEthernet[1-8]"
+                  interface_type: "1000base-t"
+                  status: "free"
+                  mtu: 9216
+          - name: am3-edge-02
+            role: edge
+            device_type: C8000V
+            status: active
+            interfaces:
+              kind: DcimPhysicalInterface
+              parameters:
+                expand_range: true
+              data:
+                - name: "GigabitEthernet[1-8]"
+                  interface_type: "1000base-t"
+                  status: "free"
+                  mtu: 9216

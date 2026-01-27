@@ -1,0 +1,395 @@
+---
+version: "1.0"
+generics:
+  - name: VirtualCircuitConnectors
+    namespace: Topology
+    description: "Virtual connectivity between locations"
+    label: "Network Circuit"
+    include_in_menu: false
+    attributes:
+      - name: name
+        kind: Text
+        order_weight: 50
+      - name: description
+        kind: Text
+        order_weight: 100
+
+  - name: VirtualCircuitLocation
+    namespace: Topology
+    description: "Location that can participate in virtual circuit connectivity"
+    label: "Virtual Circuit Location"
+    include_in_menu: false
+    human_friendly_id:
+      - name__value
+    attributes:
+      - name: name
+        kind: Text
+        order_weight: 100
+
+
+nodes:
+  - name: PhysicalCircuit
+    namespace: Topology
+    description: "Physical connectivity circuit between locations"
+    label: "Network Circuit"
+    icon: "mdi:transit-connection-variant"
+    include_in_menu: false
+    human_friendly_id:
+      - circuit_id__value
+    display_label: "{{ circuit_id__value }} - {{ provider__name__value }}"
+    uniqueness_constraints:
+      - [circuit_id__value]
+    attributes:
+      - name: circuit_id
+        kind: Text
+        label: "Circuit ID"
+        description: "Provider circuit identifier"
+        order_weight: 100
+
+      - name: description
+        kind: Text
+        optional: true
+        order_weight: 200
+
+      - name: circuit_type
+        kind: Dropdown
+        label: "Circuit Type"
+        order_weight: 300
+        choices:
+          - name: dark_fiber
+            label: "Dark Fiber"
+            description: "Unlit fiber optic circuit"
+            color: "#2c3e50"
+          - name: cross_connect
+            label: "Cross Connect"
+            description: "Physical cross-connect within facility"
+            color: "#3498db"
+          - name: metro_ethernet
+            label: "Metro Ethernet"
+            description: "Layer 2 metro Ethernet service"
+            color: "#9b59b6"
+          - name: mpls
+            label: "MPLS"
+            description: "MPLS VPN circuit"
+            color: "#e74c3c"
+          - name: dia
+            label: "DIA"
+            description: "Dedicated Internet Access"
+            color: "#f39c12"
+          - name: wavelength
+            label: "Wavelength"
+            description: "DWDM wavelength service"
+            color: "#1abc9c"
+
+      - name: committed_rate
+        kind: Number
+        label: "CIR (Mbps)"
+        optional: true
+        order_weight: 410
+
+      - name: bandwidth
+        kind: Number
+        label: "Bandwidth (Mbps)"
+        optional: true
+        order_weight: 420
+        description: "Link bandwidth in megabits per second"
+
+      - name: status
+        kind: Dropdown
+        order_weight: 500
+        default_value: provisioning
+        choices:
+          - name: provisioning
+            label: Provisioning
+            color: "#ffff7f"
+          - name: active
+            label: Active
+            color: "#7fbf7f"
+          - name: maintenance
+            label: Maintenance
+            color: "#ffd27f"
+          - name: down
+            label: Down
+            color: "#ff7f7f"
+          - name: decommissioned
+            label: Decommissioned
+            color: "#bfbfbf"
+
+      - name: install_date
+        kind: Text
+        optional: true
+        order_weight: 600
+
+      - name: contract_end_date
+        kind: Text
+        optional: true
+        order_weight: 610
+
+    relationships:
+      - name: provider
+        peer: OrganizationProvider
+        cardinality: one
+        optional: false
+        identifier: "circuit__provider"
+        order_weight: 1000
+        description: "Service provider for this connectivity"
+
+      # Physical endpoint locations (simplified for path queries)
+      - name: locations
+        label: "Endpoint Locations"
+        peer: LocationBuilding
+        cardinality: many
+        max_count: 2
+        optional: false
+        identifier: "physical_circuit__location"
+        order_weight: 3200
+        description: "Buildings/sites where this circuit terminates"
+
+      # Operational circuit endpoints
+      - name: managed_circuits
+        label: "Managed Circuit Endpoints"
+        peer: ManagedPhysicalCircuit
+        cardinality: many
+        min_count: 2
+        max_count: 2
+        optional: false
+        identifier: "physical_circuit__managed"
+        order_weight: 3400
+        description: "2 Operational circuit endpoints "
+
+      - name: deployments
+        label: "Deployments"
+        peer: TopologyPhysicalDeployment
+        cardinality: many
+        max_count: 2
+        kind: Attribute
+        optional: true
+        identifier: "physical_circuit__deployment"
+        order_weight: 3600
+        description: |
+          "Both deployments (DCs/Colocations) connected by this circuit"
+
+  - name: VirtualCircuit
+    namespace: Topology
+    description: "Virtual/overlay connectivity between locations"
+    label: "Virtual Link"
+    icon: "mdi:cloud-sync"
+    include_in_menu: false
+    human_friendly_id:
+      - name__value
+    display_label: "{{ name__value }} ({{ link_type__value|upper }})"
+    uniqueness_constraints:
+      - [name__value]
+    attributes:
+      - name: name
+        kind: Text
+        order_weight: 100
+
+      - name: description
+        kind: Text
+        optional: true
+        order_weight: 200
+
+      - name: link_type
+        kind: Dropdown
+        label: "Link Type"
+        order_weight: 300
+        choices:
+          - name: vpn_ipsec
+            label: "IPsec VPN"
+            description: "IPsec encrypted VPN tunnel"
+            color: "#e74c3c"
+          - name: vpn_ssl
+            label: "SSL VPN"
+            description: "SSL/TLS VPN connection"
+            color: "#c0392b"
+          - name: gre
+            label: "GRE Tunnel"
+            description: "Generic Routing Encapsulation"
+            color: "#95a5a6"
+          - name: vxlan
+            label: "VXLAN"
+            description: "Virtual Extensible LAN"
+            color: "#3498db"
+          - name: geneve
+            label: "GENEVE"
+            description: "Generic Network Virtualization Encapsulation"
+            color: "#2980b9"
+          - name: mpls_l3vpn
+            label: "MPLS L3VPN"
+            description: "MPLS Layer 3 VPN"
+            color: "#e67e22"
+          - name: direct_connect_aws
+            label: "AWS Direct Connect"
+            description: "AWS Direct Connect"
+            color: "#ff9900"
+          - name: express_route_azure
+            label: "Azure ExpressRoute"
+            description: "Azure ExpressRoute"
+            color: "#0078d4"
+          - name: interconnect_gcp
+            label: "GCP Cloud Interconnect"
+            description: "Google Cloud Interconnect"
+            color: "#4285f4"
+          - name: fast_connect_oracle
+            label: "Oracle FastConnect"
+            description: "Oracle Cloud FastConnect"
+            color: "#f80000"
+          - name: sd_wan
+            label: "SD-WAN"
+            description: "Software-Defined WAN"
+            color: "#9b59b6"
+          - name: equinix_fabric
+            label: "Equinix Fabric"
+            description: "Equinix Fabric Virtual Connection"
+            color: "#e30613"
+          - name: megaport
+            label: "Megaport"
+            description: "Megaport Virtual Cross Connect"
+            color: "#0066cc"
+          - name: packetfabric
+            label: "PacketFabric"
+            description: "PacketFabric Virtual Circuit"
+            color: "#00a0df"
+          - name: console_connect
+            label: "Console Connect"
+            description: "PCCW Console Connect"
+            color: "#ff6600"
+
+      - name: encryption
+        kind: Boolean
+        label: "Encrypted"
+        optional: true
+        default_value: false
+        order_weight: 410
+
+      - name: cloud_resource_id
+        kind: Text
+        label: "Cloud Resource ID"
+        optional: true
+        order_weight: 600
+        description: "Provider resource ID (e.g., dxcon-xxxxx for AWS)"
+
+      - name: bandwidth
+        kind: Number
+        label: "Bandwidth (Mbps)"
+        optional: true
+        order_weight: 610
+        description: "Link bandwidth in megabits per second"
+
+      - name: status
+        kind: Dropdown
+        order_weight: 620
+        default_value: provisioning
+        choices:
+          - name: provisioning
+            label: Provisioning
+            color: "#ffff7f"
+          - name: active
+            label: Active
+            color: "#7fbf7f"
+          - name: maintenance
+            label: Maintenance
+            color: "#ffd27f"
+          - name: down
+            label: Down
+            color: "#ff7f7f"
+          - name: decommissioned
+            label: Decommissioned
+            color: "#bfbfbf"
+
+    relationships:
+      - name: provider
+        peer: OrganizationProvider
+        cardinality: one
+        optional: false
+        identifier: "virtual_link__provider"
+        order_weight: 1000
+        description: "Service provider for this connectivity"
+
+      # Virtual circuit topology endpoints (simplified for path queries)
+      - name: locations
+        label: "Endpoint Locations"
+        peer: TopologyVirtualCircuitLocation
+        cardinality: many
+        max_count: 2
+        optional: false
+        identifier: "virtual_link__location"
+        order_weight: 3000
+        description: "Both Topology locations where virtual circuit terminates"
+
+      # Virtual circuit connector endpoints (for device interface mapping)
+      - name: connectors
+        label: "Virtual Circuit Connectors"
+        peer: TopologyVirtualCircuitConnectors
+        cardinality: many
+        min_count: 2
+        max_count: 2
+        optional: false
+        identifier: "virtual_circuit__connectors"
+        order_weight: 3200
+        description: "Virtual circuit connectors (exactly 2: one per endpoint)"
+
+extensions:
+  nodes:
+    - kind: LocationBuilding
+      relationships:
+        - name: circuits
+          label: "Physical Circuits"
+          peer: TopologyPhysicalCircuit
+          cardinality: many
+          identifier: "physical_circuit__location"
+          order_weight: 5000
+          description: "Physical circuits terminating at this building"
+
+    # Data Center - supports virtual links
+    - kind: TopologyDataCenter
+      relationships:
+        - name: virtual_links
+          label: "Virtual Links"
+          peer: TopologyVirtualCircuit
+          cardinality: many
+          identifier: "virtual_link__location"
+          order_weight: 5000
+          description: "Virtual circuits connected to this data center"
+
+    # Colocation - supports both physical circuits and virtual links
+    - kind: TopologyColocationZone
+      relationships:
+        - name: physical_circuits
+          label: "Physical Circuits"
+          peer: TopologyPhysicalCircuit
+          cardinality: many
+          identifier: "physical_circuit__deployment"
+          order_weight: 4900
+          description: "Physical circuits terminating at this facility"
+
+        - name: virtual_links
+          label: "Virtual Links"
+          peer: TopologyVirtualCircuit
+          cardinality: many
+          identifier: "virtual_link__location"
+          order_weight: 5000
+          description: "Virtual circuits connected to this colocation"
+
+    # Cloud - supports virtual links only (no physical circuits)
+    - kind: TopologyCloudRegion
+      relationships:
+        - name: virtual_links
+          label: "Virtual Links"
+          peer: TopologyVirtualCircuit
+          cardinality: many
+          identifier: "virtual_link__location"
+          order_weight: 5000
+          description: "Virtual circuits connected to this cloud region"
+
+    # SaaS - supports virtual links only
+    - kind: TopologySaasRegion
+      relationships:
+        - name: virtual_links
+          label: "Virtual Links"
+          peer: TopologyVirtualCircuit
+          cardinality: many
+          identifier: "virtual_link__location"
+          order_weight: 5000
+          description: "Virtual circuits connected to this SaaS region"

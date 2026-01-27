@@ -1,0 +1,146 @@
+---
+# Virtual Link Services - Bind virtual links to interfaces
+# This replaces direct source_endpoint/destination_endpoint bindings
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: ManagedVirtualLinkService
+  data:
+    # ===== Frankfurt (FR5) → AWS eu-central-1 Direct Connect VIFs =====
+
+    - name: "FR5-AWS-FRA-DX-Primary-SRC"
+      description: "AWS Direct Connect VIF to eu-central-1 - Primary source"
+      virtual_link: "FR5-to-AWS-FRA-DX-Primary"
+      endpoint_type: "source"
+      interface: ["fr5-edge-01", "Ethernet1/10"]
+      device: "fr5-edge-01"
+      deployment: "FR5"
+      status: "active"
+
+    - name: "FR5-AWS-FRA-DX-Backup-SRC"
+      description: "AWS Direct Connect VIF to eu-central-1 - Backup source"
+      virtual_link: "FR5-to-AWS-FRA-DX-Backup"
+      endpoint_type: "source"
+      interface: ["fr5-edge-02", "Ethernet1/10"]
+      device: "fr5-edge-02"
+      deployment: "FR5"
+      status: "active"
+
+    # ===== Amsterdam (AM5) → AWS eu-west-1 Direct Connect VIFs =====
+
+    - name: "AM5-AWS-IRL-DX-Primary-SRC"
+      description: "AWS Direct Connect VIF to eu-west-1 - Primary source"
+      virtual_link: "AM5-to-AWS-IRL-DX-Primary"
+      endpoint_type: "source"
+      interface: ["am5-edge-01", "Ethernet1/10"]
+      device: "am5-edge-01"
+      deployment: "AM5"
+      status: "active"
+
+    - name: "AM5-AWS-IRL-DX-Backup-SRC"
+      description: "AWS Direct Connect VIF to eu-west-1 - Backup source"
+      virtual_link: "AM5-to-AWS-IRL-DX-Backup"
+      endpoint_type: "source"
+      interface: ["am5-edge-02", "Ethernet1/10"]
+      device: "am5-edge-02"
+      deployment: "AM5"
+      status: "active"
+
+    # ===== Cross-Region Direct Connect =====
+
+    - name: "FR5-AWS-IRL-DX-XRegion-SRC"
+      description: "Cross-region Direct Connect VIF - Source"
+      virtual_link: "FR5-to-AWS-IRL-DX-XRegion"
+      endpoint_type: "source"
+      interface: ["fr5-edge-01", "Ethernet1/11"]
+      device: "fr5-edge-01"
+      deployment: "FR5"
+      status: "active"
+
+    # ===== IPsec VPN Backups =====
+
+    - name: "FR5-AWS-FRA-VPN-SRC"
+      description: "IPsec VPN backup to eu-central-1 - Source"
+      virtual_link: "FR5-to-AWS-FRA-VPN"
+      endpoint_type: "source"
+      interface: ["fr5-edge-01", "Tunnel1"]
+      device: "fr5-edge-01"
+      deployment: "FR5"
+      status: "active"
+
+    - name: "AM5-AWS-IRL-VPN-SRC"
+      description: "IPsec VPN backup to eu-west-1 - Source"
+      virtual_link: "AM5-to-AWS-IRL-VPN"
+      endpoint_type: "source"
+      interface: ["am5-edge-01", "Tunnel1"]
+      device: "am5-edge-01"
+      deployment: "AM5"
+      status: "active"
+
+    - name: "DC1-AWS-FRA-VPN-SRC"
+      description: "Emergency IPsec VPN from DC1 - Source"
+      virtual_link: "DC1-to-AWS-FRA-VPN"
+      endpoint_type: "source"
+      interface: ["dc1-border-01", "Tunnel1"]
+      device: "dc1-border-01"
+      deployment: "DC1"
+      status: "active"
+
+    # ===== Inter-Colocation Virtual Links =====
+
+    # VXLAN Primary
+    - name: "FR5-AM5-VXLAN-Primary-SRC"
+      description: "VXLAN FR5 to AM5 - Primary source"
+      virtual_link: "FR5-AM5-VXLAN-Primary"
+      endpoint_type: "source"
+      interface: ["fr5-edge-01", "Vxlan1"]
+      device: "fr5-edge-01"
+      deployment: "FR5"
+      status: "active"
+
+    - name: "FR5-AM5-VXLAN-Primary-DST"
+      description: "VXLAN FR5 to AM5 - Primary destination"
+      virtual_link: "FR5-AM5-VXLAN-Primary"
+      endpoint_type: "destination"
+      interface: ["am5-edge-01", "Vxlan1"]
+      device: "am5-edge-01"
+      deployment: "AM5"
+      status: "active"
+
+    # VXLAN Backup
+    - name: "FR5-AM5-VXLAN-Backup-SRC"
+      description: "VXLAN FR5 to AM5 - Backup source"
+      virtual_link: "FR5-AM5-VXLAN-Backup"
+      endpoint_type: "source"
+      interface: ["fr5-edge-02", "Vxlan1"]
+      device: "fr5-edge-02"
+      deployment: "FR5"
+      status: "active"
+
+    - name: "FR5-AM5-VXLAN-Backup-DST"
+      description: "VXLAN FR5 to AM5 - Backup destination"
+      virtual_link: "FR5-AM5-VXLAN-Backup"
+      endpoint_type: "destination"
+      interface: ["am5-edge-02", "Vxlan1"]
+      device: "am5-edge-02"
+      deployment: "AM5"
+      status: "active"
+
+    # GRE Tunnel
+    - name: "FR5-AM5-GRE-SRC"
+      description: "GRE tunnel FR5 to AM5 - Source"
+      virtual_link: "FR5-AM5-GRE"
+      endpoint_type: "source"
+      interface: ["fr5-edge-01", "Tunnel10"]
+      device: "fr5-edge-01"
+      deployment: "FR5"
+      status: "active"
+
+    - name: "FR5-AM5-GRE-DST"
+      description: "GRE tunnel FR5 to AM5 - Destination"
+      virtual_link: "FR5-AM5-GRE"
+      endpoint_type: "destination"
+      interface: ["am5-edge-01", "Tunnel10"]
+      device: "am5-edge-01"
+      deployment: "AM5"
+      status: "active"

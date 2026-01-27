@@ -89,6 +89,13 @@ artifact_definitions:
     transformation: equinix_pop
     parameters:
       name: name__value
+  - name: firewall_config
+    artifact_name: firewall
+    content_type: text/plain
+    targets: firewalls
+    transformation: firewall
+    parameters:
+      device: name__value
 
 check_definitions:
   # - name: validate_dc_capacity
@@ -139,6 +146,12 @@ check_definitions:
     targets: super-spines
     parameters:
       device: name__value
+  - name: validate_firewall
+    class_name: CheckFirewall
+    file_path: checks/firewall.py
+    targets: firewalls
+    parameters:
+      device: name__value
 
 python_transforms:
   - name: topology_cabling
@@ -171,6 +184,9 @@ python_transforms:
   - name: loadbalancer-cloud
     class_name: LoadBalancerCloud
     file_path: transforms/loadbalancer_cloud.py
+  - name: firewall
+    class_name: Firewall
+    file_path: transforms/firewall.py
 
 queries:
   - name: dc_validation
@@ -203,6 +219,8 @@ queries:
     file_path: queries/config/loadbalancer.gql
   - name: loadbalancer_cloud
     file_path: queries/config/loadbalancer_cloud.gql
+  - name: firewall_config
+    file_path: queries/config/firewall.gql
   - name: oob_config
     file_path: queries/config/oob.gql
   - name: pod_decommission

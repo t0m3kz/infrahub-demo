@@ -1,0 +1,33 @@
+# {{ name }} Firewall Configuration
+#
+set system host-name {{ name }}
+#
+# Management interfaces
+{%- for interface in interfaces %}
+{%- if interface.role == "management" %}
+set interface {{ interface.name }} ip {{ interface.ip_addresses[0].address|replace('/', ' ') if interface.ip_addresses else '' }}
+{%- if interface.description %}
+set interface {{ interface.name }} description "{{ interface.description }}"
+{%- endif %}
+#
+{%- endif %}
+{%- endfor %}
+#
+# Security zones and interfaces
+{%- for interface in interfaces %}
+{%- if interface.role != "management" %}
+set interface {{ interface.name }} ip {{ interface.ip_addresses[0].address|replace('/', ' ') if interface.ip_addresses else '' }}
+{%- if interface.description %}
+set interface {{ interface.name }} description "{{ interface.description }}"
+{%- endif %}
+{%- if interface.interface_services %}
+{%- for service in interface.interface_services %}
+set interface {{ interface.name }} zone {{ service.name }}
+{%- endfor %}
+{%- endif %}
+#
+{%- endif %}
+{%- endfor %}
+#
+# Security policies will be configured separately
+#

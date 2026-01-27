@@ -1,0 +1,50 @@
+# {{ name }} Firewall Configuration
+#
+config system global
+    set hostname "{{ name }}"
+end
+#
+# Management interfaces
+{%- for interface in interfaces %}
+{%- if interface.role == "management" %}
+config system interface
+    edit "{{ interface.name }}"
+{%- if interface.ip_addresses %}
+        set ip {{ interface.ip_addresses[0].address }}
+{%- endif %}
+{%- if interface.status == 'active' %}
+        set allowaccess ping https ssh
+{%- endif %}
+        set description "{{ interface.description|default("Management Interface") }}"
+    next
+end
+{%- endif %}
+{%- endfor %}
+#
+# Security zones and interfaces
+{%- for interface in interfaces %}
+{%- if interface.role != "management" %}
+config system interface
+    edit "{{ interface.name }}"
+{%- if interface.ip_addresses %}
+        set ip {{ interface.ip_addresses[0].address }}
+{%- endif %}
+{%- if interface.status == 'active' %}
+        set status up
+{%- endif %}
+{%- if interface.description %}
+        set description "{{ interface.description }}"
+{%- endif %}
+{%- if interface.interface_services %}
+{%- for service in interface.interface_services %}
+        set vdom "root"
+        set type physical
+{%- endfor %}
+{%- endif %}
+    next
+end
+{%- endif %}
+{%- endfor %}
+#
+# Security policies will be configured separately
+#

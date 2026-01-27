@@ -1,0 +1,50 @@
+!
+! {{ name }} Firewall Configuration
+!
+hostname {{ name }}
+!
+! Management interfaces
+{%- for interface in interfaces %}
+{%- if interface.role == "management" %}
+interface {{ interface.name }}
+{%- if interface.status == 'active' %}
+  no shutdown
+{%- endif %}
+{%- if interface.ip_addresses %}
+{%- for ip in interface.ip_addresses %}
+  ip address {{ ip.address }}
+{%- endfor %}
+{%- endif %}
+  description {{ interface.description|default("Management Interface") }}
+!
+{%- endif %}
+{%- endfor %}
+!
+! Security zones and interfaces
+{%- for interface in interfaces %}
+{%- if interface.role != "management" %}
+interface {{ interface.name }}
+{%- if interface.status == 'active' %}
+  no shutdown
+{%- endif %}
+{%- if interface.ip_addresses %}
+{%- for ip in interface.ip_addresses %}
+  ip address {{ ip.address }}
+{%- endfor %}
+{%- endif %}
+{%- if interface.description %}
+  description {{ interface.description }}
+{%- endif %}
+{%- if interface.interface_services %}
+  ! Assigned to security zones:
+{%- for service in interface.interface_services %}
+  !   - {{ service.name }}
+{%- endfor %}
+{%- endif %}
+!
+{%- endif %}
+{%- endfor %}
+!
+! Security policies will be configured separately
+!
+end

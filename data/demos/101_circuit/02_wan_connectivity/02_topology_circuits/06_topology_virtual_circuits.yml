@@ -1,0 +1,107 @@
+---
+# Virtual Circuits - VXLAN tunnels over physical circuits
+# Full mesh: Each DC1 border ↔ Each DC2 border (4 VXLAN tunnels)
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologyVirtualCircuit
+  data:
+    # Tunnel 1: dc1-border-01 ↔ dc2-border-01 (over DF-DC1-DC2-B01-B01)
+    - name: "VXLAN-DC1-DC2-B01-B01"
+      link_type: vxlan
+      bandwidth: 100000
+      status: active
+      encryption: false
+      provider: "Internal"
+      description: "VXLAN tunnel: dc1-border-01 ↔ dc2-border-01"
+      locations:
+        - ["DC1"]
+        - ["DC2"]
+      connectors:
+        - kind: ManagedVirtualCircuit
+          data:
+            name: "VXLAN-DC1-DC2-B01-B01-src"
+            description: "VXLAN source: dc1-border-01 to dc2-border-01"
+            interfaces:
+              - ["dc1-border-01", "Ethernet1/1"]
+        - kind: ManagedVirtualCircuit
+          data:
+            name: "VXLAN-DC1-DC2-B01-B01-dst"
+            description: "VXLAN destination: dc2-border-01 from dc1-border-01"
+            interfaces:
+              - ["dc2-border-01", "Ethernet1/1"]
+
+    # Tunnel 2: dc1-border-01 ↔ dc2-border-02 (over DF-DC1-DC2-B01-B02)
+    - name: "VXLAN-DC1-DC2-B01-B02"
+      link_type: vxlan
+      bandwidth: 100000
+      status: active
+      encryption: false
+      provider: "Internal"
+      description: "VXLAN tunnel: dc1-border-01 ↔ dc2-border-02"
+      locations:
+        - ["DC1"]
+        - ["DC2"]
+      connectors:
+        - kind: ManagedVirtualCircuit
+          data:
+            name: "VXLAN-DC1-DC2-B01-B02-src"
+            description: "VXLAN source: dc1-border-01 to dc2-border-02"
+            interfaces:
+              - ["dc1-border-01", "Ethernet1/2"]
+        - kind: ManagedVirtualCircuit
+          data:
+            name: "VXLAN-DC1-DC2-B01-B02-dst"
+            description: "VXLAN destination: dc2-border-02 from dc1-border-01"
+            interfaces:
+              - ["dc2-border-02", "Ethernet1/1"]
+
+    # Tunnel 3: dc1-border-02 ↔ dc2-border-01 (over DF-DC1-DC2-B02-B01)
+    - name: "VXLAN-DC1-DC2-B02-B01"
+      link_type: vxlan
+      bandwidth: 100000
+      status: active
+      encryption: false
+      provider: "Internal"
+      description: "VXLAN tunnel: dc1-border-02 ↔ dc2-border-01"
+      locations:
+        - ["DC1"]
+        - ["DC2"]
+      connectors:
+        - kind: ManagedVirtualCircuit
+          data:
+            name: "VXLAN-DC1-DC2-B02-B01-src"
+            description: "VXLAN source: dc1-border-02 to dc2-border-01"
+            interfaces:
+              - ["dc1-border-02", "Ethernet1/1"]
+        - kind: ManagedVirtualCircuit
+          data:
+            name: "VXLAN-DC1-DC2-B02-B01-dst"
+            description: "VXLAN destination: dc2-border-01 from dc1-border-02"
+            interfaces:
+              - ["dc2-border-01", "Ethernet1/2"]
+
+    # Tunnel 4: dc1-border-02 ↔ dc2-border-02 (over DF-DC1-DC2-B02-B02)
+    - name: "VXLAN-DC1-DC2-B02-B02"
+      link_type: vxlan
+      bandwidth: 100000
+      status: active
+      encryption: false
+      provider: "Internal"
+      description: "VXLAN tunnel: dc1-border-02 ↔ dc2-border-02"
+      locations:
+        - ["DC1"]
+        - ["DC2"]
+      connectors:
+        - kind: ManagedVirtualCircuit
+          data:
+            name: "VXLAN-DC1-DC2-B02-B02-src"
+            description: "VXLAN source: dc1-border-02 to dc2-border-02"
+            interfaces:
+              - ["dc1-border-02", "Ethernet1/2"]
+        - kind: ManagedVirtualCircuit
+          data:
+            name: "VXLAN-DC1-DC2-B02-B02-dst"
+            description: "VXLAN destination: dc2-border-02 from dc1-border-02"
+            interfaces:
+              - ["dc2-border-02", "Ethernet1/2"]

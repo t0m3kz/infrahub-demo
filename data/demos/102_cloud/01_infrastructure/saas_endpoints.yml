@@ -1,0 +1,46 @@
+---
+# SaaS Regional Endpoints (ZEN nodes, Media servers)
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologySaasEndpoint
+  data:
+    # Zscaler ZEN Nodes
+    - parent: "frankfurt"
+      name: "zen-fra-primary"
+      endpoint_type: "zen_node"
+      fqdn: "zen.fra.zscaler.net"
+      status: "active"
+
+    - parent: "frankfurt"
+      name: "zen-fra-secondary"
+      endpoint_type: "zen_node"
+      fqdn: "zen2.fra.zscaler.net"
+      status: "active"
+
+    - parent: "amsterdam"
+      name: "zen-ams-primary"
+      endpoint_type: "zen_node"
+      fqdn: "zen.ams.zscaler.net"
+      status: "active"
+
+    - parent: "amsterdam"
+      name: "zen-ams-secondary"
+      endpoint_type: "zen_node"
+      fqdn: "zen2.ams.zscaler.net"
+      status: "active"
+
+    # Zoom Media Servers
+    - parent: "eu-central"
+      name: "zoom-media-fra"
+      endpoint_type: "media_server"
+      fqdn: "zmmr-fra.zoom.us"
+      port: 8801
+      status: "active"
+
+    - parent: "eu-west"
+      name: "zoom-media-ams"
+      endpoint_type: "media_server"
+      fqdn: "zmmr-ams.zoom.us"
+      port: 8801
+      status: "active"

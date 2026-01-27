@@ -20,6 +20,13 @@ vlan {{ vlan.vlan_id }}
 ! Interfaces
 {%- for interface in interfaces %}
 interface {{ interface.name }}
+{%- if interface.description %}
+  description {{ interface.description }}
+{%- elif interface.circuits %}
+  description {{ interface.circuits[0].circuit_type|upper }} - {{ interface.circuits[0].circuit_id }} - {{ interface.circuits[0].provider }}
+{%- elif interface.virtual_links %}
+  description {{ interface.virtual_links[0].link_type|upper }} - {{ interface.virtual_links[0].link_name }} - {{ interface.virtual_links[0].provider }}
+{%- endif %}
 {%- if interface.status == 'active' %}
   no shutdown
 {%- endif %}
@@ -38,6 +45,22 @@ interface {{ interface.name }}
 {%- endif %}
 {%- if interface.get('ospf') %}
   ip ospf area {{ interface.ospf.area }}
+{%- endif %}
+{%- if interface.circuits %}
+  ! Circuit: {{ interface.circuits[0].circuit_id }} ({{ interface.circuits[0].bandwidth }} Mbps)
+  ! Provider: {{ interface.circuits[0].provider }}
+  ! Side: {{ interface.circuits[0].side }}
+{%- endif %}
+{%- if interface.virtual_links %}
+  ! Virtual Link: {{ interface.virtual_links[0].link_name }}
+  ! Type: {{ interface.virtual_links[0].link_type }}
+  ! Bandwidth: {{ interface.virtual_links[0].bandwidth }} Mbps
+{%- if interface.virtual_links[0].encryption %}
+  ! Encryption: Enabled
+{%- endif %}
+{%- if interface.virtual_links[0].cloud_resource_id %}
+  ! Cloud Resource: {{ interface.virtual_links[0].cloud_resource_id }}
+{%- endif %}
 {%- endif %}
 !
 {%- endfor %}

@@ -8,7 +8,7 @@ nodes:
     icon: "mdi:sitemap"
     inherit_from:
       - TopologyDesign
-    include_in_menu: true
+    include_in_menu: false
     menu_placement: "TopologyDataCenter"
     human_friendly_id:
       - name__value

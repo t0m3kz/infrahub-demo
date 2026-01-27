@@ -268,6 +268,44 @@ spec:
             kind: CloudResource
             icon: "mdi:cloud"
             description: "All cloud resources"
+          # --------- Connectivity Assets ---------
+          - namespace: Connectivity
+            name: ConnectivityMenu
+            label: Connectivity Assets
+            icon: "mdi:transit-connection-variant"
+            description: "Physical circuits, virtual links, interconnections"
+            children:
+              data:
+                - namespace: Topology
+                  name: Connectivity
+                  label: All Connectivity
+                  kind: TopologyConnectivity
+                  icon: "mdi:transit-connection-variant"
+                  description: >-
+                    All connectivity types (circuits and virtual links)
+
+                - namespace: Topology
+                  name: Circuit
+                  label: Physical Circuits
+                  kind: TopologyCircuit
+                  icon: "mdi:cable-data"
+                  description: >-
+                    Dark fiber, cross-connects, MPLS, DIA, and wavelengths
+
+                - namespace: Topology
+                  name: VirtualLink
+                  label: Virtual Links
+                  kind: TopologyVirtualLink
+                  icon: "mdi:lan-connect"
+                  description: >-
+                    Direct Connect, VPN, VXLAN, GRE, and overlay tunnels
+
+                - namespace: Managed
+                  name: Circuit
+                  label: Managed Circuits
+                  kind: ManagedCircuit
+                  icon: "mdi:transit-connection-variant"
+                  description: "Operational management for provider circuits"
     # ===================== ROUTING =====================
     - namespace: Routing
       name: MainMenu
@@ -582,3 +620,12 @@ spec:
                   kind: LoadbalancerServer
                   icon: "mdi:server-plus"
                   description: "Backend servers for load balancing"
+
+          # --------- WAN Requests ---------
+          - namespace: Request
+            name: WANConnectivity
+            label: WAN Requests
+            kind: RequestWANConnectivity
+            icon: "mdi:wan"
+            description: >-
+              Request automated WAN connectivity between deployments

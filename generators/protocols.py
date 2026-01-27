@@ -60,6 +60,63 @@ class LocationGeneric(CoreNode):
     tags: RelationshipManager
 
 
+class TopologyConnectivity(CoreNode):
+    bandwidth: IntegerOptional
+    status: DropdownOptional
+    destination_deployment: RelatedNode
+    destination_location: RelatedNode
+    member_of_groups: RelationshipManager
+    profiles: RelationshipManager
+    provider: RelatedNode
+    source_deployment: RelatedNode
+    source_location: RelatedNode
+    subscriber_of_groups: RelationshipManager
+
+
+class TopologyCircuit(TopologyConnectivity):
+    bandwidth: IntegerOptional
+    circuit_id: String
+    circuit_type: Dropdown
+    committed_rate: IntegerOptional
+    contract_end_date: StringOptional
+    description: StringOptional
+    install_date: StringOptional
+    status: DropdownOptional
+    a_side_interface: RelatedNode
+    a_side_location: RelatedNode
+    destination_deployment: RelatedNode
+    destination_location: RelatedNode
+    member_of_groups: RelationshipManager
+    profiles: RelationshipManager
+    provider: RelatedNode
+    source_deployment: RelatedNode
+    source_location: RelatedNode
+    subscriber_of_groups: RelationshipManager
+    z_side_interface: RelatedNode
+    z_side_location: RelatedNode
+
+
+class TopologyVirtualLink(TopologyConnectivity):
+    bandwidth: IntegerOptional
+    cloud_resource_id: StringOptional
+    description: StringOptional
+    encryption: BooleanOptional
+    link_type: Dropdown
+    name: String
+    status: DropdownOptional
+    destination_deployment: RelatedNode
+    destination_endpoint: RelatedNode
+    destination_location: RelatedNode
+    member_of_groups: RelationshipManager
+    profiles: RelationshipManager
+    provider: RelatedNode
+    source_deployment: RelatedNode
+    source_endpoint: RelatedNode
+    source_location: RelatedNode
+    subscriber_of_groups: RelationshipManager
+    underlay_circuit: RelatedNode
+
+
 class OrganizationGeneric(CoreNode):
     description: StringOptional
     name: String

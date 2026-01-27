@@ -1,0 +1,17 @@
+---
+apiVersion: infrahub.app/v1
+version: "1.0"
+kind: Object
+spec:
+  kind: LocationBuilding
+  data:
+    - name: "AMS-EQX-3"
+      shortname: "ams-eqx-3"
+      parent: "ams"
+      physical_address: |
+        Equinix AM3, Science Park 400, 1098 XH Amsterdam, Netherlands
+    - name: "FRA-EQX-5"
+      shortname: "fra-eqx-5"
+      parent: "fra"
+      physical_address: |
+        Equinix FR5, Unterschweinstiege 16, 60549 Frankfurt am Main, Germany

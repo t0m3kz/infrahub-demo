@@ -1,0 +1,120 @@
+---
+# Physical Cables for 100_flow Demo
+#
+# IMPORTANT: This file models ONLY physical fiber cables between equipment.
+#
+# Physical cables exist for:
+# - DC1 → FR5/AM5: Dark fiber (owned/leased direct fiber)
+#
+# NO physical cables for:
+# - FR5 ↔ AM5: Equinix Metro Connect (Layer 2 service, not a cable)
+# - Direct Connect cross-connects: Terminate in AWS cages (not modeled)
+# - DIA circuits: Terminate in ISP PoPs (not modeled)
+#
+# Cable endpoints reference DcimPhysicalInterface using HFID format:
+# ["device_name", "interface_name"]
+# Cables must be loaded AFTER interfaces (01b_interfaces.yml).
+
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimCable
+  data:
+    # ========================================
+    # DC1 <-> FR5 Dark Fiber (Owned Fiber)
+    # ========================================
+    # These are actual physical fiber strands between DC and
+    # colocation. You own/lease these fibers - they are not
+    # provided by Equinix as a service.
+
+    # Circuit DF-FRA-001: DC1 Border 1 <-> FR5 Edge 1 (100G SMF)
+    - name: "dc1-border-01__Ethernet1/1__fr5-edge-01__Ethernet1/1"
+      type: smf
+      deployment:
+        kind: TopologyDataCenter
+        data:
+          name: "DC1"
+          index: 1
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: "dc1-border-01"
+            name: "Ethernet1/1"
+        - kind: DcimPhysicalInterface
+          data:
+            device: "fr5-edge-01"
+            name: "Ethernet1/1"
+
+    # Circuit DF-FRA-002: DC1 Border 2 <-> FR5 Edge 2 (100G SMF)
+    - name: "dc1-border-02__Ethernet1/1__fr5-edge-02__Ethernet1/1"
+      type: smf
+      deployment:
+        kind: TopologyDataCenter
+        data:
+          name: "DC1"
+          index: 1
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: "dc1-border-02"
+            name: "Ethernet1/1"
+        - kind: DcimPhysicalInterface
+          data:
+            device: "fr5-edge-02"
+            name: "Ethernet1/1"
+
+    # ========================================
+    # DC1 <-> AM5 Dark Fiber (Owned Fiber)
+    # ========================================
+    # Same as above - direct physical fiber between your DC and
+    # Amsterdam colocation.
+
+    # Circuit DF-AMS-001: DC1 Border 1 <-> AM5 Edge 1 (100G SMF)
+    - name: "dc1-border-01__Ethernet1/2__am5-edge-01__Ethernet1/1"
+      type: smf
+      deployment:
+        kind: TopologyDataCenter
+        data:
+          name: "DC1"
+          index: 1
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: "dc1-border-01"
+            name: "Ethernet1/2"
+        - kind: DcimPhysicalInterface
+          data:
+            device: "am5-edge-01"
+            name: "Ethernet1/1"
+
+    # Circuit DF-AMS-002: DC1 Border 2 <-> AM5 Edge 2 (100G SMF)
+    - name: "dc1-border-02__Ethernet1/2__am5-edge-02__Ethernet1/1"
+      type: smf
+      deployment:
+        kind: TopologyDataCenter
+        data:
+          name: "DC1"
+          index: 1
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: "dc1-border-02"
+            name: "Ethernet1/2"
+        - kind: DcimPhysicalInterface
+          data:
+            device: "am5-edge-02"
+            name: "Ethernet1/1"
+# ========================================
+# FR5 <-> AM5 Metro Ethernet - NO CABLES!
+# ========================================
+# Equinix Metro Connect between FR5 and AM5 is a LAYER 2 SERVICE
+# provided by Equinix over their backbone network. There is NO
+# physical cable to model here.
+#
+# This connection is represented by:
+# - TopologyCircuit (type: metro_ethernet) in 02_circuits.yml
+# - Circuit service bindings in 02b_circuit_services.yml
+# - VXLAN/GRE overlays in 03_virtual_links.yml
+#
+# You do NOT have access to or control over the physical infrastructure
+# between Equinix facilities - this is Equinix's internal network.

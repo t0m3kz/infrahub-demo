@@ -1,0 +1,66 @@
+---
+version: "1.0"
+nodes:
+  - name: PhysicalCircuit
+    namespace: Managed
+    description: "Managed circuit representing one side of a physical circuit"
+    label: "Managed Physical Circuit"
+    icon: "mdi:transit-connection-variant"
+    include_in_menu: false
+    inherit_from:
+      - ManagedGeneric
+      - ManagedGenericInterfaces
+    human_friendly_id:
+      - name__value
+    display_label: "{{ name__value }}"
+    uniqueness_constraints:
+      - [name__value]
+    attributes:
+      - name: name
+        kind: Text
+        order_weight: 100
+    relationships:
+      - name: topology_circuit
+        label: "Topology Physical Circuit"
+        peer: TopologyPhysicalCircuit
+        cardinality: one
+        optional: true
+        identifier: "physical_circuit__managed"
+        order_weight: 1000
+        description: "Topology circuit this managed instance belongs to"
+      - name: cable
+        label: "Structured Cable"
+        peer: DcimCable
+        cardinality: one
+        optional: true
+        identifier: "managed_physical_circuit__cable"
+        order_weight: 2000
+        description: "Cabling connecting circuit termination to device"
+
+  - name: VirtualCircuit
+    namespace: Managed
+    description: "Managed circuit representing one side of a virtual circuit"
+    label: "Managed Virtual Circuit"
+    icon: "mdi:transit-connection-variant"
+    include_in_menu: false
+    inherit_from:
+      - ManagedGenericInterfaces
+      - TopologyVirtualCircuitConnectors
+    human_friendly_id:
+      - description__value
+    display_label: "{{ description__value }}"
+    uniqueness_constraints:
+      - [description__value]
+    attributes:
+      - name: description
+        kind: Text
+        order_weight: 100
+    relationships:
+      - name: topology_circuit
+        label: "Topology Virtual Circuit"
+        peer: TopologyVirtualCircuit
+        cardinality: one
+        optional: true
+        identifier: "virtual_circuit__connectors"
+        order_weight: 1000
+        description: "Topology virtual circuit this connector belongs to"

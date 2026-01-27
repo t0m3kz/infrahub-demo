@@ -130,16 +130,10 @@ query super_spine_config($device: String!) {
               interface_services{
                 edges{
                   node{
-                    ... on ManagedOSPF{
-                      area { node {area {value}}}
-                      ospf_interface_profile{node{
-                        metric{value}
-                        mode{value}
-                        authentication_mode{value}
-                        authentication_key{value}
-                        }
-                      }
-                    }
+                    __typename
+                    ...OSPFServiceFields
+                    ...CircuitServiceFields
+                    ...VirtualLinkServiceFields
                   }
                 }
               }
@@ -149,4 +143,45 @@ query super_spine_config($device: String!) {
       }
     }
   }
+}
+
+fragment OSPFServiceFields on ManagedOSPF{
+  area{node{area{value}name{value}area_type{value}}}
+  ospf_interface_profile{node{
+    metric{value}
+    mode{value}
+    authentication_mode{value}
+    authentication_key{value}
+  }}
+}
+
+fragment CircuitServiceFields on ManagedCircuitService{
+  name{value}
+  description{value}
+  status{value}
+  side{value}
+  circuit{node{
+    circuit_id{value}
+    circuit_type{value}
+    bandwidth{value}
+    status{value}
+    description{value}
+    provider{node{name{value}}}
+  }}
+}
+
+fragment VirtualLinkServiceFields on ManagedVirtualLinkService{
+  name{value}
+  description{value}
+  status{value}
+  virtual_link{node{
+    name{value}
+    link_type{value}
+    bandwidth{value}
+    status{value}
+    description{value}
+    encryption{value}
+    cloud_resource_id{value}
+    provider{node{name{value}}}
+  }}
 }

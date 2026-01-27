@@ -1,0 +1,76 @@
+---
+# Physical Circuits - Phase 1: Create circuits only (no nested managed circuits)
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologyCircuit
+  data:
+    - circuit_id: "DF-DC1-DC2-001"
+      circuit_type: dark_fiber
+      bandwidth: 100000
+      status: active
+      provider: "Equinix"
+      data_centers:
+        - ["dc1", "1"]
+        - ["dc2", "1"]
+      a_side_location: "fra-1"
+      z_side_location: "ams-1"
+
+    - circuit_id: "DF-DC1-DC2-002"
+      circuit_type: dark_fiber
+      bandwidth: 100000
+      status: active
+      provider: "Equinix"
+      data_centers:
+        - ["dc1", "1"]
+        - ["dc2", "1"]
+      a_side_location: "fra-1"
+      z_side_location: "ams-1"
+
+    - circuit_id: "XC-DC1-FR5-001"
+      circuit_type: cross_connect
+      bandwidth: 10000
+      status: active
+      provider: "Equinix"
+      data_centers:
+        - ["dc1", "1"]
+      colocations:
+        - ["Equinix-FR5"]
+      a_side_location: "fra-1"
+      z_side_location: "fra-exq-5"
+
+    - circuit_id: "XC-DC1-FR5-002"
+      circuit_type: cross_connect
+      bandwidth: 10000
+      status: active
+      provider: "Equinix"
+      data_centers:
+        - ["dc1", "1"]
+      colocations:
+        - ["Equinix-FR5"]
+      a_side_location: "fra-1"
+      z_side_location: "fra-exq-5"
+
+    - circuit_id: "XC-DC2-AM3-001"
+      circuit_type: cross_connect
+      bandwidth: 10000
+      status: active
+      provider: "Equinix"
+      data_centers:
+        - ["dc2", "1"]
+      colocations:
+        - ["Equinix-AM3"]
+      a_side_location: "ams-1"
+      z_side_location: "ams-eqx-3"
+
+    - circuit_id: "XC-DC2-AM3-002"
+      circuit_type: cross_connect
+      bandwidth: 10000
+      status: active
+      provider: "Equinix"
+      data_centers:
+        - ["dc2", "1"]
+      colocations:
+        - ["Equinix-AM3"]
+      a_side_location: "ams-1"
+      z_side_location: "ams-eqx-3"

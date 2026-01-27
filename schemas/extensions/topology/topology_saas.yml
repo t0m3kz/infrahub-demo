@@ -105,6 +105,7 @@ nodes:
     namespace: Topology
     inherit_from:
       - TopologyDeployment
+      - TopologyVirtualCircuitLocation
     parent: TopologySaas
     children: ""
     human_friendly_id:
@@ -164,3 +165,85 @@ nodes:
         order_weight: 1000
         identifier: "saas__region__location"
         description: "Geographic mapping for provider region"
+
+  - name: SaasConnector
+    namespace: Topology
+    inherit_from:
+      - TopologyVirtualCircuitConnectors
+    label: SaaS Connector
+    human_friendly_id:
+      - name__value
+    display_label: "{{ name__value }}"
+    uniqueness_constraints:
+      - [saas_region, name__value]
+    include_in_menu: false
+    icon: "mdi:connection"
+    description: "SaaS connectivity (Cloud Connector)"
+    attributes:
+      - name: connector_type
+        kind: Dropdown
+        label: Connector Type
+        optional: false
+        order_weight: 300
+        choices:
+          - name: cloud_connector
+            label: Cloud Connector
+            description: "Native cloud connector (Zscaler CC, Palo Alto CC)"
+            color: "#3498DB"
+          - name: ipsec_vpn
+            label: IPsec VPN
+            description: "IPsec VPN tunnel"
+            color: "#2ECC71"
+          - name: gre_tunnel
+            label: GRE Tunnel
+            description: "GRE tunnel"
+            color: "#9B59B6"
+          - name: direct_connect
+            label: Direct Connect
+            description: "Private direct connection"
+            color: "#E74C3C"
+          - name: api_endpoint
+            label: API Endpoint
+            description: "REST/GraphQL API endpoint"
+            color: "#F39C12"
+          - name: other
+            label: Other
+            color: "#95A5A6"
+      - name: endpoint_url
+        kind: Text
+        label: "Endpoint URL"
+        optional: true
+        order_weight: 400
+        description: "Connection endpoint URL or IP"
+      - name: status
+        kind: Dropdown
+        optional: false
+        order_weight: 500
+        default_value: active
+        choices:
+          - name: active
+            label: Active
+            color: "#7fbf7f"
+          - name: provisioning
+            label: Provisioning
+            color: "#ffcc00"
+          - name: maintenance
+            label: Maintenance
+            color: "#ff9933"
+          - name: decommissioned
+            label: Decommissioned
+            color: "#cc0000"
+      - name: bandwidth_mbps
+        kind: Number
+        optional: true
+        order_weight: 600
+        description: "Maximum bandwidth capacity in Mbps"
+    relationships:
+      - name: saas_region
+        peer: TopologySaasRegion
+        cardinality: one
+        kind: Attribute
+        optional: false
+        identifier: "saas_connector__region"
+        order_weight: 1000
+        description: "Parent SaaS region"

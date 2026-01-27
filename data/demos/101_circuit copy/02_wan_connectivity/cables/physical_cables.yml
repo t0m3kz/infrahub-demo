@@ -1,0 +1,82 @@
+---
+# Physical Cables
+# Point-to-point fiber cables between device interfaces
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimCable
+  data:
+    # DC1 to DC2 cables
+    - name: "DF-DC1-DC2-001-Cable"
+      type: smf
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: "dc1-border-01"
+            name: "Ethernet1/1"
+        - kind: DcimPhysicalInterface
+          data:
+            device: "dc2-border-01"
+            name: "Ethernet1/1"
+
+    - name: "DF-DC1-DC2-002-Cable"
+      type: smf
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: "dc1-border-02"
+            name: "Ethernet1/1"
+        - kind: DcimPhysicalInterface
+          data:
+            device: "dc2-border-02"
+            name: "Ethernet1/1"
+
+    # DC1 to Equinix FR5 cables
+    - name: "XC-DC1-FR5-001-Cable"
+      type: smf
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: "dc1-border-01"
+            name: "Ethernet1/2"
+        - kind: DcimPhysicalInterface
+          data:
+            device: "fr5-edge-01"
+            name: "GigabitEthernet1"
+
+    - name: "XC-DC1-FR5-002-Cable"
+      type: smf
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: "dc1-border-02"
+            name: "Ethernet1/2"
+        - kind: DcimPhysicalInterface
+          data:
+            device: "fr5-edge-02"
+            name: "GigabitEthernet1"
+
+    # DC2 to Equinix AM3 cables
+    - name: "XC-DC2-AM3-001-Cable"
+      type: smf
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: "dc2-border-01"
+            name: "Ethernet1/2"
+        - kind: DcimPhysicalInterface
+          data:
+            device: "am3-edge-01"
+            name: "GigabitEthernet1"
+
+    - name: "XC-DC2-AM3-002-Cable"
+      type: smf
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: "dc2-border-02"
+            name: "Ethernet1/2"
+        - kind: DcimPhysicalInterface
+          data:
+            device: "am3-edge-02"
+            name: "GigabitEthernet1"

@@ -107,6 +107,7 @@ def get_interfaces(data: list) -> list[dict[str, Any]]:
     Returns a list of interface dictionaries sorted by interface name.
     Only includes 'ospf' key if OSPF area is present.
     Includes IP addresses, description, status, role, and other interface data.
+    Also includes circuit and virtual link service information for WAN connectivity.
     """
     if not data:
         return []
@@ -123,11 +124,33 @@ def get_interfaces(data: list) -> list[dict[str, Any]]:
             for s in (iface.get("interface_services") or [])
             if s.get("typename") == "ManagedNetworkSegment"
         ]
+
+        # Extract OSPF area information
+        # After clean_data: area is a dict like {"area": 0, "name": "backbone", "area_type": "standard"}
         ospf_areas = [
             s.get("area", {}).get("area")
             for s in (iface.get("interface_services") or [])
-            if s.get("typename") == "ManagedOSPF"
+            if s.get("typename") == "ManagedOSPF" and s.get("area")
         ]
+
+        # Extract circuit services (physical circuits)
+        circuits = [
+            {
+                "name": s.get("name"),
+                "description": s.get("description"),
+                "status": s.get("status"),
+                "side": s.get("side"),
+                "circuit_id": s.get("circuit", {}).get("circuit_id"),
+                "circuit_type": s.get("circuit", {}).get("circuit_type"),
+                "bandwidth": s.get("circuit", {}).get("bandwidth"),
+                "provider": s.get("circuit", {}).get("provider", {}).get("name"),
+            }
+            for s in (iface.get("interface_services") or [])
+            if s.get("typename") == "ManagedCircuitService" and s.get("circuit")
+        ]
+
+        # Virtual link services (overlay connectivity) - REMOVED (using ManagedVirtualEndpoint now)
+        virtual_links: list[dict[str, Any]] = []
 
         # Extract IP addresses - after clean_data, these are dicts with 'address' and 'ip_namespace'
         # Structure: [{"address": "10.0.0.1/24", "ip_namespace": {"name": "default"}}, ...]
@@ -159,6 +182,12 @@ def get_interfaces(data: list) -> list[dict[str, Any]]:
 
         if ospf_areas:
             iface_dict["ospf"] = {"area": ospf_areas[0]}
+
+        if circuits:
+            iface_dict["circuits"] = circuits
+
+        if virtual_links:
+            iface_dict["virtual_links"] = virtual_links
 
         name_to_interface[name] = iface_dict
 

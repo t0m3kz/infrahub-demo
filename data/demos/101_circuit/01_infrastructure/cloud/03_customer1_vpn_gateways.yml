@@ -1,0 +1,21 @@
+# AWS VPN Gateways for DirectConnect and VPN Connectivity
+# Provides virtual circuit endpoints for DC and Colocation connections
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: CloudVPNGateway
+  data:
+    - name: "customer-1-frankfurt-vpn-gw"
+      description: "VPN Gateway for Frankfurt VPC"
+      cloud_id: "vgw-fra001"
+      vpn_type: site_to_site
+      virtual_network: ["customer-1-ecommerce-prod-vpc"]
+      status: active
+
+    - name: "customer-1-amsterdam-vpn-gw"
+      description: "VPN Gateway for Amsterdam VPC"
+      cloud_id: "vgw-ams001"
+      vpn_type: site_to_site
+      virtual_network: ["customer-1-portal-prod-vnet"]
+      status: active

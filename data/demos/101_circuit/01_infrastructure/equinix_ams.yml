@@ -1,0 +1,48 @@
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologyColocation
+  data:
+    - name: Equinix
+      children:
+        kind: TopologyColocationMetro
+        data:
+          # Amsterdam Site
+          - name: Amsterdam
+            location: ["ams"]
+            children:
+              kind: TopologyColocationZone
+              data:
+                - name: AM3
+                  deployment_type: hybrid
+                  devices:
+                    kind: DcimPhysicalDevice
+                    data:
+                      # Edge routers in Amsterdam colocation
+                      - name: am3-edge-01
+                        role: edge
+                        device_type: N9K-C9336C-FX2
+                        status: active
+                        interfaces:
+                          kind: DcimPhysicalInterface
+                          parameters:
+                            expand_range: true
+                          data:
+                            - name: "GigabitEthernet[1-8]"
+                              interface_type: "1000base-t"
+                              status: "free"
+                              mtu: 9216
+                      - name: am3-edge-02
+                        role: edge
+                        device_type: N9K-C9336C-FX2
+                        status: active
+                        interfaces:
+                          kind: DcimPhysicalInterface
+                          parameters:
+                            expand_range: true
+                          data:
+                            - name: "GigabitEthernet[1-8]"
+                              interface_type: "1000base-t"
+                              status: "free"
+                              mtu: 9216

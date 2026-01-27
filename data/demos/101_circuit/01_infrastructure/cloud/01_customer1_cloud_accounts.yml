@@ -1,0 +1,83 @@
+# Customer 1 - Cloud Accounts across AWS, GCP, and Azure
+# Three environments: Production, Staging, Development
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: CloudAccount
+  data:
+    # ========== AWS Accounts ==========
+    - name: "customer-1-aws-production"
+      account_id: "123456789012"
+      description: "Customer 1 Production AWS Account - E-Commerce Platform"
+      status: active
+      environment: production
+      provider: AWS
+      owner: "Customer 1"
+
+    - name: "customer-1-aws-staging"
+      account_id: "123456789013"
+      description: "Customer 1 Staging AWS Account - Customer Portal Staging"
+      status: active
+      environment: staging
+      provider: AWS
+      owner: "Customer 1"
+
+    - name: "customer-1-aws-development"
+      account_id: "123456789014"
+      description: >
+        Customer 1 Development AWS Account - Analytics Dashboard Dev
+      status: active
+      environment: development
+      provider: AWS
+      owner: "Customer 1"
+
+    # ========== GCP Projects ==========
+    - name: "customer-1-gcp-production"
+      account_id: "customer-1-prod-456789"
+      description: "Customer 1 Production GCP Project - Analytics Dashboard"
+      status: active
+      environment: production
+      provider: Google Cloud
+      owner: "Customer 1"
+
+    - name: "customer-1-gcp-staging"
+      account_id: "customer-1-staging-456790"
+      description: "Customer 1 Staging GCP Project - E-Commerce Staging"
+      status: active
+      environment: staging
+      provider: Google Cloud
+      owner: "Customer 1"
+
+    - name: "customer-1-gcp-development"
+      account_id: "customer-1-dev-456791"
+      description: "Customer 1 Development GCP Project - Customer Portal Dev"
+      status: active
+      environment: development
+      provider: Google Cloud
+      owner: "Customer 1"
+
+    # ========== Azure Subscriptions ==========
+    - name: "customer-1-azure-production"
+      account_id: "a1b2c3d4-e5f6-7890-abcd-111111111111"
+      description: "Customer 1 Production Azure Subscription - Customer Portal"
+      status: active
+      environment: production
+      provider: Azure
+      owner: "Customer 1"
+
+    - name: "customer-1-azure-staging"
+      account_id: "b2c3d4e5-f6a7-8901-bcde-222222222222"
+      description: "Customer 1 Staging Azure Subscription - Analytics Staging"
+      status: active
+      environment: staging
+      provider: Azure
+      owner: "Customer 1"
+
+    - name: "customer-1-azure-development"
+      account_id: "c3d4e5f6-a7b8-9012-cdef-333333333333"
+      description: "Customer 1 Development Azure Subscription - E-Commerce Dev"
+      status: active
+      environment: development
+      provider: Azure
+      owner: "Customer 1"

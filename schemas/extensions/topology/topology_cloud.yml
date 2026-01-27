@@ -56,14 +56,14 @@ nodes:
     namespace: Topology
     inherit_from:
       - TopologyDeployment
+      - TopologyVirtualCircuitLocation
     parent: TopologyCloud
     children: TopologyCloudZone
     human_friendly_id:
       - name__value
     order_by:
-      - parent__name__value
       - name__value
-    display_label: "{{ parent__name__value|upper }} - {{ name__value|upper }}"
+    display_label: "{{ name__value|upper }}"
     uniqueness_constraints:
       - ["name__value", "parent"]
     include_in_menu: false
@@ -119,15 +119,6 @@ nodes:
     uniqueness_constraints:
       - ["name__value", "parent"]
     include_in_menu: false
-    relationships:
-      - name: devices
-        peer: DcimDevice
-        state: absent
-        kind: Component
-        cardinality: many
-        identifier: "topology__devices"
-        order_weight: 7000
-        on_delete: cascade
 
   - name: Account
     namespace: Cloud
@@ -139,7 +130,6 @@ nodes:
     human_friendly_id:
       - name__value
     order_by:
-      - provider__name__value
       - name__value
     display_label: "{{ name__value }}"
     uniqueness_constraints:
@@ -310,7 +300,6 @@ nodes:
     human_friendly_id:
       - name__value
     order_by:
-      - virtual_network__name__value
       - name__value
     display_label: "{{ name__value }}"
     uniqueness_constraints:
@@ -350,7 +339,6 @@ nodes:
     human_friendly_id:
       - name__value
     order_by:
-      - account__name__value
       - name__value
     display_label: "{{ name__value }}"
     uniqueness_constraints:
@@ -466,7 +454,6 @@ nodes:
     human_friendly_id:
       - name__value
     order_by:
-      - instance__name__value
       - name__value
     display_label: "{{ name__value }}"
     uniqueness_constraints:
@@ -545,7 +532,6 @@ nodes:
     human_friendly_id:
       - name__value
     order_by:
-      - virtual_network__name__value
       - name__value
     display_label: "{{ name__value }}"
     uniqueness_constraints:
@@ -587,7 +573,6 @@ nodes:
     human_friendly_id:
       - name__value
     order_by:
-      - virtual_network__name__value
       - name__value
     display_label: "{{ name__value }}"
     uniqueness_constraints:
@@ -641,7 +626,6 @@ nodes:
     human_friendly_id:
       - name__value
     order_by:
-      - virtual_network__name__value
       - name__value
     display_label: "{{ name__value }}"
     uniqueness_constraints:
@@ -687,7 +671,6 @@ nodes:
     human_friendly_id:
       - name__value
     order_by:
-      - account__name__value
       - name__value
     display_label: "{{ name__value }}"
     uniqueness_constraints:
@@ -966,6 +949,7 @@ nodes:
       - name__value
     inherit_from:
       - CloudResource
+      - TopologyVirtualCircuitConnectors
     attributes:
       - name: vpn_type
         kind: Dropdown

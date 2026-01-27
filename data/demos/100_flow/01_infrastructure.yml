@@ -1,0 +1,104 @@
+---
+# Infrastructure: DC, Colocation, Cloud definitions
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologyDataCenter
+  data:
+    - name: DC1
+      index: 1
+      site_layout: medium-dc-layout
+      amount_of_super_spines: 2
+      super_spine_template: N9K_C9336C_FX2_SUPER_SPINE
+      fabric_interface_sorting_method: top_down
+      devices:
+        kind: DcimPhysicalDevice
+        data:
+          # Border routers for WAN connectivity
+          - name: dc1-border-01
+            role: border-leaf
+            device_type: N9K-C9336C-FX2
+            status: active
+          - name: dc1-border-02
+            role: border-leaf
+            device_type: N9K-C9336C-FX2
+            status: active
+      member_of_groups:
+        - topologies_dc
+
+---
+# Equinix Colocation (PoP) - Multi-site
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologyColocation
+  data:
+    - name: Equinix
+      children:
+        kind: TopologyColocationMetro
+        data:
+          # Frankfurt Site
+          - name: Frankfurt
+            location: ["fra"]
+            children:
+              kind: TopologyColocationZone
+              data:
+                - name: FR5
+                  deployment_type: hybrid
+                  devices:
+                    kind: DcimPhysicalDevice
+                    data:
+                      # Edge routers in Frankfurt colocation
+                      - name: fr5-edge-01
+                        role: edge
+                        device_type: N9K-C9336C-FX2
+                        status: active
+                      - name: fr5-edge-02
+                        role: edge
+                        device_type: N9K-C9336C-FX2
+                        status: active
+
+          # Amsterdam Site
+          - name: Amsterdam
+            location: ["ams"]
+            children:
+              kind: TopologyColocationZone
+              data:
+                - name: AM5
+                  deployment_type: hybrid
+                  devices:
+                    kind: DcimPhysicalDevice
+                    data:
+                      # Edge routers in Amsterdam colocation
+                      - name: am5-edge-01
+                        role: edge
+                        device_type: N9K-C9336C-FX2
+                        status: active
+                      - name: am5-edge-02
+                        role: edge
+                        device_type: N9K-C9336C-FX2
+                        status: active
+
+---
+# AWS Cloud - Multi-region
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologyCloud
+  data:
+    - name: AWS
+      children:
+        kind: TopologyCloudRegion
+        data:
+          # Frankfurt Region
+          - name: eu-central-1
+            location: ["fra"]
+            status: active
+            # Virtual gateway for Direct Connect
+            # Cloud components handled separately in cloud schema
+
+          # Ireland Region
+          - name: eu-west-1
+            location: ["dub"]
+            status: active
+            # Secondary region for redundancy

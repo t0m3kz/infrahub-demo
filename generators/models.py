@@ -81,6 +81,7 @@ class PodDesign(BaseModel):
 # Data Center Design model (fabric-wide architectural principles)
 class DataCenterDesignData(BaseModel):
     """Data Center Design model for architectural principles."""
+
     strategy: Optional[str] = None
     underlay: Optional[bool] = False
     max_super_spine_count: Optional[int] = None

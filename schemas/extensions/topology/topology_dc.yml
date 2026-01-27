@@ -12,12 +12,11 @@ nodes:
       - quantity__value
       - role__value
       - template__template_name__value
-    order_by: [role__value, quantity__value, template__template_name__value]
+    order_by: [role__value, quantity__value]
     display_label: >
       {{quantity__value}} x {{role__value|upper}}
-      {{template__template_name__value}}
     uniqueness_constraints:
-      - ["template", "quantity__value", "role__value"]
+      - ["quantity__value", "role__value", "template"]
     attributes:
       - name: quantity
         kind: Number
@@ -80,9 +79,9 @@ nodes:
   - name: DataCenter
     namespace: Topology
     inherit_from:
-      - CoreArtifactTarget
       - TopologyDeployment
       - TopologyPhysicalDeployment
+      - TopologyVirtualCircuitLocation
       - GeneratorTarget
       - TopologyDeviceHosting
     label: Data Center
@@ -92,7 +91,6 @@ nodes:
       - ["name__value", "index__value"]
     human_friendly_id:
       - name__value
-      - index__value
     display_label: "{{ name__value}} - Fabric {{index__value}}"
     attributes:
       - name: index
@@ -187,6 +185,8 @@ nodes:
         on_delete: no-action
       - name: super_spine_template
         peer: TemplateDcimPhysicalDevice
+        label: "Super Spine Template"
+        optional: false
         kind: Attribute
         cardinality: one
         identifier: "fabric__super_spine_template"
@@ -204,8 +204,7 @@ nodes:
     children: ""
     label: Pod
     human_friendly_id:
-      - parent__name__value
-      - parent__index__value
+      - name__value
       - index__value
     display_label: "{{ name__value }}"
     uniqueness_constraints:
@@ -323,9 +322,10 @@ nodes:
         on_delete: no-action
       - name: spine_template
         peer: TemplateDcimPhysicalDevice
+        label: "Spine Template"
+        optional: false
         kind: Attribute
         cardinality: one
-        optional: false
         identifier: "pod__spine_template"
         order_weight: 1100
         on_delete: no-action

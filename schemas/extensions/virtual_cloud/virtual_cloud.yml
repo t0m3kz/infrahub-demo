@@ -14,10 +14,9 @@ nodes:
       - ["name__value", "customer"]
       - ["customer", "primary_region"]
     human_friendly_id:
-      - customer__name__value
       - name__value
-    display_label: "{{customer__name__value}} - {{name__value}}"
-    order_by: [customer__name__value, name__value]
+    display_label: "{{name__value}}"
+    order_by: [name__value]
     attributes:
       - name: name
         kind: Text

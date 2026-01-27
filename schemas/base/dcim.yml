@@ -467,11 +467,11 @@ nodes:
     namespace: Dcim
     description: Generic holding attributes and relationships relevant for virtual device.
     include_in_menu: false
+    generate_template: true
     label: Virtual Device
     icon: mdi:server-network
     uniqueness_constraints:
       - ["name__value"]
-    generate_template: true
     inherit_from:
       - CoreArtifactTarget
       - DcimDevice

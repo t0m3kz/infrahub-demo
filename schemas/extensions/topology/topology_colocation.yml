@@ -29,7 +29,7 @@ nodes:
     display_label: "{{ name__value}}"
     label: Colocation Center
     parent: TopologyColocation
-    children: TopologyColocationAZ
+    children: TopologyColocationZone
     relationships:
       - name: location
         peer: LocationMetro
@@ -40,11 +40,12 @@ nodes:
         order_weight: 1000
         description: "Geographic location mapping for this region"
 
-  - name: ColocationAZ
+  - name: ColocationZone
     namespace: Topology
     inherit_from:
       - TopologyDeployment
       - TopologyPhysicalDeployment
+      - TopologyVirtualCircuitLocation
       - GeneratorTarget
       - TopologyRackHosting
       - TopologyDeviceHosting

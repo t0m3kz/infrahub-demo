@@ -10,7 +10,7 @@ nodes:
     menu_placement: ManagedGenericDevice
     uniqueness_constraints:
       - [deployment, owner, environment__value, customer_name__value]
-    include_in_menu: true
+    include_in_menu: false
     inherit_from:
       - ManagedGeneric
       - PlatformNetworkSegment

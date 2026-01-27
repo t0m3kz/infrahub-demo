@@ -483,6 +483,464 @@ uv run pytest --cov=.
 - Mock the Infrahub SDK and GraphQL responses in unit tests. Store mock data in `tests/unit/simulators/`.
 - Avoid hardcoded paths; use fixtures like `root_dir`.
 
+## Testing Objects with Python Scripts
+
+### Overview
+
+When validating loaded data or exploring the Infrahub API, build Python scripts on-the-fly using inline Python with pipe. This approach allows you to create exactly the query you need without maintaining static script files.
+
+### Simple Query Pattern
+
+For basic queries, use inline Python with `-c`:
+
+```bash
+# Count objects
+uv run python -c "
+import asyncio
+from infrahub_sdk import InfrahubClient
+
+async def main():
+    c = InfrahubClient(address='http://localhost:8000')
+    c.default_branch = 'flow'
+    r = await c.execute_graphql(query='query { DcimPhysicalDevice { count } }')
+    print(f\"Devices: {r['DcimPhysicalDevice']['count']}\")
+
+asyncio.run(main())
+"
+```
+
+### Multi-Line Query Pattern (Recommended)
+
+For complex queries with grouping and formatting, use echo with pipe:
+
+```bash
+echo "import asyncio
+from infrahub_sdk import InfrahubClient
+
+async def main():
+    c = InfrahubClient(address='http://localhost:8000')
+    c.default_branch = 'flow'
+    r = await c.execute_graphql(query='''
+        query {
+            DcimPhysicalDevice {
+                edges {
+                    node {
+                        display_label
+                        role { value }
+                    }
+                }
+            }
+        }
+    ''')
+
+    by_role = {}
+    for e in r['DcimPhysicalDevice']['edges']:
+        n = e['node']
+        role = n['role']['value']
+        if role not in by_role:
+            by_role[role] = []
+        by_role[role].append(n['display_label'])
+
+    print()
+    print('='*60)
+    print('Devices Grouped by Role')
+    print('='*60)
+    print()
+    for role, devs in by_role.items():
+        print(f'📦 {role}: {len(devs)} devices')
+        for d in devs:
+            print(f'   - {d}')
+    print()
+
+asyncio.run(main())" | uv run python
+```
+
+**Output**:
+```
+============================================================
+Devices Grouped by Role
+============================================================
+
+📦 edge: 4 devices
+   - am5-edge-01
+   - am5-edge-02
+   - fr5-edge-01
+   - fr5-edge-02
+📦 border-leaf: 2 devices
+   - dc1-border-01
+   - dc1-border-02
+```
+
+### Common Query Patterns
+
+**Pattern 1: Count objects by type**
+
+```bash
+echo "import asyncio
+from infrahub_sdk import InfrahubClient
+
+async def main():
+    c = InfrahubClient(address='http://localhost:8000')
+    c.default_branch = 'flow'
+
+    kinds = ['DcimPhysicalDevice', 'DcimCable', 'TopologyCircuit', 'TopologyVirtualLink']
+
+    print()
+    print('='*60)
+    print('Infrastructure Object Counts')
+    print('='*60)
+    print()
+
+    for kind in kinds:
+        r = await c.execute_graphql(query=f'query {{ {kind} {{ count }} }}')
+        count = r[kind]['count']
+        print(f'{kind:30s}: {count:4d}')
+    print()
+
+asyncio.run(main())" | uv run python
+```
+
+**Pattern 2: Group objects by attribute**
+
+```bash
+echo "import asyncio
+from infrahub_sdk import InfrahubClient
+
+async def main():
+    c = InfrahubClient(address='http://localhost:8000')
+    c.default_branch = 'flow'
+
+    r = await c.execute_graphql(query='''
+        query {
+            DcimPhysicalDevice {
+                edges {
+                    node {
+                        display_label
+                        role { value }
+                        status { value }
+                    }
+                }
+            }
+        }
+    ''')
+
+    by_role = {}
+    for e in r['DcimPhysicalDevice']['edges']:
+        n = e['node']
+        role = n['role']['value']
+        if role not in by_role:
+            by_role[role] = []
+        by_role[role].append(n['display_label'])
+
+    print()
+    print('='*60)
+    print('Devices Grouped by Role')
+    print('='*60)
+    print()
+    for role, devices in by_role.items():
+        print(f'📦 {role}: {len(devices)} devices')
+        for device in devices:
+            print(f'   - {device}')
+    print()
+
+asyncio.run(main())" | uv run python
+```
+
+**Pattern 3: Validate relationships**
+
+```bash
+uv run python << 'EOF'
+import asyncio
+from infrahub_sdk import InfrahubClient
+
+async def main():
+    client = InfrahubClient(address="http://localhost:8000")
+    client.default_branch = "flow"
+
+    result = await client.execute_graphql(query="""
+        query {
+            TopologyCircuit {
+                edges {
+                    node {
+                        display_label
+                        circuit_id { value }
+                        provider {
+                            node {
+                                name { value }
+                            }
+                        }
+                        a_side_location {
+                            node {
+                                display_label
+                            }
+                        }
+                        z_side_location {
+                            node {
+                                display_label
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    """)
+
+    circuits = result["TopologyCircuit"]["edges"]
+    missing_provider = []
+    missing_location = []
+
+    for edge in circuits:
+        circuit = edge["node"]
+        circuit_id = circuit["circuit_id"]["value"]
+
+        if not circuit.get("provider") or not circuit["provider"].get("node"):
+            missing_provider.append(circuit_id)
+
+        if not circuit.get("a_side_location") or not circuit.get("z_side_location"):
+            missing_location.append(circuit_id)
+
+    print(f"\n{'='*60}")
+    print("Circuit Validation Report")
+    print(f"{'='*60}\n")
+    print(f"Total circuits: {len(circuits)}")
+    print(f"Missing provider: {len(missing_provider)}")
+    print(f"Missing locations: {len(missing_location)}")
+
+    if missing_provider:
+        print("\n⚠️  Circuits without provider:")
+        for cid in missing_provider:
+            print(f"   - {cid}")
+
+    if missing_location:
+        print("\n⚠️  Circuits without locations:")
+        for cid in missing_location:
+            print(f"   - {cid}")
+
+    if not missing_provider and not missing_location:
+        print("\n✅ All circuits have required relationships!")
+
+asyncio.run(main())
+EOF
+```
+
+**Pattern 4: Multi-layer connectivity view**
+
+```bash
+uv run python << 'EOF'
+import asyncio
+from infrahub_sdk import InfrahubClient
+
+async def main():
+    client = InfrahubClient(address="http://localhost:8000")
+    client.default_branch = "flow"
+
+    # Physical Layer
+    cables_result = await client.execute_graphql(query="""
+        query {
+            DcimCable {
+                edges {
+                    node {
+                        type { value }
+                        endpoints {
+                            edges {
+                                node {
+                                    ... on DcimPhysicalInterface {
+                                        name { value }
+                                        device {
+                                            node {
+                                                name { value }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    """)
+
+    # Circuit Layer
+    circuits_result = await client.execute_graphql(query="""
+        query {
+            TopologyCircuit {
+                edges {
+                    node {
+                        circuit_type { value }
+                        a_side_location {
+                            node {
+                                display_label
+                            }
+                        }
+                        z_side_location {
+                            node {
+                                display_label
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    """)
+
+    # Virtual Layer
+    vlinks_result = await client.execute_graphql(query="""
+        query {
+            TopologyVirtualLink {
+                edges {
+                    node {
+                        link_type { value }
+                        provider {
+                            node {
+                                name { value }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    """)
+
+    print(f"\n{'='*80}")
+    print("END-TO-END CONNECTIVITY STACK")
+    print(f"{'='*80}\n")
+
+    # Physical Layer
+    cables = cables_result["DcimCable"]["edges"]
+    print(f"PHYSICAL LAYER: {len(cables)} cables\n")
+    for edge in cables:
+        cable = edge["node"]
+        endpoints = cable["endpoints"]["edges"]
+        if len(endpoints) == 2:
+            ep1 = endpoints[0]["node"]
+            ep2 = endpoints[1]["node"]
+            dev1 = ep1["device"]["node"]["name"]["value"]
+            int1 = ep1["name"]["value"]
+            dev2 = ep2["device"]["node"]["name"]["value"]
+            int2 = ep2["name"]["value"]
+            cable_type = cable["type"]["value"]
+            print(f"   🔌 {dev1}:{int1} ═══[{cable_type}]═══ {dev2}:{int2}")
+
+    # Circuit Layer
+    circuits = circuits_result["TopologyCircuit"]["edges"]
+    circuit_types = {}
+    for edge in circuits:
+        circuit = edge["node"]
+        ctype = circuit["circuit_type"]["value"]
+        circuit_types[ctype] = circuit_types.get(ctype, 0) + 1
+
+    print(f"\nCIRCUIT LAYER: {len(circuits)} circuits\n")
+    for ctype, count in circuit_types.items():
+        print(f"   📡 {ctype}: {count}")
+
+    # Virtual Layer
+    vlinks = vlinks_result["TopologyVirtualLink"]["edges"]
+    providers = {}
+    for edge in vlinks:
+        vlink = edge["node"]
+        provider = vlink["provider"]["node"]["name"]["value"]
+        providers[provider] = providers.get(provider, 0) + 1
+
+    print(f"\nVIRTUAL LAYER: {len(vlinks)} virtual links\n")
+    for provider, count in providers.items():
+        print(f"   ☁️  {provider}: {count}")
+
+    print(f"\n{'='*80}\n")
+
+asyncio.run(main())
+EOF
+```
+
+### GraphQL Query Building Tips
+
+**Simple Attributes**:
+```graphql
+name { value }
+status { value }
+bandwidth { value }
+```
+
+**Relationships (Cardinality One)**:
+```graphql
+provider {
+    node {
+        name { value }
+        display_label
+    }
+}
+```
+
+**Relationships (Cardinality Many)**:
+```graphql
+devices {
+    edges {
+        node {
+            name { value }
+            display_label
+        }
+    }
+}
+```
+
+**Polymorphic Queries (Endpoints/Interfaces)**:
+```graphql
+endpoints {
+    edges {
+        node {
+            ... on DcimPhysicalInterface {
+                name { value }
+                device {
+                    node {
+                        name { value }
+                    }
+                }
+            }
+        }
+    }
+}
+```
+
+**Filters**:
+```graphql
+TopologyCircuit(circuit_type__value: "dark_fiber") {
+    edges {
+        node {
+            display_label
+        }
+    }
+}
+```
+
+### Best Practices
+
+1. **Use heredocs for readability**: Multi-line queries are easier to read and maintain
+2. **Start simple**: Query `count` first, then add fields incrementally
+3. **Test queries in UI**: Use InfraHub's GraphQL explorer to test queries before scripting
+4. **Handle None values**: Always check if relationships exist before accessing nested fields
+5. **Use display_label**: Always include `display_label` for human-readable output
+6. **Group for summaries**: Use Python dicts to group results by attributes
+7. **Quote heredoc delimiter**: Use `'EOF'` not `EOF` to prevent variable expansion
+8. **Add progress indicators**: Use `print()` statements to show progress for long queries
+
+### Troubleshooting
+
+**Error: "Cannot query field 'X' on type 'Y'"**
+- Field doesn't exist on schema kind
+- Check schema: `uv run infrahubctl schema show YourKind`
+
+**Error: "GraphQLError"**
+- Invalid GraphQL syntax
+- Test query in InfraHub UI GraphQL explorer first
+
+**Empty Results**
+- Wrong branch name
+- No objects exist yet
+- Check: `uv run python -c "..." ` with count query
+
+**ImportError: No module named 'infrahub_sdk'**
+- Run with `uv run` prefix: `uv run python -c "..."`
+
 ## Security Considerations
 
 - Never commit `.env` files or credentials

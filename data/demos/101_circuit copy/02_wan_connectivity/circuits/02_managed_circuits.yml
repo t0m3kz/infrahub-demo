@@ -1,0 +1,108 @@
+---
+# Managed Circuits - Phase 2: Create managed circuit instances
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: ManagedCircuit
+  data:
+    # DF-DC1-DC2-001
+    - name: "DF-DC1-DC2-001-A"
+      description: "DC1 side managed circuit"
+      status: active
+      circuit: "DF-DC1-DC2-001"
+      source_topology_circuit: ["DF-DC1-DC2-001"]
+      deployment: ["dc1"]
+      interface: ["dc1-border-01", "Ethernet1/1"]
+
+    - name: "DF-DC1-DC2-001-Z"
+      description: "DC2 side managed circuit"
+      status: active
+      circuit: "DF-DC1-DC2-001"
+      destination_topology_circuit: ["DF-DC1-DC2-001"]
+      deployment: ["dc2"]
+      interface: ["dc2-border-01", "Ethernet1/1"]
+
+    # DF-DC1-DC2-002
+    - name: "DF-DC1-DC2-002-A"
+      description: "DC1 side managed circuit"
+      status: active
+      circuit: "DF-DC1-DC2-002"
+      source_topology_circuit: ["DF-DC1-DC2-002"]
+      deployment: ["dc1"]
+      interface: ["dc1-border-02", "Ethernet1/1"]
+
+    - name: "DF-DC1-DC2-002-Z"
+      description: "DC2 side managed circuit"
+      status: active
+      circuit: "DF-DC1-DC2-002"
+      destination_topology_circuit: ["DF-DC1-DC2-002"]
+      deployment: ["dc2"]
+      interface: ["dc2-border-02", "Ethernet1/1"]
+
+    # XC-DC1-FR5-001
+    - name: "XC-DC1-FR5-001-A"
+      description: "DC1 side managed circuit"
+      status: active
+      circuit: "XC-DC1-FR5-001"
+      source_topology_circuit: ["XC-DC1-FR5-001"]
+      deployment: ["dc1"]
+      interface: ["dc1-border-01", "Ethernet1/2"]
+
+    - name: "XC-DC1-FR5-001-Z"
+      description: "Equinix FR5 side managed circuit"
+      status: active
+      circuit: "XC-DC1-FR5-001"
+      destination_topology_circuit: ["XC-DC1-FR5-001"]
+      deployment: ["Equinix-FR5"]
+      interface: ["fr5-edge-01", "GigabitEthernet1"]
+
+    # XC-DC1-FR5-002
+    - name: "XC-DC1-FR5-002-A"
+      description: "DC1 side managed circuit"
+      status: active
+      circuit: "XC-DC1-FR5-002"
+      source_topology_circuit: ["XC-DC1-FR5-002"]
+      deployment: ["dc1"]
+      interface: ["dc1-border-02", "Ethernet1/2"]
+
+    - name: "XC-DC1-FR5-002-Z"
+      description: "Equinix FR5 side managed circuit"
+      status: active
+      circuit: "XC-DC1-FR5-002"
+      destination_topology_circuit: ["XC-DC1-FR5-002"]
+      deployment: ["Equinix-FR5"]
+      interface: ["fr5-edge-02", "GigabitEthernet1"]
+
+    # XC-DC2-AM3-001
+    - name: "XC-DC2-AM3-001-A"
+      description: "DC2 side managed circuit"
+      status: active
+      circuit: "XC-DC2-AM3-001"
+      source_topology_circuit: ["XC-DC2-AM3-001"]
+      deployment: ["dc2"]
+      interface: ["dc2-border-01", "Ethernet1/2"]
+
+    - name: "XC-DC2-AM3-001-Z"
+      description: "Equinix AM3 side managed circuit"
+      status: active
+      circuit: "XC-DC2-AM3-001"
+      destination_topology_circuit: ["XC-DC2-AM3-001"]
+      deployment: ["Equinix-AM3"]
+      interface: ["am3-edge-01", "GigabitEthernet1"]
+
+    # XC-DC2-AM3-002
+    - name: "XC-DC2-AM3-002-A"
+      description: "DC2 side managed circuit"
+      status: active
+      circuit: "XC-DC2-AM3-002"
+      source_topology_circuit: ["XC-DC2-AM3-002"]
+      deployment: ["dc2"]
+      interface: ["dc2-border-02", "Ethernet1/2"]
+
+    - name: "XC-DC2-AM3-002-Z"
+      description: "Equinix AM3 side managed circuit"
+      status: active
+      circuit: "XC-DC2-AM3-002"
+      destination_topology_circuit: ["XC-DC2-AM3-002"]
+      deployment: ["Equinix-AM3"]
+      interface: ["am3-edge-02", "GigabitEthernet1"]

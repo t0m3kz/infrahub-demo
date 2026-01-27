@@ -120,26 +120,84 @@ query edge_config($device: String!) {
                 edges {
                   node {
                     __typename
-                    ... on ManagedOSPF {
-                      area { node { area { value } } }
-                      ospf_interface_profile {
-                        node {
-                          metric { value }
-                          mode { value }
-                          authentication_mode { value }
-                          authentication_key { value }
-                        }
-                      }
-                    }
-                    ... on ManagedNetworkSegment {
-                      vlan_id { value }
-                      name { value }
-                    }
+                    ...OSPFServiceFields
+                    ...NetworkSegmentFields
+                    ...CircuitServiceFields
+                    ...VirtualLinkServiceFields
                   }
                 }
               }
             }
           }
+        }
+      }
+    }
+  }
+}
+
+fragment OSPFServiceFields on ManagedOSPF {
+  area {
+    node {
+      area { value }
+      name { value }
+      area_type { value }
+    }
+  }
+  ospf_interface_profile {
+    node {
+      metric { value }
+      mode { value }
+      authentication_mode { value }
+      authentication_key { value }
+    }
+  }
+}
+
+fragment NetworkSegmentFields on ManagedNetworkSegment {
+  vlan_id { value }
+  name { value }
+  description { value }
+  segment_type { value }
+  status { value }
+}
+
+fragment CircuitServiceFields on ManagedCircuitService {
+  name { value }
+  description { value }
+  status { value }
+  side { value }
+  circuit {
+    node {
+      circuit_id { value }
+      circuit_type { value }
+      bandwidth { value }
+      status { value }
+      description { value }
+      provider {
+        node {
+          name { value }
+        }
+      }
+    }
+  }
+}
+
+fragment VirtualLinkServiceFields on ManagedVirtualLinkService {
+  name { value }
+  description { value }
+  status { value }
+  virtual_link {
+    node {
+      name { value }
+      link_type { value }
+      bandwidth { value }
+      status { value }
+      description { value }
+      encryption { value }
+      cloud_resource_id { value }
+      provider {
+        node {
+          name { value }
         }
       }
     }

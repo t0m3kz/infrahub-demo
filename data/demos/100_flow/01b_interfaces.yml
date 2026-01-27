@@ -1,0 +1,225 @@
+---
+# Physical and Virtual Interfaces for Edge/Border Routers
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimPhysicalInterface
+  data:
+    # ===== DC1 Border Router 1 =====
+    - name: "Ethernet1/1"
+      device: "dc1-border-01"
+      status: active
+      interface_type: 100gbase-x-qsfp28
+      description: "To FR5 edge-01 via DF-FRA-001"
+
+    - name: "Ethernet1/2"
+      device: "dc1-border-01"
+      status: active
+      interface_type: 100gbase-x-qsfp28
+      description: "To AM5 edge-01 via DF-AMS-001"
+
+    - name: "Loopback0"
+      device: "dc1-border-01"
+      status: active
+      interface_type: other
+      role: loopback
+      description: "Loopback for BGP router ID"
+
+    # ===== DC1 Border Router 2 =====
+    - name: "Ethernet1/1"
+      device: "dc1-border-02"
+      status: active
+      interface_type: 100gbase-x-qsfp28
+      description: "To FR5 edge-02 via DF-FRA-002"
+
+    - name: "Ethernet1/2"
+      device: "dc1-border-02"
+      status: active
+      interface_type: 100gbase-x-qsfp28
+      description: "To AM5 edge-02 via DF-AMS-002"
+
+    - name: "Loopback0"
+      device: "dc1-border-02"
+      status: active
+      interface_type: other
+      role: loopback
+      description: "Loopback for BGP router ID"
+
+    # ===== FR5 Edge Router 1 =====
+    - name: "Ethernet1/1"
+      device: "fr5-edge-01"
+      status: active
+      interface_type: 100gbase-x-qsfp28
+      description: "To DC1 border-01 via DF-FRA-001"
+
+    - name: "Ethernet1/10"
+      device: "fr5-edge-01"
+      status: active
+      interface_type: 10gbase-x-sfpp
+      description: "To AWS eu-central-1 via dxcon-fh4a7lqd"
+
+    - name: "Ethernet1/11"
+      device: "fr5-edge-01"
+      status: active
+      interface_type: 10gbase-x-sfpp
+      description: "To AWS eu-west-1 cross-region"
+
+    - name: "Ethernet1/20"
+      device: "fr5-edge-01"
+      status: active
+      interface_type: 10gbase-x-sfpp
+      description: "Internet DIA for VPN"
+
+    - name: "Ethernet1/30"
+      device: "fr5-edge-01"
+      status: active
+      interface_type: 100gbase-x-qsfp28
+      description: "To AM5 edge-01 via EQX-METRO-001"
+
+    - name: "Loopback0"
+      device: "fr5-edge-01"
+      status: active
+      interface_type: other
+      role: loopback
+      description: "Loopback for BGP router ID"
+
+    # ===== FR5 Edge Router 2 =====
+    - name: "Ethernet1/1"
+      device: "fr5-edge-02"
+      status: active
+      interface_type: 100gbase-x-qsfp28
+      description: "To DC1 border-02 via DF-FRA-002"
+
+    - name: "Ethernet1/10"
+      device: "fr5-edge-02"
+      status: active
+      interface_type: 10gbase-x-sfpp
+      description: "To AWS eu-central-1 via dxcon-fk3b9mpx"
+
+    - name: "Ethernet1/30"
+      device: "fr5-edge-02"
+      status: active
+      interface_type: 100gbase-x-qsfp28
+      description: "To AM5 edge-02 via EQX-METRO-002"
+
+    - name: "Loopback0"
+      device: "fr5-edge-02"
+      status: active
+      interface_type: other
+      role: loopback
+      description: "Loopback for BGP router ID"
+
+    # ===== AM5 Edge Router 1 =====
+    - name: "Ethernet1/1"
+      device: "am5-edge-01"
+      status: active
+      interface_type: 100gbase-x-qsfp28
+      description: "To DC1 border-01 via DF-AMS-001"
+
+    - name: "Ethernet1/10"
+      device: "am5-edge-01"
+      status: active
+      interface_type: 10gbase-x-sfpp
+      description: "To AWS eu-west-1 via dxcon-ah7x2npq"
+
+    - name: "Ethernet1/20"
+      device: "am5-edge-01"
+      status: active
+      interface_type: 10gbase-x-sfpp
+      description: "Internet DIA for VPN"
+
+    - name: "Ethernet1/30"
+      device: "am5-edge-01"
+      status: active
+      interface_type: 100gbase-x-qsfp28
+      description: "To FR5 edge-01 via EQX-METRO-001"
+
+    - name: "Loopback0"
+      device: "am5-edge-01"
+      status: active
+      interface_type: other
+      role: loopback
+      description: "Loopback for BGP router ID"
+
+    # ===== AM5 Edge Router 2 =====
+    - name: "Ethernet1/1"
+      device: "am5-edge-02"
+      status: active
+      interface_type: 100gbase-x-qsfp28
+      description: "To DC1 border-02 via DF-AMS-002"
+
+    - name: "Ethernet1/10"
+      device: "am5-edge-02"
+      status: active
+      interface_type: 10gbase-x-sfpp
+      description: "To AWS eu-west-1 via dxcon-ak9y3prs"
+
+    - name: "Ethernet1/30"
+      device: "am5-edge-02"
+      status: active
+      interface_type: 100gbase-x-qsfp28
+      description: "To FR5 edge-02 via EQX-METRO-002"
+
+    - name: "Loopback0"
+      device: "am5-edge-02"
+      status: active
+      interface_type: other
+      role: loopback
+      description: "Loopback for BGP router ID"
+
+---
+# Virtual Interfaces for VPN tunnels
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimVirtualInterface
+  data:
+    # FR5 VPN tunnels
+    - name: "Tunnel1"
+      device: "fr5-edge-01"
+      status: active
+      description: "IPsec VPN to AWS eu-central-1"
+
+    # AM5 VPN tunnels
+    - name: "Tunnel1"
+      device: "am5-edge-01"
+      status: active
+      description: "IPsec VPN to AWS eu-west-1"
+
+    # DC1 emergency VPN
+    - name: "Tunnel1"
+      device: "dc1-border-01"
+      status: active
+      description: "Emergency IPsec VPN to AWS"
+
+    # VXLAN interfaces for inter-colocation
+    - name: "Vxlan1"
+      device: "fr5-edge-01"
+      status: active
+      description: "VXLAN to AM5 primary"
+
+    - name: "Vxlan1"
+      device: "fr5-edge-02"
+      status: active
+      description: "VXLAN to AM5 backup"
+
+    - name: "Vxlan1"
+      device: "am5-edge-01"
+      status: active
+      description: "VXLAN to FR5 primary"
+
+    - name: "Vxlan1"
+      device: "am5-edge-02"
+      status: active
+      description: "VXLAN to FR5 backup"
+
+    # GRE tunnel for routing
+    - name: "Tunnel10"
+      device: "fr5-edge-01"
+      status: active
+      description: "GRE tunnel to AM5 for routing"
+
+    - name: "Tunnel10"
+      device: "am5-edge-01"
+      status: active
+      description: "GRE tunnel to FR5 for routing"
