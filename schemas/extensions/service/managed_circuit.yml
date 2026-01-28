@@ -9,7 +9,6 @@ nodes:
     include_in_menu: false
     inherit_from:
       - ManagedGeneric
-      - ManagedGenericInterfaces
     human_friendly_id:
       - name__value
     display_label: "{{ name__value }}"
@@ -19,6 +18,19 @@ nodes:
       - name: name
         kind: Text
         order_weight: 100
+      - name: endpoint
+        kind: Dropdown
+        order_weight: 110
+        description: "Circuit endpoint (A or Z side)"
+        choices:
+          - name: a_side
+            label: "A Side"
+            description: "A-side endpoint of the circuit (local or primary)"
+            color: "#74B9FF"
+          - name: z_side
+            label: "Z Side"
+            description: "Z-side endpoint of the circuit (remote or secondary)"
+            color: "#55EFC4"
     relationships:
       - name: topology_circuit
         label: "Topology Physical Circuit"
@@ -28,6 +40,14 @@ nodes:
         identifier: "physical_circuit__managed"
         order_weight: 1000
         description: "Topology circuit this managed instance belongs to"
+      - name: interface
+        label: "Assigned Interface"
+        peer: DcimInterface
+        cardinality: one
+        optional: true
+        identifier: interface_services
+        order_weight: 1500
+        description: "Interface this circuit endpoint terminates on"
       - name: cable
         label: "Structured Cable"
         peer: DcimCable
@@ -44,17 +64,40 @@ nodes:
     icon: "mdi:transit-connection-variant"
     include_in_menu: false
     inherit_from:
-      - ManagedGenericInterfaces
+      - ManagedGeneric
       - TopologyVirtualCircuitConnectors
     human_friendly_id:
-      - description__value
-    display_label: "{{ description__value }}"
+      - name__value
+    display_label: "{{ name__value }}"
     uniqueness_constraints:
-      - [description__value]
+      - [name__value]
     attributes:
-      - name: description
+      - name: name
         kind: Text
         order_weight: 100
+      - name: endpoint
+        kind: Dropdown
+        order_weight: 110
+        description: "Circuit endpoint (A or Z side)"
+        choices:
+          - name: a_side
+            label: "A Side"
+            description: "A-side endpoint of the circuit (local or primary)"
+            color: "#74B9FF"
+          - name: z_side
+            label: "Z Side"
+            description: "Z-side endpoint of the circuit (remote or secondary)"
+            color: "#55EFC4"
+      - name: vni
+        kind: Number
+        optional: true
+        order_weight: 120
+        description: "VXLAN Network Identifier (if applicable)"
+      - name: tunnel_id
+        kind: Number
+        optional: true
+        order_weight: 130
+        description: "Tunnel ID (for GRE/IPSec, if applicable)"
     relationships:
       - name: topology_circuit
         label: "Topology Virtual Circuit"
@@ -64,3 +107,11 @@ nodes:
         identifier: "virtual_circuit__connectors"
         order_weight: 1000
         description: "Topology virtual circuit this connector belongs to"
+      - name: interface
+        label: "Assigned Interface"
+        peer: DcimInterface
+        cardinality: one
+        optional: true
+        identifier: interface_services
+        order_weight: 1500
+        description: "Interface this circuit endpoint terminates on"

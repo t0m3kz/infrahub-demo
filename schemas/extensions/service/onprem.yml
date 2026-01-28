@@ -55,6 +55,13 @@ generics:
         optional: false
         on_delete: no-action
         description: "The deployment location for this resource"
+      # Default: single interface for all services/protocols (BGP, OSPF, etc.)
+      - name: interface
+        peer: DcimInterface
+        cardinality: one
+        optional: true
+        identifier: interface_services
+        description: "Primary interface for this service or protocol"
 
   - name: GenericDevice
     namespace: Managed
@@ -71,10 +78,12 @@ generics:
         identifier: device_services
         order_weight: 1000
 
+  # Use this generic ONLY for segments (VLAN, VXLAN, VRF, etc.)
+  # Only inherit this for segment-like resources (VLAN, VXLAN, VRF, etc.)
   - name: GenericInterfaces
     namespace: Managed
-    description: "On-premises resources attached to device interfaces"
-    label: "Interface-based Resource"
+    description: "On-premises segment attached to multiple device interfaces"
+    label: "Segment Resource (Many Interfaces)"
     include_in_menu: false
     relationships:
       - name: interfaces
@@ -91,10 +100,10 @@ extensions:
       relationships:
         - name: device_services
           peer: ManagedGeneric
-          label: On-Premises Services
+          label: Device capabilities
           optional: true
-          direction: outbound
           cardinality: many
+          direction: outbound
           kind: Generic
           on_delete: no-action
           identifier: device_services
@@ -102,9 +111,19 @@ extensions:
       relationships:
         - name: interface_services
           peer: ManagedGeneric
-          label: On-Premises Interface Services
+          label: Interface capabilities
           identifier: interface_services
           optional: true
           cardinality: many
           kind: Generic
           on_delete: no-action
+
+        # Network segment membership (trunk or access)
+        - name: network_segments
+          peer: ManagedNetworkSegment
+          label: Network Segments
+          optional: true
+          cardinality: many
+          kind: Generic
+          identifier: interface_segments
+          order_weight: 3100

@@ -42,6 +42,28 @@ nodes:
             color: "#A9DFBF"
         default_value: production
         order_weight: 2
+      - name: segment_scope
+        kind: Dropdown
+        label: Segment Scope
+        description: "Scope of this network segment"
+        choices:
+          - name: topology
+            label: Topology-specific
+            description: |
+              "Segment present in a single topology/fabric/deployment."
+            color: "#7FBF7F"
+          - name: shared
+            label: Shared
+            description: |
+              "Segment shared across multiple topologies/fabrics/deployments"
+            color: "#F39C12"
+          - name: global
+            label: Global
+            description: |
+              "Segment present in all topologies/fabrics/deployments."
+            color: "#3498DB"
+        default_value: topology
+        order_weight: 3
       - name: tenant_isolation
         kind: Dropdown
         description: "Level of tenant isolation for this segment"
@@ -80,3 +102,21 @@ nodes:
         cardinality: one
         kind: Generic
         optional: true
+      # Interfaces assigned to this segment
+      - name: interfaces
+        peer: DcimInterface
+        label: Member Interfaces
+        optional: true
+        cardinality: many
+        kind: Generic
+        identifier: segment_interfaces
+        order_weight: 3200
+
+      - name: deployments
+        peer: TopologyDeployment
+        label: Deployments
+        optional: true
+        cardinality: many
+        kind: Generic
+        identifier: segment_deployments
+        order_weight: 3300

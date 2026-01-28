@@ -44,7 +44,6 @@ nodes:
     inherit_from:
       - ManagedGeneric
       - ManagedGenericDevice
-      - ManagedGenericInterfaces
       - ManagedRouting
     attributes:
       - name: process_id
@@ -123,7 +122,6 @@ nodes:
     inherit_from:
       - ManagedGeneric
       - ManagedGenericDevice
-      - ManagedGenericInterfaces
       - ManagedRouting
     human_friendly_id:
       - "name__value"
@@ -205,7 +203,6 @@ nodes:
     inherit_from:
       - ManagedGeneric
       - ManagedGenericDevice
-      - ManagedGenericInterfaces
       - ManagedRouting
     attributes:
       - name: dr_priority
