@@ -79,6 +79,7 @@ nodes:
   - name: DataCenter
     namespace: Topology
     inherit_from:
+      - CoreArtifactTarget
       - TopologyDeployment
       - TopologyPhysicalDeployment
       - TopologyVirtualCircuitLocation
