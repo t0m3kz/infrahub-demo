@@ -139,14 +139,15 @@ def get_interfaces(data: list) -> list[dict[str, Any]]:
                 "name": s.get("name"),
                 "description": s.get("description"),
                 "status": s.get("status"),
-                "side": s.get("side"),
-                "circuit_id": s.get("circuit", {}).get("circuit_id"),
-                "circuit_type": s.get("circuit", {}).get("circuit_type"),
-                "bandwidth": s.get("circuit", {}).get("bandwidth"),
-                "provider": s.get("circuit", {}).get("provider", {}).get("name"),
+                "side": s.get("endpoint"),
+                "endpoint": s.get("endpoint"),
+                "circuit_id": s.get("topology_circuit", {}).get("circuit_id"),
+                "circuit_type": s.get("topology_circuit", {}).get("circuit_type"),
+                "bandwidth": s.get("topology_circuit", {}).get("bandwidth"),
+                "provider": s.get("topology_circuit", {}).get("provider", {}).get("name"),
             }
             for s in (iface.get("interface_services") or [])
-            if s.get("typename") == "ManagedCircuitService" and s.get("circuit")
+            if s.get("typename") == "ManagedPhysicalCircuit" and s.get("topology_circuit")
         ]
 
         # Virtual link services (overlay connectivity) - REMOVED (using ManagedVirtualEndpoint now)

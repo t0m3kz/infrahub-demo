@@ -158,12 +158,12 @@ fragment NetworkSegmentFields on ManagedNetworkSegment {
   status { value }
 }
 
-fragment CircuitServiceFields on ManagedCircuitService {
+fragment CircuitServiceFields on ManagedPhysicalCircuit {
   name { value }
   description { value }
   status { value }
-  side { value }
-  circuit {
+  endpoint { value }
+  topology_circuit {
     node {
       circuit_id { value }
       circuit_type { value }
@@ -179,11 +179,14 @@ fragment CircuitServiceFields on ManagedCircuitService {
   }
 }
 
-fragment VirtualLinkServiceFields on ManagedVirtualLinkService {
+fragment VirtualLinkServiceFields on ManagedVirtualCircuit {
   name { value }
   description { value }
   status { value }
-  virtual_link {
+  endpoint { value }
+  vni { value }
+  tunnel_id { value }
+  topology_circuit {
     node {
       name { value }
       link_type { value }
