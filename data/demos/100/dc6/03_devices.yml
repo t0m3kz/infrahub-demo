@@ -1,0 +1,373 @@
+---
+apiVersion: infrahub.app/v1
+kind: Object
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimPhysicalDevice
+  data:
+    - name: dc6-fab1-super-spine-01
+      role: super-spine
+      device_type: N9K-C9336C-FX2
+      platform: cisco_nxos
+      status: active
+      member_of_groups:
+        - super-spines
+      object_template: N9K_C9336C_FX2_SUPER_SPINE
+    - name: dc6-fab1-super-spine-02
+      role: super-spine
+      device_type: N9K-C9336C-FX2
+      platform: cisco_nxos
+      status: active
+      member_of_groups:
+        - super-spines
+      object_template: N9K_C9336C_FX2_SUPER_SPINE
+    - name: dc6-fab1-pod1-spine-01
+      role: spine
+      device_type: N9K-C9336C-FX2
+      platform: cisco_nxos
+      status: active
+      member_of_groups:
+        - spines
+      object_template: N9K_C9336C_FX2_SPINE
+    - name: dc6-fab1-pod1-spine-02
+      role: spine
+      device_type: N9K-C9336C-FX2
+      platform: cisco_nxos
+      status: active
+      member_of_groups:
+        - spines
+      object_template: N9K_C9336C_FX2_SPINE
+    - name: dc6-fab1-pod1-spine-03
+      role: spine
+      device_type: N9K-C9336C-FX2
+      platform: cisco_nxos
+      status: active
+      member_of_groups:
+        - spines
+      object_template: N9K_C9336C_FX2_SPINE
+    - name: dc6-fab1-pod1-spine-04
+      role: spine
+      device_type: N9K-C9336C-FX2
+      platform: cisco_nxos
+      status: active
+      member_of_groups:
+        - spines
+      object_template: N9K_C9336C_FX2_SPINE
+    - name: dc6-fab1-pod1-suite1-row1-rack5-leaf-01
+      rack: ktw-1-s-1-r-1-5
+      role: leaf
+      device_type: PowerSwitch S5232F-ON
+      platform: dell_sonic
+      status: active
+      member_of_groups:
+        - leafs
+      object_template: PowerSwitch-S5232F-ON_LEAF_MR
+    - name: dc6-fab1-pod1-suite1-row1-rack5-leaf-02
+      rack: ktw-1-s-1-r-1-5
+      role: leaf
+      device_type: PowerSwitch S5232F-ON
+      platform: dell_sonic
+      status: active
+      member_of_groups:
+        - leafs
+      object_template: PowerSwitch-S5232F-ON_LEAF_MR
+    - name: dc6-fab1-pod1-suite1-row1-rack5-tor-01
+      rack: ktw-1-s-1-r-1-5
+      role: tor
+      device_type: PowerSwitch S5224F-ON
+      platform: dell_sonic
+      status: active
+      member_of_groups:
+        - tors
+      object_template: PowerSwitch-S5224F-ON_TOR
+    - name: dc6-fab1-pod1-suite1-row1-rack5-tor-02
+      rack: ktw-1-s-1-r-1-5
+      role: tor
+      device_type: PowerSwitch S5224F-ON
+      platform: dell_sonic
+      status: active
+      member_of_groups:
+        - tors
+      object_template: PowerSwitch-S5224F-ON_TOR
+    - name: dc6-fab1-pod1-suite1-row2-rack5-leaf-01
+      rack: ktw-1-s-1-r-2-5
+      role: leaf
+      device_type: PowerSwitch S5232F-ON
+      platform: dell_sonic
+      status: active
+      member_of_groups:
+        - leafs
+      object_template: PowerSwitch-S5232F-ON_LEAF_MR
+    - name: dc6-fab1-pod1-suite1-row2-rack5-leaf-02
+      rack: ktw-1-s-1-r-2-5
+      role: leaf
+      device_type: PowerSwitch S5232F-ON
+      platform: dell_sonic
+      status: active
+      member_of_groups:
+        - leafs
+      object_template: PowerSwitch-S5232F-ON_LEAF_MR
+    - name: dc6-fab1-pod1-suite1-row2-rack5-tor-01
+      rack: ktw-1-s-1-r-2-5
+      role: tor
+      device_type: PowerSwitch S5224F-ON
+      platform: dell_sonic
+      status: active
+      member_of_groups:
+        - tors
+      object_template: PowerSwitch-S5224F-ON_TOR
+    - name: dc6-fab1-pod1-suite1-row2-rack5-tor-02
+      rack: ktw-1-s-1-r-2-5
+      role: tor
+      device_type: PowerSwitch S5224F-ON
+      platform: dell_sonic
+      status: active
+      member_of_groups:
+        - tors
+      object_template: PowerSwitch-S5224F-ON_TOR
+    - name: dc6-fab1-pod2-spine-01
+      role: spine
+      device_type: N9K-C9336C-FX2
+      platform: cisco_nxos
+      status: active
+      member_of_groups:
+        - spines
+      object_template: N9K_C9336C_FX2_SPINE
+    - name: dc6-fab1-pod2-spine-02
+      role: spine
+      device_type: N9K-C9336C-FX2
+      platform: cisco_nxos
+      status: active
+      member_of_groups:
+        - spines
+      object_template: N9K_C9336C_FX2_SPINE
+    - name: dc6-fab1-pod2-spine-03
+      role: spine
+      device_type: N9K-C9336C-FX2
+      platform: cisco_nxos
+      status: active
+      member_of_groups:
+        - spines
+      object_template: N9K_C9336C_FX2_SPINE
+    - name: dc6-fab1-pod2-spine-04
+      role: spine
+      device_type: N9K-C9336C-FX2
+      platform: cisco_nxos
+      status: active
+      member_of_groups:
+        - spines
+      object_template: N9K_C9336C_FX2_SPINE
+    - name: dc6-fab1-pod2-suite2-row1-rack1-tor-01
+      rack: ktw-1-s-2-r-1-1
+      role: tor
+      device_type: N9K-C9336C-FX2
+      platform: cisco_nxos
+      status: active
+      member_of_groups:
+        - tors
+      object_template: N9K_C9336C_FX2_TOR
+    - name: dc6-fab1-pod2-suite2-row1-rack1-tor-02
+      rack: ktw-1-s-2-r-1-1
+      role: tor
+      device_type: N9K-C9336C-FX2
+      platform: cisco_nxos
+      status: active
+      member_of_groups:
+        - tors
+      object_template: N9K_C9336C_FX2_TOR
+    - name: dc6-fab1-pod2-suite2-row1-rack5-tor-01
+      rack: ktw-1-s-2-r-1-5
+      role: tor
+      device_type: N9K-C9336C-FX2
+      platform: cisco_nxos
+      status: active
+      member_of_groups:
+        - tors
+      object_template: N9K_C9336C_FX2_TOR
+    - name: dc6-fab1-pod2-suite2-row1-rack5-tor-02
+      rack: ktw-1-s-2-r-1-5
+      role: tor
+      device_type: N9K-C9336C-FX2
+      platform: cisco_nxos
+      status: active
+      member_of_groups:
+        - tors
+      object_template: N9K_C9336C_FX2_TOR
+    - name: dc6-fab1-pod2-suite2-row2-rack1-tor-01
+      rack: ktw-1-s-2-r-2-1
+      role: tor
+      device_type: PowerSwitch S5224F-ON
+      platform: dell_sonic
+      status: active
+      member_of_groups:
+        - tors
+      object_template: PowerSwitch-S5224F-ON_TOR
+    - name: dc6-fab1-pod2-suite2-row2-rack1-tor-02
+      rack: ktw-1-s-2-r-2-1
+      role: tor
+      device_type: PowerSwitch S5224F-ON
+      platform: dell_sonic
+      status: active
+      member_of_groups:
+        - tors
+      object_template: PowerSwitch-S5224F-ON_TOR
+    - name: dc6-fab1-pod2-suite2-row2-rack5-tor-01
+      rack: ktw-1-s-2-r-2-5
+      role: tor
+      device_type: PowerSwitch S5224F-ON
+      platform: dell_sonic
+      status: active
+      member_of_groups:
+        - tors
+      object_template: PowerSwitch-S5224F-ON_TOR
+    - name: dc6-fab1-pod2-suite2-row2-rack5-tor-02
+      rack: ktw-1-s-2-r-2-5
+      role: tor
+      device_type: PowerSwitch S5224F-ON
+      platform: dell_sonic
+      status: active
+      member_of_groups:
+        - tors
+      object_template: PowerSwitch-S5224F-ON_TOR
+    - name: dc6-fab1-pod3-spine-01
+      role: spine
+      device_type: N9K-C9336C-FX2
+      platform: cisco_nxos
+      status: active
+      member_of_groups:
+        - spines
+      object_template: N9K_C9336C_FX2_SPINE
+    - name: dc6-fab1-pod3-spine-02
+      role: spine
+      device_type: N9K-C9336C-FX2
+      platform: cisco_nxos
+      status: active
+      member_of_groups:
+        - spines
+      object_template: N9K_C9336C_FX2_SPINE
+    - name: dc6-fab1-pod3-spine-03
+      role: spine
+      device_type: N9K-C9336C-FX2
+      platform: cisco_nxos
+      status: active
+      member_of_groups:
+        - spines
+      object_template: N9K_C9336C_FX2_SPINE
+    - name: dc6-fab1-pod3-spine-04
+      role: spine
+      device_type: N9K-C9336C-FX2
+      platform: cisco_nxos
+      status: active
+      member_of_groups:
+        - spines
+      object_template: N9K_C9336C_FX2_SPINE
+    - name: dc6-fab1-pod3-suite3-row1-rack1-tor-01
+      rack: ktw-1-s-3-r-1-1
+      role: tor
+      device_type: DCS-7050CX3-32C-R
+      platform: arista_eos
+      status: active
+      member_of_groups:
+        - tors
+      object_template: DCS-7050CX3-32C-R_TOR
+    - name: dc6-fab1-pod3-suite3-row1-rack1-tor-02
+      rack: ktw-1-s-3-r-1-1
+      role: tor
+      device_type: DCS-7050CX3-32C-R
+      platform: arista_eos
+      status: active
+      member_of_groups:
+        - tors
+      object_template: DCS-7050CX3-32C-R_TOR
+    - name: dc6-fab1-pod3-suite3-row1-rack4-leaf-01
+      rack: ktw-1-s-3-r-1-4
+      role: leaf
+      device_type: DCS-7050CX3-32C-R
+      platform: arista_eos
+      status: active
+      member_of_groups:
+        - leafs
+      object_template: DCS-7050CX3-32C-R_LEAF_MIXED
+    - name: dc6-fab1-pod3-suite3-row1-rack4-leaf-02
+      rack: ktw-1-s-3-r-1-4
+      role: leaf
+      device_type: DCS-7050CX3-32C-R
+      platform: arista_eos
+      status: active
+      member_of_groups:
+        - leafs
+      object_template: DCS-7050CX3-32C-R_LEAF_MIXED
+    - name: dc6-fab1-pod3-suite3-row1-rack7-tor-01
+      rack: ktw-1-s-3-r-1-7
+      role: tor
+      device_type: DCS-7050CX3-32C-R
+      platform: arista_eos
+      status: active
+      member_of_groups:
+        - tors
+      object_template: DCS-7050CX3-32C-R_TOR
+    - name: dc6-fab1-pod3-suite3-row1-rack7-tor-02
+      rack: ktw-1-s-3-r-1-7
+      role: tor
+      device_type: DCS-7050CX3-32C-R
+      platform: arista_eos
+      status: active
+      member_of_groups:
+        - tors
+      object_template: DCS-7050CX3-32C-R_TOR
+    - name: dc6-fab1-pod3-suite3-row2-rack1-tor-01
+      rack: ktw-1-s-3-r-2-1
+      role: tor
+      device_type: DCS-7050CX3-32C-R
+      platform: arista_eos
+      status: active
+      member_of_groups:
+        - tors
+      object_template: DCS-7050CX3-32C-R_TOR
+    - name: dc6-fab1-pod3-suite3-row2-rack1-tor-02
+      rack: ktw-1-s-3-r-2-1
+      role: tor
+      device_type: DCS-7050CX3-32C-R
+      platform: arista_eos
+      status: active
+      member_of_groups:
+        - tors
+      object_template: DCS-7050CX3-32C-R_TOR
+    - name: dc6-fab1-pod3-suite3-row2-rack4-leaf-01
+      rack: ktw-1-s-3-r-2-4
+      role: leaf
+      device_type: DCS-7050CX3-32C-R
+      platform: arista_eos
+      status: active
+      member_of_groups:
+        - leafs
+      object_template: DCS-7050CX3-32C-R_LEAF_MIXED
+    - name: dc6-fab1-pod3-suite3-row2-rack4-leaf-02
+      rack: ktw-1-s-3-r-2-4
+      role: leaf
+      device_type: DCS-7050CX3-32C-R
+      platform: arista_eos
+      status: active
+      member_of_groups:
+        - leafs
+      object_template: DCS-7050CX3-32C-R_LEAF_MIXED
+    - name: dc6-fab1-pod3-suite3-row2-rack7-tor-01
+      rack: ktw-1-s-3-r-2-7
+      role: tor
+      device_type: DCS-7050CX3-32C-R
+      platform: arista_eos
+      status: active
+      member_of_groups:
+        - tors
+      object_template: DCS-7050CX3-32C-R_TOR
+    - name: dc6-fab1-pod3-suite3-row2-rack7-tor-02
+      rack: ktw-1-s-3-r-2-7
+      role: tor
+      device_type: DCS-7050CX3-32C-R
+      platform: arista_eos
+      status: active
+      member_of_groups:
+        - tors
+      object_template: DCS-7050CX3-32C-R_TOR
