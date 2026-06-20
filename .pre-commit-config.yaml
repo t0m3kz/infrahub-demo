@@ -60,6 +60,7 @@ repos:
         args:
           - --fix
           - --disable=MD013  # Line length - enforced at 120 chars (code/tables/headings excluded)
+          - --disable=MD024  # Duplicate headings - needed for CHANGELOG.md (Fix/Feat repeat across versions)
         exclude: ^(\.ai/|\.dev/|\.github/|docs/)
 
   # Security scanning
