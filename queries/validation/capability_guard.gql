@@ -8,7 +8,9 @@ query capability_guard {
           edges {
             node {
               __typename
-              name { value }
+              ... on ManagedGeneric {
+                name { value }
+              }
             }
           }
         }
