@@ -17,8 +17,6 @@ spec:
           - template_name: HA-PROXY_LOAD-BALANCER_private
             name: private
             role: management
-      member_of_groups:
-        - loadbalancers
     - template_name: NGINX
       device_type: NGINX
       platform: linux
@@ -32,5 +30,3 @@ spec:
           - template_name: NGINX_LOAD-BALANCER_private
             name: private
             role: management
-      member_of_groups:
-        - loadbalancers

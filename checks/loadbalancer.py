@@ -11,7 +11,7 @@ from .common import clean_data
 class CheckLoadBalancer(InfrahubCheck):
     """Check Load Balancer backend connectivity."""
 
-    query = "loadbalancer_config"
+    query = "loadbalancer_validation"
 
     def validate(self, data: Any) -> None:
         """Validate Load Balancer backend servers using proper device_service relationships."""
