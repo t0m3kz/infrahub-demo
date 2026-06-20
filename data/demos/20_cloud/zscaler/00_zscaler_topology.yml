@@ -1,0 +1,45 @@
+---
+# Zscaler Multi-Cloud Topology Hierarchy
+# AWS: eu-central-1 (Frankfurt)
+# GCP: europe-west1 (Belgium)
+# Azure: westeurope (Netherlands)
+
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologyCloud
+  data:
+    - name: "aws"
+      children:
+        kind: TopologyCloudRegion
+        data:
+          - name: "eu-central-1"
+            location: ["fra"]
+            children:
+              kind: TopologyCloudZone
+              data:
+                - name: "eu-central-1a"
+                - name: "eu-central-1b"
+
+    - name: "gcp"
+      children:
+        kind: TopologyCloudRegion
+        data:
+          - name: "europe-west1"
+            location: ["ams"]
+            children:
+              kind: TopologyCloudZone
+              data:
+                - name: "europe-west1-b"
+                - name: "europe-west1-c"
+
+    - name: "azure"
+      children:
+        kind: TopologyCloudRegion
+        data:
+          - name: "westeurope"
+            location: ["ams"]
+            children:
+              kind: TopologyCloudZone
+              data:
+                - name: "westeurope-1"

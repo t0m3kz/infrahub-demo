@@ -1,0 +1,20 @@
+---
+# Azure provider + Customer 1 subscription
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: OrganizationProvider
+  data:
+    - name: Azure
+
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: CloudAccount
+  data:
+    - name: CUST1-AZURE
+      account_id: "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+      environment: production
+      provider: Azure
+      owner: "Customer 1"

@@ -1,0 +1,31 @@
+query vlan_segment_data($name: String!) {
+  ManagedVlanSegment(name__value: $name) {
+    edges {
+      node {
+        id
+        name { value }
+        deployment {
+          node {
+            id
+            name { value }
+          }
+        }
+        prefix {
+          edges {
+            node {
+              id
+              prefix { value }
+              gateway_ip { value }
+              ip_namespace {
+                node {
+                  id
+                  name { value }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

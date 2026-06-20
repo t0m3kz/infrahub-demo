@@ -1,0 +1,143 @@
+query BorderLeafBatchConfig($device_names: [String!]) {
+  devices_count: DcimDevice(name__values: $device_names) {
+    count
+  }
+
+  devices: DcimDevice(name__values: $device_names) {
+    count
+    edges {
+      node {
+        __typename
+        id
+        name { value }
+        role { value }
+        tags_count: tags { count }
+
+        ... on DcimPhysicalDevice {
+          deployment {
+            node {
+              id
+              name { value }
+              ... on TopologyDataCenter {
+                segment_deployments_count: segment_deployments { count }
+              }
+            }
+          }
+        }
+
+        device_capabilities_count: device_capabilities { count }
+        device_capabilities {
+          edges {
+            node {
+              __typename
+              name { value }
+              status { value }
+
+              ... on ManagedBGP {
+                local_as { node { asn { value } } }
+                peerings_count: peerings { count }
+                peerings {
+                  edges {
+                    node {
+                      id
+                      name { value }
+                      session_type { value }
+                      interfaces_count: interfaces { count }
+                      interfaces {
+                        edges {
+                          node {
+                            name { value }
+                            device { node { name { value } } }
+                          }
+                        }
+                      }
+                      bgp_processes_count: bgp_processes { count }
+                      bgp_processes {
+                        edges {
+                          node {
+                            id
+                            device { node { name { value } role { value } } }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+
+              ... on ManagedOSPF {
+                process_id { value }
+              }
+
+
+              ... on ManagedNTP {
+                timezone { value }
+                servers {
+                  edges {
+                    node {
+                      address { value }
+                      prefer { value }
+                      version { value }
+                    }
+                  }
+                }
+              }
+
+              ... on ManagedSyslog {
+                servers {
+                  edges {
+                    node {
+                      address { value }
+                      port { value }
+                      severity { value }
+                    }
+                  }
+                }
+              }
+
+              ... on ManagedSNMP {
+                version { value }
+                community_ro { value }
+                location { value }
+                contact { value }
+                trap_targets {
+                  edges {
+                    node {
+                      address { value }
+                      port { value }
+                    }
+                  }
+                }
+              }
+
+              ... on ManagedAAA {
+                authentication_order { value }
+                authorization_commands { value }
+                accounting_enabled { value }
+                servers {
+                  edges {
+                    node {
+                      address { value }
+                      protocol { value }
+                      port { value }
+                      timeout { value }
+                    }
+                  }
+                }
+              }
+
+              ... on ManagedMLAG {
+                domain_id { value }
+                reload_delay { value }
+                reload_delay_non_mlag { value }
+                devices { edges { node { name { value } } } }
+              }
+            }
+          }
+        }
+
+        interfaces_count: interfaces { count }
+      }
+    }
+  }
+}

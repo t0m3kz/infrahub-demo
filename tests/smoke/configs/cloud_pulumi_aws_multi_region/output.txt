@@ -1,0 +1,163 @@
+import * as aws from "@pulumi/aws";
+import * as pulumi from "@pulumi/pulumi";
+
+const aws_eu_central_1 = new aws.Provider("eu-central-1", { region: "eu-central-1" });
+
+const aws_eu_west_1 = new aws.Provider("eu-west-1", { region: "eu-west-1" });
+
+const prod_vpc = new aws.ec2.Vpc("prod-vpc", {
+    cidrBlock: "10.0.0.0/16",
+    enableDnsSupport: true,
+    enableDnsHostnames: true,
+    tags: { Name: "prod-vpc", ManagedBy: "Infrahub" },
+}}, { provider: aws_eu_central_1 });
+
+const subnet_prod_subnet_1a = new aws.ec2.Subnet("prod-subnet-1a", {
+    vpcId: prod_vpc.id,
+    cidrBlock: "10.0.1.0/24",
+    availabilityZone: "eu-central-1a",
+    mapPublicIpOnLaunch: false,
+    tags: { Name: "prod-subnet-1a", ManagedBy: "Infrahub" },
+}}, { provider: aws_eu_central_1 });
+
+const sg_prod_sg = new aws.ec2.SecurityGroup("prod-sg", {
+    vpcId: prod_vpc.id,
+    tags: { Name: "prod-sg", ManagedBy: "Infrahub" },
+}}, { provider: aws_eu_central_1 });
+
+const instance_prod_instance_1 = new aws.ec2.Instance("prod-instance-1", {
+    ami: "ami-12345678",
+    instanceType: "t3.micro",
+    subnetId: subnet_prod_subnet_1a.id,
+    vpcSecurityGroupIds: [sg_prod_sg.id],
+    tags: { Name: "prod-instance-1", ManagedBy: "Infrahub" },
+}}, { provider: aws_eu_central_1 });
+
+const igw_prod_igw = new aws.ec2.InternetGateway("prod-igw", {
+    vpcId: prod_vpc.id,
+    tags: { Name: "prod-igw", ManagedBy: "Infrahub" },
+}}, { provider: aws_eu_central_1 });
+
+const eip_prod_nat = new aws.ec2.Eip("prod-nat-eip", {
+    domain: "vpc",
+    tags: { Name: "prod-nat-eip", ManagedBy: "Infrahub" },
+}}, { provider: aws_eu_central_1 });
+
+const nat_prod_nat = new aws.ec2.NatGateway("prod-nat", {
+    allocationId: eip_prod_nat.id,
+    subnetId: subnet_prod_subnet_1a.id,
+    tags: { Name: "prod-nat", ManagedBy: "Infrahub" },
+}}, { provider: aws_eu_central_1 });
+
+const rt_prod_rt = new aws.ec2.RouteTable("prod-rt", {
+    vpcId: prod_vpc.id,
+    tags: { Name: "prod-rt", ManagedBy: "Infrahub" },
+}}, { provider: aws_eu_central_1 });
+
+const route_route_igw_central = new aws.ec2.Route("route-igw-central", {
+    routeTableId: rt_prod_rt.id,
+    destinationCidrBlock: "0.0.0.0/0",
+    gatewayId: igw_prod_igw.id,
+}}, { provider: aws_eu_central_1 });
+
+const rta_prod_subnet_1a_prod_rt = new aws.ec2.RouteTableAssociation("prod-subnet-1a-prod-rt-assoc", {
+    subnetId: subnet_prod_subnet_1a.id,
+    routeTableId: rt_prod_rt.id,
+}}, { provider: aws_eu_central_1 });
+
+const nacl_prod_nacl = new aws.ec2.NetworkAcl("prod-nacl", {
+    vpcId: prod_vpc.id,
+    subnetIds: [subnet_prod_subnet_1a.id],
+    tags: { Name: "prod-nacl", ManagedBy: "Infrahub" },
+}}, { provider: aws_eu_central_1 });
+
+const prod_vpc_west = new aws.ec2.Vpc("prod-vpc-west", {
+    cidrBlock: "10.1.0.0/16",
+    enableDnsSupport: true,
+    enableDnsHostnames: true,
+    tags: { Name: "prod-vpc-west", ManagedBy: "Infrahub" },
+}}, { provider: aws_eu_west_1 });
+
+const subnet_prod_subnet_west_1a = new aws.ec2.Subnet("prod-subnet-west-1a", {
+    vpcId: prod_vpc_west.id,
+    cidrBlock: "10.1.1.0/24",
+    availabilityZone: "eu-west-1a",
+    mapPublicIpOnLaunch: false,
+    tags: { Name: "prod-subnet-west-1a", ManagedBy: "Infrahub" },
+}}, { provider: aws_eu_west_1 });
+
+const sg_west_sg = new aws.ec2.SecurityGroup("west-sg", {
+    vpcId: prod_vpc_west.id,
+    tags: { Name: "west-sg", ManagedBy: "Infrahub" },
+}}, { provider: aws_eu_west_1 });
+
+const instance_west_instance_1 = new aws.ec2.Instance("west-instance-1", {
+    ami: "ami-87654321",
+    instanceType: "t3.small",
+    subnetId: subnet_prod_subnet_west_1a.id,
+    vpcSecurityGroupIds: [sg_west_sg.id],
+    tags: { Name: "west-instance-1", ManagedBy: "Infrahub" },
+}}, { provider: aws_eu_west_1 });
+
+const igw_west_igw = new aws.ec2.InternetGateway("west-igw", {
+    vpcId: prod_vpc_west.id,
+    tags: { Name: "west-igw", ManagedBy: "Infrahub" },
+}}, { provider: aws_eu_west_1 });
+
+const rt_west_rt = new aws.ec2.RouteTable("west-rt", {
+    vpcId: prod_vpc_west.id,
+    tags: { Name: "west-rt", ManagedBy: "Infrahub" },
+}}, { provider: aws_eu_west_1 });
+
+const route_route_igw_west = new aws.ec2.Route("route-igw-west", {
+    routeTableId: rt_west_rt.id,
+    destinationCidrBlock: "0.0.0.0/0",
+    gatewayId: igw_west_igw.id,
+}}, { provider: aws_eu_west_1 });
+
+const rta_prod_subnet_west_1a_west_rt = new aws.ec2.RouteTableAssociation("prod-subnet-west-1a-west-rt-assoc", {
+    subnetId: subnet_prod_subnet_west_1a.id,
+    routeTableId: rt_west_rt.id,
+}}, { provider: aws_eu_west_1 });
+
+const tgw_prod_tgw = new aws.ec2transitgateway.TransitGateway("prod-tgw", {
+    defaultRouteTableAssociation: "enable",
+    dnsSupport: "enable",
+    vpnEcmpSupport: "disable",
+    tags: { Name: "prod-tgw", ManagedBy: "Infrahub" },
+}});
+
+const tgw_attach_prod_tgw_prod_vpc = new aws.ec2transitgateway.VpcAttachment("prod-tgw-prod-vpc-attach", {
+    transitGatewayId: tgw_prod_tgw.id,
+    vpcId: prod_vpc.id,
+    subnetIds: [],
+    tags: { Name: "prod-tgw-prod-vpc", ManagedBy: "Infrahub" },
+}});
+
+const tgw_attach_prod_tgw_prod_vpc_west = new aws.ec2transitgateway.VpcAttachment("prod-tgw-prod-vpc-west-attach", {
+    transitGatewayId: tgw_prod_tgw.id,
+    vpcId: prod_vpc_west.id,
+    subnetIds: [],
+    tags: { Name: "prod-tgw-prod-vpc-west", ManagedBy: "Infrahub" },
+}});
+
+const cgw_on_prem_cgw = new aws.ec2.CustomerGateway("on-prem-cgw", {
+    bgpAsn: "65000",
+    ipAddress: "203.0.113.1/32",
+    type: "ipsec.1",
+    tags: { Name: "on-prem-cgw", ManagedBy: "Infrahub" },
+}});
+
+const peering_prod_vpc_prod_vpc_west = new aws.ec2.VpcPeeringConnection("prod-to-west-peering", {
+    vpcId: prod_vpc.id,
+    peerVpcId: prod_vpc_west.id,
+    autoAccept: true,
+    tags: { Name: "prod-to-west-peering", ManagedBy: "Infrahub" },
+}});
+
+const dx_prod_dx = new aws.directconnect.Connection("prod-dx", {
+    name: "prod-dx",
+    bandwidth: "1Gbps",
+    location: "",
+    tags: { Name: "prod-dx", ManagedBy: "Infrahub" },
+}});

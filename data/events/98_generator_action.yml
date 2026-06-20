@@ -4,9 +4,28 @@ kind: Object
 spec:
   kind: CoreGeneratorAction
   data:
+    - name: run-dc-generator
+      description: Run Data Center Generator
+      generator: add_dc
     - name: run-pod-generator
       description: Run Pod Generator
-      generator: generate_pod
+      generator: add_pod
     - name: run-rack-generator
       description: Run Rack Generator
-      generator: generate_rack
+      generator: add_rack
+      # - name: run-decommission-device
+      #   description: Decommission a single device
+      #   generator: decommission_device
+    - name: run-decommission-pod
+      description: Decommission all devices within a pod
+      generator: decommission_pod
+    # VRF generator runs via group membership only — no action needed
+    - name: run-vlan-segment-generator
+      description: Run VLAN Segment Generator
+      generator: add_vlan_segment
+    - name: run-vxlan-segment-generator
+      description: Run VXLAN Segment Generator
+      generator: add_vxlan_segment
+# - name: run-endpoint-generator
+#   description: Run Endpoint Connectivity Generator
+#   generator: add_endpoint

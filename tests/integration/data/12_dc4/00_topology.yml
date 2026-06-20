@@ -1,0 +1,29 @@
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologyDataCenter
+  data:
+    - name: DC4
+      index: 4
+      design: M_EBGP_EBGP
+      naming_convention: standard
+      overlay_technology: vxlan_evpn
+      loopback_prefix_length: 23
+      technical_prefix_length: 19
+      management_prefix_length: 25
+      amount_of_super_spines: 2
+      super_spine_template: DCS-7050CX3-32C-R_SUPER_SPINE
+      fabric_interface_sorting_method: top_down
+      member_of_groups:
+        - topologies_dc
+      children:
+        kind: TopologyPod
+        data:
+          - index: 1
+            design: S_MIXED
+            deployment_type: mixed
+            amount_of_spines: 2
+            spine_template: DCS-7050CX3-32C-R_SPINE
+            member_of_groups:
+              - topologies_pod

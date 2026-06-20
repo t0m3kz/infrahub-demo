@@ -1,0 +1,68 @@
+---
+version: "1.0"
+
+# Extend BuiltinIPNamespace to serve as the VRF model for multi-tenant VXLAN-EVPN.
+#
+# Design decision: A VRF is an IP routing namespace. BuiltinIPNamespace already
+# enforces IP uniqueness per namespace (same IP can exist in two namespaces without
+# collision), which is exactly what a VRF does. Extending it — rather than creating
+# a new VRF node — avoids redundancy and aligns with how NX-OS templates already
+# generate `vrf member` from `ip_namespace.name`.
+#
+# Convention:
+#   - default namespace: no l3_vni, no owner → underlay/infrastructure, never a VRF
+#   - any namespace with l3_vni set → active EVPN VRF, generates VRF config on all
+#     switches in its deployments
+#
+# Relationship to ManagedNetworkSegment:
+#   segment.prefix.ip_namespace → this node
+#   → VRF name:   ip_namespace.name
+#   → L3VNI:      ip_namespace.l3_vni (allocated from GLOBAL-L3VNI pool)
+#   → Customer:   ip_namespace.owner
+#   → Scope:      determined by segment.deployments (not on namespace)
+
+extensions:
+  nodes:
+    - kind: BuiltinIPNamespace
+      attributes:
+        - name: l3_vni
+          kind: Number
+          label: L3 VNI
+          description: >-
+            EVPN L3VNI for this VRF namespace.
+            Allocated from GLOBAL-L3VNI pool.
+          optional: true
+          order_weight: 1000
+
+        - name: status
+          kind: Dropdown
+          label: Status
+          description: "Lifecycle state of this namespace/VRF"
+          optional: true
+          default_value: active
+          order_weight: 1100
+          choices:
+            - name: active
+              label: Active
+              description: "VRF is operational"
+              color: "#2ECC71"
+            - name: provisioning
+              label: Provisioning
+              description: "VRF is being provisioned across the fabric"
+              color: "#F39C12"
+            - name: decommissioned
+              label: Decommissioned
+              description: "VRF is being removed from service"
+              color: "#95A5A6"
+
+      relationships:
+        - name: owner
+          peer: OrganizationCustomer
+          label: Owner
+          cardinality: one
+          optional: true
+          kind: Attribute
+          order_weight: 1200
+          description: >-
+            Customer that owns this namespace/VRF.
+            All objects in this namespace are implicitly owned by this customer.

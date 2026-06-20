@@ -55,7 +55,15 @@ artifact_definitions:
     targets: loadbalancers
     transformation: loadbalancer
     parameters:
-      device: name__value
+      instance: name__value
+  # Cloud Load Balancer Terraform vars
+  - name: cloud_lb_terraform
+    artifact_name: terraform-vars
+    content_type: application/json
+    targets: cloud_loadbalancers
+    transformation: loadbalancer-cloud
+    parameters:
+      instance: name__value
   # Containerlab
   - name: Containerlab Topology
     artifact_name: containerlab-topology
@@ -71,7 +79,7 @@ artifact_definitions:
     targets: topologies_dc
     transformation: topology_cabling
     parameters:
-      name: name__value
+      id: id
 
   # Equinix POP
   - name: equinix_pop_config
@@ -81,14 +89,52 @@ artifact_definitions:
     transformation: equinix_pop
     parameters:
       name: name__value
+  - name: firewall_config
+    artifact_name: firewall
+    content_type: text/plain
+    targets: firewalls
+    transformation: firewall
+    parameters:
+      device: name__value
+  - name: rack_elevation
+    artifact_name: rack_elevation
+    content_type: image/svg+xml
+    targets: topologies_rack
+    transformation: rack_elevation
+    parameters:
+      name: name__value
+  - name: cloud_vpc_terraform
+    artifact_name: vpc-terraform
+    content_type: text/plain
+    targets: cloud_accounts
+    transformation: cloud-vpc-terraform
+    parameters:
+      account: name__value
+  - name: cloud_vpc_pulumi
+    artifact_name: vpc-pulumi
+    content_type: text/plain
+    targets: cloud_accounts
+    transformation: cloud-vpc-pulumi
+    parameters:
+      account: name__value
+  # SaaS Proxy policy export (Zscaler, Prisma, etc.)
+  - name: proxy_saas_config
+    artifact_name: proxy-policy
+    content_type: application/json
+    targets: saas_proxies
+    transformation: proxy-saas
+    parameters:
+      instance: name__value
+  # On-prem proxy config (Squid squid.conf)
+  - name: proxy_onprem_config
+    artifact_name: proxy-config
+    content_type: text/plain
+    targets: onprem_proxies
+    transformation: proxy-onprem
+    parameters:
+      instance: name__value
 
 check_definitions:
-  # - name: validate_dc_capacity
-  #   class_name: CheckDataCenterCapacity
-  #   file_path: checks/dc.py
-  #   targets: topologies_dc
-  #   parameters:
-  #     name: name__value
   - name: validate_spine
     class_name: CheckSpine
     file_path: checks/spine.py
@@ -112,11 +158,11 @@ check_definitions:
     file_path: checks/loadbalancer.py
     targets: loadbalancers
     parameters:
-      device: name__value
+      instance: name__value
   - name: validate_tor
     class_name: CheckToR
     file_path: checks/tor.py
-    targets: border-leafs
+    targets: tors
     parameters:
       device: name__value
   - name: validate_border_leaf
@@ -131,12 +177,15 @@ check_definitions:
     targets: super-spines
     parameters:
       device: name__value
-  - name: validate_virtual_fabric_capacity
-    class_name: CheckVirtualFabricCapacity
-    file_path: checks/virtual_fabric.py
-    targets: virtual_fabrics
+  - name: validate_firewall
+    class_name: CheckFirewall
+    file_path: checks/firewall.py
+    targets: firewalls
     parameters:
-      fabric_id: id
+      device: name__value
+  - name: validate_capability_guard
+    class_name: CheckCapabilityGuard
+    file_path: checks/capability_guard.py
 
 python_transforms:
   - name: topology_cabling
@@ -166,71 +215,44 @@ python_transforms:
   - name: equinix_pop
     class_name: EquinixPOP
     file_path: transforms/equinix_pop.py
-
-generator_definitions:
-  - name: generate_dc
-    file_path: generators/generate_dc.py
-    targets: topologies_dc
-    query: topology_dc
-    class_name: DCTopologyGenerator
-    execute_in_proposed_change: false
-    execute_after_merge: false
-    parameters:
-      name: name__value
-  - name: generate_pod
-    file_path: generators/generate_pod.py
-    targets: topologies_pod
-    query: topology_pod
-    class_name: PodTopologyGenerator
-    execute_in_proposed_change: false
-    execute_after_merge: false
-    parameters:
-      name: name__value
-  - name: generate_rack
-    file_path: generators/generate_rack.py
-    targets: topologies_rack
-    query: rack
-    class_name: RackGenerator
-    execute_in_proposed_change: false
-    execute_after_merge: false
-    parameters:
-      name: name__value
-  - name: connect_endpoint
-    file_path: generators/endpoint_connectivity.py
-    targets: endpoints
-    query: endpoint_connectivity
-    class_name: EndpointConnectivityGenerator
-    execute_in_proposed_change: false
-    execute_after_merge: false
-    parameters:
-      device_name: name__value
-# - name: create_pop
-#   file_path: generators/generate_pop.py
-#   targets: topologies_pop
-#   query: topology_pop
-#   class_name: PopTopologyGenerator
-#   parameters:
-#     name: name__value
-
+  - name: loadbalancer-cloud
+    class_name: LoadBalancerCloud
+    file_path: transforms/loadbalancer_cloud.py
+  - name: firewall
+    class_name: Firewall
+    file_path: transforms/firewall.py
+  - name: rack_elevation
+    class_name: RackElevation
+    file_path: transforms/rack.py
+  - name: cloud-vpc-terraform
+    class_name: CloudVpcTerraform
+    file_path: transforms/cloud_vpc_terraform.py
+  - name: cloud-vpc-pulumi
+    class_name: CloudVpcPulumi
+    file_path: transforms/cloud_vpc_pulumi.py
+  - name: proxy-saas
+    class_name: ProxySaas
+    file_path: transforms/proxy_saas.py
+  - name: proxy-onprem
+    class_name: ProxyOnprem
+    file_path: transforms/proxy_onprem.py
 queries:
-  - name: dc_validation
-    file_path: queries/validation/dc_capacity.gql
-  - name: virtual_fabric_validation
-    file_path: queries/service/virtual_fabric_validation.gql
   - name: endpoint_connectivity
-    file_path: queries/topology/endpoint.gql
+    file_path: queries/topology/add/endpoint.gql
   - name: topology_dc
-    file_path: queries/topology/dc.gql
+    file_path: queries/topology/add/dc.gql
   - name: topology_pod
-    file_path: queries/topology/pod.gql
+    file_path: queries/topology/add/pod.gql
   - name: rack
-    file_path: queries/topology/rack.gql
+    file_path: queries/topology/add/rack.gql
   - name: topology_pop
-    file_path: queries/topology/pop.gql
+    file_path: queries/topology/add/pop.gql
   - name: topology_simulator
     file_path: queries/topology/clab.gql
   - name: topology_cabling
     file_path: queries/topology/cabling.gql
+  - name: interface_descriptions_data
+    file_path: queries/topology/add/interface_descriptions.gql
   - name: leaf_config
     file_path: queries/config/leaf.gql
   - name: border_leaf_config
@@ -243,8 +265,163 @@ queries:
     file_path: queries/config/edge.gql
   - name: loadbalancer_config
     file_path: queries/config/loadbalancer.gql
+  - name: loadbalancer_cloud
+    file_path: queries/config/loadbalancer_cloud.gql
+  - name: firewall_config
+    file_path: queries/config/firewall.gql
   - name: oob_config
     file_path: queries/config/oob.gql
+  - name: pod_decommission
+    file_path: queries/topology/decomission/pod.gql
+  - name: vlan_segment_data
+    file_path: queries/topology/add/vlan_segment.gql
+  - name: vxlan_segment_data
+    file_path: queries/topology/add/vxlan_segment.gql
+  - name: vrf_namespace_data
+    file_path: queries/topology/add/vrf_namespace.gql
+  - name: dci_peering_service_data
+    file_path: queries/topology/add/dci_peering.gql
+  - name: circuit_data
+    file_path: queries/topology/add/circuit.gql
+  - name: virtual_circuit_data
+    file_path: queries/topology/add/virtual_circuit.gql
+  - name: capability_guard
+    file_path: queries/validation/capability_guard.gql
+  - name: rack_elevation_query
+    file_path: queries/topology/rack.gql
+  - name: cloud_vpc_config
+    file_path: queries/config/cloud_vpc.gql
+  - name: proxy_saas_config
+    file_path: queries/config/proxy.gql
+  - name: proxy_onprem_config
+    file_path: queries/config/proxy.gql
+
+generator_definitions:
+  - name: add_dc
+    file_path: generators/add/dc.py
+    targets: topologies_dc
+    query: topology_dc
+    class_name: DCTopologyGenerator
+    execute_in_proposed_change: false
+    execute_after_merge: false
+    parameters:
+      name: name__value
+  - name: add_pod
+    file_path: generators/add/pod.py
+    targets: topologies_pod
+    query: topology_pod
+    class_name: PodTopologyGenerator
+    execute_in_proposed_change: false
+    execute_after_merge: false
+    parameters:
+      name: name__value
+  - name: decommission_pod
+    file_path: generators/decommission/pod.py
+    targets: topologies_pod
+    query: pod_decommission
+    class_name: PodDecommissionGenerator
+    execute_in_proposed_change: false
+    execute_after_merge: false
+    parameters:
+      name: name__value
+  # - name: decommission_device
+  #   file_path: generators/decommission_device.py
+  #   targets: devices
+  #   query: device_decommission
+  #   class_name: DeviceDecommissionGenerator
+  #   execute_in_proposed_change: false
+  #   execute_after_merge: false
+  #   parameters:
+  #     name: name__value
+  - name: add_rack
+    file_path: generators/add/rack.py
+    targets: topologies_rack
+    query: rack
+    class_name: RackGenerator
+    execute_in_proposed_change: false
+    execute_after_merge: false
+    parameters:
+      name: name__value
+  - name: add_endpoint
+    file_path: generators/add/endpoint.py
+    targets: endpoints
+    query: endpoint_connectivity
+    class_name: EndpointConnectivityGenerator
+    execute_in_proposed_change: false
+    execute_after_merge: false
+    parameters:
+      device_name: name__value
+  - name: add_vrf_namespace
+    file_path: generators/add/vrf.py
+    targets: vrf_namespaces
+    query: vrf_namespace_data
+    class_name: VrfNamespaceGenerator
+    execute_in_proposed_change: false
+    execute_after_merge: false
+    parameters:
+      name: name__value
+  - name: add_vlan_segment
+    file_path: generators/add/segment.py
+    targets: vlan_segments
+    query: vlan_segment_data
+    class_name: VlanSegmentGenerator
+    execute_in_proposed_change: false
+    execute_after_merge: false
+    parameters:
+      name: name__value
+  - name: add_vxlan_segment
+    file_path: generators/add/segment.py
+    targets: vxlan_segments
+    query: vxlan_segment_data
+    class_name: VxlanSegmentGenerator
+    execute_in_proposed_change: false
+    execute_after_merge: false
+    parameters:
+      name: name__value
+  - name: add_circuit
+    file_path: generators/add/circuit.py
+    targets: physical_circuits
+    query: circuit_data
+    class_name: PhysicalCircuitGenerator
+    execute_in_proposed_change: false
+    execute_after_merge: false
+    parameters:
+      name: name__value
+  - name: add_virtual_circuit
+    file_path: generators/add/circuit.py
+    targets: virtual_circuits
+    query: virtual_circuit_data
+    class_name: VirtualCircuitGenerator
+    execute_in_proposed_change: false
+    execute_after_merge: false
+    parameters:
+      name: name__value
+  - name: add_dci_peering
+    file_path: generators/add/dci.py
+    targets: dci_peering_services
+    query: dci_peering_service_data
+    class_name: DCIPeeringGenerator
+    execute_in_proposed_change: false
+    execute_after_merge: false
+    parameters:
+      name: name__value
+  - name: set_interface_descriptions
+    file_path: generators/add/interface_descriptions.py
+    targets: topologies_dc
+    query: interface_descriptions_data
+    class_name: InterfaceDescriptionGenerator
+    execute_in_proposed_change: false
+    execute_after_merge: false
+    parameters:
+      deployment: name__value
+# - name: create_pop
+#   file_path: generators/generate_pop.py
+#   targets: topologies_pop
+#   query: topology_pop
+#   class_name: PopTopologyGenerator
+#   parameters:
+#     name: name__value
+
 # schemas:
 #   - schemas/
 # menus:

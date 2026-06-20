@@ -10,7 +10,10 @@
 
 ## Why Infrahub Demo?
 
-> "The machine cannot be blamed. It is doing precisely what it was instructed to do. The real culprits are those who sit idly by, awaiting some miraculous vendor contraption that will magically satisfy all their peculiar requirements—instead of rolling up their sleeves and constructing it themselves."
+> "The machine cannot be blamed. It is doing precisely what it was instructed to do.
+> The real culprits are those who sit idly by, awaiting some miraculous vendor contraption
+> that will magically satisfy all their peculiar requirements—instead of rolling up their sleeves
+> and constructing it themselves."
 >
 > — *Inspired by Stanisław Lem's "Memoirs Found in a Bathtub"*
 
@@ -139,7 +142,7 @@ uv run invoke load-events
 #### Single-Vendor Deployments (DC1-DC4)
 
 | Scenario | Location | Vendor | Deployment | Description |
-|----------|----------|--------|------------|-------------|
+| ---------- | ---------- | -------- | ------------ | ------------- |
 | **[DC1](data/demos/01_data_center/dc1/)** | Munich 🇩🇪 | Cisco | All (MR+Mixed+ToR) | Hierarchy Overkill: All the racks, all the drama. |
 | **[DC2](data/demos/01_data_center/dc2/)** | Paris 🇫🇷 | Arista | Middle Rack | Croissants & Cheap Packets: Small, efficient, and CFO-approved. |
 | **[DC3](data/demos/01_data_center/dc3/)** | London 🇬🇧 | Dell/SONiC | Flat ToR | Brexit, No Middle Management, Maximum Sass. |
@@ -148,7 +151,7 @@ uv run invoke load-events
 #### Multi-Vendor Deployments (DC5-DC6)
 
 | Scenario | Location | Architecture | Description |
-|----------|----------|-------------|-------------|
+| ---------- | ---------- | ------------- | ------------- |
 | **[DC5](data/demos/01_data_center/dc5/)** | New York 🇺🇸 | Different vendor per pod | Eurovision for Switches: 4 pods, 4 vendors, 0 peace. |
 | **[DC6](data/demos/01_data_center/dc6/)** | Katowice 🇵🇱 | Mixed vendors within pods | Silesian Buffet, Vendor Bingo, Debug & Dine. |
 
@@ -157,7 +160,7 @@ uv run invoke load-events
 Explore LLM upgrades and organic growth patterns—all in one place, please make sure DC1 is alredy deployed:
 
 | Scenario | Location | Type/Architecture | Description |
-|----------|----------|-------------------|-------------|
+| ---------- | ---------- | ------------------- | ------------- |
 | **[switch](data/demos/02_switch/)** | Munich 🇩🇪 | Rack Expansion | "Just TWO more switches"—organic chaos. |
 | **[rack](data/demos/03_rack/)** | Munich 🇩🇪 | Minimal ToR | Minimalist rack: started as a test, now it's critical. |
 | **[pod](data/demos/04_pod/)** | Munich 🇩🇪 | Pod Expansion | Pod 4: because 3 wasn't enough. |
@@ -179,6 +182,9 @@ This project uses GitHub Actions for continuous integration. All pushes and pull
 - If you encounter port conflicts, ensure no other service is running on port 8000.
 - For dependency issues, run `uv sync` again.
 - For Docker/infrahub issues, ensure Docker is running and you have the correct permissions.
+- **macOS + Colima + integration tests**: Colima often does not share the system temp folder (e.g. `/var/folders/...`) into the VM.
+Some integration tests start Docker Compose stacks from a pytest temp directory, and missing file sharing can break bind mounts (notably `haproxy.cfg`), causing the stack to fail with `Failed to start docker compose`.
+Use a repo-local pytest temp directory via `--basetemp` (see Testing below).
 
 ## Testing
 
@@ -189,6 +195,30 @@ uv run inv validate
 ```
 
 Or run specific test scripts in the [`tests/`](tests/) directory.
+
+### macOS + Colima
+
+If you run Docker via Colima, prefer a repo-local pytest temp directory so Docker bind mounts always come from a shared path:
+
+```bash
+uv run invoke test-unit
+uv run invoke test-integration
+```
+
+These tasks run pytest with `--basetemp .pytest-tmp`.
+
+Alternative (manual):
+
+```bash
+INFRAHUB_TESTING_ENABLE_INTEGRATION=1 uv run pytest -vv tests/integration --basetemp .pytest-tmp
+```
+
+If you want a VM-wide fix instead, start Colima with `/var/folders` mounted (heavier/less portable):
+
+```bash
+colima stop
+colima start --mount type=virtiofs,source=/var/folders,destination=/var/folders
+```
 
 ## 🙏 A Note from a Highly Fallible Carbon-Based Life Form
 

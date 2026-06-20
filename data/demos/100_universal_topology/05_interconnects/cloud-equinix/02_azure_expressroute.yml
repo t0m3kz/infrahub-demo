@@ -1,0 +1,78 @@
+---
+# Azure westeurope: ExpressRoute from Equinix AM1 to VNet Gateway
+# Physical path: AM1-EDGE-01 → Equinix cross-connect → Azure ER endpoint at AM1
+# AM1 is in Amsterdam, which is the Azure westeurope peering location
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: CloudDirectConnect
+  data:
+    - name: CUST1-ER-AM1-WESTEUROPE
+      account: CUST1-AZURE
+      region: westeurope
+      bandwidth: 1Gbps
+      connection_type: dedicated
+      vlan_id: 200
+      location: am1
+      physical_devices:
+        - AM1-EDGE-01
+
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: CloudVirtualInterface
+  data:
+    - name: CUST1-VIF-PRIVATE-AM1
+      vif_type: private
+      vlan_id: 200
+      direct_connect: CUST1-ER-AM1-WESTEUROPE
+
+---
+# Virtual interface on AM1-EDGE-01 for the Azure ExpressRoute BGP session (sub-interface over Eth1/2)
+# Equinix Fabric carries the connection as a virtual circuit — no physical cross-connect exists
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimVirtualInterface
+  data:
+    - name: Ethernet1/2.200
+      description: "Azure ExpressRoute private peering — VLAN 200 on AM1-EDGE-01"
+      role: uplink
+      status: active
+      device: AM1-EDGE-01
+
+---
+# Virtual Circuit: AM1-EDGE-01 sub-interface ↔ Azure VNet Gateway via ExpressRoute
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologyVirtualCircuit
+  data:
+    - name: VC-CUST1-AM1-AZURE-WESTEUROPE-ER
+      description: "Customer 1 Azure ExpressRoute from Equinix AM1 to westeurope VNet Gateway"
+      link_type: express_route_azure
+      bandwidth: 1000
+      status: active
+      cloud_resource_id: er-cust1am1001
+      provider: Azure
+      locations:
+        - AM1
+        - westeurope
+      interfaces:
+        - - AM1-EDGE-01
+          - Ethernet1/2.200
+      cloud_endpoints:
+        - CUST1-ER-AM1-WESTEUROPE
+        - CUST1-ERGW-WESTEUROPE
+
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: ManagedExternalPeer
+  data:
+    - name: AZURE-ER-PEER-AM1
+      peer_type: CLOUD
+      provider_name: Azure
+      circuit_id: CUST1-ER-AM1-WESTEUROPE

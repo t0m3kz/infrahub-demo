@@ -1,0 +1,11 @@
+---
+# Edinburgh branch office building
+apiVersion: infrahub.app/v1
+version: "1.0"
+kind: Object
+spec:
+  kind: LocationBuilding
+  data:
+    - name: "edi-1"
+      shortname: "edi-1"
+      parent: "edi"

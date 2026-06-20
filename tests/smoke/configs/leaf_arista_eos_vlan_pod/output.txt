@@ -1,0 +1,98 @@
+!
+! Arista EOS Leaf VXLAN/EVPN Configuration
+! Device: dc1-leaf-01
+! Generated for Arista EOS
+!
+
+hostname dc1-leaf-01
+
+! Configure spanning tree mode
+spanning-tree mode mstp
+
+! Configure VLAN 1
+no spanning-tree vlan-id 4094
+
+vlan 100
+   name Customer-A
+
+vlan 200
+   name Customer-A
+
+!
+! Zero-Trust ACLs (one per segment VLAN — inbound on SVI)
+!
+ip access-list ACL-VLAN100-IN
+   10 permit tcp any any eq 443 ! allow-https
+   20 permit tcp any any eq 80 ! allow-http
+   9990 deny ip any any log ! implicit-deny-all
+!
+ip access-list ACL-VLAN200-IN
+   10 permit tcp any any eq 22 ! allow-ssh
+   9990 deny ip any any log ! implicit-deny-all
+!
+interface Ethernet1
+   description to spine-01
+   ip address 10.1.0.1/31
+
+   no shutdown
+
+interface Ethernet2
+   description to spine-02
+   ip address 10.1.0.3/31
+
+   no shutdown
+
+interface Ethernet10
+   description to server-01
+
+   no shutdown
+
+interface Loopback0
+   description Router ID
+   ip address 10.0.0.1/32
+
+   no shutdown
+
+
+! Configure route-maps
+route-map RM-CONN-2-BGP permit 10
+   match interface Loopback0
+!
+! VXLAN Configuration with Microsegmentation (VRF-aware VNIs)
+!
+! Microsegmentation enabled: 1 VRF(s) for tenant isolation
+!
+interface Vxlan1
+   vxlan source-interface Loopback0
+   !
+   ! L2 VNI Mappings (VLAN segments)
+   vxlan vlan 100 vni 10100
+   !
+   ! L3 VNI Mappings (VRF segments for microsegmentation)
+   vxlan vrf VRF_A vni 50001
+!
+!
+! VRF Definitions (Microsegmentation)
+!
+vrf instance VRF_A
+   description Tenant VRF for microsegmentation
+   rd 10.0.0.1:50001
+!
+!
+! Anycast Gateway Configuration
+!
+ip virtual-router mac-address 00:1c:73:00:dc:01
+interface Vlan100
+   vrf VRF_A
+   ip address virtual 10.100.0.1/24
+   ip access-group ACL-VLAN100-IN in
+interface Vlan200
+   ip address virtual 10.200.0.1/24
+   ip access-group ACL-VLAN200-IN in
+!
+! VRF Default Routes — firewall gateway per namespace (Option A: FW as inter-VRF router)
+!
+ip route vrf VRF_A 0.0.0.0/0 10.100.0.254
+
+
+! End of configuration

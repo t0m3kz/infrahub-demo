@@ -1,0 +1,10 @@
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: LocationSuite
+  data:
+    - suite_name: "Suite-6"
+      index: 6
+      shortname: "ktw-1-s-6"
+      parent: ktw-1

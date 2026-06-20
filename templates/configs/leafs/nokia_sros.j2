@@ -6,6 +6,7 @@
 {#- Nokia SROS Configuration -#}
 A admin configure system hostname "{{ hostname }}"
 A admin configure system dns resolver admin-state enable
+{%- include 'common/nokia_sros_mclag.j2' %}
 A admin configure router "Base" admin-state enable
 A admin configure router "Base" router-id "{{ bgp[0].router_id.address.split('/')[0] if bgp else '0.0.0.0' }}"
 
@@ -44,50 +45,69 @@ A admin configure router "Base" interface "{{ interface.name }}" ipv4 admin-stat
 A admin configure router "Base" interface "{{ interface.name }}" ipv4 primary address "{{ ip.address }}"
 {%- endfor %}
 {%- endif %}
-{%- if interface.get('ospf') %}
-A admin configure router "Base" ospf 1 interface "{{ interface.name }}" admin-state enable
-A admin configure router "Base" ospf 1 interface "{{ interface.name }}" area "{{ interface.ospf.area }}"
-{%- endif %}
 {%- if interface.role == 'server' and interface.get('vlan') %}
 A admin configure port "{{ interface.name }}" ethernet encap-type dot1q
 A admin configure port "{{ interface.name }}" ethernet access vlan {{ interface.vlan }}
 {%- endif %}
 {% endfor %}
 
-{%- if ospf %}
-{#- OSPF Configuration -#}
-{%- for ospf_config in ospf %}
-A admin configure router "Base" ospf 1 admin-state enable
-A admin configure router "Base" ospf 1 router-id "{{ ospf_config.router_id.split('/')[0] }}"
-A admin configure router "Base" ospf 1 traffic-engineering admin-state enable
-{%- for interface in interfaces %}
-{%- if interface.get('ospf') %}
-A admin configure router "Base" ospf 1 interface "{{ interface.name }}" passive disable
-{%- else %}
-A admin configure router "Base" ospf 1 interface "{{ interface.name }}" passive enable
+{#- IP Filters (zero-trust per-segment ACLs) -#}
+{%- if acls %}
+!
+! Zero-Trust IP Filters (one per segment VLAN — inbound)
+!
+{%- for acl in acls %}
+A admin configure filter ip-filter {{ acl.vlan_id }} description "{{ acl.name }}"
+{%- for rule in acl.rules %}
+A admin configure filter ip-filter {{ acl.vlan_id }} entry {{ rule.seq }} create
+{%- if rule.src_zone or rule.dst_zone %}
+A admin configure filter ip-filter {{ acl.vlan_id }} entry {{ rule.seq }} description "Zone: {{ rule.src_zone or 'any' }} -> {{ rule.dst_zone or 'any' }}"
 {%- endif %}
+A admin configure filter ip-filter {{ acl.vlan_id }} entry {{ rule.seq }} action {{ 'accept' if rule.action == 'permit' else 'drop' }}
+{%- if rule.protocol != 'ip' %}
+A admin configure filter ip-filter {{ acl.vlan_id }} entry {{ rule.seq }} match protocol {{ rule.protocol }}
+{%- endif %}
+{%- if rule.src != 'any' %}
+A admin configure filter ip-filter {{ acl.vlan_id }} entry {{ rule.seq }} match src-ip prefix {{ rule.src }}
+{%- endif %}
+{%- if rule.dst != 'any' %}
+A admin configure filter ip-filter {{ acl.vlan_id }} entry {{ rule.seq }} match dst-ip prefix {{ rule.dst }}
+{%- endif %}
+{%- if rule.dst_port %}
+A admin configure filter ip-filter {{ acl.vlan_id }} entry {{ rule.seq }} match dst-port port {{ rule.dst_port | replace('eq ', '') | replace('range ', '') }}
+{%- endif %}
+{%- if rule.log %}
+A admin configure filter ip-filter {{ acl.vlan_id }} entry {{ rule.seq }} action log
+{%- endif %}
+A admin configure filter ip-filter {{ acl.vlan_id }} entry {{ rule.seq }} exit
 {%- endfor %}
-{% endfor %}
+A admin configure filter ip-filter {{ acl.vlan_id }} exit
+!
+{%- endfor %}
+!
+! Apply IP filters to VPLS SAP ingress
+{%- for acl in acls %}
+A admin configure service vpls {{ acl.vlan_id }} sap 1/1/1:{{ acl.vlan_id }} ingress filter ip {{ acl.vlan_id }}
+{%- endfor %}
+!
 {%- endif %}
 
-{%- if bgp %}
+{#- OSPF Configuration -#}
+{% include 'common/nokia_sros_ospf.j2' %}
+
 {#- BGP Configuration -#}
-{%- for bgp_config in bgp %}
-A admin configure router "Base" bgp 1 admin-state enable
-A admin configure router "Base" bgp 1 router-id "{{ bgp_config.router_id.address.split('/')[0] }}"
-A admin configure router "Base" bgp 1 local-as {{ bgp_config.local_as.asn }}
-A admin configure router "Base" bgp 1 ebgp-default-reject-policy import false
-A admin configure router "Base" bgp 1 ebgp-default-reject-policy export false
-{%- for session in bgp_config.sessions %}
-A admin configure router "Base" bgp 1 neighbor "{{ session.remote_ip.address.split('/')[0] }}" admin-state enable
-A admin configure router "Base" bgp 1 neighbor "{{ session.remote_ip.address.split('/')[0] }}" peer-as {{ session.remote_as.asn }}
+{% include 'common/nokia_sros_bgp.j2' %}
+
+{%- if vrf_gateways %}
+!
+! VRF Default Routes — firewall gateway per namespace (Option A: FW as inter-VRF router)
+!
+{%- for vrf, nexthop in vrf_gateways.items() %}
+A admin configure service vprn 1000 static-routes route 0.0.0.0/0 next-hop {{ nexthop }} admin-state enable
 {%- endfor %}
-{#- EVPN Configuration -#}
-A admin configure router "Base" bgp 1 family evpn
-{%- for session in bgp_config.sessions %}
-A admin configure router "Base" bgp 1 neighbor "{{ session.remote_ip.address.split('/')[0] }}" family evpn
-{%- endfor %}
-{% endfor %}
+!
 {%- endif %}
+
+{%- include 'common/nokia_sros_management.j2' %}
 
 ! End of configuration

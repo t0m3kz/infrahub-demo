@@ -51,6 +51,16 @@ spec:
       height: 1
       full_depth: false
       manufacturer: Cisco
+    - name: C9130AXI-B
+      part_number: C9130AXI-B
+      height: 0
+      full_depth: false
+      manufacturer: Cisco
+    - name: ISR4451-X
+      part_number: ISR4451-X/K9
+      height: 2
+      full_depth: true
+      manufacturer: Cisco
     - name: DL360-Gen11
       manufacturer: Cisco
       height: 1
@@ -255,6 +265,16 @@ spec:
       height: 1
       full_depth: true
       manufacturer: Dell
+    - name: Dell-H625cdw-MFP
+      part_number: H625cdw
+      height: 0
+      full_depth: false
+      manufacturer: Dell
+    - name: PowerEdge-R640
+      part_number: PowerEdge-R640
+      height: 1
+      full_depth: true
+      manufacturer: Dell
 
     # EdgeCore
     - name: 7726-32X-O
@@ -293,3 +313,25 @@ spec:
       height: 1
       full_depth: false
       manufacturer: Perle
+    # Arista SD-WAN (formerly VeloCloud)
+    - name: VCE-610
+      part_number: VCE-610
+      height: 1
+      full_depth: false
+      manufacturer: Arista
+    - name: VCG-VA
+      part_number: VCG-VA
+      height: 0
+      full_depth: false
+      manufacturer: Arista
+    - name: VCO-VA
+      part_number: VCO-VA
+      height: 0
+      full_depth: false
+      manufacturer: Arista
+    # Passive patch panel — used for provider cross-connect handoffs
+    - name: PATCH-PANEL-24
+      part_number: PATCH-PANEL-24
+      height: 1
+      full_depth: false
+      manufacturer: Generic

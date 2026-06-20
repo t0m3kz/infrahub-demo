@@ -1,0 +1,88 @@
+{#- Palo Alto PAN-OS — zone-based firewall configuration -#}
+set deviceconfig system hostname {{ name }}
+#
+{%- if fw_interfaces %}
+#
+# --- Interfaces & Zone Assignments ---
+{%- for iface in fw_interfaces %}
+{%- if iface.vlan_id and iface.parent_interface %}
+{%- set iface_ref = iface.parent_interface.name + '.' + iface.vlan_id | string %}
+set network interface ethernet {{ iface.parent_interface.name }} layer3 units {{ iface_ref }} tag {{ iface.vlan_id }}
+{%- if iface.ip_address %}
+set network interface ethernet {{ iface.parent_interface.name }} layer3 units {{ iface_ref }} ipv4 addr {{ iface.ip_address.address }}
+{%- endif %}
+{%- if iface.description %}
+set network interface ethernet {{ iface_ref }} comment "{{ iface.description }}"
+{%- endif %}
+{%- if iface.security_zone %}
+set zone {{ iface.security_zone.name }} network layer3 {{ iface_ref }}
+{%- endif %}
+{%- else %}
+set network interface ethernet {{ iface.name }} layer3 ipv4 addr {{ iface.ip_address.address if iface.ip_address else '' }}
+{%- if iface.description %}
+set network interface ethernet {{ iface.name }} comment "{{ iface.description }}"
+{%- endif %}
+{%- if iface.security_zone %}
+set zone {{ iface.security_zone.name }} network layer3 {{ iface.name }}
+{%- endif %}
+{%- endif %}
+{%- endfor %}
+#
+{%- endif %}
+{%- if zones %}
+#
+# --- Address Objects (one per zone member CIDR) ---
+{%- for zone in zones %}
+{%- for cidr in zone.member_cidrs %}
+{%- set addr_name = 'addr-' + cidr | replace('/', '-') | replace('.', '-') %}
+set address {{ addr_name }} ip-netmask {{ cidr }}
+set address {{ addr_name }} description "Zone: {{ zone.name }}"
+{%- endfor %}
+{%- endfor %}
+#
+# --- Address Groups (one per zone) ---
+{%- for zone in zones %}
+{%- if zone.member_cidrs %}
+set address-group ag-{{ zone.name }} static [ {% for cidr in zone.member_cidrs %}addr-{{ cidr | replace('/', '-') | replace('.', '-') }}{% if not loop.last %} {% endif %}{% endfor %} ]
+{%- else %}
+set address-group ag-{{ zone.name }} static [ any ]
+{%- endif %}
+{%- endfor %}
+#
+{%- endif %}
+{%- if static_routes %}
+#
+# --- Static Routes (return path to leaf per zone) ---
+{%- for route in static_routes %}
+set network virtual-router default routing-table ip static-route {{ route.vrf | replace(' ', '-') }}-{{ loop.index }} destination {{ route.destination }}
+set network virtual-router default routing-table ip static-route {{ route.vrf | replace(' ', '-') }}-{{ loop.index }} nexthop ip-address {{ route.nexthop }}
+set network virtual-router default routing-table ip static-route {{ route.vrf | replace(' ', '-') }}-{{ loop.index }} interface {{ route.interface }}
+{%- endfor %}
+#
+{%- endif %}
+{%- if zone_policies %}
+#
+# --- Security Policies ---
+{%- for policy in zone_policies %}
+{%- for rule in policy.rules %}
+{%- set rule_name = rule.name | replace(' ', '-') %}
+set rulebase security rules {{ rule_name }} from {{ rule.src_zone or 'any' }}
+set rulebase security rules {{ rule_name }} to {{ rule.dst_zone or 'any' }}
+set rulebase security rules {{ rule_name }} source {{ ('ag-' + rule.src_zone) if (rule.src_zone and not rule.src) else (rule.src or 'any') }}
+set rulebase security rules {{ rule_name }} destination {{ ('ag-' + rule.dst_zone) if (rule.dst_zone and not rule.dst) else (rule.dst or 'any') }}
+set rulebase security rules {{ rule_name }} application any
+set rulebase security rules {{ rule_name }} service any
+set rulebase security rules {{ rule_name }} action {{ 'allow' if rule.action == 'permit' else 'deny' }}
+{%- if rule.security_profile %}
+set rulebase security rules {{ rule_name }} profile-setting profiles virus {{ rule.security_profile }}
+{%- endif %}
+{%- if rule.log %}
+set rulebase security rules {{ rule_name }} log-end yes
+{%- endif %}
+{%- if rule.description %}
+set rulebase security rules {{ rule_name }} description "{{ rule.description }}"
+{%- endif %}
+{%- endfor %}
+{%- endfor %}
+#
+{%- endif %}

@@ -1,0 +1,97 @@
+---
+# Stuttgart branch office cabling
+# EDGE GE3 → ACC uplink | APs eth0 → ACC Gi1/0/10-13 | Printer eth0 → ACC Gi1/0/20
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimCable
+  data:
+    - name: CBL-STR-EDGE01-GE3-ACC01-GI1
+      type: copper
+      deployment: OFC-STR-BRANCH-01
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: OFC-STR-BRANCH-EDGE-01
+            name: GE3
+            description: "OFC-STR-BRANCH-ACC-01"
+        - kind: DcimPhysicalInterface
+          data:
+            device: OFC-STR-BRANCH-ACC-01
+            name: GigabitEthernet1/0/1
+            description: "OFC-STR-BRANCH-EDGE-01"
+
+    - name: CBL-STR-AP01-ACC01-GI10
+      type: copper
+      deployment: OFC-STR-BRANCH-01
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: OFC-STR-BRANCH-AP-01
+            name: eth0
+            description: "OFC-STR-BRANCH-ACC-01"
+        - kind: DcimPhysicalInterface
+          data:
+            device: OFC-STR-BRANCH-ACC-01
+            name: GigabitEthernet1/0/10
+            description: "OFC-STR-BRANCH-AP-01"
+
+    - name: CBL-STR-AP02-ACC01-GI11
+      type: copper
+      deployment: OFC-STR-BRANCH-01
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: OFC-STR-BRANCH-AP-02
+            name: eth0
+            description: "OFC-STR-BRANCH-ACC-01"
+        - kind: DcimPhysicalInterface
+          data:
+            device: OFC-STR-BRANCH-ACC-01
+            name: GigabitEthernet1/0/11
+            description: "OFC-STR-BRANCH-AP-02"
+
+    - name: CBL-STR-AP03-ACC01-GI12
+      type: copper
+      deployment: OFC-STR-BRANCH-01
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: OFC-STR-BRANCH-AP-03
+            name: eth0
+            description: "OFC-STR-BRANCH-ACC-01"
+        - kind: DcimPhysicalInterface
+          data:
+            device: OFC-STR-BRANCH-ACC-01
+            name: GigabitEthernet1/0/12
+            description: "OFC-STR-BRANCH-AP-03"
+
+    - name: CBL-STR-AP04-ACC01-GI13
+      type: copper
+      deployment: OFC-STR-BRANCH-01
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: OFC-STR-BRANCH-AP-04
+            name: eth0
+            description: "OFC-STR-BRANCH-ACC-01"
+        - kind: DcimPhysicalInterface
+          data:
+            device: OFC-STR-BRANCH-ACC-01
+            name: GigabitEthernet1/0/13
+            description: "OFC-STR-BRANCH-AP-04"
+
+    - name: CBL-STR-PRN01-ACC01-GI20
+      type: copper
+      deployment: OFC-STR-BRANCH-01
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: OFC-STR-BRANCH-PRN-01
+            name: eth0
+            description: "OFC-STR-BRANCH-ACC-01"
+        - kind: DcimPhysicalInterface
+          data:
+            device: OFC-STR-BRANCH-ACC-01
+            name: GigabitEthernet1/0/20
+            description: "OFC-STR-BRANCH-PRN-01"

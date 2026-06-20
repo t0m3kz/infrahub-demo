@@ -1,0 +1,11 @@
+---
+# Barcelona branch office topology
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologyOffice
+  data:
+    - name: OFC-BCN-BRANCH-01
+      site_type: branch
+      locations:
+        - bcn-1

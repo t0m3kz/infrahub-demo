@@ -10,6 +10,7 @@ feature lacp
 feature vpc
 feature lldp
 !
+{%- include 'common/cisco_nxos_vpc.j2' %}
 ! VLANs
 {%- for vlan in vlans %}
 vlan {{ vlan.vlan_id }}
@@ -17,20 +18,31 @@ vlan {{ vlan.vlan_id }}
 !
 {%- endfor %}
 !
+{%- if acls %}
+! Zero-Trust ACLs (one per segment VLAN — inbound on SVI)
+!
+{%- for acl in acls %}
+ip access-list {{ acl.name }}
+{%- for rule in acl.rules %}
+{%- if rule.src_zone or rule.dst_zone %}
+  remark Zone: {{ rule.src_zone or 'any' }} -> {{ rule.dst_zone or 'any' }}
+{%- endif %}
+  {{ rule.seq }} {{ rule.action }} {{ rule.protocol }} {{ rule.src }} {{ rule.dst -}}
+{%- if rule.dst_port %} {{ rule.dst_port }}{% endif -%}
+{%- if rule.log %} log{% endif -%}
+{%- if rule.name %} ! {{ rule.name }}{% endif %}
+{%- endfor %}
+!
+{%- endfor %}
+{%- endif %}
+!
 ! Interfaces
-{%- for interface in interfaces %}
+{%- for interface in interfaces if interface.role != 'mlag-peer' %}
 interface {{ interface.name }}
 {%- if interface.status == 'active' %}
   no shutdown
 {%- endif %}
-{%- if interface.ip_addresses %}
-{%- for ip in interface.ip_addresses %}
-  ip address {{ ip.address }}
-{%- if ip.get('ip_namespace', {}).get('name', 'default') != "default" %}
-  vrf member {{ ip.get('ip_namespace', {}).get('name') }}
-{%- endif %}
-{%- endfor %}
-{%- endif %}
+{%- include 'common/cisco_nxos_interface_ip.j2' %}
 {%- if interface.vlans %}
   switchport
   switchport mode access
@@ -43,54 +55,101 @@ interface {{ interface.name }}
 {%- endfor %}
 !
 ! OSPF Configuration
-{%- for ospf_config in ospf %}
-router ospf {{ ospf_config.process_id }}
-  router-id {{ ospf_config.router_id.split('/')[0] }}
-  area {{ ospf_config.area }} authentication message-digest
-  auto-cost reference-bandwidth {{ ospf_config.reference_bandwidth }}
-  passive-interface default
-{%- for interface in interfaces %}
-{%- if interface.get('ospf') and interface.ospf.area == ospf_config.area %}
-  no passive-interface {{ interface.name }}
-{%- endif %}
-{%- endfor %}
-!
-{%- endfor %}
+{% include 'common/cisco_nxos_ospf.j2' %}
 !
 ! BGP Configuration
-{%- for bgp_config in bgp %}
-router bgp {{ bgp_config.local_as.asn }}
-  router-id {{ bgp_config.router_id.address.split('/')[0] }}
-{%- if bgp_config.graceful_restart %}
-  graceful-restart
-{%- endif %}
-  !
-  template peer-policy {{ bgp_config.profile }}
-    send-community
-    send-community extended
-{%- if bgp_config.session_type == 'INTERNAL' %}
-    route-reflector-client
-{%- endif %}
-  !
-  template peer-session {{ bgp_config.profile }}-SESSION
-    update-source {{ bgp_config.local_ip.address.split('/')[0] }}
-  !
-  address-family ipv4 unicast
-{%- if bgp_config.multipath %}
-    maximum-paths 8
-{%- endif %}
-  !
-  address-family l2vpn evpn
-{%- for session in bgp_config.sessions %}
-  neighbor {{ session.remote_ip.address.split('/')[0] }}
-    remote-as {{ session.remote_as.asn }}
-    inherit peer-session {{ bgp_config.profile }}-SESSION
-    address-family l2vpn evpn
-      inherit peer-policy {{ bgp_config.profile }}
-    !
+{% include 'common/cisco_nxos_bgp.j2' %}
+!
+{%- if vxlan and vxlan.enabled %}
+!
+! VXLAN Configuration (netlab-style multivendor)
+!
+{%- for feature in vxlan.features %}
+feature {{ feature }}
 {%- endfor %}
 !
+interface {{ vxlan.nve_interface }}
+{%- if vxlan.vtep.ipv4 %}
+  source-interface {{ vxlan.vtep.source_interface }}
+{%- endif %}
+{%- for mapping in vxlan.l2_vni_mappings %}
+  member vni {{ mapping.vni }}
+    {%- if vxlan.evpn and vxlan.evpn.enabled %}
+    ingress-replication protocol bgp
+    {%- elif vxlan.flooding == "static" and vxlan.remote_vteps %}
+    ingress-replication protocol static
+      peer-list {{ vxlan.remote_vteps | join(' ') }}
+    {%- endif %}
 {%- endfor %}
+  no shutdown
+!
+{%- if vxlan.evpn and vxlan.evpn.enabled %}
+!
+! EVPN Configuration
+!
+evpn
+{%- for mapping in vxlan.l2_vni_mappings %}
+  vni {{ mapping.vni }} l2
+    rd {{ vxlan.evpn.rd_format }}
+    route-target import {{ bgp[0].local_as.asn }}:{{ mapping.vni }}
+    route-target export {{ bgp[0].local_as.asn }}:{{ mapping.vni }}
+{%- endfor %}
+!
+{%- endif %}
+!
+! VLAN to VNI mapping
+!
+{%- for mapping in vxlan.l2_vni_mappings %}
+vlan {{ mapping.vlan_id }}
+  vn-segment {{ mapping.vni }}
+{%- endfor %}
+{%- endif %}
+!
+! Route-maps
+route-map RM-CONN-2-BGP permit 10
+  match interface loopback0
+!
+{%- if vlans %}
+! VLAN SVI Configuration
+!
+{%- for vlan in vlans %}
+{%- if vlan.gateway_ip or vlan.gateway_ipv6 %}
+{%- set ns = namespace(acl_name=None) %}
+{%- for acl in acls %}
+{%- if acl.vlan_id == vlan.vlan_id %}
+{%- set ns.acl_name = acl.name %}
+{%- endif %}
+{%- endfor %}
+interface Vlan{{ vlan.vlan_id }}
+  description {{ vlan.name }}
+{%- if vlan.vrf %}
+  vrf member {{ vlan.vrf }}
+{%- endif %}
+{%- if vlan.gateway_ip %}
+  ip address {{ vlan.gateway_ip }}
+{%- endif %}
+{%- if vlan.gateway_ipv6 %}
+  ipv6 address {{ vlan.gateway_ipv6 }}
+{%- endif %}
+  no shutdown
+{%- if ns.acl_name %}
+  ip access-group {{ ns.acl_name }} in
+{%- endif %}
+!
+{%- endif %}
+{%- endfor %}
+{%- endif %}
+!
+{%- if vrf_gateways %}
+!
+! VRF Default Routes — firewall gateway per namespace (Option A: FW as inter-VRF router)
+!
+{%- for vrf, nexthop in vrf_gateways.items() %}
+ip route 0.0.0.0/0 {{ nexthop }} vrf {{ vrf }}
+{%- endfor %}
+!
+{%- endif %}
+{%- include 'common/cisco_nxos_management.j2' %}
 !
 ! Management
 line console

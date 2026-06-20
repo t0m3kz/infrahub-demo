@@ -1,0 +1,140 @@
+config system global
+    set hostname "dc1-fw-01"
+end
+#
+# --- Interfaces ---
+config system interface
+    edit "ethernet1/1.10"
+        set type vlan
+        set vlanid 10
+        set interface "ethernet1/1"
+        set ip 10.0.1.1/30
+        set allowaccess ping https ssh
+        set status up
+        set description "Internal LAN link"
+        set alias "internal"
+    next
+    edit "ethernet1/1.20"
+        set type vlan
+        set vlanid 20
+        set interface "ethernet1/1"
+        set ip 10.0.2.1/30
+        set allowaccess ping https ssh
+        set status up
+        set description "DMZ link"
+        set alias "dmz"
+    next
+    edit "ethernet1/1.30"
+        set type vlan
+        set vlanid 30
+        set interface "ethernet1/1"
+        set ip 10.0.3.1/30
+        set allowaccess ping https ssh
+        set status up
+        set description "External link"
+        set alias "external"
+    next
+end
+#
+# --- Address Objects (one per zone member CIDR) ---
+config firewall address
+    edit "10.0.1.0/24"
+        set subnet 10.0.1.0 24
+        set comment "Zone: internal"
+    next
+    edit "10.0.10.0/24"
+        set subnet 10.0.10.0 24
+        set comment "Zone: internal"
+    next
+    edit "10.0.2.0/24"
+        set subnet 10.0.2.0 24
+        set comment "Zone: dmz"
+    next
+end
+#
+# --- Static Routes (return path to leaf per zone) ---
+config router static
+    edit 1
+        set dst 10.0.2.0/24
+        set gateway 10.0.2.2
+        set device "ethernet1/1.20"
+        set comment "Return path: VRF-DMZ"
+    next
+    edit 2
+        set dst 10.0.1.0/24
+        set gateway 10.0.1.2
+        set device "ethernet1/1.10"
+        set comment "Return path: VRF-INTERNAL"
+    next
+    edit 3
+        set dst 10.0.10.0/24
+        set gateway 10.0.1.2
+        set device "ethernet1/1.10"
+        set comment "Return path: VRF-INTERNAL"
+    next
+end
+#
+# --- Security Policies ---
+config firewall policy
+    edit 10
+        set name "allow-https"
+        set srcintf "dmz"
+        set dstintf "internal"
+        set srcaddr "all"
+        set dstaddr "all"
+        set action accept
+        set schedule "always"
+        set service "ALL"
+        set logtraffic all
+        set utm-status enable
+        set av-profile "strict-av"
+        set comments "Allow HTTPS from DMZ to Internal"
+    next
+    edit 20
+        set name "allow-ssh"
+        set srcintf "dmz"
+        set dstintf "internal"
+        set srcaddr "all"
+        set dstaddr "all"
+        set action accept
+        set schedule "always"
+        set service "ALL"
+        set logtraffic all
+        set comments "Allow SSH from DMZ to Internal"
+    next
+    edit 9990
+        set name "implicit-deny-all"
+        set srcintf "any"
+        set dstintf "any"
+        set srcaddr "all"
+        set dstaddr "all"
+        set action deny
+        set schedule "always"
+        set service "ALL"
+        set logtraffic all
+        set comments "Implicit deny all"
+    next
+    edit 10
+        set name "allow-any"
+        set srcintf "internal"
+        set dstintf "dmz"
+        set srcaddr "all"
+        set dstaddr "all"
+        set action accept
+        set schedule "always"
+        set service "ALL"
+        set comments "Allow all from Internal to DMZ"
+    next
+    edit 9990
+        set name "implicit-deny-all"
+        set srcintf "any"
+        set dstintf "any"
+        set srcaddr "all"
+        set dstaddr "all"
+        set action deny
+        set schedule "always"
+        set service "ALL"
+        set logtraffic all
+        set comments "Implicit deny all"
+    next
+end

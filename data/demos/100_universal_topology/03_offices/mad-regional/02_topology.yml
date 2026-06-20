@@ -1,0 +1,11 @@
+---
+# Madrid regional office topology
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologyOffice
+  data:
+    - name: OFC-MAD-REGIONAL-01
+      site_type: regional
+      locations:
+        - mad-1

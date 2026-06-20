@@ -1,0 +1,11 @@
+---
+# Frankfurt Megaport building
+apiVersion: infrahub.app/v1
+version: "1.0"
+kind: Object
+spec:
+  kind: LocationBuilding
+  data:
+    - name: "MCR-FRA1"
+      shortname: "mcr-fra1"
+      parent: "fra"

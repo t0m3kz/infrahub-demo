@@ -1,0 +1,18 @@
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimDeviceType
+  data:
+    # Arista
+    - name: BIG-IP
+      part_number: BIG-IP
+      height: 1
+      full_depth: false
+      manufacturer: F5 Networks
+    # A10 Networks
+    - name: Thunder
+      part_number: Thunder
+      height: 1
+      full_depth: false
+      manufacturer: A10 Networks

@@ -1,5 +1,5 @@
 query border_leaf_config($device: String!) {
-  DcimGenericDevice(name__value: $device) {
+  DcimDevice(name__value: $device) {
     edges {
       node {
         __typename
@@ -26,53 +26,17 @@ query border_leaf_config($device: String!) {
           }
         }
 
-        # Enhanced BGP Services with Peer Groups
-        device_services {
-          edges {
+        # Deployment context — segment activations for VLAN/VNI database
+        ... on DcimPhysicalDevice {
+          deployment {
             node {
-              __typename
+              id
               name { value }
-              status { value }
-
-              ... on ServiceBGP {
-                session_type { value }
-                multipath { value }
-                graceful_restart { value }
-                local_ip { node { address { value } } }
-                local_as { node { asn { value } } }
-                remote_ip { node { address { value } } }
-                remote_as { node { asn { value } } }
-                router_id { node { address { value } } }
-
-                # CRITICAL: BGP Peer Group Information
-                peer_group {
+              ...BorderLeafSegmentsDC
+              ... on TopologyPod {
+                parent {
                   node {
-                    name { value }
-                    description { value }
-                    peer_group_type { value }
-                    bfd_enabled { value }
-                    ebgp_multihop { value }
-                    send_community { value }
-                    send_community_extended { value }
-                    route_reflector_client { value }
-                    password { value }
-                    maximum_routes { value }
-                    local_pref { value }
-                  }
-                }
-              }
-              ... on ServiceOSPF {
-                process_id { value }
-                version { value }
-                router_type { value }
-                reference_bandwidth { value }
-                router_id { node { address { value } } }
-                area {
-                  node {
-                    area { value }
-                    name { value }
-                    area_type { value }
-                    description { value }
+                    ...BorderLeafSegmentsDC
                   }
                 }
               }
@@ -80,7 +44,160 @@ query border_leaf_config($device: String!) {
           }
         }
 
-        # Enhanced Interface Information
+        # Device Services (BGP, OSPF) with nested peerings
+        device_capabilities {
+          edges {
+            node {
+              __typename
+
+              ... on ManagedGeneric {
+                name { value }
+                status { value }
+              }
+
+              ... on ManagedBGP {
+                multipath { value }
+                graceful_restart { value }
+                confederation_identifier { value }
+                local_as { node { asn { value } } }
+                router_id { node { address { value } } }
+                address_families {
+                  edges {
+                    node {
+                      afi { value }
+                      safi { value }
+                      advertise_all_vni { value }
+                      advertise_default_gw { value }
+                      advertise_svi_ip { value }
+                    }
+                  }
+                }
+                peerings {
+                  edges {
+                    node {
+                      id
+                      name { value }
+                      session_type { value }
+                      bfd_enabled { value }
+                      send_community { value }
+                      ttl { value }
+                      route_reflector_client { value }
+                      address_families {
+                        edges {
+                          node {
+                            afi { value }
+                            safi { value }
+                            advertise_all_vni { value }
+                            advertise_default_gw { value }
+                            advertise_svi_ip { value }
+                          }
+                        }
+                      }
+                      interfaces {
+                        edges {
+                          node {
+                            name { value }
+                            ... on DcimPhysicalInterface {
+                              ip_address { node { address { value } } }
+                            }
+                            ... on DcimVirtualInterface {
+                              ip_address { node { address { value } } }
+                            }
+                            device { node { name { value } } }
+                          }
+                        }
+                      }
+                      bgp_processes {
+                        edges {
+                          node {
+                            id
+                            device_capabilities { edges { node { name { value } } } }
+                            router_id { node { address { value } } }
+                            local_as { node { asn { value } } }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+
+              ... on ManagedOSPF {
+                process_id { value }
+                version { value }
+                router_type { value }
+                reference_bandwidth { value }
+                router_id { node { address { value } } }
+              }
+
+
+              ... on ManagedNTP {
+                timezone { value }
+                servers {
+                  edges {
+                    node {
+                      address { node { address { value } } }
+                      prefer { value }
+                      version { value }
+                    }
+                  }
+                }
+              }
+
+              ... on ManagedSyslog {
+                servers {
+                  edges {
+                    node {
+                      address { node { address { value } } }
+                      port { value }
+                      severity { value }
+                    }
+                  }
+                }
+              }
+
+              ... on ManagedSNMP {
+                version { value }
+                community_ro { value }
+                location { value }
+                contact { value }
+                trap_targets {
+                  edges {
+                    node {
+                      address { node { address { value } } }
+                      port { value }
+                    }
+                  }
+                }
+              }
+
+              ... on ManagedAAA {
+                authentication_order { value }
+                authorization_commands { value }
+                accounting_enabled { value }
+                servers {
+                  edges {
+                    node {
+                      address { node { address { value } } }
+                      protocol { value }
+                      port { value }
+                      timeout { value }
+                    }
+                  }
+                }
+              }
+
+              ... on ManagedMLAG {
+                domain_id { value }
+                reload_delay { value }
+                reload_delay_non_mlag { value }
+                device_capabilities { edges { node { name { value } } } }
+              }
+            }
+          }
+        }
+
+        # Interface Information
         interfaces {
           edges {
             node {
@@ -98,36 +215,172 @@ query border_leaf_config($device: String!) {
                     ip_namespace { node { name { value } } }
                   }
                 }
-              }
-
-              ... on DcimVirtualInterface {
-                ip_addresses {
-                  edges {
-                    node {
-                      address { value }
-                      ip_namespace { node { name { value } } }
+                cable {
+                  node {
+                    id
+                    endpoints {
+                      edges {
+                        node {
+                          __typename
+                          ... on DcimPhysicalInterface {
+                            name { value }
+                            ip_address {
+                              node {
+                                address { value }
+                              }
+                            }
+                            device {
+                              node {
+                                name { value }
+                              }
+                            }
+                          }
+                        }
+                      }
                     }
                   }
                 }
               }
-              interface_services {
+
+              ... on DcimVirtualInterface {
+                ip_address {
+                  node {
+                    address { value }
+                    ip_namespace { node { name { value } } }
+                  }
+                }
+              }
+
+              ... on DcimLAGInterface {
+                lag_id { value }
+                lacp_mode { value }
+                mtu { value }
+                minimum_links { value }
+                ip_address {
+                  node {
+                    address { value }
+                    ip_namespace { node { name { value } } }
+                  }
+                }
+                member_interfaces {
+                  edges {
+                    node {
+                      name { value }
+                    }
+                  }
+                }
+              }
+              interface_capabilities {
                 edges {
                   node {
                     __typename
-                    ... on ServiceOSPF {
-                      area { node { area { value } } }
-                      ospf_interface_profile {
-                        node {
-                          metric { value }
-                          mode { value }
-                          authentication_mode { value }
-                          authentication_key { value }
-                        }
+                    ... on RoutingOSPFInterface {
+                      name { value }
+                      ospf_process { node { router_id { node { address { value } } } } }
+                      area { node { area { value } area_type { value } } }
+                      mode { value }
+                      metric { value }
+                    }
+                    ...NetworkSegmentFields
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+fragment NetworkSegmentFields on ManagedNetworkSegment {
+  ... on ManagedVlanSegment {
+    name { value }
+    description { value }
+    status { value }
+    prefix {
+      edges {
+        node {
+          prefix { value }
+          gateway_ip { value }
+          ip_namespace {
+            node {
+              name { value }
+              l3_vni { value }
+              owner { node { name { value } } }
+            }
+          }
+        }
+      }
+    }
+  }
+  ... on ManagedVxlanSegment {
+    name { value }
+    description { value }
+    status { value }
+    arp_suppression { value }
+    prefix {
+      edges {
+        node {
+          prefix { value }
+          gateway_ip { value }
+          ip_namespace {
+            node {
+              name { value }
+              l3_vni { value }
+              owner { node { name { value } } }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+fragment BorderLeafSegmentsDC on TopologyDataCenter {
+  segment_deployments {
+    edges {
+      node {
+        vlan_id { value }
+        vni { value }
+        status { value }
+        segment {
+          node {
+            id
+            ... on ManagedVlanSegment {
+              name { value }
+              customer_name { value }
+              prefix {
+                edges {
+                  node {
+                    prefix { value }
+                    gateway_ip { value }
+                    ip_namespace {
+                      node {
+                        name { value }
+                        l3_vni { value }
+                        owner { node { name { value } } }
                       }
                     }
-                    ... on ServiceNetworkSegment {
-                      vlan_id { value }
-                      name { value }
+                  }
+                }
+              }
+            }
+            ... on ManagedVxlanSegment {
+              name { value }
+              customer_name { value }
+              arp_suppression { value }
+              prefix {
+                edges {
+                  node {
+                    prefix { value }
+                    gateway_ip { value }
+                    ip_namespace {
+                      node {
+                        name { value }
+                        l3_vni { value }
+                        owner { node { name { value } } }
+                      }
                     }
                   }
                 }

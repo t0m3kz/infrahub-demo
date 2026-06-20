@@ -1,0 +1,54 @@
+! Hostname configuration
+hostname DC1-POD1-L1
+
+! Enable required features
+nv overlay evpn
+feature ospf
+feature bgp
+feature interface-vlan
+feature vn-segment-vlan-based
+feature nv overlay
+
+# MC-LAG Configuration
+sudo config mclag add 1
+sudo config mclag peer-link add Port-Channel100
+interface Ethernet1
+  description to spine-01
+  ip address 10.1.2.1/31
+  no shutdown
+!
+
+interface Ethernet2
+  description to spine-02
+  ip address 10.1.2.3/31
+  no shutdown
+!
+
+interface Ethernet33
+  description MLAG peer-link member 1
+  no shutdown
+!
+
+interface Ethernet34
+  description MLAG peer-link member 2
+  no shutdown
+!
+
+interface Loopback0
+  description Router ID
+  ip address 10.0.2.1/32
+  no shutdown
+!
+
+interface Port-Channel100
+  description MLAG Peer-Link
+  no shutdown
+!
+
+
+! Configure route-maps
+route-map RM-CONN-2-BGP permit 10
+  match interface Loopback0
+!
+
+! End of configuration

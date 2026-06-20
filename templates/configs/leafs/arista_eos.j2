@@ -12,23 +12,69 @@ spanning-tree mode mstp
 ! Configure VLAN 1
 no spanning-tree vlan-id 4094
 
+{%- include 'common/arista_eos_mlag.j2' %}
+
 {#- VLAN Configuration -#}
 {%- for vlan in vlans %}
 vlan {{ vlan.vlan_id }}
    name {{ vlan.name or 'VLAN_' + vlan.vlan_id|string }}
 {% endfor %}
 
+{#- IP Access-Lists (zero-trust per-segment ACLs) -#}
+{%- if acls %}
+!
+! Zero-Trust ACLs (one per segment VLAN — inbound on SVI)
+!
+{%- for acl in acls %}
+ip access-list {{ acl.name }}
+{%- for rule in acl.rules %}
+{%- if rule.src_zone or rule.dst_zone %}
+   remark Zone: {{ rule.src_zone or 'any' }} -> {{ rule.dst_zone or 'any' }}
+{%- endif %}
+   {{ rule.seq }} {{ rule.action }} {{ rule.protocol }} {{ rule.src }} {{ rule.dst -}}
+{%- if rule.dst_port %} {{ rule.dst_port }}{% endif -%}
+{%- if rule.log %} log{% endif -%}
+{%- if rule.name %} ! {{ rule.name }}{% endif %}
+{%- endfor %}
+!
+{%- endfor %}
+{%- endif %}
+
+{#- LAG / Port-Channel Interfaces -#}
+{%- for interface in interfaces if interface.lag_id is defined and interface.role != 'mlag-peer' %}
+interface Port-Channel{{ interface.lag_id }}
+{%- if interface.description %}
+   description {{ interface.description }}
+{%- endif %}
+{%- if interface.lacp_mode == 'static' %}
+   ! static LAG (no LACP)
+{%- endif %}
+{%- if interface.mtu %}
+   mtu {{ interface.mtu }}
+{%- endif %}
+{%- if interface.minimum_links and interface.minimum_links > 1 %}
+   port-channel min-links {{ interface.minimum_links }}
+{%- endif %}
+{%- include 'common/arista_eos_interface_ip.j2' %}
+   no shutdown
+{% endfor %}
+
+{#- Physical member interfaces — bind to their LAG -#}
+{%- for lag in interfaces if lag.lag_id is defined and lag.member_interfaces is defined and lag.role != 'mlag-peer' %}
+{%- for member_name in lag.member_interfaces %}
+interface {{ member_name }}
+   channel-group {{ lag.lag_id }} mode {{ lag.lacp_mode | default('active') }}
+   no shutdown
+{% endfor %}
+{%- endfor %}
+
 {#- All Interfaces (Loopback, Physical, Virtual) -#}
-{%- for interface in interfaces %}
+{%- for interface in interfaces if interface.role != 'mlag-peer' %}
 interface {{ interface.name }}
 {%- if interface.description %}
    description {{ interface.description }}
 {%- endif %}
-{%- if interface.ip_addresses %}
-{%- for ip in interface.ip_addresses %}
-   ip address {{ ip.address }}
-{%- endfor %}
-{%- endif %}
+{%- include 'common/arista_eos_interface_ip.j2' %}
 {%- if interface.vlans %}
 {%- if interface.vlans|length == 1 %}
    switchport access vlan {{ interface.vlans[0] }}
@@ -43,48 +89,153 @@ interface {{ interface.name }}
 {% endfor %}
 
 {%- if ospf %}
+{%- from 'common/arista_eos_ospf.j2' import render_ospf %}
 ! Configure OSPF
-{%- for ospf_config in ospf %}
-router ospf {{ ospf_config.process_id or 1 }}
-   router-id {{ ospf_config.router_id.split('/')[0] }}
-   passive-interface default
-{%- for interface in interfaces %}
-{%- if interface.get('ospf') %}
-   no passive-interface {{ interface.name }}
-{%- endif %}
-{%- endfor %}
-   max-lsa 12000
-{% endfor %}
+{{ render_ospf(ospf, interfaces) }}
 {%- endif %}
 
 {%- if bgp %}
+{%- from 'common/arista_eos_bgp.j2' import render_bgp %}
 ! Configure BGP
-{%- for bgp_config in bgp %}
-router bgp {{ bgp_config.local_as.asn }}
-   router-id {{ bgp_config.router_id.address.split('/')[0] }}
-   no bgp default ipv4-unicast
-   distance bgp 20 200 200
-   maximum-paths 4 ecmp 64
-{%- for session in bgp_config.sessions %}
-   neighbor {{ session.remote_ip.address.split('/')[0] }} remote-as {{ session.remote_as.asn }}
-   neighbor {{ session.remote_ip.address.split('/')[0] }} update-source Loopback0
-   neighbor {{ session.remote_ip.address.split('/')[0] }} send-community extended
-   neighbor {{ session.remote_ip.address.split('/')[0] }} maximum-routes 0
-{%- endfor %}
-   address-family ipv4
-      redistribute connected route-map RM-CONN-2-BGP
-{%- for session in bgp_config.sessions %}
-      neighbor {{ session.remote_ip.address.split('/')[0] }} activate
-{%- endfor %}
-   address-family evpn
-{%- for session in bgp_config.sessions %}
-      neighbor {{ session.remote_ip.address.split('/')[0] }} activate
-{%- endfor %}
-{% endfor %}
+{{ render_bgp(bgp, interfaces) }}
 {%- endif %}
 
 ! Configure route-maps
 route-map RM-CONN-2-BGP permit 10
    match interface Loopback0
+
+{%- if vxlan and vxlan.enabled %}
+!
+! VXLAN Configuration with Microsegmentation (VRF-aware VNIs)
+!
+{%- if vxlan.microsegmentation and vxlan.microsegmentation.enabled %}
+! Microsegmentation enabled: {{ vxlan.microsegmentation.vrf_count }} VRF(s) for tenant isolation
+{%- endif %}
+!
+interface {{ vxlan.interface }}
+{%- if vxlan.vtep.ipv4 %}
+   vxlan source-interface {{ vxlan.vtep.source_interface }}
+{%- endif %}
+{%- if vxlan.vtep.udp_port != 4789 %}
+   vxlan udp-port {{ vxlan.vtep.udp_port }}
+{%- endif %}
+{%- if vxlan.l2_vni_mappings %}
+   !
+   ! L2 VNI Mappings (VLAN segments)
+{%- for mapping in vxlan.l2_vni_mappings %}
+   vxlan vlan {{ mapping.vlan_id }} vni {{ mapping.vni }}
+{%- endfor %}
+{%- endif %}
+{%- if vxlan.l3_vni_mappings %}
+   !
+   ! L3 VNI Mappings (VRF segments for microsegmentation)
+{%- for mapping in vxlan.l3_vni_mappings %}
+   vxlan vrf {{ mapping.vrf_name }} vni {{ mapping.l3_vni }}
+{%- endfor %}
+{%- endif %}
+{%- if vxlan.flooding == "static" and vxlan.remote_vteps and vxlan.l2_vni_mappings %}
+{%- for mapping in vxlan.l2_vni_mappings %}
+   vxlan vlan {{ mapping.vlan_id }} flood vtep {{ vxlan.remote_vteps | join(' ') }}
+{%- endfor %}
+{%- endif %}
+!
+{%- if vxlan.l3_vni_mappings %}
+!
+! VRF Definitions (Microsegmentation)
+!
+{%- for mapping in vxlan.l3_vni_mappings %}
+vrf instance {{ mapping.vrf_name }}
+   description {{ mapping.description | default('Tenant VRF for microsegmentation') }}
+   rd {{ vxlan.evpn.rd_format | replace('{vni}', mapping.l3_vni | string) }}
+!
+{%- endfor %}
+{%- endif %}
+{%- if vxlan.vrf_loopbacks %}
+!
+! VRF Loopback Interfaces
+!
+{%- for loopback in vxlan.vrf_loopbacks %}
+interface {{ loopback.name }}
+   description VRF {{ loopback.vrf }} L3VNI {{ loopback.l3_vni }}
+   vrf {{ loopback.vrf }}
+{%- if loopback.ip %}
+   ip address {{ loopback.ip }}/32
+{%- endif %}
+!
+{%- endfor %}
+{%- endif %}
+{%- if vxlan.evpn and vxlan.evpn.enabled and bgp %}
+!
+! EVPN Configuration (L2 + L3 VNI)
+!
+{%- for bgp_config in bgp %}
+router bgp {{ bgp_config.local_as.asn }}
+{%- if vxlan.l2_vni_mappings %}
+   !
+   ! L2 EVPN (VLAN-based)
+{%- for mapping in vxlan.l2_vni_mappings %}
+   vlan {{ mapping.vlan_id }}
+      rd {{ vxlan.evpn.rd_format | replace('{vni}', mapping.vni | string) }}
+      route-target both {{ vxlan.evpn.rt_format | replace('{vni}', mapping.vni | string) }}
+      redistribute learned
+{%- if mapping.get('arp_suppression') %}
+      arp proxy
+{%- endif %}
+{%- endfor %}
+{%- endif %}
+{%- if vxlan.l3_vni_mappings %}
+   !
+   ! L3 EVPN (VRF-based for microsegmentation)
+{%- for mapping in vxlan.l3_vni_mappings %}
+   vrf {{ mapping.vrf_name }}
+      rd {{ vxlan.evpn.rd_format | replace('{vni}', mapping.l3_vni | string) }}
+      route-target import evpn {{ vxlan.evpn.rt_format | replace('{vni}', mapping.l3_vni | string) }}
+      route-target export evpn {{ vxlan.evpn.rt_format | replace('{vni}', mapping.l3_vni | string) }}
+      redistribute connected
+{%- endfor %}
+{%- endif %}
+{% endfor %}
+{%- endif %}
+{%- if vxlan.anycast_gateway and vxlan.anycast_gateway.enabled %}
+!
+! Anycast Gateway Configuration
+!
+ip virtual-router mac-address {{ vxlan.anycast_gateway.mac }}
+{%- for vlan in vlans %}
+{%- if vlan.gateway_ip or vlan.gateway_ipv6 %}
+{%- set ns = namespace(acl_name=None) %}
+{%- for acl in acls %}
+{%- if acl.vlan_id == vlan.vlan_id %}
+{%- set ns.acl_name = acl.name %}
+{%- endif %}
+{%- endfor %}
+interface Vlan{{ vlan.vlan_id }}
+{%- if vlan.vrf %}
+   vrf {{ vlan.vrf }}
+{%- endif %}
+{%- if vlan.gateway_ip %}
+   ip address virtual {{ vlan.gateway_ip }}
+{%- endif %}
+{%- if vlan.gateway_ipv6 %}
+   ipv6 address virtual {{ vlan.gateway_ipv6 }}
+{%- endif %}
+{%- if ns.acl_name %}
+   ip access-group {{ ns.acl_name }} in
+{%- endif %}
+{%- endif %}
+{%- endfor %}
+{%- endif %}
+{%- endif %}
+
+{%- if vrf_gateways %}
+!
+! VRF Default Routes — firewall gateway per namespace (Option A: FW as inter-VRF router)
+!
+{%- for vrf, nexthop in vrf_gateways.items() %}
+ip route vrf {{ vrf }} 0.0.0.0/0 {{ nexthop }}
+{%- endfor %}
+{%- endif %}
+
+{%- include 'common/arista_eos_management.j2' %}
 
 ! End of configuration

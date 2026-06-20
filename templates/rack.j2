@@ -1,0 +1,64 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {{ total_width }} {{ total_height }}" width="{{ total_width }}" height="{{ total_height }}">
+  <style>
+    .rack-title { font: bold 18px sans-serif; fill: #333; }
+    .column-title { font: bold 12px sans-serif; fill: #666; }
+    .u-label { font: 9px monospace; fill: #666; }
+    .device-label { font: bold 9px sans-serif; fill: #333; }
+    .device-type { font: 8px sans-serif; fill: #555; }
+  </style>
+
+  <!-- background -->
+  <rect x="0" y="0" width="{{ total_width }}" height="{{ total_height }}" fill="white"/>
+
+  <!-- title -->
+  <text x="{{ total_width / 2 }}" y="30" text-anchor="middle" class="rack-title">Rack: {{ rack_name }} ({{ rack_height }}U)</text>
+
+  <!-- column headers -->
+  <text x="{{ front_x + column_width / 2 }}" y="{{ title_height - 8 }}" text-anchor="middle" class="column-title">FRONT</text>
+  <text x="{{ rear_x + column_width / 2 }}" y="{{ title_height - 8 }}" text-anchor="middle" class="column-title">REAR</text>
+
+  <!-- rack frames -->
+  <rect x="{{ front_x }}" y="{{ rack_top_y }}" width="{{ column_width }}" height="{{ rack_height * u_height }}" fill="#FAFAFA" stroke="#333" stroke-width="2"/>
+  <rect x="{{ rear_x }}" y="{{ rack_top_y }}" width="{{ column_width }}" height="{{ rack_height * u_height }}" fill="#FAFAFA" stroke="#333" stroke-width="2"/>
+
+  <!-- u labels and grid -->
+  {% for u in range(1, rack_height + 1) -%}
+  {% set y = rack_top_y + (rack_height - u) * u_height -%}
+  <text x="{{ label_center_x }}" y="{{ y + u_height / 2 + 3 }}" text-anchor="middle" class="u-label">U{{ u }}</text>
+  {% if u < rack_height -%}
+  <line x1="{{ front_x }}" y1="{{ y }}" x2="{{ front_x + column_width }}" y2="{{ y }}" stroke="#E0E0E0" stroke-width="1"/>
+  <line x1="{{ rear_x }}" y1="{{ y }}" x2="{{ rear_x + column_width }}" y2="{{ y }}" stroke="#E0E0E0" stroke-width="1"/>
+  {% endif -%}
+  {% endfor %}
+
+  <!-- devices -->
+  {%- for device in devices %}
+  <!-- {{ device.name }} at U{{ device.position }}-U{{ device.position + device.height - 1 }} {{ "(full-depth)" if device.is_full_depth else "(" ~ device.rack_face ~ " only)" }} -->
+  {%- if device.is_full_depth %}
+  <rect x="{{ front_x + 2 }}" y="{{ device.y_position + 1 }}" width="{{ column_width - 4 }}" height="{{ device.y_size - 2 }}" fill="{{ device.color }}" stroke="#333" stroke-width="1" rx="3"/>
+  {%- if device.height == 1 %}
+  <text x="{{ front_x + column_width / 2 }}" y="{{ device.y_position + device.y_size / 2 + 3 }}" text-anchor="middle" class="device-label">{{ device.name }} | {{ device.device_type }}</text>
+  {%- else %}
+  <text x="{{ front_x + column_width / 2 }}" y="{{ device.y_position + device.y_size / 2 - 2 }}" text-anchor="middle" class="device-label">{{ device.name }}</text>
+  <text x="{{ front_x + column_width / 2 }}" y="{{ device.y_position + device.y_size / 2 + 10 }}" text-anchor="middle" class="device-type">{{ device.device_type }}</text>
+  {%- endif %}
+  <rect x="{{ front_x + column_width }}" y="{{ device.connector_y_position }}" width="{{ label_column_width }}" height="{{ device.connector_y_size }}" fill="{{ device.color }}" opacity="0.4"/>
+  <rect x="{{ rear_x + 2 }}" y="{{ device.y_position + 1 }}" width="{{ column_width - 4 }}" height="{{ device.y_size - 2 }}" fill="{{ device.color }}" stroke="#333" stroke-width="1" rx="3"/>
+  {%- if device.height == 1 %}
+  <text x="{{ rear_x + column_width / 2 }}" y="{{ device.y_position + device.y_size / 2 + 3 }}" text-anchor="middle" class="device-label">{{ device.name }} | {{ device.device_type }}</text>
+  {%- else %}
+  <text x="{{ rear_x + column_width / 2 }}" y="{{ device.y_position + device.y_size / 2 - 2 }}" text-anchor="middle" class="device-label">{{ device.name }}</text>
+  <text x="{{ rear_x + column_width / 2 }}" y="{{ device.y_position + device.y_size / 2 + 10 }}" text-anchor="middle" class="device-type">{{ device.device_type }}</text>
+  {%- endif %}
+  {%- else %}
+  {%- set x = front_x if device.rack_face == "front" else rear_x %}
+  <rect x="{{ x + 2 }}" y="{{ device.y_position + 1 }}" width="{{ column_width - 4 }}" height="{{ device.y_size - 2 }}" fill="{{ device.color }}" stroke="#333" stroke-width="1" rx="3"/>
+  {%- if device.height == 1 %}
+  <text x="{{ x + column_width / 2 }}" y="{{ device.y_position + device.y_size / 2 + 3 }}" text-anchor="middle" class="device-label">{{ device.name }} | {{ device.device_type }}</text>
+  {%- else %}
+  <text x="{{ x + column_width / 2 }}" y="{{ device.y_position + device.y_size / 2 - 2 }}" text-anchor="middle" class="device-label">{{ device.name }}</text>
+  <text x="{{ x + column_width / 2 }}" y="{{ device.y_position + device.y_size / 2 + 10 }}" text-anchor="middle" class="device-type">{{ device.device_type }}</text>
+  {%- endif %}
+  {%- endif %}
+  {%- endfor %}
+</svg>

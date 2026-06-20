@@ -1,0 +1,22 @@
+---
+# Madrid regional office rack
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: LocationBuilding
+  data:
+    - name: MAD-1
+      shortname: mad-1
+      parent: mdr
+      children:
+        kind: LocationSuite
+        data:
+          - suite_name: MAD-OFFICE
+            index: 1
+            shortname: mad-1-office
+            children:
+              kind: LocationRack
+              data:
+                - shortname: mad-1-office-r-1
+                  index: 1
+                  row_index: 1

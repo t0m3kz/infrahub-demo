@@ -1,0 +1,383 @@
+---
+# DC2 Security — active-active physical firewall pair (spine → FW → super-spine)
+#
+# DC2-FW-01 and DC2-FW-02 replace the direct spine→super-spine cables.
+# Each FW handles one SS side; all spines connect to both FWs for redundancy.
+#
+# Port mapping (one dedicated inside port per spine):
+#   DC2-FW-01:
+#     ge-0/0/0  inside ← DC2-POD1-SP1:Eth1/1
+#     ge-0/0/1  inside ← DC2-POD1-SP2:Eth1/1
+#     ge-0/0/2  inside ← DC2-POD2-SP1:Eth1/1
+#     ge-0/0/3  inside ← DC2-POD2-SP2:Eth1/1
+#     ge-0/0/4  outside → DC2-SS1:Eth1/1
+#     ge-0/0/5  HA sync ↔ DC2-FW-02:ge-0/0/5
+#   DC2-FW-02:
+#     ge-0/0/0  inside ← DC2-POD1-SP1:Eth1/2
+#     ge-0/0/1  inside ← DC2-POD1-SP2:Eth1/2
+#     ge-0/0/2  inside ← DC2-POD2-SP1:Eth1/2
+#     ge-0/0/3  inside ← DC2-POD2-SP2:Eth1/2
+#     ge-0/0/4  outside → DC2-SS2:Eth1/1
+#     ge-0/0/5  HA sync ↔ DC2-FW-01:ge-0/0/5
+#
+# Original CBL-DC2-SS*-POD*-SP* cables removed from 05_cabling.yml.
+# Contrast with DC1 which uses per-customer virtual FWs via PBR.
+
+# ── Physical firewall pair ─────────────────────────────────────────────────────
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimPhysicalDevice
+  data:
+    - name: DC2-FW-01
+      device_type: SRX-1500
+      role: firewall-active
+      status: active
+      deployment: DC2
+      rack: dc2-s1-r-1
+      interfaces:
+        kind: DcimPhysicalInterface
+        data:
+          - name: ge-0/0/0
+            interface_type: 10gbase-x-sfpp
+            role: uplink
+            status: active
+            description: "Inside — DC2-POD1-SP1"
+          - name: ge-0/0/1
+            interface_type: 10gbase-x-sfpp
+            role: uplink
+            status: active
+            description: "Inside — DC2-POD1-SP2"
+          - name: ge-0/0/2
+            interface_type: 10gbase-x-sfpp
+            role: uplink
+            status: active
+            description: "Inside — DC2-POD2-SP1"
+          - name: ge-0/0/3
+            interface_type: 10gbase-x-sfpp
+            role: uplink
+            status: active
+            description: "Inside — DC2-POD2-SP2"
+          - name: ge-0/0/4
+            interface_type: 10gbase-x-sfpp
+            role: uplink
+            status: active
+            description: "Outside — toward DC2-SS1"
+          - name: ge-0/0/5
+            interface_type: 10gbase-x-sfpp
+            role: uplink
+            status: active
+            description: "HA sync — back-to-back with DC2-FW-02"
+
+    - name: DC2-FW-02
+      device_type: SRX-1500
+      role: firewall-active
+      status: active
+      deployment: DC2
+      rack: dc2-s1-r-2
+      interfaces:
+        kind: DcimPhysicalInterface
+        data:
+          - name: ge-0/0/0
+            interface_type: 10gbase-x-sfpp
+            role: uplink
+            status: active
+            description: "Inside — DC2-POD1-SP1"
+          - name: ge-0/0/1
+            interface_type: 10gbase-x-sfpp
+            role: uplink
+            status: active
+            description: "Inside — DC2-POD1-SP2"
+          - name: ge-0/0/2
+            interface_type: 10gbase-x-sfpp
+            role: uplink
+            status: active
+            description: "Inside — DC2-POD2-SP1"
+          - name: ge-0/0/3
+            interface_type: 10gbase-x-sfpp
+            role: uplink
+            status: active
+            description: "Inside — DC2-POD2-SP2"
+          - name: ge-0/0/4
+            interface_type: 10gbase-x-sfpp
+            role: uplink
+            status: active
+            description: "Outside — toward DC2-SS2"
+          - name: ge-0/0/5
+            interface_type: 10gbase-x-sfpp
+            role: uplink
+            status: active
+            description: "HA sync — back-to-back with DC2-FW-01"
+
+# ── Cables — spines → FW pair (one port per spine per FW) ────────────────────
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimCable
+  data:
+    # ── POD1-SP1 → FW-01:ge-0/0/0 and FW-02:ge-0/0/0 ────────────────────────
+    - name: CBL-DC2-POD1-SP1-FW01-INSIDE
+      type: smf
+      deployment: DC2
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC2-POD1-SP1
+            name: Ethernet1/1
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC2-FW-01
+            name: ge-0/0/0
+
+    - name: CBL-DC2-POD1-SP1-FW02-INSIDE
+      type: smf
+      deployment: DC2
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC2-POD1-SP1
+            name: Ethernet1/2
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC2-FW-02
+            name: ge-0/0/0
+
+    # ── POD1-SP2 → FW-01:ge-0/0/1 and FW-02:ge-0/0/1 ────────────────────────
+    - name: CBL-DC2-POD1-SP2-FW01-INSIDE
+      type: smf
+      deployment: DC2
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC2-POD1-SP2
+            name: Ethernet1/1
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC2-FW-01
+            name: ge-0/0/1
+
+    - name: CBL-DC2-POD1-SP2-FW02-INSIDE
+      type: smf
+      deployment: DC2
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC2-POD1-SP2
+            name: Ethernet1/2
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC2-FW-02
+            name: ge-0/0/1
+
+    # ── POD2-SP1 → FW-01:ge-0/0/2 and FW-02:ge-0/0/2 ────────────────────────
+    - name: CBL-DC2-POD2-SP1-FW01-INSIDE
+      type: smf
+      deployment: DC2
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC2-POD2-SP1
+            name: Ethernet1/1
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC2-FW-01
+            name: ge-0/0/2
+
+    - name: CBL-DC2-POD2-SP1-FW02-INSIDE
+      type: smf
+      deployment: DC2
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC2-POD2-SP1
+            name: Ethernet1/2
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC2-FW-02
+            name: ge-0/0/2
+
+    # ── POD2-SP2 → FW-01:ge-0/0/3 and FW-02:ge-0/0/3 ────────────────────────
+    - name: CBL-DC2-POD2-SP2-FW01-INSIDE
+      type: smf
+      deployment: DC2
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC2-POD2-SP2
+            name: Ethernet1/1
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC2-FW-01
+            name: ge-0/0/3
+
+    - name: CBL-DC2-POD2-SP2-FW02-INSIDE
+      type: smf
+      deployment: DC2
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC2-POD2-SP2
+            name: Ethernet1/2
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC2-FW-02
+            name: ge-0/0/3
+
+    # ── FW outside → super-spines ─────────────────────────────────────────────
+    - name: CBL-DC2-FW01-SS1-OUTSIDE
+      type: smf
+      deployment: DC2
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC2-FW-01
+            name: ge-0/0/4
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC2-SS1
+            name: Ethernet1/1
+
+    - name: CBL-DC2-FW02-SS2-OUTSIDE
+      type: smf
+      deployment: DC2
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC2-FW-02
+            name: ge-0/0/4
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC2-SS2
+            name: Ethernet1/1
+
+    # ── HA sync — back-to-back ────────────────────────────────────────────────
+    - name: CBL-DC2-FW01-FW02-HA-SYNC
+      type: smf
+      deployment: DC2
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC2-FW-01
+            name: ge-0/0/5
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC2-FW-02
+            name: ge-0/0/5
+
+# ── Security Zones ─────────────────────────────────────────────────────────────
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: SecurityZone
+  data:
+    - name: DC2-PROD-ZONE
+      description: "DC2 production workload zone — customer tenant segments"
+      trust_level: 70
+      zone_type: internal
+
+    - name: DC2-MGMT-ZONE
+      description: "DC2 management zone — infrastructure control plane"
+      trust_level: 90
+      zone_type: management
+
+    - name: DC2-UNTRUSTED-ZONE
+      description: "DC2 untrusted zone — internet-facing and external traffic"
+      trust_level: 10
+      zone_type: external
+
+# ── Security Policies ─────────────────────────────────────────────────────────
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: SecurityPolicy
+  data:
+    - name: DC2-FABRIC-POLICY
+      description: "DC2 fabric policy — active-active FW pair inspecting all spine→SS traffic"
+      default_action: deny
+      enabled: true
+      device_capabilities:
+        - DC2-FW-01
+        - DC2-FW-02
+
+# ── Firewall association on segments ──────────────────────────────────────────
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: ManagedVxlanSegment
+  data:
+    - customer_name: "web-frontend"
+      environment: "production"
+      owner: "Customer 1"
+      firewall: DC2-FW-01
+      pbr_enabled: false
+
+    - customer_name: "app-backend"
+      environment: "production"
+      owner: "Customer 1"
+      firewall: DC2-FW-01
+      pbr_enabled: false
+
+    - customer_name: "web-frontend"
+      environment: "production"
+      owner: "Customer 2"
+      firewall: DC2-FW-02
+      pbr_enabled: false
+
+    - customer_name: "app-backend"
+      environment: "production"
+      owner: "Customer 2"
+      firewall: DC2-FW-02
+      pbr_enabled: false
+
+# ── Security Policy Rules ──────────────────────────────────────────────────────
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: SecurityPolicyRule
+  data:
+    - index: 10
+      name: dc2-permit-https-inbound
+      description: "Allow HTTPS from untrusted to production"
+      action: permit
+      protocol: tcp
+      port_start: 443
+      log: true
+      policy: DC2-FABRIC-POLICY
+      source_zone: DC2-UNTRUSTED-ZONE
+      destination_zone: DC2-PROD-ZONE
+
+    - index: 20
+      name: dc2-permit-ssh-mgmt
+      description: "Allow SSH from management to production"
+      action: permit
+      protocol: tcp
+      port_start: 22
+      log: true
+      policy: DC2-FABRIC-POLICY
+      source_zone: DC2-MGMT-ZONE
+      destination_zone: DC2-PROD-ZONE
+
+    - index: 30
+      name: dc2-permit-intra-tenant
+      description: "Allow east-west within same production zone"
+      action: permit
+      protocol: any
+      log: false
+      policy: DC2-FABRIC-POLICY
+      source_zone: DC2-PROD-ZONE
+      destination_zone: DC2-PROD-ZONE
+
+    - index: 999
+      name: dc2-deny-all
+      description: "Default deny — log all unmatched traffic"
+      action: deny
+      protocol: any
+      log: true
+      policy: DC2-FABRIC-POLICY
+      source_zone: DC2-UNTRUSTED-ZONE
+      destination_zone: DC2-PROD-ZONE

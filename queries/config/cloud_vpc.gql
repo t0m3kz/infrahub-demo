@@ -1,0 +1,598 @@
+query cloud_vpc_config($account: String!) {
+  CloudVirtualNetwork(account__name__value: $account) {
+    edges {
+      node {
+        id
+        name {
+          value
+        }
+        is_default {
+          value
+        }
+        dns_support {
+          value
+        }
+        dns_hostnames {
+          value
+        }
+        account {
+          node {
+            name {
+              value
+            }
+            account_id {
+              value
+            }
+            environment {
+              value
+            }
+            provider {
+              node {
+                name {
+                  value
+                }
+              }
+            }
+          }
+        }
+        region {
+          node {
+            name {
+              value
+            }
+          }
+        }
+        cidr_blocks {
+          edges {
+            node {
+              prefix {
+                value
+              }
+            }
+          }
+        }
+        network_segments {
+          edges {
+            node {
+              id
+              name {
+                value
+              }
+              is_public {
+                value
+              }
+              auto_assign_public_ip {
+                value
+              }
+              segment_type {
+                value
+              }
+              cidr_block {
+                node {
+                  prefix {
+                    value
+                  }
+                }
+              }
+              availability_zone {
+                node {
+                  name {
+                    value
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+  CloudSecurityGroup(account__name__value: $account) {
+    edges {
+      node {
+        id
+        name {
+          value
+        }
+        virtual_network {
+          node {
+            name {
+              value
+            }
+          }
+        }
+      }
+    }
+  }
+  CloudInstance(account__name__value: $account) {
+    edges {
+      node {
+        id
+        name {
+          value
+        }
+        cloud_id {
+          value
+        }
+        instance_type {
+          value
+        }
+        image {
+          value
+        }
+        os_type {
+          value
+        }
+        private_ip {
+          value
+        }
+        public_ip {
+          value
+        }
+        network_segment {
+          node {
+            name {
+              value
+            }
+            virtual_network {
+              node {
+                name {
+                  value
+                }
+              }
+            }
+          }
+        }
+        availability_zone {
+          node {
+            name {
+              value
+            }
+          }
+        }
+        security_groups {
+          edges {
+            node {
+              name {
+                value
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+  CloudInternetGateway(account__name__value: $account) {
+    edges {
+      node {
+        id
+        name {
+          value
+        }
+        virtual_network {
+          node {
+            name {
+              value
+            }
+          }
+        }
+      }
+    }
+  }
+  CloudNATGateway(account__name__value: $account) {
+    edges {
+      node {
+        id
+        name {
+          value
+        }
+        public_ip {
+          value
+        }
+        virtual_network {
+          node {
+            name {
+              value
+            }
+          }
+        }
+        network_segments {
+          edges {
+            node {
+              name {
+                value
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+  CloudRouteTable {
+    edges {
+      node {
+        id
+        name {
+          value
+        }
+        is_main {
+          value
+        }
+        virtual_network {
+          node {
+            name {
+              value
+            }
+          }
+        }
+        network_segments {
+          edges {
+            node {
+              name {
+                value
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+  CloudRoute {
+    edges {
+      node {
+        id
+        name {
+          value
+        }
+        route_table {
+          node {
+            name {
+              value
+            }
+          }
+        }
+        destination {
+          node {
+            prefix {
+              value
+            }
+          }
+        }
+        internet_gateway {
+          node {
+            name {
+              value
+            }
+          }
+        }
+        nat_gateway {
+          node {
+            name {
+              value
+            }
+          }
+        }
+        instance {
+          node {
+            name {
+              value
+            }
+          }
+        }
+      }
+    }
+  }
+  CloudPublicIP(account__name__value: $account) {
+    edges {
+      node {
+        id
+        name {
+          value
+        }
+        public_ip {
+          value
+        }
+        region {
+          node {
+            name {
+              value
+            }
+          }
+        }
+        instance {
+          node {
+            name {
+              value
+            }
+          }
+        }
+      }
+    }
+  }
+  CloudNetworkACL {
+    edges {
+      node {
+        id
+        name {
+          value
+        }
+        virtual_network {
+          node {
+            name {
+              value
+            }
+          }
+        }
+        network_segments {
+          edges {
+            node {
+              name {
+                value
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+  CloudTransitGateway(account__name__value: $account) {
+    edges {
+      node {
+        id
+        name {
+          value
+        }
+        default_route_table {
+          value
+        }
+        dns_support {
+          value
+        }
+        vpn_ecmp_support {
+          value
+        }
+        region {
+          node {
+            name {
+              value
+            }
+          }
+        }
+        attached_virtual_networks {
+          edges {
+            node {
+              name {
+                value
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+  CloudVPNGateway {
+    edges {
+      node {
+        id
+        name {
+          value
+        }
+        vpn_type {
+          value
+        }
+        virtual_network {
+          node {
+            name {
+              value
+            }
+          }
+        }
+        region {
+          node {
+            name {
+              value
+            }
+          }
+        }
+        transit_gateway {
+          node {
+            name {
+              value
+            }
+          }
+        }
+        customer_gateway {
+          node {
+            name {
+              value
+            }
+          }
+        }
+      }
+    }
+  }
+  CloudCustomerGateway(account__name__value: $account) {
+    edges {
+      node {
+        id
+        name {
+          value
+        }
+        device_type {
+          value
+        }
+        asn {
+          node {
+            asn {
+              value
+            }
+          }
+        }
+        ip_address {
+          node {
+            address {
+              value
+            }
+          }
+        }
+      }
+    }
+  }
+  CloudVirtualNetworkPeering {
+    edges {
+      node {
+        id
+        name {
+          value
+        }
+        peering_status {
+          value
+        }
+        requester_virtual_network {
+          node {
+            name {
+              value
+            }
+          }
+        }
+        accepter_virtual_network {
+          node {
+            name {
+              value
+            }
+          }
+        }
+        requester_route_table {
+          node {
+            name {
+              value
+            }
+          }
+        }
+        accepter_route_table {
+          node {
+            name {
+              value
+            }
+          }
+        }
+      }
+    }
+  }
+  CloudDirectConnect(account__name__value: $account) {
+    edges {
+      node {
+        id
+        name {
+          value
+        }
+        bandwidth {
+          value
+        }
+        connection_type {
+          value
+        }
+        vlan_id {
+          value
+        }
+        region {
+          node {
+            name {
+              value
+            }
+          }
+        }
+      }
+    }
+  }
+  CloudVirtualInterface {
+    edges {
+      node {
+        id
+        name {
+          value
+        }
+        vif_type {
+          value
+        }
+        vlan_id {
+          value
+        }
+        direct_connect {
+          node {
+            name {
+              value
+            }
+          }
+        }
+        virtual_network {
+          node {
+            name {
+              value
+            }
+          }
+        }
+        transit_gateway {
+          node {
+            name {
+              value
+            }
+          }
+        }
+      }
+    }
+  }
+  CloudAutoScalingGroup(account__name__value: $account) {
+    edges {
+      node {
+        id
+        name {
+          value
+        }
+        min_size {
+          value
+        }
+        max_size {
+          value
+        }
+        desired_capacity {
+          value
+        }
+        instance_type {
+          value
+        }
+        image {
+          value
+        }
+        os_type {
+          value
+        }
+        virtual_network {
+          node {
+            name {
+              value
+            }
+          }
+        }
+        network_segments {
+          edges {
+            node {
+              name {
+                value
+              }
+            }
+          }
+        }
+        security_groups {
+          edges {
+            node {
+              name {
+                value
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

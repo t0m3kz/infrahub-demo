@@ -1,0 +1,30 @@
+---
+# Initial network racks for POD-4
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: LocationRack
+  data:
+    # Network rack in POD-4 Row 1
+    - index: 1
+      row_index: 1
+      shortname: ktw-1-s-4-r-1-1
+      rack_type: network
+      pod: DC6-1-POD-4
+      parent: ktw-1-s-4
+      member_of_groups: [topologies_rack]
+      fabric_templates:
+        - ["2", "leaf", "PowerSwitch-S5232F-ON_LEAF_MR"]
+        - ["2", "tor", "PowerSwitch-S5224F-ON_TOR"]
+
+    # Network rack in POD-4 Row 2
+    - index: 1
+      row_index: 2
+      shortname: ktw-1-s-4-r-2-1
+      rack_type: network
+      pod: DC6-1-POD-4
+      parent: ktw-1-s-4
+      member_of_groups: [topologies_rack]
+      fabric_templates:
+        - ["2", "leaf", "PowerSwitch-S5232F-ON_LEAF_MR"]
+        - ["2", "tor", "PowerSwitch-S5224F-ON_TOR"]

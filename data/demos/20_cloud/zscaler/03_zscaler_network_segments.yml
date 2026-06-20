@@ -1,0 +1,126 @@
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: CloudNetworkSegment
+  data:
+    - customer_name: aws-service-subnet-1a
+      description: Zscaler service subnet - AWS AZ-A
+      environment: production
+      segment_role: service_provider
+      status: active
+      segment_type: aws_vpc_subnet
+      virtual_network: zscaler-aws-vpc
+      availability_zone: ["eu-central-1", "eu-central-1a"]
+      ip_prefixes:
+        data:
+          - prefix: 10.10.1.0/27
+            ip_namespace: default
+      auto_assign_public_ip: false
+      owner: Customer 2
+      cloud_id: subnet-3e1f6f7fe2314f5c8
+    - customer_name: aws-service-subnet-1b
+      description: Zscaler service subnet - AWS AZ-B
+      environment: production
+      segment_role: service_provider
+      status: active
+      segment_type: aws_vpc_subnet
+      virtual_network: zscaler-aws-vpc
+      availability_zone: ["eu-central-1", "eu-central-1b"]
+      ip_prefixes:
+        data:
+          - prefix: 10.10.2.0/27
+            ip_namespace: default
+      auto_assign_public_ip: false
+      owner: Customer 2
+      cloud_id: subnet-da712d1fd683bdc07
+    - customer_name: aws-mgmt-subnet
+      description: Zscaler management subnet - AWS
+      environment: production
+      segment_role: management
+      status: active
+      segment_type: aws_vpc_subnet
+      virtual_network: zscaler-aws-vpc
+      availability_zone: ["eu-central-1", "eu-central-1a"]
+      ip_prefixes:
+        data:
+          - prefix: 10.10.10.0/27
+            ip_namespace: default
+      auto_assign_public_ip: false
+      owner: Customer 2
+      cloud_id: subnet-8e8725919f4bb047c
+    - customer_name: gcp-service-subnet-b
+      description: Zscaler service subnet - GCP Zone-B
+      environment: production
+      segment_role: service_provider
+      status: active
+      virtual_network: zscaler-gcp-vpc
+      availability_zone: ["europe-west1", "europe-west1-b"]
+      ip_prefixes:
+        data:
+          - prefix: 10.20.1.0/27
+            ip_namespace: default
+      auto_assign_public_ip: false
+      owner: Customer 2
+      cloud_id: zscaler-gcp-service-b
+      segment_type: gcp_vpc_subnet
+    - customer_name: gcp-service-subnet-c
+      description: Zscaler service subnet - GCP Zone-C
+      environment: production
+      segment_role: service_provider
+      status: active
+      virtual_network: zscaler-gcp-vpc
+      availability_zone: ["europe-west1", "europe-west1-c"]
+      ip_prefixes:
+        data:
+          - prefix: 10.20.2.0/27
+            ip_namespace: default
+      auto_assign_public_ip: false
+      owner: Customer 2
+      cloud_id: zscaler-gcp-service-c
+      segment_type: gcp_vpc_subnet
+    - customer_name: gcp-mgmt-subnet
+      description: Zscaler management subnet - GCP
+      environment: production
+      segment_role: management
+      status: active
+      virtual_network: zscaler-gcp-vpc
+      availability_zone: ["europe-west1", "europe-west1-b"]
+      ip_prefixes:
+        data:
+          - prefix: 10.20.10.0/27
+            ip_namespace: default
+      auto_assign_public_ip: false
+      owner: Customer 2
+      cloud_id: zscaler-gcp-mgmt
+      segment_type: gcp_vpc_subnet
+    - customer_name: azure-service-subnet
+      description: Zscaler service subnet - Azure
+      environment: production
+      segment_role: service_provider
+      status: active
+      virtual_network: zscaler-azure-vnet
+      availability_zone: ["westeurope", "westeurope-1"]
+      ip_prefixes:
+        data:
+          - prefix: 10.30.1.0/27
+            ip_namespace: default
+      auto_assign_public_ip: false
+      owner: Customer 2
+      cloud_id: zscaler-azure-service-subnet
+      segment_type: azure_vnet_subnet
+    - customer_name: azure-mgmt-subnet
+      description: Zscaler management subnet - Azure
+      environment: production
+      segment_role: management
+      status: active
+      virtual_network: zscaler-azure-vnet
+      availability_zone: ["westeurope", "westeurope-1"]
+      ip_prefixes:
+        data:
+          - prefix: 10.30.10.0/27
+            ip_namespace: default
+      auto_assign_public_ip: false
+      owner: Customer 2
+      cloud_id: zscaler-azure-mgmt-subnet
+      segment_type: azure_vnet_subnet

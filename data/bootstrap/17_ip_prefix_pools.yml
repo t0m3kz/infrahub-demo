@@ -7,7 +7,7 @@ spec:
     - name: Technical-IPv4
       description: Technical IPv4 Prefix Pool
       default_prefix_type: IpamPrefix
-      default_prefix_length: 23
+      default_prefix_length: 20  # Allow larger allocations for DC pools
       resources:
         kind: IpamPrefix
         default_prefix_type: IpamPrefix
@@ -23,7 +23,7 @@ spec:
     - name: Loopback-IPv4
       description: Loopback IPv4 Prefix Pool
       default_prefix_type: IpamPrefix
-      default_prefix_length: 23
+      default_prefix_length: 20  # Allow larger allocations for DC pools
       resources:
         kind: IpamPrefix
         default_prefix_type: IpamPrefix
@@ -40,7 +40,7 @@ spec:
     - name: Management-IPv4
       description: Management IPv4 Prefix Pool
       default_prefix_type: IpamPrefix
-      default_prefix_length: 24
+      default_prefix_length: 22  # Allow larger allocations for DC pools
       resources:
         kind: IpamPrefix
         data:
@@ -94,9 +94,9 @@ spec:
             role: loopback
       ip_namespace: default
     - name: Technical-IPv6
-      description: Technical P2P IPv6 Prefix Pool
+      description: Technical P2P IPv6 Prefix Pool (RFC 6164 /127 P2P links)
       default_prefix_type: IpamPrefix
-      default_prefix_length: 64
+      default_prefix_length: 127
       resources:
         kind: IpamPrefix
         data:

@@ -1,0 +1,17 @@
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologySaas
+  data:
+    - name: Zscaler
+      provider: zscaler
+      service_type: sase
+      description: Zscaler SASE Cloud
+      children:
+        kind: TopologySaasRegion
+        data:
+          - region_name: Munich I
+            location: ["muc"]
+          - region_name: Paris II
+            location: ["par"]

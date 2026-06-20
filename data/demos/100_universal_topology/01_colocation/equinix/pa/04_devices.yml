@@ -1,0 +1,40 @@
+---
+# Paris colocation edge devices
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimPhysicalDevice
+  data:
+    - name: PA4-EDGE-01
+      object_template: ISR4451-X_EDGE
+      status: active
+      deployment: PA4
+      rack: pa4-s1-r-1
+
+    - name: PA4-EDGE-02
+      object_template: ISR4451-X_EDGE
+      status: active
+      deployment: PA4
+      rack: pa4-s1-r-2
+
+    - name: PA6-EDGE-01
+      object_template: ISR4451-X_EDGE
+      status: active
+      deployment: PA6
+      rack: pa6-s1-r-1
+
+    - name: PA6-EDGE-02
+      object_template: ISR4451-X_EDGE
+      status: active
+      deployment: PA6
+      rack: pa6-s1-r-2
+
+    - name: PA4-VCG-01
+      object_template: VCG-VA_GATEWAY
+      status: active
+      deployment: PA4
+
+    - name: PA6-VCG-01
+      object_template: VCG-VA_GATEWAY
+      status: active
+      deployment: PA6

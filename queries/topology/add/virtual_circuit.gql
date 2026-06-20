@@ -1,0 +1,33 @@
+query virtual_circuit_data($name: String!) {
+  TopologyVirtualCircuit(name__value: $name) {
+    edges {
+      node {
+        id
+        name { value }
+        link_type { value }
+        vni { value }
+        tunnel_id { value }
+        interfaces {
+          edges {
+            node {
+              id
+              name { value }
+              ... on DcimPhysicalInterface {
+                ip_address { node { address { value } } }
+              }
+              ... on DcimVirtualInterface {
+                ip_address { node { address { value } } }
+              }
+              device {
+                node {
+                  id
+                  name { value }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

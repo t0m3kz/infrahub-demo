@@ -1,18 +1,21 @@
-# DC2 - Croissants & Cheap Packets
-
-*Middle Rack Data Center with Hierarchical Naming Strategy*
+# DC2 - Croissants & 4-Spine Reality
 
 ## Overview
 
 **Location:** Paris 🇫🇷 (The City of Light - where your packets enjoy croissants and romantic latency)
 
-**Size:** Small (S) - Efficient, elegant, and budget-friendly
-
 **Platform:** Arista EOS - So API-driven, even your croissant can trigger a config change.
 
-**Design Pattern:** S-Flat (Small with Flat naming convention)
+**Fabric Design:** `S_OSPF_IBGP` — OSPF underlay + iBGP overlay, IPv4 P2P links.
+The classic combo: OSPF because "everyone knows OSPF", iBGP because you still want route reflectors
+and an excuse to explain SPF trees to new joiners at 2am. IPv4 underlay — the only DC in this fleet
+still rocking the legacy addressing. Paris may have invented the internet café, but it hasn't adopted
+IPv6 underlay yet. C'est la vie.
 
-**Use Case:** When the CFO says "make it work but don't make me cry" and you actually deliver. DC2 proves you don't need four pods and a mortgage to build reliable infrastructure. Just 2 pods, 4 racks, and a healthy respect for hierarchical aggregation. It's the Parisian café of data centers - small, efficient, and everyone knows everyone.
+**Use Case:** When the CFO says "make it work but don't make me cry" and you actually deliver. DC2 proves
+you don't need four pods and a mortgage to build reliable infrastructure. Just 2 pods, 4 racks, and a
+healthy respect for hierarchical aggregation. It's the Parisian café of data centers - small, efficient, and
+everyone knows everyone.
 
 ---
 
@@ -20,43 +23,22 @@
 
 ### Fabric Scale
 
-- **Super Spines:** 2 (Arista DCS-7050CX3-32C-R) - *Your inter-pod highway patrol*
-- **Total Pods:** 2 - *Because symmetry is beautiful and troubleshooting is easier*
-- **Total Spines:** 4 (2 per pod) - *Just enough aggregation, not too much*
-- **Total Racks:** 4 - *Count them: FOUR. Not six. Not three. FOUR.*
-- **Deployment Type:** middle_rack (both pods) - *Hierarchical all the way down*
+- **Super Spines:** 2 (Arista DCS-7050CX3-32C-R)
+- **Pods:** 2 | **Spines:** 4 (2+2) | **Racks:** 4
+- **Deployment:** `middle_rack` (both pods) - Direct ToR was too mainstream
 
-### Pod Structure (The Twin Towers of Efficiency)
+| Pod | Spines | Design   | Deployment  | Site Layout | Personality      |
+| --- | ------ | -------- | ----------- | ----------- | ---------------- |
+| 1   | 2      | S_MIDDLE | middle_rack | medium-dc   | Responsible Twin |
+| 2   | 2      | S_MIDDLE | middle_rack | medium-dc   | Copy-Paste Twin  |
 
-| Pod   | Spines | Model                | Racks | Deployment    | Personality                |
-|-------|--------|----------------------|-------|--------------|----------------------------|
-| Pod 1 | 2      | DCS-7050CX3-32C-R   | 2     | middle_rack  | The Responsible Sibling    |
-| Pod 2 | 2      | DCS-7050CX3-32C-R   | 2     | middle_rack  | The Copy-Paste Sibling     |
+## Quick Start
 
----
+```bash
+uv run inv deploy-dc --scenario dc2 --branch your_branch
+```
 
-## Hardware Stack (Budget-Conscious Excellence)
-
-### Super Spine Layer
-
-- **Model:** Cisco Nexus N9K-C9336C-FX2
-- **Ports:** 36×100GbE - *More than you need, exactly what you want*
-- **Role:** Making pods talk to each other without drama
-- **Fun Fact:** These switches cost more than your car but last longer
-
-### Spine Layer
-
-- **Model:** Arista DCS-7050CX3-32C-R
-- **Ports:** 32x100GbE
-- **Role:** Pod-level aggregation
-- **Deployment:** Identical in both pods
-
-### Leaf Layer (In Racks)
-
-- **Model:** Arista DCS-7050CX3-32C-R
-- **Count:** 2 per rack
-- **Role:** Rack-level aggregation
-- **Ports:** 36x100GbE
+**Warning:** May cause spontaneous optimization and French food cravings
 
 ### ToR Layer
 
@@ -78,7 +60,7 @@ ToR → Local Leafs (same rack)
         Spine → Super Spine
 ```
 
-## Quick Start
+## Deployment Steps
 
 ```bash
 # really quick
@@ -101,6 +83,8 @@ Trigger infrastructure generation in InfraHub UI → Actions → Generator Defin
 
 As a teenager, the author visited La Défense and dreamed of working in one of those shiny Parisian towers.
 
-Years later, when the chance finally came, he realized it was a truly ridiculous dream—and thanked the universe for dodging a lifetime of overpriced coffee, endless PowerPoint meetings, rush hour traffic, and spontaneous synergy sessions.
+Years later, when the chance finally came, he realized it was a truly ridiculous dream—and thanked the
+universe for dodging a lifetime of overpriced coffee, endless PowerPoint meetings, rush hour traffic, and
+spontaneous synergy sessions.
 
 Moral: Sometimes your network (and your sanity) are better off far away from the business district.

@@ -1,0 +1,17 @@
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TemplateDcimPhysicalDevice
+  data:
+    - template_name: Dell-H625cdw-MFP_PRINTER
+      device_type: Dell-H625cdw-MFP
+      role: endpoint
+      status: provisioning
+      interfaces:
+        kind: TemplateDcimPhysicalInterface
+        data:
+          - template_name: Dell-H625cdw-MFP_PRINTER_eth0
+            name: eth0
+            role: uplink
+            interface_type: 1000base-t
