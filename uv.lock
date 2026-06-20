@@ -609,7 +609,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "infrahub-sdk", extras = ["all"], specifier = ">=1.15.0b0,<2.0.0" },
+    { name = "infrahub-sdk", extras = ["all"], specifier = ">=1.21.1,<2.0.0" },
     { name = "invoke", specifier = ">=2.2.0,<3.0.0" },
     { name = "netutils", specifier = ">=1.8.0" },
 ]
