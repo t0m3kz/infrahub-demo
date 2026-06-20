@@ -96,13 +96,13 @@ artifact_definitions:
     transformation: firewall
     parameters:
       device: name__value
-  - name: rack_elevation
-    artifact_name: rack_elevation
-    content_type: image/svg+xml
-    targets: topologies_rack
-    transformation: rack_elevation
-    parameters:
-      name: name__value
+  # - name: rack_elevation
+  #   artifact_name: rack_elevation
+  #   content_type: image/svg+xml
+  #   targets: topologies_rack
+  #   transformation: rack_elevation
+  #   parameters:
+  #     name: name__value
   - name: cloud_vpc_terraform
     artifact_name: vpc-terraform
     content_type: text/plain
@@ -251,8 +251,7 @@ queries:
     file_path: queries/topology/clab.gql
   - name: topology_cabling
     file_path: queries/topology/cabling.gql
-  - name: interface_descriptions_data
-    file_path: queries/topology/add/interface_descriptions.gql
+
   - name: leaf_config
     file_path: queries/config/leaf.gql
   - name: border_leaf_config
@@ -279,14 +278,15 @@ queries:
     file_path: queries/topology/add/vxlan_segment.gql
   - name: vrf_namespace_data
     file_path: queries/topology/add/vrf_namespace.gql
-  - name: dci_peering_service_data
-    file_path: queries/topology/add/dci_peering.gql
   - name: circuit_data
     file_path: queries/topology/add/circuit.gql
   - name: virtual_circuit_data
     file_path: queries/topology/add/virtual_circuit.gql
   - name: capability_guard
     file_path: queries/validation/capability_guard.gql
+  - name: loadbalancer_validation
+    file_path: queries/validation/lb.gql
+
   - name: rack_elevation_query
     file_path: queries/topology/rack.gql
   - name: cloud_vpc_config
@@ -396,24 +396,7 @@ generator_definitions:
     execute_after_merge: false
     parameters:
       name: name__value
-  - name: add_dci_peering
-    file_path: generators/add/dci.py
-    targets: dci_peering_services
-    query: dci_peering_service_data
-    class_name: DCIPeeringGenerator
-    execute_in_proposed_change: false
-    execute_after_merge: false
-    parameters:
-      name: name__value
-  - name: set_interface_descriptions
-    file_path: generators/add/interface_descriptions.py
-    targets: topologies_dc
-    query: interface_descriptions_data
-    class_name: InterfaceDescriptionGenerator
-    execute_in_proposed_change: false
-    execute_after_merge: false
-    parameters:
-      deployment: name__value
+
 # - name: create_pop
 #   file_path: generators/generate_pop.py
 #   targets: topologies_pop

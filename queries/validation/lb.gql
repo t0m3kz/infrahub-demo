@@ -1,60 +1,73 @@
-query loadbalancer_validation($device: String!) {
-  DcimVirtualDevice(name__value: $device) {
+query loadbalancer_validation($instance: String!) {
+  OnpremLoadbalancer(name__value: $instance) {
     edges {
       node {
         name {
           value
         }
-        device_type {
-          node {
-            platform {
-              node {
-                netmiko_device_type {
-                  value
-                }
-              }
-            }
-            manufacturer {
-              node {
-                name {
-                  value
-                }
-              }
-            }
-          }
-        }
-        role {
-          value
-        }
         status {
           value
         }
-        interfaces {
+        frontend_servers {
+          count
           edges {
             node {
               __typename
               name {
                 value
               }
-              description {
+              role {
                 value
               }
               status {
                 value
               }
-              role {
-                value
+              primary_address {
+                node {
+                  address {
+                    value
+                  }
+                }
               }
-              ... on DcimVirtualInterface {
-                ip_address {
+              interfaces {
+                edges {
                   node {
-                    address {
+                    __typename
+                    name {
                       value
                     }
-                    ip_namespace {
-                      node {
-                        name {
-                          value
+                    status {
+                      value
+                    }
+                    ... on DcimPhysicalInterface {
+                      ip_address {
+                        node {
+                          address {
+                            value
+                          }
+                          ip_namespace {
+                            node {
+                              name {
+                                value
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                    ... on DcimVirtualInterface {
+                      ip_address {
+                        node {
+                          address {
+                            value
+                          }
+                          ip_namespace {
+                            node {
+                              name {
+                                value
+                              }
+                            }
+                          }
                         }
                       }
                     }
@@ -64,73 +77,62 @@ query loadbalancer_validation($device: String!) {
             }
           }
         }
-        device_capabilities {
+        vip_services {
           edges {
             node {
-              __typename
-              name {
+              hostname {
                 value
               }
-              status {
+              protocol {
                 value
               }
-              ... on OnpremLoadbalancer {
-                vip_services {
-                  edges {
-                    node {
-                      hostname {
-                        value
-                      }
-                      protocol {
-                        value
-                      }
-                      ssl_certificate {
-                        value
-                      }
-                      vip_ip {
-                        node {
-                          address {
-                            value
-                          }
+              port {
+                value
+              }
+              ssl_certificate {
+                value
+              }
+              vip_ip {
+                node {
+                  address {
+                    value
+                  }
+                }
+              }
+              health_checks {
+                edges {
+                  node {
+                    check {
+                      value
+                    }
+                    rise {
+                      value
+                    }
+                    fall {
+                      value
+                    }
+                    timeout {
+                      value
+                    }
+                  }
+                }
+              }
+              backend_pool {
+                node {
+                  load_balancing_algorithm {
+                    value
+                  }
+                  onprem_servers {
+                    count
+                    edges {
+                      node {
+                        hostname {
+                          value
                         }
-                      }
-                      health_checks {
-                        edges {
+                        ip_address {
                           node {
-                            check {
+                            address {
                               value
-                            }
-                            rise {
-                              value
-                            }
-                            fall {
-                              value
-                            }
-                            timeout {
-                              value
-                            }
-                          }
-                        }
-                      }
-                      backend_pool {
-                        node {
-                          load_balancing_algorithm {
-                            value
-                          }
-                          onprem_servers {
-                            edges {
-                              node {
-                                hostname {
-                                  value
-                                }
-                                ip_address {
-                                  node {
-                                    address {
-                                      value
-                                    }
-                                  }
-                                }
-                              }
                             }
                           }
                         }

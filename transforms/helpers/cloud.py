@@ -26,7 +26,26 @@ def prepare_cloud_data(cleaned: dict[str, Any]) -> dict[str, Any]:
     transit_gateways = cleaned.get("CloudTransitGateway") or []
     customer_gateways = cleaned.get("CloudCustomerGateway") or []
     direct_connects = cleaned.get("CloudDirectConnect") or []
-    auto_scaling_groups = cleaned.get("CloudAutoScalingGroup") or []
+    # VirtCluster replaces CloudAutoScalingGroup. Flatten node pools so the rest
+    # of the transforms keep working with the same asg dict shape.
+    auto_scaling_groups: list[dict] = []
+    for cluster in cleaned.get("VirtCluster") or []:
+        cluster_vnet = cluster.get("virtual_network")
+        for pool in cluster.get("node_pools") or []:
+            auto_scaling_groups.append(
+                {
+                    "name": pool.get("name", ""),
+                    "instance_type": pool.get("instance_flavor", ""),
+                    "image": pool.get("image", ""),
+                    "os_type": pool.get("os_type", ""),
+                    "min_size": pool.get("min_size"),
+                    "max_size": pool.get("max_size"),
+                    "desired_capacity": pool.get("desired_capacity"),
+                    "virtual_network": cluster_vnet,
+                    "network_segments": pool.get("network_segments") or [],
+                    "security_groups": pool.get("security_groups") or [],
+                }
+            )
 
     vpc_names: set[str] = {v.get("name", "") for v in vpcs}
 

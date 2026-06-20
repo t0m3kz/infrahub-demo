@@ -151,25 +151,17 @@ Use scope to narrow the area: `schema`, `generator`, `template`, `check`, `trans
 
 ## Release Workflow
 
-1. On your feature branch, run:
+Version bumping is **fully automatic**. On every merge to `main`, CI runs
+`cz bump --yes`, updates `pyproject.toml` and `CHANGELOG.md`, and pushes
+the new tag back to `main`. No manual steps needed.
 
-```bash
-uv run invoke release              # auto-detect bump level from commits
-# or force a level:
-uv run invoke release --increment minor
-```
+To publish a **GitHub Release** (when you want to announce a version):
 
-This bumps `pyproject.toml`, updates `CHANGELOG.md`, commits
-(`bump: version X.Y.Z → X.Y.Z`), and creates a local tag `vX.Y.Z`.
+1. Go to **Actions → CI → Run workflow** on `main`
+2. CI reads the current version and creates the GitHub Release with
+   auto-generated release notes
 
-1. Push the commit and the tag:
-
-```bash
-git push && git push --tags
-```
-
-1. Open a PR as normal. On merge, CI detects the tag push and
-   automatically creates the GitHub Release.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the full workflow.
 
 ## Development Patterns
 
