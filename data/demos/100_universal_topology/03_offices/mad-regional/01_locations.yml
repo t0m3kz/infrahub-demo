@@ -1,5 +1,5 @@
 ---
-# Madrid regional office building
+# Madrid regional office building (metro defined in bcn-branch/01_locations.yml)
 apiVersion: infrahub.app/v1
 version: "1.0"
 kind: Object

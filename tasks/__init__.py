@@ -18,6 +18,7 @@ Top-level shortcuts (aliases for namespaced tasks):
   load-menu           — data.load-menu
   load-objects        — data.load-objects
   load-data           — data.load-data
+  register-repo       — infra.register-repo
   deploy-dc           — demo.deploy-dc
   run-demo            — demo.run-demo
 """
@@ -96,6 +97,12 @@ def load_data(context, name="bootstrap.py", branch="main"):
     data.load_data(context, name=name, branch=branch)
 
 
+@_task(optional=["ref"])
+def register_repo(context, ref="routing"):
+    """Register the local repository and load event actions (alias for infra.register-repo)."""
+    infra.register_repo(context, ref=ref)
+
+
 @_task(optional=["scenario", "branch"])
 def deploy_dc(context, scenario="dc1", branch="main"):
     """Deploy datacenter topology (alias for demo.deploy-dc)."""
@@ -122,6 +129,7 @@ ns.add_task(cast(Task, load_schema))
 ns.add_task(cast(Task, load_menu))
 ns.add_task(cast(Task, load_objects))
 ns.add_task(cast(Task, load_data))
+ns.add_task(cast(Task, register_repo))
 ns.add_task(cast(Task, deploy_dc))
 ns.add_task(cast(Task, run_demo))
 ns.add_collection(dev.ns)

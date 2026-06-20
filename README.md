@@ -101,7 +101,7 @@ One command to setup everything:
 uv run invoke setup
 ```
 
-This loads schemas, bootstrap data, menu, repo and events. Then explore at <http://localhost:8000>
+This starts containers, loads schemas, menu, and bootstrap data. Then explore at <http://localhost:8000>
 
 ### Manual Setup (Alternative)
 
@@ -123,16 +123,10 @@ Load demo data
 uv run invoke load-objects
 ```
 
-Load demo repo
+Register repository and load event actions
 
 ```bash
-uv run invoke load-repo
-```
-
-Load demo events
-
-```bash
-uv run invoke load-events
+uv run invoke register-repo
 ```
 
 ### Deploy Data Center Scenarios
@@ -167,6 +161,23 @@ Explore LLM upgrades and organic growth patterns—all in one place, please make
 | **[llm time](data/demos/05_llm_time/)** | Munich 🇩🇪 | Spine Expansion | Extra spines for LLMs—plausible deniability included. |
 
 Brace yourself: even more questionable use cases, wild topologies, and vendor drama are coming soon. If you want to see even more chaos, star this repo—so the author can unlock extra GitHub tools and automate his caffeine intake. Your star may be the difference between a new feature and another debugging session at midnight!
+
+### **[Universal Topology](data/demos/100_universal_topology/)** — End-to-End Graph Tracing
+
+The flagship demo. Every layer — datacenters, colocation, cloud, offices, external providers,
+and interconnects — lives in a single unified model. Because everything shares the same graph,
+you can trace a path from a server NIC to a cloud VM, from a branch office to a partner gateway,
+or from a VXLAN segment through its firewalls to AWS — **in a single traversal**, without
+pivoting between tools.
+
+```text
+DC1-POD1-SRV-01 → leaf → spine → super-spine → Equinix cross-connect → edge router
+  → virtual circuit → cloud Direct Connect → CUST1-APP-EU-CENTRAL-1A-01 (EC2)
+```
+
+Covers 3 datacenters (DC1–DC3), 2 cloud regions (AWS + Azure), 5 offices, 3 Equinix metros,
+Coresite, Megaport, ISPs, and partners. Includes 13 traced end-to-end paths and full
+virtualisation capability trees for Kubernetes, vSphere, and Nutanix.
 
 ## CI/CD
 
@@ -222,7 +233,34 @@ colima start --mount type=virtiofs,source=/var/folders,destination=/var/folders
 
 ## 🙏 A Note from a Highly Fallible Carbon-Based Life Form
 
-> Look, I'm just a human who occasionally writes code between coffee breaks and existential crises. If something explodes, catches fire, or simply refuses to work as advertised—like that one switch that's been "temporarily" in your rack since 2019—please [open an issue](https://github.com/t0m3kz/infrahub-demo/issues). I promise to investigate with the same determination I use to debug production on a Friday afternoon. Your feedback is invaluable, unlike my initial variable naming choices!
+> Look, I'm just a human who occasionally writes code between coffee breaks and existential crises.
+> If something explodes, catches fire, or simply refuses to work as advertised — like that one switch
+> that's been "temporarily" in your rack since 2019 — please
+> [open an issue](https://github.com/t0m3kz/infrahub-demo/issues).
+> I promise to investigate with the same determination I use to debug production on a Friday afternoon.
+> Your feedback is invaluable, unlike my initial variable naming choices!
+
+## ⚠️ A Word About the Jokes
+
+All sarcastic remarks, vendor opinions, city stereotypes, procurement committee jokes,
+AI commentary, and observations about cloud billing scattered throughout this project
+and its demo READMEs are drawn entirely from personal experience surviving real enterprise
+infrastructure projects over many years.
+
+They are meant to be funny. They are absolutely not meant to insult anyone —
+vendors, cities, ISPs, hypervisor platforms, cloud providers, users, managers,
+consultants, or the three people who still believe the Terraform monorepo was a good idea.
+
+If you recognise your organisation, your network, your Friday-afternoon architecture decision,
+or your specific brand of procurement committee in any of this: welcome.
+You are among friends. We have all been there.
+
+Enterprise infrastructure is a universal human experience that transcends company, country,
+and technology stack. The chaos is the same everywhere. The YAML just has different names.
+
+> *"Any sufficiently complex infrastructure is indistinguishable from something a junior engineer
+> built at 2am before a product launch. The difference is only detectable in the git log."*
+> — Not a real quote, but truer than most real ones
 
 ## Contributing
 
