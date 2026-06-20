@@ -5,6 +5,57 @@ spec:
   kind: CoreNodeTriggerRule
   data:
 
+    # - name: trigger-dc-generator-on-merge
+    #   branch_scope: "default_branch"
+    #   node_kind: TopologyDataCenter
+    #   mutation_action: "created"
+    #   action: run-dc-generator
+
+    - name: trigger-dc-generator-update-super-spines
+      branch_scope: "other_branches"
+      node_kind: TopologyDataCenter
+      mutation_action: "updated"
+      action: run-dc-generator
+      matches:
+        kind: CoreNodeTriggerAttributeMatch
+        data:
+          - attribute_name: amount_of_super_spines
+            value_match: any
+
+    - name: trigger-dc-generator-update-super-spine-template
+      branch_scope: "other_branches"
+      node_kind: TopologyDataCenter
+      mutation_action: "updated"
+      action: run-dc-generator
+      matches:
+        kind: CoreNodeTriggerRelationshipMatch
+        data:
+          - relationship_name: super_spine_template
+            modification_type: updated
+
+    - name: trigger-dc-generator-status
+      branch_scope: "other_branches"
+      node_kind: TopologyDataCenter
+      mutation_action: updated
+      action: run-dc-generator
+      matches:
+        kind: CoreNodeTriggerAttributeMatch
+        data:
+          - attribute_name: status
+            value_match: value_full
+            value: active
+            value_previous: provisioning
+
+    # Auto-trigger for pod generator on creation commented out to
+    # prevent race conditions. Pod updates are still active and safe
+
+    # # Pod triggers on creation (DC generator sets checksum) or updates
+    # - name: trigger-pod-generator-on-create
+    #   branch_scope: "other_branches"
+    #   node_kind: TopologyPod
+    #   mutation_action: "created"
+    #   action: run-pod-generator
+
     - name: trigger-pod-generator-update-checksum
       branch_scope: "other_branches"
       node_kind: TopologyPod
@@ -49,6 +100,19 @@ spec:
           - attribute_name: deployment_type
             value_match: any
 
+
+    # Auto-trigger for rack generator on creation commented out to
+    # prevent race conditions. Rack updates are still active and safe
+
+    # # Racks trigger on creation (skips if no checksum, waits for update)
+    # # or on checksum update (when pod/middle rack generator sets it)
+    # # Checksum is NEVER set manually - always calculated by generators
+    # - name: trigger-rack-generator-on-create
+    #   branch_scope: "other_branches"
+    #   node_kind: LocationRack
+    #   mutation_action: "created"
+    #   action: run-rack-generator
+
     - name: trigger-rack-generator-update-checksum
       branch_scope: "other_branches"
       node_kind: LocationRack
@@ -91,5 +155,59 @@ spec:
         kind: CoreNodeTriggerRelationshipMatch
         data:
           - relationship_name: fabric_templates
-            peer: any
             modification_type: updated
+
+    # # Device decommission: when status set to decommissioned
+    # - name: trigger-device-decommission
+    #   branch_scope: "other_branches"
+    #   node_kind: DcimPhysicalDevice
+    #   mutation_action: "updated"
+    #   action: run-decommission-device
+    #   matches:
+    #     kind: CoreNodeTriggerAttributeMatch
+    #     data:
+    #       - attribute_name: status
+    #         value_match: decommissioned
+
+    # Pod decommission: when status set to decommissioned
+    - name: trigger-pod-decommission
+      branch_scope: "other_branches"
+      node_kind: TopologyPod
+      mutation_action: "updated"
+      action: run-decommission-pod
+      matches:
+        kind: CoreNodeTriggerAttributeMatch
+        data:
+          - attribute_name: status
+            value_match: value_full
+            value: decommissioned
+            value_previous: active
+            # match_type: exact
+
+    # VRF namespace: generator auto-triggers via group membership (execute_in_proposed_change: true)
+    # No deployment-based trigger needed — L3 VNI comes from global pool
+
+    # Segment triggers: re-run generator when deployments are added/updated
+    - name: trigger-vlan-segment-deployment-updated
+      branch_scope: "other_branches"
+      node_kind: ManagedVlanSegment
+      mutation_action: "updated"
+      action: run-vlan-segment-generator
+      matches:
+        kind: CoreNodeTriggerRelationshipMatch
+        data:
+          - relationship_name: deployment
+            modification_type: updated
+
+    - name: trigger-vxlan-segment-deployments-updated
+      branch_scope: "other_branches"
+      node_kind: ManagedVxlanSegment
+      mutation_action: "updated"
+      action: run-vxlan-segment-generator
+      matches:
+        kind: CoreNodeTriggerRelationshipMatch
+        data:
+          - relationship_name: deployments
+            modification_type: updated
+
+            # Endpoint trigger when server device added to endpoints

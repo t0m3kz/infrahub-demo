@@ -1,0 +1,50 @@
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologyDataCenter
+  data:
+    - name: DC5
+      index: 1
+      design: M_EBGP_EBGP
+      naming_convention: flat
+      overlay_technology: vxlan_evpn
+      loopback_prefix_length: 23
+      technical_prefix_length: 19
+      management_prefix_length: 25
+      amount_of_super_spines: 2
+      super_spine_template: N9K-C9336C-FX2_SUPER_SPINE
+      fabric_interface_sorting_method: top_down
+      member_of_groups:
+        - topologies_dc
+      children:
+        kind: TopologyPod
+        data:
+          - index: 1
+            design: S_MIDDLE
+            amount_of_spines: 2
+            deployment_type: middle_rack
+            spine_template: N9K-C9336C-FX2_SPINE
+            member_of_groups:
+              - topologies_pod
+          - index: 2
+            design: S_MIDDLE
+            amount_of_spines: 2
+            deployment_type: middle_rack
+            spine_template: DCS-7050CX3-32C-R_SPINE
+            member_of_groups:
+              - topologies_pod
+          - index: 3
+            design: S_MIDDLE
+            amount_of_spines: 2
+            deployment_type: middle_rack
+            spine_template: PowerSwitch-S5232F-ON_SPINE
+            member_of_groups:
+              - topologies_pod
+          - index: 4
+            design: S_MIDDLE
+            amount_of_spines: 2
+            deployment_type: middle_rack
+            spine_template: Edgecore-7726-32X-O_SPINE
+            member_of_groups:
+              - topologies_pod

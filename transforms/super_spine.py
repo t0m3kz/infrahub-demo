@@ -2,61 +2,55 @@
 
 from typing import Any
 
-from infrahub_sdk.transforms import InfrahubTransform
-from jinja2 import Environment, FileSystemLoader, select_autoescape
-from netutils.utils import jinja2_convenience_function
-
-from .common import get_bgp_profile, get_data, get_interfaces, get_ospf
+from .common import BaseDeviceTransform, get_vlans, get_vxlan_config
 
 
-class SuperSpine(InfrahubTransform):
+class SuperSpine(BaseDeviceTransform):
     """Generate configuration for super-spine devices."""
 
     query = "super_spine_config"
+    template_subdir = "super_spines"
+    device_role = "super_spine"
 
-    async def transform(self, data: Any) -> Any:
-        """Transform super-spine device data into configuration.
+    def _filter_segment_deployments(self, activations: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        """Keep only stretched segments — those deployed in more than one DC.
 
-        Args:
-            data: Device data from InfraHub query
-
-        Returns:
-            Rendered configuration as string
+        A stretched VXLAN segment spans multiple data centres (e.g. DC1 ↔ DC2 DCI).
+        The super-spine only needs VLAN/VNI config for segments that cross DC boundaries.
+        Local (single-DC) segments are handled entirely by the leaf/border-leaf layer.
         """
-        data = get_data(data)
+        stretched = []
+        for act in activations:
+            seg = act.get("segment") or {}
+            deployments = seg.get("deployments") or []
+            if len(deployments) > 1:
+                stretched.append(act)
+        return stretched
 
-        # Get platform information with null safety
-        # Platform is a direct attribute on the device, not through device_type
-        platform = data.get("platform") or {}
-        platform_name = platform.get("netmiko_device_type")
+    def _build_config(self, data: dict, platform_name: str) -> dict:
+        """Extend base config by injecting stretched VLAN IDs into all uplink interfaces.
 
-        # If no platform is configured, return a warning comment
-        if not platform_name:
-            device_name = data.get("name", "Unknown Device")
-            return f"! Device {device_name} has no platform with netmiko_device_type defined.\n! No configuration generated.\n"
+        Super-spine uplinks are always fabric-facing — there is no per-interface
+        segment assignment in the data model. Instead, every physical non-loopback
+        interface automatically trunks all stretched VLANs.
+        """
+        config = super()._build_config(data, platform_name)
 
-        # Set up Jinja2 environment to load templates from the role subfolder
-        template_path = f"{self.root_directory}/templates/configs/super_spines"
-        env = Environment(
-            loader=FileSystemLoader(template_path),
-            autoescape=select_autoescape(["j2"]),
-        )
-        env.filters.update(jinja2_convenience_function())
+        activations = data.get("segment_deployments") or []
+        stretched_vlan_ids = [act["vlan_id"] for act in activations if act.get("vlan_id")]
 
-        # Select the template for super-spine devices based on platform
-        template_name = f"{platform_name}.j2"
+        if stretched_vlan_ids:
+            for iface in config.get("interfaces", []):
+                name = iface.get("name", "").lower()
+                if "loopback" in name or "vlan" in name or "management" in name:
+                    continue
+                iface["vlans"] = stretched_vlan_ids
 
-        # Render the template with enhanced data
-        template = env.get_template(template_name)
+        return config
 
-        bgp = get_bgp_profile(data.get("device_services"))
-        interfaces_list = get_interfaces(data.get("interfaces"))
-        config = {
-            "name": data.get("name"),
-            "hostname": data.get("name"),
-            "bgp": bgp,
-            "ospf": get_ospf(data.get("device_services")),
-            "interfaces": interfaces_list,
+    def _extra_config(self, data: dict, platform_name: str, extra_roots: dict | None = None) -> dict[str, Any]:
+        activations = data.get("segment_deployments")
+        return {
+            "vlans": get_vlans(activations=activations),
+            "vxlan": get_vxlan_config(data, platform_name, device_role=self.device_role, activations=activations),
         }
-
-        return template.render(**config)

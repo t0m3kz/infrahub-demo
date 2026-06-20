@@ -1,0 +1,114 @@
+---
+# DC2 infrastructure: super-spines, spines, leaves, servers
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimPhysicalDevice
+  data:
+    - name: DC2-SS1
+      object_template: N9K-C9336C-FX2_SUPER_SPINE
+      status: active
+      deployment: DC2
+      rack: dc2-s1-r-1
+
+    - name: DC2-SS2
+      object_template: N9K-C9336C-FX2_SUPER_SPINE
+      status: active
+      deployment: DC2
+      rack: dc2-s1-r-2
+
+    - name: DC2-POD1-SP1
+      object_template: N9K-C9336C-FX2_SPINE
+      status: active
+      deployment: DC2-2-POD-1
+      rack: dc2-s1-r-1
+
+    - name: DC2-POD1-SP2
+      object_template: N9K-C9336C-FX2_SPINE
+      status: active
+      deployment: DC2-2-POD-1
+      rack: dc2-s1-r-1
+
+    - name: DC2-POD1-L1
+      object_template: N9K-C9336C-FX2_LEAF_SERVER
+      status: active
+      deployment: DC2-2-POD-1
+      rack: dc2-s1-r-1
+
+    - name: DC2-POD1-L2
+      object_template: N9K-C9336C-FX2_LEAF_SERVER
+      status: active
+      deployment: DC2-2-POD-1
+      rack: dc2-s1-r-1
+
+    - name: DC2-POD1-L3
+      object_template: N9K-C9336C-FX2_LEAF
+      status: active
+      deployment: DC2-2-POD-1
+      rack: dc2-s1-r-1
+
+    - name: DC2-POD1-L4
+      object_template: N9K-C9336C-FX2_LEAF
+      status: active
+      deployment: DC2-2-POD-1
+      rack: dc2-s1-r-1
+
+    - name: DC2-POD2-SP1
+      object_template: N9K-C9336C-FX2_SPINE
+      status: active
+      deployment: DC2-2-POD-2
+      rack: dc2-s1-r-2
+
+    - name: DC2-POD2-SP2
+      object_template: N9K-C9336C-FX2_SPINE
+      status: active
+      deployment: DC2-2-POD-2
+      rack: dc2-s1-r-2
+
+    - name: DC2-POD2-L1
+      object_template: N9K-C9336C-FX2_LEAF_SERVER
+      status: active
+      deployment: DC2-2-POD-2
+      rack: dc2-s1-r-2
+
+    - name: DC2-POD2-L2
+      object_template: N9K-C9336C-FX2_LEAF_SERVER
+      status: active
+      deployment: DC2-2-POD-2
+      rack: dc2-s1-r-2
+
+    - name: DC2-POD2-L3
+      object_template: N9K-C9336C-FX2_LEAF
+      status: active
+      deployment: DC2-2-POD-2
+      rack: dc2-s1-r-2
+
+    - name: DC2-POD2-L4
+      object_template: N9K-C9336C-FX2_LEAF
+      status: active
+      deployment: DC2-2-POD-2
+      rack: dc2-s1-r-2
+
+    - name: DC2-POD1-SRV-01
+      object_template: PowerEdge-R640_SERVER
+      status: active
+      deployment: DC2-2-POD-1
+      rack: dc2-s1-r-1
+
+    - name: DC2-POD1-SRV-02
+      object_template: PowerEdge-R640_SERVER
+      status: active
+      deployment: DC2-2-POD-1
+      rack: dc2-s1-r-1
+
+    - name: DC2-POD2-SRV-01
+      object_template: PowerEdge-R640_SERVER
+      status: active
+      deployment: DC2-2-POD-2
+      rack: dc2-s1-r-2
+
+    - name: DC2-POD2-SRV-02
+      object_template: PowerEdge-R640_SERVER
+      status: active
+      deployment: DC2-2-POD-2
+      rack: dc2-s1-r-2

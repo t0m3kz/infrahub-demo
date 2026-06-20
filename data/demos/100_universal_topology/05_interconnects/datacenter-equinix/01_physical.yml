@@ -1,0 +1,98 @@
+---
+# Physical interconnects between data centers and Equinix metros
+#
+# Full cable path per circuit:
+#   customer_iface_a → provider_a (EQX-*-PATCH) → [provider span] → provider_z (EQX-*-PATCH) → customer_iface_z
+# See 06_provider_devices.yml for the patch panel devices and cables.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologyPhysicalCircuit
+  data:
+    - name: PHYS-DC1-FR2-EQX-01
+      circuit_id: PHYS-DC1-FR2-EQX-01
+      description: "Physical circuit from DC1 to Equinix Frankfurt (FR2)"
+      circuit_type: cross_connect
+      committed_rate: 100000
+      status: active
+      provider: Equinix
+      locations:
+        - DC1
+        - FR2
+      interfaces:
+        - - DC1-SS1
+          - Ethernet1/5
+        - - FR2-EDGE-01
+          - Ethernet1/2
+      provider_a:
+        - EQX-DC1-PATCH-01
+        - Port1
+      provider_z:
+        - EQX-FR2-PATCH-01
+        - Port1
+
+    - name: PHYS-DC2-PA4-EQX-01
+      circuit_id: PHYS-DC2-PA4-EQX-01
+      description: "Physical circuit from DC2 to Equinix Paris (PA4)"
+      circuit_type: cross_connect
+      committed_rate: 100000
+      status: active
+      provider: Equinix
+      locations:
+        - DC2
+        - PA4
+      interfaces:
+        - - DC2-SS1
+          - Ethernet1/5
+        - - PA4-EDGE-01
+          - Ethernet1/2
+      provider_a:
+        - EQX-DC2-PATCH-01
+        - Port1
+      provider_z:
+        - EQX-PA4-PATCH-01
+        - Port1
+
+    - name: PHYS-DC1-FR6-EQX-01
+      circuit_id: PHYS-DC1-FR6-EQX-01
+      description: "Physical circuit from DC1 to Equinix Frankfurt (FR6)"
+      circuit_type: cross_connect
+      committed_rate: 100000
+      status: active
+      provider: Equinix
+      locations:
+        - DC1
+        - FR6
+      interfaces:
+        - - DC1-SS1
+          - Ethernet1/6
+        - - FR6-EDGE-01
+          - Ethernet1/2
+      provider_a:
+        - EQX-DC1-PATCH-01
+        - Port2
+      provider_z:
+        - EQX-FR6-PATCH-01
+        - Port1
+
+    - name: PHYS-DC2-PA6-EQX-01
+      circuit_id: PHYS-DC2-PA6-EQX-01
+      description: "Physical circuit from DC2 to Equinix Paris (PA6)"
+      circuit_type: cross_connect
+      committed_rate: 100000
+      status: active
+      provider: Equinix
+      locations:
+        - DC2
+        - PA6
+      interfaces:
+        - - DC2-SS1
+          - Ethernet1/6
+        - - PA6-EDGE-01
+          - Ethernet1/2
+      provider_a:
+        - EQX-DC2-PATCH-01
+        - Port2
+      provider_z:
+        - EQX-PA6-PATCH-01
+        - Port1

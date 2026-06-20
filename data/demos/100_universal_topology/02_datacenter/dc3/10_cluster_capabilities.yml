@@ -1,0 +1,272 @@
+# DC3 cluster capabilities — CNI, storage, ingress, registry, management plane, monitoring
+# One set per cluster: DC3-K8S-PROD (Cilium/Rook), DC3-VSPHERE-PROD (DVS/NSX ALB), DC3-NUTANIX-PROD (AHV/Flow)
+
+# ── DC3-K8S-PROD ──────────────────────────────────────────────────────────────
+
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: VirtCNI
+  data:
+    - name: DC3-K8S-PROD-CNI
+      status: active
+      plugin: cilium
+      version: "1.16.3"
+      pod_cidr: "100.64.0.0/14"
+      service_cidr: "100.96.0.0/16"
+      encapsulation: geneve
+      bgp_enabled: true
+      cluster_capabilities:
+        - DC3-K8S-PROD
+
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: VirtStorageBackend
+  data:
+    - name: DC3-K8S-PROD-STORAGE
+      status: active
+      backend_type: ceph_rook
+      version: "1.15.4"
+      default_class: true
+      reclaim_policy: retain
+      cluster_capabilities:
+        - DC3-K8S-PROD
+
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: VirtIngress
+  data:
+    - name: DC3-K8S-PROD-INGRESS
+      status: active
+      controller: metallb
+      version: "0.14.8"
+      address_pool: "10.3.100.0/24"
+      cluster_capabilities:
+        - DC3-K8S-PROD
+
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: VirtRegistry
+  data:
+    - name: DC3-K8S-PROD-REGISTRY
+      status: active
+      registry_type: harbor
+      endpoint: "harbor.dc3.infra.local"
+      insecure: false
+      cluster_capabilities:
+        - DC3-K8S-PROD
+
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: VirtManagementPlane
+  data:
+    - name: DC3-K8S-PROD-MGMT
+      status: active
+      endpoint: "k8s-api.dc3.infra.local"
+      endpoint_access: private
+      port: 6443
+      auth_method: oidc
+      cluster_capabilities:
+        - DC3-K8S-PROD
+
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: VirtMonitoring
+  data:
+    - name: DC3-K8S-PROD-MONITORING
+      status: active
+      stack: prometheus_grafana
+      version: "kube-prometheus-stack 65.1.0"
+      retention_days: 30
+      remote_write: "http://thanos.dc3.infra.local:19291/api/v1/receive"
+      cluster_capabilities:
+        - DC3-K8S-PROD
+
+# ── DC3-VSPHERE-PROD ──────────────────────────────────────────────────────────
+
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: VirtCNI
+  data:
+    - name: DC3-VSPHERE-PROD-CNI
+      status: active
+      plugin: dvs
+      version: "8.0 U3"
+      encapsulation: none
+      bgp_enabled: false
+      cluster_capabilities:
+        - DC3-VSPHERE-PROD
+
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: VirtStorageBackend
+  data:
+    - name: DC3-VSPHERE-PROD-STORAGE
+      status: active
+      backend_type: vsan
+      version: "8.0 U3"
+      default_class: true
+      reclaim_policy: retain
+      cluster_capabilities:
+        - DC3-VSPHERE-PROD
+
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: VirtIngress
+  data:
+    - name: DC3-VSPHERE-PROD-LB
+      status: active
+      controller: nsx_alb
+      version: "22.1.6"
+      address_pool: "10.3.200.0/24"
+      cluster_capabilities:
+        - DC3-VSPHERE-PROD
+
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: VirtRegistry
+  data:
+    - name: DC3-VSPHERE-PROD-REGISTRY
+      status: active
+      registry_type: content_library
+      endpoint: "dc3-vcsa-01.infra.local"
+      insecure: false
+      cluster_capabilities:
+        - DC3-VSPHERE-PROD
+
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: VirtManagementPlane
+  data:
+    - name: DC3-VSPHERE-PROD-MGMT
+      status: active
+      endpoint: "dc3-vcsa-01.infra.local"
+      endpoint_access: private
+      port: 443
+      auth_method: ldap
+      cluster_capabilities:
+        - DC3-VSPHERE-PROD
+
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: VirtMonitoring
+  data:
+    - name: DC3-VSPHERE-PROD-MONITORING
+      status: active
+      stack: datadog
+      version: "7.58.0"
+      retention_days: 15
+      cluster_capabilities:
+        - DC3-VSPHERE-PROD
+
+# ── DC3-NUTANIX-PROD ──────────────────────────────────────────────────────────
+
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: VirtCNI
+  data:
+    - name: DC3-NUTANIX-PROD-CNI
+      status: active
+      plugin: ahv_virtual_switch
+      version: "20230302.x"
+      encapsulation: none
+      bgp_enabled: false
+      cluster_capabilities:
+        - DC3-NUTANIX-PROD
+
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: VirtStorageBackend
+  data:
+    - name: DC3-NUTANIX-PROD-STORAGE
+      status: active
+      backend_type: nutanix_container
+      version: "6.8"
+      default_class: true
+      reclaim_policy: retain
+      cluster_capabilities:
+        - DC3-NUTANIX-PROD
+
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: VirtIngress
+  data:
+    - name: DC3-NUTANIX-PROD-LB
+      status: active
+      controller: nsx_alb
+      version: "22.1.6"
+      address_pool: "10.4.200.0/24"
+      cluster_capabilities:
+        - DC3-NUTANIX-PROD
+
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: VirtRegistry
+  data:
+    - name: DC3-NUTANIX-PROD-REGISTRY
+      status: active
+      registry_type: nutanix_calm
+      endpoint: "dc3-prism-central.infra.local"
+      insecure: false
+      cluster_capabilities:
+        - DC3-NUTANIX-PROD
+
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: VirtManagementPlane
+  data:
+    - name: DC3-NUTANIX-PROD-MGMT
+      status: active
+      endpoint: "dc3-prism-central.infra.local"
+      endpoint_access: private
+      port: 9440
+      auth_method: ldap
+      cluster_capabilities:
+        - DC3-NUTANIX-PROD
+
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: VirtMonitoring
+  data:
+    - name: DC3-NUTANIX-PROD-MONITORING
+      status: active
+      stack: datadog
+      version: "7.58.0"
+      retention_days: 15
+      cluster_capabilities:
+        - DC3-NUTANIX-PROD

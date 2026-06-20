@@ -1,68 +1,53 @@
-# 04 - Pod Expansion Demo
+# Test Scenario 4: Add New Pod to Existing Data Center
 
-*The "We Need More Pods" Episode*
+This scenario demonstrates adding a new pod (POD-4) to an existing data center (DC1).
 
-## Overview
+## Purpose
 
-**Purpose:** Add Pod 4 to DC1 because Pods 1-3 weren't enough chaos. Because every good story needs a sequel.
+Tests the `add_pod` generator's ability to:
 
-**Philosophy:** If 3 pods are good, 4 pods are... more? Or maybe just more confusing.
+- Add a new pod to an existing DC infrastructure
+- Create spine switches for the new pod
+- Establish super-spine to spine connectivity
+- Maintain idempotency when run multiple times
 
-**Difficulty:** Medium (high if you forget to update documentation and the compliance team is watching).
+## Data Files
 
----
+- **00_suite.yml**: Suite-4 definition
+- **01_pod.yml**: POD-4 topology definition
+- **02_racks.yml**: Initial 2 network racks for POD-4
 
-## What's Inside
+## Pod Configuration
 
-**Pod 4 Specifications:**
+- **Suite**: Suite-4 (ktw-1-s-4)
+- **Parent**: DC1 (created in scenario 1)
+- **Index**: 4
+- **Deployment Type**: middle_rack (compute and storage, no direct server connections)
+- **Spines**: 2x N9K-C9364C-GX_SPINE
+- **Rows**: 3
+- **Max Leafs per Row**: 3
+- **Max ToRs per Row**: 0 (middle_rack deployment)
+- **Initial Racks**: 2 network racks (row 1 & 2, position 1) with leaf+tor templates
 
-- **Deployment Type:** ToR (because we already tried middle_rack and mixed in Pods 1-3)
-- **Spines:** 2x Cisco N9K-C9364C-GX (the usual suspects)
-- **Parent:** DC1 (the data center that keeps growing like your to-do list)
-- **Philosophy:** Flat topology - keep it simple this time (famous last words)
+## Expected Generator Behavior
 
----
+The add_pod generator will:
 
-## The Pod Creation Story
+1. Create Suite-4 (ktw-1-s-4)
+2. Create pod "DC1-1-POD-4"
+3. Create 2 spine switches
+4. Cable spines to DC1's 2 super-spines
+5. Create 2 network racks with fabric devices (4 leafs + 4 tors total)
+6. Cable leafs to spines and tors to leafs
+7. Update deployments and relationships
 
-**Chapter 1:** "We have capacity in Pods 1-3"
-**Chapter 2:** "Maybe we should isolate that new application"
-**Chapter 3:** "Compliance says separate pod"
-**Chapter 4:** Fine, we'll create Pod 4
-**Chapter 5:** Pod 4 is now 80% utilized
-**Chapter 6:** "Should we create Pod 5?" *(current location)*
+## Dependencies
 
----
+- Scenario 1 (DC deployment) must complete successfully
+- DC1 with super-spines must exist
 
-## Use Case
-
-Perfect for:
-
-- **Application Isolation:** "This app needs its own pod" (translation: politics)
-- **Compliance Theater:** Separate environments that share the same cooling
-- **Growth Planning:** Because Pods 1-3 are somehow full already
-- **Vendor Testing:** Different vendor per pod (multi-vendor chaos mode)
-- **Career Development:** Adding complexity = job security
-
----
-
-## Deployment
+## Load Command
 
 ```bash
-uv run infrahubctl branch create your_branch
-uv run infrahubctl object load data/demos/04_pod/ --branch your_branch
+uv run infrahubctl object load tests/integration/data/04_pod/ --branch <branch-name>
 ```
-
-Trigger infrastructure generation in InfraHub UI → Actions → Generator Definitions → generate_dc DC1
-
----
-
-## Fun Fact
-
-Pod 4 exists because someone said "just one more."
-
-The only thing multiplying faster than pods is documentation debt (if you're not using Infrahub)
-
-If you think Pod 4 is the last, you haven't met your application team.
-
-**Welcome to pod proliferation! May your OPEX be ever in your favor.**

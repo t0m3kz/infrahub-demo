@@ -1,10 +1,11 @@
 #
 # HAProxy Load Balancer Configuration
 # Device: {{ name }}
-# Generated for {{ device_type.manufacturer.name }} {{ device_type.platform.netmiko_device_type }}
-# Management IP: {{ load-balancer_config.management_ip }}
-# Device Role: {{ load-balancer_config.device_role }}
-# Device Status: {{ load-balancer_config.device_status }}
+# Type: {{ lb_type|default('software') }} Load Balancer
+# Scheme: {{ scheme|default('internal') }}
+# Management IP: {{ loadbalancer_config.management_ip }}
+# Device Role: {{ loadbalancer_config.device_role }}
+# Device Status: {{ loadbalancer_config.device_status }}
 #
 
 # Global section
@@ -46,13 +47,13 @@ defaults
 
 # HAProxy Stats
 listen haproxy-stats
-    bind {{ load-balancer_config.management_ip }}:{{ load-balancer_config.stats_port }}
+    bind {{ loadbalancer_config.management_ip }}:{{ loadbalancer_config.stats_port }}
     mode http
     stats enable
     stats uri /stats
     stats refresh 30s
     stats admin if TRUE
-    acl network_allowed src 127.0.0.1 {{ load-balancer_config.management_ip }}
+    acl network_allowed src 127.0.0.1 {{ loadbalancer_config.management_ip }}
     acl network_allowed src 10.0.0.0/8 172.16.0.0/12 192.168.0.0/16
     http-request deny unless network_allowed
 
@@ -60,7 +61,7 @@ listen haproxy-stats
 {%- for vip in vips %}
 {%- if vip.backend_servers %}
 
-# Frontend for {{ vip.hostname }}
+# Frontend for {{ vip.hostname }} ({{ vip.protocol }}:{{ vip.port }})
 frontend {{ vip.hostname | replace('.', '_') | replace('-', '_') }}_frontend
     {%- if vip.mode == 'tcp' %}
     mode tcp
@@ -68,9 +69,9 @@ frontend {{ vip.hostname | replace('.', '_') | replace('-', '_') }}_frontend
     mode http
     {%- endif %}
 
-    bind {{ vip.ip_address.split('/')[0] }}:80
+    bind {{ vip.vip_ip }}:{{ vip.port }}
     {%- if vip.ssl_certificate %}
-    bind {{ vip.ip_address.split('/')[0] }}:443 ssl crt {{ vip.ssl_certificate }}
+    bind {{ vip.vip_ip }}:443 ssl crt {{ vip.ssl_certificate }}
     {%- if vip.mode == 'http' %}
     redirect scheme https if !{ ssl_fc }
     {%- endif %}
@@ -104,14 +105,7 @@ backend {{ vip.hostname | replace('.', '_') | replace('-', '_') }}_backend
     {%- endif %}
 
     {%- for server in vip.backend_servers %}
-    server {{ server.hostname | default('server' ~ loop.index) }} {{ server.ip_address }}:{{ server.port | default(80) }}
-    {%- if vip.mode == 'http' %} check
-    {%- else %} check port {{ server.port | default(80) }}
-    {%- endif %}
-    {%- if server.max_fails %} maxconn {{ server.max_fails }}
-    {%- endif %}
-    {%- if server.fail_timeout %} on-error mark-down
-    {%- endif %}
+    server {{ server.hostname | replace('.', '_') | replace('-', '_') }} {{ server.ip_address }}:{{ server.port }} check
     {%- endfor %}
 
     {%- if vip.health_checks %}

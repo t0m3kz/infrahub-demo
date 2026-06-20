@@ -1,0 +1,12 @@
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: CoreNumberPool
+  data:
+    - name: GLOBAL-L3VNI
+      description: Global L3 VNI pool for VRF namespaces (EVPN symmetric IRB)
+      node: BuiltinIPNamespace
+      node_attribute: l3_vni
+      start_range: 50001
+      end_range: 59999

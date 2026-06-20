@@ -1,0 +1,11 @@
+---
+# London branch office topology
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologyOffice
+  data:
+    - name: OFC-LON-BRANCH-01
+      site_type: branch
+      locations:
+        - lon-2

@@ -1,6 +1,6 @@
 # POP - Point of Presence: Equinix Colocation Chaos
 
-*Where Your Infrastructure Meets Other People's Infrastructure (And Everyone Pretends It's Fine)*
+Where Your Infrastructure Meets Other People's Infrastructure (And Everyone Pretends It's Fine)
 
 ## Overview
 
@@ -26,7 +26,7 @@
 ### Metro Structure (The European Expansion Plan)
 
 | Metro | Location | Facility | AZs | Racks per AZ | Personality |
-|-------|----------|----------|-----|--------------|-------------|
+| -------- | ------------- | ---------- | ----- | -------------- | ------------- |
 | **FR** | Frankfurt 🇩🇪 | EQX-FR | FR2, FR6 | 2 each | The German Engineering Precision Hub |
 | **PA** | Paris 🇫🇷 | EQX-PA | PA4, PA6 | 2 each | The French Culinary Latency Experience |
 

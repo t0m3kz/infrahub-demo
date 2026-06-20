@@ -1,0 +1,66 @@
+---
+# Frankfurt Equinix edge-to-edge cabling (FR2 and FR6)
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimCable
+  data:
+    - name: CBL-FR2-EDGE01-EDGE02-01
+      type: mmf
+      deployment: FR2
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: FR2-EDGE-01
+            name: Ethernet1/10
+            description: "FR2-EDGE-02"
+        - kind: DcimPhysicalInterface
+          data:
+            device: FR2-EDGE-02
+            name: Ethernet1/10
+            description: "FR2-EDGE-01"
+
+    - name: CBL-FR2-EDGE01-EDGE02-02
+      type: mmf
+      deployment: FR2
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: FR2-EDGE-01
+            name: Ethernet1/11
+            description: "FR2-EDGE-02"
+        - kind: DcimPhysicalInterface
+          data:
+            device: FR2-EDGE-02
+            name: Ethernet1/11
+            description: "FR2-EDGE-01"
+
+    - name: CBL-FR6-EDGE01-EDGE02-01
+      type: mmf
+      deployment: FR6
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: FR6-EDGE-01
+            name: Ethernet1/10
+            description: "FR6-EDGE-02"
+        - kind: DcimPhysicalInterface
+          data:
+            device: FR6-EDGE-02
+            name: Ethernet1/10
+            description: "FR6-EDGE-01"
+
+    - name: CBL-FR6-EDGE01-EDGE02-02
+      type: mmf
+      deployment: FR6
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: FR6-EDGE-01
+            name: Ethernet1/11
+            description: "FR6-EDGE-02"
+        - kind: DcimPhysicalInterface
+          data:
+            device: FR6-EDGE-02
+            name: Ethernet1/11
+            description: "FR6-EDGE-01"

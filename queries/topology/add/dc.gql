@@ -1,0 +1,89 @@
+query topology_dc($name: String!) {
+  TopologyDeployment(name__value: $name) {
+    edges {
+      node {
+        id
+        name {
+          value
+        }
+        ... on TopologyDataCenter {
+          index {
+            value
+          }
+          amount_of_super_spines {
+            value
+          }
+          naming_convention { value }
+          overlay_technology { value }
+          loopback_prefix_length { value }
+          technical_prefix_length { value }
+          management_prefix_length { value }
+          design {
+            node {
+              # New schema structure
+              routing_strategy { value }
+              underlay_protocol { value }
+              max_pods { value }
+              max_super_spines_per_fabric { value }
+              max_spines_per_pod { value }
+            }
+          }
+          loopback_pool {
+            node {
+              id
+              name { value }
+            }
+          }
+          technical_pool {
+            node {
+              id
+              name { value }
+            }
+          }
+          management_pool {
+            node {
+              id
+              name { value }
+            }
+          }
+          super_spine_asn_pool {
+            node {
+              id
+              name { value }
+            }
+          }
+          children {
+            edges {
+              node {
+                id
+                ... on TopologyPod {
+                  checksum {
+                    value
+                  }
+                }
+              }
+            }
+          }
+          super_spine_template {
+            node {
+              id
+              template_name {
+                value
+              }
+              platform {
+                node {
+                  id
+                }
+              }
+              device_type {
+                node {
+                  id
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

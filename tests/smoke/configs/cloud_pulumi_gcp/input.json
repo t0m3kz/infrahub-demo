@@ -1,0 +1,213 @@
+{
+  "CloudVirtualNetwork": {
+    "edges": [
+      {
+        "node": {
+          "id": "vpc-1",
+          "name": {
+            "value": "prod-network"
+          },
+          "is_default": {
+            "value": false
+          },
+          "dns_support": {
+            "value": true
+          },
+          "dns_hostnames": {
+            "value": true
+          },
+          "account": {
+            "node": {
+              "name": {
+                "value": "test-gcp-account"
+              },
+              "account_id": {
+                "value": "my-gcp-project"
+              },
+              "environment": {
+                "value": "production"
+              },
+              "provider": {
+                "node": {
+                  "name": {
+                    "value": "Google Cloud"
+                  }
+                }
+              }
+            }
+          },
+          "region": {
+            "node": {
+              "name": {
+                "value": "europe-west1"
+              }
+            }
+          },
+          "cidr_blocks": {
+            "edges": [
+              {
+                "node": {
+                  "prefix": {
+                    "value": "10.0.0.0/16"
+                  }
+                }
+              }
+            ]
+          },
+          "network_segments": {
+            "edges": [
+              {
+                "node": {
+                  "id": "sub-1",
+                  "name": {
+                    "value": "prod-subnet-europe-west1"
+                  },
+                  "is_public": {
+                    "value": false
+                  },
+                  "auto_assign_public_ip": {
+                    "value": false
+                  },
+                  "segment_type": {
+                    "value": "gcp_vpc_subnet"
+                  },
+                  "cidr_block": {
+                    "node": {
+                      "prefix": {
+                        "value": "10.0.1.0/24"
+                      }
+                    }
+                  },
+                  "availability_zone": {
+                    "node": {
+                      "name": {
+                        "value": "europe-west1-b"
+                      }
+                    }
+                  }
+                }
+              }
+            ]
+          }
+        }
+      }
+    ]
+  },
+  "CloudSecurityGroup": {
+    "edges": [
+      {
+        "node": {
+          "id": "fw-1",
+          "name": {
+            "value": "prod-fw-rule"
+          },
+          "virtual_network": {
+            "node": {
+              "name": {
+                "value": "prod-network"
+              }
+            }
+          }
+        }
+      }
+    ]
+  },
+  "CloudInstance": {
+    "edges": [
+      {
+        "node": {
+          "id": "inst-1",
+          "name": {
+            "value": "prod-instance-1"
+          },
+          "cloud_id": {
+            "value": "projects/my-gcp-project/zones/europe-west1-b/instances/prod-instance-1"
+          },
+          "instance_type": {
+            "value": "n1-standard-1"
+          },
+          "image": {
+            "value": "debian-cloud/debian-11"
+          },
+          "os_type": {
+            "value": "linux"
+          },
+          "private_ip": {
+            "value": "10.0.1.10"
+          },
+          "public_ip": {
+            "value": null
+          },
+          "network_segment": {
+            "node": {
+              "name": {
+                "value": "prod-subnet-europe-west1"
+              },
+              "virtual_network": {
+                "node": {
+                  "name": {
+                    "value": "prod-network"
+                  }
+                }
+              }
+            }
+          },
+          "availability_zone": {
+            "node": {
+              "name": {
+                "value": "europe-west1-b"
+              }
+            }
+          },
+          "security_groups": {
+            "edges": [
+              {
+                "node": {
+                  "name": {
+                    "value": "prod-fw-rule"
+                  }
+                }
+              }
+            ]
+          }
+        }
+      }
+    ]
+  },
+  "CloudInternetGateway": {
+    "edges": []
+  },
+  "CloudNATGateway": {
+    "edges": []
+  },
+  "CloudRouteTable": {
+    "edges": []
+  },
+  "CloudRoute": {
+    "edges": []
+  },
+  "CloudPublicIP": {
+    "edges": []
+  },
+  "CloudNetworkACL": {
+    "edges": []
+  },
+  "CloudTransitGateway": {
+    "edges": []
+  },
+  "CloudVPNGateway": {
+    "edges": []
+  },
+  "CloudCustomerGateway": {
+    "edges": []
+  },
+  "CloudVirtualNetworkPeering": {
+    "edges": []
+  },
+  "CloudDirectConnect": {
+    "edges": []
+  },
+  "CloudVirtualInterface": {
+    "edges": []
+  }
+}

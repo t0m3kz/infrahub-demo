@@ -1,0 +1,20 @@
+---
+# Amsterdam colocation metro and zones (nested from colocation root)
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologyColocation
+  data:
+    - name: EQUINIX
+      children:
+        kind: TopologyColocationMetro
+        data:
+          - name: AM
+            location: ["ams"]
+            children:
+              kind: TopologyColocationZone
+              data:
+                - name: AM1
+                  deployment_type: virtual
+                - name: AM4
+                  deployment_type: virtual

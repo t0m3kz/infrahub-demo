@@ -1,0 +1,67 @@
+# Customer 1 - Cloud Topology Hierarchy
+# Top-level cloud deployments, regions, and availability zones
+# AWS: eu-central-1 (Frankfurt) - E-Commerce Production
+# GCP: europe-west1/3 (Belgium/Frankfurt) - Analytics Platform
+# Azure: westeurope/germanywestcentral - Customer Portal
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologyCloud
+  data:
+    - name: "aws"
+      children:
+        kind: TopologyCloudRegion
+        data:
+          - name: "eu-central-1"
+            location: ["fra"]
+            children:
+              kind: TopologyCloudZone
+              data:
+                - name: "eu-central-1a"
+                - name: "eu-central-1b"
+                - name: "eu-central-1c"
+
+    - name: "gcp"
+      children:
+        kind: TopologyCloudRegion
+        data:
+          - name: "europe-west1"
+            location: ["ams"]
+            children:
+              kind: TopologyCloudZone
+              data:
+                - name: "europe-west1-b"
+                - name: "europe-west1-c"
+                - name: "europe-west1-d"
+
+          - name: "europe-west3"
+            location: ["fra"]
+            children:
+              kind: TopologyCloudZone
+              data:
+                - name: "europe-west3-a"
+                - name: "europe-west3-b"
+                - name: "europe-west3-c"
+
+    - name: "azure"
+      children:
+        kind: TopologyCloudRegion
+        data:
+          - name: "westeurope"
+            location: ["ams"]
+            children:
+              kind: TopologyCloudZone
+              data:
+                - name: "westeurope-1"
+                - name: "westeurope-2"
+                - name: "westeurope-3"
+
+          - name: "germanywestcentral"
+            location: ["fra"]
+            children:
+              kind: TopologyCloudZone
+              data:
+                - name: "germanywestcentral-1"
+                - name: "germanywestcentral-2"
+                - name: "germanywestcentral-3"

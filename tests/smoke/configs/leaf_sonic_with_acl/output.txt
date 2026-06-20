@@ -1,0 +1,190 @@
+
+
+{
+  "ACL_RULE": {
+    "ACL-VLAN100-IN|SEQ_10": {
+      "IP_PROTOCOL": "6",
+      "IP_TYPE": "IPV4ANY",
+      "L4_DST_PORT": "443",
+      "PACKET_ACTION": "FORWARD",
+      "PRIORITY": "9990"
+    },
+    "ACL-VLAN100-IN|SEQ_20": {
+      "IP_PROTOCOL": "6",
+      "IP_TYPE": "IPV4ANY",
+      "L4_DST_PORT": "80",
+      "PACKET_ACTION": "FORWARD",
+      "PRIORITY": "9980"
+    },
+    "ACL-VLAN100-IN|SEQ_9990": {
+      "IP_TYPE": "IPV4ANY",
+      "LOG_ACTION": "SYSLOG",
+      "PACKET_ACTION": "DROP",
+      "PRIORITY": "10"
+    },
+    "ACL-VLAN200-IN|SEQ_10": {
+      "IP_PROTOCOL": "6",
+      "IP_TYPE": "IPV4ANY",
+      "L4_DST_PORT": "22",
+      "PACKET_ACTION": "FORWARD",
+      "PRIORITY": "9990"
+    },
+    "ACL-VLAN200-IN|SEQ_9990": {
+      "IP_TYPE": "IPV4ANY",
+      "LOG_ACTION": "SYSLOG",
+      "PACKET_ACTION": "DROP",
+      "PRIORITY": "10"
+    }
+  },
+  "ACL_TABLE": {
+    "ACL-VLAN100-IN": {
+      "policy_desc": "Zero-trust ACL for Customer-A",
+      "ports": [
+        "Vlan100"
+      ],
+      "stage": "ingress",
+      "type": "L3"
+    },
+    "ACL-VLAN200-IN": {
+      "policy_desc": "Zero-trust ACL for Customer-A",
+      "ports": [
+        "Vlan200"
+      ],
+      "stage": "ingress",
+      "type": "L3"
+    }
+  },
+  "BGP_GLOBALS": {
+    "default": {
+      "graceful_restart_enable": "true",
+      "local_asn": 65000,
+      "max_paths": "64",
+      "router_id": "10.0.0.1"
+    }
+  },
+  "BGP_GLOBALS_AF": {
+    "default|ipv4_unicast": {
+      "admin_status": "true",
+      "redistribute_connected": "true",
+      "route_map_redistribute_connected": "RM-CONN-2-BGP"
+    },
+    "default|ipv4_unicast|UNDERLAY-PEERS": {
+      "admin_status": "true"
+    },
+    "default|l2vpn_evpn": {
+      "admin_status": "true"
+    },
+    "default|l2vpn_evpn|EVPN-PEERS": {
+      "admin_status": "true"
+    }
+  },
+  "BGP_NEIGHBOR": {
+    "10.0.0.100": {
+      "admin_status": "true",
+      "asn": "65000",
+      "description": "spine-01",
+      "holdtime": "180",
+      "keepalive": "60",
+      "local_addr": "10.0.0.1",
+      "name": "EVPN-PEERS"
+    },
+    "10.0.0.101": {
+      "admin_status": "true",
+      "asn": "65000",
+      "description": "spine-02",
+      "holdtime": "180",
+      "keepalive": "60",
+      "local_addr": "10.0.0.1",
+      "name": "EVPN-PEERS"
+    },
+    "10.1.0.0": {
+      "admin_status": "true",
+      "asn": "65100",
+      "description": "spine-01",
+      "holdtime": "180",
+      "keepalive": "60",
+      "local_addr": "10.1.0.1",
+      "name": "UNDERLAY-PEERS"
+    },
+    "10.1.0.2": {
+      "admin_status": "true",
+      "asn": "65101",
+      "description": "spine-02",
+      "holdtime": "180",
+      "keepalive": "60",
+      "local_addr": "10.1.0.3",
+      "name": "UNDERLAY-PEERS"
+    }
+  },
+  "BGP_PEER_GROUP": {
+    "EVPN-PEERS": {
+      "asn": "65000",
+      "local_addr": "10.0.0.1",
+      "send_community": "extended"
+    },
+    "UNDERLAY-PEERS": {
+      "bfd": "true",
+      "send_community": "extended"
+    }
+  },
+  "DEVICE_METADATA": {
+    "localhost": {
+      "bgp_asn": 65000,
+      "hostname": "dc1-leaf-01",
+      "type": "LeafRouter"
+    }
+  },
+  "EVPN_NVO": {},
+  "INTERFACE": {
+    "Ethernet1": {},
+    "Ethernet10": {},
+    "Ethernet2": {}
+  },
+  "INTERFACE_IP": {
+    "Ethernet1|10.1.0.1/31": {},
+    "Ethernet2|10.1.0.3/31": {}
+  },
+  "LOOPBACK_INTERFACE": {
+    "Loopback0|10.0.0.1/32": {}
+  },
+  "OSPF_ROUTER": {},
+  "STATIC_ROUTE": {
+    "VRF_A|0.0.0.0/0": {
+      "ifname": "",
+      "nexthop": "10.100.0.254",
+      "nexthop-vrf": ""
+    }
+  },
+  "VLAN": {
+    "Vlan100": {
+      "vlanid": "100"
+    },
+    "Vlan200": {
+      "vlanid": "200"
+    }
+  },
+  "VLAN_INTERFACE": {
+    "Vlan100": {},
+    "Vlan200": {}
+  },
+  "VRF": {
+    "VRF_A": {
+      "vni": "50001"
+    }
+  },
+  "VXLAN_TUNNEL": {
+    "vtep": {
+      "src_ip": "10.0.0.1"
+    }
+  },
+  "VXLAN_TUNNEL_MAP": {
+    "vtep|map_10100_Vlan100": {
+      "vlan": "Vlan100",
+      "vni": "10100"
+    },
+    "vtep|map_50001_VRF_A": {
+      "vni": "50001",
+      "vrf": "VRF_A"
+    }
+  }
+}

@@ -1,0 +1,53 @@
+query SnapshotDCRoutingState($device_names: [String!]) {
+  bgp_processes: ManagedBGP(device__name__values: $device_names) {
+    edges {
+      node {
+        name { value }
+        local_as {
+          node {
+            asn { value }
+          }
+        }
+        device {
+          node {
+            name { value }
+            role { value }
+          }
+        }
+      }
+    }
+  }
+  ospf_processes: ManagedOSPF(device__name__values: $device_names) {
+    edges {
+      node {
+        name { value }
+        device {
+          node {
+            name { value }
+            role { value }
+          }
+        }
+      }
+    }
+  }
+  peerings: ManagedBGPPeering(bgp_processes__device__name__values: $device_names) {
+    edges {
+      node {
+        name { value }
+        session_type { value }
+        bgp_processes {
+          edges {
+            node {
+              device {
+                node {
+                  name { value }
+                  role { value }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

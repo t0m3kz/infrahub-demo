@@ -1,0 +1,10 @@
+{%- if mlag %}
+!
+! MC-LAG Configuration
+!
+A admin configure redundancy mc-lag admin-state enable
+A admin configure redundancy mc-lag system-priority {{ mlag.domain_id }}
+{%- if mlag.peer_link %}
+A admin configure redundancy mc-lag peer-link port {{ mlag.peer_link }}
+{%- endif %}
+{%- endif %}

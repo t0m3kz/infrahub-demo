@@ -1,0 +1,68 @@
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimPhysicalDevice
+  data:
+    - name: EQX-DC1-PATCH-01
+      object_template: PATCH-PANEL-24_PATCH
+      status: active
+      deployment: DC1
+      rack: dc1-s1-r-1
+
+    - name: EQX-DC2-PATCH-01
+      object_template: PATCH-PANEL-24_PATCH
+      status: active
+      deployment: DC2
+      rack: dc2-s1-r-1
+
+    - name: EQX-FR2-PATCH-01
+      object_template: PATCH-PANEL-24_PATCH
+      status: active
+      deployment: FR2
+      rack: fr2-s1-r-1
+
+    - name: EQX-FR6-PATCH-01
+      object_template: PATCH-PANEL-24_PATCH
+      status: active
+      deployment: FR6
+      rack: fr6-s1-r-1
+
+    - name: EQX-PA4-PATCH-01
+      object_template: PATCH-PANEL-24_PATCH
+      status: active
+      deployment: PA4
+      rack: pa4-s1-r-1
+
+    - name: EQX-PA6-PATCH-01
+      object_template: PATCH-PANEL-24_PATCH
+      status: active
+      deployment: PA6
+      rack: pa6-s1-r-1
+
+    - name: EQX-STR-PATCH-01
+      object_template: PATCH-PANEL-24_PATCH
+      status: active
+      deployment: OFC-STR-BRANCH-01
+      rack: str-1-office-r-1
+
+    - name: EQX-MAD-PATCH-01
+      object_template: PATCH-PANEL-24_PATCH
+      status: active
+      deployment: OFC-MAD-REGIONAL-01
+      rack: mad-1-office-r-1
+
+    - name: EXT-BT-PATCH-01
+      object_template: PATCH-PANEL-24_PATCH
+      status: active
+      deployment: INET-BT-INTERNET
+
+    - name: EXT-DECIX-PATCH-01
+      object_template: PATCH-PANEL-24_PATCH
+      status: active
+      deployment: INET-DE-CIX-FR
+
+    - name: EXT-ACME-PATCH-01
+      object_template: PATCH-PANEL-24_PATCH
+      status: active
+      deployment: PARTNER-ACME-MPLS

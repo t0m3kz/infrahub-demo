@@ -1,0 +1,25 @@
+---
+# DC3 topology — 4 pods, one per cluster type
+#   POD1: Kubernetes (k8s) — cross-pod multi-homed nodes
+#   POD2: Kubernetes (k8s workers/storage) — paired with POD1
+#   POD3: VMware vSphere
+#   POD4: Nutanix AHV
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologyDataCenter
+  data:
+    - name: DC3
+      index: 1
+      super_spine_template: N9K-C9336C-FX2_SUPER_SPINE
+      children:
+        kind: TopologyPod
+        data:
+          - index: 1
+            spine_template: N9K-C9336C-FX2_SPINE
+          - index: 2
+            spine_template: N9K-C9336C-FX2_SPINE
+          - index: 3
+            spine_template: N9K-C9336C-FX2_SPINE
+          - index: 4
+            spine_template: N9K-C9336C-FX2_SPINE

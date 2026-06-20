@@ -1,0 +1,88 @@
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: ManagedNTP
+  data:
+    - name: EQUINIX-PA-NTP
+      status: active
+      profiles:
+        - colo-ntp-default
+      device_capabilities:
+        - PA4-EDGE-01
+        - PA4-EDGE-02
+        - PA6-EDGE-01
+        - PA6-EDGE-02
+      servers:
+        kind: ManagedNTPServer
+        data:
+          - name: primary
+            address:
+              - "162.159.200.1/32"
+              - "default"
+            prefer: true
+            version: 4
+          - name: secondary
+            address:
+              - "162.159.200.123/32"
+              - "default"
+            prefer: false
+            version: 4
+
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: ManagedSyslog
+  data:
+    - name: EQUINIX-PA-Syslog
+      status: active
+      profiles:
+        - colo-syslog-default
+      device_capabilities:
+        - PA4-EDGE-01
+        - PA4-EDGE-02
+        - PA6-EDGE-01
+        - PA6-EDGE-02
+      servers:
+        kind: ManagedSyslogServer
+        data:
+          - name: server-1
+            address:
+              - "10.0.0.100/32"
+              - "default"
+            port: 514
+            severity: informational
+
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: ManagedAAA
+  data:
+    - name: EQUINIX-PA-AAA
+      status: active
+      profiles:
+        - colo-aaa-default
+      device_capabilities:
+        - PA4-EDGE-01
+        - PA4-EDGE-02
+        - PA6-EDGE-01
+        - PA6-EDGE-02
+      servers:
+        kind: ManagedAAAServer
+        data:
+          - name: primary
+            address:
+              - "10.0.0.200/32"
+              - "default"
+            protocol: tacacs
+            port: 49
+            timeout: 5
+          - name: secondary
+            address:
+              - "10.0.0.201/32"
+              - "default"
+            protocol: tacacs
+            port: 49
+            timeout: 5

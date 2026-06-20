@@ -1,0 +1,11 @@
+---
+# DC2 building
+apiVersion: infrahub.app/v1
+version: "1.0"
+kind: Object
+spec:
+  kind: LocationBuilding
+  data:
+    - name: "DC2"
+      shortname: "dc2"
+      parent: "par"

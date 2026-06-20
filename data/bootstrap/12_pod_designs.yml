@@ -1,0 +1,142 @@
+---
+# Pod Design Templates - Physical Deployment Layouts
+# These define the physical floor plan and operational parameters
+# Loaded at bootstrap time, referenced by DC and Pod instances at deployment
+#
+# deployment_type is derived from rack layout:
+#   - network_racks=0 → tor (all compute racks with ToRs)
+#   - max_tors_per_compute_rack=0 → middle_rack (leafs+tors in network racks)
+#   - both > 0 → mixed (leafs in network racks, tors in compute racks)
+#
+# Naming convention: {SIZE}_{DEPLOYMENT_TYPE}
+#   size:            S(2 rows), M(4 rows), L(8 rows)
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologyPodDesign
+  data:
+    # Small Designs (2 rows)
+    - name: "S_MIDDLE"
+      description: >
+        Small middle-rack deployment (2 rows × 9 racks = 18 racks total).
+        Network racks: 2 rows × 1 rack = 2 racks with 4 leafs + 4 tors each.
+        Compute racks: 2 rows × 8 racks = 16 racks (no ToRs).
+        Total capacity: 8 leafs, 8 tors, 2 spines.
+      rows: 2
+      compute_racks_per_row: 8
+      network_racks_per_row: 1
+      max_leafs_per_network_rack: 4
+      max_tors_per_network_rack: 4
+      max_tors_per_compute_rack: 0
+      max_spines_per_pod: 2
+
+    - name: "S_TOR"
+      description: >
+        Small ToR-only deployment (2 rows × 10 racks = 20 racks total).
+        All compute racks with ToRs connecting directly to spines.
+        Total capacity: 0 leafs, 40 tors (2 rows × 10 racks × 2 tors), 4 spines.
+      rows: 2
+      compute_racks_per_row: 10
+      network_racks_per_row: 0
+      max_leafs_per_network_rack: 0
+      max_tors_per_network_rack: 0
+      max_tors_per_compute_rack: 2
+      max_spines_per_pod: 4
+
+    - name: "S_MIXED"
+      description: >
+        Small mixed deployment (2 rows × 10 racks = 20 racks total).
+        Network racks: 2 rows × 1 rack = 2 racks with 2 leafs each.
+        Compute racks: 2 rows × 9 racks = 18 racks with 2 tors each.
+        Total capacity: 4 leafs, 36 tors (2×9×2), 4 spines.
+      rows: 2
+      compute_racks_per_row: 9
+      network_racks_per_row: 1
+      max_leafs_per_network_rack: 2
+      max_tors_per_network_rack: 0
+      max_tors_per_compute_rack: 2
+      max_spines_per_pod: 4
+
+    # Medium Designs (4 rows)
+    - name: "M_MIDDLE"
+      description: >
+        Medium middle-rack deployment (4 rows × 9 racks = 36 racks total).
+        Network racks: 4 rows × 1 rack = 4 racks with 4 leafs + 4 tors each.
+        Compute racks: 4 rows × 8 racks = 32 racks (no ToRs).
+        Total capacity: 16 leafs, 16 tors, 3 spines.
+      rows: 4
+      compute_racks_per_row: 8
+      network_racks_per_row: 1
+      max_leafs_per_network_rack: 4
+      max_tors_per_network_rack: 4
+      max_tors_per_compute_rack: 0
+      max_spines_per_pod: 3
+
+    - name: "M_TOR"
+      description: >
+        Medium ToR-only deployment (4 rows × 10 racks = 40 racks total).
+        All compute racks with ToRs connecting directly to spines.
+        Total capacity: 0 leafs, 80 tors (4 rows × 10 racks × 2 tors), 3 spines.
+      rows: 4
+      compute_racks_per_row: 10
+      network_racks_per_row: 0
+      max_leafs_per_network_rack: 0
+      max_tors_per_network_rack: 0
+      max_tors_per_compute_rack: 2
+      max_spines_per_pod: 3
+
+    - name: "M_MIXED"
+      description: >
+        Medium mixed deployment (4 rows × 10 racks = 40 racks total).
+        Network racks: 4 rows × 1 rack = 4 racks with 2 leafs each.
+        Compute racks: 4 rows × 9 racks = 36 racks with 2 tors each.
+        Total capacity: 8 leafs, 72 tors (4×9×2), 3 spines.
+      rows: 4
+      compute_racks_per_row: 9
+      network_racks_per_row: 1
+      max_leafs_per_network_rack: 2
+      max_tors_per_network_rack: 0
+      max_tors_per_compute_rack: 2
+      max_spines_per_pod: 3
+
+    # Large Designs (8 rows)
+    - name: "L_MIDDLE"
+      description: >
+        Large middle-rack deployment (8 rows × 9 racks = 72 racks total).
+        Network racks: 8 rows × 1 rack = 8 racks with 4 leafs + 4 tors each.
+        Compute racks: 8 rows × 8 racks = 64 racks (no ToRs).
+        Total capacity: 32 leafs, 32 tors, 4 spines.
+      rows: 8
+      compute_racks_per_row: 8
+      network_racks_per_row: 1
+      max_leafs_per_network_rack: 4
+      max_tors_per_network_rack: 4
+      max_tors_per_compute_rack: 0
+      max_spines_per_pod: 4
+
+    - name: "L_TOR"
+      description: >
+        Large ToR-only deployment (8 rows × 10 racks = 80 racks total).
+        All compute racks with ToRs connecting directly to spines.
+        Total capacity: 0 leafs, 160 tors (8 × 10 × 2), 4 spines.
+      rows: 8
+      compute_racks_per_row: 10
+      network_racks_per_row: 0
+      max_leafs_per_network_rack: 0
+      max_tors_per_network_rack: 0
+      max_tors_per_compute_rack: 2
+      max_spines_per_pod: 4
+
+    - name: "L_MIXED"
+      description: >
+        Large mixed deployment (8 rows × 10 racks = 80 racks total).
+        Network racks: 8 rows × 1 rack = 8 racks with 2 leafs each.
+        Compute racks: 8 rows × 9 racks = 72 racks with 2 tors each.
+        Total capacity: 16 leafs, 144 tors (8×9×2), 4 spines.
+      rows: 8
+      compute_racks_per_row: 9
+      network_racks_per_row: 1
+      max_leafs_per_network_rack: 2
+      max_tors_per_network_rack: 0
+      max_tors_per_compute_rack: 2
+      max_spines_per_pod: 4

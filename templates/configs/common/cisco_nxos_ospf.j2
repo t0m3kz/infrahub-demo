@@ -1,0 +1,19 @@
+{%- if capabilities is not defined or capabilities.ospf_enabled is not defined or capabilities.ospf_enabled %}
+{%- for ospf_config in ospf %}
+router ospf {{ ospf_config.process_id or 1 }}
+  router-id {{ ospf_config.router_id.split('/')[0] }}
+{%- if ospf_config.reference_bandwidth %}
+  auto-cost reference-bandwidth {{ ospf_config.reference_bandwidth }}
+{%- endif %}
+{%- if ospf_config.area is defined %}
+  area {{ ospf_config.area }} authentication message-digest
+{%- endif %}
+  passive-interface default
+{%- for interface in interfaces %}
+{%- if interface.get('ospf') and (ospf_config.area is not defined or interface.ospf.area == ospf_config.area) %}
+  no passive-interface {{ interface.name }}
+{%- endif %}
+{%- endfor %}
+!
+{%- endfor %}
+{%- endif %}

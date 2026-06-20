@@ -1,0 +1,29 @@
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: ManagedVxlanSegment
+  data:
+    - customer_name: web-app
+      environment: production
+      owner: "Customer 1"
+      arp_suppression: true
+      prefix:
+        - "10.100.0.0/24"
+        - "tenant-a-vrf"
+      deployments:
+        - DC1
+      member_of_groups:
+        - vxlan_segments
+
+    - customer_name: db-backend
+      environment: production
+      owner: "Customer 1"
+      arp_suppression: true
+      prefix:
+        - "10.100.0.0/24"
+        - "tenant-a-vrf"
+      deployments:
+        - DC1
+      member_of_groups:
+        - vxlan_segments

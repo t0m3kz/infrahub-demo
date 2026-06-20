@@ -1,0 +1,9 @@
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: CoreAccount
+  data:
+    - name: Customer 1 Engineering Team
+      password: "cust1-eng-team-pass"
+      description: Engineering Team for Customer 1

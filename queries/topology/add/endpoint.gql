@@ -1,0 +1,90 @@
+fragment PhysicalInterfaceFields on DcimPhysicalInterface {
+  id
+  name { value }
+  interface_type { value }
+  role { value }
+  status { value }
+  cable {
+    node {
+      id
+    }
+  }
+}
+
+fragment RackDeviceFields on DcimPhysicalDevice {
+  id
+  name { value }
+  role { value }
+  rack {
+    node {
+      id
+      row_index { value }
+    }
+  }
+  interfaces {
+    edges {
+      node {
+        ...PhysicalInterfaceFields
+      }
+    }
+  }
+}
+
+fragment PodFields on TopologyPod {
+  id
+  name { value }
+  deployment_type { value }
+  index { value }
+  parent {
+    node {
+      id
+      name { value }
+    }
+  }
+}
+
+fragment RackFields on LocationRack {
+  id
+  name { value }
+  index { value }
+  row_index { value }
+  rack_type { value }
+  pod {
+    node {
+      ...PodFields
+    }
+  }
+  devices(role__values: ["leaf", "tor"]) {
+    edges {
+      node {
+        ...RackDeviceFields
+      }
+    }
+  }
+}
+
+query GetEndpointForConnectivity($device_name: String!) {
+  DcimDevice(name__value: $device_name) {
+    edges {
+      node {
+        id
+        name { value }
+        role { value }
+        ... on DcimPhysicalDevice {
+          rack {
+            node {
+              ...RackFields
+            }
+          }
+        }
+        interfaces {
+          edges {
+            node {
+              ...PhysicalInterfaceFields
+            }
+          }
+        }
+      }
+    }
+  }
+}

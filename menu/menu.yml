@@ -1,3 +1,4 @@
+# yaml-language-server: $schema=https://schema.infrahub.app/infrahub/menu/latest.json
 ---
 apiVersion: infrahub.app/v1
 kind: Menu
@@ -34,123 +35,45 @@ spec:
       label: Location
       kind: LocationGeneric
       icon: "mdi:map-marker"
-    # ===================== DESIGN =====================
-    - namespace: Design
-      name: MainMenu
+    # ──────────────────────────────────────────────────────────────────────────
+    # TOPOLOGY — deployments and network designs
+    # ──────────────────────────────────────────────────────────────────────────
+    - namespace: Topology
+      name: TopologyMenu
+      label: Topology
+      icon: "mdi:graph"
+      kind: TopologyDeployment
+
+    # ──────────────────────────────────────────────────────────────────────────
+    # DESIGN — fabric and pod layout blueprints
+    # ──────────────────────────────────────────────────────────────────────────
+    - namespace: Topology
+      name: DesignMenu
       label: Design
       icon: "mdi:pencil-ruler"
       children:
         data:
-          # --------- Design & Planning ---------
-          - namespace: Design
-            name: DesignMenu
-            label: Templates & Designs
-            icon: "mdi:pencil-ruler"
-            children:
-              data:
-                - name: DataCenterDesign
-                  namespace: Topology
-                  label: Data Center Templates
-                  kind: TopologyDataCenterDesign
-                  icon: "mdi:vector-arrange-above"
-                  description: "Data center design templates and patterns"
-
-                - name: PopDesign
-                  namespace: Topology
-                  label: PoP Templates
-                  kind: TopologyPopDesign
-                  icon: "mdi:vector-arrange-above"
-                  description: "PoP design templates and patterns"
-
-                - name: BranchOfficeDesign
-                  namespace: Topology
-                  label: Branch Office Templates
-                  kind: TopologyBranchOfficeDesign
-                  icon: "mdi:vector-arrange-above"
-                  description: "Branch office design templates and patterns"
-
-                - name: VirtualFabricDesign
-                  namespace: Topology
-                  label: Virtual Fabric Templates
-                  kind: TopologyVirtualFabricDesign
-                  icon: "mdi:vector-arrange-above"
-                  description: |
-                    Virtual fabric design templates with resource limits
-
-          # --------- Design Elements ---------
-          - namespace: Design
-            name: ElementsMenu
-            label: Design Elements
-            icon: "mdi:cube-outline"
-            children:
-              data:
-                - name: Element
-                  namespace: Topology
-                  label: Design Elements
-                  kind: TopologyElement
-                  icon: "mdi:cube-outline"
-                  description: "Reusable design elements for infrastructure"
-    # ===================== DEPLOYMENT =====================
-    - namespace: Infrastructure
-      name: MainMenu
-      label: Deployment
-      icon: "mdi:server-network"
-      children:
-        data:
-          # --------- Data Centers ---------
-          - name: DataCenter
-            namespace: Topology
-            label: Data Centers
-            kind: TopologyDataCenter
-            icon: "mdi:office-building-outline"
-            description: "Enterprise data center deployments"
-
-          # --------- Colocation Centers ---------
-          - name: Colocation
-            namespace: Topology
-            label: Colocation Centers
-            kind: TopologyColocation
-            icon: "mdi:server-network"
-            description: "Third-party colocation facilities"
-
-          # --------- Branch Offices ---------
-          - name: BranchOffice
-            namespace: Topology
-            label: Branch Offices
-            kind: TopologyBranchOffice
-            icon: "mdi:office-building"
-            description: "Remote office deployments"
-
-          # --------- Public Clouds ---------
           - namespace: Topology
-            name: Cloud
-            label: Cloud Topology
-            kind: TopologyCloud
-            icon: "mdi:cloud"
-            description: "Public cloud topology deployments"
+            name: DesignDataCenterItem
+            label: Fabric Designs
+            kind: TopologyDataCenterDesign
+            icon: "mdi:floor-plan"
 
-          - name: VirtualisationMenu
-            namespace: Service
-            label: Customer Deployments
-            icon: "mdi:cloud-outline"
-            description: "Topology and Cloud customer deployments"
-            children:
-              data:
-                # --------- Virtual Fabric Deployments ---------
-                - name: VirtualFabricDeployment
-                  namespace: Service
-                  label: Virtual Data Centers
-                  kind: ServiceVirtualFabric
-                  icon: "carbon:ibm-cloud-internet-services"
-                  description: "Customer virtual fabric deployments"
+          - namespace: Topology
+            name: DesignPodItem
+            label: Pod Designs
+            kind: TopologyPodDesign
+            icon: "mdi:view-grid-outline"
 
-                - namespace: Service
-                  name: VirtualCloud
-                  label: Virtual Clouds
-                  kind: ServiceVirtualCloud
-                  icon: "carbon:ibm-cloud-internet-services"
-                  description: "Customer virtual cloud deployments"
-    # ===================== INVENTORY =====================
+          - namespace: Topology
+            name: DesignElementItem
+            label: Network Elements
+            kind: TopologyElement
+            icon: "mdi:view-grid-outline"
+
+    # ──────────────────────────────────────────────────────────────────────────
+    # INVENTORY — physical devices and hardware
+    # ──────────────────────────────────────────────────────────────────────────
     - namespace: Inventory
       name: MainMenu
       label: Inventory
@@ -166,9 +89,9 @@ spec:
             children:
               data:
                 - namespace: Dcim
-                  name: GenericDevice
+                  name: Device
                   label: Devices
-                  kind: DcimGenericDevice
+                  kind: DcimDevice
                   icon: "mdi:server"
                   description: "All physical and virtual devices"
 
@@ -213,299 +136,258 @@ spec:
                   kind: DcimPlatform
                   icon: "mdi:chip"
                   description: "Operating system and firmware platforms"
-    # ===================== ROUTING =====================
-    - namespace: Routing
-      name: MainMenu
-      label: Routing & Peering
-      icon: "mdi:router"
+          # ── Circuits ───────────────────────────────────────────────────────
+          - namespace: Topology
+            name: CircuitsMenu
+            label: Circuits
+            icon: "mdi:transit-connection-variant"
+            children:
+              data:
+                - namespace: Topology
+                  name: PhysicalCircuitItem
+                  label: Physical Circuits
+                  kind: TopologyPhysicalCircuit
+                  icon: "mdi:cable-data"
+
+                - namespace: Topology
+                  name: VirtualCircuitItem
+                  label: Virtual Circuits
+                  kind: TopologyVirtualCircuit
+                  icon: "mdi:cloud-sync"
+
+          # --------- Virtualisation Inventory ---------
+          - namespace: Virt
+            name: VirtMenu
+            label: Virtualisation
+            icon: "mdi:server-network"
+            description: "On-prem and cloud-managed virtualisation clusters"
+            children:
+              data:
+                - namespace: Virt
+                  name: ClusterItem
+                  label: Clusters
+                  kind: VirtCluster
+                  icon: "mdi:server-network"
+                  description: "Kubernetes, vSphere, Nutanix, and cloud-managed clusters"
+
+                - namespace: Virt
+                  name: NodePoolItem
+                  label: Node Pools
+                  kind: VirtNodePool
+                  icon: "mdi:server-plus"
+                  description: "Node groups, ESXi host pools, and cloud ASGs"
+
+          # --------- Cloud Inventory ---------
+          - namespace: Cloud
+            name: Resource
+            label: Public Cloud Resources
+            kind: CloudResource
+            icon: "mdi:cloud"
+            description: "All public cloud resources"
+
+    # ──────────────────────────────────────────────────────────────────────────
+    # ROUTING — peerings, protocol configs, static routes
+    # ──────────────────────────────────────────────────────────────────────────
+    - namespace: Managed
+      name: RoutingMenu
+      label: Routing
+      icon: "mdi:router-network"
       children:
         data:
-          - namespace: Routing
-            name: BGPMenu
-            label: BGP Management
-            icon: "mdi:router-network"
+
+          # ── All Peerings (generic view) ────────────────────────────────────
+          - namespace: Managed
+            name: AllPeeringsItem
+            label: All Peerings
+            kind: ManagedPeering
+            icon: "mdi:transit-connection-horizontal"
+
+          # ── BGP ────────────────────────────────────────────────────────────
+          - namespace: Managed
+            name: BgpMenu
+            label: BGP
+            icon: "mdi:transit-connection"
             children:
               data:
+                - namespace: Managed
+                  name: BgpPeeringItem
+                  label: BGP Peerings
+                  kind: ManagedBGPPeering
+                  icon: "mdi:transit-connection"
+
                 - namespace: Routing
-                  name: AutonomousSystem
+                  name: IpAsnItem
                   label: Autonomous Systems
                   kind: RoutingAutonomousSystem
-                  icon: "mdi:bank-circle-outline"
-                  description: "BGP AS definitions"
+                  icon: "mdi:numeric"
 
-                - namespace: Routing
-                  name: BGPService
-                  label: BGP Services
-                  kind: ServiceBGP
-                  icon: "carbon:ibm-cloud-internet-services"
-                  description: "BGP service instances"
+                - namespace: Managed
+                  name: ExternalFabricPeeringItem
+                  label: External Fabric Peerings
+                  kind: ManagedExternalFabricPeering
+                  icon: "mdi:wan"
 
-                - namespace: Routing
-                  name: BGPPeerGroup
-                  label: BGP Peer Groups
-                  kind: RoutingBGPPeerGroup
-                  icon: "mdi:view-grid-plus-outline"
-                  description: "BGP peer group templates"
+                - namespace: Managed
+                  name: ExternalPeerItem
+                  label: External Peers
+                  kind: ManagedExternalPeer
+                  icon: "mdi:account-network"
 
-                - namespace: Routing
-                  name: BGPCommunity
-                  label: BGP Communities
-                  kind: RoutingBGPCommunity
-                  icon: "mdi:tag-multiple"
-                  description: "Community definitions and policies"
 
-                - namespace: Routing
-                  name: BGPPeering
-                  label: BGP Peering Sessions
-                  kind: ServiceBGPPeering
-                  icon: "carbon:network-4-reference"
-                  description: "BGP peer with internal and external networks"
-
-          # OSPF Management
-          - namespace: Routing
-            name: OSPFMenu
-            label: OSPF Management
-            icon: "mdi:network-outline"
+          # ── OSPF ───────────────────────────────────────────────────────────
+          - namespace: Managed
+            name: OspfMenu
+            label: OSPF
+            icon: "mdi:transit-connection-variant"
             children:
               data:
+                - namespace: Managed
+                  name: OspfPeeringItem
+                  label: OSPF Peerings
+                  kind: ManagedOSPFPeering
+                  icon: "mdi:transit-connection-variant"
+
                 - namespace: Routing
-                  name: OSPFArea
+                  name: OspfAreaItem
                   label: OSPF Areas
                   kind: RoutingOSPFArea
-                  icon: "mdi:square-rounded-outline"
-                  description: "OSPF area definitions"
+                  icon: "mdi:hexagon-outline"
 
-                - namespace: Routing
-                  name: OSPFService
-                  label: OSPF Services
-                  kind: ServiceOSPF
-                  icon: "carbon:ibm-cloud-internet-services"
-                  description: "OSPF service instances"
+                - namespace: Managed
+                  name: OspfLinkItem
+                  label: OSPF Link Services
+                  kind: ManagedOSPFLinkService
+                  icon: "mdi:link-variant"
 
-                - namespace: Routing
-                  name: OSPFInterface
-                  label: OSPF Interface Profiles
-                  kind: RoutingOSPFInterface
-                  icon: "mdi:shield-check"
-                  description: "OSPF interface configurations"
+          # ── Static Routes ───────────────────────────────────────────────────
+          - namespace: Cloud
+            name: StaticRoutesItem
+            label: Static Routes
+            kind: CloudRoute
+            icon: "mdi:routes"
 
-                - namespace: Routing
-                  name: OSPFPeering
-                  label: OSPF Peering Sessions
-                  kind: ServiceOSPFPeering
-                  icon: "carbon:network-4-reference"
-                  description: "OSPF neighbor relationships"
+    # ──────────────────────────────────────────────────────────────────────────
+    # SERVICES — network services organised by function
+    # ──────────────────────────────────────────────────────────────────────────
+    - namespace: Managed
+      name: ServicesMenu
+      label: Services
+      icon: "mdi:cog-transfer"
+      children:
+        data:
+          # ── Network Segments ───────────────────────────────────────────────
+          - namespace: Platform
+            name: SegmentsItem
+            label: Network Segments
+            kind: ManagedNetworkSegment
+            icon: "mdi:layers-triple"
 
-          # PIM Management
-          - namespace: Routing
-            name: PIMMenu
-            label: PIM Management
-            icon: "mdi:network-pos"
+          # ── Infrastructure Services ────────────────────────────────────────
+          - namespace: Managed
+            name: InfraServicesMenu
+            label: Infrastructure Services
+            icon: "mdi:server-plus"
             children:
               data:
-                - namespace: Routing
-                  name: PIMService
-                  label: PIM Services
-                  kind: ServicePIM
-                  icon: "carbon:ibm-cloud-internet-services"
-                  description: "PIM service instances"
+                - namespace: Managed
+                  name: NtpItem
+                  label: NTP
+                  kind: ManagedNTP
+                  icon: "mdi:clock-outline"
 
-                - namespace: Routing
-                  name: PIMInterface
-                  label: PIM Interface Profiles
-                  kind: RoutingPIMInterface
-                  icon: "mdi:ethernet"
-                  description: "PIM interface configurations"
+                - namespace: Managed
+                  name: SyslogItem
+                  label: Syslog
+                  kind: ManagedSyslog
+                  icon: "mdi:text-box-multiple-outline"
 
-                - namespace: Service
-                  name: PeeringPolicy
-                  label: Peering Policies
-                  kind: ServicePeeringPolicy
-                  icon: "carbon:policy"
-                  description: "Policies and rules for peer relationships"
-    # ===================== SECURITY =====================
+                - namespace: Managed
+                  name: SnmpItem
+                  label: SNMP
+                  kind: ManagedSNMP
+                  icon: "mdi:gauge"
+
+                - namespace: Managed
+                  name: AaaItem
+                  label: AAA
+                  kind: ManagedAAA
+                  icon: "mdi:shield-account-outline"
+
+          # ── Traffic Management ─────────────────────────────────────────────
+          - namespace: Managed
+            name: TrafficManagementMenu
+            label: Traffic Management
+            icon: "mdi:transit-connection-variant"
+            children:
+              data:
+                - namespace: Platform
+                  name: LoadBalancerItem
+                  label: Load Balancers
+                  kind: ManagedLoadBalancer
+                  icon: "mdi:scale-balance"
+
+                - namespace: Managed
+                  name: ForwardingProxyItem
+                  label: Proxy & Forwarding
+                  kind: ManagedForwardingProxy
+                  icon: "mdi:web"
+
+    # ──────────────────────────────────────────────────────────────────────────
+    # SECURITY — zones, profiles, policies
+    # ──────────────────────────────────────────────────────────────────────────
     - namespace: Security
       name: SecurityMenu
-      label: Security Management
+      label: Security
       icon: "mdi:shield-lock"
       children:
         data:
-          # --------- Objects & Groups ---------
           - namespace: Security
-            name: ObjectsMenu
-            label: "Objects & Groups"
-            icon: "mdi:folder-network"
-            children:
-              data:
-                - namespace: Security
-                  name: AddressObject
-                  label: "Address Objects"
-                  kind: SecurityAddressObject
-                  icon: "mdi:ip-network"
-                  description: "IP addresses, prefixes, ranges, and FQDNs"
-                - namespace: Security
-                  name: AddressGroup
-                  label: "Address Groups"
-                  kind: SecurityAddressGroup
-                  icon: "mdi:folder-network"
-                  description: "Groups of address objects"
-                - namespace: Security
-                  name: ServiceObject
-                  label: "Service Objects"
-                  kind: SecurityServiceObject
-                  icon: "mdi:network"
-                  description: "Ports, protocols, and services"
-                - namespace: Security
-                  name: ServiceGroup
-                  label: "Service Groups"
-                  kind: SecurityServiceGroup
-                  icon: "mdi:folder-network"
-                  description: "Groups of service objects"
-                - namespace: Security
-                  name: FQDN
-                  label: "Domain Names (FQDN)"
-                  kind: SecurityFQDN
-                  icon: "mdi:web"
-                  description: "Fully qualified domain names for web filtering"
-                - namespace: Security
-                  name: ApplicationCategory
-                  label: "Application Categories"
-                  kind: SecurityApplicationCategory
-                  icon: "mdi:application"
-                  description: "Application categories for next-gen firewalls"
-                - namespace: Security
-                  name: URLCategory
-                  label: "URL Categories"
-                  kind: SecurityURLCategory
-                  icon: "mdi:web"
-                  description: "URL categories for web filtering"
+            name: SecurityZoneItem
+            label: Security Zones
+            kind: SecurityZone
+            icon: "mdi:shield-half-full"
 
-          # --------- Policies & Rules ---------
           - namespace: Security
-            name: PoliciesMenu
-            label: "Policies & Rules"
+            name: SecurityProfileItem
+            label: Security Profiles
+            kind: SecuritySecurityProfile
+            icon: "mdi:shield-account"
+
+          - namespace: Security
+            name: SecurityPolicyItem
+            label: Security Policies
+            kind: SecurityPolicy
+            icon: "mdi:shield-check"
+
+          - namespace: Service
+            name: ProxyURLCategoryItem
+            label: URL Categories
+            kind: ServiceProxyURLCategory
+            icon: "mdi:tag-multiple"
+
+          - namespace: Service
+            name: ProxyPolicyItem
+            label: Proxy Policies
+            kind: ServiceProxyPolicy
             icon: "mdi:file-document-outline"
-            children:
-              data:
-                - namespace: Security
-                  name: Policy
-                  label: "Security Policies"
-                  kind: SecurityPolicy
-                  icon: "mdi:file-document-outline"
-                  description: "Firewall, ACL, and cloud security policies"
-                - namespace: Security
-                  name: PolicyRule
-                  label: "Policy Rules"
-                  kind: SecurityPolicyRule
-                  icon: "mdi:file-document-edit-outline"
-                  description: "Security rules and access controls"
-                - namespace: Security
-                  name: Zone
-                  label: "Security Zones"
-                  kind: SecurityZone
-                  icon: "mdi:shield-lock"
-                  description: "Network security zones and trust levels"
-                - namespace: Security
-                  name: SecurityProfile
-                  label: "Security Profiles"
-                  kind: SecuritySecurityProfile
-                  icon: "mdi:shield-check"
-                  description: "Threat prevention and security profiles"
-                - namespace: Security
-                  name: Schedule
-                  label: "Security Schedules"
-                  kind: SecuritySchedule
-                  icon: "mdi:calendar-clock"
-                  description: "Time-based security policies"
 
-          # --------- Infrastructure ---------
-          - namespace: Security
-            name: InfrastructureMenu
-            label: "Infrastructure"
-            icon: "mdi:vpn"
-            children:
-              data:
-                - namespace: Security
-                  name: VPNConnection
-                  label: "VPN Connections"
-                  kind: SecurityVPNConnection
-                  icon: "mdi:vpn"
-                  description: "Site-to-site and remote access VPNs"
-                - namespace: Security
-                  name: Certificate
-                  label: "Security Certificates"
-                  kind: SecurityCertificate
-                  icon: "mdi:certificate"
-                  description: "SSL/TLS certificates and lifecycle management"
-                - namespace: Security
-                  name: CloudSecurityLocation
-                  label: "Cloud Security Locations"
-                  kind: SecurityCloudSecurityLocation
-                  icon: "mdi:cloud-lock"
-                  description: "Cloud security service (Zscaler, Prisma, etc.)"
-
-
-    # ===================== SERVICES =====================
-    - namespace: Network
-      name: MainMenu
-      label: Services
-      icon: "mdi:lan-connect"
+    # ──────────────────────────────────────────────────────────────────────────
+    # APPLICATIONS — business applications and virtual clouds
+    # ──────────────────────────────────────────────────────────────────────────
+    - namespace: App
+      name: ApplicationsMenu
+      label: Applications
+      icon: "mdi:application"
       children:
         data:
-          # --------- Network Services ---------
-          - namespace: Service
-            name: NetworkMenu
-            label: Network Services
-            icon: "mdi:lan"
-            description: "Network segments, load balancers, and DNS/NTP"
-            children:
-              data:
-                - namespace: Service
-                  name: NetworkSegment
-                  label: Network Segments
-                  kind: ServiceNetworkSegment
-                  icon: "mdi:lan"
-                  description: "VLANs, VXLANs, and network overlays"
+          - namespace: App
+            name: ApplicationItem
+            label: Applications
+            kind: AppApplication
+            icon: "mdi:application-outline"
 
-                - namespace: Service
-                  name: NTPServer
-                  label: NTP Servers
-                  kind: NetworkNTPServer
-                  icon: "mdi:clock-outline"
-                  description: "Time synchronization services"
-
-                - namespace: Service
-                  name: NameServer
-                  label: DNS Servers
-                  kind: NetworkNameServer
-                  icon: "mdi:dns"
-                  description: "Domain name services"
-
-          # --------- Load Balancing ---------
-          - namespace: Loadbalancing
-            name: LBMenu
-            label: Load Balancing
-            icon: "carbon:load-balancer-global"
-            description: "Health checks and backend servers"
-            children:
-              data:
-                - namespace: Service
-                  name: Loadbalancer
-                  label: Load Balancers
-                  kind: ServiceVIP
-                  icon: "carbon:floating-ip"
-                  description: "Load balancers and virtual IPs"
-
-                - namespace: Loadbalancing
-                  name: HealthCheck
-                  label: Health Checks
-                  kind: LoadbalancerHealthCheck
-                  icon: "tabler:checkup-list"
-                  description: "Health check definitions and monitoring"
-
-                - namespace: Loadbalancing
-                  name: Servers
-                  label: Backend Servers
-                  kind: LoadbalancerServer
-                  icon: "mdi:server-plus"
-                  description: "Backend servers for load balancing"
+          - namespace: App
+            name: ComponentItem
+            label: Components
+            kind: AppComponent
+            icon: "mdi:application-brackets"

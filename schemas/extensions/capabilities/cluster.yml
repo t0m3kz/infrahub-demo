@@ -1,0 +1,495 @@
+---
+# yaml-language-server: $schema=https://schema.infrahub.app/infrahub/schema/latest.json
+version: "1.0"
+
+# ============================================================================
+# Cluster capability nodes — CNI, Storage, Ingress, Registry, ManagementPlane, Monitoring
+# All inherit ManagedGeneric (name, description, status) +
+# ManagedGenericCluster (cluster_capabilities relationship).
+# ============================================================================
+
+nodes:
+  - name: CNI
+    namespace: Virt
+    label: "CNI / Network Fabric"
+    description: "Container Network Interface or hypervisor network fabric configuration for a cluster"
+    icon: "mdi:network-outline"
+    menu_placement: ManagedGeneric
+    include_in_menu: false
+    human_friendly_id:
+      - "name__value"
+    inherit_from:
+      - ManagedGeneric
+      - ManagedGenericCluster
+    attributes:
+      - name: plugin
+        kind: Dropdown
+        label: "CNI Plugin"
+        description: "CNI plugin (k8s), DVS (vSphere), NSX-T, AHV switch, or cloud-native overlay"
+        optional: false
+        order_weight: 1100
+        choices:
+          - name: cilium
+            label: Cilium
+            color: "#f8c517"
+          - name: calico
+            label: Calico
+            color: "#fb8c00"
+          - name: flannel
+            label: Flannel
+            color: "#5c6bc0"
+          - name: ovn_kubernetes
+            label: OVN-Kubernetes
+            color: "#e53935"
+          - name: antrea
+            label: Antrea
+            color: "#43a047"
+          - name: dvs
+            label: VMware DVS
+            color: "#1d428a"
+          - name: nsx_t
+            label: NSX-T
+            color: "#0f6cbf"
+          - name: ahv_virtual_switch
+            label: AHV Virtual Switch
+            color: "#024da1"
+          - name: flow_networking
+            label: Flow Networking (Proxmox)
+            color: "#e57000"
+          - name: vpc_cni
+            label: AWS VPC CNI
+            color: "#ff9900"
+          - name: azure_cni
+            label: Azure CNI
+            color: "#0078d4"
+          - name: gke_dataplane_v2
+            label: GKE Dataplane V2
+            color: "#4285f4"
+          - name: other
+            label: Other
+            color: "#808080"
+
+      - name: version
+        kind: Text
+        label: "Version"
+        description: "CNI plugin version"
+        optional: true
+        order_weight: 1200
+
+      - name: pod_cidr
+        kind: Text
+        label: "Pod / Guest CIDR"
+        description: "Pod IP range (k8s) or VM guest range"
+        optional: true
+        order_weight: 1300
+
+      - name: service_cidr
+        kind: Text
+        label: "Service CIDR"
+        description: "ClusterIP range (k8s) or internal management range"
+        optional: true
+        order_weight: 1400
+
+      - name: encapsulation
+        kind: Dropdown
+        label: "Encapsulation"
+        description: "Overlay encapsulation used by the CNI"
+        optional: true
+        order_weight: 1500
+        choices:
+          - name: vxlan
+            label: VXLAN
+            color: "#3498db"
+          - name: geneve
+            label: Geneve
+            color: "#2ecc71"
+          - name: ipip
+            label: IPIP
+            color: "#f39c12"
+          - name: none
+            label: None (native routing)
+            color: "#95a5a6"
+
+      - name: bgp_enabled
+        kind: Boolean
+        label: "BGP Enabled"
+        description: "CNI peering with underlay via BGP (Cilium BGP, NSX BGP)"
+        optional: true
+        default_value: false
+        order_weight: 1600
+
+    relationships:
+      - name: bgp_peers
+        peer: RoutingAutonomousSystem
+        label: "BGP Peers"
+        description: "Autonomous systems this CNI peers with"
+        cardinality: many
+        kind: Attribute
+        optional: true
+        identifier: "cni__bgp_peers"
+        order_weight: 2000
+
+
+  - name: StorageBackend
+    namespace: Virt
+    label: "Storage Backend"
+    description: "Storage class or datastore backend configuration for a cluster"
+    icon: "mdi:database"
+    menu_placement: ManagedGeneric
+    include_in_menu: false
+    human_friendly_id:
+      - "name__value"
+    inherit_from:
+      - ManagedGeneric
+      - ManagedGenericCluster
+    attributes:
+      - name: backend_type
+        kind: Dropdown
+        label: "Backend Type"
+        description: "Storage backend technology"
+        optional: false
+        order_weight: 1100
+        choices:
+          - name: ceph_rook
+            label: Ceph / Rook
+            color: "#ef5350"
+          - name: longhorn
+            label: Longhorn
+            color: "#e65100"
+          - name: nfs
+            label: NFS
+            color: "#78909c"
+          - name: vsan
+            label: vSAN
+            color: "#1d428a"
+          - name: datastore
+            label: vSphere Datastore
+            color: "#3949ab"
+          - name: nutanix_container
+            label: Nutanix Container
+            color: "#024da1"
+          - name: cinder
+            label: OpenStack Cinder
+            color: "#ed1944"
+          - name: local_path
+            label: Local Path
+            color: "#616161"
+          - name: other
+            label: Other
+            color: "#808080"
+
+      - name: version
+        kind: Text
+        label: "Version"
+        description: "Storage backend version"
+        optional: true
+        order_weight: 1200
+
+      - name: default_class
+        kind: Boolean
+        label: "Default Storage Class"
+        description: "Whether this is the default storage class for the cluster"
+        optional: false
+        default_value: false
+        order_weight: 1300
+
+      - name: reclaim_policy
+        kind: Dropdown
+        label: "Reclaim Policy"
+        description: "Volume reclaim policy when a PVC is deleted"
+        optional: false
+        default_value: delete
+        order_weight: 1400
+        choices:
+          - name: delete
+            label: Delete
+            description: "Automatically delete the volume when the PVC is deleted."
+            color: "#e74c3c"
+          - name: retain
+            label: Retain
+            description: "Keep the volume after the PVC is deleted."
+            color: "#2ecc71"
+
+
+  - name: Ingress
+    namespace: Virt
+    label: "Ingress / Load Balancer"
+    description: "North-south load balancer or ingress controller configuration for a cluster"
+    icon: "mdi:shuffle-variant"
+    menu_placement: ManagedGeneric
+    include_in_menu: false
+    human_friendly_id:
+      - "name__value"
+    inherit_from:
+      - ManagedGeneric
+      - ManagedGenericCluster
+    attributes:
+      - name: controller
+        kind: Dropdown
+        label: "Controller"
+        description: "Ingress or load-balancer controller technology"
+        optional: false
+        order_weight: 1100
+        choices:
+          - name: metallb
+            label: MetalLB
+            color: "#326ce5"
+          - name: nginx
+            label: NGINX Ingress
+            color: "#009639"
+          - name: traefik
+            label: Traefik
+            color: "#24a1c8"
+          - name: haproxy
+            label: HAProxy
+            color: "#c8c8c8"
+          - name: f5_cis
+            label: F5 CIS
+            color: "#e4002b"
+          - name: nsx_alb
+            label: NSX Advanced LB (Avi)
+            color: "#0f6cbf"
+          - name: aws_alb
+            label: AWS ALB Controller
+            color: "#ff9900"
+          - name: azure_appgw
+            label: Azure App Gateway
+            color: "#0078d4"
+          - name: gcp_lb
+            label: GCP Load Balancer
+            color: "#4285f4"
+          - name: other
+            label: Other
+            color: "#808080"
+
+      - name: version
+        kind: Text
+        label: "Version"
+        description: "Ingress controller version"
+        optional: true
+        order_weight: 1200
+
+      - name: address_pool
+        kind: Text
+        label: "Address Pool"
+        description: "IP pool or annotation for MetalLB / NSX ALB address allocation"
+        optional: true
+        order_weight: 1300
+
+    relationships:
+      - name: vip_prefix
+        peer: IpamPrefix
+        label: "VIP Prefix"
+        description: "IP prefix used for ingress VIP allocation"
+        cardinality: one
+        kind: Attribute
+        optional: true
+        identifier: "ingress__vip_prefix"
+        order_weight: 2000
+
+
+  - name: Registry
+    namespace: Virt
+    label: "Image / Template Registry"
+    description: "Container image or VM template registry configuration for a cluster"
+    icon: "mdi:package-variant"
+    menu_placement: ManagedGeneric
+    include_in_menu: false
+    human_friendly_id:
+      - "name__value"
+    inherit_from:
+      - ManagedGeneric
+      - ManagedGenericCluster
+    attributes:
+      - name: registry_type
+        kind: Dropdown
+        label: "Registry Type"
+        description: "Image or template registry technology"
+        optional: false
+        order_weight: 1100
+        choices:
+          - name: harbor
+            label: Harbor
+            color: "#60b932"
+          - name: ecr
+            label: AWS ECR
+            color: "#ff9900"
+          - name: acr
+            label: Azure ACR
+            color: "#0078d4"
+          - name: gcr
+            label: Google GCR / Artifact Registry
+            color: "#4285f4"
+          - name: dockerhub
+            label: Docker Hub
+            color: "#2496ed"
+          - name: content_library
+            label: vSphere Content Library
+            color: "#1d428a"
+          - name: nutanix_calm
+            label: Nutanix Calm
+            color: "#024da1"
+          - name: other
+            label: Other
+            color: "#808080"
+
+      - name: endpoint
+        kind: Text
+        label: "Endpoint"
+        description: "Registry FQDN or URL"
+        optional: true
+        order_weight: 1200
+
+      - name: insecure
+        kind: Boolean
+        label: "Insecure"
+        description: "Allow insecure (HTTP) registry access"
+        optional: true
+        default_value: false
+        order_weight: 1300
+
+
+  - name: ManagementPlane
+    namespace: Virt
+    label: "Management Plane"
+    description: "Control-plane endpoint configuration for a cluster (kube-apiserver, vCenter, Prism Central, Keystone)"
+    icon: "mdi:console-network"
+    menu_placement: ManagedGeneric
+    include_in_menu: false
+    human_friendly_id:
+      - "name__value"
+    inherit_from:
+      - ManagedGeneric
+      - ManagedGenericCluster
+    attributes:
+      - name: endpoint
+        kind: Text
+        label: "Endpoint"
+        description: "FQDN or URL of the management plane API"
+        optional: true
+        order_weight: 1100
+
+      - name: endpoint_access
+        kind: Dropdown
+        label: "Endpoint Access"
+        description: "Network accessibility of the management endpoint"
+        optional: true
+        order_weight: 1200
+        choices:
+          - name: private
+            label: Private
+            description: "Reachable only from within the VPC/VNet or internal network."
+            color: "#3498db"
+          - name: public
+            label: Public
+            description: "Publicly accessible endpoint."
+            color: "#e74c3c"
+          - name: public_and_private
+            label: Public + Private
+            description: "Accessible both publicly and from within the private network."
+            color: "#f39c12"
+
+      - name: port
+        kind: Number
+        label: "Port"
+        description: "TCP port for the management API"
+        optional: true
+        order_weight: 1300
+
+      - name: auth_method
+        kind: Dropdown
+        label: "Auth Method"
+        description: "Authentication method for the management plane"
+        optional: true
+        order_weight: 1400
+        choices:
+          - name: kubeconfig
+            label: Kubeconfig
+            color: "#326ce5"
+          - name: oidc
+            label: OIDC
+            color: "#f39c12"
+          - name: x509
+            label: X.509 Certificate
+            color: "#2ecc71"
+          - name: ldap
+            label: LDAP
+            color: "#9b59b6"
+          - name: saml
+            label: SAML
+            color: "#e74c3c"
+          - name: api_key
+            label: API Key
+            color: "#1abc9c"
+
+    relationships:
+      - name: management_ip
+        peer: IpamIPAddress
+        label: "Management IP"
+        description: "IP address of the management plane endpoint"
+        cardinality: one
+        kind: Attribute
+        optional: true
+        identifier: "management_plane__management_ip"
+        order_weight: 2000
+
+
+  - name: Monitoring
+    namespace: Virt
+    label: "Monitoring Stack"
+    description: "Observability stack configuration for a cluster"
+    icon: "mdi:chart-line"
+    menu_placement: ManagedGeneric
+    include_in_menu: false
+    human_friendly_id:
+      - "name__value"
+    inherit_from:
+      - ManagedGeneric
+      - ManagedGenericCluster
+    attributes:
+      - name: stack
+        kind: Dropdown
+        label: "Monitoring Stack"
+        description: "Observability stack technology"
+        optional: false
+        order_weight: 1100
+        choices:
+          - name: prometheus_grafana
+            label: Prometheus + Grafana
+            color: "#e6522c"
+          - name: datadog
+            label: Datadog
+            color: "#632ca6"
+          - name: dynatrace
+            label: Dynatrace
+            color: "#1496ff"
+          - name: elastic
+            label: Elastic (ELK)
+            color: "#f04e98"
+          - name: newrelic
+            label: New Relic
+            color: "#008c99"
+          - name: other
+            label: Other
+            color: "#808080"
+
+      - name: version
+        kind: Text
+        label: "Version"
+        description: "Monitoring stack version"
+        optional: true
+        order_weight: 1200
+
+      - name: retention_days
+        kind: Number
+        label: "Retention (days)"
+        description: "Metrics / log retention period in days"
+        optional: true
+        order_weight: 1300
+
+      - name: remote_write
+        kind: Text
+        label: "Remote Write URL"
+        description: "Prometheus remote_write endpoint for long-term storage"
+        optional: true
+        order_weight: 1400

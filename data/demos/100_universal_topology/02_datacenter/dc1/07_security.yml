@@ -1,0 +1,490 @@
+# DC1 Security — per-customer dedicated physical firewalls via PBR (active-passive HA)
+#
+# One active-passive SRX-1500 pair per customer VRF (IpamNamespace).
+# Both members connect to the same leaf pair for transparent failover.
+#   ge-0/0/0 (inside)  ← leaf L1 Eth1/52  (PBR redirect target)
+#   ge-0/0/1 (outside) → leaf L2 Eth1/52  (return path after inspection)
+#   ge-0/0/2 (HA sync) ↔ peer FW ge-0/0/2 (back-to-back session sync)
+#
+# Port assignment:
+#   CUST1 (POD1): FW-01 ge-0/0/0 → L1:Eth1/52 | FW-01 ge-0/0/1 → L2:Eth1/52
+#                 FW-02 ge-0/0/0 → L1:Eth1/53 | FW-02 ge-0/0/1 → L2:Eth1/53
+#   CUST2 (POD2): FW-01 ge-0/0/0 → L1:Eth1/52 | FW-01 ge-0/0/1 → L2:Eth1/52
+#                 FW-02 ge-0/0/0 → L1:Eth1/53 | FW-02 ge-0/0/1 → L2:Eth1/53
+#
+# Contrast with DC2 which uses a shared active-active inline FW between spines and SS.
+
+# ── Physical firewalls ─────────────────────────────────────────────────────────
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimPhysicalDevice
+  data:
+    # ── Customer 1 — POD1 ──────────────────────────────────────────────────────
+    - name: DC1-CUST1-FW-01
+      device_type: SRX-1500
+      role: firewall-active
+      status: active
+      deployment: DC1
+      rack: dc1-s1-r-1
+      interfaces:
+        kind: DcimPhysicalInterface
+        data:
+          - name: ge-0/0/0
+            interface_type: 10gbase-x-sfpp
+            role: uplink
+            status: active
+            description: "Inside (PBR) — DC1-POD1-L1"
+          - name: ge-0/0/1
+            interface_type: 10gbase-x-sfpp
+            role: uplink
+            status: active
+            description: "Outside (return) — DC1-POD1-L2"
+          - name: ge-0/0/2
+            interface_type: 10gbase-x-sfpp
+            role: uplink
+            status: active
+            description: "HA sync — DC1-CUST1-FW-02"
+
+    - name: DC1-CUST1-FW-02
+      device_type: SRX-1500
+      role: firewall-passive
+      status: active
+      deployment: DC1
+      rack: dc1-s1-r-1
+      interfaces:
+        kind: DcimPhysicalInterface
+        data:
+          - name: ge-0/0/0
+            interface_type: 10gbase-x-sfpp
+            role: uplink
+            status: active
+            description: "Inside (PBR standby) — DC1-POD1-L1"
+          - name: ge-0/0/1
+            interface_type: 10gbase-x-sfpp
+            role: uplink
+            status: active
+            description: "Outside (return standby) — DC1-POD1-L2"
+          - name: ge-0/0/2
+            interface_type: 10gbase-x-sfpp
+            role: uplink
+            status: active
+            description: "HA sync — DC1-CUST1-FW-01"
+
+    # ── Customer 2 — POD2 ──────────────────────────────────────────────────────
+    - name: DC1-CUST2-FW-01
+      device_type: SRX-1500
+      role: firewall-active
+      status: active
+      deployment: DC1
+      rack: dc1-s1-r-2
+      interfaces:
+        kind: DcimPhysicalInterface
+        data:
+          - name: ge-0/0/0
+            interface_type: 10gbase-x-sfpp
+            role: uplink
+            status: active
+            description: "Inside (PBR) — DC1-POD2-L1"
+          - name: ge-0/0/1
+            interface_type: 10gbase-x-sfpp
+            role: uplink
+            status: active
+            description: "Outside (return) — DC1-POD2-L2"
+          - name: ge-0/0/2
+            interface_type: 10gbase-x-sfpp
+            role: uplink
+            status: active
+            description: "HA sync — DC1-CUST2-FW-02"
+
+    - name: DC1-CUST2-FW-02
+      device_type: SRX-1500
+      role: firewall-passive
+      status: active
+      deployment: DC1
+      rack: dc1-s1-r-2
+      interfaces:
+        kind: DcimPhysicalInterface
+        data:
+          - name: ge-0/0/0
+            interface_type: 10gbase-x-sfpp
+            role: uplink
+            status: active
+            description: "Inside (PBR standby) — DC1-POD2-L1"
+          - name: ge-0/0/1
+            interface_type: 10gbase-x-sfpp
+            role: uplink
+            status: active
+            description: "Outside (return standby) — DC1-POD2-L2"
+          - name: ge-0/0/2
+            interface_type: 10gbase-x-sfpp
+            role: uplink
+            status: active
+            description: "HA sync — DC1-CUST2-FW-01"
+
+# ── Virtual firewall instances (tenant FW context, hosted on active chassis) ──
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimVirtualDevice
+  data:
+    - name: DC1-CUST1-VFW-01
+      role: firewall
+      status: active
+      deployment: DC1
+      hosting_device: DC1-CUST1-FW-01
+
+    - name: DC1-CUST2-VFW-01
+      role: firewall
+      status: active
+      deployment: DC1
+      hosting_device: DC1-CUST2-FW-01
+
+# ── Cables ─────────────────────────────────────────────────────────────────────
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimCable
+  data:
+    # ── Customer 1 — FW-01 (active) ───────────────────────────────────────────
+    - name: CBL-DC1-CUST1-FW01-L1-INSIDE
+      type: smf
+      deployment: DC1
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC1-CUST1-FW-01
+            name: ge-0/0/0
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC1-POD1-L1
+            name: Ethernet1/52
+
+    - name: CBL-DC1-CUST1-FW01-L2-OUTSIDE
+      type: smf
+      deployment: DC1
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC1-CUST1-FW-01
+            name: ge-0/0/1
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC1-POD1-L2
+            name: Ethernet1/52
+
+    # ── Customer 1 — FW-02 (passive) ──────────────────────────────────────────
+    - name: CBL-DC1-CUST1-FW02-L1-INSIDE
+      type: smf
+      deployment: DC1
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC1-CUST1-FW-02
+            name: ge-0/0/0
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC1-POD1-L1
+            name: Ethernet1/53
+
+    - name: CBL-DC1-CUST1-FW02-L2-OUTSIDE
+      type: smf
+      deployment: DC1
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC1-CUST1-FW-02
+            name: ge-0/0/1
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC1-POD1-L2
+            name: Ethernet1/53
+
+    # ── Customer 1 — HA sync ──────────────────────────────────────────────────
+    - name: CBL-DC1-CUST1-FW01-FW02-HA-SYNC
+      type: smf
+      deployment: DC1
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC1-CUST1-FW-01
+            name: ge-0/0/2
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC1-CUST1-FW-02
+            name: ge-0/0/2
+
+    # ── Customer 2 — FW-01 (active) ───────────────────────────────────────────
+    - name: CBL-DC1-CUST2-FW01-L1-INSIDE
+      type: smf
+      deployment: DC1
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC1-CUST2-FW-01
+            name: ge-0/0/0
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC1-POD2-L1
+            name: Ethernet1/52
+
+    - name: CBL-DC1-CUST2-FW01-L2-OUTSIDE
+      type: smf
+      deployment: DC1
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC1-CUST2-FW-01
+            name: ge-0/0/1
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC1-POD2-L2
+            name: Ethernet1/52
+
+    # ── Customer 2 — FW-02 (passive) ──────────────────────────────────────────
+    - name: CBL-DC1-CUST2-FW02-L1-INSIDE
+      type: smf
+      deployment: DC1
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC1-CUST2-FW-02
+            name: ge-0/0/0
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC1-POD2-L1
+            name: Ethernet1/53
+
+    - name: CBL-DC1-CUST2-FW02-L2-OUTSIDE
+      type: smf
+      deployment: DC1
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC1-CUST2-FW-02
+            name: ge-0/0/1
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC1-POD2-L2
+            name: Ethernet1/53
+
+    # ── Customer 2 — HA sync ──────────────────────────────────────────────────
+    - name: CBL-DC1-CUST2-FW01-FW02-HA-SYNC
+      type: smf
+      deployment: DC1
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC1-CUST2-FW-01
+            name: ge-0/0/2
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC1-CUST2-FW-02
+            name: ge-0/0/2
+
+# ── Security Zones ─────────────────────────────────────────────────────────────
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: SecurityZone
+  data:
+    - name: DC1-CUST1-WEB-ZONE
+      description: "DC1 Customer 1 web-frontend zone"
+      trust_level: 60
+      zone_type: dmz
+
+    - name: DC1-CUST1-APP-ZONE
+      description: "DC1 Customer 1 app-backend zone"
+      trust_level: 70
+      zone_type: internal
+
+    - name: DC1-CUST1-DB-ZONE
+      description: "DC1 Customer 1 database zone"
+      trust_level: 80
+      zone_type: internal
+
+    - name: DC1-CUST2-WEB-ZONE
+      description: "DC1 Customer 2 web-frontend zone"
+      trust_level: 60
+      zone_type: dmz
+
+    - name: DC1-CUST2-APP-ZONE
+      description: "DC1 Customer 2 app-backend zone"
+      trust_level: 70
+      zone_type: internal
+
+# ── Security Policies ─────────────────────────────────────────────────────────
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: SecurityPolicy
+  data:
+    - name: DC1-CUST1-EAST-WEST-POLICY
+      description: "Customer 1 east-west — web→app→db micro-segmentation via PBR"
+      default_action: deny
+      enabled: true
+      device_capabilities:
+        - DC1-CUST1-FW-01
+        - DC1-CUST1-FW-02
+
+    - name: DC1-CUST2-EAST-WEST-POLICY
+      description: "Customer 2 east-west — web→app micro-segmentation via PBR"
+      default_action: deny
+      enabled: true
+      device_capabilities:
+        - DC1-CUST2-FW-01
+        - DC1-CUST2-FW-02
+
+# ── Firewall association on segments ──────────────────────────────────────────
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: ManagedVxlanSegment
+  data:
+    # Customer 1 — production
+    - customer_name: "web-frontend"
+      environment: "production"
+      owner: "Customer 1"
+      firewall: DC1-CUST1-FW-01
+      pbr_enabled: true
+
+    - customer_name: "app-backend"
+      environment: "production"
+      owner: "Customer 1"
+      firewall: DC1-CUST1-FW-01
+      pbr_enabled: true
+
+    - customer_name: "database"
+      environment: "production"
+      owner: "Customer 1"
+      firewall: DC1-CUST1-FW-01
+      pbr_enabled: true
+
+    # Customer 1 — non-production
+    - customer_name: "web-frontend"
+      environment: "no-production"
+      owner: "Customer 1"
+      firewall: DC1-CUST1-FW-01
+      pbr_enabled: true
+
+    - customer_name: "app-backend"
+      environment: "no-production"
+      owner: "Customer 1"
+      firewall: DC1-CUST1-FW-01
+      pbr_enabled: true
+
+    - customer_name: "database"
+      environment: "no-production"
+      owner: "Customer 1"
+      firewall: DC1-CUST1-FW-01
+      pbr_enabled: true
+
+    # Customer 2 — production
+    - customer_name: "web-frontend"
+      environment: "production"
+      owner: "Customer 2"
+      firewall: DC1-CUST2-FW-01
+      pbr_enabled: true
+
+    - customer_name: "app-backend"
+      environment: "production"
+      owner: "Customer 2"
+      firewall: DC1-CUST2-FW-01
+      pbr_enabled: true
+
+    # Customer 2 — non-production
+    - customer_name: "web-frontend"
+      environment: "no-production"
+      owner: "Customer 2"
+      firewall: DC1-CUST2-FW-01
+      pbr_enabled: true
+
+    - customer_name: "app-backend"
+      environment: "no-production"
+      owner: "Customer 2"
+      firewall: DC1-CUST2-FW-01
+      pbr_enabled: true
+
+# ── Security Policy Rules — Customer 1 ────────────────────────────────────────
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: SecurityPolicyRule
+  data:
+    - index: 10
+      name: dc1-cust1-permit-web-to-app
+      description: "Allow HTTP/HTTPS from web-frontend to app-backend"
+      action: permit
+      protocol: tcp
+      port_start: 443
+      log: true
+      policy: DC1-CUST1-EAST-WEST-POLICY
+      source_zone: DC1-CUST1-WEB-ZONE
+      destination_zone: DC1-CUST1-APP-ZONE
+
+    - index: 11
+      name: dc1-cust1-permit-web-to-app-http
+      description: "Allow HTTP from web-frontend to app-backend"
+      action: permit
+      protocol: tcp
+      port_start: 80
+      log: false
+      policy: DC1-CUST1-EAST-WEST-POLICY
+      source_zone: DC1-CUST1-WEB-ZONE
+      destination_zone: DC1-CUST1-APP-ZONE
+
+    - index: 20
+      name: dc1-cust1-permit-app-to-db
+      description: "Allow database traffic from app-backend to database"
+      action: permit
+      protocol: tcp
+      port_start: 5432
+      log: true
+      policy: DC1-CUST1-EAST-WEST-POLICY
+      source_zone: DC1-CUST1-APP-ZONE
+      destination_zone: DC1-CUST1-DB-ZONE
+
+    - index: 999
+      name: dc1-cust1-deny-all
+      description: "Default deny — block all other east-west traffic"
+      action: deny
+      protocol: any
+      log: true
+      policy: DC1-CUST1-EAST-WEST-POLICY
+      source_zone: DC1-CUST1-WEB-ZONE
+      destination_zone: DC1-CUST1-APP-ZONE
+
+# ── Security Policy Rules — Customer 2 ────────────────────────────────────────
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: SecurityPolicyRule
+  data:
+    - index: 10
+      name: dc1-cust2-permit-web-to-app
+      description: "Allow HTTPS from web-frontend to app-backend"
+      action: permit
+      protocol: tcp
+      port_start: 443
+      log: true
+      policy: DC1-CUST2-EAST-WEST-POLICY
+      source_zone: DC1-CUST2-WEB-ZONE
+      destination_zone: DC1-CUST2-APP-ZONE
+
+    - index: 999
+      name: dc1-cust2-deny-all
+      description: "Default deny — block all other east-west traffic"
+      action: deny
+      protocol: any
+      log: true
+      policy: DC1-CUST2-EAST-WEST-POLICY
+      source_zone: DC1-CUST2-WEB-ZONE
+      destination_zone: DC1-CUST2-APP-ZONE

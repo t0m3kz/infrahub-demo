@@ -1,0 +1,95 @@
+{%- if capabilities is not defined or capabilities.bgp_enabled is not defined or capabilities.bgp_enabled %}
+{%- for bgp_config in bgp %}
+router bgp {{ bgp_config.local_as.asn }}
+  router-id {{ bgp_config.router_id.address.split('/')[0] }}
+{%- if bgp_config.graceful_restart %}
+  graceful-restart
+{%- endif %}
+{%- for pg in bgp_config.peer_groups | default([]) %}
+  !
+  template peer-policy {{ pg.name }}-POLICY
+    send-community
+    send-community extended
+{%- if pg.route_reflector_client is defined and pg.route_reflector_client %}
+    route-reflector-client
+{%- endif %}
+  !
+  template peer-session {{ pg.name }}-SESSION
+{%- if pg.type == 'overlay' %}
+    update-source loopback0
+{%- endif %}
+{%- if pg.get('ebgp_multihop') %}
+    ebgp-multihop {{ pg.ebgp_multihop }}
+{%- endif %}
+{%- if pg.get('bfd_enabled') %}
+    bfd
+{%- endif %}
+  !
+{%- endfor %}
+  address-family ipv4 unicast
+    redistribute direct route-map RM-CONN-2-BGP
+{%- if bgp_config.multipath %}
+    maximum-paths 8
+{%- endif %}
+  !
+{%- set ns = namespace(has_ipv6=false) %}
+{%- for session in bgp_config.sessions %}
+{%- if not session.address_families and ':' in session.remote_ip.address %}{% set ns.has_ipv6 = true %}{% endif %}
+{%- endfor %}
+{%- if ns.has_ipv6 %}
+  address-family ipv6 unicast
+    redistribute direct route-map RM-CONN-2-BGP
+{%- if bgp_config.multipath %}
+    maximum-paths 8
+{%- endif %}
+  !
+{%- endif %}
+  address-family l2vpn evpn
+  !
+{%- for session in bgp_config.sessions %}
+{%- set remote_ip = session.remote_ip.address.split('/')[0] %}
+  neighbor {{ remote_ip }}
+    remote-as {{ session.remote_as.asn }}
+{%- if session.get('remote_device') %}
+    description {{ session.remote_device }}
+{%- endif %}
+{%- if session.peer_group is defined %}
+    inherit peer-session {{ session.peer_group }}-SESSION
+{%- else %}
+{%- if session.get('ttl') != 1 %}
+    update-source loopback0
+{%- endif %}
+{%- if session.get('bfd_enabled') %}
+    bfd
+{%- endif %}
+{%- endif %}
+{%- if not session.address_families %}
+{%- if ':' in session.remote_ip.address %}
+    address-family ipv6 unicast
+{%- else %}
+    address-family ipv4 unicast
+{%- endif %}
+{%- if session.peer_group is defined %}
+      inherit peer-policy {{ session.peer_group }}-POLICY
+{%- else %}
+      send-community
+      send-community extended
+{%- endif %}
+    !
+{%- endif %}
+{%- if session.address_families %}
+    address-family l2vpn evpn
+{%- if session.peer_group is defined %}
+      inherit peer-policy {{ session.peer_group }}-POLICY
+{%- else %}
+      send-community
+      send-community extended
+{%- endif %}
+    !
+{%- endif %}
+{%- endfor %}
+!
+{%- endfor %}
+{%- else %}
+! BGP disabled by capability profile
+{%- endif %}

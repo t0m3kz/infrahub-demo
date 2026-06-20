@@ -1,0 +1,44 @@
+---
+version: "1.0"
+
+nodes:
+  - name: LoadBalancer
+    namespace: Cloud
+    label: Load Balancer
+    description: >
+      Cloud load balancer (ALB/NLB/ELB/Azure LB/GCP LB)
+      hosting multiple listeners.
+    include_in_menu: false
+    human_friendly_id:
+      - name__value
+    display_label: "{{ name__value }}"
+    uniqueness_constraints:
+      - [virtual_network, name__value]
+    inherit_from:
+      - ManagedLoadBalancer
+      - CloudResource
+      - CoreArtifactTarget
+    relationships:
+      - name: virtual_network
+        peer: CloudVirtualNetwork
+        cardinality: one
+        optional: false
+        order_weight: 600
+      - name: network_segments
+        peer: CloudNetworkSegment
+        cardinality: many
+        optional: false
+        order_weight: 700
+        description: "Subnets where load balancer is deployed"
+      - name: security_groups
+        peer: CloudSecurityGroup
+        cardinality: many
+        optional: true
+        order_weight: 750
+        description: "Security groups attached to load balancer"
+      - name: public_ips
+        peer: CloudPublicIP
+        cardinality: many
+        optional: true
+        order_weight: 800
+        description: "Elastic IPs attached to load balancer"

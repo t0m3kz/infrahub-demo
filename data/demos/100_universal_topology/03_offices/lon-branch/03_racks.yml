@@ -1,0 +1,22 @@
+---
+# London branch office rack
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: LocationBuilding
+  data:
+    - name: LON-2
+      shortname: lon-2
+      parent: lon
+      children:
+        kind: LocationSuite
+        data:
+          - suite_name: LON-OFFICE
+            index: 1
+            shortname: lon-2-office
+            children:
+              kind: LocationRack
+              data:
+                - shortname: lon-2-office-r-1
+                  index: 1
+                  row_index: 1

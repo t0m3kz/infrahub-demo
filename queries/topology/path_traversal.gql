@@ -1,0 +1,46 @@
+query PathTraversal($source_id: String!, $destination_id: String!) {
+  InfrahubPathTraversal(
+    data: {
+      source_id: $source_id
+      destination_id: $destination_id
+      max_depth: 20
+      max_paths: 5
+      kind_filter: [
+        "DcimPhysicalDevice"
+        "DcimVirtualDevice"
+        "DcimPhysicalInterface"
+        "DcimVirtualInterface"
+        "TopologyVirtualCircuit"
+      ]
+      relationship_filter: [
+        "interface_capabilities"
+        "device__interface"
+        "dcimcable__dcimendpoint"
+      ]
+    }
+  ) {
+    count
+    source {
+      display_label
+      kind
+    }
+    destination {
+      display_label
+      kind
+    }
+    paths {
+      depth
+      hops {
+        node {
+          display_label
+          kind
+        }
+        relationship {
+          from_label
+          to_label
+          kind
+        }
+      }
+    }
+  }
+}

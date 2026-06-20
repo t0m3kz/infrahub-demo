@@ -1,0 +1,74 @@
+---
+version: "1.0"
+
+# ============================================================================
+# Routing — MLAG schema
+# An MLAG domain is a shared construct between exactly two peer devices.
+# Both devices include the same ManagedMLAG node in their device_capabilities,
+# so the relationship is inbound here (device_capabilities is the owner side).
+# ============================================================================
+
+nodes:
+  - name: MLAG
+    namespace: Managed
+    description: "MLAG domain shared between two peer devices"
+    label: MLAG Domain
+    icon: "mdi:link-variant"
+    include_in_menu: true
+    menu_placement: ManagedGeneric
+    human_friendly_id:
+      - "name__value"
+    inherit_from:
+      - ManagedGeneric
+      - ManagedGenericDevice
+    uniqueness_constraints:
+      - ["name__value"]
+    display_label: "{{name__value}}"
+    order_by:
+      - name__value
+    relationships:
+      - name: device_capabilities
+        peer: DcimDevice
+        label: "Peer Devices"
+        description: "The two devices that form this MLAG domain"
+        cardinality: many
+        optional: false
+        kind: Generic
+        direction: inbound
+        identifier: device_capabilities
+        order_weight: 900
+    attributes:
+      - name: domain_id
+        kind: Number
+        label: "Domain ID"
+        description: "MLAG domain identifier (must be the same on both peers)"
+        optional: false
+        order_weight: 1100
+      - name: reload_delay
+        kind: Number
+        label: "Reload Delay (s)"
+        description: "Seconds to delay bringing up MLAG ports after reload"
+        optional: true
+        default_value: 300
+        order_weight: 1200
+      - name: reload_delay_non_mlag
+        kind: Number
+        label: "Reload Delay Non-MLAG (s)"
+        description: "Seconds to delay non-MLAG ports after reload"
+        optional: true
+        default_value: 330
+        order_weight: 1250
+
+extensions:
+  nodes:
+    - kind: DcimLAGInterface
+      relationships:
+        - name: mlag_domain
+          peer: ManagedMLAG
+          label: "MLAG Domain"
+          description: "MLAG domain this LAG belongs to (null for single-chassis LAG)"
+          cardinality: one
+          kind: Attribute
+          optional: true
+          identifier: "lag__mlag_domain"
+          order_weight: 1800

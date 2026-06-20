@@ -1,0 +1,187 @@
+---
+version: "1.0"
+
+generics:
+  # Reusable descriptor for an external peer (not a managed device in Infrahub)
+  - name: ExternalEndpoint
+    namespace: Managed
+    description: "Reusable descriptor for an external peer endpoint"
+    label: "External Endpoint"
+    icon: "mdi:connection"
+    include_in_menu: false
+    relationships:
+      - name: asn
+        label: "Autonomous System"
+        peer: RoutingAutonomousSystem
+        cardinality: one
+        optional: true
+        identifier: "external_endpoint__asn"
+        order_weight: 1000
+        description: "ASN of this external peer"
+      - name: bgp_ip
+        label: "BGP Peering IP"
+        peer: IpamIPAddress
+        cardinality: one
+        optional: true
+        identifier: "external_endpoint__bgp_ip"
+        order_weight: 1100
+        description: "IP address used to establish the BGP session"
+
+nodes:
+  - name: ExternalFabricPeering
+    namespace: Managed
+    description: "BGP peering between DC fabric (border-leaf/edge) and an external router"
+    label: "External Fabric Peering"
+    icon: "mdi:wan"
+    include_in_menu: false
+    human_friendly_id:
+      - name__value
+    display_label: "{{ name__value }}"
+    uniqueness_constraints:
+      - [name__value]
+    inherit_from:
+      - ManagedGeneric
+    attributes:
+      - name: name
+        kind: Text
+        order_weight: 100
+      - name: role
+        kind: Dropdown
+        order_weight: 200
+        description: "Redundancy role of this peering"
+        choices:
+          - name: primary
+            label: "Primary"
+            color: "#74B9FF"
+          - name: secondary
+            label: "Secondary"
+            color: "#A29BFE"
+          - name: single
+            label: "Single"
+            color: "#FDCB6E"
+      - name: session_type
+        kind: Dropdown
+        order_weight: 400
+        description: "BGP session type"
+        default_value: EBGP
+        choices:
+          - name: EBGP
+            label: "eBGP"
+            description: "External BGP — direct peering"
+            color: "#74B9FF"
+          - name: EBGP_MULTIHOP
+            label: "eBGP Multihop"
+            description: "External BGP over multiple hops (e.g. loopback peering)"
+            color: "#FDCB6E"
+      - name: bfd_enabled
+        kind: Checkbox
+        order_weight: 500
+        description: "Enable BFD for fast failure detection"
+        default_value: false
+        optional: true
+      - name: max_prefixes
+        kind: Number
+        optional: true
+        order_weight: 600
+        description: "Maximum prefixes to accept from this peer (0 = unlimited)"
+      - name: checksum
+        kind: Text
+        optional: true
+        order_weight: 9900
+    relationships:
+      - name: external_peer
+        label: "External Peer"
+        peer: ManagedExternalPeer
+        cardinality: one
+        optional: false
+        identifier: "fabric_peering__external_peer"
+        order_weight: 1100
+        description: "External router (CE, CPE, SD-WAN) peering into the fabric"
+      - name: deployment
+        label: "Data Center"
+        peer: TopologyDataCenter
+        cardinality: one
+        optional: false
+        identifier: "fabric_peering__dc"
+        order_weight: 1200
+        description: "Data center fabric this external router connects into"
+      - name: namespace
+        label: "IP Namespace"
+        peer: IpamNamespace
+        cardinality: one
+        optional: true
+        identifier: "fabric_peering__namespace"
+        order_weight: 1300
+        description: "IP namespace (VRF) — use for multi-tenant or VRF-aware fabrics"
+
+  - name: ExternalPeer
+    namespace: Managed
+    description: "External BGP peer endpoint — internet transit, IXP, partner, cloud, SASE, or exchange"
+    label: "External Peer"
+    icon: "mdi:connection"
+    include_in_menu: false
+    human_friendly_id:
+      - name__value
+    display_label: "{{ name__value }}"
+    uniqueness_constraints:
+      - [name__value]
+    inherit_from:
+      - ManagedGeneric
+      - ManagedExternalEndpoint
+    attributes:
+      - name: name
+        kind: Text
+        order_weight: 100
+      - name: peer_type
+        kind: Dropdown
+        order_weight: 400
+        description: "Category of this external peer"
+        choices:
+          - name: TRANSIT
+            label: "Transit Provider"
+            description: "Paid upstream transit provider"
+            color: "#FF6B6B"
+          - name: IXP
+            label: "IXP / Route Server"
+            description: "Internet Exchange Point or route server"
+            color: "#4ECDC4"
+          - name: PEER
+            label: "Settlement-free Peer"
+            description: "Settlement-free bilateral peering"
+            color: "#45B7D1"
+          - name: PARTNER
+            label: "Enterprise Partner"
+            description: "Enterprise partner or customer network"
+            color: "#96CEB4"
+          - name: CLOUD
+            label: "Cloud Provider"
+            description: "Cloud direct connect (AWS DX, Azure ER, GCP Interconnect)"
+            color: "#74B9FF"
+          - name: SASE
+            label: "SASE Provider"
+            description: "SASE/SSE provider (Zscaler, Prisma, Cloudflare, etc.)"
+            color: "#A29BFE"
+          - name: EXCHANGE
+            label: "Exchange / NaaS"
+            description: "Network exchange or NaaS provider (Megaport, Equinix, etc.)"
+            color: "#FDCB6E"
+      - name: provider_name
+        kind: Text
+        optional: true
+        order_weight: 500
+        description: "Provider or service name (e.g. AWS, Zscaler, Megaport)"
+      - name: noc_contact
+        kind: Text
+        optional: true
+        order_weight: 600
+        description: "NOC contact or ticket reference"
+      - name: circuit_id
+        kind: Text
+        optional: true
+        order_weight: 700
+        description: "Provider circuit or port identifier"
+      - name: vlan_id
+        kind: Number
+        optional: true
+        order_weight: 800
+        description: "VLAN ID for sub-interface (cloud interconnect, exchange VXC)"

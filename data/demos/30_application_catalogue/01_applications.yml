@@ -1,0 +1,96 @@
+---
+# ============================================================================
+# Customer 1 - Applications with Components
+# ============================================================================
+# Greenfield approach: Track what exists
+
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: AppApplication
+  data:
+    # ========================================================================
+    # E-Commerce Platform (AWS, eu-central-1, Production)
+    # ========================================================================
+    - name: "e-commerce-platform"
+      description: "Main e-commerce website and backend services"
+      environment: "production"
+      owner: Customer 1 Engineering Team
+      customer: "Customer 1"
+      criticality: high
+
+    # ========================================================================
+    # E-Commerce Platform (GCP, europe-west3, Staging)
+    # ========================================================================
+    - name: "e-commerce-platform-staging"
+      description: "E-commerce staging environment on GCP"
+      environment: "staging"
+      owner: Customer 1 Engineering Team
+      customer: "Customer 1"
+
+
+    # ========================================================================
+    # E-Commerce Platform (Azure, germanywestcentral, Development)
+    # ========================================================================
+    - name: "e-commerce-platform-dev"
+      description: "E-commerce development environment on Azure"
+      environment: "development"
+      owner: Customer 1 Engineering Team
+      customer: "Customer 1"
+      criticality: low
+
+    # ========================================================================
+    # Analytics Dashboard (GCP, europe-west1, Production)
+    # ========================================================================
+    - name: "analytics-dashboard"
+      description: "Real-time analytics and reporting dashboard"
+      environment: "production"
+      owner: Customer 1 Engineering Team
+      customer: "Customer 1"
+    # ========================================================================
+    # Analytics Dashboard (Azure, westeurope, Staging)
+    # ========================================================================
+    - name: "analytics-dashboard-staging"
+      description: "Analytics staging environment on Azure"
+      environment: "staging"
+      owner: Customer 1 Engineering Team
+      customer: "Customer 1"
+      criticality: low
+
+    # ========================================================================
+    # Analytics Dashboard (AWS, eu-central-1, Development)
+    # ========================================================================
+    - name: "analytics-dashboard-dev"
+      description: "Analytics development environment on AWS"
+      environment: "development"
+      owner: Customer 1 Engineering Team
+      customer: "Customer 1"
+      criticality: low
+
+
+    # ========================================================================
+    # Customer Portal (Azure, westeurope, Production)
+    # ========================================================================
+    - name: "customer-portal"
+      description: "Customer self-service portal"
+      environment: "production"
+      owner: "Customer 1 Engineering Team"
+      customer: "Customer 1"
+
+    # ========================================================================
+    # Customer Portal (AWS, eu-central-1, Staging)
+    # ========================================================================
+    - name: "customer-portal-staging"
+      description: "Customer portal staging environment on AWS"
+      environment: "staging"
+      owner: "Customer 1 Engineering Team"
+      customer: "Customer 1"
+
+    # ========================================================================
+    # Customer Portal (GCP, europe-west3, Development)
+    # ========================================================================
+    - name: "customer-portal-dev"
+      description: "Customer portal development environment on GCP"
+      environment: "development"
+      owner: "Customer 1 Engineering Team"
+      customer: "Customer 1"

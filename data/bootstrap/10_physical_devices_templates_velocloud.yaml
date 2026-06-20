@@ -1,0 +1,66 @@
+---
+# Arista SD-WAN (formerly VeloCloud) device templates
+# VCE-610: branch edge appliance (physical, 1RU)
+# VCG-VA:  virtual gateway hosted at Equinix/colocation (height=0, no rack slot)
+#
+# Interface naming:
+#   GE1-GE4  — WAN/LAN copper GigabitEthernet ports on VCE-610
+#   mgmt0    — out-of-band management
+#   eth0     — VCG-VA management/data interface (Linux-based VM)
+#
+# The SD-WAN overlay (DMPO sessions) is orchestrated automatically by
+# Arista SD-WAN Orchestrator — no tunnel interfaces are modelled here.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TemplateDcimPhysicalDevice
+  data:
+    # -------------------------------------------------------------------------
+    # VCE-610 — Branch Edge (WAN uplinks + LAN downlinks)
+    # GE1: primary WAN, GE2: secondary WAN, GE3-GE4: LAN
+    # -------------------------------------------------------------------------
+    - template_name: VCE-610_EDGE
+      device_type: VCE-610
+      platform: velocloud
+      role: edge
+      status: provisioning
+      interfaces:
+        kind: TemplateDcimPhysicalInterface
+        data:
+          - template_name: VCE-610_EDGE_GE1
+            name: GE1
+            role: uplink
+            interface_type: 1000base-t
+          - template_name: VCE-610_EDGE_GE2
+            name: GE2
+            role: uplink
+            interface_type: 1000base-t
+          - template_name: VCE-610_EDGE_GE3
+            name: GE3
+            role: downlink
+            interface_type: 1000base-t
+          - template_name: VCE-610_EDGE_GE4
+            name: GE4
+            role: downlink
+            interface_type: 1000base-t
+          - template_name: VCE-610_EDGE_mgmt0
+            name: mgmt0
+            role: management
+            interface_type: 1000base-t
+
+    # -------------------------------------------------------------------------
+    # VCG-VA — Virtual Gateway (colocation hub, VM-based, no rack slot)
+    # Single eth0 used for both management and DMPO tunnel termination
+    # -------------------------------------------------------------------------
+    - template_name: VCG-VA_GATEWAY
+      device_type: VCG-VA
+      platform: velocloud
+      role: edge
+      status: provisioning
+      interfaces:
+        kind: TemplateDcimPhysicalInterface
+        data:
+          - template_name: VCG-VA_GATEWAY_eth0
+            name: eth0
+            role: uplink
+            interface_type: 1000base-t

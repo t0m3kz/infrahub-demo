@@ -1,0 +1,9 @@
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimVirtualDevice
+  data:
+    - name: MCR-FRA1-EDGE-01
+      object_template: C8000V_EDGE
+      status: active

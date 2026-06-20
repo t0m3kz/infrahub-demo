@@ -1,0 +1,18 @@
+query capability_guard {
+  DcimDevice {
+    edges {
+      node {
+        name { value }
+        role { value }
+        device_capabilities {
+          edges {
+            node {
+              __typename
+              name { value }
+            }
+          }
+        }
+      }
+    }
+  }
+}

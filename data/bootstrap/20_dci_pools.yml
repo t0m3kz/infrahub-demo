@@ -1,0 +1,35 @@
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: CoreIPPrefixPool
+  data:
+    - name: DCI-Technical-IPv6
+      description: "DCI Technical P2P IPv6 Pool — ULA space for inter-DC BGP /127 links (RFC 6164, default)"
+      default_prefix_type: IpamPrefix
+      default_prefix_length: 127
+      resources:
+        kind: IpamPrefix
+        data:
+          - prefix: fd00:2200::/40
+            description: "ULA IPv6 for DCI P2P links (DCI-dedicated, distinct from intra-DC fd00:2100::/40)"
+            status: active
+            member_type: prefix
+            is_pool: true
+            role: technical
+      ip_namespace: default
+
+    - name: DCI-Technical-IPv4
+      description: "DCI Technical P2P IPv4 Pool — RFC 6598 /31 links (exception: IPv4-only paths)"
+      default_prefix_type: IpamPrefix
+      default_prefix_length: 31
+      resources:
+        kind: IpamPrefix
+        data:
+          - prefix: 100.64.0.0/16
+            description: "RFC 6598 Shared Address Space for DCI P2P links (IPv4 exception)"
+            status: active
+            member_type: prefix
+            is_pool: true
+            role: technical
+      ip_namespace: default

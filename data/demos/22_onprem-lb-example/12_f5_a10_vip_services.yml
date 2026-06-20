@@ -1,0 +1,55 @@
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: ServiceLoadBalancerVIP
+  data:
+    # VIP Services for F5 Load Balancer
+    - hostname: "f5-www.demo.local"
+      protocol: https
+      port: 443
+      ssl_certificate: "/etc/ssl/certs/demo.crt"
+      load_balancer: "demo-dc1-f5-lb"
+      vip_ip:
+        data:
+          address: "10.1.1.10/32"
+          ip_namespace: "default"
+      health_checks:
+        - ["http", "3", "3", "2000"]
+
+    - hostname: "f5-app.demo.local"
+      protocol: https
+      port: 8080
+      ssl_certificate: "/etc/ssl/certs/demo.crt"
+      load_balancer: "demo-dc1-f5-lb"
+      vip_ip:
+        data:
+          address: "10.1.1.11/32"
+          ip_namespace: "default"
+      health_checks:
+        - ["http", "3", "3", "2000"]
+
+    # VIP Services for A10 Load Balancer
+    - hostname: "a10-www.demo.local"
+      protocol: https
+      port: 443
+      ssl_certificate: "/etc/ssl/certs/demo.crt"
+      load_balancer: "demo-dc1-a10-lb"
+      vip_ip:
+        data:
+          address: "10.1.1.20/32"
+          ip_namespace: "default"
+      health_checks:
+        - ["http", "3", "3", "2000"]
+
+    - hostname: "a10-app.demo.local"
+      protocol: https
+      port: 8080
+      ssl_certificate: "/etc/ssl/certs/demo.crt"
+      load_balancer: "demo-dc1-a10-lb"
+      vip_ip:
+        data:
+          address: "10.1.1.21/32"
+          ip_namespace: "default"
+      health_checks:
+        - ["http", "3", "3", "2000"]

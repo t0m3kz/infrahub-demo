@@ -1,0 +1,25 @@
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TemplateDcimVirtualDevice
+  data:
+    - template_name: CloudGuard_EDGE
+      device_type: CloudGuard
+      role: firewall
+      platform: checkpoint_gaia
+      status: active
+      cpu: 2
+      memory: 8
+      storage: 100
+      interfaces:
+        kind: TemplateDcimPhysicalInterface
+        parameters:
+          expand_range: true
+        data:
+          - template_name: CloudGuard_EDGE_eth0
+            name: eth0
+            role: management
+          - template_name: CloudGuard_EDGE_eth[1-7]
+            name: eth[1-7]
+            role: customer

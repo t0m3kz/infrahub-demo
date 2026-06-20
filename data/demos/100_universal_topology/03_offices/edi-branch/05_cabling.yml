@@ -1,0 +1,67 @@
+---
+# Edinburgh branch office cabling
+# EDGE GE3 → ACC uplink | APs eth0 → ACC Gi1/0/10-11 | Printer eth0 → ACC Gi1/0/20
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimCable
+  data:
+    - name: CBL-EDI-EDGE01-GE3-ACC01-GI1
+      type: copper
+      deployment: OFC-EDI-BRANCH-01
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: OFC-EDI-BRANCH-EDGE-01
+            name: GE3
+            description: "OFC-EDI-BRANCH-ACC-01"
+        - kind: DcimPhysicalInterface
+          data:
+            device: OFC-EDI-BRANCH-ACC-01
+            name: GigabitEthernet1/0/1
+            description: "OFC-EDI-BRANCH-EDGE-01"
+
+    - name: CBL-EDI-AP01-ACC01-GI10
+      type: copper
+      deployment: OFC-EDI-BRANCH-01
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: OFC-EDI-BRANCH-AP-01
+            name: eth0
+            description: "OFC-EDI-BRANCH-ACC-01"
+        - kind: DcimPhysicalInterface
+          data:
+            device: OFC-EDI-BRANCH-ACC-01
+            name: GigabitEthernet1/0/10
+            description: "OFC-EDI-BRANCH-AP-01"
+
+    - name: CBL-EDI-AP02-ACC01-GI11
+      type: copper
+      deployment: OFC-EDI-BRANCH-01
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: OFC-EDI-BRANCH-AP-02
+            name: eth0
+            description: "OFC-EDI-BRANCH-ACC-01"
+        - kind: DcimPhysicalInterface
+          data:
+            device: OFC-EDI-BRANCH-ACC-01
+            name: GigabitEthernet1/0/11
+            description: "OFC-EDI-BRANCH-AP-02"
+
+    - name: CBL-EDI-PRN01-ACC01-GI20
+      type: copper
+      deployment: OFC-EDI-BRANCH-01
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: OFC-EDI-BRANCH-PRN-01
+            name: eth0
+            description: "OFC-EDI-BRANCH-ACC-01"
+        - kind: DcimPhysicalInterface
+          data:
+            device: OFC-EDI-BRANCH-ACC-01
+            name: GigabitEthernet1/0/20
+            description: "OFC-EDI-BRANCH-PRN-01"
