@@ -19,8 +19,10 @@ query oob_config($device: String!) {
                 edges{
                   node{
                     __typename
-                    name{
-                      value
+                    ... on ManagedGeneric {
+                      name{
+                        value
+                      }
                     }
                   }
                 }
