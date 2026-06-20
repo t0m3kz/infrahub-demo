@@ -1,5 +1,22 @@
 ---
-# Barcelona branch office building
+# Barcelona metro + branch office building
+apiVersion: infrahub.app/v1
+version: "1.0"
+kind: Object
+spec:
+  kind: LocationCountry
+  data:
+    - name: "Spain"
+      shortname: "es"
+      parent: "emea"
+      children:
+        kind: LocationMetro
+        data:
+          - name: "Barcelona"
+            shortname: "bcn"
+          - name: "Madrid"
+            shortname: "mdr"
+---
 apiVersion: infrahub.app/v1
 version: "1.0"
 kind: Object

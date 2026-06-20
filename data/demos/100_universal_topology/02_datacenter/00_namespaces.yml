@@ -1,5 +1,27 @@
-# IP namespaces (tenant VRFs) — loaded before dc1/dc2/dc3 so that VirtCluster
-# ip_namespace references resolve correctly.
+# Shared pre-requisites for the datacenter subtree.
+# Loads first (00_ prefix) to satisfy hfid lookups in capabilities files.
+#
+# 1. Shared management IPs — referenced by ManagedNTPServer, ManagedSyslogServer,
+#    ManagedAAAServer across DC1, DC2 and all office/colo sites.
+# 2. IP namespaces (tenant VRFs) — required by VirtCluster ip_namespace references.
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: IpamIPAddress
+  data:
+    - address: "162.159.200.1/32"
+      ip_namespace: default
+    - address: "162.159.200.123/32"
+      ip_namespace: default
+    - address: "162.159.210.11/32"
+      ip_namespace: default
+    - address: "10.0.0.100/32"
+      ip_namespace: default
+    - address: "10.0.0.200/32"
+      ip_namespace: default
+    - address: "10.0.0.201/32"
+      ip_namespace: default
 ---
 apiVersion: infrahub.app/v1
 kind: Object
