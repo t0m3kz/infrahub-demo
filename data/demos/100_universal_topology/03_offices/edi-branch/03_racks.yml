@@ -1,0 +1,22 @@
+---
+# Edinburgh branch office rack
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: LocationBuilding
+  data:
+    - name: EDI-1
+      shortname: edi-1
+      parent: edi
+      children:
+        kind: LocationSuite
+        data:
+          - suite_name: EDI-OFFICE
+            index: 1
+            shortname: edi-1-office
+            children:
+              kind: LocationRack
+              data:
+                - shortname: edi-1-office-r-1
+                  index: 1
+                  row_index: 1

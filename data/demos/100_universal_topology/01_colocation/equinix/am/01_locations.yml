@@ -1,0 +1,14 @@
+---
+# Amsterdam Equinix buildings
+apiVersion: infrahub.app/v1
+version: "1.0"
+kind: Object
+spec:
+  kind: LocationBuilding
+  data:
+    - name: "AM1"
+      shortname: "am1"
+      parent: "ams"
+    - name: "AM4"
+      shortname: "am4"
+      parent: "ams"

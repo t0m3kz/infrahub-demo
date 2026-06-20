@@ -1,0 +1,25 @@
+---
+# Interface descriptions derived from physical circuits (offices-equinix)
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimPhysicalInterface
+  data:
+    - device: FR6-EDGE-02
+      name: Ethernet1/1
+      description: "OFC-STR-BRANCH-EDGE-01"
+    - device: OFC-MAD-REGIONAL-EDGE-01
+      name: GE1
+      description: "PA4-EDGE-02"
+    - device: OFC-MAD-REGIONAL-EDGE-02
+      name: GE1
+      description: "PA6-EDGE-02"
+    - device: OFC-STR-BRANCH-EDGE-01
+      name: GE1
+      description: "FR6-EDGE-02"
+    - device: PA4-EDGE-02
+      name: Ethernet1/1
+      description: "OFC-MAD-REGIONAL-EDGE-01"
+    - device: PA6-EDGE-02
+      name: Ethernet1/1
+      description: "OFC-MAD-REGIONAL-EDGE-02"

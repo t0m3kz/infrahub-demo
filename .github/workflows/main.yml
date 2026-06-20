@@ -16,22 +16,17 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: "3.10"
-      - run: |
+      - name: Install dependencies
+        run: |
           pip install uv
           uv sync
-      - run: |
-          echo "Formating code"
-          uv run ruff format
-          uv run ruff check --select I --fix .
-      - run: |
-          echo "Running linters"
-          uv run ruff check
-      - run: |
-          echo "Running type checks"
-          uv run mypy .
-      - run: |
-          echo "Running validation"
-          uv run yamllint -d "{extends: default, ignore: [.github/, .venv/ , .dev/, .ai/] }" .
+      - name: Run pre-commit hooks
+        run: |
+          echo "🔍 Running pre-commit quality gates..."
+          uv run prek run --all-files
+      - name: Verify pre-commit passed
+        run: |
+          echo "✅ All pre-commit checks passed!"
   tests:
     name: Testing plugin
     needs: code-qa
@@ -61,9 +56,9 @@ jobs:
         run: |
           RUNNER_NAME=$(echo "${{ runner.name }}" | grep -o 'ghrunner[0-9]\+' | sed 's/ghrunner\([0-9]\+\)/ghrunner_\1/')
           echo "PYTEST_DEBUG_TEMPROOT=/var/lib/github/${RUNNER_NAME}/_temp" >> $GITHUB_ENV
-      - name: Run pytest
+      - name: Run unit and smoke tests
         run: |
-          uv run pytest tests/ -vv
+          uv run pytest -vv tests/smoke tests/unit --cov
 
   release:
     if: ${{ github.ref == 'refs/heads/main' }}
@@ -101,4 +96,3 @@ jobs:
   #         pip install uv
   #         uv sync
   #     - run: uv run mkdocs gh-deploy --force
-

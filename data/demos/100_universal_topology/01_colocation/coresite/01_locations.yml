@@ -1,0 +1,23 @@
+---
+# CoreSite buildings
+apiVersion: infrahub.app/v1
+version: "1.0"
+kind: Object
+spec:
+  kind: LocationBuilding
+  data:
+    - name: "NY1"
+      shortname: "ny1"
+      parent: "nyc"
+    - name: "NY2"
+      shortname: "ny2"
+      parent: "nyc"
+    - name: "VA1"
+      shortname: "va1"
+      parent: "iad"
+    - name: "VA2"
+      shortname: "va2"
+      parent: "iad"
+    - name: "SV1"
+      shortname: "sv1"
+      parent: "sjc"

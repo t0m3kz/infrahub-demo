@@ -1,0 +1,15 @@
+---
+# GLOBEX Partner (nested from external root)
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologyExternal
+  data:
+    - name: Partners
+      children:
+        kind: TopologyExternalProviders
+        data:
+          - name: PARTNER-GLOBEX-IPVPN
+            provider_type: partner
+            status: active
+            provider: Colt

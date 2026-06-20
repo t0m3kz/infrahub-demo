@@ -1,75 +1,38 @@
-{
-  "DEVICE_METADATA": {
-    "localhost": {
-      "hostname": "{{ hostname }}",
-      "type": "SpineRouter",
-      "bgp_asn": "{{ bgp.local_as }}"
-    }
-  },
-  "LOOPBACK_INTERFACE": {
-{% for interface in interface_roles.loopback %}
-  {% if interface.ip_address %}
-    "{{ interface.name }}|{{ interface.ip_address }}": {}{{ "," if not loop.last }}
-  {% endif %}
-{% endfor %}
-  },
-  "INTERFACE": {
-{% for interface in interface_roles.all_downlink %}
-    "{{ interface.name }}": {}{{ "," if not loop.last }}
-{% endfor %}
-  },
-  "BGP_NEIGHBOR": {
-{% for neighbor in bgp.neighbors %}
-    "{{ neighbor.remote_ip.split('/')[0] }}": {
-      "local_addr": "{{ bgp.router_id or loopbacks.loopback0 }}",
-      "asn": "{{ neighbor.remote_as }}",
-      "holdtime": "10",
-      "keepalive": "3",
-      "name": "{{ neighbor.description or 'BGP Neighbor' }}"
-    }{{ "," if not loop.last }}
-{% endfor %}
-  },
-  "BGP_GLOBALS": {
-    "default": {
-      "router_id": "{{ bgp.router_id or loopbacks.loopback0 }}",
-      "local_asn": "{{ bgp.local_as }}"
-    }
-  },
-  "OSPF_ROUTER": {
-    "default": {
-      "router_id": "{{ ospf.router_id or loopbacks.loopback0 }}"
-    }
-  },
-  "OSPF_INTERFACE": {
-{% for interface in interface_roles.all_downlink %}
-    "{{ interface.name }}": {
-      "area": "{{ ospf.area or '0.0.0.0' }}",
-      "network": "point-to-point"
-    }{{ "," if not loop.last }}
-{% endfor %}
-{% if interface_roles.all_downlink and interface_roles.loopback %},{% endif %}
-{% for interface in interface_roles.loopback %}
-  {% if interface.name == 'loopback0' %}
-    "{{ interface.name }}": {
-      "area": "{{ ospf.area or '0.0.0.0' }}"
-    }{{ "," if not loop.last }}
-  {% endif %}
-{% endfor %}
-  },
-  "BGP_PEER_GROUP": {
-    "UNDERLAY": {
-      "asn": "{{ bgp.local_as }}"
-    },
-    "EVPN_OVERLAY": {
-      "asn": "{{ bgp.local_as }}"
-    }
-  },
-  "BGP_NEIGHBOR_AF": {
-{% for neighbor in bgp.neighbors %}
-    "{{ neighbor.remote_ip.split('/')[0] }}|l2vpn_evpn": {
-      "admin_status": "up",
-      "route_reflector_client": "true"
-    }{{ "," if not loop.last }}
-{% endfor %}
+{#- Edgecore SONiC JSON Spine Configuration - Using Jinja2 tojson filter for clean JSON -#}
+{%- set device_metadata = {
+  'localhost': {
+    'hostname': hostname,
+    'type': 'SpineRouter',
+    'platform': 'edgecore'
   }
-}
+} -%}
+{%- if bgp %}
+{%- set _ = device_metadata['localhost'].update({'bgp_asn': bgp[0].local_as.asn}) -%}
+{%- endif %}
+
+{%- set vlan_config = {} -%}
+{%- set loopback_interfaces = {} -%}
+{%- set physical_interfaces = {} -%}
+{%- set interface_ips = {} -%}
+{%- set vlan_interfaces = {} -%}
+{%- set bgp_neighbors = {} -%}
+{%- set bgp_globals = {'default': {}} -%}
+{%- set bgp_peer_groups = {} -%}
+{%- set bgp_globals_af = {} -%}
+{%- set ospf_router = {} -%}
+{%- include 'common/sonic_common.j2' %}
+
+{{ {
+  'DEVICE_METADATA': device_metadata,
+  'VLAN': vlan_config,
+  'LOOPBACK_INTERFACE': loopback_interfaces,
+  'INTERFACE': physical_interfaces,
+  'INTERFACE_IP': interface_ips,
+  'VLAN_INTERFACE': vlan_interfaces,
+  'BGP_GLOBALS': bgp_globals,
+  'BGP_GLOBALS_AF': bgp_globals_af,
+  'BGP_PEER_GROUP': bgp_peer_groups,
+  'BGP_NEIGHBOR': bgp_neighbors,
+  'OSPF_ROUTER': ospf_router
+} | tojson(indent=2) }}
+{%- include 'common/sonic_management.j2' %}

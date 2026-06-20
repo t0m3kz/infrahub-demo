@@ -1,0 +1,14 @@
+---
+# Paris Equinix buildings
+apiVersion: infrahub.app/v1
+version: "1.0"
+kind: Object
+spec:
+  kind: LocationBuilding
+  data:
+    - name: "PA4"
+      shortname: "pa4"
+      parent: "par"
+    - name: "PA6"
+      shortname: "pa6"
+      parent: "par"

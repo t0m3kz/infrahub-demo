@@ -1,0 +1,23 @@
+---
+# Megaport Paris racks
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: LocationBuilding
+  data:
+    - name: MCR-PAR1
+      shortname: mcr-par1
+      parent: par
+      children:
+        kind: LocationSuite
+        data:
+          - suite_name: MCR-PAR1
+            index: 1
+            shortname: mcr-par1-s1
+            children:
+              kind: LocationRack
+              data:
+                - shortname: mcr-par1-s1-r-1
+                  index: 1
+                  row_index: 1
+                  pod: MCR-PAR1

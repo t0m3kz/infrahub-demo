@@ -1,0 +1,82 @@
+---
+version: "1.0"
+
+# ============================================================================
+# Routing — Common schema
+# Shared base generics used by routing protocol implementations (BGP, OSPF).
+# ============================================================================
+
+generics:
+  - name: Protocol
+    namespace: Routing
+    description: "Generic protocol model for routing protocols"
+    label: "Protocol"
+    icon: "carbon:router"
+    include_in_menu: false
+    attributes:
+      # TODO: Should be computed later
+      - name: description
+        kind: Text
+        optional: false
+        unique: true
+        description: "Description of the protocol"
+        order_weight: 1100
+      - name: status
+        kind: Dropdown
+        choices:
+          - name: active
+            label: Active
+            description: "Configuration is active and operational."
+            color: "#A9CCE3"
+          - name: disabled
+            label: Disabled
+            description: "Configuration has been disabled."
+            color: "#D3D3D3"
+          - name: deleted
+            label: Deleted
+            description: "Configuration has been deleted."
+            color: "#FAD7A0"
+        description: "Status of the Protocol Configuration."
+        order_weight: 1150
+    relationships:
+      - name: device
+        peer: DcimDevice
+        optional: false
+        cardinality: one
+        kind: Parent
+        order_weight: 1050
+
+  - name: Routing
+    namespace: Managed
+    description: "Base service for all routing protocols."
+    label: Network Routing Service
+    icon: "carbon:network-4"
+    include_in_menu: false
+    human_friendly_id:
+      - "name__value"
+    attributes:
+      - name: name
+        kind: Text
+        description: "Name of the routing service"
+        optional: false
+        order_weight: 1100
+
+  - name: Peering
+    namespace: Managed
+    description: "Base generic for all peering sessions (BGP, OSPF)."
+    label: Network Peering
+    icon: "carbon:network-2"
+    include_in_menu: false
+    relationships:
+      - name: interfaces
+        peer: DcimInterface
+        label: "Peering Interfaces"
+        kind: Generic
+        cardinality: many
+        optional: true
+        identifier: "peering__interfaces"
+        order_weight: 3000
+        description: >-
+          Interfaces for this peering session.
+          Underlay: P2P physical interfaces.
+          Overlay: loopback virtual interfaces.

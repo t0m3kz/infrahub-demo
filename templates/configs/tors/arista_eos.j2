@@ -12,6 +12,8 @@ spanning-tree mode mstp
 ! Configure VLAN 1
 no spanning-tree vlan-id 4094
 
+{%- include 'common/arista_eos_mlag.j2' %}
+
 {#- VLAN Configuration -#}
 {%- for vlan in vlans %}
 vlan {{ vlan.vlan_id }}
@@ -19,16 +21,12 @@ vlan {{ vlan.vlan_id }}
 {% endfor %}
 
 {#- All Interfaces (Loopback, Physical, Virtual) -#}
-{%- for interface in interfaces %}
+{%- for interface in interfaces if interface.role != 'mlag-peer' %}
 interface {{ interface.name }}
 {%- if interface.description %}
    description {{ interface.description }}
 {%- endif %}
-{%- if interface.ip_addresses %}
-{%- for ip in interface.ip_addresses %}
-   ip address {{ ip.address }}
-{%- endfor %}
-{%- endif %}
+{%- include 'common/arista_eos_interface_ip.j2' %}
 {%- if interface.vlans %}
 {%- if interface.vlans|length == 1 %}
    switchport access vlan {{ interface.vlans[0] }}
@@ -43,44 +41,15 @@ interface {{ interface.name }}
 {% endfor %}
 
 {%- if ospf %}
+{%- from 'common/arista_eos_ospf.j2' import render_ospf %}
 ! Configure OSPF
-{%- for ospf_config in ospf %}
-router ospf {{ ospf_config.process_id or 1 }}
-   router-id {{ ospf_config.router_id.split('/')[0] }}
-   passive-interface default
-{%- for interface in interfaces %}
-{%- if interface.get('ospf') %}
-   no passive-interface {{ interface.name }}
-{%- endif %}
-{%- endfor %}
-   max-lsa 12000
-{% endfor %}
+{{ render_ospf(ospf, interfaces) }}
 {%- endif %}
 
 {%- if bgp %}
+{%- from 'common/arista_eos_bgp.j2' import render_bgp %}
 ! Configure BGP
-{%- for bgp_config in bgp %}
-router bgp {{ bgp_config.local_as.asn }}
-   router-id {{ bgp_config.router_id.address.split('/')[0] }}
-   no bgp default ipv4-unicast
-   distance bgp 20 200 200
-   maximum-paths 4 ecmp 64
-{%- for session in bgp_config.sessions %}
-   neighbor {{ session.remote_ip.address.split('/')[0] }} remote-as {{ session.remote_as.asn }}
-   neighbor {{ session.remote_ip.address.split('/')[0] }} update-source Loopback0
-   neighbor {{ session.remote_ip.address.split('/')[0] }} send-community extended
-   neighbor {{ session.remote_ip.address.split('/')[0] }} maximum-routes 0
-{%- endfor %}
-   address-family ipv4
-      redistribute connected route-map RM-CONN-2-BGP
-{%- for session in bgp_config.sessions %}
-      neighbor {{ session.remote_ip.address.split('/')[0] }} activate
-{%- endfor %}
-   address-family evpn
-{%- for session in bgp_config.sessions %}
-      neighbor {{ session.remote_ip.address.split('/')[0] }} activate
-{%- endfor %}
-{% endfor %}
+{{ render_bgp(bgp, interfaces) }}
 {%- endif %}
 
 ! Configure route-maps

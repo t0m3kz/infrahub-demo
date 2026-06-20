@@ -1,0 +1,480 @@
+---
+# Universal virtualisation / container cluster schema
+#
+# One model for every cluster location:
+#   on-prem DC   → platform: kubernetes / vmware_vsphere / openstack / nutanix / proxmox
+#   Equinix PoP  → same, deployment points to a TopologyColocation node
+#   Cloud        → platform: eks / aks / gke / openshift_dedicated
+#
+# Hosting is a single relationship to TopologyDeployment.
+# TopologyCloudRegion inherits TopologyDeployment, so cloud and on-prem
+# use the exact same field — no special-casing needed.
+#
+# Two universal objects:
+#   VirtCluster   — the cluster (control plane, version, endpoint)
+#   VirtNodePool  — node group / ESXi host pool / cloud ASG — unified via scaling_mode
+#
+# VirtTenant is intentionally absent: ManagedNetworkSegment already models the
+# tenant boundary (owner × customer_name × environment × CIDR × VLAN/VNI).
+# The VirtCluster.segments relationship maps "which segments this cluster serves".
+#
+# Replaces CloudManagedCluster and CloudAutoScalingGroup (removed from topology_cloud.yml).
+
+version: "1.0"
+
+nodes:
+  # ── Cluster ───────────────────────────────────────────────────────────────────
+
+  - name: Cluster
+    namespace: Virt
+    description: "Universal virtualisation cluster — on-prem, Equinix, or cloud-managed."
+    label: Virt Cluster
+    icon: mdi:server-network
+    include_in_menu: true
+    human_friendly_id:
+      - name__value
+    display_label: "{{name__value}}"
+    order_by:
+      - name__value
+    uniqueness_constraints:
+      - ["name__value"]
+    attributes:
+      - name: name
+        kind: Text
+        unique: true
+        order_weight: 1000
+
+      - name: description
+        kind: Text
+        optional: true
+        order_weight: 1050
+
+      - name: platform
+        kind: Dropdown
+        label: "Platform"
+        optional: false
+        order_weight: 1100
+        choices:
+          # Self-managed on-prem / colo
+          - name: kubernetes
+            label: Kubernetes (self-managed)
+            description: "kubeadm, k3s, RKE2, OpenShift, Tanzu on baremetal or VMs."
+            color: "#326ce5"
+          - name: vmware_vsphere
+            label: VMware vSphere
+            description: "vSphere / ESXi cluster managed by vCenter."
+            color: "#1d428a"
+          - name: openstack
+            label: OpenStack
+            description: "OpenStack compute (Nova + Neutron)."
+            color: "#ed1944"
+          - name: nutanix
+            label: Nutanix AHV
+            description: "Nutanix Acropolis Hypervisor cluster."
+            color: "#024da1"
+          - name: proxmox
+            label: Proxmox VE
+            description: "Proxmox Virtual Environment cluster."
+            color: "#e57000"
+          - name: hyper_v
+            label: Hyper-V / SCVMM
+            description: "Microsoft Hyper-V cluster managed by SCVMM."
+            color: "#0078d4"
+          # Cloud-managed (control plane is provider-managed)
+          - name: eks
+            label: Amazon EKS
+            description: "AWS Elastic Kubernetes Service — managed control plane."
+            color: "#ff9900"
+          - name: aks
+            label: Azure AKS
+            description: "Azure Kubernetes Service — managed control plane."
+            color: "#0078d4"
+          - name: gke
+            label: Google GKE
+            description: "Google Kubernetes Engine — managed control plane."
+            color: "#4285f4"
+          - name: openshift_dedicated
+            label: OpenShift Dedicated
+            description: "Red Hat OpenShift as a managed cloud service."
+            color: "#ee0000"
+
+      - name: version
+        kind: Text
+        label: "Platform Version"
+        description: "k8s 1.31.2 / vSphere 8.0 U2 / OpenStack 2024.1 / etc."
+        optional: true
+        order_weight: 1200
+
+      - name: status
+        kind: Dropdown
+        optional: false
+        default_value: active
+        order_weight: 1300
+        choices:
+          - name: active
+            label: Active
+            description: "Cluster is operational and serving workloads."
+            color: "#7fbf7f"
+          - name: provisioning
+            label: Provisioning
+            description: "Cluster is being bootstrapped."
+            color: "#ffff7f"
+          - name: maintenance
+            label: Maintenance
+            description: "Undergoing maintenance or upgrades."
+            color: "#ffd27f"
+          - name: degraded
+            label: Degraded
+            description: "Running but with reduced capacity or failed nodes."
+            color: "#f4a460"
+          - name: decommissioned
+            label: Decommissioned
+            description: "Cluster retired."
+            color: "#8c8c8c"
+
+      - name: ha_enabled
+        kind: Boolean
+        label: "HA Enabled"
+        description: "Control plane HA (3+ nodes / vCenter HA / multi-AZ managed)."
+        optional: false
+        default_value: true
+        order_weight: 1400
+
+    relationships:
+      # Works for all locations:
+      # on-prem DC    → TopologyDatacenter    (inherits TopologyDeployment)
+      # Equinix colo  → TopologyColocation    (inherits TopologyDeployment)
+      # Cloud region  → TopologyCloudRegion   (inherits TopologyDeployment)
+      - name: deployment
+        peer: TopologyDeployment
+        label: "Hosting Location"
+        description: "DC, colo site, or cloud region where this cluster runs."
+        cardinality: one
+        kind: Attribute
+        optional: false
+        order_weight: 1800
+        identifier: "virt_cluster__deployment"
+
+      # Cloud-managed clusters reference a CloudAccount; on-prem clusters leave this empty
+      - name: cloud_account
+        peer: CloudAccount
+        label: "Cloud Account"
+        description: "Cloud account / subscription owning this cluster (EKS/AKS/GKE)."
+        cardinality: one
+        kind: Attribute
+        optional: true
+        order_weight: 1850
+
+      # Cloud clusters live inside a VPC/VNet; on-prem clusters leave this empty
+      - name: virtual_network
+        peer: CloudVirtualNetwork
+        label: "Virtual Network"
+        description: "VPC or VNet the cluster is deployed in (cloud-managed clusters)."
+        cardinality: one
+        kind: Attribute
+        optional: true
+        order_weight: 1870
+
+      - name: ip_namespace
+        peer: IpamNamespace
+        label: "IP Namespace"
+        description: "IP routing context / VRF for cluster traffic (on-prem / colo)."
+        cardinality: one
+        kind: Attribute
+        optional: true
+        order_weight: 1900
+
+      - name: segments
+        peer: ManagedNetworkSegment
+        label: "Network Segments"
+        description: "VXLAN/VLAN segments reachable from this cluster."
+        cardinality: many
+        kind: Attribute
+        optional: true
+        identifier: "virt_cluster__segments"
+        order_weight: 1950
+
+      - name: node_pools
+        peer: VirtNodePool
+        label: "Node Pools"
+        description: "Node groups, ESXi host pools, or cloud ASGs for this cluster."
+        cardinality: many
+        kind: Component
+        on_delete: cascade
+        identifier: "virt_cluster__node_pools"
+        order_weight: 2000
+
+      - name: tags
+        peer: BuiltinTag
+        optional: true
+        cardinality: many
+        kind: Attribute
+        order_weight: 3000
+
+
+  # ── Node Pool / Scaling Group ─────────────────────────────────────────────────
+  #
+  # Bridges on-prem node pools and cloud ASGs via scaling_mode:
+  #   static      → on-prem, node_count is authoritative, physical_hosts is set
+  #   autoscaling → cloud ASG or Cluster API, min/max/desired are authoritative
+  #   manual      → on-prem manual scaling, node_count updated by operator
+
+  - name: NodePool
+    namespace: Virt
+    description: "Universal node pool — on-prem fixed pool, Cluster API group, or cloud ASG."
+    label: Virt Node Pool
+    icon: mdi:server-plus
+    include_in_menu: false
+    human_friendly_id:
+      - cluster__name__value
+      - name__value
+    display_label: "{{cluster__name__value}}/{{name__value}}"
+    order_by:
+      - cluster__name__value
+      - name__value
+    uniqueness_constraints:
+      - ["cluster", "name__value"]
+    attributes:
+      - name: name
+        kind: Text
+        order_weight: 1000
+
+      - name: pool_type
+        kind: Dropdown
+        label: "Pool Type"
+        optional: false
+        default_value: worker
+        order_weight: 1100
+        choices:
+          - name: control_plane
+            label: Control Plane
+            description: "API server / scheduler / etcd (k8s) or vCenter appliances."
+            color: "#326ce5"
+          - name: worker
+            label: Worker / Compute
+            description: "Workload pods (k8s), guest VMs (vSphere/OpenStack), or ASG instances."
+            color: "#7fbf7f"
+          - name: storage
+            label: Storage
+            description: "Storage-dedicated nodes — vSAN, Ceph, Nutanix CVM, Longhorn."
+            color: "#f4a460"
+          - name: edge
+            label: Edge / Ingress
+            description: "Dedicated ingress or load-balancer nodes."
+            color: "#9370db"
+          - name: hypervisor
+            label: Hypervisor Host Pool
+            description: "Pool of ESXi / KVM / XCP-ng hypervisor hosts."
+            color: "#1d428a"
+          - name: management
+            label: Management
+            description: "Cluster management nodes (OpenStack controllers, Nutanix CVM)."
+            color: "#f39c12"
+
+      # Determines which sizing fields are authoritative
+      - name: scaling_mode
+        kind: Dropdown
+        label: "Scaling Mode"
+        optional: false
+        default_value: static
+        order_weight: 1150
+        choices:
+          - name: static
+            label: Static (on-prem)
+            description: "Fixed size — node_count is authoritative. physical_hosts lists the baremetal."
+            color: "#7fbf7f"
+          - name: autoscaling
+            label: Autoscaling (cloud / Cluster API)
+            description: "Dynamic — min_size / max_size / desired_capacity are authoritative."
+            color: "#326ce5"
+          - name: manual
+            label: Manual
+            description: "On-prem pool managed by operator without auto-scaling. node_count is updated manually."
+            color: "#f4a460"
+
+      - name: status
+        kind: Dropdown
+        optional: false
+        default_value: active
+        order_weight: 1200
+        choices:
+          - name: active
+            label: Active
+            color: "#7fbf7f"
+          - name: provisioning
+            label: Provisioning
+            color: "#ffff7f"
+          - name: maintenance
+            label: Maintenance
+            color: "#ffd27f"
+          - name: cordoned
+            label: Cordoned
+            description: "Schedulable=false; existing workloads still running."
+            color: "#f4a460"
+          - name: drained
+            label: Drained
+            description: "Pool empty, not accepting new workloads."
+            color: "#bfbfbf"
+
+      # ── Static / manual sizing ─────────────────────────────────────────
+      - name: node_count
+        kind: Number
+        label: "Node Count"
+        description: "Current / desired count for static pools. Observed count for autoscaling."
+        optional: true
+        order_weight: 1300
+        parameters:
+          min_value: 0
+
+      # ── Autoscaling sizing (cloud ASG / Cluster API) ───────────────────
+      - name: min_size
+        kind: Number
+        label: "Min Size"
+        description: "Minimum number of nodes (autoscaling pools)."
+        optional: true
+        order_weight: 1310
+        parameters:
+          min_value: 0
+
+      - name: max_size
+        kind: Number
+        label: "Max Size"
+        description: "Maximum number of nodes (autoscaling pools)."
+        optional: true
+        order_weight: 1320
+        parameters:
+          min_value: 0
+
+      - name: desired_capacity
+        kind: Number
+        label: "Desired Capacity"
+        description: "Desired steady-state node count (autoscaling pools)."
+        optional: true
+        order_weight: 1330
+        parameters:
+          min_value: 0
+
+      # ── Instance / host definition (shared by on-prem and cloud) ──────
+      - name: instance_flavor
+        kind: Text
+        label: "Instance Flavor / Node Size"
+        description: "Hardware profile, VM size, or cloud instance type (t3.medium, Standard_D4s_v3, m1.xlarge)."
+        optional: true
+        order_weight: 1400
+
+      - name: image
+        kind: Text
+        label: "OS Image"
+        description: "Base image — AMI ID, Azure image reference, vSphere template, or distro name."
+        optional: true
+        order_weight: 1450
+
+      - name: os_type
+        kind: Dropdown
+        label: "OS Type"
+        optional: true
+        order_weight: 1500
+        choices:
+          - name: linux
+            label: Linux
+            color: "#ffc61a"
+          - name: windows
+            label: Windows
+            color: "#0078d4"
+          - name: esxi
+            label: ESXi / Hypervisor
+            color: "#1d428a"
+          - name: other
+            label: Other
+            color: "#808080"
+
+      - name: os_version
+        kind: Text
+        label: "OS / Hypervisor Version"
+        description: "Ubuntu 24.04, ESXi 8.0u2, Windows Server 2022, etc."
+        optional: true
+        order_weight: 1550
+
+    relationships:
+      - name: cluster
+        peer: VirtCluster
+        cardinality: one
+        kind: Parent
+        identifier: "virt_cluster__node_pools"
+        optional: false
+        order_weight: 1600
+
+      # On-prem: the actual baremetal servers in this pool
+      - name: physical_hosts
+        peer: DcimPhysicalDevice
+        label: "Physical Hosts"
+        description: "Baremetal servers backing this pool (on-prem / colo)."
+        cardinality: many
+        kind: Attribute
+        optional: true
+        identifier: "virt_pool__physical_hosts"
+        order_weight: 1700
+
+      # Cloud ASG / on-prem: subnets or segments this pool deploys into
+      - name: network_segments
+        peer: ManagedNetworkSegment
+        label: "Network Segments"
+        description: "Cloud subnets or VXLAN segments this pool places nodes into."
+        cardinality: many
+        kind: Attribute
+        optional: true
+        identifier: "virt_pool__network_segments"
+        order_weight: 1750
+
+      # Cloud ASG: security groups attached to pool instances
+      - name: security_groups
+        peer: CloudSecurityGroup
+        label: "Security Groups"
+        description: "Cloud security groups applied to instances in this pool."
+        cardinality: many
+        kind: Attribute
+        optional: true
+        identifier: "virt_pool__security_groups"
+        order_weight: 1800
+
+      # Cloud: instances currently running in this pool (synced by discovery generator)
+      - name: instances
+        peer: CloudInstance
+        cardinality: many
+        kind: Generic
+        optional: true
+        identifier: "virt_pool__instances"
+        description: "Cloud instances running in this pool (cloud ASG mode)."
+        order_weight: 1840
+
+      - name: management_ip
+        peer: IpamIPAddress
+        label: "Management IP / VIP"
+        description: "Management address or representative IP for the pool."
+        cardinality: one
+        kind: Attribute
+        optional: true
+        order_weight: 1850
+
+      - name: tags
+        peer: BuiltinTag
+        optional: true
+        cardinality: many
+        kind: Attribute
+        order_weight: 3000
+
+
+extensions:
+  nodes:
+    # Back-reference: segment → clusters (symmetric with cloud model)
+    - kind: ManagedNetworkSegment
+      relationships:
+        - name: virt_clusters
+          peer: VirtCluster
+          label: "Virt Clusters"
+          description: "Virtualisation clusters (on-prem, colo, or cloud) consuming this segment."
+          cardinality: many
+          kind: Attribute
+          optional: true
+          identifier: "virt_cluster__segments"
+          order_weight: 3200

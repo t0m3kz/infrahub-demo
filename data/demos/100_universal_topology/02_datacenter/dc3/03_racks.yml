@@ -1,0 +1,39 @@
+---
+# DC3 suites and racks — one rack per pod
+#   r-1: POD1 (k8s control-plane/workers)
+#   r-2: POD2 (k8s workers/storage)
+#   r-3: POD3 (VMware vSphere)
+#   r-4: POD4 (Nutanix AHV)
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: LocationBuilding
+  data:
+    - name: DC3
+      shortname: dc3
+      parent: ams
+      children:
+        kind: LocationSuite
+        data:
+          - suite_name: DC3-S1
+            index: 1
+            shortname: dc3-s1
+            children:
+              kind: LocationRack
+              data:
+                - shortname: dc3-s1-r-1
+                  index: 1
+                  row_index: 1
+                  pod: DC3-1-POD-1
+                - shortname: dc3-s1-r-2
+                  index: 2
+                  row_index: 1
+                  pod: DC3-1-POD-2
+                - shortname: dc3-s1-r-3
+                  index: 3
+                  row_index: 1
+                  pod: DC3-1-POD-3
+                - shortname: dc3-s1-r-4
+                  index: 4
+                  row_index: 1
+                  pod: DC3-1-POD-4

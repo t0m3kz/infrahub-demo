@@ -1,0 +1,21 @@
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TemplateDcimPhysicalDevice
+  data:
+    - template_name: PowerEdge-R640_SERVER
+      device_type: PowerEdge-R640
+      role: endpoint
+      status: provisioning
+      interfaces:
+        kind: TemplateDcimPhysicalInterface
+        data:
+          - template_name: PowerEdge-R640_SERVER_eno1
+            name: eno1
+            role: uplink
+            interface_type: 25gbase-x-sfp28
+          - template_name: PowerEdge-R640_SERVER_eno2
+            name: eno2
+            role: uplink
+            interface_type: 25gbase-x-sfp28

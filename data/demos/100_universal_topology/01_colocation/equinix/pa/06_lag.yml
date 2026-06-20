@@ -1,0 +1,64 @@
+---
+# Paris Equinix port-channels — edge peer-link bundles (PA4 and PA6)
+# Ethernet1/10 between EDGE-01 and EDGE-02 bundled as Port-Channel10
+# (single cable per site currently — expand member_interfaces when second link is added)
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimLAGInterface
+  data:
+    - name: Port-Channel10
+      device: PA4-EDGE-01
+      status: active
+      role: mlag-peer
+      lag_id: 10
+      lacp_mode: active
+      mtu: 9000
+      minimum_links: 1
+      member_interfaces:
+        - kind: DcimPhysicalInterface
+          data:
+            device: PA4-EDGE-01
+            name: Ethernet1/10
+
+    - name: Port-Channel10
+      device: PA4-EDGE-02
+      status: active
+      role: mlag-peer
+      lag_id: 10
+      lacp_mode: active
+      mtu: 9000
+      minimum_links: 1
+      member_interfaces:
+        - kind: DcimPhysicalInterface
+          data:
+            device: PA4-EDGE-02
+            name: Ethernet1/10
+
+    - name: Port-Channel10
+      device: PA6-EDGE-01
+      status: active
+      role: mlag-peer
+      lag_id: 10
+      lacp_mode: active
+      mtu: 9000
+      minimum_links: 1
+      member_interfaces:
+        - kind: DcimPhysicalInterface
+          data:
+            device: PA6-EDGE-01
+            name: Ethernet1/10
+
+    - name: Port-Channel10
+      device: PA6-EDGE-02
+      status: active
+      role: mlag-peer
+      lag_id: 10
+      lacp_mode: active
+      mtu: 9000
+      minimum_links: 1
+      member_interfaces:
+        - kind: DcimPhysicalInterface
+          data:
+            device: PA6-EDGE-02
+            name: Ethernet1/10

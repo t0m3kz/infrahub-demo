@@ -1,0 +1,120 @@
+---
+# DC2 shared management capabilities — NTP, Syslog, AAA
+# Scalar defaults come from the shared profiles in 00_profiles.yml.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: ManagedNTP
+  data:
+    - name: DC2-NTP
+      status: active
+      profiles:
+        - dc-ntp-default
+      device_capabilities:
+        - DC2-SS1
+        - DC2-SS2
+        - DC2-POD1-SP1
+        - DC2-POD1-SP2
+        - DC2-POD1-L1
+        - DC2-POD1-L2
+        - DC2-POD1-L3
+        - DC2-POD1-L4
+        - DC2-POD2-SP1
+        - DC2-POD2-SP2
+        - DC2-POD2-L1
+        - DC2-POD2-L2
+        - DC2-POD2-L3
+        - DC2-POD2-L4
+      servers:
+        kind: ManagedNTPServer
+        data:
+          - name: primary
+            address:
+              - "162.159.200.1/32"
+              - "default"
+            prefer: true
+            version: 4
+          - name: secondary
+            address:
+              - "162.159.200.123/32"
+              - "default"
+            prefer: false
+            version: 4
+
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: ManagedSyslog
+  data:
+    - name: DC2-Syslog
+      status: active
+      profiles:
+        - dc-syslog-default
+      device_capabilities:
+        - DC2-SS1
+        - DC2-SS2
+        - DC2-POD1-SP1
+        - DC2-POD1-SP2
+        - DC2-POD1-L1
+        - DC2-POD1-L2
+        - DC2-POD1-L3
+        - DC2-POD1-L4
+        - DC2-POD2-SP1
+        - DC2-POD2-SP2
+        - DC2-POD2-L1
+        - DC2-POD2-L2
+        - DC2-POD2-L3
+        - DC2-POD2-L4
+      servers:
+        kind: ManagedSyslogServer
+        data:
+          - name: server-1
+            address:
+              - "10.0.0.100/32"
+              - "default"
+            port: 514
+            severity: informational
+
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: ManagedAAA
+  data:
+    - name: DC2-AAA
+      status: active
+      profiles:
+        - dc-aaa-default
+      device_capabilities:
+        - DC2-SS1
+        - DC2-SS2
+        - DC2-POD1-SP1
+        - DC2-POD1-SP2
+        - DC2-POD1-L1
+        - DC2-POD1-L2
+        - DC2-POD1-L3
+        - DC2-POD1-L4
+        - DC2-POD2-SP1
+        - DC2-POD2-SP2
+        - DC2-POD2-L1
+        - DC2-POD2-L2
+        - DC2-POD2-L3
+        - DC2-POD2-L4
+      servers:
+        kind: ManagedAAAServer
+        data:
+          - name: primary
+            address:
+              - "10.0.0.200/32"
+              - "default"
+            protocol: tacacs
+            port: 49
+            timeout: 5
+          - name: secondary
+            address:
+              - "10.0.0.201/32"
+              - "default"
+            protocol: tacacs
+            port: 49
+            timeout: 5

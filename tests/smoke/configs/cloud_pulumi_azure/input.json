@@ -1,0 +1,243 @@
+{
+  "CloudVirtualNetwork": {
+    "edges": [
+      {
+        "node": {
+          "id": "vnet-1",
+          "name": {
+            "value": "prod-vnet"
+          },
+          "is_default": {
+            "value": false
+          },
+          "dns_support": {
+            "value": true
+          },
+          "dns_hostnames": {
+            "value": true
+          },
+          "account": {
+            "node": {
+              "name": {
+                "value": "test-azure-account"
+              },
+              "account_id": {
+                "value": "/subscriptions/abc-123"
+              },
+              "environment": {
+                "value": "production"
+              },
+              "provider": {
+                "node": {
+                  "name": {
+                    "value": "Azure"
+                  }
+                }
+              }
+            }
+          },
+          "region": {
+            "node": {
+              "name": {
+                "value": "westeurope"
+              }
+            }
+          },
+          "cidr_blocks": {
+            "edges": [
+              {
+                "node": {
+                  "prefix": {
+                    "value": "10.0.0.0/16"
+                  }
+                }
+              }
+            ]
+          },
+          "network_segments": {
+            "edges": [
+              {
+                "node": {
+                  "id": "sub-1",
+                  "name": {
+                    "value": "prod-subnet-westeurope-1"
+                  },
+                  "is_public": {
+                    "value": false
+                  },
+                  "auto_assign_public_ip": {
+                    "value": false
+                  },
+                  "segment_type": {
+                    "value": "azure_vnet_subnet"
+                  },
+                  "cidr_block": {
+                    "node": {
+                      "prefix": {
+                        "value": "10.0.1.0/24"
+                      }
+                    }
+                  },
+                  "availability_zone": {
+                    "node": {
+                      "name": {
+                        "value": "westeurope-1"
+                      }
+                    }
+                  }
+                }
+              }
+            ]
+          }
+        }
+      }
+    ]
+  },
+  "CloudSecurityGroup": {
+    "edges": [
+      {
+        "node": {
+          "id": "nsg-1",
+          "name": {
+            "value": "prod-nsg"
+          },
+          "virtual_network": {
+            "node": {
+              "name": {
+                "value": "prod-vnet"
+              }
+            }
+          }
+        }
+      }
+    ]
+  },
+  "CloudInstance": {
+    "edges": [
+      {
+        "node": {
+          "id": "vm-1",
+          "name": {
+            "value": "prod-vm-1"
+          },
+          "cloud_id": {
+            "value": "vm-abc"
+          },
+          "instance_type": {
+            "value": "Standard_D2s_v3"
+          },
+          "image": {
+            "value": "UbuntuServer-18.04"
+          },
+          "os_type": {
+            "value": "linux"
+          },
+          "private_ip": {
+            "value": "10.0.1.10"
+          },
+          "public_ip": {
+            "value": null
+          },
+          "network_segment": {
+            "node": {
+              "name": {
+                "value": "prod-subnet-westeurope-1"
+              },
+              "virtual_network": {
+                "node": {
+                  "name": {
+                    "value": "prod-vnet"
+                  }
+                }
+              }
+            }
+          },
+          "availability_zone": {
+            "node": {
+              "name": {
+                "value": "westeurope-1"
+              }
+            }
+          },
+          "security_groups": {
+            "edges": [
+              {
+                "node": {
+                  "name": {
+                    "value": "prod-nsg"
+                  }
+                }
+              }
+            ]
+          }
+        }
+      }
+    ]
+  },
+  "CloudInternetGateway": {
+    "edges": []
+  },
+  "CloudNATGateway": {
+    "edges": []
+  },
+  "CloudRouteTable": {
+    "edges": [
+      {
+        "node": {
+          "id": "rt-1",
+          "name": {
+            "value": "prod-rt"
+          },
+          "is_main": {
+            "value": false
+          },
+          "virtual_network": {
+            "node": {
+              "name": {
+                "value": "prod-vnet"
+              }
+            }
+          },
+          "network_segments": {
+            "edges": [
+              {
+                "node": {
+                  "name": {
+                    "value": "prod-subnet-westeurope-1"
+                  }
+                }
+              }
+            ]
+          }
+        }
+      }
+    ]
+  },
+  "CloudRoute": {
+    "edges": []
+  },
+  "CloudPublicIP": {
+    "edges": []
+  },
+  "CloudNetworkACL": {
+    "edges": []
+  },
+  "CloudTransitGateway": {
+    "edges": []
+  },
+  "CloudVPNGateway": {
+    "edges": []
+  },
+  "CloudCustomerGateway": {
+    "edges": []
+  },
+  "CloudVirtualNetworkPeering": {
+    "edges": []
+  },
+  "CloudDirectConnect": {
+    "edges": []
+  },
+  "CloudVirtualInterface": {
+    "edges": []
+  }
+}

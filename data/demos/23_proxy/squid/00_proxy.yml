@@ -1,0 +1,35 @@
+---
+# Squid on-prem proxy instances
+# dc1-squid-wccp:     WCCP transparent interception — generates config on proxy + edge routers
+# dc1-squid-explicit: explicit mode for admin VLAN — generates config on proxy only
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: OnpremProxy
+  data:
+    - name: dc1-squid-wccp
+      description: "DC1 Squid proxy — WCCP transparent interception from edge"
+      status: active
+      proxy_type: explicit
+      vendor: squid
+      forwarding_method: wccp
+      proxy_port: 3128
+      auth_type: kerberos
+      ssl_inspection: true
+      wccp_service_id: 80
+      deployment: "DC1"
+      member_of_groups:
+        - ["onprem_proxies"]
+
+    - name: dc1-squid-explicit
+      description: "DC1 Squid proxy — explicit mode for admin VLAN and management access"
+      status: active
+      proxy_type: explicit
+      vendor: squid
+      forwarding_method: explicit
+      proxy_port: 3128
+      auth_type: basic
+      ssl_inspection: false
+      deployment: "DC1"
+      member_of_groups:
+        - ["onprem_proxies"]

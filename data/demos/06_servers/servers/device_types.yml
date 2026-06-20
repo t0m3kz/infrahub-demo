@@ -4,9 +4,9 @@ kind: Object
 spec:
   kind: DcimDeviceType
   data:
-    # Arista
+    # Dell Server
     - name: DELL-R740XD2
-      part_number: DELL-R740XD2
-      height: 1
-      full_depth: false
+      part_number: R740XD2
+      height: 2
+      full_depth: true
       manufacturer: Dell

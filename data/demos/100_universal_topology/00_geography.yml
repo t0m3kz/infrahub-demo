@@ -1,0 +1,77 @@
+---
+# Shared geography — regions, countries, metros.
+# Must load before any site-specific files. Named 00_ to ensure first-load order.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: LocationRegion
+  data:
+    - name: "EMEA"
+      shortname: "emea"
+      children:
+        kind: LocationCountry
+        data:
+          - name: "Germany"
+            shortname: "de"
+            children:
+              kind: LocationMetro
+              data:
+                - name: "Frankfurt"
+                  shortname: "fra"
+                - name: "Stuttgart"
+                  shortname: "str"
+          - name: "Netherlands"
+            shortname: "nl"
+            children:
+              kind: LocationMetro
+              data:
+                - name: "Amsterdam"
+                  shortname: "ams"
+          - name: "France"
+            shortname: "fr"
+            children:
+              kind: LocationMetro
+              data:
+                - name: "Paris"
+                  shortname: "par"
+          - name: "Spain"
+            shortname: "es"
+            children:
+              kind: LocationMetro
+              data:
+                - name: "Barcelona"
+                  shortname: "bcn"
+                - name: "Madrid"
+                  shortname: "mdr"
+          - name: "United Kingdom"
+            shortname: "uk"
+            children:
+              kind: LocationMetro
+              data:
+                - name: "Edinburgh"
+                  shortname: "edi"
+                - name: "London"
+                  shortname: "lon"
+
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: LocationRegion
+  data:
+    - name: "AMERICAS"
+      shortname: "amer"
+      children:
+        kind: LocationCountry
+        data:
+          - name: "United States"
+            shortname: "us"
+            children:
+              kind: LocationMetro
+              data:
+                - name: "New York"
+                  shortname: "nyc"
+                - name: "Northern Virginia"
+                  shortname: "iad"
+                - name: "Silicon Valley"
+                  shortname: "sjc"

@@ -1,0 +1,131 @@
+---
+# DC2 — VXLAN segment assignment to server MLAG (bond0) interfaces
+#
+# Each server's bond0 carries a trunk with a subset of the VXLAN segments
+# active in DC2. Segments distributed across servers for realistic placement.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimLAGInterface
+  data:
+    # ── POD1 servers ─────────────────────────────────────────────────────────
+    - name: bond0
+      device: DC2-POD1-SRV-01
+      lag_id: 1
+      interface_capabilities:
+        - kind: ManagedVxlanSegment
+          data:
+            owner: "Customer 1"
+            environment: "production"
+            customer_name: "web-frontend"
+        - kind: ManagedVxlanSegment
+          data:
+            owner: "Customer 1"
+            environment: "production"
+            customer_name: "app-backend"
+        - kind: ManagedVxlanSegment
+          data:
+            owner: "Customer 2"
+            environment: "production"
+            customer_name: "web-frontend"
+        - kind: ManagedVxlanSegment
+          data:
+            owner: "Customer 2"
+            environment: "no-production"
+            customer_name: "web-frontend"
+        - kind: ManagedVxlanSegment
+          data:
+            owner: "Customer 1"
+            environment: "production"
+            customer_name: "shared-infra"
+
+    - name: bond0
+      device: DC2-POD1-SRV-02
+      lag_id: 1
+      interface_capabilities:
+        - kind: ManagedVxlanSegment
+          data:
+            owner: "Customer 1"
+            environment: "production"
+            customer_name: "app-backend"
+        - kind: ManagedVxlanSegment
+          data:
+            owner: "Customer 1"
+            environment: "production"
+            customer_name: "database"
+        - kind: ManagedVxlanSegment
+          data:
+            owner: "Customer 2"
+            environment: "production"
+            customer_name: "app-backend"
+        - kind: ManagedVxlanSegment
+          data:
+            owner: "Customer 2"
+            environment: "no-production"
+            customer_name: "app-backend"
+        - kind: ManagedVxlanSegment
+          data:
+            owner: "Customer 1"
+            environment: "production"
+            customer_name: "shared-infra"
+
+    # ── POD2 servers ─────────────────────────────────────────────────────────
+    - name: bond0
+      device: DC2-POD2-SRV-01
+      lag_id: 1
+      interface_capabilities:
+        - kind: ManagedVxlanSegment
+          data:
+            owner: "Customer 1"
+            environment: "production"
+            customer_name: "database"
+        - kind: ManagedVxlanSegment
+          data:
+            owner: "Customer 2"
+            environment: "production"
+            customer_name: "web-frontend"
+        - kind: ManagedVxlanSegment
+          data:
+            owner: "Customer 2"
+            environment: "no-production"
+            customer_name: "web-frontend"
+        - kind: ManagedVxlanSegment
+          data:
+            owner: "Customer 2"
+            environment: "production"
+            customer_name: "app-backend"
+        - kind: ManagedVxlanSegment
+          data:
+            owner: "Customer 1"
+            environment: "production"
+            customer_name: "shared-infra"
+
+    - name: bond0
+      device: DC2-POD2-SRV-02
+      lag_id: 1
+      interface_capabilities:
+        - kind: ManagedVxlanSegment
+          data:
+            owner: "Customer 1"
+            environment: "production"
+            customer_name: "web-frontend"
+        - kind: ManagedVxlanSegment
+          data:
+            owner: "Customer 2"
+            environment: "production"
+            customer_name: "app-backend"
+        - kind: ManagedVxlanSegment
+          data:
+            owner: "Customer 2"
+            environment: "no-production"
+            customer_name: "app-backend"
+        - kind: ManagedVxlanSegment
+          data:
+            owner: "Customer 1"
+            environment: "production"
+            customer_name: "database"
+        - kind: ManagedVxlanSegment
+          data:
+            owner: "Customer 1"
+            environment: "production"
+            customer_name: "shared-infra"

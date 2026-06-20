@@ -1,0 +1,50 @@
+# Backend Pools for F5 and A10 Load Balancers
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: ServiceBackendPool
+  data:
+    # F5 Web Tier Backend Pool
+    - name: "f5-demo-web-pool"
+      description: "F5 web tier backend pool"
+      load_balancing_algorithm: round_robin
+      session_persistence: cookie
+      drain_timeout: 300
+      vip_service: ["f5-www.demo.local", "https", "443"]
+      onprem_servers:
+        - ["demo-web-01"]
+        - ["demo-web-02"]
+
+    # F5 App Tier Backend Pool
+    - name: "f5-demo-app-pool"
+      description: "F5 app tier backend pool"
+      load_balancing_algorithm: least_connections
+      session_persistence: source_ip
+      drain_timeout: 300
+      vip_service: ["f5-app.demo.local", "https", "8080"]
+      onprem_servers:
+        - ["demo-app-01"]
+        - ["demo-app-02"]
+
+    # A10 Web Tier Backend Pool
+    - name: "a10-demo-web-pool"
+      description: "A10 web tier backend pool"
+      load_balancing_algorithm: round_robin
+      session_persistence: cookie
+      drain_timeout: 300
+      vip_service: ["a10-www.demo.local", "https", "443"]
+      onprem_servers:
+        - ["demo-web-01"]
+        - ["demo-web-02"]
+
+    # A10 App Tier Backend Pool
+    - name: "a10-demo-app-pool"
+      description: "A10 app tier backend pool"
+      load_balancing_algorithm: least_connections
+      session_persistence: source_ip
+      drain_timeout: 300
+      vip_service: ["a10-app.demo.local", "https", "8080"]
+      onprem_servers:
+        - ["demo-app-01"]
+        - ["demo-app-02"]

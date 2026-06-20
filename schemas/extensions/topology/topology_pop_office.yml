@@ -1,0 +1,49 @@
+---
+version: "1.0"
+
+nodes:
+  - name: Office
+    namespace: Topology
+    inherit_from:
+      - CoreArtifactTarget
+      - TopologyDeployment
+      - TopologyPhysicalDeployment
+      - TopologyConnectableLocation
+      - TopologyDeviceHosting
+    uniqueness_constraints:
+      - ["name__value"]
+    human_friendly_id:
+      - name__value
+    include_in_menu: false
+    display_label: "{{ name__value }}"
+    label: Office Topology
+    children: ""
+    attributes:
+      - name: site_type
+        kind: Dropdown
+        optional: false
+        default_value: branch
+        order_weight: 650
+        choices:
+          - name: hq
+            label: Headquarters
+            color: "#2ECC71"
+          - name: regional
+            label: Regional Office
+            color: "#3498DB"
+          - name: branch
+            label: Branch Office
+            color: "#7F7FBF"
+          - name: campus
+            label: Campus
+            color: "#F39C12"
+    relationships:
+      - name: locations
+        peer: LocationBuilding
+        cardinality: many
+        kind: Attribute
+        optional: false
+        identifier: "office__locations"
+        order_weight: 1000
+        description: "Building locations backing this office deployment
+          (single for branch/regional, multiple for HQ/campus)"

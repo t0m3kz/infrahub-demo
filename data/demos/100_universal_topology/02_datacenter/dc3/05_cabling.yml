@@ -1,0 +1,1572 @@
+---
+# DC3 cabling
+#
+# k8s node multi-homing pattern:
+#   eno1 → POD1-L1  (primary leaf, same pod)
+#   eno2 → POD1-L2  (secondary leaf, same pod — MLAG peer)
+#   eno3 → POD2-L1  (primary leaf, cross-pod)
+#   eno4 → POD2-L2  (secondary leaf, cross-pod — MLAG peer)
+#
+# This gives each node 4 uplinks forming two MLAG bond pairs (bond0 within-pod,
+# bond1 cross-pod). All four links are LACP-active so the node sees one logical
+# fabric interface per bond regardless of which leaf pair is active.
+#
+# Super-spine and spine cabling mirrors DC1/DC2 exactly.
+
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimCable
+  data:
+
+    # ── Super-spine ↔ spines ──────────────────────────────────────────────────
+
+    - name: CBL-DC3-SS1-POD1-SP1
+      type: smf
+      deployment: DC3
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-SS1
+            name: Ethernet1/1
+            description: "DC3-POD1-SP1"
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD1-SP1
+            name: Ethernet1/1
+            description: "DC3-SS1"
+
+    - name: CBL-DC3-SS2-POD1-SP1
+      type: smf
+      deployment: DC3
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-SS2
+            name: Ethernet1/1
+            description: "DC3-POD1-SP1"
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD1-SP1
+            name: Ethernet1/2
+            description: "DC3-SS2"
+
+    - name: CBL-DC3-SS1-POD1-SP2
+      type: smf
+      deployment: DC3
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-SS1
+            name: Ethernet1/2
+            description: "DC3-POD1-SP2"
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD1-SP2
+            name: Ethernet1/1
+            description: "DC3-SS1"
+
+    - name: CBL-DC3-SS2-POD1-SP2
+      type: smf
+      deployment: DC3
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-SS2
+            name: Ethernet1/2
+            description: "DC3-POD1-SP2"
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD1-SP2
+            name: Ethernet1/2
+            description: "DC3-SS2"
+
+    - name: CBL-DC3-SS1-POD2-SP1
+      type: smf
+      deployment: DC3
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-SS1
+            name: Ethernet1/3
+            description: "DC3-POD2-SP1"
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD2-SP1
+            name: Ethernet1/1
+            description: "DC3-SS1"
+
+    - name: CBL-DC3-SS2-POD2-SP1
+      type: smf
+      deployment: DC3
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-SS2
+            name: Ethernet1/3
+            description: "DC3-POD2-SP1"
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD2-SP1
+            name: Ethernet1/2
+            description: "DC3-SS2"
+
+    - name: CBL-DC3-SS1-POD2-SP2
+      type: smf
+      deployment: DC3
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-SS1
+            name: Ethernet1/4
+            description: "DC3-POD2-SP2"
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD2-SP2
+            name: Ethernet1/1
+            description: "DC3-SS1"
+
+    - name: CBL-DC3-SS2-POD2-SP2
+      type: smf
+      deployment: DC3
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-SS2
+            name: Ethernet1/4
+            description: "DC3-POD2-SP2"
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD2-SP2
+            name: Ethernet1/2
+            description: "DC3-SS2"
+
+    # ── Spines ↔ leaves ───────────────────────────────────────────────────────
+
+    - name: CBL-DC3-POD1-SP1-L1
+      type: smf
+      deployment: DC3
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD1-SP1
+            name: Ethernet1/11
+            description: "DC3-POD1-L1"
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD1-L1
+            name: Ethernet1/1
+            description: "DC3-POD1-SP1"
+
+    - name: CBL-DC3-POD1-SP2-L1
+      type: smf
+      deployment: DC3
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD1-SP2
+            name: Ethernet1/21
+            description: "DC3-POD1-L1"
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD1-L1
+            name: Ethernet1/2
+            description: "DC3-POD1-SP2"
+
+    - name: CBL-DC3-POD1-SP1-L2
+      type: smf
+      deployment: DC3
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD1-SP1
+            name: Ethernet1/12
+            description: "DC3-POD1-L2"
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD1-L2
+            name: Ethernet1/1
+            description: "DC3-POD1-SP1"
+
+    - name: CBL-DC3-POD1-SP2-L2
+      type: smf
+      deployment: DC3
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD1-SP2
+            name: Ethernet1/22
+            description: "DC3-POD1-L2"
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD1-L2
+            name: Ethernet1/2
+            description: "DC3-POD1-SP2"
+
+    - name: CBL-DC3-POD1-SP1-L3
+      type: smf
+      deployment: DC3
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD1-SP1
+            name: Ethernet1/13
+            description: "DC3-POD1-L3"
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD1-L3
+            name: Ethernet1/1
+            description: "DC3-POD1-SP1"
+
+    - name: CBL-DC3-POD1-SP2-L3
+      type: smf
+      deployment: DC3
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD1-SP2
+            name: Ethernet1/23
+            description: "DC3-POD1-L3"
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD1-L3
+            name: Ethernet1/2
+            description: "DC3-POD1-SP2"
+
+    - name: CBL-DC3-POD1-SP1-L4
+      type: smf
+      deployment: DC3
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD1-SP1
+            name: Ethernet1/14
+            description: "DC3-POD1-L4"
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD1-L4
+            name: Ethernet1/1
+            description: "DC3-POD1-SP1"
+
+    - name: CBL-DC3-POD1-SP2-L4
+      type: smf
+      deployment: DC3
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD1-SP2
+            name: Ethernet1/24
+            description: "DC3-POD1-L4"
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD1-L4
+            name: Ethernet1/2
+            description: "DC3-POD1-SP2"
+
+    - name: CBL-DC3-POD2-SP1-L1
+      type: smf
+      deployment: DC3
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD2-SP1
+            name: Ethernet1/11
+            description: "DC3-POD2-L1"
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD2-L1
+            name: Ethernet1/1
+            description: "DC3-POD2-SP1"
+
+    - name: CBL-DC3-POD2-SP2-L1
+      type: smf
+      deployment: DC3
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD2-SP2
+            name: Ethernet1/21
+            description: "DC3-POD2-L1"
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD2-L1
+            name: Ethernet1/2
+            description: "DC3-POD2-SP2"
+
+    - name: CBL-DC3-POD2-SP1-L2
+      type: smf
+      deployment: DC3
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD2-SP1
+            name: Ethernet1/12
+            description: "DC3-POD2-L2"
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD2-L2
+            name: Ethernet1/1
+            description: "DC3-POD2-SP1"
+
+    - name: CBL-DC3-POD2-SP2-L2
+      type: smf
+      deployment: DC3
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD2-SP2
+            name: Ethernet1/22
+            description: "DC3-POD2-L2"
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD2-L2
+            name: Ethernet1/2
+            description: "DC3-POD2-SP2"
+
+    - name: CBL-DC3-POD2-SP1-L3
+      type: smf
+      deployment: DC3
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD2-SP1
+            name: Ethernet1/13
+            description: "DC3-POD2-L3"
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD2-L3
+            name: Ethernet1/1
+            description: "DC3-POD2-SP1"
+
+    - name: CBL-DC3-POD2-SP2-L3
+      type: smf
+      deployment: DC3
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD2-SP2
+            name: Ethernet1/23
+            description: "DC3-POD2-L3"
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD2-L3
+            name: Ethernet1/2
+            description: "DC3-POD2-SP2"
+
+    - name: CBL-DC3-POD2-SP1-L4
+      type: smf
+      deployment: DC3
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD2-SP1
+            name: Ethernet1/14
+            description: "DC3-POD2-L4"
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD2-L4
+            name: Ethernet1/1
+            description: "DC3-POD2-SP1"
+
+    - name: CBL-DC3-POD2-SP2-L4
+      type: smf
+      deployment: DC3
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD2-SP2
+            name: Ethernet1/24
+            description: "DC3-POD2-L4"
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD2-L4
+            name: Ethernet1/2
+            description: "DC3-POD2-SP2"
+
+    # ── k8s nodes → leaves (4-NIC cross-pod multi-homing) ────────────────────
+    #
+    # Port allocation on leaf switches:
+    #   Eth1/41-44 → CP nodes (3 CP nodes × 1 port each, + 1 spare)
+    #   Eth1/45-48 → POD1 worker nodes
+    #   Eth1/49-54 → POD2 worker + storage nodes (cross-pod uplinks)
+    #
+    # Each node:
+    #   eno1 → POD1-L1:Eth1/4x  (within-pod primary)
+    #   eno2 → POD1-L2:Eth1/4x  (within-pod secondary)
+    #   eno3 → POD2-L1:Eth1/4x  (cross-pod primary)
+    #   eno4 → POD2-L2:Eth1/4x  (cross-pod secondary)
+
+    # ── Control-plane node 01 ─────────────────────────────────────────────────
+    - name: CBL-DC3-K8S-CP01-POD1-L1
+      type: copper
+      deployment: DC3
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD1-K8S-CP-01
+            name: eno1
+            description: "DC3-POD1-L1 (within-pod primary)"
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD1-L1
+            name: Ethernet1/41
+            description: "DC3-POD1-K8S-CP-01"
+
+    - name: CBL-DC3-K8S-CP01-POD1-L2
+      type: copper
+      deployment: DC3
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD1-K8S-CP-01
+            name: eno2
+            description: "DC3-POD1-L2 (within-pod secondary)"
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD1-L2
+            name: Ethernet1/41
+            description: "DC3-POD1-K8S-CP-01"
+
+    - name: CBL-DC3-K8S-CP01-POD2-L1
+      type: copper
+      deployment: DC3
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD1-K8S-CP-01
+            name: eno3
+            description: "DC3-POD2-L1 (cross-pod primary)"
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD2-L1
+            name: Ethernet1/41
+            description: "DC3-POD1-K8S-CP-01"
+
+    - name: CBL-DC3-K8S-CP01-POD2-L2
+      type: copper
+      deployment: DC3
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD1-K8S-CP-01
+            name: eno4
+            description: "DC3-POD2-L2 (cross-pod secondary)"
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD2-L2
+            name: Ethernet1/41
+            description: "DC3-POD1-K8S-CP-01"
+
+    # ── Control-plane node 02 ─────────────────────────────────────────────────
+    - name: CBL-DC3-K8S-CP02-POD1-L1
+      type: copper
+      deployment: DC3
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD1-K8S-CP-02
+            name: eno1
+            description: "DC3-POD1-L1 (within-pod primary)"
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD1-L1
+            name: Ethernet1/42
+            description: "DC3-POD1-K8S-CP-02"
+
+    - name: CBL-DC3-K8S-CP02-POD1-L2
+      type: copper
+      deployment: DC3
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD1-K8S-CP-02
+            name: eno2
+            description: "DC3-POD1-L2 (within-pod secondary)"
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD1-L2
+            name: Ethernet1/42
+            description: "DC3-POD1-K8S-CP-02"
+
+    - name: CBL-DC3-K8S-CP02-POD2-L1
+      type: copper
+      deployment: DC3
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD1-K8S-CP-02
+            name: eno3
+            description: "DC3-POD2-L1 (cross-pod primary)"
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD2-L1
+            name: Ethernet1/42
+            description: "DC3-POD1-K8S-CP-02"
+
+    - name: CBL-DC3-K8S-CP02-POD2-L2
+      type: copper
+      deployment: DC3
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD1-K8S-CP-02
+            name: eno4
+            description: "DC3-POD2-L2 (cross-pod secondary)"
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD2-L2
+            name: Ethernet1/42
+            description: "DC3-POD1-K8S-CP-02"
+
+    # ── Control-plane node 03 ─────────────────────────────────────────────────
+    - name: CBL-DC3-K8S-CP03-POD1-L1
+      type: copper
+      deployment: DC3
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD1-K8S-CP-03
+            name: eno1
+            description: "DC3-POD1-L1 (within-pod primary)"
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD1-L1
+            name: Ethernet1/43
+            description: "DC3-POD1-K8S-CP-03"
+
+    - name: CBL-DC3-K8S-CP03-POD1-L2
+      type: copper
+      deployment: DC3
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD1-K8S-CP-03
+            name: eno2
+            description: "DC3-POD1-L2 (within-pod secondary)"
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD1-L2
+            name: Ethernet1/43
+            description: "DC3-POD1-K8S-CP-03"
+
+    - name: CBL-DC3-K8S-CP03-POD2-L1
+      type: copper
+      deployment: DC3
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD1-K8S-CP-03
+            name: eno3
+            description: "DC3-POD2-L1 (cross-pod primary)"
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD2-L1
+            name: Ethernet1/43
+            description: "DC3-POD1-K8S-CP-03"
+
+    - name: CBL-DC3-K8S-CP03-POD2-L2
+      type: copper
+      deployment: DC3
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD1-K8S-CP-03
+            name: eno4
+            description: "DC3-POD2-L2 (cross-pod secondary)"
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD2-L2
+            name: Ethernet1/43
+            description: "DC3-POD1-K8S-CP-03"
+
+    # ── POD1 worker node 01 ───────────────────────────────────────────────────
+    - name: CBL-DC3-K8S-WRK01-P1-POD1-L1
+      type: copper
+      deployment: DC3
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD1-K8S-WRK-01
+            name: eno1
+            description: "DC3-POD1-L1"
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD1-L1
+            name: Ethernet1/45
+            description: "DC3-POD1-K8S-WRK-01"
+
+    - name: CBL-DC3-K8S-WRK01-P1-POD1-L2
+      type: copper
+      deployment: DC3
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD1-K8S-WRK-01
+            name: eno2
+            description: "DC3-POD1-L2"
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD1-L2
+            name: Ethernet1/45
+            description: "DC3-POD1-K8S-WRK-01"
+
+    - name: CBL-DC3-K8S-WRK01-P1-POD2-L1
+      type: copper
+      deployment: DC3
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD1-K8S-WRK-01
+            name: eno3
+            description: "DC3-POD2-L1 (cross-pod)"
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD2-L1
+            name: Ethernet1/45
+            description: "DC3-POD1-K8S-WRK-01"
+
+    - name: CBL-DC3-K8S-WRK01-P1-POD2-L2
+      type: copper
+      deployment: DC3
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD1-K8S-WRK-01
+            name: eno4
+            description: "DC3-POD2-L2 (cross-pod)"
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD2-L2
+            name: Ethernet1/45
+            description: "DC3-POD1-K8S-WRK-01"
+
+    # ── POD1 worker node 02 ───────────────────────────────────────────────────
+    - name: CBL-DC3-K8S-WRK02-P1-POD1-L1
+      type: copper
+      deployment: DC3
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD1-K8S-WRK-02
+            name: eno1
+            description: "DC3-POD1-L1"
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD1-L1
+            name: Ethernet1/46
+            description: "DC3-POD1-K8S-WRK-02"
+
+    - name: CBL-DC3-K8S-WRK02-P1-POD1-L2
+      type: copper
+      deployment: DC3
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD1-K8S-WRK-02
+            name: eno2
+            description: "DC3-POD1-L2"
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD1-L2
+            name: Ethernet1/46
+            description: "DC3-POD1-K8S-WRK-02"
+
+    - name: CBL-DC3-K8S-WRK02-P1-POD2-L1
+      type: copper
+      deployment: DC3
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD1-K8S-WRK-02
+            name: eno3
+            description: "DC3-POD2-L1 (cross-pod)"
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD2-L1
+            name: Ethernet1/46
+            description: "DC3-POD1-K8S-WRK-02"
+
+    - name: CBL-DC3-K8S-WRK02-P1-POD2-L2
+      type: copper
+      deployment: DC3
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD1-K8S-WRK-02
+            name: eno4
+            description: "DC3-POD2-L2 (cross-pod)"
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD2-L2
+            name: Ethernet1/46
+            description: "DC3-POD1-K8S-WRK-02"
+
+    # ── POD2 worker nodes 01-04 ───────────────────────────────────────────────
+
+    - name: CBL-DC3-K8S-WRK01-P2-POD1-L1
+      type: copper
+      deployment: DC3
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD2-K8S-WRK-01
+            name: eno1
+            description: "DC3-POD1-L1 (cross-pod)"
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD1-L1
+            name: Ethernet1/49
+            description: "DC3-POD2-K8S-WRK-01"
+
+    - name: CBL-DC3-K8S-WRK01-P2-POD1-L2
+      type: copper
+      deployment: DC3
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD2-K8S-WRK-01
+            name: eno2
+            description: "DC3-POD1-L2 (cross-pod)"
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD1-L2
+            name: Ethernet1/49
+            description: "DC3-POD2-K8S-WRK-01"
+
+    - name: CBL-DC3-K8S-WRK01-P2-POD2-L1
+      type: copper
+      deployment: DC3
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD2-K8S-WRK-01
+            name: eno3
+            description: "DC3-POD2-L1"
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD2-L1
+            name: Ethernet1/49
+            description: "DC3-POD2-K8S-WRK-01"
+
+    - name: CBL-DC3-K8S-WRK01-P2-POD2-L2
+      type: copper
+      deployment: DC3
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD2-K8S-WRK-01
+            name: eno4
+            description: "DC3-POD2-L2"
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD2-L2
+            name: Ethernet1/49
+            description: "DC3-POD2-K8S-WRK-01"
+
+    - name: CBL-DC3-K8S-WRK02-P2-POD1-L1
+      type: copper
+      deployment: DC3
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD2-K8S-WRK-02
+            name: eno1
+            description: "DC3-POD1-L1 (cross-pod)"
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD1-L1
+            name: Ethernet1/50
+            description: "DC3-POD2-K8S-WRK-02"
+
+    - name: CBL-DC3-K8S-WRK02-P2-POD1-L2
+      type: copper
+      deployment: DC3
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD2-K8S-WRK-02
+            name: eno2
+            description: "DC3-POD1-L2 (cross-pod)"
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD1-L2
+            name: Ethernet1/50
+            description: "DC3-POD2-K8S-WRK-02"
+
+    - name: CBL-DC3-K8S-WRK02-P2-POD2-L1
+      type: copper
+      deployment: DC3
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD2-K8S-WRK-02
+            name: eno3
+            description: "DC3-POD2-L1"
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD2-L1
+            name: Ethernet1/50
+            description: "DC3-POD2-K8S-WRK-02"
+
+    - name: CBL-DC3-K8S-WRK02-P2-POD2-L2
+      type: copper
+      deployment: DC3
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD2-K8S-WRK-02
+            name: eno4
+            description: "DC3-POD2-L2"
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD2-L2
+            name: Ethernet1/50
+            description: "DC3-POD2-K8S-WRK-02"
+
+    - name: CBL-DC3-K8S-WRK03-P2-POD1-L1
+      type: copper
+      deployment: DC3
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD2-K8S-WRK-03
+            name: eno1
+            description: "DC3-POD1-L1 (cross-pod)"
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD1-L1
+            name: Ethernet1/51
+            description: "DC3-POD2-K8S-WRK-03"
+
+    - name: CBL-DC3-K8S-WRK03-P2-POD1-L2
+      type: copper
+      deployment: DC3
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD2-K8S-WRK-03
+            name: eno2
+            description: "DC3-POD1-L2 (cross-pod)"
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD1-L2
+            name: Ethernet1/51
+            description: "DC3-POD2-K8S-WRK-03"
+
+    - name: CBL-DC3-K8S-WRK03-P2-POD2-L1
+      type: copper
+      deployment: DC3
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD2-K8S-WRK-03
+            name: eno3
+            description: "DC3-POD2-L1"
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD2-L1
+            name: Ethernet1/51
+            description: "DC3-POD2-K8S-WRK-03"
+
+    - name: CBL-DC3-K8S-WRK03-P2-POD2-L2
+      type: copper
+      deployment: DC3
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD2-K8S-WRK-03
+            name: eno4
+            description: "DC3-POD2-L2"
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD2-L2
+            name: Ethernet1/51
+            description: "DC3-POD2-K8S-WRK-03"
+
+    - name: CBL-DC3-K8S-WRK04-P2-POD1-L1
+      type: copper
+      deployment: DC3
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD2-K8S-WRK-04
+            name: eno1
+            description: "DC3-POD1-L1 (cross-pod)"
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD1-L1
+            name: Ethernet1/52
+            description: "DC3-POD2-K8S-WRK-04"
+
+    - name: CBL-DC3-K8S-WRK04-P2-POD1-L2
+      type: copper
+      deployment: DC3
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD2-K8S-WRK-04
+            name: eno2
+            description: "DC3-POD1-L2 (cross-pod)"
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD1-L2
+            name: Ethernet1/52
+            description: "DC3-POD2-K8S-WRK-04"
+
+    - name: CBL-DC3-K8S-WRK04-P2-POD2-L1
+      type: copper
+      deployment: DC3
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD2-K8S-WRK-04
+            name: eno3
+            description: "DC3-POD2-L1"
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD2-L1
+            name: Ethernet1/52
+            description: "DC3-POD2-K8S-WRK-04"
+
+    - name: CBL-DC3-K8S-WRK04-P2-POD2-L2
+      type: copper
+      deployment: DC3
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD2-K8S-WRK-04
+            name: eno4
+            description: "DC3-POD2-L2"
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD2-L2
+            name: Ethernet1/52
+            description: "DC3-POD2-K8S-WRK-04"
+
+    # ── Storage nodes ─────────────────────────────────────────────────────────
+    # Storage nodes only need within-pod connectivity (Ceph replication stays local)
+
+    - name: CBL-DC3-K8S-STO01-POD2-L1
+      type: copper
+      deployment: DC3
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD2-K8S-STO-01
+            name: eno1
+            description: "DC3-POD2-L1"
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD2-L1
+            name: Ethernet1/53
+            description: "DC3-POD2-K8S-STO-01"
+
+    - name: CBL-DC3-K8S-STO01-POD2-L2
+      type: copper
+      deployment: DC3
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD2-K8S-STO-01
+            name: eno2
+            description: "DC3-POD2-L2"
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD2-L2
+            name: Ethernet1/53
+            description: "DC3-POD2-K8S-STO-01"
+
+    - name: CBL-DC3-K8S-STO02-POD2-L1
+      type: copper
+      deployment: DC3
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD2-K8S-STO-02
+            name: eno1
+            description: "DC3-POD2-L1"
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD2-L1
+            name: Ethernet1/54
+            description: "DC3-POD2-K8S-STO-02"
+
+    - name: CBL-DC3-K8S-STO02-POD2-L2
+      type: copper
+      deployment: DC3
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD2-K8S-STO-02
+            name: eno2
+            description: "DC3-POD2-L2"
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD2-L2
+            name: Ethernet1/54
+            description: "DC3-POD2-K8S-STO-02"
+
+    # ── Super-spine ↔ POD3 spines ─────────────────────────────────────────────
+
+    - name: CBL-DC3-SS1-POD3-SP1
+      type: smf
+      deployment: DC3
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-SS1
+            name: Ethernet1/5
+            description: "DC3-POD3-SP1"
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD3-SP1
+            name: Ethernet1/1
+            description: "DC3-SS1"
+
+    - name: CBL-DC3-SS2-POD3-SP1
+      type: smf
+      deployment: DC3
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-SS2
+            name: Ethernet1/5
+            description: "DC3-POD3-SP1"
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD3-SP1
+            name: Ethernet1/2
+            description: "DC3-SS2"
+
+    - name: CBL-DC3-SS1-POD3-SP2
+      type: smf
+      deployment: DC3
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-SS1
+            name: Ethernet1/6
+            description: "DC3-POD3-SP2"
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD3-SP2
+            name: Ethernet1/1
+            description: "DC3-SS1"
+
+    - name: CBL-DC3-SS2-POD3-SP2
+      type: smf
+      deployment: DC3
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-SS2
+            name: Ethernet1/6
+            description: "DC3-POD3-SP2"
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD3-SP2
+            name: Ethernet1/2
+            description: "DC3-SS2"
+
+    # ── Super-spine ↔ POD4 spines ─────────────────────────────────────────────
+
+    - name: CBL-DC3-SS1-POD4-SP1
+      type: smf
+      deployment: DC3
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-SS1
+            name: Ethernet1/7
+            description: "DC3-POD4-SP1"
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD4-SP1
+            name: Ethernet1/1
+            description: "DC3-SS1"
+
+    - name: CBL-DC3-SS2-POD4-SP1
+      type: smf
+      deployment: DC3
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-SS2
+            name: Ethernet1/7
+            description: "DC3-POD4-SP1"
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD4-SP1
+            name: Ethernet1/2
+            description: "DC3-SS2"
+
+    - name: CBL-DC3-SS1-POD4-SP2
+      type: smf
+      deployment: DC3
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-SS1
+            name: Ethernet1/8
+            description: "DC3-POD4-SP2"
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD4-SP2
+            name: Ethernet1/1
+            description: "DC3-SS1"
+
+    - name: CBL-DC3-SS2-POD4-SP2
+      type: smf
+      deployment: DC3
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-SS2
+            name: Ethernet1/8
+            description: "DC3-POD4-SP2"
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD4-SP2
+            name: Ethernet1/2
+            description: "DC3-SS2"
+
+    # ── POD3 spines ↔ leaves ──────────────────────────────────────────────────
+
+    - name: CBL-DC3-POD3-SP1-L1
+      type: smf
+      deployment: DC3
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD3-SP1
+            name: Ethernet1/11
+            description: "DC3-POD3-L1"
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD3-L1
+            name: Ethernet1/1
+            description: "DC3-POD3-SP1"
+
+    - name: CBL-DC3-POD3-SP2-L1
+      type: smf
+      deployment: DC3
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD3-SP2
+            name: Ethernet1/21
+            description: "DC3-POD3-L1"
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD3-L1
+            name: Ethernet1/2
+            description: "DC3-POD3-SP2"
+
+    - name: CBL-DC3-POD3-SP1-L2
+      type: smf
+      deployment: DC3
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD3-SP1
+            name: Ethernet1/12
+            description: "DC3-POD3-L2"
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD3-L2
+            name: Ethernet1/1
+            description: "DC3-POD3-SP1"
+
+    - name: CBL-DC3-POD3-SP2-L2
+      type: smf
+      deployment: DC3
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD3-SP2
+            name: Ethernet1/22
+            description: "DC3-POD3-L2"
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD3-L2
+            name: Ethernet1/2
+            description: "DC3-POD3-SP2"
+
+    # ── POD3 MLAG peer-link ───────────────────────────────────────────────────
+
+    - name: CBL-DC3-POD3-L1-L2-PL1
+      type: smf
+      deployment: DC3
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD3-L1
+            name: Ethernet1/33
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD3-L2
+            name: Ethernet1/33
+
+    - name: CBL-DC3-POD3-L1-L2-PL2
+      type: smf
+      deployment: DC3
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD3-L1
+            name: Ethernet1/34
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD3-L2
+            name: Ethernet1/34
+
+    # ── POD3 ESXi hosts → leaves (2-NIC MLAG) ────────────────────────────────
+    # Port allocation: Eth1/41-44 for 4 ESXi hosts, Eth1/45 for vCenter
+
+    - name: CBL-DC3-ESXI01-L1
+      type: copper
+      deployment: DC3
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD3-ESXI-01
+            name: eno1
+            description: "DC3-POD3-L1"
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD3-L1
+            name: Ethernet1/41
+            description: "DC3-POD3-ESXI-01"
+
+    - name: CBL-DC3-ESXI01-L2
+      type: copper
+      deployment: DC3
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD3-ESXI-01
+            name: eno2
+            description: "DC3-POD3-L2"
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD3-L2
+            name: Ethernet1/41
+            description: "DC3-POD3-ESXI-01"
+
+    - name: CBL-DC3-ESXI02-L1
+      type: copper
+      deployment: DC3
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD3-ESXI-02
+            name: eno1
+            description: "DC3-POD3-L1"
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD3-L1
+            name: Ethernet1/42
+            description: "DC3-POD3-ESXI-02"
+
+    - name: CBL-DC3-ESXI02-L2
+      type: copper
+      deployment: DC3
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD3-ESXI-02
+            name: eno2
+            description: "DC3-POD3-L2"
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD3-L2
+            name: Ethernet1/42
+            description: "DC3-POD3-ESXI-02"
+
+    - name: CBL-DC3-ESXI03-L1
+      type: copper
+      deployment: DC3
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD3-ESXI-03
+            name: eno1
+            description: "DC3-POD3-L1"
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD3-L1
+            name: Ethernet1/43
+            description: "DC3-POD3-ESXI-03"
+
+    - name: CBL-DC3-ESXI03-L2
+      type: copper
+      deployment: DC3
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD3-ESXI-03
+            name: eno2
+            description: "DC3-POD3-L2"
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD3-L2
+            name: Ethernet1/43
+            description: "DC3-POD3-ESXI-03"
+
+    - name: CBL-DC3-ESXI04-L1
+      type: copper
+      deployment: DC3
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD3-ESXI-04
+            name: eno1
+            description: "DC3-POD3-L1"
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD3-L1
+            name: Ethernet1/44
+            description: "DC3-POD3-ESXI-04"
+
+    - name: CBL-DC3-ESXI04-L2
+      type: copper
+      deployment: DC3
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD3-ESXI-04
+            name: eno2
+            description: "DC3-POD3-L2"
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD3-L2
+            name: Ethernet1/44
+            description: "DC3-POD3-ESXI-04"
+
+    - name: CBL-DC3-VCSA01-L1
+      type: copper
+      deployment: DC3
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD3-VCSA-01
+            name: eno1
+            description: "DC3-POD3-L1"
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD3-L1
+            name: Ethernet1/45
+            description: "DC3-POD3-VCSA-01"
+
+    # ── POD4 spines ↔ leaves ──────────────────────────────────────────────────
+
+    - name: CBL-DC3-POD4-SP1-L1
+      type: smf
+      deployment: DC3
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD4-SP1
+            name: Ethernet1/11
+            description: "DC3-POD4-L1"
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD4-L1
+            name: Ethernet1/1
+            description: "DC3-POD4-SP1"
+
+    - name: CBL-DC3-POD4-SP2-L1
+      type: smf
+      deployment: DC3
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD4-SP2
+            name: Ethernet1/21
+            description: "DC3-POD4-L1"
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD4-L1
+            name: Ethernet1/2
+            description: "DC3-POD4-SP2"
+
+    - name: CBL-DC3-POD4-SP1-L2
+      type: smf
+      deployment: DC3
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD4-SP1
+            name: Ethernet1/12
+            description: "DC3-POD4-L2"
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD4-L2
+            name: Ethernet1/1
+            description: "DC3-POD4-SP1"
+
+    - name: CBL-DC3-POD4-SP2-L2
+      type: smf
+      deployment: DC3
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD4-SP2
+            name: Ethernet1/22
+            description: "DC3-POD4-L2"
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD4-L2
+            name: Ethernet1/2
+            description: "DC3-POD4-SP2"
+
+    # ── POD4 MLAG peer-link ───────────────────────────────────────────────────
+
+    - name: CBL-DC3-POD4-L1-L2-PL1
+      type: smf
+      deployment: DC3
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD4-L1
+            name: Ethernet1/33
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD4-L2
+            name: Ethernet1/33
+
+    - name: CBL-DC3-POD4-L1-L2-PL2
+      type: smf
+      deployment: DC3
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD4-L1
+            name: Ethernet1/34
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD4-L2
+            name: Ethernet1/34
+
+    # ── POD4 Nutanix nodes → leaves (2-NIC MLAG) ─────────────────────────────
+    # Nutanix nodes use eno1/eno2 for combined CVM and guest traffic over MLAG.
+
+    - name: CBL-DC3-NTX01-L1
+      type: copper
+      deployment: DC3
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD4-NTX-01
+            name: eno1
+            description: "DC3-POD4-L1"
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD4-L1
+            name: Ethernet1/41
+            description: "DC3-POD4-NTX-01"
+
+    - name: CBL-DC3-NTX01-L2
+      type: copper
+      deployment: DC3
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD4-NTX-01
+            name: eno2
+            description: "DC3-POD4-L2"
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD4-L2
+            name: Ethernet1/41
+            description: "DC3-POD4-NTX-01"
+
+    - name: CBL-DC3-NTX02-L1
+      type: copper
+      deployment: DC3
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD4-NTX-02
+            name: eno1
+            description: "DC3-POD4-L1"
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD4-L1
+            name: Ethernet1/42
+            description: "DC3-POD4-NTX-02"
+
+    - name: CBL-DC3-NTX02-L2
+      type: copper
+      deployment: DC3
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD4-NTX-02
+            name: eno2
+            description: "DC3-POD4-L2"
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD4-L2
+            name: Ethernet1/42
+            description: "DC3-POD4-NTX-02"
+
+    - name: CBL-DC3-NTX03-L1
+      type: copper
+      deployment: DC3
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD4-NTX-03
+            name: eno1
+            description: "DC3-POD4-L1"
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD4-L1
+            name: Ethernet1/43
+            description: "DC3-POD4-NTX-03"
+
+    - name: CBL-DC3-NTX03-L2
+      type: copper
+      deployment: DC3
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD4-NTX-03
+            name: eno2
+            description: "DC3-POD4-L2"
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD4-L2
+            name: Ethernet1/43
+            description: "DC3-POD4-NTX-03"
+
+    - name: CBL-DC3-NTX04-L1
+      type: copper
+      deployment: DC3
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD4-NTX-04
+            name: eno1
+            description: "DC3-POD4-L1"
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD4-L1
+            name: Ethernet1/44
+            description: "DC3-POD4-NTX-04"
+
+    - name: CBL-DC3-NTX04-L2
+      type: copper
+      deployment: DC3
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD4-NTX-04
+            name: eno2
+            description: "DC3-POD4-L2"
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD4-L2
+            name: Ethernet1/44
+            description: "DC3-POD4-NTX-04"

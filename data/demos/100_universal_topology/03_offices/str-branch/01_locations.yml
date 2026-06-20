@@ -1,0 +1,11 @@
+---
+# Stuttgart branch office building
+apiVersion: infrahub.app/v1
+version: "1.0"
+kind: Object
+spec:
+  kind: LocationBuilding
+  data:
+    - name: "str-1"
+      shortname: "str-1"
+      parent: "str"

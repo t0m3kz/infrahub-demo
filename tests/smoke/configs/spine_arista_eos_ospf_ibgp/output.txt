@@ -1,0 +1,76 @@
+!
+! Arista EOS Spine Configuration
+! Device: dc1-spine-01
+! Generated for Arista EOS
+!
+
+hostname dc1-spine-01
+
+! Configure spanning tree mode
+spanning-tree mode mstp
+
+! Configure VLAN 1
+no spanning-tree vlan-id 4094
+interface Ethernet1
+   description to spine-01
+   ip address 10.1.0.1/31
+
+   ip ospf area 0.0.0.0
+   no shutdown
+
+interface Ethernet2
+   description to spine-02
+   ip address 10.1.0.3/31
+
+   ip ospf area 0.0.0.0
+   no shutdown
+
+interface Loopback0
+   description Router ID
+   ip address 10.0.0.1/32
+
+   no shutdown
+
+! Configure OSPF
+
+router ospf 1
+   router-id 10.0.0.1
+   auto-cost reference-bandwidth 100000
+   passive-interface default
+   no passive-interface Ethernet1
+   no passive-interface Ethernet2
+   max-lsa 12000
+
+! Configure BGP
+
+router bgp 65000
+   router-id 10.0.0.1
+   no bgp default ipv4-unicast
+   distance bgp 20 200 200
+   graceful-restart
+   maximum-paths 4 ecmp 64
+   !
+   neighbor EVPN-PEERS peer-group
+   neighbor EVPN-PEERS remote-as 65000
+   neighbor EVPN-PEERS update-source Loopback0
+   neighbor EVPN-PEERS send-community extended
+   neighbor EVPN-PEERS maximum-routes 0
+   neighbor 10.0.0.100 peer-group EVPN-PEERS
+   neighbor 10.0.0.100 description spine-01
+   neighbor 10.0.0.101 peer-group EVPN-PEERS
+   neighbor 10.0.0.101 description spine-02
+   !
+   address-family ipv4
+      redistribute connected route-map RM-CONN-2-BGP
+   !
+   address-family evpn
+      neighbor EVPN-PEERS activate
+      neighbor EVPN-PEERS route-reflector-client
+
+
+! Configure route-maps
+route-map RM-CONN-2-BGP permit 10
+   match interface Loopback0
+
+
+! End of configuration

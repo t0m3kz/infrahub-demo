@@ -1,0 +1,13 @@
+{%- if interface.ip_addresses %}
+{%- set ns_name = interface.ip_addresses[0].get('ip_namespace', {}).get('name', 'default') %}
+{%- if ns_name != 'default' %}
+   vrf {{ ns_name }}
+{%- endif %}
+{%- for ip in interface.ip_addresses %}
+{%- if ':' in ip.address %}
+   ipv6 address {{ ip.address }}
+{%- else %}
+   ip address {{ ip.address }}
+{%- endif %}
+{%- endfor %}
+{%- endif %}

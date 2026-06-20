@@ -1,0 +1,95 @@
+---
+# VXLAN segments — EVPN overlay with per-customer VRF isolation
+#
+# prefix: list of [prefix_cidr, namespace] tuples (HFID lookup)
+# deployments: set per-demo file; triggers SegmentDeployment allocation
+#
+# HFID: {owner}__{environment}__{customer_name}
+# Example: "Customer 1__production__web-frontend"
+
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: ManagedVxlanSegment
+  data:
+    # ==========================================
+    # Customer 1 — Production (3-tier app)
+    # ==========================================
+    - customer_name: "web-frontend"
+      environment: "production"
+      owner: "Customer 1"
+      arp_suppression: true
+      prefix:
+        - - "10.1.10.0/24"
+          - "CUST001-PROD"
+      member_of_groups:
+        - vxlan_segments
+
+    - customer_name: "app-backend"
+      environment: "production"
+      owner: "Customer 1"
+      arp_suppression: true
+      prefix:
+        - - "10.1.20.0/24"
+          - "CUST001-PROD"
+      member_of_groups:
+        - vxlan_segments
+
+    - customer_name: "database"
+      environment: "production"
+      owner: "Customer 1"
+      arp_suppression: true
+      prefix:
+        - - "10.1.30.0/24"
+          - "CUST001-PROD"
+      member_of_groups:
+        - vxlan_segments
+
+    # ==========================================
+    # Customer 1 — Non-Production
+    # ==========================================
+    - customer_name: "web-frontend"
+      environment: "no-production"
+      owner: "Customer 1"
+      arp_suppression: true
+      prefix:
+        - - "10.1.110.0/24"
+          - "CUST001-NONPROD"
+      member_of_groups:
+        - vxlan_segments
+
+    # ==========================================
+    # Customer 2 — Production
+    # ==========================================
+    - customer_name: "web-frontend"
+      environment: "production"
+      owner: "Customer 2"
+      arp_suppression: true
+      prefix:
+        - - "10.2.10.0/24"
+          - "CUST002-PROD"
+      member_of_groups:
+        - vxlan_segments
+
+    - customer_name: "app-backend"
+      environment: "production"
+      owner: "Customer 2"
+      arp_suppression: true
+      prefix:
+        - - "10.2.20.0/24"
+          - "CUST002-PROD"
+      member_of_groups:
+        - vxlan_segments
+
+    # ==========================================
+    # Shared Services (L2+L3, no specific customer)
+    # ==========================================
+    - customer_name: "shared-infra"
+      environment: "production"
+      owner: "Customer 1"
+      arp_suppression: false
+      prefix:
+        - - "10.255.1.0/24"
+          - "SHARED-SERVICES"
+      member_of_groups:
+        - vxlan_segments

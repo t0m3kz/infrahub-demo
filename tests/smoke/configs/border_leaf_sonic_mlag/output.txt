@@ -1,0 +1,37 @@
+
+
+{
+  "BGP_GLOBALS": {
+    "default": {}
+  },
+  "BGP_GLOBALS_AF": {},
+  "BGP_NEIGHBOR": {},
+  "BGP_PEER_GROUP": {},
+  "DEVICE_METADATA": {
+    "localhost": {
+      "hostname": "DC1-POD1-L1",
+      "type": "BorderLeafRouter"
+    }
+  },
+  "INTERFACE": {
+    "Ethernet1": {},
+    "Ethernet2": {},
+    "Ethernet33": {},
+    "Ethernet34": {},
+    "Port-Channel100": {}
+  },
+  "INTERFACE_IP": {
+    "Ethernet1|10.1.2.1/31": {},
+    "Ethernet2|10.1.2.3/31": {}
+  },
+  "LOOPBACK_INTERFACE": {
+    "Loopback0|10.0.2.1/32": {}
+  },
+  "OSPF_ROUTER": {},
+  "VLAN": {},
+  "VLAN_INTERFACE": {}
+}
+
+# MC-LAG Configuration
+sudo config mclag add 1
+sudo config mclag peer-link add Port-Channel100

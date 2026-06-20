@@ -1,0 +1,11 @@
+---
+# Suite-4 for POD-4
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: LocationSuite
+  data:
+    - suite_name: "Suite-4"
+      index: 4
+      shortname: "ktw-1-s-4"
+      parent: ktw-1

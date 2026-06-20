@@ -9,6 +9,7 @@ feature bgp
 feature interface-vlan
 feature vn-segment-vlan-based
 feature nv overlay
+{%- include 'common/sonic_mclag.j2' -%}
 
 {#- VLAN Configuration -#}
 {%- for vlan in vlans %}
@@ -17,6 +18,26 @@ vlan {{ vlan.vlan_id }}
   vn-segment {{ vlan.get('vni', vlan.vlan_id) }}
 {% endfor %}
 
+{#- IP Access-Lists (zero-trust per-segment ACLs) -#}
+{%- if acls %}
+!
+! Zero-Trust ACLs (one per segment VLAN — inbound on SVI)
+!
+{%- for acl in acls %}
+ip access-list {{ acl.name }}
+{%- for rule in acl.rules %}
+{%- if rule.src_zone or rule.dst_zone %}
+  remark Zone: {{ rule.src_zone or 'any' }} -> {{ rule.dst_zone or 'any' }}
+{%- endif %}
+  {{ rule.seq }} {{ rule.action }} {{ rule.protocol }} {{ rule.src }} {{ rule.dst -}}
+{%- if rule.dst_port %} {{ rule.dst_port }}{% endif -%}
+{%- if rule.log %} log{% endif -%}
+{%- if rule.name %} ! {{ rule.name }}{% endif %}
+{%- endfor %}
+!
+{%- endfor %}
+{%- endif %}
+
 {#- All Interfaces (Physical and Virtual) -#}
 {% for interface in interfaces %}
 interface {{ interface.name }}
@@ -24,6 +45,10 @@ interface {{ interface.name }}
   description {{ interface.description }}
 {%- endif %}
 {%- if interface.ip_addresses %}
+{%- set ns_name = interface.ip_addresses[0].get('ip_namespace', {}).get('name', 'default') %}
+{%- if ns_name != 'default' %}
+  vrf forwarding {{ ns_name }}
+{%- endif %}
 {%- for ip in interface.ip_addresses %}
   ip address {{ ip.address }}
 {%- endfor %}
@@ -33,7 +58,7 @@ interface {{ interface.name }}
   switchport mode access
   switchport access vlan {{ interface.vlans[0] }}
 {%- endif %}
-{%- if interface.get('ospf') %}
+{%- if ospf and interface.get('ospf') %}
   ip router ospf {{ ospf[0].process_id or 1 }} area {{ interface.ospf.area }}
 {%- endif %}
   no shutdown
@@ -42,49 +67,144 @@ interface {{ interface.name }}
 
 {%- if ospf %}
 {#- OSPF Configuration -#}
-{%- for ospf_config in ospf %}
-router ospf {{ ospf_config.process_id or 1 }}
-  router-id {{ ospf_config.router_id.split('/')[0] }}
-  reference-bandwidth {{ ospf_config.reference_bandwidth or 100000 }}
-  passive-interface default
-{%- for interface in interfaces %}
-{%- if interface.get('ospf') %}
-  no passive-interface {{ interface.name }}
-{%- endif %}
-{%- endfor %}
-!
-{% endfor %}
+{% include 'common/dell_sonic_ospf.j2' %}
 {%- endif %}
 
 {%- if bgp %}
 {#- BGP Configuration -#}
-{%- for bgp_config in bgp %}
-router bgp {{ bgp_config.local_as.asn }}
-  router-id {{ bgp_config.router_id.address.split('/')[0] }}
-  no bgp default ipv4-unicast
-  distance bgp 20 200 200
-  maximum-paths 4 ecmp 64
-{%- for session in bgp_config.sessions %}
-  neighbor {{ session.remote_ip.address.split('/')[0] }} remote-as {{ session.remote_as.asn }}
-  neighbor {{ session.remote_ip.address.split('/')[0] }} update-source Loopback0
-  neighbor {{ session.remote_ip.address.split('/')[0] }} send-community extended
-  neighbor {{ session.remote_ip.address.split('/')[0] }} maximum-routes 0
-{%- endfor %}
-  address-family ipv4
-    redistribute connected route-map RM-CONN-2-BGP
-{%- for session in bgp_config.sessions %}
-    neighbor {{ session.remote_ip.address.split('/')[0] }} activate
-{%- endfor %}
-  address-family evpn
-{%- for session in bgp_config.sessions %}
-    neighbor {{ session.remote_ip.address.split('/')[0] }} activate
-{%- endfor %}
+{% include 'common/dell_sonic_bgp.j2' %}
+{%- endif %}
+
+{%- if vxlan and vxlan.enabled %}
 !
-{% endfor %}
+! VXLAN Configuration with Microsegmentation (VRF-aware VNIs)
+!
+{%- if vxlan.microsegmentation and vxlan.microsegmentation.enabled %}
+! Microsegmentation enabled: {{ vxlan.microsegmentation.vrf_count }} VRF(s) for tenant isolation
+{%- endif %}
+!
+interface {{ vxlan.interface }}
+{%- if vxlan.vtep.ipv4 %}
+  source {{ vxlan.vtep.source_interface }}
+{%- endif %}
+{%- if vxlan.l2_vni_mappings %}
+  !
+  ! L2 VNI Mappings (VLAN segments)
+{%- for mapping in vxlan.l2_vni_mappings %}
+  map vni {{ mapping.vni }} vlan {{ mapping.vlan_id }}
+{%- endfor %}
+{%- endif %}
+{%- if vxlan.l3_vni_mappings %}
+  !
+  ! L3 VNI Mappings (VRF segments for microsegmentation)
+{%- for mapping in vxlan.l3_vni_mappings %}
+  map vni {{ mapping.l3_vni }} vrf {{ mapping.vrf_name }}
+{%- endfor %}
+{%- endif %}
+  no shutdown
+!
+{%- if vxlan.l3_vni_mappings %}
+!
+! VRF Definitions (Microsegmentation)
+!
+{%- for mapping in vxlan.l3_vni_mappings %}
+vrf {{ mapping.vrf_name }}
+  description {{ mapping.description | default('Tenant VRF for microsegmentation') }}
+!
+{%- endfor %}
+{%- endif %}
+{%- if vxlan.vrf_loopbacks %}
+!
+! VRF Loopback Interfaces
+!
+{%- for loopback in vxlan.vrf_loopbacks %}
+interface {{ loopback.name }}
+  description VRF {{ loopback.vrf }} L3VNI {{ loopback.l3_vni }}
+  vrf forwarding {{ loopback.vrf }}
+{%- if loopback.ip %}
+  ip address {{ loopback.ip }}/32
+{%- endif %}
+  no shutdown
+!
+{%- endfor %}
+{%- endif %}
+{%- if vxlan.evpn and vxlan.evpn.enabled %}
+!
+! EVPN Configuration (FRR)
+!
+router bgp {{ bgp[0].local_as.asn }}
+  address-family l2vpn evpn
+    advertise-all-vni
+{%- if vxlan.l2_vni_mappings %}
+    !
+    ! L2 VNI EVPN Configuration
+{%- for mapping in vxlan.l2_vni_mappings %}
+    vni {{ mapping.vni }}
+      rd {{ vxlan.evpn.rd_format | replace('{vni}', mapping.vni | string) }}
+      route-target import {{ bgp[0].local_as.asn }}:{{ mapping.vni }}
+      route-target export {{ bgp[0].local_as.asn }}:{{ mapping.vni }}
+{%- endfor %}
+{%- endif %}
+{%- if vxlan.l3_vni_mappings %}
+    !
+    ! L3 VNI EVPN Configuration (VRF-aware)
+{%- for mapping in vxlan.l3_vni_mappings %}
+    vni {{ mapping.l3_vni }}
+      rd {{ vxlan.evpn.rd_format | replace('{vni}', mapping.l3_vni | string) }}
+      route-target import {{ bgp[0].local_as.asn }}:{{ mapping.l3_vni }}
+      route-target export {{ bgp[0].local_as.asn }}:{{ mapping.l3_vni }}
+{%- endfor %}
+{%- endif %}
+  exit-address-family
+!
+{%- endif %}
 {%- endif %}
 
 ! Configure route-maps
 route-map RM-CONN-2-BGP permit 10
   match interface Loopback0
+!
+{%- if vlans %}
+! VLAN SVI Configuration
+!
+{%- for vlan in vlans %}
+{%- if vlan.gateway_ip or vlan.gateway_ipv6 %}
+{%- set ns = namespace(acl_name=None) %}
+{%- for acl in acls %}
+{%- if acl.vlan_id == vlan.vlan_id %}
+{%- set ns.acl_name = acl.name %}
+{%- endif %}
+{%- endfor %}
+interface Vlan{{ vlan.vlan_id }}
+  description {{ vlan.name }}
+{%- if vlan.vrf %}
+  vrf forwarding {{ vlan.vrf }}
+{%- endif %}
+{%- if vlan.gateway_ip %}
+  ip address {{ vlan.gateway_ip }}
+{%- endif %}
+{%- if vlan.gateway_ipv6 %}
+  ipv6 address {{ vlan.gateway_ipv6 }}
+{%- endif %}
+  no shutdown
+{%- if ns.acl_name %}
+  ip access-group {{ ns.acl_name }} in
+{%- endif %}
+!
+{%- endif %}
+{%- endfor %}
+{%- endif %}
+
+{%- if vrf_gateways %}
+!
+! VRF Default Routes — firewall gateway per namespace (Option A: FW as inter-VRF router)
+!
+{%- for vrf, nexthop in vrf_gateways.items() %}
+ip route vrf {{ vrf }} 0.0.0.0/0 {{ nexthop }}
+{%- endfor %}
+!
+{%- endif %}
+
+{%- include 'common/sonic_management.j2' %}
 
 ! End of configuration

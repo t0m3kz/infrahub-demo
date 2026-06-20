@@ -2,7 +2,7 @@
 version: "1.0"
 
 generics:
-  - name: GenericDevice
+  - name: Device
     namespace: Dcim
     description: Generic Device object.
     label: Device
@@ -75,6 +75,14 @@ generics:
             label: Firewall
             description: "Security boundary with external network"
             color: "#6e5abd"
+          - name: firewall-active
+            label: Firewall (Active)
+            description: "Active member of a redundant firewall HA pair"
+            color: "#6e5abd"
+          - name: firewall-passive
+            label: Firewall (Passive / Standby)
+            description: "Passive/standby member of a redundant firewall HA pair — carries no traffic"
+            color: "#9e8acd"
           - name: load-balancer
             label: Load Balancer
             description: Load Balancer part of a Fabric.
@@ -83,6 +91,18 @@ generics:
             label: Endpoint device
             description: Endpoint Device/Server part of a Fabric.
             color: "#38a7fb"
+          - name: controller
+            label: Controller device
+            description: Controller.
+            color: "#f5a623"
+          - name: provider
+            label: Provider Device
+            description: "Virtual/physical device representing a carrier or provider handoff point."
+            color: "#c8a2c8"
+          - name: patch-panel
+            label: Patch Panel
+            description: "Passive patch panel used as cable interconnect."
+            color: "#d4b8a0"
       - name: status
         kind: Dropdown
         optional: false
@@ -92,6 +112,10 @@ generics:
             label: Active
             description: Fully operational and currently in service.
             color: "#7fbf7f"
+          - name: free
+            label: Free
+            description: Available and ready to be provisioned.
+            color: "#a8d5ba"
           - name: provisioning
             label: Provisioning
             description: In the process of being set up and configured.
@@ -104,6 +128,10 @@ generics:
             label: Drained
             description: Temporarily taken out of service.
             color: "#bfbfbf"
+          - name: decommissioned
+            label: Decommissioned
+            description: Removed from service but retained for audit/history.
+            color: "#8c8c8c"
     relationships:
       - name: device_type
         peer: DcimDeviceType
@@ -165,7 +193,7 @@ generics:
     human_friendly_id:
       - device__name__value
       - name__value
-    display_label: "{{name__value}}"
+    display_label: "{{device__name__value}}-{{name__value}}"
 
     attributes:
       - name: name
@@ -220,58 +248,47 @@ generics:
         optional: true
         description: "The role of the interface in the network"
         choices:
-          - name: lag
-            label: Lag
-            description: "Link Aggregation Group (LAG) interface."
-            color: "#60A5FA"
-          - name: core
-            label: Core
-            description: "Interface used in the core of the network."
-            color: "#1E3A8A"
-          - name: customer
-            label: Customer
-            description: "Interface used for customer-facing connections."
-            color: "#F472B6"
-          - name: access
-            label: Access
-            description: "Access port connecting endpoint devices."
-            color: "#10B981"
-          - name: management
-            label: Management
-            description: "Interface dedicated to device management traffic."
-            color: "#F59E0B"
-          - name: upstream
-            label: Upstream
-            description: "Upstream interface toward aggregation or core."
-            color: "#38BDF8"
-          - name: leaf
-            label: Leaf
-            description: "Interface connecting towards leaf switches."
-            color: "#34D399"
-          - name: spine
-            label: Spine
-            description: "Interface connecting towards spine switches."
-            color: "#06B6D4"
-          - name: console
-            label: Console
-            description: "Console management interface (out-of-band access)."
-            color: "#9CA3AF"
+          # Infrastructure connectivity (hierarchical)
           - name: uplink
             label: Uplink
-            description: "Uplink used to connect to upstream switches."
+            description: "Interface toward higher hierarchy layer"
             color: "#FCA5A5"
-          - name: peering
-            label: Peering
-            description: "Peering interface with external networks."
-            color: "#FDE68A"
+          - name: downlink
+            label: Downlink
+            description: "Interface toward lower hierarchy layer"
+            color: "#34D399"
+
+          # Edge connectivity
+          - name: customer
+            label: Customer/Access
+            description: "Customer-facing, endpoint access, or external"
+            color: "#F472B6"
+
+          # Special interface types
+          - name: management
+            label: Management
+            description: "Out-of-band management interface"
+            color: "#F59E0B"
+          - name: console
+            label: Console
+            description: "Console management interface"
+            color: "#9CA3AF"
           - name: loopback
             label: Loopback
-            description: "Loopback used for stable addressing on the device."
+            description: "Loopback interface for stable addressing"
             color: "#C7D2FE"
           - name: loopback-vtep
             label: Loopback VTEP
-            description: "Loopback used as a VTEP VXLAN/overlay tunneling."
+            description: "Loopback used as VTEP for VXLAN/overlay tunneling"
             color: "#E9D5FF"
+          - name: lag
+            label: LAG Member
+            description: "Link Aggregation Group member interface"
+            color: "#60A5FA"
+          - name: mlag-peer
+            label: MLAG Peer-Link
+            description: "Interface used as the MLAG/vPC peer-link between two paired devices"
+            color: "#FDE68A"
         order_weight: 1250
       - name: index
         kind: Text
@@ -284,7 +301,7 @@ generics:
         order_weight: 20000
     relationships:
       - name: device
-        peer: DcimGenericDevice
+        peer: DcimDevice
         identifier: device__interface
         optional: false
         cardinality: one
@@ -420,7 +437,7 @@ nodes:
         order_weight: 1900
     relationships:
       - name: devices
-        peer: DcimGenericDevice
+        peer: DcimDevice
         optional: true
         cardinality: many
         order_weight: 1350
@@ -439,7 +456,7 @@ nodes:
     generate_template: true
     inherit_from:
       - CoreArtifactTarget
-      - DcimGenericDevice
+      - DcimDevice
     attributes:
       - name: position
         label: Position (U)
@@ -470,14 +487,14 @@ nodes:
     namespace: Dcim
     description: Generic holding attributes and relationships relevant for virtual device.
     include_in_menu: false
+    generate_template: true
     label: Virtual Device
     icon: mdi:server-network
     uniqueness_constraints:
       - ["name__value"]
-    generate_template: true
     inherit_from:
       - CoreArtifactTarget
-      - DcimGenericDevice
+      - DcimDevice
     attributes:
       - name: cpu
         label: CPU Number
@@ -589,6 +606,15 @@ nodes:
         cardinality: one
         kind: Component
         on_delete: cascade
+      - name: lag
+        peer: DcimLAGInterface
+        label: "LAG"
+        description: "LAG aggregate this physical port is a member of"
+        cardinality: one
+        kind: Attribute
+        optional: true
+        identifier: "lag__members"
+        order_weight: 1400
 
   - name: VirtualInterface
     namespace: Dcim
@@ -600,17 +626,123 @@ nodes:
     include_in_menu: false
     relationships:
       - name: parent_interface
-        peer: DcimSubInterface
+        peer: DcimPhysicalInterface
         cardinality: one
         kind: Attribute
         identifier: "sub__interface"
-        description: "Parent interface to which this sub-interface belongs"
-      - name: ip_addresses
+        description: "Parent physical interface to which this virtual interface belongs"
+      - name: ip_address
         peer: IpamIPAddress
         optional: true
-        cardinality: many
+        cardinality: one
         kind: Component
         on_delete: cascade
+
+  - name: LAGInterface
+    namespace: Dcim
+    label: LAG Interface
+    description: "Port-channel / bond aggregate interface"
+    inherit_from:
+      - DcimInterface
+    include_in_menu: false
+    attributes:
+      - name: lag_id
+        kind: Number
+        label: "LAG ID"
+        description: "Port-channel number (e.g. 1 for Port-Channel1)"
+        optional: false
+        order_weight: 1300
+      - name: lacp_mode
+        kind: Dropdown
+        label: "LACP Mode"
+        description: "Link Aggregation Control Protocol negotiation mode"
+        default_value: active
+        order_weight: 1400
+        choices:
+          - name: active
+            label: Active
+            description: "Initiates LACP negotiation"
+            color: "#A9DFBF"
+          - name: passive
+            label: Passive
+            description: "Responds to LACP negotiation only"
+            color: "#FAD7A0"
+          - name: static
+            label: Static (on)
+            description: "No LACP negotiation"
+            color: "#D3D3D3"
+      - name: mtu
+        kind: Number
+        label: MTU
+        default_value: 9000
+        optional: true
+        order_weight: 1500
+      - name: minimum_links
+        kind: Number
+        label: "Minimum Links"
+        description: "Minimum number of member links required for the LAG to be up"
+        default_value: 1
+        optional: true
+        order_weight: 1600
+    relationships:
+      - name: member_interfaces
+        peer: DcimPhysicalInterface
+        label: "Member Interfaces"
+        description: "Physical ports bundled into this LAG"
+        cardinality: many
+        kind: Generic
+        optional: true
+        identifier: "lag__members"
+        order_weight: 1700
+      - name: ip_address
+        peer: IpamIPAddress
+        optional: true
+        cardinality: one
+        kind: Component
+        on_delete: cascade
+
+  - name: FirewallInterface
+    namespace: Dcim
+    label: Firewall Interface
+    description: "Firewall interface with security zone binding"
+    inherit_from:
+      - DcimInterface
+    include_in_menu: false
+    attributes:
+      - name: security_level
+        kind: Number
+        label: Security Level
+        description: "Trust level 0-100 (e.g. Cisco ASA security-level). Defaults to zone trust_level when empty."
+        optional: true
+        order_weight: 1400
+        parameters:
+          min_value: 0
+          max_value: 100
+      - name: vlan_id
+        kind: Number
+        label: VLAN ID
+        description: "802.1Q VLAN tag for sub-interface. Set when this interface is a sub-interface on a trunk uplink."
+        optional: true
+        order_weight: 1450
+        parameters:
+          min_value: 1
+          max_value: 4094
+    relationships:
+      - name: ip_address
+        peer: IpamIPAddress
+        optional: true
+        cardinality: one
+        kind: Component
+        on_delete: cascade
+      - name: parent_interface
+        peer: DcimPhysicalInterface
+        label: Parent Interface
+        cardinality: one
+        kind: Attribute
+        optional: true
+        identifier: fw_iface__parent
+        order_weight: 1600
+        description: "Physical trunk interface this sub-interface belongs to"
 
   # --------------------  Cables  --------------------
   - name: Cable

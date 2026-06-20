@@ -1,0 +1,25 @@
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TemplateDcimVirtualDevice
+  data:
+    - template_name: C8000V_EDGE
+      device_type: C8000V
+      role: edge
+      platform: cisco_xe
+      status: active
+      cpu: 2
+      memory: 8
+      storage: 100
+      interfaces:
+        kind: TemplateDcimPhysicalInterface
+        parameters:
+          expand_range: true
+        data:
+          - template_name: C8000V_EDGE_Ethernet1/[1-24]
+            name: Ethernet1/[1-24]
+            role: customer
+          - template_name: C8000V_EDGE_mgmt0
+            name: mgmt0
+            role: management

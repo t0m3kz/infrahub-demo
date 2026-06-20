@@ -1,0 +1,14 @@
+---
+# Frankfurt Equinix buildings
+apiVersion: infrahub.app/v1
+version: "1.0"
+kind: Object
+spec:
+  kind: LocationBuilding
+  data:
+    - name: "FR2"
+      shortname: "fr2"
+      parent: "fra"
+    - name: "FR6"
+      shortname: "fr6"
+      parent: "fra"

@@ -1,0 +1,50 @@
+---
+# Racks for endpoint connectivity testing in DC1-1-POD-1
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: LocationRack
+  data:
+    # Network rack in Row 1 (middle rack with leaf switches)
+    # - index: 5
+    #   row_index: 1
+    #   shortname: ktw-1-s-1-r-1-5
+    #   rack_type: network
+    #   pod: DC1-1-POD-1
+    #   parent: ktw-1-s-1
+
+    # Compute rack in POD-1 Row 1 for servers 01 and 02
+    - index: 1
+      row_index: 1
+      shortname: ktw-1-s-1-r-1-1
+      rack_type: compute
+      pod: DC1-1-POD-1
+      parent: ktw-1-s-1
+    - index: 9
+      row_index: 1
+      shortname: ktw-1-s-1-r-1-9
+      rack_type: compute
+      pod: DC1-1-POD-1
+      parent: ktw-1-s-1
+
+    # Network rack in Row 2 (middle rack with leaf switches)
+    # - index: 5
+    #   row_index: 2
+    #   shortname: ktw-1-s-1-r-2-5
+    #   rack_type: network
+    #   pod: DC1-1-POD-1
+    #   parent: ktw-1-s-1
+
+    # Compute rack in POD-1 Row 2 for servers 03 and 04
+    - index: 1
+      row_index: 2
+      shortname: ktw-1-s-1-r-2-1
+      rack_type: compute
+      pod: DC1-1-POD-1
+      parent: ktw-1-s-1
+    - index: 9
+      row_index: 2
+      shortname: ktw-1-s-1-r-2-9
+      rack_type: compute
+      pod: DC1-1-POD-1
+      parent: ktw-1-s-1
