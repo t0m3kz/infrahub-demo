@@ -542,29 +542,11 @@ query cloud_vpc_config($account: String!) {
       }
     }
   }
-  CloudAutoScalingGroup(account__name__value: $account) {
+  VirtCluster(cloud_account__name__value: $account) {
     edges {
       node {
         id
         name {
-          value
-        }
-        min_size {
-          value
-        }
-        max_size {
-          value
-        }
-        desired_capacity {
-          value
-        }
-        instance_type {
-          value
-        }
-        image {
-          value
-        }
-        os_type {
           value
         }
         virtual_network {
@@ -574,20 +556,47 @@ query cloud_vpc_config($account: String!) {
             }
           }
         }
-        network_segments {
+        node_pools {
           edges {
             node {
               name {
                 value
               }
-            }
-          }
-        }
-        security_groups {
-          edges {
-            node {
-              name {
+              min_size {
                 value
+              }
+              max_size {
+                value
+              }
+              desired_capacity {
+                value
+              }
+              instance_flavor {
+                value
+              }
+              image {
+                value
+              }
+              os_type {
+                value
+              }
+              network_segments {
+                edges {
+                  node {
+                    name {
+                      value
+                    }
+                  }
+                }
+              }
+              security_groups {
+                edges {
+                  node {
+                    name {
+                      value
+                    }
+                  }
+                }
               }
             }
           }
