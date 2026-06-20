@@ -151,34 +151,25 @@ Use scope to narrow the area: `schema`, `generator`, `template`, `check`, `trans
 
 ## Release Workflow
 
-Releases are managed by `commitizen` which reads the commit history since the last tag
-and determines the next version automatically.
+1. On your feature branch, run:
 
 ```bash
-# Auto-detect version bump from commits and release
-uv run invoke release
-
-# Force a specific bump level
+uv run invoke release              # auto-detect bump level from commits
+# or force a level:
 uv run invoke release --increment minor
-uv run invoke release --increment patch
-uv run invoke release --increment major
 ```
 
-This command:
+This bumps `pyproject.toml`, updates `CHANGELOG.md`, commits
+(`bump: version X.Y.Z → X.Y.Z`), and creates a local tag `vX.Y.Z`.
 
-1. Reads commits since last tag and determines the next version
-2. Bumps `version` in `pyproject.toml`
-3. Updates `CHANGELOG.md`
-4. Creates a git commit: `bump: version X.Y.Z → X.Y.Z`
-5. Creates a git tag `vX.Y.Z`
-
-After running, push the commit and tag:
+1. Push the commit and the tag:
 
 ```bash
 git push && git push --tags
 ```
 
-GitHub Actions then automatically creates a GitHub Release from the tag.
+1. Open a PR as normal. On merge, CI detects the tag push and
+   automatically creates the GitHub Release.
 
 ## Development Patterns
 
