@@ -54,8 +54,12 @@ jobs:
           fetch-depth: 0
       - name: Attach HEAD to branch
         run: |
-          BRANCH=$(git branch -r --contains HEAD | grep -v HEAD | head -1 | sed 's|origin/||' | xargs)
-          if [ -n "$BRANCH" ]; then git checkout "$BRANCH"; fi
+          if [ -n "$GITHUB_HEAD_REF" ]; then
+            git checkout "$GITHUB_HEAD_REF"
+          else
+            BRANCH=$(git branch -r --contains HEAD | grep -v HEAD | head -1 | sed 's|origin/||' | xargs)
+            if [ -n "$BRANCH" ]; then git checkout "$BRANCH"; fi
+          fi
       - name: Setup Python
         uses: actions/setup-python@v6
         with:
