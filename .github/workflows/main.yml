@@ -1,7 +1,11 @@
 ---
 name: CI
 on:
-  - push
+  push:
+    branches:
+      - "**"
+    tags:
+      - "v*"
 
 permissions:
   contents: read
@@ -41,7 +45,7 @@ jobs:
       INFRAHUB_TESTING_LOG_LEVEL: INFO
     strategy:
       matrix:
-        python-version: ["3.10", "3.11", "3.12"]
+        python-version: ["3.10", "3.11", "3.12", "3.13"]
     steps:
       - uses: actions/checkout@v5
       - name: Setup Python
@@ -61,25 +65,19 @@ jobs:
           uv run pytest -vv tests/smoke tests/unit --cov
 
   release:
-    if: ${{ github.ref == 'refs/heads/main' }}
+    if: ${{ startsWith(github.ref, 'refs/tags/v') }}
     permissions:
       contents: write
     needs: tests
-    name: Create release in GitHub
+    name: Create GitHub release
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
-      - uses: actions/setup-python@v6
-        with:
-          python-version: "3.10"
-      - run: |
-          pip install uv
-          echo "TAG=v$(uvx --from=toml-cli toml get --toml-path=pyproject.toml project.version)" >> $GITHUB_ENV
-      - name: Creates a release in GitHub and uploads attachments
+      - name: Create GitHub release from tag
         uses: softprops/action-gh-release@v2
         with:
-          name: Release ${{ env.TAG }}
-          tag_name: ${{ env.TAG }}
+          name: Release ${{ github.ref_name }}
+          tag_name: ${{ github.ref_name }}
           generate_release_notes: true
   # document:
   #   if: ${{ github.ref == 'refs/heads/main' }}
