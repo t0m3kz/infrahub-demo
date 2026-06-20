@@ -1,0 +1,21 @@
+# IP Prefixes
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: IpamPrefix
+  data:
+    # VIP Prefix
+    - prefix: "10.10.1.0/24"
+      description: "Demo VIP addresses"
+      status: active
+
+    # Web Tier Prefix
+    - prefix: "10.10.10.0/24"
+      description: "Demo web tier"
+      status: active
+
+    # App Tier Prefix
+    - prefix: "10.10.20.0/24"
+      description: "Demo app tier"
+      status: active

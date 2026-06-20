@@ -1,29 +1,47 @@
 ---
+# Security Policies — Zero-trust segment contracts
+#
+# All policies default to deny. Rules explicitly permit allowed flows.
+# Policies are assigned to segments via the security_policies relationship.
+
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
   kind: SecurityPolicy
   data:
-    - name: "corporate-firewall-policy"
-      description: "Main corporate firewall security policy"
+    # Zone-level policies (macro-segmentation)
+    - name: "dc-fabric-baseline"
+      description: "Baseline DC fabric policy — zone-to-zone traffic control"
+      default_action: "deny"
+      enabled: true
 
-    - name: "guest-network-policy"
-      description: "Security policy for guest network access"
+    - name: "management-access"
+      description: "Management access policy — SSH, SNMP, syslog to infrastructure"
+      default_action: "deny"
+      enabled: true
 
-    - name: "server-access-policy"
-      description: "Policy for server farm access controls"
+    - name: "dmz-ingress"
+      description: "DMZ ingress policy — external traffic to DMZ services"
+      default_action: "deny"
+      enabled: true
 
-    - name: "dmz-policy"
-      description: "Security policy for DMZ services"
+    # Segment-level policies (micro-segmentation)
+    - name: "3tier-web-to-app"
+      description: "Micro-segmentation contract: web tier → application tier"
+      default_action: "deny"
+      enabled: true
 
-    - name: "management-policy"
-      description: "Policy for network management access"
+    - name: "3tier-app-to-db"
+      description: "Micro-segmentation contract: application tier → database tier"
+      default_action: "deny"
+      enabled: true
 
-    - name: "remote-access-policy"
-      description: "Policy for remote worker access"
+    - name: "tenant-isolation"
+      description: "Tenant isolation policy — block inter-tenant traffic"
+      default_action: "deny"
+      enabled: true
 
-    - name: "database-access-policy"
-      description: "Policy for database tier access"
-
-    - name: "development-policy"
-      description: "Policy for development environment"
+    - name: "guest-restricted"
+      description: "Guest network policy — internet only, no internal access"
+      default_action: "deny"
+      enabled: true

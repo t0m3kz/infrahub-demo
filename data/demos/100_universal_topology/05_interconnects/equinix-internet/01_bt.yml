@@ -1,0 +1,31 @@
+---
+# BT connectivity
+#
+# Cable path: FR6-EDGE-01/Eth1/1 → EQX-FR6-PATCH-01/Port2 → EXT-BT-PATCH-01/Port1 → EXT-INET-BT-01/Eth1/1
+# See 06_provider_devices.yml for patch panels and cables.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologyPhysicalCircuit
+  data:
+    - name: PHYS-FR6-INET-BT-01
+      circuit_id: PHYS-FR6-INET-BT-01
+      description: "Dedicated internet access from FR6 to BT"
+      circuit_type: dia
+      committed_rate: 2000
+      status: active
+      provider: BT
+      locations:
+        - FR6
+        - INET-BT-INTERNET
+      interfaces:
+        - - FR6-EDGE-01
+          - Ethernet1/1
+        - - EXT-INET-BT-01
+          - Ethernet1/1
+      provider_a:
+        - EQX-FR6-PATCH-01
+        - Port2
+      provider_z:
+        - EXT-BT-PATCH-01
+        - Port1

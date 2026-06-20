@@ -1,0 +1,37 @@
+{%- if ntp %}
+
+# NTP
+{%- for s in ntp.servers %}
+sudo config ntp add {{ s.address }}
+{%- endfor %}
+{%- endif %}
+{%- if syslog %}
+
+# Syslog
+{%- for s in syslog.servers %}
+sudo config syslog add {{ s.address }}
+{%- endfor %}
+{%- endif %}
+{%- if snmp %}
+
+# SNMP
+{%- if snmp.community_ro %}
+sudo config snmp community add {{ snmp.community_ro }} RO
+{%- endif %}
+{%- if snmp.community_rw %}
+sudo config snmp community add {{ snmp.community_rw }} RW
+{%- endif %}
+{%- for t in snmp.trap_targets %}
+sudo config snmp targetaddress add {{ t.address }}
+{%- endfor %}
+{%- endif %}
+{%- if aaa %}
+
+# AAA
+{%- for s in aaa.servers %}
+{%- if s.protocol == 'tacacs' %}
+sudo config tacacs add {{ s.address }}{% if s.port %} --port {{ s.port }}{% endif %}{% if s.timeout %} --timeout {{ s.timeout }}{% endif %}
+
+{%- endif %}
+{%- endfor %}
+{%- endif -%}

@@ -1,0 +1,8 @@
+{%- if mlag %}
+
+# MC-LAG Configuration
+sudo config mclag add {{ mlag.domain_id }}
+{%- if mlag.peer_link %}
+sudo config mclag peer-link add {{ mlag.peer_link }}
+{%- endif %}
+{%- endif -%}

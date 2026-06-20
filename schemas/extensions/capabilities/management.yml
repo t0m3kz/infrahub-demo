@@ -1,0 +1,410 @@
+---
+version: "1.0"
+
+# ============================================================================
+# Device management capabilities — NTP, Syslog, SNMP, AAA
+# All attach to devices via device_capabilities (ManagedGenericDevice).
+# ============================================================================
+
+nodes:
+  - name: NTP
+    namespace: Managed
+    description: "NTP client/server configuration for a device"
+    label: NTP
+    icon: "mdi:clock-outline"
+    menu_placement: ManagedGeneric
+    include_in_menu: false
+    human_friendly_id:
+      - "name__value"
+    inherit_from:
+      - ManagedGeneric
+      - ManagedGenericDevice
+    attributes:
+      - name: timezone
+        kind: Text
+        label: "Timezone"
+        description: "Device timezone (e.g. UTC, Europe/Warsaw)"
+        default_value: "UTC"
+        optional: true
+        order_weight: 1100
+    relationships:
+      - name: servers
+        peer: ManagedNTPServer
+        label: "NTP Servers"
+        cardinality: many
+        kind: Component
+        optional: true
+        identifier: "ntp__servers"
+        order_weight: 1200
+
+  - name: NTPServer
+    namespace: Managed
+    description: "Individual NTP server entry"
+    label: "NTP Server"
+    icon: "mdi:server"
+    include_in_menu: false
+    human_friendly_id:
+      - "ntp_config__name__value"
+      - "name__value"
+    display_label: "{{name__value}}"
+    attributes:
+      - name: name
+        kind: Text
+        label: "Name"
+        description: "Unique label within the NTP config (e.g. primary, secondary)"
+        optional: false
+        order_weight: 900
+      - name: prefer
+        kind: Boolean
+        label: "Preferred"
+        description: "Mark this server as preferred"
+        default_value: false
+        optional: true
+        order_weight: 1100
+      - name: version
+        kind: Number
+        label: "NTP Version"
+        description: "NTP version to use (3 or 4)"
+        default_value: 4
+        optional: true
+        order_weight: 1200
+    relationships:
+      - name: address
+        peer: IpamIPAddress
+        label: "Server IP Address"
+        cardinality: one
+        optional: false
+        kind: Attribute
+        order_weight: 1000
+      - name: ntp_config
+        peer: ManagedNTP
+        label: "NTP Config"
+        cardinality: one
+        optional: false
+        kind: Parent
+        identifier: "ntp__servers"
+        order_weight: 900
+
+  - name: Syslog
+    namespace: Managed
+    description: "Syslog configuration for a device"
+    label: Syslog
+    icon: "mdi:text-box-multiple-outline"
+    menu_placement: ManagedGeneric
+    include_in_menu: false
+    human_friendly_id:
+      - "name__value"
+    inherit_from:
+      - ManagedGeneric
+      - ManagedGenericDevice
+    relationships:
+      - name: servers
+        peer: ManagedSyslogServer
+        label: "Syslog Servers"
+        cardinality: many
+        kind: Component
+        optional: true
+        identifier: "syslog__servers"
+        order_weight: 1100
+
+  - name: SyslogServer
+    namespace: Managed
+    description: "Individual syslog server entry"
+    label: "Syslog Server"
+    icon: "mdi:server"
+    include_in_menu: false
+    human_friendly_id:
+      - "syslog_config__name__value"
+      - "name__value"
+    display_label: "{{name__value}}"
+    attributes:
+      - name: name
+        kind: Text
+        label: "Name"
+        description: "Unique label within the Syslog config (e.g. primary)"
+        optional: false
+        order_weight: 900
+      - name: port
+        kind: Number
+        label: "UDP Port"
+        description: "Destination UDP port (default 514)"
+        default_value: 514
+        optional: true
+        order_weight: 1100
+      - name: severity
+        kind: Dropdown
+        label: "Min Severity"
+        description: "Minimum severity level to send"
+        default_value: informational
+        optional: true
+        order_weight: 1200
+        choices:
+          - name: emergencies
+            label: Emergencies (0)
+            color: "#FF0000"
+          - name: alerts
+            label: Alerts (1)
+            color: "#FF4500"
+          - name: critical
+            label: Critical (2)
+            color: "#FF6347"
+          - name: errors
+            label: Errors (3)
+            color: "#FFA07A"
+          - name: warnings
+            label: Warnings (4)
+            color: "#FFD700"
+          - name: notifications
+            label: Notifications (5)
+            color: "#ADFF2F"
+          - name: informational
+            label: Informational (6)
+            color: "#00CED1"
+          - name: debugging
+            label: Debugging (7)
+            color: "#87CEEB"
+    relationships:
+      - name: address
+        peer: IpamIPAddress
+        label: "Server IP Address"
+        cardinality: one
+        optional: false
+        kind: Attribute
+        order_weight: 1000
+      - name: syslog_config
+        peer: ManagedSyslog
+        label: "Syslog Config"
+        cardinality: one
+        optional: false
+        kind: Parent
+        identifier: "syslog__servers"
+        order_weight: 900
+
+  - name: SNMP
+    namespace: Managed
+    description: "SNMP configuration for a device"
+    label: SNMP
+    icon: "mdi:gauge"
+    menu_placement: ManagedGeneric
+    include_in_menu: false
+    human_friendly_id:
+      - "name__value"
+    inherit_from:
+      - ManagedGeneric
+      - ManagedGenericDevice
+    attributes:
+      - name: version
+        kind: Dropdown
+        label: "SNMP Version"
+        default_value: v2c
+        optional: false
+        order_weight: 1100
+        choices:
+          - name: v1
+            label: "SNMPv1"
+            color: "#FFA07A"
+          - name: v2c
+            label: "SNMPv2c"
+            color: "#FFD700"
+          - name: v3
+            label: "SNMPv3"
+            color: "#ADFF2F"
+      - name: community_ro
+        kind: Password
+        label: "RO Community"
+        description: "Read-only SNMP community string (v1/v2c)"
+        optional: true
+        order_weight: 1200
+      - name: community_rw
+        kind: Password
+        label: "RW Community"
+        description: "Read-write SNMP community string (v1/v2c)"
+        optional: true
+        order_weight: 1300
+      - name: location
+        kind: Text
+        label: "SNMP Location"
+        description: "Physical location string (sysLocation)"
+        optional: true
+        order_weight: 1400
+      - name: contact
+        kind: Text
+        label: "SNMP Contact"
+        description: "Contact string (sysContact)"
+        optional: true
+        order_weight: 1500
+    relationships:
+      - name: trap_targets
+        peer: ManagedSNMPTrapTarget
+        label: "Trap Targets"
+        cardinality: many
+        kind: Component
+        optional: true
+        identifier: "snmp__trap_targets"
+        order_weight: 1600
+
+  - name: SNMPTrapTarget
+    namespace: Managed
+    description: "SNMP trap receiver target"
+    label: "SNMP Trap Target"
+    icon: "mdi:server"
+    include_in_menu: false
+    human_friendly_id:
+      - "snmp_config__name__value"
+      - "name__value"
+    display_label: "{{name__value}}"
+    attributes:
+      - name: name
+        kind: Text
+        label: "Name"
+        description: "Unique label within the SNMP config (e.g. primary)"
+        optional: false
+        order_weight: 900
+      - name: port
+        kind: Number
+        label: "UDP Port"
+        default_value: 162
+        optional: true
+        order_weight: 1100
+      - name: community
+        kind: Password
+        label: "Community"
+        description: "SNMP community for traps"
+        optional: true
+        order_weight: 1200
+    relationships:
+      - name: address
+        peer: IpamIPAddress
+        label: "Target IP Address"
+        cardinality: one
+        optional: false
+        kind: Attribute
+        order_weight: 1000
+      - name: snmp_config
+        peer: ManagedSNMP
+        label: "SNMP Config"
+        cardinality: one
+        optional: false
+        kind: Parent
+        identifier: "snmp__trap_targets"
+        order_weight: 900
+
+  - name: AAA
+    namespace: Managed
+    description: "AAA (authentication, authorization, accounting) configuration for a device"
+    label: AAA
+    icon: "mdi:shield-account-outline"
+    menu_placement: ManagedGeneric
+    include_in_menu: false
+    human_friendly_id:
+      - "name__value"
+    inherit_from:
+      - ManagedGeneric
+      - ManagedGenericDevice
+    attributes:
+      - name: authentication_order
+        kind: Dropdown
+        label: "Authentication Order"
+        description: "Order in which authentication methods are tried"
+        default_value: tacacs_local
+        optional: false
+        order_weight: 1100
+        choices:
+          - name: tacacs_local
+            label: "TACACS+ then Local"
+            color: "#74B9FF"
+          - name: radius_local
+            label: "RADIUS then Local"
+            color: "#A29BFE"
+          - name: local
+            label: "Local Only"
+            color: "#FDCB6E"
+      - name: authorization_commands
+        kind: Boolean
+        label: "Command Authorization"
+        description: "Enable per-command authorization via AAA server"
+        default_value: false
+        optional: true
+        order_weight: 1200
+      - name: accounting_enabled
+        kind: Boolean
+        label: "Accounting Enabled"
+        description: "Send accounting records to AAA server"
+        default_value: false
+        optional: true
+        order_weight: 1300
+    relationships:
+      - name: servers
+        peer: ManagedAAAServer
+        label: "AAA Servers"
+        cardinality: many
+        kind: Component
+        optional: true
+        identifier: "aaa__servers"
+        order_weight: 1400
+
+  - name: AAAServer
+    namespace: Managed
+    description: "Individual AAA server entry (TACACS+ or RADIUS)"
+    label: "AAA Server"
+    icon: "mdi:server-security"
+    include_in_menu: false
+    human_friendly_id:
+      - "aaa_config__name__value"
+      - "name__value"
+    display_label: "{{name__value}}"
+    attributes:
+      - name: name
+        kind: Text
+        label: "Name"
+        description: "Unique label within the AAA config (e.g. primary, secondary)"
+        optional: false
+        order_weight: 900
+      - name: protocol
+        kind: Dropdown
+        label: "Protocol"
+        default_value: tacacs
+        optional: false
+        order_weight: 1100
+        choices:
+          - name: tacacs
+            label: "TACACS+"
+            color: "#74B9FF"
+          - name: radius
+            label: "RADIUS"
+            color: "#A29BFE"
+      - name: port
+        kind: Number
+        label: "Port"
+        description: "Default: 49 for TACACS+, 1812 for RADIUS"
+        optional: true
+        order_weight: 1200
+      - name: secret_key
+        kind: Password
+        label: "Secret Key"
+        description: "Shared secret for the AAA server"
+        optional: true
+        order_weight: 1300
+      - name: timeout
+        kind: Number
+        label: "Timeout (s)"
+        description: "Server response timeout in seconds"
+        default_value: 5
+        optional: true
+        order_weight: 1400
+    relationships:
+      - name: address
+        peer: IpamIPAddress
+        label: "Server IP Address"
+        cardinality: one
+        optional: false
+        kind: Attribute
+        order_weight: 1000
+      - name: aaa_config
+        peer: ManagedAAA
+        label: "AAA Config"
+        cardinality: one
+        optional: false
+        kind: Parent
+        identifier: "aaa__servers"
+        order_weight: 900

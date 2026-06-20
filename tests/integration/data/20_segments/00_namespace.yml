@@ -1,0 +1,9 @@
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: IpamNamespace
+  data:
+    - name: tenant-a-vrf
+      member_of_groups:
+        - vrf_namespaces

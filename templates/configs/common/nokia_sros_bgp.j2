@@ -1,0 +1,70 @@
+{#- Nokia SROS BGP partial — shared across all device types.
+    Expects: bgp (list of BGP configs from get_bgp_profile)
+    Uses peer_groups, sessions, address_families from BGP profile for
+    consistent underlay/overlay rendering. -#}
+{%- if bgp %}
+{%- for bgp_config in bgp %}
+A admin configure router "Base" bgp 1 admin-state enable
+A admin configure router "Base" bgp 1 router-id "{{ bgp_config.router_id.address.split('/')[0] }}"
+A admin configure router "Base" bgp 1 local-as {{ bgp_config.local_as.asn }}
+A admin configure router "Base" bgp 1 ebgp-default-reject-policy import false
+A admin configure router "Base" bgp 1 ebgp-default-reject-policy export false
+{%- if bgp_config.graceful_restart %}
+A admin configure router "Base" bgp 1 graceful-restart admin-state enable
+{%- endif %}
+{%- if bgp_config.multipath %}
+A admin configure router "Base" bgp 1 multipath max-paths 64
+{%- endif %}
+{#- Peer groups -#}
+{%- for pg in bgp_config.peer_groups | default([]) %}
+A admin configure router "Base" bgp 1 group "{{ pg.name }}" admin-state enable
+{%- if pg.get('remote_as') %}
+A admin configure router "Base" bgp 1 group "{{ pg.name }}" peer-as {{ pg.remote_as }}
+{%- endif %}
+{%- if pg.type == 'overlay' %}
+A admin configure router "Base" bgp 1 group "{{ pg.name }}" local-address "{{ bgp_config.router_id.address.split('/')[0] }}"
+A admin configure router "Base" bgp 1 group "{{ pg.name }}" family evpn
+{%- if pg.route_reflector_client is defined and pg.route_reflector_client %}
+A admin configure router "Base" bgp 1 group "{{ pg.name }}" cluster {{ bgp_config.router_id.address.split('/')[0] }}
+{%- endif %}
+{%- endif %}
+{%- if 'ipv4' in (pg.address_families | default([])) %}
+A admin configure router "Base" bgp 1 group "{{ pg.name }}" family ipv4
+{%- endif %}
+{%- if pg.get('ebgp_multihop') %}
+A admin configure router "Base" bgp 1 group "{{ pg.name }}" multihop {{ pg.ebgp_multihop }}
+{%- endif %}
+{%- if pg.get('bfd_enabled') %}
+A admin configure router "Base" bgp 1 group "{{ pg.name }}" bfd-liveness true
+{%- endif %}
+A admin configure router "Base" bgp 1 group "{{ pg.name }}" send-community extended
+{%- endfor %}
+{#- BGP Neighbors -#}
+{%- for session in bgp_config.sessions %}
+{%- set remote_ip = session.remote_ip.address.split('/')[0] %}
+A admin configure router "Base" bgp 1 neighbor "{{ remote_ip }}" admin-state enable
+A admin configure router "Base" bgp 1 neighbor "{{ remote_ip }}" peer-as {{ session.remote_as.asn }}
+{%- if session.get('remote_device') %}
+A admin configure router "Base" bgp 1 neighbor "{{ remote_ip }}" description "{{ session.remote_device }}"
+{%- endif %}
+{%- if session.peer_group is defined %}
+A admin configure router "Base" bgp 1 neighbor "{{ remote_ip }}" group "{{ session.peer_group }}"
+{%- else %}
+{%- if session.address_families %}
+{#- Overlay session -#}
+A admin configure router "Base" bgp 1 neighbor "{{ remote_ip }}" local-address "{{ bgp_config.router_id.address.split('/')[0] }}"
+A admin configure router "Base" bgp 1 neighbor "{{ remote_ip }}" family evpn
+{%- else %}
+{#- Underlay session -#}
+A admin configure router "Base" bgp 1 neighbor "{{ remote_ip }}" family ipv4
+{%- endif %}
+A admin configure router "Base" bgp 1 neighbor "{{ remote_ip }}" send-community extended
+{%- if session.get('bfd_enabled') %}
+A admin configure router "Base" bgp 1 neighbor "{{ remote_ip }}" bfd-liveness true
+{%- endif %}
+{%- endif %}
+{%- endfor %}
+{#- Export policy for connected routes -#}
+A admin configure router "Base" bgp 1 export policy "RM-CONN-2-BGP"
+{% endfor %}
+{%- endif %}

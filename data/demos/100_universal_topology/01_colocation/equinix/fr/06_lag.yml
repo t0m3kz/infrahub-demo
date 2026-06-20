@@ -1,0 +1,79 @@
+---
+# Frankfurt Equinix port-channels — edge peer-link bundles (FR2 and FR6)
+# Ethernet1/10 + Ethernet1/11 between EDGE-01 and EDGE-02 bundled as Port-Channel10
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimLAGInterface
+  data:
+    - name: Port-Channel10
+      device: FR2-EDGE-01
+      status: active
+      role: mlag-peer
+      lag_id: 10
+      lacp_mode: active
+      mtu: 9000
+      minimum_links: 1
+      member_interfaces:
+        - kind: DcimPhysicalInterface
+          data:
+            device: FR2-EDGE-01
+            name: Ethernet1/10
+        - kind: DcimPhysicalInterface
+          data:
+            device: FR2-EDGE-01
+            name: Ethernet1/11
+
+    - name: Port-Channel10
+      device: FR2-EDGE-02
+      status: active
+      role: mlag-peer
+      lag_id: 10
+      lacp_mode: active
+      mtu: 9000
+      minimum_links: 1
+      member_interfaces:
+        - kind: DcimPhysicalInterface
+          data:
+            device: FR2-EDGE-02
+            name: Ethernet1/10
+        - kind: DcimPhysicalInterface
+          data:
+            device: FR2-EDGE-02
+            name: Ethernet1/11
+
+    - name: Port-Channel10
+      device: FR6-EDGE-01
+      status: active
+      role: mlag-peer
+      lag_id: 10
+      lacp_mode: active
+      mtu: 9000
+      minimum_links: 1
+      member_interfaces:
+        - kind: DcimPhysicalInterface
+          data:
+            device: FR6-EDGE-01
+            name: Ethernet1/10
+        - kind: DcimPhysicalInterface
+          data:
+            device: FR6-EDGE-01
+            name: Ethernet1/11
+
+    - name: Port-Channel10
+      device: FR6-EDGE-02
+      status: active
+      role: mlag-peer
+      lag_id: 10
+      lacp_mode: active
+      mtu: 9000
+      minimum_links: 1
+      member_interfaces:
+        - kind: DcimPhysicalInterface
+          data:
+            device: FR6-EDGE-02
+            name: Ethernet1/10
+        - kind: DcimPhysicalInterface
+          data:
+            device: FR6-EDGE-02
+            name: Ethernet1/11

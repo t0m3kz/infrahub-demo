@@ -10,88 +10,33 @@
 {%- endif %}
 
 {%- set vlan_config = {} -%}
-{%- if vlans and vlans|length > 0 -%}
-{%- for vlan in vlans -%}
-{%- set _ = vlan_config.update({
-  ('Vlan' + vlan.vlan_id|string): {
-    'vlanid': vlan.vlan_id|string
-  }
-}) -%}
-{%- endfor -%}
-{%- endif %}
-
 {%- set loopback_interfaces = {} -%}
-{%- for interface in interfaces -%}
-{%- if 'loopback' in interface.name|lower -%}
-{%- for ip in interface.ip_addresses -%}
-{%- set key = interface.name + '|' + ip.address -%}
-{%- set _ = loopback_interfaces.update({key: {}}) -%}
-{%- endfor -%}
-{%- endif -%}
-{%- endfor %}
-
 {%- set physical_interfaces = {} -%}
-{%- for interface in interfaces -%}
-{%- if 'loopback' not in interface.name|lower -%}
-{%- set _ = physical_interfaces.update({interface.name: {}}) -%}
-{%- endif -%}
-{%- endfor %}
-
 {%- set interface_ips = {} -%}
-{%- for interface in interfaces -%}
-{%- if 'loopback' not in interface.name|lower and interface.ip_addresses -%}
-{%- for ip in interface.ip_addresses -%}
-{%- set key = interface.name + '|' + ip.address -%}
-{%- set _ = interface_ips.update({key: {}}) -%}
-{%- endfor -%}
-{%- endif -%}
-{%- endfor %}
-
 {%- set vlan_interfaces = {} -%}
-{%- if vlans and vlans|length > 0 -%}
-{%- for vlan in vlans -%}
-{%- set key = 'Vlan' + vlan.vlan_id|string -%}
-{%- set _ = vlan_interfaces.update({key: {}}) -%}
-{%- endfor -%}
-{%- endif %}
-
 {%- set bgp_neighbors = {} -%}
-{%- if bgp -%}
-{%- for bgp_config in bgp -%}
-{%- for session in bgp_config.sessions -%}
-{%- set neighbor_ip = session.remote_ip.address.split('/')[0] -%}
-{%- set _ = bgp_neighbors.update({
-  neighbor_ip: {
-    'local_addr': bgp_config.router_id.address.split('/')[0],
-    'asn': session.remote_as.asn,
-    'holdtime': '10',
-    'keepalive': '3'
-  }
-}) -%}
-{%- endfor -%}
-{%- endfor -%}
-{%- endif %}
-
-{%- set bgp_globals = {
-  'default': {}
-} -%}
-{%- if bgp %}
-{%- set _ = bgp_globals['default'].update({
-  'router_id': bgp[0].router_id.address.split('/')[0],
-  'local_asn': bgp[0].local_as.asn
-}) -%}
-{%- endif %}
-
+{%- set bgp_globals = {'default': {}} -%}
+{%- set bgp_peer_groups = {} -%}
+{%- set bgp_globals_af = {} -%}
 {%- set ospf_router = {} -%}
-{%- if ospf -%}
-{%- for ospf_config in ospf -%}
-{%- set _ = ospf_router.update({
-  'default': {
-    'router_id': ospf_config.router_id.split('/')[0],
-    'reference_bandwidth': ospf_config.reference_bandwidth or 100000
-  }
-}) -%}
-{%- endfor -%}
+{%- include 'common/sonic_common.j2' %}
+
+{%- set vxlan_tunnel = {} -%}
+{%- set vxlan_tunnel_map = {} -%}
+{%- set vrf_config = {} -%}
+{%- set vrf_loopback_interfaces = {} -%}
+{%- set evpn_nvo = {} -%}
+{%- include 'common/sonic_vxlan.j2' %}
+
+{%- set acl_table = {} -%}
+{%- set acl_rule = {} -%}
+{%- include 'common/sonic_acl.j2' %}
+
+{%- set static_route_table = {} -%}
+{%- if vrf_gateways %}
+{%- for vrf, nexthop in vrf_gateways.items() %}
+{%- set _ = static_route_table.update({vrf + '|0.0.0.0/0': {'nexthop': nexthop, 'ifname': '', 'nexthop-vrf': ''}}) -%}
+{%- endfor %}
 {%- endif %}
 
 {{ {
@@ -101,7 +46,18 @@
   'INTERFACE': physical_interfaces,
   'INTERFACE_IP': interface_ips,
   'VLAN_INTERFACE': vlan_interfaces,
-  'BGP_NEIGHBOR': bgp_neighbors,
   'BGP_GLOBALS': bgp_globals,
-  'OSPF_ROUTER': ospf_router
+  'BGP_GLOBALS_AF': bgp_globals_af,
+  'BGP_PEER_GROUP': bgp_peer_groups,
+  'BGP_NEIGHBOR': bgp_neighbors,
+  'OSPF_ROUTER': ospf_router,
+  'VXLAN_TUNNEL': vxlan_tunnel,
+  'VXLAN_TUNNEL_MAP': vxlan_tunnel_map,
+  'VRF': vrf_config,
+  'EVPN_NVO': evpn_nvo,
+  'ACL_TABLE': acl_table,
+  'ACL_RULE': acl_rule,
+  'STATIC_ROUTE': static_route_table
 } | tojson(indent=2) }}
+{%- include 'common/sonic_mclag.j2' -%}
+{%- include 'common/sonic_management.j2' %}

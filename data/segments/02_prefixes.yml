@@ -1,0 +1,55 @@
+---
+# Per-segment IP prefixes in customer namespaces
+#
+# Each segment gets a /24 prefix in its customer's VRF namespace.
+# The prefix determines:
+#   - VRF membership (via ip_namespace)
+#   - Gateway IP (via prefix.gateway)
+#   - Customer ownership (via ip_namespace.owner)
+#
+# Prefix → ip_namespace links are set via the `ip_namespace` field.
+# Gateway IPs should be created separately as IpamIPAddress objects.
+
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: IpamPrefix
+  data:
+    # Customer 1 production segments
+    - prefix: "10.1.10.0/24"
+      description: "Customer 1 prod — web frontend"
+      status: active
+      ip_namespace: "CUST001-PROD"
+
+    - prefix: "10.1.20.0/24"
+      description: "Customer 1 prod — app backend"
+      status: active
+      ip_namespace: "CUST001-PROD"
+
+    - prefix: "10.1.30.0/24"
+      description: "Customer 1 prod — database"
+      status: active
+      ip_namespace: "CUST001-PROD"
+
+    # Customer 1 non-production
+    - prefix: "10.1.110.0/24"
+      description: "Customer 1 dev — web frontend"
+      status: active
+      ip_namespace: "CUST001-NONPROD"
+
+    # Customer 2 production segments
+    - prefix: "10.2.10.0/24"
+      description: "Customer 2 prod — web frontend"
+      status: active
+      ip_namespace: "CUST002-PROD"
+
+    - prefix: "10.2.20.0/24"
+      description: "Customer 2 prod — app backend"
+      status: active
+      ip_namespace: "CUST002-PROD"
+
+    # Shared services
+    - prefix: "10.255.1.0/24"
+      description: "Shared services — DNS, NTP, monitoring"
+      status: active
+      ip_namespace: "SHARED-SERVICES"

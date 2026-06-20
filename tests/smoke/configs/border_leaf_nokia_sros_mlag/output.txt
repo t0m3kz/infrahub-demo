@@ -1,0 +1,72 @@
+#!/usr/bin/env python3
+# Nokia SROS Border Leaf Configuration Template
+# Device: DC1-POD1-L1
+# Generated configurationA admin configure system hostname "DC1-POD1-L1"
+A admin configure system dns resolver admin-state enable
+!
+! MC-LAG Configuration
+!
+A admin configure redundancy mc-lag admin-state enable
+A admin configure redundancy mc-lag system-priority 1
+A admin configure redundancy mc-lag peer-link port lag-100
+
+A admin configure router "Base" admin-state enable
+A admin configure router "Base" router-id "0.0.0.0"A admin configure port "system" admin-state enable
+A admin configure port "system" mtu 9212
+A admin configure router "Base" interface "system" admin-state enable
+A admin configure router "Base" interface "system" ip-mtu 9000
+A admin configure router "Base" interface "system" ipv4 admin-state enable
+A admin configure router "Base" interface "system" ipv4 primary address "0.0.0.1/32"A admin configure service vprn 1000 customer 1 admin-state enable
+A admin configure service vprn 1000 route-distinguisher auto
+A admin configure service vprn 1000 vrf-import policy "TENANT_IMPORT"
+A admin configure service vprn 1000 vrf-export policy "TENANT_EXPORT"A admin configure service vprn 2000 customer 1 admin-state enable
+A admin configure service vprn 2000 route-distinguisher auto
+A admin configure service vprn 2000 vrf-import policy "EXTERNAL_IMPORT"
+A admin configure service vprn 2000 vrf-export policy "EXTERNAL_EXPORT"
+A admin configure port "Ethernet1" admin-state enable
+A admin configure port "Ethernet1" mtu 9212
+A admin configure router "Base" interface "Ethernet1" admin-state enable
+A admin configure router "Base" interface "Ethernet1" mtu 9000
+A admin configure router "Base" interface "Ethernet1" description "to spine-01"
+A admin configure router "Base" interface "Ethernet1" ipv4 admin-state enable
+A admin configure router "Base" interface "Ethernet1" ipv4 primary address "10.1.2.1/31"
+
+A admin configure port "Ethernet2" admin-state enable
+A admin configure port "Ethernet2" mtu 9212
+A admin configure router "Base" interface "Ethernet2" admin-state enable
+A admin configure router "Base" interface "Ethernet2" mtu 9000
+A admin configure router "Base" interface "Ethernet2" description "to spine-02"
+A admin configure router "Base" interface "Ethernet2" ipv4 admin-state enable
+A admin configure router "Base" interface "Ethernet2" ipv4 primary address "10.1.2.3/31"
+
+A admin configure port "Ethernet33" admin-state enable
+A admin configure port "Ethernet33" mtu 9212
+A admin configure router "Base" interface "Ethernet33" admin-state enable
+A admin configure router "Base" interface "Ethernet33" mtu 9000
+A admin configure router "Base" interface "Ethernet33" description "MLAG peer-link member 1"
+
+A admin configure port "Ethernet34" admin-state enable
+A admin configure port "Ethernet34" mtu 9212
+A admin configure router "Base" interface "Ethernet34" admin-state enable
+A admin configure router "Base" interface "Ethernet34" mtu 9000
+A admin configure router "Base" interface "Ethernet34" description "MLAG peer-link member 2"
+
+A admin configure port "Loopback0" admin-state enable
+A admin configure port "Loopback0" mtu 9212
+A admin configure router "Base" interface "Loopback0" admin-state enable
+A admin configure router "Base" interface "Loopback0" mtu 9000
+A admin configure router "Base" interface "Loopback0" description "Router ID"
+A admin configure router "Base" interface "Loopback0" ipv4 admin-state enable
+A admin configure router "Base" interface "Loopback0" ipv4 primary address "10.0.2.1/32"
+
+A admin configure port "lag-100" admin-state enable
+A admin configure port "lag-100" mtu 9212
+A admin configure router "Base" interface "lag-100" admin-state enable
+A admin configure router "Base" interface "lag-100" mtu 9000
+A admin configure router "Base" interface "lag-100" description "MLAG Peer-Link"
+
+
+
+
+
+! End of configuration

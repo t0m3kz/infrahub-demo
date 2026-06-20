@@ -1,0 +1,35 @@
+query vxlan_segment_data($name: String!) {
+  ManagedVxlanSegment(name__value: $name) {
+    edges {
+      node {
+        id
+        name { value }
+        arp_suppression { value }
+        deployments {
+          edges {
+            node {
+              id
+              name { value }
+            }
+          }
+        }
+        prefix {
+          edges {
+            node {
+              id
+              prefix { value }
+              gateway_ip { value }
+              ip_namespace {
+                node {
+                  id
+                  name { value }
+                  l3_vni { value }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

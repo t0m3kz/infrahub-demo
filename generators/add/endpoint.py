@@ -1,0 +1,780 @@
+"""Infrastructure generator for endpoint device connectivity.
+
+This generator connects endpoint devices (servers) to network infrastructure
+based on deployment type (middle_rack, tor, mixed). It follows deployment-aware
+routing logic with proper interface type matching and dual-homing support.
+
+Features:
+- Suite-level device distribution
+- Speed-aware interface matching (25G/100G)
+- Connection fingerprinting for idempotency
+- Pre-execution validation
+"""
+
+from __future__ import annotations
+
+import re
+from dataclasses import dataclass
+from typing import Any, Literal
+
+from netutils.interface import sort_interface_list
+
+from utils.data_cleaning import clean_data
+
+from ..common import CablingOptions, CommonGenerator
+from ..helpers.cabling import ConnectionValidator, InterfaceSpeedMatcher
+from ..models import ConnectionFingerprint, EndpointModel
+from ..protocols import DcimPhysicalDevice, DcimPhysicalInterface, LocationRack
+
+
+@dataclass
+class InterfaceData:
+    """Simple interface data container for GraphQL results."""
+
+    id: str
+    name: str
+    role: str
+    status: str
+    interface_type: str | None
+    speed: int | None
+    device_id: str
+    device_name: str
+
+
+class EndpointConnectivityGenerator(CommonGenerator):
+    """Generate connectivity for endpoint devices based on deployment patterns.
+
+    Deployment strategies:
+    - middle_rack: Connect to Leaf switches in network rack in same row
+    - tor: Connect to ToR switches in same rack, fallback to same row
+    - mixed: Connect to ToR devices in same rack, fallback to middle rack leafs in same row
+
+    Features:
+    - Suite-level device distribution
+    - Flexible speed handling (speed-aware or validation-only modes)
+    - Connection fingerprinting for idempotency
+    - Pre-execution validation
+    - Interface type and role matching (customer ↔ access)
+    - Dual-homing across consecutive device pairs
+    - Uses CablingPlanner and CommonGenerator.create_cabling()
+
+    Speed Configuration (matching CablingPlanner pattern):
+    - speed_aware=True (default): Group by speed first, only connect matching speeds
+    - speed_aware=False: Connect all interfaces, validate speeds afterward
+    - validate_speeds=True (default): Check speed compatibility, log warnings
+    - strict_speed_validation=False (default): Log warnings only (True=skip mismatches)
+    """
+
+    @staticmethod
+    def _extract_device_name(intf: Any) -> str | None:
+        """Extract the device name from a RelatedNode interface object."""
+        if hasattr(intf, "_device_name_for_grouping"):
+            return str(intf._device_name_for_grouping)
+        if hasattr(intf.device, "peer"):
+            device_obj = intf.device.peer
+            if device_obj and hasattr(device_obj, "name"):
+                return str(device_obj.name.value if hasattr(device_obj.name, "value") else device_obj.name)
+        if hasattr(intf.device, "name"):
+            return str(intf.device.name.value if hasattr(intf.device.name, "value") else intf.device.name)
+        return None
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        super().__init__(*args, **kwargs)
+        self.planned_connections: set[ConnectionFingerprint] = set()
+        self._free_interfaces: list[DcimPhysicalInterface] = []  # Free interfaces without cables
+        self._already_connected: bool = False  # True when endpoint already has existing cables
+
+        # Speed validation configuration (matching CablingPlanner pattern)
+        self.speed_aware: bool = kwargs.get("speed_aware", True)  # Group by speed first (default: True)
+        self.validate_speeds: bool = kwargs.get("validate_speeds", True)  # Check speed compatibility
+        self.strict_speed_validation: bool = kwargs.get(
+            "strict_speed_validation", False
+        )  # Skip mismatches (False=warnings only)
+
+    async def generate(self, data: dict[str, Any]) -> None:
+        """Generate endpoint device connectivity based on deployment type."""
+        try:
+            deployment_list = clean_data(data).get("DcimDevice", [])
+            if not deployment_list:
+                self.logger.error("No Endpoint Device data found in GraphQL response")
+                return
+
+            # Filter out empty interface nodes (virtual interfaces don't match PhysicalInterface fragment)
+            deployment_data = deployment_list[0]
+            if "rack" in deployment_data and "devices" in deployment_data.get("rack", {}):
+                for device in deployment_data["rack"]["devices"]:
+                    if "interfaces" in device:
+                        # Remove empty dicts ({}) which are virtual interfaces not matching the fragment
+                        device["interfaces"] = [intf for intf in device["interfaces"] if intf]
+
+            model_data = EndpointModel(endpoint=deployment_data)
+            self.data = model_data.endpoint
+        except (ValueError, KeyError, IndexError) as exc:
+            self.logger.error(f"Generation failed due to {exc}")
+            return
+
+        if not self.data.rack:
+            self.logger.error(f"Endpoint {self.data.name} has no rack assigned - cannot determine connectivity")
+            return
+
+        # Access deployment_type directly from pod (not through design)
+        deployment_type = self.data.rack.pod.deployment_type
+        self.pod_name = self.data.rack.pod.name.lower()
+        pod_id = self.data.rack.pod.id
+        dc = self.data.rack.pod.parent
+        self.deployment_id = dc.id
+        self.fabric_name = dc.name.lower()
+
+        self.logger.info(f"Generating connectivity for endpoint {self.data.name} in {deployment_type} deployment")
+
+        # Update endpoint device to set deployment to pod
+        endpoint_device = await self.client.get(kind=DcimPhysicalDevice, id=self.data.id)
+        current_deployment = endpoint_device.deployment.id
+        if current_deployment != pod_id:
+            endpoint_device.deployment = pod_id
+            await endpoint_device.save(allow_upsert=True)
+            self.logger.info(f"Updated {self.data.name} deployment to pod {self.pod_name}")
+
+        # Get all uplink interfaces from endpoint device (idempotency)
+        # Note: Endpoint devices use "uplink" role, ToR/Leaf devices use "customer" role
+        all_endpoint_interfaces: list[DcimPhysicalInterface] = await self.client.filters(
+            kind=DcimPhysicalInterface,
+            device__ids=[self.data.id],
+            role__value="uplink",
+            status__values=["free", "planned", "active"],
+            include=["device", "interface_type", "cable"],
+        )
+
+        # Filter to only interfaces without cables (for idempotency - only connect new interfaces)
+        endpoint_interfaces: list[DcimPhysicalInterface] = [
+            intf for intf in all_endpoint_interfaces if not (intf.cable and intf.cable.id)
+        ]
+
+        existing_connections = len(all_endpoint_interfaces) - len(endpoint_interfaces)
+
+        if not endpoint_interfaces:
+            if existing_connections > 0:
+                self.logger.info(
+                    f"Endpoint {self.data.name} already has {existing_connections} connection(s) - "
+                    "all interfaces connected, skipping"
+                )
+            else:
+                self.logger.info(f"Endpoint {self.data.name} has no uplink interfaces, skipping")
+            return
+
+        if existing_connections > 0:
+            self.logger.info(
+                f"Endpoint {self.data.name} already has {existing_connections} connection(s) - "
+                f"will create connections for {len(endpoint_interfaces)} free interface(s)"
+            )
+
+        # Store free interfaces and connection state for use in connection methods
+        self._free_interfaces = endpoint_interfaces
+        self._already_connected = existing_connections > 0
+
+        if deployment_type == "middle_rack":
+            await self._connect_middle_rack_deployment()
+        elif deployment_type == "tor":
+            await self._connect_tor_deployment()
+        elif deployment_type == "mixed":
+            await self._connect_mixed_deployment()
+        else:
+            self.logger.error(f"Unknown deployment type '{deployment_type}' for endpoint {self.data.name}")
+
+    async def _connect_middle_rack_deployment(self) -> None:
+        """Connect endpoint in middle_rack deployment.
+
+        Strategy: Server in compute rack connects to switches in the middle rack (network rack) in same row.
+        Middle_rack topology has one network rack per row containing ToR or Leaf switches that serve compute racks.
+        Prefers ToR switches (aggregation layer) with fallback to Leaf switches if needed.
+        """
+        # Safe to assert - validated in generate() before calling this method
+        assert self.data.rack is not None, "Rack must be assigned"
+
+        self.logger.info(
+            f"Endpoint {self.data.name} is in {self.data.rack.rack_type} rack "
+            f"(row {self.data.rack.row_index}), searching for ToR/Leaf switches in middle rack (network rack) in same row"
+        )
+
+        # Query interfaces directly on ToR or Leaf devices in network rack
+        racks = await self.client.filters(
+            kind=LocationRack,
+            pod__ids=[self.data.rack.pod.id],
+            row_index__value=self.data.rack.row_index,
+            rack_type__value="network",
+        )
+
+        if not racks:
+            self.logger.error(
+                f"Endpoint {self.data.name}: No network rack found in row {self.data.rack.row_index} for middle_rack deployment."
+            )
+            raise RuntimeError(
+                f"Endpoint {self.data.name}: Cannot connect - no network rack in row {self.data.rack.row_index}"
+            )
+
+        # Try ToR devices first in network rack (preferred for aggregation)
+        rack_ids = [rack.id for rack in racks]
+        all_target_interfaces = await self._query_interfaces_by_location(
+            rack_ids=rack_ids,
+            device_role="tor",
+            endpoint_interfaces=self._free_interfaces,
+        )
+
+        # Fallback to Leaf devices in network rack if no ToR interfaces found
+        if not all_target_interfaces:
+            self.logger.info(f"No ToR interfaces found in network rack for {self.data.name}, trying Leaf switches")
+            all_target_interfaces = await self._query_interfaces_by_location(
+                rack_ids=rack_ids,
+                device_role="leaf",
+                endpoint_interfaces=self._free_interfaces,
+            )
+
+        if not all_target_interfaces:
+            self.logger.error(
+                f"Endpoint {self.data.name}: No free interfaces found on ToR or Leaf devices in middle rack. "
+                "Cannot create endpoint connectivity."
+            )
+            raise RuntimeError(f"Endpoint {self.data.name}: Cannot connect - no interfaces found in middle rack")
+
+        await self._process_endpoint_connections(all_target_interfaces)
+
+    async def _connect_tor_deployment(self) -> None:
+        """Connect endpoint in tor deployment.
+
+        Strategy: Connect to ToR switches in same rack, fallback to same row.
+        """
+        # Safe to assert - validated in generate() before calling this method
+        assert self.data.rack is not None, "Rack must be assigned"
+
+        # First try to query interfaces in same rack
+        rack_ids = [self.data.rack.id]
+
+        # Query free interfaces on ToR devices in same rack
+        all_target_interfaces = await self._query_interfaces_by_location(
+            rack_ids=rack_ids,
+            device_role="tor",
+            endpoint_interfaces=self._free_interfaces,
+        )
+
+        # Fallback to same row if no interfaces found in rack
+        if not all_target_interfaces:
+            self.logger.info(
+                f"No ToR interfaces in same rack for {self.data.name}, searching same row {self.data.rack.row_index}"
+            )
+
+            racks = await self.client.filters(
+                kind=LocationRack,
+                pod__ids=[self.data.rack.pod.id],
+                row_index__value=self.data.rack.row_index,
+            )
+
+            if racks:
+                all_target_interfaces = await self._query_interfaces_by_location(
+                    rack_ids=[rack.id for rack in racks],
+                    device_role="tor",
+                    endpoint_interfaces=self._free_interfaces,
+                )
+
+        if not all_target_interfaces:
+            self.logger.error(
+                f"Endpoint {self.data.name}: No ToR interfaces found in tor deployment. "
+                "Cannot create endpoint connectivity."
+            )
+            raise RuntimeError(f"Endpoint {self.data.name}: Cannot connect - no ToR interfaces found in deployment")
+
+        await self._process_endpoint_connections(all_target_interfaces)
+
+    async def _connect_mixed_deployment(self) -> None:
+        """Connect endpoint in mixed deployment.
+
+        Strategy: Connect to ToR/Leaf devices in same rack, fallback to middle rack leafs in same row.
+        """
+        # Safe to assert - validated in generate() before calling this method
+        assert self.data.rack is not None, "Rack must be assigned"
+
+        # First try ToR interfaces in same rack
+        rack_ids = [self.data.rack.id]
+
+        all_target_interfaces = await self._query_interfaces_by_location(
+            rack_ids=rack_ids,
+            device_role="tor",
+            endpoint_interfaces=self._free_interfaces,
+        )
+
+        # If no ToR in same rack, try Leaf switches in same row (all network racks)
+        if not all_target_interfaces:
+            self.logger.info(
+                f"No ToR interfaces in same rack for {self.data.name}, trying Leaf switches in same row {self.data.rack.row_index}"
+            )
+
+            racks = await self.client.filters(
+                kind=LocationRack,
+                pod__ids=[self.data.rack.pod.id],
+                row_index__value=self.data.rack.row_index,
+                rack_type__value="network",
+            )
+
+            if racks:
+                all_target_interfaces = await self._query_interfaces_by_location(
+                    rack_ids=[rack.id for rack in racks],
+                    device_role="leaf",
+                    endpoint_interfaces=self._free_interfaces,
+                )
+
+        if not all_target_interfaces:
+            self.logger.error(
+                f"Endpoint {self.data.name}: No ToR or Leaf interfaces found in mixed deployment. "
+                "Cannot create endpoint connectivity."
+            )
+            raise RuntimeError(f"Endpoint {self.data.name}: Cannot connect - no interfaces found in mixed deployment")
+
+        await self._process_endpoint_connections(all_target_interfaces)
+
+    async def _query_interfaces_by_location(
+        self,
+        rack_ids: list[str],
+        device_role: Literal["tor", "leaf"],
+        endpoint_interfaces: list[Any],
+    ) -> list[DcimPhysicalInterface]:
+        """Query free interfaces on devices in specific racks.
+
+        Args:
+            rack_ids: List of rack IDs to search
+            device_role: Device role to filter (tor or leaf)
+            endpoint_interfaces: Endpoint interface models for type matching
+
+        Returns:
+            List of free interfaces on target devices
+        """
+        # First, query devices in the specified racks
+        devices = await self.client.filters(
+            kind=DcimPhysicalDevice,
+            rack__ids=rack_ids,
+            role__value=device_role,
+            status__values=["active", "free", "provisioning"],
+        )
+
+        if not devices:
+            self.logger.info(f"No {device_role} devices found in {len(rack_ids)} rack(s)")
+            return []
+
+        # Extract interface types - handle both string and object attributes
+        endpoint_types = []
+        for intf in endpoint_interfaces:
+            if intf.interface_type:
+                intf_type = (
+                    intf.interface_type.value if hasattr(intf.interface_type, "value") else str(intf.interface_type)
+                )
+                if intf_type:
+                    endpoint_types.append(intf_type)
+
+        # Query interfaces on those devices
+        # ToR/Leaf devices have "customer" interfaces that connect to server's "uplink" interfaces
+        acceptable_roles = ["downlink", "customer"]
+        device_ids = [dev.id for dev in devices]
+        # On the first connection attempt only look at genuinely unoccupied ports.
+        # When the endpoint already has cables (re-run) be permissive so that
+        # partially-connected endpoints can still have remaining ports wired up.
+        status_filter: dict[str, Any] = (
+            {"status__values": ["free", "planned", "active"]} if self._already_connected else {"status__value": "free"}
+        )
+        intf_filters: dict[str, Any] = {
+            "kind": DcimPhysicalInterface,
+            "device__ids": device_ids,
+            **status_filter,
+            "role__values": acceptable_roles,
+            "include": ["device", "interface_type", "cable"],
+        }
+        if endpoint_types:
+            intf_filters["interface_type__values"] = endpoint_types
+        all_interfaces = await self.client.filters(**intf_filters)
+
+        # Debug logging
+        self.logger.debug(f"Query returned {len(all_interfaces)} interfaces before cable filter")
+        self.logger.debug(f"Device IDs: {device_ids}")
+        self.logger.debug(f"Endpoint types: {endpoint_types}")
+        self.logger.debug(f"Acceptable roles: {acceptable_roles}")
+
+        # Filter out interfaces that already have cables
+        free_interfaces = [intf for intf in all_interfaces if not (intf.cable and intf.cable.id)]
+
+        # Debug: check what's being filtered out
+        filtered_count = len(all_interfaces) - len(free_interfaces)
+        if filtered_count > 0:
+            self.logger.debug(f"Filtered out {filtered_count} interfaces with cables")
+            # Show sample of filtered interfaces
+            for intf in all_interfaces[:3]:
+                has_cable = (
+                    f"cable={intf.cable.id if (intf.cable and hasattr(intf.cable, 'id') and intf.cable.id) else 'None'}"
+                )
+                self.logger.debug(
+                    f"  Interface {intf.name}: {has_cable}, status={intf.status.value if hasattr(intf.status, 'value') else intf.status}"
+                )
+
+        self.logger.info(
+            f"Found {len(free_interfaces)} free interfaces on {len(devices)} {device_role} device(s) in {len(rack_ids)} rack(s) "
+            f"(interface_types={endpoint_types or 'any'}, roles={acceptable_roles})"
+        )
+
+        return free_interfaces
+
+    async def _process_endpoint_connections(
+        self,
+        all_target_interfaces: list[DcimPhysicalInterface],
+    ) -> None:
+        """Process endpoint connections using available interfaces.
+
+        Args:
+            all_target_interfaces: List of available target interfaces
+        """
+        # Filter endpoint interfaces to only those without cables
+        available_endpoint_interfaces: list[DcimPhysicalInterface] = [
+            intf for intf in self._free_interfaces if not (intf.cable and intf.cable.id)
+        ]
+
+        if not available_endpoint_interfaces:
+            self.logger.info(f"All interfaces on {self.data.name} already have cables")
+            return
+
+        if not all_target_interfaces:
+            self.logger.error(
+                f"Endpoint {self.data.name}: No compatible interfaces found on target devices. "
+                "Cannot create endpoint connectivity."
+            )
+            raise RuntimeError(f"Endpoint {self.data.name}: Cannot connect - no compatible interfaces")
+
+        # Group interfaces by device for dual-homing
+        device_groups = {}
+        for intf in all_target_interfaces:
+            device_name = self._extract_device_name(intf)
+            if not device_name:
+                self.logger.warning(f"Could not extract device name for interface {intf.name.value}")
+                continue
+
+            if device_name not in device_groups:
+                device_groups[device_name] = []
+            device_groups[device_name].append(intf)
+
+        # Select consecutive device pair
+        device_names = list(device_groups.keys())
+        if len(device_names) < 2:
+            self.logger.error(
+                f"Endpoint {self.data.name}: Need at least 2 devices for dual-homing, found {len(device_names)}. "
+                "Cannot create endpoint connectivity."
+            )
+            raise RuntimeError(
+                f"Endpoint {self.data.name}: Cannot connect - insufficient devices for dual-homing (need 2, found {len(device_names)})"
+            )
+
+        # For simplicity, take first two devices (can be enhanced with consecutive pair selection)
+        selected_devices = device_names[:2]
+        selected_interfaces = []
+        for dev_name in selected_devices:
+            selected_interfaces.extend(device_groups[dev_name])
+
+        self.logger.info(f"Selected device pair for {self.data.name}: {selected_devices}")
+
+        # Choose processing mode based on configuration
+        if self.speed_aware:
+            await self._process_speed_aware(
+                available_endpoint_interfaces=available_endpoint_interfaces,
+                all_target_interfaces=selected_interfaces,
+                target_device_names=selected_devices,
+            )
+        else:
+            await self._process_with_validation(
+                available_endpoint_interfaces=available_endpoint_interfaces,
+                all_target_interfaces=selected_interfaces,
+                target_device_names=selected_devices,
+            )
+
+        self.logger.info(
+            f"Completed all connectivity for {self.data.name}: {len(self.planned_connections)} total connection(s) established"
+        )
+
+    async def _process_speed_aware(
+        self,
+        available_endpoint_interfaces: list[Any],
+        all_target_interfaces: list[DcimPhysicalInterface],
+        target_device_names: list[str],
+    ) -> None:
+        """Process connections using speed-aware mode (group by speed first).
+
+        Current default behavior: Only connect interfaces with matching speeds.
+        """
+        # Group by speed for mixed-speed deployments
+        speed_groups = InterfaceSpeedMatcher.group_by_speed(
+            server_interfaces=available_endpoint_interfaces,
+            switch_interfaces=all_target_interfaces,
+        )
+
+        if not speed_groups:
+            self.logger.error(
+                f"Endpoint {self.data.name}: No matching speed groups found between endpoint and {target_device_names}. "
+                "Cannot create endpoint connectivity (speed-aware mode)."
+            )
+            raise RuntimeError(
+                f"Endpoint {self.data.name}: Cannot connect - no matching interface speeds with {target_device_names}"
+            )
+
+        self.logger.info(f"Found {len(speed_groups)} speed group(s): {sorted(speed_groups.keys())}Gbps")
+
+        # Process each speed group independently
+        for speed, (server_intfs, switch_intfs) in sorted(speed_groups.items()):
+            self.logger.info(
+                f"Processing {speed}Gbps group: {len(server_intfs)} server interfaces, "
+                f"{len(switch_intfs)} switch interfaces"
+            )
+
+            # Build connection plan for this speed group
+            connection_plan = self._build_connection_plan(
+                server_interfaces=server_intfs,
+                switch_interfaces=switch_intfs,
+                target_device_names=target_device_names,
+            )
+
+            if not connection_plan:
+                self.logger.warning(f"No connection plan created for {speed}Gbps group")
+                continue
+
+            # Validate the plan (check for duplicates, no minimum requirement)
+            is_valid, message = ConnectionValidator.validate_plan(connection_plan, min_connections=1)
+            if not is_valid:
+                self.logger.error(f"Connection plan validation failed for {speed}Gbps: {message}")
+                continue
+
+            self.logger.info(f"Connection plan for {speed}Gbps: {len(connection_plan)} connection(s) planned")
+
+            # Add to planned connections
+            self.planned_connections.update(connection_plan)
+
+            # Execute cabling
+            await self._execute_cabling(connection_plan, target_device_names)
+
+            self.logger.info(f"Successfully created {len(connection_plan)} connections for {speed}Gbps group")
+
+    async def _process_with_validation(
+        self,
+        available_endpoint_interfaces: list[Any],
+        all_target_interfaces: list[DcimPhysicalInterface],
+        target_device_names: list[str],
+    ) -> None:
+        """Process connections with validation-only mode (connect all, validate afterward).
+
+        Flexible mode: Connects interfaces regardless of speed, then validates.
+        Useful for transition scenarios (e.g., upgrading from 10G to 25G).
+        """
+        self.logger.info(
+            f"Processing {len(available_endpoint_interfaces)} endpoint interfaces with "
+            f"{len(all_target_interfaces)} target interfaces (validation-only mode)"
+        )
+
+        # Build connection plan using all available interfaces
+        connection_plan = self._build_connection_plan(
+            server_interfaces=available_endpoint_interfaces,
+            switch_interfaces=all_target_interfaces,
+            target_device_names=target_device_names,
+        )
+
+        if not connection_plan:
+            self.logger.warning("No connection plan created")
+            return
+
+        # Validate speed compatibility if requested
+        if self.validate_speeds:
+            connection_plan = self._validate_connection_speeds(
+                connection_plan=connection_plan,
+                available_endpoint_interfaces=available_endpoint_interfaces,
+                all_target_interfaces=all_target_interfaces,
+            )
+
+        # Validate the final plan
+        is_valid, message = ConnectionValidator.validate_plan(connection_plan, min_connections=2)
+        if not is_valid:
+            self.logger.error(f"Connection plan validation failed: {message}")
+            return
+
+        self.logger.info(f"Connection plan validated: {message}")
+
+        # Add to planned connections
+        self.planned_connections.update(connection_plan)
+
+        # Execute cabling
+        await self._execute_cabling(connection_plan, target_device_names)
+
+        self.logger.info(f"Successfully created {len(connection_plan)} connections")
+
+    def _validate_connection_speeds(
+        self,
+        connection_plan: list[ConnectionFingerprint],
+        available_endpoint_interfaces: list[Any],
+        all_target_interfaces: list[DcimPhysicalInterface],
+    ) -> list[ConnectionFingerprint]:
+        """Validate interface speed compatibility in connection plan.
+
+        Similar to CablingPlanner._validate_interface_speeds() but works with ConnectionFingerprint objects.
+        """
+        validated_plan = []
+        mismatches = []
+
+        # Build lookup maps for speed extraction
+        endpoint_speed_map: dict[str, int | None] = {}
+        for intf in available_endpoint_interfaces:
+            if hasattr(intf, "interface_type") and intf.interface_type:
+                speed = InterfaceSpeedMatcher.extract_speed(str(intf.interface_type))
+                endpoint_speed_map[intf.name] = speed
+
+        target_speed_map: dict[str, int | None] = {}
+        for intf in all_target_interfaces:
+            if hasattr(intf, "interface_type") and intf.interface_type:
+                intf_type = intf.interface_type.value if hasattr(intf.interface_type, "value") else intf.interface_type
+                speed = InterfaceSpeedMatcher.extract_speed(str(intf_type)) if intf_type else None
+                target_speed_map[intf.name.value] = speed
+
+        # Check each connection
+        for conn in connection_plan:
+            endpoint_speed = endpoint_speed_map.get(conn.server_interface)
+            target_speed = target_speed_map.get(conn.switch_interface)
+
+            # Check compatibility
+            if endpoint_speed and target_speed and endpoint_speed != target_speed:
+                mismatch_msg = (
+                    f"Speed mismatch: {conn.server_name}:{conn.server_interface} "
+                    f"({endpoint_speed}G) ↔ {conn.switch_name}:{conn.switch_interface} ({target_speed}G)"
+                )
+                mismatches.append(mismatch_msg)
+
+                if self.strict_speed_validation:
+                    self.logger.warning(f"Skipping connection due to speed mismatch: {mismatch_msg}")
+                    continue
+                else:
+                    self.logger.warning(f"Speed mismatch detected (connection will proceed): {mismatch_msg}")
+
+            validated_plan.append(conn)
+
+        if mismatches:
+            self.logger.info(f"Speed validation found {len(mismatches)} mismatches")
+
+        return validated_plan
+
+    async def _execute_cabling(
+        self,
+        connection_plan: list[ConnectionFingerprint],
+        target_device_names: list[str],
+    ) -> None:
+        """Execute cabling for a connection plan."""
+        # Sort interfaces using netutils for proper ordering
+        endpoint_intf_names = sort_interface_list([conn.server_interface for conn in connection_plan])
+        target_intf_names = sort_interface_list(list(set(conn.switch_interface for conn in connection_plan)))
+
+        await self.create_cabling(
+            bottom_devices=[self.data.name],
+            bottom_interfaces=endpoint_intf_names,
+            top_devices=target_device_names,
+            top_interfaces=target_intf_names,
+            strategy="intra_rack",
+            options=CablingOptions(
+                cabling_offset=0,
+                pool=None,  # No IP allocation for endpoint connections
+            ),
+        )
+
+    def _build_connection_plan(
+        self,
+        server_interfaces: list[Any],
+        switch_interfaces: list[DcimPhysicalInterface],
+        target_device_names: list[str],
+    ) -> list[ConnectionFingerprint]:
+        """Build connection plan with fingerprinting for idempotency.
+
+        Args:
+            server_interfaces: Server interface models
+            switch_interfaces: Switch interface models
+            target_device_names: List of target switch names for dual-homing
+
+        Returns:
+            List of ConnectionFingerprint objects representing planned connections
+        """
+        plan: list[ConnectionFingerprint] = []
+
+        # Group switch interfaces by device for dual-homing
+        switch_by_device: dict[str, list[DcimPhysicalInterface]] = {}
+        for intf in switch_interfaces:
+            device_name = self._extract_device_name(intf)
+            if not device_name:
+                self.logger.warning(f"Could not determine device name for interface {intf.name.value}")
+                continue
+
+            if device_name not in switch_by_device:
+                switch_by_device[device_name] = []
+            switch_by_device[device_name].append(intf)
+
+        # Sort interfaces within each device using netutils for proper ordering
+        for device_name, intfs in switch_by_device.items():
+            interface_map = {intf.name.value: intf for intf in intfs}
+            sorted_names = sort_interface_list(list(interface_map.keys()))
+            switch_by_device[device_name] = [interface_map[name] for name in sorted_names]
+
+        # Debug: log device grouping
+        self.logger.info(
+            f"Grouped {len(switch_interfaces)} interfaces into {len(switch_by_device)} devices: {list(switch_by_device.keys())}"
+        )
+        for dev_name, intfs in switch_by_device.items():
+            self.logger.debug(f"  {dev_name}: {len(intfs)} interfaces")
+
+        # Take up to 4 server interfaces (2 per switch for dual-homing)
+        server_intfs = server_interfaces[:4]
+
+        self.logger.info(
+            f"Planning connections for {len(server_intfs)} server interfaces (requested: {len(server_interfaces)})"
+        )
+        self.logger.info(f"Target devices: {target_device_names}")
+
+        # Alternate between switches for dual-homing
+        for idx, server_intf in enumerate(server_intfs):
+            switch_name = target_device_names[idx % 2]
+            available_switch_intfs = switch_by_device.get(switch_name, [])
+
+            server_intf_name = server_intf.name.value if hasattr(server_intf.name, "value") else str(server_intf.name)
+
+            if not available_switch_intfs:
+                self.logger.warning(f"No available interfaces on {switch_name} for {server_intf.name}")
+                continue
+
+            # Take first available interface from sorted list
+            switch_intf = available_switch_intfs.pop(0)
+
+            fingerprint = ConnectionFingerprint(
+                server_name=self.data.name,
+                server_interface=server_intf_name,
+                switch_name=switch_name,
+                switch_interface=switch_intf.name.value,
+            )
+
+            # Check if already planned (idempotency within this run)
+            if fingerprint not in self.planned_connections:
+                plan.append(fingerprint)
+
+        return plan
+
+    def _select_consecutive_device_pair(self, devices: list[dict[str, Any]], role: str) -> list[dict[str, Any]]:
+        """Select pair of consecutive devices for dual-homing."""
+
+        def extract_id(name: str) -> int | None:
+            match = re.search(r"(\d+)$", name)
+            return int(match.group(1)) if match else None
+
+        device_map = {}
+        for device in devices:
+            name = device.get("name", {}).get("value", "")
+            dev_id = extract_id(name)
+            if dev_id is not None:
+                device_map[dev_id] = device
+
+        sorted_ids = sorted(device_map.keys())
+        for i in range(len(sorted_ids) - 1):
+            id1, id2 = sorted_ids[i], sorted_ids[i + 1]
+            if id2 - id1 == 1 and id1 % 2 == 1:
+                return [device_map[id1], device_map[id2]]
+
+        return devices[:2]

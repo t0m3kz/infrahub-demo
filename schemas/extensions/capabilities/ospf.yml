@@ -1,0 +1,267 @@
+---
+version: "1.0"
+
+# ============================================================================
+# Routing — OSPF schema
+# OSPF interface config, areas, processes, peerings, and link services.
+# ============================================================================
+
+nodes:
+  - name: OSPFInterface
+    namespace: Routing
+    description: "OSPF configuration for interfaces (interface-level settings)"
+    label: "OSPF Interface Config"
+    icon: "mdi:ethernet"
+    include_in_menu: false
+    inherit_from:
+      - ManagedGeneric
+      - ManagedGenericInterfaces
+    order_by:
+      - name__value
+    display_label: "{{name__value}}"
+    uniqueness_constraints:
+      - ["name__value"]
+    human_friendly_id:
+      - "name__value"
+    attributes:
+      # Could be computed later on based on OSPF Instance / Interface Name
+      - name: name
+        kind: Text
+        optional: false
+        unique: true
+        description: "Name of the OSPF interface Profile."
+        order_weight: 1500
+      - name: metric
+        kind: Number
+        optional: true
+        description: "OSPF metric for the interface."
+        order_weight: 1400
+      - name: mode
+        kind: Dropdown
+        choices:
+          - name: normal
+            label: Normal
+            description: "Standard OSPF interface mode."
+            color: "#E6E6FA"
+          - name: passive
+            label: Passive
+            description: "Interface will not send OSPF hello packets."
+            color: "#E6E6FA"
+          - name: peer_to_peer
+            label: Peer-to-Peer
+            description: "OSPF peer-to-peer interface mode."
+            color: "#E6E6FA"
+        default_value: normal
+        description: "Mode of the OSPF interface."
+        order_weight: 1300
+      - name: authentication_key
+        kind: Password
+        description: "Shared secret for routing message authentication."
+        optional: true
+        order_weight: 1250
+      - name: authentication_mode
+        kind: Dropdown
+        choices:
+          - name: md5
+            label: MD5
+            color: "#E6E6FA"
+          - name: sha1
+            label: SHA1
+            color: "#E6E6FA"
+        optional: true
+        order_weight: 1225
+    relationships:
+      - name: ospf_process
+        peer: ManagedOSPF
+        label: OSPF Process
+        cardinality: one
+        optional: false
+        identifier: "ospfinterface__process"
+        order_weight: 2000
+        description: "OSPF process this interface configuration belongs to"
+      - name: area
+        peer: RoutingOSPFArea
+        label: OSPF Area
+        cardinality: one
+        optional: false
+        identifier: "ospfinterface__area"
+        order_weight: 2100
+        description: "OSPF area for this interface"
+
+  - name: OSPFArea
+    namespace: Routing
+    description: "OSPF area configuration"
+    label: OSPF Area
+    icon: "carbon:area"
+    include_in_menu: false
+    uniqueness_constraints:
+      - ["name__value", "area__value"]
+    human_friendly_id:
+      - name__value
+      - area__value
+    display_label: "{{name__value}} {{area__value}}"
+    attributes:
+      - name: name
+        kind: Text
+        description: "Name of the OSPF area"
+        order_weight: 1000
+      - name: area
+        kind: Number
+        description: "OSPF area number (0-4294967295)"
+        order_weight: 1100
+      - name: area_type
+        kind: Dropdown
+        description: "Type of OSPF area"
+        choices:
+          - name: standard
+            label: Standard
+            description: "Regular OSPF area"
+          - name: stub
+            label: Stub Area
+            description: "Does not receive external routes"
+          - name: nssa
+            label: Not-So-Stubby Area
+            description: "Can import some external routes"
+          - name: totally_stubby
+            label: Totally Stubby Area
+            description: "Only receives default route"
+        default_value: "standard"
+        order_weight: 1200
+      - name: description
+        kind: Text
+        description: "Description of the OSPF area"
+        optional: true
+        order_weight: 1300
+
+  - name: OSPF
+    namespace: Managed
+    description: "OSPF routing service that can be attached to devices"
+    label: OSPF Service
+    icon: "carbon:network-4-reference"
+    menu_placement: ManagedGeneric
+    include_in_menu: false
+    human_friendly_id:
+      - "name__value"
+    inherit_from:
+      - ManagedGeneric
+      - ManagedGenericDevice
+      - ManagedRouting
+    attributes:
+      - name: process_id
+        kind: Text
+        description: "OSPF process ID on the device"
+        default_value: "1"
+        order_weight: 1500
+      - name: version
+        kind: Dropdown
+        choices:
+          - name: ospf
+            label: OSPFv2
+            description: "Open Shortest Path First version 2."
+            color: "#E6E6FA"
+          - name: ospfv3
+            label: OSPFv3
+            description: "Open Shortest Path First version 3."
+            color: "#ECD6FA"
+      - name: router_type
+        kind: Dropdown
+        description: "Type of OSPF router"
+        choices:
+          - name: abr
+            label: Area Border Router
+            description: "Connects multiple OSPF areas"
+          - name: asbr
+            label: Autonomous System Border Router
+            description: "Connects to external routing domains"
+          - name: internal
+            label: Internal Router
+            description: "Router within a single OSPF area"
+        default_value: "internal"
+        order_weight: 1600
+      - name: reference_bandwidth
+        kind: Number
+        description: "Reference bandwidth for OSPF (Mbps)"
+        default_value: 100000
+        optional: true
+        order_weight: 1700
+    relationships:
+      - name: router_id
+        peer: IpamIPAddress
+        optional: false
+        cardinality: one
+        kind: Attribute
+        order_weight: 1500
+        description: "Router ID for this OSPF process (namespace derived from this IP)"
+
+  # Note: Interface-specific OSPF config (area, cost, etc.) is in RoutingOSPFInterface
+  - name: OSPFPeering
+    namespace: Managed
+    description: "OSPF peering session — area, cost, and network type for P2P or broadcast links"
+    label: OSPF Peering
+    icon: "carbon:network-4-reference"
+    include_in_menu: false
+    human_friendly_id:
+      - "name__value"
+    inherit_from:
+      - ManagedGeneric
+      - ManagedPeering
+    attributes:
+      - name: ospf_area
+        kind: Text
+        label: "OSPF Area"
+        order_weight: 1400
+        description: "OSPF area identifier for this link (e.g. 0.0.0.0)"
+      - name: network_type
+        kind: Dropdown
+        order_weight: 1500
+        description: "OSPF network type"
+        default_value: point-to-point
+        choices:
+          - name: point-to-point
+            label: "Point-to-Point"
+            description: "Standard P2P link — no DR/BDR election"
+            color: "#74B9FF"
+          - name: broadcast
+            label: "Broadcast"
+            description: "Multi-access network with DR/BDR election"
+            color: "#A29BFE"
+          - name: point-to-multipoint
+            label: "Point-to-Multipoint"
+            description: "Hub-and-spoke topology"
+            color: "#FDCB6E"
+      - name: cost
+        kind: Number
+        optional: true
+        order_weight: 1600
+        description: "OSPF link cost override (lower = preferred)"
+    relationships:
+      - name: ospf_process
+        peer: ManagedOSPF
+        label: "OSPF Process"
+        kind: Attribute
+        cardinality: one
+        optional: false
+        identifier: "ospfpeering__process"
+        order_weight: 3100
+        description: "Local OSPF process this peering belongs to"
+      - name: namespace
+        peer: IpamNamespace
+        label: "IP Namespace"
+        kind: Attribute
+        cardinality: one
+        optional: true
+        identifier: "ospfpeering__namespace"
+        order_weight: 3200
+        description: "IP namespace (VRF) for VRF-aware OSPF instances"
+
+extensions:
+  nodes:
+    - kind: RoutingOSPFInterface
+      relationships:
+        - name: ospf_services
+          label: OSPF Services
+          kind: Generic
+          cardinality: many
+          optional: true
+          peer: ManagedOSPF
+          order_weight: 2000

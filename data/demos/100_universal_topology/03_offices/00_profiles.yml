@@ -1,0 +1,37 @@
+---
+# Shared management capability profiles for office devices
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: ProfileManagedNTP
+  data:
+    - profile_name: office-ntp-default
+      profile_priority: 100
+      description: "Default NTP profile for office devices"
+      timezone: "UTC"
+      status: active
+
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: ProfileManagedSyslog
+  data:
+    - profile_name: office-syslog-default
+      profile_priority: 100
+      description: "Default Syslog profile for office devices"
+      status: active
+
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: ProfileManagedAAA
+  data:
+    - profile_name: office-aaa-default
+      profile_priority: 100
+      description: "Default AAA profile for office devices"
+      authentication_order: tacacs_local
+      authorization_commands: false
+      accounting_enabled: true
+      status: active

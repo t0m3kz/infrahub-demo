@@ -96,6 +96,10 @@ nodes:
       - name: suite_name
         kind: Text
         optional: false
+      - name: index
+        kind: Number
+        optional: false
+        order_weight: 120
     relationships:
       - name: owner
         peer: OrganizationGeneric
@@ -106,6 +110,7 @@ nodes:
     inherit_from:
       - LocationGeneric
       - GeneratorTarget
+      - CoreArtifactTarget
     include_in_menu: false
     menu_placement: "LocationGeneric"
     parent: "LocationSuite"
@@ -146,6 +151,11 @@ nodes:
         unique: false
         optional: true
         order_weight: 1100
+      - name: height
+        label: Height (U)
+        optional: false
+        default_value: 42
+        kind: Number
     relationships:
       - name: owner
         peer: OrganizationGeneric
@@ -153,16 +163,19 @@ nodes:
         cardinality: one
       - name: fabric_templates
         peer: TopologyElement
+        label: Network Elements
         optional: true
         cardinality: many
+        kind: Attribute
       - name: pod
-        peer: TopologyDeployment
+        peer: TopologyRackHosting
         kind: Attribute
         cardinality: one
-        identifier: "rack__hosting"
+        identifier: "rack__pod"
         optional: true
       - name: devices
         peer: DcimPhysicalDevice
+        label: Devices in Rack
         optional: true
         cardinality: many
         kind: Generic
@@ -175,14 +188,7 @@ extensions:
           peer: LocationBuilding
           cardinality: many
           optional: true
-    - kind: TopologyDeployment
-      relationships:
-        - name: racks
-          peer: LocationRack
-          branch: aware
-          cardinality: many
-          kind: Generic
-          identifier: "rack__hosting"
+
     - kind: DcimPhysicalDevice
       relationships:
         - name: rack

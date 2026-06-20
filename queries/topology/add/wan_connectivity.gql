@@ -1,0 +1,71 @@
+query GetWANConnectivityRequest($name: String!) {
+  RequestWANConnectivity(name__value: $name) {
+    edges {
+      node {
+        id
+        name {
+          value
+        }
+        description {
+          value
+        }
+        source_deployment {
+          node {
+            id
+            name {
+              value
+            }
+            __typename
+          }
+        }
+        destination_deployment {
+          node {
+            id
+            name {
+              value
+            }
+            __typename
+          }
+        }
+        connectivity_type {
+          value
+        }
+        circuit_type {
+          value
+        }
+        redundancy {
+          value
+        }
+        bandwidth {
+          value
+        }
+        circuit_id {
+          value
+        }
+        internal_circuit_id {
+          value
+        }
+        provider {
+          node {
+            id
+            name {
+              value
+            }
+          }
+        }
+        overlay_enabled {
+          value
+        }
+        overlay_link_type {
+          value
+        }
+        overlay_encryption {
+          value
+        }
+        status {
+          value
+        }
+      }
+    }
+  }
+}

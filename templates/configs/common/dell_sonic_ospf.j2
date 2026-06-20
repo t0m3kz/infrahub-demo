@@ -1,0 +1,16 @@
+{%- if capabilities is not defined or capabilities.ospf_enabled is not defined or capabilities.ospf_enabled %}
+{%- for ospf_config in ospf %}
+router ospf {{ ospf_config.process_id or 1 }}
+  router-id {{ ospf_config.router_id.split('/')[0] }}
+{%- if ospf_config.reference_bandwidth %}
+  auto-cost reference-bandwidth {{ ospf_config.reference_bandwidth }}
+{%- endif %}
+  passive-interface default
+{%- for interface in interfaces %}
+{%- if interface.get('ospf') %}
+  no passive-interface {{ interface.name }}
+{%- endif %}
+{%- endfor %}
+!
+{% endfor %}
+{%- endif %}

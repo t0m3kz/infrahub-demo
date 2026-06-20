@@ -1,0 +1,24 @@
+# Additional VIP IP Addresses for F5 and A10 Load Balancers
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: IpamIPAddress
+  data:
+    # F5 Load Balancer VIPs
+    - address: "10.1.1.10/32"
+      ip_namespace: "default"
+      description: "F5 VIP - www.demo.local"
+
+    - address: "10.1.1.11/32"
+      ip_namespace: "default"
+      description: "F5 VIP - app.demo.local"
+
+    # A10 Load Balancer VIPs
+    - address: "10.1.1.20/32"
+      ip_namespace: "default"
+      description: "A10 VIP - www.demo.local"
+
+    - address: "10.1.1.21/32"
+      ip_namespace: "default"
+      description: "A10 VIP - app.demo.local"

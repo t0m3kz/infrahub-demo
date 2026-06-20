@@ -1,0 +1,66 @@
+{#- SONiC ConfigDB ACL variable building (zero-trust per-segment).
+    Populates pre-initialized dicts from parent scope via in-place .update():
+    acl_table, acl_rule
+
+    ACL_TABLE entry: type=L3, ports=[VlanXXX], stage=ingress
+    ACL_RULE entry:  PRIORITY = 10000 - seq (higher = first match)
+                     PACKET_ACTION = FORWARD | DROP
+                     IP_PROTOCOL = 6/17/1 (omitted for any)
+                     SRC_IP / DST_IP (omitted when "any")
+                     L4_DST_PORT or L4_DST_PORT_RANGE (TCP/UDP only)
+-#}
+{%- set _proto_num = {"tcp": "6", "udp": "17", "icmp": "1"} -%}
+{%- for acl in acls -%}
+
+{#- ACL_TABLE entry -#}
+{%- set _ = acl_table.update({
+  acl.name: {
+    'type': 'L3',
+    'policy_desc': 'Zero-trust ACL for ' + acl.segment_name,
+    'ports': ['Vlan' + acl.vlan_id|string],
+    'stage': 'ingress'
+  }
+}) -%}
+
+{#- ACL_RULE entries -#}
+{%- for rule in acl.rules -%}
+{%- set rule_key = acl.name + '|SEQ_' + rule.seq|string -%}
+{%- set rule_entry = {
+  'PRIORITY': (10000 - rule.seq)|string,
+  'IP_TYPE': 'IPV4ANY',
+  'PACKET_ACTION': 'FORWARD' if rule.action == 'permit' else 'DROP'
+} -%}
+
+{%- if rule.protocol in _proto_num -%}
+{%- set _ = rule_entry.update({'IP_PROTOCOL': _proto_num[rule.protocol]}) -%}
+{%- endif -%}
+
+{%- if rule.src != 'any' -%}
+{%- set _ = rule_entry.update({'SRC_IP': rule.src}) -%}
+{%- endif -%}
+
+{%- if rule.dst != 'any' -%}
+{%- set _ = rule_entry.update({'DST_IP': rule.dst}) -%}
+{%- endif -%}
+
+{%- if rule.dst_port and rule.protocol in ('tcp', 'udp') -%}
+{%- if rule.dst_port.startswith('range ') -%}
+{%- set port_range = rule.dst_port[6:] | replace(' ', '-') -%}
+{%- set _ = rule_entry.update({'L4_DST_PORT_RANGE': port_range}) -%}
+{%- else -%}
+{%- set _ = rule_entry.update({'L4_DST_PORT': rule.dst_port[3:]}) -%}
+{%- endif -%}
+{%- endif -%}
+
+{%- if rule.log -%}
+{%- set _ = rule_entry.update({'LOG_ACTION': 'SYSLOG'}) -%}
+{%- endif -%}
+
+{%- if rule.src_zone or rule.dst_zone -%}
+{%- set _ = rule_entry.update({'DESCRIPTION': 'Zone: ' + (rule.src_zone or 'any') + ' -> ' + (rule.dst_zone or 'any')}) -%}
+{%- endif -%}
+
+{%- set _ = acl_rule.update({rule_key: rule_entry}) -%}
+{%- endfor -%}
+
+{%- endfor -%}

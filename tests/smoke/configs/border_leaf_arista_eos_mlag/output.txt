@@ -1,0 +1,62 @@
+!
+! Arista EOS Border Leaf Configuration
+! Device: DC1-POD1-L1
+! Generated for Arista EOS
+!
+
+hostname DC1-POD1-L1
+
+! Configure spanning tree mode
+spanning-tree mode mstp
+
+! Configure VLAN 1
+no spanning-tree vlan-id 4094
+!
+! MLAG Configuration
+!
+no spanning-tree vlan-id 4094
+vlan 4094
+   trunk group MLAGPEER
+!
+interface Port-Channel100
+   description MLAG Peer-Link
+   switchport mode trunk
+   switchport trunk group MLAGPEER
+   no shutdown
+!
+interface Vlan4094
+   description MLAG Peer-Link SVI
+   no shutdown
+!
+mlag configuration
+   domain-id 1
+   local-interface Vlan4094
+   peer-link Port-Channel100
+   reload-delay mlag 300
+   reload-delay non-mlag 330
+
+interface Ethernet1
+   description to spine-01
+   ip address 10.1.2.1/31
+
+   no shutdown
+
+interface Ethernet2
+   description to spine-02
+   ip address 10.1.2.3/31
+
+   no shutdown
+
+interface Loopback0
+   description Router ID
+   ip address 10.0.2.1/32
+
+   no shutdown
+
+
+! Configure route-maps
+route-map RM-CONN-2-BGP permit 10
+   match interface Loopback0
+
+
+! End of configuration

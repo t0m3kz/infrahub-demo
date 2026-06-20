@@ -1,14 +1,17 @@
 # 05 - Spine Expansion Demo
 
-*The "We Need to Join the LLM Game" Episode*
+## The "We Need to Join the LLM Game" Episode
 
 ## Overview
 
-**Purpose:** Sneak extra spines into your ToR pod like a Trojan Horse—because every network wants to be LLM-ready, and every engineer wants plausible deniability.
+**Purpose:** Sneak extra spines into your ToR pod like a Trojan Horse—because every network wants to be
+LLM-ready, and every engineer wants plausible deniability.
 
-**Philosophy:** "Just add more spines!"—the ancient battle cry of those who fear AI will take their jobs (or at least their bandwidth).
+**Philosophy:** "Just add more spines!"—the ancient battle cry of those who fear AI will take their jobs (or at
+least their bandwidth).
 
-**Difficulty:** Easy (unless you have to explain to finance why you need four spines for "machine learning")
+**Difficulty:** Easy (unless you have to explain to finance why you need four spines for "machine
+learning")
 
 ---
 
@@ -16,7 +19,8 @@
 
 - **Spine Count:** 4 (because two is for mortals, four is for LLM gods)
 - **Pod:** DC1-1-POD-1 (the birthplace of your future AI overlords)
-- **Upgrade Method:** Trojan Horse—roll in new spines under the cover of "AI readiness" and hope nobody notices until it's too late
+- **Upgrade Method:** Trojan Horse—roll in new spines under the cover of "AI readiness" and hope nobody
+  notices until it's too late
 
 ---
 
@@ -39,7 +43,8 @@ uv run infrahubctl branch create your_branch
 uv run infrahubctl object load data/demos/05_llm_time/ --branch your_branch
 ```
 
-Here you just sit back, sip your coffee, and watch the magic happen—no clicking, no frantic tab switching, just pure event-driven automation.
+Here you just sit back, sip your coffee, and watch the magic happen—no clicking, no frantic tab switching,
+just pure event-driven automation.
 
 It's like Netflix for network engineers, but with fewer cliffhangers.
 

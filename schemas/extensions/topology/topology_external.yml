@@ -1,0 +1,74 @@
+---
+version: "1.0"
+
+nodes:
+  - name: External
+    namespace: Topology
+    inherit_from:
+      - TopologyDeployment
+    label: External Topology
+    include_in_menu: false
+    children: TopologyExternalProviders
+    uniqueness_constraints:
+      - ["name__value"]
+    human_friendly_id:
+      - name__value
+    display_label: "{{ name__value|upper }}"
+
+  - name: ExternalProviders
+    namespace: Topology
+    inherit_from:
+      - TopologyDeployment
+      - TopologyConnectableLocation
+      - TopologyDeviceHosting
+    parent: TopologyExternal
+    label: External Provider Endpoint
+    include_in_menu: false
+    children: ""
+    uniqueness_constraints:
+      - ["name__value"]
+    human_friendly_id:
+      - name__value
+    display_label: "{{ name__value }}"
+    attributes:
+      - name: provider_type
+        kind: Dropdown
+        label: Provider Type
+        optional: false
+        default_value: internet
+        order_weight: 200
+        choices:
+          - name: internet
+            label: Internet
+            color: "#3498DB"
+          - name: partner
+            label: Partner
+            color: "#2ECC71"
+          - name: exchange
+            label: Exchange
+            color: "#1ABC9C"
+      - name: status
+        kind: Dropdown
+        label: Status
+        optional: false
+        default_value: active
+        order_weight: 300
+        choices:
+          - name: active
+            label: Active
+            color: "#7FBF7F"
+          - name: provisioning
+            label: Provisioning
+            color: "#FFFF7F"
+          - name: maintenance
+            label: Maintenance
+            color: "#FFD27F"
+          - name: decommissioned
+            label: Decommissioned
+            color: "#BFBFBF"
+    relationships:
+      - name: provider
+        peer: OrganizationProvider
+        cardinality: one
+        optional: true
+        order_weight: 1000

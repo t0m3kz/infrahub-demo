@@ -1,0 +1,1666 @@
+---
+# DC3 MLAG domains — two leaf pairs, one per pod
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: ManagedMLAG
+  data:
+    - name: DC3-POD1-L1-L2-MLAG
+      status: active
+      domain_id: 1
+      reload_delay: 300
+      reload_delay_non_mlag: 330
+      device_capabilities:
+        - DC3-POD1-L1
+        - DC3-POD1-L2
+
+    - name: DC3-POD2-L1-L2-MLAG
+      status: active
+      domain_id: 2
+      reload_delay: 300
+      reload_delay_non_mlag: 330
+      device_capabilities:
+        - DC3-POD2-L1
+        - DC3-POD2-L2
+
+---
+# DC3 LAG interfaces — leaf side
+#
+# MLAG-ID allocation:
+#   POD1-MLAG:
+#     41-43 → CP-01/02/03 bond0 (within-pod primary)
+#     45-46 → WRK-01/02 (POD1) bond0 (within-pod)
+#     49-52 → WRK-01/02/03/04 (POD2) bond0 (cross-pod to POD1 pair)
+#
+#   POD2-MLAG:
+#     41-43 → CP-01/02/03 bond1 (cross-pod to POD2 pair)
+#     45-46 → WRK-01/02 (POD1) bond1 (cross-pod to POD2 pair)
+#     49-52 → WRK-01/02/03/04 (POD2) bond1 (within-pod primary)
+#     53-54 → STO-01/02 bond0 (within-pod)
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimLAGInterface
+  data:
+
+    # ── POD1-L1: CP + POD1 worker LAGs ───────────────────────────────────────
+    - name: Port-Channel41
+      device: DC3-POD1-L1
+      status: active
+      role: lag
+      lag_id: 41
+      lacp_mode: active
+      mtu: 9000
+      minimum_links: 1
+      mlag_domain: DC3-POD1-L1-L2-MLAG
+      member_interfaces:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD1-L1
+            name: Ethernet1/41
+
+    - name: Port-Channel42
+      device: DC3-POD1-L1
+      status: active
+      role: lag
+      lag_id: 42
+      lacp_mode: active
+      mtu: 9000
+      minimum_links: 1
+      mlag_domain: DC3-POD1-L1-L2-MLAG
+      member_interfaces:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD1-L1
+            name: Ethernet1/42
+
+    - name: Port-Channel43
+      device: DC3-POD1-L1
+      status: active
+      role: lag
+      lag_id: 43
+      lacp_mode: active
+      mtu: 9000
+      minimum_links: 1
+      mlag_domain: DC3-POD1-L1-L2-MLAG
+      member_interfaces:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD1-L1
+            name: Ethernet1/43
+
+    - name: Port-Channel45
+      device: DC3-POD1-L1
+      status: active
+      role: lag
+      lag_id: 45
+      lacp_mode: active
+      mtu: 9000
+      minimum_links: 1
+      mlag_domain: DC3-POD1-L1-L2-MLAG
+      member_interfaces:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD1-L1
+            name: Ethernet1/45
+
+    - name: Port-Channel46
+      device: DC3-POD1-L1
+      status: active
+      role: lag
+      lag_id: 46
+      lacp_mode: active
+      mtu: 9000
+      minimum_links: 1
+      mlag_domain: DC3-POD1-L1-L2-MLAG
+      member_interfaces:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD1-L1
+            name: Ethernet1/46
+
+    # ── POD1-L1: cross-pod LAGs for POD2 workers ─────────────────────────────
+    - name: Port-Channel49
+      device: DC3-POD1-L1
+      status: active
+      role: lag
+      lag_id: 49
+      lacp_mode: active
+      mtu: 9000
+      minimum_links: 1
+      mlag_domain: DC3-POD1-L1-L2-MLAG
+      member_interfaces:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD1-L1
+            name: Ethernet1/49
+
+    - name: Port-Channel50
+      device: DC3-POD1-L1
+      status: active
+      role: lag
+      lag_id: 50
+      lacp_mode: active
+      mtu: 9000
+      minimum_links: 1
+      mlag_domain: DC3-POD1-L1-L2-MLAG
+      member_interfaces:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD1-L1
+            name: Ethernet1/50
+
+    - name: Port-Channel51
+      device: DC3-POD1-L1
+      status: active
+      role: lag
+      lag_id: 51
+      lacp_mode: active
+      mtu: 9000
+      minimum_links: 1
+      mlag_domain: DC3-POD1-L1-L2-MLAG
+      member_interfaces:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD1-L1
+            name: Ethernet1/51
+
+    - name: Port-Channel52
+      device: DC3-POD1-L1
+      status: active
+      role: lag
+      lag_id: 52
+      lacp_mode: active
+      mtu: 9000
+      minimum_links: 1
+      mlag_domain: DC3-POD1-L1-L2-MLAG
+      member_interfaces:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD1-L1
+            name: Ethernet1/52
+
+    # ── POD1-L2: matching MLAG port-channels ─────────────────────────────────
+    - name: Port-Channel41
+      device: DC3-POD1-L2
+      status: active
+      role: lag
+      lag_id: 41
+      lacp_mode: active
+      mtu: 9000
+      minimum_links: 1
+      mlag_domain: DC3-POD1-L1-L2-MLAG
+      member_interfaces:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD1-L2
+            name: Ethernet1/41
+
+    - name: Port-Channel42
+      device: DC3-POD1-L2
+      status: active
+      role: lag
+      lag_id: 42
+      lacp_mode: active
+      mtu: 9000
+      minimum_links: 1
+      mlag_domain: DC3-POD1-L1-L2-MLAG
+      member_interfaces:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD1-L2
+            name: Ethernet1/42
+
+    - name: Port-Channel43
+      device: DC3-POD1-L2
+      status: active
+      role: lag
+      lag_id: 43
+      lacp_mode: active
+      mtu: 9000
+      minimum_links: 1
+      mlag_domain: DC3-POD1-L1-L2-MLAG
+      member_interfaces:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD1-L2
+            name: Ethernet1/43
+
+    - name: Port-Channel45
+      device: DC3-POD1-L2
+      status: active
+      role: lag
+      lag_id: 45
+      lacp_mode: active
+      mtu: 9000
+      minimum_links: 1
+      mlag_domain: DC3-POD1-L1-L2-MLAG
+      member_interfaces:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD1-L2
+            name: Ethernet1/45
+
+    - name: Port-Channel46
+      device: DC3-POD1-L2
+      status: active
+      role: lag
+      lag_id: 46
+      lacp_mode: active
+      mtu: 9000
+      minimum_links: 1
+      mlag_domain: DC3-POD1-L1-L2-MLAG
+      member_interfaces:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD1-L2
+            name: Ethernet1/46
+
+    - name: Port-Channel49
+      device: DC3-POD1-L2
+      status: active
+      role: lag
+      lag_id: 49
+      lacp_mode: active
+      mtu: 9000
+      minimum_links: 1
+      mlag_domain: DC3-POD1-L1-L2-MLAG
+      member_interfaces:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD1-L2
+            name: Ethernet1/49
+
+    - name: Port-Channel50
+      device: DC3-POD1-L2
+      status: active
+      role: lag
+      lag_id: 50
+      lacp_mode: active
+      mtu: 9000
+      minimum_links: 1
+      mlag_domain: DC3-POD1-L1-L2-MLAG
+      member_interfaces:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD1-L2
+            name: Ethernet1/50
+
+    - name: Port-Channel51
+      device: DC3-POD1-L2
+      status: active
+      role: lag
+      lag_id: 51
+      lacp_mode: active
+      mtu: 9000
+      minimum_links: 1
+      mlag_domain: DC3-POD1-L1-L2-MLAG
+      member_interfaces:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD1-L2
+            name: Ethernet1/51
+
+    - name: Port-Channel52
+      device: DC3-POD1-L2
+      status: active
+      role: lag
+      lag_id: 52
+      lacp_mode: active
+      mtu: 9000
+      minimum_links: 1
+      mlag_domain: DC3-POD1-L1-L2-MLAG
+      member_interfaces:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD1-L2
+            name: Ethernet1/52
+
+    # ── POD2-L1: cross-pod LAGs for POD1 nodes ───────────────────────────────
+    - name: Port-Channel41
+      device: DC3-POD2-L1
+      status: active
+      role: lag
+      lag_id: 41
+      lacp_mode: active
+      mtu: 9000
+      minimum_links: 1
+      mlag_domain: DC3-POD2-L1-L2-MLAG
+      member_interfaces:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD2-L1
+            name: Ethernet1/41
+
+    - name: Port-Channel42
+      device: DC3-POD2-L1
+      status: active
+      role: lag
+      lag_id: 42
+      lacp_mode: active
+      mtu: 9000
+      minimum_links: 1
+      mlag_domain: DC3-POD2-L1-L2-MLAG
+      member_interfaces:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD2-L1
+            name: Ethernet1/42
+
+    - name: Port-Channel43
+      device: DC3-POD2-L1
+      status: active
+      role: lag
+      lag_id: 43
+      lacp_mode: active
+      mtu: 9000
+      minimum_links: 1
+      mlag_domain: DC3-POD2-L1-L2-MLAG
+      member_interfaces:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD2-L1
+            name: Ethernet1/43
+
+    - name: Port-Channel45
+      device: DC3-POD2-L1
+      status: active
+      role: lag
+      lag_id: 45
+      lacp_mode: active
+      mtu: 9000
+      minimum_links: 1
+      mlag_domain: DC3-POD2-L1-L2-MLAG
+      member_interfaces:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD2-L1
+            name: Ethernet1/45
+
+    - name: Port-Channel46
+      device: DC3-POD2-L1
+      status: active
+      role: lag
+      lag_id: 46
+      lacp_mode: active
+      mtu: 9000
+      minimum_links: 1
+      mlag_domain: DC3-POD2-L1-L2-MLAG
+      member_interfaces:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD2-L1
+            name: Ethernet1/46
+
+    # ── POD2-L1: within-pod LAGs for POD2 workers + storage ──────────────────
+    - name: Port-Channel49
+      device: DC3-POD2-L1
+      status: active
+      role: lag
+      lag_id: 49
+      lacp_mode: active
+      mtu: 9000
+      minimum_links: 1
+      mlag_domain: DC3-POD2-L1-L2-MLAG
+      member_interfaces:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD2-L1
+            name: Ethernet1/49
+
+    - name: Port-Channel50
+      device: DC3-POD2-L1
+      status: active
+      role: lag
+      lag_id: 50
+      lacp_mode: active
+      mtu: 9000
+      minimum_links: 1
+      mlag_domain: DC3-POD2-L1-L2-MLAG
+      member_interfaces:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD2-L1
+            name: Ethernet1/50
+
+    - name: Port-Channel51
+      device: DC3-POD2-L1
+      status: active
+      role: lag
+      lag_id: 51
+      lacp_mode: active
+      mtu: 9000
+      minimum_links: 1
+      mlag_domain: DC3-POD2-L1-L2-MLAG
+      member_interfaces:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD2-L1
+            name: Ethernet1/51
+
+    - name: Port-Channel52
+      device: DC3-POD2-L1
+      status: active
+      role: lag
+      lag_id: 52
+      lacp_mode: active
+      mtu: 9000
+      minimum_links: 1
+      mlag_domain: DC3-POD2-L1-L2-MLAG
+      member_interfaces:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD2-L1
+            name: Ethernet1/52
+
+    - name: Port-Channel53
+      device: DC3-POD2-L1
+      status: active
+      role: lag
+      lag_id: 53
+      lacp_mode: active
+      mtu: 9000
+      minimum_links: 1
+      mlag_domain: DC3-POD2-L1-L2-MLAG
+      member_interfaces:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD2-L1
+            name: Ethernet1/53
+
+    - name: Port-Channel54
+      device: DC3-POD2-L1
+      status: active
+      role: lag
+      lag_id: 54
+      lacp_mode: active
+      mtu: 9000
+      minimum_links: 1
+      mlag_domain: DC3-POD2-L1-L2-MLAG
+      member_interfaces:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD2-L1
+            name: Ethernet1/54
+
+    # ── POD2-L2: matching MLAG port-channels ─────────────────────────────────
+    - name: Port-Channel41
+      device: DC3-POD2-L2
+      status: active
+      role: lag
+      lag_id: 41
+      lacp_mode: active
+      mtu: 9000
+      minimum_links: 1
+      mlag_domain: DC3-POD2-L1-L2-MLAG
+      member_interfaces:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD2-L2
+            name: Ethernet1/41
+
+    - name: Port-Channel42
+      device: DC3-POD2-L2
+      status: active
+      role: lag
+      lag_id: 42
+      lacp_mode: active
+      mtu: 9000
+      minimum_links: 1
+      mlag_domain: DC3-POD2-L1-L2-MLAG
+      member_interfaces:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD2-L2
+            name: Ethernet1/42
+
+    - name: Port-Channel43
+      device: DC3-POD2-L2
+      status: active
+      role: lag
+      lag_id: 43
+      lacp_mode: active
+      mtu: 9000
+      minimum_links: 1
+      mlag_domain: DC3-POD2-L1-L2-MLAG
+      member_interfaces:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD2-L2
+            name: Ethernet1/43
+
+    - name: Port-Channel45
+      device: DC3-POD2-L2
+      status: active
+      role: lag
+      lag_id: 45
+      lacp_mode: active
+      mtu: 9000
+      minimum_links: 1
+      mlag_domain: DC3-POD2-L1-L2-MLAG
+      member_interfaces:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD2-L2
+            name: Ethernet1/45
+
+    - name: Port-Channel46
+      device: DC3-POD2-L2
+      status: active
+      role: lag
+      lag_id: 46
+      lacp_mode: active
+      mtu: 9000
+      minimum_links: 1
+      mlag_domain: DC3-POD2-L1-L2-MLAG
+      member_interfaces:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD2-L2
+            name: Ethernet1/46
+
+    - name: Port-Channel49
+      device: DC3-POD2-L2
+      status: active
+      role: lag
+      lag_id: 49
+      lacp_mode: active
+      mtu: 9000
+      minimum_links: 1
+      mlag_domain: DC3-POD2-L1-L2-MLAG
+      member_interfaces:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD2-L2
+            name: Ethernet1/49
+
+    - name: Port-Channel50
+      device: DC3-POD2-L2
+      status: active
+      role: lag
+      lag_id: 50
+      lacp_mode: active
+      mtu: 9000
+      minimum_links: 1
+      mlag_domain: DC3-POD2-L1-L2-MLAG
+      member_interfaces:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD2-L2
+            name: Ethernet1/50
+
+    - name: Port-Channel51
+      device: DC3-POD2-L2
+      status: active
+      role: lag
+      lag_id: 51
+      lacp_mode: active
+      mtu: 9000
+      minimum_links: 1
+      mlag_domain: DC3-POD2-L1-L2-MLAG
+      member_interfaces:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD2-L2
+            name: Ethernet1/51
+
+    - name: Port-Channel52
+      device: DC3-POD2-L2
+      status: active
+      role: lag
+      lag_id: 52
+      lacp_mode: active
+      mtu: 9000
+      minimum_links: 1
+      mlag_domain: DC3-POD2-L1-L2-MLAG
+      member_interfaces:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD2-L2
+            name: Ethernet1/52
+
+    - name: Port-Channel53
+      device: DC3-POD2-L2
+      status: active
+      role: lag
+      lag_id: 53
+      lacp_mode: active
+      mtu: 9000
+      minimum_links: 1
+      mlag_domain: DC3-POD2-L1-L2-MLAG
+      member_interfaces:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD2-L2
+            name: Ethernet1/53
+
+    - name: Port-Channel54
+      device: DC3-POD2-L2
+      status: active
+      role: lag
+      lag_id: 54
+      lacp_mode: active
+      mtu: 9000
+      minimum_links: 1
+      mlag_domain: DC3-POD2-L1-L2-MLAG
+      member_interfaces:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD2-L2
+            name: Ethernet1/54
+
+---
+# DC3 peer-link port-channels (Ethernet1/33+34 reserved on all leaf switches)
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimLAGInterface
+  data:
+    - name: Port-Channel100
+      device: DC3-POD1-L1
+      status: active
+      role: mlag-peer
+      lag_id: 100
+      lacp_mode: active
+      mtu: 9000
+      minimum_links: 1
+      mlag_domain: DC3-POD1-L1-L2-MLAG
+      member_interfaces:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD1-L1
+            name: Ethernet1/33
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD1-L1
+            name: Ethernet1/34
+
+    - name: Port-Channel100
+      device: DC3-POD1-L2
+      status: active
+      role: mlag-peer
+      lag_id: 100
+      lacp_mode: active
+      mtu: 9000
+      minimum_links: 1
+      mlag_domain: DC3-POD1-L1-L2-MLAG
+      member_interfaces:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD1-L2
+            name: Ethernet1/33
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD1-L2
+            name: Ethernet1/34
+
+    - name: Port-Channel100
+      device: DC3-POD2-L1
+      status: active
+      role: mlag-peer
+      lag_id: 100
+      lacp_mode: active
+      mtu: 9000
+      minimum_links: 1
+      mlag_domain: DC3-POD2-L1-L2-MLAG
+      member_interfaces:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD2-L1
+            name: Ethernet1/33
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD2-L1
+            name: Ethernet1/34
+
+    - name: Port-Channel100
+      device: DC3-POD2-L2
+      status: active
+      role: mlag-peer
+      lag_id: 100
+      lacp_mode: active
+      mtu: 9000
+      minimum_links: 1
+      mlag_domain: DC3-POD2-L1-L2-MLAG
+      member_interfaces:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD2-L2
+            name: Ethernet1/33
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD2-L2
+            name: Ethernet1/34
+
+---
+# DC3 peer-link cables
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimCable
+  data:
+    - name: CBL-DC3-POD1-L1-L2-PL1
+      type: smf
+      deployment: DC3
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD1-L1
+            name: Ethernet1/33
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD1-L2
+            name: Ethernet1/33
+
+    - name: CBL-DC3-POD1-L1-L2-PL2
+      type: smf
+      deployment: DC3
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD1-L1
+            name: Ethernet1/34
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD1-L2
+            name: Ethernet1/34
+
+    - name: CBL-DC3-POD2-L1-L2-PL1
+      type: smf
+      deployment: DC3
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD2-L1
+            name: Ethernet1/33
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD2-L2
+            name: Ethernet1/33
+
+    - name: CBL-DC3-POD2-L1-L2-PL2
+      type: smf
+      deployment: DC3
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD2-L1
+            name: Ethernet1/34
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD2-L2
+            name: Ethernet1/34
+
+---
+# DC3 server bond interfaces
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimLAGInterface
+  data:
+
+    # ── Control-plane nodes (bond0 = POD1, bond1 = POD2) ─────────────────────
+    - name: bond0
+      device: DC3-POD1-K8S-CP-01
+      status: active
+      role: lag
+      lag_id: 1
+      lacp_mode: active
+      mtu: 9000
+      minimum_links: 1
+      member_interfaces:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD1-K8S-CP-01
+            name: eno1
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD1-K8S-CP-01
+            name: eno2
+
+    - name: bond1
+      device: DC3-POD1-K8S-CP-01
+      status: active
+      role: lag
+      lag_id: 2
+      lacp_mode: active
+      mtu: 9000
+      minimum_links: 1
+      member_interfaces:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD1-K8S-CP-01
+            name: eno3
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD1-K8S-CP-01
+            name: eno4
+
+    - name: bond0
+      device: DC3-POD1-K8S-CP-02
+      status: active
+      role: lag
+      lag_id: 1
+      lacp_mode: active
+      mtu: 9000
+      minimum_links: 1
+      member_interfaces:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD1-K8S-CP-02
+            name: eno1
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD1-K8S-CP-02
+            name: eno2
+
+    - name: bond1
+      device: DC3-POD1-K8S-CP-02
+      status: active
+      role: lag
+      lag_id: 2
+      lacp_mode: active
+      mtu: 9000
+      minimum_links: 1
+      member_interfaces:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD1-K8S-CP-02
+            name: eno3
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD1-K8S-CP-02
+            name: eno4
+
+    - name: bond0
+      device: DC3-POD1-K8S-CP-03
+      status: active
+      role: lag
+      lag_id: 1
+      lacp_mode: active
+      mtu: 9000
+      minimum_links: 1
+      member_interfaces:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD1-K8S-CP-03
+            name: eno1
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD1-K8S-CP-03
+            name: eno2
+
+    - name: bond1
+      device: DC3-POD1-K8S-CP-03
+      status: active
+      role: lag
+      lag_id: 2
+      lacp_mode: active
+      mtu: 9000
+      minimum_links: 1
+      member_interfaces:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD1-K8S-CP-03
+            name: eno3
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD1-K8S-CP-03
+            name: eno4
+
+    # ── POD1 worker nodes ─────────────────────────────────────────────────────
+    - name: bond0
+      device: DC3-POD1-K8S-WRK-01
+      status: active
+      role: lag
+      lag_id: 1
+      lacp_mode: active
+      mtu: 9000
+      minimum_links: 1
+      member_interfaces:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD1-K8S-WRK-01
+            name: eno1
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD1-K8S-WRK-01
+            name: eno2
+
+    - name: bond1
+      device: DC3-POD1-K8S-WRK-01
+      status: active
+      role: lag
+      lag_id: 2
+      lacp_mode: active
+      mtu: 9000
+      minimum_links: 1
+      member_interfaces:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD1-K8S-WRK-01
+            name: eno3
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD1-K8S-WRK-01
+            name: eno4
+
+    - name: bond0
+      device: DC3-POD1-K8S-WRK-02
+      status: active
+      role: lag
+      lag_id: 1
+      lacp_mode: active
+      mtu: 9000
+      minimum_links: 1
+      member_interfaces:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD1-K8S-WRK-02
+            name: eno1
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD1-K8S-WRK-02
+            name: eno2
+
+    - name: bond1
+      device: DC3-POD1-K8S-WRK-02
+      status: active
+      role: lag
+      lag_id: 2
+      lacp_mode: active
+      mtu: 9000
+      minimum_links: 1
+      member_interfaces:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD1-K8S-WRK-02
+            name: eno3
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD1-K8S-WRK-02
+            name: eno4
+
+    # ── POD2 worker nodes (bond0 = cross-pod to POD1, bond1 = within POD2) ───
+    - name: bond0
+      device: DC3-POD2-K8S-WRK-01
+      status: active
+      role: lag
+      lag_id: 1
+      lacp_mode: active
+      mtu: 9000
+      minimum_links: 1
+      member_interfaces:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD2-K8S-WRK-01
+            name: eno1
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD2-K8S-WRK-01
+            name: eno2
+
+    - name: bond1
+      device: DC3-POD2-K8S-WRK-01
+      status: active
+      role: lag
+      lag_id: 2
+      lacp_mode: active
+      mtu: 9000
+      minimum_links: 1
+      member_interfaces:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD2-K8S-WRK-01
+            name: eno3
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD2-K8S-WRK-01
+            name: eno4
+
+    - name: bond0
+      device: DC3-POD2-K8S-WRK-02
+      status: active
+      role: lag
+      lag_id: 1
+      lacp_mode: active
+      mtu: 9000
+      minimum_links: 1
+      member_interfaces:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD2-K8S-WRK-02
+            name: eno1
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD2-K8S-WRK-02
+            name: eno2
+
+    - name: bond1
+      device: DC3-POD2-K8S-WRK-02
+      status: active
+      role: lag
+      lag_id: 2
+      lacp_mode: active
+      mtu: 9000
+      minimum_links: 1
+      member_interfaces:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD2-K8S-WRK-02
+            name: eno3
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD2-K8S-WRK-02
+            name: eno4
+
+    - name: bond0
+      device: DC3-POD2-K8S-WRK-03
+      status: active
+      role: lag
+      lag_id: 1
+      lacp_mode: active
+      mtu: 9000
+      minimum_links: 1
+      member_interfaces:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD2-K8S-WRK-03
+            name: eno1
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD2-K8S-WRK-03
+            name: eno2
+
+    - name: bond1
+      device: DC3-POD2-K8S-WRK-03
+      status: active
+      role: lag
+      lag_id: 2
+      lacp_mode: active
+      mtu: 9000
+      minimum_links: 1
+      member_interfaces:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD2-K8S-WRK-03
+            name: eno3
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD2-K8S-WRK-03
+            name: eno4
+
+    - name: bond0
+      device: DC3-POD2-K8S-WRK-04
+      status: active
+      role: lag
+      lag_id: 1
+      lacp_mode: active
+      mtu: 9000
+      minimum_links: 1
+      member_interfaces:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD2-K8S-WRK-04
+            name: eno1
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD2-K8S-WRK-04
+            name: eno2
+
+    - name: bond1
+      device: DC3-POD2-K8S-WRK-04
+      status: active
+      role: lag
+      lag_id: 2
+      lacp_mode: active
+      mtu: 9000
+      minimum_links: 1
+      member_interfaces:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD2-K8S-WRK-04
+            name: eno3
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD2-K8S-WRK-04
+            name: eno4
+
+    # ── Storage nodes (2-NIC, within POD2 only) ───────────────────────────────
+    - name: bond0
+      device: DC3-POD2-K8S-STO-01
+      status: active
+      role: lag
+      lag_id: 1
+      lacp_mode: active
+      mtu: 9000
+      minimum_links: 1
+      member_interfaces:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD2-K8S-STO-01
+            name: eno1
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD2-K8S-STO-01
+            name: eno2
+
+    - name: bond0
+      device: DC3-POD2-K8S-STO-02
+      status: active
+      role: lag
+      lag_id: 1
+      lacp_mode: active
+      mtu: 9000
+      minimum_links: 1
+      member_interfaces:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD2-K8S-STO-02
+            name: eno1
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD2-K8S-STO-02
+            name: eno2
+
+---
+# POD3 (VMware vSphere) and POD4 (Nutanix) MLAG domains
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: ManagedMLAG
+  data:
+    - name: DC3-POD3-L1-L2-MLAG
+      status: active
+      domain_id: 3
+      reload_delay: 300
+      reload_delay_non_mlag: 330
+      device_capabilities:
+        - DC3-POD3-L1
+        - DC3-POD3-L2
+
+    - name: DC3-POD4-L1-L2-MLAG
+      status: active
+      domain_id: 4
+      reload_delay: 300
+      reload_delay_non_mlag: 330
+      device_capabilities:
+        - DC3-POD4-L1
+        - DC3-POD4-L2
+
+---
+# POD3 leaf LAGs (ESXi hosts + vCenter)
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimLAGInterface
+  data:
+    - name: Port-Channel41
+      device: DC3-POD3-L1
+      status: active
+      role: lag
+      lag_id: 41
+      lacp_mode: active
+      mtu: 9000
+      minimum_links: 1
+      mlag_domain: DC3-POD3-L1-L2-MLAG
+      member_interfaces:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD3-L1
+            name: Ethernet1/41
+
+    - name: Port-Channel41
+      device: DC3-POD3-L2
+      status: active
+      role: lag
+      lag_id: 41
+      lacp_mode: active
+      mtu: 9000
+      minimum_links: 1
+      mlag_domain: DC3-POD3-L1-L2-MLAG
+      member_interfaces:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD3-L2
+            name: Ethernet1/41
+
+    - name: Port-Channel42
+      device: DC3-POD3-L1
+      status: active
+      role: lag
+      lag_id: 42
+      lacp_mode: active
+      mtu: 9000
+      minimum_links: 1
+      mlag_domain: DC3-POD3-L1-L2-MLAG
+      member_interfaces:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD3-L1
+            name: Ethernet1/42
+
+    - name: Port-Channel42
+      device: DC3-POD3-L2
+      status: active
+      role: lag
+      lag_id: 42
+      lacp_mode: active
+      mtu: 9000
+      minimum_links: 1
+      mlag_domain: DC3-POD3-L1-L2-MLAG
+      member_interfaces:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD3-L2
+            name: Ethernet1/42
+
+    - name: Port-Channel43
+      device: DC3-POD3-L1
+      status: active
+      role: lag
+      lag_id: 43
+      lacp_mode: active
+      mtu: 9000
+      minimum_links: 1
+      mlag_domain: DC3-POD3-L1-L2-MLAG
+      member_interfaces:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD3-L1
+            name: Ethernet1/43
+
+    - name: Port-Channel43
+      device: DC3-POD3-L2
+      status: active
+      role: lag
+      lag_id: 43
+      lacp_mode: active
+      mtu: 9000
+      minimum_links: 1
+      mlag_domain: DC3-POD3-L1-L2-MLAG
+      member_interfaces:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD3-L2
+            name: Ethernet1/43
+
+    - name: Port-Channel44
+      device: DC3-POD3-L1
+      status: active
+      role: lag
+      lag_id: 44
+      lacp_mode: active
+      mtu: 9000
+      minimum_links: 1
+      mlag_domain: DC3-POD3-L1-L2-MLAG
+      member_interfaces:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD3-L1
+            name: Ethernet1/44
+
+    - name: Port-Channel44
+      device: DC3-POD3-L2
+      status: active
+      role: lag
+      lag_id: 44
+      lacp_mode: active
+      mtu: 9000
+      minimum_links: 1
+      mlag_domain: DC3-POD3-L1-L2-MLAG
+      member_interfaces:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD3-L2
+            name: Ethernet1/44
+
+    # POD3 peer-link
+    - name: Port-Channel100
+      device: DC3-POD3-L1
+      status: active
+      role: mlag-peer
+      lag_id: 100
+      lacp_mode: active
+      mtu: 9000
+      minimum_links: 1
+      mlag_domain: DC3-POD3-L1-L2-MLAG
+      member_interfaces:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD3-L1
+            name: Ethernet1/33
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD3-L1
+            name: Ethernet1/34
+
+    - name: Port-Channel100
+      device: DC3-POD3-L2
+      status: active
+      role: mlag-peer
+      lag_id: 100
+      lacp_mode: active
+      mtu: 9000
+      minimum_links: 1
+      mlag_domain: DC3-POD3-L1-L2-MLAG
+      member_interfaces:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD3-L2
+            name: Ethernet1/33
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD3-L2
+            name: Ethernet1/34
+
+    # POD4 leaf LAGs (Nutanix nodes)
+    - name: Port-Channel41
+      device: DC3-POD4-L1
+      status: active
+      role: lag
+      lag_id: 41
+      lacp_mode: active
+      mtu: 9000
+      minimum_links: 1
+      mlag_domain: DC3-POD4-L1-L2-MLAG
+      member_interfaces:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD4-L1
+            name: Ethernet1/41
+
+    - name: Port-Channel41
+      device: DC3-POD4-L2
+      status: active
+      role: lag
+      lag_id: 41
+      lacp_mode: active
+      mtu: 9000
+      minimum_links: 1
+      mlag_domain: DC3-POD4-L1-L2-MLAG
+      member_interfaces:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD4-L2
+            name: Ethernet1/41
+
+    - name: Port-Channel42
+      device: DC3-POD4-L1
+      status: active
+      role: lag
+      lag_id: 42
+      lacp_mode: active
+      mtu: 9000
+      minimum_links: 1
+      mlag_domain: DC3-POD4-L1-L2-MLAG
+      member_interfaces:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD4-L1
+            name: Ethernet1/42
+
+    - name: Port-Channel42
+      device: DC3-POD4-L2
+      status: active
+      role: lag
+      lag_id: 42
+      lacp_mode: active
+      mtu: 9000
+      minimum_links: 1
+      mlag_domain: DC3-POD4-L1-L2-MLAG
+      member_interfaces:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD4-L2
+            name: Ethernet1/42
+
+    - name: Port-Channel43
+      device: DC3-POD4-L1
+      status: active
+      role: lag
+      lag_id: 43
+      lacp_mode: active
+      mtu: 9000
+      minimum_links: 1
+      mlag_domain: DC3-POD4-L1-L2-MLAG
+      member_interfaces:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD4-L1
+            name: Ethernet1/43
+
+    - name: Port-Channel43
+      device: DC3-POD4-L2
+      status: active
+      role: lag
+      lag_id: 43
+      lacp_mode: active
+      mtu: 9000
+      minimum_links: 1
+      mlag_domain: DC3-POD4-L1-L2-MLAG
+      member_interfaces:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD4-L2
+            name: Ethernet1/43
+
+    - name: Port-Channel44
+      device: DC3-POD4-L1
+      status: active
+      role: lag
+      lag_id: 44
+      lacp_mode: active
+      mtu: 9000
+      minimum_links: 1
+      mlag_domain: DC3-POD4-L1-L2-MLAG
+      member_interfaces:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD4-L1
+            name: Ethernet1/44
+
+    - name: Port-Channel44
+      device: DC3-POD4-L2
+      status: active
+      role: lag
+      lag_id: 44
+      lacp_mode: active
+      mtu: 9000
+      minimum_links: 1
+      mlag_domain: DC3-POD4-L1-L2-MLAG
+      member_interfaces:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD4-L2
+            name: Ethernet1/44
+
+    # POD4 peer-link
+    - name: Port-Channel100
+      device: DC3-POD4-L1
+      status: active
+      role: mlag-peer
+      lag_id: 100
+      lacp_mode: active
+      mtu: 9000
+      minimum_links: 1
+      mlag_domain: DC3-POD4-L1-L2-MLAG
+      member_interfaces:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD4-L1
+            name: Ethernet1/33
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD4-L1
+            name: Ethernet1/34
+
+    - name: Port-Channel100
+      device: DC3-POD4-L2
+      status: active
+      role: mlag-peer
+      lag_id: 100
+      lacp_mode: active
+      mtu: 9000
+      minimum_links: 1
+      mlag_domain: DC3-POD4-L1-L2-MLAG
+      member_interfaces:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD4-L2
+            name: Ethernet1/33
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD4-L2
+            name: Ethernet1/34
+
+---
+# Server-side bond0 for ESXi and Nutanix hosts
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimLAGInterface
+  data:
+    - name: bond0
+      device: DC3-POD3-ESXI-01
+      status: active
+      role: lag
+      lag_id: 1
+      lacp_mode: active
+      mtu: 9000
+      minimum_links: 1
+      member_interfaces:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD3-ESXI-01
+            name: eno1
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD3-ESXI-01
+            name: eno2
+
+    - name: bond0
+      device: DC3-POD3-ESXI-02
+      status: active
+      role: lag
+      lag_id: 1
+      lacp_mode: active
+      mtu: 9000
+      minimum_links: 1
+      member_interfaces:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD3-ESXI-02
+            name: eno1
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD3-ESXI-02
+            name: eno2
+
+    - name: bond0
+      device: DC3-POD3-ESXI-03
+      status: active
+      role: lag
+      lag_id: 1
+      lacp_mode: active
+      mtu: 9000
+      minimum_links: 1
+      member_interfaces:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD3-ESXI-03
+            name: eno1
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD3-ESXI-03
+            name: eno2
+
+    - name: bond0
+      device: DC3-POD3-ESXI-04
+      status: active
+      role: lag
+      lag_id: 1
+      lacp_mode: active
+      mtu: 9000
+      minimum_links: 1
+      member_interfaces:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD3-ESXI-04
+            name: eno1
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD3-ESXI-04
+            name: eno2
+
+    - name: bond0
+      device: DC3-POD4-NTX-01
+      status: active
+      role: lag
+      lag_id: 1
+      lacp_mode: active
+      mtu: 9000
+      minimum_links: 1
+      member_interfaces:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD4-NTX-01
+            name: eno1
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD4-NTX-01
+            name: eno2
+
+    - name: bond0
+      device: DC3-POD4-NTX-02
+      status: active
+      role: lag
+      lag_id: 1
+      lacp_mode: active
+      mtu: 9000
+      minimum_links: 1
+      member_interfaces:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD4-NTX-02
+            name: eno1
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD4-NTX-02
+            name: eno2
+
+    - name: bond0
+      device: DC3-POD4-NTX-03
+      status: active
+      role: lag
+      lag_id: 1
+      lacp_mode: active
+      mtu: 9000
+      minimum_links: 1
+      member_interfaces:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD4-NTX-03
+            name: eno1
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD4-NTX-03
+            name: eno2
+
+    - name: bond0
+      device: DC3-POD4-NTX-04
+      status: active
+      role: lag
+      lag_id: 1
+      lacp_mode: active
+      mtu: 9000
+      minimum_links: 1
+      member_interfaces:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD4-NTX-04
+            name: eno1
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD4-NTX-04
+            name: eno2

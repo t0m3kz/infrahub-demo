@@ -1,0 +1,129 @@
+---
+version: "1.0"
+
+generics:
+  - name: Generic
+    namespace: Managed
+    description: "Base for on-premises infrastructure services and resources"
+    label: "On-Premises Resource"
+    icon: "mdi:server-network"
+    include_in_menu: false
+    order_by:
+      - name__value
+    display_label: "{{name__value}}"
+    attributes:
+      - name: name
+        kind: Text
+        label: Name
+        optional: false
+        order_weight: 1
+        description: "Resource name"
+      - name: description
+        kind: Text
+        label: Description
+        optional: true
+        order_weight: 2
+        description: "Resource description"
+      - name: status
+        order_weight: 30
+        optional: false
+        kind: Dropdown
+        choices:
+          - name: provisioning
+            label: Provisioning
+            description: "In the process of being set up and configured."
+            color: "#ffff7f"
+          - name: active
+            label: Active
+            description: "Fully operational and currently in service."
+            color: "#7fbf7f"
+          - name: decommissioning
+            label: Decommissioning
+            description: "In the process of being taken out of service."
+            color: "#fbfbfb"
+          - name: decommissioned
+            label: Decommissioned
+            description: "Taken out of service."
+            color: "#bfbfbf"
+        default_value: provisioning
+
+  - name: GenericDevice
+    namespace: Managed
+    description: "Capabilities attached to devices"
+    label: "Device-based Resource"
+    include_in_menu: false
+    relationships:
+      - name: device_capabilities
+        peer: DcimDevice
+        label: Assigned Devices
+        cardinality: many
+        kind: Generic
+        optional: true
+        direction: inbound
+        identifier: device_capabilities
+
+  - name: GenericCluster
+    namespace: Managed
+    description: "Capabilities attached to virtualisation clusters"
+    label: "Cluster-based Resource"
+    include_in_menu: false
+    relationships:
+      - name: cluster_capabilities
+        peer: VirtCluster
+        label: Assigned Clusters
+        cardinality: many
+        kind: Generic
+        optional: true
+        direction: inbound
+        identifier: cluster_capabilities
+
+  # Use this generic ONLY for segments (VLAN, VXLAN, VRF, etc.)
+  # Only inherit this for segment-like resources (VLAN, VXLAN, VRF, etc.)
+  - name: GenericInterfaces
+    namespace: Managed
+    description: "Capabilities attached to multiple device interfaces"
+    label: "Segment Resource (Many Interfaces)"
+    include_in_menu: false
+    relationships:
+      - name: interface_capabilities
+        peer: DcimInterface
+        label: Assigned Interfaces
+        cardinality: many
+        kind: Generic
+        optional: true
+        identifier: interface_capabilities
+
+extensions:
+  nodes:
+    - kind: DcimDevice
+      relationships:
+        - name: device_capabilities
+          peer: ManagedGenericDevice
+          label: Device capabilities
+          optional: true
+          cardinality: many
+          direction: outbound
+          kind: Generic
+          on_delete: no-action
+          identifier: device_capabilities
+    - kind: DcimInterface
+      relationships:
+        - name: interface_capabilities
+          peer: ManagedGenericInterfaces
+          label: Interface capabilities
+          identifier: interface_capabilities
+          optional: true
+          cardinality: many
+          kind: Generic
+          on_delete: no-action
+    - kind: VirtCluster
+      relationships:
+        - name: cluster_capabilities
+          peer: ManagedGenericCluster
+          label: Cluster capabilities
+          optional: true
+          cardinality: many
+          direction: outbound
+          kind: Generic
+          on_delete: no-action
+          identifier: cluster_capabilities

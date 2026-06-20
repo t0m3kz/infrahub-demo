@@ -1,0 +1,47 @@
+---
+# Paris Equinix racks: PA4 and PA6
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: LocationBuilding
+  data:
+    - name: PA4
+      shortname: pa4
+      parent: par
+      children:
+        kind: LocationSuite
+        data:
+          - suite_name: PA4
+            index: 4
+            shortname: pa4-s1
+            children:
+              kind: LocationRack
+              data:
+                - shortname: pa4-s1-r-1
+                  index: 1
+                  row_index: 1
+                  pod: PA4
+                - shortname: pa4-s1-r-2
+                  index: 2
+                  row_index: 1
+                  pod: PA4
+    - name: PA6
+      shortname: pa6
+      parent: par
+      children:
+        kind: LocationSuite
+        data:
+          - suite_name: PA6
+            index: 6
+            shortname: pa6-s1
+            children:
+              kind: LocationRack
+              data:
+                - shortname: pa6-s1-r-1
+                  index: 1
+                  row_index: 1
+                  pod: PA6
+                - shortname: pa6-s1-r-2
+                  index: 2
+                  row_index: 1
+                  pod: PA6

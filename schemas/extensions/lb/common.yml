@@ -1,0 +1,577 @@
+---
+version: "1.0"
+
+# ============================================================================
+# Load Balancer — Common schema
+# Shared base generic, service objects, and supporting nodes used by both
+# on-prem (OnpremLoadbalancer) and cloud (CloudLoadBalancer).
+# ============================================================================
+
+generics:
+  - name: LoadBalancer
+    namespace: Managed
+    description: "Base for all load balancers"
+    label: Load Balancer
+    include_in_menu: false
+    human_friendly_id:
+      - name__value
+    attributes:
+      - name: name
+        kind: Text
+        optional: false
+        unique: true
+        order_weight: 100
+        description: "Name of the load balancer"
+      - name: description
+        kind: Text
+        optional: true
+        order_weight: 110
+        description: "Description of the load balancer"
+      - name: status
+        kind: Dropdown
+        optional: false
+        order_weight: 200
+        description: "Operational status of the load balancer"
+        choices:
+          - name: provisioning
+            label: Provisioning
+            description: "Load balancer is being provisioned"
+            color: "#7f7fff"
+          - name: active
+            label: Active
+            description: "Load balancer is active and operational"
+            color: "#7FBF7F"
+          - name: maintenance
+            label: Maintenance
+            description: "Load balancer is under maintenance"
+            color: "#FFF2CC"
+          - name: error
+            label: Error
+            description: "Load balancer is in an error state"
+            color: "#ff7f7f"
+          - name: disabled
+            label: Disabled
+            description: "Load balancer has been disabled"
+            color: "#D3D3D3"
+          - name: decommissioning
+            label: Decommissioning
+            description: "Load balancer is being decommissioned"
+            color: "#E8DAEF"
+          - name: retired
+            label: Retired
+            description: "Load balancer is retired and inactive"
+            color: "#BFBFBF"
+        default_value: provisioning
+      - name: lb_type
+        kind: Dropdown
+        optional: true
+        order_weight: 250
+        description: "Universal load balancer type (layer, deployment, technology)"
+        choices:
+          - name: l4_software
+            label: L4 Software
+            description: "Layer 4 (TCP/UDP) software load balancer (e.g., HAProxy, Nginx, Envoy)"
+            color: "#7FA7FF"
+          - name: l7_software
+            label: L7 Software
+            description: "Layer 7 (HTTP/HTTPS) software load balancer (e.g., HAProxy, Nginx, Envoy)"
+            color: "#7FBF7F"
+          - name: l4_hardware
+            label: L4 Hardware
+            description: "Layer 4 hardware/virtual appliance (e.g., F5, Citrix, A10)"
+            color: "#E67E22"
+          - name: l7_hardware
+            label: L7 Hardware
+            description: "Layer 7 hardware/virtual appliance (e.g., F5, Citrix, A10)"
+            color: "#E67E22"
+          - name: l4_cloud
+            label: L4 Cloud
+            description: "Layer 4 cloud load balancer (e.g., AWS NLB, Azure LB, GCP LB)"
+            color: "#4285F4"
+          - name: l7_cloud
+            label: L7 Cloud
+            description: "Layer 7 cloud load balancer (e.g., AWS ALB, Azure App Gateway, GCP ALB)"
+            color: "#0078D4"
+          - name: gateway
+            label: Gateway
+            description: "Gateway load balancer (e.g., AWS GWLB)"
+            color: "#BF7FBF"
+          - name: service_mesh
+            label: Service Mesh
+            description: "Service mesh load balancer (e.g., Istio, Linkerd)"
+            color: "#466BB0"
+          - name: classic
+            label: Classic
+            description: "Classic/legacy load balancer"
+            color: "#BFBFBF"
+          - name: other
+            label: Other
+            description: "Other/Custom load balancer"
+            color: "#95A5A6"
+      - name: lb_vendor
+        kind: Dropdown
+        optional: true
+        order_weight: 260
+        description: "Load balancer vendor/product"
+        choices:
+          - name: aws_alb
+            label: AWS Application Load Balancer
+            color: "#FF9900"
+          - name: aws_nlb
+            label: AWS Network Load Balancer
+            color: "#FF9900"
+          - name: aws_clb
+            label: AWS Classic Load Balancer
+            color: "#FF9900"
+          - name: aws_gwlb
+            label: AWS Gateway Load Balancer
+            color: "#FF9900"
+          - name: azure_lb
+            label: Azure Load Balancer
+            color: "#0078D4"
+          - name: azure_app_gateway
+            label: Azure Application Gateway
+            color: "#0078D4"
+          - name: gcp_lb
+            label: GCP Load Balancer
+            color: "#4285F4"
+          - name: gcp_alb
+            label: GCP Application Load Balancer
+            color: "#4285F4"
+          - name: haproxy
+            label: HAProxy
+            color: "#9B59B6"
+          - name: nginx
+            label: Nginx
+            color: "#009639"
+          - name: envoy
+            label: Envoy
+            color: "#AC6199"
+          - name: traefik
+            label: Traefik
+            color: "#24A1C1"
+          - name: f5_bigip
+            label: F5 BIG-IP
+            color: "#E67E22"
+          - name: citrix_netscaler
+            label: Citrix NetScaler/ADC
+            color: "#E67E22"
+          - name: a10_networks
+            label: A10 Networks
+            color: "#E67E22"
+          - name: kemp
+            label: Kemp LoadMaster
+            color: "#E67E22"
+          - name: istio
+            label: Istio
+            color: "#466BB0"
+          - name: linkerd
+            label: Linkerd
+            color: "#2DCEAA"
+          - name: other
+            label: Other
+            color: "#95A5A6"
+      - name: scheme
+        kind: Dropdown
+        optional: true
+        order_weight: 310
+        description: "Accessibility scheme for the load balancer"
+        choices:
+          - name: internet_facing
+            label: Internet-facing
+            description: "Publicly accessible load balancer"
+            color: "#7FBF7F"
+          - name: internal
+            label: Internal
+            description: "Internal-only load balancer"
+            color: "#7FA7FF"
+          - name: external
+            label: External
+            description: "External network facing"
+            color: "#9FBF9F"
+    relationships:
+      - name: vips
+        peer: ServiceLoadBalancerVIP
+        cardinality: many
+        description: "VIPs (virtual IPs/listeners) exposed by this load balancer"
+      - name: backend_pools
+        peer: ServiceBackendPool
+        cardinality: many
+        description: "Backend pools available to this load balancer"
+      - name: tags
+        peer: BuiltinTag
+        cardinality: many
+        description: "Tags for automation, RBAC, and grouping"
+
+nodes:
+  # ── Backend server (on-prem) ─────────────────────────────────────────────
+  - name: Server
+    namespace: Loadbalancer
+    label: Backend Servers
+    icon: mdi:server-plus
+    include_in_menu: false
+    description: Backend servers for load balancing
+    attributes:
+      - name: hostname
+        kind: Text
+        unique: true
+        description: Unique hostname for server identification.
+        order_weight: 1010
+      - name: description
+        kind: Text
+        optional: true
+        order_weight: 1100
+      - name: status
+        kind: Dropdown
+        default_value: "active"
+        order_weight: 1200
+        choices:
+          - name: provisioning
+            label: Provisioning
+            color: "#A9DFBF"
+          - name: active
+            label: Active
+            color: "#A9CCE3"
+          - name: maintenance
+            label: Maintenance
+            color: "#FFF2CC"
+          - name: disabled
+            label: Disabled
+            color: "#D3D3D3"
+          - name: deleted
+            label: Deleted
+            color: "#FAD7A0"
+          - name: outage
+            label: Outage
+            color: "#F4CCCC"
+    relationships:
+      - name: ip_address
+        peer: IpamIPAddress
+        label: Private IP Address
+        identifier: server__ip
+        cardinality: one
+        kind: Component
+        on_delete: cascade
+        description: Primary IP address of the server.
+        order_weight: 1300
+
+  # ── Health check ─────────────────────────────────────────────────────────
+  - name: HealthCheck
+    namespace: Loadbalancer
+    label: Health-Checks
+    icon: tabler:checkup-list
+    include_in_menu: false
+    description: "Health check associated with a load balancer."
+    order_by:
+      - check__value
+    uniqueness_constraints:
+      - [check__value, rise__value, fall__value, timeout__value]
+    human_friendly_id:
+      - check__value
+      - rise__value
+      - fall__value
+      - timeout__value
+    display_label: "{{description__value}}"
+    attributes:
+      - name: check
+        kind: Dropdown
+        order_weight: 1100
+        description: "The type of health check to perform."
+        choices:
+          - name: http
+            label: "HTTP Check"
+            color: "#A9DFBF"
+          - name: tcp
+            label: "TCP Check"
+            color: "#D8E4BC"
+          - name: ssl
+            label: "SSL Check"
+            color: "#CDEACC"
+      - name: rise
+        kind: Number
+        description: "Successful checks required to mark server UP."
+        optional: true
+        default_value: 3
+        order_weight: 1200
+      - name: fall
+        kind: Number
+        description: "Failed checks required to mark server DOWN."
+        optional: true
+        default_value: 3
+        order_weight: 1300
+      - name: timeout
+        kind: Number
+        label: Timeout (ms)
+        description: "Timeout for the health check in milliseconds."
+        optional: true
+        default_value: 1000
+        order_weight: 1500
+      - name: description
+        kind: Text
+        computed_attribute:
+          kind: Jinja2
+          jinja2_template: "{{ check__value }}-{{ rise__value }}-{{ fall__value }}-{{ timeout__value }}"  # yamllint disable-line rule:line-length
+        read_only: true
+        optional: false
+
+  # ── VIP / Listener ───────────────────────────────────────────────────────
+  - name: LoadBalancerVIP
+    namespace: Service
+    label: Load Balancer VIP / Listener
+    description: "Frontend service configuration for a load balancer (VIP address, protocol, port)"
+    icon: mdi:ip-network
+    include_in_menu: false
+    uniqueness_constraints:
+      - [load_balancer, protocol__value, port__value]
+    human_friendly_id:
+      - hostname__value
+      - protocol__value
+      - port__value
+    display_label: "{{ hostname__value }} ({{ protocol__value|upper }}:{{ port__value }})"
+    attributes:
+      - name: hostname
+        kind: Text
+        description: "DNS name or VIP identifier"
+        order_weight: 100
+        regex: '(?=^.{1,253}$)(^(((?!-)[a-zA-Z0-9-]{1,63}(?<!-)|((?!-)[a-zA-Z0-9-]{1,63}(?<!-)\.)+[a-zA-Z]{2,63})$))'  # yamllint disable-line rule:line-length
+      - name: description
+        kind: Text
+        optional: true
+        order_weight: 110
+      - name: status
+        kind: Dropdown
+        optional: false
+        default_value: active
+        order_weight: 200
+        choices:
+          - name: provisioning
+            label: Provisioning
+            color: "#7f7fff"
+          - name: active
+            label: Active
+            color: "#7FBF7F"
+          - name: maintenance
+            label: Maintenance
+            color: "#FFF2CC"
+          - name: disabled
+            label: Disabled
+            color: "#D3D3D3"
+      - name: protocol
+        kind: Dropdown
+        optional: false
+        order_weight: 300
+        choices:
+          - name: http
+            label: HTTP
+            color: "#7FBF7F"
+          - name: https
+            label: HTTPS
+            color: "#5F9F5F"
+          - name: tcp
+            label: TCP
+            color: "#7FA7FF"
+          - name: udp
+            label: UDP
+            color: "#7F7FBF"
+          - name: tls
+            label: TLS
+            color: "#9F7F9F"
+      - name: port
+        kind: Number
+        optional: false
+        order_weight: 310
+        description: "Listening port for this service"
+      - name: ssl_certificate
+        kind: Text
+        optional: true
+        order_weight: 320
+      - name: ssl_redirect
+        kind: Boolean
+        optional: true
+        default_value: false
+        order_weight: 330
+        description: "Redirect HTTP to HTTPS"
+      - name: timeout_client
+        kind: Number
+        optional: true
+        order_weight: 400
+      - name: timeout_server
+        kind: Number
+        optional: true
+        order_weight: 410
+      - name: max_connections
+        kind: Number
+        optional: true
+        order_weight: 420
+    relationships:
+      - name: load_balancer
+        peer: ManagedLoadBalancer
+        cardinality: one
+        optional: false
+        order_weight: 500
+        identifier: load_balancer__vip_services
+        description: "Load balancer hosting this VIP service"
+      - name: vip_ip
+        peer: IpamIPAddress
+        cardinality: one
+        kind: Attribute
+        optional: true
+        order_weight: 600
+        identifier: vip_service__ip
+      - name: backend_pool
+        peer: ServiceBackendPool
+        cardinality: one
+        optional: true
+        order_weight: 700
+        identifier: vip_service__backend_pool
+      - name: health_checks
+        peer: LoadbalancerHealthCheck
+        cardinality: many
+        kind: Generic
+        optional: true
+        order_weight: 800
+        identifier: vip_service__health_checks
+
+  # ── Backend pool ─────────────────────────────────────────────────────────
+  - name: BackendPool
+    namespace: Service
+    label: Backend Pool
+    description: "Pool of backend servers receiving load balanced traffic"
+    icon: mdi:server-network
+    include_in_menu: false
+    uniqueness_constraints:
+      - [vip_service, name__value]
+    human_friendly_id:
+      - name__value
+    display_label: "{{ name__value }}"
+    attributes:
+      - name: name
+        kind: Text
+        optional: false
+        order_weight: 100
+      - name: description
+        kind: Text
+        optional: true
+        order_weight: 110
+      - name: load_balancing_algorithm
+        kind: Dropdown
+        optional: false
+        default_value: round_robin
+        order_weight: 200
+        choices:
+          - name: round_robin
+            label: Round Robin
+            color: "#A9CCE3"
+          - name: least_connections
+            label: Least Connections
+            color: "#A9DFBF"
+          - name: ip_hash
+            label: IP Hash
+            color: "#D2B4DE"
+          - name: weighted
+            label: Weighted
+            color: "#F9E79F"
+          - name: random
+            label: Random
+            color: "#CDEACC"
+      - name: session_persistence
+        kind: Dropdown
+        optional: true
+        order_weight: 300
+        choices:
+          - name: none
+            label: None
+            color: "#D3D3D3"
+          - name: source_ip
+            label: Source IP
+            color: "#A9CCE3"
+          - name: cookie
+            label: Cookie
+            color: "#A9DFBF"
+          - name: application
+            label: Application
+            color: "#D2B4DE"
+      - name: drain_timeout
+        kind: Number
+        optional: true
+        order_weight: 400
+        description: "Connection draining timeout in seconds"
+    relationships:
+      - name: vip_service
+        peer: ServiceLoadBalancerVIP
+        cardinality: one
+        optional: false
+        order_weight: 500
+        identifier: vip_service__backend_pool
+      - name: onprem_servers
+        peer: LoadbalancerServer
+        cardinality: many
+        kind: Generic
+        optional: true
+        order_weight: 600
+        identifier: backend_pool__onprem_servers
+        description: "On-premises backend servers"
+      - name: cloud_instances
+        peer: CloudInstance
+        cardinality: many
+        optional: true
+        order_weight: 610
+        identifier: backend_pool__cloud_instances
+        description: "Cloud compute instances"
+
+# ── Listener ─────────────────────────────────────────────────────────────
+extensions:
+  nodes:
+    - kind: OnpremLoadbalancer
+      relationships:
+        - name: vip_services
+          peer: ServiceLoadBalancerVIP
+          cardinality: many
+          kind: Component
+          optional: true
+          order_weight: 2000
+          identifier: load_balancer__vip_services
+          description: "VIP services hosted on this load balancer"
+
+    - kind: CloudLoadBalancer
+      relationships:
+        - name: vip_services
+          peer: ServiceLoadBalancerVIP
+          cardinality: many
+          kind: Component
+          optional: true
+          order_weight: 2000
+          identifier: load_balancer__vip_services
+          description: "VIP services (listeners) hosted on this load balancer"
+
+    - kind: LoadbalancerServer
+      relationships:
+        - name: backend_pools
+          peer: ServiceBackendPool
+          cardinality: many
+          kind: Generic
+          optional: true
+          order_weight: 2100
+          identifier: backend_pool__onprem_servers
+          description: "Backend pools this server belongs to"
+
+    - kind: LoadbalancerHealthCheck
+      relationships:
+        - name: vip_services
+          peer: ServiceLoadBalancerVIP
+          cardinality: many
+          kind: Generic
+          optional: true
+          order_weight: 2100
+          identifier: vip_service__health_checks
+          description: "VIP services using this health check"
+
+    - kind: CloudInstance
+      relationships:
+        - name: backend_pools
+          peer: ServiceBackendPool
+          cardinality: many
+          optional: true
+          order_weight: 2500
+          identifier: backend_pool__cloud_instances
+          description: "Load balancer backend pools this instance belongs to"

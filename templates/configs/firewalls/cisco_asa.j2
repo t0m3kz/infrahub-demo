@@ -1,0 +1,52 @@
+{#- Cisco ASA — zone-based firewall configuration -#}
+!
+hostname {{ name }}
+!
+{%- if fw_interfaces %}
+! --- Interfaces ---
+{%- for iface in fw_interfaces %}
+{%- if iface.vlan_id and iface.parent_interface %}
+interface {{ iface.parent_interface.name }}.{{ iface.vlan_id }}
+ vlan {{ iface.vlan_id }}
+{%- else %}
+interface {{ iface.name }}
+{%- endif %}
+{%- if iface.ip_address %}
+ ip address {{ iface.ip_address.address | replace('/', ' ') }}
+{%- endif %}
+{%- if iface.security_zone %}
+ nameif {{ iface.security_zone.name }}
+ security-level {{ iface.security_level if iface.security_level is not none else iface.security_zone.trust_level }}
+{%- endif %}
+{%- if iface.description %}
+ description {{ iface.description }}
+{%- endif %}
+ no shutdown
+!
+{%- endfor %}
+{%- endif %}
+{%- if static_routes %}
+! --- Static Routes (return path to leaf per zone) ---
+{%- for route in static_routes %}
+route {{ route.interface }} {{ route.destination | replace('/', ' ') }} {{ route.nexthop }} 1
+{%- endfor %}
+!
+{%- endif %}
+{%- if zone_policies %}
+! --- Access Control Lists ---
+{%- for policy in zone_policies %}
+{%- for rule in policy.rules %}
+{%- set acl_name = (rule.src_zone or 'global') + '-in' %}
+access-list {{ acl_name }} extended {{ 'permit' if rule.action == 'permit' else 'deny' }} {{ rule.protocol }} {{ rule.src or 'any' }} {{ rule.dst or 'any' }}{{ ' ' + rule.dst_port if rule.dst_port else '' }}{{ ' log' if rule.log else '' }}
+{%- endfor %}
+{%- endfor %}
+!
+! --- Access Groups ---
+{%- for iface in fw_interfaces %}
+{%- if iface.security_zone %}
+access-group {{ iface.security_zone.name }}-in in interface {{ iface.security_zone.name }}
+{%- endif %}
+{%- endfor %}
+{%- endif %}
+!
+end

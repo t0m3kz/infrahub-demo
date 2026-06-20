@@ -1,0 +1,32 @@
+import * as aws from "@pulumi/aws";
+import * as pulumi from "@pulumi/pulumi";
+
+const aws_europe_west1 = new aws.Provider("europe-west1", { region: "europe-west1" });
+
+const prod_network = new aws.ec2.Vpc("prod-network", {
+    cidrBlock: "10.0.0.0/16",
+    enableDnsSupport: true,
+    enableDnsHostnames: true,
+    tags: { Name: "prod-network", ManagedBy: "Infrahub" },
+}}, { provider: aws_europe_west1 });
+
+const subnet_prod_subnet_europe_west1 = new aws.ec2.Subnet("prod-subnet-europe-west1", {
+    vpcId: prod_network.id,
+    cidrBlock: "10.0.1.0/24",
+    availabilityZone: "europe-west1-b",
+    mapPublicIpOnLaunch: false,
+    tags: { Name: "prod-subnet-europe-west1", ManagedBy: "Infrahub" },
+}}, { provider: aws_europe_west1 });
+
+const sg_prod_fw_rule = new aws.ec2.SecurityGroup("prod-fw-rule", {
+    vpcId: prod_network.id,
+    tags: { Name: "prod-fw-rule", ManagedBy: "Infrahub" },
+}}, { provider: aws_europe_west1 });
+
+const instance_prod_instance_1 = new aws.ec2.Instance("prod-instance-1", {
+    ami: "debian-cloud/debian-11",
+    instanceType: "n1-standard-1",
+    subnetId: subnet_prod_subnet_europe_west1.id,
+    vpcSecurityGroupIds: [sg_prod_fw_rule.id],
+    tags: { Name: "prod-instance-1", ManagedBy: "Infrahub" },
+}}, { provider: aws_europe_west1 });

@@ -1,0 +1,76 @@
+---
+# Madrid regional office devices
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimPhysicalDevice
+  data:
+    - name: OFC-MAD-REGIONAL-EDGE-01
+      object_template: VCE-610_EDGE
+      status: active
+      deployment: OFC-MAD-REGIONAL-01
+
+    - name: OFC-MAD-REGIONAL-EDGE-02
+      object_template: VCE-610_EDGE
+      status: active
+      deployment: OFC-MAD-REGIONAL-01
+
+    - name: OFC-MAD-REGIONAL-ACC-01
+      object_template: C9200L-24P-4G_ACCESS_DUAL_UPLINK
+      status: active
+      deployment: OFC-MAD-REGIONAL-01
+
+    - name: OFC-MAD-REGIONAL-ACC-02
+      object_template: C9200L-24P-4G_ACCESS_DUAL_UPLINK
+      status: active
+      deployment: OFC-MAD-REGIONAL-01
+
+    - name: OFC-MAD-REGIONAL-AP-01
+      object_template: C9130AXI-B_AP
+      status: active
+      deployment: OFC-MAD-REGIONAL-01
+
+    - name: OFC-MAD-REGIONAL-AP-02
+      object_template: C9130AXI-B_AP
+      status: active
+      deployment: OFC-MAD-REGIONAL-01
+
+    - name: OFC-MAD-REGIONAL-AP-03
+      object_template: C9130AXI-B_AP
+      status: active
+      deployment: OFC-MAD-REGIONAL-01
+
+    - name: OFC-MAD-REGIONAL-AP-04
+      object_template: C9130AXI-B_AP
+      status: active
+      deployment: OFC-MAD-REGIONAL-01
+
+    - name: OFC-MAD-REGIONAL-AP-05
+      object_template: C9130AXI-B_AP
+      status: active
+      deployment: OFC-MAD-REGIONAL-01
+
+    - name: OFC-MAD-REGIONAL-AP-06
+      object_template: C9130AXI-B_AP
+      status: active
+      deployment: OFC-MAD-REGIONAL-01
+
+    - name: OFC-MAD-REGIONAL-AP-07
+      object_template: C9130AXI-B_AP
+      status: active
+      deployment: OFC-MAD-REGIONAL-01
+
+    - name: OFC-MAD-REGIONAL-AP-08
+      object_template: C9130AXI-B_AP
+      status: active
+      deployment: OFC-MAD-REGIONAL-01
+
+    - name: OFC-MAD-REGIONAL-PRN-01
+      object_template: Dell-H625cdw-MFP_PRINTER
+      status: active
+      deployment: OFC-MAD-REGIONAL-01
+
+    - name: OFC-MAD-REGIONAL-PRN-02
+      object_template: Dell-H625cdw-MFP_PRINTER
+      status: active
+      deployment: OFC-MAD-REGIONAL-01

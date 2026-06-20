@@ -101,3 +101,10 @@ spec:
       netmiko_device_type: juniper_junos
       ansible_network_os: linux
       containerlab_os: juniper_junos
+
+    - name: velocloud
+      nornir_platform: velocloud
+      napalm_driver: linux
+      netmiko_device_type: linux
+      ansible_network_os: linux
+      containerlab_os: linux

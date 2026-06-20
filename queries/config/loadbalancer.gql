@@ -1,131 +1,108 @@
-query loadbalancer_config($device: String!) {
-  DcimGenericDevice(name__value: $device) {
+query loadbalancer_config($instance: String!) {
+  OnpremLoadbalancer(name__value: $instance) {
     edges {
       node {
+        id
         name {
           value
         }
-        device_type {
-          node {
-            platform {
-              node {
-                netmiko_device_type {
-                  value
-                }
-              }
-            }
-            manufacturer {
-              node {
-                name {
-                  value
-                }
-              }
-            }
-          }
-        }
-        role {
+        lb_type {
           value
         }
-        status {
+        lb_vendor {
           value
         }
-        interfaces {
+        scheme {
+          value
+        }
+        frontend_servers {
+          count
           edges {
             node {
-              __typename
+              id
               name {
-                value
-              }
-              description {
                 value
               }
               status {
                 value
               }
-              role {
+            }
+          }
+        }
+        vip_services {
+          edges {
+            node {
+              id
+              hostname {
                 value
               }
-              ... on DcimVirtualInterface {
-                ip_addresses {
-                  edges {
-                    node {
-                      address {
-                        value
-                      }
-                      ip_namespace {
-                        node {
-                          name {
-                            value
-                          }
-                        }
-                      }
-                    }
+              protocol {
+                value
+              }
+              port {
+                value
+              }
+              ssl_certificate {
+                value
+              }
+              vip_ip {
+                node {
+                  address {
+                    value
                   }
                 }
               }
-            }
-          }
-        }
-        device_services {
-          edges {
-            node {
-              __typename
-              name {
-                value
-              }
-              status {
-                value
-              }
-              ... on ServiceVIP {
-                hostname {
-                  value
-                }
-                mode {
-                  value
-                }
-                balance {
-                  value
-                }
-                ssl_certificate {
-                  value
-                }
-                vip_ip {
+              health_checks {
+                edges {
                   node {
-                    address {
+                    check {
+                      value
+                    }
+                    rise {
+                      value
+                    }
+                    fall {
+                      value
+                    }
+                    timeout {
                       value
                     }
                   }
                 }
-                backend_servers{
-                  edges{
-                    node{
-                      hostname{
-                        value
-                      }
-                      ip_address{
-                        node{
-                          address{
-                            value
+              }
+              backend_pool {
+                node {
+                  id
+                  name {
+                    value
+                  }
+                  load_balancing_algorithm {
+                    value
+                  }
+                  onprem_servers {
+                    count
+                    edges {
+                      node {
+                        hostname {
+                          value
+                        }
+                        ip_address {
+                          node {
+                            address {
+                              value
+                            }
                           }
                         }
                       }
                     }
                   }
-                }
-                health_checks{
-                  edges{
-                    node{
-                      timeout{
-                        value
-                      }
-                      check{
-                        value
-                      }
-                      rise{
-                        value
-                      }
-                      fall{
-                        value
+                  cloud_instances {
+                    count
+                    edges {
+                      node {
+                        name {
+                          value
+                        }
                       }
                     }
                   }

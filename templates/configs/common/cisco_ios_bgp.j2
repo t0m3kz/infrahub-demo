@@ -1,0 +1,85 @@
+{%- if capabilities is not defined or capabilities.bgp_enabled is not defined or capabilities.bgp_enabled %}
+{%- for bgp_config in bgp %}
+router bgp {{ bgp_config.local_as.asn }}
+  bgp router-id {{ bgp_config.router_id.address.split('/')[0] }}
+{%- if bgp_config.graceful_restart %}
+  bgp graceful-restart
+{%- endif %}
+{%- if bgp_config.multipath %}
+  maximum-paths 4
+{%- endif %}
+{%- for pg in bgp_config.peer_groups | default([]) %}
+  !
+  neighbor {{ pg.name }} peer-group
+{%- if pg.get('remote_as') %}
+  neighbor {{ pg.name }} remote-as {{ pg.remote_as }}
+{%- endif %}
+{%- if pg.type == 'overlay' %}
+  neighbor {{ pg.name }} update-source Loopback0
+{%- endif %}
+  neighbor {{ pg.name }} send-community both
+{%- if pg.get('bfd_enabled') %}
+  neighbor {{ pg.name }} fall-over bfd
+{%- endif %}
+{%- if pg.get('ebgp_multihop') %}
+  neighbor {{ pg.name }} ebgp-multihop {{ pg.ebgp_multihop }}
+{%- endif %}
+{%- endfor %}
+{%- for session in bgp_config.sessions %}
+{%- set remote_ip = session.remote_ip.address.split('/')[0] %}
+{%- if session.peer_group is defined %}
+  neighbor {{ remote_ip }} peer-group {{ session.peer_group }}
+{%- if not session.get('remote_as_from_peer_group') %}
+  neighbor {{ remote_ip }} remote-as {{ session.remote_as.asn }}
+{%- endif %}
+{%- else %}
+  neighbor {{ remote_ip }} remote-as {{ session.remote_as.asn }}
+{%- if session.get('ttl') != 1 %}
+  neighbor {{ remote_ip }} update-source Loopback0
+{%- endif %}
+  neighbor {{ remote_ip }} send-community both
+{%- if session.get('bfd_enabled') %}
+  neighbor {{ remote_ip }} fall-over bfd
+{%- endif %}
+{%- endif %}
+{%- if session.get('remote_device') %}
+  neighbor {{ remote_ip }} description {{ session.remote_device }}
+{%- endif %}
+{%- endfor %}
+  !
+  address-family ipv4 unicast
+    redistribute connected route-map RM-CONN-2-BGP
+{%- for pg in bgp_config.peer_groups | default([]) %}
+{%- if 'ipv4' in (pg.address_families | default([])) %}
+    neighbor {{ pg.name }} activate
+{%- endif %}
+{%- endfor %}
+{%- for session in bgp_config.sessions %}
+{%- if session.peer_group is not defined and not session.address_families %}
+    neighbor {{ session.remote_ip.address.split('/')[0] }} activate
+{%- endif %}
+{%- endfor %}
+  exit-address-family
+{%- if bgp_config.sessions | selectattr('address_families') | list | length > 0 %}
+  !
+  address-family l2vpn evpn
+{%- for pg in bgp_config.peer_groups | default([]) %}
+{%- if 'evpn' in (pg.address_families | default([])) %}
+    neighbor {{ pg.name }} activate
+{%- if pg.route_reflector_client is defined and pg.route_reflector_client %}
+    neighbor {{ pg.name }} route-reflector-client
+{%- endif %}
+{%- endif %}
+{%- endfor %}
+{%- for session in bgp_config.sessions %}
+{%- if session.peer_group is not defined and session.address_families %}
+    neighbor {{ session.remote_ip.address.split('/')[0] }} activate
+{%- endif %}
+{%- endfor %}
+  exit-address-family
+{%- endif %}
+!
+{%- endfor %}
+{%- else %}
+! BGP disabled by capability profile
+{%- endif %}

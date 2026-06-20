@@ -1,0 +1,15 @@
+---
+# DE-CIX Internet Exchange (nested from external root)
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologyExternal
+  data:
+    - name: Internet
+      children:
+        kind: TopologyExternalProviders
+        data:
+          - name: INET-DE-CIX-FR
+            provider_type: exchange
+            status: active
+            provider: DE-CIX

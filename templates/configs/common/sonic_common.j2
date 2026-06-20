@@ -1,0 +1,137 @@
+{#- SONiC config-DB common variable building.
+    Populates pre-initialized dicts from parent scope via in-place .update():
+    vlan_config, loopback_interfaces, physical_interfaces,
+    interface_ips, vlan_interfaces, bgp_neighbors, bgp_globals, ospf_router,
+    bgp_peer_groups, bgp_globals_af -#}
+{%- if vlans and vlans|length > 0 -%}
+{%- for vlan in vlans -%}
+{%- set _ = vlan_config.update({
+  ('Vlan' + vlan.vlan_id|string): {
+    'vlanid': vlan.vlan_id|string
+  }
+}) -%}
+{%- endfor -%}
+{%- endif -%}
+{%- for interface in interfaces -%}
+{%- if 'loopback' in interface.name|lower -%}
+{%- for ip in interface.ip_addresses -%}
+{%- set key = interface.name + '|' + ip.address -%}
+{%- set _ = loopback_interfaces.update({key: {}}) -%}
+{%- endfor -%}
+{%- endif -%}
+{%- endfor -%}
+{%- for interface in interfaces -%}
+{%- if 'loopback' not in interface.name|lower -%}
+{%- set _ = physical_interfaces.update({interface.name: {}}) -%}
+{%- endif -%}
+{%- endfor -%}
+{%- for interface in interfaces -%}
+{%- if 'loopback' not in interface.name|lower and interface.ip_addresses -%}
+{%- for ip in interface.ip_addresses -%}
+{%- set key = interface.name + '|' + ip.address -%}
+{%- set _ = interface_ips.update({key: {}}) -%}
+{%- endfor -%}
+{%- endif -%}
+{%- endfor -%}
+{%- if vlans and vlans|length > 0 -%}
+{%- for vlan in vlans -%}
+{%- set key = 'Vlan' + vlan.vlan_id|string -%}
+{%- set _ = vlan_interfaces.update({key: {}}) -%}
+{%- endfor -%}
+{%- endif -%}
+{%- if bgp and (capabilities is not defined or capabilities.bgp_enabled is not defined or capabilities.bgp_enabled) -%}
+{#- BGP globals -#}
+{%- set globals_entry = {
+  'router_id': bgp[0].router_id.address.split('/')[0],
+  'local_asn': bgp[0].local_as.asn
+} -%}
+{%- if bgp[0].graceful_restart -%}
+{%- set _ = globals_entry.update({'graceful_restart_enable': 'true'}) -%}
+{%- endif -%}
+{%- if bgp[0].multipath -%}
+{%- set _ = globals_entry.update({'max_paths': '64'}) -%}
+{%- endif -%}
+{%- set _ = bgp_globals['default'].update(globals_entry) -%}
+{#- Global address families -#}
+{%- set _ = bgp_globals_af.update({
+  'default|ipv4_unicast': {
+    'admin_status': 'true',
+    'redistribute_connected': 'true',
+    'route_map_redistribute_connected': 'RM-CONN-2-BGP'
+  },
+  'default|l2vpn_evpn': {
+    'admin_status': 'true'
+  }
+}) -%}
+{#- Peer groups and neighbors from BGP profile -#}
+{%- for bgp_config in bgp -%}
+{%- for pg in bgp_config.peer_groups | default([]) -%}
+{%- set pg_entry = {} -%}
+{%- if pg.get('remote_as') -%}
+{%- set _ = pg_entry.update({'asn': pg.remote_as|string}) -%}
+{%- endif -%}
+{%- if pg.type == 'overlay' -%}
+{%- set _ = pg_entry.update({'local_addr': bgp_config.router_id.address.split('/')[0]}) -%}
+{%- endif -%}
+{%- if pg.get('ebgp_multihop') -%}
+{%- set _ = pg_entry.update({'ebgp_multihop': pg.ebgp_multihop|string}) -%}
+{%- endif -%}
+{%- if pg.get('bfd_enabled') -%}
+{%- set _ = pg_entry.update({'bfd': 'true'}) -%}
+{%- endif -%}
+{%- if pg.get('send_community_extended') -%}
+{%- set _ = pg_entry.update({'send_community': 'extended'}) -%}
+{%- endif -%}
+{%- set _ = bgp_peer_groups.update({pg.name: pg_entry}) -%}
+{#- Per-group address family activation -#}
+{%- if 'ipv4' in (pg.address_families | default([])) -%}
+{%- set _ = bgp_globals_af.update({
+  ('default|ipv4_unicast|' + pg.name): {'admin_status': 'true'}
+}) -%}
+{%- endif -%}
+{%- if 'evpn' in (pg.address_families | default([])) -%}
+{%- set evpn_af_entry = {'admin_status': 'true'} -%}
+{%- if pg.route_reflector_client is defined and pg.route_reflector_client -%}
+{%- set _ = evpn_af_entry.update({'route_reflector_client': 'true'}) -%}
+{%- endif -%}
+{%- set _ = bgp_globals_af.update({
+  ('default|l2vpn_evpn|' + pg.name): evpn_af_entry
+}) -%}
+{%- endif -%}
+{%- endfor -%}
+{#- Neighbors -#}
+{%- for session in bgp_config.sessions -%}
+{%- set neighbor_ip = session.remote_ip.address.split('/')[0] -%}
+{%- set neighbor_entry = {
+  'asn': session.remote_as.asn|string,
+  'holdtime': '180',
+  'keepalive': '60',
+  'admin_status': 'true'
+} -%}
+{%- if session.get('ttl') == 1 -%}
+{%- if session.get('local_ip') -%}
+{%- set _ = neighbor_entry.update({'local_addr': session.local_ip.address.split('/')[0]}) -%}
+{%- endif -%}
+{%- else -%}
+{%- set _ = neighbor_entry.update({'local_addr': bgp_config.router_id.address.split('/')[0]}) -%}
+{%- endif -%}
+{%- if session.peer_group is defined -%}
+{%- set _ = neighbor_entry.update({'name': session.peer_group}) -%}
+{%- endif -%}
+{%- if session.get('remote_device') -%}
+{%- set _ = neighbor_entry.update({'description': session.remote_device}) -%}
+{%- endif -%}
+{%- set _ = bgp_neighbors.update({neighbor_ip: neighbor_entry}) -%}
+{%- endfor -%}
+{%- endfor -%}
+{%- endif -%}
+{%- if ospf -%}
+{%- for ospf_config in ospf -%}
+{%- set _ = ospf_router.update({
+  'default': {
+    'router_id': ospf_config.router_id.split('/')[0],
+    'reference_bandwidth': ospf_config.reference_bandwidth or 100000
+  }
+}) -%}
+{%- endfor -%}
+{%- endif -%}

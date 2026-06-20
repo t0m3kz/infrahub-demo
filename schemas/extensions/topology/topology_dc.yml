@@ -1,0 +1,682 @@
+---
+version: "1.0"
+
+nodes:
+  - name: DataCenterDesign
+    namespace: Topology
+    description: "Design intent for data center fabric architecture"
+    label: Fabric Design
+    icon: "mdi:lan"
+    inherit_from:
+      - TopologyDesign
+    include_in_menu: false
+    human_friendly_id:
+      - name__value
+    display_label: "{{ name__value }}"
+    uniqueness_constraints:
+      - [name__value]
+    order_by: [name__value]
+    attributes:
+      - name: description
+        kind: Text
+        optional: true
+        order_weight: 150
+        description: "Description of this data center design"
+
+      # ROUTING ARCHITECTURE
+      - name: routing_strategy
+        kind: Dropdown
+        label: "Routing Strategy"
+        description: "Fabric routing protocol strategy"
+        optional: false
+        default_value: ebgp-ebgp
+        order_weight: 1000
+        choices:
+          - name: ebgp-ebgp
+            label: "eBGP-eBGP"
+            description: "Pure eBGP routing (RFC 7938)"
+            color: "#6666ff"
+          - name: ebgp-ibgp
+            label: "eBGP-iBGP"
+            description: "eBGP underlay with iBGP overlay"
+            color: "#7f7fff"
+          - name: ospf-ibgp
+            label: "OSPF-iBGP"
+            description: "OSPF underlay with iBGP overlay"
+            color: "#aedcee"
+
+      - name: underlay_protocol
+        label: "Underlay Protocol"
+        description: "IPv6 by default (RFC 6164 /127 P2P); use IPv4 only when IPv6 is unsupported"
+        kind: Dropdown
+        optional: false
+        default_value: ipv6
+        order_weight: 1100
+        choices:
+          - name: ipv4
+            label: "IPv4"
+            description: "IPv4 underlay routing"
+            color: "#7FBF7F"
+          - name: ipv6
+            label: "IPv6"
+            description: "IPv6 underlay routing"
+            color: "#7F7FBF"
+          - name: dual_stack
+            label: "Dual-Stack"
+            description: "IPv6 for P2P fabric links, IPv4 for loopbacks and management"
+            color: "#8E44AD"
+
+      # CAPACITY PLANNING
+      - name: max_pods
+        label: "Maximum Pods"
+        description: "Maximum number of pods this design can support"
+        kind: Number
+        optional: false
+        default_value: 2
+        order_weight: 1600
+        parameters:
+          min_value: 1
+          max_value: 16
+
+      - name: max_super_spines_per_fabric
+        label: "Maximum Super-Spines"
+        description: "Maximum number of super-spine switches per fabric"
+        kind: Number
+        optional: false
+        default_value: 2
+        order_weight: 1700
+        parameters:
+          min_value: 2
+          max_value: 4
+
+      - name: max_spines_per_pod
+        label: "Maximum Spines per Pod"
+        description: "Maximum spine switches per pod in this fabric"
+        kind: Number
+        optional: false
+        default_value: 4
+        order_weight: 1750
+        parameters:
+          min_value: 1
+          max_value: 8
+
+  - name: PodDesign
+    namespace: Topology
+    description: "Pod layout and capacity plan"
+    label: Pod Layout Design
+    icon: "mdi:floor-plan"
+    inherit_from:
+      - TopologyDesign
+    include_in_menu: false
+    menu_placement: "TopologyDataCenter"
+    human_friendly_id:
+      - name__value
+    display_label: "{{ name__value }}"
+    uniqueness_constraints:
+      - [name__value]
+    order_by: [name__value]
+    attributes:
+      - name: description
+        kind: Text
+        optional: true
+        order_weight: 150
+        description: "Description of this pod layout"
+
+      # PHYSICAL LAYOUT
+      - name: rows
+        label: "Number of Rows"
+        description: "Total number of rack rows in this layout"
+        kind: Number
+        optional: false
+        order_weight: 1000
+        parameters:
+          min_value: 1
+          max_value: 50
+
+      - name: compute_racks_per_row
+        label: "Compute Racks per Row"
+        description: "Number of compute/server racks per row"
+        kind: Number
+        optional: false
+        order_weight: 1100
+        parameters:
+          min_value: 0
+          max_value: 100
+
+      - name: network_racks_per_row
+        label: "Network Racks per Row"
+        description: "Number of network equipment racks per row"
+        kind: Number
+        optional: false
+        order_weight: 1200
+        parameters:
+          min_value: 0
+          max_value: 50
+
+      # DEVICE DENSITY (moved from Pod Design)
+      - name: max_leafs_per_network_rack
+        label: "Max Leafs per Network Rack"
+        description: "Maximum leaf switches per network rack"
+        kind: Number
+        optional: false
+        default_value: 4
+        order_weight: 1300
+        parameters:
+          min_value: 0
+          max_value: 8
+
+      - name: max_tors_per_network_rack
+        label: "Max ToRs per Network Rack"
+        description: "Maximum ToR switches per network rack"
+        kind: Number
+        optional: false
+        default_value: 2
+        order_weight: 1300
+        parameters:
+          min_value: 0
+          max_value: 8
+
+      - name: max_tors_per_compute_rack
+        label: "Max ToRs per Compute Rack"
+        description: "Maximum ToR switches per compute rack"
+        kind: Number
+        optional: false
+        default_value: 1
+        order_weight: 1400
+        parameters:
+          min_value: 0
+          max_value: 2
+
+      - name: max_spines_per_pod
+        label: "Max Spines per Pod"
+        description: "Maximum spine switches per pod in this layout"
+        kind: Number
+        optional: false
+        default_value: 2
+        order_weight: 1500
+        parameters:
+          min_value: 2
+          max_value: 8
+
+  - name: Element
+    namespace: Topology
+    description: "Physical aspect of topology elements."
+    label: "Network Elements"
+    icon: "carbon:network-3-reference"
+    include_in_menu: false
+    menu_placement: "DesignTopology"
+    human_friendly_id:
+      - quantity__value
+      - role__value
+      - template__template_name__value
+    order_by: [role__value, quantity__value]
+    # yamllint disable rule:line-length
+    display_label: >
+      {{quantity__value}} x {{role__value|upper}} - {{template__template_name__value}}
+    # yamllint enable rule:line-length
+    uniqueness_constraints:
+      - ["quantity__value", "role__value", "template"]
+    attributes:
+      - name: quantity
+        kind: Number
+        order_weight: 1200
+      - name: role
+        kind: Dropdown
+        optional: true
+        order_weight: 1000
+        choices:
+          - name: core
+            label: Core Router
+            description: Central part of the network.
+            color: "#7f7fff"
+          - name: edge
+            label: Edge Router
+            description: Network boundary with external networks.
+            color: "#bf7fbf"
+          - name: cpe
+            label: Customer Premise Equipment
+            description: >
+              Devices located at the customer's premises.
+            color: "#bf7f7f"
+          - name: leaf
+            label: Leaf Switch
+            description: Leaf Switch part of a Pod.
+            color: "#e6e6fa"
+          - name: tor
+            label: ToR/Level2 Switch
+            description: Top of Rack  or Lavel2 leaf part of a Pod.
+            color: "#e6e6fa"
+          - name: border-leaf
+            label: Border Leaf Switch
+            description: Border Leaf providing external connectivity in a Pod.
+            color: "#dda0dd"
+          - name: firewall
+            label: Firewall
+            description: "Security boundary with external network"
+            color: "#6e5abd"
+          - name: load-balancer
+            label: Load Balancer
+            description: Load Balancer part of a Fabric.
+            color: "#38e7fb"
+          - name: oob
+            label: OOB Switch
+            description: Out of Band Switch part of a Fabric.
+            color: "#e3e7fd"
+          - name: console
+            label: Console Server
+            description: Console Server part of a Fabric.
+            color: "#e9ebfd"
+    relationships:
+      - name: template
+        label: Device Template
+        peer: CoreObjectTemplate
+        optional: false
+        cardinality: one
+        kind: Attribute
+        order_weight: 1500
+
+  - name: DataCenter
+    namespace: Topology
+    inherit_from:
+      - CoreArtifactTarget
+      - TopologyDeployment
+      - TopologyPhysicalDeployment
+      - TopologyConnectableLocation
+      - TopologyDeviceHosting
+      - TopologyClusterHosting
+    label: Data Center
+    include_in_menu: false
+    children: TopologyPod
+    uniqueness_constraints:
+      - ["name__value", "index__value"]
+    human_friendly_id:
+      - name__value
+    display_label: "{{ name__value}} - Fabric {{index__value}}"
+    attributes:
+      - name: index
+        kind: Number
+        order_weight: 110
+      - name: status
+        kind: Dropdown
+        label: Status
+        optional: false
+        default_value: provisioning
+        order_weight: 550
+        choices:
+          - name: active
+            label: Active
+            description: "Operational and in service."
+            color: "#7FBF7F"
+          - name: provisioning
+            label: Provisioning
+            description: "Being built or staged."
+            color: "#FFFF7F"
+          - name: maintenance
+            label: Maintenance
+            description: "Temporarily under maintenance."
+            color: "#FFD27F"
+          - name: decommissioned
+            label: Decommissioned
+            description: "Removed from active service."
+            color: "#BFBFBF"
+      - name: fully_managed
+        label: Fully Managed
+        kind: Boolean
+        optional: false
+        default_value: true
+        order_weight: 600
+      - name: amount_of_super_spines
+        label: Amount of Super Spine switches
+        kind: Number
+        optional: false
+        default_value: 2
+        order_weight: 1000
+        parameters:
+          min_value: 2
+
+      - name: loopback_prefix_length
+        label: "Loopback Pool Prefix Length"
+        description: "IPv4 base prefix for loopback pool (e.g. 24 = /24 IPv4, /120 IPv6). Must fit all devices."
+        kind: Number
+        optional: false
+        default_value: 23
+        order_weight: 1020
+        parameters:
+          min_value: 16
+          max_value: 30
+
+      - name: technical_prefix_length
+        label: "Technical Pool Prefix Length"
+        description: "IPv4 base prefix for P2P link pool (e.g. 19 = /19 IPv4, /115 IPv6). Must fit all fabric links."
+        kind: Number
+        optional: false
+        default_value: 19
+        order_weight: 1030
+        parameters:
+          min_value: 16
+          max_value: 30
+
+      - name: management_prefix_length
+        label: "Management Pool Prefix Length"
+        description: "IPv4 prefix for management pool (always IPv4). Must fit all managed devices."
+        kind: Number
+        optional: false
+        default_value: 25
+        order_weight: 1040
+        parameters:
+          min_value: 16
+          max_value: 30
+      - name: naming_convention
+        label: "Naming Convention"
+        description: "Device naming convention for this data center"
+        kind: Dropdown
+        optional: false
+        default_value: standard
+        order_weight: 1050
+        choices:
+          - name: standard
+            label: "Standard"
+            description: "dc-fabN-podN-role-NN"
+            color: "#7FBF7F"
+          - name: hierarchical
+            label: "Hierarchical"
+            description: "dc-N-role-NN (numeric indexes)"
+            color: "#7F7FBF"
+          - name: flat
+            label: "Flat"
+            description: "dcroleNNNN (no separators)"
+            color: "#BF7FBF"
+
+      - name: overlay_technology
+        label: "Overlay Technology"
+        description: "Data plane overlay technology for the fabric"
+        kind: Dropdown
+        optional: false
+        default_value: vxlan_evpn
+        order_weight: 1100
+        choices:
+          - name: none
+            label: "None (traditional L2/L3)"
+            description: "Pure 802.1Q VLANs, no overlay"
+            color: "#95A5A6"
+          - name: vxlan_evpn
+            label: "VXLAN-EVPN"
+            description: "VXLAN data plane with EVPN control plane"
+            color: "#2ECC71"
+
+      - name: fabric_interface_sorting_method
+        kind: Dropdown
+        label: Fabric interface assignment
+        choices:
+          - name: bottom_up
+            label: Bottom Up
+            description: Assign interfaces bottom-up.
+            color: "#869FB3"
+          - name: top_down
+            label: Top Down
+            description: Assign interfaces top-down.
+            color: "#004E64"
+        default_value: bottom_up
+        order_weight: 1200
+      - name: spine_interface_sorting_method
+        kind: Dropdown
+        label: Spine interface assignment
+        choices:
+          - name: bottom_up
+            label: Bottom Up
+            description: Assign interfaces bottom-up.
+            color: "#869FB3"
+          - name: top_down
+            label: Top Down
+            description: Assign interfaces top-down.
+            color: "#004E64"
+        default_value: bottom_up
+        order_weight: 1300
+    relationships:
+      - name: design
+        label: "Data Center Design"
+        description: "Logical network topology design for this data center"
+        peer: TopologyDataCenterDesign
+        kind: Attribute
+        cardinality: one
+        optional: true
+        identifier: "dc__design"
+        order_weight: 950
+        on_delete: no-action
+      - name: super_spine_template
+        peer: TemplateDcimPhysicalDevice
+        label: "Super Spine Template"
+        optional: false
+        kind: Attribute
+        cardinality: one
+        identifier: "fabric__super_spine_template"
+        order_weight: 1100
+        on_delete: no-action
+      - name: loopback_pool
+        peer: CoreIPPrefixPool
+        kind: Attribute
+        cardinality: one
+        optional: true
+        identifier: "dc__loopback_pool"
+        order_weight: 6000
+        on_delete: cascade
+      - name: technical_pool
+        peer: CoreIPPrefixPool
+        kind: Attribute
+        cardinality: one
+        optional: true
+        identifier: "dc__technical_pool"
+        order_weight: 7000
+        on_delete: cascade
+      - name: management_pool
+        peer: CoreIPAddressPool
+        kind: Attribute
+        cardinality: one
+        optional: true
+        identifier: "dc__management_pool"
+        order_weight: 7000
+        on_delete: cascade
+      - name: super_spine_asn_pool
+        peer: CoreNumberPool
+        kind: Attribute
+        cardinality: one
+        optional: true
+        identifier: "dc__super_spine_asn_pool"
+        order_weight: 7200
+        on_delete: cascade
+
+      - name: vlan_pool
+        peer: CoreNumberPool
+        kind: Attribute
+        cardinality: one
+        optional: true
+        identifier: "dc__vlan_pool"
+        order_weight: 7300
+        on_delete: cascade
+        description: "VLAN ID pool for this DC. Allocated per-segment by add_segment generator."
+
+      - name: vni_pool
+        peer: CoreNumberPool
+        kind: Attribute
+        cardinality: one
+        optional: true
+        identifier: "dc__vni_pool"
+        order_weight: 7400
+        on_delete: cascade
+        description: "L2 VNI pool for this DC. Used when segment.vni is null and overlay is VXLAN-EVPN."
+
+      - name: l3_vni_pool
+        peer: CoreNumberPool
+        kind: Attribute
+        cardinality: one
+        optional: true
+        identifier: "dc__l3_vni_pool"
+        order_weight: 7500
+        on_delete: cascade
+        description: "L3 VNI pool for VRF allocation. Used when namespace.l3_vni is null."
+
+      - name: network_segments
+        peer: ManagedNetworkSegment
+        label: Network Segments
+        kind: Generic
+        cardinality: many
+        optional: true
+        identifier: "segment__deployments"
+        order_weight: 7900
+        description: "Network segments targeting this DC for activation"
+
+      - name: segment_deployments
+        peer: ManagedSegmentDeployment
+        kind: Generic
+        cardinality: many
+        identifier: "segmentdeployment__deployment"
+        order_weight: 8000
+        on_delete: cascade
+        description: "Segment deployments for this DC (VLAN/VNI assignments per segment)"
+
+
+  - name: Pod
+    namespace: Topology
+    inherit_from:
+      - TopologyDeployment
+      - GeneratorTarget
+      - TopologyRackHosting
+      - TopologyDeviceHosting
+    parent: TopologyDataCenter
+    children: ""
+    label: Pod
+    human_friendly_id:
+      - name__value
+    display_label: "{{ name__value }}"
+    uniqueness_constraints:
+      - ["name__value", "index__value"]
+    include_in_menu: false
+    attributes:
+      - name: index
+        kind: Number
+        order_weight: 110
+      - name: status
+        kind: Dropdown
+        label: Status
+        optional: false
+        default_value: provisioning
+        order_weight: 140
+        choices:
+          - name: active
+            label: Active
+            description: "Operational and in service."
+            color: "#7FBF7F"
+          - name: provisioning
+            label: Provisioning
+            description: "Being built or staged."
+            color: "#FFFF7F"
+          - name: maintenance
+            label: Maintenance
+            description: "Temporarily under maintenance."
+            color: "#FFD27F"
+          - name: decommissioned
+            label: Decommissioned
+            description: "Removed from active service."
+            color: "#BFBFBF"
+      - name: name
+        kind: Text
+        computed_attribute:
+          kind: Jinja2
+          jinja2_template: >
+            {{parent__name__value|upper}}-{{parent__index__value}}-POD-{{
+            index__value }}
+        read_only: true
+        optional: false
+      - name: amount_of_spines
+        label: Amount of Spine switches
+        kind: Number
+        optional: true
+        default_value: 4
+        order_weight: 1000
+        parameters:
+          min_value: 1
+          max_value: 8
+      - name: deployment_type
+        kind: Dropdown
+        optional: true
+        order_weight: 150
+        choices:
+          - name: middle_rack
+            label: Middle Rack
+            description: Middle Rack deployment
+            color: "#7f7fff"
+          - name: tor
+            label: Top of Rack
+            description: Top of Rack deployment
+            color: "#bf7fbf"
+          - name: mixed
+            label: ToR and Middle Rack
+            description: Mix of ToR and Middle Rack deployment
+            color: "#bf7f7f"
+        default_value: tor
+      - name: leaf_interface_sorting_method
+        kind: Dropdown
+        choices:
+          - name: bottom_up
+            color: "#869FB3"
+            description: Assign interfaces bottom-up.
+          - name: top_down
+            color: "#004E64"
+            description: Assign interfaces top-down.
+        default_value: bottom_up
+        order_weight: 3000
+      - name: spine_interface_sorting_method
+        kind: Dropdown
+        choices:
+          - name: bottom_up
+            color: "#869FB3"
+            description: Assign interfaces bottom-up.
+          - name: top_down
+            color: "#004E64"
+            description: Assign interfaces top-down.
+        default_value: bottom_up
+        order_weight: 4000
+    relationships:
+      - name: design
+        label: "Pod Design"
+        description: "Physical layout and operational parameters for this pod"
+        peer: TopologyPodDesign
+        kind: Attribute
+        cardinality: one
+        optional: true
+        identifier: "pod__design"
+        order_weight: 900
+        on_delete: no-action
+      - name: spine_template
+        peer: TemplateDcimPhysicalDevice
+        label: "Spine Template"
+        optional: false
+        kind: Attribute
+        cardinality: one
+        identifier: "pod__spine_template"
+        order_weight: 1100
+        on_delete: no-action
+      - name: loopback_pool
+        peer: CoreIPAddressPool
+        kind: Attribute
+        cardinality: one
+        optional: true
+        identifier: "pod__loopback_pool"
+        order_weight: 6000
+        on_delete: cascade
+      - name: prefix_pool
+        peer: CoreIPPrefixPool
+        kind: Attribute
+        cardinality: one
+        optional: true
+        identifier: "pod__prefix_pool"
+        order_weight: 7000
+        on_delete: cascade
+      - name: asn_pool
+        peer: CoreNumberPool
+        kind: Attribute
+        cardinality: one
+        optional: true
+        identifier: "pod__asn_pool"
+        order_weight: 7100
+        on_delete: cascade

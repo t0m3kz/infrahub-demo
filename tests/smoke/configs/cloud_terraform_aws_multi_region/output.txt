@@ -1,0 +1,186 @@
+terraform {
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"
+      version = "~> 5.0"
+    }
+  }
+}
+
+provider "aws" {
+  region = "eu-central-1"
+}
+
+provider "aws" {
+  alias  = "eu_west_1"
+  region = "eu-west-1"
+}
+
+resource "aws_vpc" "prod_vpc" {
+  cidr_block           = "10.0.0.0/16"
+  enable_dns_support   = true
+  enable_dns_hostnames = true
+  tags = { Name = "prod-vpc", ManagedBy = "Infrahub" }
+}
+
+resource "aws_subnet" "prod_subnet_1a" {
+  vpc_id                  = aws_vpc.prod_vpc.id
+  cidr_block              = "10.0.1.0/24"
+  availability_zone       = "eu-central-1a"
+  map_public_ip_on_launch = false
+  tags = { Name = "prod-subnet-1a", ManagedBy = "Infrahub" }
+}
+
+resource "aws_security_group" "prod_sg" {
+  name   = "prod-sg"
+  vpc_id = aws_vpc.prod_vpc.id
+  tags   = { Name = "prod-sg", ManagedBy = "Infrahub" }
+}
+
+resource "aws_instance" "prod_instance_1" {
+  ami                    = "ami-12345678"
+  instance_type          = "t3.micro"
+  subnet_id              = aws_subnet.prod_subnet_1a.id
+  vpc_security_group_ids = [aws_security_group.prod_sg.id]
+  private_ip             = "10.0.1.10"
+  tags                   = { Name = "prod-instance-1", ManagedBy = "Infrahub" }
+}
+
+resource "aws_internet_gateway" "prod_igw" {
+  vpc_id = aws_vpc.prod_vpc.id
+  tags   = { Name = "prod-igw", ManagedBy = "Infrahub" }
+}
+
+resource "aws_eip" "eip_prod_nat" {
+  domain = "vpc"
+  tags   = { Name = "prod-nat-eip", ManagedBy = "Infrahub" }
+}
+
+resource "aws_nat_gateway" "prod_nat" {
+  allocation_id = aws_eip.eip_prod_nat.id
+  subnet_id     = aws_subnet.prod_subnet_1a.id
+  tags          = { Name = "prod-nat", ManagedBy = "Infrahub" }
+}
+
+resource "aws_route_table" "prod_rt" {
+  vpc_id = aws_vpc.prod_vpc.id
+  tags   = { Name = "prod-rt", ManagedBy = "Infrahub" }
+}
+
+resource "aws_route" "route_igw_central" {
+  route_table_id         = aws_route_table.prod_rt.id
+  destination_cidr_block = "0.0.0.0/0"
+  gateway_id             = aws_internet_gateway.prod_igw.id
+}
+
+resource "aws_route_table_association" "prod_subnet_1a_assoc_prod_rt" {
+  subnet_id      = aws_subnet.prod_subnet_1a.id
+  route_table_id = aws_route_table.prod_rt.id
+}
+
+resource "aws_network_acl" "prod_nacl" {
+  vpc_id     = aws_vpc.prod_vpc.id
+  subnet_ids = [aws_subnet.prod_subnet_1a.id]
+  tags       = { Name = "prod-nacl", ManagedBy = "Infrahub" }
+}
+
+resource "aws_vpc" "prod_vpc_west" {
+  cidr_block           = "10.1.0.0/16"
+  enable_dns_support   = true
+  enable_dns_hostnames = true
+  tags = { Name = "prod-vpc-west", ManagedBy = "Infrahub" }
+  provider = aws.eu_west_1
+}
+
+resource "aws_subnet" "prod_subnet_west_1a" {
+  vpc_id                  = aws_vpc.prod_vpc_west.id
+  cidr_block              = "10.1.1.0/24"
+  availability_zone       = "eu-west-1a"
+  map_public_ip_on_launch = false
+  tags = { Name = "prod-subnet-west-1a", ManagedBy = "Infrahub" }
+  provider = aws.eu_west_1
+}
+
+resource "aws_security_group" "west_sg" {
+  name   = "west-sg"
+  vpc_id = aws_vpc.prod_vpc_west.id
+  tags   = { Name = "west-sg", ManagedBy = "Infrahub" }
+  provider = aws.eu_west_1
+}
+
+resource "aws_instance" "west_instance_1" {
+  ami                    = "ami-87654321"
+  instance_type          = "t3.small"
+  subnet_id              = aws_subnet.prod_subnet_west_1a.id
+  vpc_security_group_ids = [aws_security_group.west_sg.id]
+  private_ip             = "10.1.1.10"
+  tags                   = { Name = "west-instance-1", ManagedBy = "Infrahub" }
+  provider               = aws.eu_west_1
+}
+
+resource "aws_internet_gateway" "west_igw" {
+  vpc_id = aws_vpc.prod_vpc_west.id
+  tags   = { Name = "west-igw", ManagedBy = "Infrahub" }
+  provider = aws.eu_west_1
+}
+
+resource "aws_route_table" "west_rt" {
+  vpc_id = aws_vpc.prod_vpc_west.id
+  tags   = { Name = "west-rt", ManagedBy = "Infrahub" }
+  provider = aws.eu_west_1
+}
+
+resource "aws_route" "route_igw_west" {
+  route_table_id         = aws_route_table.west_rt.id
+  destination_cidr_block = "0.0.0.0/0"
+  gateway_id             = aws_internet_gateway.west_igw.id
+  provider               = aws.eu_west_1
+}
+
+resource "aws_route_table_association" "prod_subnet_west_1a_assoc_west_rt" {
+  subnet_id      = aws_subnet.prod_subnet_west_1a.id
+  route_table_id = aws_route_table.west_rt.id
+  provider       = aws.eu_west_1
+}
+
+resource "aws_transit_gateway" "prod_tgw" {
+  default_route_table_association = "enable"
+  dns_support                     = "enable"
+  vpn_ecmp_support                = "disable"
+  tags                            = { Name = "prod-tgw", ManagedBy = "Infrahub" }
+}
+
+resource "aws_transit_gateway_vpc_attachment" "prod_tgw_prod_vpc" {
+  transit_gateway_id = aws_transit_gateway.prod_tgw.id
+  vpc_id             = aws_vpc.prod_vpc.id
+  subnet_ids         = []
+  tags               = { Name = "prod-tgw-prod-vpc", ManagedBy = "Infrahub" }
+}
+
+resource "aws_transit_gateway_vpc_attachment" "prod_tgw_prod_vpc_west" {
+  transit_gateway_id = aws_transit_gateway.prod_tgw.id
+  vpc_id             = aws_vpc.prod_vpc_west.id
+  subnet_ids         = []
+  tags               = { Name = "prod-tgw-prod-vpc-west", ManagedBy = "Infrahub" }
+}
+
+resource "aws_customer_gateway" "on_prem_cgw" {
+  bgp_asn    = 65000
+  ip_address = "203.0.113.1/32"
+  type       = "ipsec.1"
+  tags       = { Name = "on-prem-cgw", ManagedBy = "Infrahub" }
+}
+
+resource "aws_vpc_peering_connection" "prod_vpc_prod_vpc_west" {
+  vpc_id      = aws_vpc.prod_vpc.id
+  peer_vpc_id = aws_vpc.prod_vpc_west.id
+  auto_accept = true
+  tags        = { Name = "prod-to-west-peering", ManagedBy = "Infrahub" }
+}
+
+resource "aws_dx_connection" "prod_dx" {
+  name      = "prod-dx"
+  bandwidth = "1Gbps"
+  location  = ""
+  tags      = { Name = "prod-dx", ManagedBy = "Infrahub" }
+}

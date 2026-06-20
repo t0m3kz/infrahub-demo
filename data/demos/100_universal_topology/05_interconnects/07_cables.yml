@@ -1,0 +1,298 @@
+---
+# Physical cables connecting customer-edge and provider-edge devices to Equinix patch panels.
+#
+# Each TopologyPhysicalCircuit has two cable segments:
+#   provider_a side: customer/edge device  ↔  Equinix patch panel (provider_a)
+#   provider_z side: external provider device ↔ Equinix patch panel (provider_z)
+#
+# Circuits covered:
+#   datacenter-equinix/01_physical.yml  — DC1→FR2, DC1→FR6, DC2→PA4, DC2→PA6
+#   equinix-internet/01_bt.yml          — FR6→BT internet DIA
+#   equinix-internet/02_decix.yml       — FR2→DE-CIX cross-connect
+#   equinix-partners/01_acme.yml        — PA4→ACME partner MPLS
+#   offices-equinix/01_connectivity.yml — STR, MAD-primary, MAD-secondary
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimCable
+  data:
+    # ── DC1 super-spine → Equinix DC1 patch panel ─────────────────────────────
+    - name: CBL-DC1-SS1-EQX-DC1-PATCH-P1
+      type: smf
+      deployment: DC1
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC1-SS1
+            name: Ethernet1/5
+        - kind: DcimPhysicalInterface
+          data:
+            device: EQX-DC1-PATCH-01
+            name: Port1
+
+    - name: CBL-DC1-SS1-EQX-DC1-PATCH-P2
+      type: smf
+      deployment: DC1
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC1-SS1
+            name: Ethernet1/6
+        - kind: DcimPhysicalInterface
+          data:
+            device: EQX-DC1-PATCH-01
+            name: Port2
+
+    # ── DC2 super-spine → Equinix DC2 patch panel ─────────────────────────────
+    - name: CBL-DC2-SS1-EQX-DC2-PATCH-P1
+      type: smf
+      deployment: DC2
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC2-SS1
+            name: Ethernet1/5
+        - kind: DcimPhysicalInterface
+          data:
+            device: EQX-DC2-PATCH-01
+            name: Port1
+
+    - name: CBL-DC2-SS1-EQX-DC2-PATCH-P2
+      type: smf
+      deployment: DC2
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC2-SS1
+            name: Ethernet1/6
+        - kind: DcimPhysicalInterface
+          data:
+            device: EQX-DC2-PATCH-01
+            name: Port2
+
+    # ── FR2 edge → Equinix FR2 patch panel ────────────────────────────────────
+    # Port1: DC1→FR2 cross-connect (PHYS-DC1-FR2-EQX-01)
+    - name: CBL-FR2-EDGE01-EQX-FR2-PATCH-P1
+      type: smf
+      deployment: FR2
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: FR2-EDGE-01
+            name: Ethernet1/2
+        - kind: DcimPhysicalInterface
+          data:
+            device: EQX-FR2-PATCH-01
+            name: Port1
+
+    # Port2: FR2→DE-CIX cross-connect (PHYS-FR2-INET-DE-CIX-01)
+    - name: CBL-FR2-EDGE01-EQX-FR2-PATCH-P2
+      type: smf
+      deployment: FR2
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: FR2-EDGE-01
+            name: Ethernet1/1
+        - kind: DcimPhysicalInterface
+          data:
+            device: EQX-FR2-PATCH-01
+            name: Port2
+
+    # ── FR6 edge → Equinix FR6 patch panel ────────────────────────────────────
+    # Port1: DC1→FR6 cross-connect (PHYS-DC1-FR6-EQX-01)
+    - name: CBL-FR6-EDGE01-EQX-FR6-PATCH-P1
+      type: smf
+      deployment: FR6
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: FR6-EDGE-01
+            name: Ethernet1/2
+        - kind: DcimPhysicalInterface
+          data:
+            device: EQX-FR6-PATCH-01
+            name: Port1
+
+    # Port2: FR6→BT internet DIA (PHYS-FR6-INET-BT-01)
+    - name: CBL-FR6-EDGE01-EQX-FR6-PATCH-P2
+      type: smf
+      deployment: FR6
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: FR6-EDGE-01
+            name: Ethernet1/1
+        - kind: DcimPhysicalInterface
+          data:
+            device: EQX-FR6-PATCH-01
+            name: Port2
+
+    # Port3: STR office cross-connect (PHYS-OFC-STR-EQX-FR6-01)
+    - name: CBL-FR6-EDGE02-EQX-FR6-PATCH-P3
+      type: smf
+      deployment: FR6
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: FR6-EDGE-02
+            name: Ethernet1/1
+        - kind: DcimPhysicalInterface
+          data:
+            device: EQX-FR6-PATCH-01
+            name: Port3
+
+    # ── PA4 edge → Equinix PA4 patch panel ────────────────────────────────────
+    # Port1: DC2→PA4 cross-connect (PHYS-DC2-PA4-EQX-01)
+    - name: CBL-PA4-EDGE01-EQX-PA4-PATCH-P1
+      type: smf
+      deployment: PA4
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: PA4-EDGE-01
+            name: Ethernet1/2
+        - kind: DcimPhysicalInterface
+          data:
+            device: EQX-PA4-PATCH-01
+            name: Port1
+
+    # Port2: PA4→ACME partner MPLS (PHYS-PA4-PARTNER-ACME-01)
+    - name: CBL-PA4-EDGE01-EQX-PA4-PATCH-P2
+      type: smf
+      deployment: PA4
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: PA4-EDGE-01
+            name: Ethernet1/1
+        - kind: DcimPhysicalInterface
+          data:
+            device: EQX-PA4-PATCH-01
+            name: Port2
+
+    # Port3: MAD primary office cross-connect (PHYS-OFC-MAD-EQX-PA4-01)
+    - name: CBL-PA4-EDGE02-EQX-PA4-PATCH-P3
+      type: smf
+      deployment: PA4
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: PA4-EDGE-02
+            name: Ethernet1/1
+        - kind: DcimPhysicalInterface
+          data:
+            device: EQX-PA4-PATCH-01
+            name: Port3
+
+    # ── PA6 edge → Equinix PA6 patch panel ────────────────────────────────────
+    # Port1: DC2→PA6 cross-connect (PHYS-DC2-PA6-EQX-01)
+    - name: CBL-PA6-EDGE01-EQX-PA6-PATCH-P1
+      type: smf
+      deployment: PA6
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: PA6-EDGE-01
+            name: Ethernet1/2
+        - kind: DcimPhysicalInterface
+          data:
+            device: EQX-PA6-PATCH-01
+            name: Port1
+
+    # Port2: MAD secondary office cross-connect (PHYS-OFC-MAD-EQX-PA6-01)
+    - name: CBL-PA6-EDGE02-EQX-PA6-PATCH-P2
+      type: smf
+      deployment: PA6
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: PA6-EDGE-02
+            name: Ethernet1/1
+        - kind: DcimPhysicalInterface
+          data:
+            device: EQX-PA6-PATCH-01
+            name: Port2
+
+    # ── Office edge → Equinix office patch panels ─────────────────────────────
+    # STR branch: OFC-STR-BRANCH-EDGE-01/GE1 → EQX-STR-PATCH-01/Port1
+    - name: CBL-STR-EDGE01-EQX-STR-PATCH-P1
+      type: smf
+      deployment: OFC-STR-BRANCH-01
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: OFC-STR-BRANCH-EDGE-01
+            name: GE1
+        - kind: DcimPhysicalInterface
+          data:
+            device: EQX-STR-PATCH-01
+            name: Port1
+
+    # MAD regional primary: OFC-MAD-REGIONAL-EDGE-01/GE1 → EQX-MAD-PATCH-01/Port1
+    - name: CBL-MAD-EDGE01-EQX-MAD-PATCH-P1
+      type: smf
+      deployment: OFC-MAD-REGIONAL-01
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: OFC-MAD-REGIONAL-EDGE-01
+            name: GE1
+        - kind: DcimPhysicalInterface
+          data:
+            device: EQX-MAD-PATCH-01
+            name: Port1
+
+    # MAD regional secondary: OFC-MAD-REGIONAL-EDGE-02/GE1 → EQX-MAD-PATCH-01/Port2
+    - name: CBL-MAD-EDGE02-EQX-MAD-PATCH-P2
+      type: smf
+      deployment: OFC-MAD-REGIONAL-01
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: OFC-MAD-REGIONAL-EDGE-02
+            name: GE1
+        - kind: DcimPhysicalInterface
+          data:
+            device: EQX-MAD-PATCH-01
+            name: Port2
+
+    # ── External provider devices → external patch panels ─────────────────────
+    # BT internet (FR6 DIA circuit — PHYS-FR6-INET-BT-01)
+    - name: CBL-EXT-INET-BT01-EXT-BT-PATCH-P1
+      type: smf
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: EXT-INET-BT-01
+            name: Ethernet1/1
+        - kind: DcimPhysicalInterface
+          data:
+            device: EXT-BT-PATCH-01
+            name: Port1
+
+    # DE-CIX (FR2 cross-connect — PHYS-FR2-INET-DE-CIX-01)
+    - name: CBL-EXT-INET-DECIX-EXT-DECIX-PATCH-P1
+      type: smf
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: EXT-INET-DE-CIX-FR-01
+            name: Ethernet1/1
+        - kind: DcimPhysicalInterface
+          data:
+            device: EXT-DECIX-PATCH-01
+            name: Port1
+
+    # ACME partner (PA4 MPLS circuit — PHYS-PA4-PARTNER-ACME-01)
+    - name: CBL-EXT-PARTNER-ACME01-EXT-ACME-PATCH-P1
+      type: smf
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: EXT-PARTNER-ACME-01
+            name: Ethernet1/1
+        - kind: DcimPhysicalInterface
+          data:
+            device: EXT-ACME-PATCH-01
+            name: Port1

@@ -1,85 +1,250 @@
 ---
+# Security Policy Rules — Per-flow enforcement
+#
+# Rules demonstrate both macro (zone-level) and micro (segment-level) matching.
+# Inline protocol/port replaces ServiceObject/ServiceGroup references.
+#
+# Architecture tested:
+#   DMZ → Web Tier → App Tier → Database Tier
+#   Management → all tiers (SSH/SNMP)
+#   Guest → internet only (no internal)
+#   Tenant A ←✗→ Tenant B (isolation)
+
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
   kind: SecurityPolicyRule
   data:
+    # ==========================================
+    # Zone-Level Rules (macro-segmentation)
+    # ==========================================
+
+    # Management SSH access to all production zones
     - index: 100
-      name: "allow-web-traffic"
+      name: "mgmt-ssh-to-prod"
+      description: "Allow SSH from management to production workloads"
       action: "permit"
+      protocol: "tcp"
+      port_start: 22
       log: true
-      policy: "corporate-firewall-policy"
-      source_zone: "internal"
-      destination_zone: "dmz"
+      policy: "management-access"
+      source_zone: "INFRA-ZONE"
+      destination_zone: "PROD-ZONE"
+      security_profile: "standard"
 
+    # Management SNMP polling
+    - index: 110
+      name: "mgmt-snmp-polling"
+      description: "Allow SNMP from management to all infrastructure"
+      action: "permit"
+      protocol: "udp"
+      port_start: 161
+      log: false
+      policy: "management-access"
+      source_zone: "INFRA-ZONE"
+      destination_zone: "PROD-ZONE"
+
+    # Management syslog collection
+    - index: 120
+      name: "mgmt-syslog-collect"
+      description: "Allow syslog from production to management collectors"
+      action: "permit"
+      protocol: "udp"
+      port_start: 514
+      log: false
+      policy: "management-access"
+      source_zone: "PROD-ZONE"
+      destination_zone: "INFRA-ZONE"
+
+    # DMZ HTTPS ingress to web tier
     - index: 200
-      name: "allow-database-access"
+      name: "dmz-https-to-web"
+      description: "Allow HTTPS from DMZ reverse proxies to web tier"
       action: "permit"
+      protocol: "tcp"
+      port_start: 443
       log: true
-      policy: "server-access-policy"
-      source_zone: "server-farm"
-      destination_zone: "database"
+      policy: "dmz-ingress"
+      source_zone: "DMZ-ZONE"
+      destination_zone: "PROD-ZONE"
+      security_profile: "strict"
 
+    # DMZ HTTP redirect
+    - index: 210
+      name: "dmz-http-to-web"
+      description: "Allow HTTP from DMZ (redirect to HTTPS)"
+      action: "permit"
+      protocol: "tcp"
+      port_start: 80
+      log: false
+      policy: "dmz-ingress"
+      source_zone: "DMZ-ZONE"
+      destination_zone: "PROD-ZONE"
+
+    # Guest DNS only
     - index: 300
-      name: "allow-ssh-management"
+      name: "guest-dns"
+      description: "Allow DNS resolution for guest network"
       action: "permit"
-      log: true
-      policy: "management-policy"
-      source_zone: "management"
-      destination_zone: "internal"
-
-    - index: 400
-      name: "guest-web-access"
-      action: "permit"
+      protocol: "udp"
+      port_start: 53
       log: false
-      policy: "guest-network-policy"
-      source_zone: "guest"
-      destination_zone: "external"
+      policy: "guest-restricted"
+      source_zone: "GUEST-ZONE"
+      destination_zone: "DMZ-ZONE"
 
-    - index: 500
-      name: "block-file-sharing"
-      action: "deny"
-      log: true
-      policy: "corporate-firewall-policy"
-      source_zone: "internal"
-      destination_zone: "external"
-
-    - index: 600
-      name: "allow-business-email"
+    # Guest DHCP
+    - index: 310
+      name: "guest-dhcp"
+      description: "Allow DHCP for guest network"
       action: "permit"
+      protocol: "udp"
+      port_start: 67
+      port_end: 68
       log: false
-      policy: "corporate-firewall-policy"
-      source_zone: "internal"
-      destination_zone: "external"
+      policy: "guest-restricted"
+      source_zone: "GUEST-ZONE"
+      destination_zone: "INFRA-ZONE"
 
-    - index: 700
-      name: "deny-high-risk-categories"
+    # Block guest to internal
+    - index: 390
+      name: "deny-guest-to-internal"
+      description: "Block guest network from all internal resources"
       action: "deny"
+      protocol: "any"
       log: true
-      policy: "corporate-firewall-policy"
-      source_zone: "internal"
-      destination_zone: "external"
+      policy: "guest-restricted"
+      source_zone: "GUEST-ZONE"
+      destination_zone: "PROD-ZONE"
 
-    - index: 800
-      name: "maintenance-access"
-      action: "permit"
-      log: true
-      policy: "management-policy"
-      source_zone: "management"
-      destination_zone: "server-farm"
-
-    - index: 900
-      name: "allow-infrastructure-services"
-      action: "permit"
-      log: false
-      policy: "corporate-firewall-policy"
-      source_zone: "internal"
-      destination_zone: "internal"
-
-    - index: 1000
-      name: "deny-all"
+    # Block guest to tenant
+    - index: 391
+      name: "deny-guest-to-tenant"
+      description: "Block guest network from tenant segments"
       action: "deny"
+      protocol: "any"
       log: true
-      policy: "corporate-firewall-policy"
-      source_zone: "external"
-      destination_zone: "internal"
+      policy: "guest-restricted"
+      source_zone: "GUEST-ZONE"
+      destination_zone: "TENANT-ZONE"
+
+    # ==========================================
+    # Segment-Level Rules (micro-segmentation)
+    # These use source_segment / destination_segment
+    # for per-segment contract enforcement.
+    #
+    # Segment names reference ManagedVlanSegment /
+    # ManagedVxlanSegment HFID values. Uncomment and
+    # adjust once segments are created.
+    # ==========================================
+
+    # # Web tier → App tier: HTTPS API calls only
+    # - index: 500
+    #   name: "web-to-app-https"
+    #   description: "Allow web segment to call app APIs over HTTPS"
+    #   action: "permit"
+    #   protocol: "tcp"
+    #   port_start: 443
+    #   log: true
+    #   policy: "3tier-web-to-app"
+    #   source_segment: "ACME__production__web-frontend"
+    #   destination_segment: "ACME__production__app-backend"
+    #   security_profile: "standard"
+
+    # # Web tier → App tier: HTTP (internal)
+    # - index: 510
+    #   name: "web-to-app-http"
+    #   description: "Allow web segment to call app over HTTP (internal)"
+    #   action: "permit"
+    #   protocol: "tcp"
+    #   port_start: 8080
+    #   log: false
+    #   policy: "3tier-web-to-app"
+    #   source_segment: "ACME__production__web-frontend"
+    #   destination_segment: "ACME__production__app-backend"
+
+    # # Block web direct to database
+    # - index: 590
+    #   name: "deny-web-to-db"
+    #   description: "Block web tier from directly accessing database (must go through app)"
+    #   action: "deny"
+    #   protocol: "any"
+    #   log: true
+    #   policy: "3tier-web-to-app"
+    #   source_segment: "ACME__production__web-frontend"
+    #   destination_segment: "ACME__production__database"
+
+    # # App tier → Database: PostgreSQL
+    # - index: 600
+    #   name: "app-to-db-postgres"
+    #   description: "Allow app segment to access PostgreSQL database"
+    #   action: "permit"
+    #   protocol: "tcp"
+    #   port_start: 5432
+    #   log: true
+    #   policy: "3tier-app-to-db"
+    #   source_segment: "ACME__production__app-backend"
+    #   destination_segment: "ACME__production__database"
+    #   security_profile: "strict"
+
+    # # App tier → Database: MySQL
+    # - index: 610
+    #   name: "app-to-db-mysql"
+    #   description: "Allow app segment to access MySQL database"
+    #   action: "permit"
+    #   protocol: "tcp"
+    #   port_start: 3306
+    #   log: true
+    #   policy: "3tier-app-to-db"
+    #   source_segment: "ACME__production__app-backend"
+    #   destination_segment: "ACME__production__database"
+    #   security_profile: "strict"
+
+    # # App tier → Database: Redis cache
+    # - index: 620
+    #   name: "app-to-db-redis"
+    #   description: "Allow app segment to access Redis cache"
+    #   action: "permit"
+    #   protocol: "tcp"
+    #   port_start: 6379
+    #   log: false
+    #   policy: "3tier-app-to-db"
+    #   source_segment: "ACME__production__app-backend"
+    #   destination_segment: "ACME__production__database"
+
+    # ==========================================
+    # Tenant Isolation (micro-segmentation)
+    # ==========================================
+
+    # # Block Tenant A → Tenant B (same zone, different segments)
+    # - index: 900
+    #   name: "deny-acme-to-globex"
+    #   description: "Block ACME production from accessing Globex production"
+    #   action: "deny"
+    #   protocol: "any"
+    #   log: true
+    #   policy: "tenant-isolation"
+    #   source_segment: "ACME__production__app-backend"
+    #   destination_segment: "Globex__production__app-backend"
+
+    # # Block Tenant B → Tenant A
+    # - index: 910
+    #   name: "deny-globex-to-acme"
+    #   description: "Block Globex production from accessing ACME production"
+    #   action: "deny"
+    #   protocol: "any"
+    #   log: true
+    #   policy: "tenant-isolation"
+    #   source_segment: "Globex__production__app-backend"
+    #   destination_segment: "ACME__production__app-backend"
+
+    # Catch-all: deny all inter-tenant traffic at zone level
+    - index: 999
+      name: "deny-tenant-to-tenant"
+      description: "Default deny all inter-tenant traffic"
+      action: "deny"
+      protocol: "any"
+      log: true
+      policy: "tenant-isolation"
+      source_zone: "TENANT-ZONE"
+      destination_zone: "TENANT-ZONE"

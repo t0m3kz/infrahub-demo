@@ -2,29 +2,103 @@ query firewall_config($device: String!) {
   DcimPhysicalDevice(name__value: $device) {
     edges {
       node {
-        name {
-          value
+        name { value }
+        platform {
+          node {
+            name { value }
+            netmiko_device_type { value }
+            napalm_driver { value }
+            ansible_network_os { value }
+          }
         }
         interfaces {
           edges {
             node {
               __typename
-              name {
-                value
-              }
-              description {
-                value
-              }
-              interface_services {
-                edges {
+              name { value }
+              description { value }
+              status { value }
+              role { value }
+              ... on DcimFirewallInterface {
+                security_level { value }
+                vlan_id { value }
+                parent_interface { node { name { value } } }
+                security_zone {
                   node {
-                    __typename
-                    name{
-                      value
-                    }
+                    name { value }
+                    trust_level { value }
+                    zone_type { value }
+                  }
+                }
+                ip_address {
+                  node {
+                    address { value }
+                    ip_namespace { node { name { value } } }
                   }
                 }
               }
+            }
+          }
+        }
+      }
+    }
+  }
+
+  SecurityZone {
+    edges {
+      node {
+        name { value }
+        trust_level { value }
+        zone_type { value }
+        description { value }
+        network_segments {
+          edges {
+            node {
+              id
+              ... on ManagedVlanSegment { name { value } prefix { edges { node { prefix { value } } } } }
+              ... on ManagedVxlanSegment { name { value } prefix { edges { node { prefix { value } } } } }
+            }
+          }
+        }
+      }
+    }
+  }
+
+  SecurityPolicy {
+    edges {
+      node {
+        name { value }
+        enabled { value }
+        default_action { value }
+        rules {
+          edges {
+            node {
+              index { value }
+              name { value }
+              action { value }
+              protocol { value }
+              port_start { value }
+              port_end { value }
+              log { value }
+              disabled { value }
+              description { value }
+              source_zone { node { name { value } } }
+              destination_zone { node { name { value } } }
+              source_segment {
+                node {
+                  id
+                  ... on ManagedVlanSegment { name { value } prefix { edges { node { prefix { value } } } } }
+                  ... on ManagedVxlanSegment { name { value } prefix { edges { node { prefix { value } } } } }
+                }
+              }
+              destination_segment {
+                node {
+                  id
+                  ... on ManagedVlanSegment { name { value } prefix { edges { node { prefix { value } } } } }
+                  ... on ManagedVxlanSegment { name { value } prefix { edges { node { prefix { value } } } } }
+                }
+              }
+              security_profile { node { name { value } } }
             }
           }
         }

@@ -1,0 +1,100 @@
+---
+# UK office connectivity: London and Edinburgh branches
+#
+# Internet underlay: VCE GE1 → BT UK DIA circuit → INET-BT-UK
+# SD-WAN overlay: VCE GE1 → DMPO tunnel → AM1-VCG-01 eth0
+# Orchestrated by AM1-VCO-01 (Arista SD-WAN Orchestrator at Equinix AM1)
+
+# ─── Virtual interfaces on AM1-VCG-01 for UK SD-WAN sessions ─────────────────
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimVirtualInterface
+  data:
+    - name: VTI-AM1-VCG-LON
+      description: "AM1 VCG tunnel interface for London SD-WAN DMPO session"
+      role: uplink
+      status: active
+      device: AM1-VCG-01
+
+    - name: VTI-AM1-VCG-EDI
+      description: "AM1 VCG tunnel interface for Edinburgh SD-WAN DMPO session"
+      role: uplink
+      status: active
+      device: AM1-VCG-01
+
+---
+# ─── Physical DIA circuits: offices → BT UK ──────────────────────────────────
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologyPhysicalCircuit
+  data:
+    - name: PHYS-OFC-LON-BT-UK-01
+      circuit_id: PHYS-OFC-LON-BT-UK-01
+      description: "BT UK DIA circuit: London branch internet access"
+      circuit_type: dia
+      committed_rate: 1000
+      status: active
+      provider: BT
+      locations:
+        - OFC-LON-BRANCH-01
+        - INET-BT-UK
+      interfaces:
+        - - OFC-LON-BRANCH-EDGE-01
+          - GE1
+        - - EXT-INET-BT-UK-01
+          - Ethernet1/1
+
+    - name: PHYS-OFC-EDI-BT-UK-01
+      circuit_id: PHYS-OFC-EDI-BT-UK-01
+      description: "BT UK DIA circuit: Edinburgh branch internet access"
+      circuit_type: dia
+      committed_rate: 1000
+      status: active
+      provider: BT
+      locations:
+        - OFC-EDI-BRANCH-01
+        - INET-BT-UK
+      interfaces:
+        - - OFC-EDI-BRANCH-EDGE-01
+          - GE1
+        - - EXT-INET-BT-UK-01
+          - Ethernet1/2
+
+---
+# ─── SD-WAN overlays: VCE → AM1-VCG-01 (managed by AM1-VCO-01) ──────────────
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologyVirtualCircuit
+  data:
+    - name: VC-OFC-LON-EQX-AM1-SDWAN
+      description: "Arista SD-WAN DMPO overlay: London VCE to AM1 VCG (via BT UK)"
+      link_type: sd_wan
+      bandwidth: 1000
+      status: active
+      provider: Arista
+      locations:
+        - OFC-LON-BRANCH-01
+        - AM1
+      interfaces:
+        - - OFC-LON-BRANCH-EDGE-01
+          - GE1
+        - - AM1-VCG-01
+          - VTI-AM1-VCG-LON
+
+    - name: VC-OFC-EDI-EQX-AM1-SDWAN
+      description: "Arista SD-WAN DMPO overlay: Edinburgh VCE to AM1 VCG (via BT UK)"
+      link_type: sd_wan
+      bandwidth: 1000
+      status: active
+      provider: Arista
+      locations:
+        - OFC-EDI-BRANCH-01
+        - AM1
+      interfaces:
+        - - OFC-EDI-BRANCH-EDGE-01
+          - GE1
+        - - AM1-VCG-01
+          - VTI-AM1-VCG-EDI

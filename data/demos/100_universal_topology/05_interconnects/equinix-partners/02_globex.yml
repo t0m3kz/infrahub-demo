@@ -1,0 +1,39 @@
+---
+# GLOBEX Partner connectivity
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimVirtualInterface
+  data:
+    - name: VTI-AM1-GLOBEX
+      description: "AM1 VTI for GLOBEX virtual circuit"
+      role: uplink
+      status: active
+      device: AM1-EDGE-01
+
+    - name: VTI-GLOBEX-AM1
+      description: "GLOBEX VTI for AM1 virtual circuit"
+      role: uplink
+      status: active
+      device: EXT-PARTNER-GLOBEX-01
+
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologyVirtualCircuit
+  data:
+    - name: VC-AM1-PARTNER-GLOBEX-IPVPN
+      description: "Virtual partner connection from AM1 to GLOBEX"
+      link_type: mpls_l3vpn
+      bandwidth: 1000
+      status: active
+      provider: Colt
+      locations:
+        - AM1
+        - PARTNER-GLOBEX-IPVPN
+      interfaces:
+        - - AM1-EDGE-01
+          - VTI-AM1-GLOBEX
+        - - EXT-PARTNER-GLOBEX-01
+          - VTI-GLOBEX-AM1

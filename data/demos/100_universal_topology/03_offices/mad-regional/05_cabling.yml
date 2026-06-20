@@ -1,0 +1,225 @@
+---
+# Madrid regional office cabling
+# Dual EDGE + Dual ACC (DUAL_UPLINK) with cross-connected uplinks for redundancy:
+#   EDGE-01 GE3 → ACC-01 Gi1/0/1    EDGE-01 GE4 → ACC-02 Gi1/0/1
+#   EDGE-02 GE3 → ACC-01 Gi1/0/2    EDGE-02 GE4 → ACC-02 Gi1/0/2
+# AP-01..04 → ACC-01 Gi1/0/10-13 | AP-05..08 → ACC-02 Gi1/0/10-13
+# PRN-01 → ACC-01 Gi1/0/20 | PRN-02 → ACC-02 Gi1/0/20
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimCable
+  data:
+    # EDGE uplinks to ACC switches (cross-connected for redundancy)
+    - name: CBL-MAD-EDGE01-GE3-ACC01-GI1
+      type: copper
+      deployment: OFC-MAD-REGIONAL-01
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: OFC-MAD-REGIONAL-EDGE-01
+            name: GE3
+            description: "OFC-MAD-REGIONAL-ACC-01"
+        - kind: DcimPhysicalInterface
+          data:
+            device: OFC-MAD-REGIONAL-ACC-01
+            name: GigabitEthernet1/0/1
+            description: "OFC-MAD-REGIONAL-EDGE-01"
+
+    - name: CBL-MAD-EDGE01-GE4-ACC02-GI1
+      type: copper
+      deployment: OFC-MAD-REGIONAL-01
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: OFC-MAD-REGIONAL-EDGE-01
+            name: GE4
+            description: "OFC-MAD-REGIONAL-ACC-02"
+        - kind: DcimPhysicalInterface
+          data:
+            device: OFC-MAD-REGIONAL-ACC-02
+            name: GigabitEthernet1/0/1
+            description: "OFC-MAD-REGIONAL-EDGE-01"
+
+    - name: CBL-MAD-EDGE02-GE3-ACC01-GI2
+      type: copper
+      deployment: OFC-MAD-REGIONAL-01
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: OFC-MAD-REGIONAL-EDGE-02
+            name: GE3
+            description: "OFC-MAD-REGIONAL-ACC-01"
+        - kind: DcimPhysicalInterface
+          data:
+            device: OFC-MAD-REGIONAL-ACC-01
+            name: GigabitEthernet1/0/2
+            description: "OFC-MAD-REGIONAL-EDGE-02"
+
+    - name: CBL-MAD-EDGE02-GE4-ACC02-GI2
+      type: copper
+      deployment: OFC-MAD-REGIONAL-01
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: OFC-MAD-REGIONAL-EDGE-02
+            name: GE4
+            description: "OFC-MAD-REGIONAL-ACC-02"
+        - kind: DcimPhysicalInterface
+          data:
+            device: OFC-MAD-REGIONAL-ACC-02
+            name: GigabitEthernet1/0/2
+            description: "OFC-MAD-REGIONAL-EDGE-02"
+
+    # APs on ACC-01 (AP-01 to AP-04)
+    - name: CBL-MAD-AP01-ACC01-GI10
+      type: copper
+      deployment: OFC-MAD-REGIONAL-01
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: OFC-MAD-REGIONAL-AP-01
+            name: eth0
+            description: "OFC-MAD-REGIONAL-ACC-01"
+        - kind: DcimPhysicalInterface
+          data:
+            device: OFC-MAD-REGIONAL-ACC-01
+            name: GigabitEthernet1/0/10
+            description: "OFC-MAD-REGIONAL-AP-01"
+
+    - name: CBL-MAD-AP02-ACC01-GI11
+      type: copper
+      deployment: OFC-MAD-REGIONAL-01
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: OFC-MAD-REGIONAL-AP-02
+            name: eth0
+            description: "OFC-MAD-REGIONAL-ACC-01"
+        - kind: DcimPhysicalInterface
+          data:
+            device: OFC-MAD-REGIONAL-ACC-01
+            name: GigabitEthernet1/0/11
+            description: "OFC-MAD-REGIONAL-AP-02"
+
+    - name: CBL-MAD-AP03-ACC01-GI12
+      type: copper
+      deployment: OFC-MAD-REGIONAL-01
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: OFC-MAD-REGIONAL-AP-03
+            name: eth0
+            description: "OFC-MAD-REGIONAL-ACC-01"
+        - kind: DcimPhysicalInterface
+          data:
+            device: OFC-MAD-REGIONAL-ACC-01
+            name: GigabitEthernet1/0/12
+            description: "OFC-MAD-REGIONAL-AP-03"
+
+    - name: CBL-MAD-AP04-ACC01-GI13
+      type: copper
+      deployment: OFC-MAD-REGIONAL-01
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: OFC-MAD-REGIONAL-AP-04
+            name: eth0
+            description: "OFC-MAD-REGIONAL-ACC-01"
+        - kind: DcimPhysicalInterface
+          data:
+            device: OFC-MAD-REGIONAL-ACC-01
+            name: GigabitEthernet1/0/13
+            description: "OFC-MAD-REGIONAL-AP-04"
+
+    # APs on ACC-02 (AP-05 to AP-08)
+    - name: CBL-MAD-AP05-ACC02-GI10
+      type: copper
+      deployment: OFC-MAD-REGIONAL-01
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: OFC-MAD-REGIONAL-AP-05
+            name: eth0
+            description: "OFC-MAD-REGIONAL-ACC-02"
+        - kind: DcimPhysicalInterface
+          data:
+            device: OFC-MAD-REGIONAL-ACC-02
+            name: GigabitEthernet1/0/10
+            description: "OFC-MAD-REGIONAL-AP-05"
+
+    - name: CBL-MAD-AP06-ACC02-GI11
+      type: copper
+      deployment: OFC-MAD-REGIONAL-01
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: OFC-MAD-REGIONAL-AP-06
+            name: eth0
+            description: "OFC-MAD-REGIONAL-ACC-02"
+        - kind: DcimPhysicalInterface
+          data:
+            device: OFC-MAD-REGIONAL-ACC-02
+            name: GigabitEthernet1/0/11
+            description: "OFC-MAD-REGIONAL-AP-06"
+
+    - name: CBL-MAD-AP07-ACC02-GI12
+      type: copper
+      deployment: OFC-MAD-REGIONAL-01
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: OFC-MAD-REGIONAL-AP-07
+            name: eth0
+            description: "OFC-MAD-REGIONAL-ACC-02"
+        - kind: DcimPhysicalInterface
+          data:
+            device: OFC-MAD-REGIONAL-ACC-02
+            name: GigabitEthernet1/0/12
+            description: "OFC-MAD-REGIONAL-AP-07"
+
+    - name: CBL-MAD-AP08-ACC02-GI13
+      type: copper
+      deployment: OFC-MAD-REGIONAL-01
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: OFC-MAD-REGIONAL-AP-08
+            name: eth0
+            description: "OFC-MAD-REGIONAL-ACC-02"
+        - kind: DcimPhysicalInterface
+          data:
+            device: OFC-MAD-REGIONAL-ACC-02
+            name: GigabitEthernet1/0/13
+            description: "OFC-MAD-REGIONAL-AP-08"
+
+    # Printers
+    - name: CBL-MAD-PRN01-ACC01-GI20
+      type: copper
+      deployment: OFC-MAD-REGIONAL-01
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: OFC-MAD-REGIONAL-PRN-01
+            name: eth0
+            description: "OFC-MAD-REGIONAL-ACC-01"
+        - kind: DcimPhysicalInterface
+          data:
+            device: OFC-MAD-REGIONAL-ACC-01
+            name: GigabitEthernet1/0/20
+            description: "OFC-MAD-REGIONAL-PRN-01"
+
+    - name: CBL-MAD-PRN02-ACC02-GI20
+      type: copper
+      deployment: OFC-MAD-REGIONAL-01
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: OFC-MAD-REGIONAL-PRN-02
+            name: eth0
+            description: "OFC-MAD-REGIONAL-ACC-02"
+        - kind: DcimPhysicalInterface
+          data:
+            device: OFC-MAD-REGIONAL-ACC-02
+            name: GigabitEthernet1/0/20
+            description: "OFC-MAD-REGIONAL-PRN-02"

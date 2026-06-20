@@ -1,167 +1,46 @@
-fragment TemplateDeviceFields on TemplateDcimPhysicalDevice {
-  platform {
-    node {
-      id
-      name {
-        value
-      }
-    }
-  }
-  device_type {
-    node {
-      id
-    }
-  }
-  interfaces(role__value: "uplink") {
-    edges {
-      node {
-        name {
-          value
-        }
-        role {
-          value
-        }
-      }
-    }
-  }
-}
-
-fragment FabricTemplateFields on TopologyElement {
-  name {
-    value
-  }
-  role {
-    value
-  }
-  quantity {
-    value
-  }
-  template {
-    node {
-      id
-      ...TemplateDeviceFields
-    }
-  }
-}
-
-fragment PodFields on TopologyPod {
-  id
-  name {
-    value
-  }
-  index {
-    value
-  }
-  deployment_type {
-    value
-  }
-  parent {
-    node {
-      ... on TopologyDataCenter {
-        id
-        name {
-          value
-        }
-        index {
-          value
-        }
-        design_pattern {
-          node {
-            naming_convention {
-              value
-            }
-            maximum_switches {
-              value
-            }
-          }
-        }
-      }
-    }
-  }
-  amount_of_spines {
-    value
-  }
-  maximum_leafs_per_row {
-    value
-  }
-  maximum_tors_per_row {
-    value
-  }
-  leaf_interface_sorting_method {
-    value
-  }
-  spine_interface_sorting_method {
-    value
-  }
-  loopback_pool {
-    node {
-      id
-    }
-  }
-  prefix_pool {
-    node {
-      id
-    }
-  }
-  deployment_type {
-    value
-  }
-  spine_template {
-    node {
-      id
-      interfaces(role__value: "leaf") {
-        edges {
-          node {
-            name {
-              value
-            }
-          }
-        }
-      }
-    }
-  }
-}
-
-query RackGenerator($name: String!) {
+query RackElevation($name: String!) {
   LocationRack(name__value: $name) {
     edges {
       node {
-        id
-        name {
+        __typename
+        name: name {
           value
         }
-        checksum {
+        height: height {
           value
         }
-        index {
-          value
-        }
-        rack_type {
-          value
-        }
-        checksum {
-          value
-        }
-        row_index {
-          value
-        }
-        leafs: fabric_templates(role__value: "leaf") {
+        devices: devices {
           edges {
             node {
-              ...FabricTemplateFields
+              __typename
+              display_label
+              ... on DcimPhysicalDevice {
+                name: name {
+                  value
+                }
+                status: status {
+                  color
+                }
+              }
+              position: position {
+                value
+              }
+              rack_face: rack_face {
+                value
+              }
+              device_type: device_type {
+                node {
+                  __typename
+                  display_label
+                  height: height {
+                    value
+                  }
+                  full_depth: full_depth {
+                    value
+                  }
+                }
+              }
             }
-          }
-        }
-        tors: fabric_templates(role__value: "tor") {
-          edges {
-            node {
-              ...FabricTemplateFields
-            }
-          }
-        }
-        pod {
-          node {
-            ...PodFields
           }
         }
       }

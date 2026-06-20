@@ -1,0 +1,21 @@
+---
+# AWS eu-central-1 region with both availability zones defined in one place.
+# Direct Connects, VPN Gateways, and Virtual Networks belong to the region.
+# Network Segments (subnets) and Instances belong to the zone.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologyCloud
+  data:
+    - name: AWS
+      children:
+        kind: TopologyCloudRegion
+        data:
+          - name: eu-central-1
+            status: active
+            location: fra
+            children:
+              kind: TopologyCloudZone
+              data:
+                - name: eu-central-1a
+                - name: eu-central-1b

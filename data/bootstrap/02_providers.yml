@@ -4,6 +4,9 @@ kind: Object
 spec:
   kind: OrganizationProvider
   data:
+    - name: "DE-CIX"
+    - name: "BT"
+    - name: "Colt"
     - name: "AWS"
     - name: "Azure"
     - name: "Google Cloud"
@@ -28,3 +31,5 @@ spec:
     - name: "Telecom Italia Sparkle"
     - name: "AT&T Services"
     - name: "Technology Partner"
+    - name: "Internal"
+    - name: "Arista"

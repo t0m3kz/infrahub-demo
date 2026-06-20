@@ -1,0 +1,11 @@
+---
+# eu-central-1 — references shared Frankfurt metro (see 00_geography.yml)
+apiVersion: infrahub.app/v1
+version: "1.0"
+kind: Object
+spec:
+  kind: LocationMetro
+  data:
+    - name: "Frankfurt"
+      shortname: "fra"
+      parent: "de"

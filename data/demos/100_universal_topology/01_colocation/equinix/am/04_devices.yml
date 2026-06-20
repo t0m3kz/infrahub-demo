@@ -1,0 +1,42 @@
+---
+# Amsterdam colocation edge devices — virtual deployment (AM1/AM4 have no physical racks)
+# C8000V instances are cloud-hosted VMs; interfaces provisioned via object_template.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimVirtualDevice
+  data:
+    - name: AM1-EDGE-01
+      object_template: C8000V_EDGE
+      status: active
+      deployment: AM1
+
+    - name: AM1-EDGE-02
+      object_template: C8000V_EDGE
+      status: active
+      deployment: AM1
+
+    - name: AM4-EDGE-01
+      object_template: C8000V_EDGE
+      status: active
+      deployment: AM4
+
+    - name: AM4-EDGE-02
+      object_template: C8000V_EDGE
+      status: active
+      deployment: AM4
+
+    - name: AM1-VCG-01
+      object_template: VCG-VA_CLOUD
+      status: active
+      deployment: AM1
+
+    - name: AM4-VCG-01
+      object_template: VCG-VA_CLOUD
+      status: active
+      deployment: AM4
+
+    - name: AM1-VCO-01
+      object_template: VCO-VA_ORCHESTRATOR
+      status: active
+      deployment: AM1

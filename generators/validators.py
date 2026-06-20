@@ -25,10 +25,7 @@ def validate_dc_capacity(
     errors = []
 
     if not design_pattern:
-        raise ValidationError(
-            f"Data center '{dc_name}' has no design pattern assigned. "
-            "Cannot validate capacity."
-        )
+        raise ValidationError(f"Data center '{dc_name}' has no design pattern assigned. Cannot validate capacity.")
 
     # Get design limits (already extracted as integers by Pydantic)
     max_super_spines = design_pattern.get("maximum_super_spines", 0)
@@ -37,15 +34,12 @@ def validate_dc_capacity(
     # Validate super spine count
     if super_spine_count > max_super_spines:
         errors.append(
-            f"Requested {super_spine_count} super spines exceeds design pattern "
-            f"maximum of {max_super_spines}"
+            f"Requested {super_spine_count} super spines exceeds design pattern maximum of {max_super_spines}"
         )
 
     # Validate pod count
     if pod_count > max_pods:
-        errors.append(
-            f"Requested {pod_count} pods exceeds design pattern maximum of {max_pods}"
-        )
+        errors.append(f"Requested {pod_count} pods exceeds design pattern maximum of {max_pods}")
 
     return errors
 
@@ -60,9 +54,7 @@ def validate_pod_capacity(
     errors = []
 
     if not design_pattern:
-        raise ValidationError(
-            f"Pod '{pod_name}' has no design pattern. Cannot validate capacity."
-        )
+        raise ValidationError(f"Pod '{pod_name}' has no design pattern. Cannot validate capacity.")
 
     # Get design limits (already extracted as integers by Pydantic)
     max_spines = design_pattern.get("maximum_spines", 0)
@@ -70,14 +62,10 @@ def validate_pod_capacity(
 
     # Validate spine count
     if spine_count > max_spines:
-        errors.append(
-            f"Requested {spine_count} spines exceeds design pattern maximum of {max_spines}"
-        )
+        errors.append(f"Requested {spine_count} spines exceeds design pattern maximum of {max_spines}")
 
     # Validate leaf count
     if switch_count > max_switches:
-        errors.append(
-            f"Requested {switch_count} leafs exceeds design pattern maximum of {max_switches}"
-        )
+        errors.append(f"Requested {switch_count} leafs exceeds design pattern maximum of {max_switches}")
 
     return errors
