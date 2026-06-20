@@ -151,17 +151,18 @@ Use scope to narrow the area: `schema`, `generator`, `template`, `check`, `trans
 
 ## Release Workflow
 
-Version bumping is **fully automatic**. On every merge to `main`, CI runs
-`cz bump --yes`, updates `pyproject.toml` and `CHANGELOG.md`, and pushes
-the new tag back to `main`. No manual steps needed.
+Most PRs (bug fixes, features, dependabot) are merged without any version bump.
+When you are ready to ship a release, create a dedicated release PR:
 
-To publish a **GitHub Release** (when you want to announce a version):
+```bash
+uv run invoke release        # bumps pyproject.toml, updates CHANGELOG.md, tags
+git push && git push --tags  # push branch + tag together
+```
 
-1. Go to **Actions → CI → Run workflow** on `main`
-2. CI reads the current version and creates the GitHub Release with
-   auto-generated release notes
+Open the PR and merge. CI detects the `v*` tag and creates the GitHub Release
+automatically with generated release notes.
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for the full workflow.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for full details.
 
 ## Development Patterns
 

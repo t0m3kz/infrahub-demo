@@ -15,8 +15,6 @@ uv sync
 
 ### Branching
 
-Use the following branch naming convention:
-
 | Prefix | Purpose |
 | --- | --- |
 | `feat/` | New features |
@@ -80,36 +78,41 @@ uv run pytest tests/unit tests/smoke -v
 uv run pytest tests/integration -v
 ```
 
-## Versioning
-
-This project follows [Semantic Versioning](https://semver.org/).
-
-### Automatic version bumps
-
-Every merge to `main` triggers CI to:
-
-1. Run `cz bump --yes` — reads commits since last tag, determines bump level automatically
-2. Update `pyproject.toml` and `CHANGELOG.md`
-3. Commit and push the new tag to `main`
-
-**No manual version bumping.** Never edit `pyproject.toml` version by hand.
-
-### Publishing a GitHub Release
-
-Version bumps happen silently on every merge. A GitHub Release is published
-manually when you want to announce a version:
-
-1. Ensure all desired PRs are merged to `main`
-2. Go to **Actions → CI → Run workflow** (select `main` branch)
-3. CI reads the current version from `pyproject.toml` and creates the GitHub
-   Release with auto-generated release notes
-
-This keeps release noise low — dependabot and minor patches bump the version
-automatically; you publish a Release when it actually matters.
-
 ## Pull Requests
 
 - Target `main`
 - Keep PRs focused — one concern per PR
 - Ensure all CI checks pass before requesting review
 - Squash merge is preferred to keep `main` history clean
+
+## Versioning and Releases
+
+This project follows [Semantic Versioning](https://semver.org/).
+
+### Normal PRs — no version bump
+
+Bug fixes, features, and dependabot updates are merged without touching the
+version. Just write proper conventional commits and merge.
+
+### Release PR — when you want to ship
+
+When enough has accumulated and you want to publish a release, create a
+dedicated release branch:
+
+```bash
+git checkout -b release/vX.Y.Z
+uv run invoke release        # auto-detects bump level from commits since last tag
+                             # or: uv run invoke release --increment minor
+git push && git push --tags  # push branch AND tag together
+```
+
+Open a PR, merge it. CI detects the `v*` tag push and automatically:
+
+1. Runs tests
+2. Creates the GitHub Release with auto-generated release notes
+
+The tag is read directly from the pushed tag (`github.ref_name`) — it is always
+in sync with the `pyproject.toml` version because `invoke release` creates both
+from the same `cz bump` run.
+
+**Never edit `pyproject.toml` version by hand** — always use `invoke release`.
