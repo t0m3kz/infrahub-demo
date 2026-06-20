@@ -80,7 +80,7 @@ infrahub_tests:
     tests:
       - name: syntax_check
         spec:
-          path: queries/topology/dc.gql
+          path: queries/topology/add/dc.gql
           kind: graphql-query-smoke
 
   - resource: GraphQLQuery
@@ -88,7 +88,7 @@ infrahub_tests:
     tests:
       - name: syntax_check
         spec:
-          path: queries/topology/pod.gql
+          path: queries/topology/add/pod.gql
           kind: graphql-query-smoke
 
   - resource: GraphQLQuery
@@ -96,7 +96,7 @@ infrahub_tests:
     tests:
       - name: syntax_check
         spec:
-          path: queries/topology/rack.gql
+          path: queries/topology/add/rack.gql
           kind: graphql-query-smoke
 
   - resource: GraphQLQuery
@@ -112,7 +112,7 @@ infrahub_tests:
     tests:
       - name: syntax_check
         spec:
-          path: queries/topology/pop.gql
+          path: queries/topology/add/pop.gql
           kind: graphql-query-smoke
 
   - resource: GraphQLQuery
@@ -128,14 +128,13 @@ infrahub_tests:
     tests:
       - name: syntax_check
         spec:
-          path: queries/topology/endpoint.gql
+          path: queries/topology/add/endpoint.gql
           kind: graphql-query-smoke
 
-  # ==================== SERVICE QUERIES ====================
   - resource: GraphQLQuery
-    resource_name: virtual_fabric_validation
+    resource_name: decomission_pod
     tests:
       - name: syntax_check
         spec:
-          path: queries/service/virtual_fabric_validation.gql
+          path: queries/topology/decomission/pod.gql
           kind: graphql-query-smoke

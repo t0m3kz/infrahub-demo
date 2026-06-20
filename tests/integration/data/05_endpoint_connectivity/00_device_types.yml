@@ -1,0 +1,22 @@
+---
+# Device types for endpoint servers
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimDeviceType
+  data:
+    - name: PowerEdge-R640
+      part_number: PowerEdge-R640
+      height: 1
+      full_depth: true
+      manufacturer: Dell
+    - name: PowerEdge-R740
+      part_number: PowerEdge-R740
+      height: 2
+      full_depth: true
+      manufacturer: Dell
+    - name: ProLiant-DL380
+      part_number: ProLiant-DL380-Gen10
+      height: 2
+      full_depth: true
+      manufacturer: Dell

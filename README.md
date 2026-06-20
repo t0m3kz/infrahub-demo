@@ -10,7 +10,10 @@
 
 ## Why Infrahub Demo?
 
-> "The machine cannot be blamed. It is doing precisely what it was instructed to do. The real culprits are those who sit idly by, awaiting some miraculous vendor contraption that will magically satisfy all their peculiar requirements—instead of rolling up their sleeves and constructing it themselves."
+> "The machine cannot be blamed. It is doing precisely what it was instructed to do.
+> The real culprits are those who sit idly by, awaiting some miraculous vendor contraption
+> that will magically satisfy all their peculiar requirements—instead of rolling up their sleeves
+> and constructing it themselves."
 >
 > — *Inspired by Stanisław Lem's "Memoirs Found in a Bathtub"*
 
@@ -98,7 +101,7 @@ One command to setup everything:
 uv run invoke setup
 ```
 
-This loads schemas, bootstrap data, menu, repo and events. Then explore at <http://localhost:8000>
+This starts containers, loads schemas, menu, and bootstrap data. Then explore at <http://localhost:8000>
 
 ### Manual Setup (Alternative)
 
@@ -120,16 +123,10 @@ Load demo data
 uv run invoke load-objects
 ```
 
-Load demo repo
+Register repository and load event actions
 
 ```bash
-uv run invoke load-repo
-```
-
-Load demo events
-
-```bash
-uv run invoke load-events
+uv run invoke register-repo
 ```
 
 ### Deploy Data Center Scenarios
@@ -139,7 +136,7 @@ uv run invoke load-events
 #### Single-Vendor Deployments (DC1-DC4)
 
 | Scenario | Location | Vendor | Deployment | Description |
-|----------|----------|--------|------------|-------------|
+| ---------- | ---------- | -------- | ------------ | ------------- |
 | **[DC1](data/demos/01_data_center/dc1/)** | Munich 🇩🇪 | Cisco | All (MR+Mixed+ToR) | Hierarchy Overkill: All the racks, all the drama. |
 | **[DC2](data/demos/01_data_center/dc2/)** | Paris 🇫🇷 | Arista | Middle Rack | Croissants & Cheap Packets: Small, efficient, and CFO-approved. |
 | **[DC3](data/demos/01_data_center/dc3/)** | London 🇬🇧 | Dell/SONiC | Flat ToR | Brexit, No Middle Management, Maximum Sass. |
@@ -148,7 +145,7 @@ uv run invoke load-events
 #### Multi-Vendor Deployments (DC5-DC6)
 
 | Scenario | Location | Architecture | Description |
-|----------|----------|-------------|-------------|
+| ---------- | ---------- | ------------- | ------------- |
 | **[DC5](data/demos/01_data_center/dc5/)** | New York 🇺🇸 | Different vendor per pod | Eurovision for Switches: 4 pods, 4 vendors, 0 peace. |
 | **[DC6](data/demos/01_data_center/dc6/)** | Katowice 🇵🇱 | Mixed vendors within pods | Silesian Buffet, Vendor Bingo, Debug & Dine. |
 
@@ -157,13 +154,30 @@ uv run invoke load-events
 Explore LLM upgrades and organic growth patterns—all in one place, please make sure DC1 is alredy deployed:
 
 | Scenario | Location | Type/Architecture | Description |
-|----------|----------|-------------------|-------------|
+| ---------- | ---------- | ------------------- | ------------- |
 | **[switch](data/demos/02_switch/)** | Munich 🇩🇪 | Rack Expansion | "Just TWO more switches"—organic chaos. |
 | **[rack](data/demos/03_rack/)** | Munich 🇩🇪 | Minimal ToR | Minimalist rack: started as a test, now it's critical. |
 | **[pod](data/demos/04_pod/)** | Munich 🇩🇪 | Pod Expansion | Pod 4: because 3 wasn't enough. |
 | **[llm time](data/demos/05_llm_time/)** | Munich 🇩🇪 | Spine Expansion | Extra spines for LLMs—plausible deniability included. |
 
 Brace yourself: even more questionable use cases, wild topologies, and vendor drama are coming soon. If you want to see even more chaos, star this repo—so the author can unlock extra GitHub tools and automate his caffeine intake. Your star may be the difference between a new feature and another debugging session at midnight!
+
+### **[Universal Topology](data/demos/100_universal_topology/)** — End-to-End Graph Tracing
+
+The flagship demo. Every layer — datacenters, colocation, cloud, offices, external providers,
+and interconnects — lives in a single unified model. Because everything shares the same graph,
+you can trace a path from a server NIC to a cloud VM, from a branch office to a partner gateway,
+or from a VXLAN segment through its firewalls to AWS — **in a single traversal**, without
+pivoting between tools.
+
+```text
+DC1-POD1-SRV-01 → leaf → spine → super-spine → Equinix cross-connect → edge router
+  → virtual circuit → cloud Direct Connect → CUST1-APP-EU-CENTRAL-1A-01 (EC2)
+```
+
+Covers 3 datacenters (DC1–DC3), 2 cloud regions (AWS + Azure), 5 offices, 3 Equinix metros,
+Coresite, Megaport, ISPs, and partners. Includes 13 traced end-to-end paths and full
+virtualisation capability trees for Kubernetes, vSphere, and Nutanix.
 
 ## CI/CD
 
@@ -179,6 +193,9 @@ This project uses GitHub Actions for continuous integration. All pushes and pull
 - If you encounter port conflicts, ensure no other service is running on port 8000.
 - For dependency issues, run `uv sync` again.
 - For Docker/infrahub issues, ensure Docker is running and you have the correct permissions.
+- **macOS + Colima + integration tests**: Colima often does not share the system temp folder (e.g. `/var/folders/...`) into the VM.
+Some integration tests start Docker Compose stacks from a pytest temp directory, and missing file sharing can break bind mounts (notably `haproxy.cfg`), causing the stack to fail with `Failed to start docker compose`.
+Use a repo-local pytest temp directory via `--basetemp` (see Testing below).
 
 ## Testing
 
@@ -190,9 +207,60 @@ uv run inv validate
 
 Or run specific test scripts in the [`tests/`](tests/) directory.
 
+### macOS + Colima
+
+If you run Docker via Colima, prefer a repo-local pytest temp directory so Docker bind mounts always come from a shared path:
+
+```bash
+uv run invoke test-unit
+uv run invoke test-integration
+```
+
+These tasks run pytest with `--basetemp .pytest-tmp`.
+
+Alternative (manual):
+
+```bash
+INFRAHUB_TESTING_ENABLE_INTEGRATION=1 uv run pytest -vv tests/integration --basetemp .pytest-tmp
+```
+
+If you want a VM-wide fix instead, start Colima with `/var/folders` mounted (heavier/less portable):
+
+```bash
+colima stop
+colima start --mount type=virtiofs,source=/var/folders,destination=/var/folders
+```
+
 ## 🙏 A Note from a Highly Fallible Carbon-Based Life Form
 
-> Look, I'm just a human who occasionally writes code between coffee breaks and existential crises. If something explodes, catches fire, or simply refuses to work as advertised—like that one switch that's been "temporarily" in your rack since 2019—please [open an issue](https://github.com/t0m3kz/infrahub-demo/issues). I promise to investigate with the same determination I use to debug production on a Friday afternoon. Your feedback is invaluable, unlike my initial variable naming choices!
+> Look, I'm just a human who occasionally writes code between coffee breaks and existential crises.
+> If something explodes, catches fire, or simply refuses to work as advertised — like that one switch
+> that's been "temporarily" in your rack since 2019 — please
+> [open an issue](https://github.com/t0m3kz/infrahub-demo/issues).
+> I promise to investigate with the same determination I use to debug production on a Friday afternoon.
+> Your feedback is invaluable, unlike my initial variable naming choices!
+
+## ⚠️ A Word About the Jokes
+
+All sarcastic remarks, vendor opinions, city stereotypes, procurement committee jokes,
+AI commentary, and observations about cloud billing scattered throughout this project
+and its demo READMEs are drawn entirely from personal experience surviving real enterprise
+infrastructure projects over many years.
+
+They are meant to be funny. They are absolutely not meant to insult anyone —
+vendors, cities, ISPs, hypervisor platforms, cloud providers, users, managers,
+consultants, or the three people who still believe the Terraform monorepo was a good idea.
+
+If you recognise your organisation, your network, your Friday-afternoon architecture decision,
+or your specific brand of procurement committee in any of this: welcome.
+You are among friends. We have all been there.
+
+Enterprise infrastructure is a universal human experience that transcends company, country,
+and technology stack. The chaos is the same everywhere. The YAML just has different names.
+
+> *"Any sufficiently complex infrastructure is indistinguishable from something a junior engineer
+> built at 2am before a product launch. The difference is only detectable in the git log."*
+> — Not a real quote, but truer than most real ones
 
 ## Contributing
 

@@ -22,6 +22,10 @@ spec:
       description: All firewalls
     - name: loadbalancers
       description: All load balancers
+    - name: loadbalancer_devices
+      description: Physical devices running load balancer software
+    - name: cloud_loadbalancers
+      description: All cloud load balancers (AWS/Azure/GCP)
     - name: oobs
       description: All OOB devices
     - name: consoles
@@ -48,3 +52,27 @@ spec:
       description: Group for servers in topologies
     - name: virtual_fabrics
       description: Virtual Fabric Customer Deployments
+    - name: vlan_segments
+      description: VLAN Segments (traditional 802.1Q)
+    - name: vxlan_segments
+      description: VXLAN Segments (EVPN overlay)
+    - name: vrf_namespaces
+      description: VRF Namespaces (EVPN L3VNI allocation)
+    - name: dci_peering_services
+      description: DCI Peering Services (inter-DC BGP peerings)
+    - name: physical_circuits
+      description: Physical topology circuits (cross-connects, dark fiber, etc.)
+    - name: virtual_circuits
+      description: Virtual topology circuits (Equinix Fabric, cloud interconnects, etc.)
+    - name: cloud_accounts
+      description: Cloud accounts (AWS/Azure/GCP) — one Terraform/Pulumi artifact per account
+    - name: saas_proxies
+      description: SaaS forwarding proxies (Zscaler, Prisma, Netskope, etc.)
+    - name: onprem_proxies
+      description: On-premises forwarding proxies (Squid, BlueCoat, Cisco WSA, etc.)
+    - name: sdwan_edges
+      description: VeloCloud SD-WAN branch edge appliances (VCE)
+    - name: sdwan_gateways
+      description: Arista SD-WAN hub gateways (VCG) deployed at colocation or cloud sites
+    - name: sdwan_orchestrators
+      description: Arista SD-WAN Orchestrators (VCO) — on-premises or private cloud deployments

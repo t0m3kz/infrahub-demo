@@ -1,0 +1,185 @@
+---
+# Pre-commit configuration for Infrahub Demo
+# This configuration is compatible with both pre-commit and prek
+# We recommend using prek (https://prek.j178.dev/) for faster execution:
+#   uv run prek install
+#   uv run prek run --all-files
+# See https://pre-commit.com for more information
+
+repos:
+  # Basic file checks
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: trailing-whitespace
+        exclude: \.md$
+      - id: end-of-file-fixer
+        exclude: \.md$
+      - id: check-yaml
+        args: [--unsafe]  # Allow custom YAML tags used by Infrahub
+      - id: check-json
+      - id: check-toml
+      - id: check-merge-conflict
+      - id: check-case-conflict
+      - id: check-added-large-files
+        args: [--maxkb=1000]
+      - id: mixed-line-ending
+        args: [--fix=lf]
+
+  # Python code quality
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.15.12
+    hooks:
+      # Linter
+      - id: ruff
+        args: [--fix, --exit-non-zero-on-fix]
+        types_or: [python, pyi]
+      # Formatter
+      - id: ruff-format
+        types_or: [python, pyi]
+
+  # YAML linting with yamllint
+  - repo: https://github.com/adrienverge/yamllint
+    rev: v1.38.0
+    hooks:
+      - id: yamllint
+        args:
+          - -d
+          - >
+            {extends: default,
+             rules: {line-length: {max: 120},
+                     indentation: {spaces: 2},
+                     comments: {min-spaces-from-content: 1}}}
+        exclude: ^(\.github/|\.dev/|\.ai/|\.pytest-tmp/)
+
+  # Markdown linting (line length: 120 chars for text, excludes code blocks/tables/headings)
+  - repo: https://github.com/igorshubovych/markdownlint-cli
+    rev: v0.48.0
+    hooks:
+      - id: markdownlint
+        args:
+          - --fix
+          - --disable=MD013  # Line length - enforced at 120 chars (code/tables/headings excluded)
+        exclude: ^(\.ai/|\.dev/|\.github/|docs/)
+
+  # Security scanning
+  # - repo: https://github.com/Yelp/detect-secrets
+  #   rev: v1.5.0
+  #   hooks:
+  #     - id: detect-secrets
+  #       args: [--baseline]
+  #       exclude: ^(\.ai/|\.dev/|tests/|\.pytest-tmp/)
+
+  # Infrahub-specific checks
+  - repo: local
+    hooks:
+      # Type checking with ty
+      - id: ty-check
+        name: Type check with ty
+        entry: uv run ty check .
+        language: system
+        types: [python]
+        pass_filenames: false
+        exclude: ^(tests/|\.dev/|\.ai/)
+
+      # Schema validation (disabled - requires running Infrahub instance)
+      # - id: infrahub-schema-validation
+      #   name: Validate Infrahub Schemas
+      #   entry: uv run infrahubctl schema check schemas/
+      #   language: system
+      #   files: ^schemas/.*\.ya?ml$
+      #   pass_filenames: false
+
+      # Python import sorting
+      - id: isort
+        name: Sort Python imports
+        entry: uv run isort --profile black --line-length 120
+        language: system
+        types: [python]
+
+      # Check for TODO/FIXME comments
+      - id: check-todos
+        name: Check for TODO/FIXME comments
+        entry: uv run python
+        language: system
+        types: [python]
+        args:
+          - -c
+          - |
+            import sys, re
+            todo_pattern = re.compile(
+                r'#\s*(TODO|FIXME|XXX|HACK)\b', re.IGNORECASE)
+            found_todos = []
+            for file_path in sys.argv[1:]:
+                with open(file_path, 'r') as f:
+                    for line_num, line in enumerate(f, 1):
+                        if todo_pattern.search(line):
+                            found_todos.append(
+                                f"{file_path}:{line_num}: {line.strip()}")
+            if found_todos:
+                print("Found TODO/FIXME comments:")
+                for todo in found_todos:
+                    print(f"  - {todo}")
+                print("Consider addressing these before committing.")
+
+      # Check for print statements in production code
+      - id: no-print-statements
+        name: Check for print statements
+        entry: uv run python
+        language: system
+        types: [python]
+        exclude: ^(tests/|scripts/|tasks\.py|\.dev/|\.ai/)
+        args:
+          - -c
+          - |
+            import sys, re
+            print_pattern = re.compile(r'^\s*print\s*\(', re.MULTILINE)
+            found_prints = []
+            for file_path in sys.argv[1:]:
+                with open(file_path, 'r') as f:
+                    content = f.read()
+                    for match in print_pattern.finditer(content):
+                        line_num = content[:match.start()].count('\n') + 1
+                        line = content.split('\n')[line_num - 1].strip()
+                        found_prints.append(f"{file_path}:{line_num}: {line}")
+            if found_prints:
+                print("Found print statements in production code:")
+                for print_stmt in found_prints:
+                    print(f"  - {print_stmt}")
+                print("Use logging instead of print statements.")
+                sys.exit(1)
+
+      # Dependency license compliance check
+      - id: pip-licenses-check
+        name: Check dependency licenses (non-commercial)
+        entry: uv run pip-licenses
+        language: system
+        pass_filenames: false
+        args:
+          - --format=markdown
+        verbose: true
+
+# Configuration for specific tools
+default_language_version:
+  python: python3.12
+
+# Global excludes
+exclude: |
+  (?x)^(
+    \.git/|
+    \.pytest_cache/|
+    \.ruff_cache/|
+    \.venv/|
+    __pycache__/|
+    \.pytest-tmp/|
+    node_modules/|
+    \.ai/.*|
+    \.dev/.*|
+    infrahub_backups/.*
+  )$
+
+# Fail fast - stop on first failure
+fail_fast: false
+
+# Minimum pre-commit version
+minimum_pre_commit_version: 3.0.0

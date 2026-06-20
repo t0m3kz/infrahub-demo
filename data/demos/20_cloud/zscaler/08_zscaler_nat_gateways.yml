@@ -1,0 +1,39 @@
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: CloudNATGateway
+  data:
+    - name: zscaler-aws-nat-1a
+      description: NAT Gateway for Zscaler connectors - AWS AZ-A
+      status: active
+      account: zscaler-aws-prod
+      virtual_network: zscaler-aws-vpc
+      network_segments:
+        - [customer-2-aws-service-subnet-1a-production]
+      cloud_id: nat-f55492df8b8ad296a
+    - name: zscaler-aws-nat-1b
+      description: NAT Gateway for Zscaler connectors - AWS AZ-B
+      status: active
+      account: zscaler-aws-prod
+      virtual_network: zscaler-aws-vpc
+      network_segments:
+        - [customer-2-aws-service-subnet-1b-production]
+      cloud_id: nat-e2692598a3f63657a
+    - name: zscaler-gcp-nat
+      description: Cloud NAT for Zscaler connectors - GCP
+      status: active
+      account: zscaler-gcp-prod
+      virtual_network: zscaler-gcp-vpc
+      network_segments:
+        - [customer-2-gcp-service-subnet-b-production]
+        - [customer-2-gcp-service-subnet-c-production]
+      cloud_id: zscaler-nat
+    - name: zscaler-azure-nat
+      description: NAT Gateway for Zscaler connectors - Azure
+      status: active
+      account: zscaler-azure-prod
+      virtual_network: zscaler-azure-vnet
+      network_segments:
+        - [customer-2-azure-service-subnet-production]
+      cloud_id: zscaler-azure-nat

@@ -1,0 +1,135 @@
+---
+# DC3 virtualisation clusters — one per pod/platform
+#
+# ip_namespace already defines which routing domain (VRF) the cluster belongs to.
+# All ManagedVxlanSegments attached to that namespace are reachable from the
+# cluster via the EVPN fabric — no need to enumerate them individually here.
+
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: VirtCluster
+  data:
+
+    # ── POD1+2: Kubernetes (cross-pod) ───────────────────────────────────────
+    - name: DC3-K8S-PROD
+      platform: kubernetes
+      version: "1.31"
+      status: active
+      ha_enabled: true
+      deployment: DC3
+      ip_namespace: CUST001-PROD
+
+    # ── POD3: VMware vSphere ──────────────────────────────────────────────────
+    - name: DC3-VSPHERE-PROD
+      platform: vmware_vsphere
+      version: "8.0 U3"
+      status: active
+      ha_enabled: true
+      deployment: DC3
+      ip_namespace: CUST001-PROD
+
+    # ── POD4: Nutanix AHV ─────────────────────────────────────────────────────
+    - name: DC3-NUTANIX-PROD
+      platform: nutanix
+      version: "6.8"
+      status: active
+      ha_enabled: true
+      deployment: DC3
+      ip_namespace: CUST001-PROD
+
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: VirtNodePool
+  data:
+
+    # ── DC3-K8S-PROD pools ────────────────────────────────────────────────────
+    - name: control-plane
+      cluster: DC3-K8S-PROD
+      pool_type: control_plane
+      scaling_mode: static
+      status: active
+      node_count: 3
+      instance_flavor: PowerEdge-R640
+      os_type: linux
+      os_version: "Ubuntu 24.04 LTS"
+      physical_hosts:
+        - DC3-POD1-K8S-CP-01
+        - DC3-POD1-K8S-CP-02
+        - DC3-POD1-K8S-CP-03
+
+    - name: workers
+      cluster: DC3-K8S-PROD
+      pool_type: worker
+      scaling_mode: static
+      status: active
+      node_count: 6
+      instance_flavor: PowerEdge-R640
+      os_type: linux
+      os_version: "Ubuntu 24.04 LTS"
+      physical_hosts:
+        - DC3-POD1-K8S-WRK-01
+        - DC3-POD1-K8S-WRK-02
+        - DC3-POD2-K8S-WRK-01
+        - DC3-POD2-K8S-WRK-02
+        - DC3-POD2-K8S-WRK-03
+        - DC3-POD2-K8S-WRK-04
+
+    - name: storage
+      cluster: DC3-K8S-PROD
+      pool_type: storage
+      scaling_mode: static
+      status: active
+      node_count: 2
+      instance_flavor: PowerEdge-R640
+      os_type: linux
+      os_version: "Ubuntu 24.04 LTS"
+      physical_hosts:
+        - DC3-POD2-K8S-STO-01
+        - DC3-POD2-K8S-STO-02
+
+    # ── DC3-VSPHERE-PROD pools ────────────────────────────────────────────────
+    - name: esxi-hosts
+      cluster: DC3-VSPHERE-PROD
+      pool_type: hypervisor
+      scaling_mode: static
+      status: active
+      node_count: 4
+      instance_flavor: PowerEdge-R640
+      os_type: esxi
+      os_version: "ESXi 8.0 U3"
+      physical_hosts:
+        - DC3-POD3-ESXI-01
+        - DC3-POD3-ESXI-02
+        - DC3-POD3-ESXI-03
+        - DC3-POD3-ESXI-04
+
+    - name: vcenter
+      cluster: DC3-VSPHERE-PROD
+      pool_type: management
+      scaling_mode: static
+      status: active
+      node_count: 1
+      instance_flavor: PowerEdge-R640
+      os_type: linux
+      os_version: "vCenter Server Appliance 8.0"
+      physical_hosts:
+        - DC3-POD3-VCSA-01
+
+    # ── DC3-NUTANIX-PROD pools ────────────────────────────────────────────────
+    - name: ahv-nodes
+      cluster: DC3-NUTANIX-PROD
+      pool_type: hypervisor
+      scaling_mode: static
+      status: active
+      node_count: 4
+      instance_flavor: PowerEdge-R640
+      os_type: other
+      os_version: "AHV 20230302.x"
+      physical_hosts:
+        - DC3-POD4-NTX-01
+        - DC3-POD4-NTX-02
+        - DC3-POD4-NTX-03
+        - DC3-POD4-NTX-04

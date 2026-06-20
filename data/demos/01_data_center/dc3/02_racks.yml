@@ -4,41 +4,78 @@ kind: Object
 spec:
   kind: LocationRack
   data:
-    # Pod 1 - ToR
+    # Pod 1 - Mixed: 1 network rack (leafs) + 1 tor rack per row
     - index: 1
       row_index: 1
       shortname: lon-1-s-1-r-1-1
-      rack_type: tor
-      pod: ["DC3", "1", "1"]
+      rack_type: network
+      pod: DC3-1-POD-1
       parent: lon-1-s-1
       member_of_groups: [topologies_rack]
       fabric_templates:
-        - [2_DELL_LEAFS_PowerSwitch-S5224F-ON]
+        - ["2", "leaf", "PowerSwitch-S5224F-ON_LEAF_MR"]
+    - index: 2
+      row_index: 1
+      shortname: lon-1-s-1-r-1-2
+      rack_type: tor
+      pod: DC3-1-POD-1
+      parent: lon-1-s-1
+      member_of_groups: [topologies_rack]
+      fabric_templates:
+        - ["2", "tor", "PowerSwitch-S5224F-ON_TOR"]
     - index: 1
       row_index: 2
       shortname: lon-1-s-1-r-2-1
-      rack_type: tor
-      pod: ["DC3", "1", "1"]
+      rack_type: network
+      pod: DC3-1-POD-1
       parent: lon-1-s-1
       member_of_groups: [topologies_rack]
       fabric_templates:
-        - [2_DELL_LEAFS_PowerSwitch-S5224F-ON]
-    # Pod 2 - ToR
+        - ["2", "leaf", "PowerSwitch-S5224F-ON_LEAF_MR"]
+    - index: 2
+      row_index: 2
+      shortname: lon-1-s-1-r-2-2
+      rack_type: tor
+      pod: DC3-1-POD-1
+      parent: lon-1-s-1
+      member_of_groups: [topologies_rack]
+      fabric_templates:
+        - ["2", "tor", "PowerSwitch-S5224F-ON_TOR"]
+
+    # Pod 2 - Mixed: 1 network rack (leafs) + 1 tor rack per row
     - index: 1
       row_index: 1
       shortname: lon-1-s-2-r-1-1
-      rack_type: tor
-      pod: ["DC3", "1", "2"]
+      rack_type: network
+      pod: DC3-1-POD-2
       parent: lon-1-s-2
       member_of_groups: [topologies_rack]
       fabric_templates:
-        - [2_DELL_LEAFS_PowerSwitch-S5224F-ON]
+        - ["2", "leaf", "PowerSwitch-S5224F-ON_LEAF_MR"]
+    - index: 2
+      row_index: 1
+      shortname: lon-1-s-2-r-1-2
+      rack_type: tor
+      pod: DC3-1-POD-2
+      parent: lon-1-s-2
+      member_of_groups: [topologies_rack]
+      fabric_templates:
+        - ["2", "tor", "PowerSwitch-S5224F-ON_TOR"]
     - index: 1
       row_index: 2
       shortname: lon-1-s-2-r-2-1
-      rack_type: tor
-      pod: ["DC3", "1", "2"]
+      rack_type: network
+      pod: DC3-1-POD-2
       parent: lon-1-s-2
       member_of_groups: [topologies_rack]
       fabric_templates:
-        - [2_DELL_LEAFS_PowerSwitch-S5224F-ON]
+        - ["2", "leaf", "PowerSwitch-S5224F-ON_LEAF_MR"]
+    - index: 2
+      row_index: 2
+      shortname: lon-1-s-2-r-2-2
+      rack_type: tor
+      pod: DC3-1-POD-2
+      parent: lon-1-s-2
+      member_of_groups: [topologies_rack]
+      fabric_templates:
+        - ["2", "tor", "PowerSwitch-S5224F-ON_TOR"]

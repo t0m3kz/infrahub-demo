@@ -1,0 +1,67 @@
+!
+! DC1-POD1-L1 Configuration
+!
+hostname DC1-POD1-L1
+!
+feature ospf
+feature bgp
+feature interface-vlan
+feature lacp
+feature vpc
+feature lldp
+!
+!
+! vPC Configuration
+!
+interface port-channel100
+  description vPC Peer-Link
+  switchport mode trunk
+  no shutdown
+  vpc peer-link
+!
+vpc domain 1
+  delay restore 300
+  delay restore interface-vlan 330
+!
+
+! VLANs
+!
+!
+! Interfaces
+interface Ethernet1/1
+  no shutdown
+  ip address 10.1.2.1/31
+
+!
+interface Ethernet1/2
+  no shutdown
+  ip address 10.1.2.3/31
+
+!
+interface Loopback0
+  no shutdown
+  ip address 10.0.2.1/32
+
+!
+!
+! OSPF Configuration
+
+
+!
+! BGP Configuration
+
+! BGP disabled by capability profile
+
+!
+!
+! Route-maps
+route-map RM-CONN-2-BGP permit 10
+  match interface loopback0
+!
+!
+
+!
+! Management
+line console
+line vty
+!

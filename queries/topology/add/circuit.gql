@@ -1,0 +1,54 @@
+query circuit_data($name: String!) {
+  TopologyPhysicalCircuit(circuit_id__value: $name) {
+    edges {
+      node {
+        id
+        name { value }
+        circuit_id { value }
+        circuit_type { value }
+        status { value }
+        interfaces {
+          edges {
+            node {
+              id
+              name { value }
+              ... on DcimPhysicalInterface {
+                ip_address { node { address { value } } }
+              }
+              device {
+                node {
+                  id
+                  name { value }
+                }
+              }
+            }
+          }
+        }
+        provider_a {
+          node {
+            id
+            name { value }
+            device {
+              node {
+                id
+                name { value }
+              }
+            }
+          }
+        }
+        provider_z {
+          node {
+            id
+            name { value }
+            device {
+              node {
+                id
+                name { value }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

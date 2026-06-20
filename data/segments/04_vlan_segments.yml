@@ -1,0 +1,22 @@
+---
+# VLAN segments — traditional 802.1Q without VXLAN overlay
+#
+# Used for L2-only services (management, guest WiFi, legacy)
+# that don't need VRF isolation or EVPN.
+#
+# SegmentDeployment (VLAN ID only, no VNI) is created by the generator.
+
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: ManagedVlanSegment
+  data:
+    # Management VLAN — OOB access to switches
+    - customer_name: "mgmt-oob"
+      environment: "production"
+      owner: "Customer 1"
+
+    # Guest WiFi VLAN — isolated, no internal access
+    - customer_name: "guest-wifi"
+      environment: "production"
+      owner: "Customer 1"

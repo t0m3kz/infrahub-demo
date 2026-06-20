@@ -1,0 +1,758 @@
+{
+  "CloudVirtualNetwork": {
+    "edges": [
+      {
+        "node": {
+          "id": "vpc-1",
+          "name": {
+            "value": "prod-vpc"
+          },
+          "is_default": {
+            "value": false
+          },
+          "dns_support": {
+            "value": true
+          },
+          "dns_hostnames": {
+            "value": true
+          },
+          "account": {
+            "node": {
+              "name": {
+                "value": "test-aws-account"
+              },
+              "account_id": {
+                "value": "123456789012"
+              },
+              "environment": {
+                "value": "production"
+              },
+              "provider": {
+                "node": {
+                  "name": {
+                    "value": "AWS"
+                  }
+                }
+              }
+            }
+          },
+          "region": {
+            "node": {
+              "name": {
+                "value": "eu-central-1"
+              }
+            }
+          },
+          "cidr_blocks": {
+            "edges": [
+              {
+                "node": {
+                  "prefix": {
+                    "value": "10.0.0.0/16"
+                  }
+                }
+              }
+            ]
+          },
+          "network_segments": {
+            "edges": [
+              {
+                "node": {
+                  "id": "sub-1",
+                  "name": {
+                    "value": "prod-subnet-1a"
+                  },
+                  "is_public": {
+                    "value": false
+                  },
+                  "auto_assign_public_ip": {
+                    "value": false
+                  },
+                  "segment_type": {
+                    "value": "aws_vpc_subnet"
+                  },
+                  "cidr_block": {
+                    "node": {
+                      "prefix": {
+                        "value": "10.0.1.0/24"
+                      }
+                    }
+                  },
+                  "availability_zone": {
+                    "node": {
+                      "name": {
+                        "value": "eu-central-1a"
+                      }
+                    }
+                  }
+                }
+              }
+            ]
+          }
+        }
+      },
+      {
+        "node": {
+          "id": "vpc-2",
+          "name": {
+            "value": "prod-vpc-west"
+          },
+          "is_default": {
+            "value": false
+          },
+          "dns_support": {
+            "value": true
+          },
+          "dns_hostnames": {
+            "value": true
+          },
+          "account": {
+            "node": {
+              "name": {
+                "value": "test-aws-account"
+              },
+              "account_id": {
+                "value": "123456789012"
+              },
+              "environment": {
+                "value": "production"
+              },
+              "provider": {
+                "node": {
+                  "name": {
+                    "value": "AWS"
+                  }
+                }
+              }
+            }
+          },
+          "region": {
+            "node": {
+              "name": {
+                "value": "eu-west-1"
+              }
+            }
+          },
+          "cidr_blocks": {
+            "edges": [
+              {
+                "node": {
+                  "prefix": {
+                    "value": "10.1.0.0/16"
+                  }
+                }
+              }
+            ]
+          },
+          "network_segments": {
+            "edges": [
+              {
+                "node": {
+                  "id": "sub-2",
+                  "name": {
+                    "value": "prod-subnet-west-1a"
+                  },
+                  "is_public": {
+                    "value": false
+                  },
+                  "auto_assign_public_ip": {
+                    "value": false
+                  },
+                  "segment_type": {
+                    "value": "aws_vpc_subnet"
+                  },
+                  "cidr_block": {
+                    "node": {
+                      "prefix": {
+                        "value": "10.1.1.0/24"
+                      }
+                    }
+                  },
+                  "availability_zone": {
+                    "node": {
+                      "name": {
+                        "value": "eu-west-1a"
+                      }
+                    }
+                  }
+                }
+              }
+            ]
+          }
+        }
+      }
+    ]
+  },
+  "CloudSecurityGroup": {
+    "edges": [
+      {
+        "node": {
+          "id": "sg-1",
+          "name": {
+            "value": "prod-sg"
+          },
+          "virtual_network": {
+            "node": {
+              "name": {
+                "value": "prod-vpc"
+              }
+            }
+          }
+        }
+      },
+      {
+        "node": {
+          "id": "sg-2",
+          "name": {
+            "value": "west-sg"
+          },
+          "virtual_network": {
+            "node": {
+              "name": {
+                "value": "prod-vpc-west"
+              }
+            }
+          }
+        }
+      }
+    ]
+  },
+  "CloudInstance": {
+    "edges": [
+      {
+        "node": {
+          "id": "i-1",
+          "name": {
+            "value": "prod-instance-1"
+          },
+          "cloud_id": {
+            "value": "i-abc123"
+          },
+          "instance_type": {
+            "value": "t3.micro"
+          },
+          "image": {
+            "value": "ami-12345678"
+          },
+          "os_type": {
+            "value": "linux"
+          },
+          "private_ip": {
+            "value": "10.0.1.10"
+          },
+          "public_ip": {
+            "value": null
+          },
+          "network_segment": {
+            "node": {
+              "name": {
+                "value": "prod-subnet-1a"
+              },
+              "virtual_network": {
+                "node": {
+                  "name": {
+                    "value": "prod-vpc"
+                  }
+                }
+              }
+            }
+          },
+          "availability_zone": {
+            "node": {
+              "name": {
+                "value": "eu-central-1a"
+              }
+            }
+          },
+          "security_groups": {
+            "edges": [
+              {
+                "node": {
+                  "name": {
+                    "value": "prod-sg"
+                  }
+                }
+              }
+            ]
+          }
+        }
+      },
+      {
+        "node": {
+          "id": "i-2",
+          "name": {
+            "value": "west-instance-1"
+          },
+          "cloud_id": {
+            "value": "i-def456"
+          },
+          "instance_type": {
+            "value": "t3.small"
+          },
+          "image": {
+            "value": "ami-87654321"
+          },
+          "os_type": {
+            "value": "linux"
+          },
+          "private_ip": {
+            "value": "10.1.1.10"
+          },
+          "public_ip": {
+            "value": null
+          },
+          "network_segment": {
+            "node": {
+              "name": {
+                "value": "prod-subnet-west-1a"
+              },
+              "virtual_network": {
+                "node": {
+                  "name": {
+                    "value": "prod-vpc-west"
+                  }
+                }
+              }
+            }
+          },
+          "availability_zone": {
+            "node": {
+              "name": {
+                "value": "eu-west-1a"
+              }
+            }
+          },
+          "security_groups": {
+            "edges": [
+              {
+                "node": {
+                  "name": {
+                    "value": "west-sg"
+                  }
+                }
+              }
+            ]
+          }
+        }
+      }
+    ]
+  },
+  "CloudInternetGateway": {
+    "edges": [
+      {
+        "node": {
+          "id": "igw-1",
+          "name": {
+            "value": "prod-igw"
+          },
+          "virtual_network": {
+            "node": {
+              "name": {
+                "value": "prod-vpc"
+              }
+            }
+          }
+        }
+      },
+      {
+        "node": {
+          "id": "igw-2",
+          "name": {
+            "value": "west-igw"
+          },
+          "virtual_network": {
+            "node": {
+              "name": {
+                "value": "prod-vpc-west"
+              }
+            }
+          }
+        }
+      }
+    ]
+  },
+  "CloudNATGateway": {
+    "edges": [
+      {
+        "node": {
+          "id": "nat-1",
+          "name": {
+            "value": "prod-nat"
+          },
+          "public_ip": {
+            "value": "1.2.3.4"
+          },
+          "virtual_network": {
+            "node": {
+              "name": {
+                "value": "prod-vpc"
+              }
+            }
+          },
+          "network_segments": {
+            "edges": [
+              {
+                "node": {
+                  "name": {
+                    "value": "prod-subnet-1a"
+                  }
+                }
+              }
+            ]
+          }
+        }
+      }
+    ]
+  },
+  "CloudRouteTable": {
+    "edges": [
+      {
+        "node": {
+          "id": "rt-1",
+          "name": {
+            "value": "prod-rt"
+          },
+          "is_main": {
+            "value": true
+          },
+          "virtual_network": {
+            "node": {
+              "name": {
+                "value": "prod-vpc"
+              }
+            }
+          },
+          "network_segments": {
+            "edges": [
+              {
+                "node": {
+                  "name": {
+                    "value": "prod-subnet-1a"
+                  }
+                }
+              }
+            ]
+          }
+        }
+      },
+      {
+        "node": {
+          "id": "rt-2",
+          "name": {
+            "value": "west-rt"
+          },
+          "is_main": {
+            "value": true
+          },
+          "virtual_network": {
+            "node": {
+              "name": {
+                "value": "prod-vpc-west"
+              }
+            }
+          },
+          "network_segments": {
+            "edges": [
+              {
+                "node": {
+                  "name": {
+                    "value": "prod-subnet-west-1a"
+                  }
+                }
+              }
+            ]
+          }
+        }
+      }
+    ]
+  },
+  "CloudRoute": {
+    "edges": [
+      {
+        "node": {
+          "id": "route-1",
+          "name": {
+            "value": "route-igw-central"
+          },
+          "route_table": {
+            "node": {
+              "name": {
+                "value": "prod-rt"
+              }
+            }
+          },
+          "destination": {
+            "node": {
+              "prefix": {
+                "value": "0.0.0.0/0"
+              }
+            }
+          },
+          "internet_gateway": {
+            "node": {
+              "name": {
+                "value": "prod-igw"
+              }
+            }
+          },
+          "nat_gateway": {
+            "node": null
+          },
+          "instance": {
+            "node": null
+          },
+          "network_interface": {
+            "node": null
+          }
+        }
+      },
+      {
+        "node": {
+          "id": "route-2",
+          "name": {
+            "value": "route-igw-west"
+          },
+          "route_table": {
+            "node": {
+              "name": {
+                "value": "west-rt"
+              }
+            }
+          },
+          "destination": {
+            "node": {
+              "prefix": {
+                "value": "0.0.0.0/0"
+              }
+            }
+          },
+          "internet_gateway": {
+            "node": {
+              "name": {
+                "value": "west-igw"
+              }
+            }
+          },
+          "nat_gateway": {
+            "node": null
+          },
+          "instance": {
+            "node": null
+          },
+          "network_interface": {
+            "node": null
+          }
+        }
+      }
+    ]
+  },
+  "CloudPublicIP": {
+    "edges": []
+  },
+  "CloudNetworkACL": {
+    "edges": [
+      {
+        "node": {
+          "id": "nacl-1",
+          "name": {
+            "value": "prod-nacl"
+          },
+          "virtual_network": {
+            "node": {
+              "name": {
+                "value": "prod-vpc"
+              }
+            }
+          },
+          "network_segments": {
+            "edges": [
+              {
+                "node": {
+                  "name": {
+                    "value": "prod-subnet-1a"
+                  }
+                }
+              }
+            ]
+          }
+        }
+      }
+    ]
+  },
+  "CloudTransitGateway": {
+    "edges": [
+      {
+        "node": {
+          "id": "tgw-1",
+          "name": {
+            "value": "prod-tgw"
+          },
+          "default_route_table": {
+            "value": true
+          },
+          "dns_support": {
+            "value": true
+          },
+          "vpn_ecmp_support": {
+            "value": false
+          },
+          "region": {
+            "node": {
+              "name": {
+                "value": "eu-central-1"
+              }
+            }
+          },
+          "attached_virtual_networks": {
+            "edges": [
+              {
+                "node": {
+                  "name": {
+                    "value": "prod-vpc"
+                  }
+                }
+              },
+              {
+                "node": {
+                  "name": {
+                    "value": "prod-vpc-west"
+                  }
+                }
+              }
+            ]
+          }
+        }
+      }
+    ]
+  },
+  "CloudVPNGateway": {
+    "edges": []
+  },
+  "CloudCustomerGateway": {
+    "edges": [
+      {
+        "node": {
+          "id": "cgw-1",
+          "name": {
+            "value": "on-prem-cgw"
+          },
+          "device_type": {
+            "value": "cisco"
+          },
+          "asn": {
+            "node": {
+              "asn": {
+                "value": 65000
+              }
+            }
+          },
+          "ip_address": {
+            "node": {
+              "address": {
+                "value": "203.0.113.1/32"
+              }
+            }
+          }
+        }
+      }
+    ]
+  },
+  "CloudVirtualNetworkPeering": {
+    "edges": [
+      {
+        "node": {
+          "id": "pcx-1",
+          "name": {
+            "value": "prod-to-west-peering"
+          },
+          "peering_status": {
+            "value": "active"
+          },
+          "requester_virtual_network": {
+            "node": {
+              "name": {
+                "value": "prod-vpc"
+              }
+            }
+          },
+          "accepter_virtual_network": {
+            "node": {
+              "name": {
+                "value": "prod-vpc-west"
+              }
+            }
+          },
+          "requester_route_table": {
+            "node": null
+          },
+          "accepter_route_table": {
+            "node": null
+          }
+        }
+      }
+    ]
+  },
+  "CloudDirectConnect": {
+    "edges": [
+      {
+        "node": {
+          "id": "dx-1",
+          "name": {
+            "value": "prod-dx"
+          },
+          "bandwidth": {
+            "value": "1Gbps"
+          },
+          "connection_type": {
+            "value": "dedicated"
+          },
+          "vlan_id": {
+            "value": null
+          },
+          "region": {
+            "node": {
+              "name": {
+                "value": "eu-central-1"
+              }
+            }
+          }
+        }
+      }
+    ]
+  },
+  "CloudVirtualInterface": {
+    "edges": [
+      {
+        "node": {
+          "id": "vif-1",
+          "name": {
+            "value": "prod-vif"
+          },
+          "vif_type": {
+            "value": "private"
+          },
+          "vlan_id": {
+            "value": 100
+          },
+          "direct_connect": {
+            "node": {
+              "name": {
+                "value": "prod-dx"
+              }
+            }
+          },
+          "virtual_network": {
+            "node": {
+              "name": {
+                "value": "prod-vpc"
+              }
+            }
+          },
+          "transit_gateway": {
+            "node": null
+          }
+        }
+      }
+    ]
+  }
+}

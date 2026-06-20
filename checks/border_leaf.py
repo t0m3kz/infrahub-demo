@@ -17,12 +17,12 @@ class CheckBorderLeaf(InfrahubCheck):
         errors: list[str] = []
         data = get_data(data)
         errors.extend(validate_interfaces(data))
-        # if not data.get("device_services", []):
+        # if not data.get("device_capabilities", []):
         #     errors.append("No overlay/ underlay services.")
         # else:
         #     redundant_bgp = [
         #         service.get("name")
-        #         for service in data.get("device_services", [])
+        #         for service in data.get("device_capabilities", [])
         #         if service["typename"] == "ServiceBGP"
         #     ]
         #     if redundant_bgp and len(redundant_bgp) < 2:

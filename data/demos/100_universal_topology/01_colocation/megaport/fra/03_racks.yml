@@ -1,0 +1,23 @@
+---
+# Megaport Frankfurt racks
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: LocationBuilding
+  data:
+    - name: MCR-FRA1
+      shortname: mcr-fra1
+      parent: fra
+      children:
+        kind: LocationSuite
+        data:
+          - suite_name: MCR-FRA1
+            index: 1
+            shortname: mcr-fra1-s1
+            children:
+              kind: LocationRack
+              data:
+                - shortname: mcr-fra1-s1-r-1
+                  index: 1
+                  row_index: 1
+                  pod: MCR-FRA1

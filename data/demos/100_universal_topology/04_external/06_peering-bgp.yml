@@ -1,0 +1,26 @@
+---
+# BGP peering: External peer definitions
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: ManagedExternalPeer
+  data:
+    - name: DE-CIX-RS-FR
+      peer_type: IXP
+      provider_name: DE-CIX
+      circuit_id: DE-CIX-FR-RS
+
+    - name: BT-INET-PEER
+      peer_type: TRANSIT
+      provider_name: BT
+      circuit_id: BT-INET-PRIMARY
+
+    - name: ACME-PARTNER-PEER
+      peer_type: PARTNER
+      provider_name: ACME
+      circuit_id: ACME-MPLS-01
+
+    - name: GLOBEX-PARTNER-PEER
+      peer_type: PARTNER
+      provider_name: GLOBEX
+      circuit_id: GLOBEX-IPVPN-01

@@ -1,0 +1,9 @@
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologyElement
+  data:
+    - quantity: 4
+      role: tor
+      template: PowerSwitch-S5224F-ON_TOR

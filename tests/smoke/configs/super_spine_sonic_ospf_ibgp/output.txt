@@ -1,0 +1,79 @@
+
+
+{
+  "BGP_GLOBALS": {
+    "default": {
+      "graceful_restart_enable": "true",
+      "local_asn": 65000,
+      "max_paths": "64",
+      "router_id": "10.0.0.1"
+    }
+  },
+  "BGP_GLOBALS_AF": {
+    "default|ipv4_unicast": {
+      "admin_status": "true",
+      "redistribute_connected": "true",
+      "route_map_redistribute_connected": "RM-CONN-2-BGP"
+    },
+    "default|l2vpn_evpn": {
+      "admin_status": "true"
+    },
+    "default|l2vpn_evpn|EVPN-PEERS": {
+      "admin_status": "true",
+      "route_reflector_client": "true"
+    }
+  },
+  "BGP_NEIGHBOR": {
+    "10.0.0.100": {
+      "admin_status": "true",
+      "asn": "65000",
+      "description": "spine-01",
+      "holdtime": "180",
+      "keepalive": "60",
+      "local_addr": "10.0.0.1",
+      "name": "EVPN-PEERS"
+    },
+    "10.0.0.101": {
+      "admin_status": "true",
+      "asn": "65000",
+      "description": "spine-02",
+      "holdtime": "180",
+      "keepalive": "60",
+      "local_addr": "10.0.0.1",
+      "name": "EVPN-PEERS"
+    }
+  },
+  "BGP_PEER_GROUP": {
+    "EVPN-PEERS": {
+      "asn": "65000",
+      "local_addr": "10.0.0.1",
+      "send_community": "extended"
+    }
+  },
+  "DEVICE_METADATA": {
+    "localhost": {
+      "bgp_asn": 65000,
+      "hostname": "dc1-super-spine-01",
+      "type": "SuperSpineRouter"
+    }
+  },
+  "INTERFACE": {
+    "Ethernet1": {},
+    "Ethernet2": {}
+  },
+  "INTERFACE_IP": {
+    "Ethernet1|10.1.0.1/31": {},
+    "Ethernet2|10.1.0.3/31": {}
+  },
+  "LOOPBACK_INTERFACE": {
+    "Loopback0|10.0.0.1/32": {}
+  },
+  "OSPF_ROUTER": {
+    "default": {
+      "reference_bandwidth": 100000,
+      "router_id": "10.0.0.1"
+    }
+  },
+  "VLAN": {},
+  "VLAN_INTERFACE": {}
+}

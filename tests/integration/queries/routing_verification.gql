@@ -1,0 +1,56 @@
+query RoutingVerification {
+  bgp_processes: ManagedBGP {
+    edges {
+      node {
+        id
+        name { value }
+        device {
+          node {
+            id
+            name { value }
+            role { value }
+          }
+        }
+      }
+    }
+  }
+  ospf_processes: ManagedOSPF {
+    edges {
+      node {
+        id
+        name { value }
+        device {
+          node {
+            id
+            name { value }
+            role { value }
+          }
+        }
+      }
+    }
+  }
+  peerings: ManagedBGPPeering {
+    edges {
+      node {
+        id
+        name { value }
+        session_type { value }
+        bgp_processes {
+          edges {
+            node {
+              id
+              name { value }
+              device {
+                node {
+                  id
+                  name { value }
+                  role { value }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

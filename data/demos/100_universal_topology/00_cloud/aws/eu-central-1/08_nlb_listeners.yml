@@ -1,0 +1,69 @@
+---
+# Health check: TCP, 2 successes to go UP, 3 failures to go DOWN, 5s timeout
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: LoadbalancerHealthCheck
+  data:
+    - check: tcp
+      rise: 2
+      fall: 3
+      timeout: 5000
+
+---
+# VIP listeners on CUST1-NLB-APP-EU-CENTRAL-1
+# TCP:443 — TLS passthrough to app instances
+# TCP:80  — plain TCP for health/redirect traffic
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: ServiceLoadBalancerVIP
+  data:
+    - hostname: cust1-nlb-app.example.com
+      protocol: tcp
+      port: 443
+      status: active
+      description: "TCP:443 listener — TLS passthrough to application tier"
+      load_balancer: CUST1-NLB-APP-EU-CENTRAL-1
+      health_checks:
+        - ["tcp", "2", "3", "5000"]
+
+    - hostname: cust1-nlb-app.example.com
+      protocol: tcp
+      port: 80
+      status: active
+      description: "TCP:80 listener — plain HTTP to application tier"
+      load_balancer: CUST1-NLB-APP-EU-CENTRAL-1
+      health_checks:
+        - ["tcp", "2", "3", "5000"]
+
+---
+# Backend pools — one per listener, round-robin across all 4 app instances
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: ServiceBackendPool
+  data:
+    - name: CUST1-POOL-APP-TCP443
+      load_balancing_algorithm: round_robin
+      session_persistence: none
+      drain_timeout: 30
+      description: "Backend pool for TCP:443 — all 4 app instances"
+      vip_service: ["cust1-nlb-app.example.com", "tcp", "443"]
+      cloud_instances:
+        - ["CUST1-APP-EU-CENTRAL-1A-01"]
+        - ["CUST1-APP-EU-CENTRAL-1A-02"]
+        - ["CUST1-APP-EU-CENTRAL-1B-01"]
+        - ["CUST1-APP-EU-CENTRAL-1B-02"]
+
+    - name: CUST1-POOL-APP-TCP80
+      load_balancing_algorithm: round_robin
+      session_persistence: none
+      drain_timeout: 30
+      description: "Backend pool for TCP:80 — all 4 app instances"
+      vip_service: ["cust1-nlb-app.example.com", "tcp", "80"]
+      cloud_instances:
+        - ["CUST1-APP-EU-CENTRAL-1A-01"]
+        - ["CUST1-APP-EU-CENTRAL-1A-02"]
+        - ["CUST1-APP-EU-CENTRAL-1B-01"]
+        - ["CUST1-APP-EU-CENTRAL-1B-02"]

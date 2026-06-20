@@ -1,0 +1,26 @@
+---
+# Stuttgart metro + branch office building
+apiVersion: infrahub.app/v1
+version: "1.0"
+kind: Object
+spec:
+  kind: LocationCountry
+  data:
+    - name: "Germany"
+      shortname: "de"
+      parent: "emea"
+      children:
+        kind: LocationMetro
+        data:
+          - name: "Stuttgart"
+            shortname: "str"
+---
+apiVersion: infrahub.app/v1
+version: "1.0"
+kind: Object
+spec:
+  kind: LocationBuilding
+  data:
+    - name: "str-1"
+      shortname: "str-1"
+      parent: "str"

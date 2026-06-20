@@ -1,0 +1,64 @@
+{%- if ntp %}
+!
+! NTP
+!
+{%- for s in ntp.servers %}
+ntp server {{ s.address }}{% if s.prefer %} prefer{% endif %}
+
+{%- endfor %}
+{%- endif %}
+{%- if syslog %}
+!
+! Syslog
+!
+{%- for s in syslog.servers %}
+logging host {{ s.address }}
+{%- endfor %}
+{%- endif %}
+{%- if snmp %}
+!
+! SNMP
+!
+{%- if snmp.community_ro %}
+snmp-server community {{ snmp.community_ro }} ro
+{%- endif %}
+{%- if snmp.community_rw %}
+snmp-server community {{ snmp.community_rw }} rw
+{%- endif %}
+{%- if snmp.location %}
+snmp-server location {{ snmp.location }}
+{%- endif %}
+{%- if snmp.contact %}
+snmp-server contact {{ snmp.contact }}
+{%- endif %}
+{%- for t in snmp.trap_targets %}
+snmp-server host {{ t.address }}{% if t.community %} {{ t.community }}{% endif %} version 2c traps
+{%- endfor %}
+{%- endif %}
+{%- if aaa %}
+!
+! AAA
+!
+{%- for s in aaa.servers %}
+{%- if s.protocol == 'tacacs' %}
+tacacs-server host {{ s.address }}{% if s.port %} port {{ s.port }}{% endif %}{% if s.timeout %} timeout {{ s.timeout }}{% endif %}
+
+{%- elif s.protocol == 'radius' %}
+radius-server host {{ s.address }}{% if s.port %} auth-port {{ s.port }}{% endif %}{% if s.timeout %} timeout {{ s.timeout }}{% endif %}
+
+{%- endif %}
+{%- endfor %}
+{%- if aaa.authentication_order == 'tacacs_local' %}
+aaa authentication login default group tacacs+ local
+{%- elif aaa.authentication_order == 'radius_local' %}
+aaa authentication login default group radius local
+{%- else %}
+aaa authentication login default local
+{%- endif %}
+{%- if aaa.authorization_commands %}
+aaa authorization commands all default group tacacs+ local
+{%- endif %}
+{%- if aaa.accounting_enabled %}
+aaa accounting exec default start-stop group tacacs+
+{%- endif %}
+{%- endif %}

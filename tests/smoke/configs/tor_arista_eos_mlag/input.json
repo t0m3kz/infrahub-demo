@@ -1,0 +1,343 @@
+{
+  "DcimDevice": {
+    "edges": [
+      {
+        "node": {
+          "__typename": "DcimPhysicalDevice",
+          "id": "dev-DC1-POD1-L1",
+          "name": {
+            "value": "DC1-POD1-L1"
+          },
+          "role": {
+            "value": "tor"
+          },
+          "platform": {
+            "node": {
+              "id": "plat-arista_eos",
+              "name": {
+                "value": "arista_eos"
+              },
+              "netmiko_device_type": {
+                "value": "arista_eos"
+              },
+              "napalm_driver": {
+                "value": "arista_eos"
+              },
+              "ansible_network_os": {
+                "value": "arista_eos"
+              }
+            }
+          },
+          "primary_address": {
+            "node": {
+              "address": {
+                "value": "10.0.2.1/32"
+              },
+              "ip_namespace": {
+                "node": {
+                  "name": {
+                    "value": "default"
+                  }
+                }
+              }
+            }
+          },
+          "tags": {
+            "edges": []
+          },
+          "device_capabilities": {
+            "edges": [
+              {
+                "node": {
+                  "__typename": "ManagedMLAG",
+                  "name": {
+                    "value": "DC1-POD1-L1-L2-MLAG"
+                  },
+                  "domain_id": {
+                    "value": 1
+                  },
+                  "reload_delay": {
+                    "value": 300
+                  },
+                  "reload_delay_non_mlag": {
+                    "value": 330
+                  },
+                  "device_capabilities": {
+                    "edges": [
+                      {
+                        "node": {
+                          "name": {
+                            "value": "DC1-POD1-L1"
+                          }
+                        }
+                      },
+                      {
+                        "node": {
+                          "name": {
+                            "value": "DC1-POD1-L2"
+                          }
+                        }
+                      }
+                    ]
+                  }
+                }
+              }
+            ]
+          },
+          "interfaces": {
+            "edges": [
+              {
+                "node": {
+                  "__typename": "DcimVirtualInterface",
+                  "name": {
+                    "value": "Loopback0"
+                  },
+                  "description": {
+                    "value": "Router ID"
+                  },
+                  "status": {
+                    "value": "active"
+                  },
+                  "role": {
+                    "value": "loopback"
+                  },
+                  "ip_address": {
+                    "node": {
+                      "address": {
+                        "value": "10.0.2.1/32"
+                      },
+                      "ip_namespace": {
+                        "node": {
+                          "name": {
+                            "value": "default"
+                          }
+                        }
+                      }
+                    }
+                  },
+                  "interface_capabilities": {
+                    "edges": []
+                  }
+                }
+              },
+              {
+                "node": {
+                  "__typename": "DcimPhysicalInterface",
+                  "name": {
+                    "value": "Ethernet1"
+                  },
+                  "description": {
+                    "value": "to spine-01"
+                  },
+                  "status": {
+                    "value": "active"
+                  },
+                  "role": {
+                    "value": "uplink"
+                  },
+                  "interface_type": {
+                    "value": "10gbase-x-sfpp"
+                  },
+                  "mtu": {
+                    "value": 9000
+                  },
+                  "ip_address": {
+                    "node": {
+                      "address": {
+                        "value": "10.1.2.1/31"
+                      },
+                      "ip_namespace": {
+                        "node": {
+                          "name": {
+                            "value": "default"
+                          }
+                        }
+                      }
+                    }
+                  },
+                  "cable": {
+                    "node": null
+                  },
+                  "interface_capabilities": {
+                    "edges": []
+                  }
+                }
+              },
+              {
+                "node": {
+                  "__typename": "DcimPhysicalInterface",
+                  "name": {
+                    "value": "Ethernet2"
+                  },
+                  "description": {
+                    "value": "to spine-02"
+                  },
+                  "status": {
+                    "value": "active"
+                  },
+                  "role": {
+                    "value": "uplink"
+                  },
+                  "interface_type": {
+                    "value": "10gbase-x-sfpp"
+                  },
+                  "mtu": {
+                    "value": 9000
+                  },
+                  "ip_address": {
+                    "node": {
+                      "address": {
+                        "value": "10.1.2.3/31"
+                      },
+                      "ip_namespace": {
+                        "node": {
+                          "name": {
+                            "value": "default"
+                          }
+                        }
+                      }
+                    }
+                  },
+                  "cable": {
+                    "node": null
+                  },
+                  "interface_capabilities": {
+                    "edges": []
+                  }
+                }
+              },
+              {
+                "node": {
+                  "__typename": "DcimLAGInterface",
+                  "name": {
+                    "value": "Port-Channel100"
+                  },
+                  "description": {
+                    "value": "MLAG Peer-Link"
+                  },
+                  "status": {
+                    "value": "active"
+                  },
+                  "role": {
+                    "value": "mlag-peer"
+                  },
+                  "lag_id": {
+                    "value": 100
+                  },
+                  "lacp_mode": {
+                    "value": "active"
+                  },
+                  "mtu": {
+                    "value": 9000
+                  },
+                  "minimum_links": {
+                    "value": 1
+                  },
+                  "ip_address": {
+                    "node": null
+                  },
+                  "member_interfaces": {
+                    "edges": [
+                      {
+                        "node": {
+                          "name": {
+                            "value": "Ethernet33"
+                          }
+                        }
+                      },
+                      {
+                        "node": {
+                          "name": {
+                            "value": "Ethernet34"
+                          }
+                        }
+                      }
+                    ]
+                  },
+                  "interface_capabilities": {
+                    "edges": []
+                  }
+                }
+              },
+              {
+                "node": {
+                  "__typename": "DcimPhysicalInterface",
+                  "name": {
+                    "value": "Ethernet33"
+                  },
+                  "description": {
+                    "value": "MLAG peer-link member 1"
+                  },
+                  "status": {
+                    "value": "active"
+                  },
+                  "role": {
+                    "value": "mlag-peer"
+                  },
+                  "interface_type": {
+                    "value": "10gbase-x-sfpp"
+                  },
+                  "mtu": {
+                    "value": 9000
+                  },
+                  "ip_address": {
+                    "node": null
+                  },
+                  "cable": {
+                    "node": null
+                  },
+                  "interface_capabilities": {
+                    "edges": []
+                  }
+                }
+              },
+              {
+                "node": {
+                  "__typename": "DcimPhysicalInterface",
+                  "name": {
+                    "value": "Ethernet34"
+                  },
+                  "description": {
+                    "value": "MLAG peer-link member 2"
+                  },
+                  "status": {
+                    "value": "active"
+                  },
+                  "role": {
+                    "value": "mlag-peer"
+                  },
+                  "interface_type": {
+                    "value": "10gbase-x-sfpp"
+                  },
+                  "mtu": {
+                    "value": 9000
+                  },
+                  "ip_address": {
+                    "node": null
+                  },
+                  "cable": {
+                    "node": null
+                  },
+                  "interface_capabilities": {
+                    "edges": []
+                  }
+                }
+              }
+            ]
+          },
+          "deployment": {
+            "node": {
+              "id": "dc-1",
+              "name": {
+                "value": "DC-1"
+              },
+              "segment_deployments": {
+                "edges": []
+              }
+            }
+          }
+        }
+      }
+    ]
+  }
+}

@@ -1,0 +1,15 @@
+---
+# New POD-4 added to DC1 with tor deployment
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologyPod
+  data:
+    - index: 4
+      design: S_TOR
+      deployment_type: tor
+      amount_of_spines: 2
+      spine_template: N9K-C9336C-FX2_SPINE
+      parent: DC1
+      member_of_groups:
+        - topologies_pod

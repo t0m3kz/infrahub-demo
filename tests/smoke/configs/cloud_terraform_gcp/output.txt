@@ -1,0 +1,42 @@
+terraform {
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"
+      version = "~> 5.0"
+    }
+  }
+}
+
+provider "aws" {
+  region = "europe-west1"
+}
+
+resource "aws_vpc" "prod_network" {
+  cidr_block           = "10.0.0.0/16"
+  enable_dns_support   = true
+  enable_dns_hostnames = true
+  tags = { Name = "prod-network", ManagedBy = "Infrahub" }
+}
+
+resource "aws_subnet" "prod_subnet_europe_west1" {
+  vpc_id                  = aws_vpc.prod_network.id
+  cidr_block              = "10.0.1.0/24"
+  availability_zone       = "europe-west1-b"
+  map_public_ip_on_launch = false
+  tags = { Name = "prod-subnet-europe-west1", ManagedBy = "Infrahub" }
+}
+
+resource "aws_security_group" "prod_fw_rule" {
+  name   = "prod-fw-rule"
+  vpc_id = aws_vpc.prod_network.id
+  tags   = { Name = "prod-fw-rule", ManagedBy = "Infrahub" }
+}
+
+resource "aws_instance" "prod_instance_1" {
+  ami                    = "debian-cloud/debian-11"
+  instance_type          = "n1-standard-1"
+  subnet_id              = aws_subnet.prod_subnet_europe_west1.id
+  vpc_security_group_ids = [aws_security_group.prod_fw_rule.id]
+  private_ip             = "10.0.1.10"
+  tags                   = { Name = "prod-instance-1", ManagedBy = "Infrahub" }
+}

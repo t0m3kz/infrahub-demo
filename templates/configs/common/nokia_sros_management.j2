@@ -1,0 +1,59 @@
+{%- if ntp %}
+!
+! NTP
+!
+configure system time ntp
+    admin-state enable
+    {%- for s in ntp.servers %}
+    server {{ s.address }}{% if s.prefer %} prefer{% endif %}
+
+    {%- endfor %}
+exit
+{%- endif %}
+{%- if syslog %}
+!
+! Syslog
+!
+{%- for s in syslog.servers %}
+configure log log-id 10
+    description "syslog"
+    source main
+    destination syslog {{ s.address }}
+exit
+{%- endfor %}
+{%- endif %}
+{%- if snmp %}
+!
+! SNMP
+!
+configure system security snmp
+{%- if snmp.community_ro %}
+    community {{ snmp.community_ro }} access-permissions r
+{%- endif %}
+{%- if snmp.location %}
+    location "{{ snmp.location }}"
+{%- endif %}
+{%- if snmp.contact %}
+    contact "{{ snmp.contact }}"
+{%- endif %}
+exit
+{%- endif %}
+{%- if aaa %}
+!
+! AAA
+!
+{%- for s in aaa.servers %}
+{%- if s.protocol == 'tacacs' %}
+configure system security tacplus
+    server {{ loop.index }} address {{ s.address }}{% if s.port %} port {{ s.port }}{% endif %}{% if s.timeout %} timeout {{ s.timeout }}{% endif %}
+
+{%- endif %}
+{%- endfor %}
+{%- if aaa.authentication_order in ('tacacs_local', 'radius_local') %}
+configure system security aaa
+    local-profiles
+    exit
+    tacplus-plus-authorization
+exit
+{%- endif %}
+{%- endif %}

@@ -1,0 +1,10 @@
+---
+# BT devices
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimPhysicalDevice
+  data:
+    - name: EXT-INET-BT-01
+      object_template: N9K-C9336C-FX2_EDGE
+      status: active

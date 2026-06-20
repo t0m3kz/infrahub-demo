@@ -1,0 +1,27 @@
+---
+# DC2 suites and racks
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: LocationBuilding
+  data:
+    - name: DC2
+      shortname: dc2
+      parent: par
+      children:
+        kind: LocationSuite
+        data:
+          - suite_name: DC2-S1
+            index: 1
+            shortname: dc2-s1
+            children:
+              kind: LocationRack
+              data:
+                - shortname: dc2-s1-r-1
+                  index: 1
+                  row_index: 1
+                  pod: DC2-2-POD-1
+                - shortname: dc2-s1-r-2
+                  index: 2
+                  row_index: 1
+                  pod: DC2-2-POD-2

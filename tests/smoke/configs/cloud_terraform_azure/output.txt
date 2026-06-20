@@ -1,0 +1,67 @@
+terraform {
+  required_providers {
+    azurerm = {
+      source  = "hashicorp/azurerm"
+      version = "~> 3.0"
+    }
+  }
+}
+
+provider "azurerm" {
+  features {}
+}
+
+variable "resource_group_name" {
+  default = "test-azure-account-rg"
+}
+
+resource "azurerm_virtual_network" "prod_vnet" {
+  name                = "prod-vnet"
+  location            = "westeurope"
+  resource_group_name = var.resource_group_name
+  address_space       = ["10.0.0.0/16"]
+  tags = { Name = "prod-vnet", ManagedBy = "Infrahub" }
+}
+
+resource "azurerm_subnet" "prod_subnet_westeurope_1" {
+  name                 = "prod-subnet-westeurope-1"
+  resource_group_name  = var.resource_group_name
+  virtual_network_name = azurerm_virtual_network.prod_vnet.name
+  address_prefixes     = ["10.0.1.0/24"]
+}
+
+resource "azurerm_network_security_group" "prod_nsg" {
+  name                = "prod-nsg"
+  location            = "westeurope"
+  resource_group_name = var.resource_group_name
+  tags = { Name = "prod-nsg", ManagedBy = "Infrahub" }
+}
+
+resource "azurerm_linux_virtual_machine" "prod_vm_1" {
+  name                  = "prod-vm-1"
+  location              = "westeurope"
+  resource_group_name   = var.resource_group_name
+  size                  = "Standard_D2s_v3"
+  network_interface_ids = [azurerm_subnet.prod_subnet_westeurope_1.id]
+  os_disk {
+    disk_size_gb         = 30
+    caching              = "ReadWrite"
+    storage_account_type = "Standard_LRS"
+  }
+  source_image_reference {
+    id = "UbuntuServer-18.04"
+  }
+  tags = { Name = "prod-vm-1", ManagedBy = "Infrahub" }
+}
+
+resource "azurerm_route_table" "prod_rt" {
+  name                = "prod-rt"
+  location            = "westeurope"
+  resource_group_name = var.resource_group_name
+  tags                = { Name = "prod-rt", ManagedBy = "Infrahub" }
+}
+
+resource "azurerm_subnet_route_table_association" "prod_subnet_westeurope_1_rt_assoc" {
+  subnet_id      = azurerm_subnet.prod_subnet_westeurope_1.id
+  route_table_id = azurerm_route_table.prod_rt.id
+}

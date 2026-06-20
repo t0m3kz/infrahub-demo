@@ -1,0 +1,18 @@
+# Health Checks
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: LoadbalancerHealthCheck
+  data:
+    - check: http
+      rise: 3
+      fall: 3
+      timeout: 2000
+      # description auto-computed: "http-3-3-2000"
+
+    - check: tcp
+      rise: 2
+      fall: 2
+      timeout: 1000
+      # description auto-computed: "tcp-2-2-1000"

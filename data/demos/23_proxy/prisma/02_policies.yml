@@ -1,0 +1,16 @@
+---
+# Prisma Access forwarding policy
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: ServiceProxyPolicy
+  data:
+    - name: prisma-internet-policy
+      description: "Prisma Access internet security policy — branch and remote users"
+      default_action: forward
+      enabled: true
+      proxy: ["prisma-access"]
+      cloud_zone: ["europe-west1", "europe-west1-b"]
+      cloud_instances:
+        - ["zscaler-gcp-cc-01"]
+        - ["zscaler-gcp-cc-02"]

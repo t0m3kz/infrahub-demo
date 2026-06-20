@@ -11,14 +11,14 @@ spec:
           - name: FR
             location: ["fra"]
             children:
-              kind: TopologyColocationAZ
+              kind: TopologyColocationZone
               data:
                 - name: FR2
                 - name: FR6
           - name: PA
             location: ["par"]
             children:
-              kind: TopologyColocationAZ
+              kind: TopologyColocationZone
               data:
                 - name: PA4
                 - name: PA6

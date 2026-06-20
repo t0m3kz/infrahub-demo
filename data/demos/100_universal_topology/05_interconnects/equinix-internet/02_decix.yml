@@ -1,0 +1,70 @@
+---
+# DE-CIX connectivity
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimVirtualInterface
+  data:
+    - name: VTI-FR2-DE-CIX
+      description: "FR2 VTI for DE-CIX fabric circuit"
+      role: uplink
+      status: active
+      device: FR2-EDGE-01
+
+    - name: VTI-DE-CIX-FR2
+      description: "DE-CIX VTI for FR2 fabric circuit"
+      role: uplink
+      status: active
+      device: EXT-INET-DE-CIX-FR-01
+
+---
+# Physical handoff: FR2 → DE-CIX cross-connect
+# Cable path: FR2-EDGE-01/Eth1/1 → EQX-FR2-PATCH-01/Port2 → EXT-DECIX-PATCH-01/Port1 → EXT-INET-DE-CIX-FR-01/Eth1/1
+# See 06_provider_devices.yml for patch panels and cables.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologyPhysicalCircuit
+  data:
+    - name: PHYS-FR2-INET-DE-CIX-01
+      circuit_id: PHYS-FR2-INET-DE-CIX-01
+      description: "Physical handoff between FR2 and DE-CIX Frankfurt"
+      circuit_type: cross_connect
+      committed_rate: 10000
+      status: active
+      provider: DE-CIX
+      locations:
+        - FR2
+        - INET-DE-CIX-FR
+      interfaces:
+        - - FR2-EDGE-01
+          - Ethernet1/1
+        - - EXT-INET-DE-CIX-FR-01
+          - Ethernet1/1
+      provider_a:
+        - EQX-FR2-PATCH-01
+        - Port2
+      provider_z:
+        - EXT-DECIX-PATCH-01
+        - Port1
+
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologyVirtualCircuit
+  data:
+    - name: VC-FR2-INET-DE-CIX-FABRIC
+      description: "Fabric virtual handoff from FR2 to DE-CIX"
+      link_type: equinix_fabric
+      bandwidth: 10000
+      status: active
+      provider: Equinix
+      locations:
+        - FR2
+        - INET-DE-CIX-FR
+      interfaces:
+        - - FR2-EDGE-01
+          - VTI-FR2-DE-CIX
+        - - EXT-INET-DE-CIX-FR-01
+          - VTI-DE-CIX-FR2

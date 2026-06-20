@@ -1,0 +1,43 @@
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologyDataCenter
+  data:
+    - name: DC1
+      index: 1
+      design: M_EBGP_IBGP
+      naming_convention: standard
+      overlay_technology: vxlan_evpn
+      loopback_prefix_length: 23
+      technical_prefix_length: 19
+      management_prefix_length: 25
+      amount_of_super_spines: 2
+      super_spine_template: N9K-C9336C-FX2_SUPER_SPINE
+      fabric_interface_sorting_method: top_down
+      member_of_groups:
+        - topologies_dc
+      children:
+        kind: TopologyPod
+        data:
+          - index: 1
+            design: M_MIDDLE
+            deployment_type: middle_rack
+            amount_of_spines: 2
+            spine_template: N9K-C9336C-FX2_SPINE
+            member_of_groups:
+              - topologies_pod
+          - index: 2
+            design: S_TOR
+            deployment_type: tor
+            amount_of_spines: 2
+            spine_template: N9K-C9336C-FX2_SPINE
+            member_of_groups:
+              - topologies_pod
+          - index: 3
+            design: M_MIXED
+            deployment_type: mixed
+            amount_of_spines: 2
+            spine_template: N9K-C9336C-FX2_SPINE
+            member_of_groups:
+              - topologies_pod

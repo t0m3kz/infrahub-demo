@@ -14,6 +14,38 @@ GraphQL Response Patterns:
 
 from typing import Any
 
+# Extraction rules for GraphQL dict wrappers, evaluated in priority order.
+# Each rule is (predicate, extractor). First matching predicate wins.
+_EXTRACTION_RULES: list[tuple] = [
+    # Single-key wrappers: extract the only meaningful value
+    (lambda v: "value" in v and len(v) == 1, lambda v: v["value"]),
+    (lambda v: "id" in v and len(v) == 1, lambda v: v["id"]),
+    (lambda v: "count" in v and len(v) == 1, lambda v: v["count"]),
+    # Multi-key: "value" still wins when present alongside other keys
+    (lambda v: "value" in v, lambda v: v["value"]),
+    # Collections: "edges" takes priority over "count" when both present
+    (lambda v: "edges" in v and v.get("edges") is not None, lambda v: clean_data(v["edges"])),
+    (lambda v: "count" in v and v.get("count") is not None, lambda v: v["count"]),
+]
+
+
+def _extract_from_dict(value: dict) -> tuple[bool, Any]:
+    """Try extraction rules on a dict value.
+
+    Returns:
+        (matched, result) — if matched is False, caller should recurse.
+    """
+    for predicate, extractor in _EXTRACTION_RULES:
+        if predicate(value):
+            return True, extractor(value)
+
+    # Node relationships: extract if present, None if null
+    if "node" in value:
+        node = value.get("node")
+        return True, clean_data(node) if node is not None else None
+
+    return False, None
+
 
 def clean_data(data: Any) -> Any:
     """
@@ -50,49 +82,23 @@ def clean_data(data: Any) -> Any:
         {"interfaces": [{"name": "eth0"}]}
     """
     if isinstance(data, dict):
-        dict_result = {}
+        result = {}
         for key, value in data.items():
             if isinstance(value, dict):
-                # Extract common GraphQL wrapper fields in priority order
-                # Use 'in' to check for key presence, then check if value is not None
-                
-                # Single-key wrappers: extract the wrapped value
-                if "value" in value and len(value) == 1:
-                    dict_result[key] = value["value"]
-                elif "id" in value and len(value) == 1:
-                    dict_result[key] = value["id"]
-                elif "count" in value and len(value) == 1:
-                    dict_result[key] = value["count"]
-                # Multi-key or nested structures
-                elif "value" in value:
-                    # value key present but other keys too - extract value
-                    dict_result[key] = value["value"]
-                elif "edges" in value and value.get("edges") is not None:
-                    # edges takes priority over count when both present
-                    dict_result[key] = clean_data(value["edges"])
-                elif "count" in value and value.get("count") is not None:
-                    dict_result[key] = value["count"]
-                elif "node" in value and value.get("node") is not None:
-                    dict_result[key] = clean_data(value["node"])
-                else:
-                    # Recursively clean nested objects
-                    dict_result[key] = clean_data(value)
+                matched, extracted = _extract_from_dict(value)
+                result[key] = extracted if matched else clean_data(value)
             elif "__" in key:
                 # Handle flattened GraphQL field names (e.g., "device__name")
-                dict_result[key.replace("__", "")] = value
+                result[key.replace("__", "")] = value
             else:
-                dict_result[key] = clean_data(value)
-        return dict_result
+                result[key] = clean_data(value)
+        return result
 
     if isinstance(data, list):
-        list_result = []
-        for item in data:
-            # Unwrap nodes from edge collections
-            if isinstance(item, dict) and item.get("node") is not None:
-                list_result.append(clean_data(item["node"]))
-            else:
-                list_result.append(clean_data(item))
-        return list_result
+        return [
+            clean_data(item["node"]) if isinstance(item, dict) and item.get("node") is not None else clean_data(item)
+            for item in data
+        ]
 
     # Return primitive values as-is
     return data

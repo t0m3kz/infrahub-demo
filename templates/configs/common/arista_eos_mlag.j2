@@ -1,0 +1,33 @@
+{%- if mlag %}
+!
+! MLAG Configuration
+!
+no spanning-tree vlan-id 4094
+vlan 4094
+   trunk group MLAGPEER
+!
+{%- if mlag.peer_link %}
+interface {{ mlag.peer_link }}
+   description MLAG Peer-Link
+   switchport mode trunk
+   switchport trunk group MLAGPEER
+   no shutdown
+!
+{%- endif %}
+interface Vlan4094
+   description MLAG Peer-Link SVI
+   no shutdown
+!
+mlag configuration
+   domain-id {{ mlag.domain_id }}
+   local-interface Vlan4094
+{%- if mlag.peer_link %}
+   peer-link {{ mlag.peer_link }}
+{%- endif %}
+{%- if mlag.reload_delay is not none %}
+   reload-delay mlag {{ mlag.reload_delay }}
+{%- endif %}
+{%- if mlag.reload_delay_non_mlag is not none %}
+   reload-delay non-mlag {{ mlag.reload_delay_non_mlag }}
+{%- endif %}
+{%- endif %}

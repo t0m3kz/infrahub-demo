@@ -15,7 +15,7 @@ query oob_config($device: String!) {
               description {
                 value
               }
-              interface_services{
+              interface_capabilities{
                 edges{
                   node{
                     __typename

@@ -1,0 +1,31 @@
+---
+# ACME Partner connectivity
+#
+# Cable path: PA4-EDGE-01/Eth1/1 → EQX-PA4-PATCH-01/Port2 → EXT-ACME-PATCH-01/Port1 → EXT-PARTNER-ACME-01/Eth1/1
+# See 06_provider_devices.yml for patch panels and cables.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologyPhysicalCircuit
+  data:
+    - name: PHYS-PA4-PARTNER-ACME-01
+      circuit_id: PHYS-PA4-PARTNER-ACME-01
+      description: "Partner MPLS handoff from PA4 to ACME"
+      circuit_type: mpls
+      committed_rate: 1000
+      status: active
+      provider: BT
+      locations:
+        - PA4
+        - PARTNER-ACME-MPLS
+      interfaces:
+        - - PA4-EDGE-01
+          - Ethernet1/1
+        - - EXT-PARTNER-ACME-01
+          - Ethernet1/1
+      provider_a:
+        - EQX-PA4-PATCH-01
+        - Port2
+      provider_z:
+        - EXT-ACME-PATCH-01
+        - Port1

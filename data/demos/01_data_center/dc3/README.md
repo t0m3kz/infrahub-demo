@@ -1,76 +1,56 @@
-# DC3 - Brexit, No Middle Management, Maximum Sass
+# DC3 - Brexit, Flat ToR, Maximum Speed
 
 ## Overview
 
-**Location:** London 🇬🇧 (Brexit happened, but your data stays! More fiber under the Thames than umbrellas in the city)
+**Location:** London 🇬🇧 | **Size:** Small | **Platform:** Dell SONiC | **Design:** `S_OSPF_IBGP`
 
-**Size:** Small (S) - Minimalist, fast, and direct
+**Fabric Design:** `S_OSPF_IBGP` — OSPF underlay + iBGP overlay, IPv6 P2P links (with the flat naming
+convention because London hates unnecessary formality). OSPF floods LSAs across the underlay while
+iBGP distributes EVPN routes via spine route reflectors — a division of labour as British as the
+House of Lords. At least they upgraded to IPv6 underlay. Brexit happened, but the addressing did not
+regress. Small wins.
 
-**Platform:** Dell PowerSwitch with SONiC - So open, even your neighbor's cat could SSH in (if it knew the password).
+Brexit happened, but your data stays! Mixed deployment across both pods — ToR and middle rack coexist in
+suspicious harmony, just like English and metric units on the same road sign.
 
-**Design Pattern:** M-Flat (Medium with flat naming convention)
+**Philosophy:** "I don't want any extra hops" (but I'll take a few anyway, it's fine).
 
-**Use Case:**
-For those who say "I don't want any extra hops" and actually mean it. Pure flat ToR deployment—every ToR switch connects directly to spines, like a networking speed-dating event with zero commitment. No middle aggregation, no leaf layer bureaucracy, just servers talking to ToRs and ToRs talking to spines. It's a minimalist's dream and a cable management team's recurring nightmare. If you love low latency, hate complexity, and enjoy watching your spine ports disappear faster than free beer at a tech conference, this one's for you.
-
-Warning: May cause spontaneous outbreaks of optimism and existential dread in equal measure.
-
----
-
-## Architecture (Flatness with British Charm)
-
-### Fabric Scale
+## Architecture
 
 - **Super Spines:** 2 (Dell PowerSwitch S5232F-ON)
-- **Total Pods:** 2
-- **Total Spines:** 4 (2 per pod)
-- **Total Racks:** 4
-- **Deployment Type:** tor (both pods)
+- **Pods:** 2 | **Spines:** 4 (2+2) | **Racks:** 8
+- **Deployment:** `mixed` (both pods) - The Brexit compromise: some structure, some freedom
 
-### Pod Structure (Zero-Middle-Layer Society)
+| Pod | Spines | Design  | Deployment | Site Layout | Personality         |
+| --- | ------ | ------- | ---------- | ----------- | ------------------- |
+| 1   | 2      | S_MIXED | mixed      | small-dc    | Pragmatic Londoner  |
+| 2   | 2      | S_MIXED | mixed      | small-dc    | Same Pragmatic Twin |
 
-| Pod   | Spines | Model                | Racks | Deployment | Personality         |
-|-------|--------|----------------------|-------|------------|---------------------|
-| Pod 1 | 2      | S5232F-ON           | 2     | tor        | The Speed Racer     |
-| Pod 2 | 2      | S5232F-ON           | 2     | tor        | The Speed Racer's Twin |
-
----
-
-## Hardware Stack (Simplicity Through SONiC)
-
-### Super Spine Layer
-
-- **Model:** Dell PowerSwitch S5232F-ON
-- **Ports:** 32x100GbE
-- **Role:** Inter-pod autobahn
-- **Fun Fact:** Flat ToR is how you win arguments about east-west latency
-
-### Spine Layer
-
-- **Model:** Dell PowerSwitch S5232F-ON
-- **Ports:** 32x100GbE
-- **Role:** Direct ToR aggregation
-- **Deployment:** Identical across pods
-
-### ToR Layer
-
-- **Model:** Dell PowerSwitch S5232F-ON
-- **Count:** 2 per rack
-- **Role:** Server connectivity
-
----
-
-## Deployment Strategy (Flat ToR Mastery)
-
-**ToR Connectivity Pattern:**
+## Quick Start
 
 ```bash
+uv run inv deploy-dc --scenario dc3 --branch your_branch
+```
+
+**Warning:** Spine port consumption rates may cause existential dread. Low latency worth it
+
+---
+
+## Deployment Strategy (Mixed — The British Compromise)
+
+**ToR Connectivity Patterns:**
+
+```bash
+# Some racks go direct (the ToR contingent)
 Server → ToR → Spine → Super Spine
+
+# Other racks add a leaf layer (the middle-rack contingent)
+Server → ToR → Leaf → Spine → Super Spine
 ```
 
 ---
 
-## Quick Start
+## Alternative Quick Start
 
 ```bash
 # really quick
