@@ -2,7 +2,7 @@
 authors = [
     {name = "Tomek Zajac", email = "tomek@mastuazi.com"},
 ]
-requires-python = "<3.13,>=3.10"
+requires-python = "<3.14,>=3.10"
 dependencies = [
     "invoke<3.0.0,>=2.2.0",
     "infrahub-sdk[all]>=1.15.0b0,<2.0.0",
@@ -38,7 +38,10 @@ version_scheme = "semver"
 tag_format = "v$version"
 update_changelog_on_bump = true
 changelog_incremental = true
+changelog_file = "CHANGELOG.md"
+changelog_merge_prerelease = true
 major_version_zero = true
+changelog_start_rev = "v0.1.0"
 
 [tool.ruff]
 line-length = 120
