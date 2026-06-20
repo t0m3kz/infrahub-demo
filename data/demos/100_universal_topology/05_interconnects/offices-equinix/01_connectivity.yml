@@ -1,0 +1,147 @@
+---
+# Office SD-WAN connectivity: Arista SD-WAN VCE branch edges → VCG gateways at Equinix hubs
+# Physical underlay = cross-connect; SD-WAN overlay = DMPO managed by Arista SD-WAN Orchestrator
+#
+# Cable paths:
+#   STR: OFC-STR-BRANCH-EDGE-01/GE1 → EQX-STR-PATCH-01/Port1 → EQX-FR6-PATCH-01/Port3 → FR6-EDGE-02/Eth1/1
+#   MAD primary: OFC-MAD-REGIONAL-EDGE-01/GE1 → EQX-MAD-PATCH-01/Port1 → EQX-PA4-PATCH-01/Port2 → PA4-EDGE-02/Eth1/1
+#   MAD secondary: OFC-MAD-REGIONAL-EDGE-02/GE1 → EQX-MAD-PATCH-01/Port2 → EQX-PA6-PATCH-01/Port2 → PA6-EDGE-02/Eth1/1
+# See 06_provider_devices.yml for patch panels and cables.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologyPhysicalCircuit
+  data:
+    - name: PHYS-OFC-STR-EQX-FR6-01
+      circuit_id: PHYS-OFC-STR-EQX-FR6-01
+      description: "Physical handoff between Strasbourg office and Equinix FR6"
+      circuit_type: cross_connect
+      committed_rate: 1000
+      status: active
+      provider: Equinix
+      locations:
+        - OFC-STR-BRANCH-01
+        - FR6
+      interfaces:
+        - - OFC-STR-BRANCH-EDGE-01
+          - GE1
+        - - FR6-EDGE-02
+          - Ethernet1/1
+      provider_a:
+        - EQX-STR-PATCH-01
+        - Port1
+      provider_z:
+        - EQX-FR6-PATCH-01
+        - Port3
+
+    - name: PHYS-OFC-MAD-EQX-PA4-01
+      circuit_id: PHYS-OFC-MAD-EQX-PA4-01
+      description: "Physical handoff between Madrid office and Equinix PA4"
+      circuit_type: cross_connect
+      committed_rate: 1000
+      status: active
+      provider: Equinix
+      locations:
+        - OFC-MAD-REGIONAL-01
+        - PA4
+      interfaces:
+        - - OFC-MAD-REGIONAL-EDGE-01
+          - GE1
+        - - PA4-EDGE-02
+          - Ethernet1/1
+      provider_a:
+        - EQX-MAD-PATCH-01
+        - Port1
+      provider_z:
+        - EQX-PA4-PATCH-01
+        - Port2
+
+    - name: PHYS-OFC-MAD-EQX-PA6-01
+      circuit_id: PHYS-OFC-MAD-EQX-PA6-01
+      description: "Physical handoff between Madrid office and Equinix PA6"
+      circuit_type: cross_connect
+      committed_rate: 1000
+      status: active
+      provider: Equinix
+      locations:
+        - OFC-MAD-REGIONAL-01
+        - PA6
+      interfaces:
+        - - OFC-MAD-REGIONAL-EDGE-02
+          - GE1
+        - - PA6-EDGE-02
+          - Ethernet1/1
+      provider_a:
+        - EQX-MAD-PATCH-01
+        - Port2
+      provider_z:
+        - EQX-PA6-PATCH-01
+        - Port2
+
+---
+# SD-WAN overlay: VCE GE1 WAN port → VCG eth0
+# DMPO sessions are established automatically by Arista SD-WAN Orchestrator
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologyVirtualCircuit
+  data:
+    - name: VC-OFC-STR-EQX-FR6-SDWAN
+      description: "Arista SD-WAN DMPO overlay: Strasbourg VCE to FR6 VCG"
+      link_type: sd_wan
+      bandwidth: 1000
+      status: active
+      provider: Arista
+      locations:
+        - OFC-STR-BRANCH-01
+        - FR6
+      interfaces:
+        - - OFC-STR-BRANCH-EDGE-01
+          - GE1
+        - - FR6-VCG-01
+          - eth0
+
+    - name: VC-OFC-MAD-EQX-PA4-SDWAN
+      description: "Arista SD-WAN DMPO primary overlay: Madrid VCE to PA4 VCG"
+      link_type: sd_wan
+      bandwidth: 1000
+      status: active
+      provider: Arista
+      locations:
+        - OFC-MAD-REGIONAL-01
+        - PA4
+      interfaces:
+        - - OFC-MAD-REGIONAL-EDGE-01
+          - GE1
+        - - PA4-VCG-01
+          - eth0
+
+    - name: VC-OFC-MAD-EQX-PA6-SDWAN
+      description: "Arista SD-WAN DMPO secondary overlay: Madrid VCE to PA6 VCG"
+      link_type: sd_wan
+      bandwidth: 1000
+      status: active
+      provider: Arista
+      locations:
+        - OFC-MAD-REGIONAL-01
+        - PA6
+      interfaces:
+        - - OFC-MAD-REGIONAL-EDGE-02
+          - GE1
+        - - PA6-VCG-01
+          - eth0
+
+    - name: VC-OFC-BCN-EQX-AM1-SDWAN
+      description: "Arista SD-WAN DMPO overlay: Barcelona VCE to AM1 VCG"
+      link_type: sd_wan
+      bandwidth: 1000
+      status: active
+      provider: Arista
+      locations:
+        - OFC-BCN-BRANCH-01
+        - AM1
+      interfaces:
+        - - OFC-BCN-BRANCH-EDGE-01
+          - GE1
+        - - AM1-VCG-01
+          - eth0

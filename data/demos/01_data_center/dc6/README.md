@@ -4,63 +4,45 @@
 
 **Location:** Katowice 🇵🇱 (Poland's and Silesian industrial powerhouse turned tech hub—where the only thing faster than the fiber is the coffee. Half the cost of Western Europe, double the sarcasm, and the rolada-modro-kapusta-gumiklyjzy-to-latency ratio is unbeatable!)
 
-**Size:** Medium (M) - Cost-effective, interoperable, and a little wild. Big enough to cause trouble, small enough to blame someone else.
-
 **Platform:** Multi-Vendor (Cisco, Arista, Dell SONiC, Edgecore SONiC) — because why settle for one vendor's bugs when you can have them all?
 
-**Design Pattern:** M-Standard (Medium with standard naming convention) — the architectural equivalent of a buffet: a little bit of everything, and you never know what you'll get next.
+**Fabric Design:** `M_EBGP_IBGP` — eBGP underlay + iBGP overlay, IPv6 P2P links. 3 pods.
+The committee compromise: eBGP underlay because multi-vendor fabrics need per-pod ASNs and nobody
+trusts OSPF to behave the same on Cisco and Edgecore at 3am. iBGP overlay because the super-spines
+are already there, they might as well do something useful as route reflectors. IPv6 underlay because
+Katowice didn't wait 20 years to adopt it — unlike certain Parisian data centers we could mention.
+The best of both worlds, or the worst of two support contracts. Depends who you ask.
 
 **Use Case:**
 Medium-sized multi-vendor data center with middle_rack deployment. It's the perfect playground for engineers who like living dangerously, managers who love vendor bingo, and auditors who enjoy existential dread. Demonstrates vendor interoperability at a scale just big enough to break things, but small enough to blame the intern. Cost-effective multi-vendor approach for medium enterprises—because why settle for one vendor's support hotline when you can have four? If you've ever wanted to see a Cisco, Arista, Dell, and Edgecore device argue about spanning tree, BGP, and whose logo is the ugliest, this is your chance.
 
-Warning: May cause spontaneous VLAN migrations, philosophical debates about port-channel naming, and a sudden urge to update your resume.
+**Motto:** "Why settle for one vendor's bugs when you can have them all?"
 
----
-
-## Architecture (Layer-Level Vendor Mix)
-
-### Fabric Scale
+## Architecture
 
 - **Super Spines:** 2 (Cisco N9K-C9336C-FX2)
-- **Total Pods:** 2
-- **Total Spines:** 4 (2+2 across pods)
-- **Total Racks:** 4 (2 per pod)
-- **Deployment Type:** middle_rack (all pods)
+- **Pods:** 3 | **Spines:** 6 (2+2+2) | **Racks:** 12
+- **Deployment:** `middle_rack`, `tor`, `mixed` — one of each, because Silesian variety is non-negotiable
 
-### Pod Structure (Vendor Mix Table)
-
-| Pod   | Spines | Vendor                | Leafs/ToRs Vendor | Racks | Deployment   |
-|-------|--------|----------------------|-------------------|-------|--------------|
-| Pod 1 | 2      | Arista (DCS-7050CX3-32C-R) | Dell SONiC      | 2     | middle_rack  |
-| Pod 2 | 2      | Edgecore (7726-32X-O)      | Cisco NX-OS     | 2     | middle_rack  |
-
----
-
-## Hardware Stack (Multi-Vendor Mayhem)
-
-### Super Spine Layer
-
-- **Model:** Cisco N9K-C9336C-FX2
-- **Ports:** 36x100GbE
-- **Role:** Inter-pod connectivity
-- **Fun Fact:** The neutral overlords
-
-### Spine Layer (Multi-Vendor)
-
-- **Pod 1:** Arista DCS-7050CX3-32C-R (2 spines)
-- **Pod 2:** Edgecore 7726-32X-O (2 spines)
-- **Ports:** 32x100GbE each
-- **Role:** Pod-level aggregation
-
-### Leaf/ToR Layer
-
-- **Pod 1:** Dell SONiC
-- **Pod 2:** Cisco NX-OS
-- **Role:** Rack-level aggregation and server connectivity
-
----
+| Pod | Spines | Design   | Deployment  | Spine Vendor | Site Layout | Personality                 |
+| --- | ------ | -------- | ----------- | ------------ | ----------- | --------------------------- |
+| 1   | 2      | M_MIDDLE | middle_rack | Cisco        | small-dc    | The Traditionalist          |
+| 2   | 2      | S_TOR    | tor         | Cisco        | small-dc    | The Impatient One           |
+| 3   | 2      | M_MIXED  | mixed       | Cisco        | small-dc    | The Compromise (as always)  |
 
 ## Quick Start
+
+```bash
+uv run inv deploy-dc --scenario dc6 --branch your_branch
+```
+
+**Warning:** Vendor interop at scale. May cause spontaneous VLAN migrations and philosophical debates.
+
+**Silesian Fact:** The rolada-to-latency ratio here is unbeatable. Also, we have 3 pods with 3 different deployment strategies because Silesians don't do half-measures.
+
+---
+
+## Alternative Quick Start
 
 ```bash
 # really quick

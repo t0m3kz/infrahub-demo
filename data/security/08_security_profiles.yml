@@ -1,41 +1,43 @@
 ---
+# Security Profiles — Threat prevention inspection levels
+#
+# Profiles are attached to policy rules, not segments directly.
+# A rule like "web→db on TCP/5432" can have "strict" inspection,
+# while "mgmt→infra on TCP/22" uses "standard".
+
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
   kind: SecuritySecurityProfile
   data:
-    - name: "strict-security"
-      description: "High security profile for critical systems"
+    - name: "strict"
+      description: "Full inspection — production database and critical workloads"
       antivirus_enabled: true
       ips_enabled: true
       url_filtering_enabled: true
+      ssl_inspection_enabled: true
+      data_loss_prevention_enabled: true
 
-    - name: "standard-security"
-      description: "Standard security profile for general use"
+    - name: "standard"
+      description: "Standard inspection — general production traffic"
       antivirus_enabled: true
       ips_enabled: true
       url_filtering_enabled: true
+      ssl_inspection_enabled: false
+      data_loss_prevention_enabled: false
 
-    - name: "guest-security"
-      description: "Security profile for guest users"
-      antivirus_enabled: true
-      ips_enabled: false
-      url_filtering_enabled: true
-
-    - name: "minimal-security"
-      description: "Minimal security profile for testing"
+    - name: "lightweight"
+      description: "Lightweight inspection — non-production and dev environments"
       antivirus_enabled: true
       ips_enabled: false
       url_filtering_enabled: false
+      ssl_inspection_enabled: false
+      data_loss_prevention_enabled: false
 
-    - name: "server-security"
-      description: "Security profile for server environments"
-      antivirus_enabled: true
-      ips_enabled: true
+    - name: "monitor-only"
+      description: "Monitoring only — log without blocking (for troubleshooting)"
+      antivirus_enabled: false
+      ips_enabled: false
       url_filtering_enabled: false
-
-    - name: "dmz-security"
-      description: "Security profile for DMZ services"
-      antivirus_enabled: true
-      ips_enabled: true
-      url_filtering_enabled: true
+      ssl_inspection_enabled: false
+      data_loss_prevention_enabled: false

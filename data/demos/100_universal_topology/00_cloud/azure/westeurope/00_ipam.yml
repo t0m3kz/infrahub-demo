@@ -1,0 +1,42 @@
+---
+# Azure westeurope IPAM namespace
+# Separate from on-prem namespaces to reflect the VNet routing domain.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: IpamNamespace
+  data:
+    - name: "CUST1-AZURE-WESTEUROPE"
+      description: "Customer 1 Azure VNet westeurope routing domain"
+      status: "active"
+      owner: "Customer 1"
+
+---
+# VNet CIDR and subnet ranges
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: IpamPrefix
+  data:
+    # VNet CIDR
+    - prefix: "172.17.0.0/16"
+      description: "Customer 1 VNet westeurope"
+      status: active
+      ip_namespace: "CUST1-AZURE-WESTEUROPE"
+
+    # AKS node pool subnets (private)
+    - prefix: "172.17.10.0/24"
+      description: "Customer 1 AKS node pool subnet westeurope zone 1"
+      status: active
+      ip_namespace: "CUST1-AZURE-WESTEUROPE"
+
+    - prefix: "172.17.20.0/24"
+      description: "Customer 1 AKS node pool subnet westeurope zone 2"
+      status: active
+      ip_namespace: "CUST1-AZURE-WESTEUROPE"
+
+    # Route destination — on-prem aggregate advertised via ExpressRoute
+    - prefix: "10.0.0.0/8"
+      description: "On-premises aggregate (advertised from DC1/DC2 via ER to ERGW)"
+      status: active
+      ip_namespace: "CUST1-AZURE-WESTEUROPE"

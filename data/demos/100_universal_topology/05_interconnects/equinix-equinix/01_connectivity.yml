@@ -1,0 +1,201 @@
+---
+# Colocation fabric interconnects: Equinix facility cross-connects and inter-metro links
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimVirtualInterface
+  data:
+    - name: VTI-FR2-AM1-PRI
+      description: "FR2 VTI for primary Equinix fabric interconnect to AM1"
+      role: uplink
+      status: active
+      device: FR2-EDGE-01
+
+    - name: VTI-AM1-FR2-PRI
+      description: "AM1 VTI for primary Equinix fabric interconnect to FR2"
+      role: uplink
+      status: active
+      device: AM1-EDGE-01
+
+    - name: VTI-FR6-AM4-SEC
+      description: "FR6 VTI for secondary Equinix fabric interconnect to AM4"
+      role: uplink
+      status: active
+      device: FR6-EDGE-01
+
+    - name: VTI-AM4-FR6-SEC
+      description: "AM4 VTI for secondary Equinix fabric interconnect to FR6"
+      role: uplink
+      status: active
+      device: AM4-EDGE-01
+
+    - name: VTI-FR2-AM4-SEC
+      description: "FR2 VTI for secondary Equinix fabric interconnect to AM4"
+      role: uplink
+      status: active
+      device: FR2-EDGE-01
+
+    - name: VTI-AM4-FR2-SEC
+      description: "AM4 VTI for secondary Equinix fabric interconnect to FR2"
+      role: uplink
+      status: active
+      device: AM4-EDGE-01
+
+    - name: VTI-FR6-AM1-PRI
+      description: "FR6 VTI for primary Equinix fabric interconnect to AM1"
+      role: uplink
+      status: active
+      device: FR6-EDGE-01
+
+    - name: VTI-AM1-FR6-PRI
+      description: "AM1 VTI for primary Equinix fabric interconnect to FR6"
+      role: uplink
+      status: active
+      device: AM1-EDGE-01
+
+    - name: VTI-FR2-PA4-XC
+      description: "FR2 VTI for Equinix fabric cross-connect to PA4"
+      role: uplink
+      status: active
+      device: FR2-EDGE-01
+
+    - name: VTI-PA4-FR2-XC
+      description: "PA4 VTI for Equinix fabric cross-connect to FR2"
+      role: uplink
+      status: active
+      device: PA4-EDGE-01
+
+    - name: VTI-FR6-PA6-XC
+      description: "FR6 VTI for Equinix fabric cross-connect to PA6"
+      role: uplink
+      status: active
+      device: FR6-EDGE-01
+
+    - name: VTI-PA6-FR6-XC
+      description: "PA6 VTI for Equinix fabric cross-connect to FR6"
+      role: uplink
+      status: active
+      device: PA6-EDGE-01
+
+    - name: VTI-FR2-FR6-XC
+      description: "FR2 VTI for Equinix fabric cross-connect to FR6"
+      role: uplink
+      status: active
+      device: FR2-EDGE-01
+
+    - name: VTI-FR6-FR2-XC
+      description: "FR6 VTI for Equinix fabric cross-connect to FR2"
+      role: uplink
+      status: active
+      device: FR6-EDGE-01
+
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologyVirtualCircuit
+  data:
+    - name: VC-EQX-FR2-AM1-PRIMARY
+      description: "Primary Equinix Fabric interconnect between FR2 and AM1"
+      link_type: equinix_fabric
+      bandwidth: 10000
+      status: active
+      provider: Equinix
+      locations:
+        - FR2
+        - AM1
+      interfaces:
+        - - FR2-EDGE-01
+          - VTI-FR2-AM1-PRI
+        - - AM1-EDGE-01
+          - VTI-AM1-FR2-PRI
+
+    - name: VC-EQX-FR6-AM4-SECONDARY
+      description: "Secondary Equinix Fabric interconnect between FR6 and AM4"
+      link_type: equinix_fabric
+      bandwidth: 10000
+      status: active
+      provider: Equinix
+      locations:
+        - FR6
+        - AM4
+      interfaces:
+        - - FR6-EDGE-01
+          - VTI-FR6-AM4-SEC
+        - - AM4-EDGE-01
+          - VTI-AM4-FR6-SEC
+
+    - name: VC-EQX-FR2-AM4-SECONDARY
+      description: "Secondary Equinix Fabric interconnect between FR2 and AM4"
+      link_type: equinix_fabric
+      bandwidth: 10000
+      status: active
+      provider: Equinix
+      locations:
+        - FR2
+        - AM4
+      interfaces:
+        - - FR2-EDGE-01
+          - VTI-FR2-AM4-SEC
+        - - AM4-EDGE-01
+          - VTI-AM4-FR2-SEC
+
+    - name: VC-EQX-FR6-AM1-PRIMARY
+      description: "Primary Equinix Fabric interconnect between FR6 and AM1"
+      link_type: equinix_fabric
+      bandwidth: 10000
+      status: active
+      provider: Equinix
+      locations:
+        - FR6
+        - AM1
+      interfaces:
+        - - FR6-EDGE-01
+          - VTI-FR6-AM1-PRI
+        - - AM1-EDGE-01
+          - VTI-AM1-FR6-PRI
+
+    - name: VC-EQX-FR2-PA4-CROSSCONNECT
+      description: "Equinix Fabric cross-connect between FR2 and PA4"
+      link_type: equinix_fabric
+      bandwidth: 10000
+      status: active
+      provider: Equinix
+      locations:
+        - FR2
+        - PA4
+      interfaces:
+        - - FR2-EDGE-01
+          - VTI-FR2-PA4-XC
+        - - PA4-EDGE-01
+          - VTI-PA4-FR2-XC
+
+    - name: VC-EQX-FR6-PA6-CROSSCONNECT
+      description: "Equinix Fabric cross-connect between FR6 and PA6"
+      link_type: equinix_fabric
+      bandwidth: 10000
+      status: active
+      provider: Equinix
+      locations:
+        - FR6
+        - PA6
+      interfaces:
+        - - FR6-EDGE-01
+          - VTI-FR6-PA6-XC
+        - - PA6-EDGE-01
+          - VTI-PA6-FR6-XC
+
+    - name: VC-EQX-FR2-FR6-CROSSCONNECT
+      description: "Equinix Fabric cross-connect between FR2 and FR6"
+      link_type: equinix_fabric
+      bandwidth: 10000
+      status: active
+      provider: Equinix
+      locations:
+        - FR2
+        - FR6
+      interfaces:
+        - - FR2-EDGE-01
+          - VTI-FR2-FR6-XC
+        - - FR6-EDGE-01
+          - VTI-FR6-FR2-XC

@@ -1,0 +1,46 @@
+---
+# BGP fabric peering sessions — requires connectors from 01_*/02_* to exist first
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: ManagedExternalFabricPeering
+  data:
+    - name: BGP-FR2-DE-CIX-PHYS
+      role: primary
+      session_type: EBGP
+      bfd_enabled: true
+      max_prefixes: 200000
+      deployment: DC1
+      external_peer: DE-CIX-RS-FR
+
+    - name: BGP-FR2-DE-CIX-VIRT
+      role: secondary
+      session_type: EBGP
+      bfd_enabled: true
+      max_prefixes: 200000
+      deployment: DC1
+      external_peer: DE-CIX-RS-FR
+
+    - name: BGP-FR6-BT-PHYS
+      role: primary
+      session_type: EBGP
+      bfd_enabled: true
+      max_prefixes: 100000
+      deployment: DC1
+      external_peer: BT-INET-PEER
+
+    - name: BGP-PA4-ACME-PHYS
+      role: primary
+      session_type: EBGP
+      bfd_enabled: true
+      max_prefixes: 50000
+      deployment: DC1
+      external_peer: ACME-PARTNER-PEER
+
+    - name: BGP-AM1-GLOBEX-VIRT
+      role: primary
+      session_type: EBGP
+      bfd_enabled: true
+      max_prefixes: 50000
+      deployment: DC2
+      external_peer: GLOBEX-PARTNER-PEER

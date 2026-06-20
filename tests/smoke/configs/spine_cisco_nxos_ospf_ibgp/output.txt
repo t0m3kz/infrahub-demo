@@ -1,0 +1,86 @@
+!
+! dc1-spine-01 Configuration
+!
+hostname dc1-spine-01
+!
+feature ospf
+feature bgp
+feature interface-vlan
+feature lacp
+feature vpc
+feature lldp
+!
+! VLANs
+!
+! Interfaces
+interface Ethernet1
+  no shutdown
+  ip address 10.1.0.1/31
+
+  ip ospf area 0.0.0.0
+!
+interface Ethernet2
+  no shutdown
+  ip address 10.1.0.3/31
+
+  ip ospf area 0.0.0.0
+!
+interface Loopback0
+  no shutdown
+  ip address 10.0.0.1/32
+
+!
+!
+! OSPF Configuration
+
+router ospf 1
+  router-id 10.0.0.1
+  auto-cost reference-bandwidth 100000
+  area None authentication message-digest
+  passive-interface default
+!
+
+!
+! BGP Configuration
+
+router bgp 65000
+  router-id 10.0.0.1
+  graceful-restart
+  !
+  template peer-policy EVPN-PEERS-POLICY
+    send-community
+    send-community extended
+    route-reflector-client
+  !
+  template peer-session EVPN-PEERS-SESSION
+    update-source loopback0
+  !
+  address-family ipv4 unicast
+    redistribute direct route-map RM-CONN-2-BGP
+    maximum-paths 8
+  !
+  address-family l2vpn evpn
+  !
+  neighbor 10.0.0.100
+    remote-as 65000
+    description spine-01
+    inherit peer-session EVPN-PEERS-SESSION
+    address-family l2vpn evpn
+      inherit peer-policy EVPN-PEERS-POLICY
+    !
+  neighbor 10.0.0.101
+    remote-as 65000
+    description spine-02
+    inherit peer-session EVPN-PEERS-SESSION
+    address-family l2vpn evpn
+      inherit peer-policy EVPN-PEERS-POLICY
+    !
+!
+
+!
+
+!
+! Management
+line console
+line vty
+!

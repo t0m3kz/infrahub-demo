@@ -1,0 +1,11 @@
+---
+# DC3 building — Amsterdam
+apiVersion: infrahub.app/v1
+version: "1.0"
+kind: Object
+spec:
+  kind: LocationBuilding
+  data:
+    - name: "DC3"
+      shortname: "dc3"
+      parent: "ams"

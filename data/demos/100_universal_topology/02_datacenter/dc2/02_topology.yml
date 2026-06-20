@@ -1,0 +1,17 @@
+---
+# Data center DC2 topology with pods
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologyDataCenter
+  data:
+    - name: DC2
+      index: 2
+      super_spine_template: N9K-C9336C-FX2_SUPER_SPINE
+      children:
+        kind: TopologyPod
+        data:
+          - index: 1
+            spine_template: N9K-C9336C-FX2_SPINE
+          - index: 2
+            spine_template: N9K-C9336C-FX2_SPINE

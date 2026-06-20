@@ -34,11 +34,10 @@ class MockInterface:
         """
         self.name: Any = Mock(value=name)
         self.device: Any = Mock(display_label=device_label)
+        self.cable: Any = None
 
 
-def create_mock_interfaces(
-    device_label: str, interface_names: list[str]
-) -> list[MockInterface]:
+def create_mock_interfaces(device_label: str, interface_names: list[str]) -> list[MockInterface]:
     """Helper to create multiple mock interfaces for a device.
 
     Args:

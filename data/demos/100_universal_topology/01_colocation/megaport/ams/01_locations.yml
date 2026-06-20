@@ -1,0 +1,11 @@
+---
+# Amsterdam Megaport building
+apiVersion: infrahub.app/v1
+version: "1.0"
+kind: Object
+spec:
+  kind: LocationBuilding
+  data:
+    - name: "MCR-AMS1"
+      shortname: "mcr-ams1"
+      parent: "ams"

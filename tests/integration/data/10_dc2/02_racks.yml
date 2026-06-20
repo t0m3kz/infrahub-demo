@@ -1,0 +1,24 @@
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: LocationRack
+  data:
+    - index: 1
+      row_index: 1
+      shortname: ktw-1-s-4-r-1-1
+      rack_type: tor
+      pod: DC2-2-POD-1
+      parent: ktw-1-s-4
+      member_of_groups: [topologies_rack]
+      fabric_templates:
+        - ["2", "tor", "N9K-C9336C-FX2_TOR"]
+    - index: 5
+      row_index: 1
+      shortname: ktw-1-s-4-r-1-5
+      rack_type: tor
+      pod: DC2-2-POD-1
+      parent: ktw-1-s-4
+      member_of_groups: [topologies_rack]
+      fabric_templates:
+        - ["2", "tor", "N9K-C9336C-FX2_TOR"]

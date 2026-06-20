@@ -20,17 +20,17 @@ vlan {{ vlan.vlan_id }}
 ! Interfaces
 {%- for interface in interfaces %}
 interface {{ interface.name }}
+{%- if interface.description %}
+  description {{ interface.description }}
+{%- elif interface.circuits %}
+  description {{ interface.circuits[0].circuit_type|upper }} - {{ interface.circuits[0].circuit_id }} - {{ interface.circuits[0].provider }}
+{%- elif interface.virtual_links %}
+  description {{ interface.virtual_links[0].link_type|upper }} - {{ interface.virtual_links[0].link_name }} - {{ interface.virtual_links[0].provider }}
+{%- endif %}
 {%- if interface.status == 'active' %}
   no shutdown
 {%- endif %}
-{%- if interface.ip_addresses %}
-{%- for ip in interface.ip_addresses %}
-  ip address {{ ip.address }}
-{%- if ip.get('ip_namespace', {}).get('name', 'default') != "default" %}
-  vrf member {{ ip.get('ip_namespace', {}).get('name') }}
-{%- endif %}
-{%- endfor %}
-{%- endif %}
+{%- include 'common/cisco_nxos_interface_ip.j2' %}
 {%- if interface.vlans %}
   switchport
   switchport mode access
@@ -43,54 +43,12 @@ interface {{ interface.name }}
 {%- endfor %}
 !
 ! OSPF Configuration
-{%- for ospf_config in ospf %}
-router ospf {{ ospf_config.process_id }}
-  router-id {{ ospf_config.router_id.split('/')[0] }}
-  area {{ ospf_config.area }} authentication message-digest
-  auto-cost reference-bandwidth {{ ospf_config.reference_bandwidth }}
-  passive-interface default
-{%- for interface in interfaces %}
-{%- if interface.get('ospf') and interface.ospf.area == ospf_config.area %}
-  no passive-interface {{ interface.name }}
-{%- endif %}
-{%- endfor %}
-!
-{%- endfor %}
+{% include 'common/cisco_nxos_ospf.j2' %}
 !
 ! BGP Configuration
-{%- for bgp_config in bgp %}
-router bgp {{ bgp_config.local_as.asn }}
-  router-id {{ bgp_config.router_id.address.split('/')[0] }}
-{%- if bgp_config.graceful_restart %}
-  graceful-restart
-{%- endif %}
-  !
-  template peer-policy {{ bgp_config.profile }}
-    send-community
-    send-community extended
-{%- if bgp_config.session_type == 'INTERNAL' %}
-    route-reflector-client
-{%- endif %}
-  !
-  template peer-session {{ bgp_config.profile }}-SESSION
-    update-source {{ bgp_config.local_ip.address.split('/')[0] }}
-  !
-  address-family ipv4 unicast
-{%- if bgp_config.multipath %}
-    maximum-paths 8
-{%- endif %}
-  !
-  address-family l2vpn evpn
-{%- for session in bgp_config.sessions %}
-  neighbor {{ session.remote_ip.address.split('/')[0] }}
-    remote-as {{ session.remote_as.asn }}
-    inherit peer-session {{ bgp_config.profile }}-SESSION
-    address-family l2vpn evpn
-      inherit peer-policy {{ bgp_config.profile }}
-    !
-{%- endfor %}
+{% include 'common/cisco_nxos_bgp.j2' %}
 !
-{%- endfor %}
+{%- include 'common/cisco_nxos_management.j2' %}
 !
 ! Management
 line console

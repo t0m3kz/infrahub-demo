@@ -1,0 +1,15 @@
+---
+# BT Internet provider (nested from external root)
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologyExternal
+  data:
+    - name: Internet
+      children:
+        kind: TopologyExternalProviders
+        data:
+          - name: INET-BT-INTERNET
+            provider_type: internet
+            status: active
+            provider: BT

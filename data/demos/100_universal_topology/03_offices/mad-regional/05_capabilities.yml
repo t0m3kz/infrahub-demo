@@ -1,0 +1,112 @@
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: ManagedNTP
+  data:
+    - name: OFC-MAD-NTP
+      status: active
+      profiles:
+        - office-ntp-default
+      device_capabilities:
+        - OFC-MAD-REGIONAL-EDGE-01
+        - OFC-MAD-REGIONAL-EDGE-02
+        - OFC-MAD-REGIONAL-ACC-01
+        - OFC-MAD-REGIONAL-ACC-02
+        - OFC-MAD-REGIONAL-AP-01
+        - OFC-MAD-REGIONAL-AP-02
+        - OFC-MAD-REGIONAL-AP-03
+        - OFC-MAD-REGIONAL-AP-04
+        - OFC-MAD-REGIONAL-AP-05
+        - OFC-MAD-REGIONAL-AP-06
+        - OFC-MAD-REGIONAL-AP-07
+        - OFC-MAD-REGIONAL-AP-08
+      servers:
+        kind: ManagedNTPServer
+        data:
+          - name: primary
+            address:
+              - "162.159.200.1/32"
+              - "default"
+            prefer: true
+            version: 4
+          - name: secondary
+            address:
+              - "162.159.200.123/32"
+              - "default"
+            prefer: false
+            version: 4
+
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: ManagedSyslog
+  data:
+    - name: OFC-MAD-Syslog
+      status: active
+      profiles:
+        - office-syslog-default
+      device_capabilities:
+        - OFC-MAD-REGIONAL-EDGE-01
+        - OFC-MAD-REGIONAL-EDGE-02
+        - OFC-MAD-REGIONAL-ACC-01
+        - OFC-MAD-REGIONAL-ACC-02
+        - OFC-MAD-REGIONAL-AP-01
+        - OFC-MAD-REGIONAL-AP-02
+        - OFC-MAD-REGIONAL-AP-03
+        - OFC-MAD-REGIONAL-AP-04
+        - OFC-MAD-REGIONAL-AP-05
+        - OFC-MAD-REGIONAL-AP-06
+        - OFC-MAD-REGIONAL-AP-07
+        - OFC-MAD-REGIONAL-AP-08
+      servers:
+        kind: ManagedSyslogServer
+        data:
+          - name: server-1
+            address:
+              - "10.0.0.100/32"
+              - "default"
+            port: 514
+            severity: informational
+
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: ManagedAAA
+  data:
+    - name: OFC-MAD-AAA
+      status: active
+      profiles:
+        - office-aaa-default
+      device_capabilities:
+        - OFC-MAD-REGIONAL-EDGE-01
+        - OFC-MAD-REGIONAL-EDGE-02
+        - OFC-MAD-REGIONAL-ACC-01
+        - OFC-MAD-REGIONAL-ACC-02
+        - OFC-MAD-REGIONAL-AP-01
+        - OFC-MAD-REGIONAL-AP-02
+        - OFC-MAD-REGIONAL-AP-03
+        - OFC-MAD-REGIONAL-AP-04
+        - OFC-MAD-REGIONAL-AP-05
+        - OFC-MAD-REGIONAL-AP-06
+        - OFC-MAD-REGIONAL-AP-07
+        - OFC-MAD-REGIONAL-AP-08
+      servers:
+        kind: ManagedAAAServer
+        data:
+          - name: primary
+            address:
+              - "10.0.0.200/32"
+              - "default"
+            protocol: tacacs
+            port: 49
+            timeout: 5
+          - name: secondary
+            address:
+              - "10.0.0.201/32"
+              - "default"
+            protocol: tacacs
+            port: 49
+            timeout: 5

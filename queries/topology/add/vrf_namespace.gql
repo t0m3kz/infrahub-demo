@@ -1,0 +1,11 @@
+query vrf_namespace_data($name: String!) {
+  IpamNamespace(name__value: $name) {
+    edges {
+      node {
+        id
+        name { value }
+        l3_vni { value }
+      }
+    }
+  }
+}

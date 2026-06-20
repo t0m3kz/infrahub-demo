@@ -1,0 +1,62 @@
+{#- SONiC config-DB VXLAN variable building.
+    Populates pre-initialized dicts from parent scope via in-place .update():
+    vxlan_tunnel, vxlan_tunnel_map, vrf_config, vrf_loopback_interfaces, evpn_nvo
+    Also mutates loopback_interfaces (must be populated by sonic_common.j2 first). -#}
+{%- if vxlan and vxlan.enabled -%}
+{%- set _ = vxlan_tunnel.update({
+  vxlan.interface: {
+    'src_ip': vxlan.vtep.ipv4
+  }
+}) -%}
+{%- endif -%}
+{%- if vxlan and vxlan.enabled -%}
+{%- if vxlan.l2_vni_mappings -%}
+{%- for mapping in vxlan.l2_vni_mappings -%}
+{%- set key = vxlan.interface + '|map_' + mapping.vni|string + '_Vlan' + mapping.vlan_id|string -%}
+{%- set _ = vxlan_tunnel_map.update({
+  key: {
+    'vlan': 'Vlan' + mapping.vlan_id|string,
+    'vni': mapping.vni|string
+  }
+}) -%}
+{%- endfor -%}
+{%- endif -%}
+{%- if vxlan.l3_vni_mappings -%}
+{%- for mapping in vxlan.l3_vni_mappings -%}
+{%- set key = vxlan.interface + '|map_' + mapping.l3_vni|string + '_' + mapping.vrf_name -%}
+{%- set _ = vxlan_tunnel_map.update({
+  key: {
+    'vrf': mapping.vrf_name,
+    'vni': mapping.l3_vni|string
+  }
+}) -%}
+{%- endfor -%}
+{%- endif -%}
+{%- endif -%}
+{%- if vxlan and vxlan.enabled and vxlan.l3_vni_mappings -%}
+{%- for mapping in vxlan.l3_vni_mappings -%}
+{%- set _ = vrf_config.update({
+  mapping.vrf_name: {
+    'vni': mapping.l3_vni|string
+  }
+}) -%}
+{%- endfor -%}
+{%- endif -%}
+{%- if vxlan and vxlan.enabled and vxlan.vrf_loopbacks -%}
+{%- for loopback in vxlan.vrf_loopbacks -%}
+{%- set key = loopback.name + '|' + loopback.ip + '/32' -%}
+{%- set _ = vrf_loopback_interfaces.update({
+  key: {
+    'vrf_name': loopback.vrf
+  }
+}) -%}
+{%- endfor -%}
+{%- set _ = loopback_interfaces.update(vrf_loopback_interfaces) -%}
+{%- endif -%}
+{%- if vxlan and vxlan.enabled and vxlan.evpn and vxlan.evpn.enabled -%}
+{%- set _ = evpn_nvo.update({
+  'nvo1': {
+    'source_vtep': vxlan.interface
+  }
+}) -%}
+{%- endif -%}

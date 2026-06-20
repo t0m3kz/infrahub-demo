@@ -1,0 +1,47 @@
+---
+# Per-customer VRF namespaces for multi-tenant VXLAN-EVPN
+#
+# Each customer gets a dedicated BuiltinIPNamespace (= VRF):
+#   - l3_vni: unique L3 VNI for symmetric IRB
+#   - owner: customer organization
+#   - deployments: DCs where this VRF is active
+#
+# Convention:
+#   - "default" namespace = underlay/infrastructure (no l3_vni, no owner)
+#   - Any namespace with l3_vni = active EVPN VRF
+#
+# Note: `deployments` is a cardinality-many relationship and cannot
+# be set via YAML object loader. Use the SDK or UI to link namespaces
+# to their target deployments after loading.
+
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: IpamNamespace
+  data:
+    # Customer 1 — production VRF
+    - name: "CUST001-PROD"
+      description: "Customer 1 production VRF"
+      l3_vni: 50001
+      status: "active"
+      owner: "Customer 1"
+
+    # Customer 1 — non-production VRF
+    - name: "CUST001-NONPROD"
+      description: "Customer 1 non-production VRF (dev/staging)"
+      l3_vni: 50002
+      status: "active"
+      owner: "Customer 1"
+
+    # Customer 2 — production VRF
+    - name: "CUST002-PROD"
+      description: "Customer 2 production VRF"
+      l3_vni: 50003
+      status: "active"
+      owner: "Customer 2"
+
+    # Shared services VRF (DNS, NTP, monitoring — accessible from all tenants)
+    - name: "SHARED-SERVICES"
+      description: "Shared infrastructure services VRF"
+      l3_vni: 50100
+      status: "active"

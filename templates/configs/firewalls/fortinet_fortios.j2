@@ -1,0 +1,90 @@
+{#- Fortinet FortiOS — zone-based firewall configuration -#}
+config system global
+    set hostname "{{ name }}"
+end
+{%- if fw_interfaces %}
+#
+# --- Interfaces ---
+config system interface
+{%- for iface in fw_interfaces %}
+{%- if iface.vlan_id and iface.parent_interface %}
+    edit "{{ iface.parent_interface.name }}.{{ iface.vlan_id }}"
+        set type vlan
+        set vlanid {{ iface.vlan_id }}
+        set interface "{{ iface.parent_interface.name }}"
+{%- else %}
+    edit "{{ iface.name }}"
+{%- endif %}
+{%- if iface.ip_address %}
+        set ip {{ iface.ip_address.address }}
+{%- endif %}
+        set allowaccess ping https ssh
+        set status up
+{%- if iface.description %}
+        set description "{{ iface.description }}"
+{%- endif %}
+{%- if iface.security_zone %}
+        set alias "{{ iface.security_zone.name }}"
+{%- endif %}
+    next
+{%- endfor %}
+end
+{%- endif %}
+{%- if zones %}
+#
+# --- Address Objects (one per zone member CIDR) ---
+config firewall address
+{%- for zone in zones %}
+{%- for cidr in zone.member_cidrs %}
+    edit "{{ cidr }}"
+        set subnet {{ cidr | replace('/', ' ') }}
+        set comment "Zone: {{ zone.name }}"
+    next
+{%- endfor %}
+{%- endfor %}
+end
+{%- endif %}
+{%- if static_routes %}
+#
+# --- Static Routes (return path to leaf per zone) ---
+config router static
+{%- for route in static_routes %}
+    edit {{ loop.index }}
+        set dst {{ route.destination }}
+        set gateway {{ route.nexthop }}
+        set device "{{ route.interface }}"
+        set comment "Return path: {{ route.vrf }}"
+    next
+{%- endfor %}
+end
+{%- endif %}
+{%- if zone_policies %}
+#
+# --- Security Policies ---
+config firewall policy
+{%- for policy in zone_policies %}
+{%- for rule in policy.rules %}
+    edit {{ rule.seq }}
+        set name "{{ rule.name }}"
+        set srcintf "{{ rule.src_zone or 'any' }}"
+        set dstintf "{{ rule.dst_zone or 'any' }}"
+        set srcaddr "{{ rule.src or 'all' }}"
+        set dstaddr "{{ rule.dst or 'all' }}"
+        set action {{ 'accept' if rule.action == 'permit' else 'deny' }}
+        set schedule "always"
+        set service "ALL"
+{%- if rule.log %}
+        set logtraffic all
+{%- endif %}
+{%- if rule.security_profile %}
+        set utm-status enable
+        set av-profile "{{ rule.security_profile }}"
+{%- endif %}
+{%- if rule.description %}
+        set comments "{{ rule.description }}"
+{%- endif %}
+    next
+{%- endfor %}
+{%- endfor %}
+end
+{%- endif %}

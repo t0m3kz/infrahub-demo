@@ -1,0 +1,41 @@
+---
+# Stuttgart branch office devices
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimPhysicalDevice
+  data:
+    - name: OFC-STR-BRANCH-EDGE-01
+      object_template: VCE-610_EDGE
+      status: active
+      deployment: OFC-STR-BRANCH-01
+
+    - name: OFC-STR-BRANCH-ACC-01
+      object_template: C9200L-24P-4G_ACCESS
+      status: active
+      deployment: OFC-STR-BRANCH-01
+
+    - name: OFC-STR-BRANCH-AP-01
+      object_template: C9130AXI-B_AP
+      status: active
+      deployment: OFC-STR-BRANCH-01
+
+    - name: OFC-STR-BRANCH-AP-02
+      object_template: C9130AXI-B_AP
+      status: active
+      deployment: OFC-STR-BRANCH-01
+
+    - name: OFC-STR-BRANCH-AP-03
+      object_template: C9130AXI-B_AP
+      status: active
+      deployment: OFC-STR-BRANCH-01
+
+    - name: OFC-STR-BRANCH-AP-04
+      object_template: C9130AXI-B_AP
+      status: active
+      deployment: OFC-STR-BRANCH-01
+
+    - name: OFC-STR-BRANCH-PRN-01
+      object_template: Dell-H625cdw-MFP_PRINTER
+      status: active
+      deployment: OFC-STR-BRANCH-01

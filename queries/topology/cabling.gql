@@ -1,12 +1,19 @@
 fragment PhysicalInterfaceFields on DcimPhysicalInterface {
   hfid
-  name { value }
+  name {
+    value
+  }
   device {
     node {
       ... on DcimPhysicalDevice {
+        name {
+          value
+        }
         rack {
           node {
-            name { value }
+            name {
+              value
+            }
           }
         }
       }
@@ -17,7 +24,10 @@ fragment PhysicalInterfaceFields on DcimPhysicalInterface {
 fragment CableFields on DcimCable {
   __typename
   id
-  type { value }
+  display_label
+  type {
+    value
+  }
   endpoints {
     edges {
       node {
@@ -27,36 +37,20 @@ fragment CableFields on DcimCable {
   }
 }
 
-query FabricCablingPlanQuery($name: String!) {
-  TopologyDeployment(name__value: $name) {
+query topology_cabling($id: ID) {
+  TopologyPhysicalDeployment(ids: [$id]) {
     edges {
       node {
-        children {
+        cables {
           edges {
             node {
-              ... on TopologyPod {
-                name { value }
-                devices {
-                  edges {
-                    node {
-                      interfaces {
-                        edges {
-                          node {
-                            ... on DcimPhysicalInterface {
-                              cable {
-                                node {
-                                  ...CableFields
-                                }
-                              }
-                            }
-                          }
-                        }
-                      }
-                    }
-                  }
-                }
-              }
+              ...CableFields
             }
+          }
+        }
+        ... on TopologyDeployment{
+          name{
+            value
           }
         }
       }

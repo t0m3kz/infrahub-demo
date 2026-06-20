@@ -1,0 +1,24 @@
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: LocationRack
+  data:
+    - index: 4
+      row_index: 1
+      shortname: ktw-1-s-6-r-1-4
+      rack_type: network
+      pod: DC4-4-POD-1
+      parent: ktw-1-s-6
+      member_of_groups: [topologies_rack]
+      fabric_templates:
+        - ["2", "leaf", "DCS-7050CX3-32C-R_LEAF_MIXED"]
+    - index: 1
+      row_index: 1
+      shortname: ktw-1-s-6-r-1-1
+      rack_type: tor
+      pod: DC4-4-POD-1
+      parent: ktw-1-s-6
+      member_of_groups: [topologies_rack]
+      fabric_templates:
+        - ["2", "tor", "DCS-7050CX3-32C-R_TOR"]

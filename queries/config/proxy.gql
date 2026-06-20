@@ -1,0 +1,184 @@
+query proxy_saas_config($instance: String!) {
+  SaasProxy(name__value: $instance) {
+    edges {
+      node {
+        id
+        name { value }
+        status { value }
+        proxy_type { value }
+        vendor { value }
+        cloud_node { value }
+        provisioning_key_ref { value }
+        customer {
+          node {
+            name { value }
+          }
+        }
+        saas_topology {
+          node {
+            name { value }
+          }
+        }
+        policies {
+          edges {
+            node {
+              id
+              name { value }
+              default_action { value }
+              enabled { value }
+              cloud_zone {
+                node {
+                  name { value }
+                }
+              }
+              colo_zone {
+                node {
+                  name { value }
+                }
+              }
+              cloud_instances {
+                edges {
+                  node {
+                    name { value }
+                  }
+                }
+              }
+              onprem_devices {
+                edges {
+                  node {
+                    name { value }
+                  }
+                }
+              }
+              rules {
+                edges {
+                  node {
+                    id
+                    index { value }
+                    name { value }
+                    action { value }
+                    destination_type { value }
+                    destination_value { value }
+                    protocol { value }
+                    log { value }
+                    disabled { value }
+                    source_segments {
+                      edges {
+                        node {
+                          name { value }
+                        }
+                      }
+                    }
+                    url_categories {
+                      edges {
+                        node {
+                          name { value }
+                          url_patterns { value }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+query proxy_onprem_config($instance: String!) {
+  OnpremProxy(name__value: $instance) {
+    edges {
+      node {
+        id
+        name { value }
+        status { value }
+        proxy_type { value }
+        vendor { value }
+        proxy_port { value }
+        forwarding_method { value }
+        auth_type { value }
+        ssl_inspection { value }
+        wccp_service_id { value }
+        deployment {
+          node {
+            name { value }
+          }
+        }
+        devices {
+          edges {
+            node {
+              name { value }
+            }
+          }
+        }
+        policies {
+          edges {
+            node {
+              id
+              name { value }
+              default_action { value }
+              enabled { value }
+              cloud_zone {
+                node {
+                  name { value }
+                }
+              }
+              colo_zone {
+                node {
+                  name { value }
+                }
+              }
+              cloud_instances {
+                edges {
+                  node {
+                    name { value }
+                  }
+                }
+              }
+              onprem_devices {
+                edges {
+                  node {
+                    name { value }
+                  }
+                }
+              }
+              rules {
+                edges {
+                  node {
+                    id
+                    index { value }
+                    name { value }
+                    action { value }
+                    destination_type { value }
+                    destination_value { value }
+                    protocol { value }
+                    log { value }
+                    disabled { value }
+                    source_segments {
+                      edges {
+                        node {
+                          name { value }
+                        }
+                      }
+                    }
+                    url_categories {
+                      edges {
+                        node {
+                          name { value }
+                          url_patterns { value }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

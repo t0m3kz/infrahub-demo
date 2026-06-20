@@ -1,0 +1,127 @@
+---
+# Azure westeurope: AKS cluster + node pool (universal VirtCluster / VirtNodePool)
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: VirtCluster
+  data:
+    - name: CUST1-AKS-WESTEUROPE
+      platform: aks
+      version: "1.30"
+      status: active
+      ha_enabled: true
+      deployment: westeurope
+      cloud_account: CUST1-AZURE
+      virtual_network: CUST1-VNET-WESTEUROPE
+
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: VirtNodePool
+  data:
+    - name: CUST1-AKS-NODEPOOL-WESTEUROPE
+      cluster: CUST1-AKS-WESTEUROPE
+      pool_type: worker
+      scaling_mode: autoscaling
+      status: active
+      min_size: 2
+      max_size: 8
+      desired_capacity: 4
+      instance_flavor: Standard_D4s_v3
+      image: AKS-Ubuntu-22.04
+      os_type: linux
+      network_segments:
+        - customer-1-aks-zone1-production
+        - customer-1-aks-zone2-production
+
+# ── CUST1-AKS-WESTEUROPE capabilities ────────────────────────────────────────
+
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: VirtCNI
+  data:
+    - name: CUST1-AKS-WESTEUROPE-CNI
+      status: active
+      plugin: azure_cni
+      version: "1.5.35"
+      pod_cidr: "10.244.0.0/16"
+      service_cidr: "10.96.0.0/16"
+      encapsulation: none
+      bgp_enabled: false
+      cluster_capabilities:
+        - CUST1-AKS-WESTEUROPE
+
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: VirtStorageBackend
+  data:
+    - name: CUST1-AKS-WESTEUROPE-STORAGE
+      status: active
+      backend_type: cinder
+      version: "Azure Disk CSI 1.30.3"
+      default_class: true
+      reclaim_policy: delete
+      cluster_capabilities:
+        - CUST1-AKS-WESTEUROPE
+
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: VirtIngress
+  data:
+    - name: CUST1-AKS-WESTEUROPE-INGRESS
+      status: active
+      controller: azure_appgw
+      version: "1.7.5"
+      cluster_capabilities:
+        - CUST1-AKS-WESTEUROPE
+
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: VirtRegistry
+  data:
+    - name: CUST1-AKS-WESTEUROPE-REGISTRY
+      status: active
+      registry_type: acr
+      endpoint: "cust1registry.azurecr.io"
+      insecure: false
+      cluster_capabilities:
+        - CUST1-AKS-WESTEUROPE
+
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: VirtManagementPlane
+  data:
+    - name: CUST1-AKS-WESTEUROPE-MGMT
+      status: active
+      endpoint: "cust1-aks-westeurope.hcp.westeurope.azmk8s.io"
+      endpoint_access: private
+      port: 443
+      auth_method: oidc
+      cluster_capabilities:
+        - CUST1-AKS-WESTEUROPE
+
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: VirtMonitoring
+  data:
+    - name: CUST1-AKS-WESTEUROPE-MONITORING
+      status: active
+      stack: prometheus_grafana
+      version: "kube-prometheus-stack 65.1.0"
+      retention_days: 15
+      remote_write: "https://cust1-amp.westeurope.monitoring.azure.com/dataCollectionRules/dcr-abc123/streams/Microsoft-PrometheusMetrics/api/v1/write"  # yamllint disable-line rule:line-length
+      cluster_capabilities:
+        - CUST1-AKS-WESTEUROPE

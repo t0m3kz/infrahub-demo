@@ -1,0 +1,22 @@
+---
+# New tor rack added to DC1 POD-2 (tor deployment)
+# POD-2 uses tor deployment: tors connect directly to spines.
+#
+# NOTE: This rack is created via SDK in the test (not via infrahubctl object load)
+# because v1.8.0 fails with "Relationship has not been initialized yet" when
+# upserting nodes with relationships on branches.
+#
+# After creating the rack, the test runs the pod generator for DC1-1-POD-2,
+# which sets the checksum on the new rack and cascades to the rack generator.
+#
+# Rack details (for reference):
+#   kind: LocationRack
+#   index: 6
+#   row_index: 2
+#   shortname: ktw-1-s-2-r-2-6
+#   rack_type: tor
+#   pod: DC1-1-POD-2
+#   parent: ktw-1-s-2
+#   member_of_groups: [topologies_rack]
+#   fabric_templates:
+#     - ["2", "tor", "N9K-C9336C-FX2_TOR"]

@@ -1,0 +1,44 @@
+query GetDCDevices($dc_name: String!) {
+  TopologyDataCenter(name__value: $dc_name) {
+    edges {
+      node {
+        devices {
+          edges {
+            node {
+              name { value }
+              role { value }
+            }
+          }
+        }
+      }
+    }
+  }
+  TopologyPod(parent__name__value: $dc_name) {
+    edges {
+      node {
+        devices {
+          edges {
+            node {
+              name { value }
+              role { value }
+            }
+          }
+        }
+        racks {
+          edges {
+            node {
+              devices {
+                edges {
+                  node {
+                    name { value }
+                    role { value }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

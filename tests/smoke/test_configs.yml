@@ -1,0 +1,429 @@
+---
+version: "1.0"
+infrahub_tests:
+  - resource: PythonTransform
+    resource_name: leaf
+    tests:
+      - name: arista_eos_ebgp_ibgp
+        expect: PASS
+        spec:
+          kind: python-transform-unit-process
+          directory: configs/leaf_arista_eos_ebgp_ibgp
+      - name: arista_eos_ospf_ibgp
+        expect: PASS
+        spec:
+          kind: python-transform-unit-process
+          directory: configs/leaf_arista_eos_ospf_ibgp
+      - name: cisco_nxos_ebgp_ibgp
+        expect: PASS
+        spec:
+          kind: python-transform-unit-process
+          directory: configs/leaf_cisco_nxos_ebgp_ibgp
+      - name: cisco_nxos_ospf_ibgp
+        expect: PASS
+        spec:
+          kind: python-transform-unit-process
+          directory: configs/leaf_cisco_nxos_ospf_ibgp
+      - name: dell_sonic_ebgp_ibgp
+        expect: PASS
+        spec:
+          kind: python-transform-unit-process
+          directory: configs/leaf_dell_sonic_ebgp_ibgp
+      - name: dell_sonic_ospf_ibgp
+        expect: PASS
+        spec:
+          kind: python-transform-unit-process
+          directory: configs/leaf_dell_sonic_ospf_ibgp
+      - name: nokia_sros_ebgp_ibgp
+        expect: PASS
+        spec:
+          kind: python-transform-unit-process
+          directory: configs/leaf_nokia_sros_ebgp_ibgp
+      - name: nokia_sros_ospf_ibgp
+        expect: PASS
+        spec:
+          kind: python-transform-unit-process
+          directory: configs/leaf_nokia_sros_ospf_ibgp
+      - name: sonic_ebgp_ibgp
+        expect: PASS
+        spec:
+          kind: python-transform-unit-process
+          directory: configs/leaf_sonic_ebgp_ibgp
+      - name: sonic_ospf_ibgp
+        expect: PASS
+        spec:
+          kind: python-transform-unit-process
+          directory: configs/leaf_sonic_ospf_ibgp
+      - name: arista_eos_with_acl
+        expect: PASS
+        spec:
+          kind: python-transform-unit-process
+          directory: configs/leaf_arista_eos_with_acl
+      - name: cisco_nxos_with_acl
+        expect: PASS
+        spec:
+          kind: python-transform-unit-process
+          directory: configs/leaf_cisco_nxos_with_acl
+      - name: dell_sonic_with_acl
+        expect: PASS
+        spec:
+          kind: python-transform-unit-process
+          directory: configs/leaf_dell_sonic_with_acl
+      - name: nokia_sros_with_acl
+        expect: PASS
+        spec:
+          kind: python-transform-unit-process
+          directory: configs/leaf_nokia_sros_with_acl
+      - name: sonic_with_acl
+        expect: PASS
+        spec:
+          kind: python-transform-unit-process
+          directory: configs/leaf_sonic_with_acl
+      - name: arista_eos_vlan_pod
+        expect: PASS
+        spec:
+          kind: python-transform-unit-process
+          directory: configs/leaf_arista_eos_vlan_pod
+      - name: arista_eos_mlag
+        expect: PASS
+        spec:
+          kind: python-transform-unit-process
+          directory: configs/leaf_arista_eos_mlag
+      - name: cisco_nxos_mlag
+        expect: PASS
+        spec:
+          kind: python-transform-unit-process
+          directory: configs/leaf_cisco_nxos_mlag
+      - name: dell_sonic_mlag
+        expect: PASS
+        spec:
+          kind: python-transform-unit-process
+          directory: configs/leaf_dell_sonic_mlag
+      - name: nokia_sros_mlag
+        expect: PASS
+        spec:
+          kind: python-transform-unit-process
+          directory: configs/leaf_nokia_sros_mlag
+      - name: sonic_mlag
+        expect: PASS
+        spec:
+          kind: python-transform-unit-process
+          directory: configs/leaf_sonic_mlag
+  - resource: PythonTransform
+    resource_name: spine
+    tests:
+      - name: arista_eos_ebgp_ibgp
+        expect: PASS
+        spec:
+          kind: python-transform-unit-process
+          directory: configs/spine_arista_eos_ebgp_ibgp
+      - name: arista_eos_ospf_ibgp
+        expect: PASS
+        spec:
+          kind: python-transform-unit-process
+          directory: configs/spine_arista_eos_ospf_ibgp
+      - name: cisco_nxos_ebgp_ibgp
+        expect: PASS
+        spec:
+          kind: python-transform-unit-process
+          directory: configs/spine_cisco_nxos_ebgp_ibgp
+      - name: cisco_nxos_ospf_ibgp
+        expect: PASS
+        spec:
+          kind: python-transform-unit-process
+          directory: configs/spine_cisco_nxos_ospf_ibgp
+      - name: dell_sonic_ebgp_ibgp
+        expect: PASS
+        spec:
+          kind: python-transform-unit-process
+          directory: configs/spine_dell_sonic_ebgp_ibgp
+      - name: dell_sonic_ospf_ibgp
+        expect: PASS
+        spec:
+          kind: python-transform-unit-process
+          directory: configs/spine_dell_sonic_ospf_ibgp
+      - name: edgecore_sonic_ebgp_ibgp
+        expect: PASS
+        spec:
+          kind: python-transform-unit-process
+          directory: configs/spine_edgecore_sonic_ebgp_ibgp
+      - name: edgecore_sonic_ospf_ibgp
+        expect: PASS
+        spec:
+          kind: python-transform-unit-process
+          directory: configs/spine_edgecore_sonic_ospf_ibgp
+      - name: nokia_sros_ebgp_ibgp
+        expect: PASS
+        spec:
+          kind: python-transform-unit-process
+          directory: configs/spine_nokia_sros_ebgp_ibgp
+      - name: nokia_sros_ospf_ibgp
+        expect: PASS
+        spec:
+          kind: python-transform-unit-process
+          directory: configs/spine_nokia_sros_ospf_ibgp
+      - name: sonic_ebgp_ibgp
+        expect: PASS
+        spec:
+          kind: python-transform-unit-process
+          directory: configs/spine_sonic_ebgp_ibgp
+      - name: sonic_ospf_ibgp
+        expect: PASS
+        spec:
+          kind: python-transform-unit-process
+          directory: configs/spine_sonic_ospf_ibgp
+  - resource: PythonTransform
+    resource_name: super_spine
+    tests:
+      - name: arista_eos_ebgp_ibgp
+        expect: PASS
+        spec:
+          kind: python-transform-unit-process
+          directory: configs/super_spine_arista_eos_ebgp_ibgp
+      - name: arista_eos_ospf_ibgp
+        expect: PASS
+        spec:
+          kind: python-transform-unit-process
+          directory: configs/super_spine_arista_eos_ospf_ibgp
+      - name: cisco_nxos_ebgp_ibgp
+        expect: PASS
+        spec:
+          kind: python-transform-unit-process
+          directory: configs/super_spine_cisco_nxos_ebgp_ibgp
+      - name: cisco_nxos_ospf_ibgp
+        expect: PASS
+        spec:
+          kind: python-transform-unit-process
+          directory: configs/super_spine_cisco_nxos_ospf_ibgp
+      - name: dell_sonic_ebgp_ibgp
+        expect: PASS
+        spec:
+          kind: python-transform-unit-process
+          directory: configs/super_spine_dell_sonic_ebgp_ibgp
+      - name: dell_sonic_ospf_ibgp
+        expect: PASS
+        spec:
+          kind: python-transform-unit-process
+          directory: configs/super_spine_dell_sonic_ospf_ibgp
+      - name: nokia_sros_ebgp_ibgp
+        expect: PASS
+        spec:
+          kind: python-transform-unit-process
+          directory: configs/super_spine_nokia_sros_ebgp_ibgp
+      - name: nokia_sros_ospf_ibgp
+        expect: PASS
+        spec:
+          kind: python-transform-unit-process
+          directory: configs/super_spine_nokia_sros_ospf_ibgp
+      - name: sonic_ebgp_ibgp
+        expect: PASS
+        spec:
+          kind: python-transform-unit-process
+          directory: configs/super_spine_sonic_ebgp_ibgp
+      - name: sonic_ospf_ibgp
+        expect: PASS
+        spec:
+          kind: python-transform-unit-process
+          directory: configs/super_spine_sonic_ospf_ibgp
+  - resource: PythonTransform
+    resource_name: border_leaf
+    tests:
+      - name: arista_eos_ebgp_ibgp
+        expect: PASS
+        spec:
+          kind: python-transform-unit-process
+          directory: configs/border_leaf_arista_eos_ebgp_ibgp
+      - name: arista_eos_ospf_ibgp
+        expect: PASS
+        spec:
+          kind: python-transform-unit-process
+          directory: configs/border_leaf_arista_eos_ospf_ibgp
+      - name: cisco_nxos_ebgp_ibgp
+        expect: PASS
+        spec:
+          kind: python-transform-unit-process
+          directory: configs/border_leaf_cisco_nxos_ebgp_ibgp
+      - name: cisco_nxos_ospf_ibgp
+        expect: PASS
+        spec:
+          kind: python-transform-unit-process
+          directory: configs/border_leaf_cisco_nxos_ospf_ibgp
+      - name: dell_sonic_ebgp_ibgp
+        expect: PASS
+        spec:
+          kind: python-transform-unit-process
+          directory: configs/border_leaf_dell_sonic_ebgp_ibgp
+      - name: dell_sonic_ospf_ibgp
+        expect: PASS
+        spec:
+          kind: python-transform-unit-process
+          directory: configs/border_leaf_dell_sonic_ospf_ibgp
+      - name: nokia_sros_ebgp_ibgp
+        expect: PASS
+        spec:
+          kind: python-transform-unit-process
+          directory: configs/border_leaf_nokia_sros_ebgp_ibgp
+      - name: nokia_sros_ospf_ibgp
+        expect: PASS
+        spec:
+          kind: python-transform-unit-process
+          directory: configs/border_leaf_nokia_sros_ospf_ibgp
+      - name: sonic_ebgp_ibgp
+        expect: PASS
+        spec:
+          kind: python-transform-unit-process
+          directory: configs/border_leaf_sonic_ebgp_ibgp
+      - name: sonic_ospf_ibgp
+        expect: PASS
+        spec:
+          kind: python-transform-unit-process
+          directory: configs/border_leaf_sonic_ospf_ibgp
+      - name: arista_eos_mlag
+        expect: PASS
+        spec:
+          kind: python-transform-unit-process
+          directory: configs/border_leaf_arista_eos_mlag
+      - name: cisco_nxos_mlag
+        expect: PASS
+        spec:
+          kind: python-transform-unit-process
+          directory: configs/border_leaf_cisco_nxos_mlag
+      - name: dell_sonic_mlag
+        expect: PASS
+        spec:
+          kind: python-transform-unit-process
+          directory: configs/border_leaf_dell_sonic_mlag
+      - name: nokia_sros_mlag
+        expect: PASS
+        spec:
+          kind: python-transform-unit-process
+          directory: configs/border_leaf_nokia_sros_mlag
+      - name: sonic_mlag
+        expect: PASS
+        spec:
+          kind: python-transform-unit-process
+          directory: configs/border_leaf_sonic_mlag
+  - resource: PythonTransform
+    resource_name: tor
+    tests:
+      - name: arista_eos_ebgp_ibgp
+        expect: PASS
+        spec:
+          kind: python-transform-unit-process
+          directory: configs/tor_arista_eos_ebgp_ibgp
+      - name: arista_eos_ospf_ibgp
+        expect: PASS
+        spec:
+          kind: python-transform-unit-process
+          directory: configs/tor_arista_eos_ospf_ibgp
+      - name: cisco_nxos_ebgp_ibgp
+        expect: PASS
+        spec:
+          kind: python-transform-unit-process
+          directory: configs/tor_cisco_nxos_ebgp_ibgp
+      - name: cisco_nxos_ospf_ibgp
+        expect: PASS
+        spec:
+          kind: python-transform-unit-process
+          directory: configs/tor_cisco_nxos_ospf_ibgp
+      - name: dell_sonic_ebgp_ibgp
+        expect: PASS
+        spec:
+          kind: python-transform-unit-process
+          directory: configs/tor_dell_sonic_ebgp_ibgp
+      - name: dell_sonic_ospf_ibgp
+        expect: PASS
+        spec:
+          kind: python-transform-unit-process
+          directory: configs/tor_dell_sonic_ospf_ibgp
+      - name: nokia_sros_ebgp_ibgp
+        expect: PASS
+        spec:
+          kind: python-transform-unit-process
+          directory: configs/tor_nokia_sros_ebgp_ibgp
+      - name: nokia_sros_ospf_ibgp
+        expect: PASS
+        spec:
+          kind: python-transform-unit-process
+          directory: configs/tor_nokia_sros_ospf_ibgp
+      - name: sonic_ebgp_ibgp
+        expect: PASS
+        spec:
+          kind: python-transform-unit-process
+          directory: configs/tor_sonic_ebgp_ibgp
+      - name: sonic_ospf_ibgp
+        expect: PASS
+        spec:
+          kind: python-transform-unit-process
+          directory: configs/tor_sonic_ospf_ibgp
+      - name: arista_eos_mlag
+        expect: PASS
+        spec:
+          kind: python-transform-unit-process
+          directory: configs/tor_arista_eos_mlag
+      - name: cisco_nxos_mlag
+        expect: PASS
+        spec:
+          kind: python-transform-unit-process
+          directory: configs/tor_cisco_nxos_mlag
+      - name: dell_sonic_mlag
+        expect: PASS
+        spec:
+          kind: python-transform-unit-process
+          directory: configs/tor_dell_sonic_mlag
+      - name: nokia_sros_mlag
+        expect: PASS
+        spec:
+          kind: python-transform-unit-process
+          directory: configs/tor_nokia_sros_mlag
+      - name: sonic_mlag
+        expect: PASS
+        spec:
+          kind: python-transform-unit-process
+          directory: configs/tor_sonic_mlag
+  - resource: PythonTransform
+    resource_name: edge
+    tests:
+      - name: cisco_ios_ebgp_ibgp
+        expect: PASS
+        spec:
+          kind: python-transform-unit-process
+          directory: configs/edge_cisco_ios_ebgp_ibgp
+      - name: cisco_ios_ospf_ibgp
+        expect: PASS
+        spec:
+          kind: python-transform-unit-process
+          directory: configs/edge_cisco_ios_ospf_ibgp
+      - name: cisco_nxos_ebgp_ibgp
+        expect: PASS
+        spec:
+          kind: python-transform-unit-process
+          directory: configs/edge_cisco_nxos_ebgp_ibgp
+      - name: cisco_nxos_ospf_ibgp
+        expect: PASS
+        spec:
+          kind: python-transform-unit-process
+          directory: configs/edge_cisco_nxos_ospf_ibgp
+  - resource: PythonTransform
+    resource_name: firewall
+    tests:
+      - name: paloalto_panos_with_policy
+        expect: PASS
+        spec:
+          kind: python-transform-unit-process
+          directory: configs/firewall_paloalto_panos_with_policy
+      - name: cisco_asa_with_policy
+        expect: PASS
+        spec:
+          kind: python-transform-unit-process
+          directory: configs/firewall_cisco_asa_with_policy
+      - name: fortinet_fortios_with_policy
+        expect: PASS
+        spec:
+          kind: python-transform-unit-process
+          directory: configs/firewall_fortinet_fortios_with_policy
+      - name: checkpoint_gaia_with_policy
+        expect: PASS
+        spec:
+          kind: python-transform-unit-process
+          directory: configs/firewall_checkpoint_gaia_with_policy

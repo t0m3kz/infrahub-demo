@@ -1,0 +1,57 @@
+{#- Check Point Gaia — zone-based firewall configuration -#}
+!
+set hostname {{ name }}
+!
+{%- if fw_interfaces %}
+! --- Interfaces ---
+{%- for iface in fw_interfaces %}
+{%- if iface.vlan_id and iface.parent_interface %}
+{%- set iface_name = iface.parent_interface.name + '.' + iface.vlan_id | string %}
+set interface {{ iface_name }} vlan {{ iface.vlan_id }}
+set interface {{ iface_name }} state on
+{%- if iface.ip_address %}
+set interface {{ iface_name }} ipv4-address {{ iface.ip_address.address | replace('/', ' mask-length ') }}
+{%- endif %}
+{%- if iface.security_zone %}
+set interface {{ iface_name }} security-zone {{ iface.security_zone.name }}
+{%- endif %}
+{%- if iface.description %}
+set interface {{ iface_name }} comments "{{ iface.description }}"
+{%- endif %}
+{%- else %}
+set interface {{ iface.name }} state on
+{%- if iface.ip_address %}
+set interface {{ iface.name }} ipv4-address {{ iface.ip_address.address | replace('/', ' mask-length ') }}
+{%- endif %}
+{%- if iface.security_zone %}
+set interface {{ iface.name }} security-zone {{ iface.security_zone.name }}
+{%- endif %}
+{%- if iface.description %}
+set interface {{ iface.name }} comments "{{ iface.description }}"
+{%- endif %}
+{%- endif %}
+!
+{%- endfor %}
+{%- endif %}
+{%- if static_routes %}
+! --- Static Routes (return path to leaf per zone) ---
+{%- for route in static_routes %}
+set static-route {{ route.destination }} nexthop gateway address {{ route.nexthop }} on
+{%- endfor %}
+!
+{%- endif %}
+{%- if zone_policies %}
+! --- Security Policy Rules ---
+{%- for policy in zone_policies %}
+{%- for rule in policy.rules %}
+add access-rule layer "Network" position {{ rule.seq }} name "{{ rule.name }}" action {{ 'accept' if rule.action == 'permit' else 'drop' }} source {{ rule.src or 'Any' }} destination {{ rule.dst or 'Any' }} service {{ rule.dst_port or 'Any' }} track {{ 'Log' if rule.log else 'None' }}
+{%- if rule.src_zone %}
+set access-rule layer "Network" name "{{ rule.name }}" source {{ rule.src_zone }}
+{%- endif %}
+{%- if rule.dst_zone %}
+set access-rule layer "Network" name "{{ rule.name }}" destination {{ rule.dst_zone }}
+{%- endif %}
+{%- endfor %}
+{%- endfor %}
+!
+{%- endif %}

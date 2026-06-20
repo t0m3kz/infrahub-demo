@@ -1,0 +1,284 @@
+---
+# DC3 infrastructure: super-spines, spines, leaves, servers
+#
+# Server layout for k8s cluster nodes:
+#   POD1: k8s control-plane nodes (3x) + worker nodes (2x)
+#   POD2: worker nodes (4x) + storage nodes (2x)
+#
+# Each server has 4 NICs (eno1-eno4) dual-homed to BOTH pod leaf pairs
+# so k8s nodes can communicate across pods without hair-pinning through spines.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimPhysicalDevice
+  data:
+    # ── Super-spines ──────────────────────────────────────────────────────────
+    - name: DC3-SS1
+      object_template: N9K-C9336C-FX2_SUPER_SPINE
+      status: active
+      deployment: DC3
+      rack: dc3-s1-r-1
+
+    - name: DC3-SS2
+      object_template: N9K-C9336C-FX2_SUPER_SPINE
+      status: active
+      deployment: DC3
+      rack: dc3-s1-r-2
+
+    # ── POD1 — control-plane rack ─────────────────────────────────────────────
+    - name: DC3-POD1-SP1
+      object_template: N9K-C9336C-FX2_SPINE
+      status: active
+      deployment: DC3-1-POD-1
+      rack: dc3-s1-r-1
+
+    - name: DC3-POD1-SP2
+      object_template: N9K-C9336C-FX2_SPINE
+      status: active
+      deployment: DC3-1-POD-1
+      rack: dc3-s1-r-1
+
+    # L1/L2: leaf pair serving k8s nodes (server-leaf role for MLAG)
+    - name: DC3-POD1-L1
+      object_template: N9K-C9336C-FX2_LEAF_SERVER
+      status: active
+      deployment: DC3-1-POD-1
+      rack: dc3-s1-r-1
+
+    - name: DC3-POD1-L2
+      object_template: N9K-C9336C-FX2_LEAF_SERVER
+      status: active
+      deployment: DC3-1-POD-1
+      rack: dc3-s1-r-1
+
+    # L3/L4: general-purpose leaves (future expansion)
+    - name: DC3-POD1-L3
+      object_template: N9K-C9336C-FX2_LEAF
+      status: active
+      deployment: DC3-1-POD-1
+      rack: dc3-s1-r-1
+
+    - name: DC3-POD1-L4
+      object_template: N9K-C9336C-FX2_LEAF
+      status: active
+      deployment: DC3-1-POD-1
+      rack: dc3-s1-r-1
+
+    # k8s control-plane nodes — 3 for HA etcd quorum
+    # 4 NICs: eno1/eno2 → POD1 leaf pair, eno3/eno4 → POD2 leaf pair
+    - name: DC3-POD1-K8S-CP-01
+      object_template: PowerEdge-R640_SERVER
+      status: active
+      deployment: DC3-1-POD-1
+      rack: dc3-s1-r-1
+
+    - name: DC3-POD1-K8S-CP-02
+      object_template: PowerEdge-R640_SERVER
+      status: active
+      deployment: DC3-1-POD-1
+      rack: dc3-s1-r-1
+
+    - name: DC3-POD1-K8S-CP-03
+      object_template: PowerEdge-R640_SERVER
+      status: active
+      deployment: DC3-1-POD-1
+      rack: dc3-s1-r-1
+
+    # k8s worker nodes in POD1
+    - name: DC3-POD1-K8S-WRK-01
+      object_template: PowerEdge-R640_SERVER
+      status: active
+      deployment: DC3-1-POD-1
+      rack: dc3-s1-r-1
+
+    - name: DC3-POD1-K8S-WRK-02
+      object_template: PowerEdge-R640_SERVER
+      status: active
+      deployment: DC3-1-POD-1
+      rack: dc3-s1-r-1
+
+    # ── POD2 — worker/storage rack ────────────────────────────────────────────
+    - name: DC3-POD2-SP1
+      object_template: N9K-C9336C-FX2_SPINE
+      status: active
+      deployment: DC3-1-POD-2
+      rack: dc3-s1-r-2
+
+    - name: DC3-POD2-SP2
+      object_template: N9K-C9336C-FX2_SPINE
+      status: active
+      deployment: DC3-1-POD-2
+      rack: dc3-s1-r-2
+
+    - name: DC3-POD2-L1
+      object_template: N9K-C9336C-FX2_LEAF_SERVER
+      status: active
+      deployment: DC3-1-POD-2
+      rack: dc3-s1-r-2
+
+    - name: DC3-POD2-L2
+      object_template: N9K-C9336C-FX2_LEAF_SERVER
+      status: active
+      deployment: DC3-1-POD-2
+      rack: dc3-s1-r-2
+
+    - name: DC3-POD2-L3
+      object_template: N9K-C9336C-FX2_LEAF
+      status: active
+      deployment: DC3-1-POD-2
+      rack: dc3-s1-r-2
+
+    - name: DC3-POD2-L4
+      object_template: N9K-C9336C-FX2_LEAF
+      status: active
+      deployment: DC3-1-POD-2
+      rack: dc3-s1-r-2
+
+    # k8s worker nodes in POD2
+    - name: DC3-POD2-K8S-WRK-01
+      object_template: PowerEdge-R640_SERVER
+      status: active
+      deployment: DC3-1-POD-2
+      rack: dc3-s1-r-2
+
+    - name: DC3-POD2-K8S-WRK-02
+      object_template: PowerEdge-R640_SERVER
+      status: active
+      deployment: DC3-1-POD-2
+      rack: dc3-s1-r-2
+
+    - name: DC3-POD2-K8S-WRK-03
+      object_template: PowerEdge-R640_SERVER
+      status: active
+      deployment: DC3-1-POD-2
+      rack: dc3-s1-r-2
+
+    - name: DC3-POD2-K8S-WRK-04
+      object_template: PowerEdge-R640_SERVER
+      status: active
+      deployment: DC3-1-POD-2
+      rack: dc3-s1-r-2
+
+    # k8s storage nodes (Ceph OSD) in POD2
+    - name: DC3-POD2-K8S-STO-01
+      object_template: PowerEdge-R640_SERVER
+      status: active
+      deployment: DC3-1-POD-2
+      rack: dc3-s1-r-2
+
+    - name: DC3-POD2-K8S-STO-02
+      object_template: PowerEdge-R640_SERVER
+      status: active
+      deployment: DC3-1-POD-2
+      rack: dc3-s1-r-2
+
+    # ── POD3 — VMware vSphere ─────────────────────────────────────────────────
+    # ESXi hosts are standard 2-NIC servers (within-pod MLAG only).
+    # vCenter appliance is a single-NIC management node.
+    - name: DC3-POD3-SP1
+      object_template: N9K-C9336C-FX2_SPINE
+      status: active
+      deployment: DC3-1-POD-3
+      rack: dc3-s1-r-3
+
+    - name: DC3-POD3-SP2
+      object_template: N9K-C9336C-FX2_SPINE
+      status: active
+      deployment: DC3-1-POD-3
+      rack: dc3-s1-r-3
+
+    - name: DC3-POD3-L1
+      object_template: N9K-C9336C-FX2_LEAF_SERVER
+      status: active
+      deployment: DC3-1-POD-3
+      rack: dc3-s1-r-3
+
+    - name: DC3-POD3-L2
+      object_template: N9K-C9336C-FX2_LEAF_SERVER
+      status: active
+      deployment: DC3-1-POD-3
+      rack: dc3-s1-r-3
+
+    # ESXi hypervisor hosts (4x) — 2 NICs to POD3 MLAG pair
+    - name: DC3-POD3-ESXI-01
+      object_template: PowerEdge-R640_SERVER
+      status: active
+      deployment: DC3-1-POD-3
+      rack: dc3-s1-r-3
+
+    - name: DC3-POD3-ESXI-02
+      object_template: PowerEdge-R640_SERVER
+      status: active
+      deployment: DC3-1-POD-3
+      rack: dc3-s1-r-3
+
+    - name: DC3-POD3-ESXI-03
+      object_template: PowerEdge-R640_SERVER
+      status: active
+      deployment: DC3-1-POD-3
+      rack: dc3-s1-r-3
+
+    - name: DC3-POD3-ESXI-04
+      object_template: PowerEdge-R640_SERVER
+      status: active
+      deployment: DC3-1-POD-3
+      rack: dc3-s1-r-3
+
+    # vCenter Server Appliance — management node (single NIC)
+    - name: DC3-POD3-VCSA-01
+      object_template: PowerEdge-R640_SERVER
+      status: active
+      deployment: DC3-1-POD-3
+      rack: dc3-s1-r-3
+
+    # ── POD4 — Nutanix AHV ────────────────────────────────────────────────────
+    # Nutanix nodes are hyperconverged (compute + storage in one unit).
+    # 2 NICs each to POD4 MLAG pair for CVM and guest traffic.
+    - name: DC3-POD4-SP1
+      object_template: N9K-C9336C-FX2_SPINE
+      status: active
+      deployment: DC3-1-POD-4
+      rack: dc3-s1-r-4
+
+    - name: DC3-POD4-SP2
+      object_template: N9K-C9336C-FX2_SPINE
+      status: active
+      deployment: DC3-1-POD-4
+      rack: dc3-s1-r-4
+
+    - name: DC3-POD4-L1
+      object_template: N9K-C9336C-FX2_LEAF_SERVER
+      status: active
+      deployment: DC3-1-POD-4
+      rack: dc3-s1-r-4
+
+    - name: DC3-POD4-L2
+      object_template: N9K-C9336C-FX2_LEAF_SERVER
+      status: active
+      deployment: DC3-1-POD-4
+      rack: dc3-s1-r-4
+
+    # Nutanix hyperconverged nodes (4x) — each runs AHV + CVM + guest VMs
+    - name: DC3-POD4-NTX-01
+      object_template: PowerEdge-R640_SERVER
+      status: active
+      deployment: DC3-1-POD-4
+      rack: dc3-s1-r-4
+
+    - name: DC3-POD4-NTX-02
+      object_template: PowerEdge-R640_SERVER
+      status: active
+      deployment: DC3-1-POD-4
+      rack: dc3-s1-r-4
+
+    - name: DC3-POD4-NTX-03
+      object_template: PowerEdge-R640_SERVER
+      status: active
+      deployment: DC3-1-POD-4
+      rack: dc3-s1-r-4
+
+    - name: DC3-POD4-NTX-04
+      object_template: PowerEdge-R640_SERVER
+      status: active
+      deployment: DC3-1-POD-4
+      rack: dc3-s1-r-4

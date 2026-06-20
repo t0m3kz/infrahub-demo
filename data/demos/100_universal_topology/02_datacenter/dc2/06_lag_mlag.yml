@@ -1,0 +1,373 @@
+---
+# DC2 MLAG domains — leaf pairs providing redundant server access
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: ManagedMLAG
+  data:
+    - name: DC2-POD1-L1-L2-MLAG
+      status: active
+      domain_id: 1
+      reload_delay: 300
+      reload_delay_non_mlag: 330
+      device_capabilities:
+        - DC2-POD1-L1
+        - DC2-POD1-L2
+
+    - name: DC2-POD2-L1-L2-MLAG
+      status: active
+      domain_id: 2
+      reload_delay: 300
+      reload_delay_non_mlag: 330
+      device_capabilities:
+        - DC2-POD2-L1
+        - DC2-POD2-L2
+
+---
+# DC2 LAG interfaces — leaf side (MLAG port-channels toward servers)
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimLAGInterface
+  data:
+    - name: Port-Channel1
+      device: DC2-POD1-L1
+      status: active
+      role: lag
+      lag_id: 1
+      lacp_mode: active
+      mtu: 9000
+      minimum_links: 1
+      mlag_domain: DC2-POD1-L1-L2-MLAG
+      member_interfaces:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC2-POD1-L1
+            name: Ethernet1/49
+
+    - name: Port-Channel2
+      device: DC2-POD1-L1
+      status: active
+      role: lag
+      lag_id: 2
+      lacp_mode: active
+      mtu: 9000
+      minimum_links: 1
+      mlag_domain: DC2-POD1-L1-L2-MLAG
+      member_interfaces:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC2-POD1-L1
+            name: Ethernet1/50
+
+    - name: Port-Channel1
+      device: DC2-POD1-L2
+      status: active
+      role: lag
+      lag_id: 1
+      lacp_mode: active
+      mtu: 9000
+      minimum_links: 1
+      mlag_domain: DC2-POD1-L1-L2-MLAG
+      member_interfaces:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC2-POD1-L2
+            name: Ethernet1/49
+
+    - name: Port-Channel2
+      device: DC2-POD1-L2
+      status: active
+      role: lag
+      lag_id: 2
+      lacp_mode: active
+      mtu: 9000
+      minimum_links: 1
+      mlag_domain: DC2-POD1-L1-L2-MLAG
+      member_interfaces:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC2-POD1-L2
+            name: Ethernet1/50
+
+    - name: Port-Channel1
+      device: DC2-POD2-L1
+      status: active
+      role: lag
+      lag_id: 1
+      lacp_mode: active
+      mtu: 9000
+      minimum_links: 1
+      mlag_domain: DC2-POD2-L1-L2-MLAG
+      member_interfaces:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC2-POD2-L1
+            name: Ethernet1/49
+
+    - name: Port-Channel2
+      device: DC2-POD2-L1
+      status: active
+      role: lag
+      lag_id: 2
+      lacp_mode: active
+      mtu: 9000
+      minimum_links: 1
+      mlag_domain: DC2-POD2-L1-L2-MLAG
+      member_interfaces:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC2-POD2-L1
+            name: Ethernet1/50
+
+    - name: Port-Channel1
+      device: DC2-POD2-L2
+      status: active
+      role: lag
+      lag_id: 1
+      lacp_mode: active
+      mtu: 9000
+      minimum_links: 1
+      mlag_domain: DC2-POD2-L1-L2-MLAG
+      member_interfaces:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC2-POD2-L2
+            name: Ethernet1/49
+
+    - name: Port-Channel2
+      device: DC2-POD2-L2
+      status: active
+      role: lag
+      lag_id: 2
+      lacp_mode: active
+      mtu: 9000
+      minimum_links: 1
+      mlag_domain: DC2-POD2-L1-L2-MLAG
+      member_interfaces:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC2-POD2-L2
+            name: Ethernet1/50
+
+---
+# DC2 LAG interfaces — peer-link port-channels (L1 ↔ L2 within each MLAG pair)
+# Ethernet1/33+34 reserved for MLAG peer-link on all leaf switches
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimLAGInterface
+  data:
+    - name: Port-Channel100
+      device: DC2-POD1-L1
+      status: active
+      role: mlag-peer
+      lag_id: 100
+      lacp_mode: active
+      mtu: 9000
+      minimum_links: 1
+      mlag_domain: DC2-POD1-L1-L2-MLAG
+      member_interfaces:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC2-POD1-L1
+            name: Ethernet1/33
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC2-POD1-L1
+            name: Ethernet1/34
+
+    - name: Port-Channel100
+      device: DC2-POD1-L2
+      status: active
+      role: mlag-peer
+      lag_id: 100
+      lacp_mode: active
+      mtu: 9000
+      minimum_links: 1
+      mlag_domain: DC2-POD1-L1-L2-MLAG
+      member_interfaces:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC2-POD1-L2
+            name: Ethernet1/33
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC2-POD1-L2
+            name: Ethernet1/34
+
+    - name: Port-Channel100
+      device: DC2-POD2-L1
+      status: active
+      role: mlag-peer
+      lag_id: 100
+      lacp_mode: active
+      mtu: 9000
+      minimum_links: 1
+      mlag_domain: DC2-POD2-L1-L2-MLAG
+      member_interfaces:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC2-POD2-L1
+            name: Ethernet1/33
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC2-POD2-L1
+            name: Ethernet1/34
+
+    - name: Port-Channel100
+      device: DC2-POD2-L2
+      status: active
+      role: mlag-peer
+      lag_id: 100
+      lacp_mode: active
+      mtu: 9000
+      minimum_links: 1
+      mlag_domain: DC2-POD2-L1-L2-MLAG
+      member_interfaces:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC2-POD2-L2
+            name: Ethernet1/33
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC2-POD2-L2
+            name: Ethernet1/34
+
+---
+# DC2 peer-link cables (physical links between MLAG leaf pairs)
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimCable
+  data:
+    - name: CBL-DC2-POD1-L1-L2-PL1
+      type: smf
+      deployment: DC2
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC2-POD1-L1
+            name: Ethernet1/33
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC2-POD1-L2
+            name: Ethernet1/33
+
+    - name: CBL-DC2-POD1-L1-L2-PL2
+      type: smf
+      deployment: DC2
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC2-POD1-L1
+            name: Ethernet1/34
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC2-POD1-L2
+            name: Ethernet1/34
+
+    - name: CBL-DC2-POD2-L1-L2-PL1
+      type: smf
+      deployment: DC2
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC2-POD2-L1
+            name: Ethernet1/33
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC2-POD2-L2
+            name: Ethernet1/33
+
+    - name: CBL-DC2-POD2-L1-L2-PL2
+      type: smf
+      deployment: DC2
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC2-POD2-L1
+            name: Ethernet1/34
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC2-POD2-L2
+            name: Ethernet1/34
+
+---
+# DC2 LAG interfaces — server side (bond0 toward MLAG leaf pair)
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimLAGInterface
+  data:
+    - name: bond0
+      device: DC2-POD1-SRV-01
+      status: active
+      role: lag
+      lag_id: 1
+      lacp_mode: active
+      mtu: 9000
+      minimum_links: 1
+      member_interfaces:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC2-POD1-SRV-01
+            name: eno1
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC2-POD1-SRV-01
+            name: eno2
+
+    - name: bond0
+      device: DC2-POD1-SRV-02
+      status: active
+      role: lag
+      lag_id: 1
+      lacp_mode: active
+      mtu: 9000
+      minimum_links: 1
+      member_interfaces:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC2-POD1-SRV-02
+            name: eno1
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC2-POD1-SRV-02
+            name: eno2
+
+    - name: bond0
+      device: DC2-POD2-SRV-01
+      status: active
+      role: lag
+      lag_id: 1
+      lacp_mode: active
+      mtu: 9000
+      minimum_links: 1
+      member_interfaces:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC2-POD2-SRV-01
+            name: eno1
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC2-POD2-SRV-01
+            name: eno2
+
+    - name: bond0
+      device: DC2-POD2-SRV-02
+      status: active
+      role: lag
+      lag_id: 1
+      lacp_mode: active
+      mtu: 9000
+      minimum_links: 1
+      member_interfaces:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC2-POD2-SRV-02
+            name: eno1
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC2-POD2-SRV-02
+            name: eno2

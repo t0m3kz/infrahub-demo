@@ -1,0 +1,23 @@
+---
+# Megaport Amsterdam racks
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: LocationBuilding
+  data:
+    - name: MCR-AMS1
+      shortname: mcr-ams1
+      parent: ams
+      children:
+        kind: LocationSuite
+        data:
+          - suite_name: MCR-AMS1
+            index: 1
+            shortname: mcr-ams1-s1
+            children:
+              kind: LocationRack
+              data:
+                - shortname: mcr-ams1-s1-r-1
+                  index: 1
+                  row_index: 1
+                  pod: MCR-AMS1

@@ -1,0 +1,31 @@
+---
+# Azure westeurope: Route Table for AKS node pool subnets
+#
+# On-prem traffic (10.0.0.0/8) is advertised by the ExpressRoute Gateway
+# via BGP and captured here as a static route entry for model completeness.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: CloudRouteTable
+  data:
+    - name: CUST1-RT-AKS-WESTEUROPE
+      virtual_network: CUST1-VNET-WESTEUROPE
+      is_main: false
+      network_segments:
+        - customer-1-aks-zone1-production
+        - customer-1-aks-zone2-production
+
+---
+# Azure westeurope: Routes
+#
+# On-prem aggregate via ExpressRoute Gateway
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: CloudRoute
+  data:
+    - name: CUST1-ROUTE-AKS-ONPREM
+      route_table: CUST1-RT-AKS-WESTEUROPE
+      destination:
+        - "10.0.0.0/8"
+        - "CUST1-AZURE-WESTEUROPE"

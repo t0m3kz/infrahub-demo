@@ -2,18 +2,24 @@
 version: "1.0"
 
 nodes:
-  - name: NetworkSegment
-    namespace: Service
-    description: "Network segment with automated VLAN, VNI, and RD assignment"
-    label: Network Segment
+  # Traditional 802.1Q VLAN segment.
+  # VLAN ID is allocated per-deployment via SegmentDeployment.
+  - name: VlanSegment
+    namespace: Managed
+    description: "Traditional 802.1Q VLAN segment"
+    label: VLAN Segment
     icon: "carbon:network-3"
-    menu_placement: ServiceDeviceGeneric
-    uniqueness_constraints:
-      - [deployment, owner, environment__value, customer_name__value]
-    include_in_menu: true
+    include_in_menu: false
     inherit_from:
-      - ServiceGeneric
-      - ServiceGenericInterfaces
+      - ManagedGeneric
+      - ManagedNetworkSegment
+      - ManagedGenericInterfaces
+    uniqueness_constraints:
+      - [owner, environment__value, customer_name__value]
+    human_friendly_id:
+      - owner__name__value
+      - environment__value
+      - customer_name__value
     attributes:
       - name: name
         kind: Text
@@ -22,86 +28,164 @@ nodes:
           jinja2_template: "{{ owner__name__value }} - {{ environment__value }} - {{ customer_name__value }}"  # yamllint disable-line rule:line-length
         read_only: true
         optional: false
-      - name: customer_name
-        kind: Text
-        label: Customer Segment Name
-        optional: false
-        order_weight: 1
-      - name: environment
-        kind: Dropdown
-        description: "Customer Environment"
-        choices:
-          - name: production
-            label: Production
-            description: "Production environment"
-            color: "#A9CCE3"
-          - name: no-production
-            label: No Production
-            description: "Non-Production environment"
-            color: "#A9DFBF"
-        default_value: production
-        order_weight: 2
       - name: segment_type
         kind: Dropdown
-        description: "Type of network segment"
+        default_value: vlan
+        read_only: true
         choices:
-          - name: l2_only
-            label: L2 Only
-            description: "Layer 2 segment only"
-            color: "#A9CCE3"
-          - name: l3_gateway
-            label: L3 Gateway
-            description: "Layer 2 segment with L3 gateway"
-            color: "#A9DFBF"
-          - name: l3_vrf
-            label: L3 VRF
-            description: "Layer 3 VRF segment"
-            color: "#D2B4DE"
-        default_value: "l2_only"
-        order_weight: 3
-      - name: tenant_isolation
-        kind: Dropdown
-        description: "Level of tenant isolation for this segment"
-        choices:
-          - name: customer_dedicated
-            label: Customer Dedicated
-            description: "Dedicated to a single customer"
-            color: "#E74C3C"
-          - name: shared_controlled
-            label: Shared Controlled
-            description: "Shared between selected customers"
-            color: "#F39C12"
-          - name: public_shared
-            label: Public Shared
-            description: "Public shared segment"
-            color: "#3498DB"
-        default_value: "customer_dedicated"
-        order_weight: 4
-      - name: vlan_id
-        kind: Number
-        label: VLAN ID
-        optional: false
-        order_weight: 5
-        description: "VLANID assigned from pool (VNI = VLAN + 10000, RD = VLAN)"
-      - name: external_routing
-        kind: Boolean
-        label: External Routing
-        optional: true
-        default_value: false
-        order_weight: 1550
-        description: "Enable routing outside the namespace"
+          - name: vlan
+            label: VLAN
+            description: "IEEE 802.1Q VLAN"
+            color: "#7FBF7F"
     relationships:
       - name: deployment
         peer: TopologyDeployment
         cardinality: one
         kind: Attribute
-        order_weight: 1000
-        optional: false
-        on_delete: no-action
-        description: "The deployment location for customer services"
-      - name: prefix
-        peer: IpamPrefix
-        label: Prefix
-        cardinality: one
-        kind: Generic
+        order_weight: 110
         optional: true
+        identifier: "segment__deployments"
+        description: "Data centre this VLAN segment is activated in."
+
+  # VXLAN overlay segment with EVPN multi-tenancy.
+  # Zero trust: prefix → ip_namespace (VRF with l3_vni + owner) → per-customer isolation.
+  # L2 VNI allocated per-deployment via SegmentDeployment.
+  - name: VxlanSegment
+    namespace: Managed
+    description: "VXLAN overlay segment with EVPN multi-tenancy"
+    label: VXLAN Segment
+    icon: "carbon:network-overlay"
+    include_in_menu: false
+    inherit_from:
+      - ManagedGeneric
+      - ManagedNetworkSegment
+      - ManagedGenericInterfaces
+    uniqueness_constraints:
+      - [owner, environment__value, customer_name__value]
+    human_friendly_id:
+      - owner__name__value
+      - environment__value
+      - customer_name__value
+    attributes:
+      - name: name
+        kind: Text
+        computed_attribute:
+          kind: Jinja2
+          jinja2_template: "{{ owner__name__value }} - {{ environment__value }} - {{ customer_name__value }}"  # yamllint disable-line rule:line-length
+        read_only: true
+        optional: false
+      - name: segment_type
+        kind: Dropdown
+        default_value: vxlan
+        read_only: true
+        choices:
+          - name: vxlan
+            label: VXLAN
+            description: "VXLAN overlay segment"
+            color: "#3498DB"
+      - name: arp_suppression
+        kind: Boolean
+        label: ARP Suppression
+        optional: true
+        default_value: true
+        order_weight: 3
+        description: "EVPN ARP suppression for this VXLAN segment."
+    relationships:
+      - name: deployments
+        peer: TopologyDeployment
+        cardinality: many
+        kind: Generic
+        order_weight: 110
+        optional: true
+        identifier: "segment__deployments"
+        description: "Deployments this segment is activated in (VXLAN stretch across DCs or single-site VLAN)."
+
+  # SegmentDeployment: per-DC realization of a network segment.
+  #
+  # Stores the locally-allocated VLAN ID and VNI for a segment in a
+  # specific data center. Values come from the DC's pool (vlan_pool,
+  # vni_pool) via idempotent allocation.
+  #
+  # Gateway IP is derived from segment.prefix.gateway (not stored here).
+  # ARP suppression is read from segment.arp_suppression (VXLAN only).
+  # Target DCs are derived from segment.deployments.
+  #
+  # Created by: add_vlan_segment / add_vxlan_segment generators
+  # Read by:    transforms — query deployment.segment_deployments
+
+  - name: SegmentDeployment
+    namespace: Managed
+    description: "Per-DC realization of a network segment with locally-allocated VLAN ID and VNI."
+    label: Segment Deployment
+    icon: "carbon:network-overlay"
+    include_in_menu: false
+    display_label: "{{ segment__customer_name__value }} @ {{ deployment__name__value }}"
+    uniqueness_constraints:
+      - [segment, deployment]
+    attributes:
+      - name: vlan_id
+        kind: Number
+        label: Local VLAN ID
+        optional: false
+        order_weight: 1000
+        description: "VLAN ID for this segment in this deployment. Allocated from DC vlan_pool."
+        parameters:
+          min_value: 1
+          max_value: 4094
+
+      - name: vni
+        kind: Number
+        label: L2 VNI
+        optional: true
+        order_weight: 1050
+        description: >-
+          L2 VNI for this segment in this deployment. Null means no VXLAN
+          overlay (traditional VLAN). Allocated from DC vni_pool.
+        parameters:
+          min_value: 1
+          max_value: 16777215
+
+      - name: status
+        kind: Dropdown
+        label: Status
+        optional: false
+        default_value: provisioning
+        order_weight: 1100
+        choices:
+          - name: active
+            label: Active
+            description: "Segment is fully provisioned and carrying traffic"
+            color: "#2ECC71"
+          - name: provisioning
+            label: Provisioning
+            description: "Generator is pushing config to switches"
+            color: "#F39C12"
+          - name: decommissioning
+            label: Decommissioning
+            description: "Being removed from service"
+            color: "#E67E22"
+          - name: decommissioned
+            label: Decommissioned
+            description: "Config removed from all switches"
+            color: "#95A5A6"
+
+    relationships:
+      - name: segment
+        peer: ManagedNetworkSegment
+        label: Network Segment
+        cardinality: one
+        kind: Attribute
+        optional: false
+        order_weight: 2000
+        identifier: "segmentdeployment__segment"
+        description: "The network segment being activated"
+
+      - name: deployment
+        peer: TopologyDataCenter
+        label: Data Center
+        cardinality: one
+        kind: Attribute
+        optional: false
+        order_weight: 2100
+        identifier: "segmentdeployment__deployment"
+        description: "The data center where this segment is active"

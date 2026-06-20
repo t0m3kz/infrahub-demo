@@ -1,0 +1,21 @@
+{%- if mlag %}
+!
+! vPC Configuration
+!
+{%- if mlag.peer_link %}
+interface {{ mlag.peer_link }}
+  description vPC Peer-Link
+  switchport mode trunk
+  no shutdown
+  vpc peer-link
+!
+{%- endif %}
+vpc domain {{ mlag.domain_id }}
+{%- if mlag.reload_delay is not none %}
+  delay restore {{ mlag.reload_delay }}
+{%- endif %}
+{%- if mlag.reload_delay_non_mlag is not none %}
+  delay restore interface-vlan {{ mlag.reload_delay_non_mlag }}
+{%- endif %}
+!
+{%- endif %}

@@ -1,0 +1,188 @@
+---
+version: "1.0"
+generics:
+  - name: NetworkSegment
+    namespace: Managed
+    description: "Base generic for all network segments (on-prem VLAN/VXLAN and cloud VPC subnets)"
+    label: Network Segment
+    icon: "carbon:network-3"
+    include_in_menu: false
+    human_friendly_id:
+      - name__value
+    display_label: "{{name__value}}"
+    order_by:
+      - name__value
+    uniqueness_constraints:
+      - ["owner", "customer_name__value", "environment__value"]
+    attributes:
+      - name: name
+        kind: Text
+        order_weight: 100
+        description: "Network segment identifier"
+        computed_attribute:
+          kind: Jinja2
+          # yamllint disable rule:line-length
+          jinja2_template: >
+            {{owner__name__value|lower|replace(' ', '-')}}-{{customer_name__value|lower|replace(' ', '-')}}-{{environment__value}}
+          # yamllint enable rule:line-length
+        read_only: true
+        optional: true
+      - name: description
+        kind: Text
+        optional: true
+        order_weight: 200
+        description: "Description of the network segment purpose"
+      - name: customer_name
+        kind: Text
+        label: Customer Segment Name
+        optional: false
+        order_weight: 150
+        description: "Customer-facing name for the segment"
+      - name: environment
+        kind: Dropdown
+        description: "Customer Environment"
+        optional: true
+        order_weight: 160
+        choices:
+          - name: production
+            label: Production
+            description: "Production environment"
+            color: "#A9CCE3"
+          - name: no-production
+            label: No Production
+            description: "Non-Production environment"
+            color: "#A9DFBF"
+        default_value: production
+      - name: segment_type
+        kind: Dropdown
+        optional: true
+        order_weight: 250
+        description: "Segmentation technology (cloud provider or on-prem)"
+        choices:
+          - name: vlan
+            label: VLAN
+            description: "IEEE 802.1Q VLAN"
+            color: "#7FBF7F"
+          - name: vxlan
+            label: VXLAN
+            description: "VXLAN overlay segment"
+            color: "#3498DB"
+          - name: aws_vpc_subnet
+            label: AWS VPC Subnet
+            description: "AWS VPC subnet"
+            color: "#FF9900"
+          - name: gcp_vpc_subnet
+            label: GCP VPC Subnet
+            description: "Google Cloud VPC subnet"
+            color: "#4285F4"
+          - name: azure_vnet_subnet
+            label: Azure VNet Subnet
+            description: "Azure Virtual Network subnet"
+            color: "#0078D4"
+      - name: segment_role
+        kind: Dropdown
+        label: Segment Role
+        optional: true
+        order_weight: 260
+        description: "Recommended segmentation model — defines the security and access requirements of this segment"
+        default_value: server_application
+        choices:
+          - name: enterprise_user
+            label: Enterprise User
+            description: "For employees and internal users accessing corporate resources"
+            color: "#5B9BD5"
+          - name: server_application
+            label: Server/Application
+            description: "Hosts servers and business-critical applications with high security requirements"
+            color: "#70AD47"
+          - name: management
+            label: Management Network
+            description: "Reserved for network administration and monitoring infrastructure"
+            color: "#FFC000"
+          - name: guest_visitor
+            label: Guest/Visitor
+            description: "Restricted access for guests and visitors, isolated from corporate resources"
+            color: "#FF7F50"
+          - name: iot_ot
+            label: IoT/OT
+            description: "Internet of Things and Operational Technology devices with specific protocol requirements"
+            color: "#A64D79"
+          - name: dmz
+            label: DMZ
+            description: "Demilitarized zone — perimeter network between untrusted external and internal networks"
+            color: "#E06C75"
+          - name: service_provider
+            label: Service Provider
+            description: "Dedicated connectivity for external partners and service providers"
+            color: "#8B6CE7"
+      - name: pbr_enabled
+        kind: Boolean
+        label: PBR Enabled
+        description: "Traffic is redirected to the firewall via policy-based routing (not physically inline)."
+        default_value: false
+        optional: true
+        order_weight: 270
+      - name: status
+        kind: Dropdown
+        optional: true
+        order_weight: 300
+        default_value: active
+        choices:
+          - name: active
+            label: Active
+            description: Segment is active and operational
+            color: "#7FBF7F"
+          - name: provisioning
+            label: Provisioning
+            description: Segment is being provisioned
+            color: "#7f7fff"
+          - name: maintenance
+            label: Maintenance
+            description: Segment is under maintenance
+            color: "#FFD27F"
+          - name: deprecated
+            label: Deprecated
+            description: Segment is deprecated
+            color: "#FFC107"
+          - name: retired
+            label: Retired
+            description: Segment is retired and inactive
+            color: "#BFBFBF"
+    relationships:
+      - name: owner
+        peer: OrganizationGeneric
+        cardinality: one
+        kind: Generic
+        order_weight: 100
+        optional: false
+        on_delete: no-action
+        description: "Owner of the network segment"
+        identifier: network_segment__owner
+      - name: prefix
+        peer: IpamPrefix
+        label: Prefixes
+        cardinality: many
+        kind: Generic
+        optional: true
+        order_weight: 3000
+        description: >-
+          IP prefixes for this segment (dual-stack: IPv4 and/or IPv6).
+          Determines VRF and anycast gateways. L2-only if absent.
+      - name: firewall
+        peer: DcimDevice
+        label: Firewall
+        cardinality: one
+        kind: Attribute
+        optional: true
+        order_weight: 3100
+        identifier: network_segment__firewall
+        description: "Firewall device responsible for enforcing policy on this segment (inline or PBR)."
+      - name: gateway
+        peer: IpamIPAddress
+        label: Anycast Gateway
+        cardinality: one
+        kind: Attribute
+        optional: true
+        order_weight: 3200
+        identifier: network_segment__gateway
+        description: "Anycast gateway IP address for symmetric IRB (shared across all leaves in the fabric)."

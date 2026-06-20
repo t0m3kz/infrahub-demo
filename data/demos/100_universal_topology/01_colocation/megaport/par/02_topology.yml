@@ -1,0 +1,17 @@
+---
+# Megaport Paris access topology
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologyColocation
+  data:
+    - name: MEGAPORT
+      children:
+        kind: TopologyColocationMetro
+        data:
+          - name: PAR
+            location: ["par"]
+            children:
+              kind: TopologyColocationZone
+              data:
+                - name: MCR-PAR1
