@@ -16,7 +16,7 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - uses: actions/setup-python@v6
         with:
           python-version: "3.10"
@@ -44,7 +44,7 @@ jobs:
       matrix:
         python-version: ["3.10", "3.11", "3.12", "3.13"]
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
       - name: Attach HEAD to branch
@@ -75,9 +75,9 @@ jobs:
     name: Create GitHub release
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - name: Create GitHub release from tag
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           name: Release ${{ github.ref_name }}
           tag_name: ${{ github.ref_name }}
@@ -89,7 +89,7 @@ jobs:
   #   name: Update documentation
   #   runs-on: ubuntu-latest
   #   steps:
-  #     - uses: actions/checkout@v5
+  #     - uses: actions/checkout@v7
   #     - uses: actions/setup-python@v6
   #       with:
   #         python-version: "3.10"
