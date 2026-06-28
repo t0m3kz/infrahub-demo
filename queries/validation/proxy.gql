@@ -1,0 +1,46 @@
+query proxy_validation($device: String!) {
+  DcimPhysicalDevice(name__value: $device) {
+    edges {
+      node {
+        name { value }
+        status { value }
+        platform {
+          node {
+            name { value }
+            netmiko_device_type { value }
+          }
+        }
+        ... on DcimCapabilities {
+          capabilities {
+            edges {
+              node {
+                __typename
+                ... on ManagedProxyHA {
+                  name { value }
+                  mode { value }
+                  group_id { value }
+                  proxy_type { value }
+                  proxy_vendor { value }
+                  capabilities { edges { node { name { value } } } }
+                }
+              }
+            }
+          }
+        }
+        interfaces {
+          edges {
+            node {
+              __typename
+              name { value }
+              status { value }
+              role { value }
+              ... on DcimPhysicalInterface {
+                ip_address { node { address { value } } }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

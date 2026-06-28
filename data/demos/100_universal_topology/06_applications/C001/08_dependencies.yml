@@ -1,0 +1,142 @@
+---
+# C001 (Nordix Ltd.) — Component dependency graph
+#
+# AppDependency nodes encode every directed edge with an explicit protocol and
+# port (or port range).  No automatic port inference — every edge must carry
+# port data so generated SecurityPolicyRules are fully deterministic.
+#
+# Naming convention: {src-slug}--{dst-slug}
+#   src-slug / dst-slug = computed AppComponent slug  ({app-name}-{component-name})
+
+# ── Dependency edge nodes ─────────────────────────────────────────────────────
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: AppDependency
+  data:
+
+    # ── trade-portal / production ─────────────────────────────────────────────
+
+    - name: c001-trade-portal-p-web-frontend--c001-trade-portal-p-api-gateway
+      source: c001-trade-portal-p-web-frontend
+      target: c001-trade-portal-p-api-gateway
+      protocol: tcp
+      port_start: 443
+      description: "Web frontend → API gateway (HTTPS)"
+
+    - name: c001-trade-portal-p-api-gateway--c001-trade-portal-p-order-db
+      source: c001-trade-portal-p-api-gateway
+      target: c001-trade-portal-p-order-db
+      protocol: tcp
+      port_start: 5432
+      description: "API gateway → order DB (PostgreSQL)"
+
+    - name: c001-trade-portal-p-api-gateway--c001-trade-portal-p-session-cache
+      source: c001-trade-portal-p-api-gateway
+      target: c001-trade-portal-p-session-cache
+      protocol: tcp
+      port_start: 6379
+      description: "API gateway → session cache (Redis)"
+
+    - name: c001-trade-portal-p-api-gateway--c001-auth-platform-p-auth-api
+      source: c001-trade-portal-p-api-gateway
+      target: c001-auth-platform-p-auth-api
+      protocol: tcp
+      port_start: 8443
+      description: "API gateway → auth API (cross-app, mTLS 8443)"
+
+    # ── trade-portal / nonprod ────────────────────────────────────────────────
+
+    - name: c001-trade-portal-n-web-frontend--c001-trade-portal-n-api-gateway
+      source: c001-trade-portal-n-web-frontend
+      target: c001-trade-portal-n-api-gateway
+      protocol: tcp
+      port_start: 443
+      description: "Web frontend → API gateway (HTTPS, nonprod)"
+
+    - name: c001-trade-portal-n-api-gateway--c001-trade-portal-n-order-db
+      source: c001-trade-portal-n-api-gateway
+      target: c001-trade-portal-n-order-db
+      protocol: tcp
+      port_start: 5432
+      description: "API gateway → order DB (PostgreSQL, nonprod)"
+
+    # ── auth-platform / production ────────────────────────────────────────────
+
+    - name: c001-auth-platform-p-auth-api--c001-auth-platform-p-identity-db
+      source: c001-auth-platform-p-auth-api
+      target: c001-auth-platform-p-identity-db
+      protocol: tcp
+      port_start: 5432
+      description: "Auth API → identity DB (PostgreSQL)"
+
+    # ── risk-engine / production ──────────────────────────────────────────────
+
+    - name: c001-risk-engine-p-analytics-worker--c001-risk-engine-p-risk-db
+      source: c001-risk-engine-p-analytics-worker
+      target: c001-risk-engine-p-risk-db
+      protocol: tcp
+      port_start: 5432
+      description: "Analytics worker → risk DB (PostgreSQL)"
+
+    - name: c001-risk-engine-p-analytics-worker--c001-trade-portal-p-order-db
+      source: c001-risk-engine-p-analytics-worker
+      target: c001-trade-portal-p-order-db
+      protocol: tcp
+      port_start: 5432
+      description: "Analytics worker → order DB (cross-app read, PostgreSQL)"
+
+# ── Wire depends_on on each AppComponent ─────────────────────────────────────
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: AppComponent
+  data:
+
+    # ── trade-portal / production ─────────────────────────────────────────────
+
+    - name: web-frontend
+      component_type: frontend
+      parent: c001-trade-portal-p
+      depends_on:
+        - c001-trade-portal-p-web-frontend--c001-trade-portal-p-api-gateway
+
+    - name: api-gateway
+      component_type: backend
+      parent: c001-trade-portal-p
+      depends_on:
+        - c001-trade-portal-p-api-gateway--c001-trade-portal-p-order-db
+        - c001-trade-portal-p-api-gateway--c001-trade-portal-p-session-cache
+        - c001-trade-portal-p-api-gateway--c001-auth-platform-p-auth-api
+
+    # ── trade-portal / nonprod ────────────────────────────────────────────────
+
+    - name: web-frontend
+      component_type: frontend
+      parent: c001-trade-portal-n
+      depends_on:
+        - c001-trade-portal-n-web-frontend--c001-trade-portal-n-api-gateway
+
+    - name: api-gateway
+      component_type: backend
+      parent: c001-trade-portal-n
+      depends_on:
+        - c001-trade-portal-n-api-gateway--c001-trade-portal-n-order-db
+
+    # ── auth-platform / production ────────────────────────────────────────────
+
+    - name: auth-api
+      component_type: backend
+      parent: c001-auth-platform-p
+      depends_on:
+        - c001-auth-platform-p-auth-api--c001-auth-platform-p-identity-db
+
+    # ── risk-engine / production ──────────────────────────────────────────────
+
+    - name: analytics-worker
+      component_type: worker
+      parent: c001-risk-engine-p
+      depends_on:
+        - c001-risk-engine-p-analytics-worker--c001-risk-engine-p-risk-db
+        - c001-risk-engine-p-analytics-worker--c001-trade-portal-p-order-db

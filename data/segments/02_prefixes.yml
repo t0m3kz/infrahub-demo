@@ -15,38 +15,38 @@ kind: Object
 spec:
   kind: IpamPrefix
   data:
-    # Customer 1 production segments
+    # Nordix Ltd. production segments
     - prefix: "10.1.10.0/24"
-      description: "Customer 1 prod — web frontend"
+      description: "Nordix prod — web frontend"
       status: active
-      ip_namespace: "CUST001-PROD"
+      ip_namespace: "C001-PROD"
 
     - prefix: "10.1.20.0/24"
-      description: "Customer 1 prod — app backend"
+      description: "Nordix prod — app backend"
       status: active
-      ip_namespace: "CUST001-PROD"
+      ip_namespace: "C001-PROD"
 
     - prefix: "10.1.30.0/24"
-      description: "Customer 1 prod — database"
+      description: "Nordix prod — database"
       status: active
-      ip_namespace: "CUST001-PROD"
+      ip_namespace: "C001-PROD"
 
-    # Customer 1 non-production
+    # Nordix Ltd. non-production
     - prefix: "10.1.110.0/24"
-      description: "Customer 1 dev — web frontend"
+      description: "Nordix dev — web frontend"
       status: active
-      ip_namespace: "CUST001-NONPROD"
+      ip_namespace: "C001-NONPROD"
 
-    # Customer 2 production segments
+    # SwiftGo production segments
     - prefix: "10.2.10.0/24"
-      description: "Customer 2 prod — web frontend"
+      description: "SwiftGo prod — web frontend"
       status: active
-      ip_namespace: "CUST002-PROD"
+      ip_namespace: "C002-PROD"
 
     - prefix: "10.2.20.0/24"
-      description: "Customer 2 prod — app backend"
+      description: "SwiftGo prod — app backend"
       status: active
-      ip_namespace: "CUST002-PROD"
+      ip_namespace: "C002-PROD"
 
     # Shared services
     - prefix: "10.255.1.0/24"

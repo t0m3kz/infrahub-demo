@@ -88,3 +88,20 @@ config firewall policy
 {%- endfor %}
 end
 {%- endif %}
+{%- if ha %}
+#
+# --- HA Configuration ---
+config system ha
+    set group-id {{ ha.group_id }}
+    set mode {{ 'a-p' if ha.mode == 'active-passive' else 'a-a' }}
+    set priority {{ ha.priority }}
+    set override {{ 'enable' if ha.preempt else 'disable' }}
+{%- if ha.ha_link %}
+    set hbdev "{{ ha.ha_link }}" 50
+{%- endif %}
+{%- if ha.virtual_ip %}
+    set vcluster-id {{ ha.group_id }}
+{%- endif %}
+end
+#
+{%- endif %}

@@ -1,0 +1,22 @@
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimPhysicalDevice
+  data:
+    - name: muc-1-fw-01
+      rack: muc-1-s-1-r-5-1
+      role: firewall
+      status: provisioning
+      device_type: [CP-26000]
+      platform: checkpoint_gaia
+      member_of_groups: [endpoints]
+      interfaces:
+        kind: DcimPhysicalInterface
+        data:
+          - name: eth1
+            interface_type: 100gbase-x-qsfp28
+            role: uplink
+          - name: eth2
+            interface_type: 100gbase-x-qsfp28
+            role: uplink

@@ -200,3 +200,38 @@ spec:
             name: mgmt1/1/1
             role: management
             interface_type: 1000base-t
+
+    - template_name: PowerSwitch-S5232F-ON_BORDER_LEAF
+      device_type: PowerSwitch S5232F-ON
+      role: border-leaf
+      platform: dell_sonic
+      status: provisioning
+      interfaces:
+        kind: TemplateDcimPhysicalInterface
+        parameters:
+          expand_range: true
+        data:
+          - template_name: PowerSwitch-S5232F-ON_BORDER_LEAF_Ethernet1/1/[1-24]
+            name: Ethernet1/1/[1-24]
+            role: downlink
+            interface_type: 100gbase-x-qsfp28
+          - template_name: PowerSwitch-S5232F-ON_BORDER_LEAF_Ethernet1/1/[25-28]
+            name: Ethernet1/1/[25-28]
+            role: firewall
+            interface_type: 100gbase-x-qsfp28
+          - template_name: PowerSwitch-S5232F-ON_BORDER_LEAF_Ethernet1/1/[29-32]
+            name: Ethernet1/1/[29-32]
+            role: load-balancer
+            interface_type: 100gbase-x-qsfp28
+          - template_name: PowerSwitch-S5232F-ON_BORDER_LEAF_Ethernet1/1/[33-36]
+            name: Ethernet1/1/[33-36]
+            role: uplink
+            interface_type: 100gbase-x-qsfp28
+          - template_name: PowerSwitch-S5232F-ON_BORDER_LEAF_Ethernet1/1/[37-38]
+            name: Ethernet1/1/[37-38]
+            role: management
+            interface_type: 10gbase-x-sfpp
+          - template_name: PowerSwitch-S5232F-ON_BORDER_LEAF_mgmt1
+            name: mgmt1/1/1
+            role: management
+            interface_type: 1000base-t

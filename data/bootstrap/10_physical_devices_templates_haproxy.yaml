@@ -1,0 +1,26 @@
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TemplateDcimPhysicalDevice
+  data:
+    - template_name: HA-PROXY_PROXY
+      device_type: HA-PROXY
+      platform: haproxy_technologies
+      role: proxy
+      status: provisioning
+      interfaces:
+        kind: TemplateDcimPhysicalInterface
+        data:
+          - template_name: HA-PROXY_PROXY_mgmt
+            name: mgmt
+            role: management
+            interface_type: 1000base-t
+          - template_name: HA-PROXY_PROXY_eth0
+            name: eth0
+            role: uplink
+            interface_type: 25gbase-x-sfp28
+          - template_name: HA-PROXY_PROXY_eth1
+            name: eth1
+            role: uplink
+            interface_type: 25gbase-x-sfp28

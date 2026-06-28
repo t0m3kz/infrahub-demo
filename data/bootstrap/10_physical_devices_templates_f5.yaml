@@ -1,0 +1,34 @@
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TemplateDcimPhysicalDevice
+  data:
+    - template_name: BIG-IP-i5800_LOAD_BALANCER
+      device_type: BIG-IP-i5800
+      platform: f5_tmos
+      role: load-balancer
+      status: provisioning
+      interfaces:
+        kind: TemplateDcimPhysicalInterface
+        data:
+          - template_name: BIG-IP-i5800_LOAD_BALANCER_mgmt
+            name: mgmt
+            role: management
+            interface_type: 1000base-t
+          - template_name: BIG-IP-i5800_LOAD_BALANCER_1.1
+            name: "1.1"
+            role: uplink
+            interface_type: 25gbase-x-sfp28
+          - template_name: BIG-IP-i5800_LOAD_BALANCER_1.2
+            name: "1.2"
+            role: uplink
+            interface_type: 25gbase-x-sfp28
+          - template_name: BIG-IP-i5800_LOAD_BALANCER_2.1
+            name: "2.1"
+            role: customer
+            interface_type: 100gbase-x-qsfp28
+          - template_name: BIG-IP-i5800_LOAD_BALANCER_2.2
+            name: "2.2"
+            role: customer
+            interface_type: 100gbase-x-qsfp28

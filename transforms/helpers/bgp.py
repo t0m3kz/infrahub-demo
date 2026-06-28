@@ -74,7 +74,7 @@ def _build_session_from_peering(
     Returns None if the peering cannot be processed.
     """
     # Get interfaces (2 entries: local + remote)
-    peering_ifaces = peering_node.get("interfaces", [])
+    peering_ifaces = peering_node.get("interface_capabilities", [])
     if not isinstance(peering_ifaces, list) or len(peering_ifaces) != 2:
         return None
 
@@ -127,7 +127,7 @@ def _build_session_from_peering(
             # Inter-site circuit: circuit appears in interface_capabilities (ManagedGeneric pattern)
             for iface in interfaces:
                 for svc in iface.get("interface_capabilities") or []:
-                    typename = svc.get("__typename", "")
+                    typename = svc.get("typename", "")
                     if typename not in ("TopologyPhysicalCircuit", "TopologyVirtualCircuit"):
                         continue
                     # circuits use cardinality-many `interfaces` list (2 entries: local + remote)

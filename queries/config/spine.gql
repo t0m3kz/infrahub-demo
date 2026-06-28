@@ -28,7 +28,8 @@ query spine_config($device: String!) {
         }
 
         # Device Services (BGP, OSPF) with nested peerings
-        device_capabilities {
+        ... on DcimCapabilities {
+        capabilities {
           edges {
             node {
               __typename
@@ -70,13 +71,10 @@ query spine_config($device: String!) {
                           node {
                             afi { value }
                             safi { value }
-                            advertise_all_vni { value }
-                            advertise_default_gw { value }
-                            advertise_svi_ip { value }
                           }
                         }
                       }
-                      interfaces {
+                      interface_capabilities {
                         edges {
                           node {
                             name { value }
@@ -93,8 +91,6 @@ query spine_config($device: String!) {
                       bgp_processes {
                         edges {
                           node {
-                            id
-                            device_capabilities { edges { node { name { value } } } }
                             router_id { node { address { value } } }
                             local_as { node { asn { value } } }
                           }
@@ -174,10 +170,11 @@ query spine_config($device: String!) {
                 domain_id { value }
                 reload_delay { value }
                 reload_delay_non_mlag { value }
-                device_capabilities { edges { node { name { value } } } }
+                capabilities { edges { node { name { value } } } }
               }
             }
           }
+        }
         }
 
         # Interface Information

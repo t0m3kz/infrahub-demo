@@ -1,0 +1,63 @@
+---
+# C003 (Vaultex Inc.) — IP namespaces and address space
+
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: IpamNamespace
+  data:
+    - name: "C003-PROD"
+      description: "Vaultex Inc. production VRF"
+      l3_vni: 50005
+      status: "active"
+      owner: "C003"
+      member_of_groups:
+        - vrf_namespaces
+
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: IpamPrefix
+  data:
+    - prefix: "10.3.10.0/24"
+      description: "Vaultex prod — dmz"
+      status: active
+      ip_namespace: "C003-PROD"
+
+    - prefix: "10.3.20.0/24"
+      description: "Vaultex prod — app-backend"
+      status: active
+      ip_namespace: "C003-PROD"
+
+    - prefix: "10.3.30.0/24"
+      description: "Vaultex prod — vault-core"
+      status: active
+      ip_namespace: "C003-PROD"
+
+    - prefix: "10.3.40.0/24"
+      description: "Vaultex prod — database"
+      status: active
+      ip_namespace: "C003-PROD"
+
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: IpamIPAddress
+  data:
+    - address: "10.3.10.1/24"
+      description: "Anycast GW — Vaultex prod dmz"
+      ip_namespace: "C003-PROD"
+
+    - address: "10.3.20.1/24"
+      description: "Anycast GW — Vaultex prod app-backend"
+      ip_namespace: "C003-PROD"
+
+    - address: "10.3.30.1/24"
+      description: "Anycast GW — Vaultex prod vault-core"
+      ip_namespace: "C003-PROD"
+
+    - address: "10.3.40.1/24"
+      description: "Anycast GW — Vaultex prod database"
+      ip_namespace: "C003-PROD"

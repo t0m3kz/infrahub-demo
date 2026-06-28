@@ -50,6 +50,7 @@ nodes:
       - GeneratorTarget
       - TopologyRackHosting
       - TopologyDeviceHosting
+      - TopologyClusterHosting
     parent: TopologyColocationMetro
     label: Colocation Availability Zone
     children: ""

@@ -1,0 +1,147 @@
+---
+# C003 (Vaultex Inc.) — audit-service application (single-file, nested format)
+#
+# Hierarchy: AppApplication → AppComponent (children: nested inline)
+# VMs are defined separately and point back to component slugs via capabilities.
+#
+# Components:
+#   event-collector   — receives audit events from all services (TCP 9200)
+#   event-store       — append-only event database (PostgreSQL 5432)
+#   audit-api         — read-only query API for compliance consumers (HTTPS 443)
+#
+# Dependency graph:
+#   event-collector → event-store  (write path, TCP 5432)
+#   audit-api       → event-store  (read path, TCP 5432)
+
+# ── Application ───────────────────────────────────────────────────────────────
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: AppApplication
+  data:
+    - label: audit-service
+      environment: p
+      criticality: critical
+      parent: C003
+      member_of_groups:
+        - app_applications
+      children:
+        kind: AppComponent
+        data:
+          - name: event-collector
+            component_type: backend
+            network_segment: c003-app-backend-p
+            description: "Ingests audit events from all vault-core and compliance-portal services"
+
+          - name: event-store
+            component_type: database
+            network_segment: c003-database-p
+            description: "Append-only PostgreSQL store for immutable audit records"
+
+          - name: audit-api
+            component_type: backend
+            network_segment: c003-app-backend-p
+            description: "Read-only HTTPS API for compliance and reporting consumers"
+
+---
+# ── Virtual machines ──────────────────────────────────────────────────────────
+# Defined separately because capabilities is an inbound relationship
+# (the VM points to the component, not the other way around).
+# Component slug pattern: {portfolio}-{app}-{env}-{component-name}
+#   → c003-audit-service-p-event-collector, etc.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimVirtualDevice
+  data:
+    - name: C003-AUDIT-COL-VM-01
+      role: endpoint
+      status: active
+      device_type: linux-vm
+      platform: linux
+      deployment: DC1
+      hosting_device: DC1-POD2-SRV-01
+
+    - name: C003-AUDIT-COL-VM-02
+      role: endpoint
+      status: active
+      device_type: linux-vm
+      platform: linux
+      deployment: DC1
+      hosting_device: DC1-POD2-SRV-02
+
+    - name: C003-AUDIT-DB-VM-01
+      role: endpoint
+      status: active
+      device_type: linux-vm
+      platform: linux
+      deployment: DC1
+      hosting_device: DC1-POD2-SRV-01
+
+    - name: C003-AUDIT-DB-VM-02
+      role: endpoint
+      status: active
+      device_type: linux-vm
+      platform: linux
+      deployment: DC1
+      hosting_device: DC1-POD2-SRV-02
+
+    - name: C003-AUDIT-API-VM-01
+      role: endpoint
+      status: active
+      device_type: linux-vm
+      platform: linux
+      deployment: DC1
+      hosting_device: DC1-POD2-SRV-01
+
+---
+# ── Dependencies ──────────────────────────────────────────────────────────────
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: AppDependency
+  data:
+    - name: c003-audit-service-p-event-collector--c003-audit-service-p-event-store
+      source: c003-audit-service-p-event-collector
+      target: c003-audit-service-p-event-store
+      protocol: tcp
+      port_start: 5432
+      description: "Event collector → event store (write, PostgreSQL)"
+
+    - name: c003-audit-service-p-audit-api--c003-audit-service-p-event-store
+      source: c003-audit-service-p-audit-api
+      target: c003-audit-service-p-event-store
+      protocol: tcp
+      port_start: 5432
+      description: "Audit API → event store (read-only, PostgreSQL)"
+
+---
+# ── Wire depends_on back onto components ──────────────────────────────────────
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: AppComponent
+  data:
+    - name: event-collector
+      component_type: backend
+      parent: c003-audit-service-p
+      capabilities:
+        - C003-AUDIT-COL-VM-01
+        - C003-AUDIT-COL-VM-02
+      depends_on:
+        - c003-audit-service-p-event-collector--c003-audit-service-p-event-store
+
+    - name: event-store
+      component_type: database
+      parent: c003-audit-service-p
+      capabilities:
+        - C003-AUDIT-DB-VM-01
+        - C003-AUDIT-DB-VM-02
+
+    - name: audit-api
+      component_type: backend
+      parent: c003-audit-service-p
+      capabilities:
+        - C003-AUDIT-API-VM-01
+      depends_on:
+        - c003-audit-service-p-audit-api--c003-audit-service-p-event-store

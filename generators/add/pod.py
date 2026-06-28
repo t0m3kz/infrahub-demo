@@ -89,10 +89,11 @@ class PodTopologyGenerator(CommonGenerator):
         )
 
         if design and spine_count > design.max_spines_per_pod:
-            raise RuntimeError(
+            self.logger.error(
                 f"Pod {self.data.name} requests {spine_count} spines "
                 f"but pod design '{design.name}' allows at most {design.max_spines_per_pod}"
             )
+            return
 
         spine_template = self.data.spine_template
 
@@ -190,7 +191,9 @@ class PodTopologyGenerator(CommonGenerator):
 
         parent = self.data.parent
         super_spine_devices = [device.name for device in (parent.devices or [])]
-        super_spine_interfaces = [iface.name for iface in parent.super_spine_template.interfaces]
+        super_spine_interfaces = (
+            [iface.name for iface in parent.super_spine_template.interfaces] if parent.super_spine_template else []
+        )
 
         # Create spine underlay BGP processes immediately after device creation.
         # Super-spines are declared as top_devices so the planner skips AS+BGP
@@ -219,7 +222,7 @@ class PodTopologyGenerator(CommonGenerator):
                 f"Pod {self.data.name}: No uplink interfaces found in spine template. "
                 "Cannot create spine-to-super-spine cabling."
             )
-            raise RuntimeError(f"Pod {self.data.name}: Cannot cable spines - no uplink interfaces in template")
+            return
 
         # Skip cabling if no super-spines (single-pod DC scenario)
         skip_cabling = False
@@ -253,8 +256,9 @@ class PodTopologyGenerator(CommonGenerator):
                 top_sorting=parent.fabric_interface_sorting_method,
             )
 
-        # Create routing for super-spine ↔ spine peerings (after spine-to-super-spine cabling)
-        if dc_design:
+        # Create routing for super-spine ↔ spine peerings (after spine-to-super-spine cabling).
+        # Skipped when there are no super-spines (single-pod DC) — no cable means no peering.
+        if dc_design and not skip_cabling:
             super_spine_names = [device.name for device in (parent.devices or [])]
 
             routing_options: RoutingOptions = RoutingOptions(design=dc_design)

@@ -1,0 +1,57 @@
+---
+# C003 (Vaultex Inc.) — Virtual machines on DC1/DC2 servers
+
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimVirtualDevice
+  data:
+    # ── vault-core — production ───────────────────────────────────────────────
+    - name: C003-VAULT-VM-01
+      role: endpoint
+      status: active
+      device_type: linux-vm
+      platform: linux
+      deployment: DC1
+      hosting_device: DC1-POD2-SRV-02
+
+    - name: C003-VAULT-VM-02
+      role: endpoint
+      status: active
+      device_type: linux-vm
+      platform: linux
+      deployment: DC2
+      hosting_device: DC2-POD2-SRV-02
+
+    - name: C003-VAULT-DB-VM-01
+      role: endpoint
+      status: active
+      device_type: linux-vm
+      platform: linux
+      deployment: DC1
+      hosting_device: DC1-POD2-SRV-02
+
+    # ── compliance-portal — production ────────────────────────────────────────
+    - name: C003-COMP-WEB-VM-01
+      role: endpoint
+      status: active
+      device_type: linux-vm
+      platform: linux
+      deployment: DC1
+      hosting_device: DC1-POD2-SRV-01
+
+    - name: C003-COMP-APP-VM-01
+      role: endpoint
+      status: active
+      device_type: linux-vm
+      platform: linux
+      deployment: DC1
+      hosting_device: DC1-POD2-SRV-01
+
+    - name: C003-COMP-DB-VM-01
+      role: endpoint
+      status: active
+      device_type: linux-vm
+      platform: linux
+      deployment: DC2
+      hosting_device: DC2-POD2-SRV-02

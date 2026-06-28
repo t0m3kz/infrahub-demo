@@ -1,0 +1,42 @@
+---
+# Frankfurt edge router WAN-facing interfaces — DC uplinks and partner peering
+# These are pre-created so that 05_interconnects circuits can reference them.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimPhysicalInterface
+  data:
+    - device: FR2-EDGE-01
+      name: Ethernet1/1
+      description: "WAN uplink — DC1 Super-Spine (PHYS-DC1-FR2-EQX-01)"
+      status: active
+      role: uplink
+      interface_type: 100gbase-x-qsfp28
+
+    - device: FR2-EDGE-01
+      name: Ethernet1/2
+      description: "WAN uplink — AWS Direct Connect (C001-DX-FR2-EU-CENTRAL-1)"
+      status: active
+      role: uplink
+      interface_type: 100gbase-x-qsfp28
+
+    - device: FR6-EDGE-01
+      name: Ethernet1/1
+      description: "WAN uplink — DC1 Super-Spine (PHYS-DC1-FR6-EQX-01)"
+      status: active
+      role: uplink
+      interface_type: 100gbase-x-qsfp28
+
+    - device: FR6-EDGE-01
+      name: Ethernet1/2
+      description: "WAN uplink — partner peering"
+      status: active
+      role: uplink
+      interface_type: 100gbase-x-qsfp28
+
+    - device: FR6-EDGE-02
+      name: Ethernet1/1
+      description: "WAN uplink — redundant path"
+      status: active
+      role: uplink
+      interface_type: 100gbase-x-qsfp28

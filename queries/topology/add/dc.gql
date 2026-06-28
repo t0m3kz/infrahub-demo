@@ -20,7 +20,7 @@ query topology_dc($name: String!) {
           management_prefix_length { value }
           design {
             node {
-              # New schema structure
+              id
               routing_strategy { value }
               underlay_protocol { value }
               max_pods { value }

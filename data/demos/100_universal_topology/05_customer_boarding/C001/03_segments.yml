@@ -1,0 +1,64 @@
+---
+# C001 (Nordix Ltd.) — customer boarding: DC3 VXLAN segments
+#
+# All segments reference DC3-C001-VSX-01 as the firewall with PBR enabled.
+# Inbound traffic on DC3 is redirected by the leaf PBR policy to the
+# Check Point VSX virtual system before being forwarded into the
+# C001-DC3-PROD namespace (VRF). VLAN ID and VNI are allocated from
+# the DC3-VLAN-POOL and DC3-VNI-POOL attached to the DC3 deployment.
+
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: ManagedVxlanSegment
+  data:
+    - customer_name: "web-frontend"
+      environment: "p"
+      owner: "C001"
+      arp_suppression: true
+      prefix:
+        - - "10.1.10.0/24"
+          - "C001-DC3-PROD"
+      gateway:
+        - "10.1.10.1/24"
+        - "C001-DC3-PROD"
+      deployments:
+        - DC3
+      inline_service: DC3-FW-HA
+      pbr_enabled: true
+      member_of_groups:
+        - vxlan_segments
+
+    - customer_name: "app-backend"
+      environment: "p"
+      owner: "C001"
+      arp_suppression: true
+      prefix:
+        - - "10.1.20.0/24"
+          - "C001-DC3-PROD"
+      gateway:
+        - "10.1.20.1/24"
+        - "C001-DC3-PROD"
+      deployments:
+        - DC3
+      inline_service: DC3-FW-HA
+      pbr_enabled: true
+      member_of_groups:
+        - vxlan_segments
+
+    - customer_name: "database"
+      environment: "p"
+      owner: "C001"
+      arp_suppression: true
+      prefix:
+        - - "10.1.30.0/24"
+          - "C001-DC3-PROD"
+      gateway:
+        - "10.1.30.1/24"
+        - "C001-DC3-PROD"
+      deployments:
+        - DC3
+      inline_service: DC3-FW-HA
+      pbr_enabled: true
+      member_of_groups:
+        - vxlan_segments

@@ -1,0 +1,750 @@
+{
+  "DcimPhysicalDevice": {
+    "edges": [
+      {
+        "node": {
+          "__typename": "DcimPhysicalDevice",
+          "id": "dev-dc1-fw-01",
+          "name": {
+            "value": "dc1-fw-01"
+          },
+          "role": {
+            "value": "firewall"
+          },
+          "platform": {
+            "node": {
+              "id": "plat-fortinet_fortios",
+              "name": {
+                "value": "fortinet_fortios"
+              },
+              "netmiko_device_type": {
+                "value": "fortinet_fortios"
+              },
+              "napalm_driver": {
+                "value": "fortinet_fortios"
+              },
+              "ansible_network_os": {
+                "value": "fortinet_fortios"
+              }
+            }
+          },
+          "primary_address": {
+            "node": null
+          },
+          "tags": {
+            "edges": []
+          },
+          "capabilities": {
+            "edges": [
+              {
+                "node": {
+                  "__typename": "ManagedFirewallHA",
+                  "name": {
+                    "value": "dc1-fw-ha"
+                  },
+                  "group_id": {
+                    "value": 1
+                  },
+                  "mode": {
+                    "value": "active-passive"
+                  },
+                  "priority": {
+                    "value": 100
+                  },
+                  "preempt": {
+                    "value": false
+                  },
+                  "ha_timer": {
+                    "value": "aggressive"
+                  },
+                  "capabilities": {
+                    "edges": [
+                      {
+                        "node": {
+                          "name": {
+                            "value": "dc1-fw-01"
+                          }
+                        }
+                      },
+                      {
+                        "node": {
+                          "name": {
+                            "value": "dc1-fw-02"
+                          }
+                        }
+                      }
+                    ]
+                  }
+                }
+              }
+            ]
+          },
+          "interfaces": {
+            "edges": [
+              {
+                "node": {
+                  "__typename": "DcimVirtualInterface",
+                  "name": {
+                    "value": "ethernet1/1.10"
+                  },
+                  "description": {
+                    "value": "Internal LAN link"
+                  },
+                  "status": {
+                    "value": "active"
+                  },
+                  "role": {
+                    "value": "uplink"
+                  },
+                  "parent_interface": {
+                    "node": {
+                      "name": {
+                        "value": "ethernet1/1"
+                      }
+                    }
+                  },
+                  "ip_address": {
+                    "node": {
+                      "address": {
+                        "value": "10.0.1.1/30"
+                      },
+                      "ip_namespace": {
+                        "node": {
+                          "name": {
+                            "value": "VRF-INTERNAL"
+                          }
+                        }
+                      }
+                    }
+                  },
+                  "interface_capabilities": {
+                    "edges": [
+                      {
+                        "node": {
+                          "__typename": "ManagedVxlanSegment",
+                          "id": "seg-internal",
+                          "name": {
+                            "value": "seg-internal"
+                          },
+                          "status": {
+                            "value": "active"
+                          },
+                          "arp_suppression": {
+                            "value": true
+                          },
+                          "segment_deployments": {
+                            "edges": [
+                              {
+                                "node": {
+                                  "vlan_id": {
+                                    "value": 10
+                                  },
+                                  "vni": {
+                                    "value": null
+                                  }
+                                }
+                              }
+                            ]
+                          },
+                          "security_zone": {
+                            "node": {
+                              "name": {
+                                "value": "internal"
+                              },
+                              "trust_level": {
+                                "value": 100
+                              },
+                              "zone_type": {
+                                "value": "internal"
+                              }
+                            }
+                          },
+                          "prefix": {
+                            "edges": [
+                              {
+                                "node": {
+                                  "prefix": {
+                                    "value": null
+                                  },
+                                  "gateway_ip": {
+                                    "value": null
+                                  },
+                                  "ip_namespace": {
+                                    "node": {
+                                      "name": {
+                                        "value": "VRF-INTERNAL"
+                                      },
+                                      "l3_vni": {
+                                        "value": null
+                                      },
+                                      "owner": {
+                                        "node": null
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                            ]
+                          },
+                          "security_policies": {
+                            "edges": []
+                          }
+                        }
+                      }
+                    ]
+                  }
+                }
+              },
+              {
+                "node": {
+                  "__typename": "DcimVirtualInterface",
+                  "name": {
+                    "value": "ethernet1/1.20"
+                  },
+                  "description": {
+                    "value": "DMZ link"
+                  },
+                  "status": {
+                    "value": "active"
+                  },
+                  "role": {
+                    "value": "uplink"
+                  },
+                  "parent_interface": {
+                    "node": {
+                      "name": {
+                        "value": "ethernet1/1"
+                      }
+                    }
+                  },
+                  "ip_address": {
+                    "node": {
+                      "address": {
+                        "value": "10.0.2.1/30"
+                      },
+                      "ip_namespace": {
+                        "node": {
+                          "name": {
+                            "value": "VRF-DMZ"
+                          }
+                        }
+                      }
+                    }
+                  },
+                  "interface_capabilities": {
+                    "edges": [
+                      {
+                        "node": {
+                          "__typename": "ManagedVxlanSegment",
+                          "id": "seg-dmz",
+                          "name": {
+                            "value": "seg-dmz"
+                          },
+                          "status": {
+                            "value": "active"
+                          },
+                          "arp_suppression": {
+                            "value": true
+                          },
+                          "segment_deployments": {
+                            "edges": [
+                              {
+                                "node": {
+                                  "vlan_id": {
+                                    "value": 20
+                                  },
+                                  "vni": {
+                                    "value": null
+                                  }
+                                }
+                              }
+                            ]
+                          },
+                          "security_zone": {
+                            "node": {
+                              "name": {
+                                "value": "dmz"
+                              },
+                              "trust_level": {
+                                "value": 50
+                              },
+                              "zone_type": {
+                                "value": "dmz"
+                              }
+                            }
+                          },
+                          "prefix": {
+                            "edges": [
+                              {
+                                "node": {
+                                  "prefix": {
+                                    "value": null
+                                  },
+                                  "gateway_ip": {
+                                    "value": null
+                                  },
+                                  "ip_namespace": {
+                                    "node": {
+                                      "name": {
+                                        "value": "VRF-DMZ"
+                                      },
+                                      "l3_vni": {
+                                        "value": null
+                                      },
+                                      "owner": {
+                                        "node": null
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                            ]
+                          },
+                          "security_policies": {
+                            "edges": []
+                          }
+                        }
+                      }
+                    ]
+                  }
+                }
+              },
+              {
+                "node": {
+                  "__typename": "DcimVirtualInterface",
+                  "name": {
+                    "value": "ethernet1/1.30"
+                  },
+                  "description": {
+                    "value": "External link"
+                  },
+                  "status": {
+                    "value": "active"
+                  },
+                  "role": {
+                    "value": "uplink"
+                  },
+                  "parent_interface": {
+                    "node": {
+                      "name": {
+                        "value": "ethernet1/1"
+                      }
+                    }
+                  },
+                  "ip_address": {
+                    "node": {
+                      "address": {
+                        "value": "10.0.3.1/30"
+                      },
+                      "ip_namespace": {
+                        "node": {
+                          "name": {
+                            "value": "VRF-EXTERNAL"
+                          }
+                        }
+                      }
+                    }
+                  },
+                  "interface_capabilities": {
+                    "edges": [
+                      {
+                        "node": {
+                          "__typename": "ManagedVxlanSegment",
+                          "id": "seg-external",
+                          "name": {
+                            "value": "seg-external"
+                          },
+                          "status": {
+                            "value": "active"
+                          },
+                          "arp_suppression": {
+                            "value": true
+                          },
+                          "segment_deployments": {
+                            "edges": [
+                              {
+                                "node": {
+                                  "vlan_id": {
+                                    "value": 30
+                                  },
+                                  "vni": {
+                                    "value": null
+                                  }
+                                }
+                              }
+                            ]
+                          },
+                          "security_zone": {
+                            "node": {
+                              "name": {
+                                "value": "external"
+                              },
+                              "trust_level": {
+                                "value": 0
+                              },
+                              "zone_type": {
+                                "value": "external"
+                              }
+                            }
+                          },
+                          "prefix": {
+                            "edges": [
+                              {
+                                "node": {
+                                  "prefix": {
+                                    "value": null
+                                  },
+                                  "gateway_ip": {
+                                    "value": null
+                                  },
+                                  "ip_namespace": {
+                                    "node": {
+                                      "name": {
+                                        "value": "VRF-EXTERNAL"
+                                      },
+                                      "l3_vni": {
+                                        "value": null
+                                      },
+                                      "owner": {
+                                        "node": null
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                            ]
+                          },
+                          "security_policies": {
+                            "edges": []
+                          }
+                        }
+                      }
+                    ]
+                  }
+                }
+              }
+            ]
+          },
+          "deployment": {
+            "node": null
+          }
+        }
+      }
+    ]
+  },
+  "SecurityZone": {
+    "edges": [
+      {
+        "node": {
+          "name": {
+            "value": "internal"
+          },
+          "trust_level": {
+            "value": 100
+          },
+          "zone_type": {
+            "value": "internal"
+          },
+          "description": {
+            "value": "Internal trusted network"
+          },
+          "network_segments": {
+            "edges": [
+              {
+                "node": {
+                  "id": "seg-10-0-1-0-24",
+                  "__typename": "ManagedVlanSegment",
+                  "name": {
+                    "value": "seg-10-0-1-0-24"
+                  },
+                  "prefix": {
+                    "node": {
+                      "prefix": {
+                        "value": "10.0.1.0/24"
+                      }
+                    }
+                  }
+                }
+              },
+              {
+                "node": {
+                  "id": "seg-10-0-10-0-24",
+                  "__typename": "ManagedVlanSegment",
+                  "name": {
+                    "value": "seg-10-0-10-0-24"
+                  },
+                  "prefix": {
+                    "node": {
+                      "prefix": {
+                        "value": "10.0.10.0/24"
+                      }
+                    }
+                  }
+                }
+              }
+            ]
+          }
+        }
+      },
+      {
+        "node": {
+          "name": {
+            "value": "dmz"
+          },
+          "trust_level": {
+            "value": 50
+          },
+          "zone_type": {
+            "value": "dmz"
+          },
+          "description": {
+            "value": "Demilitarized zone"
+          },
+          "network_segments": {
+            "edges": [
+              {
+                "node": {
+                  "id": "seg-10-0-2-0-24",
+                  "__typename": "ManagedVlanSegment",
+                  "name": {
+                    "value": "seg-10-0-2-0-24"
+                  },
+                  "prefix": {
+                    "node": {
+                      "prefix": {
+                        "value": "10.0.2.0/24"
+                      }
+                    }
+                  }
+                }
+              }
+            ]
+          }
+        }
+      },
+      {
+        "node": {
+          "name": {
+            "value": "external"
+          },
+          "trust_level": {
+            "value": 0
+          },
+          "zone_type": {
+            "value": "external"
+          },
+          "description": {
+            "value": "External untrusted network"
+          },
+          "network_segments": {
+            "edges": []
+          }
+        }
+      }
+    ]
+  },
+  "SecurityPolicy": {
+    "edges": [
+      {
+        "node": {
+          "name": {
+            "value": "dmz-to-internal"
+          },
+          "enabled": {
+            "value": true
+          },
+          "default_action": {
+            "value": "deny"
+          },
+          "rules": {
+            "edges": [
+              {
+                "node": {
+                  "index": {
+                    "value": 10
+                  },
+                  "name": {
+                    "value": "allow-https"
+                  },
+                  "action": {
+                    "value": "permit"
+                  },
+                  "protocol": {
+                    "value": "tcp"
+                  },
+                  "port_start": {
+                    "value": 443
+                  },
+                  "port_end": {
+                    "value": null
+                  },
+                  "log": {
+                    "value": true
+                  },
+                  "disabled": {
+                    "value": false
+                  },
+                  "description": {
+                    "value": "Allow HTTPS from DMZ to Internal"
+                  },
+                  "source_zone": {
+                    "node": {
+                      "name": {
+                        "value": "dmz"
+                      }
+                    }
+                  },
+                  "destination_zone": {
+                    "node": {
+                      "name": {
+                        "value": "internal"
+                      }
+                    }
+                  },
+                  "source_segment": {
+                    "node": null
+                  },
+                  "destination_segment": {
+                    "node": null
+                  },
+                  "security_profile": {
+                    "node": {
+                      "name": {
+                        "value": "strict-av"
+                      }
+                    }
+                  }
+                }
+              },
+              {
+                "node": {
+                  "index": {
+                    "value": 20
+                  },
+                  "name": {
+                    "value": "allow-ssh"
+                  },
+                  "action": {
+                    "value": "permit"
+                  },
+                  "protocol": {
+                    "value": "tcp"
+                  },
+                  "port_start": {
+                    "value": 22
+                  },
+                  "port_end": {
+                    "value": null
+                  },
+                  "log": {
+                    "value": true
+                  },
+                  "disabled": {
+                    "value": false
+                  },
+                  "description": {
+                    "value": "Allow SSH from DMZ to Internal"
+                  },
+                  "source_zone": {
+                    "node": {
+                      "name": {
+                        "value": "dmz"
+                      }
+                    }
+                  },
+                  "destination_zone": {
+                    "node": {
+                      "name": {
+                        "value": "internal"
+                      }
+                    }
+                  },
+                  "source_segment": {
+                    "node": null
+                  },
+                  "destination_segment": {
+                    "node": null
+                  },
+                  "security_profile": {
+                    "node": null
+                  }
+                }
+              }
+            ]
+          }
+        }
+      },
+      {
+        "node": {
+          "name": {
+            "value": "internal-to-dmz"
+          },
+          "enabled": {
+            "value": true
+          },
+          "default_action": {
+            "value": "deny"
+          },
+          "rules": {
+            "edges": [
+              {
+                "node": {
+                  "index": {
+                    "value": 10
+                  },
+                  "name": {
+                    "value": "allow-any"
+                  },
+                  "action": {
+                    "value": "permit"
+                  },
+                  "protocol": {
+                    "value": "any"
+                  },
+                  "port_start": {
+                    "value": null
+                  },
+                  "port_end": {
+                    "value": null
+                  },
+                  "log": {
+                    "value": false
+                  },
+                  "disabled": {
+                    "value": false
+                  },
+                  "description": {
+                    "value": "Allow all from Internal to DMZ"
+                  },
+                  "source_zone": {
+                    "node": {
+                      "name": {
+                        "value": "internal"
+                      }
+                    }
+                  },
+                  "destination_zone": {
+                    "node": {
+                      "name": {
+                        "value": "dmz"
+                      }
+                    }
+                  },
+                  "source_segment": {
+                    "node": null
+                  },
+                  "destination_segment": {
+                    "node": null
+                  },
+                  "security_profile": {
+                    "node": null
+                  }
+                }
+              }
+            ]
+          }
+        }
+      }
+    ]
+  }
+}

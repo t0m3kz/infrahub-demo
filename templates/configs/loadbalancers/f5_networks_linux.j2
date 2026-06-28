@@ -174,3 +174,40 @@ ltm monitor tcp tcp_monitor {
     interval 30
     timeout 91
 }
+{%- if ha %}
+# --- Device Service Clustering (DSC) ---
+cm device {{ ha.devices[0] if ha.devices else name }} {
+    configsync-ip {{ loadbalancer_config.management_ip }}
+    mirror-ip {{ loadbalancer_config.management_ip }}
+    unicast-address {
+        {
+            ip {{ loadbalancer_config.management_ip }}
+            port 1026
+        }
+    }
+}
+cm trust-domain Root {
+    ca-devices { /Common/{{ ha.devices[0] if ha.devices else name }} }
+    name Root
+}
+cm device-group {{ name }}_dg {
+    auto-sync enabled
+    devices {
+        {%- for peer in ha.devices %}
+        /Common/{{ peer }} { }
+        {%- endfor %}
+    }
+    network-failover enabled
+    type sync-failover
+}
+{%- if ha.virtual_ip %}
+cm traffic-group traffic-group-1 {
+    ha-order { {{ ha.devices | join(' ') }} }
+}
+net self {{ ha.virtual_ip }}_float {
+    address {{ ha.virtual_ip }}/24
+    traffic-group traffic-group-1
+    vlan internal
+}
+{%- endif %}
+{%- endif %}

@@ -1,0 +1,166 @@
+{#- F5 BIG-IP TMOS — load balancer configuration -#}
+sys global-settings {
+    hostname {{ name }}
+    gui-setup disabled
+    mgmt-dhcp disabled
+}
+sys ntp {
+    timezone UTC
+}
+sys dns {
+    name-servers { 8.8.8.8 8.8.4.4 }
+}
+sys snmp {
+    agent-addresses { udp:161 }
+    communities {
+        public {
+            access ro
+            source default
+        }
+    }
+}
+#
+{%- if lb_interfaces %}
+#
+# --- Self IPs ---
+{%- for iface in lb_interfaces %}
+{%- set addr = iface.ip_address.address %}
+net self {{ iface.name }}_self {
+    address {{ addr }}
+    allow-service default
+    traffic-group traffic-group-local-only
+    vlan {{ iface.name }}
+}
+{%- if iface.description %}
+# {{ iface.name }}: {{ iface.description }}
+{%- endif %}
+{%- endfor %}
+#
+{%- endif %}
+# --- Health Monitors ---
+ltm monitor http http_monitor {
+    defaults-from http
+    interval 30
+    timeout 91
+    send "GET /health HTTP/1.1\r\nHost: \r\nConnection: Close\r\n\r\n"
+    recv "200 OK"
+}
+ltm monitor tcp tcp_monitor {
+    defaults-from tcp
+    interval 30
+    timeout 91
+}
+{%- if vips %}
+#
+# --- Nodes and Pools ---
+{%- set seen_members = [] %}
+{%- for vip in vips %}
+{%- for member in vip.members %}
+{%- if member.ip and member.name not in seen_members %}
+{%- set _ = seen_members.append(member.name) %}
+ltm node {{ member.name }} {
+    address {{ member.ip.split('/')[0] }}
+}
+{%- endif %}
+{%- endfor %}
+{%- endfor %}
+{%- for vip in vips %}
+{%- set pool_name = vip.hostname | replace('.', '_') | replace('-', '_') ~ '_' ~ vip.protocol ~ '_' ~ vip.port ~ '_pool' %}
+{%- if vip.members %}
+ltm pool {{ pool_name }} {
+    monitor {{ 'tcp_monitor' if vip.protocol == 'tcp' else 'http_monitor' }}
+    load-balancing-mode round-robin
+    members {
+        {%- for member in vip.members %}
+        {%- if member.ip %}
+        {{ member.name }}:{{ member.port if member.port else vip.port }} {
+            address {{ member.ip.split('/')[0] }}
+            {%- if member.weight and member.weight != 1 %}
+            ratio {{ member.weight }}
+            {%- endif %}
+        }
+        {%- endif %}
+        {%- endfor %}
+    }
+}
+{%- endif %}
+{%- endfor %}
+#
+# --- Virtual Servers (VIPs) ---
+{%- for vip in vips %}
+{%- set vs_name = vip.hostname | replace('.', '_') | replace('-', '_') ~ '_' ~ vip.protocol ~ '_' ~ vip.port %}
+{%- set pool_name = vs_name ~ '_pool' %}
+ltm virtual {{ vs_name }} {
+    destination {{ vip.vip_ip if vip.vip_ip else '0.0.0.0' }}:{{ vip.port }}
+    ip-protocol {{ 'tcp' if vip.protocol in ['http', 'https', 'tls', 'tcp'] else 'udp' }}
+    {%- if vip.members %}
+    pool {{ pool_name }}
+    {%- endif %}
+    {%- if vip.protocol == 'https' %}
+    profiles {
+        clientssl { context clientside }
+        serverssl { context serverside }
+        http { }
+    }
+    {%- elif vip.protocol == 'http' %}
+    profiles {
+        http { }
+    }
+    {%- endif %}
+    {%- if vip.status == 'active' %}
+    enabled
+    {%- else %}
+    disabled
+    {%- endif %}
+    # {{ vip.description if vip.description else vip.hostname }}  [tenant: {{ vip.lb_name }}]
+}
+{%- endfor %}
+#
+{%- endif %}
+{%- if ha %}
+#
+# --- Device Service Clustering (DSC) ---
+{%- set mgmt_ip = (lb_interfaces | selectattr('role', 'equalto', 'management') | map(attribute='ip_address.address') | first | default('')) %}
+cm device {{ name }} {
+{%- if mgmt_ip %}
+    configsync-ip {{ mgmt_ip.split('/')[0] }}
+    mirror-ip {{ mgmt_ip.split('/')[0] }}
+    unicast-address {
+        {
+            ip {{ mgmt_ip.split('/')[0] }}
+            port 1026
+        }
+    }
+{%- endif %}
+}
+cm trust-domain Root {
+    ca-devices { /Common/{{ ha.devices[0] if ha.devices else name }} }
+    name Root
+}
+cm device-group {{ name }}_dg {
+    auto-sync enabled
+    network-failover enabled
+    type sync-failover
+    devices {
+        {%- if ha.devices %}
+        {%- for peer in ha.devices %}
+        /Common/{{ peer }} { }
+        {%- endfor %}
+        {%- else %}
+        /Common/{{ name }} { }
+        {%- endif %}
+    }
+}
+{%- if ha.virtual_ip %}
+cm traffic-group traffic-group-1 {
+    ha-order { {{ ha.devices | join(' ') if ha.devices else name }} }
+}
+net self float_self {
+    address {{ ha.virtual_ip }}/24
+    allow-service default
+    traffic-group traffic-group-1
+    vlan internal
+}
+{%- endif %}
+#
+{%- endif %}

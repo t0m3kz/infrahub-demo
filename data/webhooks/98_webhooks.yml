@@ -1,0 +1,28 @@
+---
+# To apply:
+#   infrahubctl object load data/webhooks/
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: CoreStandardWebhook
+  data:
+    - name: proposed-change-approved
+      description: >-
+        Fires when a Proposed Change is approved. POSTs the raw event JSON
+        to the webhook receiver, which enriches it with device deploy list.
+      url: http://webhook-receiver:8080/
+      event_type: infrahub.proposed_change.approved
+      active: true
+      validate_certificates: false
+      shared_key: change-me-in-production
+      branch_scope: default_branch
+    - name: proposed-change-approval-revoked
+      description: >-
+        Fires when a Proposed Change approval is revoked. POSTs the raw event
+        JSON to the webhook receiver, which returns a rollback device list.
+      url: http://webhook-receiver:8080/
+      event_type: infrahub.proposed_change.approval_revoked
+      active: true
+      validate_certificates: false
+      shared_key: change-me-in-production
+      branch_scope: default_branch

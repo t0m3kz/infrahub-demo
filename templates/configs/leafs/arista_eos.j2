@@ -18,6 +18,9 @@ no spanning-tree vlan-id 4094
 {%- for vlan in vlans %}
 vlan {{ vlan.vlan_id }}
    name {{ vlan.name or 'VLAN_' + vlan.vlan_id|string }}
+{%- if vlan.isolation_mode == 'isolated' %}
+   ! private-vlan type: isolated  (configure PVLAN or port-protection separately)
+{%- endif %}
 {% endfor %}
 
 {#- IP Access-Lists (zero-trust per-segment ACLs) -#}
@@ -78,6 +81,15 @@ interface {{ interface.name }}
 {%- if interface.vlans %}
 {%- if interface.vlans|length == 1 %}
    switchport access vlan {{ interface.vlans[0] }}
+{%- set ns_vlan = namespace(isolation_mode='normal') %}
+{%- for vlan in vlans %}
+{%- if vlan.vlan_id == interface.vlans[0] %}
+{%- set ns_vlan.isolation_mode = vlan.isolation_mode %}
+{%- endif %}
+{%- endfor %}
+{%- if ns_vlan.isolation_mode == 'isolated' %}
+   switchport protected
+{%- endif %}
 {%- else %}
    switchport trunk allowed vlan {{ interface.vlans|join(',') }}
 {%- endif %}
@@ -210,6 +222,11 @@ ip virtual-router mac-address {{ vxlan.anycast_gateway.mac }}
 {%- endif %}
 {%- endfor %}
 interface Vlan{{ vlan.vlan_id }}
+{%- if vlan.isolation_mode == 'isolated' %}
+   ! Isolation Mode: ISOLATED — intra-segment host-to-host traffic blocked via port-isolation
+{%- elif vlan.isolation_mode == 'microsegmented' %}
+   ! Isolation Mode: MICROSEGMENTED — intra+inter segment rules enforced via SVI ACL (and firewall if present)
+{%- endif %}
 {%- if vlan.vrf %}
    vrf {{ vlan.vrf }}
 {%- endif %}
@@ -233,6 +250,25 @@ interface Vlan{{ vlan.vlan_id }}
 !
 {%- for vrf, nexthop in vrf_gateways.items() %}
 ip route vrf {{ vrf }} 0.0.0.0/0 {{ nexthop }}
+{%- endfor %}
+{%- endif %}
+
+{%- if sgt_rules %}
+!
+! Security Group Tag (SGT) — VXLAN GPO tier enforcement
+! group_id is globally unique across Arista and Cisco fabrics
+!
+{%- for vlan in vlans if vlan.sgt %}
+mac security profile SGT-{{ vlan.sgt }}
+   ! Segment: {{ vlan.name }} — tier: {{ vlan.sgt_name }}
+   security-group {{ vlan.sgt }}
+{%- endfor %}
+!
+! SGT contracts (SecurityTagRule — coarse tier-to-tier, no port/protocol)
+{%- for rule in sgt_rules %}
+mac security sgt-policy {{ rule.src_sgt }}-to-{{ rule.dst_sgt }}
+   ! {{ rule.src_name }} → {{ rule.dst_name }}
+   {{ rule.action }}
 {%- endfor %}
 {%- endif %}
 

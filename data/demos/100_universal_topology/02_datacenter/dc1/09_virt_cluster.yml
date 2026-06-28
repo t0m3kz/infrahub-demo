@@ -1,0 +1,226 @@
+---
+# DC1 vSphere clusters — one per pod
+#
+# Each pod runs an independent vSphere cluster on dedicated PowerEdge R640 hosts.
+# Storage via vSAN, networking via NSX-T, connected to the EVPN fabric.
+
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: VirtCluster
+  data:
+
+    # ── POD1: VMware vSphere ──────────────────────────────────────────────────
+    - name: DC1-POD1-VSPHERE
+      description: "VMware vSphere cluster — DC1 POD1"
+      platform: vmware_vsphere
+      version: "vSphere 8.0 U3"
+      status: active
+      ha_enabled: true
+      deployment: DC1-1-POD-1
+      ip_namespace: default
+
+    # ── POD2: VMware vSphere ──────────────────────────────────────────────────
+    - name: DC1-POD2-VSPHERE
+      description: "VMware vSphere cluster — DC1 POD2"
+      platform: vmware_vsphere
+      version: "vSphere 8.0 U3"
+      status: active
+      ha_enabled: true
+      deployment: DC1-1-POD-2
+      ip_namespace: default
+
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: VirtNodePool
+  data:
+
+    # ── DC1-POD1-VSPHERE pools ────────────────────────────────────────────────
+    - name: esxi-hosts
+      cluster: DC1-POD1-VSPHERE
+      pool_type: hypervisor
+      scaling_mode: static
+      status: active
+      node_count: 4
+      instance_flavor: PowerEdge-R640
+      cpu_per_node: 32
+      memory_per_node_gb: 512
+      storage_per_node_gb: 3840
+      os_type: esxi
+      os_version: "ESXi 8.0 U3"
+      physical_hosts:
+        - DC1-POD1-ESXI-01
+        - DC1-POD1-ESXI-02
+        - DC1-POD1-ESXI-03
+        - DC1-POD1-ESXI-04
+
+    - name: vcenter
+      cluster: DC1-POD1-VSPHERE
+      pool_type: management
+      scaling_mode: static
+      status: active
+      node_count: 1
+      instance_flavor: PowerEdge-R640
+      cpu_per_node: 8
+      memory_per_node_gb: 64
+      storage_per_node_gb: 480
+      os_type: linux
+      os_version: "vCenter Server Appliance 8.0"
+      physical_hosts:
+        - DC1-POD1-VCSA-01
+
+    # ── DC1-POD2-VSPHERE pools ────────────────────────────────────────────────
+    - name: esxi-hosts
+      cluster: DC1-POD2-VSPHERE
+      pool_type: hypervisor
+      scaling_mode: static
+      status: active
+      node_count: 4
+      instance_flavor: PowerEdge-R640
+      cpu_per_node: 32
+      memory_per_node_gb: 512
+      storage_per_node_gb: 3840
+      os_type: esxi
+      os_version: "ESXi 8.0 U3"
+      physical_hosts:
+        - DC1-POD2-ESXI-01
+        - DC1-POD2-ESXI-02
+        - DC1-POD2-ESXI-03
+        - DC1-POD2-ESXI-04
+
+    - name: vcenter
+      cluster: DC1-POD2-VSPHERE
+      pool_type: management
+      scaling_mode: static
+      status: active
+      node_count: 1
+      instance_flavor: PowerEdge-R640
+      cpu_per_node: 8
+      memory_per_node_gb: 64
+      storage_per_node_gb: 480
+      os_type: linux
+      os_version: "vCenter Server Appliance 8.0"
+      physical_hosts:
+        - DC1-POD2-VCSA-01
+
+# ── Capabilities ──────────────────────────────────────────────────────────────
+
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: VirtCNI
+  data:
+    - name: DC1-POD1-VSPHERE-CNI
+      status: active
+      plugin: nsx_t
+      version: "NSX-T 4.1.2"
+      pod_cidr: "192.168.0.0/17"
+      service_cidr: "192.168.64.0/18"
+      encapsulation: geneve
+      bgp_enabled: true
+      cluster_capabilities:
+        - DC1-POD1-VSPHERE
+
+    - name: DC1-POD2-VSPHERE-CNI
+      status: active
+      plugin: nsx_t
+      version: "NSX-T 4.1.2"
+      pod_cidr: "192.168.128.0/17"
+      service_cidr: "192.168.192.0/18"
+      encapsulation: geneve
+      bgp_enabled: true
+      cluster_capabilities:
+        - DC1-POD2-VSPHERE
+
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: VirtStorageBackend
+  data:
+    - name: DC1-POD1-VSPHERE-STORAGE
+      status: active
+      backend_type: vsan
+      version: "vSAN 8.0 U3"
+      default_class: true
+      reclaim_policy: retain
+      cluster_capabilities:
+        - DC1-POD1-VSPHERE
+
+    - name: DC1-POD2-VSPHERE-STORAGE
+      status: active
+      backend_type: vsan
+      version: "vSAN 8.0 U3"
+      default_class: true
+      reclaim_policy: retain
+      cluster_capabilities:
+        - DC1-POD2-VSPHERE
+
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: VirtIngress
+  data:
+    - name: DC1-POD1-VSPHERE-INGRESS
+      status: active
+      controller: nsx_alb
+      version: "NSX ALB 22.1.6"
+      cluster_capabilities:
+        - DC1-POD1-VSPHERE
+
+    - name: DC1-POD2-VSPHERE-INGRESS
+      status: active
+      controller: nsx_alb
+      version: "NSX ALB 22.1.6"
+      cluster_capabilities:
+        - DC1-POD2-VSPHERE
+
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: VirtManagementPlane
+  data:
+    - name: DC1-POD1-VSPHERE-MGMT
+      status: active
+      endpoint: "vcenter.pod1.dc1.internal"
+      endpoint_access: private
+      port: 443
+      auth_method: saml
+      cluster_capabilities:
+        - DC1-POD1-VSPHERE
+
+    - name: DC1-POD2-VSPHERE-MGMT
+      status: active
+      endpoint: "vcenter.pod2.dc1.internal"
+      endpoint_access: private
+      port: 443
+      auth_method: saml
+      cluster_capabilities:
+        - DC1-POD2-VSPHERE
+
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: VirtMonitoring
+  data:
+    - name: DC1-POD1-VSPHERE-MONITORING
+      status: active
+      stack: prometheus_grafana
+      version: "vROps 8.14 / Prometheus exporter 0.12.0"
+      retention_days: 30
+      cluster_capabilities:
+        - DC1-POD1-VSPHERE
+
+    - name: DC1-POD2-VSPHERE-MONITORING
+      status: active
+      stack: prometheus_grafana
+      version: "vROps 8.14 / Prometheus exporter 0.12.0"
+      retention_days: 30
+      cluster_capabilities:
+        - DC1-POD2-VSPHERE

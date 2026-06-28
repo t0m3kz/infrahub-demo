@@ -1,0 +1,63 @@
+---
+# C002 (SwiftGo GmbH) — customer boarding: DC3 VXLAN segments
+#
+# All segments reference DC3-C002-VSX-01 as the firewall with PBR enabled.
+# Inbound traffic on DC3 is redirected by the leaf PBR policy to the
+# Check Point VSX virtual system before being forwarded into the
+# C002-DC3-PROD namespace (VRF).
+
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: ManagedVxlanSegment
+  data:
+    - customer_name: "web-frontend"
+      environment: "p"
+      owner: "C002"
+      arp_suppression: true
+      prefix:
+        - - "10.2.10.0/24"
+          - "C002-DC3-PROD"
+      gateway:
+        - "10.2.10.1/24"
+        - "C002-DC3-PROD"
+      deployments:
+        - DC3
+      inline_service: DC3-FW-HA
+      pbr_enabled: true
+      member_of_groups:
+        - vxlan_segments
+
+    - customer_name: "app-backend"
+      environment: "p"
+      owner: "C002"
+      arp_suppression: true
+      prefix:
+        - - "10.2.20.0/24"
+          - "C002-DC3-PROD"
+      gateway:
+        - "10.2.20.1/24"
+        - "C002-DC3-PROD"
+      deployments:
+        - DC3
+      inline_service: DC3-FW-HA
+      pbr_enabled: true
+      member_of_groups:
+        - vxlan_segments
+
+    - customer_name: "database"
+      environment: "p"
+      owner: "C002"
+      arp_suppression: true
+      prefix:
+        - - "10.2.30.0/24"
+          - "C002-DC3-PROD"
+      gateway:
+        - "10.2.30.1/24"
+        - "C002-DC3-PROD"
+      deployments:
+        - DC3
+      inline_service: DC3-FW-HA
+      pbr_enabled: true
+      member_of_groups:
+        - vxlan_segments

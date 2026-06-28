@@ -210,6 +210,7 @@ nodes:
     inherit_from:
       - ManagedGeneric
       - ManagedPeering
+      - ManagedGenericInterfaces
     attributes:
       - name: session_type
         kind: Dropdown

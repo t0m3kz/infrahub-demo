@@ -120,8 +120,8 @@ class RoutingMixin:
         all_bgp, interfaces, loopback_interfaces = await asyncio.gather(
             self.client.filters(
                 kind=ManagedBGP,
-                device_capabilities__name__values=all_device_names,
-                include=["local_as", "device_capabilities"],
+                capabilities__name__values=all_device_names,
+                include=["local_as", "capabilities"],
                 prefetch_relationships=True,
             ),
             self.client.filters(
@@ -144,7 +144,7 @@ class RoutingMixin:
         if routing_strategy == RoutingStrategy.OSPF_IBGP:
             overlay = await self.client.filters(
                 kind=ManagedOSPF,
-                device_capabilities__name__values=all_device_names,
+                capabilities__name__values=all_device_names,
             )
         else:
             overlay = [b for b in all_bgp if "overlay" in b.name.value]
@@ -161,6 +161,8 @@ class RoutingMixin:
 
         planner = RoutingPlanner(deployment_id=self.deployment_id, logger=self.logger)
 
+        evpn_af_id = await self._ensure_evpn_af_node()
+
         plan = planner.build_routing_plan(
             RoutingPlanInput(
                 bottom_devices=bottom_devices,
@@ -172,6 +174,7 @@ class RoutingMixin:
                 options={**options},
                 routing_strategy=routing_strategy,
                 deployment_name=self.fabric_name,
+                evpn_af_id=evpn_af_id,
             )
         )
 
@@ -261,6 +264,45 @@ class RoutingMixin:
                 self.logger.info(f"  Created AS{obj.asn.value}")
 
         return device_to_as_id
+
+    async def _ensure_evpn_af_node(self) -> str:
+        """Upsert the L2VPN/EVPN RoutingBGPAddressFamily node and return its ID.
+
+        This node must exist before any BGP process or peering can reference it
+        via the address_families relationship. The DC1 static demo creates it via
+        YAML load; generator-driven topologies need it created here.
+        """
+        try:
+            existing = await self.client.filters(
+                kind="RoutingBGPAddressFamily",
+                afi__value="l2vpn",
+                safi__value="evpn",
+            )
+            if existing:
+                node_id = existing[0].id
+                if node_id not in self.client.group_context.related_node_ids:
+                    self.client.group_context.related_node_ids.append(node_id)
+                return node_id
+        except Exception as exc:
+            self.logger.debug(f"Could not query RoutingBGPAddressFamily: {exc}")
+
+        try:
+            obj = await self.client.create(
+                kind="RoutingBGPAddressFamily",
+                data={
+                    "afi": "l2vpn",
+                    "safi": "evpn",
+                    "advertise_all_vni": True,
+                    "advertise_default_gw": True,
+                    "description": "L2VPN EVPN overlay",
+                },
+            )
+            await obj.save(allow_upsert=True)
+            self.logger.info(f"Upserted RoutingBGPAddressFamily l2vpn/evpn: {obj.id}")
+            return obj.id
+        except Exception as exc:
+            self.logger.warning(f"Could not upsert RoutingBGPAddressFamily l2vpn/evpn: {exc}")
+            return ""
 
     async def _resolve_shared_objects(self, routing_strategy: str) -> tuple[str | None, str | None]:
         """Find shared DC-level overlay AS and OSPF area. Returns (overlay_as_id, ospf_area_id)."""

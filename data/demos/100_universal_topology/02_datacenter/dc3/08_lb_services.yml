@@ -1,0 +1,25 @@
+---
+# DC3 Load Balancer HA cluster — F5 BIG-IP i5800 pair
+# DC3-LB-HA is both the HA domain (active-passive DSC) and the VIP anchor.
+# LoadbalancerVIP.load_balancer points here directly; all tenants share this cluster
+# with per-tenant hostname uniqueness enforced by the schema.
+
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: ManagedLoadbalancerHA
+  data:
+    - name: DC3-LB-HA
+      group_id: 2
+      mode: active-passive
+      priority: 100
+      preempt: false
+      status: active
+      lb_type: l7_hardware
+      lb_vendor: f5_bigip
+      scheme: internal
+      description: "DC3 F5 BIG-IP i5800 HA pair — shared multi-tenant load balancer cluster"
+      sync_group: dc3-lb-dsc-group
+      capabilities:
+        - DC3-LB-01
+        - DC3-LB-02

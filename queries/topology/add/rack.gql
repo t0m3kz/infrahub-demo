@@ -218,6 +218,13 @@ query RackGenerator($name: String) {
             }
           }
         }
+        border_leafs: fabric_templates(role__value: "border-leaf") {
+          edges {
+            node {
+              ...FabricTemplateFields
+            }
+          }
+        }
         pod {
           node {
             ...PodFields

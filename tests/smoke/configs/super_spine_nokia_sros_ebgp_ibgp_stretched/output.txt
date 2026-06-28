@@ -41,21 +41,7 @@ A admin configure router "Base" bgp 1 local-as 65000
 A admin configure router "Base" bgp 1 ebgp-default-reject-policy import false
 A admin configure router "Base" bgp 1 ebgp-default-reject-policy export false
 A admin configure router "Base" bgp 1 graceful-restart admin-state enable
-A admin configure router "Base" bgp 1 multipath max-paths 64
-A admin configure router "Base" bgp 1 group "EVPN-PEERS" admin-state enable
-A admin configure router "Base" bgp 1 group "EVPN-PEERS" peer-as 65000
-A admin configure router "Base" bgp 1 group "EVPN-PEERS" local-address "10.0.0.1"
-A admin configure router "Base" bgp 1 group "EVPN-PEERS" family evpn
-A admin configure router "Base" bgp 1 group "EVPN-PEERS" cluster 10.0.0.1
-A admin configure router "Base" bgp 1 group "EVPN-PEERS" send-community extended
-A admin configure router "Base" bgp 1 neighbor "10.0.0.100" admin-state enable
-A admin configure router "Base" bgp 1 neighbor "10.0.0.100" peer-as 65000
-A admin configure router "Base" bgp 1 neighbor "10.0.0.100" description "spine-01"
-A admin configure router "Base" bgp 1 neighbor "10.0.0.100" group "EVPN-PEERS"
-A admin configure router "Base" bgp 1 neighbor "10.0.0.101" admin-state enable
-A admin configure router "Base" bgp 1 neighbor "10.0.0.101" peer-as 65000
-A admin configure router "Base" bgp 1 neighbor "10.0.0.101" description "spine-02"
-A admin configure router "Base" bgp 1 neighbor "10.0.0.101" group "EVPN-PEERS"A admin configure router "Base" bgp 1 export policy "RM-CONN-2-BGP"
+A admin configure router "Base" bgp 1 multipath max-paths 64A admin configure router "Base" bgp 1 export policy "RM-CONN-2-BGP"
 
 A admin configure router "Base" bgp 1 admin-state enable
 A admin configure router "Base" bgp 1 router-id "10.0.0.1"
@@ -63,19 +49,7 @@ A admin configure router "Base" bgp 1 local-as 65001
 A admin configure router "Base" bgp 1 ebgp-default-reject-policy import false
 A admin configure router "Base" bgp 1 ebgp-default-reject-policy export false
 A admin configure router "Base" bgp 1 graceful-restart admin-state enable
-A admin configure router "Base" bgp 1 multipath max-paths 64
-A admin configure router "Base" bgp 1 group "UNDERLAY-PEERS" admin-state enable
-A admin configure router "Base" bgp 1 group "UNDERLAY-PEERS" family ipv4
-A admin configure router "Base" bgp 1 group "UNDERLAY-PEERS" bfd-liveness true
-A admin configure router "Base" bgp 1 group "UNDERLAY-PEERS" send-community extended
-A admin configure router "Base" bgp 1 neighbor "10.1.0.0" admin-state enable
-A admin configure router "Base" bgp 1 neighbor "10.1.0.0" peer-as 65100
-A admin configure router "Base" bgp 1 neighbor "10.1.0.0" description "spine-01"
-A admin configure router "Base" bgp 1 neighbor "10.1.0.0" group "UNDERLAY-PEERS"
-A admin configure router "Base" bgp 1 neighbor "10.1.0.2" admin-state enable
-A admin configure router "Base" bgp 1 neighbor "10.1.0.2" peer-as 65101
-A admin configure router "Base" bgp 1 neighbor "10.1.0.2" description "spine-02"
-A admin configure router "Base" bgp 1 neighbor "10.1.0.2" group "UNDERLAY-PEERS"A admin configure router "Base" bgp 1 export policy "RM-CONN-2-BGP"
+A admin configure router "Base" bgp 1 multipath max-paths 64A admin configure router "Base" bgp 1 export policy "RM-CONN-2-BGP"
 
 
 

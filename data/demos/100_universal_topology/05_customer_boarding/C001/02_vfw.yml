@@ -1,0 +1,51 @@
+---
+# C001 (Nordix Ltd.) — customer boarding: virtual firewall instance
+#
+# One Check Point VSX virtual system per chassis.
+# DC3-C001-VSX-01 (active)  hosted on DC3-FW-01
+# DC3-C001-VSX-02 (standby) hosted on DC3-FW-02
+#
+# PBR on DC3-POD1-L1/L2 redirects all C001 namespace traffic
+# to DC3-C001-VSX-01. On chassis failover, PBR target flips to
+# DC3-C001-VSX-02 via VRRP/tracked object — no reconfiguration needed.
+
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimVirtualDevice
+  data:
+    - name: DC3-C001-VSX-01
+      role: firewall
+      status: active
+      device_type: CloudGuard
+      platform: checkpoint_gaia
+      deployment: DC3
+      hosting_device: DC3-FW-01
+      member_of_groups:
+        - firewalls
+
+    - name: DC3-C001-VSX-02
+      role: firewall
+      status: active
+      device_type: CloudGuard
+      platform: checkpoint_gaia
+      deployment: DC3
+      hosting_device: DC3-FW-02
+      member_of_groups:
+        - firewalls
+
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: ManagedFirewallHA
+  data:
+    - name: DC3-C001-VSX-HA
+      group_id: 3
+      mode: active-passive
+      priority: 100
+      preempt: false
+      ha_timer: standard
+      capabilities:
+        - DC3-C001-VSX-01
+        - DC3-C001-VSX-02

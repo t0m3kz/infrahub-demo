@@ -120,3 +120,22 @@ spec:
       member_of_groups: [topologies_rack]
       fabric_templates:
         - ["2", "tor", "DCS-7050CX3-32C-R_TOR"]
+    # Core/Border-leaf racks — one pair across 2 pods
+    - index: 5
+      row_index: 3
+      rack_type: network
+      shortname: ktw-1-s-1-r-3-5
+      pod: DC6-1-POD-1
+      parent: ktw-1-s-1
+      member_of_groups: [topologies_rack]
+      fabric_templates:
+        - ["1", "border-leaf", "PowerSwitch-S5232F-ON_BORDER_LEAF"]
+    - index: 1
+      row_index: 3
+      rack_type: network
+      shortname: ktw-1-s-2-r-3-1
+      pod: DC6-1-POD-2
+      parent: ktw-1-s-2
+      member_of_groups: [topologies_rack]
+      fabric_templates:
+        - ["1", "border-leaf", "N9K-C9336C-FX2_BORDER_LEAF"]

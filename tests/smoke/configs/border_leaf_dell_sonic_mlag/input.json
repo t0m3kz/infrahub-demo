@@ -45,7 +45,7 @@
           "tags": {
             "edges": []
           },
-          "device_capabilities": {
+          "capabilities": {
             "edges": [
               {
                 "node": {
@@ -62,7 +62,7 @@
                   "reload_delay_non_mlag": {
                     "value": 330
                   },
-                  "device_capabilities": {
+                  "capabilities": {
                     "edges": [
                       {
                         "node": {

@@ -1,0 +1,197 @@
+---
+# C001 (Nordix Ltd.) — Application components
+
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: AppComponent
+  data:
+
+    # ── trade-portal / production ─────────────────────────────────────────────
+
+    - name: web-frontend
+      component_type: frontend
+      backend_port: 443
+      parent: c001-trade-portal-p
+      capabilities:
+        - C001-WEB-VM-01
+        - C001-WEB-VM-02
+      cluster_capabilities:
+        - DC3-VSPHERE-PROD
+      network_segment: c001-web-frontend-p
+      proxy_service: DC3-PRX-HA
+      vip_service:
+        - c001-trade-web.dc3.internal
+        - https
+        - "443"
+      member_of_groups:
+        - app_components
+
+    - name: api-gateway
+      component_type: backend
+      backend_port: 8443
+      parent: c001-trade-portal-p
+      capabilities:
+        - C001-APP-VM-01
+        - C001-APP-VM-02
+      cluster_capabilities:
+        - DC3-VSPHERE-PROD
+      network_segment: c001-app-backend-p
+      proxy_service: DC3-PRX-HA
+      vip_service:
+        - c001-trade-api.dc3.internal
+        - https
+        - "8443"
+      member_of_groups:
+        - app_components
+
+    - name: order-db
+      component_type: database
+      backend_port: 5432
+      parent: c001-trade-portal-p
+      capabilities:
+        - C001-DB-VM-01
+        - C001-DB-VM-02
+      cluster_capabilities:
+        - DC3-VSPHERE-PROD
+      network_segment: c001-database-p
+      vip_service:
+        - c001-trade-db.dc3.internal
+        - tcp
+        - "5432"
+      member_of_groups:
+        - app_components
+
+    - name: session-cache
+      component_type: cache
+      backend_port: 6379
+      parent: c001-trade-portal-p
+      capabilities:
+        - C001-CACHE-VM-01
+      cluster_capabilities:
+        - DC3-VSPHERE-PROD
+      network_segment: c001-cache-p
+
+    # ── trade-portal / nonprod ────────────────────────────────────────────────
+
+    - name: web-frontend
+      component_type: frontend
+      backend_port: 443
+      parent: c001-trade-portal-n
+      capabilities:
+        - C001-WEB-NP-VM-01
+      cluster_capabilities:
+        - DC3-K8S-PROD
+      network_segment: c001-web-frontend-n
+      proxy_service: DC3-PRX-HA
+      vip_service:
+        - c001-trade-web-n.dc3.internal
+        - https
+        - "443"
+      member_of_groups:
+        - app_components
+
+    - name: api-gateway
+      component_type: backend
+      backend_port: 8443
+      parent: c001-trade-portal-n
+      capabilities:
+        - C001-APP-NP-VM-01
+      cluster_capabilities:
+        - DC3-K8S-PROD
+      network_segment: c001-app-backend-n
+      proxy_service: DC3-PRX-HA
+      vip_service:
+        - c001-trade-api-n.dc3.internal
+        - https
+        - "8443"
+      member_of_groups:
+        - app_components
+
+    - name: order-db
+      component_type: database
+      backend_port: 5432
+      parent: c001-trade-portal-n
+      capabilities:
+        - C001-DB-NP-VM-01
+      cluster_capabilities:
+        - DC3-K8S-PROD
+      network_segment: c001-database-n
+      vip_service:
+        - c001-trade-db-n.dc3.internal
+        - tcp
+        - "5432"
+      member_of_groups:
+        - app_components
+
+    # ── auth-platform / production ────────────────────────────────────────────
+
+    - name: auth-api
+      component_type: backend
+      backend_port: 8443
+      parent: c001-auth-platform-p
+      capabilities:
+        - C001-AUTH-VM-01
+        - C001-AUTH-VM-02
+      cluster_capabilities:
+        - DC3-VSPHERE-PROD
+      network_segment: c001-app-backend-p
+      proxy_service: DC3-PRX-HA
+      vip_service:
+        - c001-auth-api.dc3.internal
+        - https
+        - "8443"
+      member_of_groups:
+        - app_components
+
+    - name: identity-db
+      component_type: database
+      backend_port: 5432
+      parent: c001-auth-platform-p
+      capabilities:
+        - C001-DB-VM-01
+      cluster_capabilities:
+        - DC3-VSPHERE-PROD
+      network_segment: c001-database-p
+      vip_service:
+        - c001-auth-db.dc3.internal
+        - tcp
+        - "5432"
+      member_of_groups:
+        - app_components
+
+    # ── risk-engine / production ──────────────────────────────────────────────
+
+    - name: analytics-worker
+      component_type: worker
+      backend_port: 8443
+      parent: c001-risk-engine-p
+      capabilities:
+        - C001-RISK-VM-01
+        - C001-RISK-VM-02
+      cluster_capabilities:
+        - DC3-NUTANIX-PROD
+      network_segment: c001-app-backend-p
+      proxy_service: DC3-PRX-HA
+      vip_service:
+        - c001-risk-api.dc3.internal
+        - https
+        - "8443"
+      member_of_groups:
+        - app_components
+
+    - name: risk-db
+      component_type: database
+      backend_port: 5432
+      parent: c001-risk-engine-p
+      capabilities:
+        - C001-DB-VM-02
+      cluster_capabilities:
+        - DC3-NUTANIX-PROD
+      network_segment: c001-database-p
+      vip_service:
+        - c001-risk-db.dc3.internal
+        - tcp
+        - "5432"
+      member_of_groups:
+        - app_components

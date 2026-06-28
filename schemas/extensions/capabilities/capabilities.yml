@@ -10,6 +10,8 @@ generics:
     include_in_menu: false
     order_by:
       - name__value
+    human_friendly_id:
+      - "name__value"
     display_label: "{{name__value}}"
     attributes:
       - name: name
@@ -49,18 +51,18 @@ generics:
 
   - name: GenericDevice
     namespace: Managed
-    description: "Capabilities attached to devices"
-    label: "Device-based Resource"
+    description: "Capabilities attached to compute"
+    label: "Compute-based Resource"
     include_in_menu: false
     relationships:
-      - name: device_capabilities
-        peer: DcimDevice
-        label: Assigned Devices
+      - name: capabilities
+        peer: DcimCapabilities
+        label: Assigned Compute
         cardinality: many
         kind: Generic
         optional: true
         direction: inbound
-        identifier: device_capabilities
+        identifier: capabilities
 
   - name: GenericCluster
     namespace: Managed
@@ -77,8 +79,21 @@ generics:
         direction: inbound
         identifier: cluster_capabilities
 
+  - name: GenericCloud
+    namespace: Managed
+    description: "Capabilities attached to cloud instances"
+    label: "Cloud-based Resource"
+    include_in_menu: false
+    relationships:
+      - name: cloud_capabilities
+        peer: CloudInstance
+        cardinality: many
+        kind: Generic
+        optional: true
+        direction: inbound
+        identifier: cloud_capabilities
+
   # Use this generic ONLY for segments (VLAN, VXLAN, VRF, etc.)
-  # Only inherit this for segment-like resources (VLAN, VXLAN, VRF, etc.)
   - name: GenericInterfaces
     namespace: Managed
     description: "Capabilities attached to multiple device interfaces"
@@ -95,17 +110,17 @@ generics:
 
 extensions:
   nodes:
-    - kind: DcimDevice
+    - kind: DcimCapabilities
       relationships:
-        - name: device_capabilities
+        - name: capabilities
           peer: ManagedGenericDevice
-          label: Device capabilities
+          label: Capabilities
           optional: true
           cardinality: many
           direction: outbound
           kind: Generic
           on_delete: no-action
-          identifier: device_capabilities
+          identifier: capabilities
     - kind: DcimInterface
       relationships:
         - name: interface_capabilities
@@ -127,3 +142,14 @@ extensions:
           kind: Generic
           on_delete: no-action
           identifier: cluster_capabilities
+    - kind: CloudInstance
+      relationships:
+        - name: cloud_capabilities
+          peer: ManagedGenericCloud
+          label: Cloud capabilities
+          optional: true
+          cardinality: many
+          direction: outbound
+          kind: Generic
+          on_delete: no-action
+          identifier: cloud_capabilities

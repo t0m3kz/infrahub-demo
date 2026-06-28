@@ -17,8 +17,9 @@ spec:
       version: "1.31"
       status: active
       ha_enabled: true
-      deployment: DC3
-      ip_namespace: CUST001-PROD
+      deployment: DC3-1-POD-1
+      ip_namespace: default
+      proxy_service: DC3-PRX-HA
 
     # ── POD3: VMware vSphere ──────────────────────────────────────────────────
     - name: DC3-VSPHERE-PROD
@@ -26,8 +27,9 @@ spec:
       version: "8.0 U3"
       status: active
       ha_enabled: true
-      deployment: DC3
-      ip_namespace: CUST001-PROD
+      deployment: DC3-1-POD-3
+      ip_namespace: default
+      proxy_service: DC3-PRX-HA
 
     # ── POD4: Nutanix AHV ─────────────────────────────────────────────────────
     - name: DC3-NUTANIX-PROD
@@ -35,8 +37,9 @@ spec:
       version: "6.8"
       status: active
       ha_enabled: true
-      deployment: DC3
-      ip_namespace: CUST001-PROD
+      deployment: DC3-1-POD-4
+      ip_namespace: default
+      proxy_service: DC3-PRX-HA
 
 ---
 apiVersion: infrahub.app/v1
@@ -53,6 +56,9 @@ spec:
       status: active
       node_count: 3
       instance_flavor: PowerEdge-R640
+      cpu_per_node: 2
+      memory_per_node_gb: 384
+      storage_per_node_gb: 3840
       os_type: linux
       os_version: "Ubuntu 24.04 LTS"
       physical_hosts:
@@ -67,6 +73,9 @@ spec:
       status: active
       node_count: 6
       instance_flavor: PowerEdge-R640
+      cpu_per_node: 2
+      memory_per_node_gb: 384
+      storage_per_node_gb: 3840
       os_type: linux
       os_version: "Ubuntu 24.04 LTS"
       physical_hosts:
@@ -84,6 +93,9 @@ spec:
       status: active
       node_count: 2
       instance_flavor: PowerEdge-R640
+      cpu_per_node: 2
+      memory_per_node_gb: 384
+      storage_per_node_gb: 3840
       os_type: linux
       os_version: "Ubuntu 24.04 LTS"
       physical_hosts:
@@ -98,6 +110,9 @@ spec:
       status: active
       node_count: 4
       instance_flavor: PowerEdge-R640
+      cpu_per_node: 2
+      memory_per_node_gb: 384
+      storage_per_node_gb: 3840
       os_type: esxi
       os_version: "ESXi 8.0 U3"
       physical_hosts:
@@ -113,6 +128,9 @@ spec:
       status: active
       node_count: 1
       instance_flavor: PowerEdge-R640
+      cpu_per_node: 2
+      memory_per_node_gb: 384
+      storage_per_node_gb: 3840
       os_type: linux
       os_version: "vCenter Server Appliance 8.0"
       physical_hosts:
@@ -126,6 +144,9 @@ spec:
       status: active
       node_count: 4
       instance_flavor: PowerEdge-R640
+      cpu_per_node: 2
+      memory_per_node_gb: 384
+      storage_per_node_gb: 3840
       os_type: other
       os_version: "AHV 20230302.x"
       physical_hosts:

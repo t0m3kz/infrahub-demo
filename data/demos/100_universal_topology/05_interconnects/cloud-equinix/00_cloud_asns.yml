@@ -1,0 +1,13 @@
+---
+# Shared WAN / cloud provider ASNs — must load before all interconnect files
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: RoutingAutonomousSystem
+  data:
+    - asn: 65000
+      description: "Company WAN edge ASN — FR2/AM1/PA4/PA6/STR edge routers"
+    - asn: 64512
+      description: "AWS TGW private ASN — Direct Connect transit VIF (eu-central-1)"
+    - asn: 12076
+      description: "Microsoft Azure — ExpressRoute MSEE public ASN"

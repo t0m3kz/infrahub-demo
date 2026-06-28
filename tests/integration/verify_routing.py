@@ -114,7 +114,7 @@ async def snapshot_dc_routing_state(
         dev_role = str(dev.get("role", roles_by_device.get(dev_name, "unknown")))
         _register_device(dev_name, dev_role)
 
-        for svc in dev.get("device_capabilities", []) or []:
+        for svc in dev.get("capabilities", []) or []:
             svc_type = str(svc.get("__typename", ""))
             svc_name = str(svc.get("name", ""))
             svc_name_lower = svc_name.lower()
@@ -236,7 +236,7 @@ async def verify_dc_topology(
         if dev_role in role_counts:
             role_counts[dev_role] += 1
 
-        for svc in dev.get("device_capabilities", []) or []:
+        for svc in dev.get("capabilities", []) or []:
             svc_type = str(svc.get("__typename", ""))
             svc_name = str(svc.get("name", "")).lower()
             is_bgp = svc_type == "ManagedBGP" or "-bgp-" in svc_name or "peerings" in svc

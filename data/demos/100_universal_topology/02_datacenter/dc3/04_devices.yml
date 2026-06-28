@@ -1,5 +1,5 @@
 ---
-# DC3 infrastructure: super-spines, spines, leaves, servers
+# DC3 infrastructure: super-spines, border-leafs, spines, leaves, servers
 #
 # Server layout for k8s cluster nodes:
 #   POD1: k8s control-plane nodes (3x) + worker nodes (2x)
@@ -7,6 +7,19 @@
 #
 # Each server has 4 NICs (eno1-eno4) dual-homed to BOTH pod leaf pairs
 # so k8s nodes can communicate across pods without hair-pinning through spines.
+#
+# Underlay: eBGP (RFC 5549 unnumbered, IPv6 link-local on fabric ports)
+# Overlay:  eBGP EVPN (combined underlay+overlay, per-device unique AS)
+# Loopbacks: 10.255.13.0/24 (FABRIC-DC3 namespace)
+#
+# AS assignment:
+#   SS1: 65300 | SS2: 65301
+#   BL1: 65370 | BL2: 65371  (border-leafs — EVPN multi-site BGW + DCI termination)
+#   POD1-SP1: 65311 | POD1-SP2: 65312
+#   POD2-SP1: 65321 | POD2-SP2: 65322
+#   POD3-SP1: 65331 | POD3-SP2: 65332
+#   POD4-SP1: 65341 | POD4-SP2: 65342
+#   Leaves: 65351–65366 (sequential per pod)
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
@@ -14,55 +27,262 @@ spec:
   data:
     # ── Super-spines ──────────────────────────────────────────────────────────
     - name: DC3-SS1
-      object_template: N9K-C9336C-FX2_SUPER_SPINE
+      object_template: Edgecore-7726-32X-O_SUPER_SPINE
       status: active
       deployment: DC3
       rack: dc3-s1-r-1
+      member_of_groups:
+        - super-spines
+      interfaces:
+        kind: DcimVirtualInterface
+        data:
+          - name: Loopback0
+            role: loopback
+            status: active
+            description: "Router-ID / BGP source — AS 65300"
+            ip_address:
+              data:
+                address: "10.255.13.1/32"
+                ip_namespace: FABRIC-DC3
 
     - name: DC3-SS2
-      object_template: N9K-C9336C-FX2_SUPER_SPINE
+      object_template: Edgecore-7726-32X-O_SUPER_SPINE
       status: active
       deployment: DC3
       rack: dc3-s1-r-2
+      member_of_groups:
+        - super-spines
+      interfaces:
+        kind: DcimVirtualInterface
+        data:
+          - name: Loopback0
+            role: loopback
+            status: active
+            description: "Router-ID / BGP source — AS 65301"
+            ip_address:
+              data:
+                address: "10.255.13.2/32"
+                ip_namespace: FABRIC-DC3
+
+    # ── Border-leafs ──────────────────────────────────────────────────────────
+    # BL1/BL2 are EVPN multi-site Border-Gateways and DCI termination points.
+    # They carry both fabric eBGP (unnumbered to SS1/SS2) and DCI eBGP
+    # (numbered to PA4/PA6 Equinix edge routers) on the same box.
+    # All customer L3 VNIs (IpamNamespaces) have EVPN presence here —
+    # inter-tenant routing and stretched VXLAN to other DCs are handled here.
+    # The Check Point VSX chassis are also uplinked here (not to server-leafs).
+    #
+    # Port layout:
+    #   Eth1/1 → DC3-SS1  (fabric uplink, eBGP unnumbered)
+    #   Eth1/2 → DC3-SS2  (fabric uplink, eBGP unnumbered)
+    #   Eth1/3 → DC3-FW-01 eth1/eth2  (inside/outside to active CP chassis)
+    #   Eth1/4 → DC3-FW-02 eth1/eth2  (inside/outside to standby CP chassis)
+    #   Eth1/9 → PA4-EDGE-01 Eth1/3   (DCI primary, 10.255.0.8/31)
+    #   Eth1/10 → PA6-EDGE-01 Eth1/3  (DCI secondary, 10.255.0.10/31)
+    - name: DC3-BL1
+      object_template: Edgecore-7726-32X-O_SPINE
+      role: border-leaf
+      status: active
+      deployment: DC3
+      rack: dc3-s1-r-1
+      member_of_groups:
+        - border-leafs
+      interfaces:
+        kind: DcimVirtualInterface
+        data:
+          - name: Loopback0
+            role: loopback
+            status: active
+            description: "Router-ID / BGP source — AS 65370"
+            ip_address:
+              data:
+                address: "10.255.13.51/32"
+                ip_namespace: FABRIC-DC3
+          - name: Loopback1
+            role: loopback-vtep
+            status: active
+            description: "VTEP NVE source — BL1 (independent, no MLAG)"
+            ip_address:
+              data:
+                address: "10.255.13.71/32"
+                ip_namespace: FABRIC-DC3
+
+    - name: DC3-BL2
+      object_template: Edgecore-7726-32X-O_SPINE
+      role: border-leaf
+      status: active
+      deployment: DC3
+      rack: dc3-s1-r-2
+      member_of_groups:
+        - border-leafs
+      interfaces:
+        kind: DcimVirtualInterface
+        data:
+          - name: Loopback0
+            role: loopback
+            status: active
+            description: "Router-ID / BGP source — AS 65371"
+            ip_address:
+              data:
+                address: "10.255.13.52/32"
+                ip_namespace: FABRIC-DC3
+          - name: Loopback1
+            role: loopback-vtep
+            status: active
+            description: "VTEP NVE source — BL2 (independent, no MLAG)"
+            ip_address:
+              data:
+                address: "10.255.13.72/32"
+                ip_namespace: FABRIC-DC3
 
     # ── POD1 — control-plane rack ─────────────────────────────────────────────
     - name: DC3-POD1-SP1
-      object_template: N9K-C9336C-FX2_SPINE
+      object_template: Edgecore-7726-32X-O_SPINE
       status: active
       deployment: DC3-1-POD-1
       rack: dc3-s1-r-1
+      member_of_groups:
+        - spines
+      interfaces:
+        kind: DcimVirtualInterface
+        data:
+          - name: Loopback0
+            role: loopback
+            status: active
+            description: "Router-ID / BGP source — AS 65311"
+            ip_address:
+              data:
+                address: "10.255.13.11/32"
+                ip_namespace: FABRIC-DC3
 
     - name: DC3-POD1-SP2
-      object_template: N9K-C9336C-FX2_SPINE
+      object_template: Edgecore-7726-32X-O_SPINE
       status: active
       deployment: DC3-1-POD-1
       rack: dc3-s1-r-1
+      member_of_groups:
+        - spines
+      interfaces:
+        kind: DcimVirtualInterface
+        data:
+          - name: Loopback0
+            role: loopback
+            status: active
+            description: "Router-ID / BGP source — AS 65312"
+            ip_address:
+              data:
+                address: "10.255.13.12/32"
+                ip_namespace: FABRIC-DC3
 
     # L1/L2: leaf pair serving k8s nodes (server-leaf role for MLAG)
     - name: DC3-POD1-L1
-      object_template: N9K-C9336C-FX2_LEAF_SERVER
+      object_template: Edgecore-7AS7326-56X-O-48V-F_LEAF
       status: active
       deployment: DC3-1-POD-1
       rack: dc3-s1-r-1
+      member_of_groups:
+        - leafs
+      interfaces:
+        kind: DcimVirtualInterface
+        data:
+          - name: Loopback0
+            role: loopback
+            status: active
+            description: "Router-ID / BGP source — AS 65351"
+            ip_address:
+              data:
+                address: "10.255.13.21/32"
+                ip_namespace: FABRIC-DC3
+          - name: Loopback1
+            role: loopback-vtep
+            status: active
+            description: "VTEP NVE source (shared with MLAG peer L2)"
+            ip_address:
+              data:
+                address: "10.255.13.41/32"
+                ip_namespace: FABRIC-DC3
 
     - name: DC3-POD1-L2
-      object_template: N9K-C9336C-FX2_LEAF_SERVER
+      object_template: Edgecore-7AS7326-56X-O-48V-F_LEAF
       status: active
       deployment: DC3-1-POD-1
       rack: dc3-s1-r-1
+      member_of_groups:
+        - leafs
+      interfaces:
+        kind: DcimVirtualInterface
+        data:
+          - name: Loopback0
+            role: loopback
+            status: active
+            description: "Router-ID / BGP source — AS 65352"
+            ip_address:
+              data:
+                address: "10.255.13.22/32"
+                ip_namespace: FABRIC-DC3
+          - name: Loopback1
+            role: loopback-vtep
+            status: active
+            description: "VTEP NVE source (shared with MLAG peer L1)"
+            ip_address:
+              data:
+                address: "10.255.13.41/32"
+                ip_namespace: FABRIC-DC3
 
     # L3/L4: general-purpose leaves (future expansion)
     - name: DC3-POD1-L3
-      object_template: N9K-C9336C-FX2_LEAF
+      object_template: Edgecore-7AS7326-56X-O-48V-F_LEAF
       status: active
       deployment: DC3-1-POD-1
       rack: dc3-s1-r-1
+      member_of_groups:
+        - leafs
+      interfaces:
+        kind: DcimVirtualInterface
+        data:
+          - name: Loopback0
+            role: loopback
+            status: active
+            description: "Router-ID / BGP source — AS 65353"
+            ip_address:
+              data:
+                address: "10.255.13.23/32"
+                ip_namespace: FABRIC-DC3
+          - name: Loopback1
+            role: loopback-vtep
+            status: active
+            description: "VTEP NVE source (shared with MLAG peer L4)"
+            ip_address:
+              data:
+                address: "10.255.13.42/32"
+                ip_namespace: FABRIC-DC3
 
     - name: DC3-POD1-L4
-      object_template: N9K-C9336C-FX2_LEAF
+      object_template: Edgecore-7AS7326-56X-O-48V-F_LEAF
       status: active
       deployment: DC3-1-POD-1
       rack: dc3-s1-r-1
+      member_of_groups:
+        - leafs
+      interfaces:
+        kind: DcimVirtualInterface
+        data:
+          - name: Loopback0
+            role: loopback
+            status: active
+            description: "Router-ID / BGP source — AS 65354"
+            ip_address:
+              data:
+                address: "10.255.13.24/32"
+                ip_namespace: FABRIC-DC3
+          - name: Loopback1
+            role: loopback-vtep
+            status: active
+            description: "VTEP NVE source (shared with MLAG peer L3)"
+            ip_address:
+              data:
+                address: "10.255.13.42/32"
+                ip_namespace: FABRIC-DC3
 
     # k8s control-plane nodes — 3 for HA etcd quorum
     # 4 NICs: eno1/eno2 → POD1 leaf pair, eno3/eno4 → POD2 leaf pair
@@ -99,40 +319,138 @@ spec:
 
     # ── POD2 — worker/storage rack ────────────────────────────────────────────
     - name: DC3-POD2-SP1
-      object_template: N9K-C9336C-FX2_SPINE
+      object_template: Edgecore-7726-32X-O_SPINE
       status: active
       deployment: DC3-1-POD-2
       rack: dc3-s1-r-2
+      interfaces:
+        kind: DcimVirtualInterface
+        data:
+          - name: Loopback0
+            role: loopback
+            status: active
+            description: "Router-ID / BGP source — AS 65321"
+            ip_address:
+              data:
+                address: "10.255.13.13/32"
+                ip_namespace: FABRIC-DC3
 
     - name: DC3-POD2-SP2
-      object_template: N9K-C9336C-FX2_SPINE
+      object_template: Edgecore-7726-32X-O_SPINE
       status: active
       deployment: DC3-1-POD-2
       rack: dc3-s1-r-2
+      interfaces:
+        kind: DcimVirtualInterface
+        data:
+          - name: Loopback0
+            role: loopback
+            status: active
+            description: "Router-ID / BGP source — AS 65322"
+            ip_address:
+              data:
+                address: "10.255.13.14/32"
+                ip_namespace: FABRIC-DC3
 
     - name: DC3-POD2-L1
-      object_template: N9K-C9336C-FX2_LEAF_SERVER
+      object_template: Edgecore-7AS7326-56X-O-48V-F_LEAF
       status: active
       deployment: DC3-1-POD-2
       rack: dc3-s1-r-2
+      interfaces:
+        kind: DcimVirtualInterface
+        data:
+          - name: Loopback0
+            role: loopback
+            status: active
+            description: "Router-ID / BGP source — AS 65355"
+            ip_address:
+              data:
+                address: "10.255.13.25/32"
+                ip_namespace: FABRIC-DC3
+          - name: Loopback1
+            role: loopback-vtep
+            status: active
+            description: "VTEP NVE source (shared with MLAG peer L2)"
+            ip_address:
+              data:
+                address: "10.255.13.43/32"
+                ip_namespace: FABRIC-DC3
 
     - name: DC3-POD2-L2
-      object_template: N9K-C9336C-FX2_LEAF_SERVER
+      object_template: Edgecore-7AS7326-56X-O-48V-F_LEAF
       status: active
       deployment: DC3-1-POD-2
       rack: dc3-s1-r-2
+      interfaces:
+        kind: DcimVirtualInterface
+        data:
+          - name: Loopback0
+            role: loopback
+            status: active
+            description: "Router-ID / BGP source — AS 65356"
+            ip_address:
+              data:
+                address: "10.255.13.26/32"
+                ip_namespace: FABRIC-DC3
+          - name: Loopback1
+            role: loopback-vtep
+            status: active
+            description: "VTEP NVE source (shared with MLAG peer L1)"
+            ip_address:
+              data:
+                address: "10.255.13.43/32"
+                ip_namespace: FABRIC-DC3
 
     - name: DC3-POD2-L3
-      object_template: N9K-C9336C-FX2_LEAF
+      object_template: Edgecore-7AS7326-56X-O-48V-F_LEAF
       status: active
       deployment: DC3-1-POD-2
       rack: dc3-s1-r-2
+      interfaces:
+        kind: DcimVirtualInterface
+        data:
+          - name: Loopback0
+            role: loopback
+            status: active
+            description: "Router-ID / BGP source — AS 65357"
+            ip_address:
+              data:
+                address: "10.255.13.27/32"
+                ip_namespace: FABRIC-DC3
+          - name: Loopback1
+            role: loopback-vtep
+            status: active
+            description: "VTEP NVE source (shared with MLAG peer L4)"
+            ip_address:
+              data:
+                address: "10.255.13.44/32"
+                ip_namespace: FABRIC-DC3
 
     - name: DC3-POD2-L4
-      object_template: N9K-C9336C-FX2_LEAF
+      object_template: Edgecore-7AS7326-56X-O-48V-F_LEAF
       status: active
       deployment: DC3-1-POD-2
       rack: dc3-s1-r-2
+      interfaces:
+        kind: DcimVirtualInterface
+        data:
+          - name: Loopback0
+            role: loopback
+            status: active
+            description: "Router-ID / BGP source — AS 65358"
+            ip_address:
+              data:
+                address: "10.255.13.28/32"
+                ip_namespace: FABRIC-DC3
+          - name: Loopback1
+            role: loopback-vtep
+            status: active
+            description: "VTEP NVE source (shared with MLAG peer L3)"
+            ip_address:
+              data:
+                address: "10.255.13.44/32"
+                ip_namespace: FABRIC-DC3
 
     # k8s worker nodes in POD2
     - name: DC3-POD2-K8S-WRK-01
@@ -176,28 +494,88 @@ spec:
     # ESXi hosts are standard 2-NIC servers (within-pod MLAG only).
     # vCenter appliance is a single-NIC management node.
     - name: DC3-POD3-SP1
-      object_template: N9K-C9336C-FX2_SPINE
+      object_template: Edgecore-7726-32X-O_SPINE
       status: active
       deployment: DC3-1-POD-3
       rack: dc3-s1-r-3
+      interfaces:
+        kind: DcimVirtualInterface
+        data:
+          - name: Loopback0
+            role: loopback
+            status: active
+            description: "Router-ID / BGP source — AS 65331"
+            ip_address:
+              data:
+                address: "10.255.13.15/32"
+                ip_namespace: FABRIC-DC3
 
     - name: DC3-POD3-SP2
-      object_template: N9K-C9336C-FX2_SPINE
+      object_template: Edgecore-7726-32X-O_SPINE
       status: active
       deployment: DC3-1-POD-3
       rack: dc3-s1-r-3
+      interfaces:
+        kind: DcimVirtualInterface
+        data:
+          - name: Loopback0
+            role: loopback
+            status: active
+            description: "Router-ID / BGP source — AS 65332"
+            ip_address:
+              data:
+                address: "10.255.13.16/32"
+                ip_namespace: FABRIC-DC3
 
     - name: DC3-POD3-L1
-      object_template: N9K-C9336C-FX2_LEAF_SERVER
+      object_template: Edgecore-7AS7326-56X-O-48V-F_LEAF
       status: active
       deployment: DC3-1-POD-3
       rack: dc3-s1-r-3
+      interfaces:
+        kind: DcimVirtualInterface
+        data:
+          - name: Loopback0
+            role: loopback
+            status: active
+            description: "Router-ID / BGP source — AS 65359"
+            ip_address:
+              data:
+                address: "10.255.13.29/32"
+                ip_namespace: FABRIC-DC3
+          - name: Loopback1
+            role: loopback-vtep
+            status: active
+            description: "VTEP NVE source (shared with MLAG peer L2)"
+            ip_address:
+              data:
+                address: "10.255.13.45/32"
+                ip_namespace: FABRIC-DC3
 
     - name: DC3-POD3-L2
-      object_template: N9K-C9336C-FX2_LEAF_SERVER
+      object_template: Edgecore-7AS7326-56X-O-48V-F_LEAF
       status: active
       deployment: DC3-1-POD-3
       rack: dc3-s1-r-3
+      interfaces:
+        kind: DcimVirtualInterface
+        data:
+          - name: Loopback0
+            role: loopback
+            status: active
+            description: "Router-ID / BGP source — AS 65360"
+            ip_address:
+              data:
+                address: "10.255.13.30/32"
+                ip_namespace: FABRIC-DC3
+          - name: Loopback1
+            role: loopback-vtep
+            status: active
+            description: "VTEP NVE source (shared with MLAG peer L1)"
+            ip_address:
+              data:
+                address: "10.255.13.45/32"
+                ip_namespace: FABRIC-DC3
 
     # ESXi hypervisor hosts (4x) — 2 NICs to POD3 MLAG pair
     - name: DC3-POD3-ESXI-01
@@ -235,28 +613,88 @@ spec:
     # Nutanix nodes are hyperconverged (compute + storage in one unit).
     # 2 NICs each to POD4 MLAG pair for CVM and guest traffic.
     - name: DC3-POD4-SP1
-      object_template: N9K-C9336C-FX2_SPINE
+      object_template: Edgecore-7726-32X-O_SPINE
       status: active
       deployment: DC3-1-POD-4
       rack: dc3-s1-r-4
+      interfaces:
+        kind: DcimVirtualInterface
+        data:
+          - name: Loopback0
+            role: loopback
+            status: active
+            description: "Router-ID / BGP source — AS 65341"
+            ip_address:
+              data:
+                address: "10.255.13.17/32"
+                ip_namespace: FABRIC-DC3
 
     - name: DC3-POD4-SP2
-      object_template: N9K-C9336C-FX2_SPINE
+      object_template: Edgecore-7726-32X-O_SPINE
       status: active
       deployment: DC3-1-POD-4
       rack: dc3-s1-r-4
+      interfaces:
+        kind: DcimVirtualInterface
+        data:
+          - name: Loopback0
+            role: loopback
+            status: active
+            description: "Router-ID / BGP source — AS 65342"
+            ip_address:
+              data:
+                address: "10.255.13.18/32"
+                ip_namespace: FABRIC-DC3
 
     - name: DC3-POD4-L1
-      object_template: N9K-C9336C-FX2_LEAF_SERVER
+      object_template: Edgecore-7AS7326-56X-O-48V-F_LEAF
       status: active
       deployment: DC3-1-POD-4
       rack: dc3-s1-r-4
+      interfaces:
+        kind: DcimVirtualInterface
+        data:
+          - name: Loopback0
+            role: loopback
+            status: active
+            description: "Router-ID / BGP source — AS 65361"
+            ip_address:
+              data:
+                address: "10.255.13.31/32"
+                ip_namespace: FABRIC-DC3
+          - name: Loopback1
+            role: loopback-vtep
+            status: active
+            description: "VTEP NVE source (shared with MLAG peer L2)"
+            ip_address:
+              data:
+                address: "10.255.13.46/32"
+                ip_namespace: FABRIC-DC3
 
     - name: DC3-POD4-L2
-      object_template: N9K-C9336C-FX2_LEAF_SERVER
+      object_template: Edgecore-7AS7326-56X-O-48V-F_LEAF
       status: active
       deployment: DC3-1-POD-4
       rack: dc3-s1-r-4
+      interfaces:
+        kind: DcimVirtualInterface
+        data:
+          - name: Loopback0
+            role: loopback
+            status: active
+            description: "Router-ID / BGP source — AS 65362"
+            ip_address:
+              data:
+                address: "10.255.13.32/32"
+                ip_namespace: FABRIC-DC3
+          - name: Loopback1
+            role: loopback-vtep
+            status: active
+            description: "VTEP NVE source (shared with MLAG peer L1)"
+            ip_address:
+              data:
+                address: "10.255.13.46/32"
+                ip_namespace: FABRIC-DC3
 
     # Nutanix hyperconverged nodes (4x) — each runs AHV + CVM + guest VMs
     - name: DC3-POD4-NTX-01
@@ -282,3 +720,48 @@ spec:
       status: active
       deployment: DC3-1-POD-4
       rack: dc3-s1-r-4
+
+    # ── Inline service chain — load balancers ─────────────────────────────────
+    # F5 BIG-IP i5800 pair, inline between firewall and proxy.
+    # Traffic path: BL (PBR) → FW:eth1 → FW:eth2 → LB:1.1 → LB:1.2 → PRX:eth0 → PRX:eth1 → BL:Ethernet5
+    - name: DC3-LB-01
+      object_template: BIG-IP-i5800_LOAD_BALANCER
+      status: active
+      deployment: DC3
+      rack: dc3-s1-r-1
+      member_of_groups:
+        - loadbalancers
+      interfaces:
+        kind: DcimPhysicalInterface
+        data:
+          - name: "1.1"
+            interface_type: 25gbase-x-sfp28
+            role: uplink
+            status: active
+            description: "Ingress — DC3-FW-01:eth2"
+          - name: "1.2"
+            interface_type: 25gbase-x-sfp28
+            role: uplink
+            status: active
+            description: "Egress — DC3-PRX-01:eth0"
+
+    - name: DC3-LB-02
+      object_template: BIG-IP-i5800_LOAD_BALANCER
+      status: active
+      deployment: DC3
+      rack: dc3-s1-r-2
+      member_of_groups:
+        - loadbalancers
+      interfaces:
+        kind: DcimPhysicalInterface
+        data:
+          - name: "1.1"
+            interface_type: 25gbase-x-sfp28
+            role: uplink
+            status: active
+            description: "Ingress — DC3-FW-02:eth2"
+          - name: "1.2"
+            interface_type: 25gbase-x-sfp28
+            role: uplink
+            status: active
+            description: "Egress — DC3-PRX-02:eth0"

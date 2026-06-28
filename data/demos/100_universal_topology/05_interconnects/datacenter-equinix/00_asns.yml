@@ -1,0 +1,16 @@
+---
+# DCI BGP autonomous systems — per-BL WAN ASNs for eBGP peerings to Equinix edge routers.
+#
+# These ASNs are distinct from the fabric overlay ASNs (AS65001/65002/65003…)
+# and are only used on the border-leaf WAN-facing BGP processes.
+# Defined here (not in per-DC underlay files) so this folder is self-contained.
+
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: RoutingAutonomousSystem
+  data:
+    - asn: 65270
+      description: "DC2-BL1 DCI BGP AS — eBGP WAN peering (Paris PA4)"
+    - asn: 65271
+      description: "DC2-BL2 DCI BGP AS — eBGP WAN peering (Paris PA6)"

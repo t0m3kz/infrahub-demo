@@ -1,84 +1,88 @@
 ---
 # AWS eu-central-1: VPC
-# cidr_blocks references IpamPrefix in CUST1-AWS-EU-CENTRAL-1 namespace (see 00_ipam.yml)
+# cidr_blocks references IpamPrefix in C001-AWS-EU-CENTRAL-1 namespace (see 00_i
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
   kind: CloudVirtualNetwork
   data:
-    - name: CUST1-VPC-EU-CENTRAL-1
-      account: CUST1-AWS
+    - name: C001-VPC-EU-CENTRAL-1
+      account: C001-AWS
       region: eu-central-1
       is_default: false
       dns_support: true
       dns_hostnames: true
       cidr_blocks:
         - - "172.16.0.0/16"
-          - "CUST1-AWS-EU-CENTRAL-1"
+          - "C001-AWS-EU-CENTRAL-1"
 
 ---
 # AWS eu-central-1: subnets
-# name is computed: {{owner}}-{{customer_name}}-{{environment}}
-# app-1a  → customer-1-app-1a-production    172.16.10.0/24 (private)
-# app-1b  → customer-1-app-1b-production    172.16.20.0/24 (private)
-# lb-1a   → customer-1-lb-1a-production     172.16.100.0/24 (public)
-# lb-1b   → customer-1-lb-1b-production     172.16.110.0/24 (public)
+# name is computed: {{owner__org_id__value|lower}}-{{customer_name}}-{{environment}}
+# app-1a  → c001-app-1a-p    172.16.10.0/24 (private)
+# app-1b  → c001-app-1b-p    172.16.20.0/24 (private)
+# lb-1a   → c001-lb-1a-p     172.16.100.0/24 (public)
+# lb-1b   → c001-lb-1b-p     172.16.110.0/24 (public)
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
   kind: CloudNetworkSegment
   data:
     - customer_name: app-1a
-      owner: "Customer 1"
+      owner: "C001"
+      environment: p
       segment_type: aws_vpc_subnet
       segment_role: server_application
       status: active
       is_public: false
       auto_assign_public_ip: false
-      virtual_network: CUST1-VPC-EU-CENTRAL-1
+      virtual_network: C001-VPC-EU-CENTRAL-1
       availability_zone: ["eu-central-1", "eu-central-1a"]
       cidr_block:
         - "172.16.10.0/24"
-        - "CUST1-AWS-EU-CENTRAL-1"
+        - "C001-AWS-EU-CENTRAL-1"
 
     - customer_name: app-1b
-      owner: "Customer 1"
+      owner: "C001"
+      environment: p
       segment_type: aws_vpc_subnet
       segment_role: server_application
       status: active
       is_public: false
       auto_assign_public_ip: false
-      virtual_network: CUST1-VPC-EU-CENTRAL-1
+      virtual_network: C001-VPC-EU-CENTRAL-1
       availability_zone: ["eu-central-1", "eu-central-1b"]
       cidr_block:
         - "172.16.20.0/24"
-        - "CUST1-AWS-EU-CENTRAL-1"
+        - "C001-AWS-EU-CENTRAL-1"
 
     - customer_name: lb-1a
-      owner: "Customer 1"
+      owner: "C001"
+      environment: p
       segment_type: aws_vpc_subnet
       segment_role: dmz
       status: active
       is_public: true
       auto_assign_public_ip: false
-      virtual_network: CUST1-VPC-EU-CENTRAL-1
+      virtual_network: C001-VPC-EU-CENTRAL-1
       availability_zone: ["eu-central-1", "eu-central-1a"]
       cidr_block:
         - "172.16.100.0/24"
-        - "CUST1-AWS-EU-CENTRAL-1"
+        - "C001-AWS-EU-CENTRAL-1"
 
     - customer_name: lb-1b
-      owner: "Customer 1"
+      owner: "C001"
+      environment: p
       segment_type: aws_vpc_subnet
       segment_role: dmz
       status: active
       is_public: true
       auto_assign_public_ip: false
-      virtual_network: CUST1-VPC-EU-CENTRAL-1
+      virtual_network: C001-VPC-EU-CENTRAL-1
       availability_zone: ["eu-central-1", "eu-central-1b"]
       cidr_block:
         - "172.16.110.0/24"
-        - "CUST1-AWS-EU-CENTRAL-1"
+        - "C001-AWS-EU-CENTRAL-1"
 
 ---
 # AWS eu-central-1: Transit Gateway
@@ -87,11 +91,11 @@ kind: Object
 spec:
   kind: CloudTransitGateway
   data:
-    - name: CUST1-TGW-EU-CENTRAL-1
-      account: CUST1-AWS
+    - name: C001-TGW-EU-CENTRAL-1
+      account: C001-AWS
       region: eu-central-1
       default_route_table: true
       dns_support: true
       vpn_ecmp_support: true
       attached_virtual_networks:
-        - CUST1-VPC-EU-CENTRAL-1
+        - C001-VPC-EU-CENTRAL-1

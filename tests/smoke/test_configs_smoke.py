@@ -17,15 +17,15 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from transforms.border_leaf import BorderLeaf
-from transforms.cloud_vpc_pulumi import CloudVpcPulumi
-from transforms.cloud_vpc_terraform import CloudVpcTerraform
-from transforms.edge import Edge
-from transforms.firewall import Firewall
-from transforms.leaf import Leaf
-from transforms.spine import Spine
-from transforms.super_spine import SuperSpine
-from transforms.tor import ToR
+from transforms.cloud.vpc_terraform import CloudVpcTerraform
+from transforms.config.border_leaf import BorderLeaf
+from transforms.config.edge import Edge
+from transforms.config.firewall import Firewall
+from transforms.config.leaf import Leaf
+from transforms.config.proxy import Proxy
+from transforms.config.spine import Spine
+from transforms.config.super_spine import SuperSpine
+from transforms.config.tor import ToR
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 CONFIGS_DIR = Path(__file__).resolve().parent / "configs"
@@ -36,9 +36,9 @@ _PREFIX_TO_CLASS: list[tuple[str, type]] = sorted(
         ("super_spine", SuperSpine),
         ("border_leaf", BorderLeaf),
         ("cloud_terraform", CloudVpcTerraform),
-        ("cloud_pulumi", CloudVpcPulumi),
         ("firewall", Firewall),
         ("spine", Spine),
+        ("proxy", Proxy),
         ("leaf", Leaf),
         ("tor", ToR),
         ("edge", Edge),

@@ -1,0 +1,443 @@
+---
+# Zscaler IPsec tunnels
+#
+# All internet-bound traffic is steered into Zscaler via IPsec GRE tunnels.
+# Two tunnel anchors per site (primary + secondary region) ensure HA.
+#
+# Hub anchors (VCG gateways at Equinix) — each VCG forwards traffic for all
+# branch VCEs tunnelling through it.  Tunnels originate from eth0 (SD-WAN WAN
+# uplink) and terminate at the nearest Zscaler regional PoP:
+#   AM1-VCG-01  → EUROPE-WEST  (primary) + EUROPE-CENTRAL (secondary)
+#   FR6-VCG-01  → EUROPE-CENTRAL (primary) + EUROPE-WEST  (secondary)
+#   PA4-VCG-01  → EUROPE-CENTRAL (primary) + EUROPE-WEST  (secondary)
+#   PA6-VCG-01  → EUROPE-CENTRAL (primary) + EUROPE-WEST  (secondary)
+#
+# Branch anchors (VCE edges) use GE2 (internet breakout) for direct local
+# breakout to Zscaler.  GE1 carries the SD-WAN underlay back to the VCG hub.
+#   LON, EDI, BCN → EUROPE-WEST  (closest Zscaler PoP)
+#   STR, MAD      → EUROPE-CENTRAL (closest Zscaler PoP)
+
+# ── VTI interfaces on VCG hub gateways (SD-WAN WAN side) ─────────────────────
+
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimVirtualInterface
+  data:
+    - name: ZSC-AM1-WEST-PRI
+      description: "IPsec tunnel to Zscaler Europe West — primary"
+      role: uplink
+      status: active
+      device: AM1-VCG-01
+
+    - name: ZSC-AM1-CENTRAL-SEC
+      description: "IPsec tunnel to Zscaler Europe Central — secondary"
+      role: uplink
+      status: active
+      device: AM1-VCG-01
+
+    - name: ZSC-FR6-CENTRAL-PRI
+      description: "IPsec tunnel to Zscaler Europe Central — primary"
+      role: uplink
+      status: active
+      device: FR6-VCG-01
+
+    - name: ZSC-FR6-WEST-SEC
+      description: "IPsec tunnel to Zscaler Europe West — secondary"
+      role: uplink
+      status: active
+      device: FR6-VCG-01
+
+    - name: ZSC-PA4-CENTRAL-PRI
+      description: "IPsec tunnel to Zscaler Europe Central — primary"
+      role: uplink
+      status: active
+      device: PA4-VCG-01
+
+    - name: ZSC-PA4-WEST-SEC
+      description: "IPsec tunnel to Zscaler Europe West — secondary"
+      role: uplink
+      status: active
+      device: PA4-VCG-01
+
+    - name: ZSC-PA6-CENTRAL-PRI
+      description: "IPsec tunnel to Zscaler Europe Central — primary"
+      role: uplink
+      status: active
+      device: PA6-VCG-01
+
+    - name: ZSC-PA6-WEST-SEC
+      description: "IPsec tunnel to Zscaler Europe West — secondary"
+      role: uplink
+      status: active
+      device: PA6-VCG-01
+
+---
+# ── VTI interfaces on branch VCEs (GE2 internet breakout side) ───────────────
+
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimVirtualInterface
+  data:
+    - name: ZSC-LON-WEST
+      description: "IPsec tunnel to Zscaler Europe West — local breakout"
+      role: uplink
+      status: active
+      device: OFC-LON-BRANCH-EDGE-01
+
+    - name: ZSC-EDI-WEST
+      description: "IPsec tunnel to Zscaler Europe West — local breakout"
+      role: uplink
+      status: active
+      device: OFC-EDI-BRANCH-EDGE-01
+
+    - name: ZSC-BCN-WEST
+      description: "IPsec tunnel to Zscaler Europe West — local breakout"
+      role: uplink
+      status: active
+      device: OFC-BCN-BRANCH-EDGE-01
+
+    - name: ZSC-STR-CENTRAL
+      description: "IPsec tunnel to Zscaler Europe Central — local breakout"
+      role: uplink
+      status: active
+      device: OFC-STR-BRANCH-EDGE-01
+
+    - name: ZSC-MAD-01-CENTRAL
+      description: "IPsec tunnel to Zscaler Europe Central — primary edge"
+      role: uplink
+      status: active
+      device: OFC-MAD-REGIONAL-EDGE-01
+
+    - name: ZSC-MAD-02-CENTRAL
+      description: "IPsec tunnel to Zscaler Europe Central — secondary edge"
+      role: uplink
+      status: active
+      device: OFC-MAD-REGIONAL-EDGE-02
+
+---
+# ── VTI interfaces on Zscaler PoP logical devices ─────────────────────────────
+# Each tunnel has a corresponding VTI on the Zscaler PoP side for
+# circuit model completeness.
+
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimVirtualInterface
+  data:
+    # Amsterdam PoP receives: AM1-WEST-PRI, FR6-WEST-SEC, PA4-WEST-SEC, PA6-WEST-SEC,
+    #                         LON, EDI, BCN branch breakouts
+    - name: ZSC-AMS-AM1-WEST-PRI
+      description: "IPsec tunnel from AM1-VCG-01 — primary"
+      role: uplink
+      status: active
+      device: EXT-SAAS-ZSCALER-AMS-01
+
+    - name: ZSC-AMS-FR6-WEST-SEC
+      description: "IPsec tunnel from FR6-VCG-01 — secondary"
+      role: uplink
+      status: active
+      device: EXT-SAAS-ZSCALER-AMS-01
+
+    - name: ZSC-AMS-PA4-WEST-SEC
+      description: "IPsec tunnel from PA4-VCG-01 — secondary"
+      role: uplink
+      status: active
+      device: EXT-SAAS-ZSCALER-AMS-01
+
+    - name: ZSC-AMS-PA6-WEST-SEC
+      description: "IPsec tunnel from PA6-VCG-01 — secondary"
+      role: uplink
+      status: active
+      device: EXT-SAAS-ZSCALER-AMS-01
+
+    - name: ZSC-AMS-LON
+      description: "IPsec tunnel from London VCE"
+      role: uplink
+      status: active
+      device: EXT-SAAS-ZSCALER-AMS-01
+
+    - name: ZSC-AMS-EDI
+      description: "IPsec tunnel from Edinburgh VCE"
+      role: uplink
+      status: active
+      device: EXT-SAAS-ZSCALER-AMS-01
+
+    - name: ZSC-AMS-BCN
+      description: "IPsec tunnel from Barcelona VCE"
+      role: uplink
+      status: active
+      device: EXT-SAAS-ZSCALER-AMS-01
+
+    # Frankfurt PoP receives: FR6-CENTRAL-PRI, PA4-CENTRAL-PRI, PA6-CENTRAL-PRI,
+    #                         AM1-CENTRAL-SEC, STR, MAD branch breakouts
+    - name: ZSC-FRA-FR6-CENTRAL-PRI
+      description: "IPsec tunnel from FR6-VCG-01 — primary"
+      role: uplink
+      status: active
+      device: EXT-SAAS-ZSCALER-FRA-01
+
+    - name: ZSC-FRA-PA4-CENTRAL-PRI
+      description: "IPsec tunnel from PA4-VCG-01 — primary"
+      role: uplink
+      status: active
+      device: EXT-SAAS-ZSCALER-FRA-01
+
+    - name: ZSC-FRA-PA6-CENTRAL-PRI
+      description: "IPsec tunnel from PA6-VCG-01 — primary"
+      role: uplink
+      status: active
+      device: EXT-SAAS-ZSCALER-FRA-01
+
+    - name: ZSC-FRA-AM1-CENTRAL-SEC
+      description: "IPsec tunnel from AM1-VCG-01 — secondary"
+      role: uplink
+      status: active
+      device: EXT-SAAS-ZSCALER-FRA-01
+
+    - name: ZSC-FRA-STR
+      description: "IPsec tunnel from Stuttgart VCE"
+      role: uplink
+      status: active
+      device: EXT-SAAS-ZSCALER-FRA-01
+
+    - name: ZSC-FRA-MAD-01
+      description: "IPsec tunnel from Madrid primary VCE"
+      role: uplink
+      status: active
+      device: EXT-SAAS-ZSCALER-FRA-01
+
+    - name: ZSC-FRA-MAD-02
+      description: "IPsec tunnel from Madrid secondary VCE"
+      role: uplink
+      status: active
+      device: EXT-SAAS-ZSCALER-FRA-01
+
+---
+# ── Hub VCG → Zscaler virtual circuits ───────────────────────────────────────
+
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologyVirtualCircuit
+  data:
+
+    - name: VC-AM1-VCG-ZSCALER-WEST-PRI
+      description: "AM1 VCG → Zscaler Europe West (Amsterdam PoP) — primary IPsec tunnel"
+      link_type: vpn_ipsec
+      bandwidth: 2000
+      status: active
+      provider: Zscaler
+      locations:
+        - AM1
+        - europe-west
+      interfaces:
+        - - AM1-VCG-01
+          - ZSC-AM1-WEST-PRI
+        - - EXT-SAAS-ZSCALER-AMS-01
+          - ZSC-AMS-AM1-WEST-PRI
+
+    - name: VC-AM1-VCG-ZSCALER-CENTRAL-SEC
+      description: "AM1 VCG → Zscaler Europe Central (Frankfurt PoP) — secondary IPsec tunnel"
+      link_type: vpn_ipsec
+      bandwidth: 2000
+      status: active
+      provider: Zscaler
+      locations:
+        - AM1
+        - europe-central
+      interfaces:
+        - - AM1-VCG-01
+          - ZSC-AM1-CENTRAL-SEC
+        - - EXT-SAAS-ZSCALER-FRA-01
+          - ZSC-FRA-AM1-CENTRAL-SEC
+
+    - name: VC-FR6-VCG-ZSCALER-CENTRAL-PRI
+      description: "FR6 VCG → Zscaler Europe Central (Frankfurt PoP) — primary IPsec tunnel"
+      link_type: vpn_ipsec
+      bandwidth: 2000
+      status: active
+      provider: Zscaler
+      locations:
+        - FR6
+        - europe-central
+      interfaces:
+        - - FR6-VCG-01
+          - ZSC-FR6-CENTRAL-PRI
+        - - EXT-SAAS-ZSCALER-FRA-01
+          - ZSC-FRA-FR6-CENTRAL-PRI
+
+    - name: VC-FR6-VCG-ZSCALER-WEST-SEC
+      description: "FR6 VCG → Zscaler Europe West (Amsterdam PoP) — secondary IPsec tunnel"
+      link_type: vpn_ipsec
+      bandwidth: 2000
+      status: active
+      provider: Zscaler
+      locations:
+        - FR6
+        - europe-west
+      interfaces:
+        - - FR6-VCG-01
+          - ZSC-FR6-WEST-SEC
+        - - EXT-SAAS-ZSCALER-AMS-01
+          - ZSC-AMS-FR6-WEST-SEC
+
+    - name: VC-PA4-VCG-ZSCALER-CENTRAL-PRI
+      description: "PA4 VCG → Zscaler Europe Central (Frankfurt PoP) — primary IPsec tunnel"
+      link_type: vpn_ipsec
+      bandwidth: 2000
+      status: active
+      provider: Zscaler
+      locations:
+        - PA4
+        - europe-central
+      interfaces:
+        - - PA4-VCG-01
+          - ZSC-PA4-CENTRAL-PRI
+        - - EXT-SAAS-ZSCALER-FRA-01
+          - ZSC-FRA-PA4-CENTRAL-PRI
+
+    - name: VC-PA4-VCG-ZSCALER-WEST-SEC
+      description: "PA4 VCG → Zscaler Europe West (Amsterdam PoP) — secondary IPsec tunnel"
+      link_type: vpn_ipsec
+      bandwidth: 2000
+      status: active
+      provider: Zscaler
+      locations:
+        - PA4
+        - europe-west
+      interfaces:
+        - - PA4-VCG-01
+          - ZSC-PA4-WEST-SEC
+        - - EXT-SAAS-ZSCALER-AMS-01
+          - ZSC-AMS-PA4-WEST-SEC
+
+    - name: VC-PA6-VCG-ZSCALER-CENTRAL-PRI
+      description: "PA6 VCG → Zscaler Europe Central (Frankfurt PoP) — primary IPsec tunnel"
+      link_type: vpn_ipsec
+      bandwidth: 2000
+      status: active
+      provider: Zscaler
+      locations:
+        - PA6
+        - europe-central
+      interfaces:
+        - - PA6-VCG-01
+          - ZSC-PA6-CENTRAL-PRI
+        - - EXT-SAAS-ZSCALER-FRA-01
+          - ZSC-FRA-PA6-CENTRAL-PRI
+
+    - name: VC-PA6-VCG-ZSCALER-WEST-SEC
+      description: "PA6 VCG → Zscaler Europe West (Amsterdam PoP) — secondary IPsec tunnel"
+      link_type: vpn_ipsec
+      bandwidth: 2000
+      status: active
+      provider: Zscaler
+      locations:
+        - PA6
+        - europe-west
+      interfaces:
+        - - PA6-VCG-01
+          - ZSC-PA6-WEST-SEC
+        - - EXT-SAAS-ZSCALER-AMS-01
+          - ZSC-AMS-PA6-WEST-SEC
+
+---
+# ── Branch VCE → Zscaler virtual circuits ────────────────────────────────────
+
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologyVirtualCircuit
+  data:
+
+    - name: VC-LON-VCE-ZSCALER-WEST
+      description: "London VCE → Zscaler Europe West — IPsec local breakout via GE2"
+      link_type: vpn_ipsec
+      bandwidth: 500
+      status: active
+      provider: Zscaler
+      locations:
+        - OFC-LON-BRANCH-01
+        - europe-west
+      interfaces:
+        - - OFC-LON-BRANCH-EDGE-01
+          - ZSC-LON-WEST
+        - - EXT-SAAS-ZSCALER-AMS-01
+          - ZSC-AMS-LON
+
+    - name: VC-EDI-VCE-ZSCALER-WEST
+      description: "Edinburgh VCE → Zscaler Europe West — IPsec local breakout via GE2"
+      link_type: vpn_ipsec
+      bandwidth: 500
+      status: active
+      provider: Zscaler
+      locations:
+        - OFC-EDI-BRANCH-01
+        - europe-west
+      interfaces:
+        - - OFC-EDI-BRANCH-EDGE-01
+          - ZSC-EDI-WEST
+        - - EXT-SAAS-ZSCALER-AMS-01
+          - ZSC-AMS-EDI
+
+    - name: VC-BCN-VCE-ZSCALER-WEST
+      description: "Barcelona VCE → Zscaler Europe West — IPsec local breakout via GE2"
+      link_type: vpn_ipsec
+      bandwidth: 500
+      status: active
+      provider: Zscaler
+      locations:
+        - OFC-BCN-BRANCH-01
+        - europe-west
+      interfaces:
+        - - OFC-BCN-BRANCH-EDGE-01
+          - ZSC-BCN-WEST
+        - - EXT-SAAS-ZSCALER-AMS-01
+          - ZSC-AMS-BCN
+
+    - name: VC-STR-VCE-ZSCALER-CENTRAL
+      description: "Stuttgart VCE → Zscaler Europe Central — IPsec local breakout via GE2"
+      link_type: vpn_ipsec
+      bandwidth: 500
+      status: active
+      provider: Zscaler
+      locations:
+        - OFC-STR-BRANCH-01
+        - europe-central
+      interfaces:
+        - - OFC-STR-BRANCH-EDGE-01
+          - ZSC-STR-CENTRAL
+        - - EXT-SAAS-ZSCALER-FRA-01
+          - ZSC-FRA-STR
+
+    - name: VC-MAD-VCE-01-ZSCALER-CENTRAL
+      description: "Madrid primary VCE → Zscaler Europe Central — IPsec local breakout via GE2"
+      link_type: vpn_ipsec
+      bandwidth: 1000
+      status: active
+      provider: Zscaler
+      locations:
+        - OFC-MAD-REGIONAL-01
+        - europe-central
+      interfaces:
+        - - OFC-MAD-REGIONAL-EDGE-01
+          - ZSC-MAD-01-CENTRAL
+        - - EXT-SAAS-ZSCALER-FRA-01
+          - ZSC-FRA-MAD-01
+
+    - name: VC-MAD-VCE-02-ZSCALER-CENTRAL
+      description: "Madrid secondary VCE → Zscaler Europe Central — IPsec local breakout via GE2"
+      link_type: vpn_ipsec
+      bandwidth: 1000
+      status: active
+      provider: Zscaler
+      locations:
+        - OFC-MAD-REGIONAL-01
+        - europe-central
+      interfaces:
+        - - OFC-MAD-REGIONAL-EDGE-02
+          - ZSC-MAD-02-CENTRAL
+        - - EXT-SAAS-ZSCALER-FRA-01
+          - ZSC-FRA-MAD-02

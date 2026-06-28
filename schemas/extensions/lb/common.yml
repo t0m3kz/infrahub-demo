@@ -190,71 +190,12 @@ generics:
             description: "External network facing"
             color: "#9FBF9F"
     relationships:
-      - name: vips
-        peer: ServiceLoadBalancerVIP
-        cardinality: many
-        description: "VIPs (virtual IPs/listeners) exposed by this load balancer"
-      - name: backend_pools
-        peer: ServiceBackendPool
-        cardinality: many
-        description: "Backend pools available to this load balancer"
       - name: tags
         peer: BuiltinTag
         cardinality: many
         description: "Tags for automation, RBAC, and grouping"
 
 nodes:
-  # ── Backend server (on-prem) ─────────────────────────────────────────────
-  - name: Server
-    namespace: Loadbalancer
-    label: Backend Servers
-    icon: mdi:server-plus
-    include_in_menu: false
-    description: Backend servers for load balancing
-    attributes:
-      - name: hostname
-        kind: Text
-        unique: true
-        description: Unique hostname for server identification.
-        order_weight: 1010
-      - name: description
-        kind: Text
-        optional: true
-        order_weight: 1100
-      - name: status
-        kind: Dropdown
-        default_value: "active"
-        order_weight: 1200
-        choices:
-          - name: provisioning
-            label: Provisioning
-            color: "#A9DFBF"
-          - name: active
-            label: Active
-            color: "#A9CCE3"
-          - name: maintenance
-            label: Maintenance
-            color: "#FFF2CC"
-          - name: disabled
-            label: Disabled
-            color: "#D3D3D3"
-          - name: deleted
-            label: Deleted
-            color: "#FAD7A0"
-          - name: outage
-            label: Outage
-            color: "#F4CCCC"
-    relationships:
-      - name: ip_address
-        peer: IpamIPAddress
-        label: Private IP Address
-        identifier: server__ip
-        cardinality: one
-        kind: Component
-        on_delete: cascade
-        description: Primary IP address of the server.
-        order_weight: 1300
-
   # ── Health check ─────────────────────────────────────────────────────────
   - name: HealthCheck
     namespace: Loadbalancer
@@ -315,14 +256,16 @@ nodes:
         optional: false
 
   # ── VIP / Listener ───────────────────────────────────────────────────────
-  - name: LoadBalancerVIP
-    namespace: Service
+  - name: VIP
+    namespace: Loadbalancer
     label: Load Balancer VIP / Listener
     description: "Frontend service configuration for a load balancer (VIP address, protocol, port)"
     icon: mdi:ip-network
     include_in_menu: false
+    inherit_from:
+      - ManagedGenericInterfaces
     uniqueness_constraints:
-      - [load_balancer, protocol__value, port__value]
+      - [load_balancer, hostname__value, protocol__value, port__value]
     human_friendly_id:
       - hostname__value
       - protocol__value
@@ -403,61 +346,11 @@ nodes:
         kind: Number
         optional: true
         order_weight: 420
-    relationships:
-      - name: load_balancer
-        peer: ManagedLoadBalancer
-        cardinality: one
-        optional: false
-        order_weight: 500
-        identifier: load_balancer__vip_services
-        description: "Load balancer hosting this VIP service"
-      - name: vip_ip
-        peer: IpamIPAddress
-        cardinality: one
-        kind: Attribute
-        optional: true
-        order_weight: 600
-        identifier: vip_service__ip
-      - name: backend_pool
-        peer: ServiceBackendPool
-        cardinality: one
-        optional: true
-        order_weight: 700
-        identifier: vip_service__backend_pool
-      - name: health_checks
-        peer: LoadbalancerHealthCheck
-        cardinality: many
-        kind: Generic
-        optional: true
-        order_weight: 800
-        identifier: vip_service__health_checks
-
-  # ── Backend pool ─────────────────────────────────────────────────────────
-  - name: BackendPool
-    namespace: Service
-    label: Backend Pool
-    description: "Pool of backend servers receiving load balanced traffic"
-    icon: mdi:server-network
-    include_in_menu: false
-    uniqueness_constraints:
-      - [vip_service, name__value]
-    human_friendly_id:
-      - name__value
-    display_label: "{{ name__value }}"
-    attributes:
-      - name: name
-        kind: Text
-        optional: false
-        order_weight: 100
-      - name: description
-        kind: Text
-        optional: true
-        order_weight: 110
       - name: load_balancing_algorithm
         kind: Dropdown
-        optional: false
-        default_value: round_robin
-        order_weight: 200
+        optional: true
+        order_weight: 430
+        description: "How traffic is distributed across backend pool members"
         choices:
           - name: round_robin
             label: Round Robin
@@ -477,7 +370,8 @@ nodes:
       - name: session_persistence
         kind: Dropdown
         optional: true
-        order_weight: 300
+        order_weight: 440
+        description: "Client session affinity method"
         choices:
           - name: none
             label: None
@@ -491,74 +385,43 @@ nodes:
           - name: application
             label: Application
             color: "#D2B4DE"
-      - name: drain_timeout
-        kind: Number
-        optional: true
-        order_weight: 400
-        description: "Connection draining timeout in seconds"
     relationships:
-      - name: vip_service
-        peer: ServiceLoadBalancerVIP
+      - name: load_balancer
+        peer: ManagedLoadBalancer
         cardinality: one
         optional: false
         order_weight: 500
-        identifier: vip_service__backend_pool
-      - name: onprem_servers
-        peer: LoadbalancerServer
+        identifier: load_balancer__vip_services
+        description: "Load balancer hosting this VIP (on-prem HA or cloud)"
+      - name: vip_ip
+        peer: IpamIPAddress
+        cardinality: one
+        kind: Attribute
+        optional: true
+        order_weight: 600
+        identifier: vip_service__ip
+      - name: health_checks
+        peer: LoadbalancerHealthCheck
         cardinality: many
         kind: Generic
         optional: true
-        order_weight: 600
-        identifier: backend_pool__onprem_servers
-        description: "On-premises backend servers"
-      - name: cloud_instances
-        peer: CloudInstance
+        order_weight: 800
+        identifier: vip_service__health_checks
+      - name: members
+        peer: LoadbalancerPoolMember
         cardinality: many
+        kind: Generic
         optional: true
-        order_weight: 610
-        identifier: backend_pool__cloud_instances
-        description: "Cloud compute instances"
+        order_weight: 850
+        identifier: loadbalancer_pool_member__vip_service
+        description: "Backend pool members (devices) serving this VIP"
 
-# ── Listener ─────────────────────────────────────────────────────────────
 extensions:
   nodes:
-    - kind: OnpremLoadbalancer
-      relationships:
-        - name: vip_services
-          peer: ServiceLoadBalancerVIP
-          cardinality: many
-          kind: Component
-          optional: true
-          order_weight: 2000
-          identifier: load_balancer__vip_services
-          description: "VIP services hosted on this load balancer"
-
-    - kind: CloudLoadBalancer
-      relationships:
-        - name: vip_services
-          peer: ServiceLoadBalancerVIP
-          cardinality: many
-          kind: Component
-          optional: true
-          order_weight: 2000
-          identifier: load_balancer__vip_services
-          description: "VIP services (listeners) hosted on this load balancer"
-
-    - kind: LoadbalancerServer
-      relationships:
-        - name: backend_pools
-          peer: ServiceBackendPool
-          cardinality: many
-          kind: Generic
-          optional: true
-          order_weight: 2100
-          identifier: backend_pool__onprem_servers
-          description: "Backend pools this server belongs to"
-
     - kind: LoadbalancerHealthCheck
       relationships:
         - name: vip_services
-          peer: ServiceLoadBalancerVIP
+          peer: LoadbalancerVIP
           cardinality: many
           kind: Generic
           optional: true
@@ -566,12 +429,16 @@ extensions:
           identifier: vip_service__health_checks
           description: "VIP services using this health check"
 
-    - kind: CloudInstance
+    - kind: LoadbalancerVIP
       relationships:
-        - name: backend_pools
-          peer: ServiceBackendPool
+        - name: components
+          peer: AppComponent
           cardinality: many
+          kind: Generic
+          direction: inbound
           optional: true
-          order_weight: 2500
-          identifier: backend_pool__cloud_instances
-          description: "Load balancer backend pools this instance belongs to"
+          on_delete: no-action
+          identifier: "app_component__vip_service"
+          order_weight: 700
+          label: "App Components"
+          description: "Application components routed through this VIP"

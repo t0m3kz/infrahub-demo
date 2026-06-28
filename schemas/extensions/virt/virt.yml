@@ -140,6 +140,39 @@ nodes:
         default_value: true
         order_weight: 1400
 
+      - name: total_cpu
+        kind: Text
+        label: "Total CPU"
+        description: "Aggregate vCPU count across all node pools (computed)."
+        optional: true
+        read_only: true
+        order_weight: 1500
+        computed_attribute:
+          kind: TransformPython
+          transform: virt_cluster_total_cpu
+
+      - name: total_memory_gb
+        kind: Text
+        label: "Total Memory (GB)"
+        description: "Aggregate RAM in GB across all node pools (computed)."
+        optional: true
+        read_only: true
+        order_weight: 1510
+        computed_attribute:
+          kind: TransformPython
+          transform: virt_cluster_total_memory_gb
+
+      - name: total_storage_gb
+        kind: Text
+        label: "Total Storage (GB)"
+        description: "Aggregate storage in GB across all node pools (computed)."
+        optional: true
+        read_only: true
+        order_weight: 1520
+        computed_attribute:
+          kind: TransformPython
+          transform: virt_cluster_total_storage_gb
+
     relationships:
       # Works for all locations:
       # on-prem DC    → TopologyDatacenter    (inherits TopologyDeployment)
@@ -203,6 +236,26 @@ nodes:
         on_delete: cascade
         identifier: "virt_cluster__node_pools"
         order_weight: 2000
+
+      - name: vip_service
+        peer: LoadbalancerVIP
+        label: "VIP Service"
+        description: "External VIP fronting this cluster's ingress controller."
+        cardinality: one
+        kind: Attribute
+        optional: true
+        identifier: "virt_cluster__vip_service"
+        order_weight: 2100
+
+      - name: proxy_service
+        peer: ManagedGeneric
+        label: "Proxy Service"
+        description: "Cluster-wide egress proxy or SASE service."
+        cardinality: one
+        kind: Attribute
+        optional: true
+        identifier: "virt_cluster__proxy_service"
+        order_weight: 2200
 
       - name: tags
         peer: BuiltinTag
@@ -394,6 +447,27 @@ nodes:
         description: "Ubuntu 24.04, ESXi 8.0u2, Windows Server 2022, etc."
         optional: true
         order_weight: 1550
+
+      - name: cpu_per_node
+        kind: Number
+        label: "CPU per Node"
+        description: "vCPU or physical CPU count per node/host in this pool."
+        optional: true
+        order_weight: 1560
+
+      - name: memory_per_node_gb
+        kind: Number
+        label: "Memory per Node (GB)"
+        description: "RAM in GB per node/host in this pool."
+        optional: true
+        order_weight: 1570
+
+      - name: storage_per_node_gb
+        kind: Number
+        label: "Storage per Node (GB)"
+        description: "Usable storage in GB per node/host in this pool."
+        optional: true
+        order_weight: 1580
 
     relationships:
       - name: cluster

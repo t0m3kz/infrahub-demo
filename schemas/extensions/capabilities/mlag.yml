@@ -14,8 +14,7 @@ nodes:
     description: "MLAG domain shared between two peer devices"
     label: MLAG Domain
     icon: "mdi:link-variant"
-    include_in_menu: true
-    menu_placement: ManagedGeneric
+    include_in_menu: false
     human_friendly_id:
       - "name__value"
     inherit_from:
@@ -27,8 +26,8 @@ nodes:
     order_by:
       - name__value
     relationships:
-      - name: device_capabilities
-        peer: DcimDevice
+      - name: capabilities
+        peer: DcimCapabilities
         label: "Peer Devices"
         description: "The two devices that form this MLAG domain"
         cardinality: many

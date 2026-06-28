@@ -19,7 +19,7 @@ nodes:
     description: "Security zone — macro trust classification for network segments"
     label: Security Zone
     icon: "mdi:shield-lock"
-    include_in_menu: false
+    include_in_menu: true
     order_by:
       - name__value
     display_label: "{{ name__value }}"
@@ -66,15 +66,6 @@ nodes:
         optional: false
         order_weight: 1300
     relationships:
-      - name: firewall_interface
-        peer: DcimFirewallInterface
-        label: Firewall Interface
-        cardinality: one
-        kind: Attribute
-        optional: true
-        order_weight: 1350
-        identifier: firewall_interface__security_zone
-        description: "FW interface serving this zone — defines the VRF gateway"
       - name: network_segments
         peer: ManagedNetworkSegment
         label: Network Segments
@@ -111,7 +102,8 @@ nodes:
     description: "Threat prevention profile — applied per policy rule"
     label: Security Profile
     icon: "mdi:shield-check"
-    include_in_menu: false
+    include_in_menu: true
+    menu_placement: SecurityZone
     order_by:
       - name__value
     display_label: "{{ name__value }}"
@@ -171,7 +163,8 @@ nodes:
     description: "Security policy — zero-trust contract for segment traffic"
     label: Security Policy
     icon: "mdi:file-document-outline"
-    include_in_menu: false
+    include_in_menu: true
+    menu_placement: SecurityZone
     inherit_from:
       - ManagedGenericDevice
     order_by:
@@ -230,7 +223,8 @@ nodes:
     description: "Policy rule with segment-level micro-segmentation and inline protocol/port"
     label: Security Policy Rule
     icon: "mdi:file-document-edit-outline"
-    include_in_menu: false
+    include_in_menu: true
+    menu_placement: SecurityZone
     order_by:
       - index__value
     display_label: "{{ name__value }}"
@@ -335,6 +329,13 @@ nodes:
         default_value: false
         optional: true
         order_weight: 1800
+      - name: apply_on_switch
+        kind: Boolean
+        label: Apply on Switch
+        description: "Force ACL on leaf SVI regardless of firewall assignment (microsegmentation)"
+        default_value: false
+        optional: true
+        order_weight: 1850
     relationships:
       - name: policy
         peer: SecurityPolicy
@@ -393,18 +394,6 @@ nodes:
 
 extensions:
   nodes:
-    - kind: DcimFirewallInterface
-      relationships:
-        - name: security_zone
-          peer: SecurityZone
-          label: Security Zone
-          cardinality: one
-          kind: Attribute
-          optional: true
-          identifier: firewall_interface__security_zone
-          order_weight: 1500
-          description: "Security zone this interface belongs to"
-
     - kind: ManagedNetworkSegment
       relationships:
         - name: security_zone

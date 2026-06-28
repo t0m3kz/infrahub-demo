@@ -42,5 +42,4 @@ access-list global-in extended deny ip any any log
 access-group internal-in in interface internal
 access-group dmz-in in interface dmz
 access-group external-in in interface external
-!
 end

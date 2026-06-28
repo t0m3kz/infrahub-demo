@@ -117,6 +117,17 @@ class EndpointConnectivityGenerator(CommonGenerator):
             self.logger.error(f"Endpoint {self.data.name} has no rack assigned - cannot determine connectivity")
             return
 
+        device_role = self.data.role or ""
+
+        # Firewalls and load-balancers connect to border-leaf dedicated ports, not to pod switches
+        if device_role in ("firewall", "firewall-active", "firewall-passive", "load-balancer"):
+            dc = self.data.rack.pod.parent
+            self.deployment_id = dc.id
+            self.fabric_name = dc.name.lower()
+            bl_port_role = "firewall" if "firewall" in device_role else "load-balancer"
+            await self._connect_to_border_leaf(dc_id=dc.id, bl_port_role=bl_port_role)
+            return
+
         # Access deployment_type directly from pod (not through design)
         deployment_type = self.data.rack.pod.deployment_type
         self.pod_name = self.data.rack.pod.name.lower()
@@ -180,6 +191,135 @@ class EndpointConnectivityGenerator(CommonGenerator):
             await self._connect_mixed_deployment()
         else:
             self.logger.error(f"Unknown deployment type '{deployment_type}' for endpoint {self.data.name}")
+
+    async def _connect_to_border_leaf(self, dc_id: str, bl_port_role: str) -> None:
+        """Connect firewall or load-balancer to dedicated ports on border-leaf switches.
+
+        Deterministic per-interface assignment:
+          uplink[0] (sorted by name) → BL-1 (sorted by name)
+          uplink[1]                  → BL-2
+
+        This ensures BFD + static route redundancy without VPC:
+        each uplink has an independent path to a separate BL.
+        """
+        assert self.data.rack is not None
+
+        # Find the DC's border-leaf pair (always exactly 2, sorted by name)
+        border_leafs = await self.client.filters(
+            kind=DcimPhysicalDevice,
+            deployment__ids=[dc_id],
+            role__value="border-leaf",
+            status__values=["active", "provisioning", "free"],
+        )
+
+        if not border_leafs:
+            self.logger.error(
+                f"{self.data.name}: No border-leaf devices found in DC {dc_id}. "
+                "Cannot connect firewall/LB — run add_dc generator first."
+            )
+            return
+
+        sorted_bls = sorted(border_leafs, key=lambda bl: bl.name.value)
+
+        # Get uplink interfaces on this device, sorted by name
+        all_uplinks: list[DcimPhysicalInterface] = await self.client.filters(
+            kind=DcimPhysicalInterface,
+            device__ids=[self.data.id],
+            role__value="uplink",
+            status__values=["free", "planned", "active"],
+            include=["device", "interface_type", "cable"],
+        )
+
+        free_uplinks = [i for i in all_uplinks if not (i.cable and i.cable.id)]
+        existing = len(all_uplinks) - len(free_uplinks)
+
+        if not free_uplinks:
+            if existing > 0:
+                self.logger.info(f"{self.data.name}: already fully connected to border-leaf ({existing} cables)")
+            else:
+                self.logger.info(f"{self.data.name}: no uplink interfaces, skipping")
+            return
+
+        # Sort uplinks so assignment is stable across re-runs
+        uplink_name_map = {u.name.value: u for u in free_uplinks}
+        sorted_uplink_names = sort_interface_list(list(uplink_name_map.keys()))
+        sorted_uplinks = [uplink_name_map[n] for n in sorted_uplink_names]
+
+        self.logger.info(
+            f"{self.data.name} ({self.data.role}): {len(sorted_uplinks)} free uplink(s), "
+            f"{len(sorted_bls)} border-leaf(s) — deterministic assignment uplink[N] → BL[N]"
+        )
+
+        # For each uplink[i], cable to the first free bl_port_role port on BL[i]
+        connections_made = 0
+        for idx, uplink in enumerate(sorted_uplinks):
+            if idx >= len(sorted_bls):
+                self.logger.warning(
+                    f"{self.data.name}: uplink {uplink.name.value} has no BL to assign "
+                    f"(only {len(sorted_bls)} BL(s) available)"
+                )
+                break
+
+            target_bl = sorted_bls[idx]
+
+            # Find first free dedicated port on this specific BL
+            bl_ports: list[DcimPhysicalInterface] = await self.client.filters(
+                kind=DcimPhysicalInterface,
+                device__ids=[target_bl.id],
+                role__value=bl_port_role,
+                include=["device", "interface_type", "cable"],
+                status__values=["free", "planned", "active"] if existing > 0 else [],
+            )
+            if not existing:
+                bl_ports = await self.client.filters(
+                    kind=DcimPhysicalInterface,
+                    device__ids=[target_bl.id],
+                    role__value=bl_port_role,
+                    include=["device", "interface_type", "cable"],
+                    status__value="free",
+                )
+
+            free_bl_ports = [p for p in bl_ports if not (p.cable and p.cable.id)]
+
+            if not free_bl_ports:
+                self.logger.error(
+                    f"{self.data.name}: No free {bl_port_role!r} ports on {target_bl.name.value} "
+                    f"for uplink {uplink.name.value}"
+                )
+                continue
+
+            # Pick first free port (sorted for stability)
+            bl_port_name_map = {p.name.value: p for p in free_bl_ports}
+            first_free_port = bl_port_name_map[sort_interface_list(list(bl_port_name_map.keys()))[0]]
+
+            fingerprint = ConnectionFingerprint(
+                server_name=self.data.name,
+                server_interface=uplink.name.value,
+                switch_name=target_bl.name.value,
+                switch_interface=first_free_port.name.value,
+            )
+
+            if fingerprint in self.planned_connections:
+                self.logger.info(f"{self.data.name}: connection {fingerprint} already planned, skipping")
+                continue
+
+            self.planned_connections.add(fingerprint)
+
+            await self.create_cabling(
+                bottom_devices=[self.data.name],
+                bottom_interfaces=[uplink.name.value],
+                top_devices=[target_bl.name.value],
+                top_interfaces=[first_free_port.name.value],
+                strategy="intra_rack",
+                options=CablingOptions(cabling_offset=0, pool=None),
+            )
+
+            self.logger.info(
+                f"{self.data.name}: cabled {uplink.name.value} → {target_bl.name.value}:{first_free_port.name.value}"
+            )
+            connections_made += 1
+
+        self.logger.info(f"{self.data.name}: created {connections_made} connection(s) to border-leaf pair")
 
     async def _connect_middle_rack_deployment(self) -> None:
         """Connect endpoint in middle_rack deployment.

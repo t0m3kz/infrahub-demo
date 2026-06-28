@@ -1,0 +1,26 @@
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TemplateDcimPhysicalDevice
+  data:
+    - template_name: CISCO-WSA-S195_PROXY
+      device_type: CISCO-WSA-S195
+      platform: cisco_wsa
+      role: proxy
+      status: provisioning
+      interfaces:
+        kind: TemplateDcimPhysicalInterface
+        data:
+          - template_name: CISCO-WSA-S195_PROXY_mgmt
+            name: M1
+            role: management
+            interface_type: 1000base-t
+          - template_name: CISCO-WSA-S195_PROXY_P1
+            name: P1
+            role: uplink
+            interface_type: 10gbase-x-sfpp
+          - template_name: CISCO-WSA-S195_PROXY_P2
+            name: P2
+            role: uplink
+            interface_type: 10gbase-x-sfpp

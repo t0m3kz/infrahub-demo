@@ -189,22 +189,26 @@ nodes:
         optional: true
         description: Environment classification of this account
         choices:
-          - name: production
+          - name: p
             label: Production
             description: Production workloads
             color: "#ff7f7f"
-          - name: staging
+          - name: s
             label: Staging
             description: Pre-production staging environment
             color: "#ffd27f"
-          - name: development
+          - name: d
             label: Development
             description: Development and testing
             color: "#7fbf7f"
-          - name: sandbox
-            label: Sandbox
-            description: Experimental sandbox environment
-            color: "#7f7fff"
+          - name: t
+            label: Testing
+            description: Testing environment
+            color: "#D2B4DE"
+          - name: n
+            label: Non-Production
+            description: Non-production environment
+            color: "#A9DFBF"
         order_weight: 1400
     relationships:
       - name: provider
@@ -213,7 +217,7 @@ nodes:
         optional: false
         order_weight: 600
       - name: owner
-        peer: OrganizationCustomer
+        peer: OrganizationEntity
         cardinality: one
         optional: true
         order_weight: 700
@@ -288,21 +292,8 @@ nodes:
     inherit_from:
       - CloudResource
       - ManagedNetworkSegment
-    human_friendly_id:
-      - name__value
     display_label: "{{name__value}}"
     attributes:
-      - name: name
-        kind: Text
-        optional: true
-        order_weight: 100
-        computed_attribute:
-          kind: Jinja2
-          # yamllint disable rule:line-length
-          jinja2_template: >
-            {{owner__name__value|lower|replace(' ', '-')}}-{{customer_name__value|lower|replace(' ', '-')}}-{{environment__value}}
-          # yamllint enable rule:line-length
-        read_only: true
       - name: is_public
         kind: Boolean
         optional: true
@@ -370,6 +361,120 @@ nodes:
     uniqueness_constraints:
       - [virtual_network, customer_name__value]
 
+  - name: SecurityGroupRule
+    namespace: Cloud
+    description: "Security group rule — ingress or egress firewall rule within a cloud security group"
+    label: Security Group Rule
+    icon: mdi:file-document-edit-outline
+    include_in_menu: false
+    inherit_from:
+      - CloudResource
+    human_friendly_id:
+      - name__value
+    display_label: "{{ name__value }}"
+    uniqueness_constraints:
+      - [security_group, name__value]
+    attributes:
+      - name: name
+        kind: Text
+        optional: false
+        unique: false
+        order_weight: 1000
+      - name: direction
+        kind: Dropdown
+        optional: false
+        default_value: ingress
+        order_weight: 1100
+        choices:
+          - name: ingress
+            label: Ingress
+            color: "#2ECC71"
+          - name: egress
+            label: Egress
+            color: "#3498DB"
+      - name: priority
+        kind: Number
+        optional: true
+        order_weight: 1200
+        description: "Rule priority — lower = higher priority (provider-specific semantics)"
+      - name: protocol
+        kind: Dropdown
+        optional: false
+        default_value: tcp
+        order_weight: 1300
+        choices:
+          - name: tcp
+            label: TCP
+            color: "#3498DB"
+          - name: udp
+            label: UDP
+            color: "#2ECC71"
+          - name: icmp
+            label: ICMP
+            color: "#F39C12"
+          - name: any
+            label: Any
+            color: "#9B59B6"
+      - name: port_start
+        kind: Number
+        optional: true
+        order_weight: 1400
+        parameters:
+          min_value: 1
+          max_value: 65535
+      - name: port_end
+        kind: Number
+        optional: true
+        order_weight: 1500
+        parameters:
+          min_value: 1
+          max_value: 65535
+      - name: action
+        kind: Dropdown
+        optional: false
+        default_value: allow
+        order_weight: 1600
+        choices:
+          - name: allow
+            label: Allow
+            color: "#2ECC71"
+          - name: deny
+            label: Deny
+            color: "#E74C3C"
+      - name: log
+        kind: Boolean
+        optional: true
+        default_value: false
+        order_weight: 1700
+      - name: description
+        kind: Text
+        optional: true
+        order_weight: 1800
+      - name: disabled
+        kind: Boolean
+        optional: true
+        default_value: false
+        order_weight: 1900
+      - name: source_cidr
+        kind: Text
+        optional: true
+        order_weight: 2000
+        description: "Source CIDR for ingress rules (e.g. 10.0.0.0/8)"
+      - name: dest_cidr
+        kind: Text
+        optional: true
+        order_weight: 2100
+        description: "Destination CIDR for egress rules"
+    relationships:
+      - name: security_group
+        peer: CloudSecurityGroup
+        cardinality: one
+        kind: Parent
+        optional: false
+        order_weight: 1050
+        identifier: "cloudsecuritygroup__rules"
+        description: "Security group owning this rule"
+
   - name: SecurityGroup
     namespace: Cloud
     description: >-
@@ -409,6 +514,15 @@ nodes:
         optional: false
         description: Cloud account owning this security group
         order_weight: 1100
+      - name: rules
+        peer: CloudSecurityGroupRule
+        label: Rules
+        cardinality: many
+        kind: Component
+        optional: true
+        order_weight: 1200
+        identifier: "cloudsecuritygroup__rules"
+        description: "Ingress/egress rules for this security group"
 
   # --------------------  Compute Instance  --------------------
   - name: Instance
@@ -420,6 +534,7 @@ nodes:
     include_in_menu: false
     inherit_from:
       - CloudResource
+      - DcimCapabilities
     human_friendly_id:
       - name__value
     order_by:
@@ -753,33 +868,6 @@ nodes:
       - [route_table, destination]
 
 
-  - name: NetworkACL
-    namespace: Cloud
-    label: Network ACL
-    description: Subnet-level network access control list (stateless firewall).
-    include_in_menu: false
-    inherit_from:
-      - CloudResource
-    relationships:
-      - name: virtual_network
-        peer: CloudVirtualNetwork
-        cardinality: one
-        optional: false
-        order_weight: 600
-      - name: network_segments
-        peer: CloudNetworkSegment
-        cardinality: many
-        optional: true
-        order_weight: 700
-      - name: security_policies
-        peer: SecurityPolicy
-        cardinality: many
-        optional: true
-        order_weight: 800
-        description: "Security policies that define ACL rules"
-    uniqueness_constraints:
-      - [virtual_network, name__value]
-
   - name: TransitGateway
     namespace: Cloud
     label: Transit Gateway
@@ -939,65 +1027,6 @@ nodes:
     uniqueness_constraints:
       - [account, name__value]
 
-  - name: VirtualNetworkPeering
-    namespace: Cloud
-    label: Virtual Network Peering
-    description: Direct virtual network peering connection between two networks.
-    include_in_menu: false
-    inherit_from:
-      - CloudResource
-    attributes:
-      - name: peering_status
-        kind: Dropdown
-        order_weight: 300
-        optional: false
-        choices:
-          - name: initiating_request
-            label: Initiating Request
-            color: "#F39C12"
-          - name: pending_acceptance
-            label: Pending Acceptance
-            color: "#FFD27F"
-          - name: active
-            label: Active
-            color: "#7FBF7F"
-          - name: rejected
-            label: Rejected
-            color: "#E74C3C"
-          - name: failed
-            label: Failed
-            color: "#C0392B"
-          - name: deleted
-            label: Deleted
-            color: "#BFBFBF"
-    relationships:
-      - name: requester_virtual_network
-        peer: CloudVirtualNetwork
-        cardinality: one
-        optional: false
-        order_weight: 600
-        identifier: "cloud_peering_requester"
-      - name: accepter_virtual_network
-        peer: CloudVirtualNetwork
-        cardinality: one
-        optional: false
-        order_weight: 650
-        identifier: "cloud_peering_accepter"
-      - name: requester_route_table
-        peer: CloudRouteTable
-        cardinality: one
-        optional: true
-        order_weight: 700
-        identifier: "cloud_peering_requester_rt"
-      - name: accepter_route_table
-        peer: CloudRouteTable
-        cardinality: one
-        optional: true
-        order_weight: 750
-        identifier: "cloud_peering_accepter_rt"
-    uniqueness_constraints:
-      - [requester_virtual_network, accepter_virtual_network]
-
   - name: DirectConnect
     namespace: Cloud
     label: Direct Connect
@@ -1135,14 +1164,6 @@ extensions:
   nodes:
     - kind: CloudInstance
       relationships:
-        - name: backend_pools
-          peer: ServiceBackendPool
-          label: Backend Pools
-          cardinality: many
-          optional: true
-          order_weight: 2500
-          identifier: backend_pool__cloud_instances
-          description: "Load balancer backend pools this instance belongs to"
         - name: node_pool
           peer: VirtNodePool
           cardinality: one

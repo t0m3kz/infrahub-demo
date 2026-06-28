@@ -7,11 +7,15 @@ spec:
   data:
     - name: DC1
       index: 1
-      super_spine_template: N9K-C9336C-FX2_SUPER_SPINE
+      vlan_pool: DC1-VLAN-POOL
+      member_of_groups:
+        - topologies_dc
+      vni_pool: DC1-VNI-POOL
+      l3_vni_pool: GLOBAL-L3VNI
       children:
         kind: TopologyPod
         data:
           - index: 1
-            spine_template: N9K-C9336C-FX2_SPINE
+            spine_template: DCS-7050CX3-32C-R_SPINE
           - index: 2
-            spine_template: N9K-C9336C-FX2_SPINE
+            spine_template: DCS-7050CX3-32C-R_SPINE

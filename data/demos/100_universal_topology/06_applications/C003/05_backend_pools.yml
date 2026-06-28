@@ -1,0 +1,117 @@
+---
+# C003 (Vaultex Inc.) — Backend pool members on DC3-LB-HA
+# One pool member per device per VIP — VIPs are per-component.
+
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: LoadbalancerPoolMember
+  data:
+
+    # ── vault-core vault-api (VIP: c003-vault-api:8200) ──────────────────────
+    - name: c003-vault-vm-01-vault-api
+      weight: 1
+      vip_service:
+        - c003-vault-api.dc3.internal
+        - https
+        - "8200"
+      capabilities:
+        - C003-VAULT-VM-01
+
+    - name: c003-vault-vm-02-vault-api
+      weight: 1
+      vip_service:
+        - c003-vault-api.dc3.internal
+        - https
+        - "8200"
+      capabilities:
+        - C003-VAULT-VM-02
+
+    # ── vault-core vault-db (VIP: c003-vault-db:5432) ────────────────────────
+    - name: c003-vault-db-vm-01-vault-db
+      weight: 1
+      vip_service:
+        - c003-vault-db.dc3.internal
+        - tcp
+        - "5432"
+      capabilities:
+        - C003-VAULT-DB-VM-01
+
+    # ── compliance-portal audit-dashboard (VIP: c003-comp-web:443/80) ────────
+    - name: c003-comp-web-vm-01-comp-web-443
+      weight: 1
+      vip_service:
+        - c003-comp-web.dc3.internal
+        - https
+        - "443"
+      capabilities:
+        - C003-COMP-WEB-VM-01
+
+    - name: c003-comp-web-vm-01-comp-web-80
+      weight: 1
+      vip_service:
+        - c003-comp-web.dc3.internal
+        - http
+        - "80"
+      capabilities:
+        - C003-COMP-WEB-VM-01
+
+    # ── compliance-portal policy-engine (VIP: c003-comp-api:8443) ────────────
+    - name: c003-comp-app-vm-01-comp-api
+      weight: 1
+      vip_service:
+        - c003-comp-api.dc3.internal
+        - https
+        - "8443"
+      capabilities:
+        - C003-COMP-APP-VM-01
+
+    # ── compliance-portal audit-db (VIP: c003-comp-db:5432) ──────────────────
+    - name: c003-comp-db-vm-01-comp-db
+      weight: 1
+      vip_service:
+        - c003-comp-db.dc3.internal
+        - tcp
+        - "5432"
+      capabilities:
+        - C003-COMP-DB-VM-01
+
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: LoadbalancerPoolInterface
+  data:
+
+    # ── vault-core vault-api ──────────────────────────────────────────────────
+    - name: c003-vault-vm-01-vault-api-iface
+      port: 8200
+      pool_member: c003-vault-vm-01-vault-api
+
+    - name: c003-vault-vm-02-vault-api-iface
+      port: 8200
+      pool_member: c003-vault-vm-02-vault-api
+
+    # ── vault-core vault-db ───────────────────────────────────────────────────
+    - name: c003-vault-db-vm-01-vault-db-iface
+      port: 5432
+      pool_member: c003-vault-db-vm-01-vault-db
+
+    # ── compliance-portal audit-dashboard ────────────────────────────────────
+    - name: c003-comp-web-vm-01-comp-web-443-iface
+      port: 443
+      pool_member: c003-comp-web-vm-01-comp-web-443
+
+    - name: c003-comp-web-vm-01-comp-web-80-iface
+      port: 80
+      pool_member: c003-comp-web-vm-01-comp-web-80
+
+    # ── compliance-portal policy-engine ──────────────────────────────────────
+    - name: c003-comp-app-vm-01-comp-api-iface
+      port: 8443
+      pool_member: c003-comp-app-vm-01-comp-api
+
+    # ── compliance-portal audit-db ────────────────────────────────────────────
+    - name: c003-comp-db-vm-01-comp-db-iface
+      port: 5432
+      pool_member: c003-comp-db-vm-01-comp-db

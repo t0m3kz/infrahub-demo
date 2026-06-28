@@ -24,13 +24,13 @@ def _make_peering_interfaces(
     """Build peering_interfaces list (already flattened from edges)."""
     return [
         {
-            "__typename": local_type,
+            "typename": local_type,
             "name": local_name,
             "ip_address": {"address": local_ip},
             "device": {"name": local_device},
         },
         {
-            "__typename": remote_type,
+            "typename": remote_type,
             "name": remote_name,
             "ip_address": {"address": remote_ip},
             "device": {"name": remote_device},
@@ -61,7 +61,7 @@ def _make_peering(
         "send_community": "standard-extended",
         "ttl": ttl,
         "route_reflector_client": route_reflector_client,
-        "interfaces": _make_peering_interfaces(
+        "interface_capabilities": _make_peering_interfaces(
             local_name="Ethernet1",
             local_ip=local_ip,
             local_device=local_device,
@@ -199,7 +199,7 @@ class TestBuildSessionFromPeering:
             "name": "bad",
             "session_type": "EBGP",
             "ttl": 1,
-            "interfaces": [{"device": {"name": "leaf-01"}}],  # only 1
+            "interface_capabilities": [{"device": {"name": "leaf-01"}}],  # only 1
         }
         session = _build_session_from_peering(
             peering,
@@ -288,7 +288,7 @@ def _make_circuit_iface(
     The circuit uses a cardinality-many `interfaces` list (local + remote).
     """
     circuit = {
-        "__typename": circuit_typename,
+        "typename": circuit_typename,
         "interfaces": [
             {
                 "name": local_iface,
@@ -329,7 +329,7 @@ class TestCircuitServiceTraversal:
             "send_community": True,
             "ttl": 1,
             "route_reflector_client": False,
-            "interfaces": [
+            "interface_capabilities": [
                 {"name": "Ethernet1/31", "ip_address": None, "device": {"name": local_device}},
                 {"name": "Ethernet25/1", "ip_address": None, "device": {"name": remote_device}},
             ],
@@ -490,7 +490,7 @@ class TestCircuitServiceTraversal:
     def test_z_side_device_also_resolves(self):
         """The Z-side device resolves its peer via interface_capabilities circuit lookup."""
         circuit = {
-            "__typename": "TopologyVirtualCircuit",
+            "typename": "TopologyVirtualCircuit",
             "interfaces": [
                 {
                     "name": "Ethernet1/31",
@@ -518,7 +518,7 @@ class TestCircuitServiceTraversal:
             "send_community": True,
             "ttl": 1,
             "route_reflector_client": False,
-            "interfaces": [
+            "interface_capabilities": [
                 {"name": "Ethernet25/1", "ip_address": None, "device": {"name": "dc2-super-spine-01"}},
                 {"name": "Ethernet1/31", "ip_address": None, "device": {"name": "dc1-super-spine-01"}},
             ],

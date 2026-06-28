@@ -1,0 +1,78 @@
+---
+# C003 (Vaultex Inc.) — Component dependency graph
+#
+# AppDependency nodes encode every directed edge with an explicit protocol and
+# port.  No automatic port inference.
+#
+# Vaultex is a fintech customer — vault-core uses non-standard ports to enforce
+# strict east-west controls at the firewall level.
+
+# ── Dependency edge nodes ─────────────────────────────────────────────────────
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: AppDependency
+  data:
+
+    # ── vault-core / production ───────────────────────────────────────────────
+
+    - name: c003-vault-core-p-vault-api--c003-vault-core-p-vault-db
+      source: c003-vault-core-p-vault-api
+      target: c003-vault-core-p-vault-db
+      protocol: tcp
+      port_start: 5432
+      description: "Vault API → vault DB (PostgreSQL)"
+
+    # ── compliance-portal / production ────────────────────────────────────────
+
+    - name: c003-compliance-portal-p-audit-dashboard--c003-compliance-portal-p-policy-engine
+      source: c003-compliance-portal-p-audit-dashboard
+      target: c003-compliance-portal-p-policy-engine
+      protocol: tcp
+      port_start: 8443
+      description: "Audit dashboard → policy engine (mTLS 8443)"
+
+    - name: c003-compliance-portal-p-policy-engine--c003-compliance-portal-p-audit-db
+      source: c003-compliance-portal-p-policy-engine
+      target: c003-compliance-portal-p-audit-db
+      protocol: tcp
+      port_start: 5432
+      description: "Policy engine → audit DB (PostgreSQL)"
+
+    - name: c003-compliance-portal-p-policy-engine--c003-vault-core-p-vault-api
+      source: c003-compliance-portal-p-policy-engine
+      target: c003-vault-core-p-vault-api
+      protocol: tcp
+      port_start: 8200
+      description: "Policy engine → vault API (cross-app, HashiCorp Vault port)"
+
+# ── Wire depends_on on each AppComponent ─────────────────────────────────────
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: AppComponent
+  data:
+
+    # ── vault-core / production ───────────────────────────────────────────────
+
+    - name: vault-api
+      component_type: backend
+      parent: c003-vault-core-p
+      depends_on:
+        - c003-vault-core-p-vault-api--c003-vault-core-p-vault-db
+
+    # ── compliance-portal / production ────────────────────────────────────────
+
+    - name: audit-dashboard
+      component_type: frontend
+      parent: c003-compliance-portal-p
+      depends_on:
+        - c003-compliance-portal-p-audit-dashboard--c003-compliance-portal-p-policy-engine
+
+    - name: policy-engine
+      component_type: backend
+      parent: c003-compliance-portal-p
+      depends_on:
+        - c003-compliance-portal-p-policy-engine--c003-compliance-portal-p-audit-db
+        - c003-compliance-portal-p-policy-engine--c003-vault-core-p-vault-api

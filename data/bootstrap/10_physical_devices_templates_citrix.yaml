@@ -1,0 +1,246 @@
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TemplateDcimPhysicalDevice
+  data:
+    - template_name: NetScaler-MPX-26000-100G_LOAD_BALANCER
+      device_type: NetScaler-MPX-26000-100G
+      platform: netscaler
+      role: load-balancer
+      status: provisioning
+      interfaces:
+        kind: TemplateDcimPhysicalInterface
+        data:
+          - template_name: NetScaler-MPX-26000-100G_LB_LOM
+            name: LOM
+            role: management
+            interface_type: 1000base-t
+          - template_name: NetScaler-MPX-26000-100G_LB_0-1
+            name: "0/1"
+            role: management
+            interface_type: 1000base-t
+          - template_name: NetScaler-MPX-26000-100G_LB_0-2
+            name: "0/2"
+            role: management
+            interface_type: 1000base-t
+          - template_name: NetScaler-MPX-26000-100G_LB_100-1
+            name: "100/1"
+            role: uplink
+            interface_type: 100gbase-x-qsfp28
+          - template_name: NetScaler-MPX-26000-100G_LB_100-2
+            name: "100/2"
+            role: uplink
+            interface_type: 100gbase-x-qsfp28
+          - template_name: NetScaler-MPX-26000-100G_LB_100-3
+            name: "100/3"
+            role: customer
+            interface_type: 100gbase-x-qsfp28
+          - template_name: NetScaler-MPX-26000-100G_LB_100-4
+            name: "100/4"
+            role: customer
+            interface_type: 100gbase-x-qsfp28
+          - template_name: NetScaler-MPX-26000-100G_LB_100-5
+            name: "100/5"
+            role: customer
+            interface_type: 100gbase-x-qsfp28
+          - template_name: NetScaler-MPX-26000-100G_LB_100-6
+            name: "100/6"
+            role: customer
+            interface_type: 100gbase-x-qsfp28
+          - template_name: NetScaler-MPX-26000-100G_LB_100-7
+            name: "100/7"
+            role: customer
+            interface_type: 100gbase-x-qsfp28
+          - template_name: NetScaler-MPX-26000-100G_LB_100-8
+            name: "100/8"
+            role: customer
+            interface_type: 100gbase-x-qsfp28
+
+    - template_name: NetScaler-MPX-26100-100G_LOAD_BALANCER
+      device_type: NetScaler-MPX-26100-100G
+      platform: netscaler
+      role: load-balancer
+      status: provisioning
+      interfaces:
+        kind: TemplateDcimPhysicalInterface
+        data:
+          - template_name: NetScaler-MPX-26100-100G_LB_LOM
+            name: LOM
+            role: management
+            interface_type: 1000base-t
+          - template_name: NetScaler-MPX-26100-100G_LB_0-1
+            name: "0/1"
+            role: management
+            interface_type: 1000base-t
+          - template_name: NetScaler-MPX-26100-100G_LB_0-2
+            name: "0/2"
+            role: management
+            interface_type: 1000base-t
+          - template_name: NetScaler-MPX-26100-100G_LB_100-1
+            name: "100/1"
+            role: uplink
+            interface_type: 100gbase-x-qsfp28
+          - template_name: NetScaler-MPX-26100-100G_LB_100-2
+            name: "100/2"
+            role: uplink
+            interface_type: 100gbase-x-qsfp28
+          - template_name: NetScaler-MPX-26100-100G_LB_100-3
+            name: "100/3"
+            role: customer
+            interface_type: 100gbase-x-qsfp28
+          - template_name: NetScaler-MPX-26100-100G_LB_100-4
+            name: "100/4"
+            role: customer
+            interface_type: 100gbase-x-qsfp28
+          - template_name: NetScaler-MPX-26100-100G_LB_100-5
+            name: "100/5"
+            role: customer
+            interface_type: 100gbase-x-qsfp28
+          - template_name: NetScaler-MPX-26100-100G_LB_100-6
+            name: "100/6"
+            role: customer
+            interface_type: 100gbase-x-qsfp28
+          - template_name: NetScaler-MPX-26100-100G_LB_100-7
+            name: "100/7"
+            role: customer
+            interface_type: 100gbase-x-qsfp28
+          - template_name: NetScaler-MPX-26100-100G_LB_100-8
+            name: "100/8"
+            role: customer
+            interface_type: 100gbase-x-qsfp28
+
+    - template_name: NetScaler-MPX-26160-100G_LOAD_BALANCER
+      device_type: NetScaler-MPX-26160-100G
+      platform: netscaler
+      role: load-balancer
+      status: provisioning
+      interfaces:
+        kind: TemplateDcimPhysicalInterface
+        data:
+          - template_name: NetScaler-MPX-26160-100G_LB_LOM
+            name: LOM
+            role: management
+            interface_type: 1000base-t
+          - template_name: NetScaler-MPX-26160-100G_LB_0-1
+            name: "0/1"
+            role: management
+            interface_type: 1000base-t
+          - template_name: NetScaler-MPX-26160-100G_LB_0-2
+            name: "0/2"
+            role: management
+            interface_type: 1000base-t
+          - template_name: NetScaler-MPX-26160-100G_LB_100-1
+            name: "100/1"
+            role: uplink
+            interface_type: 100gbase-x-qsfp28
+          - template_name: NetScaler-MPX-26160-100G_LB_100-2
+            name: "100/2"
+            role: uplink
+            interface_type: 100gbase-x-qsfp28
+          - template_name: NetScaler-MPX-26160-100G_LB_100-3
+            name: "100/3"
+            role: customer
+            interface_type: 100gbase-x-qsfp28
+          - template_name: NetScaler-MPX-26160-100G_LB_100-4
+            name: "100/4"
+            role: customer
+            interface_type: 100gbase-x-qsfp28
+          - template_name: NetScaler-MPX-26160-100G_LB_100-5
+            name: "100/5"
+            role: customer
+            interface_type: 100gbase-x-qsfp28
+          - template_name: NetScaler-MPX-26160-100G_LB_100-6
+            name: "100/6"
+            role: customer
+            interface_type: 100gbase-x-qsfp28
+          - template_name: NetScaler-MPX-26160-100G_LB_100-7
+            name: "100/7"
+            role: customer
+            interface_type: 100gbase-x-qsfp28
+          - template_name: NetScaler-MPX-26160-100G_LB_100-8
+            name: "100/8"
+            role: customer
+            interface_type: 100gbase-x-qsfp28
+
+    - template_name: NetScaler-MPX-26200-100G_LOAD_BALANCER
+      device_type: NetScaler-MPX-26200-100G
+      platform: netscaler
+      role: load-balancer
+      status: provisioning
+      interfaces:
+        kind: TemplateDcimPhysicalInterface
+        data:
+          - template_name: NetScaler-MPX-26200-100G_LB_LOM
+            name: LOM
+            role: management
+            interface_type: 1000base-t
+          - template_name: NetScaler-MPX-26200-100G_LB_0-1
+            name: "0/1"
+            role: management
+            interface_type: 1000base-t
+          - template_name: NetScaler-MPX-26200-100G_LB_0-2
+            name: "0/2"
+            role: management
+            interface_type: 1000base-t
+          - template_name: NetScaler-MPX-26200-100G_LB_100-1
+            name: "100/1"
+            role: uplink
+            interface_type: 100gbase-x-qsfp28
+          - template_name: NetScaler-MPX-26200-100G_LB_100-2
+            name: "100/2"
+            role: uplink
+            interface_type: 100gbase-x-qsfp28
+          - template_name: NetScaler-MPX-26200-100G_LB_100-3
+            name: "100/3"
+            role: customer
+            interface_type: 100gbase-x-qsfp28
+          - template_name: NetScaler-MPX-26200-100G_LB_100-4
+            name: "100/4"
+            role: customer
+            interface_type: 100gbase-x-qsfp28
+          - template_name: NetScaler-MPX-26200-100G_LB_100-5
+            name: "100/5"
+            role: customer
+            interface_type: 100gbase-x-qsfp28
+          - template_name: NetScaler-MPX-26200-100G_LB_100-6
+            name: "100/6"
+            role: customer
+            interface_type: 100gbase-x-qsfp28
+          - template_name: NetScaler-MPX-26200-100G_LB_100-7
+            name: "100/7"
+            role: customer
+            interface_type: 100gbase-x-qsfp28
+          - template_name: NetScaler-MPX-26200-100G_LB_100-8
+            name: "100/8"
+            role: customer
+            interface_type: 100gbase-x-qsfp28
+
+    - template_name: NetScaler-ADC-VPX_LOAD_BALANCER
+      device_type: NetScaler-ADC-VPX
+      platform: netscaler
+      role: load-balancer
+      status: provisioning
+      interfaces:
+        kind: TemplateDcimPhysicalInterface
+        data:
+          - template_name: NetScaler-ADC-VPX_LOAD_BALANCER_mgmt
+            name: eth0
+            role: management
+            interface_type: other
+          - template_name: NetScaler-ADC-VPX_LOAD_BALANCER_eth1
+            name: eth1
+            role: uplink
+            interface_type: other
+          - template_name: NetScaler-ADC-VPX_LOAD_BALANCER_eth2
+            name: eth2
+            role: uplink
+            interface_type: other
+          - template_name: NetScaler-ADC-VPX_LOAD_BALANCER_eth3
+            name: eth3
+            role: customer
+            interface_type: other
+          - template_name: NetScaler-ADC-VPX_LOAD_BALANCER_eth4
+            name: eth4
+            role: customer
+            interface_type: other

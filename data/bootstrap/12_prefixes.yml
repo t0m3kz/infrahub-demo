@@ -12,6 +12,8 @@ spec:
       status: active
     - prefix: 1.0.0.0/8
       status: active
+    - prefix: 162.159.0.0/16
+      status: active
     - prefix: fd00:1000::/32
       status: active
     - prefix: fd00:2000::/32

@@ -1,0 +1,58 @@
+{#- BlueCoat / Broadcom ProxySG — SGOS configuration -#}
+;
+; Device:     {{ name }}
+; Proxy type: {{ proxy_type | default('explicit') }}
+; HA mode:    {{ ha.mode if ha else 'standalone' }}
+;
+inline proxy:
+  enable yes
+{%- if proxy_type == 'transparent' %}
+  mode transparent
+  http-port 80
+  https-port 443
+{%- else %}
+  mode explicit
+  http-port 3128
+  https-port 3129
+{%- endif %}
+
+inline network:
+  ssl-verify-server no
+  ssl-verify-client no
+{%- for iface in proxy_interfaces %}
+{%- if iface.ip_address %}
+  interface {{ iface.name }}
+    ip-address {{ iface.ip_address.address.split('/')[0] }}
+    enabled yes
+{%- endif %}
+{%- endfor %}
+
+inline dns:
+  primary-server 8.8.8.8
+  secondary-server 8.8.4.4
+
+inline access-log:
+  enabled yes
+  upload-type none
+  filename /logs/access.log
+
+inline policy:
+  ; default explicit policy — allow all authenticated users
+  allow client.address=10.0.0.0/8
+  allow client.address=172.16.0.0/12
+  allow client.address=192.168.0.0/16
+  deny all
+{%- if ha %}
+
+; --- HA (SGOS Active-Passive) ---
+; HA group: {{ ha.group_id }}  mode: {{ ha.mode }}  priority: {{ ha.priority }}
+; Peers: {{ ha.devices | join(', ') }}
+inline ha:
+  enabled yes
+  group-id {{ ha.group_id if ha.group_id else 1 }}
+  priority {{ ha.priority if ha.priority else 100 }}
+{%- if ha.ha_link %}
+  heartbeat-interface {{ ha.ha_link }}
+{%- endif %}
+  preempt {{ 'yes' if ha.preempt else 'no' }}
+{%- endif %}

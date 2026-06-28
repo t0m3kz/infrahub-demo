@@ -172,3 +172,58 @@ Leaf L1 redirects customer VRF traffic via PBR to the active FW's inside port (`
 | --- | --- | --- | --- |
 | `DC1-CUST1-EAST-WEST-POLICY` | CUST1-FW-01, CUST1-FW-02 | deny | web→app (80/443), app→db (5432) |
 | `DC1-CUST2-EAST-WEST-POLICY` | CUST2-FW-01, CUST2-FW-02 | deny | web→app (443) |
+
+---
+
+## Traceable Paths from DC1
+
+These paths can be resolved by traversing the unified graph from any DC1 endpoint.
+
+### Server → Equinix FR2 (primary WAN exit)
+
+```text
+DC1-POD1-SRV-01 : eno1
+  --[CBL-DC1-POD1-SRV01-L1-P49]--> DC1-POD1-L1 : Ethernet1/49
+  --[CBL-DC1-POD1-L1-SP1-P11]---> DC1-POD1-SP1 : Ethernet1/11
+  --[CBL-DC1-SS1-P1-SP1-P51]----> DC1-SS1 : Ethernet1/1
+  --[CBL-DC1-SS1-EQX-DC1-PATCH-P1]--> EQX-DC1-PATCH-01 : Port1
+  ~~[PHYS-DC1-FR2-EQX-01]~~
+  --> FR2-EDGE-01 : Ethernet1/1
+
+4 paths via ECMP (2 NICs × 2 spines)
+```
+
+### Server → AWS EKS (Direct Connect via FR2)
+
+```text
+DC1-POD1-SRV-01  →  [Clos fabric]  →  FR2-EDGE-01
+  --[C001-VIF-TRANSIT-FR2 / Ethernet1/2.100]~~
+  ~~[VC-CNRD-FR2-AWS-EU-CENTRAL-1-DX]~~
+  --> CUST1-EKS-EU-CENTRAL-1
+
+BGP: BGP-FR2-AWS-DX-EU-CENTRAL-1  |  Circuit: C001-DX-FR2-EU-CENTRAL-1
+```
+
+### Server → Azure AKS (ExpressRoute via AM1)
+
+```text
+DC1-POD1-SRV-01  →  [Clos fabric]  →  FR2-EDGE-01
+  ~~[VC-EQX-FR2-AM1-PRIMARY (VTI-FR2-AM1-PRI ↔ VTI-AM1-FR2-PRI)]~~
+  --> AM1-EDGE-01 : Ethernet1/2.200
+  ~~[VC-CNRD-AM1-AZURE-WESTEUROPE-ER]~~
+  --> CUST1-AKS-WESTEUROPE
+
+BGP: BGP-AM1-AZURE-ER-WESTEUROPE  |  Circuit: C001-ER-AM1-WESTEUROPE
+```
+
+### PBR firewall path (CUST1 segments)
+
+```text
+DC1-POD1-SRV-01 : bond0  →  DC1-POD1-L1
+  --[PBR]--> DC1-CUST1-FW-01 : ge-0/0/0 (inside)
+             DC1-CUST1-FW-01 : ge-0/0/1 (outside)
+  --> DC1-POD1-L2  →  spine  →  super-spine
+
+Segments affected: customer-1-web-frontend-production, customer-1-app-backend-production,
+                   customer-1-database-production
+```

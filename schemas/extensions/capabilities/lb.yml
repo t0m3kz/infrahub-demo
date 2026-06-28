@@ -1,0 +1,98 @@
+---
+version: "1.0"
+
+# ============================================================================
+# LB Pool capabilities — two-level model (mirrors ManagedOSPF / RoutingOSPFInterface)
+#
+# LoadbalancerPoolMember  — device capability (ManagedGenericDevice)
+#   Which device belongs to a VIP pool and at what weight.
+#
+# LoadbalancerPoolInterface — interface capability (ManagedGenericInterfaces)
+#   Which interface on that device receives LB traffic: port + IP.
+#   Points back to the device-level LoadbalancerPoolMember.
+# ============================================================================
+
+nodes:
+  - name: PoolMember
+    namespace: Loadbalancer
+    description: "Declares a device as a backend member of a load balancer VIP"
+    label: Pool Member
+    icon: mdi:server-network
+    include_in_menu: false
+    human_friendly_id:
+      - name__value
+    display_label: "{{name__value}}"
+    order_by:
+      - name__value
+    inherit_from:
+      - ManagedGeneric
+      - ManagedGenericDevice
+    attributes:
+      - name: weight
+        kind: Number
+        label: Weight
+        optional: true
+        default_value: 1
+        order_weight: 1000
+        description: "Relative weight for weighted load balancing"
+      - name: drain_timeout
+        kind: Number
+        optional: true
+        order_weight: 1010
+        description: "Connection draining timeout in seconds before removing this member"
+    relationships:
+      - name: vip_service
+        peer: LoadbalancerVIP
+        cardinality: one
+        kind: Attribute
+        optional: false
+        order_weight: 900
+        identifier: loadbalancer_pool_member__vip_service
+        description: "VIP this device is serving as a backend member"
+      - name: pool_interfaces
+        peer: LoadbalancerPoolInterface
+        cardinality: many
+        kind: Generic
+        optional: true
+        order_weight: 1100
+        identifier: pool_interface__member
+        description: "Interfaces on this device that receive load-balanced traffic"
+
+  - name: PoolInterface
+    namespace: Loadbalancer
+    description: "Declares an interface as the receiving endpoint for LB traffic"
+    label: Pool Interface
+    icon: mdi:ethernet
+    include_in_menu: false
+    human_friendly_id:
+      - name__value
+    display_label: "{{name__value}}"
+    order_by:
+      - name__value
+    inherit_from:
+      - ManagedGeneric
+      - ManagedGenericInterfaces
+    attributes:
+      - name: port
+        kind: Number
+        label: Backend Port
+        optional: true
+        order_weight: 1000
+        description: "Port this interface listens on for load-balanced traffic"
+    relationships:
+      - name: pool_member
+        peer: LoadbalancerPoolMember
+        cardinality: one
+        kind: Attribute
+        optional: false
+        order_weight: 900
+        identifier: pool_interface__member
+        description: "Device-level pool membership this interface belongs to"
+      - name: ip_address
+        peer: IpamIPAddress
+        cardinality: one
+        kind: Attribute
+        optional: true
+        order_weight: 950
+        identifier: pool_interface__ip
+        description: "IP address used for health checks and traffic forwarding"

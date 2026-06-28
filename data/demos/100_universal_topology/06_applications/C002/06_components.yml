@@ -1,0 +1,150 @@
+---
+# C002 (SwiftGo GmbH) — Application components
+
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: AppComponent
+  data:
+
+    # ── shipment-tracker / production ─────────────────────────────────────────
+
+    - name: web-frontend
+      component_type: frontend
+      backend_port: 443
+      parent: c002-shipment-tracker-p
+      capabilities:
+        - C002-WEB-VM-01
+        - C002-WEB-VM-02
+      cluster_capabilities:
+        - DC3-VSPHERE-PROD
+      network_segment: c002-web-frontend-p
+      proxy_service: DC3-PRX-HA
+      vip_service:
+        - c002-ship-web.dc3.internal
+        - https
+        - "443"
+      member_of_groups:
+        - app_components
+
+    - name: tracking-api
+      component_type: backend
+      backend_port: 8443
+      parent: c002-shipment-tracker-p
+      capabilities:
+        - C002-APP-VM-01
+        - C002-APP-VM-02
+      cluster_capabilities:
+        - DC3-VSPHERE-PROD
+      network_segment: c002-app-backend-p
+      proxy_service: DC3-PRX-HA
+      vip_service:
+        - c002-ship-api.dc3.internal
+        - https
+        - "8443"
+      member_of_groups:
+        - app_components
+
+    - name: shipment-db
+      component_type: database
+      backend_port: 5432
+      parent: c002-shipment-tracker-p
+      capabilities:
+        - C002-DB-VM-01
+      cluster_capabilities:
+        - DC3-VSPHERE-PROD
+      network_segment: c002-database-p
+      vip_service:
+        - c002-ship-db.dc3.internal
+        - tcp
+        - "5432"
+      member_of_groups:
+        - app_components
+
+    # ── shipment-tracker / nonprod ────────────────────────────────────────────
+
+    - name: web-frontend
+      component_type: frontend
+      backend_port: 443
+      parent: c002-shipment-tracker-n
+      capabilities:
+        - C002-WEB-NP-VM-01
+      cluster_capabilities:
+        - DC3-K8S-PROD
+      network_segment: c002-web-frontend-n
+      proxy_service: DC3-PRX-HA
+      vip_service:
+        - c002-ship-web-n.dc3.internal
+        - https
+        - "443"
+      member_of_groups:
+        - app_components
+
+    - name: tracking-api
+      component_type: backend
+      backend_port: 8443
+      parent: c002-shipment-tracker-n
+      capabilities:
+        - C002-APP-NP-VM-01
+      cluster_capabilities:
+        - DC3-K8S-PROD
+      network_segment: c002-app-backend-n
+      proxy_service: DC3-PRX-HA
+      vip_service:
+        - c002-ship-api-n.dc3.internal
+        - https
+        - "8443"
+      member_of_groups:
+        - app_components
+
+    # ── fleet-manager / production ────────────────────────────────────────────
+
+    - name: dispatch-portal
+      component_type: frontend
+      backend_port: 443
+      parent: c002-fleet-manager-p
+      capabilities:
+        - C002-FLEET-WEB-VM-01
+      cluster_capabilities:
+        - DC3-NUTANIX-PROD
+      network_segment: c002-web-frontend-p
+      proxy_service: DC3-PRX-HA
+      vip_service:
+        - c002-fleet-web.dc3.internal
+        - https
+        - "443"
+      member_of_groups:
+        - app_components
+
+    - name: telematics-api
+      component_type: backend
+      backend_port: 8443
+      parent: c002-fleet-manager-p
+      capabilities:
+        - C002-FLEET-APP-VM-01
+      cluster_capabilities:
+        - DC3-NUTANIX-PROD
+      network_segment: c002-app-backend-p
+      proxy_service: DC3-PRX-HA
+      vip_service:
+        - c002-fleet-api.dc3.internal
+        - https
+        - "8443"
+      member_of_groups:
+        - app_components
+
+    - name: fleet-db
+      component_type: database
+      backend_port: 5432
+      parent: c002-fleet-manager-p
+      capabilities:
+        - C002-FLEET-DB-VM-01
+      cluster_capabilities:
+        - DC3-NUTANIX-PROD
+      network_segment: c002-database-p
+      vip_service:
+        - c002-fleet-db.dc3.internal
+        - tcp
+        - "5432"
+      member_of_groups:
+        - app_components

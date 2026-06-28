@@ -211,3 +211,36 @@ spec:
             modification_type: updated
 
             # Endpoint trigger when server device added to endpoints
+
+    # ── App Security Rules ────────────────────────────────────────────────────
+    # Re-run the security rules generator whenever an AppComponent is created
+    # or its depends_on / network_segment relationships change.
+    # Trigger is scoped to other_branches so engineers review in a Proposed Change.
+
+    - name: trigger-app-security-rules-on-component-created
+      branch_scope: "other_branches"
+      node_kind: AppComponent
+      mutation_action: "created"
+      action: run-app-application-generator
+
+    - name: trigger-app-security-rules-on-depends-on-updated
+      branch_scope: "other_branches"
+      node_kind: AppComponent
+      mutation_action: "updated"
+      action: run-app-application-generator
+      matches:
+        kind: CoreNodeTriggerRelationshipMatch
+        data:
+          - relationship_name: depends_on
+            modification_type: updated
+
+    - name: trigger-app-security-rules-on-segment-updated
+      branch_scope: "other_branches"
+      node_kind: AppComponent
+      mutation_action: "updated"
+      action: run-app-application-generator
+      matches:
+        kind: CoreNodeTriggerRelationshipMatch
+        data:
+          - relationship_name: network_segment
+            modification_type: updated

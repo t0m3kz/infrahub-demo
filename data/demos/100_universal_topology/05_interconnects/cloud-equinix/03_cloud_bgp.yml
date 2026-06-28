@@ -1,0 +1,86 @@
+---
+# Cloud BGP sessions — AWS Direct Connect and Azure ExpressRoute
+#
+# AWS DX (FR2-EDGE-01:Eth1/2.100 ↔ AWS TGW eu-central-1):
+#   Local:  FR2-EDGE-01 AS65000 (company WAN edge)
+#   Remote: AWS TGW     AS64512 (AWS-assigned private ASN for DX transit VIF)
+#   Type:   eBGP multihop (loopback peering over the DX VIF)
+#
+# Azure ER (AM1-EDGE-01:Eth1/2.200 ↔ Azure westeurope VNet GW):
+#   Local:  AM1-EDGE-01 AS65000 (company WAN edge)
+#   Remote: Azure MSEE  AS12076 (Microsoft public ASN for ExpressRoute)
+#   Type:   eBGP (Azure always uses AS12076 on the Microsoft edge)
+#
+# AM1-EDGE-01 is a virtual device (C8000V) in the Equinix Amsterdam zone,
+# part of the same AS65000 WAN distribution layer as FR2/FR6/PA4/PA6 EDGE-01s.
+
+# ── AM1-EDGE-01 loopback and BGP process (same WAN AS65000) ───────────────────
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimVirtualInterface
+  data:
+    - name: Loopback0
+      description: "Router-ID loopback — AM1-EDGE-01"
+      role: loopback
+      status: active
+      device: AM1-EDGE-01
+      ip_address:
+        data:
+          address: "10.255.0.5/32"
+          ip_namespace: default
+
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: IpamIPAddress
+  data:
+    - address: "10.255.0.5/32"
+      ip_namespace: default
+
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: ManagedBGP
+  data:
+    - name: AM1-EDGE-01-CLOUD-BGP
+      status: active
+      description: "Cloud BGP process — AM1-EDGE-01 (AS65000, Azure ExpressRoute)"
+      multipath: true
+      capabilities:
+        - AM1-EDGE-01
+      router_id:
+        - "10.255.0.5/32"
+        - default
+      local_as: "AS65000"
+      address_families:
+        - - ipv4
+          - unicast
+
+---
+# ── Cloud BGP peering sessions ─────────────────────────────────────────────────
+# external_peer references defined in 01_aws_directconnect.yml / 02_azure_expressroute.yml
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: ManagedExternalFabricPeering
+  data:
+    - name: BGP-FR2-AWS-DX-EU-CENTRAL-1
+      role: primary
+      scope: CLOUD
+      session_type: EBGP_MULTIHOP
+      bfd_enabled: false
+      max_prefixes: 1000
+      deployment: FR2
+      external_peer: AWS-DX-TRANSIT-PEER-FR2
+
+    - name: BGP-AM1-AZURE-ER-WESTEUROPE
+      role: primary
+      scope: CLOUD
+      session_type: EBGP_MULTIHOP
+      bfd_enabled: false
+      max_prefixes: 500
+      deployment: AM1
+      external_peer: AZURE-ER-PEER-AM1

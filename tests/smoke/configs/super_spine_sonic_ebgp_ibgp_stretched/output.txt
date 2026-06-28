@@ -15,66 +15,12 @@
       "redistribute_connected": "true",
       "route_map_redistribute_connected": "RM-CONN-2-BGP"
     },
-    "default|ipv4_unicast|UNDERLAY-PEERS": {
-      "admin_status": "true"
-    },
     "default|l2vpn_evpn": {
       "admin_status": "true"
-    },
-    "default|l2vpn_evpn|EVPN-PEERS": {
-      "admin_status": "true",
-      "route_reflector_client": "true"
     }
   },
-  "BGP_NEIGHBOR": {
-    "10.0.0.100": {
-      "admin_status": "true",
-      "asn": "65000",
-      "description": "spine-01",
-      "holdtime": "180",
-      "keepalive": "60",
-      "local_addr": "10.0.0.1",
-      "name": "EVPN-PEERS"
-    },
-    "10.0.0.101": {
-      "admin_status": "true",
-      "asn": "65000",
-      "description": "spine-02",
-      "holdtime": "180",
-      "keepalive": "60",
-      "local_addr": "10.0.0.1",
-      "name": "EVPN-PEERS"
-    },
-    "10.1.0.0": {
-      "admin_status": "true",
-      "asn": "65100",
-      "description": "spine-01",
-      "holdtime": "180",
-      "keepalive": "60",
-      "local_addr": "10.1.0.1",
-      "name": "UNDERLAY-PEERS"
-    },
-    "10.1.0.2": {
-      "admin_status": "true",
-      "asn": "65101",
-      "description": "spine-02",
-      "holdtime": "180",
-      "keepalive": "60",
-      "local_addr": "10.1.0.3",
-      "name": "UNDERLAY-PEERS"
-    }
-  },
-  "BGP_PEER_GROUP": {
-    "EVPN-PEERS": {
-      "asn": "65000",
-      "local_addr": "10.0.0.1",
-      "send_community": "extended"
-    },
-    "UNDERLAY-PEERS": {
-      "bfd": "true",
-      "send_community": "extended"
-    }
-  },
+  "BGP_NEIGHBOR": {},
+  "BGP_PEER_GROUP": {},
   "DEVICE_METADATA": {
     "localhost": {
       "bgp_asn": 65000,
@@ -94,16 +40,6 @@
     "Loopback0|10.0.0.1/32": {}
   },
   "OSPF_ROUTER": {},
-  "VLAN": {
-    "Vlan100": {
-      "vlanid": "100"
-    },
-    "Vlan101": {
-      "vlanid": "101"
-    }
-  },
-  "VLAN_INTERFACE": {
-    "Vlan100": {},
-    "Vlan101": {}
-  }
+  "VLAN": {},
+  "VLAN_INTERFACE": {}
 }

@@ -1,0 +1,67 @@
+{#- Cisco Web Security Appliance — AsyncOS configuration -#}
+!
+! Device:     {{ name }}
+! Proxy type: {{ proxy_type | default('explicit') }}
+! HA mode:    {{ ha.mode if ha else 'standalone' }}
+!
+
+! --- Interfaces ---
+{%- set mgmt_iface = proxy_interfaces | selectattr('role', 'equalto', 'management') | list | first | default(None) %}
+{%- for iface in proxy_interfaces %}
+{%- if iface.ip_address %}
+interfaceconfig
+  interface {{ iface.name }}
+    ipv4 {{ iface.ip_address.address.split('/')[0] }} {{ iface.ip_address.address | ipaddr('netmask') | default('255.255.255.0') }}
+    enabled
+  !
+{%- endif %}
+{%- endfor %}
+
+! --- Proxy Ports ---
+{%- if proxy_type == 'transparent' %}
+proxyconfig
+  http-port 80 transparent
+  https-port 443 transparent
+{%- else %}
+proxyconfig
+  http-port 3128
+  https-port 3128
+{%- endif %}
+  max-connections 10000
+!
+
+! --- DNS ---
+dnsconfig
+  primary 8.8.8.8
+  secondary 8.8.4.4
+!
+
+! --- Access Policy ---
+accesspolicies
+  policy global
+    protocols http https ftp
+    action monitor
+  !
+  policy block-malware
+    url-category malware
+    action block
+  !
+  policy allow-internal
+    src-network 10.0.0.0/8 172.16.0.0/12 192.168.0.0/16
+    action allow
+  !
+!
+
+! --- Logging ---
+logconfig
+  access-log enabled
+  format squid
+!
+{%- if ha %}
+
+! --- High Availability ---
+! HA group: {{ ha.group_id }}  mode: {{ ha.mode }}  priority: {{ ha.priority }}
+! Peers: {{ ha.devices | join(', ') }}
+! Note: WSA HA is managed via Cisco Centralized Management (SMA). Failover is
+! handled at the network layer (WCCP or PBR) — not natively on the appliance.
+{%- endif %}

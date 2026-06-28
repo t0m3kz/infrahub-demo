@@ -121,7 +121,7 @@ class DcimDevice(CoreNode):
     role: DropdownOptional
     status: Dropdown
     deployment: RelatedNode
-    device_capabilities: RelationshipManager
+    capabilities: RelationshipManager
     device_type: RelatedNode
     interfaces: RelationshipManager
     member_of_groups: RelationshipManager
@@ -477,7 +477,7 @@ class ManagedOSPF(ManagedGeneric):
     reference_bandwidth: IntegerOptional
     version: Dropdown
     area: RelatedNode
-    device_capabilities: RelationshipManager
+    capabilities: RelationshipManager
     export_routing_policies: RelationshipManager
     import_routing_policies: RelationshipManager
     router_id: RelatedNode
@@ -507,7 +507,7 @@ class DcimPhysicalDevice(CoreArtifactTarget, DcimDevice):
     status: Dropdown
     artifacts: RelationshipManager
     deployment: RelatedNode
-    device_capabilities: RelationshipManager
+    capabilities: RelationshipManager
     device_type: RelatedNode
     interfaces: RelationshipManager
     member_of_groups: RelationshipManager
@@ -735,7 +735,7 @@ class DcimVirtualDevice(CoreArtifactTarget, DcimDevice):
     storage: IntegerOptional
     artifacts: RelationshipManager
     deployment: RelatedNode
-    device_capabilities: RelationshipManager
+    capabilities: RelationshipManager
     device_type: RelatedNode
     hosting_device: RelatedNode
     interfaces: RelationshipManager
@@ -865,7 +865,7 @@ class ManagedBGP(ManagedGeneric, ManagedGenericDevice, ManagedRouting):
 
 class ManagedPeering(CoreNode):
     role: DropdownOptional
-    interfaces: RelationshipManager
+    interface_capabilities: RelationshipManager
     member_of_groups: RelationshipManager
     profiles: RelationshipManager
     subscriber_of_groups: RelationshipManager
@@ -901,7 +901,7 @@ class ManagedBGPPeering(ManagedGeneric, ManagedPeering):
     status: DropdownOptional
     ttl: IntegerOptional
     bgp_processes: RelationshipManager
-    interfaces: RelationshipManager
+    interface_capabilities: RelationshipManager
     member_of_groups: RelationshipManager
     namespace: RelatedNode
     profiles: RelationshipManager
@@ -915,7 +915,7 @@ class ManagedOSPFPeering(ManagedGeneric, ManagedPeering):
     network_type: DropdownOptional
     ospf_area: String
     status: DropdownOptional
-    interfaces: RelationshipManager
+    interface_capabilities: RelationshipManager
     member_of_groups: RelationshipManager
     namespace: RelatedNode
     ospf_process: RelatedNode

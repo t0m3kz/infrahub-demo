@@ -1,255 +1,157 @@
 ---
-# DC2 Security — active-active physical firewall pair (spine → FW → super-spine)
+# DC2 Security — active-active PA-5260 firewall pair (BL → FW)
 #
-# DC2-FW-01 and DC2-FW-02 replace the direct spine→super-spine cables.
-# Each FW handles one SS side; all spines connect to both FWs for redundancy.
+# DC2-FW-01 (active) and DC2-FW-02 (standby) are Palo Alto PA-5260 firewalls.
+# Each FW connects to one BL (inside + outside/return) for PBR steering.
+# HA sync back-to-back between FW-01 and FW-02.
 #
-# Port mapping (one dedicated inside port per spine):
+# Port mapping:
 #   DC2-FW-01:
-#     ge-0/0/0  inside ← DC2-POD1-SP1:Eth1/1
-#     ge-0/0/1  inside ← DC2-POD1-SP2:Eth1/1
-#     ge-0/0/2  inside ← DC2-POD2-SP1:Eth1/1
-#     ge-0/0/3  inside ← DC2-POD2-SP2:Eth1/1
-#     ge-0/0/4  outside → DC2-SS1:Eth1/1
-#     ge-0/0/5  HA sync ↔ DC2-FW-02:ge-0/0/5
+#     ethernet1/1  inside  ← DC2-BL1:Ethernet1/5
+#     ethernet1/2  outside → DC2-BL1:Ethernet1/6
+#     ethernet1/3  HA sync ↔ DC2-FW-02:ethernet1/3
 #   DC2-FW-02:
-#     ge-0/0/0  inside ← DC2-POD1-SP1:Eth1/2
-#     ge-0/0/1  inside ← DC2-POD1-SP2:Eth1/2
-#     ge-0/0/2  inside ← DC2-POD2-SP1:Eth1/2
-#     ge-0/0/3  inside ← DC2-POD2-SP2:Eth1/2
-#     ge-0/0/4  outside → DC2-SS2:Eth1/1
-#     ge-0/0/5  HA sync ↔ DC2-FW-01:ge-0/0/5
-#
-# Original CBL-DC2-SS*-POD*-SP* cables removed from 05_cabling.yml.
-# Contrast with DC1 which uses per-customer virtual FWs via PBR.
+#     ethernet1/1  inside  ← DC2-BL2:Ethernet1/5
+#     ethernet1/2  outside → DC2-BL2:Ethernet1/6
+#     ethernet1/3  HA sync ↔ DC2-FW-01:ethernet1/3
 
-# ── Physical firewall pair ─────────────────────────────────────────────────────
+# ── Physical firewall pair ────────────────────────────────────────────────────
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
   kind: DcimPhysicalDevice
   data:
     - name: DC2-FW-01
-      device_type: SRX-1500
+      object_template: PA-5260_FIREWALL
       role: firewall-active
       status: active
       deployment: DC2
       rack: dc2-s1-r-1
+      member_of_groups:
+        - firewalls
       interfaces:
         kind: DcimPhysicalInterface
         data:
-          - name: ge-0/0/0
+          - name: ethernet1/1
             interface_type: 10gbase-x-sfpp
             role: uplink
             status: active
-            description: "Inside — DC2-POD1-SP1"
-          - name: ge-0/0/1
+            description: "Inside — DC2-BL1:Ethernet1/5"
+          - name: ethernet1/2
             interface_type: 10gbase-x-sfpp
             role: uplink
             status: active
-            description: "Inside — DC2-POD1-SP2"
-          - name: ge-0/0/2
+            description: "Outside/return — DC2-BL1:Ethernet1/6"
+          - name: ethernet1/3
             interface_type: 10gbase-x-sfpp
-            role: uplink
-            status: active
-            description: "Inside — DC2-POD2-SP1"
-          - name: ge-0/0/3
-            interface_type: 10gbase-x-sfpp
-            role: uplink
-            status: active
-            description: "Inside — DC2-POD2-SP2"
-          - name: ge-0/0/4
-            interface_type: 10gbase-x-sfpp
-            role: uplink
-            status: active
-            description: "Outside — toward DC2-SS1"
-          - name: ge-0/0/5
-            interface_type: 10gbase-x-sfpp
-            role: uplink
+            role: management
             status: active
             description: "HA sync — back-to-back with DC2-FW-02"
 
     - name: DC2-FW-02
-      device_type: SRX-1500
-      role: firewall-active
+      object_template: PA-5260_FIREWALL
+      role: firewall-passive
       status: active
       deployment: DC2
       rack: dc2-s1-r-2
+      member_of_groups:
+        - firewalls
       interfaces:
         kind: DcimPhysicalInterface
         data:
-          - name: ge-0/0/0
+          - name: ethernet1/1
             interface_type: 10gbase-x-sfpp
             role: uplink
             status: active
-            description: "Inside — DC2-POD1-SP1"
-          - name: ge-0/0/1
+            description: "Inside — DC2-BL2:Ethernet1/5"
+          - name: ethernet1/2
             interface_type: 10gbase-x-sfpp
             role: uplink
             status: active
-            description: "Inside — DC2-POD1-SP2"
-          - name: ge-0/0/2
+            description: "Outside/return — DC2-BL2:Ethernet1/6"
+          - name: ethernet1/3
             interface_type: 10gbase-x-sfpp
-            role: uplink
-            status: active
-            description: "Inside — DC2-POD2-SP1"
-          - name: ge-0/0/3
-            interface_type: 10gbase-x-sfpp
-            role: uplink
-            status: active
-            description: "Inside — DC2-POD2-SP2"
-          - name: ge-0/0/4
-            interface_type: 10gbase-x-sfpp
-            role: uplink
-            status: active
-            description: "Outside — toward DC2-SS2"
-          - name: ge-0/0/5
-            interface_type: 10gbase-x-sfpp
-            role: uplink
+            role: management
             status: active
             description: "HA sync — back-to-back with DC2-FW-01"
 
-# ── Cables — spines → FW pair (one port per spine per FW) ────────────────────
+# ── HA domain ─────────────────────────────────────────────────────────────────
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: ManagedFirewallHA
+  data:
+    - name: DC2-FW-HA
+      group_id: 1
+      mode: active-passive
+      priority: 100
+      preempt: false
+      ha_timer: aggressive
+      capabilities:
+        - DC2-FW-01
+        - DC2-FW-02
+
+# ── Cables — BL → FW pair + HA sync ──────────────────────────────────────────
 ---
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
   kind: DcimCable
   data:
-    # ── POD1-SP1 → FW-01:ge-0/0/0 and FW-02:ge-0/0/0 ────────────────────────
-    - name: CBL-DC2-POD1-SP1-FW01-INSIDE
+    # ── BL1 → DC2-FW-01 ──────────────────────────────────────────────────────────
+    - name: CBL-DC2-BL1-FW01-INSIDE
       type: smf
       deployment: DC2
       endpoints:
         - kind: DcimPhysicalInterface
           data:
-            device: DC2-POD1-SP1
-            name: Ethernet1/1
+            device: DC2-BL1
+            name: Ethernet1/5
         - kind: DcimPhysicalInterface
           data:
             device: DC2-FW-01
-            name: ge-0/0/0
+            name: ethernet1/1
 
-    - name: CBL-DC2-POD1-SP1-FW02-INSIDE
+    - name: CBL-DC2-BL1-FW01-OUTSIDE
       type: smf
       deployment: DC2
       endpoints:
         - kind: DcimPhysicalInterface
           data:
-            device: DC2-POD1-SP1
-            name: Ethernet1/2
-        - kind: DcimPhysicalInterface
-          data:
-            device: DC2-FW-02
-            name: ge-0/0/0
-
-    # ── POD1-SP2 → FW-01:ge-0/0/1 and FW-02:ge-0/0/1 ────────────────────────
-    - name: CBL-DC2-POD1-SP2-FW01-INSIDE
-      type: smf
-      deployment: DC2
-      endpoints:
-        - kind: DcimPhysicalInterface
-          data:
-            device: DC2-POD1-SP2
-            name: Ethernet1/1
+            device: DC2-BL1
+            name: Ethernet1/6
         - kind: DcimPhysicalInterface
           data:
             device: DC2-FW-01
-            name: ge-0/0/1
+            name: ethernet1/2
 
-    - name: CBL-DC2-POD1-SP2-FW02-INSIDE
+    # ── BL2 → DC2-FW-02 ──────────────────────────────────────────────────────────
+    - name: CBL-DC2-BL2-FW02-INSIDE
       type: smf
       deployment: DC2
       endpoints:
         - kind: DcimPhysicalInterface
           data:
-            device: DC2-POD1-SP2
-            name: Ethernet1/2
+            device: DC2-BL2
+            name: Ethernet1/5
         - kind: DcimPhysicalInterface
           data:
             device: DC2-FW-02
-            name: ge-0/0/1
+            name: ethernet1/1
 
-    # ── POD2-SP1 → FW-01:ge-0/0/2 and FW-02:ge-0/0/2 ────────────────────────
-    - name: CBL-DC2-POD2-SP1-FW01-INSIDE
+    - name: CBL-DC2-BL2-FW02-OUTSIDE
       type: smf
       deployment: DC2
       endpoints:
         - kind: DcimPhysicalInterface
           data:
-            device: DC2-POD2-SP1
-            name: Ethernet1/1
-        - kind: DcimPhysicalInterface
-          data:
-            device: DC2-FW-01
-            name: ge-0/0/2
-
-    - name: CBL-DC2-POD2-SP1-FW02-INSIDE
-      type: smf
-      deployment: DC2
-      endpoints:
-        - kind: DcimPhysicalInterface
-          data:
-            device: DC2-POD2-SP1
-            name: Ethernet1/2
+            device: DC2-BL2
+            name: Ethernet1/6
         - kind: DcimPhysicalInterface
           data:
             device: DC2-FW-02
-            name: ge-0/0/2
-
-    # ── POD2-SP2 → FW-01:ge-0/0/3 and FW-02:ge-0/0/3 ────────────────────────
-    - name: CBL-DC2-POD2-SP2-FW01-INSIDE
-      type: smf
-      deployment: DC2
-      endpoints:
-        - kind: DcimPhysicalInterface
-          data:
-            device: DC2-POD2-SP2
-            name: Ethernet1/1
-        - kind: DcimPhysicalInterface
-          data:
-            device: DC2-FW-01
-            name: ge-0/0/3
-
-    - name: CBL-DC2-POD2-SP2-FW02-INSIDE
-      type: smf
-      deployment: DC2
-      endpoints:
-        - kind: DcimPhysicalInterface
-          data:
-            device: DC2-POD2-SP2
-            name: Ethernet1/2
-        - kind: DcimPhysicalInterface
-          data:
-            device: DC2-FW-02
-            name: ge-0/0/3
-
-    # ── FW outside → super-spines ─────────────────────────────────────────────
-    - name: CBL-DC2-FW01-SS1-OUTSIDE
-      type: smf
-      deployment: DC2
-      endpoints:
-        - kind: DcimPhysicalInterface
-          data:
-            device: DC2-FW-01
-            name: ge-0/0/4
-        - kind: DcimPhysicalInterface
-          data:
-            device: DC2-SS1
-            name: Ethernet1/1
-
-    - name: CBL-DC2-FW02-SS2-OUTSIDE
-      type: smf
-      deployment: DC2
-      endpoints:
-        - kind: DcimPhysicalInterface
-          data:
-            device: DC2-FW-02
-            name: ge-0/0/4
-        - kind: DcimPhysicalInterface
-          data:
-            device: DC2-SS2
-            name: Ethernet1/1
+            name: ethernet1/2
 
     # ── HA sync — back-to-back ────────────────────────────────────────────────
     - name: CBL-DC2-FW01-FW02-HA-SYNC
@@ -259,13 +161,13 @@ spec:
         - kind: DcimPhysicalInterface
           data:
             device: DC2-FW-01
-            name: ge-0/0/5
+            name: ethernet1/3
         - kind: DcimPhysicalInterface
           data:
             device: DC2-FW-02
-            name: ge-0/0/5
+            name: ethernet1/3
 
-# ── Security Zones ─────────────────────────────────────────────────────────────
+# ── Security Zones ────────────────────────────────────────────────────────────
 ---
 apiVersion: infrahub.app/v1
 kind: Object
@@ -295,10 +197,10 @@ spec:
   kind: SecurityPolicy
   data:
     - name: DC2-FABRIC-POLICY
-      description: "DC2 fabric policy — active-active FW pair inspecting all spine→SS traffic"
+      description: "DC2 fabric policy — active-active FW pair inspection"
       default_action: deny
       enabled: true
-      device_capabilities:
+      capabilities:
         - DC2-FW-01
         - DC2-FW-02
 
@@ -310,30 +212,30 @@ spec:
   kind: ManagedVxlanSegment
   data:
     - customer_name: "web-frontend"
-      environment: "production"
-      owner: "Customer 1"
-      firewall: DC2-FW-01
+      environment: "p"
+      owner: "C001"
+      inline_service: DC2-FW-HA
       pbr_enabled: false
 
     - customer_name: "app-backend"
-      environment: "production"
-      owner: "Customer 1"
-      firewall: DC2-FW-01
+      environment: "p"
+      owner: "C001"
+      inline_service: DC2-FW-HA
       pbr_enabled: false
 
     - customer_name: "web-frontend"
-      environment: "production"
-      owner: "Customer 2"
-      firewall: DC2-FW-02
+      environment: "p"
+      owner: "C002"
+      inline_service: DC2-FW-HA
       pbr_enabled: false
 
     - customer_name: "app-backend"
-      environment: "production"
-      owner: "Customer 2"
-      firewall: DC2-FW-02
+      environment: "p"
+      owner: "C002"
+      inline_service: DC2-FW-HA
       pbr_enabled: false
 
-# ── Security Policy Rules ──────────────────────────────────────────────────────
+# ── Security Policy Rules ─────────────────────────────────────────────────────
 ---
 apiVersion: infrahub.app/v1
 kind: Object

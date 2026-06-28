@@ -5,9 +5,9 @@ kind: Object
 spec:
   kind: CloudInternetGateway
   data:
-    - name: CUST1-IGW-EU-CENTRAL-1
-      account: CUST1-AWS
-      virtual_network: CUST1-VPC-EU-CENTRAL-1
+    - name: CNRD-IGW-EU-CENTRAL-1
+      account: C001-AWS
+      virtual_network: C001-VPC-EU-CENTRAL-1
 
 ---
 # AWS eu-central-1: NAT Gateway (placed in lb-1a public subnet, serves private app subnets)
@@ -16,37 +16,37 @@ kind: Object
 spec:
   kind: CloudNATGateway
   data:
-    - name: CUST1-NATGW-EU-CENTRAL-1A
-      account: CUST1-AWS
-      virtual_network: CUST1-VPC-EU-CENTRAL-1
+    - name: CNRD-NATGW-EU-CENTRAL-1A
+      account: C001-AWS
+      virtual_network: C001-VPC-EU-CENTRAL-1
       public_ip: "52.28.10.1"
       network_segments:
-        - customer-1-app-1a-production
-        - customer-1-app-1b-production
+        - c001-app-1a-p
+        - c001-app-1b-p
 
 ---
 # AWS eu-central-1: Route Tables
 #
-# private-rt  — app subnets: 10.0.0.0/8 via TGW (on-prem via DX), 0.0.0.0/0 via NAT GW
+# private-rt  — app subnets: 10.0.0.0/8 via TGW (on-prem via DX), 0.0.0.0/0 via NAT
 # public-rt   — lb subnets:  0.0.0.0/0 via IGW
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
   kind: CloudRouteTable
   data:
-    - name: CUST1-RT-PRIVATE-EU-CENTRAL-1
-      virtual_network: CUST1-VPC-EU-CENTRAL-1
+    - name: CNRD-RT-PRIVATE-EU-CENTRAL-1
+      virtual_network: C001-VPC-EU-CENTRAL-1
       is_main: false
       network_segments:
-        - customer-1-app-1a-production
-        - customer-1-app-1b-production
+        - c001-app-1a-p
+        - c001-app-1b-p
 
-    - name: CUST1-RT-PUBLIC-EU-CENTRAL-1
-      virtual_network: CUST1-VPC-EU-CENTRAL-1
+    - name: CNRD-RT-PUBLIC-EU-CENTRAL-1
+      virtual_network: C001-VPC-EU-CENTRAL-1
       is_main: false
       network_segments:
-        - customer-1-lb-1a-production
-        - customer-1-lb-1b-production
+        - c001-lb-1a-p
+        - c001-lb-1b-p
 
 ---
 # AWS eu-central-1: Routes
@@ -63,24 +63,24 @@ spec:
   kind: CloudRoute
   data:
     # Private: on-prem aggregate via Transit Gateway (Direct Connect attachment)
-    - name: CUST1-ROUTE-PRIVATE-ONPREM
-      route_table: CUST1-RT-PRIVATE-EU-CENTRAL-1
+    - name: CNRD-ROUTE-PRIVATE-ONPREM
+      route_table: CNRD-RT-PRIVATE-EU-CENTRAL-1
       destination:
         - "10.0.0.0/8"
-        - "CUST1-AWS-EU-CENTRAL-1"
+        - "C001-AWS-EU-CENTRAL-1"
 
     # Private: internet egress via NAT Gateway
-    - name: CUST1-ROUTE-PRIVATE-DEFAULT
-      route_table: CUST1-RT-PRIVATE-EU-CENTRAL-1
+    - name: CNRD-ROUTE-PRIVATE-DEFAULT
+      route_table: CNRD-RT-PRIVATE-EU-CENTRAL-1
       destination:
         - "0.0.0.0/0"
-        - "CUST1-AWS-EU-CENTRAL-1"
-      nat_gateway: CUST1-NATGW-EU-CENTRAL-1A
+        - "C001-AWS-EU-CENTRAL-1"
+      nat_gateway: CNRD-NATGW-EU-CENTRAL-1A
 
     # Public: internet via Internet Gateway
-    - name: CUST1-ROUTE-PUBLIC-DEFAULT
-      route_table: CUST1-RT-PUBLIC-EU-CENTRAL-1
+    - name: CNRD-ROUTE-PUBLIC-DEFAULT
+      route_table: CNRD-RT-PUBLIC-EU-CENTRAL-1
       destination:
         - "0.0.0.0/0"
-        - "CUST1-AWS-EU-CENTRAL-1"
-      internet_gateway: CUST1-IGW-EU-CENTRAL-1
+        - "C001-AWS-EU-CENTRAL-1"
+      internet_gateway: CNRD-IGW-EU-CENTRAL-1

@@ -9,7 +9,7 @@ from infrahub_sdk.exceptions import ValidationError
 from infrahub_sdk.generator import InfrahubGenerator
 from infrahub_sdk.protocols import CoreIPAddressPool, CoreIPPrefixPool, CoreStandardGroup
 
-from .helpers import CablingPlanner, DeviceNamingConfig
+from .helpers import CableTypeDetector, CablingPlanner, DeviceNamingConfig
 from .protocols import (
     DcimCable,
     DcimPhysicalDevice,
@@ -506,25 +506,38 @@ class CommonGenerator(RoutingMixin, InfrahubGenerator):
             f"[strategy={strategy}, offset={cabling_offset}]"
         )
 
-        # Wait for device templates to instantiate interfaces
-        await asyncio.sleep(2.0)
-
-        # Query interfaces including cable so we don't need per-connection re-fetches
-        src_interfaces = await self.client.filters(
-            kind=DcimPhysicalInterface,
-            device__name__values=bottom_devices,
-            name__values=bottom_interfaces,
-            include=["cable"],
-        )
-        dst_interfaces = await self.client.filters(
-            kind=DcimPhysicalInterface,
-            device__name__values=top_devices,
-            name__values=top_interfaces,
-            include=["cable"],
-        )
+        # Retry querying interfaces until template instantiation completes.
+        # Templates are applied asynchronously; a fixed sleep is fragile under load.
+        _MAX_RETRIES = 10
+        _RETRY_DELAY = 3.0
+        src_interfaces: list = []
+        dst_interfaces: list = []
+        for _attempt in range(_MAX_RETRIES):
+            src_interfaces = await self.client.filters(
+                kind=DcimPhysicalInterface,
+                device__name__values=bottom_devices,
+                name__values=bottom_interfaces,
+                include=["cable"],
+            )
+            dst_interfaces = await self.client.filters(
+                kind=DcimPhysicalInterface,
+                device__name__values=top_devices,
+                name__values=top_interfaces,
+                include=["cable"],
+            )
+            if src_interfaces and dst_interfaces:
+                break
+            self.logger.info(
+                f"Interfaces not ready yet (src={len(src_interfaces)}, dst={len(dst_interfaces)}) — "
+                f"retrying in {_RETRY_DELAY}s (attempt {_attempt + 1}/{_MAX_RETRIES})"
+            )
+            await asyncio.sleep(_RETRY_DELAY)
 
         if not src_interfaces or not dst_interfaces:
-            self.logger.error(f"No interfaces found (src={len(src_interfaces or [])}, dst={len(dst_interfaces or [])})")
+            self.logger.error(
+                f"Interfaces still not found after {_MAX_RETRIES} attempts "
+                f"(src={len(src_interfaces)}, dst={len(dst_interfaces)}) — skipping cabling"
+            )
             return
 
         # Build lookup map for O(1) access after cabling plan is built
@@ -564,11 +577,15 @@ class CommonGenerator(RoutingMixin, InfrahubGenerator):
             cable_name = "__".join(endpoint_names)
             link_identifier = "__".join(sorted([src_interface.id, dst_interface.id]))
 
+            src_intf_type = getattr(getattr(src_interface, "interface_type", None), "value", None)
+            dst_intf_type = getattr(getattr(dst_interface, "interface_type", None), "value", None)
+            cable_type = CableTypeDetector.detect_cable_type(src_intf_type, dst_intf_type)
+
             cable = await self.client.create(
                 kind=DcimCable,
                 data={
                     "name": cable_name,
-                    "type": "mmf",
+                    "type": cable_type,
                     "endpoints": [src_interface.id, dst_interface.id],
                     "deployment": {"id": self.deployment_id} if self.deployment_id else None,
                 },

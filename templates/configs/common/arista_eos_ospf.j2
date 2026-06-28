@@ -1,6 +1,7 @@
 {%- macro render_ospf(ospf, interfaces) %}
 {%- for ospf_config in ospf %}
-router ospf {{ ospf_config.process_id or 1 }}
+{%- set process_id = ospf_config.process_id or 1 %}
+router ospf {{ process_id }}
    router-id {{ ospf_config.router_id.split('/')[0] }}
 {%- if ospf_config.reference_bandwidth %}
    auto-cost reference-bandwidth {{ ospf_config.reference_bandwidth }}
@@ -13,4 +14,22 @@ router ospf {{ ospf_config.process_id or 1 }}
 {%- endfor %}
    max-lsa 12000
 {% endfor %}
+{%- for interface in interfaces %}
+{%- if interface.get('ospf') %}
+{%- set ospf = interface.ospf %}
+{%- set pid = ospf.process_id or 1 %}
+interface {{ interface.name }}
+{%- if ospf.area is not none %}
+   ip ospf {{ pid }} area {{ ospf.area }}
+{%- endif %}
+{%- if ospf.mode == 'peer_to_peer' %}
+   ip ospf network point-to-point
+{%- elif ospf.mode == 'passive' %}
+   ip ospf passive
+{%- endif %}
+{%- if ospf.metric is not none %}
+   ip ospf cost {{ ospf.metric }}
+{%- endif %}
+{%- endif %}
+{%- endfor %}
 {%- endmacro %}

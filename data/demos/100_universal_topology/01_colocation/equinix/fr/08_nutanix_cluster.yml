@@ -1,0 +1,151 @@
+---
+# Nutanix AHV cluster on Equinix Metal (Frankfurt FR2)
+#
+# Connected to the Equinix network fabric via VMware DVS (Distributed Virtual Switch)
+# on a Layer 2 Equinix Fabric connection — no routing on the edge routers, the cluster
+# participates directly in the overlay via the DVS trunk.
+#
+# Network path:
+#   FR2-EDGE-01:dot1q-trunk ──L2 Equinix Fabric VC──▶ Nutanix AHV cluster (DVS trunk)
+#   FR2-EDGE-02:dot1q-trunk ──L2 Equinix Fabric VC──▶ Nutanix AHV cluster (redundant)
+#
+# 3 node pools: AHV hypervisors (compute+CVM co-located), storage, management (Prism Central)
+
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: VirtCluster
+  data:
+    - name: EQUINIX-FR2-NUTANIX-01
+      description: "Nutanix AHV cluster on Equinix Metal (Frankfurt FR2) — L2 DVS fabric"
+      platform: nutanix
+      version: "AOS 6.7.1 / AHV 20230302.101"
+      status: active
+      ha_enabled: true
+      deployment: FR2
+      ip_namespace: default
+
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: VirtNodePool
+  data:
+
+    # AHV hypervisor + CVM (Controller VM) — co-located per Nutanix architecture
+    - name: compute
+      cluster: EQUINIX-FR2-NUTANIX-01
+      pool_type: hypervisor
+      scaling_mode: static
+      status: active
+      node_count: 4
+      instance_flavor: "Equinix Metal m3.large.x86"
+      os_type: linux
+      os_version: "AHV 20230302.101"
+      cpu_per_node: 32
+      memory_per_node_gb: 512
+      storage_per_node_gb: 7680
+
+    # Dedicated storage nodes — Nutanix distributed storage fabric
+    - name: storage
+      cluster: EQUINIX-FR2-NUTANIX-01
+      pool_type: storage
+      scaling_mode: static
+      status: active
+      node_count: 3
+      instance_flavor: "Equinix Metal s3.xlarge.x86"
+      os_type: linux
+      os_version: "AHV 20230302.101"
+      cpu_per_node: 16
+      memory_per_node_gb: 128
+      storage_per_node_gb: 15360
+
+    # Prism Central management appliance
+    - name: management
+      cluster: EQUINIX-FR2-NUTANIX-01
+      pool_type: management
+      scaling_mode: static
+      status: active
+      node_count: 3
+      instance_flavor: "Equinix Metal s3.xlarge.x86"
+      os_type: linux
+      os_version: "Prism Central 2023.4"
+      cpu_per_node: 8
+      memory_per_node_gb: 64
+      storage_per_node_gb: 500
+
+# ── EQUINIX-FR2-NUTANIX-01 capabilities ──────────────────────────────────────
+
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: VirtCNI
+  data:
+    - name: EQUINIX-FR2-NUTANIX-01-CNI
+      status: active
+      plugin: dvs
+      version: "AHV DVS / Nutanix Flow 4.0"
+      pod_cidr: "172.16.0.0/16"
+      service_cidr: "172.16.128.0/17"
+      encapsulation: none
+      bgp_enabled: false
+      cluster_capabilities:
+        - EQUINIX-FR2-NUTANIX-01
+
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: VirtStorageBackend
+  data:
+    - name: EQUINIX-FR2-NUTANIX-01-STORAGE
+      status: active
+      backend_type: nutanix_container
+      version: "AOS 6.7.1"
+      default_class: true
+      reclaim_policy: retain
+      cluster_capabilities:
+        - EQUINIX-FR2-NUTANIX-01
+
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: VirtIngress
+  data:
+    - name: EQUINIX-FR2-NUTANIX-01-INGRESS
+      status: active
+      controller: other
+      version: "Nutanix Calm LB 3.7"
+      cluster_capabilities:
+        - EQUINIX-FR2-NUTANIX-01
+
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: VirtManagementPlane
+  data:
+    - name: EQUINIX-FR2-NUTANIX-01-MGMT
+      status: active
+      endpoint: "prism.fr2.equinix.internal"
+      endpoint_access: private
+      port: 9440
+      auth_method: api_key
+      cluster_capabilities:
+        - EQUINIX-FR2-NUTANIX-01
+
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: VirtMonitoring
+  data:
+    - name: EQUINIX-FR2-NUTANIX-01-MONITORING
+      status: active
+      stack: prometheus_grafana
+      version: "Prism Pro metrics / Prometheus exporter 0.10.0"
+      retention_days: 30
+      cluster_capabilities:
+        - EQUINIX-FR2-NUTANIX-01

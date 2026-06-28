@@ -36,6 +36,7 @@ def _l2_from_activations(activations: list[dict[str, Any]]) -> list[dict[str, An
             continue
         seg = act.get("segment") or {}
         gateway_ip, gateway_ipv6, vrf, l3_vni = _get_segment_gateways(seg)
+        sgt = seg.get("security_tag") or {}
         mappings.append(
             {
                 "vlan_id": vlan_id,
@@ -46,6 +47,8 @@ def _l2_from_activations(activations: list[dict[str, Any]]) -> list[dict[str, An
                 "arp_suppression": seg.get("arp_suppression", True),
                 "vrf": vrf,
                 "l3_vni": l3_vni,
+                "sgt": sgt.get("group_id"),
+                "sgt_name": sgt.get("name"),
             }
         )
         seen.add(vlan_id)
@@ -93,12 +96,16 @@ def get_interfaces(
             if s.get("typename") in ("ManagedVlanSegment", "ManagedVxlanSegment") and s.get("name") in segment_vlan
         ]
 
-        # Extract OSPF area information
+        # Extract OSPF interface configuration
         # After clean_data: area is a dict like {"area": 0, "name": "backbone", "area_type": "standard"}
-        ospf_areas = [
-            s.get("area", {}).get("area")
-            for s in (iface.get("interface_capabilities") or [])
-            if s.get("typename") == "RoutingOSPFInterface" and s.get("area")
+        ospf_configs = [
+            s for s in (iface.get("interface_capabilities") or []) if s.get("typename") == "RoutingOSPFInterface"
+        ]
+        ospf_areas = [s.get("area", {}).get("area") for s in ospf_configs if s.get("area")]
+        ospf_modes = [s.get("mode") for s in ospf_configs if s.get("mode")]
+        ospf_metrics = [s.get("metric") for s in ospf_configs if s.get("metric") is not None]
+        ospf_process_ids = [
+            (s.get("ospf_process") or {}).get("process_id") for s in ospf_configs if s.get("ospf_process")
         ]
 
         # Extract circuit services (physical circuits)
@@ -171,8 +178,13 @@ def get_interfaces(
             member_interfaces = iface.get("member_interfaces") or []
             iface_dict["member_interfaces"] = [m.get("name") for m in member_interfaces if m.get("name")]
 
-        if ospf_areas:
-            iface_dict["ospf"] = {"area": ospf_areas[0]}
+        if ospf_areas or ospf_modes or ospf_metrics or ospf_process_ids:
+            iface_dict["ospf"] = {
+                "area": ospf_areas[0] if ospf_areas else None,
+                "mode": ospf_modes[0] if ospf_modes else None,
+                "metric": ospf_metrics[0] if ospf_metrics else None,
+                "process_id": ospf_process_ids[0] if ospf_process_ids else None,
+            }
 
         if circuits:
             iface_dict["circuits"] = circuits
@@ -232,7 +244,7 @@ def get_vxlan_config(
             vtep_ipv4 = ip_address.get("address", "").split("/")[0]
 
     # Get BGP config for EVPN
-    device_capabilities = data.get("device_capabilities", [])
+    device_capabilities = data.get("capabilities", [])
     bgp_services = [svc for svc in device_capabilities if svc.get("service_type") == "bgp"]
     local_as = None
     router_id = vtep_ipv4  # Use VTEP IP as router ID

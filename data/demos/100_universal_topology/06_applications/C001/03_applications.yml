@@ -1,0 +1,46 @@
+---
+# C001 (Nordix Ltd.) — Applications
+#
+# trade-portal:   customer-facing trading platform (production + nonprod)
+# auth-platform:  shared SSO / identity service (production only)
+# risk-engine:    real-time trade risk analytics (production only)
+
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: AppApplication
+  data:
+    - label: trade-portal
+      environment: p
+      criticality: critical
+      parent: C001
+      member_of_groups:
+        - app_applications
+
+    - label: trade-portal
+      environment: n
+      criticality: medium
+      parent: C001
+      member_of_groups:
+        - app_applications
+
+    - label: auth-platform
+      environment: p
+      criticality: critical
+      parent: C001
+      member_of_groups:
+        - app_applications
+
+    - label: risk-engine
+      environment: p
+      criticality: high
+      parent: C001
+      member_of_groups:
+        - app_applications
+
+    - label: nlb-app
+      environment: p
+      criticality: high
+      parent: C001
+      member_of_groups:
+        - app_applications

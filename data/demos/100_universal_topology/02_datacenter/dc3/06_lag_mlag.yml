@@ -10,7 +10,7 @@ spec:
       domain_id: 1
       reload_delay: 300
       reload_delay_non_mlag: 330
-      device_capabilities:
+      capabilities:
         - DC3-POD1-L1
         - DC3-POD1-L2
 
@@ -19,7 +19,7 @@ spec:
       domain_id: 2
       reload_delay: 300
       reload_delay_non_mlag: 330
-      device_capabilities:
+      capabilities:
         - DC3-POD2-L1
         - DC3-POD2-L2
 
@@ -57,7 +57,7 @@ spec:
         - kind: DcimPhysicalInterface
           data:
             device: DC3-POD1-L1
-            name: Ethernet1/41
+            name: xe1
 
     - name: Port-Channel42
       device: DC3-POD1-L1
@@ -72,7 +72,7 @@ spec:
         - kind: DcimPhysicalInterface
           data:
             device: DC3-POD1-L1
-            name: Ethernet1/42
+            name: xe2
 
     - name: Port-Channel43
       device: DC3-POD1-L1
@@ -87,7 +87,7 @@ spec:
         - kind: DcimPhysicalInterface
           data:
             device: DC3-POD1-L1
-            name: Ethernet1/43
+            name: xe3
 
     - name: Port-Channel45
       device: DC3-POD1-L1
@@ -102,7 +102,7 @@ spec:
         - kind: DcimPhysicalInterface
           data:
             device: DC3-POD1-L1
-            name: Ethernet1/45
+            name: xe5
 
     - name: Port-Channel46
       device: DC3-POD1-L1
@@ -117,7 +117,7 @@ spec:
         - kind: DcimPhysicalInterface
           data:
             device: DC3-POD1-L1
-            name: Ethernet1/46
+            name: xe6
 
     # ── POD1-L1: cross-pod LAGs for POD2 workers ─────────────────────────────
     - name: Port-Channel49
@@ -133,7 +133,7 @@ spec:
         - kind: DcimPhysicalInterface
           data:
             device: DC3-POD1-L1
-            name: Ethernet1/49
+            name: xe9
 
     - name: Port-Channel50
       device: DC3-POD1-L1
@@ -148,7 +148,7 @@ spec:
         - kind: DcimPhysicalInterface
           data:
             device: DC3-POD1-L1
-            name: Ethernet1/50
+            name: xe10
 
     - name: Port-Channel51
       device: DC3-POD1-L1
@@ -163,7 +163,7 @@ spec:
         - kind: DcimPhysicalInterface
           data:
             device: DC3-POD1-L1
-            name: Ethernet1/51
+            name: xe11
 
     - name: Port-Channel52
       device: DC3-POD1-L1
@@ -178,7 +178,7 @@ spec:
         - kind: DcimPhysicalInterface
           data:
             device: DC3-POD1-L1
-            name: Ethernet1/52
+            name: xe12
 
     # ── POD1-L2: matching MLAG port-channels ─────────────────────────────────
     - name: Port-Channel41
@@ -194,7 +194,7 @@ spec:
         - kind: DcimPhysicalInterface
           data:
             device: DC3-POD1-L2
-            name: Ethernet1/41
+            name: xe1
 
     - name: Port-Channel42
       device: DC3-POD1-L2
@@ -209,7 +209,7 @@ spec:
         - kind: DcimPhysicalInterface
           data:
             device: DC3-POD1-L2
-            name: Ethernet1/42
+            name: xe2
 
     - name: Port-Channel43
       device: DC3-POD1-L2
@@ -224,7 +224,7 @@ spec:
         - kind: DcimPhysicalInterface
           data:
             device: DC3-POD1-L2
-            name: Ethernet1/43
+            name: xe3
 
     - name: Port-Channel45
       device: DC3-POD1-L2
@@ -239,7 +239,7 @@ spec:
         - kind: DcimPhysicalInterface
           data:
             device: DC3-POD1-L2
-            name: Ethernet1/45
+            name: xe5
 
     - name: Port-Channel46
       device: DC3-POD1-L2
@@ -254,7 +254,7 @@ spec:
         - kind: DcimPhysicalInterface
           data:
             device: DC3-POD1-L2
-            name: Ethernet1/46
+            name: xe6
 
     - name: Port-Channel49
       device: DC3-POD1-L2
@@ -269,7 +269,7 @@ spec:
         - kind: DcimPhysicalInterface
           data:
             device: DC3-POD1-L2
-            name: Ethernet1/49
+            name: xe9
 
     - name: Port-Channel50
       device: DC3-POD1-L2
@@ -284,7 +284,7 @@ spec:
         - kind: DcimPhysicalInterface
           data:
             device: DC3-POD1-L2
-            name: Ethernet1/50
+            name: xe10
 
     - name: Port-Channel51
       device: DC3-POD1-L2
@@ -299,7 +299,7 @@ spec:
         - kind: DcimPhysicalInterface
           data:
             device: DC3-POD1-L2
-            name: Ethernet1/51
+            name: xe11
 
     - name: Port-Channel52
       device: DC3-POD1-L2
@@ -314,7 +314,7 @@ spec:
         - kind: DcimPhysicalInterface
           data:
             device: DC3-POD1-L2
-            name: Ethernet1/52
+            name: xe12
 
     # ── POD2-L1: cross-pod LAGs for POD1 nodes ───────────────────────────────
     - name: Port-Channel41
@@ -330,7 +330,7 @@ spec:
         - kind: DcimPhysicalInterface
           data:
             device: DC3-POD2-L1
-            name: Ethernet1/41
+            name: xe1
 
     - name: Port-Channel42
       device: DC3-POD2-L1
@@ -345,7 +345,7 @@ spec:
         - kind: DcimPhysicalInterface
           data:
             device: DC3-POD2-L1
-            name: Ethernet1/42
+            name: xe2
 
     - name: Port-Channel43
       device: DC3-POD2-L1
@@ -360,7 +360,7 @@ spec:
         - kind: DcimPhysicalInterface
           data:
             device: DC3-POD2-L1
-            name: Ethernet1/43
+            name: xe3
 
     - name: Port-Channel45
       device: DC3-POD2-L1
@@ -375,7 +375,7 @@ spec:
         - kind: DcimPhysicalInterface
           data:
             device: DC3-POD2-L1
-            name: Ethernet1/45
+            name: xe5
 
     - name: Port-Channel46
       device: DC3-POD2-L1
@@ -390,7 +390,7 @@ spec:
         - kind: DcimPhysicalInterface
           data:
             device: DC3-POD2-L1
-            name: Ethernet1/46
+            name: xe6
 
     # ── POD2-L1: within-pod LAGs for POD2 workers + storage ──────────────────
     - name: Port-Channel49
@@ -406,7 +406,7 @@ spec:
         - kind: DcimPhysicalInterface
           data:
             device: DC3-POD2-L1
-            name: Ethernet1/49
+            name: xe9
 
     - name: Port-Channel50
       device: DC3-POD2-L1
@@ -421,7 +421,7 @@ spec:
         - kind: DcimPhysicalInterface
           data:
             device: DC3-POD2-L1
-            name: Ethernet1/50
+            name: xe10
 
     - name: Port-Channel51
       device: DC3-POD2-L1
@@ -436,7 +436,7 @@ spec:
         - kind: DcimPhysicalInterface
           data:
             device: DC3-POD2-L1
-            name: Ethernet1/51
+            name: xe11
 
     - name: Port-Channel52
       device: DC3-POD2-L1
@@ -451,7 +451,7 @@ spec:
         - kind: DcimPhysicalInterface
           data:
             device: DC3-POD2-L1
-            name: Ethernet1/52
+            name: xe12
 
     - name: Port-Channel53
       device: DC3-POD2-L1
@@ -466,7 +466,7 @@ spec:
         - kind: DcimPhysicalInterface
           data:
             device: DC3-POD2-L1
-            name: Ethernet1/53
+            name: xe13
 
     - name: Port-Channel54
       device: DC3-POD2-L1
@@ -481,7 +481,7 @@ spec:
         - kind: DcimPhysicalInterface
           data:
             device: DC3-POD2-L1
-            name: Ethernet1/54
+            name: xe14
 
     # ── POD2-L2: matching MLAG port-channels ─────────────────────────────────
     - name: Port-Channel41
@@ -497,7 +497,7 @@ spec:
         - kind: DcimPhysicalInterface
           data:
             device: DC3-POD2-L2
-            name: Ethernet1/41
+            name: xe1
 
     - name: Port-Channel42
       device: DC3-POD2-L2
@@ -512,7 +512,7 @@ spec:
         - kind: DcimPhysicalInterface
           data:
             device: DC3-POD2-L2
-            name: Ethernet1/42
+            name: xe2
 
     - name: Port-Channel43
       device: DC3-POD2-L2
@@ -527,7 +527,7 @@ spec:
         - kind: DcimPhysicalInterface
           data:
             device: DC3-POD2-L2
-            name: Ethernet1/43
+            name: xe3
 
     - name: Port-Channel45
       device: DC3-POD2-L2
@@ -542,7 +542,7 @@ spec:
         - kind: DcimPhysicalInterface
           data:
             device: DC3-POD2-L2
-            name: Ethernet1/45
+            name: xe5
 
     - name: Port-Channel46
       device: DC3-POD2-L2
@@ -557,7 +557,7 @@ spec:
         - kind: DcimPhysicalInterface
           data:
             device: DC3-POD2-L2
-            name: Ethernet1/46
+            name: xe6
 
     - name: Port-Channel49
       device: DC3-POD2-L2
@@ -572,7 +572,7 @@ spec:
         - kind: DcimPhysicalInterface
           data:
             device: DC3-POD2-L2
-            name: Ethernet1/49
+            name: xe9
 
     - name: Port-Channel50
       device: DC3-POD2-L2
@@ -587,7 +587,7 @@ spec:
         - kind: DcimPhysicalInterface
           data:
             device: DC3-POD2-L2
-            name: Ethernet1/50
+            name: xe10
 
     - name: Port-Channel51
       device: DC3-POD2-L2
@@ -602,7 +602,7 @@ spec:
         - kind: DcimPhysicalInterface
           data:
             device: DC3-POD2-L2
-            name: Ethernet1/51
+            name: xe11
 
     - name: Port-Channel52
       device: DC3-POD2-L2
@@ -617,7 +617,7 @@ spec:
         - kind: DcimPhysicalInterface
           data:
             device: DC3-POD2-L2
-            name: Ethernet1/52
+            name: xe12
 
     - name: Port-Channel53
       device: DC3-POD2-L2
@@ -632,7 +632,7 @@ spec:
         - kind: DcimPhysicalInterface
           data:
             device: DC3-POD2-L2
-            name: Ethernet1/53
+            name: xe13
 
     - name: Port-Channel54
       device: DC3-POD2-L2
@@ -647,7 +647,7 @@ spec:
         - kind: DcimPhysicalInterface
           data:
             device: DC3-POD2-L2
-            name: Ethernet1/54
+            name: xe14
 
 ---
 # DC3 peer-link port-channels (Ethernet1/33+34 reserved on all leaf switches)
@@ -669,11 +669,11 @@ spec:
         - kind: DcimPhysicalInterface
           data:
             device: DC3-POD1-L1
-            name: Ethernet1/33
+            name: xe53
         - kind: DcimPhysicalInterface
           data:
             device: DC3-POD1-L1
-            name: Ethernet1/34
+            name: xe54
 
     - name: Port-Channel100
       device: DC3-POD1-L2
@@ -688,11 +688,11 @@ spec:
         - kind: DcimPhysicalInterface
           data:
             device: DC3-POD1-L2
-            name: Ethernet1/33
+            name: xe53
         - kind: DcimPhysicalInterface
           data:
             device: DC3-POD1-L2
-            name: Ethernet1/34
+            name: xe54
 
     - name: Port-Channel100
       device: DC3-POD2-L1
@@ -707,11 +707,11 @@ spec:
         - kind: DcimPhysicalInterface
           data:
             device: DC3-POD2-L1
-            name: Ethernet1/33
+            name: xe53
         - kind: DcimPhysicalInterface
           data:
             device: DC3-POD2-L1
-            name: Ethernet1/34
+            name: xe54
 
     - name: Port-Channel100
       device: DC3-POD2-L2
@@ -726,11 +726,11 @@ spec:
         - kind: DcimPhysicalInterface
           data:
             device: DC3-POD2-L2
-            name: Ethernet1/33
+            name: xe53
         - kind: DcimPhysicalInterface
           data:
             device: DC3-POD2-L2
-            name: Ethernet1/34
+            name: xe54
 
 ---
 # DC3 peer-link cables
@@ -746,11 +746,11 @@ spec:
         - kind: DcimPhysicalInterface
           data:
             device: DC3-POD1-L1
-            name: Ethernet1/33
+            name: xe53
         - kind: DcimPhysicalInterface
           data:
             device: DC3-POD1-L2
-            name: Ethernet1/33
+            name: xe53
 
     - name: CBL-DC3-POD1-L1-L2-PL2
       type: smf
@@ -759,11 +759,11 @@ spec:
         - kind: DcimPhysicalInterface
           data:
             device: DC3-POD1-L1
-            name: Ethernet1/34
+            name: xe54
         - kind: DcimPhysicalInterface
           data:
             device: DC3-POD1-L2
-            name: Ethernet1/34
+            name: xe54
 
     - name: CBL-DC3-POD2-L1-L2-PL1
       type: smf
@@ -772,11 +772,11 @@ spec:
         - kind: DcimPhysicalInterface
           data:
             device: DC3-POD2-L1
-            name: Ethernet1/33
+            name: xe53
         - kind: DcimPhysicalInterface
           data:
             device: DC3-POD2-L2
-            name: Ethernet1/33
+            name: xe53
 
     - name: CBL-DC3-POD2-L1-L2-PL2
       type: smf
@@ -785,11 +785,11 @@ spec:
         - kind: DcimPhysicalInterface
           data:
             device: DC3-POD2-L1
-            name: Ethernet1/34
+            name: xe54
         - kind: DcimPhysicalInterface
           data:
             device: DC3-POD2-L2
-            name: Ethernet1/34
+            name: xe54
 
 ---
 # DC3 server bond interfaces
@@ -1175,7 +1175,7 @@ spec:
       domain_id: 3
       reload_delay: 300
       reload_delay_non_mlag: 330
-      device_capabilities:
+      capabilities:
         - DC3-POD3-L1
         - DC3-POD3-L2
 
@@ -1184,7 +1184,7 @@ spec:
       domain_id: 4
       reload_delay: 300
       reload_delay_non_mlag: 330
-      device_capabilities:
+      capabilities:
         - DC3-POD4-L1
         - DC3-POD4-L2
 
@@ -1208,7 +1208,7 @@ spec:
         - kind: DcimPhysicalInterface
           data:
             device: DC3-POD3-L1
-            name: Ethernet1/41
+            name: xe1
 
     - name: Port-Channel41
       device: DC3-POD3-L2
@@ -1223,7 +1223,7 @@ spec:
         - kind: DcimPhysicalInterface
           data:
             device: DC3-POD3-L2
-            name: Ethernet1/41
+            name: xe1
 
     - name: Port-Channel42
       device: DC3-POD3-L1
@@ -1238,7 +1238,7 @@ spec:
         - kind: DcimPhysicalInterface
           data:
             device: DC3-POD3-L1
-            name: Ethernet1/42
+            name: xe2
 
     - name: Port-Channel42
       device: DC3-POD3-L2
@@ -1253,7 +1253,7 @@ spec:
         - kind: DcimPhysicalInterface
           data:
             device: DC3-POD3-L2
-            name: Ethernet1/42
+            name: xe2
 
     - name: Port-Channel43
       device: DC3-POD3-L1
@@ -1268,7 +1268,7 @@ spec:
         - kind: DcimPhysicalInterface
           data:
             device: DC3-POD3-L1
-            name: Ethernet1/43
+            name: xe3
 
     - name: Port-Channel43
       device: DC3-POD3-L2
@@ -1283,7 +1283,7 @@ spec:
         - kind: DcimPhysicalInterface
           data:
             device: DC3-POD3-L2
-            name: Ethernet1/43
+            name: xe3
 
     - name: Port-Channel44
       device: DC3-POD3-L1
@@ -1298,7 +1298,7 @@ spec:
         - kind: DcimPhysicalInterface
           data:
             device: DC3-POD3-L1
-            name: Ethernet1/44
+            name: xe4
 
     - name: Port-Channel44
       device: DC3-POD3-L2
@@ -1313,7 +1313,7 @@ spec:
         - kind: DcimPhysicalInterface
           data:
             device: DC3-POD3-L2
-            name: Ethernet1/44
+            name: xe4
 
     # POD3 peer-link
     - name: Port-Channel100
@@ -1329,11 +1329,11 @@ spec:
         - kind: DcimPhysicalInterface
           data:
             device: DC3-POD3-L1
-            name: Ethernet1/33
+            name: xe53
         - kind: DcimPhysicalInterface
           data:
             device: DC3-POD3-L1
-            name: Ethernet1/34
+            name: xe54
 
     - name: Port-Channel100
       device: DC3-POD3-L2
@@ -1348,11 +1348,11 @@ spec:
         - kind: DcimPhysicalInterface
           data:
             device: DC3-POD3-L2
-            name: Ethernet1/33
+            name: xe53
         - kind: DcimPhysicalInterface
           data:
             device: DC3-POD3-L2
-            name: Ethernet1/34
+            name: xe54
 
     # POD4 leaf LAGs (Nutanix nodes)
     - name: Port-Channel41
@@ -1368,7 +1368,7 @@ spec:
         - kind: DcimPhysicalInterface
           data:
             device: DC3-POD4-L1
-            name: Ethernet1/41
+            name: xe1
 
     - name: Port-Channel41
       device: DC3-POD4-L2
@@ -1383,7 +1383,7 @@ spec:
         - kind: DcimPhysicalInterface
           data:
             device: DC3-POD4-L2
-            name: Ethernet1/41
+            name: xe1
 
     - name: Port-Channel42
       device: DC3-POD4-L1
@@ -1398,7 +1398,7 @@ spec:
         - kind: DcimPhysicalInterface
           data:
             device: DC3-POD4-L1
-            name: Ethernet1/42
+            name: xe2
 
     - name: Port-Channel42
       device: DC3-POD4-L2
@@ -1413,7 +1413,7 @@ spec:
         - kind: DcimPhysicalInterface
           data:
             device: DC3-POD4-L2
-            name: Ethernet1/42
+            name: xe2
 
     - name: Port-Channel43
       device: DC3-POD4-L1
@@ -1428,7 +1428,7 @@ spec:
         - kind: DcimPhysicalInterface
           data:
             device: DC3-POD4-L1
-            name: Ethernet1/43
+            name: xe3
 
     - name: Port-Channel43
       device: DC3-POD4-L2
@@ -1443,7 +1443,7 @@ spec:
         - kind: DcimPhysicalInterface
           data:
             device: DC3-POD4-L2
-            name: Ethernet1/43
+            name: xe3
 
     - name: Port-Channel44
       device: DC3-POD4-L1
@@ -1458,7 +1458,7 @@ spec:
         - kind: DcimPhysicalInterface
           data:
             device: DC3-POD4-L1
-            name: Ethernet1/44
+            name: xe4
 
     - name: Port-Channel44
       device: DC3-POD4-L2
@@ -1473,7 +1473,7 @@ spec:
         - kind: DcimPhysicalInterface
           data:
             device: DC3-POD4-L2
-            name: Ethernet1/44
+            name: xe4
 
     # POD4 peer-link
     - name: Port-Channel100
@@ -1489,11 +1489,11 @@ spec:
         - kind: DcimPhysicalInterface
           data:
             device: DC3-POD4-L1
-            name: Ethernet1/33
+            name: xe53
         - kind: DcimPhysicalInterface
           data:
             device: DC3-POD4-L1
-            name: Ethernet1/34
+            name: xe54
 
     - name: Port-Channel100
       device: DC3-POD4-L2
@@ -1508,11 +1508,11 @@ spec:
         - kind: DcimPhysicalInterface
           data:
             device: DC3-POD4-L2
-            name: Ethernet1/33
+            name: xe53
         - kind: DcimPhysicalInterface
           data:
             device: DC3-POD4-L2
-            name: Ethernet1/34
+            name: xe54
 
 ---
 # Server-side bond0 for ESXi and Nutanix hosts

@@ -1,0 +1,51 @@
+---
+# Equinix Fabric virtual connections between PA4 edge routers and the vSphere cluster
+#
+# Mirrors AM1 pattern. Primary path: PA4-EDGE-01, secondary: PA4-EDGE-02.
+
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimVirtualInterface
+  data:
+    - name: VTI-PA4-VSPHERE-PRI
+      description: "PA4-EDGE-01 VTI — primary Equinix Fabric VC to vSphere cluster"
+      role: uplink
+      status: active
+      device: PA4-EDGE-01
+
+    - name: VTI-PA4-VSPHERE-SEC
+      description: "PA4-EDGE-02 VTI — secondary Equinix Fabric VC to vSphere cluster"
+      role: uplink
+      status: active
+      device: PA4-EDGE-02
+
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologyVirtualCircuit
+  data:
+    - name: VC-EQX-PA4-VSPHERE-PRIMARY
+      description: "Primary Equinix Fabric connection — PA4-EDGE-01 to vSphere cluster"
+      link_type: equinix_fabric
+      bandwidth: 10000
+      status: active
+      provider: Equinix
+      locations:
+        - PA4
+      interfaces:
+        - - PA4-EDGE-01
+          - VTI-PA4-VSPHERE-PRI
+
+    - name: VC-EQX-PA4-VSPHERE-SECONDARY
+      description: "Secondary Equinix Fabric connection — PA4-EDGE-02 to vSphere cluster"
+      link_type: equinix_fabric
+      bandwidth: 10000
+      status: active
+      provider: Equinix
+      locations:
+        - PA4
+      interfaces:
+        - - PA4-EDGE-02
+          - VTI-PA4-VSPHERE-SEC

@@ -5,19 +5,10 @@ query super_spine_config($device: String!) {
         id
         name { value }
         role { value }
-        device_type {
-          node {
-            name { value }
-            manufacturer { node { name { value } } }
-          }
-        }
         platform {
           node {
-            id
             name { value }
             netmiko_device_type { value }
-            napalm_driver { value }
-            ansible_network_os { value }
           }
         }
         primary_address {
@@ -33,7 +24,8 @@ query super_spine_config($device: String!) {
         }
 
         # Device Services (BGP, OSPF) with nested peerings
-        device_capabilities {
+        ... on DcimCapabilities {
+        capabilities {
           edges {
             node {
               __typename
@@ -54,9 +46,6 @@ query super_spine_config($device: String!) {
                     node {
                       afi { value }
                       safi { value }
-                      advertise_all_vni { value }
-                      advertise_default_gw { value }
-                      advertise_svi_ip { value }
                     }
                   }
                 }
@@ -75,13 +64,10 @@ query super_spine_config($device: String!) {
                           node {
                             afi { value }
                             safi { value }
-                            advertise_all_vni { value }
-                            advertise_default_gw { value }
-                            advertise_svi_ip { value }
                           }
                         }
                       }
-                      interfaces {
+                      interface_capabilities {
                         edges {
                           node {
                             name { value }
@@ -98,8 +84,6 @@ query super_spine_config($device: String!) {
                       bgp_processes {
                         edges {
                           node {
-                            id
-                            device_capabilities { edges { node { name { value } } } }
                             router_id { node { address { value } } }
                             local_as { node { asn { value } } }
                           }
@@ -179,28 +163,11 @@ query super_spine_config($device: String!) {
                 domain_id { value }
                 reload_delay { value }
                 reload_delay_non_mlag { value }
-                device_capabilities { edges { node { name { value } } } }
+                capabilities { edges { node { name { value } } } }
               }
             }
           }
         }
-
-        # Deployment context — stretched segment activations for VLAN/VNI database
-        ... on DcimPhysicalDevice {
-          deployment {
-            node {
-              id
-              name { value }
-              ...SuperSpineSegmentsDC
-              ... on TopologyPod {
-                parent {
-                  node {
-                    ...SuperSpineSegmentsDC
-                  }
-                }
-              }
-            }
-          }
         }
 
         # Interface Information
@@ -287,6 +254,7 @@ query super_spine_config($device: String!) {
                       mode { value }
                       metric { value }
                     }
+                    ...NetworkSegmentFields
                   }
                 }
               }
@@ -299,38 +267,30 @@ query super_spine_config($device: String!) {
 }
 
 
-fragment SuperSpineSegmentsDC on TopologyDataCenter {
-  segment_deployments {
-    edges {
-      node {
-        vlan_id { value }
-        vni { value }
-        segment {
-          node {
-            id
-            ... on ManagedVxlanSegment {
-              # deployments list used to detect stretched segments (count > 1)
-              deployments {
-                edges { node { id } }
-              }
+fragment NetworkSegmentFields on ManagedNetworkSegment {
+  ... on ManagedVxlanSegment {
+    id
+    name { value }
+    customer_name { value }
+    arp_suppression { value }
+    segment_deployments(status__values: ["active", "provisioning"]) {
+      edges {
+        node {
+          vlan_id { value }
+          vni { value }
+        }
+      }
+    }
+    prefix {
+      edges {
+        node {
+          prefix { value }
+          gateway_ip { value }
+          ip_namespace {
+            node {
               name { value }
-              customer_name { value }
-              arp_suppression { value }
-              prefix {
-                edges {
-                  node {
-                    prefix { value }
-                    gateway_ip { value }
-                    ip_namespace {
-                      node {
-                        name { value }
-                        l3_vni { value }
-                        owner { node { name { value } } }
-                      }
-                    }
-                  }
-                }
-              }
+              l3_vni { value }
+              owner { node { name { value } } }
             }
           }
         }

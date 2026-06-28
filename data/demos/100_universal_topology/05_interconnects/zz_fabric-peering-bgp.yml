@@ -7,6 +7,7 @@ spec:
   data:
     - name: BGP-FR2-DE-CIX-PHYS
       role: primary
+      scope: INTERNET
       session_type: EBGP
       bfd_enabled: true
       max_prefixes: 200000
@@ -15,6 +16,7 @@ spec:
 
     - name: BGP-FR2-DE-CIX-VIRT
       role: secondary
+      scope: INTERNET
       session_type: EBGP
       bfd_enabled: true
       max_prefixes: 200000
@@ -23,6 +25,7 @@ spec:
 
     - name: BGP-FR6-BT-PHYS
       role: primary
+      scope: INTERNET
       session_type: EBGP
       bfd_enabled: true
       max_prefixes: 100000
@@ -31,6 +34,7 @@ spec:
 
     - name: BGP-PA4-ACME-PHYS
       role: primary
+      scope: PARTNER
       session_type: EBGP
       bfd_enabled: true
       max_prefixes: 50000
@@ -39,6 +43,7 @@ spec:
 
     - name: BGP-AM1-GLOBEX-VIRT
       role: primary
+      scope: PARTNER
       session_type: EBGP
       bfd_enabled: true
       max_prefixes: 50000

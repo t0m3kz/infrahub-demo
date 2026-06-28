@@ -1,0 +1,104 @@
+---
+# Global security tier tags
+# group_id values are globally unique — rendered as SGT (Cisco) / security-group (Arista)
+
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: SecurityTag
+  data:
+    - name: dmz
+      description: "DMZ / perimeter tier — internet-facing or partner-facing services"
+      group_id: 10
+      color: "#E74C3C"
+
+    - name: web-tier
+      description: "Web frontend tier — user-facing application layer"
+      group_id: 20
+      color: "#3498DB"
+
+    - name: app-tier
+      description: "Application backend tier — business logic and APIs"
+      group_id: 30
+      color: "#2ECC71"
+
+    - name: cache-tier
+      description: "Cache tier — in-memory data stores (Redis, Memcached)"
+      group_id: 40
+      color: "#9B59B6"
+
+    - name: database
+      description: "Database tier — persistent data stores"
+      group_id: 50
+      color: "#E67E22"
+
+    - name: management
+      description: "Management tier — OOB, monitoring, automation"
+      group_id: 60
+      color: "#95A5A6"
+
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: SecurityTagRule
+  data:
+    # web → app (standard 3-tier)
+    - source_tag: web-tier
+      destination_tag: app-tier
+      action: permit
+      log: false
+      description: "Web frontend to application backend"
+
+    # app → database
+    - source_tag: app-tier
+      destination_tag: database
+      action: permit
+      log: false
+      description: "Application backend to database tier"
+
+    # app → cache
+    - source_tag: app-tier
+      destination_tag: cache-tier
+      action: permit
+      log: false
+      description: "Application backend to cache tier"
+
+    # dmz → web
+    - source_tag: dmz
+      destination_tag: web-tier
+      action: permit
+      log: false
+      description: "DMZ to web frontend tier"
+
+    # dmz → app (direct, e.g. API gateway in DMZ)
+    - source_tag: dmz
+      destination_tag: app-tier
+      action: permit
+      log: false
+      description: "DMZ to application backend (API gateway)"
+
+    # management → any (monitoring / automation reach)
+    - source_tag: management
+      destination_tag: web-tier
+      action: permit
+      log: false
+      description: "Management to web tier"
+
+    - source_tag: management
+      destination_tag: app-tier
+      action: permit
+      log: false
+      description: "Management to app tier"
+
+    - source_tag: management
+      destination_tag: database
+      action: permit
+      log: false
+      description: "Management to database tier"
+
+    - source_tag: management
+      destination_tag: cache-tier
+      action: permit
+      log: false
+      description: "Management to cache tier"

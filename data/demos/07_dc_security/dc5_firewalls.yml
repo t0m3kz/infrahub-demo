@@ -1,0 +1,22 @@
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimPhysicalDevice
+  data:
+    - name: ny-1-fw-01
+      rack: ny-1-s-1-r-3-1
+      role: firewall
+      status: provisioning
+      device_type: [PA-5260]
+      platform: panos
+      member_of_groups: [endpoints]
+      interfaces:
+        kind: DcimPhysicalInterface
+        data:
+          - name: "ethernet1/1"
+            interface_type: 100gbase-x-qsfp28
+            role: uplink
+          - name: "ethernet1/2"
+            interface_type: 100gbase-x-qsfp28
+            role: uplink

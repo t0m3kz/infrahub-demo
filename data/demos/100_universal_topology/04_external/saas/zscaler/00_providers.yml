@@ -1,0 +1,8 @@
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: OrganizationProvider
+  data:
+    - name: "Zscaler"
+      org_id: "P030"

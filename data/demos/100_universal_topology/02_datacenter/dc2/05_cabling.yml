@@ -136,6 +136,8 @@ spec:
 
     # Spine → super-spine cables removed — replaced by active-active FW pair
     # in 07_security.yml: spines connect through DC2-FW-01/DC2-FW-02
+    # Inter-pod full-mesh spine-spine cables and BL-spine uplinks are defined
+    # at the end of this file.
 
 
     - name: CBL-DC2-POD1-SP1-L1
@@ -392,3 +394,201 @@ spec:
             device: DC2-POD2-L4
             name: Ethernet1/2
             description: "DC2-POD2-SP2"
+
+
+    # Inter-pod full-mesh spine-spine cables
+
+    - name: CBL-DC2-POD1-SP1-POD2-SP1
+      type: smf
+      deployment: DC2
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC2-POD1-SP1
+            name: Ethernet1/3
+            description: "DC2-POD2-SP1 (inter-pod full-mesh)"
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC2-POD2-SP1
+            name: Ethernet1/3
+            description: "DC2-POD1-SP1 (inter-pod full-mesh)"
+
+
+    - name: CBL-DC2-POD1-SP1-POD2-SP2
+      type: smf
+      deployment: DC2
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC2-POD1-SP1
+            name: Ethernet1/4
+            description: "DC2-POD2-SP2 (inter-pod full-mesh)"
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC2-POD2-SP2
+            name: Ethernet1/3
+            description: "DC2-POD1-SP1 (inter-pod full-mesh)"
+
+
+    - name: CBL-DC2-POD1-SP2-POD2-SP1
+      type: smf
+      deployment: DC2
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC2-POD1-SP2
+            name: Ethernet1/3
+            description: "DC2-POD2-SP1 (inter-pod full-mesh)"
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC2-POD2-SP1
+            name: Ethernet1/4
+            description: "DC2-POD1-SP2 (inter-pod full-mesh)"
+
+
+    - name: CBL-DC2-POD1-SP2-POD2-SP2
+      type: smf
+      deployment: DC2
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC2-POD1-SP2
+            name: Ethernet1/4
+            description: "DC2-POD2-SP2 (inter-pod full-mesh)"
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC2-POD2-SP2
+            name: Ethernet1/4
+            description: "DC2-POD1-SP2 (inter-pod full-mesh)"
+
+
+    # BL1-spine uplink cables
+
+    - name: CBL-DC2-BL1-POD1-SP1
+      type: smf
+      deployment: DC2
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC2-BL1
+            name: Ethernet1/1
+            description: "DC2-POD1-SP1 (BL uplink)"
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC2-POD1-SP1
+            name: Ethernet1/5
+            description: "DC2-BL1 (BL uplink)"
+
+
+    - name: CBL-DC2-BL1-POD1-SP2
+      type: smf
+      deployment: DC2
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC2-BL1
+            name: Ethernet1/2
+            description: "DC2-POD1-SP2 (BL uplink)"
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC2-POD1-SP2
+            name: Ethernet1/5
+            description: "DC2-BL1 (BL uplink)"
+
+
+    - name: CBL-DC2-BL1-POD2-SP1
+      type: smf
+      deployment: DC2
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC2-BL1
+            name: Ethernet1/3
+            description: "DC2-POD2-SP1 (BL uplink)"
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC2-POD2-SP1
+            name: Ethernet1/5
+            description: "DC2-BL1 (BL uplink)"
+
+
+    - name: CBL-DC2-BL1-POD2-SP2
+      type: smf
+      deployment: DC2
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC2-BL1
+            name: Ethernet1/4
+            description: "DC2-POD2-SP2 (BL uplink)"
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC2-POD2-SP2
+            name: Ethernet1/5
+            description: "DC2-BL1 (BL uplink)"
+
+
+    # BL2-spine uplink cables
+
+    - name: CBL-DC2-BL2-POD1-SP1
+      type: smf
+      deployment: DC2
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC2-BL2
+            name: Ethernet1/1
+            description: "DC2-POD1-SP1 (BL uplink)"
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC2-POD1-SP1
+            name: Ethernet1/6
+            description: "DC2-BL2 (BL uplink)"
+
+
+    - name: CBL-DC2-BL2-POD1-SP2
+      type: smf
+      deployment: DC2
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC2-BL2
+            name: Ethernet1/2
+            description: "DC2-POD1-SP2 (BL uplink)"
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC2-POD1-SP2
+            name: Ethernet1/6
+            description: "DC2-BL2 (BL uplink)"
+
+
+    - name: CBL-DC2-BL2-POD2-SP1
+      type: smf
+      deployment: DC2
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC2-BL2
+            name: Ethernet1/3
+            description: "DC2-POD2-SP1 (BL uplink)"
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC2-POD2-SP1
+            name: Ethernet1/6
+            description: "DC2-BL2 (BL uplink)"
+
+
+    - name: CBL-DC2-BL2-POD2-SP2
+      type: smf
+      deployment: DC2
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC2-BL2
+            name: Ethernet1/4
+            description: "DC2-POD2-SP2 (BL uplink)"
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC2-POD2-SP2
+            name: Ethernet1/6
+            description: "DC2-BL2 (BL uplink)"

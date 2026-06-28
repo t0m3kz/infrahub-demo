@@ -60,7 +60,6 @@ generics:
       - name: name
         kind: Text
         order_weight: 100
-
   - name: PhysicalDeployment
     namespace: Topology
     description: "Physical infrastructure deployments with cabling"

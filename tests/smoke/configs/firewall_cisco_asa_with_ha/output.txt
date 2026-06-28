@@ -1,0 +1,50 @@
+!
+hostname dc1-fw-01
+!
+! --- Interfaces ---
+interface ethernet1/1.10
+ vlan 10
+ ip address 10.0.1.1 30
+ nameif internal
+ security-level 100
+ description Internal LAN link
+ no shutdown
+!
+interface ethernet1/1.20
+ vlan 20
+ ip address 10.0.2.1 30
+ nameif dmz
+ security-level 50
+ description DMZ link
+ no shutdown
+!
+interface ethernet1/1.30
+ vlan 30
+ ip address 10.0.3.1 30
+ nameif external
+ security-level 0
+ description External link
+ no shutdown
+!
+! --- Static Routes (return path to leaf per zone) ---
+route ethernet1/1.20 10.0.2.0 24 10.0.2.2 1
+route ethernet1/1.10 10.0.1.0 24 10.0.1.2 1
+route ethernet1/1.10 10.0.10.0 24 10.0.1.2 1
+!
+! --- Access Control Lists ---
+access-list dmz-in extended permit tcp any any eq 443 log
+access-list dmz-in extended permit tcp any any eq 22 log
+access-list global-in extended deny ip any any log
+access-list internal-in extended permit ip any any
+access-list global-in extended deny ip any any log
+!
+! --- Access Groups ---
+access-group internal-in in interface internal
+access-group dmz-in in interface dmz
+access-group external-in in interface external
+!
+! --- Failover (HA) ---
+failover
+failover group 1
+!
+end

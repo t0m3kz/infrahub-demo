@@ -1,0 +1,253 @@
+---
+# C001 (Nordix Ltd.) — Backend pool members on DC3-LB-HA
+# One pool member per device per VIP — VIPs are per-component.
+
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: LoadbalancerPoolMember
+  data:
+
+    # ── trade-portal web-frontend (VIP: c001-trade-web:443/80) ───────────────
+    - name: c001-web-vm-01-trade-web-443
+      weight: 1
+      vip_service:
+        - c001-trade-web.dc3.internal
+        - https
+        - "443"
+      capabilities:
+        - C001-WEB-VM-01
+
+    - name: c001-web-vm-02-trade-web-443
+      weight: 1
+      vip_service:
+        - c001-trade-web.dc3.internal
+        - https
+        - "443"
+      capabilities:
+        - C001-WEB-VM-02
+
+    - name: c001-web-vm-01-trade-web-80
+      weight: 1
+      vip_service:
+        - c001-trade-web.dc3.internal
+        - http
+        - "80"
+      capabilities:
+        - C001-WEB-VM-01
+
+    - name: c001-web-vm-02-trade-web-80
+      weight: 1
+      vip_service:
+        - c001-trade-web.dc3.internal
+        - http
+        - "80"
+      capabilities:
+        - C001-WEB-VM-02
+
+    # ── trade-portal api-gateway (VIP: c001-trade-api:8443) ──────────────────
+    - name: c001-app-vm-01-trade-api
+      weight: 1
+      vip_service:
+        - c001-trade-api.dc3.internal
+        - https
+        - "8443"
+      capabilities:
+        - C001-APP-VM-01
+
+    - name: c001-app-vm-02-trade-api
+      weight: 1
+      vip_service:
+        - c001-trade-api.dc3.internal
+        - https
+        - "8443"
+      capabilities:
+        - C001-APP-VM-02
+
+    # ── trade-portal order-db (VIP: c001-trade-db:5432) ──────────────────────
+    - name: c001-db-vm-01-trade-db
+      weight: 1
+      vip_service:
+        - c001-trade-db.dc3.internal
+        - tcp
+        - "5432"
+      capabilities:
+        - C001-DB-VM-01
+
+    - name: c001-db-vm-02-trade-db
+      weight: 1
+      vip_service:
+        - c001-trade-db.dc3.internal
+        - tcp
+        - "5432"
+      capabilities:
+        - C001-DB-VM-02
+
+    # ── trade-portal nonprod web-frontend (VIP: c001-trade-web-n:443) ────────
+    - name: c001-web-np-vm-01-trade-web-n
+      weight: 1
+      vip_service:
+        - c001-trade-web-n.dc3.internal
+        - https
+        - "443"
+      capabilities:
+        - C001-WEB-NP-VM-01
+
+    # ── trade-portal nonprod api-gateway (VIP: c001-trade-api-n:8443) ────────
+    - name: c001-app-np-vm-01-trade-api-n
+      weight: 1
+      vip_service:
+        - c001-trade-api-n.dc3.internal
+        - https
+        - "8443"
+      capabilities:
+        - C001-APP-NP-VM-01
+
+    # ── trade-portal nonprod order-db (VIP: c001-trade-db-n:5432) ────────────
+    - name: c001-db-np-vm-01-trade-db-n
+      weight: 1
+      vip_service:
+        - c001-trade-db-n.dc3.internal
+        - tcp
+        - "5432"
+      capabilities:
+        - C001-DB-NP-VM-01
+
+    # ── auth-platform auth-api (VIP: c001-auth-api:8443) ─────────────────────
+    - name: c001-auth-vm-01-auth-api
+      weight: 1
+      vip_service:
+        - c001-auth-api.dc3.internal
+        - https
+        - "8443"
+      capabilities:
+        - C001-AUTH-VM-01
+
+    - name: c001-auth-vm-02-auth-api
+      weight: 1
+      vip_service:
+        - c001-auth-api.dc3.internal
+        - https
+        - "8443"
+      capabilities:
+        - C001-AUTH-VM-02
+
+    # ── auth-platform identity-db (VIP: c001-auth-db:5432) ───────────────────
+    - name: c001-db-vm-01-auth-db
+      weight: 1
+      vip_service:
+        - c001-auth-db.dc3.internal
+        - tcp
+        - "5432"
+      capabilities:
+        - C001-DB-VM-01
+
+    # ── risk-engine analytics-worker (VIP: c001-risk-api:8443) ───────────────
+    - name: c001-risk-vm-01-risk-api
+      weight: 1
+      vip_service:
+        - c001-risk-api.dc3.internal
+        - https
+        - "8443"
+      capabilities:
+        - C001-RISK-VM-01
+
+    - name: c001-risk-vm-02-risk-api
+      weight: 1
+      vip_service:
+        - c001-risk-api.dc3.internal
+        - https
+        - "8443"
+      capabilities:
+        - C001-RISK-VM-02
+
+    # ── risk-engine risk-db (VIP: c001-risk-db:5432) ─────────────────────────
+    - name: c001-db-vm-02-risk-db
+      weight: 1
+      vip_service:
+        - c001-risk-db.dc3.internal
+        - tcp
+        - "5432"
+      capabilities:
+        - C001-DB-VM-02
+
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: LoadbalancerPoolInterface
+  data:
+
+    # ── trade-portal web-frontend ─────────────────────────────────────────────
+    - name: c001-web-vm-01-trade-web-443-iface
+      port: 443
+      pool_member: c001-web-vm-01-trade-web-443
+
+    - name: c001-web-vm-02-trade-web-443-iface
+      port: 443
+      pool_member: c001-web-vm-02-trade-web-443
+
+    - name: c001-web-vm-01-trade-web-80-iface
+      port: 80
+      pool_member: c001-web-vm-01-trade-web-80
+
+    - name: c001-web-vm-02-trade-web-80-iface
+      port: 80
+      pool_member: c001-web-vm-02-trade-web-80
+
+    # ── trade-portal api-gateway ──────────────────────────────────────────────
+    - name: c001-app-vm-01-trade-api-iface
+      port: 8443
+      pool_member: c001-app-vm-01-trade-api
+
+    - name: c001-app-vm-02-trade-api-iface
+      port: 8443
+      pool_member: c001-app-vm-02-trade-api
+
+    # ── trade-portal order-db ─────────────────────────────────────────────────
+    - name: c001-db-vm-01-trade-db-iface
+      port: 5432
+      pool_member: c001-db-vm-01-trade-db
+
+    - name: c001-db-vm-02-trade-db-iface
+      port: 5432
+      pool_member: c001-db-vm-02-trade-db
+
+    # ── trade-portal nonprod ──────────────────────────────────────────────────
+    - name: c001-web-np-vm-01-trade-web-n-iface
+      port: 443
+      pool_member: c001-web-np-vm-01-trade-web-n
+
+    - name: c001-app-np-vm-01-trade-api-n-iface
+      port: 8443
+      pool_member: c001-app-np-vm-01-trade-api-n
+
+    - name: c001-db-np-vm-01-trade-db-n-iface
+      port: 5432
+      pool_member: c001-db-np-vm-01-trade-db-n
+
+    # ── auth-platform ─────────────────────────────────────────────────────────
+    - name: c001-auth-vm-01-auth-api-iface
+      port: 8443
+      pool_member: c001-auth-vm-01-auth-api
+
+    - name: c001-auth-vm-02-auth-api-iface
+      port: 8443
+      pool_member: c001-auth-vm-02-auth-api
+
+    - name: c001-db-vm-01-auth-db-iface
+      port: 5432
+      pool_member: c001-db-vm-01-auth-db
+
+    # ── risk-engine ───────────────────────────────────────────────────────────
+    - name: c001-risk-vm-01-risk-api-iface
+      port: 8443
+      pool_member: c001-risk-vm-01-risk-api
+
+    - name: c001-risk-vm-02-risk-api-iface
+      port: 8443
+      pool_member: c001-risk-vm-02-risk-api
+
+    - name: c001-db-vm-02-risk-db-iface
+      port: 5432
+      pool_member: c001-db-vm-02-risk-db

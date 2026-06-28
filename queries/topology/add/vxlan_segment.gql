@@ -5,6 +5,23 @@ query vxlan_segment_data($name: String!) {
         id
         name { value }
         arp_suppression { value }
+        terminate_inline { value }
+        inline_service {
+          node {
+            id
+            name { value }
+            ... on ManagedGenericDevice {
+              capabilities {
+                edges {
+                  node {
+                    id
+                    __typename
+                  }
+                }
+              }
+            }
+          }
+        }
         deployments {
           edges {
             node {

@@ -1,0 +1,74 @@
+query app_component_data($name: String!) {
+  AppComponent(slug__value: $name) {
+    edges {
+      node {
+        id
+        name { value }
+        slug { value }
+        component_type { value }
+        backend_port { value }
+        network_segment {
+          node {
+            id
+            name { value }
+            __typename
+          }
+        }
+        vip_service {
+          node {
+            id
+            hostname { value }
+            protocol { value }
+            port { value }
+            load_balancer {
+              node {
+                id
+                name { value }
+              }
+            }
+          }
+        }
+        capabilities {
+          edges {
+            node {
+              id
+              name { value }
+              ... on DcimVirtualDevice {
+                hosting_device {
+                  node {
+                    id
+                    name { value }
+                  }
+                }
+              }
+            }
+          }
+        }
+        cluster_capabilities {
+          edges {
+            node {
+              id
+              name { value }
+              node_pools {
+                edges {
+                  node {
+                    id
+                    name { value }
+                    physical_hosts {
+                      edges {
+                        node {
+                          id
+                          name { value }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

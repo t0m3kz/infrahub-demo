@@ -1,93 +1,305 @@
 ---
-# DC1 infrastructure: super-spines, spines, leaves, servers
+# DC1 infrastructure: border-leafs, spines, leaves, servers
+# Underlay: iBGP (RFC 5549 unnumbered, IPv6 link-local on fabric ports)
+# Overlay:  iBGP EVPN (L2VPN-EVPN AF, BL1/BL2 act as EVPN route-reflectors)
+# Fabric:   Arista DCS-7050CX3-32C-R fabric
+# Loopbacks: 10.255.11.0/24 (FABRIC-DC1 namespace)
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
   kind: DcimPhysicalDevice
   data:
-    - name: DC1-SS1
-      object_template: N9K-C9336C-FX2_SUPER_SPINE
-      status: active
-      deployment: DC1
-      rack: dc1-s1-r-1
-
-    - name: DC1-SS2
-      object_template: N9K-C9336C-FX2_SUPER_SPINE
-      status: active
-      deployment: DC1
-      rack: dc1-s1-r-2
-
     - name: DC1-POD1-SP1
-      object_template: N9K-C9336C-FX2_SPINE
+      object_template: DCS-7050CX3-32C-R_SPINE
       status: active
       deployment: DC1-1-POD-1
       rack: dc1-s1-r-1
+      member_of_groups:
+        - spines
+      interfaces:
+        kind: DcimVirtualInterface
+        data:
+          - name: Loopback0
+            role: loopback
+            status: active
+            description: "Router-ID / BGP source"
+            ip_address:
+              data:
+                address: "10.255.11.11/32"
+                ip_namespace: FABRIC-DC1
 
     - name: DC1-POD1-SP2
-      object_template: N9K-C9336C-FX2_SPINE
+      object_template: DCS-7050CX3-32C-R_SPINE
       status: active
       deployment: DC1-1-POD-1
       rack: dc1-s1-r-1
+      member_of_groups:
+        - spines
+      interfaces:
+        kind: DcimVirtualInterface
+        data:
+          - name: Loopback0
+            role: loopback
+            status: active
+            description: "Router-ID / BGP source"
+            ip_address:
+              data:
+                address: "10.255.11.12/32"
+                ip_namespace: FABRIC-DC1
 
     - name: DC1-POD1-L1
-      object_template: N9K-C9336C-FX2_LEAF_SERVER
+      object_template: DCS-7050CX3-32C-R_LEAF
       status: active
       deployment: DC1-1-POD-1
       rack: dc1-s1-r-1
+      member_of_groups:
+        - leafs
+      interfaces:
+        kind: DcimVirtualInterface
+        data:
+          - name: Loopback0
+            role: loopback
+            status: active
+            description: "Router-ID / BGP source"
+            ip_address:
+              data:
+                address: "10.255.11.21/32"
+                ip_namespace: FABRIC-DC1
+          - name: Loopback1
+            role: loopback-vtep
+            status: active
+            description: "VTEP NVE source (shared with MLAG peer L2)"
+            ip_address:
+              data:
+                address: "10.255.11.41/32"
+                ip_namespace: FABRIC-DC1
 
     - name: DC1-POD1-L2
-      object_template: N9K-C9336C-FX2_LEAF_SERVER
+      object_template: DCS-7050CX3-32C-R_LEAF
       status: active
       deployment: DC1-1-POD-1
       rack: dc1-s1-r-1
+      member_of_groups:
+        - leafs
+      interfaces:
+        kind: DcimVirtualInterface
+        data:
+          - name: Loopback0
+            role: loopback
+            status: active
+            description: "Router-ID / BGP source"
+            ip_address:
+              data:
+                address: "10.255.11.22/32"
+                ip_namespace: FABRIC-DC1
+          - name: Loopback1
+            role: loopback-vtep
+            status: active
+            description: "VTEP NVE source (shared with MLAG peer L1)"
+            ip_address:
+              data:
+                address: "10.255.11.41/32"
+                ip_namespace: FABRIC-DC1
 
     - name: DC1-POD1-L3
-      object_template: N9K-C9336C-FX2_LEAF
+      object_template: DCS-7050CX3-32C-R_LEAF
       status: active
       deployment: DC1-1-POD-1
       rack: dc1-s1-r-1
+      member_of_groups:
+        - leafs
+      interfaces:
+        kind: DcimVirtualInterface
+        data:
+          - name: Loopback0
+            role: loopback
+            status: active
+            description: "Router-ID / BGP source"
+            ip_address:
+              data:
+                address: "10.255.11.23/32"
+                ip_namespace: FABRIC-DC1
+          - name: Loopback1
+            role: loopback-vtep
+            status: active
+            description: "VTEP NVE source (shared with MLAG peer L4)"
+            ip_address:
+              data:
+                address: "10.255.11.42/32"
+                ip_namespace: FABRIC-DC1
 
     - name: DC1-POD1-L4
-      object_template: N9K-C9336C-FX2_LEAF
+      object_template: DCS-7050CX3-32C-R_LEAF
       status: active
       deployment: DC1-1-POD-1
       rack: dc1-s1-r-1
+      member_of_groups:
+        - leafs
+      interfaces:
+        kind: DcimVirtualInterface
+        data:
+          - name: Loopback0
+            role: loopback
+            status: active
+            description: "Router-ID / BGP source"
+            ip_address:
+              data:
+                address: "10.255.11.24/32"
+                ip_namespace: FABRIC-DC1
+          - name: Loopback1
+            role: loopback-vtep
+            status: active
+            description: "VTEP NVE source (shared with MLAG peer L3)"
+            ip_address:
+              data:
+                address: "10.255.11.42/32"
+                ip_namespace: FABRIC-DC1
 
     - name: DC1-POD2-SP1
-      object_template: N9K-C9336C-FX2_SPINE
+      object_template: DCS-7050CX3-32C-R_SPINE
       status: active
       deployment: DC1-1-POD-2
       rack: dc1-s1-r-2
+      member_of_groups:
+        - spines
+      interfaces:
+        kind: DcimVirtualInterface
+        data:
+          - name: Loopback0
+            role: loopback
+            status: active
+            description: "Router-ID / BGP source"
+            ip_address:
+              data:
+                address: "10.255.11.13/32"
+                ip_namespace: FABRIC-DC1
 
     - name: DC1-POD2-SP2
-      object_template: N9K-C9336C-FX2_SPINE
+      object_template: DCS-7050CX3-32C-R_SPINE
       status: active
       deployment: DC1-1-POD-2
       rack: dc1-s1-r-2
+      member_of_groups:
+        - spines
+      interfaces:
+        kind: DcimVirtualInterface
+        data:
+          - name: Loopback0
+            role: loopback
+            status: active
+            description: "Router-ID / BGP source"
+            ip_address:
+              data:
+                address: "10.255.11.14/32"
+                ip_namespace: FABRIC-DC1
 
     - name: DC1-POD2-L1
-      object_template: N9K-C9336C-FX2_LEAF_SERVER
+      object_template: DCS-7050CX3-32C-R_LEAF
       status: active
       deployment: DC1-1-POD-2
       rack: dc1-s1-r-2
+      member_of_groups:
+        - leafs
+      interfaces:
+        kind: DcimVirtualInterface
+        data:
+          - name: Loopback0
+            role: loopback
+            status: active
+            description: "Router-ID / BGP source"
+            ip_address:
+              data:
+                address: "10.255.11.25/32"
+                ip_namespace: FABRIC-DC1
+          - name: Loopback1
+            role: loopback-vtep
+            status: active
+            description: "VTEP NVE source (shared with MLAG peer L2)"
+            ip_address:
+              data:
+                address: "10.255.11.43/32"
+                ip_namespace: FABRIC-DC1
 
     - name: DC1-POD2-L2
-      object_template: N9K-C9336C-FX2_LEAF_SERVER
+      object_template: DCS-7050CX3-32C-R_LEAF
       status: active
       deployment: DC1-1-POD-2
       rack: dc1-s1-r-2
+      member_of_groups:
+        - leafs
+      interfaces:
+        kind: DcimVirtualInterface
+        data:
+          - name: Loopback0
+            role: loopback
+            status: active
+            description: "Router-ID / BGP source"
+            ip_address:
+              data:
+                address: "10.255.11.26/32"
+                ip_namespace: FABRIC-DC1
+          - name: Loopback1
+            role: loopback-vtep
+            status: active
+            description: "VTEP NVE source (shared with MLAG peer L1)"
+            ip_address:
+              data:
+                address: "10.255.11.43/32"
+                ip_namespace: FABRIC-DC1
 
     - name: DC1-POD2-L3
-      object_template: N9K-C9336C-FX2_LEAF
+      object_template: DCS-7050CX3-32C-R_LEAF
       status: active
       deployment: DC1-1-POD-2
       rack: dc1-s1-r-2
+      member_of_groups:
+        - leafs
+      interfaces:
+        kind: DcimVirtualInterface
+        data:
+          - name: Loopback0
+            role: loopback
+            status: active
+            description: "Router-ID / BGP source"
+            ip_address:
+              data:
+                address: "10.255.11.27/32"
+                ip_namespace: FABRIC-DC1
+          - name: Loopback1
+            role: loopback-vtep
+            status: active
+            description: "VTEP NVE source (shared with MLAG peer L4)"
+            ip_address:
+              data:
+                address: "10.255.11.44/32"
+                ip_namespace: FABRIC-DC1
 
     - name: DC1-POD2-L4
-      object_template: N9K-C9336C-FX2_LEAF
+      object_template: DCS-7050CX3-32C-R_LEAF
       status: active
       deployment: DC1-1-POD-2
       rack: dc1-s1-r-2
+      member_of_groups:
+        - leafs
+      interfaces:
+        kind: DcimVirtualInterface
+        data:
+          - name: Loopback0
+            role: loopback
+            status: active
+            description: "Router-ID / BGP source"
+            ip_address:
+              data:
+                address: "10.255.11.28/32"
+                ip_namespace: FABRIC-DC1
+          - name: Loopback1
+            role: loopback-vtep
+            status: active
+            description: "VTEP NVE source (shared with MLAG peer L3)"
+            ip_address:
+              data:
+                address: "10.255.11.44/32"
+                ip_namespace: FABRIC-DC1
 
     - name: DC1-POD1-SRV-01
       object_template: PowerEdge-R640_SERVER
@@ -107,6 +319,37 @@ spec:
       deployment: DC1-1-POD-1
       rack: dc1-s1-r-1
 
+    # ── POD1 — vSphere ESXi hosts ─────────────────────────────────────────────
+    - name: DC1-POD1-ESXI-01
+      object_template: PowerEdge-R640_SERVER
+      status: active
+      deployment: DC1-1-POD-1
+      rack: dc1-s1-r-1
+
+    - name: DC1-POD1-ESXI-02
+      object_template: PowerEdge-R640_SERVER
+      status: active
+      deployment: DC1-1-POD-1
+      rack: dc1-s1-r-1
+
+    - name: DC1-POD1-ESXI-03
+      object_template: PowerEdge-R640_SERVER
+      status: active
+      deployment: DC1-1-POD-1
+      rack: dc1-s1-r-1
+
+    - name: DC1-POD1-ESXI-04
+      object_template: PowerEdge-R640_SERVER
+      status: active
+      deployment: DC1-1-POD-1
+      rack: dc1-s1-r-1
+
+    - name: DC1-POD1-VCSA-01
+      object_template: PowerEdge-R640_SERVER
+      status: active
+      deployment: DC1-1-POD-1
+      rack: dc1-s1-r-1
+
     - name: DC1-POD2-SRV-01
       object_template: PowerEdge-R640_SERVER
       status: active
@@ -118,3 +361,90 @@ spec:
       status: active
       deployment: DC1-1-POD-2
       rack: dc1-s1-r-2
+
+    # ── POD2 — vSphere ESXi hosts ─────────────────────────────────────────────
+    - name: DC1-POD2-ESXI-01
+      object_template: PowerEdge-R640_SERVER
+      status: active
+      deployment: DC1-1-POD-2
+      rack: dc1-s1-r-2
+
+    - name: DC1-POD2-ESXI-02
+      object_template: PowerEdge-R640_SERVER
+      status: active
+      deployment: DC1-1-POD-2
+      rack: dc1-s1-r-2
+
+    - name: DC1-POD2-ESXI-03
+      object_template: PowerEdge-R640_SERVER
+      status: active
+      deployment: DC1-1-POD-2
+      rack: dc1-s1-r-2
+
+    - name: DC1-POD2-ESXI-04
+      object_template: PowerEdge-R640_SERVER
+      status: active
+      deployment: DC1-1-POD-2
+      rack: dc1-s1-r-2
+
+    - name: DC1-POD2-VCSA-01
+      object_template: PowerEdge-R640_SERVER
+      status: active
+      deployment: DC1-1-POD-2
+      rack: dc1-s1-r-2
+
+    - name: DC1-BL1
+      object_template: DCS-7050CX3-32C-R_SPINE
+      status: active
+      role: border-leaf
+      deployment: DC1
+      rack: dc1-s1-r-1
+      member_of_groups:
+        - border-leafs
+      interfaces:
+        kind: DcimVirtualInterface
+        data:
+          - name: Loopback0
+            role: loopback
+            status: active
+            description: "Router-ID / BGP source"
+            ip_address:
+              data:
+                address: "10.255.11.51/32"
+                ip_namespace: FABRIC-DC1
+          - name: Loopback1
+            role: loopback-vtep
+            status: active
+            description: "VTEP NVE source"
+            ip_address:
+              data:
+                address: "10.255.11.71/32"
+                ip_namespace: FABRIC-DC1
+
+    - name: DC1-BL2
+      object_template: DCS-7050CX3-32C-R_SPINE
+      status: active
+      role: border-leaf
+      deployment: DC1
+      rack: dc1-s1-r-2
+      member_of_groups:
+        - border-leafs
+      interfaces:
+        kind: DcimVirtualInterface
+        data:
+          - name: Loopback0
+            role: loopback
+            status: active
+            description: "Router-ID / BGP source"
+            ip_address:
+              data:
+                address: "10.255.11.52/32"
+                ip_namespace: FABRIC-DC1
+          - name: Loopback1
+            role: loopback-vtep
+            status: active
+            description: "VTEP NVE source"
+            ip_address:
+              data:
+                address: "10.255.11.72/32"
+                ip_namespace: FABRIC-DC1

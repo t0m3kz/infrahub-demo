@@ -21,7 +21,7 @@ from typing import Any
 from utils.data_cleaning import clean_data
 
 from ..common import CommonGenerator
-from ..protocols import DcimPhysicalDevice, DcimPhysicalInterface
+from ..protocols import DcimPhysicalDevice, DcimPhysicalInterface, DcimVirtualInterface
 
 # Typename constants for both segment types
 MANAGED_SEGMENT_TYPES = ("ManagedVlanSegment", "ManagedVxlanSegment")
@@ -236,9 +236,12 @@ class VlanSegmentGenerator(BaseSegmentGenerator):
 
 
 class VxlanSegmentGenerator(BaseSegmentGenerator):
-    """VXLAN segment generator — allocates VLAN ID + VNI from pools, then assigns
-    the segment to all leaf/tor customer-facing interfaces in each target deployment.
-    This populates interface_capabilities so the leaf transform can generate VXLAN config.
+    """VXLAN segment generator — allocates VLAN ID + VNI from pools, assigns
+    the segment to leaf/tor customer-facing interfaces and physical host uplinks,
+    and creates inline sub-interfaces when terminate_inline is set.
+
+    VIP/pool-member wiring is handled by AppComponentGenerator (triggered when
+    AppComponent nodes are created or updated).
     """
 
     graphql_root_key = "ManagedVxlanSegment"
@@ -247,6 +250,7 @@ class VxlanSegmentGenerator(BaseSegmentGenerator):
     async def generate(self, data: dict[str, Any]) -> None:
         await super().generate(data)
         await self._assign_to_deployment_interfaces(data)
+        await self._create_inline_sub_interfaces(data)
 
     async def _assign_to_deployment_interfaces(self, data: dict[str, Any]) -> None:
         """Assign this segment to all leaf/tor customer-facing interfaces in each deployment."""
@@ -327,3 +331,181 @@ class VxlanSegmentGenerator(BaseSegmentGenerator):
             f"  [{deployment_name}] Assigned segment '{segment_name}' to {assigned} interface(s) "
             f"({len(interfaces) - assigned} already assigned)"
         )
+
+    async def _create_inline_sub_interfaces(self, data: dict[str, Any]) -> None:
+        """When terminate_inline is true, create DcimVirtualInterface sub-interfaces
+        on all inline_service (ManagedHA) member devices.
+
+        For each member device:
+        - Finds the trunk/uplink physical interface (role=uplink or first physical interface)
+        - Creates a DcimVirtualInterface named <parent>.<vlan_id> per deployment VLAN
+        - Attaches the segment to interface_capabilities
+        - Assigns the gateway IP from segment.prefix
+        """
+        cleaned = clean_data(data)
+        segment_list = cleaned.get(self.graphql_root_key, [])
+        if not segment_list:
+            return
+
+        segment = segment_list[0]
+        terminate_inline = segment.get("terminate_inline") or False
+        if not terminate_inline:
+            return
+
+        segment_id: str = segment.get("id", "")
+        segment_name: str = segment.get("name", "")
+        inline_service = segment.get("inline_service") or {}
+        ha_node = inline_service if inline_service.get("id") else {}
+        if not ha_node:
+            self.logger.warning(
+                f"Segment '{segment_name}' has terminate_inline=true but no inline_service — skipping sub-interface creation"
+            )
+            return
+
+        # Resolve all member devices from ManagedHA.capabilities
+        member_devices = [cap for cap in (ha_node.get("capabilities") or []) if cap.get("id")]
+        if not member_devices:
+            self.logger.warning(
+                f"Segment '{segment_name}' inline_service has no member devices — skipping sub-interface creation"
+            )
+            return
+
+        # Collect gateway IPs and their namespaces from segment.prefix
+        # Each prefix entry may have a different gateway_ip (one per namespace/VRF)
+        prefix_entries = segment.get("prefix") or []
+        if not prefix_entries:
+            self.logger.warning(f"Segment '{segment_name}' has no prefix — sub-interfaces created without IP addresses")
+
+        # Collect per-deployment VLAN IDs by querying existing SegmentDeployments
+        raw_deps = segment.get("deployments") or segment.get("deployment")
+        target_deployments: list[dict] = [raw_deps] if isinstance(raw_deps, dict) else (raw_deps or [])
+        dep_ids: list[str] = [d["id"] for d in target_deployments if d.get("id")]
+
+        # Fetch SegmentDeployments to get the allocated VLAN IDs
+        vlan_by_dep: dict[str, int] = {}
+        for dep_id in dep_ids:
+            try:
+                existing = await self.client.filters(
+                    kind="ManagedSegmentDeployment",
+                    segment__ids=[segment_id],
+                    deployment__ids=[dep_id],
+                )
+                for sd in existing:
+                    await sd.resolve()
+                    vlan_val = getattr(getattr(sd, "vlan_id", None), "value", None)
+                    if vlan_val:
+                        vlan_by_dep[dep_id] = vlan_val
+                        break
+            except Exception as exc:
+                self.logger.warning(f"Could not fetch SegmentDeployment for dep {dep_id}: {exc}")
+
+        if not vlan_by_dep:
+            self.logger.warning(
+                f"Segment '{segment_name}' has no allocated VLAN IDs yet — run again after pool allocation completes"
+            )
+            return
+
+        # Use the first VLAN (segments typically have one VLAN ID per DC, pick any for naming)
+        vlan_id = next(iter(vlan_by_dep.values()))
+
+        # Fetch the segment SDK object for interface_capabilities linkage
+        segment_obj = await self.client.get(kind="ManagedVxlanSegment", id=segment_id)
+        if not segment_obj:
+            self.logger.warning(f"Could not fetch segment SDK object for '{segment_name}'")
+            return
+
+        self.logger.info(
+            f"Segment '{segment_name}' terminate_inline=true — creating sub-interfaces on "
+            f"{len(member_devices)} device(s), VLAN {vlan_id}"
+        )
+
+        for member in member_devices:
+            device_id: str = member.get("id", "")
+            device_name: str = member.get("name", device_id)
+
+            # Find the trunk/uplink physical interface on this device
+            trunk_iface = await self._find_trunk_interface(device_id, device_name)
+            if trunk_iface is None:
+                self.logger.warning(f"  [{device_name}] No trunk/uplink interface found — skipping")
+                continue
+
+            # Sub-interface name: <parent>.<vlan_id> (e.g. Ethernet1/1.100)
+            sub_iface_name = f"{trunk_iface.name.value}.{vlan_id}"
+
+            # Pick gateway IP and namespace from the first prefix entry (no per-DC differentiation for FW)
+            gateway_ip_str: str | None = None
+            ip_namespace_id: str | None = None
+            if prefix_entries:
+                first_prefix = prefix_entries[0]
+                gateway_ip_str = first_prefix.get("gateway_ip")
+                ns = first_prefix.get("ip_namespace") or {}
+                ip_namespace_id = ns.get("id")
+
+            ip_address_data: Any = None
+            if gateway_ip_str and ip_namespace_id:
+                # Allocate/upsert the gateway IP address
+                try:
+                    ip_obj = await self.client.create(
+                        kind="IpamIPAddress",
+                        data={
+                            "address": gateway_ip_str,
+                            "ip_namespace": {"id": ip_namespace_id},
+                        },
+                    )
+                    await ip_obj.save(allow_upsert=True)
+                    ip_address_data = {"id": ip_obj.id}
+                except Exception as exc:
+                    self.logger.warning(f"  [{device_name}] Could not upsert gateway IP {gateway_ip_str}: {exc}")
+
+            try:
+                sub_iface = await self.client.create(
+                    kind=DcimVirtualInterface,
+                    data={
+                        "name": sub_iface_name,
+                        "device": {"id": device_id},
+                        "parent_interface": {"id": trunk_iface.id},
+                        "status": "active",
+                        "role": "service",
+                        **({"ip_address": ip_address_data} if ip_address_data else {}),
+                    },
+                )
+                await sub_iface.save(allow_upsert=True)
+
+                # Link segment to interface_capabilities
+                iface_services = getattr(sub_iface, "interface_capabilities")
+                await iface_services.fetch()
+                existing_ids = {peer.id for peer in iface_services.peers}
+                if segment_id not in existing_ids:
+                    await iface_services.add(segment_obj)
+                    await sub_iface.save(allow_upsert=True)
+
+                self.logger.info(
+                    f"  [{device_name}] Upserted sub-interface {sub_iface_name}"
+                    + (f" with IP {gateway_ip_str}" if gateway_ip_str else "")
+                )
+            except Exception as exc:
+                self.logger.error(f"  [{device_name}] Failed to create sub-interface {sub_iface_name}: {exc}")
+
+    async def _find_trunk_interface(self, device_id: str, device_name: str) -> Any:
+        """Return the trunk/uplink physical interface for a device.
+
+        Looks for role=uplink first, then falls back to the first physical interface.
+        """
+        try:
+            uplinks = await self.client.filters(
+                kind=DcimPhysicalInterface,
+                device__ids=[device_id],
+                role__value="uplink",
+            )
+            if uplinks:
+                return uplinks[0]
+            # Fallback: first physical interface alphabetically
+            all_ifaces = await self.client.filters(
+                kind=DcimPhysicalInterface,
+                device__ids=[device_id],
+            )
+            if all_ifaces:
+                return sorted(all_ifaces, key=lambda i: i.name.value)[0]
+        except Exception as exc:
+            self.logger.warning(f"  [{device_name}] Error fetching interfaces: {exc}")
+        return None

@@ -1,0 +1,236 @@
+---
+# C001 (Nordix Ltd.) — VXLAN segment boarding
+#
+# Segments are activated across DC1, DC2, DC3 (production) or DC1 only (nonprod).
+# interface_capabilities assigns each segment to server bond0 interfaces,
+# completing the boarding: fabric trunk = segment is live on that server.
+
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: ManagedVxlanSegment
+  data:
+    # ── Production ────────────────────────────────────────────────────────────
+
+    - customer_name: "web-frontend"
+      environment: "p"
+      owner: "C001"
+      security_tag: web-tier
+      arp_suppression: true
+      prefix:
+        - - "10.1.10.0/24"
+          - "C001-PROD"
+      gateway:
+        - "10.1.10.1/24"
+        - "C001-PROD"
+      deployments:
+        - DC1
+        - DC2
+        - DC3
+      member_of_groups:
+        - vxlan_segments
+      interface_capabilities:
+        - kind: DcimLAGInterface
+          data:
+            device: DC1-POD1-SRV-01
+            name: bond0
+            lag_id: 1
+        - kind: DcimLAGInterface
+          data:
+            device: DC1-POD1-SRV-ASS-01
+            name: bond0
+            lag_id: 1
+        - kind: DcimLAGInterface
+          data:
+            device: DC1-POD2-SRV-02
+            name: bond0
+            lag_id: 1
+        - kind: DcimLAGInterface
+          data:
+            device: DC2-POD1-SRV-01
+            name: bond0
+            lag_id: 1
+        - kind: DcimLAGInterface
+          data:
+            device: DC2-POD2-SRV-02
+            name: bond0
+            lag_id: 1
+
+    - customer_name: "app-backend"
+      environment: "p"
+      owner: "C001"
+      security_tag: app-tier
+      arp_suppression: true
+      prefix:
+        - - "10.1.20.0/24"
+          - "C001-PROD"
+      gateway:
+        - "10.1.20.1/24"
+        - "C001-PROD"
+      deployments:
+        - DC1
+        - DC2
+        - DC3
+      member_of_groups:
+        - vxlan_segments
+      interface_capabilities:
+        - kind: DcimLAGInterface
+          data:
+            device: DC1-POD1-SRV-01
+            name: bond0
+            lag_id: 1
+        - kind: DcimLAGInterface
+          data:
+            device: DC1-POD1-SRV-02
+            name: bond0
+            lag_id: 1
+        - kind: DcimLAGInterface
+          data:
+            device: DC2-POD1-SRV-01
+            name: bond0
+            lag_id: 1
+        - kind: DcimLAGInterface
+          data:
+            device: DC2-POD1-SRV-02
+            name: bond0
+            lag_id: 1
+
+    - customer_name: "database"
+      environment: "p"
+      owner: "C001"
+      security_tag: database
+      arp_suppression: true
+      prefix:
+        - - "10.1.30.0/24"
+          - "C001-PROD"
+      gateway:
+        - "10.1.30.1/24"
+        - "C001-PROD"
+      deployments:
+        - DC1
+        - DC2
+        - DC3
+      member_of_groups:
+        - vxlan_segments
+      interface_capabilities:
+        - kind: DcimLAGInterface
+          data:
+            device: DC1-POD1-SRV-02
+            name: bond0
+            lag_id: 1
+        - kind: DcimLAGInterface
+          data:
+            device: DC1-POD2-SRV-01
+            name: bond0
+            lag_id: 1
+        - kind: DcimLAGInterface
+          data:
+            device: DC2-POD1-SRV-02
+            name: bond0
+            lag_id: 1
+        - kind: DcimLAGInterface
+          data:
+            device: DC2-POD2-SRV-01
+            name: bond0
+            lag_id: 1
+
+    - customer_name: "cache"
+      environment: "p"
+      owner: "C001"
+      security_tag: cache-tier
+      arp_suppression: true
+      prefix:
+        - - "10.1.40.0/24"
+          - "C001-PROD"
+      gateway:
+        - "10.1.40.1/24"
+        - "C001-PROD"
+      deployments:
+        - DC1
+        - DC2
+      member_of_groups:
+        - vxlan_segments
+      interface_capabilities:
+        - kind: DcimLAGInterface
+          data:
+            device: DC1-POD1-SRV-02
+            name: bond0
+            lag_id: 1
+        - kind: DcimLAGInterface
+          data:
+            device: DC2-POD1-SRV-02
+            name: bond0
+            lag_id: 1
+
+    # ── Non-production (DC1 only) ─────────────────────────────────────────────
+
+    - customer_name: "web-frontend"
+      environment: "n"
+      owner: "C001"
+      security_tag: web-tier
+      arp_suppression: true
+      prefix:
+        - - "10.1.110.0/24"
+          - "C001-NONPROD"
+      gateway:
+        - "10.1.110.1/24"
+        - "C001-NONPROD"
+      deployments:
+        - DC1
+      member_of_groups:
+        - vxlan_segments
+      interface_capabilities:
+        - kind: DcimLAGInterface
+          data:
+            device: DC1-POD1-SRV-02
+            name: bond0
+            lag_id: 1
+        - kind: DcimLAGInterface
+          data:
+            device: DC1-POD1-SRV-ASS-01
+            name: bond0
+            lag_id: 1
+
+    - customer_name: "app-backend"
+      environment: "n"
+      owner: "C001"
+      security_tag: app-tier
+      arp_suppression: true
+      prefix:
+        - - "10.1.120.0/24"
+          - "C001-NONPROD"
+      gateway:
+        - "10.1.120.1/24"
+        - "C001-NONPROD"
+      deployments:
+        - DC1
+      member_of_groups:
+        - vxlan_segments
+      interface_capabilities:
+        - kind: DcimLAGInterface
+          data:
+            device: DC1-POD1-SRV-ASS-01
+            name: bond0
+            lag_id: 1
+
+    - customer_name: "database"
+      environment: "n"
+      owner: "C001"
+      security_tag: database
+      arp_suppression: true
+      prefix:
+        - - "10.1.130.0/24"
+          - "C001-NONPROD"
+      gateway:
+        - "10.1.130.1/24"
+        - "C001-NONPROD"
+      deployments:
+        - DC1
+      member_of_groups:
+        - vxlan_segments
+      interface_capabilities:
+        - kind: DcimLAGInterface
+          data:
+            device: DC1-POD1-SRV-ASS-01
+            name: bond0
+            lag_id: 1

@@ -1,0 +1,99 @@
+---
+# C001 (Nordix Ltd.) — IP namespaces (tenant VRFs) and address space
+# Onboarded when the customer is first provisioned on the fabric.
+
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: IpamNamespace
+  data:
+    - name: "C001-PROD"
+      description: "Nordix Ltd. production VRF"
+      l3_vni: 50001
+      status: "active"
+      owner: "C001"
+      member_of_groups:
+        - vrf_namespaces
+
+    - name: "C001-NONPROD"
+      description: "Nordix Ltd. non-production VRF"
+      l3_vni: 50002
+      status: "active"
+      owner: "C001"
+      member_of_groups:
+        - vrf_namespaces
+
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: IpamPrefix
+  data:
+    - prefix: "10.1.10.0/24"
+      description: "Nordix prod — web-frontend"
+      status: active
+      ip_namespace: "C001-PROD"
+
+    - prefix: "10.1.20.0/24"
+      description: "Nordix prod — app-backend"
+      status: active
+      ip_namespace: "C001-PROD"
+
+    - prefix: "10.1.30.0/24"
+      description: "Nordix prod — database"
+      status: active
+      ip_namespace: "C001-PROD"
+
+    - prefix: "10.1.40.0/24"
+      description: "Nordix prod — cache"
+      status: active
+      ip_namespace: "C001-PROD"
+
+    - prefix: "10.1.110.0/24"
+      description: "Nordix nonprod — web-frontend"
+      status: active
+      ip_namespace: "C001-NONPROD"
+
+    - prefix: "10.1.120.0/24"
+      description: "Nordix nonprod — app-backend"
+      status: active
+      ip_namespace: "C001-NONPROD"
+
+    - prefix: "10.1.130.0/24"
+      description: "Nordix nonprod — database"
+      status: active
+      ip_namespace: "C001-NONPROD"
+
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: IpamIPAddress
+  data:
+    - address: "10.1.10.1/24"
+      description: "Anycast GW — Nordix prod web-frontend"
+      ip_namespace: "C001-PROD"
+
+    - address: "10.1.20.1/24"
+      description: "Anycast GW — Nordix prod app-backend"
+      ip_namespace: "C001-PROD"
+
+    - address: "10.1.30.1/24"
+      description: "Anycast GW — Nordix prod database"
+      ip_namespace: "C001-PROD"
+
+    - address: "10.1.40.1/24"
+      description: "Anycast GW — Nordix prod cache"
+      ip_namespace: "C001-PROD"
+
+    - address: "10.1.110.1/24"
+      description: "Anycast GW — Nordix nonprod web-frontend"
+      ip_namespace: "C001-NONPROD"
+
+    - address: "10.1.120.1/24"
+      description: "Anycast GW — Nordix nonprod app-backend"
+      ip_namespace: "C001-NONPROD"
+
+    - address: "10.1.130.1/24"
+      description: "Anycast GW — Nordix nonprod database"
+      ip_namespace: "C001-NONPROD"

@@ -3,7 +3,7 @@
 from ipaddress import ip_interface, ip_network
 from typing import Any
 
-from transforms.helpers.segments import _get_segment_namespace, _get_segment_prefix_str
+from transforms.helpers.segments import _get_segment_prefix_str
 
 
 def get_firewall_zones(zones_data: list[dict[str, Any]] | None = None) -> list[dict[str, Any]]:
@@ -122,37 +122,11 @@ def get_firewall_static_routes(
 def get_vrf_default_gateways(
     activations: list[dict[str, Any]] | None,
 ) -> dict[str, str]:
-    """Build namespace_name → FW gateway IP for VRF default routes (Option A: FW as inter-VRF router).
+    """Placeholder — VRF default gateway nexthops are not yet derived from segment data.
 
-    Traverses: activation → segment → security_zone → firewall_interface → ip_address.
-    The VRF name comes from segment.prefix.ip_namespace.name.
-
-    Returns one default-route nexthop per non-default VRF that has a FW interface.
-
-    Args:
-        activations: SegmentDeployment list (already cleaned), containing
-                     segment.security_zone.firewall_interface.ip_address data.
-
-    Returns:
-        Dict mapping VRF name → FW gateway IP, e.g. {"VRF-INTERNAL": "10.0.1.1"}
+    Returns an empty dict; leaf templates skip the default-route block when empty.
     """
-    if not activations:
-        return {}
-    gateways: dict[str, str] = {}
-    for act in activations:
-        seg = act.get("segment") or {}
-        ns = _get_segment_namespace(seg)
-        ns_name = ns.get("name")
-        if not ns_name or ns_name == "default":
-            continue
-        if ns_name in gateways:
-            continue
-        fw_iface = (seg.get("security_zone") or {}).get("firewall_interface") or {}
-        ip_obj = fw_iface.get("ip_address") or {}
-        ip_addr = ip_obj.get("address")
-        if ip_addr:
-            gateways[ns_name] = ip_addr.split("/")[0]
-    return gateways
+    return {}
 
 
 def get_zone_policies(policies_data: list[dict[str, Any]] | None = None) -> list[dict[str, Any]]:

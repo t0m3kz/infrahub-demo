@@ -1,66 +1,68 @@
 ---
 # Azure westeurope: VNet
-# cidr_blocks references IpamPrefix in CUST1-AZURE-WESTEUROPE namespace (see 00_ipam.yml)
+# cidr_blocks references IpamPrefix in CNRD-AZURE-WESTEUROPE namespace (see 00_i
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
   kind: CloudVirtualNetwork
   data:
-    - name: CUST1-VNET-WESTEUROPE
-      account: CUST1-AZURE
+    - name: C001-VNET-WESTEUROPE
+      account: CNRD-AZURE
       region: westeurope
       is_default: false
       dns_support: true
       dns_hostnames: false
       cidr_blocks:
         - - "172.17.0.0/16"
-          - "CUST1-AZURE-WESTEUROPE"
+          - "CNRD-AZURE-WESTEUROPE"
 
 ---
 # Azure westeurope: subnets for AKS node pools
-# name is computed: customer-1-{customer_name}-production
-# aks-zone1 → customer-1-aks-zone1-production   172.17.10.0/24
-# aks-zone2 → customer-1-aks-zone2-production   172.17.20.0/24
+# name is computed: {{owner__org_id__value|lower}}-{{customer_name}}-{{environment}}
+# aks-zone1 → c001-aks-zone1-p   172.17.10.0/24
+# aks-zone2 → c001-aks-zone2-p   172.17.20.0/24
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
   kind: CloudNetworkSegment
   data:
     - customer_name: aks-zone1
-      owner: "Customer 1"
+      owner: "C001"
+      environment: p
       segment_type: azure_vnet_subnet
       segment_role: server_application
       status: active
       is_public: false
       auto_assign_public_ip: false
-      virtual_network: CUST1-VNET-WESTEUROPE
+      virtual_network: C001-VNET-WESTEUROPE
       availability_zone: ["westeurope", "westeurope-1"]
       cidr_block:
         - "172.17.10.0/24"
-        - "CUST1-AZURE-WESTEUROPE"
+        - "CNRD-AZURE-WESTEUROPE"
 
     - customer_name: aks-zone2
-      owner: "Customer 1"
+      owner: "C001"
+      environment: p
       segment_type: azure_vnet_subnet
       segment_role: server_application
       status: active
       is_public: false
       auto_assign_public_ip: false
-      virtual_network: CUST1-VNET-WESTEUROPE
+      virtual_network: C001-VNET-WESTEUROPE
       availability_zone: ["westeurope", "westeurope-2"]
       cidr_block:
         - "172.17.20.0/24"
-        - "CUST1-AZURE-WESTEUROPE"
+        - "CNRD-AZURE-WESTEUROPE"
 
 ---
-# Azure Virtual Network Gateway (ExpressRoute — connects VNet to ExpressRoute circuit)
+# Azure Virtual Network Gateway (ExpressRoute — connects VNet to ExpressRoute ci
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
   kind: CloudVPNGateway
   data:
-    - name: CUST1-ERGW-WESTEUROPE
-      description: "Customer 1 ExpressRoute VNet Gateway for westeurope"
+    - name: C001-ERGW-WESTEUROPE
+      description: "CNRD ExpressRoute VNet Gateway for westeurope"
       region: westeurope
       vpn_type: site_to_site
-      virtual_network: CUST1-VNET-WESTEUROPE
+      virtual_network: C001-VNET-WESTEUROPE

@@ -188,7 +188,7 @@ class PodCablingStrategy(CablingStrategy):
                 top_intf_index = (bottom_index + cabling_offset) % len(top_interfaces)
                 top_intf = top_interfaces[top_intf_index]
                 bottom_intf = self.planner.bottom_by_device[bottom_device][(top_index)]
-                cabling_plan.append((top_intf, bottom_intf))
+                cabling_plan.append((bottom_intf, top_intf))
 
         return cabling_plan
 

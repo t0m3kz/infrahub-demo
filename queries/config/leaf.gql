@@ -8,11 +8,8 @@ query leaf_config($device: String!) {
         role { value }
         platform {
           node {
-            id
             name { value }
             netmiko_device_type { value }
-            napalm_driver { value }
-            ansible_network_os { value }
           }
         }
         primary_address {
@@ -27,26 +24,9 @@ query leaf_config($device: String!) {
           }
         }
 
-        # Deployment context — segment activations for VLAN/VNI database
-        ... on DcimPhysicalDevice {
-          deployment {
-            node {
-              id
-              name { value }
-              ...SegmentDeploymentsDC
-              ... on TopologyPod {
-                parent {
-                  node {
-                    ...SegmentDeploymentsDC
-                  }
-                }
-              }
-            }
-          }
-        }
-
         # Device Services (BGP, OSPF) with nested peerings
-        device_capabilities {
+        ... on DcimCapabilities {
+        capabilities {
           edges {
             node {
               __typename
@@ -67,9 +47,6 @@ query leaf_config($device: String!) {
                     node {
                       afi { value }
                       safi { value }
-                      advertise_all_vni { value }
-                      advertise_default_gw { value }
-                      advertise_svi_ip { value }
                     }
                   }
                 }
@@ -88,13 +65,10 @@ query leaf_config($device: String!) {
                           node {
                             afi { value }
                             safi { value }
-                            advertise_all_vni { value }
-                            advertise_default_gw { value }
-                            advertise_svi_ip { value }
                           }
                         }
                       }
-                      interfaces {
+                      interface_capabilities {
                         edges {
                           node {
                             name { value }
@@ -111,8 +85,6 @@ query leaf_config($device: String!) {
                       bgp_processes {
                         edges {
                           node {
-                            id
-                            device_capabilities { edges { node { name { value } } } }
                             router_id { node { address { value } } }
                             local_as { node { asn { value } } }
                           }
@@ -192,10 +164,11 @@ query leaf_config($device: String!) {
                 domain_id { value }
                 reload_delay { value }
                 reload_delay_non_mlag { value }
-                device_capabilities { edges { node { name { value } } } }
+                capabilities { edges { node { name { value } } } }
               }
             }
           }
+        }
         }
 
         # Interface Information
@@ -300,6 +273,14 @@ fragment NetworkSegmentFields on ManagedNetworkSegment {
     name { value }
     description { value }
     status { value }
+    segment_deployments(status__values: ["active", "provisioning"]) {
+      edges {
+        node {
+          vlan_id { value }
+          vni { value }
+        }
+      }
+    }
     prefix {
       edges {
         node {
@@ -322,6 +303,14 @@ fragment NetworkSegmentFields on ManagedNetworkSegment {
     description { value }
     status { value }
     arp_suppression { value }
+    segment_deployments(status__values: ["active", "provisioning"]) {
+      edges {
+        node {
+          vlan_id { value }
+          vni { value }
+        }
+      }
+    }
     prefix {
       edges {
         node {
@@ -344,6 +333,30 @@ fragment NetworkSegmentFields on ManagedNetworkSegment {
 # SecurityPolicyFields is spread inside each concrete segment type (ManagedVlan/VxlanSegment)
 # because security_policies lives on ManagedNetworkSegment — all segment types inherit it.
 fragment SecurityPolicyFields on ManagedNetworkSegment {
+  inline_service {
+    node { id name { value } }
+  }
+  isolation_mode { value }
+  security_tag {
+    node {
+      name { value }
+      group_id { value }
+      rules_as_source {
+        edges {
+          node {
+            action { value }
+            log { value }
+            destination_tag {
+              node {
+                name { value }
+                group_id { value }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
   security_policies {
     edges {
       node {
@@ -361,6 +374,7 @@ fragment SecurityPolicyFields on ManagedNetworkSegment {
               port_end { value }
               log { value }
               disabled { value }
+              apply_on_switch { value }
               source_zone { node { name { value } } }
               destination_zone { node { name { value } } }
               source_segment {
@@ -375,90 +389,6 @@ fragment SecurityPolicyFields on ManagedNetworkSegment {
                   id
                   ... on ManagedVlanSegment { name { value } prefix { edges { node { prefix { value } } } } }
                   ... on ManagedVxlanSegment { name { value } prefix { edges { node { prefix { value } } } } }
-                }
-              }
-            }
-          }
-        }
-      }
-    }
-  }
-}
-
-fragment SegmentDeploymentsDC on TopologyDataCenter {
-  segment_deployments {
-    edges {
-      node {
-        vlan_id { value }
-        vni { value }
-        status { value }
-        segment {
-          node {
-            id
-            ... on ManagedVlanSegment {
-              name { value }
-              customer_name { value }
-              security_zone {
-                node {
-                  firewall_interface {
-                    node {
-                      ip_address {
-                        node {
-                          address { value }
-                          ip_namespace { node { name { value } } }
-                        }
-                      }
-                    }
-                  }
-                }
-              }
-              prefix {
-                edges {
-                  node {
-                    prefix { value }
-                    gateway_ip { value }
-                    ip_namespace {
-                      node {
-                        name { value }
-                        l3_vni { value }
-                        owner { node { name { value } } }
-                      }
-                    }
-                  }
-                }
-              }
-            }
-            ... on ManagedVxlanSegment {
-              name { value }
-              customer_name { value }
-              arp_suppression { value }
-              security_zone {
-                node {
-                  firewall_interface {
-                    node {
-                      ip_address {
-                        node {
-                          address { value }
-                          ip_namespace { node { name { value } } }
-                        }
-                      }
-                    }
-                  }
-                }
-              }
-              prefix {
-                edges {
-                  node {
-                    prefix { value }
-                    gateway_ip { value }
-                    ip_namespace {
-                      node {
-                        name { value }
-                        l3_vni { value }
-                        owner { node { name { value } } }
-                      }
-                    }
-                  }
                 }
               }
             }

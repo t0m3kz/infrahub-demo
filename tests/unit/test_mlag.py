@@ -249,7 +249,7 @@ class TestGetCapabilitiesMLAGFlag:
 
         result = get_capabilities(
             {
-                "device_capabilities": [
+                "capabilities": [
                     {"typename": "ManagedMLAG"},
                 ]
             }
@@ -261,7 +261,7 @@ class TestGetCapabilitiesMLAGFlag:
 
         result = get_capabilities(
             {
-                "device_capabilities": [
+                "capabilities": [
                     {"typename": "ManagedBGP"},
                 ]
             }
@@ -273,7 +273,7 @@ class TestGetCapabilitiesMLAGFlag:
 
         result = get_capabilities(
             {
-                "device_capabilities": [
+                "capabilities": [
                     {"typename": "ManagedBGP"},
                     {"typename": "ManagedMLAG"},
                 ]
