@@ -1,0 +1,55 @@
+---
+# Equinix Fabric virtual connections between AM1 edge routers and the vSphere cluster
+#
+# Equinix Metal bare-metal hosts connect to the Equinix Fabric via an internal
+# cross-connect inside AM1. The edge routers (AM1-EDGE-01/02) each terminate one VC;
+# vSphere management, vMotion, and NSX-T overlay traffic flows over these paths.
+# Primary path: AM1-EDGE-01 → vSphere management network
+# Secondary path: AM1-EDGE-02 → vSphere management network (redundancy)
+
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimVirtualInterface
+  data:
+    - name: VTI-AM1-VSPHERE-PRI
+      description: "AM1-EDGE-01 VTI — primary Equinix Fabric VC to vSphere cluster"
+      role: uplink
+      status: active
+      device: AM1-EDGE-01
+
+    - name: VTI-AM1-VSPHERE-SEC
+      description: "AM1-EDGE-02 VTI — secondary Equinix Fabric VC to vSphere cluster"
+      role: uplink
+      status: active
+      device: AM1-EDGE-02
+
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologyVirtualCircuit
+  data:
+    - name: VC-EQX-AM1-VSPHERE-PRIMARY
+      description: "Primary Equinix Fabric connection — AM1-EDGE-01 to vSphere cluster"
+      link_type: equinix_fabric
+      bandwidth: 10000
+      status: active
+      provider: Equinix
+      locations:
+        - AM1
+      interfaces:
+        - - AM1-EDGE-01
+          - VTI-AM1-VSPHERE-PRI
+
+    - name: VC-EQX-AM1-VSPHERE-SECONDARY
+      description: "Secondary Equinix Fabric connection — AM1-EDGE-02 to vSphere cluster"
+      link_type: equinix_fabric
+      bandwidth: 10000
+      status: active
+      provider: Equinix
+      locations:
+        - AM1
+      interfaces:
+        - - AM1-EDGE-02
+          - VTI-AM1-VSPHERE-SEC

@@ -72,10 +72,27 @@ class VrfNamespaceGenerator(CommonGenerator):
         vni_identifier = f"{ns_id}-l3vni"
         self.logger.info(f"Allocating L3 VNI for namespace '{ns_name}' from pool {GLOBAL_L3VNI_POOL_NAME}")
 
+        # SDK Number-attribute mutation on a fetched node is broken (serialises as
+        # value: BigInt, server rejects it). Use a raw GraphQL Upsert so the
+        # from_pool directive is sent correctly.
+        mutation = """
+        mutation AllocateL3Vni($id: String!, $pool_id: String!, $identifier: String!) {
+          IpamNamespaceUpsert(data: {
+            id: $id
+            l3_vni: { from_pool: { id: $pool_id }, identifier: $identifier }
+          }) {
+            object { id }
+          }
+        }
+        """
         try:
-            namespace_obj = await self.client.get(kind="IpamNamespace", id=ns_id)
-            namespace_obj.l3_vni = {"from_pool": {"id": l3_vni_pool.id}, "identifier": vni_identifier}
-            await namespace_obj.save(allow_upsert=True)
+            await self.client.execute_graphql(
+                query=mutation,
+                variables={"id": ns_id, "pool_id": l3_vni_pool.id, "identifier": vni_identifier},
+            )
             self.logger.info(f"Namespace '{ns_name}' updated with L3 VNI from pool")
+            # Re-fetch and re-save so the SDK group context tracks this node
+            namespace_obj = await self.client.get(kind="IpamNamespace", id=ns_id)
+            await namespace_obj.save(allow_upsert=True)
         except Exception as exc:
             self.logger.error(f"Failed to allocate L3 VNI for namespace '{ns_name}': {exc}")

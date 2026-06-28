@@ -1,0 +1,75 @@
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TemplateDcimPhysicalDevice
+  data:
+    - template_name: CP-26000_FIREWALL
+      device_type: CP-26000
+      platform: checkpoint_gaia
+      role: firewall
+      status: provisioning
+      interfaces:
+        kind: TemplateDcimPhysicalInterface
+        data:
+          - template_name: CP-26000_FIREWALL_mgmt
+            name: MGMT
+            role: management
+            interface_type: 1000base-t
+          - template_name: CP-26000_FIREWALL_eth1
+            name: eth1
+            role: uplink
+            interface_type: 100gbase-x-qsfp28
+          - template_name: CP-26000_FIREWALL_eth2
+            name: eth2
+            role: uplink
+            interface_type: 100gbase-x-qsfp28
+          - template_name: CP-26000_FIREWALL_eth3
+            name: eth3
+            role: customer
+            interface_type: 100gbase-x-qsfp28
+          - template_name: CP-26000_FIREWALL_eth4
+            name: eth4
+            role: customer
+            interface_type: 100gbase-x-qsfp28
+          - template_name: CP-26000_FIREWALL_sync
+            name: sync
+            role: mlag-peer
+            interface_type: 10gbase-x-sfpp
+
+    - template_name: PA-5260_FIREWALL
+      device_type: PA-5260
+      platform: panos
+      role: firewall
+      status: provisioning
+      interfaces:
+        kind: TemplateDcimPhysicalInterface
+        data:
+          - template_name: PA-5260_FIREWALL_mgmt
+            name: MGT
+            role: management
+            interface_type: 1000base-t
+          - template_name: PA-5260_FIREWALL_eth1-1
+            name: ethernet1/1
+            role: uplink
+            interface_type: 100gbase-x-qsfp28
+          - template_name: PA-5260_FIREWALL_eth1-2
+            name: ethernet1/2
+            role: uplink
+            interface_type: 100gbase-x-qsfp28
+          - template_name: PA-5260_FIREWALL_eth1-3
+            name: ethernet1/3
+            role: customer
+            interface_type: 100gbase-x-qsfp28
+          - template_name: PA-5260_FIREWALL_eth1-4
+            name: ethernet1/4
+            role: customer
+            interface_type: 100gbase-x-qsfp28
+          - template_name: PA-5260_FIREWALL_ha1
+            name: HA1
+            role: mlag-peer
+            interface_type: 1000base-t
+          - template_name: PA-5260_FIREWALL_ha2
+            name: HA2
+            role: mlag-peer
+            interface_type: 100gbase-x-qsfp28

@@ -1,0 +1,52 @@
+---
+# Zscaler SASE — cloud-delivered Secure Web Gateway / Zero Trust Network Access
+#
+# Zscaler has no physical on-prem presence. Traffic is forwarded from branch VCEs
+# and Equinix VCG hubs via IPsec GRE tunnels to the nearest Zscaler data centre.
+#
+# Two regional nodes cover the topology:
+#   ZSCALER-SASE-EUROPE-WEST     — Amsterdam PoP (primary for UK/NL/ES offices and AM1 hub)
+#   ZSCALER-SASE-EUROPE-CENTRAL  — Frankfurt PoP  (primary for DE/FR offices and FR6/PA4/PA6 hubs)
+#
+# Location mapping follows Zscaler's published data centre footprint:
+#   amsterdam  → ams metro  (serves LON, EDI, BCN branch VCEs + AM1 VCG)
+#   frankfurt  → fra metro  (serves MAD, STR branch VCEs + FR6/PA4/PA6 VCGs)
+
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologySaas
+  data:
+    - name: ZSCALER-SASE
+      provider: zscaler
+      service_type: sase
+      status: active
+      description: "Zscaler Internet Access (ZIA) + Zscaler Private Access (ZPA) — SASE platform"
+      children:
+        kind: TopologySaasRegion
+        data:
+          - region_name: europe-west
+            status: active
+            location: ams
+
+          - region_name: europe-central
+            status: active
+            location: fra
+
+---
+# Zscaler PoP logical devices — one per regional node
+# These are virtual/logical endpoints representing the Zscaler cloud;
+# they carry no physical device type but anchor the virtual circuit model.
+
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimPhysicalDevice
+  data:
+    - name: EXT-SAAS-ZSCALER-AMS-01
+      object_template: N9K-C9336C-FX2_EDGE
+      status: active
+
+    - name: EXT-SAAS-ZSCALER-FRA-01
+      object_template: N9K-C9336C-FX2_EDGE
+      status: active

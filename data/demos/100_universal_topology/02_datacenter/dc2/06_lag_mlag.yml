@@ -10,7 +10,7 @@ spec:
       domain_id: 1
       reload_delay: 300
       reload_delay_non_mlag: 330
-      device_capabilities:
+      capabilities:
         - DC2-POD1-L1
         - DC2-POD1-L2
 
@@ -19,7 +19,7 @@ spec:
       domain_id: 2
       reload_delay: 300
       reload_delay_non_mlag: 330
-      device_capabilities:
+      capabilities:
         - DC2-POD2-L1
         - DC2-POD2-L2
 

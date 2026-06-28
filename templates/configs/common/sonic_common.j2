@@ -101,7 +101,8 @@
 {%- endfor -%}
 {#- Neighbors -#}
 {%- for session in bgp_config.sessions -%}
-{%- set neighbor_ip = session.remote_ip.address.split('/')[0] -%}
+{%- set _sonic_unnumbered = session.get('interface_name') and not session.get('remote_ip') -%}
+{%- set neighbor_ip = session.interface_name if _sonic_unnumbered else session.remote_ip.address.split('/')[0] -%}
 {%- set neighbor_entry = {
   'asn': session.remote_as.asn|string,
   'holdtime': '180',
@@ -122,6 +123,13 @@
 {%- set _ = neighbor_entry.update({'description': session.remote_device}) -%}
 {%- endif -%}
 {%- set _ = bgp_neighbors.update({neighbor_ip: neighbor_entry}) -%}
+{%- if session.peer_group is not defined and session.address_families -%}
+{%- set _sess_evpn_af = {'admin_status': 'true'} -%}
+{%- if session.get('route_reflector_client') -%}
+{%- set _ = _sess_evpn_af.update({'route_reflector_client': 'true'}) -%}
+{%- endif -%}
+{%- set _ = bgp_globals_af.update({('default|l2vpn_evpn|' + neighbor_ip): _sess_evpn_af}) -%}
+{%- endif -%}
 {%- endfor -%}
 {%- endfor -%}
 {%- endif -%}

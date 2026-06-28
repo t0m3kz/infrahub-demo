@@ -15,6 +15,9 @@ feature lldp
 {%- for vlan in vlans %}
 vlan {{ vlan.vlan_id }}
   name {{ vlan.name }}
+{%- if vlan.isolation_mode == 'isolated' %}
+  ! private-vlan type: isolated  (configure PVLAN or port-protection separately)
+{%- endif %}
 !
 {%- endfor %}
 !
@@ -47,6 +50,15 @@ interface {{ interface.name }}
   switchport
   switchport mode access
   switchport access vlan {{ interface.vlans[0] }}
+{%- set ns_vlan = namespace(isolation_mode='normal') %}
+{%- for vlan in vlans %}
+{%- if vlan.vlan_id == interface.vlans[0] %}
+{%- set ns_vlan.isolation_mode = vlan.isolation_mode %}
+{%- endif %}
+{%- endfor %}
+{%- if ns_vlan.isolation_mode == 'isolated' %}
+  ! TODO: configure port-isolation group X (NX-OS port isolation requires interface-level group assignment)
+{%- endif %}
 {%- endif %}
 {%- if interface.get('ospf') %}
   ip ospf area {{ interface.ospf.area }}
@@ -122,6 +134,11 @@ route-map RM-CONN-2-BGP permit 10
 {%- endfor %}
 interface Vlan{{ vlan.vlan_id }}
   description {{ vlan.name }}
+{%- if vlan.isolation_mode == 'isolated' %}
+  ! Isolation Mode: ISOLATED — intra-segment host-to-host traffic blocked via port-isolation
+{%- elif vlan.isolation_mode == 'microsegmented' %}
+  ! Isolation Mode: MICROSEGMENTED — intra+inter segment rules enforced via SVI ACL (and firewall if present)
+{%- endif %}
 {%- if vlan.vrf %}
   vrf member {{ vlan.vrf }}
 {%- endif %}
@@ -146,6 +163,25 @@ interface Vlan{{ vlan.vlan_id }}
 !
 {%- for vrf, nexthop in vrf_gateways.items() %}
 ip route 0.0.0.0/0 {{ nexthop }} vrf {{ vrf }}
+{%- endfor %}
+!
+{%- endif %}
+{%- if sgt_rules %}
+!
+! CTS Security Group Tags — VXLAN GPO tier enforcement
+! group_id is globally unique across Arista and Cisco fabrics
+!
+feature cts
+!
+{%- for vlan in vlans if vlan.sgt %}
+! Segment: {{ vlan.name }} — tier: {{ vlan.sgt_name }}
+cts role-based sgt-map vlan {{ vlan.vlan_id }} sgt {{ vlan.sgt }}
+{%- endfor %}
+!
+! CTS role-based permissions (SecurityTagRule — coarse tier-to-tier)
+{%- for rule in sgt_rules %}
+cts role-based permissions from {{ rule.src_sgt }} to {{ rule.dst_sgt }} {{ rule.action }}
+  ! {{ rule.src_name }} → {{ rule.dst_name }}
 {%- endfor %}
 !
 {%- endif %}

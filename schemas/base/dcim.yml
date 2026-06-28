@@ -2,6 +2,19 @@
 version: "1.0"
 
 generics:
+  - name: Capabilities
+    namespace: Dcim
+    description: "Unified compute endpoint — any node that can host managed capabilities"
+    include_in_menu: false
+    human_friendly_id:
+      - name__value
+    display_label: "{{name__value}}"
+    attributes:
+      - name: name
+        kind: Text
+        optional: true
+        order_weight: 1000
+
   - name: Device
     namespace: Dcim
     description: Generic Device object.
@@ -18,7 +31,6 @@ generics:
         unique: true
         order_weight: 1000
       - name: description
-        state: absent
         kind: Text
         optional: true
         order_weight: 2000
@@ -99,6 +111,10 @@ generics:
             label: Provider Device
             description: "Virtual/physical device representing a carrier or provider handoff point."
             color: "#c8a2c8"
+          - name: proxy
+            label: Proxy
+            description: "Forward, transparent, or reverse proxy appliance."
+            color: "#5ba85b"
           - name: patch-panel
             label: Patch Panel
             description: "Passive patch panel used as cable interconnect."
@@ -289,10 +305,17 @@ generics:
             label: MLAG Peer-Link
             description: "Interface used as the MLAG/vPC peer-link between two paired devices"
             color: "#FDE68A"
+          - name: firewall
+            label: Firewall
+            description: "Dedicated port for firewall attachment on a border-leaf"
+            color: "#FF6B6B"
+          - name: load-balancer
+            label: Load Balancer
+            description: "Dedicated port for load-balancer attachment on a border-leaf"
+            color: "#4ECDC4"
         order_weight: 1250
       - name: index
         kind: Text
-        state: absent
         read_only: true
         optional: true
         computed_attribute:
@@ -374,6 +397,42 @@ nodes:
         optional: true
         kind: Number
         order_weight: 1600
+      - name: cpu_count
+        label: CPU Count
+        description: "Number of CPU sockets (servers) or management CPUs (network devices)"
+        optional: true
+        kind: Number
+        order_weight: 1700
+      - name: core_count
+        label: Core Count
+        description: "Total CPU core count"
+        optional: true
+        kind: Number
+        order_weight: 1710
+      - name: memory_gb
+        label: Memory (GB)
+        description: "Installed or maximum memory in GB"
+        optional: true
+        kind: Number
+        order_weight: 1720
+      - name: storage_gb
+        label: Storage (GB)
+        description: "Internal storage capacity in GB (servers only)"
+        optional: true
+        kind: Number
+        order_weight: 1730
+      - name: max_routes
+        label: Max Routes
+        description: "Maximum routing table entries (network devices)"
+        optional: true
+        kind: Number
+        order_weight: 1740
+      - name: tcam_entries
+        label: TCAM Entries
+        description: "Hardware TCAM entries for ACL/FIB (network devices)"
+        optional: true
+        kind: Number
+        order_weight: 1750
     relationships:
       - name: platform
         peer: DcimPlatform
@@ -457,6 +516,7 @@ nodes:
     inherit_from:
       - CoreArtifactTarget
       - DcimDevice
+      - DcimCapabilities
     attributes:
       - name: position
         label: Position (U)
@@ -495,6 +555,7 @@ nodes:
     inherit_from:
       - CoreArtifactTarget
       - DcimDevice
+      - DcimCapabilities
     attributes:
       - name: cpu
         label: CPU Number
@@ -635,8 +696,7 @@ nodes:
         peer: IpamIPAddress
         optional: true
         cardinality: one
-        kind: Component
-        on_delete: cascade
+        kind: Attribute
 
   - name: LAGInterface
     namespace: Dcim
@@ -700,49 +760,6 @@ nodes:
         cardinality: one
         kind: Component
         on_delete: cascade
-
-  - name: FirewallInterface
-    namespace: Dcim
-    label: Firewall Interface
-    description: "Firewall interface with security zone binding"
-    inherit_from:
-      - DcimInterface
-    include_in_menu: false
-    attributes:
-      - name: security_level
-        kind: Number
-        label: Security Level
-        description: "Trust level 0-100 (e.g. Cisco ASA security-level). Defaults to zone trust_level when empty."
-        optional: true
-        order_weight: 1400
-        parameters:
-          min_value: 0
-          max_value: 100
-      - name: vlan_id
-        kind: Number
-        label: VLAN ID
-        description: "802.1Q VLAN tag for sub-interface. Set when this interface is a sub-interface on a trunk uplink."
-        optional: true
-        order_weight: 1450
-        parameters:
-          min_value: 1
-          max_value: 4094
-    relationships:
-      - name: ip_address
-        peer: IpamIPAddress
-        optional: true
-        cardinality: one
-        kind: Component
-        on_delete: cascade
-      - name: parent_interface
-        peer: DcimPhysicalInterface
-        label: Parent Interface
-        cardinality: one
-        kind: Attribute
-        optional: true
-        identifier: fw_iface__parent
-        order_weight: 1600
-        description: "Physical trunk interface this sub-interface belongs to"
 
   # --------------------  Cables  --------------------
   - name: Cable

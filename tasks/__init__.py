@@ -7,6 +7,7 @@ Namespaces:
   demo    — end-to-end demo flows
 
 Top-level shortcuts (aliases for namespaced tasks):
+  start               — infra.start
   destroy             — infra.destroy
   setup               — infra.setup
   validate            — dev.validate
@@ -30,6 +31,12 @@ from invoke import Collection, Task
 from invoke import task as _task
 
 from tasks import data, demo, dev, infra
+
+
+@_task
+def start(context):
+    """Start all Infrahub containers (alias for infra.start)."""
+    infra.start(context)
 
 
 @_task
@@ -125,6 +132,7 @@ def run_demo(context, phases="", skip_generators=False, skip_merge=False, dry_ru
 
 
 ns = Collection()
+ns.add_task(cast(Task, start))
 ns.add_task(cast(Task, destroy))
 ns.add_task(cast(Task, setup))
 ns.add_task(cast(Task, validate))

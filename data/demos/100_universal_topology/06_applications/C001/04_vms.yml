@@ -1,0 +1,123 @@
+---
+# C001 (Nordix Ltd.) — Virtual machines on DC1 servers
+
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimVirtualDevice
+  data:
+    # ── trade-portal — production ─────────────────────────────────────────────
+    - name: C001-WEB-VM-01
+      role: endpoint
+      status: active
+      device_type: linux-vm
+      platform: linux
+      deployment: DC1
+      hosting_device: DC1-POD1-SRV-01
+
+    - name: C001-WEB-VM-02
+      role: endpoint
+      status: active
+      device_type: linux-vm
+      platform: linux
+      deployment: DC1
+      hosting_device: DC1-POD1-SRV-ASS-01
+
+    - name: C001-APP-VM-01
+      role: endpoint
+      status: active
+      device_type: linux-vm
+      platform: linux
+      deployment: DC1
+      hosting_device: DC1-POD1-SRV-01
+
+    - name: C001-APP-VM-02
+      role: endpoint
+      status: active
+      device_type: linux-vm
+      platform: linux
+      deployment: DC1
+      hosting_device: DC1-POD1-SRV-02
+
+    - name: C001-DB-VM-01
+      role: endpoint
+      status: active
+      device_type: linux-vm
+      platform: linux
+      deployment: DC1
+      hosting_device: DC1-POD1-SRV-02
+
+    - name: C001-DB-VM-02
+      role: endpoint
+      status: active
+      device_type: linux-vm
+      platform: linux
+      deployment: DC1
+      hosting_device: DC1-POD2-SRV-01
+
+    - name: C001-CACHE-VM-01
+      role: endpoint
+      status: active
+      device_type: linux-vm
+      platform: linux
+      deployment: DC1
+      hosting_device: DC1-POD1-SRV-02
+
+    # ── auth-platform — production ────────────────────────────────────────────
+    - name: C001-AUTH-VM-01
+      role: endpoint
+      status: active
+      device_type: linux-vm
+      platform: linux
+      deployment: DC1
+      hosting_device: DC1-POD1-SRV-01
+
+    - name: C001-AUTH-VM-02
+      role: endpoint
+      status: active
+      device_type: linux-vm
+      platform: linux
+      deployment: DC1
+      hosting_device: DC1-POD1-SRV-02
+
+    # ── risk-engine — production ──────────────────────────────────────────────
+    - name: C001-RISK-VM-01
+      role: endpoint
+      status: active
+      device_type: linux-vm
+      platform: linux
+      deployment: DC1
+      hosting_device: DC1-POD2-SRV-01
+
+    - name: C001-RISK-VM-02
+      role: endpoint
+      status: active
+      device_type: linux-vm
+      platform: linux
+      deployment: DC1
+      hosting_device: DC1-POD2-SRV-02
+
+    # ── trade-portal — nonprod ────────────────────────────────────────────────
+    - name: C001-WEB-NP-VM-01
+      role: endpoint
+      status: active
+      device_type: linux-vm
+      platform: linux
+      deployment: DC1
+      hosting_device: DC1-POD1-SRV-ASS-01
+
+    - name: C001-APP-NP-VM-01
+      role: endpoint
+      status: active
+      device_type: linux-vm
+      platform: linux
+      deployment: DC1
+      hosting_device: DC1-POD1-SRV-ASS-01
+
+    - name: C001-DB-NP-VM-01
+      role: endpoint
+      status: active
+      device_type: linux-vm
+      platform: linux
+      deployment: DC1
+      hosting_device: DC1-POD1-SRV-ASS-01

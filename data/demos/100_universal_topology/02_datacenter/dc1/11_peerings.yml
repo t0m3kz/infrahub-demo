@@ -1,0 +1,523 @@
+---
+# DC1 BGP peerings — iBGP unnumbered (RFC 5549, IPv6 link-local)
+#
+# All devices share AS65001 (iBGP).
+# BL1/BL2 are EVPN route reflectors → route_reflector_client: true on all peers.
+# Spines act as hierarchical RRs for their leaves (single-tier RR hierarchy).
+# Full-mesh cross-pod spine peerings for inter-pod reachability.
+# Underlay: IPv4-unicast + L2VPN-EVPN carried over same unnumbered sessions.
+# Interfaces: the physical Ethernet ports on each side of the link.
+
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: ManagedBGPPeering
+  data:
+    # ── BL1 ↔ spine peerings ──────────────────────────────────────────────────
+    - name: DC1-BL1-POD1-SP1-BGP
+      description: "iBGP unnumbered — DC1-BL1 (RR) ↔ DC1-POD1-SP1 (RR client)"
+      session_type: IBGP
+      bfd_enabled: true
+      route_reflector_client: true
+      bgp_processes:
+        - DC1-BL1-BGP
+        - DC1-POD1-SP1-BGP
+      interface_capabilities:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC1-BL1
+            name: Ethernet1/1
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC1-POD1-SP1
+            name: Ethernet5/1
+
+    - name: DC1-BL1-POD1-SP2-BGP
+      description: "iBGP unnumbered — DC1-BL1 (RR) ↔ DC1-POD1-SP2 (RR client)"
+      session_type: IBGP
+      bfd_enabled: true
+      route_reflector_client: true
+      bgp_processes:
+        - DC1-BL1-BGP
+        - DC1-POD1-SP2-BGP
+      interface_capabilities:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC1-BL1
+            name: Ethernet2/1
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC1-POD1-SP2
+            name: Ethernet5/1
+
+    - name: DC1-BL1-POD2-SP1-BGP
+      description: "iBGP unnumbered — DC1-BL1 (RR) ↔ DC1-POD2-SP1 (RR client)"
+      session_type: IBGP
+      bfd_enabled: true
+      route_reflector_client: true
+      bgp_processes:
+        - DC1-BL1-BGP
+        - DC1-POD2-SP1-BGP
+      interface_capabilities:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC1-BL1
+            name: Ethernet3/1
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC1-POD2-SP1
+            name: Ethernet5/1
+
+    - name: DC1-BL1-POD2-SP2-BGP
+      description: "iBGP unnumbered — DC1-BL1 (RR) ↔ DC1-POD2-SP2 (RR client)"
+      session_type: IBGP
+      bfd_enabled: true
+      route_reflector_client: true
+      bgp_processes:
+        - DC1-BL1-BGP
+        - DC1-POD2-SP2-BGP
+      interface_capabilities:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC1-BL1
+            name: Ethernet4/1
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC1-POD2-SP2
+            name: Ethernet5/1
+
+    # ── BL2 ↔ spine peerings ──────────────────────────────────────────────────
+    - name: DC1-BL2-POD1-SP1-BGP
+      description: "iBGP unnumbered — DC1-BL2 (RR) ↔ DC1-POD1-SP1 (RR client)"
+      session_type: IBGP
+      bfd_enabled: true
+      route_reflector_client: true
+      bgp_processes:
+        - DC1-BL2-BGP
+        - DC1-POD1-SP1-BGP
+      interface_capabilities:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC1-BL2
+            name: Ethernet1/1
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC1-POD1-SP1
+            name: Ethernet6/1
+
+    - name: DC1-BL2-POD1-SP2-BGP
+      description: "iBGP unnumbered — DC1-BL2 (RR) ↔ DC1-POD1-SP2 (RR client)"
+      session_type: IBGP
+      bfd_enabled: true
+      route_reflector_client: true
+      bgp_processes:
+        - DC1-BL2-BGP
+        - DC1-POD1-SP2-BGP
+      interface_capabilities:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC1-BL2
+            name: Ethernet2/1
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC1-POD1-SP2
+            name: Ethernet6/1
+
+    - name: DC1-BL2-POD2-SP1-BGP
+      description: "iBGP unnumbered — DC1-BL2 (RR) ↔ DC1-POD2-SP1 (RR client)"
+      session_type: IBGP
+      bfd_enabled: true
+      route_reflector_client: true
+      bgp_processes:
+        - DC1-BL2-BGP
+        - DC1-POD2-SP1-BGP
+      interface_capabilities:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC1-BL2
+            name: Ethernet3/1
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC1-POD2-SP1
+            name: Ethernet6/1
+
+    - name: DC1-BL2-POD2-SP2-BGP
+      description: "iBGP unnumbered — DC1-BL2 (RR) ↔ DC1-POD2-SP2 (RR client)"
+      session_type: IBGP
+      bfd_enabled: true
+      route_reflector_client: true
+      bgp_processes:
+        - DC1-BL2-BGP
+        - DC1-POD2-SP2-BGP
+      interface_capabilities:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC1-BL2
+            name: Ethernet4/1
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC1-POD2-SP2
+            name: Ethernet6/1
+
+    # ── Full-mesh inter-pod spine peerings ────────────────────────────────────
+    - name: DC1-POD1-SP1-POD2-SP1-BGP
+      description: "iBGP unnumbered — DC1-POD1-SP1 ↔ DC1-POD2-SP1 (full-mesh cross-pod)"
+      session_type: IBGP
+      bfd_enabled: true
+      route_reflector_client: true
+      bgp_processes:
+        - DC1-POD1-SP1-BGP
+        - DC1-POD2-SP1-BGP
+      interface_capabilities:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC1-POD1-SP1
+            name: Ethernet3/1
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC1-POD2-SP1
+            name: Ethernet3/1
+
+    - name: DC1-POD1-SP1-POD2-SP2-BGP
+      description: "iBGP unnumbered — DC1-POD1-SP1 ↔ DC1-POD2-SP2 (full-mesh cross-pod)"
+      session_type: IBGP
+      bfd_enabled: true
+      route_reflector_client: true
+      bgp_processes:
+        - DC1-POD1-SP1-BGP
+        - DC1-POD2-SP2-BGP
+      interface_capabilities:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC1-POD1-SP1
+            name: Ethernet4/1
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC1-POD2-SP2
+            name: Ethernet3/1
+
+    - name: DC1-POD1-SP2-POD2-SP1-BGP
+      description: "iBGP unnumbered — DC1-POD1-SP2 ↔ DC1-POD2-SP1 (full-mesh cross-pod)"
+      session_type: IBGP
+      bfd_enabled: true
+      route_reflector_client: true
+      bgp_processes:
+        - DC1-POD1-SP2-BGP
+        - DC1-POD2-SP1-BGP
+      interface_capabilities:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC1-POD1-SP2
+            name: Ethernet3/1
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC1-POD2-SP1
+            name: Ethernet4/1
+
+    - name: DC1-POD1-SP2-POD2-SP2-BGP
+      description: "iBGP unnumbered — DC1-POD1-SP2 ↔ DC1-POD2-SP2 (full-mesh cross-pod)"
+      session_type: IBGP
+      bfd_enabled: true
+      route_reflector_client: true
+      bgp_processes:
+        - DC1-POD1-SP2-BGP
+        - DC1-POD2-SP2-BGP
+      interface_capabilities:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC1-POD1-SP2
+            name: Ethernet4/1
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC1-POD2-SP2
+            name: Ethernet4/1
+
+    # ── Spine ↔ leaf peerings (POD1) ─────────────────────────────────────────
+    - name: DC1-POD1-SP1-POD1-L1-BGP
+      description: "iBGP unnumbered — DC1-POD1-SP1 (hierarchical RR) ↔ DC1-POD1-L1 (leaf client)"
+      session_type: IBGP
+      bfd_enabled: true
+      route_reflector_client: true
+      bgp_processes:
+        - DC1-POD1-SP1-BGP
+        - DC1-POD1-L1-BGP
+      interface_capabilities:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC1-POD1-SP1
+            name: Ethernet11/1
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC1-POD1-L1
+            name: Ethernet1/1
+
+    - name: DC1-POD1-SP2-POD1-L1-BGP
+      description: "iBGP unnumbered — DC1-POD1-SP2 (hierarchical RR) ↔ DC1-POD1-L1 (leaf client)"
+      session_type: IBGP
+      bfd_enabled: true
+      route_reflector_client: true
+      bgp_processes:
+        - DC1-POD1-SP2-BGP
+        - DC1-POD1-L1-BGP
+      interface_capabilities:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC1-POD1-SP2
+            name: Ethernet21/1
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC1-POD1-L1
+            name: Ethernet2/1
+
+    - name: DC1-POD1-SP1-POD1-L2-BGP
+      description: "iBGP unnumbered — DC1-POD1-SP1 (hierarchical RR) ↔ DC1-POD1-L2 (leaf client)"
+      session_type: IBGP
+      bfd_enabled: true
+      route_reflector_client: true
+      bgp_processes:
+        - DC1-POD1-SP1-BGP
+        - DC1-POD1-L2-BGP
+      interface_capabilities:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC1-POD1-SP1
+            name: Ethernet12/1
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC1-POD1-L2
+            name: Ethernet1/1
+
+    - name: DC1-POD1-SP2-POD1-L2-BGP
+      description: "iBGP unnumbered — DC1-POD1-SP2 (hierarchical RR) ↔ DC1-POD1-L2 (leaf client)"
+      session_type: IBGP
+      bfd_enabled: true
+      route_reflector_client: true
+      bgp_processes:
+        - DC1-POD1-SP2-BGP
+        - DC1-POD1-L2-BGP
+      interface_capabilities:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC1-POD1-SP2
+            name: Ethernet22/1
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC1-POD1-L2
+            name: Ethernet2/1
+
+    - name: DC1-POD1-SP1-POD1-L3-BGP
+      description: "iBGP unnumbered — DC1-POD1-SP1 (hierarchical RR) ↔ DC1-POD1-L3 (leaf client)"
+      session_type: IBGP
+      bfd_enabled: true
+      route_reflector_client: true
+      bgp_processes:
+        - DC1-POD1-SP1-BGP
+        - DC1-POD1-L3-BGP
+      interface_capabilities:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC1-POD1-SP1
+            name: Ethernet13/1
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC1-POD1-L3
+            name: Ethernet1/1
+
+    - name: DC1-POD1-SP2-POD1-L3-BGP
+      description: "iBGP unnumbered — DC1-POD1-SP2 (hierarchical RR) ↔ DC1-POD1-L3 (leaf client)"
+      session_type: IBGP
+      bfd_enabled: true
+      route_reflector_client: true
+      bgp_processes:
+        - DC1-POD1-SP2-BGP
+        - DC1-POD1-L3-BGP
+      interface_capabilities:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC1-POD1-SP2
+            name: Ethernet23/1
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC1-POD1-L3
+            name: Ethernet2/1
+
+    - name: DC1-POD1-SP1-POD1-L4-BGP
+      description: "iBGP unnumbered — DC1-POD1-SP1 (hierarchical RR) ↔ DC1-POD1-L4 (leaf client)"
+      session_type: IBGP
+      bfd_enabled: true
+      route_reflector_client: true
+      bgp_processes:
+        - DC1-POD1-SP1-BGP
+        - DC1-POD1-L4-BGP
+      interface_capabilities:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC1-POD1-SP1
+            name: Ethernet14/1
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC1-POD1-L4
+            name: Ethernet1/1
+
+    - name: DC1-POD1-SP2-POD1-L4-BGP
+      description: "iBGP unnumbered — DC1-POD1-SP2 (hierarchical RR) ↔ DC1-POD1-L4 (leaf client)"
+      session_type: IBGP
+      bfd_enabled: true
+      route_reflector_client: true
+      bgp_processes:
+        - DC1-POD1-SP2-BGP
+        - DC1-POD1-L4-BGP
+      interface_capabilities:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC1-POD1-SP2
+            name: Ethernet24/1
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC1-POD1-L4
+            name: Ethernet2/1
+
+    # ── Spine ↔ leaf peerings (POD2) ─────────────────────────────────────────
+    - name: DC1-POD2-SP1-POD2-L1-BGP
+      description: "iBGP unnumbered — DC1-POD2-SP1 (hierarchical RR) ↔ DC1-POD2-L1 (leaf client)"
+      session_type: IBGP
+      bfd_enabled: true
+      route_reflector_client: true
+      bgp_processes:
+        - DC1-POD2-SP1-BGP
+        - DC1-POD2-L1-BGP
+      interface_capabilities:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC1-POD2-SP1
+            name: Ethernet11/1
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC1-POD2-L1
+            name: Ethernet1/1
+
+    - name: DC1-POD2-SP2-POD2-L1-BGP
+      description: "iBGP unnumbered — DC1-POD2-SP2 (hierarchical RR) ↔ DC1-POD2-L1 (leaf client)"
+      session_type: IBGP
+      bfd_enabled: true
+      route_reflector_client: true
+      bgp_processes:
+        - DC1-POD2-SP2-BGP
+        - DC1-POD2-L1-BGP
+      interface_capabilities:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC1-POD2-SP2
+            name: Ethernet21/1
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC1-POD2-L1
+            name: Ethernet2/1
+
+    - name: DC1-POD2-SP1-POD2-L2-BGP
+      description: "iBGP unnumbered — DC1-POD2-SP1 (hierarchical RR) ↔ DC1-POD2-L2 (leaf client)"
+      session_type: IBGP
+      bfd_enabled: true
+      route_reflector_client: true
+      bgp_processes:
+        - DC1-POD2-SP1-BGP
+        - DC1-POD2-L2-BGP
+      interface_capabilities:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC1-POD2-SP1
+            name: Ethernet12/1
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC1-POD2-L2
+            name: Ethernet1/1
+
+    - name: DC1-POD2-SP2-POD2-L2-BGP
+      description: "iBGP unnumbered — DC1-POD2-SP2 (hierarchical RR) ↔ DC1-POD2-L2 (leaf client)"
+      session_type: IBGP
+      bfd_enabled: true
+      route_reflector_client: true
+      bgp_processes:
+        - DC1-POD2-SP2-BGP
+        - DC1-POD2-L2-BGP
+      interface_capabilities:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC1-POD2-SP2
+            name: Ethernet22/1
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC1-POD2-L2
+            name: Ethernet2/1
+
+    - name: DC1-POD2-SP1-POD2-L3-BGP
+      description: "iBGP unnumbered — DC1-POD2-SP1 (hierarchical RR) ↔ DC1-POD2-L3 (leaf client)"
+      session_type: IBGP
+      bfd_enabled: true
+      route_reflector_client: true
+      bgp_processes:
+        - DC1-POD2-SP1-BGP
+        - DC1-POD2-L3-BGP
+      interface_capabilities:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC1-POD2-SP1
+            name: Ethernet13/1
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC1-POD2-L3
+            name: Ethernet1/1
+
+    - name: DC1-POD2-SP2-POD2-L3-BGP
+      description: "iBGP unnumbered — DC1-POD2-SP2 (hierarchical RR) ↔ DC1-POD2-L3 (leaf client)"
+      session_type: IBGP
+      bfd_enabled: true
+      route_reflector_client: true
+      bgp_processes:
+        - DC1-POD2-SP2-BGP
+        - DC1-POD2-L3-BGP
+      interface_capabilities:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC1-POD2-SP2
+            name: Ethernet23/1
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC1-POD2-L3
+            name: Ethernet2/1
+
+    - name: DC1-POD2-SP1-POD2-L4-BGP
+      description: "iBGP unnumbered — DC1-POD2-SP1 (hierarchical RR) ↔ DC1-POD2-L4 (leaf client)"
+      session_type: IBGP
+      bfd_enabled: true
+      route_reflector_client: true
+      bgp_processes:
+        - DC1-POD2-SP1-BGP
+        - DC1-POD2-L4-BGP
+      interface_capabilities:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC1-POD2-SP1
+            name: Ethernet14/1
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC1-POD2-L4
+            name: Ethernet1/1
+
+    - name: DC1-POD2-SP2-POD2-L4-BGP
+      description: "iBGP unnumbered — DC1-POD2-SP2 (hierarchical RR) ↔ DC1-POD2-L4 (leaf client)"
+      session_type: IBGP
+      bfd_enabled: true
+      route_reflector_client: true
+      bgp_processes:
+        - DC1-POD2-SP2-BGP
+        - DC1-POD2-L4-BGP
+      interface_capabilities:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC1-POD2-SP2
+            name: Ethernet24/1
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC1-POD2-L4
+            name: Ethernet2/1

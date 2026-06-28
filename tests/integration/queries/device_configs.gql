@@ -18,9 +18,7 @@ query BorderLeafBatchConfig($device_names: [String!]) {
             node {
               id
               name { value }
-              ... on TopologyDataCenter {
-                segment_deployments_count: segment_deployments { count }
-              }
+              segment_deployments_count: segment_deployments { count }
             }
           }
         }

@@ -1,0 +1,81 @@
+{#- Squid — {{ proxy_type | default('explicit') }} proxy configuration -#}
+#
+# Device:     {{ name }}
+# Proxy type: {{ proxy_type | default('explicit') }}
+# HA mode:    {{ ha.mode if ha else 'standalone' }}
+#
+
+# --- Ports ---
+{%- if proxy_type == 'transparent' %}
+http_port 3128 intercept
+https_port 3129 ssl-bump intercept cert=/etc/squid/ssl_cert/myCA.pem
+{%- else %}
+http_port 3128
+https_port 3129 ssl-bump cert=/etc/squid/ssl_cert/myCA.pem
+{%- endif %}
+
+# --- SSL bump (HTTPS inspection) ---
+acl step1 at_step SslBump1
+ssl_bump peek step1
+ssl_bump bump all
+
+# --- Access Control ---
+acl localnet src 10.0.0.0/8
+acl localnet src 172.16.0.0/12
+acl localnet src 192.168.0.0/16
+acl SSL_ports port 443
+acl Safe_ports port 80
+acl Safe_ports port 443
+acl Safe_ports port 21
+acl Safe_ports port 70
+acl Safe_ports port 210
+acl Safe_ports port 1025-65535
+acl Safe_ports port 280
+acl Safe_ports port 488
+acl Safe_ports port 591
+acl Safe_ports port 777
+acl CONNECT method CONNECT
+
+http_access deny !Safe_ports
+http_access deny CONNECT !SSL_ports
+http_access allow localhost manager
+http_access deny manager
+http_access allow localnet
+http_access allow localhost
+http_access deny all
+
+# --- DNS ---
+dns_nameservers 8.8.8.8 8.8.4.4
+
+# --- Interfaces ---
+{%- set mgmt_iface = proxy_interfaces | selectattr('role', 'equalto', 'management') | list | first | default(None) %}
+{%- if mgmt_iface and mgmt_iface.ip_address %}
+tcp_outgoing_address {{ mgmt_iface.ip_address.address.split('/')[0] }}
+{%- endif %}
+{%- for iface in proxy_interfaces %}
+# {{ iface.name }}{%- if iface.description %}: {{ iface.description }}{%- endif %}{%- if iface.ip_address %} — {{ iface.ip_address.address }}{%- endif %}
+{%- endfor %}
+
+# --- Cache ---
+cache_mem 256 MB
+maximum_object_size_in_memory 512 KB
+maximum_object_size 4 MB
+cache_dir ufs /var/spool/squid 10000 16 256
+
+# --- Logging ---
+access_log /var/log/squid/access.log squid
+cache_log /var/log/squid/cache.log
+logfile_rotate 7
+
+# --- Stats ---
+cachemgr_passwd disable all
+{%- if mgmt_iface and mgmt_iface.ip_address %}
+http_access allow {{ mgmt_iface.ip_address.address.split('/')[0] }} manager
+{%- endif %}
+{%- if ha %}
+
+# --- HA notes ---
+# HA group: {{ ha.group_id }}  mode: {{ ha.mode }}  priority: {{ ha.priority }}
+# Peers: {{ ha.devices | join(', ') }}
+# Failover managed externally via keepalived — Squid itself is stateless.
+{%- endif %}

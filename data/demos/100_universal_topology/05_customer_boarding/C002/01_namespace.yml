@@ -1,0 +1,63 @@
+---
+# C002 (SwiftGo GmbH) — customer boarding: namespace (VRF)
+#
+# IpamNamespace maps 1:1 to a VRF on the VXLAN fabric.
+# The L3 VNI is allocated from the shared GLOBAL-L3VNI pool and
+# distributed via EVPN type-5 routes to all DC3 leafs.
+# All customer traffic entering through the virtual firewall
+# is forwarded into this namespace after inspection.
+
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: IpamNamespace
+  data:
+    - name: "C002-DC3-PROD"
+      description: "SwiftGo GmbH production VRF on DC3"
+      l3_vni: 50012
+      status: "active"
+      owner: "C002"
+      member_of_groups:
+        - vrf_namespaces
+
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: IpamPrefix
+  data:
+    - prefix: "10.2.10.0/24"
+      description: "C002 prod web-frontend subnet (DC3)"
+      status: active
+      role: customer
+      ip_namespace: "C002-DC3-PROD"
+
+    - prefix: "10.2.20.0/24"
+      description: "C002 prod app-backend subnet (DC3)"
+      status: active
+      role: customer
+      ip_namespace: "C002-DC3-PROD"
+
+    - prefix: "10.2.30.0/24"
+      description: "C002 prod database subnet (DC3)"
+      status: active
+      role: customer
+      ip_namespace: "C002-DC3-PROD"
+
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: IpamIPAddress
+  data:
+    - address: "10.2.10.1/24"
+      description: "Anycast GW — C002 prod web-frontend (DC3)"
+      ip_namespace: "C002-DC3-PROD"
+
+    - address: "10.2.20.1/24"
+      description: "Anycast GW — C002 prod app-backend (DC3)"
+      ip_namespace: "C002-DC3-PROD"
+
+    - address: "10.2.30.1/24"
+      description: "Anycast GW — C002 prod database (DC3)"
+      ip_namespace: "C002-DC3-PROD"

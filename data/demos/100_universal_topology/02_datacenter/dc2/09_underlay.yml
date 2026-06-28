@@ -1,0 +1,205 @@
+---
+# DC2 underlay — OSPF (area 0, point-to-point, numbered /31 links)
+#
+# All devices run OSPF process 1 in area 0 (backbone).
+# BL1/BL2 act as EVPN route-reflectors and are the aggregation points for the fabric.
+# Fabric interfaces have numbered /31 IPs from 10.255.22.0/24 (see 08_fabric_ips.yml).
+# Router-ID sourced from Loopback0 (10.255.12.x/32).
+# reference-bandwidth 100000 (100Gbps) for consistent metric calculation.
+
+# ── DC2 overlay AS ────────────────────────────────────────────────────────────
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: RoutingAutonomousSystem
+  data:
+    - asn: 65002
+      description: "DC2 fabric AS — iBGP EVPN overlay (underlay via OSPF)"
+
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: ManagedOSPF
+  data:
+    - name: DC2-BL1-OSPF
+      status: active
+      description: "OSPF process — DC2 border-leaf BL1 (EVPN RR)"
+      process_id: "1"
+      version: ospf
+      router_type: internal
+      reference_bandwidth: 100000
+      capabilities:
+        - DC2-BL1
+      router_id:
+        - "10.255.12.51/32"
+        - FABRIC-DC2
+
+    - name: DC2-BL2-OSPF
+      status: active
+      description: "OSPF process — DC2 border-leaf BL2 (EVPN RR)"
+      process_id: "1"
+      version: ospf
+      router_type: internal
+      reference_bandwidth: 100000
+      capabilities:
+        - DC2-BL2
+      router_id:
+        - "10.255.12.52/32"
+        - FABRIC-DC2
+
+    - name: DC2-POD1-SP1-OSPF
+      status: active
+      description: "OSPF process — DC2 POD1 spine SP1"
+      process_id: "1"
+      version: ospf
+      router_type: internal
+      reference_bandwidth: 100000
+      capabilities:
+        - DC2-POD1-SP1
+      router_id:
+        - "10.255.12.11/32"
+        - FABRIC-DC2
+
+    - name: DC2-POD1-SP2-OSPF
+      status: active
+      description: "OSPF process — DC2 POD1 spine SP2"
+      process_id: "1"
+      version: ospf
+      router_type: internal
+      reference_bandwidth: 100000
+      capabilities:
+        - DC2-POD1-SP2
+      router_id:
+        - "10.255.12.12/32"
+        - FABRIC-DC2
+
+    - name: DC2-POD1-L1-OSPF
+      status: active
+      description: "OSPF process — DC2 POD1 leaf L1"
+      process_id: "1"
+      version: ospf
+      router_type: internal
+      reference_bandwidth: 100000
+      capabilities:
+        - DC2-POD1-L1
+      router_id:
+        - "10.255.12.21/32"
+        - FABRIC-DC2
+
+    - name: DC2-POD1-L2-OSPF
+      status: active
+      description: "OSPF process — DC2 POD1 leaf L2"
+      process_id: "1"
+      version: ospf
+      router_type: internal
+      reference_bandwidth: 100000
+      capabilities:
+        - DC2-POD1-L2
+      router_id:
+        - "10.255.12.22/32"
+        - FABRIC-DC2
+
+    - name: DC2-POD1-L3-OSPF
+      status: active
+      description: "OSPF process — DC2 POD1 leaf L3"
+      process_id: "1"
+      version: ospf
+      router_type: internal
+      reference_bandwidth: 100000
+      capabilities:
+        - DC2-POD1-L3
+      router_id:
+        - "10.255.12.23/32"
+        - FABRIC-DC2
+
+    - name: DC2-POD1-L4-OSPF
+      status: active
+      description: "OSPF process — DC2 POD1 leaf L4"
+      process_id: "1"
+      version: ospf
+      router_type: internal
+      reference_bandwidth: 100000
+      capabilities:
+        - DC2-POD1-L4
+      router_id:
+        - "10.255.12.24/32"
+        - FABRIC-DC2
+
+    - name: DC2-POD2-SP1-OSPF
+      status: active
+      description: "OSPF process — DC2 POD2 spine SP1"
+      process_id: "1"
+      version: ospf
+      router_type: internal
+      reference_bandwidth: 100000
+      capabilities:
+        - DC2-POD2-SP1
+      router_id:
+        - "10.255.12.13/32"
+        - FABRIC-DC2
+
+    - name: DC2-POD2-SP2-OSPF
+      status: active
+      description: "OSPF process — DC2 POD2 spine SP2"
+      process_id: "1"
+      version: ospf
+      router_type: internal
+      reference_bandwidth: 100000
+      capabilities:
+        - DC2-POD2-SP2
+      router_id:
+        - "10.255.12.14/32"
+        - FABRIC-DC2
+
+    - name: DC2-POD2-L1-OSPF
+      status: active
+      description: "OSPF process — DC2 POD2 leaf L1"
+      process_id: "1"
+      version: ospf
+      router_type: internal
+      reference_bandwidth: 100000
+      capabilities:
+        - DC2-POD2-L1
+      router_id:
+        - "10.255.12.25/32"
+        - FABRIC-DC2
+
+    - name: DC2-POD2-L2-OSPF
+      status: active
+      description: "OSPF process — DC2 POD2 leaf L2"
+      process_id: "1"
+      version: ospf
+      router_type: internal
+      reference_bandwidth: 100000
+      capabilities:
+        - DC2-POD2-L2
+      router_id:
+        - "10.255.12.26/32"
+        - FABRIC-DC2
+
+    - name: DC2-POD2-L3-OSPF
+      status: active
+      description: "OSPF process — DC2 POD2 leaf L3"
+      process_id: "1"
+      version: ospf
+      router_type: internal
+      reference_bandwidth: 100000
+      capabilities:
+        - DC2-POD2-L3
+      router_id:
+        - "10.255.12.27/32"
+        - FABRIC-DC2
+
+    - name: DC2-POD2-L4-OSPF
+      status: active
+      description: "OSPF process — DC2 POD2 leaf L4"
+      process_id: "1"
+      version: ospf
+      router_type: internal
+      reference_bandwidth: 100000
+      capabilities:
+        - DC2-POD2-L4
+      router_id:
+        - "10.255.12.28/32"
+        - FABRIC-DC2

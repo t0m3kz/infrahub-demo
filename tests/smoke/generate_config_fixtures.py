@@ -20,13 +20,14 @@ from pathlib import Path
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
-from transforms.border_leaf import BorderLeaf
-from transforms.edge import Edge
-from transforms.firewall import Firewall
-from transforms.leaf import Leaf
-from transforms.spine import Spine
-from transforms.super_spine import SuperSpine
-from transforms.tor import ToR
+from transforms.config.border_leaf import BorderLeaf
+from transforms.config.edge import Edge
+from transforms.config.firewall import Firewall
+from transforms.config.leaf import Leaf
+from transforms.config.proxy import Proxy
+from transforms.config.spine import Spine
+from transforms.config.super_spine import SuperSpine
+from transforms.config.tor import ToR
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 SMOKE_DIR = Path(__file__).resolve().parent / "configs"
@@ -254,31 +255,23 @@ def _make_segment_deployment(
     gateway_ip: str | None = None,
     ns_name: str = "default",
     security_policies: list[dict] | None = None,
-    fw_gateway_ip: str | None = None,
     num_deployments: int = 1,
+    isolation_mode: str | None = None,
+    has_firewall: bool = False,
 ) -> dict:
-    """Build a SegmentDeployment node.
-
-    Args:
-        fw_gateway_ip: If set, embed security_zone.firewall_interface.ip_address
-                       in the segment so get_vrf_default_gateways() can derive the
-                       VRF default route nexthop (Option A: FW as inter-VRF router).
-    """
+    """Build a SegmentDeployment node."""
     seg: dict[str, Any] = {"id": f"seg-{seg_name}"}
 
-    # Build security_zone with optional embedded firewall_interface
-    if fw_gateway_ip:
-        fw_iface_node: dict | None = {
-            "ip_address": _node(
-                {
-                    "address": _v(fw_gateway_ip),
-                    "ip_namespace": _node({"name": _v(ns_name)}),
-                }
-            )
-        }
+    if isolation_mode is not None:
+        seg["isolation_mode"] = _v(isolation_mode)
+
+    # Embed a firewall node reference so acl.py seg_has_firewall detects it
+    if has_firewall:
+        seg["inline_service"] = _node({"id": "fw-dc1-01", "name": _v("dc1-fw-01")})
     else:
-        fw_iface_node = None
-    security_zone_node = _node({"firewall_interface": _node(fw_iface_node)})
+        seg["inline_service"] = _node(None)
+
+    security_zone_node = _node(None)
 
     if seg_type == "ManagedVxlanSegment":
         seg.update(
@@ -352,6 +345,7 @@ def build_device_data(
     include_segments: bool = False,
     include_acls: bool = False,
     stretched_segments: bool = False,
+    isolation_mode: str | None = None,
 ) -> dict:
     """Build a complete raw GraphQL response for a device config query.
 
@@ -588,6 +582,8 @@ def build_device_data(
                 )
             ]
 
+        # microsegmented: assign firewall but still render leaf ACL
+        microseg = isolation_mode == "microsegmented"
         activations.append(
             _make_segment_deployment(
                 vlan_id=100,
@@ -597,8 +593,9 @@ def build_device_data(
                 gateway_ip="10.100.0.1/24",
                 ns_name="VRF_A",
                 security_policies=policies_vxlan,
-                fw_gateway_ip="10.100.0.254/24",
                 num_deployments=2 if stretched_segments else 1,
+                isolation_mode=isolation_mode,
+                has_firewall=microseg,
             )
         )
         if not stretched_segments:
@@ -610,6 +607,7 @@ def build_device_data(
                     seg_type="ManagedVlanSegment",
                     gateway_ip="10.200.0.1/24",
                     security_policies=policies_vlan,
+                    isolation_mode=isolation_mode,
                     num_deployments=1,
                 )
             )
@@ -660,7 +658,7 @@ def build_device_data(
             }
         ),
         "tags": _edges([]),
-        "device_capabilities": _edges(device_capabilities),
+        "capabilities": _edges(device_capabilities),
         "interfaces": _edges(interfaces),
         "deployment": _node(
             {
@@ -682,27 +680,50 @@ def _make_firewall_interface(
     trust_level: int,
     zone_type: str = "internal",
     description: str = "",
-    security_level: int | None = None,
     vlan_id: int | None = None,
     parent_interface_name: str | None = None,
     namespace_name: str | None = None,
 ) -> dict:
-    zone: dict = {
+    seg_name = f"seg-{zone_name}"
+    zone_node = {
         "name": _v(zone_name),
         "trust_level": _v(trust_level),
         "zone_type": _v(zone_type),
     }
+    seg_node = {
+        "__typename": "ManagedVxlanSegment",
+        "id": seg_name,
+        "name": _v(seg_name),
+        "status": _v("active"),
+        "arp_suppression": _v(True),
+        "segment_deployments": _edges([{"vlan_id": _v(vlan_id), "vni": _v(None)}]),
+        "security_zone": _node(zone_node),
+        "prefix": _edges(
+            [
+                {
+                    "prefix": _v(None),
+                    "gateway_ip": _v(None),
+                    "ip_namespace": _node({"name": _v(namespace_name), "l3_vni": _v(None), "owner": _node(None)}),
+                }
+            ]
+        ),
+        "security_policies": _edges([]),
+    }
     return {
-        "__typename": "DcimFirewallInterface",
+        "__typename": "DcimVirtualInterface",
         "name": _v(name),
         "description": _v(description),
         "status": _v("active"),
         "role": _v("uplink"),
-        "security_level": _v(security_level),
-        "vlan_id": _v(vlan_id),
         "parent_interface": _node({"name": _v(parent_interface_name)} if parent_interface_name else None),
-        "security_zone": _node(zone),
-        "ip_address": _node({"address": _v(ip_address), "ip_namespace": _node({"name": _v(namespace_name)})}),
+        "ip_address": _node(
+            {
+                "address": _v(ip_address),
+                "ip_namespace": _node({"name": _v(namespace_name)}),
+            }
+        ),
+        "ha_domain": _node(None),
+        "interface_capabilities": _edges([seg_node]),
     }
 
 
@@ -829,7 +850,7 @@ def build_firewall_data(*, device_name: str, platform: str) -> dict:
         ),
         "primary_address": _node(None),
         "tags": _edges([]),
-        "device_capabilities": _edges([]),
+        "capabilities": _edges([]),
         "interfaces": _edges(fw_interfaces),
         "deployment": _node(None),
     }
@@ -919,6 +940,38 @@ def build_firewall_data(*, device_name: str, platform: str) -> dict:
     }
 
 
+def build_firewall_ha_data(*, device_name: str, platform: str) -> dict:
+    """Build a firewall GQL response that includes a ManagedHA capability.
+
+    Same topology as build_firewall_data() but with a ManagedHA capability node
+    so the HA template block is exercised.
+    """
+    data = build_firewall_data(device_name=device_name, platform=platform)
+
+    ha_cap = {
+        "__typename": "ManagedHA",
+        "name": _v("dc1-fw-ha"),
+        "group_id": _v(1),
+        "mode": _v("active-passive"),
+        "priority": _v(100),
+        "preempt": _v(False),
+        "ha_timer": _v("aggressive"),
+        "virtual_ip": _v("10.0.0.254"),
+        "capabilities": _edges(
+            [
+                {"name": _v("dc1-fw-01")},
+                {"name": _v("dc1-fw-02")},
+            ]
+        ),
+    }
+
+    # Inject the HA capability into the device node
+    devices_edges = data["DcimPhysicalDevice"]["edges"]
+    devices_edges[0]["node"]["capabilities"] = _edges([ha_cap])
+
+    return data
+
+
 def build_mlag_device_data(
     *,
     device_name: str,
@@ -943,7 +996,7 @@ def build_mlag_device_data(
         "domain_id": _v(domain_id),
         "reload_delay": _v(300),
         "reload_delay_non_mlag": _v(330),
-        "device_capabilities": _edges(
+        "capabilities": _edges(
             [
                 {"name": _v(device_name)},
                 {"name": _v(peer_name)},
@@ -1041,7 +1094,7 @@ def build_mlag_device_data(
             }
         ),
         "tags": _edges([]),
-        "device_capabilities": _edges([mlag_cap]),
+        "capabilities": _edges([mlag_cap]),
         "interfaces": _edges([loopback, up1, up2, lag_iface, mem1, mem2]),
         "deployment": _node(
             {
@@ -1053,6 +1106,93 @@ def build_mlag_device_data(
     }
 
     return {"DcimDevice": _edges([device_node])}
+
+
+_PROXY_PLATFORM_VENDOR: dict[str, str] = {
+    "haproxy_technologies_linux": "haproxy",
+    "squid_cache_linux": "squid",
+    "bluecoat_sgos": "bluecoat",
+    "cisco_wsa_asyncos": "cisco_wsa",
+}
+
+
+def build_proxy_data(
+    *,
+    device_name: str,
+    platform: str,
+    proxy_type: str = "explicit",
+) -> dict:
+    """Build a raw GQL-shaped dict for a proxy device config query.
+
+    The response mirrors what clean_data() will receive (raw ``{"value": ...}`` wrappers).
+    """
+    vendor = _PROXY_PLATFORM_VENDOR.get(platform, "haproxy")
+
+    proxy_cap = {
+        "__typename": "ManagedProxyHA",
+        "name": _v(f"{device_name}-HA"),
+        "group_id": _v(1),
+        "mode": _v("active-passive"),
+        "priority": _v(100),
+        "preempt": _v(False),
+        "proxy_type": _v(proxy_type),
+        "proxy_vendor": _v(vendor),
+        "capabilities": _edges(
+            [
+                {"name": _v(device_name)},
+                {"name": _v(device_name.replace("01", "02"))},
+            ]
+        ),
+    }
+
+    interfaces = [
+        {
+            "__typename": "DcimPhysicalInterface",
+            "name": _v("mgmt"),
+            "description": _v("OOB management"),
+            "status": _v("active"),
+            "role": _v("management"),
+            "ip_address": _node({"address": _v("192.168.1.1/24")}),
+        },
+        {
+            "__typename": "DcimPhysicalInterface",
+            "name": _v("eth0"),
+            "description": _v("Ingress uplink"),
+            "status": _v("active"),
+            "role": _v("uplink"),
+            "ip_address": _node(None),
+        },
+        {
+            "__typename": "DcimPhysicalInterface",
+            "name": _v("eth1"),
+            "description": _v("Egress uplink"),
+            "status": _v("active"),
+            "role": _v("uplink"),
+            "ip_address": _node(None),
+        },
+    ]
+
+    device_node: dict = {
+        "__typename": "DcimPhysicalDevice",
+        "id": f"dev-{device_name}",
+        "name": _v(device_name),
+        "role": _v("proxy"),
+        "platform": _node(
+            {
+                "id": f"plat-{platform}",
+                "name": _v(platform),
+                "netmiko_device_type": _v(platform),
+                "napalm_driver": _v(platform),
+                "ansible_network_os": _v(platform),
+            }
+        ),
+        "primary_address": _node(None),
+        "tags": _edges([]),
+        "capabilities": _edges([proxy_cap]),
+        "interfaces": _edges(interfaces),
+    }
+
+    return {"DcimPhysicalDevice": _edges([device_node])}
 
 
 def run_transform(transform_cls: type, data: dict) -> str:
@@ -1105,6 +1245,7 @@ def _write_fixture(
     include_segments: bool,
     include_acls: bool = False,
     stretched_segments: bool = False,
+    isolation_mode: str | None = None,
 ) -> tuple[int, int]:
     test_dir = SMOKE_DIR / dir_name
     test_dir.mkdir(parents=True, exist_ok=True)
@@ -1117,6 +1258,7 @@ def _write_fixture(
         include_segments=include_segments,
         include_acls=include_acls,
         stretched_segments=stretched_segments,
+        isolation_mode=isolation_mode,
     )
 
     input_path = test_dir / "input.json"
@@ -1216,6 +1358,66 @@ def main() -> None:
             print(f"  ✗ {dir_name}: {e}")
             errors += 1
 
+    # Firewall HA scenarios: same platforms, with ManagedHA capability
+    print("\nGenerating firewall HA fixtures:")
+    for platform in FIREWALL_PLATFORMS:
+        dir_name = f"firewall_{platform}_with_ha"
+        test_dir = SMOKE_DIR / dir_name
+        test_dir.mkdir(parents=True, exist_ok=True)
+
+        data = build_firewall_ha_data(
+            device_name="dc1-fw-01",
+            platform=platform,
+        )
+        input_path = test_dir / "input.json"
+        with open(input_path, "w") as f:
+            json.dump(data, f, indent=2)
+            f.write("\n")
+
+        try:
+            output = run_transform(Firewall, data)
+            with open(test_dir / "output.txt", "w") as f:
+                f.write(output)
+            print(f"  ✓ {dir_name}")
+            generated += 1
+        except Exception as e:
+            print(f"  ✗ {dir_name}: {e}")
+            errors += 1
+
+    # Isolation mode: isolated — switchport protected, no intra-segment forwarding
+    print("\nGenerating isolated segment fixtures (leaf):")
+    for platform in ACL_PLATFORMS:
+        g, e = _write_fixture(
+            Leaf,
+            dir_name=f"leaf_{platform}_isolated",
+            dev_name="dc1-leaf-01",
+            role="leaf",
+            platform=platform,
+            scenario="ebgp_ibgp",
+            include_segments=True,
+            include_acls=True,
+            isolation_mode="isolated",
+        )
+        generated += g
+        errors += e
+
+    # Isolation mode: microsegmented — leaf ACL rendered even when firewall present
+    print("\nGenerating microsegmented fixtures (leaf):")
+    for platform in ACL_PLATFORMS:
+        g, e = _write_fixture(
+            Leaf,
+            dir_name=f"leaf_{platform}_microsegmented",
+            dev_name="dc1-leaf-01",
+            role="leaf",
+            platform=platform,
+            scenario="ebgp_ibgp",
+            include_segments=True,
+            include_acls=True,
+            isolation_mode="microsegmented",
+        )
+        generated += g
+        errors += e
+
     # MLAG/VPC scenarios: leaf, border_leaf, tor — platforms with MLAG templates
     MLAG_PLATFORMS = ["arista_eos", "cisco_nxos", "dell_sonic", "nokia_sros", "sonic"]
     MLAG_DEVICE_TYPES: list[tuple[type, str, str]] = [
@@ -1245,6 +1447,35 @@ def main() -> None:
                 f.write("\n")
             try:
                 output = run_transform(transform_cls, data)
+                with open(test_dir / "output.txt", "w") as f:
+                    f.write(output)
+                print(f"  ✓ {dir_name}")
+                generated += 1
+            except Exception as e:
+                print(f"  ✗ {dir_name}: {e}")
+                errors += 1
+
+    # Proxy scenarios: platform × proxy_type
+    PROXY_PLATFORMS = list(_PROXY_PLATFORM_VENDOR.keys())
+    PROXY_TYPES = ["explicit", "transparent", "reverse"]
+    print("\nGenerating proxy fixtures:")
+    for platform in PROXY_PLATFORMS:
+        for proxy_type in PROXY_TYPES:
+            dir_name = f"proxy_{platform}_{proxy_type}"
+            test_dir = SMOKE_DIR / dir_name
+            test_dir.mkdir(parents=True, exist_ok=True)
+            dev_name = "DC3-PRX-01"
+            data = build_proxy_data(
+                device_name=dev_name,
+                platform=platform,
+                proxy_type=proxy_type,
+            )
+            input_path = test_dir / "input.json"
+            with open(input_path, "w") as f:
+                json.dump(data, f, indent=2)
+                f.write("\n")
+            try:
+                output = run_transform(Proxy, data)
                 with open(test_dir / "output.txt", "w") as f:
                     f.write(output)
                 print(f"  ✓ {dir_name}")

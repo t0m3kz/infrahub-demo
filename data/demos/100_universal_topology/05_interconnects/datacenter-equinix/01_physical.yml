@@ -11,17 +11,19 @@ spec:
   data:
     - name: PHYS-DC1-FR2-EQX-01
       circuit_id: PHYS-DC1-FR2-EQX-01
-      description: "Physical circuit from DC1 to Equinix Frankfurt (FR2)"
+      description: "Physical circuit from DC1-BL1 to Equinix Frankfurt (FR2)"
       circuit_type: cross_connect
       committed_rate: 100000
       status: active
       provider: Equinix
+      member_of_groups:
+        - physical_circuits
       locations:
         - DC1
         - FR2
       interfaces:
-        - - DC1-SS1
-          - Ethernet1/5
+        - - DC1-BL1
+          - Ethernet9/1
         - - FR2-EDGE-01
           - Ethernet1/2
       provider_a:
@@ -33,17 +35,19 @@ spec:
 
     - name: PHYS-DC2-PA4-EQX-01
       circuit_id: PHYS-DC2-PA4-EQX-01
-      description: "Physical circuit from DC2 to Equinix Paris (PA4)"
+      description: "Physical circuit from DC2-BL1 to Equinix Paris (PA4)"
       circuit_type: cross_connect
       committed_rate: 100000
       status: active
       provider: Equinix
+      member_of_groups:
+        - physical_circuits
       locations:
         - DC2
         - PA4
       interfaces:
-        - - DC2-SS1
-          - Ethernet1/5
+        - - DC2-BL1
+          - Ethernet1/9
         - - PA4-EDGE-01
           - Ethernet1/2
       provider_a:
@@ -55,17 +59,19 @@ spec:
 
     - name: PHYS-DC1-FR6-EQX-01
       circuit_id: PHYS-DC1-FR6-EQX-01
-      description: "Physical circuit from DC1 to Equinix Frankfurt (FR6)"
+      description: "Physical circuit from DC1-BL2 to Equinix Frankfurt (FR6)"
       circuit_type: cross_connect
       committed_rate: 100000
       status: active
       provider: Equinix
+      member_of_groups:
+        - physical_circuits
       locations:
         - DC1
         - FR6
       interfaces:
-        - - DC1-SS1
-          - Ethernet1/6
+        - - DC1-BL2
+          - Ethernet9/1
         - - FR6-EDGE-01
           - Ethernet1/2
       provider_a:
@@ -77,17 +83,19 @@ spec:
 
     - name: PHYS-DC2-PA6-EQX-01
       circuit_id: PHYS-DC2-PA6-EQX-01
-      description: "Physical circuit from DC2 to Equinix Paris (PA6)"
+      description: "Physical circuit from DC2-BL2 to Equinix Paris (PA6)"
       circuit_type: cross_connect
       committed_rate: 100000
       status: active
       provider: Equinix
+      member_of_groups:
+        - physical_circuits
       locations:
         - DC2
         - PA6
       interfaces:
-        - - DC2-SS1
-          - Ethernet1/6
+        - - DC2-BL2
+          - Ethernet1/9
         - - PA6-EDGE-01
           - Ethernet1/2
       provider_a:

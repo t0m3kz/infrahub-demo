@@ -1,0 +1,77 @@
+!
+! dc1-leaf-01 Configuration
+!
+hostname dc1-leaf-01
+!
+feature ospf
+feature bgp
+feature interface-vlan
+feature lacp
+feature vpc
+feature lldp
+!
+
+! VLANs
+!
+!
+! Interfaces
+interface Ethernet1
+  no shutdown
+  ip address 10.1.0.1/31
+
+!
+interface Ethernet2
+  no shutdown
+  ip address 10.1.0.3/31
+
+!
+interface Ethernet10
+  no shutdown
+
+!
+interface Loopback0
+  no shutdown
+  ip address 10.0.0.1/32
+
+!
+!
+! OSPF Configuration
+
+
+!
+! BGP Configuration
+
+router bgp 65000
+  router-id 10.0.0.1
+  graceful-restart
+  address-family ipv4 unicast
+    redistribute direct route-map RM-CONN-2-BGP
+    maximum-paths 8
+  !
+  address-family l2vpn evpn
+  !
+!
+router bgp 65001
+  router-id 10.0.0.1
+  graceful-restart
+  address-family ipv4 unicast
+    redistribute direct route-map RM-CONN-2-BGP
+    maximum-paths 8
+  !
+  address-family l2vpn evpn
+  !
+!
+
+!
+!
+! Route-maps
+route-map RM-CONN-2-BGP permit 10
+  match interface loopback0
+!
+!
+
+!
+! Management
+line console
+line vty
+!

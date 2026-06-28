@@ -361,13 +361,20 @@ class TestVxlanVniAllocation:
 
 
 class TestVxlanGenerateCallsInterfaceAssignment:
-    """VxlanSegmentGenerator.generate() must call both base activation and
-    _assign_to_deployment_interfaces after processing segment data."""
+    """VxlanSegmentGenerator.generate() must call base activation,
+    _assign_to_deployment_interfaces, and _create_inline_sub_interfaces.
+
+    Note: _assign_to_server_interfaces has been removed from VxlanSegmentGenerator.
+    The generator only calls _activate_segment_in_deployment (via super().generate()),
+    _assign_to_deployment_interfaces, and _create_inline_sub_interfaces.
+    """
 
     def test_generate_calls_assign_to_deployment_interfaces(self):
+        """generate() calls _activate_segment_in_deployment and _assign_to_deployment_interfaces."""
         gen = _make_gen(VxlanSegmentGenerator)
         gen._activate_segment_in_deployment = AsyncMock()
         gen._assign_to_deployment_interfaces = AsyncMock()
+        gen._create_inline_sub_interfaces = AsyncMock()
 
         data = _seg_response(
             "ManagedVxlanSegment",
@@ -379,3 +386,28 @@ class TestVxlanGenerateCallsInterfaceAssignment:
 
         gen._activate_segment_in_deployment.assert_awaited_once()
         gen._assign_to_deployment_interfaces.assert_awaited_once_with(data)
+
+    def test_generate_does_not_call_assign_to_server_interfaces(self):
+        """_assign_to_server_interfaces no longer exists on VxlanSegmentGenerator.
+        Only _activate_segment_in_deployment, _assign_to_deployment_interfaces,
+        and _create_inline_sub_interfaces are called."""
+        gen = _make_gen(VxlanSegmentGenerator)
+        gen._activate_segment_in_deployment = AsyncMock()
+        gen._assign_to_deployment_interfaces = AsyncMock()
+        gen._create_inline_sub_interfaces = AsyncMock()
+
+        data = _seg_response(
+            "ManagedVxlanSegment",
+            seg_id="seg-3",
+            seg_name="vxlan-2000",
+            deployments=[_DEP_1],
+        )
+        asyncio.run(gen.generate(data))
+
+        # The removed method must not exist on the generator instance
+        assert not hasattr(gen, "_assign_to_server_interfaces")
+
+        # All three current methods called exactly once
+        gen._activate_segment_in_deployment.assert_awaited_once()
+        gen._assign_to_deployment_interfaces.assert_awaited_once_with(data)
+        gen._create_inline_sub_interfaces.assert_awaited_once_with(data)

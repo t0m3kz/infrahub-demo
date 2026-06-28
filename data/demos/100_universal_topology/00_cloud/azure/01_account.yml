@@ -1,5 +1,5 @@
 ---
-# Azure provider + Customer 1 subscription
+# Azure provider + CNRD subscription
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
@@ -13,8 +13,10 @@ kind: Object
 spec:
   kind: CloudAccount
   data:
-    - name: CUST1-AZURE
+    - name: CNRD-AZURE
       account_id: "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
-      environment: production
+      environment: p
       provider: Azure
-      owner: "Customer 1"
+      owner: "C001"
+      member_of_groups:
+        - cloud_accounts

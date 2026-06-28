@@ -1,0 +1,169 @@
+---
+# Equinix Metal + VMware (vSphere) cluster hosted in PA4
+# https://www.equinix.com/partners/vmware
+#
+# Mirrors the AM1 cluster (EQUINIX-AM1-VSPHERE-01) — same topology, Paris site.
+# BGP inter-site peering connects PA4-EDGE-01/02 to AM1-EDGE-01/02.
+
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: VirtCluster
+  data:
+    - name: EQUINIX-PA4-VSPHERE-01
+      description: "VMware vSphere cluster on Equinix Metal (Paris PA4)"
+      platform: vmware_vsphere
+      version: "vSphere 8.0 U2"
+      status: active
+      ha_enabled: true
+      deployment: PA4
+      ip_namespace: default
+
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: VirtNodePool
+  data:
+
+    - name: control-plane
+      cluster: EQUINIX-PA4-VSPHERE-01
+      pool_type: control_plane
+      scaling_mode: static
+      status: active
+      node_count: 1
+      instance_flavor: "Equinix Metal s3.xlarge.x86"
+      os_type: esxi
+      os_version: "ESXi 8.0 U2"
+      cpu_per_node: 8
+      memory_per_node_gb: 64
+      storage_per_node_gb: 480
+
+    - name: compute
+      cluster: EQUINIX-PA4-VSPHERE-01
+      pool_type: hypervisor
+      scaling_mode: static
+      status: active
+      node_count: 4
+      instance_flavor: "Equinix Metal m3.large.x86"
+      os_type: esxi
+      os_version: "ESXi 8.0 U2"
+      cpu_per_node: 32
+      memory_per_node_gb: 512
+      storage_per_node_gb: 3840
+
+    - name: storage
+      cluster: EQUINIX-PA4-VSPHERE-01
+      pool_type: storage
+      scaling_mode: static
+      status: active
+      node_count: 3
+      instance_flavor: "Equinix Metal s3.xlarge.x86"
+      os_type: esxi
+      os_version: "ESXi 8.0 U2"
+      cpu_per_node: 16
+      memory_per_node_gb: 128
+      storage_per_node_gb: 7680
+
+    - name: management
+      cluster: EQUINIX-PA4-VSPHERE-01
+      pool_type: management
+      scaling_mode: static
+      status: active
+      node_count: 3
+      instance_flavor: "Equinix Metal s3.xlarge.x86"
+      os_type: esxi
+      os_version: "ESXi 8.0 U2"
+      cpu_per_node: 8
+      memory_per_node_gb: 64
+      storage_per_node_gb: 480
+
+# ── EQUINIX-PA4-VSPHERE-01 capabilities ──────────────────────────────────────
+
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: VirtCNI
+  data:
+    - name: EQUINIX-PA4-VSPHERE-01-CNI
+      status: active
+      plugin: nsx_t
+      version: "NSX-T 4.1.2"
+      pod_cidr: "192.168.0.0/16"
+      service_cidr: "192.168.128.0/17"
+      encapsulation: geneve
+      bgp_enabled: true
+      cluster_capabilities:
+        - EQUINIX-PA4-VSPHERE-01
+
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: VirtStorageBackend
+  data:
+    - name: EQUINIX-PA4-VSPHERE-01-STORAGE
+      status: active
+      backend_type: vsan
+      version: "vSAN 8.0 U2"
+      default_class: true
+      reclaim_policy: retain
+      cluster_capabilities:
+        - EQUINIX-PA4-VSPHERE-01
+
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: VirtIngress
+  data:
+    - name: EQUINIX-PA4-VSPHERE-01-INGRESS
+      status: active
+      controller: nsx_alb
+      version: "NSX ALB 22.1.6"
+      cluster_capabilities:
+        - EQUINIX-PA4-VSPHERE-01
+
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: VirtRegistry
+  data:
+    - name: EQUINIX-PA4-VSPHERE-01-REGISTRY
+      status: active
+      registry_type: content_library
+      endpoint: "vcenter.pa4.equinix.internal"
+      insecure: false
+      cluster_capabilities:
+        - EQUINIX-PA4-VSPHERE-01
+
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: VirtManagementPlane
+  data:
+    - name: EQUINIX-PA4-VSPHERE-01-MGMT
+      status: active
+      endpoint: "vcenter.pa4.equinix.internal"
+      endpoint_access: private
+      port: 443
+      auth_method: saml
+      cluster_capabilities:
+        - EQUINIX-PA4-VSPHERE-01
+
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: VirtMonitoring
+  data:
+    - name: EQUINIX-PA4-VSPHERE-01-MONITORING
+      status: active
+      stack: prometheus_grafana
+      version: "vROps 8.14 / Prometheus exporter 0.12.0"
+      retention_days: 30
+      cluster_capabilities:
+        - EQUINIX-PA4-VSPHERE-01

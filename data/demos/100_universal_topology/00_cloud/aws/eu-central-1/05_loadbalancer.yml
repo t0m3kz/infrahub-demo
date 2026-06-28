@@ -1,19 +1,21 @@
 ---
 # AWS eu-central-1: NLB spread across both AZs via LB subnets
-# Subnet refs use computed names: customer-1-{customer_name}-production
+# Subnet refs use computed names: c001-{customer_name}-p
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
   kind: CloudLoadBalancer
   data:
-    - name: CUST1-NLB-APP-EU-CENTRAL-1
+    - name: C001-NLB-APP-EU-CENTRAL-1
       status: active
-      description: "Customer 1 NLB serving application tier across eu-central-1a/1b"
+      member_of_groups:
+        - cloud_loadbalancers
+      description: "CNRD NLB serving application tier across eu-central-1a/1b"  # yamllint disable-line rule:line-length
       lb_type: l4_cloud
       lb_vendor: aws_nlb
       scheme: internet_facing
-      cloud_id: "arn:aws:elasticloadbalancing:eu-central-1:123456789012:loadbalancer/net/cust1-nlb-app/abcdef1234567890"
-      virtual_network: CUST1-VPC-EU-CENTRAL-1
+      cloud_id: "arn:aws:elasticloadbalancing:eu-central-1:123456789012:loadbalancer/net/cnrd-nlb-app/abcdef1234567890"  # yamllint disable-line rule:line-length
+      virtual_network: C001-VPC-EU-CENTRAL-1
       network_segments:
-        - customer-1-lb-1a-production
-        - customer-1-lb-1b-production
+        - c001-lb-1a-p
+        - c001-lb-1b-p

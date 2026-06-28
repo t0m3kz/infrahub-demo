@@ -45,6 +45,7 @@ interface Ethernet2
 interface Ethernet10
    description to server-01
 
+   switchport trunk allowed vlan 100,200
    no shutdown
 
 interface Loopback0
@@ -89,10 +90,6 @@ interface Vlan100
 interface Vlan200
    ip address virtual 10.200.0.1/24
    ip access-group ACL-VLAN200-IN in
-!
-! VRF Default Routes — firewall gateway per namespace (Option A: FW as inter-VRF router)
-!
-ip route vrf VRF_A 0.0.0.0/0 10.100.0.254
 
 
 ! End of configuration

@@ -1,0 +1,768 @@
+---
+# DC3 BGP peerings — eBGP unnumbered (RFC 5549, IPv6 link-local)
+#
+# Each device has a unique AS (65300–65362, BLs 65370–65371).
+# Combined underlay+overlay: same eBGP sessions carry IPv4 unicast + L2VPN EVPN.
+# No separate overlay sessions — EVPN runs on the underlay eBGP adjacencies.
+# Interfaces: the physical Ethernet ports on each side of the link.
+#
+# Border-leafs (BL1/BL2) peer with both super-spines for fabric reachability.
+# They are also EVPN multi-site BGWs: they re-originate EVPN Type-5 routes
+# from the fabric to the DCI (PA4/PA6) and vice versa, enabling stretched
+# VXLAN segments across DC1/DC2/DC3. Inter-tenant routing for customer
+# namespaces (VRFs) is also handled here via RT import/export policy.
+
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: ManagedBGPPeering
+  data:
+    # ── Border-leaf ↔ super-spine peerings ────────────────────────────────────
+    - name: DC3-BL1-SS1-BGP
+      description: "eBGP unnumbered — DC3-BL1 (AS65370) ↔ DC3-SS1 (AS65300)"
+      session_type: EBGP_UNNUMBERED
+      bfd_enabled: true
+      bgp_processes:
+        - DC3-BL1-BGP
+        - DC3-SS1-BGP
+      interface_capabilities:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-BL1
+            name: Ethernet112
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-SS1
+            name: Ethernet32
+
+    - name: DC3-BL1-SS2-BGP
+      description: "eBGP unnumbered — DC3-BL1 (AS65370) ↔ DC3-SS2 (AS65301)"
+      session_type: EBGP_UNNUMBERED
+      bfd_enabled: true
+      bgp_processes:
+        - DC3-BL1-BGP
+        - DC3-SS2-BGP
+      interface_capabilities:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-BL1
+            name: Ethernet116
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-SS2
+            name: Ethernet32
+
+    - name: DC3-BL2-SS1-BGP
+      description: "eBGP unnumbered — DC3-BL2 (AS65371) ↔ DC3-SS1 (AS65300)"
+      session_type: EBGP_UNNUMBERED
+      bfd_enabled: true
+      bgp_processes:
+        - DC3-BL2-BGP
+        - DC3-SS1-BGP
+      interface_capabilities:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-BL2
+            name: Ethernet112
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-SS1
+            name: Ethernet36
+
+    - name: DC3-BL2-SS2-BGP
+      description: "eBGP unnumbered — DC3-BL2 (AS65371) ↔ DC3-SS2 (AS65301)"
+      session_type: EBGP_UNNUMBERED
+      bfd_enabled: true
+      bgp_processes:
+        - DC3-BL2-BGP
+        - DC3-SS2-BGP
+      interface_capabilities:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-BL2
+            name: Ethernet116
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-SS2
+            name: Ethernet36
+
+    # ── Super-spine ↔ pod-spine peerings ─────────────────────────────────────
+    - name: DC3-SS1-POD1-SP1-BGP
+      description: "eBGP unnumbered — DC3-SS1 (AS65300) ↔ DC3-POD1-SP1 (AS65311)"
+      session_type: EBGP_UNNUMBERED
+      bfd_enabled: true
+      bgp_processes:
+        - DC3-SS1-BGP
+        - DC3-POD1-SP1-BGP
+      interface_capabilities:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-SS1
+            name: Ethernet0
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD1-SP1
+            name: Ethernet112
+
+    - name: DC3-SS2-POD1-SP1-BGP
+      description: "eBGP unnumbered — DC3-SS2 (AS65301) ↔ DC3-POD1-SP1 (AS65311)"
+      session_type: EBGP_UNNUMBERED
+      bfd_enabled: true
+      bgp_processes:
+        - DC3-SS2-BGP
+        - DC3-POD1-SP1-BGP
+      interface_capabilities:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-SS2
+            name: Ethernet0
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD1-SP1
+            name: Ethernet116
+
+    - name: DC3-SS1-POD1-SP2-BGP
+      description: "eBGP unnumbered — DC3-SS1 (AS65300) ↔ DC3-POD1-SP2 (AS65312)"
+      session_type: EBGP_UNNUMBERED
+      bfd_enabled: true
+      bgp_processes:
+        - DC3-SS1-BGP
+        - DC3-POD1-SP2-BGP
+      interface_capabilities:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-SS1
+            name: Ethernet4
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD1-SP2
+            name: Ethernet112
+
+    - name: DC3-SS2-POD1-SP2-BGP
+      description: "eBGP unnumbered — DC3-SS2 (AS65301) ↔ DC3-POD1-SP2 (AS65312)"
+      session_type: EBGP_UNNUMBERED
+      bfd_enabled: true
+      bgp_processes:
+        - DC3-SS2-BGP
+        - DC3-POD1-SP2-BGP
+      interface_capabilities:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-SS2
+            name: Ethernet4
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD1-SP2
+            name: Ethernet116
+
+    - name: DC3-SS1-POD2-SP1-BGP
+      description: "eBGP unnumbered — DC3-SS1 (AS65300) ↔ DC3-POD2-SP1 (AS65321)"
+      session_type: EBGP_UNNUMBERED
+      bfd_enabled: true
+      bgp_processes:
+        - DC3-SS1-BGP
+        - DC3-POD2-SP1-BGP
+      interface_capabilities:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-SS1
+            name: Ethernet8
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD2-SP1
+            name: Ethernet112
+
+    - name: DC3-SS2-POD2-SP1-BGP
+      description: "eBGP unnumbered — DC3-SS2 (AS65301) ↔ DC3-POD2-SP1 (AS65321)"
+      session_type: EBGP_UNNUMBERED
+      bfd_enabled: true
+      bgp_processes:
+        - DC3-SS2-BGP
+        - DC3-POD2-SP1-BGP
+      interface_capabilities:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-SS2
+            name: Ethernet8
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD2-SP1
+            name: Ethernet116
+
+    - name: DC3-SS1-POD2-SP2-BGP
+      description: "eBGP unnumbered — DC3-SS1 (AS65300) ↔ DC3-POD2-SP2 (AS65322)"
+      session_type: EBGP_UNNUMBERED
+      bfd_enabled: true
+      bgp_processes:
+        - DC3-SS1-BGP
+        - DC3-POD2-SP2-BGP
+      interface_capabilities:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-SS1
+            name: Ethernet12
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD2-SP2
+            name: Ethernet112
+
+    - name: DC3-SS2-POD2-SP2-BGP
+      description: "eBGP unnumbered — DC3-SS2 (AS65301) ↔ DC3-POD2-SP2 (AS65322)"
+      session_type: EBGP_UNNUMBERED
+      bfd_enabled: true
+      bgp_processes:
+        - DC3-SS2-BGP
+        - DC3-POD2-SP2-BGP
+      interface_capabilities:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-SS2
+            name: Ethernet12
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD2-SP2
+            name: Ethernet116
+
+    - name: DC3-SS1-POD3-SP1-BGP
+      description: "eBGP unnumbered — DC3-SS1 (AS65300) ↔ DC3-POD3-SP1 (AS65331)"
+      session_type: EBGP_UNNUMBERED
+      bfd_enabled: true
+      bgp_processes:
+        - DC3-SS1-BGP
+        - DC3-POD3-SP1-BGP
+      interface_capabilities:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-SS1
+            name: Ethernet16
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD3-SP1
+            name: Ethernet112
+
+    - name: DC3-SS2-POD3-SP1-BGP
+      description: "eBGP unnumbered — DC3-SS2 (AS65301) ↔ DC3-POD3-SP1 (AS65331)"
+      session_type: EBGP_UNNUMBERED
+      bfd_enabled: true
+      bgp_processes:
+        - DC3-SS2-BGP
+        - DC3-POD3-SP1-BGP
+      interface_capabilities:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-SS2
+            name: Ethernet16
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD3-SP1
+            name: Ethernet116
+
+    - name: DC3-SS1-POD3-SP2-BGP
+      description: "eBGP unnumbered — DC3-SS1 (AS65300) ↔ DC3-POD3-SP2 (AS65332)"
+      session_type: EBGP_UNNUMBERED
+      bfd_enabled: true
+      bgp_processes:
+        - DC3-SS1-BGP
+        - DC3-POD3-SP2-BGP
+      interface_capabilities:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-SS1
+            name: Ethernet20
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD3-SP2
+            name: Ethernet112
+
+    - name: DC3-SS2-POD3-SP2-BGP
+      description: "eBGP unnumbered — DC3-SS2 (AS65301) ↔ DC3-POD3-SP2 (AS65332)"
+      session_type: EBGP_UNNUMBERED
+      bfd_enabled: true
+      bgp_processes:
+        - DC3-SS2-BGP
+        - DC3-POD3-SP2-BGP
+      interface_capabilities:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-SS2
+            name: Ethernet20
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD3-SP2
+            name: Ethernet116
+
+    - name: DC3-SS1-POD4-SP1-BGP
+      description: "eBGP unnumbered — DC3-SS1 (AS65300) ↔ DC3-POD4-SP1 (AS65341)"
+      session_type: EBGP_UNNUMBERED
+      bfd_enabled: true
+      bgp_processes:
+        - DC3-SS1-BGP
+        - DC3-POD4-SP1-BGP
+      interface_capabilities:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-SS1
+            name: Ethernet24
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD4-SP1
+            name: Ethernet112
+
+    - name: DC3-SS2-POD4-SP1-BGP
+      description: "eBGP unnumbered — DC3-SS2 (AS65301) ↔ DC3-POD4-SP1 (AS65341)"
+      session_type: EBGP_UNNUMBERED
+      bfd_enabled: true
+      bgp_processes:
+        - DC3-SS2-BGP
+        - DC3-POD4-SP1-BGP
+      interface_capabilities:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-SS2
+            name: Ethernet24
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD4-SP1
+            name: Ethernet116
+
+    - name: DC3-SS1-POD4-SP2-BGP
+      description: "eBGP unnumbered — DC3-SS1 (AS65300) ↔ DC3-POD4-SP2 (AS65342)"
+      session_type: EBGP_UNNUMBERED
+      bfd_enabled: true
+      bgp_processes:
+        - DC3-SS1-BGP
+        - DC3-POD4-SP2-BGP
+      interface_capabilities:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-SS1
+            name: Ethernet28
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD4-SP2
+            name: Ethernet112
+
+    - name: DC3-SS2-POD4-SP2-BGP
+      description: "eBGP unnumbered — DC3-SS2 (AS65301) ↔ DC3-POD4-SP2 (AS65342)"
+      session_type: EBGP_UNNUMBERED
+      bfd_enabled: true
+      bgp_processes:
+        - DC3-SS2-BGP
+        - DC3-POD4-SP2-BGP
+      interface_capabilities:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-SS2
+            name: Ethernet28
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD4-SP2
+            name: Ethernet116
+
+    - name: DC3-POD1-SP1-POD1-L1-BGP
+      description: "eBGP unnumbered — DC3-POD1-SP1 (AS65311) ↔ DC3-POD1-L1 (AS65351)"
+      session_type: EBGP_UNNUMBERED
+      bfd_enabled: true
+      bgp_processes:
+        - DC3-POD1-SP1-BGP
+        - DC3-POD1-L1-BGP
+      interface_capabilities:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD1-SP1
+            name: Ethernet0
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD1-L1
+            name: xe49
+
+    - name: DC3-POD1-SP2-POD1-L1-BGP
+      description: "eBGP unnumbered — DC3-POD1-SP2 (AS65312) ↔ DC3-POD1-L1 (AS65351)"
+      session_type: EBGP_UNNUMBERED
+      bfd_enabled: true
+      bgp_processes:
+        - DC3-POD1-SP2-BGP
+        - DC3-POD1-L1-BGP
+      interface_capabilities:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD1-SP2
+            name: Ethernet0
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD1-L1
+            name: xe50
+
+    - name: DC3-POD1-SP1-POD1-L2-BGP
+      description: "eBGP unnumbered — DC3-POD1-SP1 (AS65311) ↔ DC3-POD1-L2 (AS65352)"
+      session_type: EBGP_UNNUMBERED
+      bfd_enabled: true
+      bgp_processes:
+        - DC3-POD1-SP1-BGP
+        - DC3-POD1-L2-BGP
+      interface_capabilities:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD1-SP1
+            name: Ethernet4
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD1-L2
+            name: xe49
+
+    - name: DC3-POD1-SP2-POD1-L2-BGP
+      description: "eBGP unnumbered — DC3-POD1-SP2 (AS65312) ↔ DC3-POD1-L2 (AS65352)"
+      session_type: EBGP_UNNUMBERED
+      bfd_enabled: true
+      bgp_processes:
+        - DC3-POD1-SP2-BGP
+        - DC3-POD1-L2-BGP
+      interface_capabilities:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD1-SP2
+            name: Ethernet4
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD1-L2
+            name: xe50
+
+    - name: DC3-POD1-SP1-POD1-L3-BGP
+      description: "eBGP unnumbered — DC3-POD1-SP1 (AS65311) ↔ DC3-POD1-L3 (AS65353)"
+      session_type: EBGP_UNNUMBERED
+      bfd_enabled: true
+      bgp_processes:
+        - DC3-POD1-SP1-BGP
+        - DC3-POD1-L3-BGP
+      interface_capabilities:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD1-SP1
+            name: Ethernet8
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD1-L3
+            name: xe49
+
+    - name: DC3-POD1-SP2-POD1-L3-BGP
+      description: "eBGP unnumbered — DC3-POD1-SP2 (AS65312) ↔ DC3-POD1-L3 (AS65353)"
+      session_type: EBGP_UNNUMBERED
+      bfd_enabled: true
+      bgp_processes:
+        - DC3-POD1-SP2-BGP
+        - DC3-POD1-L3-BGP
+      interface_capabilities:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD1-SP2
+            name: Ethernet8
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD1-L3
+            name: xe50
+
+    - name: DC3-POD1-SP1-POD1-L4-BGP
+      description: "eBGP unnumbered — DC3-POD1-SP1 (AS65311) ↔ DC3-POD1-L4 (AS65354)"
+      session_type: EBGP_UNNUMBERED
+      bfd_enabled: true
+      bgp_processes:
+        - DC3-POD1-SP1-BGP
+        - DC3-POD1-L4-BGP
+      interface_capabilities:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD1-SP1
+            name: Ethernet12
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD1-L4
+            name: xe49
+
+    - name: DC3-POD1-SP2-POD1-L4-BGP
+      description: "eBGP unnumbered — DC3-POD1-SP2 (AS65312) ↔ DC3-POD1-L4 (AS65354)"
+      session_type: EBGP_UNNUMBERED
+      bfd_enabled: true
+      bgp_processes:
+        - DC3-POD1-SP2-BGP
+        - DC3-POD1-L4-BGP
+      interface_capabilities:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD1-SP2
+            name: Ethernet12
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD1-L4
+            name: xe50
+
+    - name: DC3-POD2-SP1-POD2-L1-BGP
+      description: "eBGP unnumbered — DC3-POD2-SP1 (AS65321) ↔ DC3-POD2-L1 (AS65355)"
+      session_type: EBGP_UNNUMBERED
+      bfd_enabled: true
+      bgp_processes:
+        - DC3-POD2-SP1-BGP
+        - DC3-POD2-L1-BGP
+      interface_capabilities:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD2-SP1
+            name: Ethernet0
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD2-L1
+            name: xe49
+
+    - name: DC3-POD2-SP2-POD2-L1-BGP
+      description: "eBGP unnumbered — DC3-POD2-SP2 (AS65322) ↔ DC3-POD2-L1 (AS65355)"
+      session_type: EBGP_UNNUMBERED
+      bfd_enabled: true
+      bgp_processes:
+        - DC3-POD2-SP2-BGP
+        - DC3-POD2-L1-BGP
+      interface_capabilities:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD2-SP2
+            name: Ethernet0
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD2-L1
+            name: xe50
+
+    - name: DC3-POD2-SP1-POD2-L2-BGP
+      description: "eBGP unnumbered — DC3-POD2-SP1 (AS65321) ↔ DC3-POD2-L2 (AS65356)"
+      session_type: EBGP_UNNUMBERED
+      bfd_enabled: true
+      bgp_processes:
+        - DC3-POD2-SP1-BGP
+        - DC3-POD2-L2-BGP
+      interface_capabilities:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD2-SP1
+            name: Ethernet4
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD2-L2
+            name: xe49
+
+    - name: DC3-POD2-SP2-POD2-L2-BGP
+      description: "eBGP unnumbered — DC3-POD2-SP2 (AS65322) ↔ DC3-POD2-L2 (AS65356)"
+      session_type: EBGP_UNNUMBERED
+      bfd_enabled: true
+      bgp_processes:
+        - DC3-POD2-SP2-BGP
+        - DC3-POD2-L2-BGP
+      interface_capabilities:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD2-SP2
+            name: Ethernet4
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD2-L2
+            name: xe50
+
+    - name: DC3-POD2-SP1-POD2-L3-BGP
+      description: "eBGP unnumbered — DC3-POD2-SP1 (AS65321) ↔ DC3-POD2-L3 (AS65357)"
+      session_type: EBGP_UNNUMBERED
+      bfd_enabled: true
+      bgp_processes:
+        - DC3-POD2-SP1-BGP
+        - DC3-POD2-L3-BGP
+      interface_capabilities:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD2-SP1
+            name: Ethernet8
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD2-L3
+            name: xe49
+
+    - name: DC3-POD2-SP2-POD2-L3-BGP
+      description: "eBGP unnumbered — DC3-POD2-SP2 (AS65322) ↔ DC3-POD2-L3 (AS65357)"
+      session_type: EBGP_UNNUMBERED
+      bfd_enabled: true
+      bgp_processes:
+        - DC3-POD2-SP2-BGP
+        - DC3-POD2-L3-BGP
+      interface_capabilities:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD2-SP2
+            name: Ethernet8
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD2-L3
+            name: xe50
+
+    - name: DC3-POD2-SP1-POD2-L4-BGP
+      description: "eBGP unnumbered — DC3-POD2-SP1 (AS65321) ↔ DC3-POD2-L4 (AS65358)"
+      session_type: EBGP_UNNUMBERED
+      bfd_enabled: true
+      bgp_processes:
+        - DC3-POD2-SP1-BGP
+        - DC3-POD2-L4-BGP
+      interface_capabilities:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD2-SP1
+            name: Ethernet12
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD2-L4
+            name: xe49
+
+    - name: DC3-POD2-SP2-POD2-L4-BGP
+      description: "eBGP unnumbered — DC3-POD2-SP2 (AS65322) ↔ DC3-POD2-L4 (AS65358)"
+      session_type: EBGP_UNNUMBERED
+      bfd_enabled: true
+      bgp_processes:
+        - DC3-POD2-SP2-BGP
+        - DC3-POD2-L4-BGP
+      interface_capabilities:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD2-SP2
+            name: Ethernet12
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD2-L4
+            name: xe50
+
+    - name: DC3-POD3-SP1-POD3-L1-BGP
+      description: "eBGP unnumbered — DC3-POD3-SP1 (AS65331) ↔ DC3-POD3-L1 (AS65359)"
+      session_type: EBGP_UNNUMBERED
+      bfd_enabled: true
+      bgp_processes:
+        - DC3-POD3-SP1-BGP
+        - DC3-POD3-L1-BGP
+      interface_capabilities:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD3-SP1
+            name: Ethernet0
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD3-L1
+            name: xe49
+
+    - name: DC3-POD3-SP2-POD3-L1-BGP
+      description: "eBGP unnumbered — DC3-POD3-SP2 (AS65332) ↔ DC3-POD3-L1 (AS65359)"
+      session_type: EBGP_UNNUMBERED
+      bfd_enabled: true
+      bgp_processes:
+        - DC3-POD3-SP2-BGP
+        - DC3-POD3-L1-BGP
+      interface_capabilities:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD3-SP2
+            name: Ethernet0
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD3-L1
+            name: xe50
+
+    - name: DC3-POD3-SP1-POD3-L2-BGP
+      description: "eBGP unnumbered — DC3-POD3-SP1 (AS65331) ↔ DC3-POD3-L2 (AS65360)"
+      session_type: EBGP_UNNUMBERED
+      bfd_enabled: true
+      bgp_processes:
+        - DC3-POD3-SP1-BGP
+        - DC3-POD3-L2-BGP
+      interface_capabilities:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD3-SP1
+            name: Ethernet4
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD3-L2
+            name: xe49
+
+    - name: DC3-POD3-SP2-POD3-L2-BGP
+      description: "eBGP unnumbered — DC3-POD3-SP2 (AS65332) ↔ DC3-POD3-L2 (AS65360)"
+      session_type: EBGP_UNNUMBERED
+      bfd_enabled: true
+      bgp_processes:
+        - DC3-POD3-SP2-BGP
+        - DC3-POD3-L2-BGP
+      interface_capabilities:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD3-SP2
+            name: Ethernet4
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD3-L2
+            name: xe50
+
+    - name: DC3-POD4-SP1-POD4-L1-BGP
+      description: "eBGP unnumbered — DC3-POD4-SP1 (AS65341) ↔ DC3-POD4-L1 (AS65361)"
+      session_type: EBGP_UNNUMBERED
+      bfd_enabled: true
+      bgp_processes:
+        - DC3-POD4-SP1-BGP
+        - DC3-POD4-L1-BGP
+      interface_capabilities:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD4-SP1
+            name: Ethernet0
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD4-L1
+            name: xe49
+
+    - name: DC3-POD4-SP2-POD4-L1-BGP
+      description: "eBGP unnumbered — DC3-POD4-SP2 (AS65342) ↔ DC3-POD4-L1 (AS65361)"
+      session_type: EBGP_UNNUMBERED
+      bfd_enabled: true
+      bgp_processes:
+        - DC3-POD4-SP2-BGP
+        - DC3-POD4-L1-BGP
+      interface_capabilities:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD4-SP2
+            name: Ethernet0
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD4-L1
+            name: xe50
+
+    - name: DC3-POD4-SP1-POD4-L2-BGP
+      description: "eBGP unnumbered — DC3-POD4-SP1 (AS65341) ↔ DC3-POD4-L2 (AS65362)"
+      session_type: EBGP_UNNUMBERED
+      bfd_enabled: true
+      bgp_processes:
+        - DC3-POD4-SP1-BGP
+        - DC3-POD4-L2-BGP
+      interface_capabilities:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD4-SP1
+            name: Ethernet4
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD4-L2
+            name: xe49
+
+    - name: DC3-POD4-SP2-POD4-L2-BGP
+      description: "eBGP unnumbered — DC3-POD4-SP2 (AS65342) ↔ DC3-POD4-L2 (AS65362)"
+      session_type: EBGP_UNNUMBERED
+      bfd_enabled: true
+      bgp_processes:
+        - DC3-POD4-SP2-BGP
+        - DC3-POD4-L2-BGP
+      interface_capabilities:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD4-SP2
+            name: Ethernet4
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD4-L2
+            name: xe50

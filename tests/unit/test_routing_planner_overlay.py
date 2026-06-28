@@ -51,7 +51,7 @@ def _device_map_entry(
 
 
 def _bgp_process(name: str, device_id: str) -> dict[str, Any]:
-    return {"name": name, "device_capabilities": [{"id": device_id}]}
+    return {"name": name, "capabilities": [{"id": device_id}]}
 
 
 def _design() -> MagicMock:

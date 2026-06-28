@@ -1,9 +1,8 @@
-"""Unit tests for cloud transform helpers, CloudVpcTerraform, and CloudVpcPulumi.
+"""Unit tests for cloud transform helpers and CloudVpcTerraform.
 
 Covers:
 - prepare_cloud_data()           — provider detection, filtering, grouping, region tracking
 - CloudVpcTerraform.transform()  — AWS, Azure, GCP HCL output
-- CloudVpcPulumi.transform()     — AWS, Azure, GCP TypeScript output
 """
 
 from __future__ import annotations
@@ -13,8 +12,7 @@ from unittest.mock import patch
 
 import pytest
 
-from transforms.cloud_vpc_pulumi import CloudVpcPulumi
-from transforms.cloud_vpc_terraform import CloudVpcTerraform
+from transforms.cloud.vpc_terraform import CloudVpcTerraform
 from transforms.helpers.cloud import prepare_cloud_data
 
 # ---------------------------------------------------------------------------
@@ -160,10 +158,6 @@ def _multi_region_aws_cleaned() -> dict:
 
 def _make_terraform() -> CloudVpcTerraform:
     return CloudVpcTerraform.__new__(CloudVpcTerraform)
-
-
-def _make_pulumi() -> CloudVpcPulumi:
-    return CloudVpcPulumi.__new__(CloudVpcPulumi)
 
 
 # ===========================================================================
@@ -341,21 +335,21 @@ class TestTerraformAwsProvider:
     @pytest.mark.asyncio
     async def test_aws_provider_block_present(self) -> None:
         tf = _make_terraform()
-        with patch("transforms.cloud_vpc_terraform.clean_data", return_value=_aws_cleaned()):
+        with patch("transforms.cloud.vpc_terraform.clean_data", return_value=_aws_cleaned()):
             result = await tf.transform({})
         assert 'provider "aws"' in result
 
     @pytest.mark.asyncio
     async def test_aws_default_region_set(self) -> None:
         tf = _make_terraform()
-        with patch("transforms.cloud_vpc_terraform.clean_data", return_value=_aws_cleaned()):
+        with patch("transforms.cloud.vpc_terraform.clean_data", return_value=_aws_cleaned()):
             result = await tf.transform({})
         assert 'region = "eu-central-1"' in result
 
     @pytest.mark.asyncio
     async def test_terraform_required_providers_block(self) -> None:
         tf = _make_terraform()
-        with patch("transforms.cloud_vpc_terraform.clean_data", return_value=_aws_cleaned()):
+        with patch("transforms.cloud.vpc_terraform.clean_data", return_value=_aws_cleaned()):
             result = await tf.transform({})
         assert "required_providers" in result
         assert "hashicorp/aws" in result
@@ -365,84 +359,84 @@ class TestTerraformAwsResources:
     @pytest.mark.asyncio
     async def test_vpc_resource_block(self) -> None:
         tf = _make_terraform()
-        with patch("transforms.cloud_vpc_terraform.clean_data", return_value=_aws_cleaned()):
+        with patch("transforms.cloud.vpc_terraform.clean_data", return_value=_aws_cleaned()):
             result = await tf.transform({})
         assert 'resource "aws_vpc" "prod_vpc"' in result
 
     @pytest.mark.asyncio
     async def test_vpc_cidr_block(self) -> None:
         tf = _make_terraform()
-        with patch("transforms.cloud_vpc_terraform.clean_data", return_value=_aws_cleaned()):
+        with patch("transforms.cloud.vpc_terraform.clean_data", return_value=_aws_cleaned()):
             result = await tf.transform({})
         assert 'cidr_block           = "10.0.0.0/16"' in result
 
     @pytest.mark.asyncio
     async def test_subnet_resource_block(self) -> None:
         tf = _make_terraform()
-        with patch("transforms.cloud_vpc_terraform.clean_data", return_value=_aws_cleaned()):
+        with patch("transforms.cloud.vpc_terraform.clean_data", return_value=_aws_cleaned()):
             result = await tf.transform({})
         assert 'resource "aws_subnet" "prod_subnet_1a"' in result
 
     @pytest.mark.asyncio
     async def test_subnet_availability_zone(self) -> None:
         tf = _make_terraform()
-        with patch("transforms.cloud_vpc_terraform.clean_data", return_value=_aws_cleaned()):
+        with patch("transforms.cloud.vpc_terraform.clean_data", return_value=_aws_cleaned()):
             result = await tf.transform({})
         assert 'availability_zone       = "eu-central-1a"' in result
 
     @pytest.mark.asyncio
     async def test_security_group_resource_block(self) -> None:
         tf = _make_terraform()
-        with patch("transforms.cloud_vpc_terraform.clean_data", return_value=_aws_cleaned()):
+        with patch("transforms.cloud.vpc_terraform.clean_data", return_value=_aws_cleaned()):
             result = await tf.transform({})
         assert 'resource "aws_security_group" "prod_sg"' in result
 
     @pytest.mark.asyncio
     async def test_instance_resource_block(self) -> None:
         tf = _make_terraform()
-        with patch("transforms.cloud_vpc_terraform.clean_data", return_value=_aws_cleaned()):
+        with patch("transforms.cloud.vpc_terraform.clean_data", return_value=_aws_cleaned()):
             result = await tf.transform({})
         assert 'resource "aws_instance" "prod_instance_1"' in result
 
     @pytest.mark.asyncio
     async def test_instance_private_ip(self) -> None:
         tf = _make_terraform()
-        with patch("transforms.cloud_vpc_terraform.clean_data", return_value=_aws_cleaned()):
+        with patch("transforms.cloud.vpc_terraform.clean_data", return_value=_aws_cleaned()):
             result = await tf.transform({})
         assert 'private_ip             = "10.0.1.10"' in result
 
     @pytest.mark.asyncio
     async def test_internet_gateway_resource_block(self) -> None:
         tf = _make_terraform()
-        with patch("transforms.cloud_vpc_terraform.clean_data", return_value=_aws_cleaned()):
+        with patch("transforms.cloud.vpc_terraform.clean_data", return_value=_aws_cleaned()):
             result = await tf.transform({})
         assert 'resource "aws_internet_gateway" "prod_igw"' in result
 
     @pytest.mark.asyncio
     async def test_nat_gateway_eip_created_when_public_ip(self) -> None:
         tf = _make_terraform()
-        with patch("transforms.cloud_vpc_terraform.clean_data", return_value=_aws_cleaned()):
+        with patch("transforms.cloud.vpc_terraform.clean_data", return_value=_aws_cleaned()):
             result = await tf.transform({})
         assert 'resource "aws_eip"' in result
 
     @pytest.mark.asyncio
     async def test_nat_gateway_resource_block(self) -> None:
         tf = _make_terraform()
-        with patch("transforms.cloud_vpc_terraform.clean_data", return_value=_aws_cleaned()):
+        with patch("transforms.cloud.vpc_terraform.clean_data", return_value=_aws_cleaned()):
             result = await tf.transform({})
         assert 'resource "aws_nat_gateway" "prod_nat"' in result
 
     @pytest.mark.asyncio
     async def test_route_table_resource_block(self) -> None:
         tf = _make_terraform()
-        with patch("transforms.cloud_vpc_terraform.clean_data", return_value=_aws_cleaned()):
+        with patch("transforms.cloud.vpc_terraform.clean_data", return_value=_aws_cleaned()):
             result = await tf.transform({})
         assert 'resource "aws_route_table" "prod_rt"' in result
 
     @pytest.mark.asyncio
     async def test_route_via_internet_gateway(self) -> None:
         tf = _make_terraform()
-        with patch("transforms.cloud_vpc_terraform.clean_data", return_value=_aws_cleaned()):
+        with patch("transforms.cloud.vpc_terraform.clean_data", return_value=_aws_cleaned()):
             result = await tf.transform({})
         assert 'resource "aws_route"' in result
         assert "gateway_id             = aws_internet_gateway.prod_igw.id" in result
@@ -453,14 +447,14 @@ class TestTerraformAwsMultiRegion:
     async def test_single_region_no_alias(self) -> None:
         """Single-region config must not contain alias blocks."""
         tf = _make_terraform()
-        with patch("transforms.cloud_vpc_terraform.clean_data", return_value=_aws_cleaned()):
+        with patch("transforms.cloud.vpc_terraform.clean_data", return_value=_aws_cleaned()):
             result = await tf.transform({})
         assert "alias" not in result
 
     @pytest.mark.asyncio
     async def test_multi_region_alias_block_present(self) -> None:
         tf = _make_terraform()
-        with patch("transforms.cloud_vpc_terraform.clean_data", return_value=_multi_region_aws_cleaned()):
+        with patch("transforms.cloud.vpc_terraform.clean_data", return_value=_multi_region_aws_cleaned()):
             result = await tf.transform({})
         assert 'alias  = "eu_west_1"' in result
 
@@ -468,7 +462,7 @@ class TestTerraformAwsMultiRegion:
     async def test_multi_region_default_provider_has_no_alias(self) -> None:
         """The first region is the default provider block — no alias attribute."""
         tf = _make_terraform()
-        with patch("transforms.cloud_vpc_terraform.clean_data", return_value=_multi_region_aws_cleaned()):
+        with patch("transforms.cloud.vpc_terraform.clean_data", return_value=_multi_region_aws_cleaned()):
             result = await tf.transform({})
         # Default provider block: 'provider "aws" {\n  region = "eu-central-1"\n}'
         # Check default region block contains no alias line
@@ -486,14 +480,14 @@ class TestTerraformAwsMultiRegion:
     async def test_multi_region_second_vpc_has_provider_attr(self) -> None:
         """The second VPC (different region) must reference the aliased provider."""
         tf = _make_terraform()
-        with patch("transforms.cloud_vpc_terraform.clean_data", return_value=_multi_region_aws_cleaned()):
+        with patch("transforms.cloud.vpc_terraform.clean_data", return_value=_multi_region_aws_cleaned()):
             result = await tf.transform({})
         assert "provider = aws.eu_west_1" in result
 
     @pytest.mark.asyncio
     async def test_multi_region_both_vpc_blocks_present(self) -> None:
         tf = _make_terraform()
-        with patch("transforms.cloud_vpc_terraform.clean_data", return_value=_multi_region_aws_cleaned()):
+        with patch("transforms.cloud.vpc_terraform.clean_data", return_value=_multi_region_aws_cleaned()):
             result = await tf.transform({})
         assert 'resource "aws_vpc" "prod_vpc"' in result
         assert 'resource "aws_vpc" "prod_vpc_west"' in result
@@ -505,7 +499,7 @@ class TestTerraformAwsNoVpcsRaises:
         tf = _make_terraform()
         data = _aws_cleaned()
         data["CloudVirtualNetwork"] = []
-        with patch("transforms.cloud_vpc_terraform.clean_data", return_value=data):
+        with patch("transforms.cloud.vpc_terraform.clean_data", return_value=data):
             with pytest.raises(ValueError, match="No CloudVirtualNetwork"):
                 await tf.transform({})
 
@@ -514,28 +508,28 @@ class TestTerraformAzure:
     @pytest.mark.asyncio
     async def test_azure_provider_block(self) -> None:
         tf = _make_terraform()
-        with patch("transforms.cloud_vpc_terraform.clean_data", return_value=_azure_cleaned()):
+        with patch("transforms.cloud.vpc_terraform.clean_data", return_value=_azure_cleaned()):
             result = await tf.transform({})
         assert 'provider "azurerm"' in result
 
     @pytest.mark.asyncio
     async def test_azure_virtual_network_resource(self) -> None:
         tf = _make_terraform()
-        with patch("transforms.cloud_vpc_terraform.clean_data", return_value=_azure_cleaned()):
+        with patch("transforms.cloud.vpc_terraform.clean_data", return_value=_azure_cleaned()):
             result = await tf.transform({})
         assert 'resource "azurerm_virtual_network"' in result
 
     @pytest.mark.asyncio
     async def test_azure_required_provider_source(self) -> None:
         tf = _make_terraform()
-        with patch("transforms.cloud_vpc_terraform.clean_data", return_value=_azure_cleaned()):
+        with patch("transforms.cloud.vpc_terraform.clean_data", return_value=_azure_cleaned()):
             result = await tf.transform({})
         assert "hashicorp/azurerm" in result
 
     @pytest.mark.asyncio
     async def test_azure_features_block(self) -> None:
         tf = _make_terraform()
-        with patch("transforms.cloud_vpc_terraform.clean_data", return_value=_azure_cleaned()):
+        with patch("transforms.cloud.vpc_terraform.clean_data", return_value=_azure_cleaned()):
             result = await tf.transform({})
         assert "features {}" in result
 
@@ -544,21 +538,21 @@ class TestTerraformGcp:
     @pytest.mark.asyncio
     async def test_gcp_provider_block(self) -> None:
         tf = _make_terraform()
-        with patch("transforms.cloud_vpc_terraform.clean_data", return_value=_gcp_cleaned()):
+        with patch("transforms.cloud.vpc_terraform.clean_data", return_value=_gcp_cleaned()):
             result = await tf.transform({})
         assert 'provider "google"' in result
 
     @pytest.mark.asyncio
     async def test_gcp_compute_network_resource(self) -> None:
         tf = _make_terraform()
-        with patch("transforms.cloud_vpc_terraform.clean_data", return_value=_gcp_cleaned()):
+        with patch("transforms.cloud.vpc_terraform.clean_data", return_value=_gcp_cleaned()):
             result = await tf.transform({})
         assert 'resource "google_compute_network"' in result
 
     @pytest.mark.asyncio
     async def test_gcp_required_provider_source(self) -> None:
         tf = _make_terraform()
-        with patch("transforms.cloud_vpc_terraform.clean_data", return_value=_gcp_cleaned()):
+        with patch("transforms.cloud.vpc_terraform.clean_data", return_value=_gcp_cleaned()):
             result = await tf.transform({})
         assert "hashicorp/google" in result
 
@@ -566,171 +560,9 @@ class TestTerraformGcp:
     async def test_gcp_project_in_provider(self) -> None:
         """GCP provider block should reference the account_id as project."""
         tf = _make_terraform()
-        with patch("transforms.cloud_vpc_terraform.clean_data", return_value=_gcp_cleaned()):
+        with patch("transforms.cloud.vpc_terraform.clean_data", return_value=_gcp_cleaned()):
             result = await tf.transform({})
         assert 'project = "123456789012"' in result
-
-
-# ===========================================================================
-# CloudVpcPulumi tests
-# ===========================================================================
-
-
-class TestPulumiAwsImports:
-    @pytest.mark.asyncio
-    async def test_aws_import_statement(self) -> None:
-        pulumi = _make_pulumi()
-        with patch("transforms.cloud_vpc_pulumi.clean_data", return_value=_aws_cleaned()):
-            result = await pulumi.transform({})
-        assert 'import * as aws from "@pulumi/aws"' in result
-
-    @pytest.mark.asyncio
-    async def test_pulumi_core_import_statement(self) -> None:
-        pulumi = _make_pulumi()
-        with patch("transforms.cloud_vpc_pulumi.clean_data", return_value=_aws_cleaned()):
-            result = await pulumi.transform({})
-        assert 'import * as pulumi from "@pulumi/pulumi"' in result
-
-
-class TestPulumiAwsProviderInstances:
-    @pytest.mark.asyncio
-    async def test_provider_instance_for_region(self) -> None:
-        pulumi = _make_pulumi()
-        with patch("transforms.cloud_vpc_pulumi.clean_data", return_value=_aws_cleaned()):
-            result = await pulumi.transform({})
-        assert 'new aws.Provider("eu-central-1"' in result
-
-    @pytest.mark.asyncio
-    async def test_multi_region_two_provider_instances(self) -> None:
-        pulumi = _make_pulumi()
-        with patch("transforms.cloud_vpc_pulumi.clean_data", return_value=_multi_region_aws_cleaned()):
-            result = await pulumi.transform({})
-        assert 'new aws.Provider("eu-central-1"' in result
-        assert 'new aws.Provider("eu-west-1"' in result
-
-
-class TestPulumiAwsResources:
-    @pytest.mark.asyncio
-    async def test_vpc_construct(self) -> None:
-        pulumi = _make_pulumi()
-        with patch("transforms.cloud_vpc_pulumi.clean_data", return_value=_aws_cleaned()):
-            result = await pulumi.transform({})
-        assert 'new aws.ec2.Vpc("prod-vpc"' in result
-
-    @pytest.mark.asyncio
-    async def test_vpc_cidr_block(self) -> None:
-        pulumi = _make_pulumi()
-        with patch("transforms.cloud_vpc_pulumi.clean_data", return_value=_aws_cleaned()):
-            result = await pulumi.transform({})
-        assert 'cidrBlock: "10.0.0.0/16"' in result
-
-    @pytest.mark.asyncio
-    async def test_subnet_construct(self) -> None:
-        pulumi = _make_pulumi()
-        with patch("transforms.cloud_vpc_pulumi.clean_data", return_value=_aws_cleaned()):
-            result = await pulumi.transform({})
-        assert 'new aws.ec2.Subnet("prod-subnet-1a"' in result
-
-    @pytest.mark.asyncio
-    async def test_security_group_construct(self) -> None:
-        pulumi = _make_pulumi()
-        with patch("transforms.cloud_vpc_pulumi.clean_data", return_value=_aws_cleaned()):
-            result = await pulumi.transform({})
-        assert 'new aws.ec2.SecurityGroup("prod-sg"' in result
-
-    @pytest.mark.asyncio
-    async def test_instance_construct(self) -> None:
-        pulumi = _make_pulumi()
-        with patch("transforms.cloud_vpc_pulumi.clean_data", return_value=_aws_cleaned()):
-            result = await pulumi.transform({})
-        assert 'new aws.ec2.Instance("prod-instance-1"' in result
-
-    @pytest.mark.asyncio
-    async def test_instance_ami_field(self) -> None:
-        pulumi = _make_pulumi()
-        with patch("transforms.cloud_vpc_pulumi.clean_data", return_value=_aws_cleaned()):
-            result = await pulumi.transform({})
-        assert 'ami: "ami-12345678"' in result
-
-    @pytest.mark.asyncio
-    async def test_internet_gateway_construct(self) -> None:
-        pulumi = _make_pulumi()
-        with patch("transforms.cloud_vpc_pulumi.clean_data", return_value=_aws_cleaned()):
-            result = await pulumi.transform({})
-        assert "new aws.ec2.InternetGateway" in result
-
-    @pytest.mark.asyncio
-    async def test_nat_eip_construct(self) -> None:
-        pulumi = _make_pulumi()
-        with patch("transforms.cloud_vpc_pulumi.clean_data", return_value=_aws_cleaned()):
-            result = await pulumi.transform({})
-        assert "new aws.ec2.Eip" in result
-
-    @pytest.mark.asyncio
-    async def test_nat_gateway_construct(self) -> None:
-        pulumi = _make_pulumi()
-        with patch("transforms.cloud_vpc_pulumi.clean_data", return_value=_aws_cleaned()):
-            result = await pulumi.transform({})
-        assert "new aws.ec2.NatGateway" in result
-
-
-class TestPulumiAwsNoVpcsRaises:
-    @pytest.mark.asyncio
-    async def test_empty_vpcs_raises_value_error(self) -> None:
-        pulumi = _make_pulumi()
-        data = _aws_cleaned()
-        data["CloudVirtualNetwork"] = []
-        with patch("transforms.cloud_vpc_pulumi.clean_data", return_value=data):
-            with pytest.raises(ValueError, match="No CloudVirtualNetwork"):
-                await pulumi.transform({})
-
-
-class TestPulumiAzure:
-    @pytest.mark.asyncio
-    async def test_azure_import_statement(self) -> None:
-        pulumi = _make_pulumi()
-        with patch("transforms.cloud_vpc_pulumi.clean_data", return_value=_azure_cleaned()):
-            result = await pulumi.transform({})
-        assert 'import * as azure_native from "@pulumi/azure-native"' in result
-
-    @pytest.mark.asyncio
-    async def test_azure_virtual_network_construct(self) -> None:
-        pulumi = _make_pulumi()
-        with patch("transforms.cloud_vpc_pulumi.clean_data", return_value=_azure_cleaned()):
-            result = await pulumi.transform({})
-        assert "azure_native.network.VirtualNetwork" in result
-
-    @pytest.mark.asyncio
-    async def test_azure_no_aws_import(self) -> None:
-        """Azure output must not contain AWS SDK imports."""
-        pulumi = _make_pulumi()
-        with patch("transforms.cloud_vpc_pulumi.clean_data", return_value=_azure_cleaned()):
-            result = await pulumi.transform({})
-        assert '@pulumi/aws"' not in result
-
-
-class TestPulumiGcp:
-    @pytest.mark.asyncio
-    async def test_gcp_import_statement(self) -> None:
-        pulumi = _make_pulumi()
-        with patch("transforms.cloud_vpc_pulumi.clean_data", return_value=_gcp_cleaned()):
-            result = await pulumi.transform({})
-        assert 'import * as gcp from "@pulumi/gcp"' in result
-
-    @pytest.mark.asyncio
-    async def test_gcp_network_construct(self) -> None:
-        pulumi = _make_pulumi()
-        with patch("transforms.cloud_vpc_pulumi.clean_data", return_value=_gcp_cleaned()):
-            result = await pulumi.transform({})
-        assert "gcp.compute.Network" in result
-
-    @pytest.mark.asyncio
-    async def test_gcp_no_aws_import(self) -> None:
-        """GCP output must not contain AWS SDK imports."""
-        pulumi = _make_pulumi()
-        with patch("transforms.cloud_vpc_pulumi.clean_data", return_value=_gcp_cleaned()):
-            result = await pulumi.transform({})
-        assert '@pulumi/aws"' not in result
 
 
 # ===========================================================================
@@ -812,7 +644,7 @@ class TestSmokeCloudTransforms:
     async def test_terraform_aws_smoke_resource_types_present(self) -> None:
         """All expected HCL resource types appear in a full AWS account output."""
         tf = _make_terraform()
-        with patch("transforms.cloud_vpc_terraform.clean_data", return_value=_full_aws_cleaned()):
+        with patch("transforms.cloud.vpc_terraform.clean_data", return_value=_full_aws_cleaned()):
             result = await tf.transform({})
 
         expected_types = [
@@ -837,7 +669,7 @@ class TestSmokeCloudTransforms:
     async def test_terraform_aws_smoke_multi_region_providers(self) -> None:
         """Multi-region output has default + aliased provider blocks."""
         tf = _make_terraform()
-        with patch("transforms.cloud_vpc_terraform.clean_data", return_value=_full_aws_cleaned()):
+        with patch("transforms.cloud.vpc_terraform.clean_data", return_value=_full_aws_cleaned()):
             result = await tf.transform({})
 
         assert result.count('provider "aws"') == 2
@@ -848,7 +680,7 @@ class TestSmokeCloudTransforms:
     async def test_terraform_aws_smoke_cross_references_intact(self) -> None:
         """VPC ID is correctly referenced by subnet, SG, IGW, and route table."""
         tf = _make_terraform()
-        with patch("transforms.cloud_vpc_terraform.clean_data", return_value=_aws_cleaned()):
+        with patch("transforms.cloud.vpc_terraform.clean_data", return_value=_aws_cleaned()):
             result = await tf.transform({})
 
         assert "aws_vpc.prod_vpc.id" in result
@@ -857,7 +689,7 @@ class TestSmokeCloudTransforms:
     async def test_terraform_aws_smoke_no_empty_cidr(self) -> None:
         """No resource block contains an empty cidr_block."""
         tf = _make_terraform()
-        with patch("transforms.cloud_vpc_terraform.clean_data", return_value=_aws_cleaned()):
+        with patch("transforms.cloud.vpc_terraform.clean_data", return_value=_aws_cleaned()):
             result = await tf.transform({})
 
         assert 'cidr_block              = ""' not in result
@@ -867,7 +699,7 @@ class TestSmokeCloudTransforms:
     async def test_terraform_aws_smoke_route_references_igw(self) -> None:
         """Route with internet_gateway correctly references the IGW resource."""
         tf = _make_terraform()
-        with patch("transforms.cloud_vpc_terraform.clean_data", return_value=_aws_cleaned()):
+        with patch("transforms.cloud.vpc_terraform.clean_data", return_value=_aws_cleaned()):
             result = await tf.transform({})
 
         assert "gateway_id" in result
@@ -877,63 +709,8 @@ class TestSmokeCloudTransforms:
     async def test_terraform_aws_smoke_both_vpcs_present(self) -> None:
         """Multi-VPC account emits resource blocks for both VPCs."""
         tf = _make_terraform()
-        with patch("transforms.cloud_vpc_terraform.clean_data", return_value=_full_aws_cleaned()):
+        with patch("transforms.cloud.vpc_terraform.clean_data", return_value=_full_aws_cleaned()):
             result = await tf.transform({})
 
         assert 'resource "aws_vpc" "prod_vpc"' in result
         assert 'resource "aws_vpc" "prod_vpc_west"' in result
-
-    @pytest.mark.asyncio
-    async def test_pulumi_aws_smoke_resource_types_present(self) -> None:
-        """All expected Pulumi AWS construct types appear in a full account output."""
-        pulumi = _make_pulumi()
-        with patch("transforms.cloud_vpc_pulumi.clean_data", return_value=_full_aws_cleaned()):
-            result = await pulumi.transform({})
-
-        expected = [
-            "aws.ec2.Vpc",
-            "aws.ec2.Subnet",
-            "aws.ec2.SecurityGroup",
-            "aws.ec2.Instance",
-            "aws.ec2.InternetGateway",
-            "aws.ec2.Eip",
-            "aws.ec2.NatGateway",
-            "aws.ec2.RouteTable",
-            "aws.ec2.Route",
-            "aws.ec2.NetworkAcl",
-            "aws.ec2transitgateway.TransitGateway",
-            "aws.ec2.CustomerGateway",
-            "aws.ec2.VpcPeeringConnection",
-        ]
-        for construct in expected:
-            assert construct in result, f"Missing Pulumi construct: {construct}"
-
-    @pytest.mark.asyncio
-    async def test_pulumi_aws_smoke_multi_region_providers(self) -> None:
-        """Multi-region output has one Provider instance per region."""
-        pulumi = _make_pulumi()
-        with patch("transforms.cloud_vpc_pulumi.clean_data", return_value=_full_aws_cleaned()):
-            result = await pulumi.transform({})
-
-        assert 'new aws.Provider("eu-central-1"' in result
-        assert 'new aws.Provider("eu-west-1"' in result
-
-    @pytest.mark.asyncio
-    async def test_pulumi_aws_smoke_vpc_references_provider(self) -> None:
-        """Each VPC construct passes its region provider in opts."""
-        pulumi = _make_pulumi()
-        with patch("transforms.cloud_vpc_pulumi.clean_data", return_value=_full_aws_cleaned()):
-            result = await pulumi.transform({})
-
-        assert "aws_eu_central_1" in result
-        assert "aws_eu_west_1" in result
-
-    @pytest.mark.asyncio
-    async def test_pulumi_aws_smoke_both_vpcs_present(self) -> None:
-        """Multi-VPC account emits construct declarations for both VPCs."""
-        pulumi = _make_pulumi()
-        with patch("transforms.cloud_vpc_pulumi.clean_data", return_value=_full_aws_cleaned()):
-            result = await pulumi.transform({})
-
-        assert 'new aws.ec2.Vpc("prod-vpc"' in result
-        assert 'new aws.ec2.Vpc("prod-vpc-west"' in result

@@ -164,7 +164,7 @@ nodes:
         peer: DcimInterface
         cardinality: many
         optional: true
-        identifier: "interface_capabilities"
+        identifier: "physical_circuit__interfaces"
         order_weight: 1100
         description: "Customer-side A and Z interfaces (each cabled to a provider port)"
 
@@ -300,7 +300,7 @@ nodes:
         peer: DcimInterface
         cardinality: many
         optional: true
-        identifier: "interface_capabilities"
+        identifier: "virtual_circuit__interfaces"
         order_weight: 1100
         description: "A-side and Z-side interfaces this circuit terminates on"
 

@@ -7,8 +7,8 @@ kind: Object
 spec:
   kind: CloudDirectConnect
   data:
-    - name: CUST1-DX-FR2-EU-CENTRAL-1
-      account: CUST1-AWS
+    - name: C001-DX-FR2-EU-CENTRAL-1
+      account: C001-AWS
       region: eu-central-1
       bandwidth: 1Gbps
       connection_type: dedicated
@@ -23,15 +23,15 @@ kind: Object
 spec:
   kind: CloudVirtualInterface
   data:
-    - name: CUST1-VIF-TRANSIT-FR2
+    - name: C001-VIF-TRANSIT-FR2
       vif_type: transit
       vlan_id: 100
-      direct_connect: CUST1-DX-FR2-EU-CENTRAL-1
-      transit_gateway: CUST1-TGW-EU-CENTRAL-1
+      direct_connect: C001-DX-FR2-EU-CENTRAL-1
+      transit_gateway: C001-TGW-EU-CENTRAL-1
 
 ---
-# Virtual interface on FR2-EDGE-01 for the AWS Direct Connect BGP session (sub-interface over Eth1/2)
-# Equinix Fabric carries the connection as a virtual circuit — no physical cross-connect exists
+# Virtual interface on FR2-EDGE-01 for the AWS Direct Connect BGP session (sub-i
+# Equinix Fabric carries the connection as a virtual circuit — no physical cross
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
@@ -50,8 +50,8 @@ kind: Object
 spec:
   kind: TopologyVirtualCircuit
   data:
-    - name: VC-CUST1-FR2-AWS-EU-CENTRAL-1-DX
-      description: "Customer 1 AWS Direct Connect from Equinix FR2 to eu-central-1 Transit Gateway"
+    - name: VC-CNRD-FR2-AWS-EU-CENTRAL-1-DX
+      description: "CNRD AWS Direct Connect from Equinix FR2 to eu-central-1 Transit Gateway"  # yamllint disable-line rule:line-length
       link_type: direct_connect_aws
       bandwidth: 1000
       status: active
@@ -64,8 +64,8 @@ spec:
         - - FR2-EDGE-01
           - Ethernet1/2.100
       cloud_endpoints:
-        - CUST1-DX-FR2-EU-CENTRAL-1
-        - CUST1-TGW-EU-CENTRAL-1
+        - C001-DX-FR2-EU-CENTRAL-1
+        - C001-TGW-EU-CENTRAL-1
 
 ---
 # ManagedExternalPeer: AWS-side BGP peer reachable over the Direct Connect VIF
@@ -77,4 +77,5 @@ spec:
     - name: AWS-DX-TRANSIT-PEER-FR2
       peer_type: CLOUD
       provider_name: AWS
-      circuit_id: CUST1-DX-FR2-EU-CENTRAL-1
+      circuit_id: C001-DX-FR2-EU-CENTRAL-1
+      asn: "AS64512"

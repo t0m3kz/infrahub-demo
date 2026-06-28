@@ -1,0 +1,353 @@
+---
+# DCI BGP — data-center to Equinix edge peerings
+#
+# Topology:
+#   DC1-BL1 (AS65001) ↔ FR2-EDGE-01 (AS65000) via DC1-BL1:Eth9/1 — FR2-EDGE-01:Eth1/2
+#   DC1-BL2 (AS65001) ↔ FR6-EDGE-01 (AS65000) via DC1-BL2:Eth9/1 — FR6-EDGE-01:Eth1/2
+#   DC2-BL1 (AS65270) ↔ PA4-EDGE-01 (AS65000) via DC2-BL1:Eth1/9 — PA4-EDGE-01:Eth1/2
+#   DC2-BL2 (AS65271) ↔ PA6-EDGE-01 (AS65000) via DC2-BL2:Eth1/9 — PA6-EDGE-01:Eth1/2
+#   DC3-BL1 (AS65370) ↔ PA4-EDGE-01 (AS65000) via DC3-BL1:Eth8  — PA4-EDGE-01:Eth1/3
+#   DC3-BL2 (AS65371) ↔ PA6-EDGE-01 (AS65000) via DC3-BL2:Eth8  — PA6-EDGE-01:Eth1/3
+#
+# All sessions are eBGP (different ASNs).
+# Edge routers run AS65000 (company WAN/distribution AS).
+# DC1 border-leafs add a dedicated DCI BGP process for WAN-facing interfaces.
+
+# Loopback0 virtual interfaces on Equinix edge routers (carry the router-ID IP)
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimVirtualInterface
+  data:
+    - name: Loopback0
+      description: "Router-ID loopback — FR2-EDGE-01"
+      role: loopback
+      status: active
+      device: FR2-EDGE-01
+      ip_address:
+        data:
+          address: "10.255.0.1/32"
+          ip_namespace: default
+
+    - name: Loopback0
+      description: "Router-ID loopback — FR6-EDGE-01"
+      role: loopback
+      status: active
+      device: FR6-EDGE-01
+      ip_address:
+        data:
+          address: "10.255.0.2/32"
+          ip_namespace: default
+
+    - name: Loopback0
+      description: "Router-ID loopback — PA4-EDGE-01"
+      role: loopback
+      status: active
+      device: PA4-EDGE-01
+      ip_address:
+        data:
+          address: "10.255.0.3/32"
+          ip_namespace: default
+
+    - name: Loopback0
+      description: "Router-ID loopback — PA6-EDGE-01"
+      role: loopback
+      status: active
+      device: PA6-EDGE-01
+      ip_address:
+        data:
+          address: "10.255.0.4/32"
+          ip_namespace: default
+
+---
+# ── BGP processes on Equinix edge routers ─────────────────────────────────────
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: ManagedBGP
+  data:
+    - name: FR2-EDGE-01-DCI-BGP
+      status: active
+      description: "DCI BGP process — FR2-EDGE-01 (AS65000, Frankfurt AZ1)"
+      multipath: true
+      capabilities:
+        - FR2-EDGE-01
+      router_id:
+        - "10.255.0.1/32"
+        - default
+      local_as: "AS65000"
+      address_families:
+        - - ipv4
+          - unicast
+        - - l2vpn
+          - evpn
+
+    - name: FR6-EDGE-01-DCI-BGP
+      status: active
+      description: "DCI BGP process — FR6-EDGE-01 (AS65000, Frankfurt AZ2)"
+      multipath: true
+      capabilities:
+        - FR6-EDGE-01
+      router_id:
+        - "10.255.0.2/32"
+        - default
+      local_as: "AS65000"
+      address_families:
+        - - ipv4
+          - unicast
+        - - l2vpn
+          - evpn
+
+    - name: PA4-EDGE-01-DCI-BGP
+      status: active
+      description: "DCI BGP process — PA4-EDGE-01 (AS65000, Paris AZ1)"
+      multipath: true
+      capabilities:
+        - PA4-EDGE-01
+      router_id:
+        - "10.255.0.3/32"
+        - default
+      local_as: "AS65000"
+      address_families:
+        - - ipv4
+          - unicast
+
+    - name: PA6-EDGE-01-DCI-BGP
+      status: active
+      description: "DCI BGP process — PA6-EDGE-01 (AS65000, Paris AZ2)"
+      multipath: true
+      capabilities:
+        - PA6-EDGE-01
+      router_id:
+        - "10.255.0.4/32"
+        - default
+      local_as: "AS65000"
+      address_families:
+        - - ipv4
+          - unicast
+
+---
+# ── DCI BGP processes on DC1 border-leafs (WAN-facing) ────────────────────────
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: ManagedBGP
+  data:
+    - name: DC1-BL1-DCI-BGP
+      status: active
+      description: "DCI BGP process — DC1-BL1 WAN uplink primary (AS65001, Frankfurt FR2)"
+      multipath: true
+      capabilities:
+        - DC1-BL1
+      router_id:
+        - "10.255.11.51/32"
+        - FABRIC-DC1
+      local_as: "AS65001"
+      address_families:
+        - - ipv4
+          - unicast
+        - - l2vpn
+          - evpn
+
+    - name: DC1-BL2-DCI-BGP
+      status: active
+      description: "DCI BGP process — DC1-BL2 WAN uplink secondary (AS65001, Frankfurt FR6)"
+      multipath: true
+      capabilities:
+        - DC1-BL2
+      router_id:
+        - "10.255.11.52/32"
+        - FABRIC-DC1
+      local_as: "AS65001"
+      address_families:
+        - - ipv4
+          - unicast
+        - - l2vpn
+          - evpn
+
+    - name: DC2-BL1-DCI-BGP
+      status: active
+      description: "DCI BGP process — DC2-BL1 WAN uplink primary (AS65270, Paris PA4)"
+      multipath: true
+      capabilities:
+        - DC2-BL1
+      router_id:
+        - "10.255.12.51/32"
+        - FABRIC-DC2
+      local_as: "AS65270"
+      address_families:
+        - - ipv4
+          - unicast
+        - - l2vpn
+          - evpn
+
+    - name: DC2-BL2-DCI-BGP
+      status: active
+      description: "DCI BGP process — DC2-BL2 WAN uplink secondary (AS65271, Paris PA6)"
+      multipath: true
+      capabilities:
+        - DC2-BL2
+      router_id:
+        - "10.255.12.52/32"
+        - FABRIC-DC2
+      local_as: "AS65271"
+      address_families:
+        - - ipv4
+          - unicast
+        - - l2vpn
+          - evpn
+
+    - name: DC3-BL1-DCI-BGP
+      status: active
+      description: "DCI BGP process — DC3-BL1 WAN uplink primary (AS65370, Paris PA4)"
+      multipath: true
+      capabilities:
+        - DC3-BL1
+      router_id:
+        - "10.255.13.51/32"
+        - FABRIC-DC3
+      local_as: "AS65370"
+      address_families:
+        - - ipv4
+          - unicast
+        - - l2vpn
+          - evpn
+
+    - name: DC3-BL2-DCI-BGP
+      status: active
+      description: "DCI BGP process — DC3-BL2 WAN uplink secondary (AS65371, Paris PA6)"
+      multipath: true
+      capabilities:
+        - DC3-BL2
+      router_id:
+        - "10.255.13.52/32"
+        - FABRIC-DC3
+      local_as: "AS65371"
+      address_families:
+        - - ipv4
+          - unicast
+        - - l2vpn
+          - evpn
+
+---
+# ── DC1 border-leafs → Frankfurt eBGP peerings ────────────────────────────────
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: ManagedBGPPeering
+  data:
+    - name: DC1-BL1-FR2-EDGE-01-DCI-BGP
+      description: "eBGP DCI — DC1-BL1 (AS65001) ↔ FR2-EDGE-01 (AS65000) — primary Frankfurt"
+      session_type: EBGP
+      bfd_enabled: true
+      bgp_processes:
+        - DC1-BL1-DCI-BGP
+        - FR2-EDGE-01-DCI-BGP
+      interface_capabilities:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC1-BL1
+            name: Ethernet9/1
+        - kind: DcimPhysicalInterface
+          data:
+            device: FR2-EDGE-01
+            name: Ethernet1/2
+
+    - name: DC1-BL2-FR6-EDGE-01-DCI-BGP
+      description: "eBGP DCI — DC1-BL2 (AS65001) ↔ FR6-EDGE-01 (AS65000) — secondary Frankfurt"
+      session_type: EBGP
+      bfd_enabled: true
+      bgp_processes:
+        - DC1-BL2-DCI-BGP
+        - FR6-EDGE-01-DCI-BGP
+      interface_capabilities:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC1-BL2
+            name: Ethernet9/1
+        - kind: DcimPhysicalInterface
+          data:
+            device: FR6-EDGE-01
+            name: Ethernet1/2
+
+---
+# ── DC2 → Paris eBGP peerings ─────────────────────────────────────────────────
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: ManagedBGPPeering
+  data:
+    - name: DC2-BL1-PA4-EDGE-01-DCI-BGP
+      description: "eBGP DCI — DC2-BL1 (AS65270) ↔ PA4-EDGE-01 (AS65000) — primary Paris"
+      session_type: EBGP
+      bfd_enabled: true
+      bgp_processes:
+        - DC2-BL1-DCI-BGP
+        - PA4-EDGE-01-DCI-BGP
+      interface_capabilities:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC2-BL1
+            name: Ethernet1/9
+        - kind: DcimPhysicalInterface
+          data:
+            device: PA4-EDGE-01
+            name: Ethernet1/2
+
+    - name: DC2-BL2-PA6-EDGE-01-DCI-BGP
+      description: "eBGP DCI — DC2-BL2 (AS65271) ↔ PA6-EDGE-01 (AS65000) — secondary Paris"
+      session_type: EBGP
+      bfd_enabled: true
+      bgp_processes:
+        - DC2-BL2-DCI-BGP
+        - PA6-EDGE-01-DCI-BGP
+      interface_capabilities:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC2-BL2
+            name: Ethernet1/9
+        - kind: DcimPhysicalInterface
+          data:
+            device: PA6-EDGE-01
+            name: Ethernet1/2
+
+---
+# ── DC3 → Paris eBGP peerings ─────────────────────────────────────────────────
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: ManagedBGPPeering
+  data:
+    - name: DC3-BL1-PA4-EDGE-01-DCI-BGP
+      description: "eBGP DCI — DC3-BL1 (AS65370) ↔ PA4-EDGE-01 (AS65000) — primary Paris"
+      session_type: EBGP
+      bfd_enabled: true
+      bgp_processes:
+        - DC3-BL1-DCI-BGP
+        - PA4-EDGE-01-DCI-BGP
+      interface_capabilities:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-BL1
+            name: Ethernet8
+        - kind: DcimPhysicalInterface
+          data:
+            device: PA4-EDGE-01
+            name: Ethernet1/3
+
+    - name: DC3-BL2-PA6-EDGE-01-DCI-BGP
+      description: "eBGP DCI — DC3-BL2 (AS65371) ↔ PA6-EDGE-01 (AS65000) — secondary Paris"
+      session_type: EBGP
+      bfd_enabled: true
+      bgp_processes:
+        - DC3-BL2-DCI-BGP
+        - PA6-EDGE-01-DCI-BGP
+      interface_capabilities:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-BL2
+            name: Ethernet8
+        - kind: DcimPhysicalInterface
+          data:
+            device: PA6-EDGE-01
+            name: Ethernet1/3

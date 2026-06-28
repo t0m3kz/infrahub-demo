@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+from pathlib import Path
 from typing import Literal, cast
 
 from utils.data_cleaning import clean_data
@@ -20,7 +21,7 @@ class RackGenerator(CommonGenerator):
         role_filter: str | None = None,
         interface_role: str = "downlink",
     ) -> list[dict]:
-        """Fetch devices and their interfaces from a rack using single GraphQL query.
+        """Fetch devices and their interfaces from a rack using the registered GQL query.
 
         Args:
             rack: Optional SDK rack object. If None, uses self.data context (pod + row)
@@ -30,67 +31,34 @@ class RackGenerator(CommonGenerator):
         Returns:
             List of dicts with device name, interfaces list, and role
         """
-        # Build GraphQL query with nested devices and interfaces
-        device_filter = f'(role__value: "{role_filter}")' if role_filter else ""
-
-        query = f"""
-        query RackDevicesWithInterfaces($pod_id: ID!, $row_index: BigInt!) {{
-          LocationRack(row_index__value: $row_index, pod__ids: [$pod_id]) {{
-            edges {{
-              node {{
-                id
-                name {{ value }}
-                devices{device_filter} {{
-                  edges {{
-                    node {{
-                      id
-                      name {{ value }}
-                      role {{ value }}
-                      interfaces(role__value: "{interface_role}") {{
-                        edges {{
-                          node {{
-                            id
-                            name {{ value }}
-                          }}
-                        }}
-                      }}
-                    }}
-                  }}
-                }}
-              }}
-            }}
-          }}
-        }}
-        """
-
-        # Prepare variables
         if rack:
-            # Use provided rack's pod and row_index (need to fetch these from rack)
             rack_obj = await self.client.get(kind=LocationRack, id=rack.id)
             pod_id = rack_obj.pod.id
             row_index = rack_obj.row_index.value
         else:
-            # Use current rack's context
             pod_id = self.data.pod.id
             row_index = self.data.row_index
 
-        # Execute query
-        result = await self.client.execute_graphql(query=query, variables={"pod_id": pod_id, "row_index": row_index})
+        _gql_path = Path(__file__).parent.parent.parent / "queries/topology/add/rack_devices_with_interfaces.gql"
+        result = await self.client.execute_graphql(
+            query=_gql_path.read_text(),
+            variables={
+                "pod_id": pod_id,
+                "row_index": row_index,
+                "role_filter": role_filter,
+                "interface_role": interface_role,
+            },
+        )
 
-        # Parse nested response
         devices_with_interfaces = []
-        racks = result.get("LocationRack", {}).get("edges", [])
-
-        for rack_edge in racks:
+        for rack_edge in result.get("LocationRack", {}).get("edges", []):
             rack_node = rack_edge.get("node", {})
-            device_edges = rack_node.get("devices", {}).get("edges", [])
-
-            for device_edge in device_edges:
+            for device_edge in rack_node.get("devices", {}).get("edges", []):
                 device_node = device_edge.get("node", {})
-                interface_edges = device_node.get("interfaces", {}).get("edges", [])
-
-                interfaces = [iface_edge.get("node", {}).get("name", {}).get("value") for iface_edge in interface_edges]
-
+                interfaces = [
+                    iface_edge.get("node", {}).get("name", {}).get("value")
+                    for iface_edge in device_node.get("interfaces", {}).get("edges", [])
+                ]
                 devices_with_interfaces.append(
                     {
                         "device_id": device_node.get("id"),
@@ -115,8 +83,13 @@ class RackGenerator(CommonGenerator):
         if deployment_type != "mixed" or self.data.rack_type != "network":
             return
 
+        # Skip racks that have no leaf template — e.g. border-leaf-only racks.
+        # These are valid network racks but have no leafs to cascade from.
+        if not self.data.leafs:
+            self.logger.warning(f"Rack {self.data.name} has no leaf template — skipping ToR checksum cascade")
+            return
+
         # Verify leafs were created in this rack before cascading to ToR racks
-        # Use helper to fetch devices with interfaces (data ready for future connection building)
         leaf_data = await self.fetch_rack_devices_with_interfaces(role_filter="leaf")
 
         if not leaf_data:
@@ -280,10 +253,15 @@ class RackGenerator(CommonGenerator):
 
         # deployment_type is on pod, max_tors_per_row can be calculated from design
         deployment_type = pod.deployment_type
-        if pod.design is not None:
-            max_tors_per_row = pod.design.compute_racks_per_row * pod.design.max_tors_per_compute_rack
-        else:
+        if pod.design is None:
+            self.logger.warning(
+                f"Rack {self.data.name}: pod '{pod.name}' has no design set — "
+                "falling back to max_tors_per_row=8 for offset calculation. "
+                "Run pod generator first for accurate cabling."
+            )
             max_tors_per_row = 8
+        else:
+            max_tors_per_row = pod.design.compute_racks_per_row * pod.design.max_tors_per_compute_rack
 
         # For middle_rack deployment ToRs: always offset=0 (ToRs connect to leafs in same rack)
         if deployment_type == "middle_rack" and device_type == "tor":
@@ -601,7 +579,11 @@ class RackGenerator(CommonGenerator):
         _created_device_names: set[str] = set()
 
         # Derive spine info once from query data (no API calls)
-        spine_device_names, spine_interfaces = self._derive_spine_info()
+        try:
+            spine_device_names, spine_interfaces = self._derive_spine_info()
+        except RuntimeError as exc:
+            self.logger.error(str(exc))
+            return
 
         # Prepare routing options once for all create_routing calls
         routing_options: RoutingOptions = RoutingOptions(design=dc_design)
@@ -655,7 +637,11 @@ class RackGenerator(CommonGenerator):
             created_leaf_devices.extend(leaf_devices)
 
             leaf_interfaces = [interface.name for interface in leaf_role.template.interfaces]
-            cabling_offset = self.calculate_cabling_offsets(device_count=leaf_role.quantity, device_type="leaf")
+            try:
+                cabling_offset = self.calculate_cabling_offsets(device_count=leaf_role.quantity, device_type="leaf")
+            except RuntimeError as exc:
+                self.logger.error(str(exc))
+                return
 
             await self._cable_and_route(
                 bottom_devices=leaf_devices,
@@ -736,15 +722,13 @@ class RackGenerator(CommonGenerator):
                             f"middle_rack deployment for {self.data.name}: No downlink interfaces found on leaf devices. "
                             "Cannot create ToR-to-leaf cabling."
                         )
-                        raise RuntimeError(
-                            f"Rack {self.data.name}: Cannot cable ToRs - no downlink interfaces on leaf devices"
-                        )
+                        return
                 else:
                     self.logger.error(
                         f"middle_rack deployment for {self.data.name} has ToRs but no leafs. "
                         "Cannot create ToR-to-leaf cabling."
                     )
-                    raise RuntimeError(f"Rack {self.data.name}: Cannot cable ToRs - no leaf devices in rack")
+                    return
 
             # Deployment type: tor - ToRs connect directly to spines
             elif deployment_type == "tor":
@@ -758,11 +742,15 @@ class RackGenerator(CommonGenerator):
                     for r in sibling_racks
                     if hasattr(r, "row_index") and r.row_index and r.row_index.value < self.data.row_index
                 )
-                cabling_offset = self.calculate_cabling_offsets(
-                    device_count=tors_per_rack,
-                    device_type="tor",
-                    racks_in_previous_rows=prev_row_racks,
-                )
+                try:
+                    cabling_offset = self.calculate_cabling_offsets(
+                        device_count=tors_per_rack,
+                        device_type="tor",
+                        racks_in_previous_rows=prev_row_racks,
+                    )
+                except RuntimeError as exc:
+                    self.logger.error(str(exc))
+                    return
 
                 if spine_device_names:
                     await self._cable_and_route(
@@ -780,7 +768,7 @@ class RackGenerator(CommonGenerator):
                         f"tor deployment for {self.data.name}: No spine devices found in pod. "
                         "Cannot create ToR-to-spine cabling."
                     )
-                    raise RuntimeError(f"Rack {self.data.name}: Cannot cable ToRs - no spine devices in pod")
+                    return
 
             # Deployment type: mixed - ToRs connect to local leafs if present, otherwise middle rack leafs
             elif deployment_type == "mixed":
@@ -810,9 +798,13 @@ class RackGenerator(CommonGenerator):
                     cabling_offset = (self.data.index - 1) * tors_per_rack
 
                     if leaf_row_cache is None:
-                        leaf_row_cache = await self._get_leaf_devices_in_row(
-                            pod_id=pod.id, row_index=self.data.row_index
-                        )
+                        try:
+                            leaf_row_cache = await self._get_leaf_devices_in_row(
+                                pod_id=pod.id, row_index=self.data.row_index
+                            )
+                        except RuntimeError as exc:
+                            self.logger.error(str(exc))
+                            return
                     leaf_device_names, leaf_interfaces = leaf_row_cache
 
                     if leaf_device_names:
@@ -829,12 +821,36 @@ class RackGenerator(CommonGenerator):
                             f"Mixed deployment for rack {self.data.name}: No middle rack leafs found in row {self.data.row_index}. "
                             "Cannot create ToR-to-leaf cabling."
                         )
-                        raise RuntimeError(
-                            f"Rack {self.data.name}: Cannot cable ToRs - no leaf devices found in row {self.data.row_index}"
-                        )
+                        return
 
             else:
                 self.logger.warning(f"Unknown deployment_type '{deployment_type}' for rack {self.data.name}")
+
+        # Process border-leaf devices: create with loopback + management only.
+        # Cabling to the fabric happens via the endpoint generator (which detects
+        # role=border-leaf and cables to the appropriate uplink/DCI interfaces).
+        for bl_role in self.data.border_leafs or []:
+            bl_indexes: list[int] = [
+                dc.index,
+                suite.index,
+                self.data.row_index,
+                self.data.index,
+            ]
+            await self.create_devices(
+                deployment_id=dc.id,
+                device_role="border-leaf",
+                amount=bl_role.quantity,
+                template=bl_role.template.model_dump(),
+                naming_convention=naming_conv,
+                options=DeviceOptions(
+                    indexes=bl_indexes,
+                    allocate_loopback=True,
+                    rack=self.data.id,
+                    loopback_pool=loopback_pool_id,
+                    loopback_prefix_length=128 if is_ipv6 else 32,
+                    management_pool=management_pool_id,
+                ),
+            )
 
         # Generation completion summary
         total_devices = len(created_leaf_devices or []) + sum(tor_role.quantity for tor_role in (self.data.tors or []))
@@ -842,7 +858,8 @@ class RackGenerator(CommonGenerator):
             f"Rack generation completed: {self.data.name} - {total_devices} device(s) created with connectivity"
         )
 
-        # For mixed deployment with network rack: trigger ToR rack checksum updates
-        # This ensures ToR racks in the same row are generated after network rack completes
-        if deployment_type == "mixed" and self.data.rack_type == "network":
+        # For mixed deployment with network rack that has leafs: trigger ToR rack checksum updates
+        # This ensures ToR racks in the same row are generated after network rack completes.
+        # Border-leaf-only racks are skipped — they have no leafs to cascade from.
+        if deployment_type == "mixed" and self.data.rack_type == "network" and self.data.leafs:
             await self.update_checksum()

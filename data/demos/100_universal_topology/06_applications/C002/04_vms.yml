@@ -1,0 +1,90 @@
+---
+# C002 (SwiftGo GmbH) — Virtual machines on DC1/DC2 servers
+
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimVirtualDevice
+  data:
+    # ── shipment-tracker — production ─────────────────────────────────────────
+    - name: C002-WEB-VM-01
+      role: endpoint
+      status: active
+      device_type: linux-vm
+      platform: linux
+      deployment: DC1
+      hosting_device: DC1-POD1-SRV-01
+
+    - name: C002-WEB-VM-02
+      role: endpoint
+      status: active
+      device_type: linux-vm
+      platform: linux
+      deployment: DC1
+      hosting_device: DC1-POD1-SRV-ASS-01
+
+    - name: C002-APP-VM-01
+      role: endpoint
+      status: active
+      device_type: linux-vm
+      platform: linux
+      deployment: DC1
+      hosting_device: DC1-POD1-SRV-02
+
+    - name: C002-APP-VM-02
+      role: endpoint
+      status: active
+      device_type: linux-vm
+      platform: linux
+      deployment: DC2
+      hosting_device: DC2-POD1-SRV-02
+
+    - name: C002-DB-VM-01
+      role: endpoint
+      status: active
+      device_type: linux-vm
+      platform: linux
+      deployment: DC1
+      hosting_device: DC1-POD2-SRV-02
+
+    # ── fleet-manager — production ────────────────────────────────────────────
+    - name: C002-FLEET-WEB-VM-01
+      role: endpoint
+      status: active
+      device_type: linux-vm
+      platform: linux
+      deployment: DC1
+      hosting_device: DC1-POD2-SRV-01
+
+    - name: C002-FLEET-APP-VM-01
+      role: endpoint
+      status: active
+      device_type: linux-vm
+      platform: linux
+      deployment: DC1
+      hosting_device: DC1-POD2-SRV-01
+
+    - name: C002-FLEET-DB-VM-01
+      role: endpoint
+      status: active
+      device_type: linux-vm
+      platform: linux
+      deployment: DC2
+      hosting_device: DC2-POD2-SRV-01
+
+    # ── shipment-tracker — nonprod ────────────────────────────────────────────
+    - name: C002-WEB-NP-VM-01
+      role: endpoint
+      status: active
+      device_type: linux-vm
+      platform: linux
+      deployment: DC2
+      hosting_device: DC2-POD1-SRV-01
+
+    - name: C002-APP-NP-VM-01
+      role: endpoint
+      status: active
+      device_type: linux-vm
+      platform: linux
+      deployment: DC2
+      hosting_device: DC2-POD1-SRV-02

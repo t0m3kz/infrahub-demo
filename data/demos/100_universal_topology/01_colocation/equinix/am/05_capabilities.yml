@@ -8,7 +8,7 @@ spec:
       status: active
       profiles:
         - colo-ntp-default
-      device_capabilities:
+      capabilities:
         - AM1-EDGE-01
         - AM1-EDGE-02
         - AM4-EDGE-01
@@ -39,7 +39,7 @@ spec:
       status: active
       profiles:
         - colo-syslog-default
-      device_capabilities:
+      capabilities:
         - AM1-EDGE-01
         - AM1-EDGE-02
         - AM4-EDGE-01
@@ -64,7 +64,7 @@ spec:
       status: active
       profiles:
         - colo-aaa-default
-      device_capabilities:
+      capabilities:
         - AM1-EDGE-01
         - AM1-EDGE-02
         - AM4-EDGE-01

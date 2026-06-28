@@ -86,7 +86,7 @@ def _signature(plan: RoutingPlan) -> dict[str, Any]:
                 p["name"],
                 tuple(sorted(p.get("local_as", {}).items())),
                 p["router_id"]["id"],
-                p["device_capabilities"][0]["id"],
+                p["capabilities"][0]["id"],
             )
             for p in plan.bgp_processes
         ),

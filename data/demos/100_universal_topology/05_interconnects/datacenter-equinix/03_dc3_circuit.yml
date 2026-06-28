@@ -1,0 +1,154 @@
+---
+# DC3 → Equinix Paris physical circuits
+#
+# DC3 DCI now terminates on border-leafs (BL1/BL2), not the super-spine.
+# BL1/BL2 are EVPN multi-site Border-Gateways and perform service chaining
+# for customer namespaces — keeping DCI + firewall steering on one tier.
+#
+# Cable path: DC3-BL1/Eth1/9 → EQX-DC3-PATCH-01/Port1 → EQX-PA4-PATCH-01/Port4 → PA4-EDGE-01/Eth1/3
+#             DC3-BL2/Eth1/9 → EQX-DC3-PATCH-01/Port2 → EQX-PA6-PATCH-01/Port3 → PA6-EDGE-01/Eth1/3
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimPhysicalDevice
+  data:
+    - name: EQX-DC3-PATCH-01
+      object_template: PATCH-PANEL-24_PATCH
+      status: active
+      deployment: DC3
+      rack: dc3-s1-r-1
+
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologyPhysicalCircuit
+  data:
+    - name: PHYS-DC3-PA4-EQX-01
+      circuit_id: PHYS-DC3-PA4-EQX-01
+      description: "Physical circuit from DC3-BL1 to Equinix Paris (PA4) — primary DCI"
+      circuit_type: cross_connect
+      committed_rate: 100000
+      status: active
+      provider: Equinix
+      locations:
+        - DC3
+        - PA4
+      interfaces:
+        - - DC3-BL1
+          - Ethernet8
+        - - PA4-EDGE-01
+          - Ethernet1/3
+      provider_a:
+        - EQX-DC3-PATCH-01
+        - Port1
+      provider_z:
+        - EQX-PA4-PATCH-01
+        - Port4
+
+    - name: PHYS-DC3-PA6-EQX-01
+      circuit_id: PHYS-DC3-PA6-EQX-01
+      description: "Physical circuit from DC3-BL2 to Equinix Paris (PA6) — secondary DCI"
+      circuit_type: cross_connect
+      committed_rate: 100000
+      status: active
+      provider: Equinix
+      locations:
+        - DC3
+        - PA6
+      interfaces:
+        - - DC3-BL2
+          - Ethernet8
+        - - PA6-EDGE-01
+          - Ethernet1/3
+      provider_a:
+        - EQX-DC3-PATCH-01
+        - Port2
+      provider_z:
+        - EQX-PA6-PATCH-01
+        - Port3
+
+---
+# Interface descriptions for DC3 DCI links
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimPhysicalInterface
+  data:
+    - device: DC3-BL1
+      name: Ethernet8
+      description: "PA4-EDGE-01 (DCI primary)"
+    - device: DC3-BL2
+      name: Ethernet8
+      description: "PA6-EDGE-01 (DCI secondary)"
+    - device: PA4-EDGE-01
+      name: Ethernet1/3
+      description: "DC3-BL1"
+    - device: PA6-EDGE-01
+      name: Ethernet1/3
+      description: "DC3-BL2"
+
+---
+# Cables for DC3 DCI cross-connects
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimCable
+  data:
+    # ── DC3 border-leafs → Equinix DC3 patch panel ────────────────────────────
+    # These cables are also defined in dc3/05_cabling.yml for completeness;
+    # the circuit file is the authoritative cross-connect definition.
+    - name: CBL-DC3-BL1-EQX-DC3-PATCH-P1
+      type: smf
+      deployment: DC3
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-BL1
+            name: Ethernet8
+        - kind: DcimPhysicalInterface
+          data:
+            device: EQX-DC3-PATCH-01
+            name: Port1
+
+    - name: CBL-DC3-BL2-EQX-DC3-PATCH-P2
+      type: smf
+      deployment: DC3
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-BL2
+            name: Ethernet8
+        - kind: DcimPhysicalInterface
+          data:
+            device: EQX-DC3-PATCH-01
+            name: Port2
+
+    # ── Equinix DC3 patch panel → PA4 edge ────────────────────────────────────
+    # Port4: DC3→PA4 cross-connect (PHYS-DC3-PA4-EQX-01)
+    - name: CBL-PA4-EDGE01-EQX-PA4-PATCH-P4
+      type: smf
+      deployment: PA4
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: PA4-EDGE-01
+            name: Ethernet1/3
+        - kind: DcimPhysicalInterface
+          data:
+            device: EQX-PA4-PATCH-01
+            name: Port4
+
+    # Port3: DC3→PA6 cross-connect (PHYS-DC3-PA6-EQX-01)
+    - name: CBL-PA6-EDGE01-EQX-PA6-PATCH-P3
+      type: smf
+      deployment: PA6
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: PA6-EDGE-01
+            name: Ethernet1/3
+        - kind: DcimPhysicalInterface
+          data:
+            device: EQX-PA6-PATCH-01
+            name: Port3

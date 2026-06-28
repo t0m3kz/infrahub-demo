@@ -41,6 +41,10 @@ router ospf 1
   area None authentication message-digest
   passive-interface default
 !
+interface Ethernet1
+  ip router ospf 1 area 0.0.0.0
+interface Ethernet2
+  ip router ospf 1 area 0.0.0.0
 
 !
 ! BGP Configuration
@@ -50,21 +54,8 @@ router bgp 65000
   bgp graceful-restart
   maximum-paths 4
   !
-  neighbor EVPN-PEERS peer-group
-  neighbor EVPN-PEERS remote-as 65000
-  neighbor EVPN-PEERS update-source Loopback0
-  neighbor EVPN-PEERS send-community both
-  neighbor 10.0.0.100 peer-group EVPN-PEERS
-  neighbor 10.0.0.100 description spine-01
-  neighbor 10.0.0.101 peer-group EVPN-PEERS
-  neighbor 10.0.0.101 description spine-02
-  !
   address-family ipv4 unicast
     redistribute connected route-map RM-CONN-2-BGP
-  exit-address-family
-  !
-  address-family l2vpn evpn
-    neighbor EVPN-PEERS activate
   exit-address-family
 !
 

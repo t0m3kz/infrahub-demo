@@ -48,8 +48,8 @@ def _make_existing_bgp(
     bgp = MagicMock()
     bgp.id = f"bgp-{device_name}-underlay"
     bgp.name.value = name
-    bgp.device_capabilities.peers[0].name.value = device_name
-    bgp.device_capabilities.peers[0].id = f"dev-{device_name}"
+    bgp.capabilities.peers[0].name.value = device_name
+    bgp.capabilities.peers[0].id = f"dev-{device_name}"
     bgp.local_as.id = as_id
     return bgp
 
@@ -483,8 +483,8 @@ class TestRoutingPlanIdempotency:
         ids2 = sorted(o["_existing_id"] for o in _existing_as(plan2))
         assert ids1 == ids2
 
-        bgp1 = [(p["name"], p["device_capabilities"][0]["id"]) for p in plan1.bgp_processes]
-        bgp2 = [(p["name"], p["device_capabilities"][0]["id"]) for p in plan2.bgp_processes]
+        bgp1 = [(p["name"], p["capabilities"][0]["id"]) for p in plan1.bgp_processes]
+        bgp2 = [(p["name"], p["capabilities"][0]["id"]) for p in plan2.bgp_processes]
         assert bgp1 == bgp2
 
     def test_overlay_peerings_deterministic(self) -> None:

@@ -29,7 +29,8 @@ router bgp {{ bgp_config.local_as.asn }}
 {%- endif %}
 {%- endfor %}
 {%- for session in bgp_config.sessions %}
-{%- set remote_ip = session.remote_ip.address.split('/')[0] %}
+{%- set is_unnumbered = session.get('interface_name') and not session.get('remote_ip') %}
+{%- set remote_ip = session.interface_name if is_unnumbered else session.remote_ip.address.split('/')[0] %}
 {%- if session.peer_group is defined %}
   neighbor {{ remote_ip }} peer-group {{ session.peer_group }}
 {%- if not session.get('remote_as_from_peer_group') %}
@@ -62,8 +63,9 @@ router bgp {{ bgp_config.local_as.asn }}
 {%- endif %}
 {%- endfor %}
 {%- for session in bgp_config.sessions %}
-{%- if session.peer_group is not defined and not session.address_families and ':' not in session.remote_ip.address %}
-    neighbor {{ session.remote_ip.address.split('/')[0] }} activate
+{%- set _s_unnumbered = session.get('interface_name') and not session.get('remote_ip') %}
+{%- if session.peer_group is not defined and not session.address_families and (_s_unnumbered or ':' not in session.remote_ip.address) %}
+    neighbor {{ session.interface_name if _s_unnumbered else session.remote_ip.address.split('/')[0] }} activate
 {%- endif %}
 {%- endfor %}
   !
@@ -72,7 +74,7 @@ router bgp {{ bgp_config.local_as.asn }}
 {%- if 'ipv6' in (pg.address_families | default([])) %}{% set ns.has_ipv6 = true %}{% endif %}
 {%- endfor %}
 {%- for session in bgp_config.sessions %}
-{%- if not session.address_families and ':' in session.remote_ip.address %}{% set ns.has_ipv6 = true %}{% endif %}
+{%- if not session.address_families and session.remote_ip and ':' in session.remote_ip.address %}{% set ns.has_ipv6 = true %}{% endif %}
 {%- endfor %}
 {%- if ns.has_ipv6 %}
   address-family ipv6 unicast
@@ -83,7 +85,7 @@ router bgp {{ bgp_config.local_as.asn }}
 {%- endif %}
 {%- endfor %}
 {%- for session in bgp_config.sessions %}
-{%- if session.peer_group is not defined and not session.address_families and ':' in session.remote_ip.address %}
+{%- if session.peer_group is not defined and not session.address_families and session.remote_ip and ':' in session.remote_ip.address %}
     neighbor {{ session.remote_ip.address.split('/')[0] }} activate
 {%- endif %}
 {%- endfor %}
@@ -100,7 +102,12 @@ router bgp {{ bgp_config.local_as.asn }}
 {%- endfor %}
 {%- for session in bgp_config.sessions %}
 {%- if session.peer_group is not defined and session.address_families %}
-    neighbor {{ session.remote_ip.address.split('/')[0] }} activate
+{%- set _e_unnumbered = session.get('interface_name') and not session.get('remote_ip') %}
+{%- set _evpn_neighbor = session.interface_name if _e_unnumbered else session.remote_ip.address.split('/')[0] %}
+    neighbor {{ _evpn_neighbor }} activate
+{%- if session.get('route_reflector_client') %}
+    neighbor {{ _evpn_neighbor }} route-reflector-client
+{%- endif %}
 {%- endif %}
 {%- endfor %}
 !

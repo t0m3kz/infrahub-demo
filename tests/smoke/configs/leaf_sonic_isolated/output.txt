@@ -1,0 +1,53 @@
+
+
+{
+  "ACL_RULE": {},
+  "ACL_TABLE": {},
+  "BGP_GLOBALS": {
+    "default": {
+      "graceful_restart_enable": "true",
+      "local_asn": 65000,
+      "max_paths": "64",
+      "router_id": "10.0.0.1"
+    }
+  },
+  "BGP_GLOBALS_AF": {
+    "default|ipv4_unicast": {
+      "admin_status": "true",
+      "redistribute_connected": "true",
+      "route_map_redistribute_connected": "RM-CONN-2-BGP"
+    },
+    "default|l2vpn_evpn": {
+      "admin_status": "true"
+    }
+  },
+  "BGP_NEIGHBOR": {},
+  "BGP_PEER_GROUP": {},
+  "DEVICE_METADATA": {
+    "localhost": {
+      "bgp_asn": 65000,
+      "hostname": "dc1-leaf-01",
+      "type": "LeafRouter"
+    }
+  },
+  "EVPN_NVO": {},
+  "INTERFACE": {
+    "Ethernet1": {},
+    "Ethernet10": {},
+    "Ethernet2": {}
+  },
+  "INTERFACE_IP": {
+    "Ethernet1|10.1.0.1/31": {},
+    "Ethernet2|10.1.0.3/31": {}
+  },
+  "LOOPBACK_INTERFACE": {
+    "Loopback0|10.0.0.1/32": {}
+  },
+  "OSPF_ROUTER": {},
+  "STATIC_ROUTE": {},
+  "VLAN": {},
+  "VLAN_INTERFACE": {},
+  "VRF": {},
+  "VXLAN_TUNNEL": {},
+  "VXLAN_TUNNEL_MAP": {}
+}

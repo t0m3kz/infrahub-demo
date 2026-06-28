@@ -1,0 +1,74 @@
+query ProposedChangeArtifacts($name: String!) {
+  CoreProposedChange(name__value: $name) {
+    edges {
+      node {
+        id
+        name {
+          value
+        }
+        source_branch {
+          value
+        }
+        destination_branch {
+          value
+        }
+        state {
+          value
+        }
+        threads {
+          edges {
+            node {
+              __typename
+              ... on CoreArtifactThread {
+                artifact_id {
+                  value
+                }
+                storage_id {
+                  value
+                }
+                label {
+                  value
+                }
+                resolved {
+                  value
+                }
+              }
+            }
+          }
+        }
+        validations {
+          edges {
+            node {
+              __typename
+              ... on CoreArtifactValidator {
+                checks {
+                  edges {
+                    node {
+                      ... on CoreArtifactCheck {
+                        artifact_id {
+                          value
+                        }
+                        changed {
+                          value
+                        }
+                        checksum {
+                          value
+                        }
+                        label {
+                          value
+                        }
+                        storage_id {
+                          value
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

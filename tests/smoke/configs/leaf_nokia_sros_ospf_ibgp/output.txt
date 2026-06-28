@@ -14,10 +14,6 @@ A admin configure router "Base" interface "system" ipv4 primary address "10.0.0.
 A admin configure service vprn 1000 route-distinguisher auto
 A admin configure service vprn 1000 vrf-import policy "TENANT_IMPORT"
 A admin configure service vprn 1000 vrf-export policy "TENANT_EXPORT"
-A admin configure service vpls  customer 1 admin-state enable
-A admin configure service vpls  description "Customer-A"
-A admin configure service vpls  customer 1 admin-state enable
-A admin configure service vpls  description "Customer-A"
 A admin configure port "Ethernet1" admin-state enable
 A admin configure port "Ethernet1" mtu 9212
 A admin configure router "Base" interface "Ethernet1" admin-state enable
@@ -68,27 +64,9 @@ A admin configure router "Base" bgp 1 local-as 65000
 A admin configure router "Base" bgp 1 ebgp-default-reject-policy import false
 A admin configure router "Base" bgp 1 ebgp-default-reject-policy export false
 A admin configure router "Base" bgp 1 graceful-restart admin-state enable
-A admin configure router "Base" bgp 1 multipath max-paths 64
-A admin configure router "Base" bgp 1 group "EVPN-PEERS" admin-state enable
-A admin configure router "Base" bgp 1 group "EVPN-PEERS" peer-as 65000
-A admin configure router "Base" bgp 1 group "EVPN-PEERS" local-address "10.0.0.1"
-A admin configure router "Base" bgp 1 group "EVPN-PEERS" family evpn
-A admin configure router "Base" bgp 1 group "EVPN-PEERS" send-community extended
-A admin configure router "Base" bgp 1 neighbor "10.0.0.100" admin-state enable
-A admin configure router "Base" bgp 1 neighbor "10.0.0.100" peer-as 65000
-A admin configure router "Base" bgp 1 neighbor "10.0.0.100" description "spine-01"
-A admin configure router "Base" bgp 1 neighbor "10.0.0.100" group "EVPN-PEERS"
-A admin configure router "Base" bgp 1 neighbor "10.0.0.101" admin-state enable
-A admin configure router "Base" bgp 1 neighbor "10.0.0.101" peer-as 65000
-A admin configure router "Base" bgp 1 neighbor "10.0.0.101" description "spine-02"
-A admin configure router "Base" bgp 1 neighbor "10.0.0.101" group "EVPN-PEERS"A admin configure router "Base" bgp 1 export policy "RM-CONN-2-BGP"
+A admin configure router "Base" bgp 1 multipath max-paths 64A admin configure router "Base" bgp 1 export policy "RM-CONN-2-BGP"
 
 
-!
-! VRF Default Routes — firewall gateway per namespace (Option A: FW as inter-VRF router)
-!
-A admin configure service vprn 1000 static-routes route 0.0.0.0/0 next-hop 10.100.0.254 admin-state enable
-!
 
 
 ! End of configuration

@@ -16,55 +16,55 @@ kind: Object
 spec:
   kind: DcimCable
   data:
-    # ── DC1 super-spine → Equinix DC1 patch panel ─────────────────────────────
-    - name: CBL-DC1-SS1-EQX-DC1-PATCH-P1
+    # ── DC1 border-leafs → Equinix DC1 patch panel ────────────────────────────
+    - name: CBL-DC1-BL1-EQX-DC1-PATCH-P1
       type: smf
       deployment: DC1
       endpoints:
         - kind: DcimPhysicalInterface
           data:
-            device: DC1-SS1
-            name: Ethernet1/5
+            device: DC1-BL1
+            name: Ethernet9/1
         - kind: DcimPhysicalInterface
           data:
             device: EQX-DC1-PATCH-01
             name: Port1
 
-    - name: CBL-DC1-SS1-EQX-DC1-PATCH-P2
+    - name: CBL-DC1-BL2-EQX-DC1-PATCH-P2
       type: smf
       deployment: DC1
       endpoints:
         - kind: DcimPhysicalInterface
           data:
-            device: DC1-SS1
-            name: Ethernet1/6
+            device: DC1-BL2
+            name: Ethernet9/1
         - kind: DcimPhysicalInterface
           data:
             device: EQX-DC1-PATCH-01
             name: Port2
 
-    # ── DC2 super-spine → Equinix DC2 patch panel ─────────────────────────────
-    - name: CBL-DC2-SS1-EQX-DC2-PATCH-P1
+    # ── DC2 border-leafs → Equinix DC2 patch panel ────────────────────────────
+    - name: CBL-DC2-BL1-EQX-DC2-PATCH-P1
       type: smf
       deployment: DC2
       endpoints:
         - kind: DcimPhysicalInterface
           data:
-            device: DC2-SS1
-            name: Ethernet1/5
+            device: DC2-BL1
+            name: Ethernet1/9
         - kind: DcimPhysicalInterface
           data:
             device: EQX-DC2-PATCH-01
             name: Port1
 
-    - name: CBL-DC2-SS1-EQX-DC2-PATCH-P2
+    - name: CBL-DC2-BL2-EQX-DC2-PATCH-P2
       type: smf
       deployment: DC2
       endpoints:
         - kind: DcimPhysicalInterface
           data:
-            device: DC2-SS1
-            name: Ethernet1/6
+            device: DC2-BL2
+            name: Ethernet1/9
         - kind: DcimPhysicalInterface
           data:
             device: EQX-DC2-PATCH-01

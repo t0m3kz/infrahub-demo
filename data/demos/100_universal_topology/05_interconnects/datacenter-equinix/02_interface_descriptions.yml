@@ -5,27 +5,27 @@ kind: Object
 spec:
   kind: DcimPhysicalInterface
   data:
-    - device: DC1-SS1
-      name: Ethernet1/5
+    - device: DC1-BL1
+      name: Ethernet9/1
       description: "FR2-EDGE-01"
-    - device: DC1-SS1
-      name: Ethernet1/6
+    - device: DC1-BL2
+      name: Ethernet9/1
       description: "FR6-EDGE-01"
-    - device: DC2-SS1
-      name: Ethernet1/5
+    - device: DC2-BL1
+      name: Ethernet1/9
       description: "PA4-EDGE-01"
-    - device: DC2-SS1
-      name: Ethernet1/6
+    - device: DC2-BL2
+      name: Ethernet1/9
       description: "PA6-EDGE-01"
     - device: FR2-EDGE-01
       name: Ethernet1/2
-      description: "DC1-SS1"
+      description: "DC1-BL1"
     - device: FR6-EDGE-01
       name: Ethernet1/2
-      description: "DC1-SS1"
+      description: "DC1-BL2"
     - device: PA4-EDGE-01
       name: Ethernet1/2
-      description: "DC2-SS1"
+      description: "DC2-BL1"
     - device: PA6-EDGE-01
       name: Ethernet1/2
-      description: "DC2-SS1"
+      description: "DC2-BL2"

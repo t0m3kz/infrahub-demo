@@ -1,0 +1,122 @@
+{#- HAProxy — {{ proxy_type | default('explicit') }} proxy configuration -#}
+#
+# Device:     {{ name }}
+# Proxy type: {{ proxy_type | default('explicit') }}
+# HA mode:    {{ ha.mode if ha else 'standalone' }}
+#
+
+global
+    log stdout local0
+    chroot /var/lib/haproxy
+    stats socket /run/haproxy/admin.sock mode 660 level admin expose-fd listeners
+    stats timeout 30s
+    user haproxy
+    group haproxy
+    daemon
+    maxconn 50000
+
+    # SSL defaults
+    ca-base /etc/ssl/certs
+    crt-base /etc/ssl/private
+    ssl-default-bind-ciphers ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384
+    ssl-default-bind-options ssl-min-ver TLSv1.2 no-tls-tickets
+
+defaults
+    log     global
+    mode    http
+    option  httplog
+    option  dontlognull
+    option  forwardfor
+    option  http-server-close
+    retries 3
+    timeout connect  5s
+    timeout client   30s
+    timeout server   30s
+    timeout tunnel   1h
+    maxconn 3000
+
+#
+# --- Interfaces ---
+{%- for iface in proxy_interfaces %}
+# {{ iface.name }}{%- if iface.description %}: {{ iface.description }}{%- endif %}{%- if iface.ip_address %} — {{ iface.ip_address.address }}{%- endif %}
+{%- endfor %}
+#
+# --- Stats ---
+{%- set mgmt_iface = proxy_interfaces | selectattr('role', 'equalto', 'management') | list | first | default(None) %}
+frontend stats
+    bind {{ mgmt_iface.ip_address.address.split('/')[0] if mgmt_iface and mgmt_iface.ip_address else '127.0.0.1' }}:8404
+    mode http
+    stats enable
+    stats uri /stats
+    stats refresh 10s
+    stats admin if TRUE
+    no log
+
+{%- if proxy_type == 'explicit' %}
+#
+# --- Explicit forward proxy ---
+frontend http_proxy
+    bind *:3128
+    mode http
+    option httplog
+    default_backend http_connect
+
+frontend https_proxy
+    bind *:3129
+    mode tcp
+    option tcplog
+    default_backend https_connect
+
+backend http_connect
+    mode http
+    option forwardfor
+    http-request set-header X-Forwarded-For %[src]
+    server-template upstream 10 0.0.0.0:0 disabled
+
+backend https_connect
+    mode tcp
+    server-template upstream 10 0.0.0.0:0 disabled
+
+{%- elif proxy_type == 'transparent' %}
+#
+# --- Transparent proxy (intercept) ---
+frontend transparent_http
+    bind *:3128 transparent
+    mode http
+    option httplog
+    default_backend transparent_backend
+
+backend transparent_backend
+    mode http
+    option forwardfor
+    server-template upstream 10 0.0.0.0:0 disabled
+
+{%- elif proxy_type == 'reverse' %}
+#
+# --- Reverse proxy ---
+frontend reverse_frontend
+    bind *:80
+    bind *:443 ssl crt /etc/ssl/private/server.pem
+    mode http
+    option httplog
+    http-request redirect scheme https unless { ssl_fc }
+    default_backend reverse_backend
+
+backend reverse_backend
+    mode http
+    balance roundrobin
+    option httpchk GET /health
+    server-template upstream 10 0.0.0.0:0 disabled check
+
+{%- endif %}
+{%- if ha %}
+#
+# --- Peers (HA state sync) ---
+peers haproxy_cluster
+{%- for peer in ha.devices %}
+    peer {{ peer }} {{ peer }}:1024
+{%- endfor %}
+
+# Keepalived integration — managed externally via /etc/keepalived/keepalived.conf
+# HA group: {{ ha.group_id }}  mode: {{ ha.mode }}  priority: {{ ha.priority }}
+{%- endif %}

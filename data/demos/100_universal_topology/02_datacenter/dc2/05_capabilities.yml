@@ -10,9 +10,9 @@ spec:
       status: active
       profiles:
         - dc-ntp-default
-      device_capabilities:
-        - DC2-SS1
-        - DC2-SS2
+      capabilities:
+        - DC2-BL1
+        - DC2-BL2
         - DC2-POD1-SP1
         - DC2-POD1-SP2
         - DC2-POD1-L1
@@ -51,9 +51,9 @@ spec:
       status: active
       profiles:
         - dc-syslog-default
-      device_capabilities:
-        - DC2-SS1
-        - DC2-SS2
+      capabilities:
+        - DC2-BL1
+        - DC2-BL2
         - DC2-POD1-SP1
         - DC2-POD1-SP2
         - DC2-POD1-L1
@@ -86,9 +86,9 @@ spec:
       status: active
       profiles:
         - dc-aaa-default
-      device_capabilities:
-        - DC2-SS1
-        - DC2-SS2
+      capabilities:
+        - DC2-BL1
+        - DC2-BL2
         - DC2-POD1-SP1
         - DC2-POD1-SP2
         - DC2-POD1-L1

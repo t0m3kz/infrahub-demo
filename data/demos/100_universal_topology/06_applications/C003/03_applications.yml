@@ -1,0 +1,24 @@
+---
+# C003 (Vaultex Inc.) — Applications
+#
+# vault-core:         secret management and key signing service (production only)
+# compliance-portal:  audit dashboard and policy reporting (production only)
+
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: AppApplication
+  data:
+    - label: vault-core
+      environment: p
+      criticality: critical
+      parent: C003
+      member_of_groups:
+        - app_applications
+
+    - label: compliance-portal
+      environment: p
+      criticality: high
+      parent: C003
+      member_of_groups:
+        - app_applications

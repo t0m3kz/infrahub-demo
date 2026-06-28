@@ -86,3 +86,20 @@ set rulebase security rules {{ rule_name }} description "{{ rule.description }}"
 {%- endfor %}
 #
 {%- endif %}
+{%- if ha %}
+#
+# --- High Availability ---
+set deviceconfig high-availability enabled yes
+set deviceconfig high-availability group {{ ha.group_id }}
+set deviceconfig high-availability group mode {{ ha.mode }}
+set deviceconfig high-availability group election-option priority {{ ha.priority }}
+set deviceconfig high-availability group election-option preemptive {{ 'yes' if ha.preempt else 'no' }}
+set deviceconfig high-availability group timers {{ ha.ha_timer }}
+{%- if ha.ha_link %}
+set deviceconfig high-availability group ha1 port {{ ha.ha_link }}
+{%- endif %}
+{%- if ha.virtual_ip %}
+set deviceconfig high-availability group interface-mgmt floating-ip {{ ha.virtual_ip }}
+{%- endif %}
+#
+{%- endif %}

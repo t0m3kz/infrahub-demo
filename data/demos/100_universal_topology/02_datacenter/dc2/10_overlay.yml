@@ -1,0 +1,207 @@
+---
+# DC2 overlay — iBGP EVPN (AS 65002, L2VPN EVPN AF)
+#
+# Border-leafs (BL1/BL2) act as EVPN route reflectors.
+# All spines and leaves are iBGP EVPN clients toward SS1 and SS2.
+# iBGP sessions source from Loopback0 (reachable via OSPF underlay).
+
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: ManagedBGP
+  data:
+    - name: DC2-BL1-BGP-EVPN
+      status: active
+      description: "iBGP EVPN process — DC2 border-leaf BL1 (route reflector)"
+      multipath: true
+      capabilities:
+        - DC2-BL1
+      router_id:
+        - "10.255.12.51/32"
+        - FABRIC-DC2
+      local_as: "AS65002"
+      address_families:
+        - - l2vpn
+          - evpn
+
+    - name: DC2-BL2-BGP-EVPN
+      status: active
+      description: "iBGP EVPN process — DC2 border-leaf BL2 (route reflector)"
+      multipath: true
+      capabilities:
+        - DC2-BL2
+      router_id:
+        - "10.255.12.52/32"
+        - FABRIC-DC2
+      local_as: "AS65002"
+      address_families:
+        - - l2vpn
+          - evpn
+
+    - name: DC2-POD1-SP1-BGP-EVPN
+      status: active
+      description: "iBGP EVPN process — DC2 POD1 spine SP1"
+      multipath: true
+      capabilities:
+        - DC2-POD1-SP1
+      router_id:
+        - "10.255.12.11/32"
+        - FABRIC-DC2
+      local_as: "AS65002"
+      address_families:
+        - - l2vpn
+          - evpn
+
+    - name: DC2-POD1-SP2-BGP-EVPN
+      status: active
+      description: "iBGP EVPN process — DC2 POD1 spine SP2"
+      multipath: true
+      capabilities:
+        - DC2-POD1-SP2
+      router_id:
+        - "10.255.12.12/32"
+        - FABRIC-DC2
+      local_as: "AS65002"
+      address_families:
+        - - l2vpn
+          - evpn
+
+    - name: DC2-POD1-L1-BGP-EVPN
+      status: active
+      description: "iBGP EVPN process — DC2 POD1 leaf L1"
+      multipath: true
+      capabilities:
+        - DC2-POD1-L1
+      router_id:
+        - "10.255.12.21/32"
+        - FABRIC-DC2
+      local_as: "AS65002"
+      address_families:
+        - - l2vpn
+          - evpn
+
+    - name: DC2-POD1-L2-BGP-EVPN
+      status: active
+      description: "iBGP EVPN process — DC2 POD1 leaf L2"
+      multipath: true
+      capabilities:
+        - DC2-POD1-L2
+      router_id:
+        - "10.255.12.22/32"
+        - FABRIC-DC2
+      local_as: "AS65002"
+      address_families:
+        - - l2vpn
+          - evpn
+
+    - name: DC2-POD1-L3-BGP-EVPN
+      status: active
+      description: "iBGP EVPN process — DC2 POD1 leaf L3"
+      multipath: true
+      capabilities:
+        - DC2-POD1-L3
+      router_id:
+        - "10.255.12.23/32"
+        - FABRIC-DC2
+      local_as: "AS65002"
+      address_families:
+        - - l2vpn
+          - evpn
+
+    - name: DC2-POD1-L4-BGP-EVPN
+      status: active
+      description: "iBGP EVPN process — DC2 POD1 leaf L4"
+      multipath: true
+      capabilities:
+        - DC2-POD1-L4
+      router_id:
+        - "10.255.12.24/32"
+        - FABRIC-DC2
+      local_as: "AS65002"
+      address_families:
+        - - l2vpn
+          - evpn
+
+    - name: DC2-POD2-SP1-BGP-EVPN
+      status: active
+      description: "iBGP EVPN process — DC2 POD2 spine SP1"
+      multipath: true
+      capabilities:
+        - DC2-POD2-SP1
+      router_id:
+        - "10.255.12.13/32"
+        - FABRIC-DC2
+      local_as: "AS65002"
+      address_families:
+        - - l2vpn
+          - evpn
+
+    - name: DC2-POD2-SP2-BGP-EVPN
+      status: active
+      description: "iBGP EVPN process — DC2 POD2 spine SP2"
+      multipath: true
+      capabilities:
+        - DC2-POD2-SP2
+      router_id:
+        - "10.255.12.14/32"
+        - FABRIC-DC2
+      local_as: "AS65002"
+      address_families:
+        - - l2vpn
+          - evpn
+
+    - name: DC2-POD2-L1-BGP-EVPN
+      status: active
+      description: "iBGP EVPN process — DC2 POD2 leaf L1"
+      multipath: true
+      capabilities:
+        - DC2-POD2-L1
+      router_id:
+        - "10.255.12.25/32"
+        - FABRIC-DC2
+      local_as: "AS65002"
+      address_families:
+        - - l2vpn
+          - evpn
+
+    - name: DC2-POD2-L2-BGP-EVPN
+      status: active
+      description: "iBGP EVPN process — DC2 POD2 leaf L2"
+      multipath: true
+      capabilities:
+        - DC2-POD2-L2
+      router_id:
+        - "10.255.12.26/32"
+        - FABRIC-DC2
+      local_as: "AS65002"
+      address_families:
+        - - l2vpn
+          - evpn
+
+    - name: DC2-POD2-L3-BGP-EVPN
+      status: active
+      description: "iBGP EVPN process — DC2 POD2 leaf L3"
+      multipath: true
+      capabilities:
+        - DC2-POD2-L3
+      router_id:
+        - "10.255.12.27/32"
+        - FABRIC-DC2
+      local_as: "AS65002"
+      address_families:
+        - - l2vpn
+          - evpn
+
+    - name: DC2-POD2-L4-BGP-EVPN
+      status: active
+      description: "iBGP EVPN process — DC2 POD2 leaf L4"
+      multipath: true
+      capabilities:
+        - DC2-POD2-L4
+      router_id:
+        - "10.255.12.28/32"
+        - FABRIC-DC2
+      local_as: "AS65002"
+      address_families:
+        - - l2vpn
+          - evpn

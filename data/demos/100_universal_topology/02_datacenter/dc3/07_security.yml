@@ -1,0 +1,199 @@
+---
+# DC3 Security — Check Point VSX pair + F5 BIG-IP + HAProxy inline service chain
+#
+# Two CP-26000 appliances provide multi-tenant virtual firewall contexts (VSX).
+# Each customer gets one dedicated virtual system (VS) per chassis, giving
+# active-passive HA per tenant with full traffic isolation.
+#
+# Full inline service chain — traffic steered by PBR on border-leafs:
+#
+#   BL1:Eth0 (PBR) ──▶ FW-01:eth1 (inspect) ──▶ FW-01:eth2 ──▶
+#                       LB-01:1.1 (balance)  ──▶ LB-01:1.2  ──▶
+#                       PRX-01:eth0 (proxy)  ──▶ PRX-01:eth1 ──▶ BL1:Ethernet5
+#
+# Port mapping:
+#   DC3-FW-01 (dc3-s1-r-1, active):
+#     eth1  inside  ← DC3-BL1:Ethernet0   (PBR redirect target)
+#     eth2  outside → DC3-LB-01:1.1       (inline to LB)
+#     sync  HA sync ↔ DC3-FW-02:sync       (back-to-back)
+#   DC3-FW-02 (dc3-s1-r-2, standby):
+#     eth1  inside  ← DC3-BL2:Ethernet0   (PBR redirect target, standby)
+#     eth2  outside → DC3-LB-02:1.1       (inline to LB)
+#     sync  HA sync ↔ DC3-FW-01:sync       (back-to-back)
+#   DC3-LB-01 (dc3-s1-r-1):
+#     1.1   ingress ← DC3-FW-01:eth2      (from firewall)
+#     1.2   egress  → DC3-PRX-01:eth0     (inline to proxy)
+#   DC3-LB-02 (dc3-s1-r-2):
+#     1.1   ingress ← DC3-FW-02:eth2      (from firewall)
+#     1.2   egress  → DC3-PRX-02:eth0     (inline to proxy)
+# (DC3-PRX-01/02 cables and HA domain are in 09_proxy_services.yml)
+
+# ── Physical chassis ──────────────────────────────────────────────────────────
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimPhysicalDevice
+  data:
+    - name: DC3-FW-01
+      object_template: CP-26000_FIREWALL
+      role: firewall-active
+      status: active
+      deployment: DC3
+      rack: dc3-s1-r-1
+      member_of_groups:
+        - firewalls
+      interfaces:
+        kind: DcimPhysicalInterface
+        data:
+          - name: eth1
+            interface_type: 100gbase-x-qsfp28
+            role: uplink
+            status: active
+            description: "Inside (PBR) — DC3-BL1:Ethernet0"
+          - name: eth2
+            interface_type: 100gbase-x-qsfp28
+            role: uplink
+            status: active
+            description: "Outside (inline to LB) — DC3-LB-01:1.1"
+          - name: sync
+            interface_type: 10gbase-x-sfpp
+            role: management
+            status: active
+            description: "HA sync — DC3-FW-02"
+
+    - name: DC3-FW-02
+      object_template: CP-26000_FIREWALL
+      role: firewall-passive
+      status: active
+      deployment: DC3
+      rack: dc3-s1-r-2
+      member_of_groups:
+        - firewalls
+      interfaces:
+        kind: DcimPhysicalInterface
+        data:
+          - name: eth1
+            interface_type: 100gbase-x-qsfp28
+            role: uplink
+            status: active
+            description: "Inside (PBR standby) — DC3-BL2:Ethernet0"
+          - name: eth2
+            interface_type: 100gbase-x-qsfp28
+            role: uplink
+            status: active
+            description: "Outside (inline to LB standby) — DC3-LB-02:1.1"
+          - name: sync
+            interface_type: 10gbase-x-sfpp
+            role: management
+            status: active
+            description: "HA sync — DC3-FW-01"
+
+# ── HA domains ────────────────────────────────────────────────────────────────
+
+# CP-26000 firewall pair (active-passive, Check Point ClusterXL)
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: ManagedFirewallHA
+  data:
+    - name: DC3-FW-HA
+      group_id: 1
+      mode: active-passive
+      priority: 100
+      preempt: false
+      ha_timer: standard
+      capabilities:
+        - DC3-FW-01
+        - DC3-FW-02
+
+# F5 BIG-IP inline LB pair (DSC sync-failover group)
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: ManagedLoadbalancerHA
+  data:
+    - name: DC3-LB-HA
+      group_id: 2
+      mode: active-passive
+      priority: 100
+      preempt: false
+      capabilities:
+        - DC3-LB-01
+        - DC3-LB-02
+
+# ── Cables ────────────────────────────────────────────────────────────────────
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimCable
+  data:
+    # ── FW-01 inside/outside ──────────────────────────────────────────────────
+    - name: CBL-DC3-FW01-BL1-INSIDE
+      type: smf
+      deployment: DC3
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-FW-01
+            name: eth1
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-BL1
+            name: Ethernet0
+
+    - name: CBL-DC3-FW01-LB01-INLINE
+      type: smf
+      deployment: DC3
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-FW-01
+            name: eth2
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-LB-01
+            name: "1.1"
+
+    # ── FW-02 inside/outside + LB-02 inline ──────────────────────────────────
+    - name: CBL-DC3-FW02-BL2-INSIDE
+      type: smf
+      deployment: DC3
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-FW-02
+            name: eth1
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-BL2
+            name: Ethernet0
+
+    - name: CBL-DC3-FW02-LB02-INLINE
+      type: smf
+      deployment: DC3
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-FW-02
+            name: eth2
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-LB-02
+            name: "1.1"
+
+    # ── HA sync — back-to-back ────────────────────────────────────────────────
+    - name: CBL-DC3-FW01-FW02-HA-SYNC
+      type: smf
+      deployment: DC3
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-FW-01
+            name: sync
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-FW-02
+            name: sync

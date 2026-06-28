@@ -34,7 +34,7 @@ router bgp {{ bgp_config.local_as.asn }}
   !
 {%- set ns = namespace(has_ipv6=false) %}
 {%- for session in bgp_config.sessions %}
-{%- if not session.address_families and ':' in session.remote_ip.address %}{% set ns.has_ipv6 = true %}{% endif %}
+{%- if not session.address_families and session.remote_ip and ':' in session.remote_ip.address %}{% set ns.has_ipv6 = true %}{% endif %}
 {%- endfor %}
 {%- if ns.has_ipv6 %}
   address-family ipv6 unicast
@@ -47,8 +47,9 @@ router bgp {{ bgp_config.local_as.asn }}
   address-family l2vpn evpn
   !
 {%- for session in bgp_config.sessions %}
-{%- set remote_ip = session.remote_ip.address.split('/')[0] %}
-  neighbor {{ remote_ip }}
+{%- set is_unnumbered = session.get('interface_name') and not session.get('remote_ip') %}
+{%- set neighbor_id = session.interface_name if is_unnumbered else session.remote_ip.address.split('/')[0] %}
+  neighbor {{ neighbor_id }}
     remote-as {{ session.remote_as.asn }}
 {%- if session.get('remote_device') %}
     description {{ session.remote_device }}
@@ -64,7 +65,7 @@ router bgp {{ bgp_config.local_as.asn }}
 {%- endif %}
 {%- endif %}
 {%- if not session.address_families %}
-{%- if ':' in session.remote_ip.address %}
+{%- if not is_unnumbered and session.remote_ip and ':' in session.remote_ip.address %}
     address-family ipv6 unicast
 {%- else %}
     address-family ipv4 unicast
@@ -84,6 +85,9 @@ router bgp {{ bgp_config.local_as.asn }}
 {%- else %}
       send-community
       send-community extended
+{%- if session.get('route_reflector_client') %}
+      route-reflector-client
+{%- endif %}
 {%- endif %}
     !
 {%- endif %}

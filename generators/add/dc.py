@@ -97,26 +97,32 @@ class DCTopologyGenerator(CommonGenerator):
             technical_prefix = base_technical
             loopback_prefix = base_loopback
 
-        super_spine_loopback_prefix = calculate_super_spine_loopback_prefix(
-            max_super_spines=amount_of_super_spines,
-            ipv6=is_ipv6,
-        )
-
-        self.logger.info(
-            f"Creating pools from design: technical=/{technical_prefix}, "
-            f"loopback=/{loopback_prefix}, management=/{management_prefix}, "
-            f"super-spine-loopback=/{super_spine_loopback_prefix}"
-        )
+        pools_to_allocate: dict[str, int] = {
+            "technical": technical_prefix,
+            "loopback": loopback_prefix,
+            "management": management_prefix,
+        }
+        if amount_of_super_spines > 0 and super_spine_template:
+            super_spine_loopback_prefix = calculate_super_spine_loopback_prefix(
+                max_super_spines=amount_of_super_spines,
+                ipv6=is_ipv6,
+            )
+            pools_to_allocate["super-spine-loopback"] = super_spine_loopback_prefix
+            self.logger.info(
+                f"Creating pools from design: technical=/{technical_prefix}, "
+                f"loopback=/{loopback_prefix}, management=/{management_prefix}, "
+                f"super-spine-loopback=/{super_spine_loopback_prefix}"
+            )
+        else:
+            self.logger.info(
+                f"Creating pools from design: technical=/{technical_prefix}, "
+                f"loopback=/{loopback_prefix}, management=/{management_prefix} (no super-spines)"
+            )
 
         dc_pools = await self.allocate_resource_pools(
             id=dc_id,
             strategy="fabric",
-            pools={
-                "technical": technical_prefix,
-                "loopback": loopback_prefix,
-                "management": management_prefix,
-                "super-spine-loopback": super_spine_loopback_prefix,
-            },
+            pools=pools_to_allocate,
             ipv6=is_ipv6,
             dual_stack=is_dual_stack,
         )
@@ -200,27 +206,30 @@ class DCTopologyGenerator(CommonGenerator):
                 parent_attr="l3_vni_pool",
             )
 
-        super_spine_names = await self.create_devices(
-            deployment_id=dc_id,
-            device_role="super-spine",
-            amount=amount_of_super_spines,
-            template=super_spine_template.model_dump(),
-            naming_convention=cast(
-                Literal["standard", "hierarchical", "flat"],
-                naming_convention.lower(),
-            ),
-            options=DeviceOptions(
-                indexes=indexes,
-                allocate_loopback=True,
-                loopback_pool=dc_pools.get("super-spine-loopback"),
-                loopback_prefix_length=128 if is_ipv6 else 32,
-                management_pool=dc_pools.get("management"),
-            ),
-        )
+        super_spine_names: list[str] = []
+        if amount_of_super_spines > 0 and super_spine_template:
+            super_spine_names = await self.create_devices(
+                deployment_id=dc_id,
+                device_role="super-spine",
+                amount=amount_of_super_spines,
+                template=super_spine_template.model_dump(),
+                naming_convention=cast(
+                    Literal["standard", "hierarchical", "flat"],
+                    naming_convention.lower(),
+                ),
+                options=DeviceOptions(
+                    indexes=indexes,
+                    allocate_loopback=True,
+                    loopback_pool=dc_pools.get("super-spine-loopback"),
+                    loopback_prefix_length=128 if is_ipv6 else 32,
+                    management_pool=dc_pools.get("management"),
+                ),
+            )
 
         # Create shared routing objects (overlay AS, OSPF area) at the DC level
-        # so pod/rack generators always find them and never create duplicates
-        await self._create_shared_routing_objects(overlay_asn=asn_end)
+        # so pod/rack generators always find them and never create duplicates.
+        # overlay_asn is asn_end + 1 to avoid collision with the per-device pool range [asn_start, asn_end]
+        await self._create_shared_routing_objects(overlay_asn=asn_end + 1)
 
         # Create super-spine routing objects here so they exist before any pod generator runs.
         # For eBGP strategies: underlay + overlay BGP processes.

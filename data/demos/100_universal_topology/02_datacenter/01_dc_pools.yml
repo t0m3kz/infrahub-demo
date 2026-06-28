@@ -1,0 +1,59 @@
+---
+# Per-DC number pools for VLAN IDs and L2 VNIs
+# These are assigned to TopologyDataCenter.vlan_pool and .vni_pool so the
+# add_vxlan_segment / add_vlan_segment generators can allocate IDs per DC.
+#
+# Ranges:
+#   VLAN IDs: 1000–3999 per DC   (tenant VLANs, avoiding 0-999 infra/reserved)
+#   L2 VNIs:  10001–39999 per DC (tenant L2 overlay, below GLOBAL-L3VNI at 50001)
+#   L3 VNIs:  shared GLOBAL-L3VNI pool (50001–59999, already bootstrapped)
+
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: CoreNumberPool
+  data:
+    # ── DC1 ──────────────────────────────────────────────────────────────────
+    - name: DC1-VLAN-POOL
+      description: Tenant VLAN ID pool for DC1 (allocated per segment by add_segment)
+      node: ManagedSegmentDeployment
+      node_attribute: vlan_id
+      start_range: 1000
+      end_range: 3999
+
+    - name: DC1-VNI-POOL
+      description: L2 VNI pool for DC1 VXLAN segments
+      node: ManagedSegmentDeployment
+      node_attribute: vni
+      start_range: 10001
+      end_range: 39999
+
+    # ── DC2 ──────────────────────────────────────────────────────────────────
+    - name: DC2-VLAN-POOL
+      description: Tenant VLAN ID pool for DC2 (allocated per segment by add_segment)
+      node: ManagedSegmentDeployment
+      node_attribute: vlan_id
+      start_range: 1000
+      end_range: 3999
+
+    - name: DC2-VNI-POOL
+      description: L2 VNI pool for DC2 VXLAN segments
+      node: ManagedSegmentDeployment
+      node_attribute: vni
+      start_range: 10001
+      end_range: 39999
+
+    # ── DC3 ──────────────────────────────────────────────────────────────────
+    - name: DC3-VLAN-POOL
+      description: Tenant VLAN ID pool for DC3 (allocated per segment by add_segment)
+      node: ManagedSegmentDeployment
+      node_attribute: vlan_id
+      start_range: 1000
+      end_range: 3999
+
+    - name: DC3-VNI-POOL
+      description: L2 VNI pool for DC3 VXLAN segments
+      node: ManagedSegmentDeployment
+      node_attribute: vni
+      start_range: 10001
+      end_range: 39999

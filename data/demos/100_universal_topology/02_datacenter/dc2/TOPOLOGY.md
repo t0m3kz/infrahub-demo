@@ -158,3 +158,42 @@ All spine→super-spine traffic passes through the FW pair. Each spine connects 
 | Policy | Devices | Default | Rules |
 | --- | --- | --- | --- |
 | `DC2-FABRIC-POLICY` | DC2-FW-01, DC2-FW-02 | deny | HTTPS inbound (443), SSH mgmt (22), intra-tenant east-west |
+
+---
+
+## Traceable Paths from DC2
+
+### Server → Equinix PA4 (primary WAN exit)
+
+```text
+DC2-POD1-SRV-01 : eno1
+  --> DC2-POD1-L1  -->  DC2-POD1-SP1  -->  DC2-FW-01 (inline)  -->  DC2-SS1
+  --[CBL-DC2-SS1-EQX-DC2-PATCH-P1]--> EQX-DC2-PATCH-01 : Port1
+  ~~[PHYS-DC2-PA4-EQX-01]~~
+  --> PA4-EDGE-01 : Ethernet1/2
+
+Note: all spine→super-spine traffic transits the active-active FW pair inline.
+No PBR — the firewalls are in the forwarding path by topology design.
+```
+
+### Server → AWS EKS (via PA4 Direct Connect)
+
+```text
+DC2-POD1-SRV-01  →  [Clos + inline FW]  →  PA4-EDGE-01
+  ~~[VC-CNRD-FR2-AWS-EU-CENTRAL-1-DX]~~  (via FR metro cross-connect if PA4→FR2 path used)
+  --> CUST1-EKS-EU-CENTRAL-1
+
+DCI BGP: DC2-SS1-PA4-EDGE-01-DCI-BGP (AS65002 ↔ AS65000)
+```
+
+### DC2 → DC1 cross-DC path
+
+```text
+DC2-POD1-SRV-01  →  [DC2 Clos fabric]  →  PA4-EDGE-01
+  ~~[VC-EQX-FR2-PA4-CROSSCONNECT (VTI-FR2-PA4-XC ↔ VTI-PA4-FR2-XC)]~~
+  --> FR2-EDGE-01
+  ~~[PHYS-DC1-FR2-EQX-01]~~
+  --> DC1-SS1  →  [DC1 Clos fabric]  →  DC1-POD1-SRV-01
+
+BGP: DC2-SS1-PA4-EDGE-01-DCI-BGP → DC1-SS1-FR2-EDGE-01-DCI-BGP (via Equinix)
+```

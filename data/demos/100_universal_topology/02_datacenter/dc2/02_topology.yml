@@ -7,7 +7,11 @@ spec:
   data:
     - name: DC2
       index: 2
-      super_spine_template: N9K-C9336C-FX2_SUPER_SPINE
+      vlan_pool: DC2-VLAN-POOL
+      member_of_groups:
+        - topologies_dc
+      vni_pool: DC2-VNI-POOL
+      l3_vni_pool: GLOBAL-L3VNI
       children:
         kind: TopologyPod
         data:

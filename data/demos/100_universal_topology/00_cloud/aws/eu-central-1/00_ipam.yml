@@ -1,15 +1,15 @@
 ---
 # AWS eu-central-1 IPAM namespace
-# Separate from on-prem CUST001-PROD to reflect the VPC routing domain.
+# Separate from on-prem C001-PROD to reflect the VPC routing domain.
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
   kind: IpamNamespace
   data:
-    - name: "CUST1-AWS-EU-CENTRAL-1"
-      description: "Customer 1 AWS VPC eu-central-1 routing domain"
+    - name: "C001-AWS-EU-CENTRAL-1"
+      description: "CNRD AWS VPC eu-central-1 routing domain"
       status: "active"
-      owner: "Customer 1"
+      owner: "C001"
 
 ---
 # VPC CIDR and subnet ranges
@@ -20,40 +20,40 @@ spec:
   data:
     # VPC CIDR
     - prefix: "172.16.0.0/16"
-      description: "Customer 1 VPC eu-central-1"
+      description: "CNRD VPC eu-central-1"
       status: active
-      ip_namespace: "CUST1-AWS-EU-CENTRAL-1"
+      ip_namespace: "C001-AWS-EU-CENTRAL-1"
 
     # Application tier (private)
     - prefix: "172.16.10.0/24"
-      description: "Customer 1 app subnet eu-central-1a"
+      description: "CNRD app subnet eu-central-1a"
       status: active
-      ip_namespace: "CUST1-AWS-EU-CENTRAL-1"
+      ip_namespace: "C001-AWS-EU-CENTRAL-1"
 
     - prefix: "172.16.20.0/24"
-      description: "Customer 1 app subnet eu-central-1b"
+      description: "CNRD app subnet eu-central-1b"
       status: active
-      ip_namespace: "CUST1-AWS-EU-CENTRAL-1"
+      ip_namespace: "C001-AWS-EU-CENTRAL-1"
 
     # Load balancer tier (public)
     - prefix: "172.16.100.0/24"
-      description: "Customer 1 load balancer subnet eu-central-1a"
+      description: "CNRD load balancer subnet eu-central-1a"
       status: active
-      ip_namespace: "CUST1-AWS-EU-CENTRAL-1"
+      ip_namespace: "C001-AWS-EU-CENTRAL-1"
 
     - prefix: "172.16.110.0/24"
-      description: "Customer 1 load balancer subnet eu-central-1b"
+      description: "CNRD load balancer subnet eu-central-1b"
       status: active
-      ip_namespace: "CUST1-AWS-EU-CENTRAL-1"
+      ip_namespace: "C001-AWS-EU-CENTRAL-1"
 
     # Route destinations — on-prem aggregate advertised via Direct Connect
     - prefix: "10.0.0.0/8"
-      description: "On-premises aggregate (advertised from DC1/DC2 via DX to TGW)"
+      description: "On-premises aggregate (advertised from DC1/DC2 via DX to TGW)"  # yamllint disable-line rule:line-length
       status: active
-      ip_namespace: "CUST1-AWS-EU-CENTRAL-1"
+      ip_namespace: "C001-AWS-EU-CENTRAL-1"
 
     # Route destination — internet default (via IGW)
     - prefix: "0.0.0.0/0"
       description: "Internet default route (via IGW for public subnets)"
       status: active
-      ip_namespace: "CUST1-AWS-EU-CENTRAL-1"
+      ip_namespace: "C001-AWS-EU-CENTRAL-1"

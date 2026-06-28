@@ -93,12 +93,18 @@ def get_acls(activations: list[dict[str, Any]] | None = None) -> list[dict[str, 
         return []
 
     # --- Index: segment_id → vlan_id for cross-segment rule mirroring ---
+    # Also track which segments have a firewall — those are skipped for leaf ACLs.
     seg_id_to_vlan: dict[str, int] = {}
+    seg_has_firewall: set[str] = set()
     for act in activations:
         vlan_id = act.get("vlan_id")
-        seg_id = (act.get("segment") or {}).get("id")
+        seg = act.get("segment") or {}
+        seg_id = seg.get("id")
         if vlan_id and seg_id:
             seg_id_to_vlan[seg_id] = vlan_id
+        fw_node = (seg.get("inline_service") or {}).get("id") or (seg.get("inline_service") or {}).get("name")
+        if fw_node and seg_id:
+            seg_has_firewall.add(seg_id)
 
     # --- Collect mirrored rules: rules from other segments that target this segment ---
     # mirrored_by_vlan[dst_vlan] = [(original_rule, src_segment_name), ...]
@@ -135,6 +141,15 @@ def get_acls(activations: list[dict[str, Any]] | None = None) -> list[dict[str, 
             continue
 
         seg = act.get("segment") or {}
+        seg_id = seg.get("id")
+
+        # Segment has a dedicated firewall — policy is enforced there, not on the leaf SVI.
+        # Exception: microsegmented segments always get a leaf ACL regardless of firewall.
+        isolation_mode = seg.get("isolation_mode") or "normal"
+        if seg_id and seg_id in seg_has_firewall and isolation_mode != "microsegmented":
+            seen_vlans.add(vlan_id)
+            continue
+
         # Only render ACLs when security_policies is explicitly in the data
         # (i.e. the query included it). Missing key = field not queried → skip.
         if "security_policies" not in seg:
@@ -192,6 +207,7 @@ def get_acls(activations: list[dict[str, Any]] | None = None) -> list[dict[str, 
                 "name": f"ACL-VLAN{vlan_id}-IN",
                 "vlan_id": vlan_id,
                 "segment_name": segment_name,
+                "isolation_mode": isolation_mode,
                 "rules": rules,
             }
         )

@@ -8,7 +8,7 @@ spec:
       status: active
       profiles:
         - office-ntp-default
-      device_capabilities:
+      capabilities:
         - OFC-MAD-REGIONAL-EDGE-01
         - OFC-MAD-REGIONAL-EDGE-02
         - OFC-MAD-REGIONAL-ACC-01
@@ -47,7 +47,7 @@ spec:
       status: active
       profiles:
         - office-syslog-default
-      device_capabilities:
+      capabilities:
         - OFC-MAD-REGIONAL-EDGE-01
         - OFC-MAD-REGIONAL-EDGE-02
         - OFC-MAD-REGIONAL-ACC-01
@@ -80,7 +80,7 @@ spec:
       status: active
       profiles:
         - office-aaa-default
-      device_capabilities:
+      capabilities:
         - OFC-MAD-REGIONAL-EDGE-01
         - OFC-MAD-REGIONAL-EDGE-02
         - OFC-MAD-REGIONAL-ACC-01

@@ -1,9 +1,10 @@
 # Shared pre-requisites for the datacenter subtree.
 # Loads first (00_ prefix) to satisfy hfid lookups in capabilities files.
 #
-# 1. Shared management IPs — referenced by ManagedNTPServer, ManagedSyslogServer,
+# 1. Shared management IPs — referenced by ManagedNTPServer, ManagedSyslogServer
 #    ManagedAAAServer across DC1, DC2 and all office/colo sites.
-# 2. IP namespaces (tenant VRFs) — required by VirtCluster ip_namespace references.
+# 2. Fabric IP namespaces — loopback and P2P addressing per DC.
+#    Individual IPs are created inline on device loopback/physical interfaces.
 ---
 apiVersion: infrahub.app/v1
 kind: Object
@@ -22,37 +23,91 @@ spec:
       ip_namespace: default
     - address: "10.0.0.201/32"
       ip_namespace: default
+
 ---
+# Fabric IP namespaces — one per DC for loopback and P2P addressing
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
   kind: IpamNamespace
   data:
-    - name: "CUST001-PROD"
-      description: "Customer 1 production VRF"
-      l3_vni: 50001
-      status: "active"
-      owner: "Customer 1"
+    - name: "FABRIC-DC1"
+      description: "DC1 fabric addressing — iBGP underlay (RFC 5549) + eBGP EVPN overlay"
 
-    - name: "CUST001-NONPROD"
-      description: "Customer 1 non-production VRF (dev/staging)"
-      l3_vni: 50002
-      status: "active"
-      owner: "Customer 1"
+    - name: "FABRIC-DC2"
+      description: "DC2 fabric addressing — OSPF underlay + iBGP EVPN overlay"
 
-    - name: "CUST002-PROD"
-      description: "Customer 2 production VRF"
-      l3_vni: 50003
-      status: "active"
-      owner: "Customer 2"
+    - name: "FABRIC-DC3"
+      description: "DC3 fabric addressing — eBGP underlay+overlay (RFC 5549 unnumbered)"
 
-    - name: "CUST002-NONPROD"
-      description: "Customer 2 non-production VRF (dev/staging)"
-      l3_vni: 50004
-      status: "active"
-      owner: "Customer 2"
+---
+# Fabric loopback prefixes
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: IpamPrefix
+  data:
+    - prefix: "10.255.11.0/24"
+      description: "DC1 fabric loopbacks"
+      status: active
+      role: loopback
+      ip_namespace: "FABRIC-DC1"
 
-    - name: "SHARED-SERVICES"
-      description: "Shared infrastructure services VRF (DNS, NTP, monitoring)"
-      l3_vni: 50100
-      status: "active"
+    - prefix: "10.255.12.0/24"
+      description: "DC2 fabric loopbacks"
+      status: active
+      role: loopback
+      ip_namespace: "FABRIC-DC2"
+
+    - prefix: "10.255.22.0/24"
+      description: "DC2 fabric P2P links (OSPF numbered /31s)"
+      status: active
+      role: technical
+      ip_namespace: "FABRIC-DC2"
+
+    - prefix: "10.255.13.0/24"
+      description: "DC3 fabric loopbacks"
+      status: active
+      role: loopback
+      ip_namespace: "FABRIC-DC3"
+
+---
+# Shared VTEP loopback IPs (Loopback1 anycast VTEP, shared per MLAG pair)
+# Pre-created here so both leaves can reference by HFID without inline duplication.
+# DC1 POD1: L1/L2 share .41, L3/L4 share .42; POD2: L1/L2 share .43, L3/L4 share .44
+# DC2 POD1: L1/L2 share .41, L3/L4 share .42; POD2: L1/L2 share .43, L3/L4 share .44
+# DC3 POD1: L1/L2 share .41, L3/L4 share .42; POD2: L1/L2 share .43, L3/L4 share .44
+#     POD3: L1/L2 share .45; POD4: L1/L2 share .46
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: IpamIPAddress
+  data:
+    - address: "10.255.11.41/32"
+      ip_namespace: FABRIC-DC1
+    - address: "10.255.11.42/32"
+      ip_namespace: FABRIC-DC1
+    - address: "10.255.11.43/32"
+      ip_namespace: FABRIC-DC1
+    - address: "10.255.11.44/32"
+      ip_namespace: FABRIC-DC1
+    - address: "10.255.12.41/32"
+      ip_namespace: FABRIC-DC2
+    - address: "10.255.12.42/32"
+      ip_namespace: FABRIC-DC2
+    - address: "10.255.12.43/32"
+      ip_namespace: FABRIC-DC2
+    - address: "10.255.12.44/32"
+      ip_namespace: FABRIC-DC2
+    - address: "10.255.13.41/32"
+      ip_namespace: FABRIC-DC3
+    - address: "10.255.13.42/32"
+      ip_namespace: FABRIC-DC3
+    - address: "10.255.13.43/32"
+      ip_namespace: FABRIC-DC3
+    - address: "10.255.13.44/32"
+      ip_namespace: FABRIC-DC3
+    - address: "10.255.13.45/32"
+      ip_namespace: FABRIC-DC3
+    - address: "10.255.13.46/32"
+      ip_namespace: FABRIC-DC3

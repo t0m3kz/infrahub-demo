@@ -1,0 +1,31 @@
+---
+# C002 (SwiftGo GmbH) — Applications
+#
+# shipment-tracker:  real-time parcel & freight tracking (production + nonprod)
+# fleet-manager:     vehicle fleet dispatch and telematics (production only)
+
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: AppApplication
+  data:
+    - label: shipment-tracker
+      environment: p
+      criticality: high
+      parent: C002
+      member_of_groups:
+        - app_applications
+
+    - label: shipment-tracker
+      environment: n
+      criticality: low
+      parent: C002
+      member_of_groups:
+        - app_applications
+
+    - label: fleet-manager
+      environment: p
+      criticality: high
+      parent: C002
+      member_of_groups:
+        - app_applications

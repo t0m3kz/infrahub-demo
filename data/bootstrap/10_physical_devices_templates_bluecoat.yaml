@@ -1,0 +1,26 @@
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TemplateDcimPhysicalDevice
+  data:
+    - template_name: BLUECOAT-SG900_PROXY
+      device_type: BLUECOAT-SG900
+      platform: bluecoat_sgos
+      role: proxy
+      status: provisioning
+      interfaces:
+        kind: TemplateDcimPhysicalInterface
+        data:
+          - template_name: BLUECOAT-SG900_PROXY_mgmt
+            name: mgmt
+            role: management
+            interface_type: 1000base-t
+          - template_name: BLUECOAT-SG900_PROXY_eth0
+            name: "0"
+            role: uplink
+            interface_type: 10gbase-x-sfpp
+          - template_name: BLUECOAT-SG900_PROXY_eth1
+            name: "1"
+            role: uplink
+            interface_type: 10gbase-x-sfpp

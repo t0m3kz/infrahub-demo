@@ -18,7 +18,7 @@ spec:
         - kind: DcimPhysicalInterface
           data:
             device: DC1-POD1-L1
-            name: Ethernet1/49
+            name: Ethernet49/1
             description: "DC1-POD1-SRV-01"
 
 
@@ -34,7 +34,7 @@ spec:
         - kind: DcimPhysicalInterface
           data:
             device: DC1-POD1-L2
-            name: Ethernet1/49
+            name: Ethernet49/1
             description: "DC1-POD1-SRV-01"
 
 
@@ -50,7 +50,7 @@ spec:
         - kind: DcimPhysicalInterface
           data:
             device: DC1-POD1-L1
-            name: Ethernet1/50
+            name: Ethernet50/1
             description: "DC1-POD1-SRV-02"
 
 
@@ -66,7 +66,7 @@ spec:
         - kind: DcimPhysicalInterface
           data:
             device: DC1-POD1-L2
-            name: Ethernet1/50
+            name: Ethernet50/1
             description: "DC1-POD1-SRV-02"
 
 
@@ -82,7 +82,7 @@ spec:
         - kind: DcimPhysicalInterface
           data:
             device: DC1-POD1-L1
-            name: Ethernet1/51
+            name: Ethernet51/1
             description: "DC1-POD1-SRV-ASS-01"
 
 
@@ -98,7 +98,7 @@ spec:
         - kind: DcimPhysicalInterface
           data:
             device: DC1-POD1-L2
-            name: Ethernet1/51
+            name: Ethernet51/1
             description: "DC1-POD1-SRV-ASS-01"
 
 
@@ -114,7 +114,7 @@ spec:
         - kind: DcimPhysicalInterface
           data:
             device: DC1-POD2-L1
-            name: Ethernet1/49
+            name: Ethernet49/1
             description: "DC1-POD2-SRV-01"
 
 
@@ -130,7 +130,7 @@ spec:
         - kind: DcimPhysicalInterface
           data:
             device: DC1-POD2-L2
-            name: Ethernet1/49
+            name: Ethernet49/1
             description: "DC1-POD2-SRV-01"
 
 
@@ -146,7 +146,7 @@ spec:
         - kind: DcimPhysicalInterface
           data:
             device: DC1-POD2-L1
-            name: Ethernet1/50
+            name: Ethernet50/1
             description: "DC1-POD2-SRV-02"
 
 
@@ -162,136 +162,8 @@ spec:
         - kind: DcimPhysicalInterface
           data:
             device: DC1-POD2-L2
-            name: Ethernet1/50
+            name: Ethernet50/1
             description: "DC1-POD2-SRV-02"
-
-
-    - name: CBL-DC1-SS1-POD1-SP1
-      type: smf
-      deployment: DC1
-      endpoints:
-        - kind: DcimPhysicalInterface
-          data:
-            device: DC1-SS1
-            name: Ethernet1/1
-            description: "DC1-POD1-SP1"
-        - kind: DcimPhysicalInterface
-          data:
-            device: DC1-POD1-SP1
-            name: Ethernet1/1
-            description: "DC1-SS1"
-
-
-    - name: CBL-DC1-SS2-POD1-SP1
-      type: smf
-      deployment: DC1
-      endpoints:
-        - kind: DcimPhysicalInterface
-          data:
-            device: DC1-SS2
-            name: Ethernet1/1
-            description: "DC1-POD1-SP1"
-        - kind: DcimPhysicalInterface
-          data:
-            device: DC1-POD1-SP1
-            name: Ethernet1/2
-            description: "DC1-SS2"
-
-
-    - name: CBL-DC1-SS1-POD1-SP2
-      type: smf
-      deployment: DC1
-      endpoints:
-        - kind: DcimPhysicalInterface
-          data:
-            device: DC1-SS1
-            name: Ethernet1/2
-            description: "DC1-POD1-SP2"
-        - kind: DcimPhysicalInterface
-          data:
-            device: DC1-POD1-SP2
-            name: Ethernet1/1
-            description: "DC1-SS1"
-
-
-    - name: CBL-DC1-SS2-POD1-SP2
-      type: smf
-      deployment: DC1
-      endpoints:
-        - kind: DcimPhysicalInterface
-          data:
-            device: DC1-SS2
-            name: Ethernet1/2
-            description: "DC1-POD1-SP2"
-        - kind: DcimPhysicalInterface
-          data:
-            device: DC1-POD1-SP2
-            name: Ethernet1/2
-            description: "DC1-SS2"
-
-
-    - name: CBL-DC1-SS1-POD2-SP1
-      type: smf
-      deployment: DC1
-      endpoints:
-        - kind: DcimPhysicalInterface
-          data:
-            device: DC1-SS1
-            name: Ethernet1/3
-            description: "DC1-POD2-SP1"
-        - kind: DcimPhysicalInterface
-          data:
-            device: DC1-POD2-SP1
-            name: Ethernet1/1
-            description: "DC1-SS1"
-
-
-    - name: CBL-DC1-SS2-POD2-SP1
-      type: smf
-      deployment: DC1
-      endpoints:
-        - kind: DcimPhysicalInterface
-          data:
-            device: DC1-SS2
-            name: Ethernet1/3
-            description: "DC1-POD2-SP1"
-        - kind: DcimPhysicalInterface
-          data:
-            device: DC1-POD2-SP1
-            name: Ethernet1/2
-            description: "DC1-SS2"
-
-
-    - name: CBL-DC1-SS1-POD2-SP2
-      type: smf
-      deployment: DC1
-      endpoints:
-        - kind: DcimPhysicalInterface
-          data:
-            device: DC1-SS1
-            name: Ethernet1/4
-            description: "DC1-POD2-SP2"
-        - kind: DcimPhysicalInterface
-          data:
-            device: DC1-POD2-SP2
-            name: Ethernet1/1
-            description: "DC1-SS1"
-
-
-    - name: CBL-DC1-SS2-POD2-SP2
-      type: smf
-      deployment: DC1
-      endpoints:
-        - kind: DcimPhysicalInterface
-          data:
-            device: DC1-SS2
-            name: Ethernet1/4
-            description: "DC1-POD2-SP2"
-        - kind: DcimPhysicalInterface
-          data:
-            device: DC1-POD2-SP2
-            name: Ethernet1/2
-            description: "DC1-SS2"
 
 
     - name: CBL-DC1-POD1-SP1-L1
@@ -301,7 +173,7 @@ spec:
         - kind: DcimPhysicalInterface
           data:
             device: DC1-POD1-SP1
-            name: Ethernet1/11
+            name: Ethernet11/1
             description: "DC1-POD1-L1"
         - kind: DcimPhysicalInterface
           data:
@@ -317,12 +189,12 @@ spec:
         - kind: DcimPhysicalInterface
           data:
             device: DC1-POD1-SP2
-            name: Ethernet1/21
+            name: Ethernet21/1
             description: "DC1-POD1-L1"
         - kind: DcimPhysicalInterface
           data:
             device: DC1-POD1-L1
-            name: Ethernet1/2
+            name: Ethernet2/1
             description: "DC1-POD1-SP2"
 
 
@@ -333,7 +205,7 @@ spec:
         - kind: DcimPhysicalInterface
           data:
             device: DC1-POD1-SP1
-            name: Ethernet1/12
+            name: Ethernet12/1
             description: "DC1-POD1-L2"
         - kind: DcimPhysicalInterface
           data:
@@ -349,12 +221,12 @@ spec:
         - kind: DcimPhysicalInterface
           data:
             device: DC1-POD1-SP2
-            name: Ethernet1/22
+            name: Ethernet22/1
             description: "DC1-POD1-L2"
         - kind: DcimPhysicalInterface
           data:
             device: DC1-POD1-L2
-            name: Ethernet1/2
+            name: Ethernet2/1
             description: "DC1-POD1-SP2"
 
 
@@ -365,7 +237,7 @@ spec:
         - kind: DcimPhysicalInterface
           data:
             device: DC1-POD1-SP1
-            name: Ethernet1/13
+            name: Ethernet13/1
             description: "DC1-POD1-L3"
         - kind: DcimPhysicalInterface
           data:
@@ -381,12 +253,12 @@ spec:
         - kind: DcimPhysicalInterface
           data:
             device: DC1-POD1-SP2
-            name: Ethernet1/23
+            name: Ethernet23/1
             description: "DC1-POD1-L3"
         - kind: DcimPhysicalInterface
           data:
             device: DC1-POD1-L3
-            name: Ethernet1/2
+            name: Ethernet2/1
             description: "DC1-POD1-SP2"
 
 
@@ -397,7 +269,7 @@ spec:
         - kind: DcimPhysicalInterface
           data:
             device: DC1-POD1-SP1
-            name: Ethernet1/14
+            name: Ethernet14/1
             description: "DC1-POD1-L4"
         - kind: DcimPhysicalInterface
           data:
@@ -413,12 +285,12 @@ spec:
         - kind: DcimPhysicalInterface
           data:
             device: DC1-POD1-SP2
-            name: Ethernet1/24
+            name: Ethernet24/1
             description: "DC1-POD1-L4"
         - kind: DcimPhysicalInterface
           data:
             device: DC1-POD1-L4
-            name: Ethernet1/2
+            name: Ethernet2/1
             description: "DC1-POD1-SP2"
 
 
@@ -429,7 +301,7 @@ spec:
         - kind: DcimPhysicalInterface
           data:
             device: DC1-POD2-SP1
-            name: Ethernet1/11
+            name: Ethernet11/1
             description: "DC1-POD2-L1"
         - kind: DcimPhysicalInterface
           data:
@@ -445,12 +317,12 @@ spec:
         - kind: DcimPhysicalInterface
           data:
             device: DC1-POD2-SP2
-            name: Ethernet1/21
+            name: Ethernet21/1
             description: "DC1-POD2-L1"
         - kind: DcimPhysicalInterface
           data:
             device: DC1-POD2-L1
-            name: Ethernet1/2
+            name: Ethernet2/1
             description: "DC1-POD2-SP2"
 
 
@@ -461,7 +333,7 @@ spec:
         - kind: DcimPhysicalInterface
           data:
             device: DC1-POD2-SP1
-            name: Ethernet1/12
+            name: Ethernet12/1
             description: "DC1-POD2-L2"
         - kind: DcimPhysicalInterface
           data:
@@ -477,12 +349,12 @@ spec:
         - kind: DcimPhysicalInterface
           data:
             device: DC1-POD2-SP2
-            name: Ethernet1/22
+            name: Ethernet22/1
             description: "DC1-POD2-L2"
         - kind: DcimPhysicalInterface
           data:
             device: DC1-POD2-L2
-            name: Ethernet1/2
+            name: Ethernet2/1
             description: "DC1-POD2-SP2"
 
 
@@ -493,7 +365,7 @@ spec:
         - kind: DcimPhysicalInterface
           data:
             device: DC1-POD2-SP1
-            name: Ethernet1/13
+            name: Ethernet13/1
             description: "DC1-POD2-L3"
         - kind: DcimPhysicalInterface
           data:
@@ -509,12 +381,12 @@ spec:
         - kind: DcimPhysicalInterface
           data:
             device: DC1-POD2-SP2
-            name: Ethernet1/23
+            name: Ethernet23/1
             description: "DC1-POD2-L3"
         - kind: DcimPhysicalInterface
           data:
             device: DC1-POD2-L3
-            name: Ethernet1/2
+            name: Ethernet2/1
             description: "DC1-POD2-SP2"
 
 
@@ -525,7 +397,7 @@ spec:
         - kind: DcimPhysicalInterface
           data:
             device: DC1-POD2-SP1
-            name: Ethernet1/14
+            name: Ethernet14/1
             description: "DC1-POD2-L4"
         - kind: DcimPhysicalInterface
           data:
@@ -541,10 +413,480 @@ spec:
         - kind: DcimPhysicalInterface
           data:
             device: DC1-POD2-SP2
-            name: Ethernet1/24
+            name: Ethernet24/1
             description: "DC1-POD2-L4"
         - kind: DcimPhysicalInterface
           data:
             device: DC1-POD2-L4
-            name: Ethernet1/2
+            name: Ethernet2/1
             description: "DC1-POD2-SP2"
+
+
+    # ── Inter-pod spine full-mesh ──────────────────────────────────────────────
+    - name: CBL-DC1-POD1-SP1-POD2-SP1
+      type: smf
+      deployment: DC1
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC1-POD1-SP1
+            name: Ethernet3/1
+            description: "DC1-POD2-SP1"
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC1-POD2-SP1
+            name: Ethernet3/1
+            description: "DC1-POD1-SP1"
+
+
+    - name: CBL-DC1-POD1-SP1-POD2-SP2
+      type: smf
+      deployment: DC1
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC1-POD1-SP1
+            name: Ethernet4/1
+            description: "DC1-POD2-SP2"
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC1-POD2-SP2
+            name: Ethernet3/1
+            description: "DC1-POD1-SP1"
+
+
+    - name: CBL-DC1-POD1-SP2-POD2-SP1
+      type: smf
+      deployment: DC1
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC1-POD1-SP2
+            name: Ethernet3/1
+            description: "DC1-POD2-SP1"
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC1-POD2-SP1
+            name: Ethernet4/1
+            description: "DC1-POD1-SP2"
+
+
+    - name: CBL-DC1-POD1-SP2-POD2-SP2
+      type: smf
+      deployment: DC1
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC1-POD1-SP2
+            name: Ethernet4/1
+            description: "DC1-POD2-SP2"
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC1-POD2-SP2
+            name: Ethernet4/1
+            description: "DC1-POD1-SP2"
+
+
+    # ── Border-leaf ↔ spine cables ────────────────────────────────────────────
+    - name: CBL-DC1-BL1-POD1-SP1
+      type: smf
+      deployment: DC1
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC1-BL1
+            name: Ethernet1/1
+            description: "DC1-POD1-SP1"
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC1-POD1-SP1
+            name: Ethernet5/1
+            description: "DC1-BL1"
+
+
+    - name: CBL-DC1-BL1-POD1-SP2
+      type: smf
+      deployment: DC1
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC1-BL1
+            name: Ethernet2/1
+            description: "DC1-POD1-SP2"
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC1-POD1-SP2
+            name: Ethernet5/1
+            description: "DC1-BL1"
+
+
+    - name: CBL-DC1-BL1-POD2-SP1
+      type: smf
+      deployment: DC1
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC1-BL1
+            name: Ethernet3/1
+            description: "DC1-POD2-SP1"
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC1-POD2-SP1
+            name: Ethernet5/1
+            description: "DC1-BL1"
+
+
+    - name: CBL-DC1-BL1-POD2-SP2
+      type: smf
+      deployment: DC1
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC1-BL1
+            name: Ethernet4/1
+            description: "DC1-POD2-SP2"
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC1-POD2-SP2
+            name: Ethernet5/1
+            description: "DC1-BL1"
+
+
+    - name: CBL-DC1-BL2-POD1-SP1
+      type: smf
+      deployment: DC1
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC1-BL2
+            name: Ethernet1/1
+            description: "DC1-POD1-SP1"
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC1-POD1-SP1
+            name: Ethernet6/1
+            description: "DC1-BL2"
+
+
+    - name: CBL-DC1-BL2-POD1-SP2
+      type: smf
+      deployment: DC1
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC1-BL2
+            name: Ethernet2/1
+            description: "DC1-POD1-SP2"
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC1-POD1-SP2
+            name: Ethernet6/1
+            description: "DC1-BL2"
+
+
+    - name: CBL-DC1-BL2-POD2-SP1
+      type: smf
+      deployment: DC1
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC1-BL2
+            name: Ethernet3/1
+            description: "DC1-POD2-SP1"
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC1-POD2-SP1
+            name: Ethernet6/1
+            description: "DC1-BL2"
+
+
+    - name: CBL-DC1-BL2-POD2-SP2
+      type: smf
+      deployment: DC1
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC1-BL2
+            name: Ethernet4/1
+            description: "DC1-POD2-SP2"
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC1-POD2-SP2
+            name: Ethernet6/1
+            description: "DC1-BL2"
+
+    # ── POD1 ESXi hosts → leaves (2-NIC MLAG, eno1→L1, eno2→L2) ─────────────
+    # Port allocation: Eth52/1-55/1 (ESXI-01..04), Eth56/1 (VCSA)
+
+    - name: CBL-DC1-POD1-ESXI01-L1
+      type: copper
+      deployment: DC1
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC1-POD1-ESXI-01
+            name: eno1
+            description: "DC1-POD1-L1"
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC1-POD1-L1
+            name: Ethernet52/1
+            description: "DC1-POD1-ESXI-01"
+
+    - name: CBL-DC1-POD1-ESXI01-L2
+      type: copper
+      deployment: DC1
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC1-POD1-ESXI-01
+            name: eno2
+            description: "DC1-POD1-L2"
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC1-POD1-L2
+            name: Ethernet52/1
+            description: "DC1-POD1-ESXI-01"
+
+    - name: CBL-DC1-POD1-ESXI02-L1
+      type: copper
+      deployment: DC1
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC1-POD1-ESXI-02
+            name: eno1
+            description: "DC1-POD1-L1"
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC1-POD1-L1
+            name: Ethernet53/1
+            description: "DC1-POD1-ESXI-02"
+
+    - name: CBL-DC1-POD1-ESXI02-L2
+      type: copper
+      deployment: DC1
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC1-POD1-ESXI-02
+            name: eno2
+            description: "DC1-POD1-L2"
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC1-POD1-L2
+            name: Ethernet53/1
+            description: "DC1-POD1-ESXI-02"
+
+    - name: CBL-DC1-POD1-ESXI03-L1
+      type: copper
+      deployment: DC1
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC1-POD1-ESXI-03
+            name: eno1
+            description: "DC1-POD1-L1"
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC1-POD1-L1
+            name: Ethernet54/1
+            description: "DC1-POD1-ESXI-03"
+
+    - name: CBL-DC1-POD1-ESXI03-L2
+      type: copper
+      deployment: DC1
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC1-POD1-ESXI-03
+            name: eno2
+            description: "DC1-POD1-L2"
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC1-POD1-L2
+            name: Ethernet54/1
+            description: "DC1-POD1-ESXI-03"
+
+    - name: CBL-DC1-POD1-ESXI04-L1
+      type: copper
+      deployment: DC1
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC1-POD1-ESXI-04
+            name: eno1
+            description: "DC1-POD1-L1"
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC1-POD1-L1
+            name: Ethernet55/1
+            description: "DC1-POD1-ESXI-04"
+
+    - name: CBL-DC1-POD1-ESXI04-L2
+      type: copper
+      deployment: DC1
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC1-POD1-ESXI-04
+            name: eno2
+            description: "DC1-POD1-L2"
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC1-POD1-L2
+            name: Ethernet55/1
+            description: "DC1-POD1-ESXI-04"
+
+    - name: CBL-DC1-POD1-VCSA01-L1
+      type: copper
+      deployment: DC1
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC1-POD1-VCSA-01
+            name: eno1
+            description: "DC1-POD1-L1"
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC1-POD1-L1
+            name: Ethernet56/1
+            description: "DC1-POD1-VCSA-01"
+
+    # ── POD2 ESXi hosts → leaves (2-NIC MLAG, eno1→L1, eno2→L2) ─────────────
+    # Port allocation: Eth51/1-54/1 (ESXI-01..04), Eth55/1 (VCSA)
+
+    - name: CBL-DC1-POD2-ESXI01-L1
+      type: copper
+      deployment: DC1
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC1-POD2-ESXI-01
+            name: eno1
+            description: "DC1-POD2-L1"
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC1-POD2-L1
+            name: Ethernet51/1
+            description: "DC1-POD2-ESXI-01"
+
+    - name: CBL-DC1-POD2-ESXI01-L2
+      type: copper
+      deployment: DC1
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC1-POD2-ESXI-01
+            name: eno2
+            description: "DC1-POD2-L2"
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC1-POD2-L2
+            name: Ethernet51/1
+            description: "DC1-POD2-ESXI-01"
+
+    - name: CBL-DC1-POD2-ESXI02-L1
+      type: copper
+      deployment: DC1
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC1-POD2-ESXI-02
+            name: eno1
+            description: "DC1-POD2-L1"
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC1-POD2-L1
+            name: Ethernet52/1
+            description: "DC1-POD2-ESXI-02"
+
+    - name: CBL-DC1-POD2-ESXI02-L2
+      type: copper
+      deployment: DC1
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC1-POD2-ESXI-02
+            name: eno2
+            description: "DC1-POD2-L2"
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC1-POD2-L2
+            name: Ethernet52/1
+            description: "DC1-POD2-ESXI-02"
+
+    - name: CBL-DC1-POD2-ESXI03-L1
+      type: copper
+      deployment: DC1
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC1-POD2-ESXI-03
+            name: eno1
+            description: "DC1-POD2-L1"
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC1-POD2-L1
+            name: Ethernet53/1
+            description: "DC1-POD2-ESXI-03"
+
+    - name: CBL-DC1-POD2-ESXI03-L2
+      type: copper
+      deployment: DC1
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC1-POD2-ESXI-03
+            name: eno2
+            description: "DC1-POD2-L2"
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC1-POD2-L2
+            name: Ethernet53/1
+            description: "DC1-POD2-ESXI-03"
+
+    - name: CBL-DC1-POD2-ESXI04-L1
+      type: copper
+      deployment: DC1
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC1-POD2-ESXI-04
+            name: eno1
+            description: "DC1-POD2-L1"
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC1-POD2-L1
+            name: Ethernet54/1
+            description: "DC1-POD2-ESXI-04"
+
+    - name: CBL-DC1-POD2-ESXI04-L2
+      type: copper
+      deployment: DC1
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC1-POD2-ESXI-04
+            name: eno2
+            description: "DC1-POD2-L2"
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC1-POD2-L2
+            name: Ethernet54/1
+            description: "DC1-POD2-ESXI-04"
+
+    - name: CBL-DC1-POD2-VCSA01-L1
+      type: copper
+      deployment: DC1
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC1-POD2-VCSA-01
+            name: eno1
+            description: "DC1-POD2-L1"
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC1-POD2-L1
+            name: Ethernet55/1
+            description: "DC1-POD2-VCSA-01"

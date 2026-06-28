@@ -80,6 +80,7 @@ def _vlans_from_activations(activations: list[dict[str, Any]]) -> list[dict[str,
             continue
         seg = act.get("segment") or {}
         gateway_ip, gateway_ipv6, vrf, _ = _get_segment_gateways(seg)
+        sgt = seg.get("security_tag") or {}
         vlans.append(
             {
                 "vlan_id": vlan_id,
@@ -88,6 +89,9 @@ def _vlans_from_activations(activations: list[dict[str, Any]]) -> list[dict[str,
                 "gateway_ipv6": gateway_ipv6,
                 "arp_suppression": seg.get("arp_suppression", True),
                 "vrf": vrf,
+                "isolation_mode": seg.get("isolation_mode") or "normal",
+                "sgt": sgt.get("group_id"),
+                "sgt_name": sgt.get("name"),
             }
         )
         seen.add(vlan_id)

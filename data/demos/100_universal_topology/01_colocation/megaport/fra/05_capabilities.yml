@@ -8,7 +8,7 @@ spec:
       status: active
       profiles:
         - colo-ntp-default
-      device_capabilities:
+      capabilities:
         - MCR-FRA1-EDGE-01
       servers:
         kind: ManagedNTPServer
@@ -36,7 +36,7 @@ spec:
       status: active
       profiles:
         - colo-syslog-default
-      device_capabilities:
+      capabilities:
         - MCR-FRA1-EDGE-01
       servers:
         kind: ManagedSyslogServer
@@ -58,7 +58,7 @@ spec:
       status: active
       profiles:
         - colo-aaa-default
-      device_capabilities:
+      capabilities:
         - MCR-FRA1-EDGE-01
       servers:
         kind: ManagedAAAServer

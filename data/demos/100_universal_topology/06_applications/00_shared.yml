@@ -1,0 +1,103 @@
+---
+# Shared infrastructure services segment — DNS, NTP, monitoring
+# Owned by C001 (Nordix Ltd.) as the primary tenant of the shared namespace.
+
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: IpamNamespace
+  data:
+    - name: "SHARED-SERVICES"
+      description: "Shared infrastructure services VRF (DNS, NTP, monitoring)"
+      l3_vni: 50100
+      status: "active"
+
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: IpamPrefix
+  data:
+    - prefix: "10.255.1.0/24"
+      description: "Shared services — DNS, NTP, monitoring"
+      status: active
+      ip_namespace: "SHARED-SERVICES"
+
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: IpamIPAddress
+  data:
+    - address: "10.255.1.1/24"
+      description: "Anycast GW — Shared services"
+      ip_namespace: "SHARED-SERVICES"
+
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: ManagedVxlanSegment
+  data:
+    - customer_name: "shared-infra"
+      environment: "p"
+      owner: "C001"
+      arp_suppression: false
+      prefix:
+        - - "10.255.1.0/24"
+          - "SHARED-SERVICES"
+      gateway:
+        - "10.255.1.1/24"
+        - "SHARED-SERVICES"
+      deployments:
+        - DC1
+        - DC2
+        - DC3
+      member_of_groups:
+        - vxlan_segments
+      interface_capabilities:
+        - kind: DcimLAGInterface
+          data:
+            device: DC1-POD1-SRV-01
+            name: bond0
+            lag_id: 1
+        - kind: DcimLAGInterface
+          data:
+            device: DC1-POD1-SRV-02
+            name: bond0
+            lag_id: 1
+        - kind: DcimLAGInterface
+          data:
+            device: DC1-POD1-SRV-ASS-01
+            name: bond0
+            lag_id: 1
+        - kind: DcimLAGInterface
+          data:
+            device: DC1-POD2-SRV-01
+            name: bond0
+            lag_id: 1
+        - kind: DcimLAGInterface
+          data:
+            device: DC1-POD2-SRV-02
+            name: bond0
+            lag_id: 1
+        - kind: DcimLAGInterface
+          data:
+            device: DC2-POD1-SRV-01
+            name: bond0
+            lag_id: 1
+        - kind: DcimLAGInterface
+          data:
+            device: DC2-POD1-SRV-02
+            name: bond0
+            lag_id: 1
+        - kind: DcimLAGInterface
+          data:
+            device: DC2-POD2-SRV-01
+            name: bond0
+            lag_id: 1
+        - kind: DcimLAGInterface
+          data:
+            device: DC2-POD2-SRV-02
+            name: bond0
+            lag_id: 1

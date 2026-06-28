@@ -268,7 +268,7 @@ class TestPodCablingStrategy:
     def test_pod_plan_with_offset(self) -> None:
         """Offset shifts which top interface is used per bottom device.
 
-        PodCablingStrategy.build_plan appends (top_intf, bottom_intf).
+        PodCablingStrategy.build_plan appends (bottom_intf, top_intf).
         top_intf_index = (bottom_index + cabling_offset) % len(top_interfaces)
         offset=0: leaf-01→Eth1, leaf-02→Eth2  →  top intfs: ['Eth1','Eth2']
         offset=1: leaf-01→Eth2, leaf-02→Eth1  →  top intfs: ['Eth2','Eth1']
@@ -282,9 +282,9 @@ class TestPodCablingStrategy:
         plan_offset0 = strategy.build_plan(cabling_offset=0)
         plan_offset1 = strategy.build_plan(cabling_offset=1)
 
-        # First element of each tuple is the top (spine) interface
-        top_intfs_offset0 = [top.name.value for top, _ in plan_offset0]
-        top_intfs_offset1 = [top.name.value for top, _ in plan_offset1]
+        # Second element of each tuple is the top (spine) interface
+        top_intfs_offset0 = [top.name.value for _, top in plan_offset0]
+        top_intfs_offset1 = [top.name.value for _, top in plan_offset1]
         assert top_intfs_offset0 != top_intfs_offset1
 
     def test_pod_plan_empty_bottom(self) -> None:

@@ -11,13 +11,111 @@
 # bond1 cross-pod). All four links are LACP-active so the node sees one logical
 # fabric interface per bond regardless of which leaf pair is active.
 #
-# Super-spine and spine cabling mirrors DC1/DC2 exactly.
+# Border-leaf (BL1/BL2) uplinks use SS1/SS2 Eth1/9–10 (previously used for DCI).
+# DCI now terminates on BL1/BL2 Eth1/9–10 → Equinix patch panel → PA4/PA6.
 
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
   kind: DcimCable
   data:
+
+    # ── Border-leaf ↔ super-spines ────────────────────────────────────────────
+    # BL1 uplinks (AS 65370) — one link per super-spine for redundancy
+
+    - name: CBL-DC3-BL1-SS1
+      type: smf
+      deployment: DC3
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-BL1
+            name: Ethernet112
+            description: "DC3-SS1"
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-SS1
+            name: Ethernet32
+            description: "DC3-BL1"
+
+    - name: CBL-DC3-BL1-SS2
+      type: smf
+      deployment: DC3
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-BL1
+            name: Ethernet116
+            description: "DC3-SS2"
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-SS2
+            name: Ethernet32
+            description: "DC3-BL1"
+
+    # BL2 uplinks (AS 65371)
+
+    - name: CBL-DC3-BL2-SS1
+      type: smf
+      deployment: DC3
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-BL2
+            name: Ethernet112
+            description: "DC3-SS1"
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-SS1
+            name: Ethernet36
+            description: "DC3-BL2"
+
+    - name: CBL-DC3-BL2-SS2
+      type: smf
+      deployment: DC3
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-BL2
+            name: Ethernet116
+            description: "DC3-SS2"
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-SS2
+            name: Ethernet36
+            description: "DC3-BL2"
+
+    # ── Border-leaf ↔ Equinix DC3 patch panel (DCI) ───────────────────────────
+    # Circuit path: BL1:Eth1/9 → patch Port1 → PA4-EDGE-01:Eth1/3 (primary)
+    #               BL2:Eth1/9 → patch Port2 → PA6-EDGE-01:Eth1/3 (secondary)
+
+    - name: CBL-DC3-BL1-EQX-DC3-PATCH-P1
+      type: smf
+      deployment: DC3
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-BL1
+            name: Ethernet8
+            description: "PA4-EDGE-01 (via EQX-DC3-PATCH-01)"
+        - kind: DcimPhysicalInterface
+          data:
+            device: EQX-DC3-PATCH-01
+            name: Port1
+
+    - name: CBL-DC3-BL2-EQX-DC3-PATCH-P2
+      type: smf
+      deployment: DC3
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-BL2
+            name: Ethernet8
+            description: "PA6-EDGE-01 (via EQX-DC3-PATCH-01)"
+        - kind: DcimPhysicalInterface
+          data:
+            device: EQX-DC3-PATCH-01
+            name: Port2
 
     # ── Super-spine ↔ spines ──────────────────────────────────────────────────
 
@@ -28,12 +126,12 @@ spec:
         - kind: DcimPhysicalInterface
           data:
             device: DC3-SS1
-            name: Ethernet1/1
+            name: Ethernet0
             description: "DC3-POD1-SP1"
         - kind: DcimPhysicalInterface
           data:
             device: DC3-POD1-SP1
-            name: Ethernet1/1
+            name: Ethernet112
             description: "DC3-SS1"
 
     - name: CBL-DC3-SS2-POD1-SP1
@@ -43,12 +141,12 @@ spec:
         - kind: DcimPhysicalInterface
           data:
             device: DC3-SS2
-            name: Ethernet1/1
+            name: Ethernet0
             description: "DC3-POD1-SP1"
         - kind: DcimPhysicalInterface
           data:
             device: DC3-POD1-SP1
-            name: Ethernet1/2
+            name: Ethernet116
             description: "DC3-SS2"
 
     - name: CBL-DC3-SS1-POD1-SP2
@@ -58,12 +156,12 @@ spec:
         - kind: DcimPhysicalInterface
           data:
             device: DC3-SS1
-            name: Ethernet1/2
+            name: Ethernet4
             description: "DC3-POD1-SP2"
         - kind: DcimPhysicalInterface
           data:
             device: DC3-POD1-SP2
-            name: Ethernet1/1
+            name: Ethernet112
             description: "DC3-SS1"
 
     - name: CBL-DC3-SS2-POD1-SP2
@@ -73,12 +171,12 @@ spec:
         - kind: DcimPhysicalInterface
           data:
             device: DC3-SS2
-            name: Ethernet1/2
+            name: Ethernet4
             description: "DC3-POD1-SP2"
         - kind: DcimPhysicalInterface
           data:
             device: DC3-POD1-SP2
-            name: Ethernet1/2
+            name: Ethernet116
             description: "DC3-SS2"
 
     - name: CBL-DC3-SS1-POD2-SP1
@@ -88,12 +186,12 @@ spec:
         - kind: DcimPhysicalInterface
           data:
             device: DC3-SS1
-            name: Ethernet1/3
+            name: Ethernet8
             description: "DC3-POD2-SP1"
         - kind: DcimPhysicalInterface
           data:
             device: DC3-POD2-SP1
-            name: Ethernet1/1
+            name: Ethernet112
             description: "DC3-SS1"
 
     - name: CBL-DC3-SS2-POD2-SP1
@@ -103,12 +201,12 @@ spec:
         - kind: DcimPhysicalInterface
           data:
             device: DC3-SS2
-            name: Ethernet1/3
+            name: Ethernet8
             description: "DC3-POD2-SP1"
         - kind: DcimPhysicalInterface
           data:
             device: DC3-POD2-SP1
-            name: Ethernet1/2
+            name: Ethernet116
             description: "DC3-SS2"
 
     - name: CBL-DC3-SS1-POD2-SP2
@@ -118,12 +216,12 @@ spec:
         - kind: DcimPhysicalInterface
           data:
             device: DC3-SS1
-            name: Ethernet1/4
+            name: Ethernet12
             description: "DC3-POD2-SP2"
         - kind: DcimPhysicalInterface
           data:
             device: DC3-POD2-SP2
-            name: Ethernet1/1
+            name: Ethernet112
             description: "DC3-SS1"
 
     - name: CBL-DC3-SS2-POD2-SP2
@@ -133,12 +231,12 @@ spec:
         - kind: DcimPhysicalInterface
           data:
             device: DC3-SS2
-            name: Ethernet1/4
+            name: Ethernet12
             description: "DC3-POD2-SP2"
         - kind: DcimPhysicalInterface
           data:
             device: DC3-POD2-SP2
-            name: Ethernet1/2
+            name: Ethernet116
             description: "DC3-SS2"
 
     # ── Spines ↔ leaves ───────────────────────────────────────────────────────
@@ -150,12 +248,12 @@ spec:
         - kind: DcimPhysicalInterface
           data:
             device: DC3-POD1-SP1
-            name: Ethernet1/11
+            name: Ethernet0
             description: "DC3-POD1-L1"
         - kind: DcimPhysicalInterface
           data:
             device: DC3-POD1-L1
-            name: Ethernet1/1
+            name: xe49
             description: "DC3-POD1-SP1"
 
     - name: CBL-DC3-POD1-SP2-L1
@@ -165,12 +263,12 @@ spec:
         - kind: DcimPhysicalInterface
           data:
             device: DC3-POD1-SP2
-            name: Ethernet1/21
+            name: Ethernet0
             description: "DC3-POD1-L1"
         - kind: DcimPhysicalInterface
           data:
             device: DC3-POD1-L1
-            name: Ethernet1/2
+            name: xe50
             description: "DC3-POD1-SP2"
 
     - name: CBL-DC3-POD1-SP1-L2
@@ -180,12 +278,12 @@ spec:
         - kind: DcimPhysicalInterface
           data:
             device: DC3-POD1-SP1
-            name: Ethernet1/12
+            name: Ethernet4
             description: "DC3-POD1-L2"
         - kind: DcimPhysicalInterface
           data:
             device: DC3-POD1-L2
-            name: Ethernet1/1
+            name: xe49
             description: "DC3-POD1-SP1"
 
     - name: CBL-DC3-POD1-SP2-L2
@@ -195,12 +293,12 @@ spec:
         - kind: DcimPhysicalInterface
           data:
             device: DC3-POD1-SP2
-            name: Ethernet1/22
+            name: Ethernet4
             description: "DC3-POD1-L2"
         - kind: DcimPhysicalInterface
           data:
             device: DC3-POD1-L2
-            name: Ethernet1/2
+            name: xe50
             description: "DC3-POD1-SP2"
 
     - name: CBL-DC3-POD1-SP1-L3
@@ -210,12 +308,12 @@ spec:
         - kind: DcimPhysicalInterface
           data:
             device: DC3-POD1-SP1
-            name: Ethernet1/13
+            name: Ethernet8
             description: "DC3-POD1-L3"
         - kind: DcimPhysicalInterface
           data:
             device: DC3-POD1-L3
-            name: Ethernet1/1
+            name: xe49
             description: "DC3-POD1-SP1"
 
     - name: CBL-DC3-POD1-SP2-L3
@@ -225,12 +323,12 @@ spec:
         - kind: DcimPhysicalInterface
           data:
             device: DC3-POD1-SP2
-            name: Ethernet1/23
+            name: Ethernet8
             description: "DC3-POD1-L3"
         - kind: DcimPhysicalInterface
           data:
             device: DC3-POD1-L3
-            name: Ethernet1/2
+            name: xe50
             description: "DC3-POD1-SP2"
 
     - name: CBL-DC3-POD1-SP1-L4
@@ -240,12 +338,12 @@ spec:
         - kind: DcimPhysicalInterface
           data:
             device: DC3-POD1-SP1
-            name: Ethernet1/14
+            name: Ethernet12
             description: "DC3-POD1-L4"
         - kind: DcimPhysicalInterface
           data:
             device: DC3-POD1-L4
-            name: Ethernet1/1
+            name: xe49
             description: "DC3-POD1-SP1"
 
     - name: CBL-DC3-POD1-SP2-L4
@@ -255,12 +353,12 @@ spec:
         - kind: DcimPhysicalInterface
           data:
             device: DC3-POD1-SP2
-            name: Ethernet1/24
+            name: Ethernet12
             description: "DC3-POD1-L4"
         - kind: DcimPhysicalInterface
           data:
             device: DC3-POD1-L4
-            name: Ethernet1/2
+            name: xe50
             description: "DC3-POD1-SP2"
 
     - name: CBL-DC3-POD2-SP1-L1
@@ -270,12 +368,12 @@ spec:
         - kind: DcimPhysicalInterface
           data:
             device: DC3-POD2-SP1
-            name: Ethernet1/11
+            name: Ethernet0
             description: "DC3-POD2-L1"
         - kind: DcimPhysicalInterface
           data:
             device: DC3-POD2-L1
-            name: Ethernet1/1
+            name: xe49
             description: "DC3-POD2-SP1"
 
     - name: CBL-DC3-POD2-SP2-L1
@@ -285,12 +383,12 @@ spec:
         - kind: DcimPhysicalInterface
           data:
             device: DC3-POD2-SP2
-            name: Ethernet1/21
+            name: Ethernet0
             description: "DC3-POD2-L1"
         - kind: DcimPhysicalInterface
           data:
             device: DC3-POD2-L1
-            name: Ethernet1/2
+            name: xe50
             description: "DC3-POD2-SP2"
 
     - name: CBL-DC3-POD2-SP1-L2
@@ -300,12 +398,12 @@ spec:
         - kind: DcimPhysicalInterface
           data:
             device: DC3-POD2-SP1
-            name: Ethernet1/12
+            name: Ethernet4
             description: "DC3-POD2-L2"
         - kind: DcimPhysicalInterface
           data:
             device: DC3-POD2-L2
-            name: Ethernet1/1
+            name: xe49
             description: "DC3-POD2-SP1"
 
     - name: CBL-DC3-POD2-SP2-L2
@@ -315,12 +413,12 @@ spec:
         - kind: DcimPhysicalInterface
           data:
             device: DC3-POD2-SP2
-            name: Ethernet1/22
+            name: Ethernet4
             description: "DC3-POD2-L2"
         - kind: DcimPhysicalInterface
           data:
             device: DC3-POD2-L2
-            name: Ethernet1/2
+            name: xe50
             description: "DC3-POD2-SP2"
 
     - name: CBL-DC3-POD2-SP1-L3
@@ -330,12 +428,12 @@ spec:
         - kind: DcimPhysicalInterface
           data:
             device: DC3-POD2-SP1
-            name: Ethernet1/13
+            name: Ethernet8
             description: "DC3-POD2-L3"
         - kind: DcimPhysicalInterface
           data:
             device: DC3-POD2-L3
-            name: Ethernet1/1
+            name: xe49
             description: "DC3-POD2-SP1"
 
     - name: CBL-DC3-POD2-SP2-L3
@@ -345,12 +443,12 @@ spec:
         - kind: DcimPhysicalInterface
           data:
             device: DC3-POD2-SP2
-            name: Ethernet1/23
+            name: Ethernet8
             description: "DC3-POD2-L3"
         - kind: DcimPhysicalInterface
           data:
             device: DC3-POD2-L3
-            name: Ethernet1/2
+            name: xe50
             description: "DC3-POD2-SP2"
 
     - name: CBL-DC3-POD2-SP1-L4
@@ -360,12 +458,12 @@ spec:
         - kind: DcimPhysicalInterface
           data:
             device: DC3-POD2-SP1
-            name: Ethernet1/14
+            name: Ethernet12
             description: "DC3-POD2-L4"
         - kind: DcimPhysicalInterface
           data:
             device: DC3-POD2-L4
-            name: Ethernet1/1
+            name: xe49
             description: "DC3-POD2-SP1"
 
     - name: CBL-DC3-POD2-SP2-L4
@@ -375,12 +473,12 @@ spec:
         - kind: DcimPhysicalInterface
           data:
             device: DC3-POD2-SP2
-            name: Ethernet1/24
+            name: Ethernet12
             description: "DC3-POD2-L4"
         - kind: DcimPhysicalInterface
           data:
             device: DC3-POD2-L4
-            name: Ethernet1/2
+            name: xe50
             description: "DC3-POD2-SP2"
 
     # ── k8s nodes → leaves (4-NIC cross-pod multi-homing) ────────────────────
@@ -409,7 +507,7 @@ spec:
         - kind: DcimPhysicalInterface
           data:
             device: DC3-POD1-L1
-            name: Ethernet1/41
+            name: xe1
             description: "DC3-POD1-K8S-CP-01"
 
     - name: CBL-DC3-K8S-CP01-POD1-L2
@@ -424,7 +522,7 @@ spec:
         - kind: DcimPhysicalInterface
           data:
             device: DC3-POD1-L2
-            name: Ethernet1/41
+            name: xe1
             description: "DC3-POD1-K8S-CP-01"
 
     - name: CBL-DC3-K8S-CP01-POD2-L1
@@ -439,7 +537,7 @@ spec:
         - kind: DcimPhysicalInterface
           data:
             device: DC3-POD2-L1
-            name: Ethernet1/41
+            name: xe1
             description: "DC3-POD1-K8S-CP-01"
 
     - name: CBL-DC3-K8S-CP01-POD2-L2
@@ -454,7 +552,7 @@ spec:
         - kind: DcimPhysicalInterface
           data:
             device: DC3-POD2-L2
-            name: Ethernet1/41
+            name: xe1
             description: "DC3-POD1-K8S-CP-01"
 
     # ── Control-plane node 02 ─────────────────────────────────────────────────
@@ -470,7 +568,7 @@ spec:
         - kind: DcimPhysicalInterface
           data:
             device: DC3-POD1-L1
-            name: Ethernet1/42
+            name: xe2
             description: "DC3-POD1-K8S-CP-02"
 
     - name: CBL-DC3-K8S-CP02-POD1-L2
@@ -485,7 +583,7 @@ spec:
         - kind: DcimPhysicalInterface
           data:
             device: DC3-POD1-L2
-            name: Ethernet1/42
+            name: xe2
             description: "DC3-POD1-K8S-CP-02"
 
     - name: CBL-DC3-K8S-CP02-POD2-L1
@@ -500,7 +598,7 @@ spec:
         - kind: DcimPhysicalInterface
           data:
             device: DC3-POD2-L1
-            name: Ethernet1/42
+            name: xe2
             description: "DC3-POD1-K8S-CP-02"
 
     - name: CBL-DC3-K8S-CP02-POD2-L2
@@ -515,7 +613,7 @@ spec:
         - kind: DcimPhysicalInterface
           data:
             device: DC3-POD2-L2
-            name: Ethernet1/42
+            name: xe2
             description: "DC3-POD1-K8S-CP-02"
 
     # ── Control-plane node 03 ─────────────────────────────────────────────────
@@ -531,7 +629,7 @@ spec:
         - kind: DcimPhysicalInterface
           data:
             device: DC3-POD1-L1
-            name: Ethernet1/43
+            name: xe3
             description: "DC3-POD1-K8S-CP-03"
 
     - name: CBL-DC3-K8S-CP03-POD1-L2
@@ -546,7 +644,7 @@ spec:
         - kind: DcimPhysicalInterface
           data:
             device: DC3-POD1-L2
-            name: Ethernet1/43
+            name: xe3
             description: "DC3-POD1-K8S-CP-03"
 
     - name: CBL-DC3-K8S-CP03-POD2-L1
@@ -561,7 +659,7 @@ spec:
         - kind: DcimPhysicalInterface
           data:
             device: DC3-POD2-L1
-            name: Ethernet1/43
+            name: xe3
             description: "DC3-POD1-K8S-CP-03"
 
     - name: CBL-DC3-K8S-CP03-POD2-L2
@@ -576,7 +674,7 @@ spec:
         - kind: DcimPhysicalInterface
           data:
             device: DC3-POD2-L2
-            name: Ethernet1/43
+            name: xe3
             description: "DC3-POD1-K8S-CP-03"
 
     # ── POD1 worker node 01 ───────────────────────────────────────────────────
@@ -592,7 +690,7 @@ spec:
         - kind: DcimPhysicalInterface
           data:
             device: DC3-POD1-L1
-            name: Ethernet1/45
+            name: xe5
             description: "DC3-POD1-K8S-WRK-01"
 
     - name: CBL-DC3-K8S-WRK01-P1-POD1-L2
@@ -607,7 +705,7 @@ spec:
         - kind: DcimPhysicalInterface
           data:
             device: DC3-POD1-L2
-            name: Ethernet1/45
+            name: xe5
             description: "DC3-POD1-K8S-WRK-01"
 
     - name: CBL-DC3-K8S-WRK01-P1-POD2-L1
@@ -622,7 +720,7 @@ spec:
         - kind: DcimPhysicalInterface
           data:
             device: DC3-POD2-L1
-            name: Ethernet1/45
+            name: xe5
             description: "DC3-POD1-K8S-WRK-01"
 
     - name: CBL-DC3-K8S-WRK01-P1-POD2-L2
@@ -637,7 +735,7 @@ spec:
         - kind: DcimPhysicalInterface
           data:
             device: DC3-POD2-L2
-            name: Ethernet1/45
+            name: xe5
             description: "DC3-POD1-K8S-WRK-01"
 
     # ── POD1 worker node 02 ───────────────────────────────────────────────────
@@ -653,7 +751,7 @@ spec:
         - kind: DcimPhysicalInterface
           data:
             device: DC3-POD1-L1
-            name: Ethernet1/46
+            name: xe6
             description: "DC3-POD1-K8S-WRK-02"
 
     - name: CBL-DC3-K8S-WRK02-P1-POD1-L2
@@ -668,7 +766,7 @@ spec:
         - kind: DcimPhysicalInterface
           data:
             device: DC3-POD1-L2
-            name: Ethernet1/46
+            name: xe6
             description: "DC3-POD1-K8S-WRK-02"
 
     - name: CBL-DC3-K8S-WRK02-P1-POD2-L1
@@ -683,7 +781,7 @@ spec:
         - kind: DcimPhysicalInterface
           data:
             device: DC3-POD2-L1
-            name: Ethernet1/46
+            name: xe6
             description: "DC3-POD1-K8S-WRK-02"
 
     - name: CBL-DC3-K8S-WRK02-P1-POD2-L2
@@ -698,7 +796,7 @@ spec:
         - kind: DcimPhysicalInterface
           data:
             device: DC3-POD2-L2
-            name: Ethernet1/46
+            name: xe6
             description: "DC3-POD1-K8S-WRK-02"
 
     # ── POD2 worker nodes 01-04 ───────────────────────────────────────────────
@@ -715,7 +813,7 @@ spec:
         - kind: DcimPhysicalInterface
           data:
             device: DC3-POD1-L1
-            name: Ethernet1/49
+            name: xe9
             description: "DC3-POD2-K8S-WRK-01"
 
     - name: CBL-DC3-K8S-WRK01-P2-POD1-L2
@@ -730,7 +828,7 @@ spec:
         - kind: DcimPhysicalInterface
           data:
             device: DC3-POD1-L2
-            name: Ethernet1/49
+            name: xe9
             description: "DC3-POD2-K8S-WRK-01"
 
     - name: CBL-DC3-K8S-WRK01-P2-POD2-L1
@@ -745,7 +843,7 @@ spec:
         - kind: DcimPhysicalInterface
           data:
             device: DC3-POD2-L1
-            name: Ethernet1/49
+            name: xe9
             description: "DC3-POD2-K8S-WRK-01"
 
     - name: CBL-DC3-K8S-WRK01-P2-POD2-L2
@@ -760,7 +858,7 @@ spec:
         - kind: DcimPhysicalInterface
           data:
             device: DC3-POD2-L2
-            name: Ethernet1/49
+            name: xe9
             description: "DC3-POD2-K8S-WRK-01"
 
     - name: CBL-DC3-K8S-WRK02-P2-POD1-L1
@@ -775,7 +873,7 @@ spec:
         - kind: DcimPhysicalInterface
           data:
             device: DC3-POD1-L1
-            name: Ethernet1/50
+            name: xe10
             description: "DC3-POD2-K8S-WRK-02"
 
     - name: CBL-DC3-K8S-WRK02-P2-POD1-L2
@@ -790,7 +888,7 @@ spec:
         - kind: DcimPhysicalInterface
           data:
             device: DC3-POD1-L2
-            name: Ethernet1/50
+            name: xe10
             description: "DC3-POD2-K8S-WRK-02"
 
     - name: CBL-DC3-K8S-WRK02-P2-POD2-L1
@@ -805,7 +903,7 @@ spec:
         - kind: DcimPhysicalInterface
           data:
             device: DC3-POD2-L1
-            name: Ethernet1/50
+            name: xe10
             description: "DC3-POD2-K8S-WRK-02"
 
     - name: CBL-DC3-K8S-WRK02-P2-POD2-L2
@@ -820,7 +918,7 @@ spec:
         - kind: DcimPhysicalInterface
           data:
             device: DC3-POD2-L2
-            name: Ethernet1/50
+            name: xe10
             description: "DC3-POD2-K8S-WRK-02"
 
     - name: CBL-DC3-K8S-WRK03-P2-POD1-L1
@@ -835,7 +933,7 @@ spec:
         - kind: DcimPhysicalInterface
           data:
             device: DC3-POD1-L1
-            name: Ethernet1/51
+            name: xe11
             description: "DC3-POD2-K8S-WRK-03"
 
     - name: CBL-DC3-K8S-WRK03-P2-POD1-L2
@@ -850,7 +948,7 @@ spec:
         - kind: DcimPhysicalInterface
           data:
             device: DC3-POD1-L2
-            name: Ethernet1/51
+            name: xe11
             description: "DC3-POD2-K8S-WRK-03"
 
     - name: CBL-DC3-K8S-WRK03-P2-POD2-L1
@@ -865,7 +963,7 @@ spec:
         - kind: DcimPhysicalInterface
           data:
             device: DC3-POD2-L1
-            name: Ethernet1/51
+            name: xe11
             description: "DC3-POD2-K8S-WRK-03"
 
     - name: CBL-DC3-K8S-WRK03-P2-POD2-L2
@@ -880,7 +978,7 @@ spec:
         - kind: DcimPhysicalInterface
           data:
             device: DC3-POD2-L2
-            name: Ethernet1/51
+            name: xe11
             description: "DC3-POD2-K8S-WRK-03"
 
     - name: CBL-DC3-K8S-WRK04-P2-POD1-L1
@@ -895,7 +993,7 @@ spec:
         - kind: DcimPhysicalInterface
           data:
             device: DC3-POD1-L1
-            name: Ethernet1/52
+            name: xe12
             description: "DC3-POD2-K8S-WRK-04"
 
     - name: CBL-DC3-K8S-WRK04-P2-POD1-L2
@@ -910,7 +1008,7 @@ spec:
         - kind: DcimPhysicalInterface
           data:
             device: DC3-POD1-L2
-            name: Ethernet1/52
+            name: xe12
             description: "DC3-POD2-K8S-WRK-04"
 
     - name: CBL-DC3-K8S-WRK04-P2-POD2-L1
@@ -925,7 +1023,7 @@ spec:
         - kind: DcimPhysicalInterface
           data:
             device: DC3-POD2-L1
-            name: Ethernet1/52
+            name: xe12
             description: "DC3-POD2-K8S-WRK-04"
 
     - name: CBL-DC3-K8S-WRK04-P2-POD2-L2
@@ -940,7 +1038,7 @@ spec:
         - kind: DcimPhysicalInterface
           data:
             device: DC3-POD2-L2
-            name: Ethernet1/52
+            name: xe12
             description: "DC3-POD2-K8S-WRK-04"
 
     # ── Storage nodes ─────────────────────────────────────────────────────────
@@ -958,7 +1056,7 @@ spec:
         - kind: DcimPhysicalInterface
           data:
             device: DC3-POD2-L1
-            name: Ethernet1/53
+            name: xe13
             description: "DC3-POD2-K8S-STO-01"
 
     - name: CBL-DC3-K8S-STO01-POD2-L2
@@ -973,7 +1071,7 @@ spec:
         - kind: DcimPhysicalInterface
           data:
             device: DC3-POD2-L2
-            name: Ethernet1/53
+            name: xe13
             description: "DC3-POD2-K8S-STO-01"
 
     - name: CBL-DC3-K8S-STO02-POD2-L1
@@ -988,7 +1086,7 @@ spec:
         - kind: DcimPhysicalInterface
           data:
             device: DC3-POD2-L1
-            name: Ethernet1/54
+            name: xe14
             description: "DC3-POD2-K8S-STO-02"
 
     - name: CBL-DC3-K8S-STO02-POD2-L2
@@ -1003,7 +1101,7 @@ spec:
         - kind: DcimPhysicalInterface
           data:
             device: DC3-POD2-L2
-            name: Ethernet1/54
+            name: xe14
             description: "DC3-POD2-K8S-STO-02"
 
     # ── Super-spine ↔ POD3 spines ─────────────────────────────────────────────
@@ -1015,12 +1113,12 @@ spec:
         - kind: DcimPhysicalInterface
           data:
             device: DC3-SS1
-            name: Ethernet1/5
+            name: Ethernet16
             description: "DC3-POD3-SP1"
         - kind: DcimPhysicalInterface
           data:
             device: DC3-POD3-SP1
-            name: Ethernet1/1
+            name: Ethernet112
             description: "DC3-SS1"
 
     - name: CBL-DC3-SS2-POD3-SP1
@@ -1030,12 +1128,12 @@ spec:
         - kind: DcimPhysicalInterface
           data:
             device: DC3-SS2
-            name: Ethernet1/5
+            name: Ethernet16
             description: "DC3-POD3-SP1"
         - kind: DcimPhysicalInterface
           data:
             device: DC3-POD3-SP1
-            name: Ethernet1/2
+            name: Ethernet116
             description: "DC3-SS2"
 
     - name: CBL-DC3-SS1-POD3-SP2
@@ -1045,12 +1143,12 @@ spec:
         - kind: DcimPhysicalInterface
           data:
             device: DC3-SS1
-            name: Ethernet1/6
+            name: Ethernet20
             description: "DC3-POD3-SP2"
         - kind: DcimPhysicalInterface
           data:
             device: DC3-POD3-SP2
-            name: Ethernet1/1
+            name: Ethernet112
             description: "DC3-SS1"
 
     - name: CBL-DC3-SS2-POD3-SP2
@@ -1060,12 +1158,12 @@ spec:
         - kind: DcimPhysicalInterface
           data:
             device: DC3-SS2
-            name: Ethernet1/6
+            name: Ethernet20
             description: "DC3-POD3-SP2"
         - kind: DcimPhysicalInterface
           data:
             device: DC3-POD3-SP2
-            name: Ethernet1/2
+            name: Ethernet116
             description: "DC3-SS2"
 
     # ── Super-spine ↔ POD4 spines ─────────────────────────────────────────────
@@ -1077,12 +1175,12 @@ spec:
         - kind: DcimPhysicalInterface
           data:
             device: DC3-SS1
-            name: Ethernet1/7
+            name: Ethernet24
             description: "DC3-POD4-SP1"
         - kind: DcimPhysicalInterface
           data:
             device: DC3-POD4-SP1
-            name: Ethernet1/1
+            name: Ethernet112
             description: "DC3-SS1"
 
     - name: CBL-DC3-SS2-POD4-SP1
@@ -1092,12 +1190,12 @@ spec:
         - kind: DcimPhysicalInterface
           data:
             device: DC3-SS2
-            name: Ethernet1/7
+            name: Ethernet24
             description: "DC3-POD4-SP1"
         - kind: DcimPhysicalInterface
           data:
             device: DC3-POD4-SP1
-            name: Ethernet1/2
+            name: Ethernet116
             description: "DC3-SS2"
 
     - name: CBL-DC3-SS1-POD4-SP2
@@ -1107,12 +1205,12 @@ spec:
         - kind: DcimPhysicalInterface
           data:
             device: DC3-SS1
-            name: Ethernet1/8
+            name: Ethernet28
             description: "DC3-POD4-SP2"
         - kind: DcimPhysicalInterface
           data:
             device: DC3-POD4-SP2
-            name: Ethernet1/1
+            name: Ethernet112
             description: "DC3-SS1"
 
     - name: CBL-DC3-SS2-POD4-SP2
@@ -1122,12 +1220,12 @@ spec:
         - kind: DcimPhysicalInterface
           data:
             device: DC3-SS2
-            name: Ethernet1/8
+            name: Ethernet28
             description: "DC3-POD4-SP2"
         - kind: DcimPhysicalInterface
           data:
             device: DC3-POD4-SP2
-            name: Ethernet1/2
+            name: Ethernet116
             description: "DC3-SS2"
 
     # ── POD3 spines ↔ leaves ──────────────────────────────────────────────────
@@ -1139,12 +1237,12 @@ spec:
         - kind: DcimPhysicalInterface
           data:
             device: DC3-POD3-SP1
-            name: Ethernet1/11
+            name: Ethernet0
             description: "DC3-POD3-L1"
         - kind: DcimPhysicalInterface
           data:
             device: DC3-POD3-L1
-            name: Ethernet1/1
+            name: xe49
             description: "DC3-POD3-SP1"
 
     - name: CBL-DC3-POD3-SP2-L1
@@ -1154,12 +1252,12 @@ spec:
         - kind: DcimPhysicalInterface
           data:
             device: DC3-POD3-SP2
-            name: Ethernet1/21
+            name: Ethernet0
             description: "DC3-POD3-L1"
         - kind: DcimPhysicalInterface
           data:
             device: DC3-POD3-L1
-            name: Ethernet1/2
+            name: xe50
             description: "DC3-POD3-SP2"
 
     - name: CBL-DC3-POD3-SP1-L2
@@ -1169,12 +1267,12 @@ spec:
         - kind: DcimPhysicalInterface
           data:
             device: DC3-POD3-SP1
-            name: Ethernet1/12
+            name: Ethernet4
             description: "DC3-POD3-L2"
         - kind: DcimPhysicalInterface
           data:
             device: DC3-POD3-L2
-            name: Ethernet1/1
+            name: xe49
             description: "DC3-POD3-SP1"
 
     - name: CBL-DC3-POD3-SP2-L2
@@ -1184,12 +1282,12 @@ spec:
         - kind: DcimPhysicalInterface
           data:
             device: DC3-POD3-SP2
-            name: Ethernet1/22
+            name: Ethernet4
             description: "DC3-POD3-L2"
         - kind: DcimPhysicalInterface
           data:
             device: DC3-POD3-L2
-            name: Ethernet1/2
+            name: xe50
             description: "DC3-POD3-SP2"
 
     # ── POD3 MLAG peer-link ───────────────────────────────────────────────────
@@ -1201,11 +1299,11 @@ spec:
         - kind: DcimPhysicalInterface
           data:
             device: DC3-POD3-L1
-            name: Ethernet1/33
+            name: xe53
         - kind: DcimPhysicalInterface
           data:
             device: DC3-POD3-L2
-            name: Ethernet1/33
+            name: xe53
 
     - name: CBL-DC3-POD3-L1-L2-PL2
       type: smf
@@ -1214,11 +1312,11 @@ spec:
         - kind: DcimPhysicalInterface
           data:
             device: DC3-POD3-L1
-            name: Ethernet1/34
+            name: xe54
         - kind: DcimPhysicalInterface
           data:
             device: DC3-POD3-L2
-            name: Ethernet1/34
+            name: xe54
 
     # ── POD3 ESXi hosts → leaves (2-NIC MLAG) ────────────────────────────────
     # Port allocation: Eth1/41-44 for 4 ESXi hosts, Eth1/45 for vCenter
@@ -1235,7 +1333,7 @@ spec:
         - kind: DcimPhysicalInterface
           data:
             device: DC3-POD3-L1
-            name: Ethernet1/41
+            name: xe1
             description: "DC3-POD3-ESXI-01"
 
     - name: CBL-DC3-ESXI01-L2
@@ -1250,7 +1348,7 @@ spec:
         - kind: DcimPhysicalInterface
           data:
             device: DC3-POD3-L2
-            name: Ethernet1/41
+            name: xe1
             description: "DC3-POD3-ESXI-01"
 
     - name: CBL-DC3-ESXI02-L1
@@ -1265,7 +1363,7 @@ spec:
         - kind: DcimPhysicalInterface
           data:
             device: DC3-POD3-L1
-            name: Ethernet1/42
+            name: xe2
             description: "DC3-POD3-ESXI-02"
 
     - name: CBL-DC3-ESXI02-L2
@@ -1280,7 +1378,7 @@ spec:
         - kind: DcimPhysicalInterface
           data:
             device: DC3-POD3-L2
-            name: Ethernet1/42
+            name: xe2
             description: "DC3-POD3-ESXI-02"
 
     - name: CBL-DC3-ESXI03-L1
@@ -1295,7 +1393,7 @@ spec:
         - kind: DcimPhysicalInterface
           data:
             device: DC3-POD3-L1
-            name: Ethernet1/43
+            name: xe3
             description: "DC3-POD3-ESXI-03"
 
     - name: CBL-DC3-ESXI03-L2
@@ -1310,7 +1408,7 @@ spec:
         - kind: DcimPhysicalInterface
           data:
             device: DC3-POD3-L2
-            name: Ethernet1/43
+            name: xe3
             description: "DC3-POD3-ESXI-03"
 
     - name: CBL-DC3-ESXI04-L1
@@ -1325,7 +1423,7 @@ spec:
         - kind: DcimPhysicalInterface
           data:
             device: DC3-POD3-L1
-            name: Ethernet1/44
+            name: xe4
             description: "DC3-POD3-ESXI-04"
 
     - name: CBL-DC3-ESXI04-L2
@@ -1340,7 +1438,7 @@ spec:
         - kind: DcimPhysicalInterface
           data:
             device: DC3-POD3-L2
-            name: Ethernet1/44
+            name: xe4
             description: "DC3-POD3-ESXI-04"
 
     - name: CBL-DC3-VCSA01-L1
@@ -1355,7 +1453,7 @@ spec:
         - kind: DcimPhysicalInterface
           data:
             device: DC3-POD3-L1
-            name: Ethernet1/45
+            name: xe5
             description: "DC3-POD3-VCSA-01"
 
     # ── POD4 spines ↔ leaves ──────────────────────────────────────────────────
@@ -1367,12 +1465,12 @@ spec:
         - kind: DcimPhysicalInterface
           data:
             device: DC3-POD4-SP1
-            name: Ethernet1/11
+            name: Ethernet0
             description: "DC3-POD4-L1"
         - kind: DcimPhysicalInterface
           data:
             device: DC3-POD4-L1
-            name: Ethernet1/1
+            name: xe49
             description: "DC3-POD4-SP1"
 
     - name: CBL-DC3-POD4-SP2-L1
@@ -1382,12 +1480,12 @@ spec:
         - kind: DcimPhysicalInterface
           data:
             device: DC3-POD4-SP2
-            name: Ethernet1/21
+            name: Ethernet0
             description: "DC3-POD4-L1"
         - kind: DcimPhysicalInterface
           data:
             device: DC3-POD4-L1
-            name: Ethernet1/2
+            name: xe50
             description: "DC3-POD4-SP2"
 
     - name: CBL-DC3-POD4-SP1-L2
@@ -1397,12 +1495,12 @@ spec:
         - kind: DcimPhysicalInterface
           data:
             device: DC3-POD4-SP1
-            name: Ethernet1/12
+            name: Ethernet4
             description: "DC3-POD4-L2"
         - kind: DcimPhysicalInterface
           data:
             device: DC3-POD4-L2
-            name: Ethernet1/1
+            name: xe49
             description: "DC3-POD4-SP1"
 
     - name: CBL-DC3-POD4-SP2-L2
@@ -1412,12 +1510,12 @@ spec:
         - kind: DcimPhysicalInterface
           data:
             device: DC3-POD4-SP2
-            name: Ethernet1/22
+            name: Ethernet4
             description: "DC3-POD4-L2"
         - kind: DcimPhysicalInterface
           data:
             device: DC3-POD4-L2
-            name: Ethernet1/2
+            name: xe50
             description: "DC3-POD4-SP2"
 
     # ── POD4 MLAG peer-link ───────────────────────────────────────────────────
@@ -1429,11 +1527,11 @@ spec:
         - kind: DcimPhysicalInterface
           data:
             device: DC3-POD4-L1
-            name: Ethernet1/33
+            name: xe53
         - kind: DcimPhysicalInterface
           data:
             device: DC3-POD4-L2
-            name: Ethernet1/33
+            name: xe53
 
     - name: CBL-DC3-POD4-L1-L2-PL2
       type: smf
@@ -1442,11 +1540,11 @@ spec:
         - kind: DcimPhysicalInterface
           data:
             device: DC3-POD4-L1
-            name: Ethernet1/34
+            name: xe54
         - kind: DcimPhysicalInterface
           data:
             device: DC3-POD4-L2
-            name: Ethernet1/34
+            name: xe54
 
     # ── POD4 Nutanix nodes → leaves (2-NIC MLAG) ─────────────────────────────
     # Nutanix nodes use eno1/eno2 for combined CVM and guest traffic over MLAG.
@@ -1463,7 +1561,7 @@ spec:
         - kind: DcimPhysicalInterface
           data:
             device: DC3-POD4-L1
-            name: Ethernet1/41
+            name: xe1
             description: "DC3-POD4-NTX-01"
 
     - name: CBL-DC3-NTX01-L2
@@ -1478,7 +1576,7 @@ spec:
         - kind: DcimPhysicalInterface
           data:
             device: DC3-POD4-L2
-            name: Ethernet1/41
+            name: xe1
             description: "DC3-POD4-NTX-01"
 
     - name: CBL-DC3-NTX02-L1
@@ -1493,7 +1591,7 @@ spec:
         - kind: DcimPhysicalInterface
           data:
             device: DC3-POD4-L1
-            name: Ethernet1/42
+            name: xe2
             description: "DC3-POD4-NTX-02"
 
     - name: CBL-DC3-NTX02-L2
@@ -1508,7 +1606,7 @@ spec:
         - kind: DcimPhysicalInterface
           data:
             device: DC3-POD4-L2
-            name: Ethernet1/42
+            name: xe2
             description: "DC3-POD4-NTX-02"
 
     - name: CBL-DC3-NTX03-L1
@@ -1523,7 +1621,7 @@ spec:
         - kind: DcimPhysicalInterface
           data:
             device: DC3-POD4-L1
-            name: Ethernet1/43
+            name: xe3
             description: "DC3-POD4-NTX-03"
 
     - name: CBL-DC3-NTX03-L2
@@ -1538,7 +1636,7 @@ spec:
         - kind: DcimPhysicalInterface
           data:
             device: DC3-POD4-L2
-            name: Ethernet1/43
+            name: xe3
             description: "DC3-POD4-NTX-03"
 
     - name: CBL-DC3-NTX04-L1
@@ -1553,7 +1651,7 @@ spec:
         - kind: DcimPhysicalInterface
           data:
             device: DC3-POD4-L1
-            name: Ethernet1/44
+            name: xe4
             description: "DC3-POD4-NTX-04"
 
     - name: CBL-DC3-NTX04-L2
@@ -1568,5 +1666,5 @@ spec:
         - kind: DcimPhysicalInterface
           data:
             device: DC3-POD4-L2
-            name: Ethernet1/44
+            name: xe4
             description: "DC3-POD4-NTX-04"

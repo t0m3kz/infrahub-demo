@@ -15,11 +15,14 @@ from unittest.mock import AsyncMock, MagicMock, call, patch
 import pytest
 
 from generators.add.rack import RackGenerator
-from generators.models import Interface, LocationSuiteModel, RackModel, RackParent, RackPod, Template
+from generators.models import DeviceRole, Interface, LocationSuiteModel, RackModel, RackParent, RackPod, Template
 
 # ---------------------------------------------------------------------------
 # Helpers (shared with test_rack_offset_calculation.py)
 # ---------------------------------------------------------------------------
+
+
+_DEFAULT_LEAF = DeviceRole(role="leaf", quantity=2, template=Template(id="tmpl-leaf"))
 
 
 def _build_rack_generator(
@@ -29,6 +32,7 @@ def _build_rack_generator(
     rack_index: int = 5,
     row_index: int = 1,
     checksum: str = "abc123",
+    leafs: list[DeviceRole] | None = None,
 ) -> Any:
     """Return a RackGenerator typed as Any so ty allows mock attribute assignments."""
     parent = RackParent(id="parent-1", name="DC1", index=1)
@@ -54,6 +58,7 @@ def _build_rack_generator(
         row_index=row_index,
         parent=suite,
         pod=pod,
+        leafs=leafs if leafs is not None else [_DEFAULT_LEAF],
     )
     gen = RackGenerator.__new__(RackGenerator)
     gen.data = rack
@@ -290,8 +295,8 @@ class TestUpdateChecksumMixed:
 
     @pytest.mark.asyncio
     async def test_no_leafs_skips_cascade(self) -> None:
-        gen = _build_rack_generator(deployment_type="mixed", rack_type="network")
-        gen.fetch_rack_devices_with_interfaces = AsyncMock(return_value=[])  # no leafs
+        gen = _build_rack_generator(deployment_type="mixed", rack_type="network", leafs=[])
+        gen.fetch_rack_devices_with_interfaces = AsyncMock(return_value=[])
         gen.client.filters = AsyncMock(return_value=[])
 
         await gen.update_checksum()

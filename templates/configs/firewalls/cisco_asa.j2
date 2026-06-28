@@ -16,7 +16,7 @@ interface {{ iface.name }}
 {%- endif %}
 {%- if iface.security_zone %}
  nameif {{ iface.security_zone.name }}
- security-level {{ iface.security_level if iface.security_level is not none else iface.security_zone.trust_level }}
+ security-level {{ iface.security_zone.trust_level }}
 {%- endif %}
 {%- if iface.description %}
  description {{ iface.description }}
@@ -48,5 +48,22 @@ access-group {{ iface.security_zone.name }}-in in interface {{ iface.security_zo
 {%- endif %}
 {%- endfor %}
 {%- endif %}
+{%- if ha %}
 !
+! --- Failover (HA) ---
+failover
+failover group {{ ha.group_id }}
+{%- if ha.mode == 'active-active' %}
+failover group {{ ha.group_id }}
+ primary
+{%- endif %}
+{%- if ha.ha_link %}
+failover interface ip {{ ha.ha_link }} standby
+failover link {{ ha.ha_link }}
+{%- endif %}
+{%- if ha.virtual_ip %}
+failover interface ip mgmt {{ ha.virtual_ip }} 255.255.255.0 standby {{ ha.virtual_ip }}
+{%- endif %}
+!
+{%- endif %}
 end

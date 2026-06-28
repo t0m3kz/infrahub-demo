@@ -1,0 +1,327 @@
+---
+# Proxy Policy — URL filtering and egress access control
+#
+# Three-node model:
+#   ProxyURLCategory  — reusable named group of FQDNs/CIDRs/patterns
+#   ProxyPolicy       — ordered policy (shared base or customer-specific)
+#   ProxyPolicyRule   — single action entry inside a policy
+#
+# Attachment:
+#   ManagedProxyHA / ManagedCloudProxyHA → shared_policies (base, all tenants)
+#   OrganizationCustomer                 → proxy_policies  (tenant overrides)
+#
+# Evaluation order: shared policies first (by priority asc), then customer policies.
+version: "1.0"
+
+nodes:
+
+  # ── URL Category ────────────────────────────────────────────────────────────
+  - name: URLCategory
+    namespace: Proxy
+    description: "Named URL category — FQDNs, CIDRs, or regex patterns for proxy policy matching"
+    label: URL Category
+    icon: "mdi:web"
+    include_in_menu: true
+    menu_placement: SecurityZone
+    human_friendly_id:
+      - name__value
+    display_label: "{{ name__value }}"
+    order_by:
+      - name__value
+    uniqueness_constraints:
+      - [name__value]
+    attributes:
+      - name: name
+        kind: Text
+        label: Name
+        optional: false
+        unique: true
+        order_weight: 100
+      - name: description
+        kind: Text
+        label: Description
+        optional: true
+        order_weight: 200
+      - name: category_type
+        kind: Dropdown
+        label: Category Type
+        optional: false
+        default_value: custom
+        order_weight: 300
+        choices:
+          - name: malware
+            label: "Malware / C2"
+            description: "Known malware distribution or command-and-control endpoints"
+            color: "#E74C3C"
+          - name: social_media
+            label: "Social Media"
+            description: "Social networking and messaging platforms"
+            color: "#F39C12"
+          - name: saas_allowed
+            label: "SaaS (Allowed)"
+            description: "Sanctioned SaaS services with SSL bypass"
+            color: "#2ECC71"
+          - name: internal_bypass
+            label: "Internal Bypass"
+            description: "Internal/private destinations that skip inspection"
+            color: "#3498DB"
+          - name: gambling
+            label: "Gambling"
+            description: "Online gambling and betting sites"
+            color: "#8E44AD"
+          - name: adult
+            label: "Adult Content"
+            description: "Adult or explicit content sites"
+            color: "#C0392B"
+          - name: streaming
+            label: "Streaming / Video"
+            description: "Video streaming and media delivery services"
+            color: "#16A085"
+          - name: custom
+            label: "Custom"
+            description: "Custom/organisation-specific category"
+            color: "#95A5A6"
+      - name: entries
+        kind: Text
+        label: Entries
+        description: "Newline-separated FQDNs, CIDRs, or regex patterns"
+        optional: true
+        order_weight: 400
+
+  # ── Proxy Policy ────────────────────────────────────────────────────────────
+  - name: Policy
+    namespace: Proxy
+    description: "Proxy policy — ordered allow/block/inspect rules for egress traffic control"
+    label: Proxy Policy
+    icon: "mdi:shield-key-outline"
+    include_in_menu: true
+    menu_placement: SecurityZone
+    human_friendly_id:
+      - name__value
+    display_label: "{{ name__value }}"
+    order_by:
+      - name__value
+    uniqueness_constraints:
+      - [name__value]
+    attributes:
+      - name: name
+        kind: Text
+        label: Name
+        optional: false
+        unique: true
+        order_weight: 100
+      - name: description
+        kind: Text
+        label: Description
+        optional: true
+        order_weight: 200
+      - name: policy_type
+        kind: Dropdown
+        label: Policy Type
+        optional: false
+        default_value: customer
+        order_weight: 300
+        choices:
+          - name: shared
+            label: "Shared (Base)"
+            description: "Applied to all tenants on the proxy as the base policy"
+            color: "#3498DB"
+          - name: customer
+            label: "Customer"
+            description: "Tenant-specific policy layered on top of the shared base"
+            color: "#9B59B6"
+      - name: priority
+        kind: Number
+        label: Priority
+        description: "Evaluation order — lower number processed first"
+        optional: false
+        default_value: 100
+        order_weight: 400
+      - name: enabled
+        kind: Boolean
+        label: Enabled
+        optional: true
+        default_value: true
+        order_weight: 500
+      - name: default_action
+        kind: Dropdown
+        label: Default Action
+        description: "Action for traffic not matched by any rule"
+        optional: false
+        default_value: allow
+        order_weight: 600
+        choices:
+          - name: allow
+            label: Allow
+            description: "Permit unmatched traffic"
+            color: "#2ECC71"
+          - name: block
+            label: Block
+            description: "Deny unmatched traffic"
+            color: "#E74C3C"
+    relationships:
+      - name: rules
+        peer: ProxyPolicyRule
+        label: Rules
+        cardinality: many
+        kind: Component
+        optional: true
+        order_weight: 1000
+        description: "Ordered rules in this policy"
+
+  # ── Proxy Policy Rule ───────────────────────────────────────────────────────
+  - name: PolicyRule
+    namespace: Proxy
+    description: "Single proxy ACL entry — action applied to matching URL categories or explicit destinations"
+    label: Proxy Policy Rule
+    icon: "mdi:filter-outline"
+    include_in_menu: false
+    human_friendly_id:
+      - name__value
+    display_label: "{{ name__value }}"
+    order_by:
+      - priority__value
+    uniqueness_constraints:
+      - [policy, name__value]
+    attributes:
+      - name: name
+        kind: Text
+        label: Name
+        optional: false
+        order_weight: 100
+      - name: priority
+        kind: Number
+        label: Priority
+        description: "Evaluation order within the policy — lower number processed first"
+        optional: false
+        default_value: 10
+        order_weight: 200
+      - name: action
+        kind: Dropdown
+        label: Action
+        optional: false
+        default_value: block
+        order_weight: 300
+        choices:
+          - name: allow
+            label: Allow
+            description: "Permit matching traffic"
+            color: "#2ECC71"
+          - name: block
+            label: Block
+            description: "Deny matching traffic"
+            color: "#E74C3C"
+          - name: inspect
+            label: "Inspect (SSL)"
+            description: "Allow with SSL/TLS inspection"
+            color: "#F39C12"
+          - name: bypass
+            label: "Bypass Inspection"
+            description: "Allow without SSL/TLS inspection"
+            color: "#3498DB"
+          - name: redirect
+            label: Redirect
+            description: "Redirect to an alternate destination"
+            color: "#9B59B6"
+      - name: destination_type
+        kind: Dropdown
+        label: "Destination Type"
+        optional: false
+        default_value: category
+        order_weight: 400
+        choices:
+          - name: category
+            label: "URL Category"
+            description: "Match against one or more ProxyURLCategory entries"
+            color: "#3498DB"
+          - name: fqdn
+            label: "FQDN"
+            description: "Exact or wildcard hostname match"
+            color: "#2ECC71"
+          - name: cidr
+            label: "CIDR"
+            description: "IP network range match"
+            color: "#E67E22"
+          - name: regex
+            label: "Regex Pattern"
+            description: "Regular expression URL match"
+            color: "#9B59B6"
+      - name: destination
+        kind: Text
+        label: Destination
+        description: "FQDN, CIDR, or regex value — leave empty when destination_type is 'category'"
+        optional: true
+        order_weight: 500
+      - name: log
+        kind: Boolean
+        label: Log
+        optional: true
+        default_value: false
+        order_weight: 600
+      - name: description
+        kind: Text
+        label: Description
+        optional: true
+        order_weight: 700
+      - name: disabled
+        kind: Boolean
+        label: Disabled
+        optional: true
+        default_value: false
+        order_weight: 800
+    relationships:
+      - name: policy
+        peer: ProxyPolicy
+        label: Policy
+        cardinality: one
+        kind: Attribute
+        optional: false
+        order_weight: 2000
+        identifier: proxypolicyrule__policy
+      - name: categories
+        peer: ProxyURLCategory
+        label: "URL Categories"
+        cardinality: many
+        kind: Attribute
+        optional: true
+        order_weight: 2100
+        identifier: proxypolicyrule__categories
+        description: "URL categories this rule matches against (used when destination_type is 'category')"
+
+extensions:
+  nodes:
+    - kind: ManagedProxyHA
+      relationships:
+        - name: shared_policies
+          peer: ProxyPolicy
+          label: "Shared Policies"
+          cardinality: many
+          kind: Generic
+          optional: true
+          order_weight: 1000
+          identifier: proxyha__shared_policies
+          description: "Base proxy policies applied to all tenants on this proxy"
+
+    - kind: ManagedCloudProxyHA
+      relationships:
+        - name: shared_policies
+          peer: ProxyPolicy
+          label: "Shared Policies"
+          cardinality: many
+          kind: Generic
+          optional: true
+          order_weight: 1000
+          identifier: cloudproxyha__shared_policies
+          description: "Base proxy policies applied to all tenants on this SASE service"
+
+    - kind: OrganizationCustomer
+      relationships:
+        - name: proxy_policies
+          peer: ProxyPolicy
+          label: "Proxy Policies"
+          cardinality: many
+          kind: Generic
+          optional: true
+          order_weight: 1100
+          identifier: customer__proxy_policies
+          description: "Customer-specific proxy policies layered on top of shared base"

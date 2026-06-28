@@ -8,20 +8,9 @@ feature bgp
 feature interface-vlan
 feature vn-segment-vlan-based
 feature nv overlay
-vlan 100
-  name Customer-A
-  vn-segment 100
-
-vlan 101
-  name Customer-A
-  vn-segment 101
-
 interface Ethernet1
   description to spine-01
   ip address 10.1.0.1/31
-  switchport
-  switchport mode access
-  switchport access vlan 100
   ip router ospf 1 area 0.0.0.0
   no shutdown
 !
@@ -29,9 +18,6 @@ interface Ethernet1
 interface Ethernet2
   description to spine-02
   ip address 10.1.0.3/31
-  switchport
-  switchport mode access
-  switchport access vlan 100
   ip router ospf 1 area 0.0.0.0
   no shutdown
 !
@@ -58,22 +44,10 @@ router bgp 65000
   bgp graceful-restart
   maximum-paths 4 ecmp 64
   !
-  neighbor EVPN-PEERS peer-group
-  neighbor EVPN-PEERS remote-as 65000
-  neighbor EVPN-PEERS update-source Loopback0
-  neighbor EVPN-PEERS send-community extended
-  neighbor EVPN-PEERS maximum-routes 0
-  neighbor 10.0.0.100 peer-group EVPN-PEERS
-  neighbor 10.0.0.100 description spine-01
-  neighbor 10.0.0.101 peer-group EVPN-PEERS
-  neighbor 10.0.0.101 description spine-02
-  !
   address-family ipv4
     redistribute connected route-map RM-CONN-2-BGP
   !
   address-family evpn
-    neighbor EVPN-PEERS activate
-    neighbor EVPN-PEERS route-reflector-client
 !
 
 

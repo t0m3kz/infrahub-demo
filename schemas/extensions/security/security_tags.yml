@@ -1,0 +1,142 @@
+---
+# Security Tags — global tier classification for VXLAN GPO enforcement
+#
+# SecurityTag:     global tier label + globally-unique group_id (SGT on Cisco,
+#                  security-group on Arista). Allocated from SGT-POOL.
+# SecurityTagRule: intent — permitted tier-to-tier flows (coarse, no port).
+#                  Firewall SecurityPolicyRule handles port/protocol detail.
+#
+# Enforcement layers (additive — both must permit):
+#   1. VTEP hardware  — VXLAN GPO / SGT contract (SecurityTagRule)
+#   2. Leaf SVI ACL   — isolation_mode: microsegmented (SecurityPolicyRule)
+#   3. Firewall       — stateful inspection (SecurityPolicyRule)
+version: "1.0"
+
+nodes:
+  - name: Tag
+    namespace: Security
+    description: "Global security tier tag — maps to VXLAN SGT / security-group ID for hardware enforcement"
+    label: Security Tag
+    icon: "mdi:tag-outline"
+    include_in_menu: true
+    menu_placement: SecurityZone
+    order_by:
+      - name__value
+    display_label: "{{ name__value }}"
+    human_friendly_id:
+      - name__value
+    uniqueness_constraints:
+      - [name__value]
+    attributes:
+      - name: name
+        kind: Text
+        label: Name
+        optional: false
+        unique: true
+        order_weight: 100
+        description: "Tier name — e.g. web-tier, app-tier, database, dmz"
+      - name: description
+        kind: Text
+        label: Description
+        optional: true
+        order_weight: 200
+      - name: group_id
+        kind: Number
+        label: Group ID
+        optional: false
+        order_weight: 300
+        description: "Globally unique ID — rendered as SGT (Cisco TrustSec) or security-group (Arista). Allocated from SGT-POOL."  # yamllint disable-line rule:line-length
+        parameters:
+          min_value: 2
+          max_value: 65535
+      - name: color
+        kind: Text
+        label: Color
+        optional: true
+        order_weight: 400
+        description: "Display color for UI (hex, e.g. #3498DB)"
+
+  - name: TagRule
+    namespace: Security
+    description: "Permitted tier-to-tier flow — coarse hardware enforcement via VXLAN GPO / SGT contract"
+    label: Security Tag Rule
+    icon: "mdi:tag-arrow-right-outline"
+    include_in_menu: true
+    menu_placement: SecurityZone
+    order_by:
+      - source_tag__name__value
+    display_label: "{{ source_tag__name__value }} → {{ destination_tag__name__value }}"
+    uniqueness_constraints:
+      - [source_tag, destination_tag]
+    attributes:
+      - name: action
+        kind: Dropdown
+        label: Action
+        optional: false
+        default_value: permit
+        order_weight: 300
+        choices:
+          - name: permit
+            label: Permit
+            description: "Allow traffic between these tiers"
+            color: "#2ECC71"
+          - name: deny
+            label: Deny
+            description: "Block traffic between these tiers"
+            color: "#E74C3C"
+      - name: description
+        kind: Text
+        label: Description
+        optional: true
+        order_weight: 400
+      - name: log
+        kind: Boolean
+        label: Log
+        optional: true
+        default_value: false
+        order_weight: 500
+    relationships:
+      - name: source_tag
+        peer: SecurityTag
+        label: Source Tag
+        cardinality: one
+        kind: Attribute
+        optional: false
+        order_weight: 100
+        identifier: tagrule__source_tag
+        description: "Source security tier"
+      - name: destination_tag
+        peer: SecurityTag
+        label: Destination Tag
+        cardinality: one
+        kind: Attribute
+        optional: false
+        order_weight: 200
+        identifier: tagrule__destination_tag
+        description: "Destination security tier"
+
+extensions:
+  nodes:
+    - kind: SecurityTag
+      relationships:
+        - name: rules_as_source
+          peer: SecurityTagRule
+          label: Rules as Source
+          cardinality: many
+          kind: Generic
+          optional: true
+          order_weight: 500
+          identifier: tagrule__source_tag
+          description: "Tag rules where this tag is the source tier"
+
+    - kind: ManagedNetworkSegment
+      relationships:
+        - name: security_tag
+          peer: SecurityTag
+          label: Security Tag
+          cardinality: one
+          kind: Attribute
+          optional: true
+          order_weight: 890
+          identifier: network_segment__security_tag
+          description: "Security tier — maps to VXLAN GPO group_id for hardware enforcement"

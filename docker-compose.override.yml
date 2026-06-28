@@ -1,0 +1,51 @@
+name: infrahub
+
+services:
+  database:
+    ports:
+      - "${NEO4J_HTTP_PORT:-7474}:7474"
+      - "${NEO4J_BOLT_PORT:-7687}:7687"
+    environment:
+      - NEO4J_dbms_memory_transaction_total_max=8g
+      - NEO4J_dbms_memory_heap_initial__size=2g
+      - NEO4J_dbms_memory_heap_max__size=4g
+      - NEO4J_dbms_memory_pagecache_size=2g
+
+  infrahub-server:
+    ports:
+      - "${INFRAHUB_PORT:-8000}:8000"
+
+  task-manager:
+    ports:
+      - "${PREFECT_PORT:-4200}:4200"
+
+  task-worker:
+    volumes:
+      - ./:/upstream
+
+  webhook-receiver:
+    container_name: infrahub-webhook-receiver-1
+    depends_on:
+      infrahub-server:
+        condition: service_healthy
+    build:
+      context: ./services/webhook
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      WEBHOOK_SECRET: ${WEBHOOK_SECRET:-change-me-in-production}
+      INFRAHUB_URL: ${INFRAHUB_URL:-http://infrahub-server:8000}
+      INFRAHUB_API_TOKEN: ${INFRAHUB_API_TOKEN:-06438eb2-8019-4776-878c-0941b1f1d1ec}
+    healthcheck:
+      test: curl -s -f http://localhost:8080/health || exit 1
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+
+volumes:
+  database_data:
+  database_logs:
+  storage_data:

@@ -1,0 +1,9 @@
+---
+# C003 (Vaultex Inc.) — Application portfolio
+
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: AppPortfolio
+  data:
+    - owner: "C003"

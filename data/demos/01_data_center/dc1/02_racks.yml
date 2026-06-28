@@ -13,6 +13,7 @@ spec:
       parent: muc-1-s-1
       member_of_groups: [topologies_rack]
       fabric_templates:
+        - ["1", "border-leaf", "N9K-C9336C-FX2_BORDER_LEAF"]
         - ["2", "leaf", "N9K-C9336C-FX2_LEAF_MR"]
         - ["2", "tor", "N9K-C9336C-FX2_TOR"]
     - index: 5
@@ -56,6 +57,7 @@ spec:
       parent: muc-1-s-2
       member_of_groups: [topologies_rack]
       fabric_templates:
+        - ["1", "border-leaf", "N9K-C9336C-FX2_BORDER_LEAF"]
         - ["2", "leaf", "N9K-C9336C-FX2_LEAF_MIXED"]
     - index: 1
       row_index: 1

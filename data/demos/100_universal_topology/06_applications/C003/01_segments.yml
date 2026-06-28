@@ -1,0 +1,125 @@
+---
+# C003 (Vaultex Inc.) — VXLAN segment boarding
+# Vaultex runs production-only, DC1 + DC2 for HA. No nonprod fabric footprint.
+
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: ManagedVxlanSegment
+  data:
+    - customer_name: "dmz"
+      environment: "p"
+      owner: "C003"
+      security_tag: dmz
+      arp_suppression: true
+      prefix:
+        - - "10.3.10.0/24"
+          - "C003-PROD"
+      gateway:
+        - "10.3.10.1/24"
+        - "C003-PROD"
+      deployments:
+        - DC1
+        - DC2
+      member_of_groups:
+        - vxlan_segments
+      interface_capabilities:
+        - kind: DcimLAGInterface
+          data:
+            device: DC1-POD2-SRV-01
+            name: bond0
+            lag_id: 1
+        - kind: DcimLAGInterface
+          data:
+            device: DC2-POD2-SRV-01
+            name: bond0
+            lag_id: 1
+
+    - customer_name: "app-backend"
+      environment: "p"
+      owner: "C003"
+      security_tag: app-tier
+      arp_suppression: true
+      prefix:
+        - - "10.3.20.0/24"
+          - "C003-PROD"
+      gateway:
+        - "10.3.20.1/24"
+        - "C003-PROD"
+      deployments:
+        - DC1
+        - DC2
+      member_of_groups:
+        - vxlan_segments
+      interface_capabilities:
+        - kind: DcimLAGInterface
+          data:
+            device: DC1-POD2-SRV-01
+            name: bond0
+            lag_id: 1
+        - kind: DcimLAGInterface
+          data:
+            device: DC1-POD2-SRV-02
+            name: bond0
+            lag_id: 1
+        - kind: DcimLAGInterface
+          data:
+            device: DC2-POD2-SRV-01
+            name: bond0
+            lag_id: 1
+
+    - customer_name: "vault-core"
+      environment: "p"
+      owner: "C003"
+      security_tag: app-tier
+      arp_suppression: true
+      prefix:
+        - - "10.3.30.0/24"
+          - "C003-PROD"
+      gateway:
+        - "10.3.30.1/24"
+        - "C003-PROD"
+      deployments:
+        - DC1
+        - DC2
+      member_of_groups:
+        - vxlan_segments
+      interface_capabilities:
+        - kind: DcimLAGInterface
+          data:
+            device: DC1-POD2-SRV-02
+            name: bond0
+            lag_id: 1
+        - kind: DcimLAGInterface
+          data:
+            device: DC2-POD2-SRV-02
+            name: bond0
+            lag_id: 1
+
+    - customer_name: "database"
+      environment: "p"
+      owner: "C003"
+      security_tag: database
+      arp_suppression: true
+      prefix:
+        - - "10.3.40.0/24"
+          - "C003-PROD"
+      gateway:
+        - "10.3.40.1/24"
+        - "C003-PROD"
+      deployments:
+        - DC1
+        - DC2
+      member_of_groups:
+        - vxlan_segments
+      interface_capabilities:
+        - kind: DcimLAGInterface
+          data:
+            device: DC1-POD2-SRV-02
+            name: bond0
+            lag_id: 1
+        - kind: DcimLAGInterface
+          data:
+            device: DC2-POD2-SRV-02
+            name: bond0
+            lag_id: 1

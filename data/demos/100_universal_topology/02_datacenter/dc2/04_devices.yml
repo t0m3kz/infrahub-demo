@@ -1,93 +1,378 @@
 ---
-# DC2 infrastructure: super-spines, spines, leaves, servers
+# DC2 infrastructure: spines, border-leaves, leaves, servers
+# Underlay: OSPF (area 0, point-to-point, numbered /31 links from 10.255.22.0/24)
+# Overlay:  iBGP EVPN (L2VPN-EVPN AF, BL1/BL2 act as EVPN route-reflectors)
+# Loopbacks: 10.255.12.0/24 (FABRIC-DC2 namespace)
+# P2P links: 10.255.22.0/24 (FABRIC-DC2 namespace)
+# Architecture: full-mesh spine inter-pod routing, no super-spines
+#
+# P2P addressing plan (all /31, .x0/.x1 = spine-side/leaf-side):
+#   POD1-SP1↔L1: 10.255.22.16/31    POD1-SP2↔L1: 10.255.22.18/31
+#   POD1-SP1↔L2: 10.255.22.20/31    POD1-SP2↔L2: 10.255.22.22/31
+#   POD1-SP1↔L3: 10.255.22.24/31    POD1-SP2↔L3: 10.255.22.26/31
+#   POD1-SP1↔L4: 10.255.22.28/31    POD1-SP2↔L4: 10.255.22.30/31
+#   POD2-SP1↔L1: 10.255.22.32/31    POD2-SP2↔L1: 10.255.22.34/31
+#   POD2-SP1↔L2: 10.255.22.36/31    POD2-SP2↔L2: 10.255.22.38/31
+#   POD2-SP1↔L3: 10.255.22.40/31    POD2-SP2↔L3: 10.255.22.42/31
+#   POD2-SP1↔L4: 10.255.22.44/31    POD2-SP2↔L4: 10.255.22.46/31
+#   POD1-SP1↔POD2-SP1 (Eth1/3): 10.255.22.48/31
+#   POD1-SP1↔POD2-SP2 (Eth1/3): 10.255.22.50/31
+#   POD1-SP2↔POD2-SP1 (Eth1/3): 10.255.22.52/31
+#   POD1-SP2↔POD2-SP2 (Eth1/3): 10.255.22.54/31
+#   BL1 uplinks Eth1/1-4: 10.255.22.56/31  10.255.22.58/31  10.255.22.60/31  10.255.22.62/31
+#   BL2 uplinks Eth1/1-4: 10.255.22.64/31  10.255.22.66/31  10.255.22.68/31  10.255.22.70/31
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
   kind: DcimPhysicalDevice
   data:
-    - name: DC2-SS1
-      object_template: N9K-C9336C-FX2_SUPER_SPINE
-      status: active
-      deployment: DC2
-      rack: dc2-s1-r-1
-
-    - name: DC2-SS2
-      object_template: N9K-C9336C-FX2_SUPER_SPINE
-      status: active
-      deployment: DC2
-      rack: dc2-s1-r-2
-
     - name: DC2-POD1-SP1
       object_template: N9K-C9336C-FX2_SPINE
       status: active
       deployment: DC2-2-POD-1
       rack: dc2-s1-r-1
+      member_of_groups:
+        - spines
+      interfaces:
+        kind: DcimVirtualInterface
+        data:
+          - name: Loopback0
+            role: loopback
+            status: active
+            description: "Router-ID / OSPF source"
+            ip_address:
+              data:
+                address: "10.255.12.11/32"
+                ip_namespace: FABRIC-DC2
 
     - name: DC2-POD1-SP2
       object_template: N9K-C9336C-FX2_SPINE
       status: active
       deployment: DC2-2-POD-1
       rack: dc2-s1-r-1
+      member_of_groups:
+        - spines
+      interfaces:
+        kind: DcimVirtualInterface
+        data:
+          - name: Loopback0
+            role: loopback
+            status: active
+            description: "Router-ID / OSPF source"
+            ip_address:
+              data:
+                address: "10.255.12.12/32"
+                ip_namespace: FABRIC-DC2
+
+    - name: DC2-BL1
+      object_template: N9K-C9336C-FX2_LEAF
+      role: border-leaf
+      status: active
+      deployment: DC2
+      rack: dc2-s1-r-1
+      member_of_groups:
+        - border-leafs
+      interfaces:
+        kind: DcimVirtualInterface
+        data:
+          - name: Loopback0
+            role: loopback
+            status: active
+            description: "Router-ID / OSPF source"
+            ip_address:
+              data:
+                address: "10.255.12.51/32"
+                ip_namespace: FABRIC-DC2
+          - name: Loopback1
+            role: loopback-vtep
+            status: active
+            description: "VTEP NVE source — BL1"
+            ip_address:
+              data:
+                address: "10.255.12.71/32"
+                ip_namespace: FABRIC-DC2
+
+    - name: DC2-BL2
+      object_template: N9K-C9336C-FX2_LEAF
+      role: border-leaf
+      status: active
+      deployment: DC2
+      rack: dc2-s1-r-2
+      member_of_groups:
+        - border-leafs
+      interfaces:
+        kind: DcimVirtualInterface
+        data:
+          - name: Loopback0
+            role: loopback
+            status: active
+            description: "Router-ID / OSPF source"
+            ip_address:
+              data:
+                address: "10.255.12.52/32"
+                ip_namespace: FABRIC-DC2
+          - name: Loopback1
+            role: loopback-vtep
+            status: active
+            description: "VTEP NVE source — BL2"
+            ip_address:
+              data:
+                address: "10.255.12.72/32"
+                ip_namespace: FABRIC-DC2
 
     - name: DC2-POD1-L1
       object_template: N9K-C9336C-FX2_LEAF_SERVER
       status: active
       deployment: DC2-2-POD-1
       rack: dc2-s1-r-1
+      member_of_groups:
+        - leafs
+      interfaces:
+        kind: DcimVirtualInterface
+        data:
+          - name: Loopback0
+            role: loopback
+            status: active
+            description: "Router-ID / OSPF source"
+            ip_address:
+              data:
+                address: "10.255.12.21/32"
+                ip_namespace: FABRIC-DC2
+          - name: Loopback1
+            role: loopback-vtep
+            status: active
+            description: "VTEP NVE source (shared with MLAG peer L2)"
+            ip_address:
+              data:
+                address: "10.255.12.41/32"
+                ip_namespace: FABRIC-DC2
 
     - name: DC2-POD1-L2
       object_template: N9K-C9336C-FX2_LEAF_SERVER
       status: active
       deployment: DC2-2-POD-1
       rack: dc2-s1-r-1
+      member_of_groups:
+        - leafs
+      interfaces:
+        kind: DcimVirtualInterface
+        data:
+          - name: Loopback0
+            role: loopback
+            status: active
+            description: "Router-ID / OSPF source"
+            ip_address:
+              data:
+                address: "10.255.12.22/32"
+                ip_namespace: FABRIC-DC2
+          - name: Loopback1
+            role: loopback-vtep
+            status: active
+            description: "VTEP NVE source (shared with MLAG peer L1)"
+            ip_address:
+              data:
+                address: "10.255.12.41/32"
+                ip_namespace: FABRIC-DC2
 
     - name: DC2-POD1-L3
       object_template: N9K-C9336C-FX2_LEAF
       status: active
       deployment: DC2-2-POD-1
       rack: dc2-s1-r-1
+      member_of_groups:
+        - leafs
+      interfaces:
+        kind: DcimVirtualInterface
+        data:
+          - name: Loopback0
+            role: loopback
+            status: active
+            description: "Router-ID / OSPF source"
+            ip_address:
+              data:
+                address: "10.255.12.23/32"
+                ip_namespace: FABRIC-DC2
+          - name: Loopback1
+            role: loopback-vtep
+            status: active
+            description: "VTEP NVE source (shared with MLAG peer L4)"
+            ip_address:
+              data:
+                address: "10.255.12.42/32"
+                ip_namespace: FABRIC-DC2
 
     - name: DC2-POD1-L4
       object_template: N9K-C9336C-FX2_LEAF
       status: active
       deployment: DC2-2-POD-1
       rack: dc2-s1-r-1
+      member_of_groups:
+        - leafs
+      interfaces:
+        kind: DcimVirtualInterface
+        data:
+          - name: Loopback0
+            role: loopback
+            status: active
+            description: "Router-ID / OSPF source"
+            ip_address:
+              data:
+                address: "10.255.12.24/32"
+                ip_namespace: FABRIC-DC2
+          - name: Loopback1
+            role: loopback-vtep
+            status: active
+            description: "VTEP NVE source (shared with MLAG peer L3)"
+            ip_address:
+              data:
+                address: "10.255.12.42/32"
+                ip_namespace: FABRIC-DC2
 
     - name: DC2-POD2-SP1
       object_template: N9K-C9336C-FX2_SPINE
       status: active
       deployment: DC2-2-POD-2
       rack: dc2-s1-r-2
+      member_of_groups:
+        - spines
+      interfaces:
+        kind: DcimVirtualInterface
+        data:
+          - name: Loopback0
+            role: loopback
+            status: active
+            description: "Router-ID / OSPF source"
+            ip_address:
+              data:
+                address: "10.255.12.13/32"
+                ip_namespace: FABRIC-DC2
 
     - name: DC2-POD2-SP2
       object_template: N9K-C9336C-FX2_SPINE
       status: active
       deployment: DC2-2-POD-2
       rack: dc2-s1-r-2
+      member_of_groups:
+        - spines
+      interfaces:
+        kind: DcimVirtualInterface
+        data:
+          - name: Loopback0
+            role: loopback
+            status: active
+            description: "Router-ID / OSPF source"
+            ip_address:
+              data:
+                address: "10.255.12.14/32"
+                ip_namespace: FABRIC-DC2
 
     - name: DC2-POD2-L1
       object_template: N9K-C9336C-FX2_LEAF_SERVER
       status: active
       deployment: DC2-2-POD-2
       rack: dc2-s1-r-2
+      member_of_groups:
+        - leafs
+      interfaces:
+        kind: DcimVirtualInterface
+        data:
+          - name: Loopback0
+            role: loopback
+            status: active
+            description: "Router-ID / OSPF source"
+            ip_address:
+              data:
+                address: "10.255.12.25/32"
+                ip_namespace: FABRIC-DC2
+          - name: Loopback1
+            role: loopback-vtep
+            status: active
+            description: "VTEP NVE source (shared with MLAG peer L2)"
+            ip_address:
+              data:
+                address: "10.255.12.43/32"
+                ip_namespace: FABRIC-DC2
 
     - name: DC2-POD2-L2
       object_template: N9K-C9336C-FX2_LEAF_SERVER
       status: active
       deployment: DC2-2-POD-2
       rack: dc2-s1-r-2
+      member_of_groups:
+        - leafs
+      interfaces:
+        kind: DcimVirtualInterface
+        data:
+          - name: Loopback0
+            role: loopback
+            status: active
+            description: "Router-ID / OSPF source"
+            ip_address:
+              data:
+                address: "10.255.12.26/32"
+                ip_namespace: FABRIC-DC2
+          - name: Loopback1
+            role: loopback-vtep
+            status: active
+            description: "VTEP NVE source (shared with MLAG peer L1)"
+            ip_address:
+              data:
+                address: "10.255.12.43/32"
+                ip_namespace: FABRIC-DC2
 
     - name: DC2-POD2-L3
       object_template: N9K-C9336C-FX2_LEAF
       status: active
       deployment: DC2-2-POD-2
       rack: dc2-s1-r-2
+      member_of_groups:
+        - leafs
+      interfaces:
+        kind: DcimVirtualInterface
+        data:
+          - name: Loopback0
+            role: loopback
+            status: active
+            description: "Router-ID / OSPF source"
+            ip_address:
+              data:
+                address: "10.255.12.27/32"
+                ip_namespace: FABRIC-DC2
+          - name: Loopback1
+            role: loopback-vtep
+            status: active
+            description: "VTEP NVE source (shared with MLAG peer L4)"
+            ip_address:
+              data:
+                address: "10.255.12.44/32"
+                ip_namespace: FABRIC-DC2
 
     - name: DC2-POD2-L4
       object_template: N9K-C9336C-FX2_LEAF
       status: active
       deployment: DC2-2-POD-2
       rack: dc2-s1-r-2
+      member_of_groups:
+        - leafs
+      interfaces:
+        kind: DcimVirtualInterface
+        data:
+          - name: Loopback0
+            role: loopback
+            status: active
+            description: "Router-ID / OSPF source"
+            ip_address:
+              data:
+                address: "10.255.12.28/32"
+                ip_namespace: FABRIC-DC2
+          - name: Loopback1
+            role: loopback-vtep
+            status: active
+            description: "VTEP NVE source (shared with MLAG peer L3)"
+            ip_address:
+              data:
+                address: "10.255.12.44/32"
+                ip_namespace: FABRIC-DC2
 
     - name: DC2-POD1-SRV-01
       object_template: PowerEdge-R640_SERVER

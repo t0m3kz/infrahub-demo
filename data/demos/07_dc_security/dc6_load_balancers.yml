@@ -1,0 +1,22 @@
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimPhysicalDevice
+  data:
+    - name: ktw-1-lb-01
+      rack: ktw-1-s-1-r-3-5
+      role: load-balancer
+      status: provisioning
+      device_type: [NetScaler-MPX-26000-100G]
+      platform: netscaler
+      member_of_groups: [endpoints]
+      interfaces:
+        kind: DcimPhysicalInterface
+        data:
+          - name: "100/1"
+            interface_type: 100gbase-x-qsfp28
+            role: uplink
+          - name: "100/2"
+            interface_type: 100gbase-x-qsfp28
+            role: uplink

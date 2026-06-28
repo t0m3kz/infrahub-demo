@@ -16,18 +16,7 @@ nodes:
       - ManagedGenericInterfaces
     uniqueness_constraints:
       - [owner, environment__value, customer_name__value]
-    human_friendly_id:
-      - owner__name__value
-      - environment__value
-      - customer_name__value
     attributes:
-      - name: name
-        kind: Text
-        computed_attribute:
-          kind: Jinja2
-          jinja2_template: "{{ owner__name__value }} - {{ environment__value }} - {{ customer_name__value }}"  # yamllint disable-line rule:line-length
-        read_only: true
-        optional: false
       - name: segment_type
         kind: Dropdown
         default_value: vlan
@@ -48,7 +37,7 @@ nodes:
         description: "Data centre this VLAN segment is activated in."
 
   # VXLAN overlay segment with EVPN multi-tenancy.
-  # Zero trust: prefix → ip_namespace (VRF with l3_vni + owner) → per-customer isolation.
+  # Zero trust: prefix → ip_namespace (VRF+l3_vni+owner) → tenant isolation.
   # L2 VNI allocated per-deployment via SegmentDeployment.
   - name: VxlanSegment
     namespace: Managed
@@ -62,18 +51,7 @@ nodes:
       - ManagedGenericInterfaces
     uniqueness_constraints:
       - [owner, environment__value, customer_name__value]
-    human_friendly_id:
-      - owner__name__value
-      - environment__value
-      - customer_name__value
     attributes:
-      - name: name
-        kind: Text
-        computed_attribute:
-          kind: Jinja2
-          jinja2_template: "{{ owner__name__value }} - {{ environment__value }} - {{ customer_name__value }}"  # yamllint disable-line rule:line-length
-        read_only: true
-        optional: false
       - name: segment_type
         kind: Dropdown
         default_value: vxlan
@@ -98,7 +76,7 @@ nodes:
         order_weight: 110
         optional: true
         identifier: "segment__deployments"
-        description: "Deployments this segment is activated in (VXLAN stretch across DCs or single-site VLAN)."
+        description: "Deployments this segment is activated in (VXLAN stretch across DCs or single-site VLAN)."  # yamllint disable-line rule:line-length
 
   # SegmentDeployment: per-DC realization of a network segment.
   #
@@ -115,11 +93,11 @@ nodes:
 
   - name: SegmentDeployment
     namespace: Managed
-    description: "Per-DC realization of a network segment with locally-allocated VLAN ID and VNI."
+    description: "Per-DC realization of a network segment with locally-allocated VLAN ID and VNI."  # yamllint disable-line rule:line-length
     label: Segment Deployment
     icon: "carbon:network-overlay"
     include_in_menu: false
-    display_label: "{{ segment__customer_name__value }} @ {{ deployment__name__value }}"
+    display_label: "{{ segment__customer_name__value }} @ {{ deployment__name__value }}"  # yamllint disable-line rule:line-length
     uniqueness_constraints:
       - [segment, deployment]
     attributes:
@@ -128,7 +106,7 @@ nodes:
         label: Local VLAN ID
         optional: false
         order_weight: 1000
-        description: "VLAN ID for this segment in this deployment. Allocated from DC vlan_pool."
+        description: "VLAN ID for this segment in this deployment. Allocated from DC vlan_pool."  # yamllint disable-line rule:line-length
         parameters:
           min_value: 1
           max_value: 4094
@@ -189,3 +167,24 @@ nodes:
         order_weight: 2100
         identifier: "segmentdeployment__deployment"
         description: "The data center where this segment is active"
+
+extensions:
+  nodes:
+    - kind: ManagedVlanSegment
+      relationships:
+        - name: segment_deployments
+          peer: ManagedSegmentDeployment
+          kind: Generic
+          cardinality: many
+          identifier: "segmentdeployment__segment"
+          order_weight: 9000
+          description: "Per-deployment VLAN/VNI allocations for this segment"
+    - kind: ManagedVxlanSegment
+      relationships:
+        - name: segment_deployments
+          peer: ManagedSegmentDeployment
+          kind: Generic
+          cardinality: many
+          identifier: "segmentdeployment__segment"
+          order_weight: 9000
+          description: "Per-deployment VLAN/VNI allocations for this segment"

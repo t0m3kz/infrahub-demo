@@ -45,7 +45,7 @@
           "tags": {
             "edges": []
           },
-          "device_capabilities": {
+          "capabilities": {
             "edges": [
               {
                 "node": {
@@ -689,6 +689,9 @@
                       "segment": {
                         "node": {
                           "id": "seg-seg-100",
+                          "inline_service": {
+                            "node": null
+                          },
                           "__typename": "ManagedVxlanSegment",
                           "name": {
                             "value": "seg-100"
@@ -700,26 +703,7 @@
                             "value": true
                           },
                           "security_zone": {
-                            "node": {
-                              "firewall_interface": {
-                                "node": {
-                                  "ip_address": {
-                                    "node": {
-                                      "address": {
-                                        "value": "10.100.0.254/24"
-                                      },
-                                      "ip_namespace": {
-                                        "node": {
-                                          "name": {
-                                            "value": "VRF_A"
-                                          }
-                                        }
-                                      }
-                                    }
-                                  }
-                                }
-                              }
-                            }
+                            "node": null
                           },
                           "prefix": {
                             "node": {
@@ -777,6 +761,9 @@
                       "segment": {
                         "node": {
                           "id": "seg-seg-101",
+                          "inline_service": {
+                            "node": null
+                          },
                           "__typename": "ManagedVxlanSegment",
                           "name": {
                             "value": "seg-101"
@@ -788,11 +775,7 @@
                             "value": true
                           },
                           "security_zone": {
-                            "node": {
-                              "firewall_interface": {
-                                "node": null
-                              }
-                            }
+                            "node": null
                           },
                           "prefix": {
                             "node": {
@@ -850,6 +833,9 @@
                       "segment": {
                         "node": {
                           "id": "seg-seg-300-local",
+                          "inline_service": {
+                            "node": null
+                          },
                           "__typename": "ManagedVxlanSegment",
                           "name": {
                             "value": "seg-300-local"
@@ -861,11 +847,7 @@
                             "value": true
                           },
                           "security_zone": {
-                            "node": {
-                              "firewall_interface": {
-                                "node": null
-                              }
-                            }
+                            "node": null
                           },
                           "prefix": {
                             "node": {

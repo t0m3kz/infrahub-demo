@@ -1,0 +1,56 @@
+---
+# Layer 2 Equinix Fabric connections between FR2 edge routers and the Nutanix cluster
+#
+# The cluster connects via a DVS (Distributed Virtual Switch) trunk — no IP routing
+# on the edge router side. The Equinix Fabric VC carries raw 802.1Q frames (dot1q trunk)
+# directly into the AHV DVS, giving the cluster native VLAN access to the fabric.
+#
+# Primary path:   FR2-EDGE-01:DVS-FR2-NUTANIX-PRI ── L2 VC ──▶ Nutanix DVS trunk (primary)
+# Secondary path: FR2-EDGE-02:DVS-FR2-NUTANIX-SEC ── L2 VC ──▶ Nutanix DVS trunk (redundant)
+
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimVirtualInterface
+  data:
+    - name: DVS-FR2-NUTANIX-PRI
+      description: "FR2-EDGE-01 DVS trunk — primary L2 Equinix Fabric VC to Nutanix cluster"
+      role: uplink
+      status: active
+      device: FR2-EDGE-01
+
+    - name: DVS-FR2-NUTANIX-SEC
+      description: "FR2-EDGE-02 DVS trunk — secondary L2 Equinix Fabric VC to Nutanix cluster"
+      role: uplink
+      status: active
+      device: FR2-EDGE-02
+
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologyVirtualCircuit
+  data:
+    - name: VC-EQX-FR2-NUTANIX-PRIMARY
+      description: "Primary L2 Equinix Fabric connection — FR2-EDGE-01 to Nutanix DVS trunk"
+      link_type: equinix_fabric
+      bandwidth: 10000
+      status: active
+      provider: Equinix
+      locations:
+        - FR2
+      interfaces:
+        - - FR2-EDGE-01
+          - DVS-FR2-NUTANIX-PRI
+
+    - name: VC-EQX-FR2-NUTANIX-SECONDARY
+      description: "Secondary L2 Equinix Fabric connection — FR2-EDGE-02 to Nutanix DVS trunk"
+      link_type: equinix_fabric
+      bandwidth: 10000
+      status: active
+      provider: Equinix
+      locations:
+        - FR2
+      interfaces:
+        - - FR2-EDGE-02
+          - DVS-FR2-NUTANIX-SEC

@@ -101,6 +101,25 @@ query cloud_vpc_config($account: String!) {
             }
           }
         }
+        rules {
+          edges {
+            node {
+              id
+              name { value }
+              direction { value }
+              priority { value }
+              protocol { value }
+              port_start { value }
+              port_end { value }
+              action { value }
+              log { value }
+              disabled { value }
+              description { value }
+              source_cidr { value }
+              dest_cidr { value }
+            }
+          }
+        }
       }
     }
   }
@@ -309,32 +328,6 @@ query cloud_vpc_config($account: String!) {
       }
     }
   }
-  CloudNetworkACL {
-    edges {
-      node {
-        id
-        name {
-          value
-        }
-        virtual_network {
-          node {
-            name {
-              value
-            }
-          }
-        }
-        network_segments {
-          edges {
-            node {
-              name {
-                value
-              }
-            }
-          }
-        }
-      }
-    }
-  }
   CloudTransitGateway(account__name__value: $account) {
     edges {
       node {
@@ -431,47 +424,6 @@ query cloud_vpc_config($account: String!) {
         ip_address {
           node {
             address {
-              value
-            }
-          }
-        }
-      }
-    }
-  }
-  CloudVirtualNetworkPeering {
-    edges {
-      node {
-        id
-        name {
-          value
-        }
-        peering_status {
-          value
-        }
-        requester_virtual_network {
-          node {
-            name {
-              value
-            }
-          }
-        }
-        accepter_virtual_network {
-          node {
-            name {
-              value
-            }
-          }
-        }
-        requester_route_table {
-          node {
-            name {
-              value
-            }
-          }
-        }
-        accepter_route_table {
-          node {
-            name {
               value
             }
           }

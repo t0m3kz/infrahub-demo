@@ -1,0 +1,465 @@
+---
+# DC3 underlay+overlay — eBGP (RFC 5549 unnumbered, per-device unique AS)
+#
+# Each device has its own AS (65300–65362, 65370–65371).
+# eBGP unnumbered uses IPv6 link-local for peering — no P2P IPs needed.
+# EVPN is carried on the same eBGP sessions (combined underlay+overlay).
+# Router-ID sourced from Loopback0 (10.255.13.x/32).
+#
+# AS assignment:
+#   Super-spines: SS1=65300, SS2=65301
+#   Border-leafs: BL1=65370, BL2=65371  (EVPN multi-site BGW + DCI)
+#   POD1 spines:  SP1=65311, SP2=65312
+#   POD2 spines:  SP1=65321, SP2=65322
+#   POD3 spines:  SP1=65331, SP2=65332
+#   POD4 spines:  SP1=65341, SP2=65342
+#   POD1 leaves:  L1=65351, L2=65352, L3=65353, L4=65354
+#   POD2 leaves:  L1=65355, L2=65356, L3=65357, L4=65358
+#   POD3 leaves:  L1=65359, L2=65360
+#   POD4 leaves:  L1=65361, L2=65362
+
+# ── Autonomous Systems ────────────────────────────────────────────────────────
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: RoutingAutonomousSystem
+  data:
+    - asn: 65300
+      description: "DC3 Super-spine SS1"
+    - asn: 65301
+      description: "DC3 Super-spine SS2"
+    - asn: 65370
+      description: "DC3 Border-leaf BL1 (EVPN BGW, DCI primary)"
+    - asn: 65371
+      description: "DC3 Border-leaf BL2 (EVPN BGW, DCI secondary)"
+    - asn: 65311
+      description: "DC3 POD1 Spine SP1"
+    - asn: 65312
+      description: "DC3 POD1 Spine SP2"
+    - asn: 65321
+      description: "DC3 POD2 Spine SP1"
+    - asn: 65322
+      description: "DC3 POD2 Spine SP2"
+    - asn: 65331
+      description: "DC3 POD3 Spine SP1"
+    - asn: 65332
+      description: "DC3 POD3 Spine SP2"
+    - asn: 65341
+      description: "DC3 POD4 Spine SP1"
+    - asn: 65342
+      description: "DC3 POD4 Spine SP2"
+    - asn: 65351
+      description: "DC3 POD1 Leaf L1"
+    - asn: 65352
+      description: "DC3 POD1 Leaf L2"
+    - asn: 65353
+      description: "DC3 POD1 Leaf L3"
+    - asn: 65354
+      description: "DC3 POD1 Leaf L4"
+    - asn: 65355
+      description: "DC3 POD2 Leaf L1"
+    - asn: 65356
+      description: "DC3 POD2 Leaf L2"
+    - asn: 65357
+      description: "DC3 POD2 Leaf L3"
+    - asn: 65358
+      description: "DC3 POD2 Leaf L4"
+    - asn: 65359
+      description: "DC3 POD3 Leaf L1"
+    - asn: 65360
+      description: "DC3 POD3 Leaf L2"
+    - asn: 65361
+      description: "DC3 POD4 Leaf L1"
+    - asn: 65362
+      description: "DC3 POD4 Leaf L2"
+
+# ── BGP processes — per-device unique AS, IPv4+L2VPN EVPN ────────────────────
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: ManagedBGP
+  data:
+    - name: DC3-BL1-BGP
+      status: active
+      description: "eBGP process — DC3 border-leaf BL1 (AS 65370, EVPN BGW)"
+      multipath: true
+      capabilities:
+        - DC3-BL1
+      router_id:
+        - "10.255.13.51/32"
+        - FABRIC-DC3
+      local_as: "AS65370"
+      address_families:
+        - - ipv4
+          - unicast
+        - - l2vpn
+          - evpn
+
+    - name: DC3-BL2-BGP
+      status: active
+      description: "eBGP process — DC3 border-leaf BL2 (AS 65371, EVPN BGW)"
+      multipath: true
+      capabilities:
+        - DC3-BL2
+      router_id:
+        - "10.255.13.52/32"
+        - FABRIC-DC3
+      local_as: "AS65371"
+      address_families:
+        - - ipv4
+          - unicast
+        - - l2vpn
+          - evpn
+
+    - name: DC3-SS1-BGP
+      status: active
+      description: "eBGP process — DC3 super-spine SS1 (AS 65300)"
+      multipath: true
+      capabilities:
+        - DC3-SS1
+      router_id:
+        - "10.255.13.1/32"
+        - FABRIC-DC3
+      local_as: "AS65300"
+      address_families:
+        - - ipv4
+          - unicast
+        - - l2vpn
+          - evpn
+
+    - name: DC3-SS2-BGP
+      status: active
+      description: "eBGP process — DC3 super-spine SS2 (AS 65301)"
+      multipath: true
+      capabilities:
+        - DC3-SS2
+      router_id:
+        - "10.255.13.2/32"
+        - FABRIC-DC3
+      local_as: "AS65301"
+      address_families:
+        - - ipv4
+          - unicast
+        - - l2vpn
+          - evpn
+
+    - name: DC3-POD1-SP1-BGP
+      status: active
+      description: "eBGP process — DC3 POD1 spine SP1 (AS 65311)"
+      multipath: true
+      capabilities:
+        - DC3-POD1-SP1
+      router_id:
+        - "10.255.13.11/32"
+        - FABRIC-DC3
+      local_as: "AS65311"
+      address_families:
+        - - ipv4
+          - unicast
+        - - l2vpn
+          - evpn
+
+    - name: DC3-POD1-SP2-BGP
+      status: active
+      description: "eBGP process — DC3 POD1 spine SP2 (AS 65312)"
+      multipath: true
+      capabilities:
+        - DC3-POD1-SP2
+      router_id:
+        - "10.255.13.12/32"
+        - FABRIC-DC3
+      local_as: "AS65312"
+      address_families:
+        - - ipv4
+          - unicast
+        - - l2vpn
+          - evpn
+
+    - name: DC3-POD1-L1-BGP
+      status: active
+      description: "eBGP process — DC3 POD1 leaf L1 (AS 65351)"
+      multipath: true
+      capabilities:
+        - DC3-POD1-L1
+      router_id:
+        - "10.255.13.21/32"
+        - FABRIC-DC3
+      local_as: "AS65351"
+      address_families:
+        - - ipv4
+          - unicast
+        - - l2vpn
+          - evpn
+
+    - name: DC3-POD1-L2-BGP
+      status: active
+      description: "eBGP process — DC3 POD1 leaf L2 (AS 65352)"
+      multipath: true
+      capabilities:
+        - DC3-POD1-L2
+      router_id:
+        - "10.255.13.22/32"
+        - FABRIC-DC3
+      local_as: "AS65352"
+      address_families:
+        - - ipv4
+          - unicast
+        - - l2vpn
+          - evpn
+
+    - name: DC3-POD1-L3-BGP
+      status: active
+      description: "eBGP process — DC3 POD1 leaf L3 (AS 65353)"
+      multipath: true
+      capabilities:
+        - DC3-POD1-L3
+      router_id:
+        - "10.255.13.23/32"
+        - FABRIC-DC3
+      local_as: "AS65353"
+      address_families:
+        - - ipv4
+          - unicast
+        - - l2vpn
+          - evpn
+
+    - name: DC3-POD1-L4-BGP
+      status: active
+      description: "eBGP process — DC3 POD1 leaf L4 (AS 65354)"
+      multipath: true
+      capabilities:
+        - DC3-POD1-L4
+      router_id:
+        - "10.255.13.24/32"
+        - FABRIC-DC3
+      local_as: "AS65354"
+      address_families:
+        - - ipv4
+          - unicast
+        - - l2vpn
+          - evpn
+
+    - name: DC3-POD2-SP1-BGP
+      status: active
+      description: "eBGP process — DC3 POD2 spine SP1 (AS 65321)"
+      multipath: true
+      capabilities:
+        - DC3-POD2-SP1
+      router_id:
+        - "10.255.13.13/32"
+        - FABRIC-DC3
+      local_as: "AS65321"
+      address_families:
+        - - ipv4
+          - unicast
+        - - l2vpn
+          - evpn
+
+    - name: DC3-POD2-SP2-BGP
+      status: active
+      description: "eBGP process — DC3 POD2 spine SP2 (AS 65322)"
+      multipath: true
+      capabilities:
+        - DC3-POD2-SP2
+      router_id:
+        - "10.255.13.14/32"
+        - FABRIC-DC3
+      local_as: "AS65322"
+      address_families:
+        - - ipv4
+          - unicast
+        - - l2vpn
+          - evpn
+
+    - name: DC3-POD2-L1-BGP
+      status: active
+      description: "eBGP process — DC3 POD2 leaf L1 (AS 65355)"
+      multipath: true
+      capabilities:
+        - DC3-POD2-L1
+      router_id:
+        - "10.255.13.25/32"
+        - FABRIC-DC3
+      local_as: "AS65355"
+      address_families:
+        - - ipv4
+          - unicast
+        - - l2vpn
+          - evpn
+
+    - name: DC3-POD2-L2-BGP
+      status: active
+      description: "eBGP process — DC3 POD2 leaf L2 (AS 65356)"
+      multipath: true
+      capabilities:
+        - DC3-POD2-L2
+      router_id:
+        - "10.255.13.26/32"
+        - FABRIC-DC3
+      local_as: "AS65356"
+      address_families:
+        - - ipv4
+          - unicast
+        - - l2vpn
+          - evpn
+
+    - name: DC3-POD2-L3-BGP
+      status: active
+      description: "eBGP process — DC3 POD2 leaf L3 (AS 65357)"
+      multipath: true
+      capabilities:
+        - DC3-POD2-L3
+      router_id:
+        - "10.255.13.27/32"
+        - FABRIC-DC3
+      local_as: "AS65357"
+      address_families:
+        - - ipv4
+          - unicast
+        - - l2vpn
+          - evpn
+
+    - name: DC3-POD2-L4-BGP
+      status: active
+      description: "eBGP process — DC3 POD2 leaf L4 (AS 65358)"
+      multipath: true
+      capabilities:
+        - DC3-POD2-L4
+      router_id:
+        - "10.255.13.28/32"
+        - FABRIC-DC3
+      local_as: "AS65358"
+      address_families:
+        - - ipv4
+          - unicast
+        - - l2vpn
+          - evpn
+
+    - name: DC3-POD3-SP1-BGP
+      status: active
+      description: "eBGP process — DC3 POD3 spine SP1 (AS 65331)"
+      multipath: true
+      capabilities:
+        - DC3-POD3-SP1
+      router_id:
+        - "10.255.13.15/32"
+        - FABRIC-DC3
+      local_as: "AS65331"
+      address_families:
+        - - ipv4
+          - unicast
+        - - l2vpn
+          - evpn
+
+    - name: DC3-POD3-SP2-BGP
+      status: active
+      description: "eBGP process — DC3 POD3 spine SP2 (AS 65332)"
+      multipath: true
+      capabilities:
+        - DC3-POD3-SP2
+      router_id:
+        - "10.255.13.16/32"
+        - FABRIC-DC3
+      local_as: "AS65332"
+      address_families:
+        - - ipv4
+          - unicast
+        - - l2vpn
+          - evpn
+
+    - name: DC3-POD3-L1-BGP
+      status: active
+      description: "eBGP process — DC3 POD3 leaf L1 (AS 65359)"
+      multipath: true
+      capabilities:
+        - DC3-POD3-L1
+      router_id:
+        - "10.255.13.29/32"
+        - FABRIC-DC3
+      local_as: "AS65359"
+      address_families:
+        - - ipv4
+          - unicast
+        - - l2vpn
+          - evpn
+
+    - name: DC3-POD3-L2-BGP
+      status: active
+      description: "eBGP process — DC3 POD3 leaf L2 (AS 65360)"
+      multipath: true
+      capabilities:
+        - DC3-POD3-L2
+      router_id:
+        - "10.255.13.30/32"
+        - FABRIC-DC3
+      local_as: "AS65360"
+      address_families:
+        - - ipv4
+          - unicast
+        - - l2vpn
+          - evpn
+
+    - name: DC3-POD4-SP1-BGP
+      status: active
+      description: "eBGP process — DC3 POD4 spine SP1 (AS 65341)"
+      multipath: true
+      capabilities:
+        - DC3-POD4-SP1
+      router_id:
+        - "10.255.13.17/32"
+        - FABRIC-DC3
+      local_as: "AS65341"
+      address_families:
+        - - ipv4
+          - unicast
+        - - l2vpn
+          - evpn
+
+    - name: DC3-POD4-SP2-BGP
+      status: active
+      description: "eBGP process — DC3 POD4 spine SP2 (AS 65342)"
+      multipath: true
+      capabilities:
+        - DC3-POD4-SP2
+      router_id:
+        - "10.255.13.18/32"
+        - FABRIC-DC3
+      local_as: "AS65342"
+      address_families:
+        - - ipv4
+          - unicast
+        - - l2vpn
+          - evpn
+
+    - name: DC3-POD4-L1-BGP
+      status: active
+      description: "eBGP process — DC3 POD4 leaf L1 (AS 65361)"
+      multipath: true
+      capabilities:
+        - DC3-POD4-L1
+      router_id:
+        - "10.255.13.31/32"
+        - FABRIC-DC3
+      local_as: "AS65361"
+      address_families:
+        - - ipv4
+          - unicast
+        - - l2vpn
+          - evpn
+
+    - name: DC3-POD4-L2-BGP
+      status: active
+      description: "eBGP process — DC3 POD4 leaf L2 (AS 65362)"
+      multipath: true
+      capabilities:
+        - DC3-POD4-L2
+      router_id:
+        - "10.255.13.32/32"
+        - FABRIC-DC3
+      local_as: "AS65362"
+      address_families:
+        - - ipv4
+          - unicast
+        - - l2vpn
+          - evpn

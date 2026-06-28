@@ -41,6 +41,10 @@ router ospf 1
    no passive-interface Ethernet2
    max-lsa 12000
 
+interface Ethernet1
+   ip ospf 1 area 0.0.0.0
+interface Ethernet2
+   ip ospf 1 area 0.0.0.0
 ! Configure BGP
 
 router bgp 65000
@@ -50,22 +54,10 @@ router bgp 65000
    graceful-restart
    maximum-paths 4 ecmp 64
    !
-   neighbor EVPN-PEERS peer-group
-   neighbor EVPN-PEERS remote-as 65000
-   neighbor EVPN-PEERS update-source Loopback0
-   neighbor EVPN-PEERS send-community extended
-   neighbor EVPN-PEERS maximum-routes 0
-   neighbor 10.0.0.100 peer-group EVPN-PEERS
-   neighbor 10.0.0.100 description spine-01
-   neighbor 10.0.0.101 peer-group EVPN-PEERS
-   neighbor 10.0.0.101 description spine-02
-   !
    address-family ipv4
       redistribute connected route-map RM-CONN-2-BGP
    !
    address-family evpn
-      neighbor EVPN-PEERS activate
-      neighbor EVPN-PEERS route-reflector-client
 
 
 ! Configure route-maps

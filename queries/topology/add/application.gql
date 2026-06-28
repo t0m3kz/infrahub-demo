@@ -1,0 +1,109 @@
+fragment SegmentSecurityFields on ManagedNetworkSegment {
+  isolation_mode { value }
+  security_zone { node { name { value } trust_level { value } } }
+  security_policies { edges { node { id name { value } } } }
+  prefix { edges { node { prefix { value } } } }
+}
+
+query app_security_rules($name: String!) {
+  AppApplication(name__value: $name) {
+    edges {
+      node {
+        id
+        name { value }
+        environment { value }
+        criticality { value }
+        children {
+          edges {
+            node {
+              id
+              ... on AppComponent {
+                name { value }
+                slug { value }
+                component_type { value }
+                network_segment {
+                  node {
+                    id
+                    __typename
+                    ...SegmentSecurityFields
+                    ... on CloudNetworkSegment {
+                      name { value }
+                      segment_type { value }
+                      cidr_block {
+                        node {
+                          prefix { value }
+                        }
+                      }
+                      virtual_network {
+                        node {
+                          id
+                          name { value }
+                          account {
+                            node {
+                              id
+                              name { value }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+                depends_on {
+                  edges {
+                    node {
+                      id
+                      name { value }
+                      protocol { value }
+                      port_start { value }
+                      port_end { value }
+                      description { value }
+                      target {
+                        node {
+                          id
+                          ... on AppComponent {
+                            name { value }
+                            slug { value }
+                            component_type { value }
+                            network_segment {
+                              node {
+                                id
+                                __typename
+                                ...SegmentSecurityFields
+                                ... on CloudNetworkSegment {
+                                  name { value }
+                                  segment_type { value }
+                                  cidr_block {
+                                    node {
+                                      prefix { value }
+                                    }
+                                  }
+                                  virtual_network {
+                                    node {
+                                      id
+                                      name { value }
+                                      account {
+                                        node {
+                                          id
+                                          name { value }
+                                        }
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

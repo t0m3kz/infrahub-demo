@@ -17,38 +17,10 @@
     },
     "default|l2vpn_evpn": {
       "admin_status": "true"
-    },
-    "default|l2vpn_evpn|EVPN-PEERS": {
-      "admin_status": "true"
     }
   },
-  "BGP_NEIGHBOR": {
-    "10.0.0.100": {
-      "admin_status": "true",
-      "asn": "65000",
-      "description": "spine-01",
-      "holdtime": "180",
-      "keepalive": "60",
-      "local_addr": "10.0.0.1",
-      "name": "EVPN-PEERS"
-    },
-    "10.0.0.101": {
-      "admin_status": "true",
-      "asn": "65000",
-      "description": "spine-02",
-      "holdtime": "180",
-      "keepalive": "60",
-      "local_addr": "10.0.0.1",
-      "name": "EVPN-PEERS"
-    }
-  },
-  "BGP_PEER_GROUP": {
-    "EVPN-PEERS": {
-      "asn": "65000",
-      "local_addr": "10.0.0.1",
-      "send_community": "extended"
-    }
-  },
+  "BGP_NEIGHBOR": {},
+  "BGP_PEER_GROUP": {},
   "DEVICE_METADATA": {
     "localhost": {
       "bgp_asn": 65000,
@@ -74,16 +46,6 @@
       "router_id": "10.0.0.1"
     }
   },
-  "VLAN": {
-    "Vlan100": {
-      "vlanid": "100"
-    },
-    "Vlan200": {
-      "vlanid": "200"
-    }
-  },
-  "VLAN_INTERFACE": {
-    "Vlan100": {},
-    "Vlan200": {}
-  }
+  "VLAN": {},
+  "VLAN_INTERFACE": {}
 }

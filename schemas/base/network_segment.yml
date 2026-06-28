@@ -3,7 +3,7 @@ version: "1.0"
 generics:
   - name: NetworkSegment
     namespace: Managed
-    description: "Base generic for all network segments (on-prem VLAN/VXLAN and cloud VPC subnets)"
+    description: "Base generic for all network segments (on-prem VLAN/VXLAN and cloud VPC subnets)"  # yamllint disable-line rule:line-length
     label: Network Segment
     icon: "carbon:network-3"
     include_in_menu: false
@@ -21,12 +21,9 @@ generics:
         description: "Network segment identifier"
         computed_attribute:
           kind: Jinja2
-          # yamllint disable rule:line-length
-          jinja2_template: >
-            {{owner__name__value|lower|replace(' ', '-')}}-{{customer_name__value|lower|replace(' ', '-')}}-{{environment__value}}
-          # yamllint enable rule:line-length
+          jinja2_template: "{{owner__org_id__value|lower}}-{{customer_name__value|lower|replace(' ', '-')}}-{{environment__value}}"  # yamllint disable-line rule:line-length
         read_only: true
-        optional: true
+        optional: false
       - name: description
         kind: Text
         optional: true
@@ -44,15 +41,27 @@ generics:
         optional: true
         order_weight: 160
         choices:
-          - name: production
+          - name: p
             label: Production
             description: "Production environment"
             color: "#A9CCE3"
-          - name: no-production
-            label: No Production
+          - name: n
+            label: Non-Production
             description: "Non-Production environment"
             color: "#A9DFBF"
-        default_value: production
+          - name: s
+            label: Staging
+            description: "Staging environment"
+            color: "#FFA500"
+          - name: d
+            label: Development
+            description: "Development environment"
+            color: "#7f7fff"
+          - name: t
+            label: Testing
+            description: "Testing environment"
+            color: "#D2B4DE"
+        default_value: p
       - name: segment_type
         kind: Dropdown
         optional: true
@@ -84,44 +93,64 @@ generics:
         label: Segment Role
         optional: true
         order_weight: 260
-        description: "Recommended segmentation model — defines the security and access requirements of this segment"
+        description: "Recommended segmentation model — defines the security and access requirements of this segment"  # yamllint disable-line rule:line-length
         default_value: server_application
         choices:
           - name: enterprise_user
             label: Enterprise User
-            description: "For employees and internal users accessing corporate resources"
+            description: "For employees and internal users accessing corporate resources"  # yamllint disable-line rule:line-length
             color: "#5B9BD5"
           - name: server_application
             label: Server/Application
-            description: "Hosts servers and business-critical applications with high security requirements"
+            description: "Hosts servers and business-critical applications with high security requirements"  # yamllint disable-line rule:line-length
             color: "#70AD47"
           - name: management
             label: Management Network
-            description: "Reserved for network administration and monitoring infrastructure"
+            description: "Reserved for network administration and monitoring infrastructure"  # yamllint disable-line rule:line-length
             color: "#FFC000"
           - name: guest_visitor
             label: Guest/Visitor
-            description: "Restricted access for guests and visitors, isolated from corporate resources"
+            description: "Restricted access for guests and visitors, isolated from corporate resources"  # yamllint disable-line rule:line-length
             color: "#FF7F50"
           - name: iot_ot
             label: IoT/OT
-            description: "Internet of Things and Operational Technology devices with specific protocol requirements"
+            description: "Internet of Things and Operational Technology devices with specific protocol requirements"  # yamllint disable-line rule:line-length
             color: "#A64D79"
           - name: dmz
             label: DMZ
-            description: "Demilitarized zone — perimeter network between untrusted external and internal networks"
+            description: "Demilitarized zone — perimeter network between untrusted external and internal networks"  # yamllint disable-line rule:line-length
             color: "#E06C75"
           - name: service_provider
             label: Service Provider
-            description: "Dedicated connectivity for external partners and service providers"
+            description: "Dedicated connectivity for external partners and service providers"  # yamllint disable-line rule:line-length
             color: "#8B6CE7"
       - name: pbr_enabled
         kind: Boolean
         label: PBR Enabled
-        description: "Traffic is redirected to the firewall via policy-based routing (not physically inline)."
+        description: "Traffic is redirected to the firewall via policy-based routing (not physically inline)."  # yamllint disable-line rule:line-length
         default_value: false
         optional: true
         order_weight: 270
+      - name: isolation_mode
+        kind: Dropdown
+        label: Isolation Mode
+        description: "Intra-segment traffic policy"
+        optional: true
+        order_weight: 850
+        default_value: normal
+        choices:
+          - name: normal
+            label: Normal
+            description: "Hosts within the segment can talk freely"
+            color: "#2ECC71"
+          - name: isolated
+            label: Isolated
+            description: "Hosts within the segment cannot talk to each other (port-isolation / PVLAN)"
+            color: "#F39C12"
+          - name: microsegmented
+            label: Microsegmented
+            description: "Per-rule intra-segment enforcement; ACL rendered on leaf SVI even when firewall is present"
+            color: "#9B59B6"
       - name: status
         kind: Dropdown
         optional: true
@@ -148,9 +177,16 @@ generics:
             label: Retired
             description: Segment is retired and inactive
             color: "#BFBFBF"
+      - name: terminate_inline
+        kind: Boolean
+        label: Terminate Inline
+        optional: true
+        default_value: false
+        order_weight: 3050
+        description: "When true, FW/LB terminates traffic inline. Leaf is pure L2."
     relationships:
       - name: owner
-        peer: OrganizationGeneric
+        peer: OrganizationEntity
         cardinality: one
         kind: Generic
         order_weight: 100
@@ -168,15 +204,6 @@ generics:
         description: >-
           IP prefixes for this segment (dual-stack: IPv4 and/or IPv6).
           Determines VRF and anycast gateways. L2-only if absent.
-      - name: firewall
-        peer: DcimDevice
-        label: Firewall
-        cardinality: one
-        kind: Attribute
-        optional: true
-        order_weight: 3100
-        identifier: network_segment__firewall
-        description: "Firewall device responsible for enforcing policy on this segment (inline or PBR)."
       - name: gateway
         peer: IpamIPAddress
         label: Anycast Gateway
@@ -185,4 +212,4 @@ generics:
         optional: true
         order_weight: 3200
         identifier: network_segment__gateway
-        description: "Anycast gateway IP address for symmetric IRB (shared across all leaves in the fabric)."
+        description: "Anycast gateway IP address for symmetric IRB (shared across all leaves in the fabric)."  # yamllint disable-line rule:line-length

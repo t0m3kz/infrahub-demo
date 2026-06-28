@@ -115,6 +115,13 @@ spec:
                   icon: "mdi:cable-data"
                   kind: DcimCable
                   description: "Cabling between devices"
+
+                - name: Mlag
+                  namespace: Managed
+                  label: MLAG
+                  icon: "mdi:link-variant"
+                  kind: ManagedMLAG
+                  description: "Multi-chassis link aggregation groups"
           # --------- Device Catalog ---------
           - namespace: Dcim
             name: CatalogMenu
@@ -327,10 +334,16 @@ spec:
                   icon: "mdi:scale-balance"
 
                 - namespace: Managed
-                  name: ForwardingProxyItem
-                  label: Proxy & Forwarding
-                  kind: ManagedForwardingProxy
-                  icon: "mdi:web"
+                  name: ProxyHAItem
+                  label: Proxy HA
+                  kind: ManagedProxyHA
+                  icon: "mdi:swap-horizontal-bold"
+
+                - namespace: Managed
+                  name: CloudProxyHAItem
+                  label: Cloud Proxy / SASE
+                  kind: ManagedCloudProxyHA
+                  icon: "mdi:cloud-sync"
 
     # ──────────────────────────────────────────────────────────────────────────
     # SECURITY — zones, profiles, policies
@@ -359,17 +372,6 @@ spec:
             kind: SecurityPolicy
             icon: "mdi:shield-check"
 
-          - namespace: Service
-            name: ProxyURLCategoryItem
-            label: URL Categories
-            kind: ServiceProxyURLCategory
-            icon: "mdi:tag-multiple"
-
-          - namespace: Service
-            name: ProxyPolicyItem
-            label: Proxy Policies
-            kind: ServiceProxyPolicy
-            icon: "mdi:file-document-outline"
 
     # ──────────────────────────────────────────────────────────────────────────
     # APPLICATIONS — business applications and virtual clouds

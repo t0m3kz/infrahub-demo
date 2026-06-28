@@ -1,0 +1,217 @@
+---
+# C002 (SwiftGo GmbH) — DC3 Load Balancer VIP services
+# One VIP per AppComponent — no shared hostnames across applications.
+
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: LoadbalancerVIP
+  data:
+
+    # ── shipment-tracker / production ─────────────────────────────────────────
+    - hostname: c002-ship-web.dc3.internal
+      protocol: https
+      port: 443
+      status: active
+      description: "C002 shipment-tracker web-frontend — HTTPS"
+      load_balancer: DC3-LB-HA
+
+    - hostname: c002-ship-web.dc3.internal
+      protocol: http
+      port: 80
+      status: active
+      description: "C002 shipment-tracker web-frontend — HTTP (redirect)"
+      load_balancer: DC3-LB-HA
+
+    - hostname: c002-ship-api.dc3.internal
+      protocol: https
+      port: 8443
+      status: active
+      description: "C002 shipment-tracker tracking-api"
+      load_balancer: DC3-LB-HA
+
+    - hostname: c002-ship-db.dc3.internal
+      protocol: tcp
+      port: 5432
+      status: active
+      description: "C002 shipment-tracker shipment-db"
+      load_balancer: DC3-LB-HA
+
+    # ── shipment-tracker / nonprod ────────────────────────────────────────────
+    - hostname: c002-ship-web-n.dc3.internal
+      protocol: https
+      port: 443
+      status: active
+      description: "C002 shipment-tracker web-frontend nonprod — HTTPS"
+      load_balancer: DC3-LB-HA
+
+    - hostname: c002-ship-api-n.dc3.internal
+      protocol: https
+      port: 8443
+      status: active
+      description: "C002 shipment-tracker tracking-api nonprod"
+      load_balancer: DC3-LB-HA
+
+    # ── fleet-manager / production ────────────────────────────────────────────
+    - hostname: c002-fleet-web.dc3.internal
+      protocol: https
+      port: 443
+      status: active
+      description: "C002 fleet-manager dispatch-portal — HTTPS"
+      load_balancer: DC3-LB-HA
+
+    - hostname: c002-fleet-web.dc3.internal
+      protocol: http
+      port: 80
+      status: active
+      description: "C002 fleet-manager dispatch-portal — HTTP (redirect)"
+      load_balancer: DC3-LB-HA
+
+    - hostname: c002-fleet-api.dc3.internal
+      protocol: https
+      port: 8443
+      status: active
+      description: "C002 fleet-manager telematics-api"
+      load_balancer: DC3-LB-HA
+
+    - hostname: c002-fleet-db.dc3.internal
+      protocol: tcp
+      port: 5432
+      status: active
+      description: "C002 fleet-manager fleet-db"
+      load_balancer: DC3-LB-HA
+
+---
+# Bind all VIPs to ingress interface 1.1 on both LB nodes.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimPhysicalInterface
+  data:
+    - name: "1.1"
+      device: DC3-LB-01
+      interface_capabilities:
+        - kind: LoadbalancerVIP
+          data:
+            hostname: c002-ship-web.dc3.internal
+            protocol: https
+            port: 443
+            load_balancer: DC3-LB-HA
+        - kind: LoadbalancerVIP
+          data:
+            hostname: c002-ship-web.dc3.internal
+            protocol: http
+            port: 80
+            load_balancer: DC3-LB-HA
+        - kind: LoadbalancerVIP
+          data:
+            hostname: c002-ship-api.dc3.internal
+            protocol: https
+            port: 8443
+            load_balancer: DC3-LB-HA
+        - kind: LoadbalancerVIP
+          data:
+            hostname: c002-ship-db.dc3.internal
+            protocol: tcp
+            port: 5432
+            load_balancer: DC3-LB-HA
+        - kind: LoadbalancerVIP
+          data:
+            hostname: c002-ship-web-n.dc3.internal
+            protocol: https
+            port: 443
+            load_balancer: DC3-LB-HA
+        - kind: LoadbalancerVIP
+          data:
+            hostname: c002-ship-api-n.dc3.internal
+            protocol: https
+            port: 8443
+            load_balancer: DC3-LB-HA
+        - kind: LoadbalancerVIP
+          data:
+            hostname: c002-fleet-web.dc3.internal
+            protocol: https
+            port: 443
+            load_balancer: DC3-LB-HA
+        - kind: LoadbalancerVIP
+          data:
+            hostname: c002-fleet-web.dc3.internal
+            protocol: http
+            port: 80
+            load_balancer: DC3-LB-HA
+        - kind: LoadbalancerVIP
+          data:
+            hostname: c002-fleet-api.dc3.internal
+            protocol: https
+            port: 8443
+            load_balancer: DC3-LB-HA
+        - kind: LoadbalancerVIP
+          data:
+            hostname: c002-fleet-db.dc3.internal
+            protocol: tcp
+            port: 5432
+            load_balancer: DC3-LB-HA
+
+    - name: "1.1"
+      device: DC3-LB-02
+      interface_capabilities:
+        - kind: LoadbalancerVIP
+          data:
+            hostname: c002-ship-web.dc3.internal
+            protocol: https
+            port: 443
+            load_balancer: DC3-LB-HA
+        - kind: LoadbalancerVIP
+          data:
+            hostname: c002-ship-web.dc3.internal
+            protocol: http
+            port: 80
+            load_balancer: DC3-LB-HA
+        - kind: LoadbalancerVIP
+          data:
+            hostname: c002-ship-api.dc3.internal
+            protocol: https
+            port: 8443
+            load_balancer: DC3-LB-HA
+        - kind: LoadbalancerVIP
+          data:
+            hostname: c002-ship-db.dc3.internal
+            protocol: tcp
+            port: 5432
+            load_balancer: DC3-LB-HA
+        - kind: LoadbalancerVIP
+          data:
+            hostname: c002-ship-web-n.dc3.internal
+            protocol: https
+            port: 443
+            load_balancer: DC3-LB-HA
+        - kind: LoadbalancerVIP
+          data:
+            hostname: c002-ship-api-n.dc3.internal
+            protocol: https
+            port: 8443
+            load_balancer: DC3-LB-HA
+        - kind: LoadbalancerVIP
+          data:
+            hostname: c002-fleet-web.dc3.internal
+            protocol: https
+            port: 443
+            load_balancer: DC3-LB-HA
+        - kind: LoadbalancerVIP
+          data:
+            hostname: c002-fleet-web.dc3.internal
+            protocol: http
+            port: 80
+            load_balancer: DC3-LB-HA
+        - kind: LoadbalancerVIP
+          data:
+            hostname: c002-fleet-api.dc3.internal
+            protocol: https
+            port: 8443
+            load_balancer: DC3-LB-HA
+        - kind: LoadbalancerVIP
+          data:
+            hostname: c002-fleet-db.dc3.internal
+            protocol: tcp
+            port: 5432
+            load_balancer: DC3-LB-HA

@@ -2,6 +2,28 @@
 version: "1.0"
 
 generics:
+  - name: Entity
+    namespace: Organization
+    description: An organization with a unique identifier (customer or provider).
+    include_in_menu: false
+    attributes:
+      - name: org_id
+        kind: Text
+        unique: true
+        optional: true
+        description: "Unique organization identifier (e.g. C001, P001)"
+        order_weight: 900
+    relationships:
+      - name: network_segments
+        peer: ManagedNetworkSegment
+        cardinality: many
+        kind: Component
+        on_delete: cascade
+        optional: true
+        description: "Owned network segments"
+        order_weight: 2200
+        identifier: network_segment__owner
+
   - name: Generic
     namespace: Organization
     label: Organization
@@ -23,15 +45,6 @@ generics:
         optional: true
         order_weight: 1200
     relationships:
-      - name: network_segments
-        peer: ManagedNetworkSegment
-        cardinality: many
-        kind: Component
-        on_delete: cascade
-        optional: true
-        description: "Customer-owned network segments"
-        order_weight: 2200
-        identifier: network_segment__owner
       - name: tags
         peer: BuiltinTag
         cardinality: many
@@ -76,8 +89,12 @@ nodes:
     icon: mdi:domain
     inherit_from:
       - OrganizationGeneric
+      - OrganizationEntity
     include_in_menu: true
     menu_placement: OrganizationGeneric
+    human_friendly_id:
+      - name__value
+    display_label: "{{name__value}} ({{org_id__value}})"
 
   - name: Customer
     namespace: Organization
@@ -85,12 +102,9 @@ nodes:
     icon: mdi:account-group
     inherit_from:
       - OrganizationGeneric
+      - OrganizationEntity
     include_in_menu: true
     menu_placement: OrganizationGeneric
-    attributes:
-      - name: customer_id
-        kind: Text
-        unique: true
-        optional: true
-        description: "Unique customer identifier"
-        order_weight: 900
+    human_friendly_id:
+      - org_id__value
+    display_label: "{{name__value}} ({{org_id__value}})"

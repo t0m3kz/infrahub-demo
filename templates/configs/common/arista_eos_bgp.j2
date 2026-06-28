@@ -32,27 +32,28 @@ router bgp {{ bgp_config.local_as.asn }}
 {%- endif %}
 {%- endfor %}
 {%- for session in bgp_config.sessions %}
-{%- set remote_ip = session.remote_ip.address.split('/')[0] %}
+{%- set is_unnumbered = session.get('interface_name') and not session.get('remote_ip') %}
+{%- set neighbor_id = session.interface_name if is_unnumbered else session.remote_ip.address.split('/')[0] %}
 {%- if session.peer_group is defined %}
-   neighbor {{ remote_ip }} peer-group {{ session.peer_group }}
+   neighbor {{ neighbor_id }} peer-group {{ session.peer_group }}
 {%- if not session.get('remote_as_from_peer_group') %}
-   neighbor {{ remote_ip }} remote-as {{ session.remote_as.asn }}
+   neighbor {{ neighbor_id }} remote-as {{ session.remote_as.asn }}
 {%- endif %}
 {%- if session.get('remote_device') %}
-   neighbor {{ remote_ip }} description {{ session.remote_device }}
+   neighbor {{ neighbor_id }} description {{ session.remote_device }}
 {%- endif %}
 {%- else %}
-   neighbor {{ remote_ip }} remote-as {{ session.remote_as.asn }}
+   neighbor {{ neighbor_id }} remote-as {{ session.remote_as.asn }}
 {%- if session.get('ttl') != 1 %}
-   neighbor {{ remote_ip }} update-source Loopback0
+   neighbor {{ neighbor_id }} update-source Loopback0
 {%- endif %}
 {%- if session.get('remote_device') %}
-   neighbor {{ remote_ip }} description {{ session.remote_device }}
+   neighbor {{ neighbor_id }} description {{ session.remote_device }}
 {%- endif %}
-   neighbor {{ remote_ip }} send-community extended
-   neighbor {{ remote_ip }} maximum-routes 0
+   neighbor {{ neighbor_id }} send-community extended
+   neighbor {{ neighbor_id }} maximum-routes 0
 {%- if session.get('bfd_enabled') %}
-   neighbor {{ remote_ip }} bfd
+   neighbor {{ neighbor_id }} bfd
 {%- endif %}
 {%- endif %}
 {%- endfor %}
@@ -65,8 +66,11 @@ router bgp {{ bgp_config.local_as.asn }}
 {%- endif %}
 {%- endfor %}
 {%- for session in bgp_config.sessions %}
-{%- if session.peer_group is not defined and not session.address_families and ':' not in session.remote_ip.address %}
-      neighbor {{ session.remote_ip.address.split('/')[0] }} activate
+{%- set is_unnumbered = session.get('interface_name') and not session.get('remote_ip') %}
+{%- if session.peer_group is not defined and not session.address_families %}
+{%- if is_unnumbered or ':' not in (session.remote_ip.address if session.remote_ip else '') %}
+      neighbor {{ session.interface_name if is_unnumbered else session.remote_ip.address.split('/')[0] }} activate
+{%- endif %}
 {%- endif %}
 {%- endfor %}
    !
@@ -75,7 +79,7 @@ router bgp {{ bgp_config.local_as.asn }}
 {%- if 'ipv6' in (pg.address_families | default([])) %}{% set ns.has_ipv6 = true %}{% endif %}
 {%- endfor %}
 {%- for session in bgp_config.sessions %}
-{%- if not session.address_families and ':' in session.remote_ip.address %}{% set ns.has_ipv6 = true %}{% endif %}
+{%- if not session.address_families and session.remote_ip and ':' in session.remote_ip.address %}{% set ns.has_ipv6 = true %}{% endif %}
 {%- endfor %}
 {%- if ns.has_ipv6 %}
    address-family ipv6 unicast
@@ -86,7 +90,7 @@ router bgp {{ bgp_config.local_as.asn }}
 {%- endif %}
 {%- endfor %}
 {%- for session in bgp_config.sessions %}
-{%- if session.peer_group is not defined and not session.address_families and ':' in session.remote_ip.address %}
+{%- if session.peer_group is not defined and not session.address_families and session.remote_ip and ':' in session.remote_ip.address %}
       neighbor {{ session.remote_ip.address.split('/')[0] }} activate
 {%- endif %}
 {%- endfor %}
@@ -103,7 +107,12 @@ router bgp {{ bgp_config.local_as.asn }}
 {%- endfor %}
 {%- for session in bgp_config.sessions %}
 {%- if session.peer_group is not defined and session.address_families %}
-      neighbor {{ session.remote_ip.address.split('/')[0] }} activate
+{%- set is_unnumbered = session.get('interface_name') and not session.get('remote_ip') %}
+{%- set neighbor_evpn = session.interface_name if is_unnumbered else session.remote_ip.address.split('/')[0] %}
+      neighbor {{ neighbor_evpn }} activate
+{%- if session.get('route_reflector_client') %}
+      neighbor {{ neighbor_evpn }} route-reflector-client
+{%- endif %}
 {%- endif %}
 {%- endfor %}
 {% endfor %}

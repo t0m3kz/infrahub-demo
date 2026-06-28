@@ -286,3 +286,38 @@ spec:
             name: Management1
             role: management
             interface_type: 1000base-t
+
+    - template_name: DCS-7050CX3-32C-R_BORDER_LEAF
+      device_type: DCS-7050CX3-32C-R
+      role: border-leaf
+      platform: arista_eos
+      status: provisioning
+      interfaces:
+        kind: TemplateDcimPhysicalInterface
+        parameters:
+          expand_range: true
+        data:
+          - template_name: DCS-7050CX3-32C-R_BORDER_LEAF_Ethernet[1-24]/1
+            name: Ethernet[1-24]/1
+            role: downlink
+            interface_type: 100gbase-x-qsfp28
+          - template_name: DCS-7050CX3-32C-R_BORDER_LEAF_Ethernet[25-28]/1
+            name: Ethernet[25-28]/1
+            role: firewall
+            interface_type: 100gbase-x-qsfp28
+          - template_name: DCS-7050CX3-32C-R_BORDER_LEAF_Ethernet[29-32]/1
+            name: Ethernet[29-32]/1
+            role: load-balancer
+            interface_type: 100gbase-x-qsfp28
+          - template_name: DCS-7050CX3-32C-R_BORDER_LEAF_Ethernet[33-36]/1
+            name: Ethernet[33-36]/1
+            role: uplink
+            interface_type: 100gbase-x-qsfp28
+          - template_name: DCS-7050CX3-32C-R_BORDER_LEAF_Ethernet[37-38]
+            name: Ethernet[37-38]
+            role: management
+            interface_type: 10gbase-x-sfpp
+          - template_name: DCS-7050CX3-32C-R_BORDER_LEAF_Management1
+            name: Management1
+            role: management
+            interface_type: 1000base-t

@@ -41,7 +41,8 @@ A admin configure router "Base" bgp 1 group "{{ pg.name }}" send-community exten
 {%- endfor %}
 {#- BGP Neighbors -#}
 {%- for session in bgp_config.sessions %}
-{%- set remote_ip = session.remote_ip.address.split('/')[0] %}
+{%- set is_unnumbered = session.get('interface_name') and not session.get('remote_ip') %}
+{%- set remote_ip = session.interface_name if is_unnumbered else session.remote_ip.address.split('/')[0] %}
 A admin configure router "Base" bgp 1 neighbor "{{ remote_ip }}" admin-state enable
 A admin configure router "Base" bgp 1 neighbor "{{ remote_ip }}" peer-as {{ session.remote_as.asn }}
 {%- if session.get('remote_device') %}
@@ -54,6 +55,9 @@ A admin configure router "Base" bgp 1 neighbor "{{ remote_ip }}" group "{{ sessi
 {#- Overlay session -#}
 A admin configure router "Base" bgp 1 neighbor "{{ remote_ip }}" local-address "{{ bgp_config.router_id.address.split('/')[0] }}"
 A admin configure router "Base" bgp 1 neighbor "{{ remote_ip }}" family evpn
+{%- if session.get('route_reflector_client') %}
+A admin configure router "Base" bgp 1 neighbor "{{ remote_ip }}" cluster {{ bgp_config.router_id.address.split('/')[0] }}
+{%- endif %}
 {%- else %}
 {#- Underlay session -#}
 A admin configure router "Base" bgp 1 neighbor "{{ remote_ip }}" family ipv4

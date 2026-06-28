@@ -1,0 +1,80 @@
+---
+# C002 (SwiftGo GmbH) — IP namespaces and address space
+
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: IpamNamespace
+  data:
+    - name: "C002-PROD"
+      description: "SwiftGo GmbH production VRF"
+      l3_vni: 50003
+      status: "active"
+      owner: "C002"
+      member_of_groups:
+        - vrf_namespaces
+
+    - name: "C002-NONPROD"
+      description: "SwiftGo GmbH non-production VRF"
+      l3_vni: 50004
+      status: "active"
+      owner: "C002"
+      member_of_groups:
+        - vrf_namespaces
+
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: IpamPrefix
+  data:
+    - prefix: "10.2.10.0/24"
+      description: "SwiftGo prod — web-frontend"
+      status: active
+      ip_namespace: "C002-PROD"
+
+    - prefix: "10.2.20.0/24"
+      description: "SwiftGo prod — app-backend"
+      status: active
+      ip_namespace: "C002-PROD"
+
+    - prefix: "10.2.30.0/24"
+      description: "SwiftGo prod — database"
+      status: active
+      ip_namespace: "C002-PROD"
+
+    - prefix: "10.2.110.0/24"
+      description: "SwiftGo nonprod — web-frontend"
+      status: active
+      ip_namespace: "C002-NONPROD"
+
+    - prefix: "10.2.120.0/24"
+      description: "SwiftGo nonprod — app-backend"
+      status: active
+      ip_namespace: "C002-NONPROD"
+
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: IpamIPAddress
+  data:
+    - address: "10.2.10.1/24"
+      description: "Anycast GW — SwiftGo prod web-frontend"
+      ip_namespace: "C002-PROD"
+
+    - address: "10.2.20.1/24"
+      description: "Anycast GW — SwiftGo prod app-backend"
+      ip_namespace: "C002-PROD"
+
+    - address: "10.2.30.1/24"
+      description: "Anycast GW — SwiftGo prod database"
+      ip_namespace: "C002-PROD"
+
+    - address: "10.2.110.1/24"
+      description: "Anycast GW — SwiftGo nonprod web-frontend"
+      ip_namespace: "C002-NONPROD"
+
+    - address: "10.2.120.1/24"
+      description: "Anycast GW — SwiftGo nonprod app-backend"
+      ip_namespace: "C002-NONPROD"

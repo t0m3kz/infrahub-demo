@@ -55,3 +55,16 @@ set access-rule layer "Network" name "{{ rule.name }}" destination {{ rule.dst_z
 {%- endfor %}
 !
 {%- endif %}
+{%- if ha %}
+!
+! --- ClusterXL ---
+set cluster member priority {{ ha.priority }}
+set cluster mode {{ 'HighAvailability' if ha.mode == 'active-passive' else 'LoadSharing' }}
+{%- if ha.virtual_ip %}
+set cluster virtual-ip {{ ha.virtual_ip }}
+{%- endif %}
+{%- if ha.ha_link %}
+set cluster sync-interface {{ ha.ha_link }}
+{%- endif %}
+!
+{%- endif %}

@@ -1,0 +1,56 @@
+---
+# Paris edge router WAN-facing interfaces — DC uplinks and partner peering
+# These are pre-created so that 05_interconnects circuits can reference them.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimPhysicalInterface
+  data:
+    - device: PA4-EDGE-01
+      name: Ethernet1/1
+      description: "WAN uplink — partner peering"
+      status: active
+      role: uplink
+      interface_type: 100gbase-x-qsfp28
+
+    - device: PA4-EDGE-01
+      name: Ethernet1/2
+      description: "WAN uplink — DC2 Super-Spine (PHYS-DC2-PA4-EQX-01)"
+      status: active
+      role: uplink
+      interface_type: 100gbase-x-qsfp28
+
+    - device: PA4-EDGE-01
+      name: Ethernet1/3
+      description: "WAN uplink — DC3 cross-connect"
+      status: active
+      role: uplink
+      interface_type: 100gbase-x-qsfp28
+
+    - device: PA4-EDGE-02
+      name: Ethernet1/1
+      description: "WAN uplink — redundant path"
+      status: active
+      role: uplink
+      interface_type: 100gbase-x-qsfp28
+
+    - device: PA6-EDGE-01
+      name: Ethernet1/2
+      description: "WAN uplink — DC2 Super-Spine (PHYS-DC2-PA6-EQX-01)"
+      status: active
+      role: uplink
+      interface_type: 100gbase-x-qsfp28
+
+    - device: PA6-EDGE-01
+      name: Ethernet1/3
+      description: "WAN uplink — partner peering"
+      status: active
+      role: uplink
+      interface_type: 100gbase-x-qsfp28
+
+    - device: PA6-EDGE-02
+      name: Ethernet1/1
+      description: "WAN uplink — redundant path"
+      status: active
+      role: uplink
+      interface_type: 100gbase-x-qsfp28

@@ -108,3 +108,45 @@ spec:
       netmiko_device_type: linux
       ansible_network_os: linux
       containerlab_os: linux
+
+    - name: haproxy_technologies
+      nornir_platform: linux
+      napalm_driver: linux
+      netmiko_device_type: haproxy_technologies_linux
+      ansible_network_os: linux
+      containerlab_os: linux
+
+    - name: squid_cache
+      nornir_platform: linux
+      napalm_driver: linux
+      netmiko_device_type: squid_cache_linux
+      ansible_network_os: linux
+      containerlab_os: linux
+
+    - name: bluecoat_sgos
+      nornir_platform: linux
+      napalm_driver: linux
+      netmiko_device_type: bluecoat_sgos
+      ansible_network_os: linux
+      containerlab_os: linux
+
+    - name: cisco_wsa
+      nornir_platform: linux
+      napalm_driver: linux
+      netmiko_device_type: cisco_wsa_asyncos
+      ansible_network_os: linux
+      containerlab_os: linux
+
+    - name: f5_tmos
+      nornir_platform: f5_tmos
+      napalm_driver: f5
+      netmiko_device_type: f5_linux
+      ansible_network_os: f5networks.f5_modules.bigip
+      containerlab_os: linux
+
+    - name: panos
+      nornir_platform: panos
+      napalm_driver: panos
+      netmiko_device_type: paloalto_panos
+      ansible_network_os: paloaltonetworks.panos.panos
+      containerlab_os: linux

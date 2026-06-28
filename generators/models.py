@@ -175,8 +175,8 @@ class DCModel(BaseModel):
     loopback_prefix_length: int = 23
     technical_prefix_length: int = 19
     management_prefix_length: int = 25
-    amount_of_super_spines: int
-    super_spine_template: Template
+    amount_of_super_spines: int = 0
+    super_spine_template: Optional[Template] = None
     loopback_pool: Optional[Pool] = None
     technical_pool: Optional[Pool] = None
     management_pool: Optional[Pool] = None
@@ -189,11 +189,15 @@ class DCModel(BaseModel):
         "management_pool",
         "super_spine_asn_pool",
         "design",
+        "super_spine_template",
         mode="before",
     )
     @classmethod
     def extract_node(cls, value: Any) -> Optional[Any]:
-        return _unwrap_node(value)
+        unwrapped = _unwrap_node(value)
+        if isinstance(unwrapped, dict) and unwrapped.get("id") is None:
+            return None
+        return unwrapped
 
 
 # Pod model
@@ -202,10 +206,9 @@ class PodParent(BaseModel):
     devices: List[Device]
     name: str
     index: int
-    # Schema: required relationship (optional: false)
-    super_spine_template: Template
-    # Schema: required with default=2
-    amount_of_super_spines: int = 2
+    # Schema: optional — only set for fabrics with super-spine tier
+    super_spine_template: Optional[Template] = None
+    amount_of_super_spines: int = 0
     design: Optional[DataCenterDesignData] = None
     naming_convention: str = "standard"
     fabric_interface_sorting_method: Literal["top_down", "bottom_up"] = "bottom_up"
@@ -216,7 +219,11 @@ class PodParent(BaseModel):
     @field_validator("management_pool", "super_spine_asn_pool", "design", "super_spine_template", mode="before")
     @classmethod
     def extract_parent_node(cls, value: Any) -> Optional[Any]:
-        return _unwrap_node(value)
+        unwrapped = _unwrap_node(value)
+        # super_spine_template node wrapper may resolve to {"id": null} when not set
+        if isinstance(unwrapped, dict) and unwrapped.get("id") is None:
+            return None
+        return unwrapped
 
 
 class PodModel(BaseModel):
@@ -356,6 +363,7 @@ class RackModel(BaseModel):
     parent: LocationSuiteModel
     leafs: Optional[List[DeviceRole]] = []
     tors: Optional[List[DeviceRole]] = []
+    border_leafs: Optional[List[DeviceRole]] = []
     pod: RackPod
 
 

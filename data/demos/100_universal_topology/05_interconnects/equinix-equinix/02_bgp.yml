@@ -1,0 +1,47 @@
+---
+# Equinix inter-metro BGP — Frankfurt ↔ Paris distribution peerings
+#
+# These sessions provide path between the two AZs:
+#   FR2-EDGE-01 ↔ PA4-EDGE-01  via VTI-FR2-PA4-XC / VTI-PA4-FR2-XC (10G)
+#   FR6-EDGE-01 ↔ PA6-EDGE-01  via VTI-FR6-PA6-XC / VTI-PA6-FR6-XC (10G)
+#
+# Both peers share AS65000 (iBGP within the distribution layer).
+# VTI interfaces are virtual (DcimVirtualInterface) — pre-existing from 01_connectivity.yml.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: ManagedBGPPeering
+  data:
+    - name: FR2-PA4-INTERMETRO-BGP
+      description: "iBGP inter-metro — FR2-EDGE-01 (AS65000) ↔ PA4-EDGE-01 (AS65000) via Equinix cross-connect"
+      session_type: IBGP
+      bfd_enabled: true
+      bgp_processes:
+        - FR2-EDGE-01-DCI-BGP
+        - PA4-EDGE-01-DCI-BGP
+      interface_capabilities:
+        - kind: DcimVirtualInterface
+          data:
+            device: FR2-EDGE-01
+            name: VTI-FR2-PA4-XC
+        - kind: DcimVirtualInterface
+          data:
+            device: PA4-EDGE-01
+            name: VTI-PA4-FR2-XC
+
+    - name: FR6-PA6-INTERMETRO-BGP
+      description: "iBGP inter-metro — FR6-EDGE-01 (AS65000) ↔ PA6-EDGE-01 (AS65000) via Equinix cross-connect"
+      session_type: IBGP
+      bfd_enabled: true
+      bgp_processes:
+        - FR6-EDGE-01-DCI-BGP
+        - PA6-EDGE-01-DCI-BGP
+      interface_capabilities:
+        - kind: DcimVirtualInterface
+          data:
+            device: FR6-EDGE-01
+            name: VTI-FR6-PA6-XC
+        - kind: DcimVirtualInterface
+          data:
+            device: PA6-EDGE-01
+            name: VTI-PA6-FR6-XC

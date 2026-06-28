@@ -1,0 +1,73 @@
+---
+# C003 (Vaultex Inc.) — customer boarding: namespace (VRF)
+#
+# IpamNamespace maps 1:1 to a VRF on the VXLAN fabric.
+# The L3 VNI is allocated from the shared GLOBAL-L3VNI pool and
+# distributed via EVPN type-5 routes to all DC3 leafs.
+# All customer traffic entering through the virtual firewall
+# is forwarded into this namespace after inspection.
+
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: IpamNamespace
+  data:
+    - name: "C003-DC3-PROD"
+      description: "Vaultex Inc. production VRF on DC3"
+      l3_vni: 50013
+      status: "active"
+      owner: "C003"
+      member_of_groups:
+        - vrf_namespaces
+
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: IpamPrefix
+  data:
+    - prefix: "10.3.10.0/24"
+      description: "C003 prod DMZ subnet (DC3)"
+      status: active
+      role: customer
+      ip_namespace: "C003-DC3-PROD"
+
+    - prefix: "10.3.20.0/24"
+      description: "C003 prod app-backend subnet (DC3)"
+      status: active
+      role: customer
+      ip_namespace: "C003-DC3-PROD"
+
+    - prefix: "10.3.30.0/24"
+      description: "C003 prod vault-core subnet (DC3)"
+      status: active
+      role: customer
+      ip_namespace: "C003-DC3-PROD"
+
+    - prefix: "10.3.40.0/24"
+      description: "C003 prod database subnet (DC3)"
+      status: active
+      role: customer
+      ip_namespace: "C003-DC3-PROD"
+
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: IpamIPAddress
+  data:
+    - address: "10.3.10.1/24"
+      description: "Anycast GW — C003 prod DMZ (DC3)"
+      ip_namespace: "C003-DC3-PROD"
+
+    - address: "10.3.20.1/24"
+      description: "Anycast GW — C003 prod app-backend (DC3)"
+      ip_namespace: "C003-DC3-PROD"
+
+    - address: "10.3.30.1/24"
+      description: "Anycast GW — C003 prod vault-core (DC3)"
+      ip_namespace: "C003-DC3-PROD"
+
+    - address: "10.3.40.1/24"
+      description: "Anycast GW — C003 prod database (DC3)"
+      ip_namespace: "C003-DC3-PROD"

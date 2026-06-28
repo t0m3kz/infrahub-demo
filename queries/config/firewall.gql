@@ -11,6 +11,28 @@ query firewall_config($device: String!) {
             ansible_network_os { value }
           }
         }
+        ... on DcimCapabilities {
+        capabilities {
+          edges {
+            node {
+              __typename
+              ... on ManagedGeneric {
+                name { value }
+                status { value }
+              }
+              ... on ManagedFirewallHA {
+                group_id { value }
+                mode { value }
+                priority { value }
+                preempt { value }
+                ha_protocol { value }
+                ha_timer { value }
+                capabilities { edges { node { name { value } } } }
+              }
+            }
+          }
+        }
+        }
         interfaces {
           edges {
             node {
@@ -19,21 +41,21 @@ query firewall_config($device: String!) {
               description { value }
               status { value }
               role { value }
-              ... on DcimFirewallInterface {
-                security_level { value }
-                vlan_id { value }
+              ... on DcimPhysicalInterface {
+                ip_address { node { address { value } ip_namespace { node { name { value } } } } }
+              }
+              ... on DcimVirtualInterface {
+                ip_address { node { address { value } ip_namespace { node { name { value } } } } }
                 parent_interface { node { name { value } } }
-                security_zone {
+              }
+              ... on DcimLAGInterface {
+                ip_address { node { address { value } ip_namespace { node { name { value } } } } }
+              }
+              interface_capabilities {
+                edges {
                   node {
-                    name { value }
-                    trust_level { value }
-                    zone_type { value }
-                  }
-                }
-                ip_address {
-                  node {
-                    address { value }
-                    ip_namespace { node { name { value } } }
+                    __typename
+                    ...FirewallSegmentFields
                   }
                 }
               }
@@ -67,6 +89,7 @@ query firewall_config($device: String!) {
   SecurityPolicy {
     edges {
       node {
+        id
         name { value }
         enabled { value }
         default_action { value }
@@ -81,6 +104,7 @@ query firewall_config($device: String!) {
               port_end { value }
               log { value }
               disabled { value }
+              apply_on_switch { value }
               description { value }
               source_zone { node { name { value } } }
               destination_zone { node { name { value } } }
@@ -99,6 +123,130 @@ query firewall_config($device: String!) {
                 }
               }
               security_profile { node { name { value } } }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+fragment FirewallSegmentFields on ManagedNetworkSegment {
+  ... on ManagedVlanSegment {
+    name { value }
+    status { value }
+    segment_deployments(status__values: ["active", "provisioning"]) {
+      edges { node { vlan_id { value } vni { value } } }
+    }
+    prefix {
+      edges {
+        node {
+          prefix { value }
+          gateway_ip { value }
+          ip_namespace { node { name { value } l3_vni { value } owner { node { name { value } } } } }
+        }
+      }
+    }
+    security_zone { node { name { value } trust_level { value } zone_type { value } } }
+    security_policies {
+      edges {
+        node {
+          id
+          name { value }
+          enabled { value }
+          default_action { value }
+          rules {
+            edges {
+              node {
+                index { value }
+                name { value }
+                action { value }
+                protocol { value }
+                port_start { value }
+                port_end { value }
+                log { value }
+                disabled { value }
+                apply_on_switch { value }
+                description { value }
+                source_zone { node { name { value } } }
+                destination_zone { node { name { value } } }
+                source_segment {
+                  node {
+                    id
+                    ... on ManagedVxlanSegment { name { value } prefix { edges { node { prefix { value } } } } }
+                    ... on ManagedVlanSegment  { name { value } prefix { edges { node { prefix { value } } } } }
+                  }
+                }
+                destination_segment {
+                  node {
+                    id
+                    ... on ManagedVxlanSegment { name { value } prefix { edges { node { prefix { value } } } } }
+                    ... on ManagedVlanSegment  { name { value } prefix { edges { node { prefix { value } } } } }
+                  }
+                }
+                security_profile { node { name { value } } }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+  ... on ManagedVxlanSegment {
+    name { value }
+    status { value }
+    arp_suppression { value }
+    segment_deployments(status__values: ["active", "provisioning"]) {
+      edges { node { vlan_id { value } vni { value } } }
+    }
+    prefix {
+      edges {
+        node {
+          prefix { value }
+          gateway_ip { value }
+          ip_namespace { node { name { value } l3_vni { value } owner { node { name { value } } } } }
+        }
+      }
+    }
+    security_zone { node { name { value } trust_level { value } zone_type { value } } }
+    security_policies {
+      edges {
+        node {
+          id
+          name { value }
+          enabled { value }
+          default_action { value }
+          rules {
+            edges {
+              node {
+                index { value }
+                name { value }
+                action { value }
+                protocol { value }
+                port_start { value }
+                port_end { value }
+                log { value }
+                disabled { value }
+                apply_on_switch { value }
+                description { value }
+                source_zone { node { name { value } } }
+                destination_zone { node { name { value } } }
+                source_segment {
+                  node {
+                    id
+                    ... on ManagedVxlanSegment { name { value } prefix { edges { node { prefix { value } } } } }
+                    ... on ManagedVlanSegment  { name { value } prefix { edges { node { prefix { value } } } } }
+                  }
+                }
+                destination_segment {
+                  node {
+                    id
+                    ... on ManagedVxlanSegment { name { value } prefix { edges { node { prefix { value } } } } }
+                    ... on ManagedVlanSegment  { name { value } prefix { edges { node { prefix { value } } } } }
+                  }
+                }
+                security_profile { node { name { value } } }
+              }
             }
           }
         }

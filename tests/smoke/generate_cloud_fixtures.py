@@ -5,17 +5,13 @@ Usage:
     python tests/smoke/generate_cloud_fixtures.py
 
 Creates directories under tests/smoke/configs/ with input.json (raw GQL) and
-output.txt (rendered HCL / TypeScript) for CloudVpcTerraform and CloudVpcPulumi.
+output.txt (rendered HCL) for CloudVpcTerraform.
 
 Scenarios:
     cloud_terraform_aws_single_region  — single AWS VPC, eu-central-1
     cloud_terraform_aws_multi_region   — two AWS VPCs in different regions
     cloud_terraform_azure              — Azure VNet
     cloud_terraform_gcp                — GCP network
-    cloud_pulumi_aws_single_region
-    cloud_pulumi_aws_multi_region
-    cloud_pulumi_azure
-    cloud_pulumi_gcp
 """
 
 from __future__ import annotations
@@ -26,8 +22,7 @@ from pathlib import Path
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
-from transforms.cloud_vpc_pulumi import CloudVpcPulumi
-from transforms.cloud_vpc_terraform import CloudVpcTerraform
+from transforms.cloud.vpc_terraform import CloudVpcTerraform
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 SMOKE_DIR = Path(__file__).resolve().parent / "configs"
@@ -790,10 +785,6 @@ SCENARIOS: list[tuple[type, str, Any]] = [
     (CloudVpcTerraform, "cloud_terraform_aws_multi_region", build_aws_multi_region),
     (CloudVpcTerraform, "cloud_terraform_azure", build_azure),
     (CloudVpcTerraform, "cloud_terraform_gcp", build_gcp),
-    (CloudVpcPulumi, "cloud_pulumi_aws_single_region", build_aws_single_region),
-    (CloudVpcPulumi, "cloud_pulumi_aws_multi_region", build_aws_multi_region),
-    (CloudVpcPulumi, "cloud_pulumi_azure", build_azure),
-    (CloudVpcPulumi, "cloud_pulumi_gcp", build_gcp),
 ]
 
 

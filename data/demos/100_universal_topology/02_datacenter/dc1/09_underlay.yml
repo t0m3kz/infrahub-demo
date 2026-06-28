@@ -1,0 +1,264 @@
+---
+# DC1 underlay — iBGP (AS 65001, RFC 5549 unnumbered, IPv6 link-local)
+#
+# All devices run iBGP in AS 65001.
+# Fabric interfaces use IPv6 link-local only (no P2P IPs needed).
+# Router-ID sourced from Loopback0 (10.255.11.x/32).
+# BL1/BL2 act as EVPN route reflectors for the overlay (see 10_overlay.yml).
+
+# ── DC1 fabric AS ─────────────────────────────────────────────────────────────
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: RoutingAutonomousSystem
+  data:
+    - asn: 65001
+      description: "DC1 fabric AS — iBGP underlay + eBGP EVPN overlay"
+
+# ── Shared BGP address family — IPv4 unicast (underlay reachability) ──────────
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: RoutingBGPAddressFamily
+  data:
+    - afi: ipv4
+      safi: unicast
+      description: "IPv4 unicast underlay (loopback reachability)"
+
+    - afi: l2vpn
+      safi: evpn
+      description: "L2VPN EVPN overlay"
+      advertise_all_vni: true
+      advertise_default_gw: true
+
+# ── BGP processes — one per network device ────────────────────────────────────
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: ManagedBGP
+  data:
+    - name: DC1-BL1-BGP
+      status: active
+      description: "iBGP process — DC1 border-leaf BL1 (RR for all spines)"
+      multipath: true
+      capabilities:
+        - DC1-BL1
+      router_id:
+        - "10.255.11.51/32"
+        - FABRIC-DC1
+      local_as: "AS65001"
+      address_families:
+        - - ipv4
+          - unicast
+        - - l2vpn
+          - evpn
+
+    - name: DC1-BL2-BGP
+      status: active
+      description: "iBGP process — DC1 border-leaf BL2 (RR for all spines)"
+      multipath: true
+      capabilities:
+        - DC1-BL2
+      router_id:
+        - "10.255.11.52/32"
+        - FABRIC-DC1
+      local_as: "AS65001"
+      address_families:
+        - - ipv4
+          - unicast
+        - - l2vpn
+          - evpn
+
+    - name: DC1-POD1-SP1-BGP
+      status: active
+      description: "iBGP process — DC1 POD1 spine SP1"
+      multipath: true
+      capabilities:
+        - DC1-POD1-SP1
+      router_id:
+        - "10.255.11.11/32"
+        - FABRIC-DC1
+      local_as: "AS65001"
+      address_families:
+        - - ipv4
+          - unicast
+        - - l2vpn
+          - evpn
+
+    - name: DC1-POD1-SP2-BGP
+      status: active
+      description: "iBGP process — DC1 POD1 spine SP2"
+      multipath: true
+      capabilities:
+        - DC1-POD1-SP2
+      router_id:
+        - "10.255.11.12/32"
+        - FABRIC-DC1
+      local_as: "AS65001"
+      address_families:
+        - - ipv4
+          - unicast
+        - - l2vpn
+          - evpn
+
+    - name: DC1-POD1-L1-BGP
+      status: active
+      description: "iBGP process — DC1 POD1 leaf L1"
+      multipath: true
+      capabilities:
+        - DC1-POD1-L1
+      router_id:
+        - "10.255.11.21/32"
+        - FABRIC-DC1
+      local_as: "AS65001"
+      address_families:
+        - - ipv4
+          - unicast
+        - - l2vpn
+          - evpn
+
+    - name: DC1-POD1-L2-BGP
+      status: active
+      description: "iBGP process — DC1 POD1 leaf L2"
+      multipath: true
+      capabilities:
+        - DC1-POD1-L2
+      router_id:
+        - "10.255.11.22/32"
+        - FABRIC-DC1
+      local_as: "AS65001"
+      address_families:
+        - - ipv4
+          - unicast
+        - - l2vpn
+          - evpn
+
+    - name: DC1-POD1-L3-BGP
+      status: active
+      description: "iBGP process — DC1 POD1 leaf L3"
+      multipath: true
+      capabilities:
+        - DC1-POD1-L3
+      router_id:
+        - "10.255.11.23/32"
+        - FABRIC-DC1
+      local_as: "AS65001"
+      address_families:
+        - - ipv4
+          - unicast
+        - - l2vpn
+          - evpn
+
+    - name: DC1-POD1-L4-BGP
+      status: active
+      description: "iBGP process — DC1 POD1 leaf L4"
+      multipath: true
+      capabilities:
+        - DC1-POD1-L4
+      router_id:
+        - "10.255.11.24/32"
+        - FABRIC-DC1
+      local_as: "AS65001"
+      address_families:
+        - - ipv4
+          - unicast
+        - - l2vpn
+          - evpn
+
+    - name: DC1-POD2-SP1-BGP
+      status: active
+      description: "iBGP process — DC1 POD2 spine SP1"
+      multipath: true
+      capabilities:
+        - DC1-POD2-SP1
+      router_id:
+        - "10.255.11.13/32"
+        - FABRIC-DC1
+      local_as: "AS65001"
+      address_families:
+        - - ipv4
+          - unicast
+        - - l2vpn
+          - evpn
+
+    - name: DC1-POD2-SP2-BGP
+      status: active
+      description: "iBGP process — DC1 POD2 spine SP2"
+      multipath: true
+      capabilities:
+        - DC1-POD2-SP2
+      router_id:
+        - "10.255.11.14/32"
+        - FABRIC-DC1
+      local_as: "AS65001"
+      address_families:
+        - - ipv4
+          - unicast
+        - - l2vpn
+          - evpn
+
+    - name: DC1-POD2-L1-BGP
+      status: active
+      description: "iBGP process — DC1 POD2 leaf L1"
+      multipath: true
+      capabilities:
+        - DC1-POD2-L1
+      router_id:
+        - "10.255.11.25/32"
+        - FABRIC-DC1
+      local_as: "AS65001"
+      address_families:
+        - - ipv4
+          - unicast
+        - - l2vpn
+          - evpn
+
+    - name: DC1-POD2-L2-BGP
+      status: active
+      description: "iBGP process — DC1 POD2 leaf L2"
+      multipath: true
+      capabilities:
+        - DC1-POD2-L2
+      router_id:
+        - "10.255.11.26/32"
+        - FABRIC-DC1
+      local_as: "AS65001"
+      address_families:
+        - - ipv4
+          - unicast
+        - - l2vpn
+          - evpn
+
+    - name: DC1-POD2-L3-BGP
+      status: active
+      description: "iBGP process — DC1 POD2 leaf L3"
+      multipath: true
+      capabilities:
+        - DC1-POD2-L3
+      router_id:
+        - "10.255.11.27/32"
+        - FABRIC-DC1
+      local_as: "AS65001"
+      address_families:
+        - - ipv4
+          - unicast
+        - - l2vpn
+          - evpn
+
+    - name: DC1-POD2-L4-BGP
+      status: active
+      description: "iBGP process — DC1 POD2 leaf L4"
+      multipath: true
+      capabilities:
+        - DC1-POD2-L4
+      router_id:
+        - "10.255.11.28/32"
+        - FABRIC-DC1
+      local_as: "AS65001"
+      address_families:
+        - - ipv4
+          - unicast
+        - - l2vpn
+          - evpn

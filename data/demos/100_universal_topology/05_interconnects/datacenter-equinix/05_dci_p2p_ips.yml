@@ -1,0 +1,178 @@
+---
+# DCI P2P addressing — /31 pairs for all cross-connect and inter-metro links
+#
+# Subnet: 10.255.0.0/24 in the `default` namespace (shared WAN routing domain).
+# Convention: lower address = DC/FR side, higher address = PA/remote side.
+#
+# DC ↔ Equinix edge (physical cross-connects):
+#   DC1-BL1:Eth9/1  ↔ FR2-EDGE-01:Eth1/2  → 10.255.0.0/31  (.0 / .1)
+#   DC1-BL2:Eth9/1  ↔ FR6-EDGE-01:Eth1/2  → 10.255.0.2/31  (.2 / .3)
+#   DC2-BL1:Eth1/9  ↔ PA4-EDGE-01:Eth1/2  → 10.255.0.4/31  (.4 / .5)
+#   DC2-BL2:Eth1/9  ↔ PA6-EDGE-01:Eth1/2  → 10.255.0.6/31  (.6 / .7)
+#   DC3-BL1:Eth8    ↔ PA4-EDGE-01:Eth1/3  → 10.255.0.8/31  (.8 / .9)
+#   DC3-BL2:Eth8    ↔ PA6-EDGE-01:Eth1/3  → 10.255.0.10/31 (.10 / .11)
+#
+# Equinix inter-metro (VTI cross-connects):
+#   FR2-EDGE-01:VTI-FR2-PA4-XC        ↔ PA4-EDGE-01:VTI-PA4-FR2-XC        → 10.255.0.12/31 (.12 / .13)
+#   FR6-EDGE-01:VTI-FR6-PA6-XC        ↔ PA6-EDGE-01:VTI-PA6-FR6-XC        → 10.255.0.14/31 (.14 / .15)
+#   AM1-EDGE-01:VTI-AM1-PA4-VSPHERE-PRI ↔ PA4-EDGE-01:VTI-PA4-AM1-VSPHERE-PRI → 10.255.0.16/31 (.16 / .17)
+#   AM1-EDGE-02:VTI-AM1-PA4-VSPHERE-SEC ↔ PA4-EDGE-02:VTI-PA4-AM1-VSPHERE-SEC → 10.255.0.18/31 (.18 / .19)
+#
+# Router-ID loopbacks (/32):
+#   FR2-EDGE-01 → 10.255.0.1/32   FR6-EDGE-01 → 10.255.0.2/32
+#   PA4-EDGE-01 → 10.255.0.3/32   PA6-EDGE-01 → 10.255.0.4/32
+#   PA4-EDGE-01 cloud → 10.255.0.5/32 (cloud-equinix/03_cloud_bgp.yml)
+#   AM1-EDGE-01 → 10.255.0.6/32   AM1-EDGE-02 → 10.255.0.7/32
+#   PA4-EDGE-02 → 10.255.0.8/32
+
+# ── P2P prefix ─────────────────────────────────────────────────────────────────
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: IpamPrefix
+  data:
+    - prefix: "10.255.0.0/24"
+      description: "DCI P2P links — cross-connect and inter-metro /31 pairs"
+      status: active
+      role: technical
+      ip_namespace: default
+
+---
+# ── DC1 DCI P2P interfaces ─────────────────────────────────────────────────────
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimPhysicalInterface
+  data:
+    - name: Ethernet9/1
+      device: DC1-BL1
+      ip_address:
+        data:
+          address: "10.255.0.0/31"
+          ip_namespace: default
+
+    - name: Ethernet9/1
+      device: DC1-BL2
+      ip_address:
+        data:
+          address: "10.255.0.2/31"
+          ip_namespace: default
+
+    - name: Ethernet1/2
+      device: FR2-EDGE-01
+      ip_address:
+        data:
+          address: "10.255.0.1/31"
+          ip_namespace: default
+
+    - name: Ethernet1/2
+      device: FR6-EDGE-01
+      ip_address:
+        data:
+          address: "10.255.0.3/31"
+          ip_namespace: default
+
+---
+# ── DC2 DCI P2P interfaces ─────────────────────────────────────────────────────
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimPhysicalInterface
+  data:
+    - name: Ethernet1/9
+      device: DC2-BL1
+      ip_address:
+        data:
+          address: "10.255.0.4/31"
+          ip_namespace: default
+
+    - name: Ethernet1/9
+      device: DC2-BL2
+      ip_address:
+        data:
+          address: "10.255.0.6/31"
+          ip_namespace: default
+
+    - name: Ethernet1/2
+      device: PA4-EDGE-01
+      ip_address:
+        data:
+          address: "10.255.0.5/31"
+          ip_namespace: default
+
+    - name: Ethernet1/2
+      device: PA6-EDGE-01
+      ip_address:
+        data:
+          address: "10.255.0.7/31"
+          ip_namespace: default
+
+---
+# ── DC3 DCI P2P interfaces ─────────────────────────────────────────────────────
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimPhysicalInterface
+  data:
+    - name: Ethernet8
+      device: DC3-BL1
+      ip_address:
+        data:
+          address: "10.255.0.8/31"
+          ip_namespace: default
+
+    - name: Ethernet8
+      device: DC3-BL2
+      ip_address:
+        data:
+          address: "10.255.0.10/31"
+          ip_namespace: default
+
+    - name: Ethernet1/3
+      device: PA4-EDGE-01
+      ip_address:
+        data:
+          address: "10.255.0.9/31"
+          ip_namespace: default
+
+    - name: Ethernet1/3
+      device: PA6-EDGE-01
+      ip_address:
+        data:
+          address: "10.255.0.11/31"
+          ip_namespace: default
+
+---
+# ── Inter-metro VTI P2P interfaces ────────────────────────────────────────────
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimVirtualInterface
+  data:
+    - name: VTI-FR2-PA4-XC
+      device: FR2-EDGE-01
+      ip_address:
+        data:
+          address: "10.255.0.12/31"
+          ip_namespace: default
+
+    - name: VTI-PA4-FR2-XC
+      device: PA4-EDGE-01
+      ip_address:
+        data:
+          address: "10.255.0.13/31"
+          ip_namespace: default
+
+    - name: VTI-FR6-PA6-XC
+      device: FR6-EDGE-01
+      ip_address:
+        data:
+          address: "10.255.0.14/31"
+          ip_namespace: default
+
+    - name: VTI-PA6-FR6-XC
+      device: PA6-EDGE-01
+      ip_address:
+        data:
+          address: "10.255.0.15/31"
+          ip_namespace: default

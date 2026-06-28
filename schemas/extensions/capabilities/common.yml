@@ -67,16 +67,3 @@ generics:
     label: Network Peering
     icon: "carbon:network-2"
     include_in_menu: false
-    relationships:
-      - name: interfaces
-        peer: DcimInterface
-        label: "Peering Interfaces"
-        kind: Generic
-        cardinality: many
-        optional: true
-        identifier: "peering__interfaces"
-        order_weight: 3000
-        description: >-
-          Interfaces for this peering session.
-          Underlay: P2P physical interfaces.
-          Overlay: loopback virtual interfaces.

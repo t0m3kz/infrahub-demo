@@ -47,6 +47,7 @@ class RoutingPlanInput:
     options: dict[str, Any] = field(default_factory=dict)
     routing_strategy: str = "ebgp-ebgp"
     deployment_name: str = ""
+    evpn_af_id: str = ""
 
 
 @dataclass
@@ -99,7 +100,7 @@ class RoutingStrategy(str, Enum):
 def _safe_device_name(bgp: Any) -> str | None:
     """Extract device name from a prefetched ManagedBGP/ManagedOSPF object."""
     try:
-        peers = bgp.device_capabilities.peers
+        peers = bgp.capabilities.peers
         if peers:
             return peers[0].name.value
         return None
@@ -119,15 +120,19 @@ def _make_bgp_proc(
     local_as: dict,
     router_id: dict,
     device_id: str,
+    multipath: bool = False,
 ) -> dict[str, Any]:
-    return {
+    proc: dict[str, Any] = {
         "name": f"{name}-bgp-{suffix}",
         "description": description,
         "status": "active",
         "local_as": local_as,
         "router_id": router_id,
-        "device_capabilities": [{"id": device_id}],
+        "capabilities": [{"id": device_id}],
     }
+    if multipath:
+        proc["multipath"] = True
+    return proc
 
 
 class RoutingPlanner:
@@ -221,12 +226,13 @@ class RoutingPlanner:
                 device_map,
                 overlay_as_id if overlay_type == "ibgp" else None,
                 set(inp.top_devices),
+                evpn_af_id=inp.evpn_af_id,
             )
 
         # ---- Overlay peerings ----
         if design:
             overlay_bgp = [b for b in plan.bgp_processes if b["name"].endswith("-bgp-overlay")]
-            planned_device_ids = {b["device_capabilities"][0]["id"] for b in overlay_bgp}
+            planned_device_ids = {b["capabilities"][0]["id"] for b in overlay_bgp}
 
             # Include remote devices with existing overlay BGP not yet in plan
             existing_overlay_names: set[str] = set()
@@ -242,7 +248,7 @@ class RoutingPlanner:
                     overlay_bgp.append(
                         {
                             "name": f"{name}-bgp-overlay",
-                            "device_capabilities": [{"id": info["id"]}],
+                            "capabilities": [{"id": info["id"]}],
                         }
                     )
 
@@ -254,6 +260,7 @@ class RoutingPlanner:
                     device_map=device_map,
                     bottom_device_names=set(inp.bottom_devices),
                     top_device_names=set(inp.top_devices),
+                    evpn_af_id=inp.evpn_af_id,
                 )
 
         return plan
@@ -363,7 +370,13 @@ class RoutingPlanner:
 
             local_as = {"id": existing_as_id} if existing_as_id else {"_for_device": name}
             proc = _make_bgp_proc(
-                name, "underlay", f"eBGP process for {name} underlay", local_as, router_id, info["id"]
+                name,
+                "underlay",
+                f"eBGP process for {name} underlay",
+                local_as,
+                router_id,
+                info["id"],
+                multipath=True,
             )
             plan.bgp_processes.append(proc)
             bgp_planned.add(name)
@@ -413,7 +426,7 @@ class RoutingPlanner:
                     "bfd_enabled": True,
                     "send_community": True,
                     "ttl": 1,
-                    "interfaces": [{"id": a.id}, {"id": b.id}],
+                    "interface_capabilities": [{"id": a.id}, {"id": b.id}],
                     "bgp_processes": [
                         {"hfid": f"{a_name}-bgp-underlay"},
                         {"hfid": f"{b_name}-bgp-underlay"},
@@ -431,6 +444,7 @@ class RoutingPlanner:
         device_map: dict[str, dict],
         overlay_as_id: str | None,
         top_device_names: set[str] | None = None,
+        evpn_af_id: str = "",
     ) -> None:
         """Build overlay BGP processes. If overlay_as_id is set → iBGP (shared ASN); otherwise → eBGP (per-device ASN).
 
@@ -483,6 +497,8 @@ class RoutingPlanner:
                 router_id,
                 info["id"],
             )
+            if evpn_af_id:
+                proc["address_families"] = [{"id": evpn_af_id}]
             plan.bgp_processes.append(proc)
 
     # ================================================================
@@ -526,7 +542,7 @@ class RoutingPlanner:
                     "process_id": "1",
                     "version": "ospf",
                     "router_type": "internal",
-                    "device_capabilities": [{"id": info["id"]}],
+                    "capabilities": [{"id": info["id"]}],
                     "router_id": router_id,
                 }
             )
@@ -542,7 +558,7 @@ class RoutingPlanner:
                         "mode": "peer_to_peer",
                         "ospf_process": {"hfid": ospf_name},
                         "area": area_ref,
-                        "interfaces": [{"id": iface.id}],
+                        "interface_capabilities": [{"id": iface.id}],
                     }
                 )
 
@@ -558,18 +574,19 @@ class RoutingPlanner:
         device_map: dict[str, dict],
         bottom_device_names: set[str] | None = None,
         top_device_names: set[str] | None = None,
+        evpn_af_id: str = "",
     ) -> None:
         """Build overlay peerings using device loopback IPs from device_map."""
         id_to_name = {info["id"]: name for name, info in device_map.items()}
         device_bgp_map: dict[str, dict] = {}
 
         for bgp in bgp_processes:
-            did = bgp["device_capabilities"][0]["id"]
+            did = bgp["capabilities"][0]["id"]
             device_bgp_map[did] = bgp
 
         device_data: list[_BGPDevice] = []
         for bgp in bgp_processes:
-            did = bgp["device_capabilities"][0]["id"]
+            did = bgp["capabilities"][0]["id"]
             name = id_to_name.get(did)
             if not name:
                 continue
@@ -609,13 +626,21 @@ class RoutingPlanner:
         if not session_plan:
             return
 
+        _RR_ROLES = frozenset(("spine", "super-spine", "super_spine"))
+        _CLIENT_ROLES = frozenset(("leaf", "border-leaf", "tor"))
+
         for d1_name, d1_id, d2_name, d2_id, stype, af_types in session_plan:
             if d1_id not in device_bgp_map or d2_id not in device_bgp_map:
                 continue
 
             bgp1, bgp2 = device_bgp_map[d1_id], device_bgp_map[d2_id]
             left_name, right_name = sorted([d1_name, d2_name])
-            is_rr = overlay_type == "ibgp"
+
+            # route_reflector_client is True only for genuine RR→client peerings
+            # (d1=client leaf/tor, d2=RR spine/super-spine); RR-to-RR sessions do not set it
+            d1_role = device_map.get(d1_name, {}).get("role", "")
+            d2_role = device_map.get(d2_name, {}).get("role", "")
+            rr_client_session = stype == "ibgp" and d1_role in _CLIENT_ROLES and d2_role in _RR_ROLES
 
             # Overlay peers via loopback interfaces
             peering_interfaces = []
@@ -632,11 +657,12 @@ class RoutingPlanner:
                 "bfd_enabled": True,
                 "send_community": True,
                 "send_extended_community": True,
-                "route_reflector_client": bool(stype == "ibgp" and is_rr),
+                "route_reflector_client": rr_client_session,
+                **({"address_families": [{"id": evpn_af_id}]} if evpn_af_id else {}),
                 "bgp_processes": [{"hfid": bgp1["name"]}, {"hfid": bgp2["name"]}],
             }
             if peering_interfaces:
-                peering["interfaces"] = peering_interfaces
+                peering["interface_capabilities"] = peering_interfaces
 
             plan.bgp_peerings.append(peering)
 

@@ -6,10 +6,10 @@ kind: Object
 spec:
   kind: IpamNamespace
   data:
-    - name: "CUST1-AZURE-WESTEUROPE"
-      description: "Customer 1 Azure VNet westeurope routing domain"
+    - name: "CNRD-AZURE-WESTEUROPE"
+      description: "CNRD Azure VNet westeurope routing domain"
       status: "active"
-      owner: "Customer 1"
+      owner: "C001"
 
 ---
 # VNet CIDR and subnet ranges
@@ -20,23 +20,23 @@ spec:
   data:
     # VNet CIDR
     - prefix: "172.17.0.0/16"
-      description: "Customer 1 VNet westeurope"
+      description: "CNRD VNet westeurope"
       status: active
-      ip_namespace: "CUST1-AZURE-WESTEUROPE"
+      ip_namespace: "CNRD-AZURE-WESTEUROPE"
 
     # AKS node pool subnets (private)
     - prefix: "172.17.10.0/24"
-      description: "Customer 1 AKS node pool subnet westeurope zone 1"
+      description: "CNRD AKS node pool subnet westeurope zone 1"
       status: active
-      ip_namespace: "CUST1-AZURE-WESTEUROPE"
+      ip_namespace: "CNRD-AZURE-WESTEUROPE"
 
     - prefix: "172.17.20.0/24"
-      description: "Customer 1 AKS node pool subnet westeurope zone 2"
+      description: "CNRD AKS node pool subnet westeurope zone 2"
       status: active
-      ip_namespace: "CUST1-AZURE-WESTEUROPE"
+      ip_namespace: "CNRD-AZURE-WESTEUROPE"
 
     # Route destination — on-prem aggregate advertised via ExpressRoute
     - prefix: "10.0.0.0/8"
-      description: "On-premises aggregate (advertised from DC1/DC2 via ER to ERGW)"
+      description: "On-premises aggregate (advertised from DC1/DC2 via ER to ERGW)"  # yamllint disable-line rule:line-length
       status: active
-      ip_namespace: "CUST1-AZURE-WESTEUROPE"
+      ip_namespace: "CNRD-AZURE-WESTEUROPE"

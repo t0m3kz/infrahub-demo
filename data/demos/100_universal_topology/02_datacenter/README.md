@@ -75,9 +75,12 @@ dc3/
 ├── 04_devices.yml             # K8s workers, vSphere ESXi hosts, Nutanix nodes. All in one building.
 ├── 05_cabling.yml             # 1500+ lines. It's fine. Everything's fine.
 ├── 06_lag_mlag.yml            # LAGs so the cables have friends.
-├── 08_server_segments.yml     # Segments for all three platforms. Fair and equal.
+├── 09_underlay.yml            # BGP underlay for the three-platform circus.
 ├── 09_virt_cluster.yml        # Three clusters. One namespace. Zero consensus.
-└── 10_cluster_capabilities.yml # 18 capability nodes. Completely reasonable.
+├── 10_cluster_capabilities.yml # 18 capability nodes. Completely reasonable.
+├── 11_peerings.yml            # OSPF peerings. Because the hypervisors needed routing too.
+└── TOPOLOGY.md               # A diagram. It documents three hypervisors in one building.
+                               # We are not proud. We are thorough.
 ```
 
 ### DC3 Hypervisor Situation (A Brief History)

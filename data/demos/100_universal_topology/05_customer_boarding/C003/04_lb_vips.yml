@@ -1,0 +1,140 @@
+---
+# C003 (Vaultex Inc.) — DC3 Load Balancer VIP services
+# One VIP per AppComponent — no shared hostnames across applications.
+
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: LoadbalancerVIP
+  data:
+
+    # ── vault-core / production ───────────────────────────────────────────────
+    - hostname: c003-vault-api.dc3.internal
+      protocol: https
+      port: 8200
+      status: active
+      description: "C003 vault-core vault-api — HTTPS:8200"
+      load_balancer: DC3-LB-HA
+
+    - hostname: c003-vault-db.dc3.internal
+      protocol: tcp
+      port: 5432
+      status: active
+      description: "C003 vault-core vault-db"
+      load_balancer: DC3-LB-HA
+
+    # ── compliance-portal / production ────────────────────────────────────────
+    - hostname: c003-comp-web.dc3.internal
+      protocol: https
+      port: 443
+      status: active
+      description: "C003 compliance-portal audit-dashboard — HTTPS"
+      load_balancer: DC3-LB-HA
+
+    - hostname: c003-comp-web.dc3.internal
+      protocol: http
+      port: 80
+      status: active
+      description: "C003 compliance-portal audit-dashboard — HTTP (redirect)"
+      load_balancer: DC3-LB-HA
+
+    - hostname: c003-comp-api.dc3.internal
+      protocol: https
+      port: 8443
+      status: active
+      description: "C003 compliance-portal policy-engine"
+      load_balancer: DC3-LB-HA
+
+    - hostname: c003-comp-db.dc3.internal
+      protocol: tcp
+      port: 5432
+      status: active
+      description: "C003 compliance-portal audit-db"
+      load_balancer: DC3-LB-HA
+
+---
+# Bind all VIPs to ingress interface 1.1 on both LB nodes.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimPhysicalInterface
+  data:
+    - name: "1.1"
+      device: DC3-LB-01
+      interface_capabilities:
+        - kind: LoadbalancerVIP
+          data:
+            hostname: c003-vault-api.dc3.internal
+            protocol: https
+            port: 8200
+            load_balancer: DC3-LB-HA
+        - kind: LoadbalancerVIP
+          data:
+            hostname: c003-vault-db.dc3.internal
+            protocol: tcp
+            port: 5432
+            load_balancer: DC3-LB-HA
+        - kind: LoadbalancerVIP
+          data:
+            hostname: c003-comp-web.dc3.internal
+            protocol: https
+            port: 443
+            load_balancer: DC3-LB-HA
+        - kind: LoadbalancerVIP
+          data:
+            hostname: c003-comp-web.dc3.internal
+            protocol: http
+            port: 80
+            load_balancer: DC3-LB-HA
+        - kind: LoadbalancerVIP
+          data:
+            hostname: c003-comp-api.dc3.internal
+            protocol: https
+            port: 8443
+            load_balancer: DC3-LB-HA
+        - kind: LoadbalancerVIP
+          data:
+            hostname: c003-comp-db.dc3.internal
+            protocol: tcp
+            port: 5432
+            load_balancer: DC3-LB-HA
+
+    - name: "1.1"
+      device: DC3-LB-02
+      interface_capabilities:
+        - kind: LoadbalancerVIP
+          data:
+            hostname: c003-vault-api.dc3.internal
+            protocol: https
+            port: 8200
+            load_balancer: DC3-LB-HA
+        - kind: LoadbalancerVIP
+          data:
+            hostname: c003-vault-db.dc3.internal
+            protocol: tcp
+            port: 5432
+            load_balancer: DC3-LB-HA
+        - kind: LoadbalancerVIP
+          data:
+            hostname: c003-comp-web.dc3.internal
+            protocol: https
+            port: 443
+            load_balancer: DC3-LB-HA
+        - kind: LoadbalancerVIP
+          data:
+            hostname: c003-comp-web.dc3.internal
+            protocol: http
+            port: 80
+            load_balancer: DC3-LB-HA
+        - kind: LoadbalancerVIP
+          data:
+            hostname: c003-comp-api.dc3.internal
+            protocol: https
+            port: 8443
+            load_balancer: DC3-LB-HA
+        - kind: LoadbalancerVIP
+          data:
+            hostname: c003-comp-db.dc3.internal
+            protocol: tcp
+            port: 5432
+            load_balancer: DC3-LB-HA

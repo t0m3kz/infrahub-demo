@@ -1,0 +1,19 @@
+query VirtClusterCapacity($id: ID!) {
+  VirtCluster(ids: [$id]) {
+    edges {
+      node {
+        node_pools {
+          edges {
+            node {
+              node_count { value }
+              desired_capacity { value }
+              cpu_per_node { value }
+              memory_per_node_gb { value }
+              storage_per_node_gb { value }
+            }
+          }
+        }
+      }
+    }
+  }
+}

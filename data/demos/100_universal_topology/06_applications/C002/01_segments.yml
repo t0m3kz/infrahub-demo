@@ -1,0 +1,171 @@
+---
+# C002 (SwiftGo GmbH) — VXLAN segment boarding
+
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: ManagedVxlanSegment
+  data:
+    # ── Production ────────────────────────────────────────────────────────────
+
+    - customer_name: "web-frontend"
+      environment: "p"
+      owner: "C002"
+      security_tag: web-tier
+      arp_suppression: true
+      prefix:
+        - - "10.2.10.0/24"
+          - "C002-PROD"
+      gateway:
+        - "10.2.10.1/24"
+        - "C002-PROD"
+      deployments:
+        - DC1
+        - DC2
+        - DC3
+      member_of_groups:
+        - vxlan_segments
+      interface_capabilities:
+        - kind: DcimLAGInterface
+          data:
+            device: DC1-POD1-SRV-01
+            name: bond0
+            lag_id: 1
+        - kind: DcimLAGInterface
+          data:
+            device: DC1-POD1-SRV-ASS-01
+            name: bond0
+            lag_id: 1
+        - kind: DcimLAGInterface
+          data:
+            device: DC1-POD2-SRV-01
+            name: bond0
+            lag_id: 1
+        - kind: DcimLAGInterface
+          data:
+            device: DC2-POD1-SRV-01
+            name: bond0
+            lag_id: 1
+        - kind: DcimLAGInterface
+          data:
+            device: DC2-POD2-SRV-01
+            name: bond0
+            lag_id: 1
+
+    - customer_name: "app-backend"
+      environment: "p"
+      owner: "C002"
+      security_tag: app-tier
+      arp_suppression: true
+      prefix:
+        - - "10.2.20.0/24"
+          - "C002-PROD"
+      gateway:
+        - "10.2.20.1/24"
+        - "C002-PROD"
+      deployments:
+        - DC1
+        - DC2
+        - DC3
+      member_of_groups:
+        - vxlan_segments
+      interface_capabilities:
+        - kind: DcimLAGInterface
+          data:
+            device: DC1-POD1-SRV-02
+            name: bond0
+            lag_id: 1
+        - kind: DcimLAGInterface
+          data:
+            device: DC1-POD2-SRV-01
+            name: bond0
+            lag_id: 1
+        - kind: DcimLAGInterface
+          data:
+            device: DC2-POD1-SRV-02
+            name: bond0
+            lag_id: 1
+        - kind: DcimLAGInterface
+          data:
+            device: DC2-POD2-SRV-02
+            name: bond0
+            lag_id: 1
+
+    - customer_name: "database"
+      environment: "p"
+      owner: "C002"
+      security_tag: database
+      arp_suppression: true
+      prefix:
+        - - "10.2.30.0/24"
+          - "C002-PROD"
+      gateway:
+        - "10.2.30.1/24"
+        - "C002-PROD"
+      deployments:
+        - DC1
+        - DC2
+      member_of_groups:
+        - vxlan_segments
+      interface_capabilities:
+        - kind: DcimLAGInterface
+          data:
+            device: DC1-POD2-SRV-02
+            name: bond0
+            lag_id: 1
+        - kind: DcimLAGInterface
+          data:
+            device: DC2-POD2-SRV-01
+            name: bond0
+            lag_id: 1
+
+    # ── Non-production (DC2 only) ─────────────────────────────────────────────
+
+    - customer_name: "web-frontend"
+      environment: "n"
+      owner: "C002"
+      security_tag: web-tier
+      arp_suppression: true
+      prefix:
+        - - "10.2.110.0/24"
+          - "C002-NONPROD"
+      gateway:
+        - "10.2.110.1/24"
+        - "C002-NONPROD"
+      deployments:
+        - DC2
+      member_of_groups:
+        - vxlan_segments
+      interface_capabilities:
+        - kind: DcimLAGInterface
+          data:
+            device: DC2-POD1-SRV-01
+            name: bond0
+            lag_id: 1
+
+    - customer_name: "app-backend"
+      environment: "n"
+      owner: "C002"
+      security_tag: app-tier
+      arp_suppression: true
+      prefix:
+        - - "10.2.120.0/24"
+          - "C002-NONPROD"
+      gateway:
+        - "10.2.120.1/24"
+        - "C002-NONPROD"
+      deployments:
+        - DC2
+      member_of_groups:
+        - vxlan_segments
+      interface_capabilities:
+        - kind: DcimLAGInterface
+          data:
+            device: DC2-POD1-SRV-02
+            name: bond0
+            lag_id: 1
+        - kind: DcimLAGInterface
+          data:
+            device: DC2-POD2-SRV-02
+            name: bond0
+            lag_id: 1

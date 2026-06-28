@@ -76,3 +76,7 @@ spec:
       description: Arista SD-WAN hub gateways (VCG) deployed at colocation or cloud sites
     - name: sdwan_orchestrators
       description: Arista SD-WAN Orchestrators (VCO) — on-premises or private cloud deployments
+    - name: app_applications
+      description: Application instances — generator target for AppApplicationGenerator
+    - name: app_components
+      description: Application component instances — generator target for AppComponentGenerator

@@ -55,7 +55,14 @@ artifact_definitions:
     targets: loadbalancers
     transformation: loadbalancer
     parameters:
-      instance: name__value
+      device: name__value
+  - name: proxy_config
+    artifact_name: proxy
+    content_type: text/plain
+    targets: onprem_proxies
+    transformation: proxy
+    parameters:
+      device: name__value
   # Cloud Load Balancer Terraform vars
   - name: cloud_lb_terraform
     artifact_name: terraform-vars
@@ -110,29 +117,6 @@ artifact_definitions:
     transformation: cloud-vpc-terraform
     parameters:
       account: name__value
-  - name: cloud_vpc_pulumi
-    artifact_name: vpc-pulumi
-    content_type: text/plain
-    targets: cloud_accounts
-    transformation: cloud-vpc-pulumi
-    parameters:
-      account: name__value
-  # SaaS Proxy policy export (Zscaler, Prisma, etc.)
-  - name: proxy_saas_config
-    artifact_name: proxy-policy
-    content_type: application/json
-    targets: saas_proxies
-    transformation: proxy-saas
-    parameters:
-      instance: name__value
-  # On-prem proxy config (Squid squid.conf)
-  - name: proxy_onprem_config
-    artifact_name: proxy-config
-    content_type: text/plain
-    targets: onprem_proxies
-    transformation: proxy-onprem
-    parameters:
-      instance: name__value
 
 check_definitions:
   - name: validate_spine
@@ -156,9 +140,15 @@ check_definitions:
   - name: validate_loadbalancer
     class_name: CheckLoadBalancer
     file_path: checks/loadbalancer.py
-    targets: loadbalancers
+    targets: loadbalancer_devices
     parameters:
-      instance: name__value
+      device: name__value
+  - name: validate_proxy
+    class_name: CheckProxy
+    file_path: checks/proxy.py
+    targets: onprem_proxies
+    parameters:
+      device: name__value
   - name: validate_tor
     class_name: CheckToR
     file_path: checks/tor.py
@@ -190,53 +180,58 @@ check_definitions:
 python_transforms:
   - name: topology_cabling
     class_name: TopologyCabling
-    file_path: transforms/topology_cabling.py
+    file_path: transforms/topology/cabling.py
   - name: leaf
     class_name: Leaf
-    file_path: transforms/leaf.py
+    file_path: transforms/config/leaf.py
   - name: border_leaf
     class_name: BorderLeaf
-    file_path: transforms/border_leaf.py
+    file_path: transforms/config/border_leaf.py
   - name: tor
     class_name: ToR
-    file_path: transforms/tor.py
+    file_path: transforms/config/tor.py
   - name: spine
     class_name: Spine
-    file_path: transforms/spine.py
+    file_path: transforms/config/spine.py
   - name: super_spine
     class_name: SuperSpine
-    file_path: transforms/super_spine.py
+    file_path: transforms/config/super_spine.py
   - name: loadbalancer
     class_name: LoadBalancer
-    file_path: transforms/loadbalancer.py
+    file_path: transforms/config/loadbalancer.py
+  - name: proxy
+    class_name: Proxy
+    file_path: transforms/config/proxy.py
   - name: edge
     class_name: Edge
-    file_path: transforms/edge.py
+    file_path: transforms/config/edge.py
   - name: equinix_pop
     class_name: EquinixPOP
-    file_path: transforms/equinix_pop.py
+    file_path: transforms/config/equinix_pop.py
   - name: loadbalancer-cloud
     class_name: LoadBalancerCloud
-    file_path: transforms/loadbalancer_cloud.py
+    file_path: transforms/config/loadbalancer_cloud.py
   - name: firewall
     class_name: Firewall
-    file_path: transforms/firewall.py
+    file_path: transforms/config/firewall.py
   - name: rack_elevation
     class_name: RackElevation
-    file_path: transforms/rack.py
+    file_path: transforms/topology/rack.py
   - name: cloud-vpc-terraform
     class_name: CloudVpcTerraform
-    file_path: transforms/cloud_vpc_terraform.py
-  - name: cloud-vpc-pulumi
-    class_name: CloudVpcPulumi
-    file_path: transforms/cloud_vpc_pulumi.py
-  - name: proxy-saas
-    class_name: ProxySaas
-    file_path: transforms/proxy_saas.py
-  - name: proxy-onprem
-    class_name: ProxyOnprem
-    file_path: transforms/proxy_onprem.py
+    file_path: transforms/cloud/vpc_terraform.py
+  - name: virt_cluster_total_cpu
+    class_name: VirtClusterTotalCpu
+    file_path: transforms/fields/virt_cluster_capacity.py
+  - name: virt_cluster_total_memory_gb
+    class_name: VirtClusterTotalMemoryGb
+    file_path: transforms/fields/virt_cluster_capacity.py
+  - name: virt_cluster_total_storage_gb
+    class_name: VirtClusterTotalStorageGb
+    file_path: transforms/fields/virt_cluster_capacity.py
 queries:
+  - name: placeholder
+    file_path: queries/placeholder.gql
   - name: endpoint_connectivity
     file_path: queries/topology/add/endpoint.gql
   - name: topology_dc
@@ -245,6 +240,8 @@ queries:
     file_path: queries/topology/add/pod.gql
   - name: rack
     file_path: queries/topology/add/rack.gql
+  - name: rack_devices_with_interfaces
+    file_path: queries/topology/add/rack_devices_with_interfaces.gql
   - name: topology_pop
     file_path: queries/topology/add/pop.gql
   - name: topology_simulator
@@ -264,6 +261,8 @@ queries:
     file_path: queries/config/edge.gql
   - name: loadbalancer_config
     file_path: queries/config/loadbalancer.gql
+  - name: proxy_config
+    file_path: queries/config/proxy.gql
   - name: loadbalancer_cloud
     file_path: queries/config/loadbalancer_cloud.gql
   - name: firewall_config
@@ -272,6 +271,12 @@ queries:
     file_path: queries/config/oob.gql
   - name: pod_decommission
     file_path: queries/topology/decomission/pod.gql
+  - name: virt_cluster_capacity
+    file_path: queries/topology/add/virt_cluster_capacity.gql
+  - name: application
+    file_path: queries/topology/add/application.gql
+  - name: app_component_data
+    file_path: queries/topology/add/app_component.gql
   - name: vlan_segment_data
     file_path: queries/topology/add/vlan_segment.gql
   - name: vxlan_segment_data
@@ -286,15 +291,15 @@ queries:
     file_path: queries/validation/capability_guard.gql
   - name: loadbalancer_validation
     file_path: queries/validation/lb.gql
+  - name: proxy_validation
+    file_path: queries/validation/proxy.gql
 
   - name: rack_elevation_query
     file_path: queries/topology/rack.gql
   - name: cloud_vpc_config
     file_path: queries/config/cloud_vpc.gql
-  - name: proxy_saas_config
-    file_path: queries/config/proxy.gql
-  - name: proxy_onprem_config
-    file_path: queries/config/proxy.gql
+  - name: proposed_change_artifacts
+    file_path: queries/topology/add/proposed_change_artifacts.gql
 
 generator_definitions:
   - name: add_dc
@@ -396,6 +401,24 @@ generator_definitions:
     execute_after_merge: false
     parameters:
       name: name__value
+  - name: add_app_application
+    file_path: generators/add/application.py
+    targets: app_applications
+    query: application
+    class_name: AppApplicationGenerator
+    execute_in_proposed_change: false
+    execute_after_merge: false
+    parameters:
+      name: name__value
+  - name: add_app_components
+    file_path: generators/add/app_component.py
+    targets: app_components
+    query: app_component_data
+    class_name: AppComponentGenerator
+    execute_in_proposed_change: false
+    execute_after_merge: false
+    parameters:
+      name: slug__value
 
 # - name: create_pop
 #   file_path: generators/generate_pop.py

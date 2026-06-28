@@ -7,9 +7,16 @@ Covers:
   - _l3_from_activations()       — L3 VNI (VRF) mappings from activations
   - _transform_vxlan_arista()    — anycast_gateway enabled from gateway_ip presence
   - get_acls()                   — zero-trust ACL list from security_policies on segments
+  - isolation_mode propagation   — _vlans_from_activations and arista_eos.j2 rendering
 """
 
+from pathlib import Path
+
+import jinja2
+import pytest
+
 from transforms.common import (
+    _build_acl_rule,
     _l2_from_activations,
     _l3_from_activations,
     _transform_vxlan_arista,
@@ -649,3 +656,268 @@ class TestGetAclsZoneSupport:
         r = get_acls(activations=acts)[0]["rules"][0]
         assert r["src_zone"] == "external"
         assert r["dst_zone"] is None
+
+
+# ===========================================================================
+# isolation_mode and firewall-skip logic
+# ===========================================================================
+
+
+def _make_isolation_activation(
+    vlan_id: int,
+    seg_id: str,
+    policies: list | None = None,
+    firewall_id: str | None = None,
+    isolation_mode: str = "normal",
+) -> dict:
+    """Return a single activation dict for isolation_mode / firewall-skip tests.
+
+    The segment always has ``security_policies`` present so that the skip vs.
+    render decision is exercised rather than the "field not queried" early-exit.
+    """
+    seg: dict = {
+        "id": seg_id,
+        "name": f"owner - prod - vlan{vlan_id}",
+        "customer_name": f"vlan{vlan_id}",
+        "arp_suppression": True,
+        "prefix": {"ip_namespace": {"name": "tenant-a", "l3_vni": 50001}},
+        "security_policies": policies if policies is not None else [],
+        "isolation_mode": isolation_mode,
+    }
+    if firewall_id is not None:
+        seg["inline_service"] = {"id": firewall_id}
+    return {"vlan_id": vlan_id, "vni": 10000 + vlan_id, "status": "active", "segment": seg}
+
+
+class TestGetAclsIsolationMode:
+    """Firewall-skip logic gated by isolation_mode on the segment."""
+
+    def test_normal_segment_with_firewall_skips_acl(self) -> None:
+        """A segment with a firewall and isolation_mode='normal' produces no ACL."""
+        act = _make_isolation_activation(
+            vlan_id=100, seg_id="seg-fw-normal", firewall_id="fw-1", isolation_mode="normal"
+        )
+        result = get_acls(activations=[act])
+        assert result == []
+
+    def test_isolated_segment_with_firewall_skips_acl(self) -> None:
+        """'isolated' is not 'microsegmented' — firewall skip still applies."""
+        act = _make_isolation_activation(
+            vlan_id=101, seg_id="seg-fw-isolated", firewall_id="fw-1", isolation_mode="isolated"
+        )
+        result = get_acls(activations=[act])
+        assert result == []
+
+    def test_microsegmented_segment_with_firewall_renders_acl(self) -> None:
+        """isolation_mode='microsegmented' bypasses the firewall skip — ACL must be generated."""
+        policies = [_policy(rules=[_rule(index=10)])]
+        act = _make_isolation_activation(
+            vlan_id=102,
+            seg_id="seg-fw-micro",
+            firewall_id="fw-1",
+            isolation_mode="microsegmented",
+            policies=policies,
+        )
+        result = get_acls(activations=[act])
+        assert len(result) == 1
+        assert result[0]["isolation_mode"] == "microsegmented"
+
+    def test_microsegmented_without_firewall_renders_acl(self) -> None:
+        """Microsegmented segment with no firewall still renders its ACL normally."""
+        policies = [_policy(rules=[_rule(index=10)])]
+        act = _make_isolation_activation(
+            vlan_id=103, seg_id="seg-micro-nofw", isolation_mode="microsegmented", policies=policies
+        )
+        result = get_acls(activations=[act])
+        assert len(result) == 1
+
+    def test_normal_without_firewall_renders_acl(self) -> None:
+        """Baseline: no firewall, isolation_mode='normal' → ACL rendered as always."""
+        policies = [_policy(rules=[_rule(index=10)])]
+        act = _make_isolation_activation(
+            vlan_id=104, seg_id="seg-normal-nofw", isolation_mode="normal", policies=policies
+        )
+        result = get_acls(activations=[act])
+        assert len(result) == 1
+
+    def test_isolation_mode_propagated_to_acl_dict(self) -> None:
+        """isolation_mode value from the segment must appear in the output ACL dict."""
+        policies = [_policy(rules=[_rule(index=10)])]
+        act = _make_isolation_activation(
+            vlan_id=105, seg_id="seg-isolated-nofw", isolation_mode="isolated", policies=policies
+        )
+        result = get_acls(activations=[act])
+        assert len(result) == 1
+        assert result[0]["isolation_mode"] == "isolated"
+
+    def test_missing_isolation_mode_defaults_to_normal(self) -> None:
+        """When 'isolation_mode' key is absent from the segment dict, it defaults to 'normal'."""
+        act = _make_isolation_activation(
+            vlan_id=106, seg_id="seg-no-iso-key", policies=[_policy(rules=[_rule(index=10)])]
+        )
+        # Remove the key entirely — _make_isolation_activation always sets it, so pop it
+        del act["segment"]["isolation_mode"]
+        result = get_acls(activations=[act])
+        assert len(result) == 1
+        assert result[0]["isolation_mode"] == "normal"
+
+    def test_apply_on_switch_field_present_in_rule(self) -> None:
+        """_build_acl_rule must not crash when 'apply_on_switch' appears in the rule dict."""
+        rule_dict = {
+            "index": 10,
+            "name": "r",
+            "action": "permit",
+            "protocol": "tcp",
+            "apply_on_switch": True,
+        }
+        result = _build_acl_rule(rule_dict)
+        assert result["action"] == "permit"
+
+
+# ===========================================================================
+# isolation_mode propagation in _vlans_from_activations()
+# ===========================================================================
+
+
+def _make_iso_activation(vlan_id: int, isolation_mode: str | None = None) -> dict:
+    """Build a minimal activation dict, optionally with isolation_mode on the segment."""
+    seg: dict = {
+        "name": f"seg-{vlan_id}",
+        "customer_name": f"seg-{vlan_id}",
+        "arp_suppression": True,
+        "prefix": {"ip_namespace": {"name": "default"}},
+    }
+    if isolation_mode is not None:
+        seg["isolation_mode"] = isolation_mode
+    return {"vlan_id": vlan_id, "vni": 10000 + vlan_id, "status": "active", "segment": seg}
+
+
+class TestVlansFromActivationsIsolationMode:
+    """isolation_mode is read from segment dict and stored verbatim in the VLAN dict."""
+
+    def test_isolation_mode_normal_propagated(self) -> None:
+        acts = [_make_iso_activation(vlan_id=100, isolation_mode="normal")]
+        result = _vlans_from_activations(acts)
+        assert result[0]["isolation_mode"] == "normal"
+
+    def test_isolation_mode_isolated_propagated(self) -> None:
+        acts = [_make_iso_activation(vlan_id=101, isolation_mode="isolated")]
+        result = _vlans_from_activations(acts)
+        assert result[0]["isolation_mode"] == "isolated"
+
+    def test_isolation_mode_microsegmented_propagated(self) -> None:
+        acts = [_make_iso_activation(vlan_id=102, isolation_mode="microsegmented")]
+        result = _vlans_from_activations(acts)
+        assert result[0]["isolation_mode"] == "microsegmented"
+
+    def test_isolation_mode_missing_defaults_to_normal(self) -> None:
+        """When segment dict has no isolation_mode key the VLAN dict gets 'normal'."""
+        acts = [_make_iso_activation(vlan_id=103, isolation_mode=None)]
+        result = _vlans_from_activations(acts)
+        assert result[0]["isolation_mode"] == "normal"
+
+
+# ===========================================================================
+# Arista EOS leaf template — isolation_mode rendering smoke tests
+# ===========================================================================
+
+# The template uses includes like 'common/arista_eos_mlag.j2' so the loader
+# root must be templates/configs/ (one level above both 'leafs/' and 'common/').
+_TEMPLATES_CONFIGS_DIR = Path(__file__).parent.parent.parent / "templates" / "configs"
+_LEAF_TEMPLATE_NAME = "leafs/arista_eos.j2"
+
+
+@pytest.fixture
+def arista_env() -> jinja2.Environment:
+    return jinja2.Environment(
+        loader=jinja2.FileSystemLoader(str(_TEMPLATES_CONFIGS_DIR)),
+        undefined=jinja2.Undefined,  # silent undefined — avoids errors from optional ctx keys
+    )
+
+
+def _minimal_ctx(**overrides) -> dict:
+    """Minimal rendering context that avoids template errors for optional sections."""
+    ctx: dict = {
+        "hostname": "test-leaf",
+        "vlans": [],
+        "acls": [],
+        "interfaces": [],
+        "ospf": None,
+        "bgp": None,
+        "vxlan": {"enabled": False},
+        "vrf_gateways": {},
+        # Management-section variables expected by arista_eos_management.j2
+        "ntp": None,
+        "syslog": None,
+        "snmp": None,
+        "aaa": None,
+        # MLAG section
+        "mlag": None,
+    }
+    ctx.update(overrides)
+    return ctx
+
+
+def _vxlan_with_anycast(mac: str = "00:1c:73:00:dc:01") -> dict:
+    """Return a minimal vxlan dict with anycast gateway enabled (SVI block condition)."""
+    return {
+        "enabled": True,
+        "interface": "Vxlan1",
+        "vtep": {"source_interface": "Loopback0", "ipv4": "10.0.0.1", "udp_port": 4789},
+        "l2_vni_mappings": [],
+        "l3_vni_mappings": [],
+        "flooding": "evpn",
+        "evpn": {"enabled": False},
+        "microsegmentation": {"enabled": False, "vrf_count": 0},
+        "anycast_gateway": {"enabled": True, "mac": mac},
+    }
+
+
+class TestAristaLeafTemplateIsolationMode:
+    """Smoke tests: isolation_mode values produce the expected comment lines in rendered output."""
+
+    def test_isolated_vlan_renders_pvlan_comment(self, arista_env: jinja2.Environment) -> None:
+        """VLAN block for isolation_mode='isolated' must contain the private-vlan remark."""
+        vlans = [{"vlan_id": 100, "name": "test-isolated", "isolation_mode": "isolated"}]
+        ctx = _minimal_ctx(vlans=vlans)
+        rendered = arista_env.get_template(_LEAF_TEMPLATE_NAME).render(**ctx)
+        assert "private-vlan type: isolated" in rendered
+
+    def test_normal_vlan_no_pvlan_comment(self, arista_env: jinja2.Environment) -> None:
+        """VLAN block for isolation_mode='normal' must NOT contain the private-vlan remark."""
+        vlans = [{"vlan_id": 200, "name": "test-normal", "isolation_mode": "normal"}]
+        ctx = _minimal_ctx(vlans=vlans)
+        rendered = arista_env.get_template(_LEAF_TEMPLATE_NAME).render(**ctx)
+        assert "private-vlan" not in rendered
+
+    def test_microsegmented_svi_renders_mode_comment(self, arista_env: jinja2.Environment) -> None:
+        """SVI block for isolation_mode='microsegmented' must contain the MICROSEGMENTED comment."""
+        vlans = [
+            {
+                "vlan_id": 300,
+                "name": "test-micro",
+                "isolation_mode": "microsegmented",
+                "gateway_ip": "10.0.3.1/24",
+                "gateway_ipv6": None,
+                "vrf": None,
+            }
+        ]
+        ctx = _minimal_ctx(vlans=vlans, vxlan=_vxlan_with_anycast())
+        rendered = arista_env.get_template(_LEAF_TEMPLATE_NAME).render(**ctx)
+        assert "MICROSEGMENTED" in rendered
+
+    def test_isolated_svi_renders_mode_comment(self, arista_env: jinja2.Environment) -> None:
+        """SVI block for isolation_mode='isolated' with a gateway must contain the ISOLATED comment."""
+        vlans = [
+            {
+                "vlan_id": 400,
+                "name": "test-iso-svi",
+                "isolation_mode": "isolated",
+                "gateway_ip": "10.0.4.1/24",
+                "gateway_ipv6": None,
+                "vrf": None,
+            }
+        ]
+        ctx = _minimal_ctx(vlans=vlans, vxlan=_vxlan_with_anycast())
+        rendered = arista_env.get_template(_LEAF_TEMPLATE_NAME).render(**ctx)
+        assert "ISOLATED" in rendered

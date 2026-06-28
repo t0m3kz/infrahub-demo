@@ -1,139 +1,190 @@
 ---
 version: "1.0"
 
-# ============================================================================
-# Application Catalogue - Base Schemas
-# ============================================================================
-
 generics:
-  # --------------------------------------------------------------------------
-  # AppGeneric - Base for all application entities
-  # --------------------------------------------------------------------------
   - name: Generic
     namespace: App
-    description: "Base generic for application catalogue entities"
+    description: "Base for application hierarchy nodes"
     include_in_menu: false
+    hierarchical: true
     attributes:
-      - name: name
-        kind: Text
-        order_weight: 100
-        unique: true
       - name: description
         kind: Text
         optional: true
         order_weight: 200
 
 nodes:
-  # --------------------------------------------------------------------------
-  # Application - Top-level application entity
-  # --------------------------------------------------------------------------
+  # ── Portfolio ─────────────────────────────────────────────────────────────
+  # Top-level grouping owned by a customer (OrganizationCustomer).
+  - name: Portfolio
+    namespace: App
+    description: "Application portfolio owned by a customer"
+    label: "App Portfolio"
+    icon: "mdi:briefcase-outline"
+    include_in_menu: false
+    inherit_from:
+      - AppGeneric
+    parent: ""
+    children: AppApplication
+    human_friendly_id:
+      - owner__org_id__value
+    order_by:
+      - owner__org_id__value
+    display_label: "{{ owner__name__value }}"
+    uniqueness_constraints:
+      - [org_id__value]
+    attributes:
+      - name: org_id
+        kind: Text
+        order_weight: 100
+        computed_attribute:
+          kind: Jinja2
+          jinja2_template: "{{ owner__org_id__value|upper }}"
+        read_only: true
+        optional: true
+    relationships:
+      - name: owner
+        peer: OrganizationCustomer
+        cardinality: one
+        kind: Attribute
+        optional: false
+        order_weight: 1000
+        identifier: "customer_portfolio"
+
+  # ── Application ───────────────────────────────────────────────────────────
+  # A single deployable application within a portfolio.
   - name: Application
     namespace: App
-    description: "Business application or service requiring infrastructure"
+    description: "Business application or service within a portfolio"
     label: "Application"
     icon: "mdi:application"
     include_in_menu: false
     inherit_from:
       - AppGeneric
+    parent: AppPortfolio
+    children: AppComponent
     human_friendly_id:
       - name__value
     order_by:
       - name__value
-    display_label: "{{ name__value|upper }} - {{ environment__value|upper }}"
+    display_label: "{{ name__value }}"
     uniqueness_constraints:
-      - [name__value]
+      - [parent, label__value, environment__value]
     attributes:
+      - name: name
+        kind: Text
+        order_weight: 100
+        computed_attribute:
+          kind: Jinja2
+          jinja2_template: "{{ parent__org_id__value|lower }}-{{ label__value|lower|replace(' ', '-') }}-{{ environment__value }}"  # yamllint disable-line rule:line-length
+        read_only: true
+        optional: true
+      - name: label
+        kind: Text
+        order_weight: 110
+        description: "Short application identifier (e.g. ecommerce, auth-platform)"  # yamllint disable-line rule:line-length
+        optional: false
       - name: environment
         kind: Dropdown
         optional: false
-        description: "Deployment environment"
         order_weight: 500
+        default_value: p
         choices:
-          - name: development
-            label: "Development"
-            color: "#7f7fff"
-          - name: staging
-            label: "Staging"
-            color: "#FFA500"
-          - name: production
+          - name: p
             label: "Production"
             color: "#7FBF7F"
-        default_value: development
+          - name: s
+            label: "Staging"
+            color: "#FFA500"
+          - name: d
+            label: "Development"
+            color: "#7f7fff"
+          - name: t
+            label: "Testing"
+            color: "#D2B4DE"
+          - name: n
+            label: "Non-Production"
+            color: "#A9DFBF"
       - name: criticality
         kind: Dropdown
         optional: true
-        description: "Business criticality level"
         order_weight: 600
+        default_value: medium
         choices:
           - name: low
             label: "Low"
-            description: "Low business impact if unavailable"
             color: "#90EE90"
           - name: medium
             label: "Medium"
-            description: "Medium business impact"
             color: "#FFD700"
           - name: high
             label: "High"
-            description: "High business impact"
             color: "#FF8C00"
           - name: critical
             label: "Critical"
-            description: "Mission-critical, severe business impact"
             color: "#FF0000"
-        default_value: medium
       - name: cost_center
         kind: Text
         optional: true
-        description: "Cost center or budget code"
         order_weight: 700
     relationships:
-      - name: owner
-        peer: CoreAccount
-        cardinality: one
-        kind: Attribute
-        optional: false
-        description: "Application owner or team"
-        order_weight: 1000
-      - name: customer
-        peer: OrganizationCustomer
-        cardinality: one
-        kind: Attribute
-        optional: false
-        description: "Customer this application belongs to"
-        order_weight: 1100
-        identifier: "customer_applications"
-      - name: components
-        peer: AppComponent
+      - name: ingress
+        peer: LoadbalancerVIP
         cardinality: many
-        kind: Component
+        kind: Attribute
         optional: true
-        description: "Application components (frontend, backend, etc.)"
-        order_weight: 2000
+        identifier: "app_application__ingress"
+        order_weight: 800
+        label: "Ingress"
+      - name: security_policies
+        peer: SecurityPolicy
+        label: "Security Policies"
+        cardinality: many
+        kind: Generic
+        optional: true
+        order_weight: 900
+        identifier: "app_application__security_policies"
+        description: "Security policies governing this application's traffic"
 
-  # --------------------------------------------------------------------------
-  # AppComponent - Logical component of an application
-  # --------------------------------------------------------------------------
+  # ── Component ─────────────────────────────────────────────────────────────
+  # Logical service tier within an application (frontend, backend, db, etc.)
   - name: Component
     namespace: App
-    description: "Logical component of an application (frontend, backend, etc.)"
+    description: "Logical component of an application"
     label: "Application Component"
     icon: "mdi:cube-outline"
     include_in_menu: false
     inherit_from:
       - AppGeneric
-    order_by:
-      - name__value
+      - ManagedGenericDevice
+      - ManagedGenericCluster
+    parent: AppApplication
+    children: ""
     human_friendly_id:
-      - name__value
-    display_label: "{{ application__name__value }} {{ application__environment__value|upper }} - {{ name__value|upper }}"  # yamllint disable-line rule:line-length
+      - slug__value
+    order_by:
+      - slug__value
+    display_label: "{{ name__value }}"
     uniqueness_constraints:
-      - [name__value]
+      - [parent, name__value]
     attributes:
+      - name: name
+        kind: Text
+        optional: false
+        order_weight: 100
+      - name: slug
+        kind: Text
+        unique: true
+        optional: true
+        order_weight: 150
+        description: "Globally unique slug — {portfolio}-{app}-{env}-{component}"  # yamllint disable-line rule:line-length
+        computed_attribute:
+          kind: Jinja2
+          jinja2_template: "{{ parent__name__value }}-{{ name__value|lower|replace(' ', '-') }}"  # yamllint disable-line rule:line-length
+        read_only: true
       - name: component_type
         kind: Dropdown
         optional: false
-        description: "Type of component"
         order_weight: 400
         choices:
           - name: frontend
@@ -154,55 +205,50 @@ nodes:
           - name: worker
             label: "Worker"
             color: "#777777"
-      - name: deployment_type
-        kind: Dropdown
+      - name: backend_port
+        kind: Number
         optional: true
-        description: "Deployment infrastructure type"
-        order_weight: 700
-        choices:
-          - name: cloud
-            label: "Cloud"
-            color: "#0078D4"
-          - name: managed
-            label: "On-Premises"
-            color: "#68A063"
-          - name: hybrid
-            label: "Hybrid"
-            color: "#FF8C00"
+        order_weight: 410
+        description: "Backend port this component listens on (used for pool member configuration)"
     relationships:
-      - name: application
-        peer: AppApplication
-        cardinality: one
-        kind: Parent
-        optional: false
-        description: "Parent application"
-        order_weight: 1000
-      - name: network_segments
+      - name: network_segment
         peer: ManagedNetworkSegment
-        cardinality: many
+        cardinality: one
         kind: Attribute
         optional: true
-        identifier: "app_component_network_segments"
-        description: "Network segments used by this component"
-        order_weight: 9000
-      - name: deployments
-        peer: TopologyDeployment
-        cardinality: many
+        order_weight: 750
+        identifier: app_component__network_segment
+        label: "Network Segment"
+        description: "VXLAN security zone this component lives in"
+      - name: vip_service
+        peer: LoadbalancerVIP
+        cardinality: one
+        kind: Generic
+        direction: outbound
+        optional: true
+        on_delete: no-action
+        identifier: "app_component__vip_service"
+        order_weight: 840
+        label: "VIP Service"
+        description: "Frontend listener that routes traffic to this component"
+      - name: proxy_service
+        peer: ManagedGeneric
+        cardinality: one
         kind: Attribute
         optional: true
-        identifier: "app_component_deployments"
-        description: "Deployments where this component runs"
-        order_weight: 9100
-
+        on_delete: no-action
+        identifier: "app_component__proxy_service"
+        order_weight: 850
+        label: "Proxy Service"
+        description: "Proxy or SASE service this component's traffic egresses through"
 extensions:
   nodes:
     - kind: OrganizationCustomer
       relationships:
-        - name: applications
-          peer: AppApplication
+        - name: portfolios
+          peer: AppPortfolio
           cardinality: many
-          kind: Component
+          kind: Attribute
           optional: true
-          description: "Applications owned by this customer"
           order_weight: 2000
-          identifier: "customer_applications"
+          identifier: "customer_portfolio"

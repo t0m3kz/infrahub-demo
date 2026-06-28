@@ -1,0 +1,422 @@
+---
+version: "1.0"
+
+# ============================================================================
+# HA — High Availability schema
+#
+# ManagedHA is an abstract generic holding shared HA attributes.
+# ManagedInlineService is an abstract type anchor for all services that sit
+# inline in a network segment (firewalls and load balancers).
+# Concrete types inherit from ManagedHA + ManagedGeneric + ManagedInlineService,
+# plus ManagedGenericDevice for on-prem devices.
+#
+# ManagedHAInterface is a capability node that models the sync/heartbeat/
+# control link on a specific device interface.
+# ============================================================================
+
+generics:
+  - name: InlineService
+    namespace: Managed
+    description: "Abstract type anchor for services that sit inline in a network segment"
+    label: Inline Service
+    icon: "mdi:transit-connection-variant"
+    include_in_menu: false
+
+  - name: ProxyService
+    namespace: Managed
+    description: "Abstract type anchor for all proxy services (on-prem and cloud/SASE)"
+    label: Proxy Service
+    icon: "mdi:swap-horizontal-bold"
+    include_in_menu: false
+
+  - name: HA
+    namespace: Managed
+    description: "Base for all HA domain types"
+    label: HA Domain
+    icon: "mdi:shield-half-full"
+    include_in_menu: false
+    attributes:
+      - name: group_id
+        kind: Number
+        label: "HA Group ID"
+        description: "HA group / cluster ID (must match on both peers); not applicable for cloud-native services"
+        optional: true
+        order_weight: 1000
+      - name: mode
+        kind: Dropdown
+        label: "HA Mode"
+        description: "HA operating mode"
+        optional: true
+        default_value: active-passive
+        choices:
+          - name: active-passive
+            label: "Active-Passive"
+            color: "#2ECC71"
+          - name: active-active
+            label: "Active-Active"
+            color: "#3498DB"
+          - name: cloud_managed
+            label: "Cloud Managed"
+            color: "#7FA7FF"
+        order_weight: 1100
+      - name: priority
+        kind: Number
+        label: "Election Priority"
+        description: "Election priority — higher value wins active role"
+        optional: true
+        default_value: 100
+        order_weight: 1200
+      - name: preempt
+        kind: Boolean
+        label: "Preempt"
+        description: "Reclaim active role when priority is higher than peer"
+        optional: true
+        default_value: false
+        order_weight: 1300
+
+nodes:
+  # ── Firewall HA domain ────────────────────────────────────────────────────
+  - name: FirewallHA
+    namespace: Managed
+    description: "HA domain shared between two peer firewall devices"
+    label: Firewall HA Domain
+    icon: "mdi:shield-half-full"
+    include_in_menu: false
+    human_friendly_id:
+      - "name__value"
+    inherit_from:
+      - ManagedHA
+      - ManagedGeneric
+      - ManagedGenericDevice
+      - ManagedInlineService
+    uniqueness_constraints:
+      - ["name__value"]
+    display_label: "{{name__value}}"
+    order_by:
+      - name__value
+    relationships:
+      - name: capabilities
+        peer: DcimCapabilities
+        label: "Peer Devices"
+        description: "The two firewall devices that form this HA domain"
+        cardinality: many
+        optional: false
+        kind: Generic
+        direction: inbound
+        identifier: device_capabilities
+        order_weight: 900
+    attributes:
+      - name: ha_protocol
+        kind: Dropdown
+        label: "HA Protocol"
+        description: "Redundancy protocol used for this firewall HA domain"
+        optional: true
+        default_value: vrrp
+        choices:
+          - name: vrrp
+            label: "VRRP"
+            color: "#3498DB"
+          - name: clusterxl
+            label: "ClusterXL"
+            color: "#2ECC71"
+          - name: vsx
+            label: "VSX"
+            color: "#9B59B6"
+          - name: carp
+            label: "CARP"
+            color: "#E67E22"
+          - name: keepalived
+            label: "Keepalived"
+            color: "#1ABC9C"
+        order_weight: 1400
+      - name: ha_timer
+        kind: Dropdown
+        label: "HA Timer Profile"
+        description: "HA hello/dead timer profile"
+        optional: true
+        default_value: standard
+        choices:
+          - name: aggressive
+            label: "Aggressive"
+            color: "#E74C3C"
+          - name: standard
+            label: "Standard"
+            color: "#2ECC71"
+        order_weight: 1500
+
+  # ── Load Balancer HA domain (on-prem, physical devices) ───────────────────
+  - name: LoadbalancerHA
+    namespace: Managed
+    description: "HA domain shared between two peer load balancer devices"
+    label: Load Balancer HA Domain
+    icon: "mdi:shield-half-full"
+    include_in_menu: false
+    human_friendly_id:
+      - "name__value"
+    inherit_from:
+      - ManagedHA
+      - ManagedGeneric
+      - ManagedGenericDevice
+      - ManagedInlineService
+      - ManagedLoadBalancer
+    uniqueness_constraints:
+      - ["name__value"]
+    display_label: "{{name__value}}"
+    order_by:
+      - name__value
+    relationships:
+      - name: capabilities
+        peer: DcimCapabilities
+        label: "Peer Devices"
+        description: "The two load balancer devices that form this HA domain"
+        cardinality: many
+        optional: false
+        kind: Generic
+        direction: inbound
+        identifier: device_capabilities
+        order_weight: 900
+
+  # ── Cloud Firewall HA ─────────────────────────────────────────────────────
+  - name: CloudFirewallHA
+    namespace: Managed
+    description: "Cloud-native firewall HA service (AWS NFW, Azure Firewall, GCP NGFW, Zscaler)"
+    label: Cloud Firewall HA
+    icon: "mdi:cloud-lock"
+    include_in_menu: false
+    human_friendly_id:
+      - "name__value"
+    inherit_from:
+      - ManagedHA
+      - ManagedGeneric
+      - ManagedInlineService
+    uniqueness_constraints:
+      - ["name__value"]
+    display_label: "{{name__value}}"
+    order_by:
+      - name__value
+    attributes:
+      - name: provider
+        kind: Dropdown
+        label: "Cloud Provider / Product"
+        optional: false
+        order_weight: 1400
+        choices:
+          - name: aws_nfw
+            label: "AWS Network Firewall"
+            color: "#FF9900"
+          - name: azure_firewall
+            label: "Azure Firewall"
+            color: "#0078D4"
+          - name: gcp_ngfw
+            label: "GCP Cloud NGFW"
+            color: "#4285F4"
+          - name: other
+            label: "Other"
+            color: "#95A5A6"
+      - name: region
+        kind: Text
+        label: "Region / Zone"
+        optional: true
+        order_weight: 1500
+        description: "Cloud region or availability zone"
+      - name: policy_arn
+        kind: Text
+        label: "Policy ARN / Resource ID"
+        optional: true
+        order_weight: 1600
+        description: "Cloud resource identifier for the firewall policy"
+
+  # ── On-prem Proxy HA ─────────────────────────────────────────────────────
+  - name: ProxyHA
+    namespace: Managed
+    description: "On-premises explicit or transparent proxy HA pair (Squid, BlueCoat, ProxySG)"
+    label: Proxy HA
+    icon: "mdi:swap-horizontal-bold"
+    include_in_menu: false
+    human_friendly_id:
+      - "name__value"
+    inherit_from:
+      - ManagedHA
+      - ManagedGeneric
+      - ManagedGenericDevice
+      - ManagedInlineService
+      - ManagedProxyService
+    uniqueness_constraints:
+      - ["name__value"]
+    display_label: "{{name__value}}"
+    order_by:
+      - name__value
+    relationships:
+      - name: capabilities
+        peer: DcimCapabilities
+        label: "Peer Devices"
+        description: "The two proxy devices that form this HA pair"
+        cardinality: many
+        optional: false
+        kind: Generic
+        direction: inbound
+        identifier: device_capabilities
+        order_weight: 900
+    attributes:
+      - name: proxy_type
+        kind: Dropdown
+        label: "Proxy Type"
+        optional: true
+        order_weight: 1400
+        choices:
+          - name: explicit
+            label: "Explicit"
+            description: "Clients are configured to use the proxy directly"
+            color: "#3498DB"
+          - name: transparent
+            label: "Transparent"
+            description: "Traffic is intercepted without client configuration"
+            color: "#2ECC71"
+          - name: reverse
+            label: "Reverse"
+            description: "Reverse proxy / content cache in front of servers"
+            color: "#E67E22"
+      - name: proxy_vendor
+        kind: Dropdown
+        label: "Vendor / Product"
+        optional: true
+        order_weight: 1450
+        choices:
+          - name: haproxy
+            label: "HAProxy"
+            color: "#1ABC9C"
+          - name: squid
+            label: "Squid"
+            color: "#9B59B6"
+          - name: bluecoat
+            label: "BlueCoat / ProxySG"
+            color: "#2C3E50"
+          - name: cisco_wsa
+            label: "Cisco WSA"
+            color: "#1BA0D7"
+          - name: other
+            label: "Other"
+            color: "#95A5A6"
+
+  # ── Cloud Proxy / SASE ────────────────────────────────────────────────────
+  - name: CloudProxyHA
+    namespace: Managed
+    description: "Cloud-native proxy / SASE service (Zscaler ZIA, Netskope, Cloudflare Gateway)"
+    label: Cloud Proxy / SASE
+    icon: "mdi:cloud-sync"
+    include_in_menu: false
+    human_friendly_id:
+      - "name__value"
+    inherit_from:
+      - ManagedHA
+      - ManagedGeneric
+      - ManagedInlineService
+      - ManagedProxyService
+    uniqueness_constraints:
+      - ["name__value"]
+    display_label: "{{name__value}}"
+    order_by:
+      - name__value
+    attributes:
+      - name: provider
+        kind: Dropdown
+        label: "SASE Provider"
+        optional: false
+        order_weight: 1400
+        choices:
+          - name: zscaler_zia
+            label: "Zscaler ZIA"
+            color: "#00A3E0"
+          - name: zscaler_zpa
+            label: "Zscaler ZPA"
+            color: "#00A3E0"
+          - name: netskope
+            label: "Netskope"
+            color: "#007DC5"
+          - name: cloudflare_gateway
+            label: "Cloudflare Gateway"
+            color: "#F38020"
+          - name: palo_prisma
+            label: "Palo Alto Prisma Access"
+            color: "#FA582D"
+          - name: other
+            label: "Other"
+            color: "#95A5A6"
+      - name: tenant_id
+        kind: Text
+        label: "Tenant / Org ID"
+        optional: true
+        order_weight: 1500
+        description: "Cloud tenant or organization identifier"
+      - name: tunnel_endpoint
+        kind: Text
+        label: "Tunnel Endpoint"
+        optional: true
+        order_weight: 1600
+        description: "GRE or IPSec tunnel endpoint for traffic steering"
+      - name: pac_url
+        kind: Text
+        label: "PAC File URL"
+        optional: true
+        order_weight: 1700
+        description: "Proxy Auto-Config URL for explicit proxy deployments"
+
+  # ── HA Interface capability ───────────────────────────────────────────────
+  - name: HAInterface
+    namespace: Managed
+    description: "Interface-level HA service — models sync/heartbeat/control link on a specific interface"
+    label: HA Interface
+    icon: "mdi:link-variant"
+    include_in_menu: false
+    human_friendly_id:
+      - "name__value"
+    inherit_from:
+      - ManagedGeneric
+      - ManagedGenericInterfaces
+    uniqueness_constraints:
+      - ["name__value"]
+    display_label: "{{name__value}}"
+    order_by:
+      - name__value
+    relationships:
+      - name: ha_domain
+        peer: ManagedHA
+        label: "HA Domain"
+        description: "HA domain this interface link belongs to"
+        cardinality: one
+        kind: Attribute
+        optional: false
+        identifier: ha_interface__domain
+        order_weight: 900
+    attributes:
+      - name: link_type
+        kind: Dropdown
+        label: "Link Type"
+        description: "HA link role on this interface"
+        optional: true
+        default_value: sync
+        choices:
+          - name: sync
+            label: "Sync"
+            color: "#3498DB"
+          - name: heartbeat
+            label: "Heartbeat"
+            color: "#2ECC71"
+          - name: control
+            label: "Control"
+            color: "#E67E22"
+        order_weight: 1000
+
+extensions:
+  nodes:
+    - kind: ManagedNetworkSegment
+      relationships:
+        - name: inline_service
+          peer: ManagedGeneric
+          label: Inline Service
+          cardinality: one
+          kind: Attribute
+          optional: true
+          order_weight: 3100
+          identifier: network_segment__inline_service
+          description: "Inline service (firewall or load balancer HA) terminating this segment."

@@ -1,0 +1,1617 @@
+---
+# DC2 routing peerings
+#
+# Underlay: OSPF area 0, point-to-point on numbered /31 links.
+# Overlay:  iBGP EVPN, loopback-based. BL1/BL2 are route reflectors.
+
+# ── OSPF area 0 ──────────────────────────────────────────────────────────────
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: RoutingOSPFArea
+  data:
+    - name: "DC2-AREA-0"
+      area: 0
+      area_type: standard
+      description: "DC2 OSPF backbone area"
+
+---
+# ── OSPF interface configs — one profile per fabric port ─────────────────────
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: RoutingOSPFInterface
+  data:
+    - name: DC2-POD1-SP1-Ethernet1-3-OSPF
+      description: "OSPF P2P — DC2-POD1-SP1 Ethernet1/3"
+      mode: peer_to_peer
+      ospf_process: DC2-POD1-SP1-OSPF
+      area:
+        - DC2-AREA-0
+        - "0"
+      interface_capabilities:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC2-POD1-SP1
+            name: Ethernet1/3
+
+    - name: DC2-POD1-SP1-Ethernet1-4-OSPF
+      description: "OSPF P2P — DC2-POD1-SP1 Ethernet1/4"
+      mode: peer_to_peer
+      ospf_process: DC2-POD1-SP1-OSPF
+      area:
+        - DC2-AREA-0
+        - "0"
+      interface_capabilities:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC2-POD1-SP1
+            name: Ethernet1/4
+
+    - name: DC2-POD1-SP1-Ethernet1-5-OSPF
+      description: "OSPF P2P — DC2-POD1-SP1 Ethernet1/5"
+      mode: peer_to_peer
+      ospf_process: DC2-POD1-SP1-OSPF
+      area:
+        - DC2-AREA-0
+        - "0"
+      interface_capabilities:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC2-POD1-SP1
+            name: Ethernet1/5
+
+    - name: DC2-POD1-SP1-Ethernet1-6-OSPF
+      description: "OSPF P2P — DC2-POD1-SP1 Ethernet1/6"
+      mode: peer_to_peer
+      ospf_process: DC2-POD1-SP1-OSPF
+      area:
+        - DC2-AREA-0
+        - "0"
+      interface_capabilities:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC2-POD1-SP1
+            name: Ethernet1/6
+
+    - name: DC2-POD1-SP1-Ethernet1-11-OSPF
+      description: "OSPF P2P — DC2-POD1-SP1 Ethernet1/11"
+      mode: peer_to_peer
+      ospf_process: DC2-POD1-SP1-OSPF
+      area:
+        - DC2-AREA-0
+        - "0"
+      interface_capabilities:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC2-POD1-SP1
+            name: Ethernet1/11
+
+    - name: DC2-POD1-SP1-Ethernet1-12-OSPF
+      description: "OSPF P2P — DC2-POD1-SP1 Ethernet1/12"
+      mode: peer_to_peer
+      ospf_process: DC2-POD1-SP1-OSPF
+      area:
+        - DC2-AREA-0
+        - "0"
+      interface_capabilities:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC2-POD1-SP1
+            name: Ethernet1/12
+
+    - name: DC2-POD1-SP1-Ethernet1-13-OSPF
+      description: "OSPF P2P — DC2-POD1-SP1 Ethernet1/13"
+      mode: peer_to_peer
+      ospf_process: DC2-POD1-SP1-OSPF
+      area:
+        - DC2-AREA-0
+        - "0"
+      interface_capabilities:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC2-POD1-SP1
+            name: Ethernet1/13
+
+    - name: DC2-POD1-SP1-Ethernet1-14-OSPF
+      description: "OSPF P2P — DC2-POD1-SP1 Ethernet1/14"
+      mode: peer_to_peer
+      ospf_process: DC2-POD1-SP1-OSPF
+      area:
+        - DC2-AREA-0
+        - "0"
+      interface_capabilities:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC2-POD1-SP1
+            name: Ethernet1/14
+
+    - name: DC2-POD1-SP2-Ethernet1-3-OSPF
+      description: "OSPF P2P — DC2-POD1-SP2 Ethernet1/3"
+      mode: peer_to_peer
+      ospf_process: DC2-POD1-SP2-OSPF
+      area:
+        - DC2-AREA-0
+        - "0"
+      interface_capabilities:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC2-POD1-SP2
+            name: Ethernet1/3
+
+    - name: DC2-POD1-SP2-Ethernet1-4-OSPF
+      description: "OSPF P2P — DC2-POD1-SP2 Ethernet1/4"
+      mode: peer_to_peer
+      ospf_process: DC2-POD1-SP2-OSPF
+      area:
+        - DC2-AREA-0
+        - "0"
+      interface_capabilities:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC2-POD1-SP2
+            name: Ethernet1/4
+
+    - name: DC2-POD1-SP2-Ethernet1-5-OSPF
+      description: "OSPF P2P — DC2-POD1-SP2 Ethernet1/5"
+      mode: peer_to_peer
+      ospf_process: DC2-POD1-SP2-OSPF
+      area:
+        - DC2-AREA-0
+        - "0"
+      interface_capabilities:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC2-POD1-SP2
+            name: Ethernet1/5
+
+    - name: DC2-POD1-SP2-Ethernet1-6-OSPF
+      description: "OSPF P2P — DC2-POD1-SP2 Ethernet1/6"
+      mode: peer_to_peer
+      ospf_process: DC2-POD1-SP2-OSPF
+      area:
+        - DC2-AREA-0
+        - "0"
+      interface_capabilities:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC2-POD1-SP2
+            name: Ethernet1/6
+
+    - name: DC2-POD1-SP2-Ethernet1-21-OSPF
+      description: "OSPF P2P — DC2-POD1-SP2 Ethernet1/21"
+      mode: peer_to_peer
+      ospf_process: DC2-POD1-SP2-OSPF
+      area:
+        - DC2-AREA-0
+        - "0"
+      interface_capabilities:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC2-POD1-SP2
+            name: Ethernet1/21
+
+    - name: DC2-POD1-SP2-Ethernet1-22-OSPF
+      description: "OSPF P2P — DC2-POD1-SP2 Ethernet1/22"
+      mode: peer_to_peer
+      ospf_process: DC2-POD1-SP2-OSPF
+      area:
+        - DC2-AREA-0
+        - "0"
+      interface_capabilities:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC2-POD1-SP2
+            name: Ethernet1/22
+
+    - name: DC2-POD1-SP2-Ethernet1-23-OSPF
+      description: "OSPF P2P — DC2-POD1-SP2 Ethernet1/23"
+      mode: peer_to_peer
+      ospf_process: DC2-POD1-SP2-OSPF
+      area:
+        - DC2-AREA-0
+        - "0"
+      interface_capabilities:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC2-POD1-SP2
+            name: Ethernet1/23
+
+    - name: DC2-POD1-SP2-Ethernet1-24-OSPF
+      description: "OSPF P2P — DC2-POD1-SP2 Ethernet1/24"
+      mode: peer_to_peer
+      ospf_process: DC2-POD1-SP2-OSPF
+      area:
+        - DC2-AREA-0
+        - "0"
+      interface_capabilities:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC2-POD1-SP2
+            name: Ethernet1/24
+
+    - name: DC2-POD2-SP1-Ethernet1-3-OSPF
+      description: "OSPF P2P — DC2-POD2-SP1 Ethernet1/3"
+      mode: peer_to_peer
+      ospf_process: DC2-POD2-SP1-OSPF
+      area:
+        - DC2-AREA-0
+        - "0"
+      interface_capabilities:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC2-POD2-SP1
+            name: Ethernet1/3
+
+    - name: DC2-POD2-SP1-Ethernet1-4-OSPF
+      description: "OSPF P2P — DC2-POD2-SP1 Ethernet1/4"
+      mode: peer_to_peer
+      ospf_process: DC2-POD2-SP1-OSPF
+      area:
+        - DC2-AREA-0
+        - "0"
+      interface_capabilities:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC2-POD2-SP1
+            name: Ethernet1/4
+
+    - name: DC2-POD2-SP1-Ethernet1-5-OSPF
+      description: "OSPF P2P — DC2-POD2-SP1 Ethernet1/5"
+      mode: peer_to_peer
+      ospf_process: DC2-POD2-SP1-OSPF
+      area:
+        - DC2-AREA-0
+        - "0"
+      interface_capabilities:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC2-POD2-SP1
+            name: Ethernet1/5
+
+    - name: DC2-POD2-SP1-Ethernet1-6-OSPF
+      description: "OSPF P2P — DC2-POD2-SP1 Ethernet1/6"
+      mode: peer_to_peer
+      ospf_process: DC2-POD2-SP1-OSPF
+      area:
+        - DC2-AREA-0
+        - "0"
+      interface_capabilities:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC2-POD2-SP1
+            name: Ethernet1/6
+
+    - name: DC2-POD2-SP1-Ethernet1-11-OSPF
+      description: "OSPF P2P — DC2-POD2-SP1 Ethernet1/11"
+      mode: peer_to_peer
+      ospf_process: DC2-POD2-SP1-OSPF
+      area:
+        - DC2-AREA-0
+        - "0"
+      interface_capabilities:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC2-POD2-SP1
+            name: Ethernet1/11
+
+    - name: DC2-POD2-SP1-Ethernet1-12-OSPF
+      description: "OSPF P2P — DC2-POD2-SP1 Ethernet1/12"
+      mode: peer_to_peer
+      ospf_process: DC2-POD2-SP1-OSPF
+      area:
+        - DC2-AREA-0
+        - "0"
+      interface_capabilities:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC2-POD2-SP1
+            name: Ethernet1/12
+
+    - name: DC2-POD2-SP1-Ethernet1-13-OSPF
+      description: "OSPF P2P — DC2-POD2-SP1 Ethernet1/13"
+      mode: peer_to_peer
+      ospf_process: DC2-POD2-SP1-OSPF
+      area:
+        - DC2-AREA-0
+        - "0"
+      interface_capabilities:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC2-POD2-SP1
+            name: Ethernet1/13
+
+    - name: DC2-POD2-SP1-Ethernet1-14-OSPF
+      description: "OSPF P2P — DC2-POD2-SP1 Ethernet1/14"
+      mode: peer_to_peer
+      ospf_process: DC2-POD2-SP1-OSPF
+      area:
+        - DC2-AREA-0
+        - "0"
+      interface_capabilities:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC2-POD2-SP1
+            name: Ethernet1/14
+
+    - name: DC2-POD2-SP2-Ethernet1-3-OSPF
+      description: "OSPF P2P — DC2-POD2-SP2 Ethernet1/3"
+      mode: peer_to_peer
+      ospf_process: DC2-POD2-SP2-OSPF
+      area:
+        - DC2-AREA-0
+        - "0"
+      interface_capabilities:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC2-POD2-SP2
+            name: Ethernet1/3
+
+    - name: DC2-POD2-SP2-Ethernet1-4-OSPF
+      description: "OSPF P2P — DC2-POD2-SP2 Ethernet1/4"
+      mode: peer_to_peer
+      ospf_process: DC2-POD2-SP2-OSPF
+      area:
+        - DC2-AREA-0
+        - "0"
+      interface_capabilities:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC2-POD2-SP2
+            name: Ethernet1/4
+
+    - name: DC2-POD2-SP2-Ethernet1-5-OSPF
+      description: "OSPF P2P — DC2-POD2-SP2 Ethernet1/5"
+      mode: peer_to_peer
+      ospf_process: DC2-POD2-SP2-OSPF
+      area:
+        - DC2-AREA-0
+        - "0"
+      interface_capabilities:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC2-POD2-SP2
+            name: Ethernet1/5
+
+    - name: DC2-POD2-SP2-Ethernet1-6-OSPF
+      description: "OSPF P2P — DC2-POD2-SP2 Ethernet1/6"
+      mode: peer_to_peer
+      ospf_process: DC2-POD2-SP2-OSPF
+      area:
+        - DC2-AREA-0
+        - "0"
+      interface_capabilities:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC2-POD2-SP2
+            name: Ethernet1/6
+
+    - name: DC2-POD2-SP2-Ethernet1-21-OSPF
+      description: "OSPF P2P — DC2-POD2-SP2 Ethernet1/21"
+      mode: peer_to_peer
+      ospf_process: DC2-POD2-SP2-OSPF
+      area:
+        - DC2-AREA-0
+        - "0"
+      interface_capabilities:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC2-POD2-SP2
+            name: Ethernet1/21
+
+    - name: DC2-POD2-SP2-Ethernet1-22-OSPF
+      description: "OSPF P2P — DC2-POD2-SP2 Ethernet1/22"
+      mode: peer_to_peer
+      ospf_process: DC2-POD2-SP2-OSPF
+      area:
+        - DC2-AREA-0
+        - "0"
+      interface_capabilities:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC2-POD2-SP2
+            name: Ethernet1/22
+
+    - name: DC2-POD2-SP2-Ethernet1-23-OSPF
+      description: "OSPF P2P — DC2-POD2-SP2 Ethernet1/23"
+      mode: peer_to_peer
+      ospf_process: DC2-POD2-SP2-OSPF
+      area:
+        - DC2-AREA-0
+        - "0"
+      interface_capabilities:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC2-POD2-SP2
+            name: Ethernet1/23
+
+    - name: DC2-POD2-SP2-Ethernet1-24-OSPF
+      description: "OSPF P2P — DC2-POD2-SP2 Ethernet1/24"
+      mode: peer_to_peer
+      ospf_process: DC2-POD2-SP2-OSPF
+      area:
+        - DC2-AREA-0
+        - "0"
+      interface_capabilities:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC2-POD2-SP2
+            name: Ethernet1/24
+
+    - name: DC2-BL1-Ethernet1-1-OSPF
+      description: "OSPF P2P — DC2-BL1 Ethernet1/1"
+      mode: peer_to_peer
+      ospf_process: DC2-BL1-OSPF
+      area:
+        - DC2-AREA-0
+        - "0"
+      interface_capabilities:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC2-BL1
+            name: Ethernet1/1
+
+    - name: DC2-BL1-Ethernet1-2-OSPF
+      description: "OSPF P2P — DC2-BL1 Ethernet1/2"
+      mode: peer_to_peer
+      ospf_process: DC2-BL1-OSPF
+      area:
+        - DC2-AREA-0
+        - "0"
+      interface_capabilities:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC2-BL1
+            name: Ethernet1/2
+
+    - name: DC2-BL1-Ethernet1-3-OSPF
+      description: "OSPF P2P — DC2-BL1 Ethernet1/3"
+      mode: peer_to_peer
+      ospf_process: DC2-BL1-OSPF
+      area:
+        - DC2-AREA-0
+        - "0"
+      interface_capabilities:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC2-BL1
+            name: Ethernet1/3
+
+    - name: DC2-BL1-Ethernet1-4-OSPF
+      description: "OSPF P2P — DC2-BL1 Ethernet1/4"
+      mode: peer_to_peer
+      ospf_process: DC2-BL1-OSPF
+      area:
+        - DC2-AREA-0
+        - "0"
+      interface_capabilities:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC2-BL1
+            name: Ethernet1/4
+
+    - name: DC2-BL2-Ethernet1-1-OSPF
+      description: "OSPF P2P — DC2-BL2 Ethernet1/1"
+      mode: peer_to_peer
+      ospf_process: DC2-BL2-OSPF
+      area:
+        - DC2-AREA-0
+        - "0"
+      interface_capabilities:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC2-BL2
+            name: Ethernet1/1
+
+    - name: DC2-BL2-Ethernet1-2-OSPF
+      description: "OSPF P2P — DC2-BL2 Ethernet1/2"
+      mode: peer_to_peer
+      ospf_process: DC2-BL2-OSPF
+      area:
+        - DC2-AREA-0
+        - "0"
+      interface_capabilities:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC2-BL2
+            name: Ethernet1/2
+
+    - name: DC2-BL2-Ethernet1-3-OSPF
+      description: "OSPF P2P — DC2-BL2 Ethernet1/3"
+      mode: peer_to_peer
+      ospf_process: DC2-BL2-OSPF
+      area:
+        - DC2-AREA-0
+        - "0"
+      interface_capabilities:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC2-BL2
+            name: Ethernet1/3
+
+    - name: DC2-BL2-Ethernet1-4-OSPF
+      description: "OSPF P2P — DC2-BL2 Ethernet1/4"
+      mode: peer_to_peer
+      ospf_process: DC2-BL2-OSPF
+      area:
+        - DC2-AREA-0
+        - "0"
+      interface_capabilities:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC2-BL2
+            name: Ethernet1/4
+
+    - name: DC2-POD1-L1-Ethernet1-1-OSPF
+      description: "OSPF P2P — DC2-POD1-L1 Ethernet1/1"
+      mode: peer_to_peer
+      ospf_process: DC2-POD1-L1-OSPF
+      area:
+        - DC2-AREA-0
+        - "0"
+      interface_capabilities:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC2-POD1-L1
+            name: Ethernet1/1
+
+    - name: DC2-POD1-L1-Ethernet1-2-OSPF
+      description: "OSPF P2P — DC2-POD1-L1 Ethernet1/2"
+      mode: peer_to_peer
+      ospf_process: DC2-POD1-L1-OSPF
+      area:
+        - DC2-AREA-0
+        - "0"
+      interface_capabilities:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC2-POD1-L1
+            name: Ethernet1/2
+
+    - name: DC2-POD1-L2-Ethernet1-1-OSPF
+      description: "OSPF P2P — DC2-POD1-L2 Ethernet1/1"
+      mode: peer_to_peer
+      ospf_process: DC2-POD1-L2-OSPF
+      area:
+        - DC2-AREA-0
+        - "0"
+      interface_capabilities:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC2-POD1-L2
+            name: Ethernet1/1
+
+    - name: DC2-POD1-L2-Ethernet1-2-OSPF
+      description: "OSPF P2P — DC2-POD1-L2 Ethernet1/2"
+      mode: peer_to_peer
+      ospf_process: DC2-POD1-L2-OSPF
+      area:
+        - DC2-AREA-0
+        - "0"
+      interface_capabilities:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC2-POD1-L2
+            name: Ethernet1/2
+
+    - name: DC2-POD1-L3-Ethernet1-1-OSPF
+      description: "OSPF P2P — DC2-POD1-L3 Ethernet1/1"
+      mode: peer_to_peer
+      ospf_process: DC2-POD1-L3-OSPF
+      area:
+        - DC2-AREA-0
+        - "0"
+      interface_capabilities:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC2-POD1-L3
+            name: Ethernet1/1
+
+    - name: DC2-POD1-L3-Ethernet1-2-OSPF
+      description: "OSPF P2P — DC2-POD1-L3 Ethernet1/2"
+      mode: peer_to_peer
+      ospf_process: DC2-POD1-L3-OSPF
+      area:
+        - DC2-AREA-0
+        - "0"
+      interface_capabilities:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC2-POD1-L3
+            name: Ethernet1/2
+
+    - name: DC2-POD1-L4-Ethernet1-1-OSPF
+      description: "OSPF P2P — DC2-POD1-L4 Ethernet1/1"
+      mode: peer_to_peer
+      ospf_process: DC2-POD1-L4-OSPF
+      area:
+        - DC2-AREA-0
+        - "0"
+      interface_capabilities:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC2-POD1-L4
+            name: Ethernet1/1
+
+    - name: DC2-POD1-L4-Ethernet1-2-OSPF
+      description: "OSPF P2P — DC2-POD1-L4 Ethernet1/2"
+      mode: peer_to_peer
+      ospf_process: DC2-POD1-L4-OSPF
+      area:
+        - DC2-AREA-0
+        - "0"
+      interface_capabilities:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC2-POD1-L4
+            name: Ethernet1/2
+
+    - name: DC2-POD2-L1-Ethernet1-1-OSPF
+      description: "OSPF P2P — DC2-POD2-L1 Ethernet1/1"
+      mode: peer_to_peer
+      ospf_process: DC2-POD2-L1-OSPF
+      area:
+        - DC2-AREA-0
+        - "0"
+      interface_capabilities:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC2-POD2-L1
+            name: Ethernet1/1
+
+    - name: DC2-POD2-L1-Ethernet1-2-OSPF
+      description: "OSPF P2P — DC2-POD2-L1 Ethernet1/2"
+      mode: peer_to_peer
+      ospf_process: DC2-POD2-L1-OSPF
+      area:
+        - DC2-AREA-0
+        - "0"
+      interface_capabilities:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC2-POD2-L1
+            name: Ethernet1/2
+
+    - name: DC2-POD2-L2-Ethernet1-1-OSPF
+      description: "OSPF P2P — DC2-POD2-L2 Ethernet1/1"
+      mode: peer_to_peer
+      ospf_process: DC2-POD2-L2-OSPF
+      area:
+        - DC2-AREA-0
+        - "0"
+      interface_capabilities:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC2-POD2-L2
+            name: Ethernet1/1
+
+    - name: DC2-POD2-L2-Ethernet1-2-OSPF
+      description: "OSPF P2P — DC2-POD2-L2 Ethernet1/2"
+      mode: peer_to_peer
+      ospf_process: DC2-POD2-L2-OSPF
+      area:
+        - DC2-AREA-0
+        - "0"
+      interface_capabilities:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC2-POD2-L2
+            name: Ethernet1/2
+
+    - name: DC2-POD2-L3-Ethernet1-1-OSPF
+      description: "OSPF P2P — DC2-POD2-L3 Ethernet1/1"
+      mode: peer_to_peer
+      ospf_process: DC2-POD2-L3-OSPF
+      area:
+        - DC2-AREA-0
+        - "0"
+      interface_capabilities:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC2-POD2-L3
+            name: Ethernet1/1
+
+    - name: DC2-POD2-L3-Ethernet1-2-OSPF
+      description: "OSPF P2P — DC2-POD2-L3 Ethernet1/2"
+      mode: peer_to_peer
+      ospf_process: DC2-POD2-L3-OSPF
+      area:
+        - DC2-AREA-0
+        - "0"
+      interface_capabilities:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC2-POD2-L3
+            name: Ethernet1/2
+
+    - name: DC2-POD2-L4-Ethernet1-1-OSPF
+      description: "OSPF P2P — DC2-POD2-L4 Ethernet1/1"
+      mode: peer_to_peer
+      ospf_process: DC2-POD2-L4-OSPF
+      area:
+        - DC2-AREA-0
+        - "0"
+      interface_capabilities:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC2-POD2-L4
+            name: Ethernet1/1
+
+    - name: DC2-POD2-L4-Ethernet1-2-OSPF
+      description: "OSPF P2P — DC2-POD2-L4 Ethernet1/2"
+      mode: peer_to_peer
+      ospf_process: DC2-POD2-L4-OSPF
+      area:
+        - DC2-AREA-0
+        - "0"
+      interface_capabilities:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC2-POD2-L4
+            name: Ethernet1/2
+
+---
+# ── OSPF P2P peerings ────────────────────────────────────────────────────────
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: ManagedOSPFPeering
+  data:
+    - name: DC2-POD1-SP1-POD2-SP1-OSPF
+      description: "OSPF P2P — DC2-POD1-SP1 Ethernet1/3 ↔ DC2-POD2-SP1 Ethernet1/3"
+      ospf_area: "0.0.0.0"
+      network_type: point-to-point
+      ospf_process: DC2-POD1-SP1-OSPF
+      interface_capabilities:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC2-POD1-SP1
+            name: Ethernet1/3
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC2-POD2-SP1
+            name: Ethernet1/3
+
+    - name: DC2-POD1-SP1-POD2-SP2-OSPF
+      description: "OSPF P2P — DC2-POD1-SP1 Ethernet1/4 ↔ DC2-POD2-SP2 Ethernet1/3"
+      ospf_area: "0.0.0.0"
+      network_type: point-to-point
+      ospf_process: DC2-POD1-SP1-OSPF
+      interface_capabilities:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC2-POD1-SP1
+            name: Ethernet1/4
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC2-POD2-SP2
+            name: Ethernet1/3
+
+    - name: DC2-POD1-SP2-POD2-SP1-OSPF
+      description: "OSPF P2P — DC2-POD1-SP2 Ethernet1/3 ↔ DC2-POD2-SP1 Ethernet1/4"
+      ospf_area: "0.0.0.0"
+      network_type: point-to-point
+      ospf_process: DC2-POD1-SP2-OSPF
+      interface_capabilities:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC2-POD1-SP2
+            name: Ethernet1/3
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC2-POD2-SP1
+            name: Ethernet1/4
+
+    - name: DC2-POD1-SP2-POD2-SP2-OSPF
+      description: "OSPF P2P — DC2-POD1-SP2 Ethernet1/4 ↔ DC2-POD2-SP2 Ethernet1/4"
+      ospf_area: "0.0.0.0"
+      network_type: point-to-point
+      ospf_process: DC2-POD1-SP2-OSPF
+      interface_capabilities:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC2-POD1-SP2
+            name: Ethernet1/4
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC2-POD2-SP2
+            name: Ethernet1/4
+
+    - name: DC2-BL1-POD1-SP1-OSPF
+      description: "OSPF P2P — DC2-BL1 Ethernet1/1 ↔ DC2-POD1-SP1 Ethernet1/5"
+      ospf_area: "0.0.0.0"
+      network_type: point-to-point
+      ospf_process: DC2-BL1-OSPF
+      interface_capabilities:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC2-BL1
+            name: Ethernet1/1
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC2-POD1-SP1
+            name: Ethernet1/5
+
+    - name: DC2-BL1-POD1-SP2-OSPF
+      description: "OSPF P2P — DC2-BL1 Ethernet1/2 ↔ DC2-POD1-SP2 Ethernet1/5"
+      ospf_area: "0.0.0.0"
+      network_type: point-to-point
+      ospf_process: DC2-BL1-OSPF
+      interface_capabilities:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC2-BL1
+            name: Ethernet1/2
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC2-POD1-SP2
+            name: Ethernet1/5
+
+    - name: DC2-BL1-POD2-SP1-OSPF
+      description: "OSPF P2P — DC2-BL1 Ethernet1/3 ↔ DC2-POD2-SP1 Ethernet1/5"
+      ospf_area: "0.0.0.0"
+      network_type: point-to-point
+      ospf_process: DC2-BL1-OSPF
+      interface_capabilities:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC2-BL1
+            name: Ethernet1/3
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC2-POD2-SP1
+            name: Ethernet1/5
+
+    - name: DC2-BL1-POD2-SP2-OSPF
+      description: "OSPF P2P — DC2-BL1 Ethernet1/4 ↔ DC2-POD2-SP2 Ethernet1/5"
+      ospf_area: "0.0.0.0"
+      network_type: point-to-point
+      ospf_process: DC2-BL1-OSPF
+      interface_capabilities:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC2-BL1
+            name: Ethernet1/4
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC2-POD2-SP2
+            name: Ethernet1/5
+
+    - name: DC2-BL2-POD1-SP1-OSPF
+      description: "OSPF P2P — DC2-BL2 Ethernet1/1 ↔ DC2-POD1-SP1 Ethernet1/6"
+      ospf_area: "0.0.0.0"
+      network_type: point-to-point
+      ospf_process: DC2-BL2-OSPF
+      interface_capabilities:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC2-BL2
+            name: Ethernet1/1
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC2-POD1-SP1
+            name: Ethernet1/6
+
+    - name: DC2-BL2-POD1-SP2-OSPF
+      description: "OSPF P2P — DC2-BL2 Ethernet1/2 ↔ DC2-POD1-SP2 Ethernet1/6"
+      ospf_area: "0.0.0.0"
+      network_type: point-to-point
+      ospf_process: DC2-BL2-OSPF
+      interface_capabilities:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC2-BL2
+            name: Ethernet1/2
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC2-POD1-SP2
+            name: Ethernet1/6
+
+    - name: DC2-BL2-POD2-SP1-OSPF
+      description: "OSPF P2P — DC2-BL2 Ethernet1/3 ↔ DC2-POD2-SP1 Ethernet1/6"
+      ospf_area: "0.0.0.0"
+      network_type: point-to-point
+      ospf_process: DC2-BL2-OSPF
+      interface_capabilities:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC2-BL2
+            name: Ethernet1/3
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC2-POD2-SP1
+            name: Ethernet1/6
+
+    - name: DC2-BL2-POD2-SP2-OSPF
+      description: "OSPF P2P — DC2-BL2 Ethernet1/4 ↔ DC2-POD2-SP2 Ethernet1/6"
+      ospf_area: "0.0.0.0"
+      network_type: point-to-point
+      ospf_process: DC2-BL2-OSPF
+      interface_capabilities:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC2-BL2
+            name: Ethernet1/4
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC2-POD2-SP2
+            name: Ethernet1/6
+
+    - name: DC2-POD1-SP1-POD1-L1-OSPF
+      description: "OSPF P2P — DC2-POD1-SP1 Ethernet1/11 ↔ DC2-POD1-L1 Ethernet1/1"
+      ospf_area: "0.0.0.0"
+      network_type: point-to-point
+      ospf_process: DC2-POD1-SP1-OSPF
+      interface_capabilities:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC2-POD1-SP1
+            name: Ethernet1/11
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC2-POD1-L1
+            name: Ethernet1/1
+
+    - name: DC2-POD1-SP1-POD1-L2-OSPF
+      description: "OSPF P2P — DC2-POD1-SP1 Ethernet1/12 ↔ DC2-POD1-L2 Ethernet1/1"
+      ospf_area: "0.0.0.0"
+      network_type: point-to-point
+      ospf_process: DC2-POD1-SP1-OSPF
+      interface_capabilities:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC2-POD1-SP1
+            name: Ethernet1/12
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC2-POD1-L2
+            name: Ethernet1/1
+
+    - name: DC2-POD1-SP1-POD1-L3-OSPF
+      description: "OSPF P2P — DC2-POD1-SP1 Ethernet1/13 ↔ DC2-POD1-L3 Ethernet1/1"
+      ospf_area: "0.0.0.0"
+      network_type: point-to-point
+      ospf_process: DC2-POD1-SP1-OSPF
+      interface_capabilities:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC2-POD1-SP1
+            name: Ethernet1/13
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC2-POD1-L3
+            name: Ethernet1/1
+
+    - name: DC2-POD1-SP1-POD1-L4-OSPF
+      description: "OSPF P2P — DC2-POD1-SP1 Ethernet1/14 ↔ DC2-POD1-L4 Ethernet1/1"
+      ospf_area: "0.0.0.0"
+      network_type: point-to-point
+      ospf_process: DC2-POD1-SP1-OSPF
+      interface_capabilities:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC2-POD1-SP1
+            name: Ethernet1/14
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC2-POD1-L4
+            name: Ethernet1/1
+
+    - name: DC2-POD1-SP2-POD1-L1-OSPF
+      description: "OSPF P2P — DC2-POD1-SP2 Ethernet1/21 ↔ DC2-POD1-L1 Ethernet1/2"
+      ospf_area: "0.0.0.0"
+      network_type: point-to-point
+      ospf_process: DC2-POD1-SP2-OSPF
+      interface_capabilities:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC2-POD1-SP2
+            name: Ethernet1/21
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC2-POD1-L1
+            name: Ethernet1/2
+
+    - name: DC2-POD1-SP2-POD1-L2-OSPF
+      description: "OSPF P2P — DC2-POD1-SP2 Ethernet1/22 ↔ DC2-POD1-L2 Ethernet1/2"
+      ospf_area: "0.0.0.0"
+      network_type: point-to-point
+      ospf_process: DC2-POD1-SP2-OSPF
+      interface_capabilities:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC2-POD1-SP2
+            name: Ethernet1/22
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC2-POD1-L2
+            name: Ethernet1/2
+
+    - name: DC2-POD1-SP2-POD1-L3-OSPF
+      description: "OSPF P2P — DC2-POD1-SP2 Ethernet1/23 ↔ DC2-POD1-L3 Ethernet1/2"
+      ospf_area: "0.0.0.0"
+      network_type: point-to-point
+      ospf_process: DC2-POD1-SP2-OSPF
+      interface_capabilities:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC2-POD1-SP2
+            name: Ethernet1/23
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC2-POD1-L3
+            name: Ethernet1/2
+
+    - name: DC2-POD1-SP2-POD1-L4-OSPF
+      description: "OSPF P2P — DC2-POD1-SP2 Ethernet1/24 ↔ DC2-POD1-L4 Ethernet1/2"
+      ospf_area: "0.0.0.0"
+      network_type: point-to-point
+      ospf_process: DC2-POD1-SP2-OSPF
+      interface_capabilities:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC2-POD1-SP2
+            name: Ethernet1/24
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC2-POD1-L4
+            name: Ethernet1/2
+
+    - name: DC2-POD2-SP1-POD2-L1-OSPF
+      description: "OSPF P2P — DC2-POD2-SP1 Ethernet1/11 ↔ DC2-POD2-L1 Ethernet1/1"
+      ospf_area: "0.0.0.0"
+      network_type: point-to-point
+      ospf_process: DC2-POD2-SP1-OSPF
+      interface_capabilities:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC2-POD2-SP1
+            name: Ethernet1/11
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC2-POD2-L1
+            name: Ethernet1/1
+
+    - name: DC2-POD2-SP1-POD2-L2-OSPF
+      description: "OSPF P2P — DC2-POD2-SP1 Ethernet1/12 ↔ DC2-POD2-L2 Ethernet1/1"
+      ospf_area: "0.0.0.0"
+      network_type: point-to-point
+      ospf_process: DC2-POD2-SP1-OSPF
+      interface_capabilities:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC2-POD2-SP1
+            name: Ethernet1/12
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC2-POD2-L2
+            name: Ethernet1/1
+
+    - name: DC2-POD2-SP1-POD2-L3-OSPF
+      description: "OSPF P2P — DC2-POD2-SP1 Ethernet1/13 ↔ DC2-POD2-L3 Ethernet1/1"
+      ospf_area: "0.0.0.0"
+      network_type: point-to-point
+      ospf_process: DC2-POD2-SP1-OSPF
+      interface_capabilities:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC2-POD2-SP1
+            name: Ethernet1/13
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC2-POD2-L3
+            name: Ethernet1/1
+
+    - name: DC2-POD2-SP1-POD2-L4-OSPF
+      description: "OSPF P2P — DC2-POD2-SP1 Ethernet1/14 ↔ DC2-POD2-L4 Ethernet1/1"
+      ospf_area: "0.0.0.0"
+      network_type: point-to-point
+      ospf_process: DC2-POD2-SP1-OSPF
+      interface_capabilities:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC2-POD2-SP1
+            name: Ethernet1/14
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC2-POD2-L4
+            name: Ethernet1/1
+
+    - name: DC2-POD2-SP2-POD2-L1-OSPF
+      description: "OSPF P2P — DC2-POD2-SP2 Ethernet1/21 ↔ DC2-POD2-L1 Ethernet1/2"
+      ospf_area: "0.0.0.0"
+      network_type: point-to-point
+      ospf_process: DC2-POD2-SP2-OSPF
+      interface_capabilities:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC2-POD2-SP2
+            name: Ethernet1/21
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC2-POD2-L1
+            name: Ethernet1/2
+
+    - name: DC2-POD2-SP2-POD2-L2-OSPF
+      description: "OSPF P2P — DC2-POD2-SP2 Ethernet1/22 ↔ DC2-POD2-L2 Ethernet1/2"
+      ospf_area: "0.0.0.0"
+      network_type: point-to-point
+      ospf_process: DC2-POD2-SP2-OSPF
+      interface_capabilities:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC2-POD2-SP2
+            name: Ethernet1/22
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC2-POD2-L2
+            name: Ethernet1/2
+
+    - name: DC2-POD2-SP2-POD2-L3-OSPF
+      description: "OSPF P2P — DC2-POD2-SP2 Ethernet1/23 ↔ DC2-POD2-L3 Ethernet1/2"
+      ospf_area: "0.0.0.0"
+      network_type: point-to-point
+      ospf_process: DC2-POD2-SP2-OSPF
+      interface_capabilities:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC2-POD2-SP2
+            name: Ethernet1/23
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC2-POD2-L3
+            name: Ethernet1/2
+
+    - name: DC2-POD2-SP2-POD2-L4-OSPF
+      description: "OSPF P2P — DC2-POD2-SP2 Ethernet1/24 ↔ DC2-POD2-L4 Ethernet1/2"
+      ospf_area: "0.0.0.0"
+      network_type: point-to-point
+      ospf_process: DC2-POD2-SP2-OSPF
+      interface_capabilities:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC2-POD2-SP2
+            name: Ethernet1/24
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC2-POD2-L4
+            name: Ethernet1/2
+
+---
+# ── iBGP EVPN overlay peerings — loopback-based (BL as RR) ───────────────────
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: ManagedBGPPeering
+  data:
+    - name: DC2-BL1-P1-SP1-BGP-EVPN
+      description: "iBGP EVPN — DC2-BL1 (RR) ↔ DC2-POD1-SP1 (client) via loopbacks"
+      session_type: IBGP
+      bfd_enabled: true
+      route_reflector_client: true
+      bgp_processes:
+        - DC2-BL1-BGP-EVPN
+        - DC2-POD1-SP1-BGP-EVPN
+      interface_capabilities:
+        - kind: DcimVirtualInterface
+          data:
+            device: DC2-BL1
+            name: Loopback0
+        - kind: DcimVirtualInterface
+          data:
+            device: DC2-POD1-SP1
+            name: Loopback0
+
+    - name: DC2-BL1-P1-SP2-BGP-EVPN
+      description: "iBGP EVPN — DC2-BL1 (RR) ↔ DC2-POD1-SP2 (client) via loopbacks"
+      session_type: IBGP
+      bfd_enabled: true
+      route_reflector_client: true
+      bgp_processes:
+        - DC2-BL1-BGP-EVPN
+        - DC2-POD1-SP2-BGP-EVPN
+      interface_capabilities:
+        - kind: DcimVirtualInterface
+          data:
+            device: DC2-BL1
+            name: Loopback0
+        - kind: DcimVirtualInterface
+          data:
+            device: DC2-POD1-SP2
+            name: Loopback0
+
+    - name: DC2-BL1-P1-L1-BGP-EVPN
+      description: "iBGP EVPN — DC2-BL1 (RR) ↔ DC2-POD1-L1 (client) via loopbacks"
+      session_type: IBGP
+      bfd_enabled: true
+      route_reflector_client: true
+      bgp_processes:
+        - DC2-BL1-BGP-EVPN
+        - DC2-POD1-L1-BGP-EVPN
+      interface_capabilities:
+        - kind: DcimVirtualInterface
+          data:
+            device: DC2-BL1
+            name: Loopback0
+        - kind: DcimVirtualInterface
+          data:
+            device: DC2-POD1-L1
+            name: Loopback0
+
+    - name: DC2-BL1-P1-L2-BGP-EVPN
+      description: "iBGP EVPN — DC2-BL1 (RR) ↔ DC2-POD1-L2 (client) via loopbacks"
+      session_type: IBGP
+      bfd_enabled: true
+      route_reflector_client: true
+      bgp_processes:
+        - DC2-BL1-BGP-EVPN
+        - DC2-POD1-L2-BGP-EVPN
+      interface_capabilities:
+        - kind: DcimVirtualInterface
+          data:
+            device: DC2-BL1
+            name: Loopback0
+        - kind: DcimVirtualInterface
+          data:
+            device: DC2-POD1-L2
+            name: Loopback0
+
+    - name: DC2-BL1-P1-L3-BGP-EVPN
+      description: "iBGP EVPN — DC2-BL1 (RR) ↔ DC2-POD1-L3 (client) via loopbacks"
+      session_type: IBGP
+      bfd_enabled: true
+      route_reflector_client: true
+      bgp_processes:
+        - DC2-BL1-BGP-EVPN
+        - DC2-POD1-L3-BGP-EVPN
+      interface_capabilities:
+        - kind: DcimVirtualInterface
+          data:
+            device: DC2-BL1
+            name: Loopback0
+        - kind: DcimVirtualInterface
+          data:
+            device: DC2-POD1-L3
+            name: Loopback0
+
+    - name: DC2-BL1-P1-L4-BGP-EVPN
+      description: "iBGP EVPN — DC2-BL1 (RR) ↔ DC2-POD1-L4 (client) via loopbacks"
+      session_type: IBGP
+      bfd_enabled: true
+      route_reflector_client: true
+      bgp_processes:
+        - DC2-BL1-BGP-EVPN
+        - DC2-POD1-L4-BGP-EVPN
+      interface_capabilities:
+        - kind: DcimVirtualInterface
+          data:
+            device: DC2-BL1
+            name: Loopback0
+        - kind: DcimVirtualInterface
+          data:
+            device: DC2-POD1-L4
+            name: Loopback0
+
+    - name: DC2-BL1-P2-SP1-BGP-EVPN
+      description: "iBGP EVPN — DC2-BL1 (RR) ↔ DC2-POD2-SP1 (client) via loopbacks"
+      session_type: IBGP
+      bfd_enabled: true
+      route_reflector_client: true
+      bgp_processes:
+        - DC2-BL1-BGP-EVPN
+        - DC2-POD2-SP1-BGP-EVPN
+      interface_capabilities:
+        - kind: DcimVirtualInterface
+          data:
+            device: DC2-BL1
+            name: Loopback0
+        - kind: DcimVirtualInterface
+          data:
+            device: DC2-POD2-SP1
+            name: Loopback0
+
+    - name: DC2-BL1-P2-SP2-BGP-EVPN
+      description: "iBGP EVPN — DC2-BL1 (RR) ↔ DC2-POD2-SP2 (client) via loopbacks"
+      session_type: IBGP
+      bfd_enabled: true
+      route_reflector_client: true
+      bgp_processes:
+        - DC2-BL1-BGP-EVPN
+        - DC2-POD2-SP2-BGP-EVPN
+      interface_capabilities:
+        - kind: DcimVirtualInterface
+          data:
+            device: DC2-BL1
+            name: Loopback0
+        - kind: DcimVirtualInterface
+          data:
+            device: DC2-POD2-SP2
+            name: Loopback0
+
+    - name: DC2-BL1-P2-L1-BGP-EVPN
+      description: "iBGP EVPN — DC2-BL1 (RR) ↔ DC2-POD2-L1 (client) via loopbacks"
+      session_type: IBGP
+      bfd_enabled: true
+      route_reflector_client: true
+      bgp_processes:
+        - DC2-BL1-BGP-EVPN
+        - DC2-POD2-L1-BGP-EVPN
+      interface_capabilities:
+        - kind: DcimVirtualInterface
+          data:
+            device: DC2-BL1
+            name: Loopback0
+        - kind: DcimVirtualInterface
+          data:
+            device: DC2-POD2-L1
+            name: Loopback0
+
+    - name: DC2-BL1-P2-L2-BGP-EVPN
+      description: "iBGP EVPN — DC2-BL1 (RR) ↔ DC2-POD2-L2 (client) via loopbacks"
+      session_type: IBGP
+      bfd_enabled: true
+      route_reflector_client: true
+      bgp_processes:
+        - DC2-BL1-BGP-EVPN
+        - DC2-POD2-L2-BGP-EVPN
+      interface_capabilities:
+        - kind: DcimVirtualInterface
+          data:
+            device: DC2-BL1
+            name: Loopback0
+        - kind: DcimVirtualInterface
+          data:
+            device: DC2-POD2-L2
+            name: Loopback0
+
+    - name: DC2-BL1-P2-L3-BGP-EVPN
+      description: "iBGP EVPN — DC2-BL1 (RR) ↔ DC2-POD2-L3 (client) via loopbacks"
+      session_type: IBGP
+      bfd_enabled: true
+      route_reflector_client: true
+      bgp_processes:
+        - DC2-BL1-BGP-EVPN
+        - DC2-POD2-L3-BGP-EVPN
+      interface_capabilities:
+        - kind: DcimVirtualInterface
+          data:
+            device: DC2-BL1
+            name: Loopback0
+        - kind: DcimVirtualInterface
+          data:
+            device: DC2-POD2-L3
+            name: Loopback0
+
+    - name: DC2-BL1-P2-L4-BGP-EVPN
+      description: "iBGP EVPN — DC2-BL1 (RR) ↔ DC2-POD2-L4 (client) via loopbacks"
+      session_type: IBGP
+      bfd_enabled: true
+      route_reflector_client: true
+      bgp_processes:
+        - DC2-BL1-BGP-EVPN
+        - DC2-POD2-L4-BGP-EVPN
+      interface_capabilities:
+        - kind: DcimVirtualInterface
+          data:
+            device: DC2-BL1
+            name: Loopback0
+        - kind: DcimVirtualInterface
+          data:
+            device: DC2-POD2-L4
+            name: Loopback0
+
+    - name: DC2-BL2-P1-SP1-BGP-EVPN
+      description: "iBGP EVPN — DC2-BL2 (RR) ↔ DC2-POD1-SP1 (client) via loopbacks"
+      session_type: IBGP
+      bfd_enabled: true
+      route_reflector_client: true
+      bgp_processes:
+        - DC2-BL2-BGP-EVPN
+        - DC2-POD1-SP1-BGP-EVPN
+      interface_capabilities:
+        - kind: DcimVirtualInterface
+          data:
+            device: DC2-BL2
+            name: Loopback0
+        - kind: DcimVirtualInterface
+          data:
+            device: DC2-POD1-SP1
+            name: Loopback0
+
+    - name: DC2-BL2-P1-SP2-BGP-EVPN
+      description: "iBGP EVPN — DC2-BL2 (RR) ↔ DC2-POD1-SP2 (client) via loopbacks"
+      session_type: IBGP
+      bfd_enabled: true
+      route_reflector_client: true
+      bgp_processes:
+        - DC2-BL2-BGP-EVPN
+        - DC2-POD1-SP2-BGP-EVPN
+      interface_capabilities:
+        - kind: DcimVirtualInterface
+          data:
+            device: DC2-BL2
+            name: Loopback0
+        - kind: DcimVirtualInterface
+          data:
+            device: DC2-POD1-SP2
+            name: Loopback0
+
+    - name: DC2-BL2-P1-L1-BGP-EVPN
+      description: "iBGP EVPN — DC2-BL2 (RR) ↔ DC2-POD1-L1 (client) via loopbacks"
+      session_type: IBGP
+      bfd_enabled: true
+      route_reflector_client: true
+      bgp_processes:
+        - DC2-BL2-BGP-EVPN
+        - DC2-POD1-L1-BGP-EVPN
+      interface_capabilities:
+        - kind: DcimVirtualInterface
+          data:
+            device: DC2-BL2
+            name: Loopback0
+        - kind: DcimVirtualInterface
+          data:
+            device: DC2-POD1-L1
+            name: Loopback0
+
+    - name: DC2-BL2-P1-L2-BGP-EVPN
+      description: "iBGP EVPN — DC2-BL2 (RR) ↔ DC2-POD1-L2 (client) via loopbacks"
+      session_type: IBGP
+      bfd_enabled: true
+      route_reflector_client: true
+      bgp_processes:
+        - DC2-BL2-BGP-EVPN
+        - DC2-POD1-L2-BGP-EVPN
+      interface_capabilities:
+        - kind: DcimVirtualInterface
+          data:
+            device: DC2-BL2
+            name: Loopback0
+        - kind: DcimVirtualInterface
+          data:
+            device: DC2-POD1-L2
+            name: Loopback0
+
+    - name: DC2-BL2-P1-L3-BGP-EVPN
+      description: "iBGP EVPN — DC2-BL2 (RR) ↔ DC2-POD1-L3 (client) via loopbacks"
+      session_type: IBGP
+      bfd_enabled: true
+      route_reflector_client: true
+      bgp_processes:
+        - DC2-BL2-BGP-EVPN
+        - DC2-POD1-L3-BGP-EVPN
+      interface_capabilities:
+        - kind: DcimVirtualInterface
+          data:
+            device: DC2-BL2
+            name: Loopback0
+        - kind: DcimVirtualInterface
+          data:
+            device: DC2-POD1-L3
+            name: Loopback0
+
+    - name: DC2-BL2-P1-L4-BGP-EVPN
+      description: "iBGP EVPN — DC2-BL2 (RR) ↔ DC2-POD1-L4 (client) via loopbacks"
+      session_type: IBGP
+      bfd_enabled: true
+      route_reflector_client: true
+      bgp_processes:
+        - DC2-BL2-BGP-EVPN
+        - DC2-POD1-L4-BGP-EVPN
+      interface_capabilities:
+        - kind: DcimVirtualInterface
+          data:
+            device: DC2-BL2
+            name: Loopback0
+        - kind: DcimVirtualInterface
+          data:
+            device: DC2-POD1-L4
+            name: Loopback0
+
+    - name: DC2-BL2-P2-SP1-BGP-EVPN
+      description: "iBGP EVPN — DC2-BL2 (RR) ↔ DC2-POD2-SP1 (client) via loopbacks"
+      session_type: IBGP
+      bfd_enabled: true
+      route_reflector_client: true
+      bgp_processes:
+        - DC2-BL2-BGP-EVPN
+        - DC2-POD2-SP1-BGP-EVPN
+      interface_capabilities:
+        - kind: DcimVirtualInterface
+          data:
+            device: DC2-BL2
+            name: Loopback0
+        - kind: DcimVirtualInterface
+          data:
+            device: DC2-POD2-SP1
+            name: Loopback0
+
+    - name: DC2-BL2-P2-SP2-BGP-EVPN
+      description: "iBGP EVPN — DC2-BL2 (RR) ↔ DC2-POD2-SP2 (client) via loopbacks"
+      session_type: IBGP
+      bfd_enabled: true
+      route_reflector_client: true
+      bgp_processes:
+        - DC2-BL2-BGP-EVPN
+        - DC2-POD2-SP2-BGP-EVPN
+      interface_capabilities:
+        - kind: DcimVirtualInterface
+          data:
+            device: DC2-BL2
+            name: Loopback0
+        - kind: DcimVirtualInterface
+          data:
+            device: DC2-POD2-SP2
+            name: Loopback0
+
+    - name: DC2-BL2-P2-L1-BGP-EVPN
+      description: "iBGP EVPN — DC2-BL2 (RR) ↔ DC2-POD2-L1 (client) via loopbacks"
+      session_type: IBGP
+      bfd_enabled: true
+      route_reflector_client: true
+      bgp_processes:
+        - DC2-BL2-BGP-EVPN
+        - DC2-POD2-L1-BGP-EVPN
+      interface_capabilities:
+        - kind: DcimVirtualInterface
+          data:
+            device: DC2-BL2
+            name: Loopback0
+        - kind: DcimVirtualInterface
+          data:
+            device: DC2-POD2-L1
+            name: Loopback0
+
+    - name: DC2-BL2-P2-L2-BGP-EVPN
+      description: "iBGP EVPN — DC2-BL2 (RR) ↔ DC2-POD2-L2 (client) via loopbacks"
+      session_type: IBGP
+      bfd_enabled: true
+      route_reflector_client: true
+      bgp_processes:
+        - DC2-BL2-BGP-EVPN
+        - DC2-POD2-L2-BGP-EVPN
+      interface_capabilities:
+        - kind: DcimVirtualInterface
+          data:
+            device: DC2-BL2
+            name: Loopback0
+        - kind: DcimVirtualInterface
+          data:
+            device: DC2-POD2-L2
+            name: Loopback0
+
+    - name: DC2-BL2-P2-L3-BGP-EVPN
+      description: "iBGP EVPN — DC2-BL2 (RR) ↔ DC2-POD2-L3 (client) via loopbacks"
+      session_type: IBGP
+      bfd_enabled: true
+      route_reflector_client: true
+      bgp_processes:
+        - DC2-BL2-BGP-EVPN
+        - DC2-POD2-L3-BGP-EVPN
+      interface_capabilities:
+        - kind: DcimVirtualInterface
+          data:
+            device: DC2-BL2
+            name: Loopback0
+        - kind: DcimVirtualInterface
+          data:
+            device: DC2-POD2-L3
+            name: Loopback0
+
+    - name: DC2-BL2-P2-L4-BGP-EVPN
+      description: "iBGP EVPN — DC2-BL2 (RR) ↔ DC2-POD2-L4 (client) via loopbacks"
+      session_type: IBGP
+      bfd_enabled: true
+      route_reflector_client: true
+      bgp_processes:
+        - DC2-BL2-BGP-EVPN
+        - DC2-POD2-L4-BGP-EVPN
+      interface_capabilities:
+        - kind: DcimVirtualInterface
+          data:
+            device: DC2-BL2
+            name: Loopback0
+        - kind: DcimVirtualInterface
+          data:
+            device: DC2-POD2-L4
+            name: Loopback0

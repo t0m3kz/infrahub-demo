@@ -4,9 +4,7 @@ version: "1.0"
 nodes:
   - name: Loadbalancer
     namespace: Onprem
-    description: |
-      On-premises load balancer (e.g., HAProxy, Nginx, F5)
-      hosting multiple VIP services (listeners).
+    description: "On-premises load balancer (e.g., F5, HAProxy) hosting VIP services."
     label: "On-Prem Load Balancer"
     icon: carbon:floating-ip
     include_in_menu: false
@@ -26,13 +24,3 @@ nodes:
         optional: false
         on_delete: no-action
         description: "The deployment location for this load balancer"
-      - name: frontend_servers
-        peer: DcimDevice
-        label: Frontend Servers
-        cardinality: many
-        kind: Component
-        optional: true
-        order_weight: 1000
-        identifier: load_balancer__frontend_servers
-        description: >
-          "Cluster members (HA/VPX instances) hosting the LB software"

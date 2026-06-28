@@ -1,0 +1,105 @@
+---
+# C002 (SwiftGo GmbH) — Component dependency graph
+#
+# AppDependency nodes encode every directed edge with an explicit protocol and
+# port.  No automatic port inference.
+
+# ── Dependency edge nodes ─────────────────────────────────────────────────────
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: AppDependency
+  data:
+
+    # ── shipment-tracker / production ─────────────────────────────────────────
+
+    - name: c002-shipment-tracker-p-web-frontend--c002-shipment-tracker-p-tracking-api
+      source: c002-shipment-tracker-p-web-frontend
+      target: c002-shipment-tracker-p-tracking-api
+      protocol: tcp
+      port_start: 443
+      description: "Web frontend → tracking API (HTTPS)"
+
+    - name: c002-shipment-tracker-p-tracking-api--c002-shipment-tracker-p-shipment-db
+      source: c002-shipment-tracker-p-tracking-api
+      target: c002-shipment-tracker-p-shipment-db
+      protocol: tcp
+      port_start: 5432
+      description: "Tracking API → shipment DB (PostgreSQL)"
+
+    # ── shipment-tracker / nonprod ────────────────────────────────────────────
+
+    - name: c002-shipment-tracker-n-web-frontend--c002-shipment-tracker-n-tracking-api
+      source: c002-shipment-tracker-n-web-frontend
+      target: c002-shipment-tracker-n-tracking-api
+      protocol: tcp
+      port_start: 443
+      description: "Web frontend → tracking API (HTTPS, nonprod)"
+
+    # ── fleet-manager / production ────────────────────────────────────────────
+
+    - name: c002-fleet-manager-p-dispatch-portal--c002-fleet-manager-p-telematics-api
+      source: c002-fleet-manager-p-dispatch-portal
+      target: c002-fleet-manager-p-telematics-api
+      protocol: tcp
+      port_start: 8080
+      description: "Dispatch portal → telematics API (HTTP/2)"
+
+    - name: c002-fleet-manager-p-dispatch-portal--c002-shipment-tracker-p-tracking-api
+      source: c002-fleet-manager-p-dispatch-portal
+      target: c002-shipment-tracker-p-tracking-api
+      protocol: tcp
+      port_start: 443
+      description: "Dispatch portal → tracking API (cross-app, HTTPS)"
+
+    - name: c002-fleet-manager-p-telematics-api--c002-fleet-manager-p-fleet-db
+      source: c002-fleet-manager-p-telematics-api
+      target: c002-fleet-manager-p-fleet-db
+      protocol: tcp
+      port_start: 5432
+      description: "Telematics API → fleet DB (PostgreSQL)"
+
+# ── Wire depends_on on each AppComponent ─────────────────────────────────────
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: AppComponent
+  data:
+
+    # ── shipment-tracker / production ─────────────────────────────────────────
+
+    - name: web-frontend
+      component_type: frontend
+      parent: c002-shipment-tracker-p
+      depends_on:
+        - c002-shipment-tracker-p-web-frontend--c002-shipment-tracker-p-tracking-api
+
+    - name: tracking-api
+      component_type: backend
+      parent: c002-shipment-tracker-p
+      depends_on:
+        - c002-shipment-tracker-p-tracking-api--c002-shipment-tracker-p-shipment-db
+
+    # ── shipment-tracker / nonprod ────────────────────────────────────────────
+
+    - name: web-frontend
+      component_type: frontend
+      parent: c002-shipment-tracker-n
+      depends_on:
+        - c002-shipment-tracker-n-web-frontend--c002-shipment-tracker-n-tracking-api
+
+    # ── fleet-manager / production ────────────────────────────────────────────
+
+    - name: dispatch-portal
+      component_type: frontend
+      parent: c002-fleet-manager-p
+      depends_on:
+        - c002-fleet-manager-p-dispatch-portal--c002-fleet-manager-p-telematics-api
+        - c002-fleet-manager-p-dispatch-portal--c002-shipment-tracker-p-tracking-api
+
+    - name: telematics-api
+      component_type: backend
+      parent: c002-fleet-manager-p
+      depends_on:
+        - c002-fleet-manager-p-telematics-api--c002-fleet-manager-p-fleet-db

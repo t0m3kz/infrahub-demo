@@ -1,0 +1,200 @@
+---
+# C002 (SwiftGo GmbH) — Backend pool members on DC3-LB-HA
+# One pool member per device per VIP — VIPs are per-component.
+
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: LoadbalancerPoolMember
+  data:
+
+    # ── shipment-tracker web-frontend (VIP: c002-ship-web:443/80) ────────────
+    - name: c002-web-vm-01-ship-web-443
+      weight: 1
+      vip_service:
+        - c002-ship-web.dc3.internal
+        - https
+        - "443"
+      capabilities:
+        - C002-WEB-VM-01
+
+    - name: c002-web-vm-02-ship-web-443
+      weight: 1
+      vip_service:
+        - c002-ship-web.dc3.internal
+        - https
+        - "443"
+      capabilities:
+        - C002-WEB-VM-02
+
+    - name: c002-web-vm-01-ship-web-80
+      weight: 1
+      vip_service:
+        - c002-ship-web.dc3.internal
+        - http
+        - "80"
+      capabilities:
+        - C002-WEB-VM-01
+
+    - name: c002-web-vm-02-ship-web-80
+      weight: 1
+      vip_service:
+        - c002-ship-web.dc3.internal
+        - http
+        - "80"
+      capabilities:
+        - C002-WEB-VM-02
+
+    # ── shipment-tracker tracking-api (VIP: c002-ship-api:8443) ──────────────
+    - name: c002-app-vm-01-ship-api
+      weight: 1
+      vip_service:
+        - c002-ship-api.dc3.internal
+        - https
+        - "8443"
+      capabilities:
+        - C002-APP-VM-01
+
+    - name: c002-app-vm-02-ship-api
+      weight: 1
+      vip_service:
+        - c002-ship-api.dc3.internal
+        - https
+        - "8443"
+      capabilities:
+        - C002-APP-VM-02
+
+    # ── shipment-tracker shipment-db (VIP: c002-ship-db:5432) ────────────────
+    - name: c002-db-vm-01-ship-db
+      weight: 1
+      vip_service:
+        - c002-ship-db.dc3.internal
+        - tcp
+        - "5432"
+      capabilities:
+        - C002-DB-VM-01
+
+    # ── shipment-tracker nonprod web-frontend (VIP: c002-ship-web-n:443) ─────
+    - name: c002-web-np-vm-01-ship-web-n
+      weight: 1
+      vip_service:
+        - c002-ship-web-n.dc3.internal
+        - https
+        - "443"
+      capabilities:
+        - C002-WEB-NP-VM-01
+
+    # ── shipment-tracker nonprod tracking-api (VIP: c002-ship-api-n:8443) ────
+    - name: c002-app-np-vm-01-ship-api-n
+      weight: 1
+      vip_service:
+        - c002-ship-api-n.dc3.internal
+        - https
+        - "8443"
+      capabilities:
+        - C002-APP-NP-VM-01
+
+    # ── fleet-manager dispatch-portal (VIP: c002-fleet-web:443/80) ───────────
+    - name: c002-fleet-web-vm-01-fleet-web-443
+      weight: 1
+      vip_service:
+        - c002-fleet-web.dc3.internal
+        - https
+        - "443"
+      capabilities:
+        - C002-FLEET-WEB-VM-01
+
+    - name: c002-fleet-web-vm-01-fleet-web-80
+      weight: 1
+      vip_service:
+        - c002-fleet-web.dc3.internal
+        - http
+        - "80"
+      capabilities:
+        - C002-FLEET-WEB-VM-01
+
+    # ── fleet-manager telematics-api (VIP: c002-fleet-api:8443) ──────────────
+    - name: c002-fleet-app-vm-01-fleet-api
+      weight: 1
+      vip_service:
+        - c002-fleet-api.dc3.internal
+        - https
+        - "8443"
+      capabilities:
+        - C002-FLEET-APP-VM-01
+
+    # ── fleet-manager fleet-db (VIP: c002-fleet-db:5432) ─────────────────────
+    - name: c002-fleet-db-vm-01-fleet-db
+      weight: 1
+      vip_service:
+        - c002-fleet-db.dc3.internal
+        - tcp
+        - "5432"
+      capabilities:
+        - C002-FLEET-DB-VM-01
+
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: LoadbalancerPoolInterface
+  data:
+
+    # ── shipment-tracker web-frontend ─────────────────────────────────────────
+    - name: c002-web-vm-01-ship-web-443-iface
+      port: 443
+      pool_member: c002-web-vm-01-ship-web-443
+
+    - name: c002-web-vm-02-ship-web-443-iface
+      port: 443
+      pool_member: c002-web-vm-02-ship-web-443
+
+    - name: c002-web-vm-01-ship-web-80-iface
+      port: 80
+      pool_member: c002-web-vm-01-ship-web-80
+
+    - name: c002-web-vm-02-ship-web-80-iface
+      port: 80
+      pool_member: c002-web-vm-02-ship-web-80
+
+    # ── shipment-tracker tracking-api ────────────────────────────────────────
+    - name: c002-app-vm-01-ship-api-iface
+      port: 8443
+      pool_member: c002-app-vm-01-ship-api
+
+    - name: c002-app-vm-02-ship-api-iface
+      port: 8443
+      pool_member: c002-app-vm-02-ship-api
+
+    # ── shipment-tracker shipment-db ──────────────────────────────────────────
+    - name: c002-db-vm-01-ship-db-iface
+      port: 5432
+      pool_member: c002-db-vm-01-ship-db
+
+    # ── shipment-tracker nonprod ──────────────────────────────────────────────
+    - name: c002-web-np-vm-01-ship-web-n-iface
+      port: 443
+      pool_member: c002-web-np-vm-01-ship-web-n
+
+    - name: c002-app-np-vm-01-ship-api-n-iface
+      port: 8443
+      pool_member: c002-app-np-vm-01-ship-api-n
+
+    # ── fleet-manager dispatch-portal ────────────────────────────────────────
+    - name: c002-fleet-web-vm-01-fleet-web-443-iface
+      port: 443
+      pool_member: c002-fleet-web-vm-01-fleet-web-443
+
+    - name: c002-fleet-web-vm-01-fleet-web-80-iface
+      port: 80
+      pool_member: c002-fleet-web-vm-01-fleet-web-80
+
+    # ── fleet-manager telematics-api ─────────────────────────────────────────
+    - name: c002-fleet-app-vm-01-fleet-api-iface
+      port: 8443
+      pool_member: c002-fleet-app-vm-01-fleet-api
+
+    # ── fleet-manager fleet-db ────────────────────────────────────────────────
+    - name: c002-fleet-db-vm-01-fleet-db-iface
+      port: 5432
+      pool_member: c002-fleet-db-vm-01-fleet-db

@@ -1,0 +1,145 @@
+---
+# DC3 Proxy Services — HAProxy explicit-proxy pair
+#
+# Two HAProxy appliances sit inline after the F5 BIG-IP load balancers,
+# providing tenant traffic inspection, SSL interception, and URL filtering.
+#
+# Full inline service chain (active path):
+#   BL1:Eth0 (PBR) ──▶ FW-01:eth1 (inspect) ──▶ FW-01:eth2 ──▶
+#                       LB-01:1.1 (balance)  ──▶ LB-01:1.2  ──▶
+#                       PRX-01:eth0 (proxy)  ──▶ PRX-01:eth1 ──▶ BL1:Ethernet5
+#
+# Port mapping:
+#   DC3-PRX-01 (dc3-s1-r-1, active):
+#     eth0  ingress ← DC3-LB-01:1.2   (from load balancer)
+#     eth1  egress  → DC3-BL1:Ethernet5  (return to fabric)
+#   DC3-PRX-02 (dc3-s1-r-2, standby):
+#     eth0  ingress ← DC3-LB-02:1.2   (from load balancer)
+#     eth1  egress  → DC3-BL2:Ethernet5  (return to fabric)
+
+# ── Physical appliances ───────────────────────────────────────────────────────
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimPhysicalDevice
+  data:
+    - name: DC3-PRX-01
+      object_template: HA-PROXY_PROXY
+      status: active
+      deployment: DC3
+      rack: dc3-s1-r-1
+      member_of_groups:
+        - onprem_proxies
+      interfaces:
+        kind: DcimPhysicalInterface
+        data:
+          - name: eth0
+            interface_type: 25gbase-x-sfp28
+            role: uplink
+            status: active
+            description: "Ingress — DC3-LB-01:1.2"
+          - name: eth1
+            interface_type: 25gbase-x-sfp28
+            role: uplink
+            status: active
+            description: "Egress — DC3-BL1:Ethernet5"
+
+    - name: DC3-PRX-02
+      object_template: HA-PROXY_PROXY
+      status: active
+      deployment: DC3
+      rack: dc3-s1-r-2
+      member_of_groups:
+        - onprem_proxies
+      interfaces:
+        kind: DcimPhysicalInterface
+        data:
+          - name: eth0
+            interface_type: 25gbase-x-sfp28
+            role: uplink
+            status: active
+            description: "Ingress — DC3-LB-02:1.2"
+          - name: eth1
+            interface_type: 25gbase-x-sfp28
+            role: uplink
+            status: active
+            description: "Egress — DC3-BL2:Ethernet5"
+
+# ── HA domain ─────────────────────────────────────────────────────────────────
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: ManagedProxyHA
+  data:
+    - name: DC3-PRX-HA
+      group_id: 3
+      mode: active-passive
+      priority: 100
+      preempt: false
+      proxy_type: explicit
+      proxy_vendor: haproxy
+      status: active
+      description: "DC3 HAProxy explicit-proxy HA pair — tenant egress inspection"
+      capabilities:
+        - DC3-PRX-01
+        - DC3-PRX-02
+
+# ── Cables ────────────────────────────────────────────────────────────────────
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimCable
+  data:
+    - name: CBL-DC3-LB01-PRX01-INLINE
+      type: smf
+      deployment: DC3
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-LB-01
+            name: "1.2"
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-PRX-01
+            name: eth0
+
+    - name: CBL-DC3-PRX01-BL1-RETURN
+      type: smf
+      deployment: DC3
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-PRX-01
+            name: eth1
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-BL1
+            name: Ethernet5
+
+    - name: CBL-DC3-LB02-PRX02-INLINE
+      type: smf
+      deployment: DC3
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-LB-02
+            name: "1.2"
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-PRX-02
+            name: eth0
+
+    - name: CBL-DC3-PRX02-BL2-RETURN
+      type: smf
+      deployment: DC3
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-PRX-02
+            name: eth1
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-BL2
+            name: Ethernet5
