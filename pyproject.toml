@@ -16,7 +16,7 @@ readme = "README.md"
 [dependency-groups]
 dev = [
     "commitizen>=4.0.0",
-    "infrahub-testcontainers>=1.5.2",
+    "infrahub-testcontainers>=1.10.0",
     "invoke>=2.2.0",
     "isort>=5.13.0",
     "pip-licenses>=4.4.0",
