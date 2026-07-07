@@ -85,4 +85,4 @@ spec:
     - name: app_applications
       description: Application instances — generator target for AppApplicationGenerator
     - name: app_components
-      description: Application component instances — target for AppServicePortGenerator and AppComponentGenerator
+      description: Application component instances — target for AppServicePortGenerator
