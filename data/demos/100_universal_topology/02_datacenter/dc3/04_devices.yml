@@ -744,6 +744,11 @@ spec:
             role: uplink
             status: active
             description: "Egress — DC3-PRX-01:eth0"
+          - name: ha-mirror
+            interface_type: other
+            role: ha
+            status: active
+            description: "HA mirroring channel — DC3-LB-02:ha-mirror"
 
     - name: DC3-LB-02
       object_template: BIG-IP-i5800_LOAD_BALANCER
@@ -765,3 +770,8 @@ spec:
             role: uplink
             status: active
             description: "Egress — DC3-PRX-02:eth0"
+          - name: ha-mirror
+            interface_type: other
+            role: ha
+            status: active
+            description: "HA mirroring channel — DC3-LB-01:ha-mirror"

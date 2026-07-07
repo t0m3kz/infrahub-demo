@@ -1,0 +1,14 @@
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: VirtCNI
+  data:
+    - name: DC3-VSPHERE-PROD-CNI
+      status: active
+      plugin: dvs
+      version: "8.0 U3"
+      encapsulation: none
+      bgp_enabled: false
+      cluster_capabilities:
+        - DC3-VSPHERE-PROD

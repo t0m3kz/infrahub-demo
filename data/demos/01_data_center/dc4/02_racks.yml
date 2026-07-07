@@ -23,7 +23,7 @@ spec:
       parent: ber-1-s-1
       member_of_groups: [topologies_rack]
       fabric_templates:
-        - ["2", "tor", "Edgecore-7AS7326-56X-O-48V-F_TOR"]
+        - ["2", "l2-leaf", "Edgecore-7AS7326-56X-O-48V-F_TOR"]
     - index: 1
       row_index: 2
       shortname: ber-1-s-1-r-2-1
@@ -41,7 +41,7 @@ spec:
       parent: ber-1-s-1
       member_of_groups: [topologies_rack]
       fabric_templates:
-        - ["2", "tor", "Edgecore-7AS7326-56X-O-48V-F_TOR"]
+        - ["2", "l2-leaf", "Edgecore-7AS7326-56X-O-48V-F_TOR"]
     # Pod 2 - ToR
     - index: 1
       row_index: 1

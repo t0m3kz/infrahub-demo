@@ -1,0 +1,66 @@
+---
+# DC3 Proxy Services — HAProxy explicit-proxy pair
+#
+# Two HAProxy appliances sit inline after the F5 BIG-IP load balancers,
+# providing tenant traffic inspection, SSL interception, and URL filtering.
+#
+# Full inline service chain (active path):
+#   BL1:Eth0 (PBR) ──▶ FW-01:eth1 (inspect) ──▶ FW-01:eth2 ──▶
+#                       LB-01:1.1 (balance)  ──▶ LB-01:1.2  ──▶
+#                       PRX-01:eth0 (proxy)  ──▶ PRX-01:eth1 ──▶ BL1:Ethernet5
+#
+# Port mapping:
+#   DC3-PRX-01 (dc3-s1-r-1, active):
+#     eth0  ingress ← DC3-LB-01:1.2   (from load balancer)
+#     eth1  egress  → DC3-BL1:Ethernet5  (return to fabric)
+#   DC3-PRX-02 (dc3-s1-r-2, standby):
+#     eth0  ingress ← DC3-LB-02:1.2   (from load balancer)
+#     eth1  egress  → DC3-BL2:Ethernet5  (return to fabric)
+
+# ── Physical appliances ───────────────────────────────────────────────────────
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimPhysicalDevice
+  data:
+    - name: DC3-PRX-01
+      object_template: HA-PROXY_PROXY
+      status: active
+      deployment: DC3
+      rack: dc3-s1-r-1
+      member_of_groups:
+        - onprem_proxies
+      interfaces:
+        kind: DcimPhysicalInterface
+        data:
+          - name: eth0
+            interface_type: 25gbase-x-sfp28
+            role: uplink
+            status: active
+            description: "Ingress — DC3-LB-01:1.2"
+          - name: eth1
+            interface_type: 25gbase-x-sfp28
+            role: uplink
+            status: active
+            description: "Egress — DC3-BL1:Ethernet5"
+
+    - name: DC3-PRX-02
+      object_template: HA-PROXY_PROXY
+      status: active
+      deployment: DC3
+      rack: dc3-s1-r-2
+      member_of_groups:
+        - onprem_proxies
+      interfaces:
+        kind: DcimPhysicalInterface
+        data:
+          - name: eth0
+            interface_type: 25gbase-x-sfp28
+            role: uplink
+            status: active
+            description: "Ingress — DC3-LB-02:1.2"
+          - name: eth1
+            interface_type: 25gbase-x-sfp28
+            role: uplink
+            status: active
+            description: "Egress — DC3-BL2:Ethernet5"

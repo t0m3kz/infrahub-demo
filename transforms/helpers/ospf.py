@@ -18,7 +18,7 @@ def get_ospf(device_capabilities: list[dict[str, Any]]) -> list[dict[str, Any]]:
                 "process_id": service.get("process_id", 1),
                 "router_id": service.get("router_id", {}).get("address", ""),
                 "area": service.get("area", {}).get("area"),
-                "reference_bandwidth": service.get("reference_bandwidth", 10000),
+                "reference_bandwidth": service.get("reference_bandwidth", 400000),
             }
             ospf_configs.append(ospf_config)
 

@@ -1,7 +1,16 @@
+{%- set _lb = namespace(name='Loopback0') %}
+{%- for iface in interfaces %}
+{%- if iface.name | lower | truncate(8, true, '') == 'loopback' and _lb.name == 'Loopback0' %}
+{%- set _lb.name = iface.name %}
+{%- endif %}
+{%- endfor %}
 {%- if capabilities is not defined or capabilities.bgp_enabled is not defined or capabilities.bgp_enabled %}
 {%- for bgp_config in bgp %}
 router bgp {{ bgp_config.local_as.asn }}
   router-id {{ bgp_config.router_id.address.split('/')[0] }}
+{%- if bgp_config.get('cluster_id') %}
+  bgp cluster-id {{ bgp_config.cluster_id }}
+{%- endif %}
   no bgp default ipv4-unicast
   distance bgp 20 200 200
 {%- if bgp_config.graceful_restart %}
@@ -17,7 +26,7 @@ router bgp {{ bgp_config.local_as.asn }}
   neighbor {{ pg.name }} remote-as {{ pg.remote_as }}
 {%- endif %}
 {%- if pg.type == 'overlay' %}
-  neighbor {{ pg.name }} update-source Loopback0
+  neighbor {{ pg.name }} update-source {{ _lb.name }}
 {%- endif %}
   neighbor {{ pg.name }} send-community extended
   neighbor {{ pg.name }} maximum-routes 0
@@ -42,7 +51,7 @@ router bgp {{ bgp_config.local_as.asn }}
 {%- else %}
   neighbor {{ remote_ip }} remote-as {{ session.remote_as.asn }}
 {%- if session.get('ttl') != 1 %}
-  neighbor {{ remote_ip }} update-source Loopback0
+  neighbor {{ remote_ip }} update-source {{ _lb.name }}
 {%- endif %}
 {%- if session.get('remote_device') %}
   neighbor {{ remote_ip }} description {{ session.remote_device }}
@@ -98,6 +107,9 @@ router bgp {{ bgp_config.local_as.asn }}
 {%- if pg.route_reflector_client is defined and pg.route_reflector_client %}
     neighbor {{ pg.name }} route-reflector-client
 {%- endif %}
+{%- if pg.get('next_hop_unchanged') %}
+    neighbor {{ pg.name }} next-hop-unchanged
+{%- endif %}
 {%- endif %}
 {%- endfor %}
 {%- for session in bgp_config.sessions %}
@@ -107,6 +119,9 @@ router bgp {{ bgp_config.local_as.asn }}
     neighbor {{ _evpn_neighbor }} activate
 {%- if session.get('route_reflector_client') %}
     neighbor {{ _evpn_neighbor }} route-reflector-client
+{%- endif %}
+{%- if session.get('next_hop_unchanged') %}
+    neighbor {{ _evpn_neighbor }} next-hop-unchanged
 {%- endif %}
 {%- endif %}
 {%- endfor %}

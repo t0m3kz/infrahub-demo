@@ -73,8 +73,12 @@ generics:
             color: "#dda0dd"
           - name: tor
             label: ToR Switch
-            description: ToR/Lavel2 switch part of a Fabric.
+            description: ToR switch acting as VTEP in a tor-deployment fabric (connects directly to spines).
             color: "#e8e7fd"
+          - name: l2-leaf
+            label: L2 Leaf Switch
+            description: L2-only aggregation switch (connects to leafs, not spines; no VXLAN/overlay BGP).
+            color: "#d0e8fd"
           - name: oob
             label: Out of Band Switch
             description: OOB switch part of a Fabric.
@@ -313,6 +317,10 @@ generics:
             label: Load Balancer
             description: "Dedicated port for load-balancer attachment on a border-leaf"
             color: "#4ECDC4"
+          - name: ha
+            label: High Availability
+            description: "Dedicated port for high availability attachment"
+            color: "#4EDEC4"
         order_weight: 1250
       - name: index
         kind: Text

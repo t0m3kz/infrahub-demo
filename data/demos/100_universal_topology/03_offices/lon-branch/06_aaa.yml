@@ -1,0 +1,30 @@
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: ManagedAAA
+  data:
+    - name: OFC-LON-AAA
+      status: active
+      capabilities:
+        - OFC-LON-BRANCH-EDGE-01
+        - OFC-LON-BRANCH-ACC-01
+        - OFC-LON-BRANCH-AP-01
+        - OFC-LON-BRANCH-AP-02
+      servers:
+        kind: ManagedAAAServer
+        data:
+          - name: primary
+            address:
+              data:
+                address: "10.0.0.200/32"
+            protocol: tacacs
+            port: 49
+            timeout: 5
+          - name: secondary
+            address:
+              data:
+                address: "10.0.0.201/32"
+            protocol: tacacs
+            port: 49
+            timeout: 5

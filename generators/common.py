@@ -9,7 +9,8 @@ from infrahub_sdk.exceptions import ValidationError
 from infrahub_sdk.generator import InfrahubGenerator
 from infrahub_sdk.protocols import CoreIPAddressPool, CoreIPPrefixPool, CoreStandardGroup
 
-from .helpers import CableTypeDetector, CablingPlanner, DeviceNamingConfig
+from .helpers import CableTypeDetector, CablingPlanner, DeviceNamingConfig, get_loopback_name
+from .logger import FailOnErrorLoggerMixin, GeneratorError  # noqa: F401
 from .protocols import (
     DcimCable,
     DcimPhysicalDevice,
@@ -25,7 +26,7 @@ from .routing import RoutingMixin
 from .types import CablingOptions, DeviceOptions, RoutingOptions  # noqa: F401
 
 
-class CommonGenerator(RoutingMixin, InfrahubGenerator):
+class CommonGenerator(FailOnErrorLoggerMixin, RoutingMixin, InfrahubGenerator):
     """
     An extended InfrahubGenerator with helper methods for creating objects.
 
@@ -35,13 +36,14 @@ class CommonGenerator(RoutingMixin, InfrahubGenerator):
         pod_name: Pod name (lowercase) for pool naming (optional, only in pod/rack generators)
 
     Error handling conventions:
-        - ``generate()`` entry points: ``self.logger.error()`` + ``return``.
-          These are called by the SDK framework; raising would crash the workflow.
+        - ``self.logger.error()`` raises ``GeneratorError`` — the task will show as failed
+          in Infrahub. Use it freely; no need to also raise manually after an error log.
         - Internal helper methods (``_get_spine_devices``, etc.): ``raise RuntimeError``
           for missing prerequisites so the caller can decide how to handle it.
         - Pure helpers (naming, routing, cabling): ``raise ValueError`` for invalid inputs.
         - Loop iterations: ``self.logger.warning()`` + ``continue`` to skip one bad item
-          without halting the entire batch operation.
+          without halting the entire batch operation. Use ``self.logger.error()`` instead
+          when a bad item means the entire generator output would be invalid.
     """
 
     # Instance variables - must be set in generate() before calling helper methods
@@ -430,7 +432,7 @@ class CommonGenerator(RoutingMixin, InfrahubGenerator):
                     loopback_obj = await self.client.create(
                         kind=DcimVirtualInterface,
                         data={
-                            "name": "Loopback0",
+                            "name": get_loopback_name((template.get("platform") or {}).get("name") or "", 0),
                             "description": "Loopback interface",
                             # Reference device object directly
                             "device": obj,

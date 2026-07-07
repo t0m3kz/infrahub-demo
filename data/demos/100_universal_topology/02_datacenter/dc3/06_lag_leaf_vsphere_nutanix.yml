@@ -1,0 +1,247 @@
+---
+# POD3 leaf LAGs (ESXi hosts + vCenter)
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimLAGInterface
+  data:
+    - name: Port-Channel41
+      device: DC3-POD3-L1
+      status: active
+      role: lag
+      lag_id: 41
+      lacp_mode: active
+      mtu: 9000
+      minimum_links: 1
+      mlag_domain: DC3-POD3-L1-L2-MLAG
+      member_interfaces:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD3-L1
+            name: xe1
+
+    - name: Port-Channel41
+      device: DC3-POD3-L2
+      status: active
+      role: lag
+      lag_id: 41
+      lacp_mode: active
+      mtu: 9000
+      minimum_links: 1
+      mlag_domain: DC3-POD3-L1-L2-MLAG
+      member_interfaces:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD3-L2
+            name: xe1
+
+    - name: Port-Channel42
+      device: DC3-POD3-L1
+      status: active
+      role: lag
+      lag_id: 42
+      lacp_mode: active
+      mtu: 9000
+      minimum_links: 1
+      mlag_domain: DC3-POD3-L1-L2-MLAG
+      member_interfaces:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD3-L1
+            name: xe2
+
+    - name: Port-Channel42
+      device: DC3-POD3-L2
+      status: active
+      role: lag
+      lag_id: 42
+      lacp_mode: active
+      mtu: 9000
+      minimum_links: 1
+      mlag_domain: DC3-POD3-L1-L2-MLAG
+      member_interfaces:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD3-L2
+            name: xe2
+
+    - name: Port-Channel43
+      device: DC3-POD3-L1
+      status: active
+      role: lag
+      lag_id: 43
+      lacp_mode: active
+      mtu: 9000
+      minimum_links: 1
+      mlag_domain: DC3-POD3-L1-L2-MLAG
+      member_interfaces:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD3-L1
+            name: xe3
+
+    - name: Port-Channel43
+      device: DC3-POD3-L2
+      status: active
+      role: lag
+      lag_id: 43
+      lacp_mode: active
+      mtu: 9000
+      minimum_links: 1
+      mlag_domain: DC3-POD3-L1-L2-MLAG
+      member_interfaces:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD3-L2
+            name: xe3
+
+    - name: Port-Channel44
+      device: DC3-POD3-L1
+      status: active
+      role: lag
+      lag_id: 44
+      lacp_mode: active
+      mtu: 9000
+      minimum_links: 1
+      mlag_domain: DC3-POD3-L1-L2-MLAG
+      member_interfaces:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD3-L1
+            name: xe4
+
+    - name: Port-Channel44
+      device: DC3-POD3-L2
+      status: active
+      role: lag
+      lag_id: 44
+      lacp_mode: active
+      mtu: 9000
+      minimum_links: 1
+      mlag_domain: DC3-POD3-L1-L2-MLAG
+      member_interfaces:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD3-L2
+            name: xe4
+
+    # POD4 leaf LAGs (Nutanix nodes)
+    - name: Port-Channel41
+      device: DC3-POD4-L1
+      status: active
+      role: lag
+      lag_id: 41
+      lacp_mode: active
+      mtu: 9000
+      minimum_links: 1
+      mlag_domain: DC3-POD4-L1-L2-MLAG
+      member_interfaces:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD4-L1
+            name: xe1
+
+    - name: Port-Channel41
+      device: DC3-POD4-L2
+      status: active
+      role: lag
+      lag_id: 41
+      lacp_mode: active
+      mtu: 9000
+      minimum_links: 1
+      mlag_domain: DC3-POD4-L1-L2-MLAG
+      member_interfaces:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD4-L2
+            name: xe1
+
+    - name: Port-Channel42
+      device: DC3-POD4-L1
+      status: active
+      role: lag
+      lag_id: 42
+      lacp_mode: active
+      mtu: 9000
+      minimum_links: 1
+      mlag_domain: DC3-POD4-L1-L2-MLAG
+      member_interfaces:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD4-L1
+            name: xe2
+
+    - name: Port-Channel42
+      device: DC3-POD4-L2
+      status: active
+      role: lag
+      lag_id: 42
+      lacp_mode: active
+      mtu: 9000
+      minimum_links: 1
+      mlag_domain: DC3-POD4-L1-L2-MLAG
+      member_interfaces:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD4-L2
+            name: xe2
+
+    - name: Port-Channel43
+      device: DC3-POD4-L1
+      status: active
+      role: lag
+      lag_id: 43
+      lacp_mode: active
+      mtu: 9000
+      minimum_links: 1
+      mlag_domain: DC3-POD4-L1-L2-MLAG
+      member_interfaces:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD4-L1
+            name: xe3
+
+    - name: Port-Channel43
+      device: DC3-POD4-L2
+      status: active
+      role: lag
+      lag_id: 43
+      lacp_mode: active
+      mtu: 9000
+      minimum_links: 1
+      mlag_domain: DC3-POD4-L1-L2-MLAG
+      member_interfaces:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD4-L2
+            name: xe3
+
+    - name: Port-Channel44
+      device: DC3-POD4-L1
+      status: active
+      role: lag
+      lag_id: 44
+      lacp_mode: active
+      mtu: 9000
+      minimum_links: 1
+      mlag_domain: DC3-POD4-L1-L2-MLAG
+      member_interfaces:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD4-L1
+            name: xe4
+
+    - name: Port-Channel44
+      device: DC3-POD4-L2
+      status: active
+      role: lag
+      lag_id: 44
+      lacp_mode: active
+      mtu: 9000
+      minimum_links: 1
+      mlag_domain: DC3-POD4-L1-L2-MLAG
+      member_interfaces:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD4-L2
+            name: xe4

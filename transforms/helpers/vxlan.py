@@ -156,7 +156,7 @@ def get_interfaces(
 
         is_loopback = "loopback" in name.lower()
         is_svi = "vlan" in name.lower()
-        is_lag = iface.get("__typename") == "DcimLAGInterface"
+        is_lag = iface.get("typename") == "DcimLAGInterface"
         is_bgp_unnumbered = not ip_addresses and iface.get("cable") is not None and not is_loopback and not is_svi
 
         iface_dict = {

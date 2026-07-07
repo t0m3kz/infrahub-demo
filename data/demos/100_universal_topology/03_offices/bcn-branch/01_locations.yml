@@ -14,15 +14,8 @@ spec:
         data:
           - name: "Barcelona"
             shortname: "bcn"
-          - name: "Madrid"
-            shortname: "mdr"
----
-apiVersion: infrahub.app/v1
-version: "1.0"
-kind: Object
-spec:
-  kind: LocationBuilding
-  data:
-    - name: "bcn-1"
-      shortname: "bcn-1"
-      parent: "bcn"
+            children:
+              kind: LocationBuilding
+              data:
+                - name: "bcn-1"
+                  shortname: "bcn-1"

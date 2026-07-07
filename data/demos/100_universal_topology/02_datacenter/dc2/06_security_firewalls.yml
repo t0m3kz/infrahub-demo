@@ -1,0 +1,76 @@
+---
+# DC2 Security — active-active PA-5260 firewall pair (BL → FW)
+#
+# DC2-FW-01 (active) and DC2-FW-02 (standby) are Palo Alto PA-5260 firewalls.
+# Each FW connects to one BL (inside + outside/return) for PBR steering.
+# HA sync back-to-back between FW-01 and FW-02.
+#
+# Port mapping:
+#   DC2-FW-01:
+#     ethernet1/1  inside  ← DC2-BL1:Ethernet1/5
+#     ethernet1/2  outside → DC2-BL1:Ethernet1/6
+#     ethernet1/3  HA sync ↔ DC2-FW-02:ethernet1/3
+#   DC2-FW-02:
+#     ethernet1/1  inside  ← DC2-BL2:Ethernet1/5
+#     ethernet1/2  outside → DC2-BL2:Ethernet1/6
+#     ethernet1/3  HA sync ↔ DC2-FW-01:ethernet1/3
+
+# ── Physical firewall pair ────────────────────────────────────────────────────
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimPhysicalDevice
+  data:
+    - name: DC2-FW-01
+      object_template: PA-5260_FIREWALL
+      role: firewall-active
+      status: active
+      deployment: DC2
+      rack: dc2-s1-r-1
+      member_of_groups:
+        - firewalls
+      interfaces:
+        kind: DcimPhysicalInterface
+        data:
+          - name: ethernet1/1
+            interface_type: 10gbase-x-sfpp
+            role: uplink
+            status: active
+            description: "Inside — DC2-BL1:Ethernet1/5"
+          - name: ethernet1/2
+            interface_type: 10gbase-x-sfpp
+            role: uplink
+            status: active
+            description: "Outside/return — DC2-BL1:Ethernet1/6"
+          - name: ethernet1/3
+            interface_type: 10gbase-x-sfpp
+            role: ha
+            status: active
+            description: "HA sync — back-to-back with DC2-FW-02"
+
+    - name: DC2-FW-02
+      object_template: PA-5260_FIREWALL
+      role: firewall-passive
+      status: active
+      deployment: DC2
+      rack: dc2-s1-r-2
+      member_of_groups:
+        - firewalls
+      interfaces:
+        kind: DcimPhysicalInterface
+        data:
+          - name: ethernet1/1
+            interface_type: 10gbase-x-sfpp
+            role: uplink
+            status: active
+            description: "Inside — DC2-BL2:Ethernet1/5"
+          - name: ethernet1/2
+            interface_type: 10gbase-x-sfpp
+            role: uplink
+            status: active
+            description: "Outside/return — DC2-BL2:Ethernet1/6"
+          - name: ethernet1/3
+            interface_type: 10gbase-x-sfpp
+            role: ha
+            status: active
+            description: "HA sync — back-to-back with DC2-FW-01"

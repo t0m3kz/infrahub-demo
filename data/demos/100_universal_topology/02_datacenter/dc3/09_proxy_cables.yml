@@ -1,0 +1,58 @@
+---
+# ── Cables ────────────────────────────────────────────────────────────────────
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimCable
+  data:
+    - name: CBL-DC3-LB01-PRX01-INLINE
+      type: smf
+      deployment: DC3
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-LB-01
+            name: "1.2"
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-PRX-01
+            name: eth0
+
+    - name: CBL-DC3-PRX01-BL1-RETURN
+      type: smf
+      deployment: DC3
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-PRX-01
+            name: eth1
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-BL1
+            name: Ethernet5
+
+    - name: CBL-DC3-LB02-PRX02-INLINE
+      type: smf
+      deployment: DC3
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-LB-02
+            name: "1.2"
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-PRX-02
+            name: eth0
+
+    - name: CBL-DC3-PRX02-BL2-RETURN
+      type: smf
+      deployment: DC3
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-PRX-02
+            name: eth1
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-BL2
+            name: Ethernet5

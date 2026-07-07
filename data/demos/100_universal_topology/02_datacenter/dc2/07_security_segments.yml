@@ -1,0 +1,30 @@
+---
+# ── Firewall association on segments ──────────────────────────────────────────
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: ManagedVxlanSegment
+  data:
+    - customer_name: "web-frontend"
+      environment: "p"
+      owner: "C001"
+      inline_service: DC2-FW-HA
+      pbr_enabled: false
+
+    - customer_name: "app-backend"
+      environment: "p"
+      owner: "C001"
+      inline_service: DC2-FW-HA
+      pbr_enabled: false
+
+    - customer_name: "web-frontend"
+      environment: "p"
+      owner: "C002"
+      inline_service: DC2-FW-HA
+      pbr_enabled: false
+
+    - customer_name: "app-backend"
+      environment: "p"
+      owner: "C002"
+      inline_service: DC2-FW-HA
+      pbr_enabled: false

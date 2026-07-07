@@ -21,7 +21,7 @@
     "Ethernet2": {},
     "Ethernet33": {},
     "Ethernet34": {},
-    "Port-Channel100": {}
+    "PortChannel100": {}
   },
   "INTERFACE_IP": {
     "Ethernet1|10.1.2.1/31": {},
@@ -41,4 +41,7 @@
 
 # MC-LAG Configuration
 sudo config mclag add 1
-sudo config mclag peer-link add Port-Channel100
+sudo config portchannel add PortChannel100
+sudo config portchannel member add PortChannel100 Ethernet33
+sudo config portchannel member add PortChannel100 Ethernet34
+sudo config mclag peer-link add PortChannel100

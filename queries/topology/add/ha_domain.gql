@@ -1,0 +1,122 @@
+query ha_domain_data($name: String!) {
+  ManagedFirewallHA(name__value: $name) {
+    edges {
+      node {
+        id
+        name { value }
+        capabilities {
+          edges {
+            node {
+              __typename
+              ... on DcimPhysicalDevice {
+                id
+                name { value }
+                deployment {
+                  node {
+                    id
+                    ... on TopologyPod {
+                      parent {
+                        node {
+                          id
+                        }
+                      }
+                    }
+                  }
+                }
+                interfaces {
+                  edges {
+                    node {
+                      id
+                      name { value }
+                      __typename
+                      ... on DcimPhysicalInterface {
+                        role { value }
+                        description { value }
+                        cable { node { id name { value } } }
+                      }
+                      ... on DcimVirtualInterface {
+                        role { value }
+                        description { value }
+                      }
+                    }
+                  }
+                }
+              }
+              ... on DcimVirtualDevice {
+                id
+                name { value }
+                interfaces {
+                  edges {
+                    node {
+                      id
+                      name { value }
+                      __typename
+                      ... on DcimPhysicalInterface {
+                        role { value }
+                        description { value }
+                        cable { node { id name { value } } }
+                      }
+                      ... on DcimVirtualInterface {
+                        role { value }
+                        description { value }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+  ManagedLoadbalancerHA(name__value: $name) {
+    edges {
+      node {
+        id
+        name { value }
+        capabilities {
+          edges {
+            node {
+              __typename
+              ... on DcimPhysicalDevice {
+                id
+                name { value }
+                deployment {
+                  node {
+                    id
+                    ... on TopologyPod {
+                      parent {
+                        node {
+                          id
+                        }
+                      }
+                    }
+                  }
+                }
+                interfaces {
+                  edges {
+                    node {
+                      id
+                      name { value }
+                      __typename
+                      ... on DcimPhysicalInterface {
+                        role { value }
+                        description { value }
+                        cable { node { id name { value } } }
+                      }
+                      ... on DcimVirtualInterface {
+                        role { value }
+                        description { value }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

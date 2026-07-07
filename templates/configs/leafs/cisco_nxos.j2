@@ -1,3 +1,9 @@
+{%- set _lb = namespace(name='loopback0') -%}
+{%- for iface in interfaces -%}
+{%- if iface.name | lower | truncate(8, true, '') == 'loopback' and _lb.name == 'loopback0' -%}
+{%- set _lb.name = iface.name -%}
+{%- endif -%}
+{%- endfor -%}
 !
 ! {{ name }} Configuration
 !
@@ -119,7 +125,7 @@ vlan {{ mapping.vlan_id }}
 !
 ! Route-maps
 route-map RM-CONN-2-BGP permit 10
-  match interface loopback0
+  match interface {{ _lb.name }}
 !
 {%- if vlans %}
 ! VLAN SVI Configuration

@@ -777,6 +777,50 @@ async def _run_demo(
 # ---------------------------------------------------------------------------
 
 
+async def _run_generator_for_group(
+    client: object,
+    group_name: str,
+    generator_name: str,
+    branch: str,
+    dry_run: bool,
+) -> None:
+    """Fetch all members of a CoreStandardGroup and run a generator on each."""
+    from infrahub_sdk import InfrahubClient
+
+    assert isinstance(client, InfrahubClient)
+
+    result = await client.execute_graphql(
+        query="""
+        query GroupMembers($name: String!) {
+            CoreStandardGroup(name__value: $name) {
+                edges {
+                    node {
+                        members {
+                            edges { node { id display_label } }
+                        }
+                    }
+                }
+            }
+        }
+        """,
+        variables={"name": group_name},
+    )
+    groups = result.get("CoreStandardGroup", {}).get("edges", [])
+    if not groups:
+        log.warning("  Group '%s' not found — skipping %s", group_name, generator_name)
+        return
+
+    members = groups[0]["node"]["members"]["edges"]
+    if not members:
+        log.info("  Group '%s' has no members — skipping %s", group_name, generator_name)
+        return
+
+    node_ids = [m["node"]["id"] for m in members]
+    labels = [m["node"]["display_label"] for m in members]
+    log.info("  Running %s for %s: %s", generator_name, group_name, ", ".join(labels))
+    await _run_generator(client, generator_name, node_ids, branch, dry_run)
+
+
 @task(optional=["scenario", "branch"])
 def deploy_dc(
     context: Context,
@@ -794,6 +838,63 @@ def deploy_dc(
         pty=True,
     )
     log.info("Done. Trigger generators: UI → Actions → Generator Definitions → add_dc")
+
+
+@task(optional=["branch", "dcs", "skip_generators", "dry_run"])
+def deploy_universal_topology(
+    context: Context,
+    branch: str = "main",
+    dcs: str = "",
+    skip_generators: bool = False,
+    dry_run: bool = False,
+) -> None:
+    """Load the 100_universal_topology datacenter data and run MLAG/HA generators.
+
+    Loads all files for each requested DC (dc1, dc2, dc3) under
+    data/demos/100_universal_topology/02_datacenter/ and then runs:
+      - add_mlag  for all mlag_domains group members
+      - add_ha    for all ha_domains group members
+
+    Options:
+        --dcs             Space-separated DC names, e.g. "dc1 dc2" (default: dc1 dc2 dc3)
+        --branch          Target branch (default: main)
+        --skip-generators Load data but skip generator runs
+        --dry-run         Print what would happen without executing writes
+
+    Example:
+        uv run invoke demo.deploy-universal-topology
+        uv run invoke demo.deploy-universal-topology --dcs "dc1" --branch my-branch
+    """
+    base = f"{_DEMOS_ROOT}/100_universal_topology/02_datacenter"
+    dc_list = dcs.split() if dcs else ["dc1", "dc2", "dc3"]
+
+    # Load shared namespace/pool files first
+    for shared_file in ["00_namespaces.yml", "00_profiles.yml", "01_dc_pools.yml"]:
+        path = f"{base}/{shared_file}"
+        import os as _os
+
+        if _os.path.exists(f"{_PROJECT_ROOT}/{path}"):
+            _load_objects(path, branch, dry_run)
+
+    for dc in dc_list:
+        log.info("Loading %s …", dc)
+        _load_objects(f"{base}/{dc}", branch, dry_run)
+
+    if skip_generators or dry_run:
+        log.info("Skipping generators (skip_generators=%s, dry_run=%s)", skip_generators, dry_run)
+        return
+
+    async def _run() -> None:
+        from infrahub_sdk import Config, InfrahubClient
+
+        client = InfrahubClient(config=Config(address=INFRAHUB_ADDRESS, api_token=INFRAHUB_API_TOKEN))
+        client.default_branch = branch
+        await _wait_for_tasks(client, branch)
+        await _run_generator_for_group(client, "mlag_domains", "add_mlag", branch, dry_run)
+        await _run_generator_for_group(client, "ha_domains", "add_ha", branch, dry_run)
+        log.info("  ✓ universal topology generators complete")
+
+    asyncio.run(_run())
 
 
 @task(
@@ -845,4 +946,5 @@ def run_demo(
 
 ns = Collection("demo")
 ns.add_task(cast(Task, deploy_dc), name="deploy-dc")
+ns.add_task(cast(Task, deploy_universal_topology), name="deploy-universal-topology")
 ns.add_task(cast(Task, run_demo), name="run-demo")

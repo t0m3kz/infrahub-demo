@@ -1,0 +1,62 @@
+---
+# ── POD2 leaves ───────────────────────────────────────────────────────────────
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimPhysicalInterface
+  data:
+    - name: Ethernet1/1
+      device: DC2-POD2-L1
+      ip_address:
+        data:
+          address: "10.255.22.33/31"
+          ip_namespace: FABRIC-DC2
+
+    - name: Ethernet1/2
+      device: DC2-POD2-L1
+      ip_address:
+        data:
+          address: "10.255.22.35/31"
+          ip_namespace: FABRIC-DC2
+
+    - name: Ethernet1/1
+      device: DC2-POD2-L2
+      ip_address:
+        data:
+          address: "10.255.22.37/31"
+          ip_namespace: FABRIC-DC2
+
+    - name: Ethernet1/2
+      device: DC2-POD2-L2
+      ip_address:
+        data:
+          address: "10.255.22.39/31"
+          ip_namespace: FABRIC-DC2
+
+    - name: Ethernet1/1
+      device: DC2-POD2-L3
+      ip_address:
+        data:
+          address: "10.255.22.41/31"
+          ip_namespace: FABRIC-DC2
+
+    - name: Ethernet1/2
+      device: DC2-POD2-L3
+      ip_address:
+        data:
+          address: "10.255.22.43/31"
+          ip_namespace: FABRIC-DC2
+
+    - name: Ethernet1/1
+      device: DC2-POD2-L4
+      ip_address:
+        data:
+          address: "10.255.22.45/31"
+          ip_namespace: FABRIC-DC2
+
+    - name: Ethernet1/2
+      device: DC2-POD2-L4
+      ip_address:
+        data:
+          address: "10.255.22.47/31"
+          ip_namespace: FABRIC-DC2

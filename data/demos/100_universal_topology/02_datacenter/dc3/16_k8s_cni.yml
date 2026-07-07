@@ -1,0 +1,16 @@
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: VirtCNI
+  data:
+    - name: DC3-K8S-PROD-CNI
+      status: active
+      plugin: cilium
+      version: "1.16.3"
+      pod_cidr: "100.64.0.0/14"
+      service_cidr: "100.96.0.0/16"
+      encapsulation: geneve
+      bgp_enabled: true
+      cluster_capabilities:
+        - DC3-K8S-PROD

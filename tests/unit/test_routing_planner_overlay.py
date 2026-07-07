@@ -167,6 +167,7 @@ class TestIBGPOverlayPeerings:
         assert all_hfids == expected_names
 
     def test_with_tors(self) -> None:
+        """ToRs in tor-deployment are VTEPs — (2 leafs + 2 tors) × 2 spines = 8."""
         device_map = dict(
             [
                 *_SPINE_LEAF_DEVICE_MAP.items(),
@@ -187,8 +188,108 @@ class TestIBGPOverlayPeerings:
             device_map=device_map,
         )
 
-        # (2 leafs + 2 tors) x 2 spines = 8
         assert len(peerings) == 8
+
+    def test_spine_to_super_spine_is_rr_client(self) -> None:
+        """In a spines+super-spines-only setup the planner builds a full mesh.
+
+        With no leaf clients the session planner enters the all-RR full-mesh path,
+        generating sessions between every pair: spine↔super-spine, spine↔spine, and
+        super-spine↔super-spine.  The two-tier RR flag logic must label each correctly:
+
+        - spine  ↔ super-spine  → route_reflector_client = True  (spine is client)
+        - super-spine ↔ super-spine → route_reflector_client = False (peer RRs)
+        - spine  ↔ spine        → route_reflector_client = False (peer RRs)
+        """
+        device_map = dict(
+            [
+                _device_map_entry("super-spine-1", "ss1", "super-spine", "10.0.0.100"),
+                _device_map_entry("super-spine-2", "ss2", "super-spine", "10.0.0.101"),
+                _device_map_entry("spine-1", "s1", "spine", "10.0.0.1"),
+                _device_map_entry("spine-2", "s2", "spine", "10.0.0.2"),
+            ]
+        )
+        bgp_procs = [
+            _bgp_process("super-spine-1-bgp-overlay", "ss1"),
+            _bgp_process("super-spine-2-bgp-overlay", "ss2"),
+            _bgp_process("spine-1-bgp-overlay", "s1"),
+            _bgp_process("spine-2-bgp-overlay", "s2"),
+        ]
+
+        planner = RoutingPlanner(deployment_id="dc-1")
+        peerings = _call_plan_overlay(
+            planner,
+            overlay_type="ibgp",
+            bgp_processes=bgp_procs,
+            device_map=device_map,
+        )
+
+        # Full mesh of 4 devices = 6 sessions
+        assert len(peerings) == 6
+
+        def _roles_in(p: dict) -> tuple[str, str]:
+            """Return the (role_left, role_right) for a peering using its sorted name."""
+            # name format: "overlay-evpn--<left>--<right>"
+            parts = p["name"].split("--")
+            left, right = parts[1], parts[2]
+            return device_map[left]["role"], device_map[right]["role"]
+
+        for p in peerings:
+            r1, r2 = _roles_in(p)
+            if (
+                {"r1", "r2"} == {"spine", "super-spine"}
+                or (r1 == "spine" and r2 == "super-spine")
+                or (r1 == "super-spine" and r2 == "spine")
+            ):
+                # spine↔super-spine: spine is a client of super-spine
+                assert p["route_reflector_client"] is True, (
+                    f"Expected rr_client=True for spine↔super-spine on {p['name']}"
+                )
+            else:
+                # super-spine↔super-spine or spine↔spine: peer RRs
+                assert p["route_reflector_client"] is False, f"Expected rr_client=False for peer-RR session {p['name']}"
+
+    def test_leaf_spine_rr_client_flag(self) -> None:
+        """leaf/border-leaf/tor → spine peerings must set route_reflector_client=True."""
+        planner = RoutingPlanner(deployment_id="dc-1")
+        peerings = _call_plan_overlay(
+            planner,
+            overlay_type="ibgp",
+            bgp_processes=_spine_leaf_bgp_processes(),
+            device_map=_SPINE_LEAF_DEVICE_MAP,
+        )
+
+        # All 4 sessions are leaf↔spine — all should be rr_client
+        assert len(peerings) == 4
+        for p in peerings:
+            assert p["route_reflector_client"] is True, f"Expected rr_client=True for leaf↔spine on {p['name']}"
+
+    def test_l2_leafs_excluded(self) -> None:
+        """l2-leaf devices are L2-only — excluded from overlay peering."""
+        device_map = dict(
+            [
+                *_SPINE_LEAF_DEVICE_MAP.items(),
+                _device_map_entry("l2-leaf-1", "ll1", "l2-leaf", "10.0.3.1"),
+                _device_map_entry("l2-leaf-2", "ll2", "l2-leaf", "10.0.3.2"),
+            ]
+        )
+        bgp_procs = _spine_leaf_bgp_processes() + [
+            _bgp_process("l2-leaf-1-bgp-overlay", "ll1"),
+            _bgp_process("l2-leaf-2-bgp-overlay", "ll2"),
+        ]
+
+        planner = RoutingPlanner(deployment_id="dc-1")
+        peerings = _call_plan_overlay(
+            planner,
+            overlay_type="ibgp",
+            bgp_processes=bgp_procs,
+            device_map=device_map,
+        )
+
+        # Only leafs × spines: 2 leafs × 2 spines = 4. l2-leafs excluded.
+        assert len(peerings) == 4
+        for p in peerings:
+            assert "l2-leaf" not in p["name"]
 
 
 # ================================================================
@@ -213,6 +314,7 @@ class TestEBGPOverlayPeerings:
             assert p["route_reflector_client"] is False
 
     def test_ebgp_with_tors(self) -> None:
+        """ToRs in tor-deployment are VTEPs — (2 leafs + 2 tors) × 2 spines = 8."""
         device_map = dict(
             [
                 *_SPINE_LEAF_DEVICE_MAP.items(),

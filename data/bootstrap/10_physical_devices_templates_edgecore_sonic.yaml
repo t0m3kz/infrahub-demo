@@ -442,9 +442,13 @@ spec:
             name: xe[1-48]
             role: customer
             interface_type: 25gbase-x-sfp28
-          - template_name: 7AS7326-56X-O-48V-F_LEAF_ce[49-56]
-            name: xe[49-56]
+          - template_name: 7AS7326-56X-O-48V-F_LEAF_ce[49-54]
+            name: xe[49-54]
             role: uplink
+            interface_type: 25gbase-x-sfp28
+          - template_name: 7AS7326-56X-O-48V-F_LEAF_xe[55-56]
+            name: xe[55-56]
+            role: mlag-peer
             interface_type: 25gbase-x-sfp28
           - template_name: 7AS7326-56X-O-48V-F_LEAF_xe[57-58]
             name: xe[57-58]

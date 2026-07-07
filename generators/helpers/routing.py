@@ -467,10 +467,15 @@ class RoutingPlanner:
                 else:
                     device_as_refs[dev_name] = {"_for_device": dev_name}
 
+        _OVERLAY_ROLES = frozenset(("leaf", "border-leaf", "tor", "spine", "super-spine"))
+
         for name in sorted(device_map.keys()):
             if name in _top:
                 continue
             info = device_map[name]
+            # ToRs are L2 aggregation only — they are not VTEPs and don't run overlay BGP
+            if info.get("role") not in _OVERLAY_ROLES:
+                continue
 
             if is_ibgp:
                 as_ref: dict = {"id": overlay_as_id}
@@ -626,8 +631,9 @@ class RoutingPlanner:
         if not session_plan:
             return
 
-        _RR_ROLES = frozenset(("spine", "super-spine", "super_spine"))
-        _CLIENT_ROLES = frozenset(("leaf", "border-leaf", "tor"))
+        _SUPER_SPINE = frozenset(("super-spine",))
+        _SPINE = frozenset(("spine",))
+        _LEAF_CLIENTS = frozenset(("leaf", "border-leaf", "tor"))
 
         for d1_name, d1_id, d2_name, d2_id, stype, af_types in session_plan:
             if d1_id not in device_bgp_map or d2_id not in device_bgp_map:
@@ -636,11 +642,18 @@ class RoutingPlanner:
             bgp1, bgp2 = device_bgp_map[d1_id], device_bgp_map[d2_id]
             left_name, right_name = sorted([d1_name, d2_name])
 
-            # route_reflector_client is True only for genuine RR→client peerings
-            # (d1=client leaf/tor, d2=RR spine/super-spine); RR-to-RR sessions do not set it
             d1_role = device_map.get(d1_name, {}).get("role", "")
             d2_role = device_map.get(d2_name, {}).get("role", "")
-            rr_client_session = stype == "ibgp" and d1_role in _CLIENT_ROLES and d2_role in _RR_ROLES
+
+            # An RR-client session exists when there is a genuine client→RR relationship:
+            # - leaf/border-leaf/tor are clients of spines
+            # - spines are clients of super-spines
+            rr_client_session = stype == "ibgp" and (
+                (d1_role in _LEAF_CLIENTS and d2_role in (_SPINE | _SUPER_SPINE))
+                or (d1_role in (_SPINE | _SUPER_SPINE) and d2_role in _LEAF_CLIENTS)
+                or (d1_role in _SPINE and d2_role in _SUPER_SPINE)
+                or (d1_role in _SUPER_SPINE and d2_role in _SPINE)
+            )
 
             # Overlay peers via loopback interfaces
             peering_interfaces = []
@@ -684,16 +697,20 @@ class _BGPSessionPlanner:
         return [s if isinstance(s, BGPSession) else BGPSession(*s) for s in sessions]
 
     def _build_route_reflector(self, session_type: str) -> list[tuple]:
-        """Spines + super-spines as RR, leafs/tors as clients."""
+        """Spines + super-spines as RR, leafs/border-leafs/tors as clients. l2-leaf is L2-only.
+
+        Special cases:
+        - Super-spines only (no clients): full mesh between super-spines (DC-level seeding)
+        - Spines only (no clients, no super-spines): full mesh between spines
+          (back-to-back design: spines from different pods peer as equals)
+        """
         roles = {d.role for d in self.devices}
-        rrs = [d for d in self.devices if d.role in ("super-spine", "super_spine", "spine")]
+        rrs = [d for d in self.devices if d.role in ("super-spine", "spine")]
         clients = [d for d in self.devices if d.role in ("leaf", "border-leaf", "tor")]
-        if not rrs:
-            rrs = [d for d in self.devices if d.role in ("leaf", "border-leaf")]
-            clients = [d for d in self.devices if d.role == "tor"]
         af = ["evpn"]
-        has_super_spine = "super-spine" in roles or "super_spine" in roles
-        if rrs and not clients and has_super_spine:
+        has_super_spine = "super-spine" in roles
+        has_only_spines = roles == {"spine"}  # back-to-back: spines peer as equals
+        if rrs and not clients and (has_super_spine or has_only_spines):
             return [
                 (rrs[i].name, rrs[i].id, rrs[j].name, rrs[j].id, session_type, af)
                 for i in range(len(rrs))

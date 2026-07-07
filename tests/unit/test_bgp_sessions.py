@@ -85,7 +85,8 @@ class TestRouteReflectorTopology:
         assert len(leaf1_sessions) == 2
         assert len(leaf2_sessions) == 2
 
-    def test_route_reflector_with_tors_mixed_deployment(self) -> None:
+    def test_route_reflector_with_tors_tor_deployment(self) -> None:
+        """In tor-deployment, ToRs are VTEPs and participate in overlay BGP."""
         devices = [
             _BGPDevice("spine-1", "s1", "spine"),
             _BGPDevice("spine-2", "s2", "spine"),
@@ -98,11 +99,11 @@ class TestRouteReflectorTopology:
         planner = BGPSessionPlanner(devices=devices)
         sessions = planner.build_session_plan(session_type="ibgp")
 
-        # (2 leafs + 2 ToRs) × 2 spines = 8 sessions
+        # (2 leafs + 2 tors) × 2 spines = 8 sessions
         assert len(sessions) == 8
 
         tor_sessions = [s for s in sessions if "tor" in s[0]]
-        assert len(tor_sessions) == 4  # 2 ToRs × 2 spines
+        assert len(tor_sessions) == 4
 
         for session in tor_sessions:
             dev1_name, _, dev2_name, _, sess_type, _ = session
@@ -110,26 +111,47 @@ class TestRouteReflectorTopology:
             assert "spine" in dev2_name
             assert sess_type == "ibgp"
 
-    def test_route_reflector_with_tors_middle_rack_deployment(self) -> None:
+    def test_l2_leafs_excluded_from_overlay(self) -> None:
+        """l2-leaf devices are L2-only aggregation switches — no overlay BGP."""
         devices = [
             _BGPDevice("spine-1", "s1", "spine"),
+            _BGPDevice("spine-2", "s2", "spine"),
             _BGPDevice("leaf-1", "l1", "leaf"),
             _BGPDevice("leaf-2", "l2", "leaf"),
-            _BGPDevice("tor-1", "t1", "tor"),
-            _BGPDevice("tor-2", "t2", "tor"),
+            _BGPDevice("l2-leaf-1", "ll1", "l2-leaf"),
+            _BGPDevice("l2-leaf-2", "ll2", "l2-leaf"),
         ]
 
         planner = BGPSessionPlanner(devices=devices)
         sessions = planner.build_session_plan(session_type="ibgp")
 
-        # (2 leafs + 2 ToRs) × 1 spine = 4 sessions
+        # Only leafs get overlay: 2 leafs × 2 spines = 4. l2-leafs are excluded.
         assert len(sessions) == 4
+
+        l2_sessions = [s for s in sessions if "l2-leaf" in s[0]]
+        assert len(l2_sessions) == 0
+
+    def test_route_reflector_with_tors_middle_rack_deployment(self) -> None:
+        """In middle_rack, ToR-role devices are replaced by l2-leaf. Remaining tors→spines."""
+        devices = [
+            _BGPDevice("spine-1", "s1", "spine"),
+            _BGPDevice("leaf-1", "l1", "leaf"),
+            _BGPDevice("leaf-2", "l2", "leaf"),
+            _BGPDevice("l2-leaf-1", "ll1", "l2-leaf"),
+            _BGPDevice("l2-leaf-2", "ll2", "l2-leaf"),
+        ]
+
+        planner = BGPSessionPlanner(devices=devices)
+        sessions = planner.build_session_plan(session_type="ibgp")
+
+        # Only leafs: 2 leafs × 1 spine = 2 sessions. l2-leafs excluded.
+        assert len(sessions) == 2
 
         client_devices = [s[0] for s in sessions]
         assert "leaf-1" in client_devices
         assert "leaf-2" in client_devices
-        assert "tor-1" in client_devices
-        assert "tor-2" in client_devices
+        assert "l2-leaf-1" not in client_devices
+        assert "l2-leaf-2" not in client_devices
 
         for session in sessions:
             assert session[2] == "spine-1"
@@ -210,7 +232,7 @@ class TestEdgeCases:
         assert sessions == []
 
     def test_no_spines_tor_leaf_route_reflector(self) -> None:
-        """Rack generator scenario: leafs act as sub-RR for ToRs when no spines present."""
+        """No spines → no RRs → no overlay sessions regardless of client types."""
         devices = [
             _BGPDevice("leaf-1", "l1", "leaf"),
             _BGPDevice("leaf-2", "l2", "leaf"),
@@ -221,19 +243,14 @@ class TestEdgeCases:
         planner = BGPSessionPlanner(devices=devices)
         sessions = planner.build_session_plan(session_type="ibgp")
 
-        # Fallback: leafs as RR, TORs as clients → 2 TORs × 2 leafs = 4 sessions
-        assert len(sessions) == 4
-
-        for session in sessions:
-            dev1_name, _, dev2_name, _, sess_type, _ = session
-            assert "tor" in dev1_name
-            assert "leaf" in dev2_name
-            assert sess_type == "ibgp"
+        assert sessions == []
 
     def test_no_leafs_route_reflector(self) -> None:
-        """Spines without clients (leaves/tors) do NOT peer with each other.
-        Spines are RRs for clients, not for other spines. This contrasts with
-        super-spines which DO peer together when alone (see test_super_spines_only_peer_together).
+        """Spines without clients create full-mesh sessions with each other.
+
+        This supports the back-to-back inter_pod_connectivity design where spines
+        from different pods peer directly as equals (no super-spine tier).
+        This mirrors super-spines-only behavior (see test_super_spines_only_peer_together).
         """
         devices = [
             _BGPDevice("spine-1", "s1", "spine"),
@@ -243,7 +260,40 @@ class TestEdgeCases:
         planner = BGPSessionPlanner(devices=devices)
         sessions = planner.build_session_plan(session_type="ibgp")
 
-        assert sessions == []
+        assert len(sessions) == 1
+        assert {sessions[0].dev1_name, sessions[0].dev2_name} == {"spine-1", "spine-2"}
+
+    def test_back_to_back_spines_full_mesh_four_spines(self) -> None:
+        """Back-to-back design: 4 spines (2 pods × 2 spines) create a full mesh — 6 sessions."""
+        devices = [
+            _BGPDevice("pod1-spine-01", "s1", "spine"),
+            _BGPDevice("pod1-spine-02", "s2", "spine"),
+            _BGPDevice("pod2-spine-01", "s3", "spine"),
+            _BGPDevice("pod2-spine-02", "s4", "spine"),
+        ]
+
+        planner = BGPSessionPlanner(devices=devices)
+        sessions = planner.build_session_plan(session_type="ibgp")
+
+        # Full mesh: C(4,2) = 6 sessions
+        assert len(sessions) == 6
+        # All sessions are ibgp
+        for s in sessions:
+            assert s.session_type == "ibgp"
+            assert s.af_types == ["evpn"]
+
+    def test_back_to_back_spines_full_mesh_ebgp(self) -> None:
+        """Back-to-back: spines-only full mesh also works for eBGP overlay."""
+        devices = [
+            _BGPDevice("pod1-spine-01", "s1", "spine"),
+            _BGPDevice("pod2-spine-01", "s2", "spine"),
+        ]
+
+        planner = BGPSessionPlanner(devices=devices)
+        sessions = planner.build_session_plan(session_type="ebgp")
+
+        assert len(sessions) == 1
+        assert sessions[0].session_type == "ebgp"
 
     def test_super_spines_only_peer_together(self) -> None:
         """Super-spines without clients DO peer with each other.
@@ -276,48 +326,51 @@ class TestMixedDeploymentScenarios:
     """Test specific mixed deployment scenarios for leaf-ToR relationships."""
 
     def test_mixed_deployment_two_rows(self) -> None:
+        """Mixed deployment: leafs and tors all get overlay; l2-leafs are excluded."""
         devices = [
             _BGPDevice("spine-1", "s1", "spine"),
             _BGPDevice("spine-2", "s2", "spine"),
             _BGPDevice("leaf-1", "l1", "leaf"),
             _BGPDevice("leaf-2", "l2", "leaf"),
-            _BGPDevice("tor-1", "t1", "tor"),
-            _BGPDevice("tor-2", "t2", "tor"),
+            _BGPDevice("l2-leaf-1", "ll1", "l2-leaf"),
+            _BGPDevice("l2-leaf-2", "ll2", "l2-leaf"),
             _BGPDevice("leaf-3", "l3", "leaf"),
             _BGPDevice("leaf-4", "l4", "leaf"),
-            _BGPDevice("tor-3", "t3", "tor"),
-            _BGPDevice("tor-4", "t4", "tor"),
+            _BGPDevice("l2-leaf-3", "ll3", "l2-leaf"),
+            _BGPDevice("l2-leaf-4", "ll4", "l2-leaf"),
         ]
 
         planner = BGPSessionPlanner(devices=devices)
         sessions = planner.build_session_plan(session_type="ibgp")
 
-        # (4 leafs + 4 ToRs) × 2 spines = 16 sessions
-        assert len(sessions) == 16
+        # 4 leafs × 2 spines = 8 sessions. l2-leafs excluded.
+        assert len(sessions) == 8
 
-        tor_sessions = [s for s in sessions if "tor" in s[0]]
-        assert len(tor_sessions) == 8  # 4 ToRs × 2 spines
+        l2_sessions = [s for s in sessions if "l2-leaf" in s[0]]
+        assert len(l2_sessions) == 0
 
-        tor1_sessions = [s for s in sessions if s[0] == "tor-1"]
-        assert len(tor1_sessions) == 2
+        leaf_sessions = [s for s in sessions if s[0].startswith("leaf")]
+        assert len(leaf_sessions) == 8
 
     def test_middle_rack_deployment_single_rack(self) -> None:
+        """Middle-rack: l2-leafs replace tors. Only leafs get overlay BGP."""
         devices = [
             _BGPDevice("spine-1", "s1", "spine"),
             _BGPDevice("leaf-1", "l1", "leaf"),
             _BGPDevice("leaf-2", "l2", "leaf"),
-            _BGPDevice("tor-1", "t1", "tor"),
-            _BGPDevice("tor-2", "t2", "tor"),
+            _BGPDevice("l2-leaf-1", "ll1", "l2-leaf"),
+            _BGPDevice("l2-leaf-2", "ll2", "l2-leaf"),
         ]
 
         planner = BGPSessionPlanner(devices=devices)
         sessions = planner.build_session_plan(session_type="ibgp")
 
-        assert len(sessions) == 4
+        # 2 leafs × 1 spine = 2 sessions. l2-leafs excluded.
+        assert len(sessions) == 2
 
         device_names = {s[0] for s in sessions}
-        assert "tor-1" in device_names
-        assert "tor-2" in device_names
+        assert "l2-leaf-1" not in device_names
+        assert "l2-leaf-2" not in device_names
         assert "leaf-1" in device_names
         assert "leaf-2" in device_names
 

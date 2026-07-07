@@ -44,7 +44,7 @@ spec:
         - kind: DcimPhysicalInterface
           data:
             device: DC1-POD1-L1
-            name: Ethernet1/49
+            name: Ethernet1/1
 
     - name: Port-Channel2
       device: DC1-POD1-L1
@@ -59,7 +59,7 @@ spec:
         - kind: DcimPhysicalInterface
           data:
             device: DC1-POD1-L1
-            name: Ethernet1/50
+            name: Ethernet2/1
 
     - name: Port-Channel3
       device: DC1-POD1-L1
@@ -74,7 +74,7 @@ spec:
         - kind: DcimPhysicalInterface
           data:
             device: DC1-POD1-L1
-            name: Ethernet1/51
+            name: Ethernet3/1
 
     # POD1-L2: matching MLAG port-channels (same mlag-ids as L1)
     - name: Port-Channel1
@@ -90,7 +90,7 @@ spec:
         - kind: DcimPhysicalInterface
           data:
             device: DC1-POD1-L2
-            name: Ethernet1/49
+            name: Ethernet1/1
 
     - name: Port-Channel2
       device: DC1-POD1-L2
@@ -105,7 +105,7 @@ spec:
         - kind: DcimPhysicalInterface
           data:
             device: DC1-POD1-L2
-            name: Ethernet1/50
+            name: Ethernet2/1
 
     - name: Port-Channel3
       device: DC1-POD1-L2
@@ -120,7 +120,7 @@ spec:
         - kind: DcimPhysicalInterface
           data:
             device: DC1-POD1-L2
-            name: Ethernet1/51
+            name: Ethernet3/1
 
     # POD2-L1: LAG toward SRV-01 (mlag-id 1) and SRV-02 (mlag-id 2)
     - name: Port-Channel1
@@ -136,7 +136,7 @@ spec:
         - kind: DcimPhysicalInterface
           data:
             device: DC1-POD2-L1
-            name: Ethernet1/49
+            name: Ethernet1/1
 
     - name: Port-Channel2
       device: DC1-POD2-L1
@@ -151,7 +151,7 @@ spec:
         - kind: DcimPhysicalInterface
           data:
             device: DC1-POD2-L1
-            name: Ethernet1/50
+            name: Ethernet2/1
 
     # POD2-L2: matching MLAG port-channels
     - name: Port-Channel1
@@ -167,7 +167,7 @@ spec:
         - kind: DcimPhysicalInterface
           data:
             device: DC1-POD2-L2
-            name: Ethernet1/49
+            name: Ethernet1/1
 
     - name: Port-Channel2
       device: DC1-POD2-L2
@@ -182,150 +182,7 @@ spec:
         - kind: DcimPhysicalInterface
           data:
             device: DC1-POD2-L2
-            name: Ethernet1/50
-
----
-# DC1 LAG interfaces — peer-link port-channels (L1 ↔ L2 within each MLAG pair)
-# Ethernet1/33+34 reserved for MLAG peer-link on all leaf switches
-apiVersion: infrahub.app/v1
-kind: Object
-spec:
-  kind: DcimLAGInterface
-  data:
-    - name: Port-Channel100
-      device: DC1-POD1-L1
-      status: active
-      role: mlag-peer
-      lag_id: 100
-      lacp_mode: active
-      mtu: 9000
-      minimum_links: 1
-      mlag_domain: DC1-POD1-L1-L2-MLAG
-      member_interfaces:
-        - kind: DcimPhysicalInterface
-          data:
-            device: DC1-POD1-L1
-            name: Ethernet1/33
-        - kind: DcimPhysicalInterface
-          data:
-            device: DC1-POD1-L1
-            name: Ethernet1/34
-
-    - name: Port-Channel100
-      device: DC1-POD1-L2
-      status: active
-      role: mlag-peer
-      lag_id: 100
-      lacp_mode: active
-      mtu: 9000
-      minimum_links: 1
-      mlag_domain: DC1-POD1-L1-L2-MLAG
-      member_interfaces:
-        - kind: DcimPhysicalInterface
-          data:
-            device: DC1-POD1-L2
-            name: Ethernet1/33
-        - kind: DcimPhysicalInterface
-          data:
-            device: DC1-POD1-L2
-            name: Ethernet1/34
-
-    - name: Port-Channel100
-      device: DC1-POD2-L1
-      status: active
-      role: mlag-peer
-      lag_id: 100
-      lacp_mode: active
-      mtu: 9000
-      minimum_links: 1
-      mlag_domain: DC1-POD2-L1-L2-MLAG
-      member_interfaces:
-        - kind: DcimPhysicalInterface
-          data:
-            device: DC1-POD2-L1
-            name: Ethernet1/33
-        - kind: DcimPhysicalInterface
-          data:
-            device: DC1-POD2-L1
-            name: Ethernet1/34
-
-    - name: Port-Channel100
-      device: DC1-POD2-L2
-      status: active
-      role: mlag-peer
-      lag_id: 100
-      lacp_mode: active
-      mtu: 9000
-      minimum_links: 1
-      mlag_domain: DC1-POD2-L1-L2-MLAG
-      member_interfaces:
-        - kind: DcimPhysicalInterface
-          data:
-            device: DC1-POD2-L2
-            name: Ethernet1/33
-        - kind: DcimPhysicalInterface
-          data:
-            device: DC1-POD2-L2
-            name: Ethernet1/34
-
----
-# DC1 peer-link cables (physical links between MLAG leaf pairs)
-apiVersion: infrahub.app/v1
-kind: Object
-spec:
-  kind: DcimCable
-  data:
-    - name: CBL-DC1-POD1-L1-L2-PL1
-      type: smf
-      deployment: DC1
-      endpoints:
-        - kind: DcimPhysicalInterface
-          data:
-            device: DC1-POD1-L1
-            name: Ethernet1/33
-        - kind: DcimPhysicalInterface
-          data:
-            device: DC1-POD1-L2
-            name: Ethernet1/33
-
-    - name: CBL-DC1-POD1-L1-L2-PL2
-      type: smf
-      deployment: DC1
-      endpoints:
-        - kind: DcimPhysicalInterface
-          data:
-            device: DC1-POD1-L1
-            name: Ethernet1/34
-        - kind: DcimPhysicalInterface
-          data:
-            device: DC1-POD1-L2
-            name: Ethernet1/34
-
-    - name: CBL-DC1-POD2-L1-L2-PL1
-      type: smf
-      deployment: DC1
-      endpoints:
-        - kind: DcimPhysicalInterface
-          data:
-            device: DC1-POD2-L1
-            name: Ethernet1/33
-        - kind: DcimPhysicalInterface
-          data:
-            device: DC1-POD2-L2
-            name: Ethernet1/33
-
-    - name: CBL-DC1-POD2-L1-L2-PL2
-      type: smf
-      deployment: DC1
-      endpoints:
-        - kind: DcimPhysicalInterface
-          data:
-            device: DC1-POD2-L1
-            name: Ethernet1/34
-        - kind: DcimPhysicalInterface
-          data:
-            device: DC1-POD2-L2
-            name: Ethernet1/34
+            name: Ethernet2/1
 
 ---
 # DC1 LAG interfaces — server side (bond0 toward MLAG leaf pair)

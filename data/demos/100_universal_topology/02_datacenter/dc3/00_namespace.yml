@@ -1,0 +1,8 @@
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: IpamNamespace
+  data:
+    - name: "FABRIC-DC3"
+      description: "DC3 fabric addressing — eBGP RFC 5549 unnumbered (IPv6 link-local) + EVPN overlay"

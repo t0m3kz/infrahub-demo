@@ -137,6 +137,7 @@ class DataCenterDesignData(BaseModel):
     max_pods: int = 2
     max_super_spines_per_fabric: int = 2
     max_spines_per_pod: int = 4
+    inter_pod_connectivity: str = "super-spine"
 
     @property
     def is_ipv6(self) -> bool:
@@ -292,12 +293,18 @@ class RackParent(BaseModel):
     index: int
     design: Optional[DataCenterDesignData] = None
     naming_convention: str = "standard"
+    fabric_interface_sorting_method: Literal["top_down", "bottom_up"] = "bottom_up"
     management_pool: Optional[Pool] = None
+    amount_of_super_spines: int = 0
+    super_spine_template: Optional[Template] = None
 
-    @field_validator("management_pool", "design", mode="before")
+    @field_validator("management_pool", "design", "super_spine_template", mode="before")
     @classmethod
     def extract_rack_parent_node(cls, value: Any) -> Optional[Any]:
-        return _unwrap_node(value)
+        unwrapped = _unwrap_node(value)
+        if isinstance(unwrapped, dict) and unwrapped.get("id") is None:
+            return None
+        return unwrapped
 
 
 class QuantityOnly(BaseModel):
@@ -363,6 +370,7 @@ class RackModel(BaseModel):
     parent: LocationSuiteModel
     leafs: Optional[List[DeviceRole]] = []
     tors: Optional[List[DeviceRole]] = []
+    l2_leafs: Optional[List[DeviceRole]] = []
     border_leafs: Optional[List[DeviceRole]] = []
     pod: RackPod
 

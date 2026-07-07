@@ -1,0 +1,74 @@
+---
+# DC3 underlay+overlay — eBGP (RFC 5549 unnumbered, per-device unique AS)
+#
+# Each device has its own AS (65300–65362, 65370–65371).
+# eBGP unnumbered uses IPv6 link-local for peering — no P2P IPs needed.
+# EVPN is carried on the same eBGP sessions (combined underlay+overlay).
+# Router-ID sourced from Loopback0 (10.255.13.x/32).
+#
+# AS assignment:
+#   Super-spines: SS1=65300, SS2=65301
+#   Border-leafs: BL1=65370, BL2=65371  (EVPN multi-site BGW + DCI)
+#   POD1 spines:  SP1=65311, SP2=65312
+#   POD2 spines:  SP1=65321, SP2=65322
+#   POD3 spines:  SP1=65331, SP2=65332
+#   POD4 spines:  SP1=65341, SP2=65342
+#   POD1 leaves:  L1=65351, L2=65352, L3=65353, L4=65354
+#   POD2 leaves:  L1=65355, L2=65356, L3=65357, L4=65358
+#   POD3 leaves:  L1=65359, L2=65360
+#   POD4 leaves:  L1=65361, L2=65362
+
+# ── Autonomous Systems ────────────────────────────────────────────────────────
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: RoutingAutonomousSystem
+  data:
+    - asn: 65300
+      description: "DC3 Super-spine SS1"
+    - asn: 65301
+      description: "DC3 Super-spine SS2"
+    - asn: 65370
+      description: "DC3 Border-leaf BL1 (EVPN BGW, DCI primary)"
+    - asn: 65371
+      description: "DC3 Border-leaf BL2 (EVPN BGW, DCI secondary)"
+    - asn: 65311
+      description: "DC3 POD1 Spine SP1"
+    - asn: 65312
+      description: "DC3 POD1 Spine SP2"
+    - asn: 65321
+      description: "DC3 POD2 Spine SP1"
+    - asn: 65322
+      description: "DC3 POD2 Spine SP2"
+    - asn: 65331
+      description: "DC3 POD3 Spine SP1"
+    - asn: 65332
+      description: "DC3 POD3 Spine SP2"
+    - asn: 65341
+      description: "DC3 POD4 Spine SP1"
+    - asn: 65342
+      description: "DC3 POD4 Spine SP2"
+    - asn: 65351
+      description: "DC3 POD1 Leaf L1"
+    - asn: 65352
+      description: "DC3 POD1 Leaf L2"
+    - asn: 65353
+      description: "DC3 POD1 Leaf L3"
+    - asn: 65354
+      description: "DC3 POD1 Leaf L4"
+    - asn: 65355
+      description: "DC3 POD2 Leaf L1"
+    - asn: 65356
+      description: "DC3 POD2 Leaf L2"
+    - asn: 65357
+      description: "DC3 POD2 Leaf L3"
+    - asn: 65358
+      description: "DC3 POD2 Leaf L4"
+    - asn: 65359
+      description: "DC3 POD3 Leaf L1"
+    - asn: 65360
+      description: "DC3 POD3 Leaf L2"
+    - asn: 65361
+      description: "DC3 POD4 Leaf L1"
+    - asn: 65362
+      description: "DC3 POD4 Leaf L2"

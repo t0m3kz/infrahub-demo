@@ -1,0 +1,13 @@
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: VirtMonitoring
+  data:
+    - name: DC3-VSPHERE-PROD-MONITORING
+      status: active
+      stack: datadog
+      version: "7.58.0"
+      retention_days: 15
+      cluster_capabilities:
+        - DC3-VSPHERE-PROD

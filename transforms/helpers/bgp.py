@@ -1,7 +1,10 @@
 """BGP configuration helpers for device transforms."""
 
+import logging
 from ipaddress import ip_address
 from typing import Any
+
+_log = logging.getLogger(__name__)
 
 
 def _sort_key_ip(ip_obj: Any) -> tuple:
@@ -67,11 +70,15 @@ def _build_session_from_peering(
     device_name: str,
     local_as: dict | None,
     interfaces: list[dict[str, Any]] | None,
+    warnings: list[str] | None = None,
 ) -> dict[str, Any] | None:
     """Build a BGP session dict from a peering node using interfaces.
 
     Determines local vs remote by matching device name in interfaces.
     Returns None if the peering cannot be processed.
+
+    If ``warnings`` is provided (a list), a message is appended for each
+    peering that is silently dropped due to missing interface_capabilities.
     """
     # Get interfaces (2 entries: local + remote)
     peering_ifaces = peering_node.get("interface_capabilities", [])
@@ -89,6 +96,10 @@ def _build_session_from_peering(
             remote_iface = iface
 
     if not local_iface or not remote_iface:
+        if warnings is not None:
+            warnings.append(
+                f"Overlay peering '{peering_node.get('name')}' dropped — no interface_capabilities for {device_name}"
+            )
         return None
 
     session: dict[str, Any] = {
@@ -253,6 +264,7 @@ def _build_peer_groups(sessions: list[dict[str, Any]], device_role: str = "") ->
                 "remote_as": remote_as,
                 "send_community_extended": True,
                 "route_reflector_client": rr_client,
+                "next_hop_unchanged": rr_client,  # RRs must not change next-hop for EVPN clients
                 "address_families": ["evpn"],
             }
         )
@@ -323,13 +335,19 @@ def get_bgp_profile(
             bgp_config["router_id"] = router_id
 
         sessions = []
+        dropped_warnings: list[str] = []
         peerings = service.get("peerings", [])
 
         if isinstance(peerings, list):
             for peering_node in peerings:
-                session = _build_session_from_peering(peering_node, device_name, local_as, interfaces)
+                session = _build_session_from_peering(
+                    peering_node, device_name, local_as, interfaces, warnings=dropped_warnings
+                )
                 if session:
                     sessions.append(session)
+
+        for msg in dropped_warnings:
+            _log.warning(msg)
 
         bgp_config["sessions"] = sessions
         bgp_configs.append(bgp_config)
@@ -362,5 +380,13 @@ def get_bgp_profile(
         # Sort sessions (neighbors) by (ttl group, IP address) for deterministic config output
         bgp_config["sessions"].sort(key=lambda s: (s.get("ttl") or 255, _sort_key_ip(s.get("remote_ip"))))
         bgp_config["peer_groups"] = _build_peer_groups(bgp_config["sessions"], device_role=device_role)
+
+        # RR devices get an explicit cluster-id equal to their router-id for loop prevention.
+        # Cisco/Arista/FRR default cluster-id to router-id when unset, but being explicit
+        # makes the intent clear and is considered best practice.
+        is_rr = any(pg.get("route_reflector_client") for pg in bgp_config["peer_groups"])
+        if is_rr:
+            router_id_address = (bgp_config.get("router_id") or {}).get("address", "")
+            bgp_config["cluster_id"] = router_id_address.split("/")[0] if router_id_address else ""
 
     return merged

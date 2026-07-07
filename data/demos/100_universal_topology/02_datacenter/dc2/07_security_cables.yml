@@ -1,0 +1,74 @@
+---
+# ── Cables — BL → FW pair + HA sync ──────────────────────────────────────────
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimCable
+  data:
+    # ── BL1 → DC2-FW-01 ──────────────────────────────────────────────────────────
+    - name: CBL-DC2-BL1-FW01-INSIDE
+      type: smf
+      deployment: DC2
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC2-BL1
+            name: Ethernet1/5
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC2-FW-01
+            name: ethernet1/1
+
+    - name: CBL-DC2-BL1-FW01-OUTSIDE
+      type: smf
+      deployment: DC2
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC2-BL1
+            name: Ethernet1/6
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC2-FW-01
+            name: ethernet1/2
+
+    # ── BL2 → DC2-FW-02 ──────────────────────────────────────────────────────────
+    - name: CBL-DC2-BL2-FW02-INSIDE
+      type: smf
+      deployment: DC2
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC2-BL2
+            name: Ethernet1/5
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC2-FW-02
+            name: ethernet1/1
+
+    - name: CBL-DC2-BL2-FW02-OUTSIDE
+      type: smf
+      deployment: DC2
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC2-BL2
+            name: Ethernet1/6
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC2-FW-02
+            name: ethernet1/2
+
+    # ── HA sync — back-to-back ────────────────────────────────────────────────
+    - name: CBL-DC2-FW01-FW02-HA-SYNC
+      type: smf
+      deployment: DC2
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC2-FW-01
+            name: ethernet1/3
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC2-FW-02
+            name: ethernet1/3

@@ -24,6 +24,14 @@ interface Port-Channel100
    switchport trunk group MLAGPEER
    no shutdown
 !
+interface Ethernet33
+   channel-group 100 mode active
+   no shutdown
+!
+interface Ethernet34
+   channel-group 100 mode active
+   no shutdown
+!
 interface Vlan4094
    description MLAG Peer-Link SVI
    no shutdown

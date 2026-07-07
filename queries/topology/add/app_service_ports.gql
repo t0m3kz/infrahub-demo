@@ -1,0 +1,19 @@
+query app_service_ports($slug: String!) {
+  AppComponent(slug__value: $slug) {
+    edges {
+      node {
+        id
+        slug { value }
+        vip_services {
+          edges {
+            node {
+              id
+              port { value }
+              protocol { value }
+            }
+          }
+        }
+      }
+    }
+  }
+}

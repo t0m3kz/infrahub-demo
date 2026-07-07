@@ -212,6 +212,25 @@ spec:
 
             # Endpoint trigger when server device added to endpoints
 
+    # ── MLAG Wiring ───────────────────────────────────────────────────────────
+    - name: trigger-mlag-on-update
+      branch_scope: "other_branches"
+      node_kind: ManagedMLAG
+      mutation_action: "updated"
+      action: mlag-generator
+
+    # ── HA Interfaces ─────────────────────────────────────────────────────────
+    - name: trigger-ha-on-firewall-update
+      branch_scope: "other_branches"
+      node_kind: ManagedFirewallHA
+      mutation_action: "updated"
+      action: ha-generator
+
+    - name: trigger-ha-on-lb-update
+      branch_scope: "other_branches"
+      node_kind: ManagedLoadbalancerHA
+      mutation_action: "updated"
+      action: ha-generator
     # ── App Security Rules ────────────────────────────────────────────────────
     # Re-run the security rules generator whenever an AppComponent is created
     # or its depends_on / network_segment relationships change.

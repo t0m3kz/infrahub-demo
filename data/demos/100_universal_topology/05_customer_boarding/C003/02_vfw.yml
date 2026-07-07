@@ -15,6 +15,7 @@ spec:
       status: active
       device_type: CloudGuard
       platform: checkpoint_gaia
+      software_image: checkpoint_gaia-R81.20
       deployment: DC3
       hosting_device: DC3-FW-01
       member_of_groups:
@@ -25,6 +26,7 @@ spec:
       status: active
       device_type: CloudGuard
       platform: checkpoint_gaia
+      software_image: checkpoint_gaia-R81.20
       deployment: DC3
       hosting_device: DC3-FW-02
       member_of_groups:
@@ -42,6 +44,8 @@ spec:
       priority: 100
       preempt: false
       ha_timer: standard
+      member_of_groups:
+        - ha_domains
       capabilities:
         - DC3-C003-VSX-01
         - DC3-C003-VSX-02

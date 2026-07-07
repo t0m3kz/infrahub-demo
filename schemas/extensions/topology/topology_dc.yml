@@ -100,6 +100,23 @@ nodes:
           min_value: 1
           max_value: 8
 
+      - name: inter_pod_connectivity
+        label: "Inter-Pod Connectivity"
+        description: "How pods are interconnected: via a dedicated super-spine tier, or back-to-back spine connections"
+        kind: Dropdown
+        optional: false
+        default_value: super-spine
+        order_weight: 1800
+        choices:
+          - name: super-spine
+            label: "Super-Spine Tier"
+            description: "Dedicated super-spine switches aggregate all pods (M/L/XL fabrics)"
+            color: "#5fa8a8"
+          - name: back-to-back
+            label: "Back-to-Back Spines"
+            description: "Spine uplinks connect directly across pods — no super-spine tier (S fabrics)"
+            color: "#7fbfbf"
+
   - name: PodDesign
     namespace: Topology
     description: "Pod layout and capacity plan"
@@ -243,9 +260,13 @@ nodes:
             description: Leaf Switch part of a Pod.
             color: "#e6e6fa"
           - name: tor
-            label: ToR/Level2 Switch
-            description: Top of Rack  or Lavel2 leaf part of a Pod.
+            label: ToR Switch
+            description: Top of Rack switch acting as VTEP in tor-deployment (connects directly to spines).
             color: "#e6e6fa"
+          - name: l2-leaf
+            label: L2 Leaf Switch
+            description: L2-only aggregation switch (connects to leafs, not spines; no VXLAN/overlay BGP).
+            color: "#d0e8fd"
           - name: border-leaf
             label: Border Leaf Switch
             description: Border Leaf providing external connectivity in a Pod.

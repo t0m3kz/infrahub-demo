@@ -102,7 +102,8 @@ class DCTopologyGenerator(CommonGenerator):
             "loopback": loopback_prefix,
             "management": management_prefix,
         }
-        if amount_of_super_spines > 0 and super_spine_template:
+        design_mode = self.data.design.inter_pod_connectivity if self.data.design else "super-spine"
+        if amount_of_super_spines > 0 and super_spine_template and design_mode != "back-to-back":
             super_spine_loopback_prefix = calculate_super_spine_loopback_prefix(
                 max_super_spines=amount_of_super_spines,
                 ipv6=is_ipv6,
@@ -114,9 +115,10 @@ class DCTopologyGenerator(CommonGenerator):
                 f"super-spine-loopback=/{super_spine_loopback_prefix}"
             )
         else:
+            reason = "back-to-back design" if design_mode == "back-to-back" else "no super-spines"
             self.logger.info(
                 f"Creating pools from design: technical=/{technical_prefix}, "
-                f"loopback=/{loopback_prefix}, management=/{management_prefix} (no super-spines)"
+                f"loopback=/{loopback_prefix}, management=/{management_prefix} ({reason})"
             )
 
         dc_pools = await self.allocate_resource_pools(
@@ -207,7 +209,12 @@ class DCTopologyGenerator(CommonGenerator):
             )
 
         super_spine_names: list[str] = []
-        if amount_of_super_spines > 0 and super_spine_template:
+        if design_mode == "back-to-back":
+            self.logger.info(
+                f"DC {self.fabric_name}: inter_pod_connectivity=back-to-back — "
+                "skipping super-spine tier, spines will connect directly across pods"
+            )
+        elif amount_of_super_spines > 0 and super_spine_template:
             super_spine_names = await self.create_devices(
                 deployment_id=dc_id,
                 device_role="super-spine",

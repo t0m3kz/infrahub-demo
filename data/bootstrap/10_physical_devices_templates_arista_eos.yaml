@@ -122,9 +122,13 @@ spec:
             name: Ethernet[1-24]/1
             role: customer
             interface_type: 100gbase-x-qsfp28
-          - template_name: DCS-7050CX3-32C-R_LEAF_Ethernet[25-32]/1
-            name: Ethernet[25-32]/1
+          - template_name: DCS-7050CX3-32C-R_LEAF_Ethernet[25-30]/1
+            name: Ethernet[25-30]/1
             role: uplink
+            interface_type: 100gbase-x-qsfp28
+          - template_name: DCS-7050CX3-32C-R_LEAF_Ethernet[31-32]/1
+            name: Ethernet[31-32]/1
+            role: mlag-peer
             interface_type: 100gbase-x-qsfp28
           - template_name: DCS-7050CX3-32C-R_LEAF_Ethernet[33-34]
             name: Ethernet[33-34]
@@ -152,9 +156,13 @@ spec:
             name: Ethernet[17-24]/1
             role: downlink
             interface_type: 100gbase-x-qsfp28
-          - template_name: DCS-7050CX3-32C-R_LEAF_MR_Ethernet[25-32]/1
-            name: Ethernet[25-32]/1
+          - template_name: DCS-7050CX3-32C-R_LEAF_MR_Ethernet[25-30]/1
+            name: Ethernet[25-30]/1
             role: uplink
+            interface_type: 100gbase-x-qsfp28
+          - template_name: DCS-7050CX3-32C-R_LEAF_MR_Ethernet[31-32]/1
+            name: Ethernet[31-32]/1
+            role: mlag-peer
             interface_type: 100gbase-x-qsfp28
           - template_name: DCS-7050CX3-32C-R_LEAF_MR_Ethernet[33-34]
             name: Ethernet[33-34]
@@ -182,9 +190,13 @@ spec:
             name: Ethernet[11-28]/1
             role: downlink
             interface_type: 100gbase-x-qsfp28
-          - template_name: DCS-7050CX3-32C-R_LEAF_MIXED_Ethernet[29-32]/1
-            name: Ethernet[29-32]/1
+          - template_name: DCS-7050CX3-32C-R_LEAF_MIXED_Ethernet[29-30]/1
+            name: Ethernet[29-30]/1
             role: uplink
+            interface_type: 100gbase-x-qsfp28
+          - template_name: DCS-7050CX3-32C-R_LEAF_MIXED_Ethernet[31-32]/1
+            name: Ethernet[31-32]/1
+            role: mlag-peer
             interface_type: 100gbase-x-qsfp28
           - template_name: DCS-7050CX3-32C-R_LEAF_MIXED_Ethernet[33-34]
             name: Ethernet[33-34]

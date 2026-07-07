@@ -19,6 +19,14 @@ interface port-channel100
   no shutdown
   vpc peer-link
 !
+interface Ethernet1/33
+  channel-group 100 mode active
+  no shutdown
+!
+interface Ethernet1/34
+  channel-group 100 mode active
+  no shutdown
+!
 vpc domain 1
   delay restore 300
   delay restore interface-vlan 330
