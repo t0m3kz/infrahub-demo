@@ -13,4 +13,20 @@ router ospf {{ ospf_config.process_id or 1 }}
 {%- endfor %}
 !
 {% endfor %}
+{%- for interface in interfaces %}
+{%- if interface.get('ospf') %}
+{%- set iface_ospf = interface.ospf %}
+interface {{ interface.name }}
+{%- if iface_ospf.area is not none %}
+  ip ospf area {{ iface_ospf.area }}
+{%- endif %}
+{%- if iface_ospf.mode == 'peer_to_peer' %}
+  ip ospf network point-to-point
+{%- endif %}
+{%- if iface_ospf.metric is not none %}
+  ip ospf cost {{ iface_ospf.metric }}
+{%- endif %}
+!
+{%- endif %}
+{%- endfor %}
 {%- endif %}

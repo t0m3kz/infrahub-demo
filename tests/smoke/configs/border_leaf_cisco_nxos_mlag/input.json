@@ -236,6 +236,14 @@
                   "ip_address": {
                     "node": null
                   },
+                  "mlag_domain": {
+                    "node": {
+                      "id": "mlag-dom-1",
+                      "name": {
+                        "value": "DC1-POD1-L1-L2-MLAG"
+                      }
+                    }
+                  },
                   "member_interfaces": {
                     "edges": [
                       {

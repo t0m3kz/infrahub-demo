@@ -3,6 +3,12 @@
 # MC-LAG Configuration
 sudo config mclag add {{ mlag.domain_id }}
 {%- if mlag.peer_link %}
+{%- if mlag.peer_link_lag_id %}
+sudo config portchannel add {{ mlag.peer_link }}
+{%- for member in mlag.peer_link_members %}
+sudo config portchannel member add {{ mlag.peer_link }} {{ member }}
+{%- endfor %}
+{%- endif %}
 sudo config mclag peer-link add {{ mlag.peer_link }}
 {%- endif %}
 {%- endif -%}

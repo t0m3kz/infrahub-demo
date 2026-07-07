@@ -176,6 +176,51 @@ class RackGenerator(CommonGenerator):
         )
         return device_names, interface_names
 
+    def _derive_super_spine_info(self) -> tuple[list[str], list[str]]:
+        """Derive super-spine device names and uplink interface names from query data.
+
+        The DC generator always creates super-spines with indexes=[dc.index], so names
+        are deterministic — no API call needed.  Super-spine template interfaces are
+        pre-filtered to role="uplink" in rack.gql.
+
+        Returns:
+            Tuple of (device_names, interface_names) for create_cabling.
+
+        Raises:
+            RuntimeError: when super-spine count or template is not set on the DC.
+        """
+        dc = self.data.pod.parent
+        count = dc.amount_of_super_spines
+        template = dc.super_spine_template
+
+        if not count or not template:
+            raise RuntimeError(
+                f"Rack {self.data.name}: Cannot derive super-spine info — "
+                f"amount_of_super_spines={count}, super_spine_template={'set' if template else 'None'}"
+            )
+
+        naming = DeviceNamingConfig(strategy=self.data.pod.parent.naming_convention)
+        device_names = sorted(
+            naming.format_device_name(
+                self.fabric_name,
+                "super-spine",
+                index=idx,
+                fabric_name=self.fabric_name,
+                indexes=[dc.index],
+            )
+            for idx in range(1, count + 1)
+        )
+
+        interface_names = sorted(iface.name for iface in template.interfaces if iface.role == "uplink")
+        if not interface_names:
+            raise RuntimeError(f"Rack {self.data.name}: Super-spine template has no uplink interfaces")
+
+        self.logger.info(
+            f"Derived {len(device_names)} super-spine device names with "
+            f"{len(interface_names)} uplink interface(s) from query data"
+        )
+        return device_names, interface_names
+
     async def _get_leaf_devices_in_row(self, pod_id: str, row_index: int) -> tuple[list[str], list[str]]:
         """Query leaf devices in same row and their interfaces for ToR-to-leaf cabling.
 
@@ -654,7 +699,9 @@ class RackGenerator(CommonGenerator):
                 top_sorting=pod.spine_interface_sorting_method,
             )
 
-        # Process ToR devices: create → cable → route (per deployment type)
+        # Process ToR devices: create → cable → route (always connect directly to spines)
+        # ToRs in this loop are always VTEPs (tor-deployment). L2-only aggregation switches
+        # that connect to leafs use role "l2-leaf" and are handled in the loop below.
         for tor_role in self.data.tors or []:
             # Skip if this template would create devices already created by a previous template
             expected_names = set(
@@ -690,141 +737,178 @@ class RackGenerator(CommonGenerator):
             _created_device_names.update(tor_devices)
             created_tor_devices.extend(tor_devices)
 
-            # Get only uplink interfaces from ToR template (role="uplink")
             tor_interfaces = [
                 interface.name for interface in tor_role.template.interfaces if interface.role == "uplink"
             ]
 
-            # Deployment type: middle_rack - ToRs connect to local leafs in same rack
-            if deployment_type == "middle_rack":
-                cabling_offset = 0
-
-                if created_leaf_devices:
-                    leaf_interfaces_objects = await self.client.filters(
-                        kind=DcimPhysicalInterface,
-                        device__name__values=created_leaf_devices,
-                        role__value="downlink",
-                    )
-
-                    if leaf_interfaces_objects:
-                        leaf_interfaces = sorted(set(iface.name.value for iface in leaf_interfaces_objects))
-
-                        await self._cable_and_route(
-                            bottom_devices=tor_devices,
-                            bottom_interfaces=tor_interfaces,
-                            top_devices=created_leaf_devices,
-                            top_interfaces=leaf_interfaces,
-                            strategy="intra_rack_middle",
-                            offset=cabling_offset,
-                        )
-                    else:
-                        self.logger.error(
-                            f"middle_rack deployment for {self.data.name}: No downlink interfaces found on leaf devices. "
-                            "Cannot create ToR-to-leaf cabling."
-                        )
-                        return
-                else:
-                    self.logger.error(
-                        f"middle_rack deployment for {self.data.name} has ToRs but no leafs. "
-                        "Cannot create ToR-to-leaf cabling."
-                    )
-                    return
-
-            # Deployment type: tor - ToRs connect directly to spines
-            elif deployment_type == "tor":
-                tors_per_rack = sum(tor_role.quantity or 0 for tor_role in self.data.tors or [])
-                sibling_racks = await self.client.filters(
-                    kind="LocationRack",
-                    pod__ids=[pod.id],
+            tors_per_rack = sum(r.quantity or 0 for r in self.data.tors or [])
+            sibling_racks = await self.client.filters(kind="LocationRack", pod__ids=[pod.id])
+            prev_row_racks = sum(
+                1
+                for r in sibling_racks
+                if hasattr(r, "row_index") and r.row_index and r.row_index.value < self.data.row_index
+            )
+            try:
+                cabling_offset = self.calculate_cabling_offsets(
+                    device_count=tors_per_rack,
+                    device_type="tor",
+                    racks_in_previous_rows=prev_row_racks,
                 )
-                prev_row_racks = sum(
-                    1
-                    for r in sibling_racks
-                    if hasattr(r, "row_index") and r.row_index and r.row_index.value < self.data.row_index
+            except RuntimeError as exc:
+                self.logger.error(str(exc))
+                return
+
+            if not spine_device_names:
+                self.logger.error(
+                    f"Rack {self.data.name}: No spine devices found in pod — cannot cable ToRs to spines."
                 )
-                try:
-                    cabling_offset = self.calculate_cabling_offsets(
-                        device_count=tors_per_rack,
-                        device_type="tor",
-                        racks_in_previous_rows=prev_row_racks,
-                    )
-                except RuntimeError as exc:
-                    self.logger.error(str(exc))
-                    return
+                return
 
-                if spine_device_names:
-                    await self._cable_and_route(
-                        bottom_devices=tor_devices,
-                        bottom_interfaces=tor_interfaces,
-                        top_devices=spine_device_names,
-                        top_interfaces=spine_interfaces,
-                        strategy="rack",
-                        offset=cabling_offset,
-                        bottom_sorting=pod.leaf_interface_sorting_method,
-                        top_sorting=pod.spine_interface_sorting_method,
-                    )
-                else:
+            await self._cable_and_route(
+                bottom_devices=tor_devices,
+                bottom_interfaces=tor_interfaces,
+                top_devices=spine_device_names,
+                top_interfaces=spine_interfaces,
+                strategy="rack",
+                offset=cabling_offset,
+                bottom_sorting=pod.leaf_interface_sorting_method,
+                top_sorting=pod.spine_interface_sorting_method,
+            )
+
+        # Process L2-leaf devices: create → cable to local leafs (no routing — L2-only)
+        # l2-leafs are aggregation switches in middle_rack/mixed deployments that sit
+        # below leafs. They carry VLANs but are not VTEPs and don't run overlay BGP.
+        for l2_leaf_role in self.data.l2_leafs or []:
+            l2_leaf_devices = await self.create_devices(
+                deployment_id=pod.id,
+                device_role="l2-leaf",
+                amount=l2_leaf_role.quantity,
+                template=l2_leaf_role.template.model_dump(),
+                naming_convention=naming_conv,
+                options=DeviceOptions(
+                    indexes=tor_indexes,
+                    allocate_loopback=False,
+                    rack=self.data.id,
+                    management_pool=management_pool_id,
+                ),
+            )
+
+            _created_device_names.update(l2_leaf_devices)
+
+            l2_leaf_interfaces = [
+                interface.name for interface in l2_leaf_role.template.interfaces if interface.role == "uplink"
+            ]
+
+            if created_leaf_devices:
+                # Network rack: cable to local leafs in this rack
+                leaf_interfaces_objects = await self.client.filters(
+                    kind=DcimPhysicalInterface,
+                    device__name__values=created_leaf_devices,
+                    role__value="downlink",
+                )
+                if not leaf_interfaces_objects:
                     self.logger.error(
-                        f"tor deployment for {self.data.name}: No spine devices found in pod. "
-                        "Cannot create ToR-to-spine cabling."
+                        f"Rack {self.data.name}: No downlink interfaces on leafs — cannot cable l2-leafs."
                     )
-                    return
-
-            # Deployment type: mixed - ToRs connect to local leafs if present, otherwise middle rack leafs
-            elif deployment_type == "mixed":
-                if created_leaf_devices:
-                    cabling_offset = 0
-                    leaf_device_names = created_leaf_devices
-                    leaf_interfaces = [
-                        iface.name
-                        for leaf_role in self.data.leafs or []
-                        for iface in leaf_role.template.interfaces
-                        if iface.role == "downlink"
-                    ]
-
-                    await self._cable_and_route(
-                        bottom_devices=tor_devices,
-                        bottom_interfaces=tor_interfaces,
-                        top_devices=leaf_device_names,
-                        top_interfaces=leaf_interfaces,
-                        strategy="rack",
-                        offset=cabling_offset,
-                        bottom_sorting=pod.leaf_interface_sorting_method,
-                        top_sorting=pod.leaf_interface_sorting_method,
-                    )
-                else:
-                    # ToR-only rack - connect to middle rack leafs in same row
-                    tors_per_rack = len(tor_devices)
-                    cabling_offset = (self.data.index - 1) * tors_per_rack
-
-                    if leaf_row_cache is None:
-                        try:
-                            leaf_row_cache = await self._get_leaf_devices_in_row(
-                                pod_id=pod.id, row_index=self.data.row_index
-                            )
-                        except RuntimeError as exc:
-                            self.logger.error(str(exc))
-                            return
-                    leaf_device_names, leaf_interfaces = leaf_row_cache
-
-                    if leaf_device_names:
-                        await self._cable_and_route(
-                            bottom_devices=tor_devices,
-                            bottom_interfaces=tor_interfaces,
-                            top_devices=leaf_device_names,
-                            top_interfaces=leaf_interfaces,
-                            strategy="intra_rack_mixed",
-                            offset=cabling_offset,
-                        )
-                    else:
-                        self.logger.error(
-                            f"Mixed deployment for rack {self.data.name}: No middle rack leafs found in row {self.data.row_index}. "
-                            "Cannot create ToR-to-leaf cabling."
-                        )
-                        return
-
+                    continue
+                leaf_interfaces = sorted(set(iface.name.value for iface in leaf_interfaces_objects))
+                await self.create_cabling(
+                    bottom_devices=l2_leaf_devices,
+                    bottom_interfaces=l2_leaf_interfaces,
+                    top_devices=created_leaf_devices,
+                    top_interfaces=leaf_interfaces,
+                    strategy="intra_rack_middle",
+                    options=CablingOptions(
+                        cabling_offset=0,
+                        pool=self._technical_pool_id,
+                        p2p_prefix_length=self._p2p_prefix_length,
+                    ),
+                )
             else:
-                self.logger.warning(f"Unknown deployment_type '{deployment_type}' for rack {self.data.name}")
+                # Compute rack (mixed deployment): cable to middle-rack leafs in same row
+                l2_per_rack = len(l2_leaf_devices)
+                cabling_offset = (self.data.index - 1) * l2_per_rack
+
+                if leaf_row_cache is None:
+                    try:
+                        leaf_row_cache = await self._get_leaf_devices_in_row(
+                            pod_id=pod.id, row_index=self.data.row_index
+                        )
+                    except RuntimeError as exc:
+                        self.logger.error(str(exc))
+                        continue
+                leaf_device_names, leaf_interfaces = leaf_row_cache
+
+                if not leaf_device_names:
+                    self.logger.error(
+                        f"Rack {self.data.name}: No middle-rack leafs in row {self.data.row_index} — cannot cable l2-leafs."
+                    )
+                    continue
+
+                await self.create_cabling(
+                    bottom_devices=l2_leaf_devices,
+                    bottom_interfaces=l2_leaf_interfaces,
+                    top_devices=leaf_device_names,
+                    top_interfaces=leaf_interfaces,
+                    strategy="intra_rack_mixed",
+                    options=CablingOptions(
+                        cabling_offset=cabling_offset,
+                        pool=self._technical_pool_id,
+                        p2p_prefix_length=self._p2p_prefix_length,
+                    ),
+                )
+
+        # Process border-leaf devices: create, then cable uplinks to pod spines (same
+        # as regular leafs) and create BGP peerings.
+        # Border-leafs are pod-tier devices — they always connect to pod spines.
+        # Endpoint generator only handles FW/LB → border-leaf connections.
+        for bl_role in self.data.border_leafs or []:
+            bl_indexes: list[int] = [
+                dc.index,
+                suite.index,
+                self.data.row_index,
+                self.data.index,
+            ]
+            bl_devices = await self.create_devices(
+                deployment_id=dc.id,
+                device_role="border-leaf",
+                amount=bl_role.quantity,
+                template=bl_role.template.model_dump(),
+                naming_convention=naming_conv,
+                options=DeviceOptions(
+                    indexes=bl_indexes,
+                    allocate_loopback=True,
+                    rack=self.data.id,
+                    loopback_pool=loopback_pool_id,
+                    loopback_prefix_length=128 if is_ipv6 else 32,
+                    management_pool=management_pool_id,
+                ),
+            )
+
+            # Uplink interfaces from the border-leaf template (role="uplink")
+            bl_uplink_interfaces = [iface.name for iface in bl_role.template.interfaces if iface.role == "uplink"]
+            if not bl_uplink_interfaces:
+                self.logger.warning(
+                    f"Rack {self.data.name}: border-leaf template has no uplink interfaces — skipping fabric cabling"
+                )
+                continue
+
+            # Border-leafs connect to pod spines, like regular leafs.
+            # Use the next free spine downlink slots after leafs in this rack.
+            top_devices = spine_device_names
+            top_interfaces = spine_interfaces
+            cabling_offset = self.calculate_cabling_offsets(device_count=bl_role.quantity, device_type="leaf")
+
+            await self._cable_and_route(
+                bottom_devices=bl_devices,
+                bottom_interfaces=bl_uplink_interfaces,
+                top_devices=top_devices,
+                top_interfaces=top_interfaces,
+                strategy="rack",
+                offset=cabling_offset,
+                bottom_sorting=pod.leaf_interface_sorting_method,
+                top_sorting=pod.spine_interface_sorting_method,
+            )
 
         # Process border-leaf devices: create with loopback + management only.
         # Cabling to the fabric happens via the endpoint generator (which detects

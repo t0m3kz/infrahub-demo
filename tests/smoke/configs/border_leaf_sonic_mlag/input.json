@@ -210,7 +210,7 @@
                 "node": {
                   "__typename": "DcimLAGInterface",
                   "name": {
-                    "value": "Port-Channel100"
+                    "value": "PortChannel100"
                   },
                   "description": {
                     "value": "MLAG Peer-Link"
@@ -235,6 +235,14 @@
                   },
                   "ip_address": {
                     "node": null
+                  },
+                  "mlag_domain": {
+                    "node": {
+                      "id": "mlag-dom-1",
+                      "name": {
+                        "value": "DC1-POD1-L1-L2-MLAG"
+                      }
+                    }
                   },
                   "member_interfaces": {
                     "edges": [

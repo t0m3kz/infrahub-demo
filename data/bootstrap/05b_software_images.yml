@@ -1,0 +1,174 @@
+---
+# Software images — representative releases per platform defined in 05_platforms.yml.
+# Naming convention: {platform_name}-{version}
+# Must load after 05_platforms.yml (platform references resolve by HFID).
+#
+# is_recommended: true  → golden image, new deployments should target this version
+# is_approved: true     → cleared for production use by network/security team
+
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimSoftwareImage
+  data:
+
+    # ── Arista EOS ────────────────────────────────────────────────────────────
+    - name: arista_eos-4.28.3M
+      version: "4.28.3M"
+      release_type: lts
+      is_approved: true
+      is_recommended: false
+      release_date: "2022-11-01T00:00:00+00:00"
+      end_of_support: "2025-11-01T00:00:00+00:00"
+      end_of_life: "2026-05-01T00:00:00+00:00"
+      platform: arista_eos
+      description: "EOS 4.28 LTS — maintenance release, approved for existing deployments only"
+
+    - name: arista_eos-4.30.4M
+      version: "4.30.4M"
+      release_type: lts
+      is_approved: true
+      is_recommended: false
+      release_date: "2023-10-15T00:00:00+00:00"
+      end_of_support: "2026-10-15T00:00:00+00:00"
+      end_of_life: "2027-04-15T00:00:00+00:00"
+      platform: arista_eos
+      description: "EOS 4.30 LTS — approved, superseded by 4.32"
+
+    - name: arista_eos-4.32.1F
+      version: "4.32.1F"
+      release_type: ga
+      is_approved: true
+      is_recommended: true
+      release_date: "2024-06-01T00:00:00+00:00"
+      end_of_support: "2027-06-01T00:00:00+00:00"
+      end_of_life: "2028-06-01T00:00:00+00:00"
+      platform: arista_eos
+      description: "EOS 4.32 — current recommended image for all new deployments"
+
+    # ── Linux (Ubuntu LTS) ────────────────────────────────────────────────────
+    - name: linux-20.04.6
+      version: "20.04.6"
+      release_type: lts
+      is_approved: false
+      is_recommended: false
+      release_date: "2020-04-23T00:00:00+00:00"
+      end_of_support: "2025-04-30T00:00:00+00:00"
+      end_of_life: "2030-04-30T00:00:00+00:00"
+      known_cve_count: 12
+      platform: linux
+      description: "Ubuntu 20.04 LTS (Focal) — EoS reached April 2025, do not use for new builds"
+
+    - name: linux-22.04.3
+      version: "22.04.3"
+      release_type: lts
+      is_approved: true
+      is_recommended: true
+      release_date: "2022-04-21T00:00:00+00:00"
+      end_of_support: "2027-04-30T00:00:00+00:00"
+      end_of_life: "2032-04-30T00:00:00+00:00"
+      platform: linux
+      description: "Ubuntu 22.04 LTS (Jammy) — recommended for all VM deployments"
+
+    - name: linux-24.04.1
+      version: "24.04.1"
+      release_type: lts
+      is_approved: true
+      is_recommended: false
+      release_date: "2024-04-25T00:00:00+00:00"
+      end_of_support: "2029-04-30T00:00:00+00:00"
+      end_of_life: "2034-04-30T00:00:00+00:00"
+      platform: linux
+      description: "Ubuntu 24.04 LTS (Noble) — approved for new greenfield builds"
+
+    # ── Check Point Gaia ──────────────────────────────────────────────────────
+    - name: checkpoint_gaia-R81.10
+      version: "R81.10"
+      release_type: lts
+      is_approved: true
+      is_recommended: false
+      release_date: "2021-10-01T00:00:00+00:00"
+      end_of_support: "2025-10-01T00:00:00+00:00"
+      end_of_life: "2026-04-01T00:00:00+00:00"
+      platform: checkpoint_gaia
+      description: "Gaia R81.10 — approved for existing deployments, migrate to R81.20"
+
+    - name: checkpoint_gaia-R81.20
+      version: "R81.20"
+      release_type: ga
+      is_approved: true
+      is_recommended: true
+      release_date: "2023-01-15T00:00:00+00:00"
+      end_of_support: "2027-01-15T00:00:00+00:00"
+      end_of_life: "2028-01-15T00:00:00+00:00"
+      platform: checkpoint_gaia
+      description: "Gaia R81.20 — current recommended release for all firewall deployments"
+
+    # ── F5 TMOS ───────────────────────────────────────────────────────────────
+    - name: f5_tmos-16.1.4
+      version: "16.1.4"
+      release_type: lts
+      is_approved: true
+      is_recommended: false
+      release_date: "2022-08-01T00:00:00+00:00"
+      end_of_support: "2026-08-01T00:00:00+00:00"
+      end_of_life: "2027-02-01T00:00:00+00:00"
+      platform: f5_tmos
+      description: "TMOS 16.1 LTS — approved, migrate to 17.1 at next maintenance window"
+
+    - name: f5_tmos-17.1.1
+      version: "17.1.1"
+      release_type: ga
+      is_approved: true
+      is_recommended: true
+      release_date: "2023-09-01T00:00:00+00:00"
+      end_of_support: "2027-09-01T00:00:00+00:00"
+      end_of_life: "2028-09-01T00:00:00+00:00"
+      platform: f5_tmos
+      description: "TMOS 17.1 — current recommended release"
+
+    # ── Citrix NetScaler (ADC) ────────────────────────────────────────────────
+    - name: netscaler-13.1.48.47
+      version: "13.1.48.47"
+      release_type: ga
+      is_approved: true
+      is_recommended: false
+      release_date: "2023-03-01T00:00:00+00:00"
+      end_of_support: "2026-03-01T00:00:00+00:00"
+      end_of_life: "2027-03-01T00:00:00+00:00"
+      platform: netscaler
+      description: "NetScaler ADC 13.1 — approved, superseded by 14.1"
+
+    - name: netscaler-14.1.17.16
+      version: "14.1.17.16"
+      release_type: ga
+      is_approved: true
+      is_recommended: true
+      release_date: "2024-02-01T00:00:00+00:00"
+      end_of_support: "2027-02-01T00:00:00+00:00"
+      end_of_life: "2028-02-01T00:00:00+00:00"
+      platform: netscaler
+      description: "NetScaler ADC 14.1 — current recommended release"
+
+    # ── Palo Alto PAN-OS ──────────────────────────────────────────────────────
+    - name: panos-10.2.7
+      version: "10.2.7"
+      release_type: ga
+      is_approved: true
+      is_recommended: false
+      release_date: "2023-06-01T00:00:00+00:00"
+      end_of_support: "2026-06-01T00:00:00+00:00"
+      end_of_life: "2027-06-01T00:00:00+00:00"
+      platform: panos
+      description: "PAN-OS 10.2 — approved for existing deployments"
+
+    - name: panos-11.1.3
+      version: "11.1.3"
+      release_type: ga
+      is_approved: true
+      is_recommended: true
+      release_date: "2024-03-01T00:00:00+00:00"
+      end_of_support: "2027-03-01T00:00:00+00:00"
+      end_of_life: "2028-03-01T00:00:00+00:00"
+      platform: panos
+      description: "PAN-OS 11.1 — current recommended release"

@@ -1,0 +1,75 @@
+query mlag_domain_data($name: String!) {
+  ManagedMLAG(name__value: $name) {
+    edges {
+      node {
+        id
+        name { value }
+        domain_id { value }
+        virtual_peer_link { value }
+        capabilities {
+          edges {
+            node {
+              __typename
+              ... on DcimPhysicalDevice {
+                id
+                name { value }
+                deployment {
+                  node {
+                    id
+                    ... on TopologyPod {
+                      parent {
+                        node {
+                          id
+                        }
+                      }
+                    }
+                  }
+                }
+                platform {
+                  node {
+                    name { value }
+                  }
+                }
+                interfaces {
+                  edges {
+                    node {
+                      id
+                      name { value }
+                      __typename
+                      ... on DcimPhysicalInterface {
+                        role { value }
+                        cable { node { id name { value } } }
+                      }
+                      ... on DcimLAGInterface {
+                        role { value }
+                        lag_id { value }
+                        lacp_mode { value }
+                        mlag_domain {
+                          node {
+                            id
+                            name { value }
+                          }
+                        }
+                        member_interfaces {
+                          edges {
+                            node {
+                              id
+                              name { value }
+                            }
+                          }
+                        }
+                      }
+                      ... on DcimVirtualInterface {
+                        role { value }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,30 @@
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: ManagedAAA
+  data:
+    - name: OFC-EDI-AAA
+      status: active
+      capabilities:
+        - OFC-EDI-BRANCH-EDGE-01
+        - OFC-EDI-BRANCH-ACC-01
+        - OFC-EDI-BRANCH-AP-01
+        - OFC-EDI-BRANCH-AP-02
+      servers:
+        kind: ManagedAAAServer
+        data:
+          - name: primary
+            address:
+              data:
+                address: "10.0.0.200/32"
+            protocol: tacacs
+            port: 49
+            timeout: 5
+          - name: secondary
+            address:
+              data:
+                address: "10.0.0.201/32"
+            protocol: tacacs
+            port: 49
+            timeout: 5

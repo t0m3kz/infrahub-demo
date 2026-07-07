@@ -1,0 +1,155 @@
+---
+version: "1.0"
+
+# ============================================================================
+# DcimSoftwareImage — a versioned OS/firmware release for a DcimPlatform.
+#
+# Replaces the free-text os_version field on DcimDevice with a structured
+# relationship so that:
+#   - All devices on the same release share one node (queryable)
+#   - Full lifecycle metadata is tracked per image (dates, approval, CVEs)
+#   - The platform is implicit from the image (no mismatch possible)
+#   - Golden/approved image policy can be enforced via checks
+#
+# HFID:    name__value  (e.g. "arista_eos-4.28.3M", "linux-22.04.3")
+# Naming convention: {platform_name}-{version}
+# ============================================================================
+
+nodes:
+  - name: SoftwareImage
+    namespace: Dcim
+    description: "A versioned OS or firmware image for a DcimPlatform"
+    label: "Software Image"
+    icon: "mdi:package-variant"
+    human_friendly_id:
+      - name__value
+    order_by:
+      - platform__name__value
+      - version__value
+    display_label: "{{ name__value }}"
+    uniqueness_constraints:
+      - [platform, version__value]
+    attributes:
+      - name: name
+        kind: Text
+        optional: false
+        unique: true
+        order_weight: 100
+        description: "Unique image identifier — {platform}-{version}"
+
+      - name: version
+        kind: Text
+        optional: false
+        order_weight: 200
+        description: "Release version string (e.g. 4.28.3M, 22.04.3, R81.20)"
+
+      - name: release_type
+        kind: Dropdown
+        optional: false
+        default_value: ga
+        order_weight: 300
+        description: "Release track"
+        choices:
+          - name: ga
+            label: "GA"
+            description: "General Availability"
+            color: "#7FBF7F"
+          - name: lts
+            label: "LTS"
+            description: "Long Term Support"
+            color: "#3498DB"
+          - name: beta
+            label: "Beta"
+            description: "Pre-release / beta"
+            color: "#F39C12"
+          - name: eol
+            label: "EOL"
+            description: "End of Life — no longer supported"
+            color: "#E74C3C"
+
+      - name: is_approved
+        kind: Boolean
+        label: "Approved"
+        optional: false
+        default_value: false
+        order_weight: 310
+        description: "Explicitly approved for production deployment by the network/security team"
+
+      - name: is_recommended
+        kind: Boolean
+        label: "Recommended"
+        optional: false
+        default_value: false
+        order_weight: 320
+        description: "Preferred/golden image — new deployments should use this version"
+
+      - name: release_date
+        kind: DateTime
+        optional: true
+        order_weight: 400
+        description: "General availability date"
+
+      - name: end_of_support
+        kind: DateTime
+        optional: true
+        order_weight: 410
+        description: "End of software maintenance / support date"
+
+      - name: end_of_life
+        kind: DateTime
+        optional: true
+        order_weight: 420
+        description: "End of life date — no further security patches after this date"
+
+      - name: known_cve_count
+        kind: Number
+        label: "Known CVEs"
+        optional: true
+        order_weight: 500
+        description: "Number of known unpatched CVEs at last review (informational)"
+
+      - name: release_notes_url
+        kind: URL
+        optional: true
+        order_weight: 600
+        description: "Link to vendor release notes or security advisory"
+
+      - name: description
+        kind: Text
+        optional: true
+        order_weight: 700
+
+    relationships:
+      - name: platform
+        peer: DcimPlatform
+        label: "Platform"
+        cardinality: one
+        kind: Attribute
+        optional: false
+        order_weight: 150
+        identifier: "software_image__platform"
+        description: "OS platform this image belongs to"
+
+      - name: devices
+        peer: DcimDevice
+        label: "Devices"
+        cardinality: many
+        kind: Attribute
+        optional: true
+        order_weight: 800
+        identifier: "device__software_image"
+        description: "Devices currently running this image"
+
+extensions:
+  nodes:
+    - kind: DcimDevice
+      relationships:
+        - name: software_image
+          peer: DcimSoftwareImage
+          label: "Software Image"
+          cardinality: one
+          kind: Attribute
+          optional: true
+          order_weight: 1260
+          identifier: "device__software_image"
+          description: "Versioned OS/firmware image running on this device"

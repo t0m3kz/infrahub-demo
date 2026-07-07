@@ -1,0 +1,65 @@
+---
+# ── POD2-SP2 interfaces ───────────────────────────────────────────────────────
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimPhysicalInterface
+  data:
+    # Inter-pod full-mesh uplinks
+    - name: Ethernet1/3
+      device: DC2-POD2-SP2
+      ip_address:
+        data:
+          address: "10.255.22.51/31"
+          ip_namespace: FABRIC-DC2
+
+    - name: Ethernet1/4
+      device: DC2-POD2-SP2
+      ip_address:
+        data:
+          address: "10.255.22.55/31"
+          ip_namespace: FABRIC-DC2
+
+    # BL uplinks
+    - name: Ethernet1/5
+      device: DC2-POD2-SP2
+      ip_address:
+        data:
+          address: "10.255.22.63/31"
+          ip_namespace: FABRIC-DC2
+
+    - name: Ethernet1/6
+      device: DC2-POD2-SP2
+      ip_address:
+        data:
+          address: "10.255.22.71/31"
+          ip_namespace: FABRIC-DC2
+
+    # Downlinks to leaves
+    - name: Ethernet1/21
+      device: DC2-POD2-SP2
+      ip_address:
+        data:
+          address: "10.255.22.34/31"
+          ip_namespace: FABRIC-DC2
+
+    - name: Ethernet1/22
+      device: DC2-POD2-SP2
+      ip_address:
+        data:
+          address: "10.255.22.38/31"
+          ip_namespace: FABRIC-DC2
+
+    - name: Ethernet1/23
+      device: DC2-POD2-SP2
+      ip_address:
+        data:
+          address: "10.255.22.42/31"
+          ip_namespace: FABRIC-DC2
+
+    - name: Ethernet1/24
+      device: DC2-POD2-SP2
+      ip_address:
+        data:
+          address: "10.255.22.46/31"
+          ip_namespace: FABRIC-DC2

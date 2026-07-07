@@ -22,7 +22,7 @@ spec:
       parent: lon-1-s-1
       member_of_groups: [topologies_rack]
       fabric_templates:
-        - ["2", "tor", "PowerSwitch-S5224F-ON_TOR"]
+        - ["2", "l2-leaf", "PowerSwitch-S5224F-ON_TOR"]
     - index: 1
       row_index: 2
       shortname: lon-1-s-1-r-2-1
@@ -40,7 +40,7 @@ spec:
       parent: lon-1-s-1
       member_of_groups: [topologies_rack]
       fabric_templates:
-        - ["2", "tor", "PowerSwitch-S5224F-ON_TOR"]
+        - ["2", "l2-leaf", "PowerSwitch-S5224F-ON_TOR"]
 
     # Pod 2 - Mixed: 1 network rack (leafs) + 1 tor rack per row
     - index: 1
@@ -60,7 +60,7 @@ spec:
       parent: lon-1-s-2
       member_of_groups: [topologies_rack]
       fabric_templates:
-        - ["2", "tor", "PowerSwitch-S5224F-ON_TOR"]
+        - ["2", "l2-leaf", "PowerSwitch-S5224F-ON_TOR"]
     - index: 1
       row_index: 2
       shortname: lon-1-s-2-r-2-1
@@ -78,7 +78,7 @@ spec:
       parent: lon-1-s-2
       member_of_groups: [topologies_rack]
       fabric_templates:
-        - ["2", "tor", "PowerSwitch-S5224F-ON_TOR"]
+        - ["2", "l2-leaf", "PowerSwitch-S5224F-ON_TOR"]
 
     # Core/Border-leaf racks — one per pod
     - index: 1

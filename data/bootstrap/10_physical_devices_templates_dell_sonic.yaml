@@ -80,7 +80,7 @@ spec:
             interface_type: 100gbase-x-qsfp28
           - template_name: PowerSwitch-S5232F-ON_LEAF_MR_Ethernet1/1/[33-34]
             name: Ethernet1/1/[33-34]
-            role: management
+            role: mlag-peer
             interface_type: 10gbase-x-sfpp
           - template_name: PowerSwitch-S5232F-ON_LEAF_MR_mgmt1
             name: mgmt1/1/1

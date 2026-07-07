@@ -28,7 +28,7 @@ repos:
 
   # Python code quality
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.15.12
+    rev: v0.15.20
     hooks:
       # Linter
       - id: ruff
@@ -54,7 +54,7 @@ repos:
 
   # Markdown linting (line length: 120 chars for text, excludes code blocks/tables/headings)
   - repo: https://github.com/igorshubovych/markdownlint-cli
-    rev: v0.48.0
+    rev: v0.49.0
     hooks:
       - id: markdownlint
         args:

@@ -14,7 +14,7 @@ spec:
       member_of_groups: [topologies_rack]
       fabric_templates:
         - ["2", "leaf", "DCS-7050CX3-32C-R_LEAF_MR"]
-        - ["2", "tor", "DCS-7050CX3-32C-R_TOR"]
+        - ["2", "l2-leaf", "DCS-7050CX3-32C-R_TOR"]
     - index: 1
       row_index: 2
       shortname: par-1-s-1-r-2-1
@@ -24,7 +24,7 @@ spec:
       member_of_groups: [topologies_rack]
       fabric_templates:
         - ["2", "leaf", "DCS-7050CX3-32C-R_LEAF_MR"]
-        - ["2", "tor", "DCS-7050CX3-32C-R_TOR"]
+        - ["2", "l2-leaf", "DCS-7050CX3-32C-R_TOR"]
     # Pod 2 - Middle Rack
     - index: 1
       row_index: 1
@@ -35,7 +35,7 @@ spec:
       member_of_groups: [topologies_rack]
       fabric_templates:
         - ["2", "leaf", "DCS-7050CX3-32C-R_LEAF_MR"]
-        - ["2", "tor", "DCS-7050CX3-32C-R_TOR"]
+        - ["2", "l2-leaf", "DCS-7050CX3-32C-R_TOR"]
     - index: 1
       row_index: 2
       shortname: par-1-s-2-r-2-1
@@ -45,7 +45,7 @@ spec:
       member_of_groups: [topologies_rack]
       fabric_templates:
         - ["2", "leaf", "DCS-7050CX3-32C-R_LEAF_MR"]
-        - ["2", "tor", "DCS-7050CX3-32C-R_TOR"]
+        - ["2", "l2-leaf", "DCS-7050CX3-32C-R_TOR"]
 
     # Core/Border-leaf racks — one per pod
     - index: 1

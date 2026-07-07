@@ -1,0 +1,41 @@
+---
+# DC3 virtualisation clusters — one per pod/platform
+#
+# ip_namespace already defines which routing domain (VRF) the cluster belongs to.
+# All ManagedVxlanSegments attached to that namespace are reachable from the
+# cluster via the EVPN fabric — no need to enumerate them individually here.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: VirtCluster
+  data:
+
+    # ── POD1+2: Kubernetes (cross-pod) ───────────────────────────────────────
+    - name: DC3-K8S-PROD
+      platform: kubernetes
+      version: "1.31"
+      status: active
+      ha_enabled: true
+      deployment: DC3-1-POD-1
+      ip_namespace: default
+      proxy_service: DC3-PRX-HA
+
+    # ── POD3: VMware vSphere ──────────────────────────────────────────────────
+    - name: DC3-VSPHERE-PROD
+      platform: vmware_vsphere
+      version: "8.0 U3"
+      status: active
+      ha_enabled: true
+      deployment: DC3-1-POD-3
+      ip_namespace: default
+      proxy_service: DC3-PRX-HA
+
+    # ── POD4: Nutanix AHV ─────────────────────────────────────────────────────
+    - name: DC3-NUTANIX-PROD
+      platform: nutanix
+      version: "6.8"
+      status: active
+      ha_enabled: true
+      deployment: DC3-1-POD-4
+      ip_namespace: default
+      proxy_service: DC3-PRX-HA

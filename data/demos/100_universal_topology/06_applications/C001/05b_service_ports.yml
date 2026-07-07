@@ -1,0 +1,24 @@
+---
+# C001 (Nordix Ltd.) — Global service port definitions
+# AppServicePort nodes are globally shared — no component field.
+# Component linkage is handled by the AppServicePortGenerator.
+
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: AppServicePort
+  data:
+    - port: 80
+      protocol: tcp
+
+    - port: 443
+      protocol: tcp
+
+    - port: 5432
+      protocol: tcp
+
+    - port: 6379
+      protocol: tcp
+
+    - port: 8443
+      protocol: tcp

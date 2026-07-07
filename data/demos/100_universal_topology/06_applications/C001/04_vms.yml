@@ -12,6 +12,7 @@ spec:
       status: active
       device_type: linux-vm
       platform: linux
+      software_image: linux-22.04.3
       deployment: DC1
       hosting_device: DC1-POD1-SRV-01
 
@@ -20,6 +21,7 @@ spec:
       status: active
       device_type: linux-vm
       platform: linux
+      software_image: linux-22.04.3
       deployment: DC1
       hosting_device: DC1-POD1-SRV-ASS-01
 
@@ -28,6 +30,7 @@ spec:
       status: active
       device_type: linux-vm
       platform: linux
+      software_image: linux-22.04.3
       deployment: DC1
       hosting_device: DC1-POD1-SRV-01
 
@@ -36,6 +39,7 @@ spec:
       status: active
       device_type: linux-vm
       platform: linux
+      software_image: linux-22.04.3
       deployment: DC1
       hosting_device: DC1-POD1-SRV-02
 
@@ -44,6 +48,7 @@ spec:
       status: active
       device_type: linux-vm
       platform: linux
+      software_image: linux-22.04.3
       deployment: DC1
       hosting_device: DC1-POD1-SRV-02
 
@@ -52,6 +57,7 @@ spec:
       status: active
       device_type: linux-vm
       platform: linux
+      software_image: linux-22.04.3
       deployment: DC1
       hosting_device: DC1-POD2-SRV-01
 
@@ -60,6 +66,7 @@ spec:
       status: active
       device_type: linux-vm
       platform: linux
+      software_image: linux-22.04.3
       deployment: DC1
       hosting_device: DC1-POD1-SRV-02
 
@@ -69,6 +76,7 @@ spec:
       status: active
       device_type: linux-vm
       platform: linux
+      software_image: linux-22.04.3
       deployment: DC1
       hosting_device: DC1-POD1-SRV-01
 
@@ -77,6 +85,7 @@ spec:
       status: active
       device_type: linux-vm
       platform: linux
+      software_image: linux-22.04.3
       deployment: DC1
       hosting_device: DC1-POD1-SRV-02
 
@@ -86,6 +95,7 @@ spec:
       status: active
       device_type: linux-vm
       platform: linux
+      software_image: linux-22.04.3
       deployment: DC1
       hosting_device: DC1-POD2-SRV-01
 
@@ -94,6 +104,7 @@ spec:
       status: active
       device_type: linux-vm
       platform: linux
+      software_image: linux-22.04.3
       deployment: DC1
       hosting_device: DC1-POD2-SRV-02
 
@@ -103,6 +114,7 @@ spec:
       status: active
       device_type: linux-vm
       platform: linux
+      software_image: linux-22.04.3
       deployment: DC1
       hosting_device: DC1-POD1-SRV-ASS-01
 
@@ -111,6 +123,7 @@ spec:
       status: active
       device_type: linux-vm
       platform: linux
+      software_image: linux-22.04.3
       deployment: DC1
       hosting_device: DC1-POD1-SRV-ASS-01
 
@@ -119,5 +132,6 @@ spec:
       status: active
       device_type: linux-vm
       platform: linux
+      software_image: linux-22.04.3
       deployment: DC1
       hosting_device: DC1-POD1-SRV-ASS-01

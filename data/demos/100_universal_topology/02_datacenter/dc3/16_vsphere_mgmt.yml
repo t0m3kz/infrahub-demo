@@ -1,0 +1,14 @@
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: VirtManagementPlane
+  data:
+    - name: DC3-VSPHERE-PROD-MGMT
+      status: active
+      endpoint: "dc3-vcsa-01.infra.local"
+      endpoint_access: private
+      port: 443
+      auth_method: ldap
+      cluster_capabilities:
+        - DC3-VSPHERE-PROD

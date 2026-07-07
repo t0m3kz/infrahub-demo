@@ -11,7 +11,9 @@ spec:
     - name: leafs
       description: All leaf switches
     - name: tors
-      description: All ToR/Level2 switches
+      description: All ToR switches (VTEP — tor-deployment, connects to spines)
+    - name: l2-leafs
+      description: All L2-leaf switches (L2-only aggregation — middle_rack/mixed, connects to leafs)
     - name: border-leafs
       description: All border leafs
     - name: spines
@@ -76,7 +78,11 @@ spec:
       description: Arista SD-WAN hub gateways (VCG) deployed at colocation or cloud sites
     - name: sdwan_orchestrators
       description: Arista SD-WAN Orchestrators (VCO) — on-premises or private cloud deployments
+    - name: ha_domains
+      description: HA domains (firewall + load balancer) — generator target for HAInterfaceGenerator
+    - name: mlag_domains
+      description: MLAG domains — generator target for MLAGWiringGenerator
     - name: app_applications
       description: Application instances — generator target for AppApplicationGenerator
     - name: app_components
-      description: Application component instances — generator target for AppComponentGenerator
+      description: Application component instances — target for AppServicePortGenerator and AppComponentGenerator

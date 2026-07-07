@@ -102,6 +102,12 @@ fragment PodFields on TopologyPod {
         naming_convention {
           value
         }
+        amount_of_super_spines {
+          value
+        }
+        fabric_interface_sorting_method {
+          value
+        }
         management_pool {
           node {
             id
@@ -116,6 +122,20 @@ fragment PodFields on TopologyPod {
             }
             underlay_protocol {
               value
+            }
+            inter_pod_connectivity { value }
+          }
+        }
+        super_spine_template {
+          node {
+            id
+            interfaces(role__value: "uplink") {
+              edges {
+                node {
+                  name { value }
+                  role { value }
+                }
+              }
             }
           }
         }
@@ -219,6 +239,13 @@ query RackGenerator($name: String) {
           }
         }
         border_leafs: fabric_templates(role__value: "border-leaf") {
+          edges {
+            node {
+              ...FabricTemplateFields
+            }
+          }
+        }
+        l2_leafs: fabric_templates(role__value: "l2-leaf") {
           edges {
             node {
               ...FabricTemplateFields

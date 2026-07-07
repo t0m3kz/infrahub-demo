@@ -299,10 +299,10 @@ class VxlanSegmentGenerator(BaseSegmentGenerator):
         devices = await self.client.filters(
             kind=DcimPhysicalDevice,
             deployment__ids=[deployment_id],
-            role__values=["leaf", "tor"],
+            role__values=["leaf", "tor", "l2-leaf"],
         )
         if not devices:
-            self.logger.debug(f"  [{deployment_name}] No leaf/tor devices — skipping interface assignment")
+            self.logger.debug(f"  [{deployment_name}] No leaf/tor/l2-leaf devices — skipping interface assignment")
             return
 
         device_ids = [d.id for d in devices]

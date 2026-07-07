@@ -1,0 +1,22 @@
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: ManagedSyslog
+  data:
+    - name: OFC-LON-Syslog
+      status: active
+      capabilities:
+        - OFC-LON-BRANCH-EDGE-01
+        - OFC-LON-BRANCH-ACC-01
+        - OFC-LON-BRANCH-AP-01
+        - OFC-LON-BRANCH-AP-02
+      servers:
+        kind: ManagedSyslogServer
+        data:
+          - name: server-1
+            address:
+              data:
+                address: "10.0.0.100/32"
+            port: 514
+            severity: informational

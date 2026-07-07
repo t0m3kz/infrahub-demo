@@ -1,0 +1,8 @@
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: IpamNamespace
+  data:
+    - name: "FABRIC-DC1"
+      description: "DC1 fabric addressing — iBGP underlay (RFC 5549) + eBGP EVPN overlay"

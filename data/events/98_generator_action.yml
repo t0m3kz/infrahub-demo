@@ -26,6 +26,12 @@ spec:
     - name: run-vxlan-segment-generator
       description: Run VXLAN Segment Generator
       generator: add_vxlan_segment
+    - name: mlag-generator
+      description: Create MLAG peer-link interfaces and cables for an MLAG domain
+      generator: add_mlag
+    - name: ha-generator
+      description: Create HA sync interfaces and cables for an HA domain
+      generator: add_ha
     - name: run-app-application-generator
       description: Derive security policy rules from application component dependencies
       generator: add_app_application

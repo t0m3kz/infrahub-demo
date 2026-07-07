@@ -300,6 +300,12 @@ queries:
     file_path: queries/config/cloud_vpc.gql
   - name: proposed_change_artifacts
     file_path: queries/topology/add/proposed_change_artifacts.gql
+  - name: ha_domain_data
+    file_path: queries/topology/add/ha_domain.gql
+  - name: mlag_domain_data
+    file_path: queries/topology/add/mlag_domain.gql
+  - name: app_service_ports
+    file_path: queries/topology/add/app_service_ports.gql
 
 generator_definitions:
   - name: add_dc
@@ -401,6 +407,33 @@ generator_definitions:
     execute_after_merge: false
     parameters:
       name: name__value
+  - name: add_ha
+    file_path: generators/add/ha_interface.py
+    targets: ha_domains
+    query: ha_domain_data
+    class_name: HAInterfaceGenerator
+    execute_in_proposed_change: false
+    execute_after_merge: false
+    parameters:
+      name: name__value
+  - name: add_mlag
+    file_path: generators/add/mlag_wiring.py
+    targets: mlag_domains
+    query: mlag_domain_data
+    class_name: MLAGWiringGenerator
+    execute_in_proposed_change: false
+    execute_after_merge: false
+    parameters:
+      name: name__value
+  - name: add_app_service_ports
+    file_path: generators/add/app_service_ports.py
+    targets: app_components
+    query: app_service_ports
+    class_name: AppServicePortGenerator
+    execute_in_proposed_change: false
+    execute_after_merge: false
+    parameters:
+      slug: slug__value
   - name: add_app_application
     file_path: generators/add/application.py
     targets: app_applications

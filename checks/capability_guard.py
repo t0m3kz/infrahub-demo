@@ -12,7 +12,7 @@ from typing import Any
 
 from infrahub_sdk.checks import InfrahubCheck
 
-OVERLAY_ROLES = {"leaf", "border-leaf", "border_leaf"}
+OVERLAY_ROLES = {"leaf", "border-leaf", "tor"}
 
 
 class CheckCapabilityGuard(InfrahubCheck):

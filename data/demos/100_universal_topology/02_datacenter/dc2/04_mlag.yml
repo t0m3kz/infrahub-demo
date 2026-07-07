@@ -1,0 +1,28 @@
+---
+# DC2 MLAG domains — leaf pairs providing redundant server access
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: ManagedMLAG
+  data:
+    - name: DC2-POD1-L1-L2-MLAG
+      status: active
+      domain_id: 1
+      reload_delay: 300
+      reload_delay_non_mlag: 330
+      member_of_groups:
+        - mlag_domains
+      capabilities:
+        - DC2-POD1-L1
+        - DC2-POD1-L2
+
+    - name: DC2-POD2-L1-L2-MLAG
+      status: active
+      domain_id: 2
+      reload_delay: 300
+      reload_delay_non_mlag: 330
+      member_of_groups:
+        - mlag_domains
+      capabilities:
+        - DC2-POD2-L1
+        - DC2-POD2-L2

@@ -1,0 +1,115 @@
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimPhysicalDevice
+  data:
+    # ── CNRD — POD1 ──────────────────────────────────────────────────
+    - name: DC1-C001-FW-01
+      object_template: SRX-1500_DC_FIREWALL
+      role: firewall-active
+      status: active
+      deployment: DC1
+      rack: dc1-s1-r-1
+      member_of_groups:
+        - firewalls
+      interfaces:
+        kind: DcimPhysicalInterface
+        data:
+          - name: ge-0/0/0
+            interface_type: 10gbase-x-sfpp
+            role: uplink
+            status: active
+            description: "Inside (PBR) — DC1-BL1"
+          - name: ge-0/0/1
+            interface_type: 10gbase-x-sfpp
+            role: uplink
+            status: active
+            description: "Outside (return) — DC1-BL1"
+          - name: ge-0/0/2
+            interface_type: 10gbase-x-sfpp
+            role: ha
+            status: active
+            description: "HA sync — DC1-C001-FW-02"
+
+    - name: DC1-C001-FW-02
+      object_template: SRX-1500_DC_FIREWALL
+      role: firewall-passive
+      status: active
+      deployment: DC1
+      rack: dc1-s1-r-1
+      member_of_groups:
+        - firewalls
+      interfaces:
+        kind: DcimPhysicalInterface
+        data:
+          - name: ge-0/0/0
+            interface_type: 10gbase-x-sfpp
+            role: uplink
+            status: active
+            description: "Inside (PBR standby) — DC1-BL2"
+          - name: ge-0/0/1
+            interface_type: 10gbase-x-sfpp
+            role: uplink
+            status: active
+            description: "Outside (return standby) — DC1-BL2"
+          - name: ge-0/0/2
+            interface_type: 10gbase-x-sfpp
+            role: ha
+            status: active
+            description: "HA sync — DC1-C001-FW-01"
+
+    # ── CSWM — POD2 ────────────────────────────────────────────
+    - name: DC1-C002-FW-01
+      object_template: SRX-1500_DC_FIREWALL
+      role: firewall-active
+      status: active
+      deployment: DC1
+      rack: dc1-s1-r-2
+      member_of_groups:
+        - firewalls
+      interfaces:
+        kind: DcimPhysicalInterface
+        data:
+          - name: ge-0/0/0
+            interface_type: 10gbase-x-sfpp
+            role: uplink
+            status: active
+            description: "Inside (PBR) — DC1-BL1"
+          - name: ge-0/0/1
+            interface_type: 10gbase-x-sfpp
+            role: uplink
+            status: active
+            description: "Outside (return) — DC1-BL1"
+          - name: ge-0/0/2
+            interface_type: 10gbase-x-sfpp
+            role: ha
+            status: active
+            description: "HA sync — DC1-C002-FW-02"
+
+    - name: DC1-C002-FW-02
+      object_template: SRX-1500_DC_FIREWALL
+      role: firewall-passive
+      status: active
+      deployment: DC1
+      rack: dc1-s1-r-2
+      member_of_groups:
+        - firewalls
+      interfaces:
+        kind: DcimPhysicalInterface
+        data:
+          - name: ge-0/0/0
+            interface_type: 10gbase-x-sfpp
+            role: uplink
+            status: active
+            description: "Inside (PBR standby) — DC1-BL2"
+          - name: ge-0/0/1
+            interface_type: 10gbase-x-sfpp
+            role: uplink
+            status: active
+            description: "Outside (return standby) — DC1-BL2"
+          - name: ge-0/0/2
+            interface_type: 10gbase-x-sfpp
+            role: ha
+            status: active
+            description: "HA sync — DC1-C002-FW-01"

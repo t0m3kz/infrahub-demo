@@ -236,6 +236,12 @@ query leaf_config($device: String!) {
                     ip_namespace { node { name { value } } }
                   }
                 }
+                mlag_domain {
+                  node {
+                    id
+                    name { value }
+                  }
+                }
                 member_interfaces {
                   edges {
                     node {

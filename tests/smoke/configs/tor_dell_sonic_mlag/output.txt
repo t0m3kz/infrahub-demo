@@ -11,7 +11,10 @@ feature nv overlay
 
 # MC-LAG Configuration
 sudo config mclag add 1
-sudo config mclag peer-link add Port-Channel100
+sudo config portchannel add PortChannel100
+sudo config portchannel member add PortChannel100 Ethernet33
+sudo config portchannel member add PortChannel100 Ethernet34
+sudo config mclag peer-link add PortChannel100
 interface Ethernet1
   description to spine-01
   ip address 10.1.2.1/31
@@ -40,7 +43,7 @@ interface Loopback0
   no shutdown
 !
 
-interface Port-Channel100
+interface PortChannel100
   description MLAG Peer-Link
   no shutdown
 !

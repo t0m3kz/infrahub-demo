@@ -1,196 +1,355 @@
 ---
 # ============================================================================
-# Infrastructure Mappings - Component Deployments
+# Application Components — all three customers
+# Each component links instances, network segments, listening ports, and VIPs.
 # ============================================================================
-# Maps application components to actual cloud infrastructure
+
+# ── C001 (Nordix Ltd.) ────────────────────────────────────────────────────────
 
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
   kind: AppComponent
   data:
-    # ========================================================================
-    # E-Commerce Platform - AWS Deployments
-    # ========================================================================
-    - name: "ecommerce-web-prod"
-      application: ["e-commerce-platform"]
+
+    # ── trade-portal / production ─────────────────────────────────────────────
+
+    - name: web-frontend
       component_type: frontend
-      deployment_type: cloud
+      parent: c001-trade-portal-p
+      instances:
+        - C001-WEB-VM-01
+        - C001-WEB-VM-02
       network_segments:
-        - ["customer-1-ecommerce-prod-web-1a"]
-        - ["customer-1-ecommerce-prod-web-1b"]
+        - c001-web-frontend-p
+      vip_services:
+        - - c001-trade-web.dc3.internal
+          - https
+          - "443"
+        - - c001-trade-web.dc3.internal
+          - http
+          - "80"
 
-    - name: "ecommerce-app-prod"
-      application: ["e-commerce-platform"]
+    - name: api-gateway
       component_type: backend
-      deployment_type: cloud
+      parent: c001-trade-portal-p
+      instances:
+        - C001-APP-VM-01
+        - C001-APP-VM-02
       network_segments:
-        - ["customer-1-ecommerce-prod-app-1a"]
-        - ["customer-1-ecommerce-prod-app-1b"]
+        - c001-app-backend-p
+      vip_services:
+        - - c001-trade-api.dc3.internal
+          - https
+          - "8443"
 
-    - name: "ecommerce-db-prod"
-      application: ["e-commerce-platform"]
+    - name: order-db
       component_type: database
-      deployment_type: cloud
+      parent: c001-trade-portal-p
+      instances:
+        - C001-DB-VM-01
+        - C001-DB-VM-02
       network_segments:
-        - ["customer-1-ecommerce-prod-data-1a"]
-        - ["customer-1-ecommerce-prod-data-1b"]
+        - c001-database-p
+      vip_services:
+        - - c001-trade-db.dc3.internal
+          - tcp
+          - "5432"
 
-    # ========================================================================
-    # E-Commerce Platform - GCP Staging
-    # ========================================================================
-    - name: "ecommerce-web-staging"
-      application: ["e-commerce-platform-staging"]
+    - name: session-cache
+      component_type: cache
+      parent: c001-trade-portal-p
+      instances:
+        - C001-CACHE-VM-01
+      network_segments:
+        - c001-cache-p
+      service_ports:
+        - 6379/tcp
+
+    # ── trade-portal / nonprod ────────────────────────────────────────────────
+
+    - name: web-frontend
       component_type: frontend
-      deployment_type: cloud
+      parent: c001-trade-portal-n
+      instances:
+        - C001-WEB-NP-VM-01
       network_segments:
-        - ["customer-1-ecommerce-staging-web"]
+        - c001-web-frontend-n
+      vip_services:
+        - - c001-trade-web-n.dc3.internal
+          - https
+          - "443"
 
-    - name: "ecommerce-app-staging"
-      application: ["e-commerce-platform-staging"]
+    - name: api-gateway
       component_type: backend
-      deployment_type: cloud
+      parent: c001-trade-portal-n
+      instances:
+        - C001-APP-NP-VM-01
       network_segments:
-        - ["customer-1-ecommerce-staging-app"]
+        - c001-app-backend-n
+      vip_services:
+        - - c001-trade-api-n.dc3.internal
+          - https
+          - "8443"
 
-    - name: "ecommerce-db-staging"
-      application: ["e-commerce-platform-staging"]
+    - name: order-db
       component_type: database
-      deployment_type: cloud
+      parent: c001-trade-portal-n
+      instances:
+        - C001-DB-NP-VM-01
       network_segments:
-        - ["customer-1-ecommerce-staging-data"]
+        - c001-database-n
+      vip_services:
+        - - c001-trade-db-n.dc3.internal
+          - tcp
+          - "5432"
 
-    # ========================================================================
-    # E-Commerce Platform - Azure Development
-    # ========================================================================
-    - name: "ecommerce-web-dev"
-      application: ["e-commerce-platform-dev"]
-      component_type: frontend
-      deployment_type: cloud
-      network_segments:
-        - ["customer-1-ecommerce-dev-web"]
+    # ── auth-platform / production ────────────────────────────────────────────
 
-    - name: "ecommerce-app-dev"
-      application: ["e-commerce-platform-dev"]
+    - name: auth-api
       component_type: backend
-      deployment_type: cloud
+      parent: c001-auth-platform-p
+      instances:
+        - C001-AUTH-VM-01
+        - C001-AUTH-VM-02
       network_segments:
-        - ["customer-1-ecommerce-dev-app"]
+        - c001-app-backend-p
+      vip_services:
+        - - c001-auth-api.dc3.internal
+          - https
+          - "8443"
 
-    # ========================================================================
-    # Analytics Dashboard - GCP Deployments
-    # ========================================================================
-    - name: "analytics-web-prod"
-      application: ["analytics-dashboard"]
-      component_type: frontend
-      deployment_type: cloud
-      network_segments:
-        - ["customer-1-analytics-prod-web"]
-
-    - name: "analytics-api-prod"
-      application: ["analytics-dashboard"]
-      component_type: backend
-      deployment_type: cloud
-      network_segments:
-        - ["customer-1-analytics-prod-app"]
-
-    - name: "analytics-db-prod"
-      application: ["analytics-dashboard"]
+    - name: identity-db
       component_type: database
-      deployment_type: cloud
+      parent: c001-auth-platform-p
+      instances:
+        - C001-DB-VM-01
       network_segments:
-        - ["customer-1-analytics-prod-data"]
+        - c001-database-p
+      vip_services:
+        - - c001-auth-db.dc3.internal
+          - tcp
+          - "5432"
 
-    # ========================================================================
-    # Analytics Dashboard - Azure Staging
-    # ========================================================================
-    - name: "analytics-web-staging"
-      application: ["analytics-dashboard-staging"]
-      component_type: frontend
-      deployment_type: cloud
+    # ── risk-engine / production ──────────────────────────────────────────────
+
+    - name: analytics-worker
+      component_type: worker
+      parent: c001-risk-engine-p
+      instances:
+        - C001-RISK-VM-01
+        - C001-RISK-VM-02
       network_segments:
-        - ["customer-1-analytics-staging-web"]
+        - c001-app-backend-p
+      vip_services:
+        - - c001-risk-api.dc3.internal
+          - https
+          - "8443"
 
-    - name: "analytics-api-staging"
-      application: ["analytics-dashboard-staging"]
-      component_type: backend
-      deployment_type: cloud
-      network_segments:
-        - ["customer-1-analytics-staging-app"]
-
-    # ========================================================================
-    # Analytics Dashboard - AWS Development
-    # ========================================================================
-    - name: "analytics-web-dev"
-      application: ["analytics-dashboard-dev"]
-      component_type: frontend
-      deployment_type: cloud
-      network_segments:
-        - ["customer-1-analytics-dev-web"]
-
-    - name: "analytics-api-dev"
-      application: ["analytics-dashboard-dev"]
-      component_type: backend
-      deployment_type: cloud
-      network_segments:
-        - ["customer-1-analytics-dev-app"]
-
-    # ========================================================================
-    # Customer Portal - Azure Deployments
-    # ========================================================================
-    - name: "portal-web-prod"
-      application: ["customer-portal"]
-      component_type: frontend
-      deployment_type: cloud
-      network_segments:
-        - ["customer-1-portal-prod-web-1"]
-        - ["customer-1-portal-prod-web-2"]
-
-    - name: "portal-api-prod"
-      application: ["customer-portal"]
-      component_type: backend
-      deployment_type: cloud
-      network_segments:
-        - ["customer-1-portal-prod-app-1"]
-        - ["customer-1-portal-prod-app-2"]
-
-    - name: "portal-db-prod"
-      application: ["customer-portal"]
+    - name: risk-db
       component_type: database
-      deployment_type: cloud
+      parent: c001-risk-engine-p
+      instances:
+        - C001-DB-VM-02
       network_segments:
-        - ["customer-1-portal-prod-data"]
+        - c001-database-p
+      vip_services:
+        - - c001-risk-db.dc3.internal
+          - tcp
+          - "5432"
 
-    # ========================================================================
-    # Customer Portal - AWS Staging
-    # ========================================================================
-    - name: "portal-web-staging"
-      application: ["customer-portal-staging"]
+---
+# ── C002 (SwiftGo GmbH) ──────────────────────────────────────────────────────
+
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: AppComponent
+  data:
+
+    # ── shipment-tracker / production ─────────────────────────────────────────
+
+    - name: web-frontend
       component_type: frontend
-      deployment_type: cloud
+      parent: c002-shipment-tracker-p
+      instances:
+        - C002-WEB-VM-01
+        - C002-WEB-VM-02
       network_segments:
-        - ["customer-1-portal-staging-web"]
+        - c002-web-frontend-p
+      vip_services:
+        - - c002-ship-web.dc3.internal
+          - https
+          - "443"
+        - - c002-ship-web.dc3.internal
+          - http
+          - "80"
 
-    - name: "portal-api-staging"
-      application: ["customer-portal-staging"]
+    - name: tracking-api
       component_type: backend
-      deployment_type: cloud
+      parent: c002-shipment-tracker-p
+      instances:
+        - C002-APP-VM-01
+        - C002-APP-VM-02
       network_segments:
-        - ["customer-1-portal-staging-app"]
+        - c002-app-backend-p
+      vip_services:
+        - - c002-ship-api.dc3.internal
+          - https
+          - "8443"
 
-    # ========================================================================
-    # Customer Portal - GCP Development
-    # ========================================================================
-    - name: "portal-web-dev"
-      application: ["customer-portal-dev"]
+    - name: shipment-db
+      component_type: database
+      parent: c002-shipment-tracker-p
+      instances:
+        - C002-DB-VM-01
+      network_segments:
+        - c002-database-p
+      vip_services:
+        - - c002-ship-db.dc3.internal
+          - tcp
+          - "5432"
+
+    # ── shipment-tracker / nonprod ────────────────────────────────────────────
+
+    - name: web-frontend
       component_type: frontend
-      deployment_type: cloud
+      parent: c002-shipment-tracker-n
+      instances:
+        - C002-WEB-NP-VM-01
       network_segments:
-        - ["customer-1-portal-dev-web"]
+        - c002-web-frontend-n
+      vip_services:
+        - - c002-ship-web-n.dc3.internal
+          - https
+          - "443"
 
-    - name: "portal-api-dev"
-      application: ["customer-portal-dev"]
+    - name: tracking-api
       component_type: backend
-      deployment_type: cloud
+      parent: c002-shipment-tracker-n
+      instances:
+        - C002-APP-NP-VM-01
       network_segments:
-        - ["customer-1-portal-dev-app"]
+        - c002-app-backend-n
+      vip_services:
+        - - c002-ship-api-n.dc3.internal
+          - https
+          - "8443"
+
+    # ── fleet-manager / production ────────────────────────────────────────────
+
+    - name: dispatch-portal
+      component_type: frontend
+      parent: c002-fleet-manager-p
+      instances:
+        - C002-FLEET-WEB-VM-01
+      network_segments:
+        - c002-web-frontend-p
+      vip_services:
+        - - c002-fleet-web.dc3.internal
+          - https
+          - "443"
+        - - c002-fleet-web.dc3.internal
+          - http
+          - "80"
+
+    - name: telematics-api
+      component_type: backend
+      parent: c002-fleet-manager-p
+      instances:
+        - C002-FLEET-APP-VM-01
+      network_segments:
+        - c002-app-backend-p
+      vip_services:
+        - - c002-fleet-api.dc3.internal
+          - https
+          - "8443"
+
+    - name: fleet-db
+      component_type: database
+      parent: c002-fleet-manager-p
+      instances:
+        - C002-FLEET-DB-VM-01
+      network_segments:
+        - c002-database-p
+      vip_services:
+        - - c002-fleet-db.dc3.internal
+          - tcp
+          - "5432"
+
+---
+# ── C003 (Vaultex Inc.) ──────────────────────────────────────────────────────
+
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: AppComponent
+  data:
+
+    # ── vault-core / production ───────────────────────────────────────────────
+
+    - name: vault-api
+      component_type: backend
+      parent: c003-vault-core-p
+      instances:
+        - C003-VAULT-VM-01
+        - C003-VAULT-VM-02
+      network_segments:
+        - c003-vault-core-p
+      vip_services:
+        - - c003-vault-api.dc3.internal
+          - https
+          - "8200"
+
+    - name: vault-db
+      component_type: database
+      parent: c003-vault-core-p
+      instances:
+        - C003-VAULT-DB-VM-01
+      network_segments:
+        - c003-database-p
+      vip_services:
+        - - c003-vault-db.dc3.internal
+          - tcp
+          - "5432"
+
+    # ── compliance-portal / production ────────────────────────────────────────
+
+    - name: audit-dashboard
+      component_type: frontend
+      parent: c003-compliance-portal-p
+      instances:
+        - C003-COMP-WEB-VM-01
+      network_segments:
+        - c003-dmz-p
+      vip_services:
+        - - c003-comp-web.dc3.internal
+          - https
+          - "443"
+        - - c003-comp-web.dc3.internal
+          - http
+          - "80"
+
+    - name: policy-engine
+      component_type: backend
+      parent: c003-compliance-portal-p
+      instances:
+        - C003-COMP-APP-VM-01
+      network_segments:
+        - c003-app-backend-p
+      vip_services:
+        - - c003-comp-api.dc3.internal
+          - https
+          - "8443"
+
+    - name: audit-db
+      component_type: database
+      parent: c003-compliance-portal-p
+      instances:
+        - C003-COMP-DB-VM-01
+      network_segments:
+        - c003-database-p
+      vip_services:
+        - - c003-comp-db.dc3.internal
+          - tcp
+          - "5432"

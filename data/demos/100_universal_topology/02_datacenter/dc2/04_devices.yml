@@ -121,7 +121,7 @@ spec:
                 ip_namespace: FABRIC-DC2
 
     - name: DC2-POD1-L1
-      object_template: N9K-C9336C-FX2_LEAF_SERVER
+      object_template: N9K-C9336C-FX2_LEAF
       status: active
       deployment: DC2-2-POD-1
       rack: dc2-s1-r-1
@@ -148,7 +148,7 @@ spec:
                 ip_namespace: FABRIC-DC2
 
     - name: DC2-POD1-L2
-      object_template: N9K-C9336C-FX2_LEAF_SERVER
+      object_template: N9K-C9336C-FX2_LEAF
       status: active
       deployment: DC2-2-POD-1
       rack: dc2-s1-r-1
@@ -267,7 +267,7 @@ spec:
                 ip_namespace: FABRIC-DC2
 
     - name: DC2-POD2-L1
-      object_template: N9K-C9336C-FX2_LEAF_SERVER
+      object_template: N9K-C9336C-FX2_LEAF
       status: active
       deployment: DC2-2-POD-2
       rack: dc2-s1-r-2
@@ -294,7 +294,7 @@ spec:
                 ip_namespace: FABRIC-DC2
 
     - name: DC2-POD2-L2
-      object_template: N9K-C9336C-FX2_LEAF_SERVER
+      object_template: N9K-C9336C-FX2_LEAF
       status: active
       deployment: DC2-2-POD-2
       rack: dc2-s1-r-2

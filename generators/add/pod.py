@@ -7,7 +7,7 @@ from utils.data_cleaning import clean_data
 from ..common import CablingOptions, CommonGenerator, DeviceOptions, RoutingOptions
 from ..helpers.routing import RoutingStrategy
 from ..models import PodModel
-from ..protocols import LocationRack
+from ..protocols import DcimPhysicalDevice, LocationRack, TopologyPod
 
 
 class PodTopologyGenerator(CommonGenerator):
@@ -232,6 +232,8 @@ class PodTopologyGenerator(CommonGenerator):
             )
             skip_cabling = True
 
+        is_back_to_back = dc_design is not None and dc_design.inter_pod_connectivity == "back-to-back"
+
         if not skip_cabling:
             dc_max_spines = dc_design.max_spines_per_pod if dc_design else spine_count
             cabling_offset = (self.data.index - 1) * dc_max_spines
@@ -255,10 +257,59 @@ class PodTopologyGenerator(CommonGenerator):
                 bottom_sorting=self.data.spine_interface_sorting_method,
                 top_sorting=parent.fabric_interface_sorting_method,
             )
+        elif is_back_to_back:
+            # Back-to-back: cable this pod's spines to spines in lower-index sibling pods.
+            # Only connecting to lower-index pods avoids creating duplicate cables when
+            # pod2 generator runs (pod2 → pod1), but pod1 generator has no pod to connect to.
+            dc_max_spines = dc_design.max_spines_per_pod if dc_design else spine_count
+            p2p_prefix_length = 127 if is_ipv6 else 31
+            technical_pool = pod_pools.get("technical")
+
+            sibling_pods = await self._get_sibling_pods_with_lower_index(dc.id)
+            if not sibling_pods:
+                self.logger.info(
+                    f"Pod {self.data.name}: back-to-back design but no lower-index sibling pods found — "
+                    "no inter-pod cabling to create (this is pod index 1 or the only pod)"
+                )
+            for sibling_pod_id, sibling_spine_names, sibling_index in sibling_pods:
+                if not sibling_spine_names:
+                    self.logger.warning(
+                        f"Pod {self.data.name}: sibling pod index {sibling_index} has no spine devices yet — "
+                        "skipping inter-pod cabling for that sibling"
+                    )
+                    continue
+                # Offset: use sibling pod index so interfaces don't collide across siblings
+                cabling_offset = (sibling_index - 1) * dc_max_spines
+                self.logger.info(
+                    f"Pod {self.data.name} (idx={self.data.index}): cabling to sibling pod idx={sibling_index} "
+                    f"[{len(spines)} spines → {len(sibling_spine_names)} sibling spines, offset={cabling_offset}]"
+                )
+                await self.create_cabling(
+                    bottom_devices=spines,
+                    bottom_interfaces=spine_interfaces,
+                    top_devices=sibling_spine_names,
+                    top_interfaces=spine_interfaces,  # Same template → same interface names
+                    strategy="pod",
+                    options=CablingOptions(
+                        cabling_offset=cabling_offset,
+                        pool=technical_pool,
+                        p2p_prefix_length=p2p_prefix_length,
+                    ),
+                    bottom_sorting=self.data.spine_interface_sorting_method,
+                    top_sorting=self.data.spine_interface_sorting_method,
+                )
+                # Create routing between this pod's spines and the sibling pod's spines
+                if dc_design and dc_asn_pool_id:
+                    await self.create_routing(
+                        bottom_devices=spines,
+                        top_devices=sibling_spine_names,
+                        options=RoutingOptions(design=dc_design, asn_pool=dc_asn_pool_id),
+                    )
 
         # Create routing for super-spine ↔ spine peerings (after spine-to-super-spine cabling).
         # Skipped when there are no super-spines (single-pod DC) — no cable means no peering.
-        if dc_design and not skip_cabling:
+        # Also skipped for back-to-back designs (routing was handled per-sibling above).
+        if dc_design and not skip_cabling and not is_back_to_back:
             super_spine_names = [device.name for device in (parent.devices or [])]
 
             routing_options: RoutingOptions = RoutingOptions(design=dc_design)
@@ -279,3 +330,30 @@ class PodTopologyGenerator(CommonGenerator):
                 options=routing_options,
             )
         await self.update_checksum()
+
+    async def _get_sibling_pods_with_lower_index(self, dc_id: str) -> list[tuple[str, list[str], int]]:
+        """Return spine device names for all sibling pods with index < self.data.index.
+
+        Returns a list of (pod_id, [spine_names], pod_index) tuples, sorted by pod index.
+        Only pods with a lower index than the current pod are returned to ensure each
+        spine-to-spine cable is created exactly once across all pod generator runs.
+        """
+        all_pods = await self.client.filters(kind=TopologyPod, parent__ids=[dc_id])
+        result: list[tuple[str, list[str], int]] = []
+
+        for pod in all_pods:
+            pod_index = pod.index.value
+            if pod_index >= self.data.index:
+                continue  # Only connect to lower-index pods
+
+            # Fetch spine devices in this sibling pod
+            sibling_spines = await self.client.filters(
+                kind=DcimPhysicalDevice,
+                deployment__ids=[pod.id],
+                role__value="spine",
+            )
+            spine_names = [s.name.value for s in sibling_spines]
+            result.append((pod.id, spine_names, pod_index))
+
+        result.sort(key=lambda x: x[2])
+        return result

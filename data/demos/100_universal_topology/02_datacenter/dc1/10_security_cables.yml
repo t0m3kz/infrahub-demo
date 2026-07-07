@@ -1,0 +1,137 @@
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimCable
+  data:
+    # ── C001 FW pair (POD1 customer) — BL1 ↔ FW-01, BL2 ↔ FW-02 ─────────────
+    - name: CBL-DC1-BL1-C001FW01-INSIDE
+      type: smf
+      deployment: DC1
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC1-BL1
+            name: Ethernet5/1
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC1-C001-FW-01
+            name: ge-0/0/0
+
+    - name: CBL-DC1-BL1-C001FW01-OUTSIDE
+      type: smf
+      deployment: DC1
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC1-BL1
+            name: Ethernet6/1
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC1-C001-FW-01
+            name: ge-0/0/1
+
+    - name: CBL-DC1-BL2-C001FW02-INSIDE
+      type: smf
+      deployment: DC1
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC1-BL2
+            name: Ethernet5/1
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC1-C001-FW-02
+            name: ge-0/0/0
+
+    - name: CBL-DC1-BL2-C001FW02-OUTSIDE
+      type: smf
+      deployment: DC1
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC1-BL2
+            name: Ethernet6/1
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC1-C001-FW-02
+            name: ge-0/0/1
+
+    - name: CBL-DC1-C001FW01-C001FW02-HA-SYNC
+      type: smf
+      deployment: DC1
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC1-C001-FW-01
+            name: ge-0/0/2
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC1-C001-FW-02
+            name: ge-0/0/2
+
+    # ── C002 FW pair (POD2 customer) — BL1 ↔ FW-01, BL2 ↔ FW-02 ─────────────
+    - name: CBL-DC1-BL1-C002FW01-INSIDE
+      type: smf
+      deployment: DC1
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC1-BL1
+            name: Ethernet7/1
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC1-C002-FW-01
+            name: ge-0/0/0
+
+    - name: CBL-DC1-BL1-C002FW01-OUTSIDE
+      type: smf
+      deployment: DC1
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC1-BL1
+            name: Ethernet8/1
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC1-C002-FW-01
+            name: ge-0/0/1
+
+    - name: CBL-DC1-BL2-C002FW02-INSIDE
+      type: smf
+      deployment: DC1
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC1-BL2
+            name: Ethernet7/1
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC1-C002-FW-02
+            name: ge-0/0/0
+
+    - name: CBL-DC1-BL2-C002FW02-OUTSIDE
+      type: smf
+      deployment: DC1
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC1-BL2
+            name: Ethernet8/1
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC1-C002-FW-02
+            name: ge-0/0/1
+
+    - name: CBL-DC1-C002FW01-C002FW02-HA-SYNC
+      type: smf
+      deployment: DC1
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC1-C002-FW-01
+            name: ge-0/0/2
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC1-C002-FW-02
+            name: ge-0/0/2

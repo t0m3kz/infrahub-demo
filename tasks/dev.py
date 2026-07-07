@@ -94,6 +94,23 @@ def release(context: Context, increment: str = "") -> None:
 
 
 @task
+def upgrade(context: Context) -> None:
+    """Upgrade all Python dependencies and pre-commit hook revisions.
+
+    Runs uv lock --upgrade to update the lockfile, then prek auto-update
+    to bump the rev: pins in .pre-commit-config.yaml to the latest tags.
+
+    Example:
+        uv run invoke dev.upgrade
+    """
+    log.info("Upgrading Python dependencies (uv lock --upgrade)...")
+    context.run("uv lock --upgrade", pty=True)
+    log.info("Upgrading pre-commit hook revisions (prek auto-update)...")
+    context.run("uv run prek auto-update", pty=True)
+    log.info("All dependencies and hooks upgraded. Review the changes and commit.")
+
+
+@task
 def clean_testcontainers(context: Context) -> None:
     """Remove leftover Docker resources created by integration tests."""
     for cmd in [
@@ -111,4 +128,5 @@ ns.add_task(cast(Task, validate))
 ns.add_task(cast(Task, test_unit), name="test-unit")
 ns.add_task(cast(Task, test_integration), name="test-integration")
 ns.add_task(cast(Task, release))
+ns.add_task(cast(Task, upgrade))
 ns.add_task(cast(Task, clean_testcontainers), name="clean-testcontainers")

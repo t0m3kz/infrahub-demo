@@ -1,0 +1,35 @@
+---
+# ── DC2-BL2 interfaces ────────────────────────────────────────────────────────
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimPhysicalInterface
+  data:
+    # Uplinks to spines
+    - name: Ethernet1/1
+      device: DC2-BL2
+      ip_address:
+        data:
+          address: "10.255.22.64/31"
+          ip_namespace: FABRIC-DC2
+
+    - name: Ethernet1/2
+      device: DC2-BL2
+      ip_address:
+        data:
+          address: "10.255.22.66/31"
+          ip_namespace: FABRIC-DC2
+
+    - name: Ethernet1/3
+      device: DC2-BL2
+      ip_address:
+        data:
+          address: "10.255.22.68/31"
+          ip_namespace: FABRIC-DC2
+
+    - name: Ethernet1/4
+      device: DC2-BL2
+      ip_address:
+        data:
+          address: "10.255.22.70/31"
+          ip_namespace: FABRIC-DC2

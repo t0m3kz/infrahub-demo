@@ -14,16 +14,31 @@ def get_mlag(
     the device has no MLAG domain.
 
     If interfaces are provided, the peer-link interface (role == 'mlag-peer')
-    is identified and included as peer_link in the result.
+    is identified and included as peer_link in the result. The peer-link name
+    is taken directly from the database — the generator creates it with the
+    vendor-correct naming convention (Port-Channel100, port-channel100,
+    lag-100, PortChannel100, peer-link, etc.).
     """
     for cap in device_capabilities or []:
         if cap.get("typename") != "ManagedMLAG":
             continue
         peer_link = None
+        peer_link_lag_id = None
+        peer_link_lacp_mode = None
+        peer_link_members: list[str] = []
         for iface in interfaces or []:
-            if iface.get("role") == "mlag-peer":
-                peer_link = iface.get("name")
-                break
+            if iface.get("role") != "mlag-peer":
+                continue
+            iface_name = iface.get("name")
+            lag_id = iface.get("lag_id")
+            if lag_id is not None:
+                peer_link = iface_name
+                peer_link_lag_id = lag_id
+                peer_link_lacp_mode = iface.get("lacp_mode", "active")
+                peer_link_members = [m.get("name") for m in (iface.get("member_interfaces") or []) if m.get("name")]
+            else:
+                peer_link = iface_name
+            break
         return {
             "name": cap.get("name"),
             "domain_id": cap.get("domain_id"),
@@ -31,5 +46,8 @@ def get_mlag(
             "reload_delay_non_mlag": cap.get("reload_delay_non_mlag", 330),
             "devices": [d.get("name") for d in (cap.get("devices") or [])],
             "peer_link": peer_link,
+            "peer_link_lag_id": peer_link_lag_id,
+            "peer_link_lacp_mode": peer_link_lacp_mode,
+            "peer_link_members": peer_link_members,
         }
     return None

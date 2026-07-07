@@ -1051,6 +1051,7 @@ def build_mlag_device_data(
         "mtu": _v(9000),
         "minimum_links": _v(1),
         "ip_address": _node(None),
+        "mlag_domain": _node({"id": "mlag-dom-1", "name": _v(domain_name)}),
         "member_interfaces": _edges(
             [
                 {"name": _v(member1)},

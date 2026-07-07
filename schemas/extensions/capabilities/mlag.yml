@@ -20,6 +20,7 @@ nodes:
     inherit_from:
       - ManagedGeneric
       - ManagedGenericDevice
+      - ManagedGenericInterfaces
     uniqueness_constraints:
       - ["name__value"]
     display_label: "{{name__value}}"
@@ -34,7 +35,7 @@ nodes:
         optional: false
         kind: Generic
         direction: inbound
-        identifier: device_capabilities
+        identifier: capabilities
         order_weight: 900
     attributes:
       - name: domain_id
@@ -57,6 +58,13 @@ nodes:
         optional: true
         default_value: 330
         order_weight: 1250
+      - name: virtual_peer_link
+        kind: Boolean
+        label: "Virtual Peer-Link"
+        description: "When true, generator creates a virtual peer-link interface instead of a physical LAG"
+        optional: true
+        default_value: false
+        order_weight: 1300
 
 extensions:
   nodes:

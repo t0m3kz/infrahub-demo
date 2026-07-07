@@ -22,6 +22,7 @@ from .cabling import (
     PodCablingStrategy,
     RackCablingStrategy,
 )
+from .interface_naming import get_lag_name, get_loopback_name
 from .naming import DeviceNamingConfig
 from .pools import (
     DEFAULT_ASN_BASE_START,
@@ -58,4 +59,7 @@ __all__ = [
     "InterfaceSpeedMatcher",
     "CableTypeDetector",
     "ConnectionValidator",
+    # Interface naming
+    "get_lag_name",
+    "get_loopback_name",
 ]
