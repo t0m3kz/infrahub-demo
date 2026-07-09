@@ -6,7 +6,6 @@ query app_component_data($name: String!) {
         name { value }
         slug { value }
         component_type { value }
-        backend_port { value }
         network_segment {
           node {
             id
@@ -28,12 +27,17 @@ query app_component_data($name: String!) {
             }
           }
         }
-        capabilities {
+        instances {
           edges {
             node {
               id
               name { value }
+              __typename
+              ... on DcimPhysicalDevice {
+                role { value }
+              }
               ... on DcimVirtualDevice {
+                role { value }
                 hosting_device {
                   node {
                     id
@@ -44,27 +48,14 @@ query app_component_data($name: String!) {
             }
           }
         }
-        cluster_capabilities {
+        service_ports {
           edges {
             node {
               id
               name { value }
-              node_pools {
-                edges {
-                  node {
-                    id
-                    name { value }
-                    physical_hosts {
-                      edges {
-                        node {
-                          id
-                          name { value }
-                        }
-                      }
-                    }
-                  }
-                }
-              }
+              port { value }
+              port_end { value }
+              protocol { value }
             }
           }
         }
