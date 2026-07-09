@@ -21,7 +21,7 @@ nodes:
     description: "Named URL category — FQDNs, CIDRs, or regex patterns for proxy policy matching"
     label: URL Category
     icon: "mdi:web"
-    include_in_menu: true
+    include_in_menu: false
     menu_placement: SecurityZone
     human_friendly_id:
       - name__value
@@ -94,7 +94,7 @@ nodes:
     description: "Proxy policy — ordered allow/block/inspect rules for egress traffic control"
     label: Proxy Policy
     icon: "mdi:shield-key-outline"
-    include_in_menu: true
+    include_in_menu: false
     menu_placement: SecurityZone
     human_friendly_id:
       - name__value

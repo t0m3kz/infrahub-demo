@@ -19,7 +19,7 @@ nodes:
     description: "Security zone — macro trust classification for network segments"
     label: Security Zone
     icon: "mdi:shield-lock"
-    include_in_menu: true
+    include_in_menu: false
     order_by:
       - name__value
     display_label: "{{ name__value }}"
@@ -49,19 +49,15 @@ nodes:
           - name: internal
             label: Internal
             description: "Internal trusted network"
-            color: "#2ECC71"
           - name: dmz
             label: DMZ
             description: "Demilitarized zone"
-            color: "#F39C12"
           - name: external
             label: External
             description: "External untrusted network"
-            color: "#E74C3C"
           - name: management
             label: Management
             description: "Management network"
-            color: "#3498DB"
         default_value: internal
         optional: false
         order_weight: 1300
@@ -102,7 +98,7 @@ nodes:
     description: "Threat prevention profile — applied per policy rule"
     label: Security Profile
     icon: "mdi:shield-check"
-    include_in_menu: true
+    include_in_menu: false
     menu_placement: SecurityZone
     order_by:
       - name__value
@@ -163,7 +159,7 @@ nodes:
     description: "Security policy — zero-trust contract for segment traffic"
     label: Security Policy
     icon: "mdi:file-document-outline"
-    include_in_menu: true
+    include_in_menu: false
     menu_placement: SecurityZone
     inherit_from:
       - ManagedGenericDevice
@@ -190,11 +186,9 @@ nodes:
           - name: permit
             label: Permit
             description: "Allow by default"
-            color: "#2ECC71"
           - name: deny
             label: Deny
             description: "Block by default"
-            color: "#E74C3C"
         default_value: deny
         optional: false
         order_weight: 1200
@@ -223,7 +217,7 @@ nodes:
     description: "Policy rule with segment-level micro-segmentation and inline protocol/port"
     label: Security Policy Rule
     icon: "mdi:file-document-edit-outline"
-    include_in_menu: true
+    include_in_menu: false
     menu_placement: SecurityZone
     order_by:
       - index__value
@@ -252,19 +246,15 @@ nodes:
           - name: permit
             label: Permit
             description: "Allow the traffic"
-            color: "#2ECC71"
           - name: deny
             label: Deny
             description: "Block the traffic"
-            color: "#E74C3C"
           - name: drop
             label: Drop
             description: "Silently drop the traffic"
-            color: "#95A5A6"
           - name: reject
             label: Reject
             description: "Reject with ICMP response"
-            color: "#E67E22"
         default_value: deny
         optional: false
         order_weight: 1200
@@ -276,19 +266,15 @@ nodes:
           - name: tcp
             label: TCP
             description: "Transmission Control Protocol"
-            color: "#3498DB"
           - name: udp
             label: UDP
             description: "User Datagram Protocol"
-            color: "#2ECC71"
           - name: icmp
             label: ICMP
             description: "Internet Control Message Protocol"
-            color: "#F39C12"
           - name: any
             label: Any
             description: "Any protocol"
-            color: "#9B59B6"
         default_value: any
         optional: false
         order_weight: 1300
