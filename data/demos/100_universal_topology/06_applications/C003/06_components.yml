@@ -11,13 +11,10 @@ spec:
 
     - name: vault-api
       component_type: backend
-      backend_port: 8200
       parent: c003-vault-core-p
-      capabilities:
+      instances:
         - C003-VAULT-VM-01
         - C003-VAULT-VM-02
-      cluster_capabilities:
-        - DC3-VSPHERE-PROD
       network_segment: c003-vault-core-p
       proxy_service: DC3-PRX-HA
       vip_service:
@@ -29,12 +26,9 @@ spec:
 
     - name: vault-db
       component_type: database
-      backend_port: 5432
       parent: c003-vault-core-p
-      capabilities:
+      instances:
         - C003-VAULT-DB-VM-01
-      cluster_capabilities:
-        - DC3-VSPHERE-PROD
       network_segment: c003-database-p
       vip_service:
         - c003-vault-db.dc3.internal
@@ -47,12 +41,9 @@ spec:
 
     - name: audit-dashboard
       component_type: frontend
-      backend_port: 443
       parent: c003-compliance-portal-p
-      capabilities:
+      instances:
         - C003-COMP-WEB-VM-01
-      cluster_capabilities:
-        - DC3-NUTANIX-PROD
       network_segment: c003-dmz-p
       proxy_service: DC3-PRX-HA
       vip_service:
@@ -64,12 +55,9 @@ spec:
 
     - name: policy-engine
       component_type: backend
-      backend_port: 8443
       parent: c003-compliance-portal-p
-      capabilities:
+      instances:
         - C003-COMP-APP-VM-01
-      cluster_capabilities:
-        - DC3-NUTANIX-PROD
       network_segment: c003-app-backend-p
       proxy_service: DC3-PRX-HA
       vip_service:
@@ -81,12 +69,9 @@ spec:
 
     - name: audit-db
       component_type: database
-      backend_port: 5432
       parent: c003-compliance-portal-p
-      capabilities:
+      instances:
         - C003-COMP-DB-VM-01
-      cluster_capabilities:
-        - DC3-NUTANIX-PROD
       network_segment: c003-database-p
       vip_service:
         - c003-comp-db.dc3.internal

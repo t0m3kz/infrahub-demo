@@ -2,7 +2,7 @@
 # C003 (Vaultex Inc.) — audit-service application (single-file, nested format)
 #
 # Hierarchy: AppApplication → AppComponent (children: nested inline)
-# VMs are defined separately and point back to component slugs via capabilities.
+# VMs are defined separately and point back to component slugs via instances.
 #
 # Components:
 #   event-collector   — receives audit events from all services (TCP 9200)
@@ -45,10 +45,6 @@ spec:
 
 ---
 # ── Virtual machines ──────────────────────────────────────────────────────────
-# Defined separately because capabilities is an inbound relationship
-# (the VM points to the component, not the other way around).
-# Component slug pattern: {portfolio}-{app}-{env}-{component-name}
-#   → c003-audit-service-p-event-collector, etc.
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
@@ -116,7 +112,7 @@ spec:
       description: "Audit API → event store (read-only, PostgreSQL)"
 
 ---
-# ── Wire depends_on back onto components ──────────────────────────────────────
+# ── Wire instances and depends_on back onto components ────────────────────────
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
@@ -125,7 +121,7 @@ spec:
     - name: event-collector
       component_type: backend
       parent: c003-audit-service-p
-      capabilities:
+      instances:
         - C003-AUDIT-COL-VM-01
         - C003-AUDIT-COL-VM-02
       depends_on:
@@ -134,14 +130,14 @@ spec:
     - name: event-store
       component_type: database
       parent: c003-audit-service-p
-      capabilities:
+      instances:
         - C003-AUDIT-DB-VM-01
         - C003-AUDIT-DB-VM-02
 
     - name: audit-api
       component_type: backend
       parent: c003-audit-service-p
-      capabilities:
+      instances:
         - C003-AUDIT-API-VM-01
       depends_on:
         - c003-audit-service-p-audit-api--c003-audit-service-p-event-store
