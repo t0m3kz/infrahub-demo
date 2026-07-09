@@ -21,7 +21,6 @@ spec:
       description: "DC3 F5 BIG-IP i5800 HA pair — shared multi-tenant load balancer cluster"
       member_of_groups:
         - ha_domains
-      sync_group: dc3-lb-dsc-group
       capabilities:
         - DC3-LB-01
         - DC3-LB-02
