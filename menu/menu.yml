@@ -122,6 +122,13 @@ spec:
                   icon: "mdi:link-variant"
                   kind: ManagedMLAG
                   description: "Multi-chassis link aggregation groups"
+
+                - name: HA
+                  namespace: Managed
+                  label: HA Domains
+                  icon: "mdi:heart-pulse"
+                  kind: ManagedHA
+                  description: "High availability domains (firewall, proxy, load balancer, cloud)"
           # --------- Device Catalog ---------
           - namespace: Dcim
             name: CatalogMenu
@@ -340,18 +347,6 @@ spec:
                   kind: ManagedLoadBalancer
                   icon: "mdi:scale-balance"
 
-                - namespace: Managed
-                  name: ProxyHAItem
-                  label: Proxy HA
-                  kind: ManagedProxyHA
-                  icon: "mdi:swap-horizontal-bold"
-
-                - namespace: Managed
-                  name: CloudProxyHAItem
-                  label: Cloud Proxy / SASE
-                  kind: ManagedCloudProxyHA
-                  icon: "mdi:cloud-sync"
-
     # ──────────────────────────────────────────────────────────────────────────
     # SECURITY — zones, profiles, policies
     # ──────────────────────────────────────────────────────────────────────────
@@ -384,6 +379,30 @@ spec:
             label: Security Policy Rules
             kind: SecurityPolicyRule
             icon: "mdi:file-document-edit-outline"
+
+          - namespace: Security
+            name: SecurityTagItem
+            label: Security Tags
+            kind: SecurityTag
+            icon: "mdi:tag-outline"
+
+          - namespace: Security
+            name: SecurityTagRuleItem
+            label: Security Tag Rules
+            kind: SecurityTagRule
+            icon: "mdi:tag-arrow-right-outline"
+
+          - namespace: Proxy
+            name: ProxyURLCategoryItem
+            label: URL Categories
+            kind: ProxyURLCategory
+            icon: "mdi:web"
+
+          - namespace: Proxy
+            name: ProxyPolicyItem
+            label: Proxy Policies
+            kind: ProxyPolicy
+            icon: "mdi:shield-key-outline"
 
 
     # ──────────────────────────────────────────────────────────────────────────
