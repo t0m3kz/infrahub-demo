@@ -566,7 +566,6 @@ class CloudInstance(CloudResource, DcimCapabilities):
     account: RelationshipAttribute[CoreNode]
     availability_zone: RelationshipAttribute[TopologyCloudZone]
     capabilities: RelationshipManager[CoreNode]
-    cloud_capabilities: RelationshipManager[CoreNode]
     member_of_groups: RelationshipManager[CoreNode]
     network_segment: RelationshipAttribute[CloudNetworkSegment]
     node_pool: RelationshipAttribute[CoreNode]
