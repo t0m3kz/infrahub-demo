@@ -6,8 +6,6 @@ spec:
   data:
     - name: OFC-MAD-NTP
       status: active
-      profiles:
-        - office-ntp-default
       capabilities:
         - OFC-MAD-REGIONAL-EDGE-01
         - OFC-MAD-REGIONAL-EDGE-02
@@ -45,8 +43,6 @@ spec:
   data:
     - name: OFC-MAD-Syslog
       status: active
-      profiles:
-        - office-syslog-default
       capabilities:
         - OFC-MAD-REGIONAL-EDGE-01
         - OFC-MAD-REGIONAL-EDGE-02
@@ -78,8 +74,6 @@ spec:
   data:
     - name: OFC-MAD-AAA
       status: active
-      profiles:
-        - office-aaa-default
       capabilities:
         - OFC-MAD-REGIONAL-EDGE-01
         - OFC-MAD-REGIONAL-EDGE-02

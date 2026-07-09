@@ -6,8 +6,6 @@ spec:
   data:
     - name: MEGAPORT-PAR-NTP
       status: active
-      profiles:
-        - colo-ntp-default
       capabilities:
         - MCR-PAR1-EDGE-01
       servers:
@@ -34,8 +32,6 @@ spec:
   data:
     - name: MEGAPORT-PAR-Syslog
       status: active
-      profiles:
-        - colo-syslog-default
       capabilities:
         - MCR-PAR1-EDGE-01
       servers:
@@ -56,8 +52,6 @@ spec:
   data:
     - name: MEGAPORT-PAR-AAA
       status: active
-      profiles:
-        - colo-aaa-default
       capabilities:
         - MCR-PAR1-EDGE-01
       servers:

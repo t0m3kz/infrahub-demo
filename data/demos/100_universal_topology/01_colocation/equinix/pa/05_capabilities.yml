@@ -6,8 +6,6 @@ spec:
   data:
     - name: EQUINIX-PA-NTP
       status: active
-      profiles:
-        - colo-ntp-default
       capabilities:
         - PA4-EDGE-01
         - PA4-EDGE-02
@@ -37,8 +35,6 @@ spec:
   data:
     - name: EQUINIX-PA-Syslog
       status: active
-      profiles:
-        - colo-syslog-default
       capabilities:
         - PA4-EDGE-01
         - PA4-EDGE-02
@@ -62,8 +58,6 @@ spec:
   data:
     - name: EQUINIX-PA-AAA
       status: active
-      profiles:
-        - colo-aaa-default
       capabilities:
         - PA4-EDGE-01
         - PA4-EDGE-02

@@ -6,8 +6,6 @@ spec:
   data:
     - name: EQUINIX-AM-NTP
       status: active
-      profiles:
-        - colo-ntp-default
       capabilities:
         - AM1-EDGE-01
         - AM1-EDGE-02
@@ -37,8 +35,6 @@ spec:
   data:
     - name: EQUINIX-AM-Syslog
       status: active
-      profiles:
-        - colo-syslog-default
       capabilities:
         - AM1-EDGE-01
         - AM1-EDGE-02
@@ -62,8 +58,6 @@ spec:
   data:
     - name: EQUINIX-AM-AAA
       status: active
-      profiles:
-        - colo-aaa-default
       capabilities:
         - AM1-EDGE-01
         - AM1-EDGE-02

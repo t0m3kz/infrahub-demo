@@ -6,8 +6,6 @@ spec:
   data:
     - name: EQUINIX-FR-NTP
       status: active
-      profiles:
-        - colo-ntp-default
       capabilities:
         - FR2-EDGE-01
         - FR2-EDGE-02
@@ -37,8 +35,6 @@ spec:
   data:
     - name: EQUINIX-FR-Syslog
       status: active
-      profiles:
-        - colo-syslog-default
       capabilities:
         - FR2-EDGE-01
         - FR2-EDGE-02
@@ -62,8 +58,6 @@ spec:
   data:
     - name: EQUINIX-FR-AAA
       status: active
-      profiles:
-        - colo-aaa-default
       capabilities:
         - FR2-EDGE-01
         - FR2-EDGE-02

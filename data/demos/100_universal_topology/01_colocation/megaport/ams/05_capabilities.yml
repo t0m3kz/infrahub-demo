@@ -6,8 +6,6 @@ spec:
   data:
     - name: MEGAPORT-AMS-NTP
       status: active
-      profiles:
-        - colo-ntp-default
       capabilities:
         - MCR-AMS1-EDGE-01
       servers:
@@ -34,8 +32,6 @@ spec:
   data:
     - name: MEGAPORT-AMS-Syslog
       status: active
-      profiles:
-        - colo-syslog-default
       capabilities:
         - MCR-AMS1-EDGE-01
       servers:
@@ -56,8 +52,6 @@ spec:
   data:
     - name: MEGAPORT-AMS-AAA
       status: active
-      profiles:
-        - colo-aaa-default
       capabilities:
         - MCR-AMS1-EDGE-01
       servers:

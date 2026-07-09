@@ -6,8 +6,6 @@ spec:
   data:
     - name: OFC-EDI-NTP
       status: active
-      profiles:
-        - office-ntp-default
       capabilities:
         - OFC-EDI-BRANCH-EDGE-01
         - OFC-EDI-BRANCH-ACC-01
@@ -37,8 +35,6 @@ spec:
   data:
     - name: OFC-EDI-Syslog
       status: active
-      profiles:
-        - office-syslog-default
       capabilities:
         - OFC-EDI-BRANCH-EDGE-01
         - OFC-EDI-BRANCH-ACC-01
@@ -62,8 +58,6 @@ spec:
   data:
     - name: OFC-EDI-AAA
       status: active
-      profiles:
-        - office-aaa-default
       capabilities:
         - OFC-EDI-BRANCH-EDGE-01
         - OFC-EDI-BRANCH-ACC-01
