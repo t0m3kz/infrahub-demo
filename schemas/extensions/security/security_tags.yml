@@ -18,7 +18,7 @@ nodes:
     description: "Global security tier tag — maps to VXLAN SGT / security-group ID for hardware enforcement"
     label: Security Tag
     icon: "mdi:tag-outline"
-    include_in_menu: true
+    include_in_menu: false
     menu_placement: SecurityZone
     order_by:
       - name__value
@@ -61,7 +61,7 @@ nodes:
     description: "Permitted tier-to-tier flow — coarse hardware enforcement via VXLAN GPO / SGT contract"
     label: Security Tag Rule
     icon: "mdi:tag-arrow-right-outline"
-    include_in_menu: true
+    include_in_menu: false
     menu_placement: SecurityZone
     order_by:
       - source_tag__name__value

@@ -143,6 +143,13 @@ spec:
                   kind: DcimPlatform
                   icon: "mdi:chip"
                   description: "Operating system and firmware platforms"
+
+                - namespace: Dcim
+                  name: SoftwareImage
+                  label: Software Images
+                  kind: DcimSoftwareImage
+                  icon: "mdi:package-variant"
+                  description: "Versioned OS and firmware images"
           # ── Circuits ───────────────────────────────────────────────────────
           - namespace: Topology
             name: CircuitsMenu
@@ -372,6 +379,12 @@ spec:
             kind: SecurityPolicy
             icon: "mdi:shield-check"
 
+          - namespace: Security
+            name: SecurityPolicyRuleItem
+            label: Security Policy Rules
+            kind: SecurityPolicyRule
+            icon: "mdi:file-document-edit-outline"
+
 
     # ──────────────────────────────────────────────────────────────────────────
     # APPLICATIONS — business applications and virtual clouds
@@ -379,17 +392,5 @@ spec:
     - namespace: App
       name: ApplicationsMenu
       label: Applications
+      kind: AppApplication
       icon: "mdi:application"
-      children:
-        data:
-          - namespace: App
-            name: ApplicationItem
-            label: Applications
-            kind: AppApplication
-            icon: "mdi:application-outline"
-
-          - namespace: App
-            name: ComponentItem
-            label: Components
-            kind: AppComponent
-            icon: "mdi:application-brackets"
