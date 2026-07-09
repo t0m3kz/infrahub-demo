@@ -3,16 +3,16 @@
 Triggered per AppComponent (target group: app_components).
 
 Steps:
-  1. If cluster_capabilities are set, assign the component's network_segment to
-     the uplink interfaces of every physical host in those clusters' node pools.
-     (This is the piece the segment generator can't do because segments don't
-     reference clusters — only AppComponent does via cluster_capabilities.)
-  2. If vip_service is set:
+  1. Collect physical hosts from instances:
+     - DcimVirtualDevice → hosting_device (the hypervisor)
+     - DcimPhysicalDevice → directly
+  2. If network_segment is set, assign it to uplink interfaces of those hosts.
+  3. If vip_service is set:
      a. Add the VIP to interface_capabilities on interface '1.1' of every physical
         LB device that is a member of the ManagedLoadbalancerHA cluster.
-     b. Create a LoadbalancerPoolMember per VM in component.capabilities.
-     c. Create a LoadbalancerPoolInterface per VM, linked to the PoolMember.
-     d. Assign the PoolInterface to the VM's first active interface.
+     b. Create a LoadbalancerPoolMember per DcimVirtualDevice instance.
+     c. Create a LoadbalancerPoolInterface per member, using service_ports[0].port
+        as the backend port when available.
 
 Idempotency: existing PoolMember names are detected and re-registered with
 the Infrahub tracker so they are not deleted on re-runs.
@@ -29,7 +29,7 @@ from ..protocols import DcimPhysicalInterface, DcimVirtualInterface
 
 
 class AppComponentGenerator(CommonGenerator):
-    """Wire one AppComponent to its network segment (via cluster hosts) and LB backend pool.
+    """Wire one AppComponent to its network segment (via instance hosts) and LB backend pool.
 
     Triggered per AppComponent node — query: app_component_data.
     """
@@ -46,32 +46,25 @@ class AppComponentGenerator(CommonGenerator):
 
         self.logger.info("Processing AppComponent: %s", comp_slug)
 
+        instances: list[dict[str, Any]] = comp.get("instances") or []
+
         # ── 1. Assign segment to physical host uplinks ────────────────────
-        # Two sources of physical hosts:
-        #   a) cluster_capabilities → VirtCluster → node_pools → physical_hosts
-        #   b) capabilities (explicit VMs) → hosting_device (the hypervisor)
         network_segment = comp.get("network_segment") or {}
         segment_id: str = network_segment.get("id", "")
         segment_name: str = network_segment.get("name", "")
-        cluster_capabilities = comp.get("cluster_capabilities") or []
-        capabilities = comp.get("capabilities") or []
-
-        # Collect host IDs from both sources
-        host_ids: set[str] = set()
-
-        for cluster in cluster_capabilities:
-            for pool in cluster.get("node_pools") or []:
-                for host in pool.get("physical_hosts") or []:
-                    if host.get("id"):
-                        host_ids.add(host["id"])
-
-        for vm_stub in capabilities:
-            hosting = vm_stub.get("hosting_device") or {}
-            if hosting.get("id"):
-                host_ids.add(hosting["id"])
-
         segment_typename: str = network_segment.get("typename", "")
         is_cloud_segment = segment_typename == "CloudNetworkSegment"
+
+        host_ids: set[str] = set()
+        for inst in instances:
+            typename = inst.get("typename", "")
+            if typename == "DcimVirtualDevice":
+                hosting = inst.get("hosting_device") or {}
+                if hosting.get("id"):
+                    host_ids.add(hosting["id"])
+            elif typename == "DcimPhysicalDevice":
+                if inst.get("id"):
+                    host_ids.add(inst["id"])
 
         if segment_id and host_ids and not is_cloud_segment:
             await self._assign_segment_to_hosts(
@@ -87,7 +80,7 @@ class AppComponentGenerator(CommonGenerator):
             )
         elif host_ids and not segment_id:
             self.logger.warning(
-                "  %s has cluster/VM capabilities but no network_segment — skipping host uplink assignment",
+                "  %s has instances but no network_segment — skipping host uplink assignment",
                 comp_slug,
             )
 
@@ -119,8 +112,11 @@ class AppComponentGenerator(CommonGenerator):
 
         await self._assign_vip_to_lb(vip_obj, vip_id, vip_hostname)
 
-        backend_port: int | None = comp.get("backend_port")
-        for vm_stub in comp.get("capabilities") or []:
+        service_ports: list[dict[str, Any]] = comp.get("service_ports") or []
+        backend_port: int | None = service_ports[0].get("port") if service_ports else None
+
+        vm_instances = [i for i in instances if i.get("typename") == "DcimVirtualDevice"]
+        for vm_stub in vm_instances:
             vm_id: str = vm_stub.get("id", "")
             vm_name: str = vm_stub.get("name", vm_id)
             if not vm_id:
@@ -143,15 +139,7 @@ class AppComponentGenerator(CommonGenerator):
         segment_kind: str,
         host_ids: set[str],
     ) -> None:
-        """Assign network_segment to the uplink interfaces of the given physical hosts.
-
-        Called with hosts collected from two sources:
-          - cluster_capabilities → node_pools → physical_hosts
-          - capabilities (VMs) → hosting_device
-
-        segment_kind is the concrete __typename (ManagedVxlanSegment or ManagedVlanSegment)
-        so the SDK can fetch the right node type for interface_capabilities assignment.
-        """
+        """Assign network_segment to the uplink interfaces of the given physical hosts."""
         self.logger.info(
             "  Segment '%s' (%s) — assigning to uplink interfaces on %d host(s)",
             segment_name,
