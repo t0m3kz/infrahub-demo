@@ -525,6 +525,7 @@ nodes:
       - CoreArtifactTarget
       - DcimDevice
       - DcimCapabilities
+      - AppInstance
     attributes:
       - name: position
         label: Position (U)
@@ -564,6 +565,7 @@ nodes:
       - CoreArtifactTarget
       - DcimDevice
       - DcimCapabilities
+      - AppInstance
     attributes:
       - name: cpu
         label: CPU Number
