@@ -535,6 +535,7 @@ nodes:
     inherit_from:
       - CloudResource
       - DcimCapabilities
+      - AppInstance
     human_friendly_id:
       - name__value
     order_by:
