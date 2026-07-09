@@ -152,7 +152,7 @@ spec:
 
 ---
 # DC2 LAG interfaces — peer-link port-channels (L1 ↔ L2 within each MLAG pair)
-# Ethernet1/33+34 reserved for MLAG peer-link on all leaf switches
+# Ethernet1/35+36 reserved for MLAG peer-link on all leaf switches
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
@@ -171,11 +171,11 @@ spec:
         - kind: DcimPhysicalInterface
           data:
             device: DC2-POD1-L1
-            name: Ethernet1/33
+            name: Ethernet1/35
         - kind: DcimPhysicalInterface
           data:
             device: DC2-POD1-L1
-            name: Ethernet1/34
+            name: Ethernet1/36
 
     - name: Port-Channel100
       device: DC2-POD1-L2
@@ -190,11 +190,11 @@ spec:
         - kind: DcimPhysicalInterface
           data:
             device: DC2-POD1-L2
-            name: Ethernet1/33
+            name: Ethernet1/35
         - kind: DcimPhysicalInterface
           data:
             device: DC2-POD1-L2
-            name: Ethernet1/34
+            name: Ethernet1/36
 
     - name: Port-Channel100
       device: DC2-POD2-L1
@@ -209,11 +209,11 @@ spec:
         - kind: DcimPhysicalInterface
           data:
             device: DC2-POD2-L1
-            name: Ethernet1/33
+            name: Ethernet1/35
         - kind: DcimPhysicalInterface
           data:
             device: DC2-POD2-L1
-            name: Ethernet1/34
+            name: Ethernet1/36
 
     - name: Port-Channel100
       device: DC2-POD2-L2
@@ -228,70 +228,11 @@ spec:
         - kind: DcimPhysicalInterface
           data:
             device: DC2-POD2-L2
-            name: Ethernet1/33
+            name: Ethernet1/35
         - kind: DcimPhysicalInterface
           data:
             device: DC2-POD2-L2
-            name: Ethernet1/34
-
----
-# DC2 peer-link cables (physical links between MLAG leaf pairs)
-apiVersion: infrahub.app/v1
-kind: Object
-spec:
-  kind: DcimCable
-  data:
-    - name: CBL-DC2-POD1-L1-L2-PL1
-      type: smf
-      deployment: DC2
-      endpoints:
-        - kind: DcimPhysicalInterface
-          data:
-            device: DC2-POD1-L1
-            name: Ethernet1/33
-        - kind: DcimPhysicalInterface
-          data:
-            device: DC2-POD1-L2
-            name: Ethernet1/33
-
-    - name: CBL-DC2-POD1-L1-L2-PL2
-      type: smf
-      deployment: DC2
-      endpoints:
-        - kind: DcimPhysicalInterface
-          data:
-            device: DC2-POD1-L1
-            name: Ethernet1/34
-        - kind: DcimPhysicalInterface
-          data:
-            device: DC2-POD1-L2
-            name: Ethernet1/34
-
-    - name: CBL-DC2-POD2-L1-L2-PL1
-      type: smf
-      deployment: DC2
-      endpoints:
-        - kind: DcimPhysicalInterface
-          data:
-            device: DC2-POD2-L1
-            name: Ethernet1/33
-        - kind: DcimPhysicalInterface
-          data:
-            device: DC2-POD2-L2
-            name: Ethernet1/33
-
-    - name: CBL-DC2-POD2-L1-L2-PL2
-      type: smf
-      deployment: DC2
-      endpoints:
-        - kind: DcimPhysicalInterface
-          data:
-            device: DC2-POD2-L1
-            name: Ethernet1/34
-        - kind: DcimPhysicalInterface
-          data:
-            device: DC2-POD2-L2
-            name: Ethernet1/34
+            name: Ethernet1/36
 
 ---
 # DC2 LAG interfaces — server side (bond0 toward MLAG leaf pair)
