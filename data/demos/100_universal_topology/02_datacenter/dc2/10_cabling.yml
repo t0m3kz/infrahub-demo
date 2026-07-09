@@ -592,3 +592,64 @@ spec:
             device: DC2-POD2-SP2
             name: Ethernet1/6
             description: "DC2-BL2 (BL uplink)"
+
+    # ── MLAG peer-link cables ─────────────────────────────────────────────────
+    - name: CBL-DC2-POD1-L1-L2-PL1
+      type: smf
+      deployment: DC2
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC2-POD1-L1
+            name: Ethernet1/35
+            description: "DC2-PODx-Lx (peer-link)"
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC2-POD1-L2
+            name: Ethernet1/35
+            description: "DC2-POD1-L1 (peer-link)"
+
+    - name: CBL-DC2-POD1-L1-L2-PL2
+      type: smf
+      deployment: DC2
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC2-POD1-L1
+            name: Ethernet1/36
+            description: "DC2-PODx-Lx (peer-link)"
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC2-POD1-L2
+            name: Ethernet1/36
+            description: "DC2-POD1-L1 (peer-link)"
+
+    - name: CBL-DC2-POD2-L1-L2-PL1
+      type: smf
+      deployment: DC2
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC2-POD2-L1
+            name: Ethernet1/35
+            description: "DC2-POD2-L2 (peer-link)"
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC2-POD2-L2
+            name: Ethernet1/35
+            description: "DC2-POD2-L1 (peer-link)"
+
+    - name: CBL-DC2-POD2-L1-L2-PL2
+      type: smf
+      deployment: DC2
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC2-POD2-L1
+            name: Ethernet1/36
+            description: "DC2-POD2-L2 (peer-link)"
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC2-POD2-L2
+            name: Ethernet1/36
+            description: "DC2-POD2-L1 (peer-link)"

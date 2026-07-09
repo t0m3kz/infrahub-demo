@@ -1668,3 +1668,64 @@ spec:
             device: DC3-POD4-L2
             name: xe4
             description: "DC3-POD4-NTX-04"
+
+    # ── MLAG peer-link cables ─────────────────────────────────────────────────
+    - name: CBL-DC3-POD1-L1-L2-PL1
+      type: smf
+      deployment: DC3
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD1-L1
+            name: xe53
+            description: "DC3-POD1-L2 (peer-link)"
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD1-L2
+            name: xe53
+            description: "DC3-POD1-L1 (peer-link)"
+
+    - name: CBL-DC3-POD1-L1-L2-PL2
+      type: smf
+      deployment: DC3
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD1-L1
+            name: xe54
+            description: "DC3-POD1-L2 (peer-link)"
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD1-L2
+            name: xe54
+            description: "DC3-POD1-L1 (peer-link)"
+
+    - name: CBL-DC3-POD2-L1-L2-PL1
+      type: smf
+      deployment: DC3
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD2-L1
+            name: xe53
+            description: "DC3-POD2-L2 (peer-link)"
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD2-L2
+            name: xe53
+            description: "DC3-POD2-L1 (peer-link)"
+
+    - name: CBL-DC3-POD2-L1-L2-PL2
+      type: smf
+      deployment: DC3
+      endpoints:
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD2-L1
+            name: xe54
+            description: "DC3-POD2-L2 (peer-link)"
+        - kind: DcimPhysicalInterface
+          data:
+            device: DC3-POD2-L2
+            name: xe54
+            description: "DC3-POD2-L1 (peer-link)"
