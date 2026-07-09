@@ -79,20 +79,6 @@ generics:
         direction: inbound
         identifier: cluster_capabilities
 
-  - name: GenericCloud
-    namespace: Managed
-    description: "Capabilities attached to cloud instances"
-    label: "Cloud-based Resource"
-    include_in_menu: false
-    relationships:
-      - name: cloud_capabilities
-        peer: CloudInstance
-        cardinality: many
-        kind: Generic
-        optional: true
-        direction: inbound
-        identifier: cloud_capabilities
-
   # Use this generic ONLY for segments (VLAN, VXLAN, VRF, etc.)
   - name: GenericInterfaces
     namespace: Managed
@@ -142,14 +128,3 @@ extensions:
           kind: Generic
           on_delete: no-action
           identifier: cluster_capabilities
-    - kind: CloudInstance
-      relationships:
-        - name: cloud_capabilities
-          peer: ManagedGenericCloud
-          label: Cloud capabilities
-          optional: true
-          cardinality: many
-          direction: outbound
-          kind: Generic
-          on_delete: no-action
-          identifier: cloud_capabilities
