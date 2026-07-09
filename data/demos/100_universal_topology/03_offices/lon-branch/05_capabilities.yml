@@ -6,8 +6,6 @@ spec:
   data:
     - name: OFC-LON-NTP
       status: active
-      profiles:
-        - office-ntp-default
       capabilities:
         - OFC-LON-BRANCH-EDGE-01
         - OFC-LON-BRANCH-ACC-01
@@ -37,8 +35,6 @@ spec:
   data:
     - name: OFC-LON-Syslog
       status: active
-      profiles:
-        - office-syslog-default
       capabilities:
         - OFC-LON-BRANCH-EDGE-01
         - OFC-LON-BRANCH-ACC-01
@@ -62,8 +58,6 @@ spec:
   data:
     - name: OFC-LON-AAA
       status: active
-      profiles:
-        - office-aaa-default
       capabilities:
         - OFC-LON-BRANCH-EDGE-01
         - OFC-LON-BRANCH-ACC-01

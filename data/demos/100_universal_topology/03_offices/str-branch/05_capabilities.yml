@@ -6,8 +6,6 @@ spec:
   data:
     - name: OFC-STR-NTP
       status: active
-      profiles:
-        - office-ntp-default
       capabilities:
         - OFC-STR-BRANCH-EDGE-01
         - OFC-STR-BRANCH-ACC-01
@@ -39,8 +37,6 @@ spec:
   data:
     - name: OFC-STR-Syslog
       status: active
-      profiles:
-        - office-syslog-default
       capabilities:
         - OFC-STR-BRANCH-EDGE-01
         - OFC-STR-BRANCH-ACC-01
@@ -66,8 +62,6 @@ spec:
   data:
     - name: OFC-STR-AAA
       status: active
-      profiles:
-        - office-aaa-default
       capabilities:
         - OFC-STR-BRANCH-EDGE-01
         - OFC-STR-BRANCH-ACC-01

@@ -1,6 +1,5 @@
 ---
 # DC1 shared management capabilities — NTP, Syslog, AAA
-# Scalar defaults come from the shared profiles in 00_profiles.yml.
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
@@ -8,8 +7,6 @@ spec:
   data:
     - name: DC1-NTP
       status: active
-      profiles:
-        - dc-ntp-default
       capabilities:
         - DC1-BL1
         - DC1-BL2
@@ -49,8 +46,6 @@ spec:
   data:
     - name: DC1-Syslog
       status: active
-      profiles:
-        - dc-syslog-default
       capabilities:
         - DC1-BL1
         - DC1-BL2
@@ -84,8 +79,6 @@ spec:
   data:
     - name: DC1-AAA
       status: active
-      profiles:
-        - dc-aaa-default
       capabilities:
         - DC1-BL1
         - DC1-BL2

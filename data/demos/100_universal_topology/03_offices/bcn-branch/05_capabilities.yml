@@ -6,8 +6,6 @@ spec:
   data:
     - name: OFC-BCN-NTP
       status: active
-      profiles:
-        - office-ntp-default
       capabilities:
         - OFC-BCN-BRANCH-EDGE-01
         - OFC-BCN-BRANCH-ACC-01
@@ -39,8 +37,6 @@ spec:
   data:
     - name: OFC-BCN-Syslog
       status: active
-      profiles:
-        - office-syslog-default
       capabilities:
         - OFC-BCN-BRANCH-EDGE-01
         - OFC-BCN-BRANCH-ACC-01
@@ -66,8 +62,6 @@ spec:
   data:
     - name: OFC-BCN-AAA
       status: active
-      profiles:
-        - office-aaa-default
       capabilities:
         - OFC-BCN-BRANCH-EDGE-01
         - OFC-BCN-BRANCH-ACC-01
