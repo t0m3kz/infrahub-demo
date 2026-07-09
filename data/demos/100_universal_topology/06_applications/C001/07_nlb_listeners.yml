@@ -47,7 +47,7 @@ spec:
 
 ---
 # NLB target groups modelled as AppComponents under the nlb-app application.
-# Each component declares its VIP, LB config, health check, and compute members.
+# Each component declares its VIP, LB config, and compute members.
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
@@ -61,8 +61,6 @@ spec:
         - cnrd-nlb-app.example.com
         - tcp
         - "443"
-      cluster_capabilities:
-        - C001-EKS-EU-CENTRAL-1
 
     - name: tcp-80-targets
       component_type: backend
@@ -72,5 +70,3 @@ spec:
         - cnrd-nlb-app.example.com
         - tcp
         - "80"
-      cluster_capabilities:
-        - C001-EKS-EU-CENTRAL-1

@@ -11,13 +11,10 @@ spec:
 
     - name: web-frontend
       component_type: frontend
-      backend_port: 443
       parent: c002-shipment-tracker-p
-      capabilities:
+      instances:
         - C002-WEB-VM-01
         - C002-WEB-VM-02
-      cluster_capabilities:
-        - DC3-VSPHERE-PROD
       network_segment: c002-web-frontend-p
       proxy_service: DC3-PRX-HA
       vip_service:
@@ -29,13 +26,10 @@ spec:
 
     - name: tracking-api
       component_type: backend
-      backend_port: 8443
       parent: c002-shipment-tracker-p
-      capabilities:
+      instances:
         - C002-APP-VM-01
         - C002-APP-VM-02
-      cluster_capabilities:
-        - DC3-VSPHERE-PROD
       network_segment: c002-app-backend-p
       proxy_service: DC3-PRX-HA
       vip_service:
@@ -47,12 +41,9 @@ spec:
 
     - name: shipment-db
       component_type: database
-      backend_port: 5432
       parent: c002-shipment-tracker-p
-      capabilities:
+      instances:
         - C002-DB-VM-01
-      cluster_capabilities:
-        - DC3-VSPHERE-PROD
       network_segment: c002-database-p
       vip_service:
         - c002-ship-db.dc3.internal
@@ -65,12 +56,9 @@ spec:
 
     - name: web-frontend
       component_type: frontend
-      backend_port: 443
       parent: c002-shipment-tracker-n
-      capabilities:
+      instances:
         - C002-WEB-NP-VM-01
-      cluster_capabilities:
-        - DC3-K8S-PROD
       network_segment: c002-web-frontend-n
       proxy_service: DC3-PRX-HA
       vip_service:
@@ -82,12 +70,9 @@ spec:
 
     - name: tracking-api
       component_type: backend
-      backend_port: 8443
       parent: c002-shipment-tracker-n
-      capabilities:
+      instances:
         - C002-APP-NP-VM-01
-      cluster_capabilities:
-        - DC3-K8S-PROD
       network_segment: c002-app-backend-n
       proxy_service: DC3-PRX-HA
       vip_service:
@@ -101,12 +86,9 @@ spec:
 
     - name: dispatch-portal
       component_type: frontend
-      backend_port: 443
       parent: c002-fleet-manager-p
-      capabilities:
+      instances:
         - C002-FLEET-WEB-VM-01
-      cluster_capabilities:
-        - DC3-NUTANIX-PROD
       network_segment: c002-web-frontend-p
       proxy_service: DC3-PRX-HA
       vip_service:
@@ -118,12 +100,9 @@ spec:
 
     - name: telematics-api
       component_type: backend
-      backend_port: 8443
       parent: c002-fleet-manager-p
-      capabilities:
+      instances:
         - C002-FLEET-APP-VM-01
-      cluster_capabilities:
-        - DC3-NUTANIX-PROD
       network_segment: c002-app-backend-p
       proxy_service: DC3-PRX-HA
       vip_service:
@@ -135,12 +114,9 @@ spec:
 
     - name: fleet-db
       component_type: database
-      backend_port: 5432
       parent: c002-fleet-manager-p
-      capabilities:
+      instances:
         - C002-FLEET-DB-VM-01
-      cluster_capabilities:
-        - DC3-NUTANIX-PROD
       network_segment: c002-database-p
       vip_service:
         - c002-fleet-db.dc3.internal
