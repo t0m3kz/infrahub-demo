@@ -916,13 +916,31 @@ class RackGenerator(CommonGenerator):
                 ),
             )
 
-            # Uplink interfaces from the border-leaf template (role="uplink")
-            bl_uplink_interfaces = [iface.name for iface in bl_role.template.interfaces if iface.role == "uplink"]
-            if not bl_uplink_interfaces:
+            # Uplink interfaces from the border-leaf template (role="uplink"), sorted by name.
+            # Layout: [0 .. max_super_spines-1] reserved for DCI/super-spine connections,
+            #         [max_super_spines .. max_super_spines + amount_of_spines - 1] → pod spines.
+            all_bl_uplinks = sorted([iface.name for iface in bl_role.template.interfaces if iface.role == "uplink"])
+            if not all_bl_uplinks:
                 self.logger.warning(
                     f"Rack {self.data.name}: border-leaf template has no uplink interfaces — skipping fabric cabling"
                 )
                 continue
+
+            max_super_spines = dc.amount_of_super_spines
+            spine_count = pod.amount_of_spines
+            bl_uplink_interfaces = all_bl_uplinks[max_super_spines : max_super_spines + spine_count]
+            if not bl_uplink_interfaces:
+                self.logger.warning(
+                    f"Rack {self.data.name}: not enough border-leaf uplinks for pod spines "
+                    f"(uplinks={len(all_bl_uplinks)}, reserved_dci={max_super_spines}, "
+                    f"needed={spine_count}) — skipping fabric cabling"
+                )
+                continue
+
+            self.logger.info(
+                f"Rack {self.data.name}: border-leaf fabric uplinks {bl_uplink_interfaces} "
+                f"(DCI reserved: {all_bl_uplinks[:max_super_spines]})"
+            )
 
             # Border-leafs connect to pod spines after regular leafs.
             # Offset accounts for all regular leaf downlinks already wired in this row.
