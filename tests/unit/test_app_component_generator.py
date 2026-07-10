@@ -96,30 +96,32 @@ def _comp_response(
     comp_id: str = "comp-1",
     slug: str = "c001-trade-portal-p-web-frontend",
     name: str = "web-frontend",
-    backend_port: int | None = 443,
+    service_ports: list | None = None,
     segment_id: str = "seg-1",
     segment_name: str = "c001-web-frontend-p",
     segment_typename: str = "ManagedVxlanSegment",
     vip_id: str | None = "vip-1",
-    capabilities: list | None = None,
-    cluster_capabilities: list | None = None,
+    instances: list | None = None,
 ) -> dict:
-    """Build cleaned AppComponent data (no edges/node wrapping — already clean_data'd)."""
+    """Build cleaned AppComponent data (no edges/node wrapping — already clean_data'd).
+
+    instances entries should include 'typename' set to 'DcimVirtualDevice' or
+    'DcimPhysicalDevice' to exercise the generator's host_ids collection logic.
+    """
     return {
         "AppComponent": [
             {
                 "id": comp_id,
                 "name": name,
                 "slug": slug,
-                "backend_port": backend_port,
+                "service_ports": service_ports or [{"port": 443, "protocol": "tcp"}],
                 "network_segment": {
                     "id": segment_id,
                     "name": segment_name,
                     "typename": segment_typename,
                 },
                 "vip_service": {"id": vip_id, "typename": "LoadbalancerVIP"} if vip_id else {},
-                "capabilities": capabilities or [],
-                "cluster_capabilities": cluster_capabilities or [],
+                "instances": instances or [],
             }
         ]
     }
@@ -167,14 +169,14 @@ class TestAppComponentGeneratorGenerate:
         data = _comp_response(
             segment_typename="CloudNetworkSegment",
             vip_id=None,
-            cluster_capabilities=[{"node_pools": [{"physical_hosts": [{"id": "host-1"}]}]}],
+            instances=[{"id": "host-1", "typename": "DcimPhysicalDevice"}],
         )
         asyncio.run(gen.generate(data))
 
         gen._assign_segment_to_hosts.assert_not_called()
 
-    def test_host_ids_from_cluster_capabilities(self):
-        """Cluster with node_pool with physical_host → _assign_segment_to_hosts called with that host id."""
+    def test_host_ids_from_physical_device_instance(self):
+        """PhysicalDevice instance → _assign_segment_to_hosts called with that device id."""
         gen = _make_gen()
         gen._assign_segment_to_hosts = AsyncMock()
         gen._assign_vip_to_lb = AsyncMock()
@@ -182,21 +184,16 @@ class TestAppComponentGeneratorGenerate:
 
         data = _comp_response(
             vip_id=None,
-            cluster_capabilities=[{"node_pools": [{"physical_hosts": [{"id": "host-cluster-1"}]}]}],
+            instances=[{"id": "host-physical-1", "name": "server-01", "typename": "DcimPhysicalDevice"}],
         )
         asyncio.run(gen.generate(data))
 
         gen._assign_segment_to_hosts.assert_awaited_once()
         call_kwargs = gen._assign_segment_to_hosts.call_args.kwargs
-        assert "host-cluster-1" in call_kwargs["host_ids"]
+        assert "host-physical-1" in call_kwargs["host_ids"]
 
     def test_host_ids_from_vm_hosting_device(self):
-        """VM capability with hosting_device → _assign_segment_to_hosts called with that host id.
-
-        Note: hosting_device must have more than just 'id' in the test data, because clean_data
-        reduces a single-key {'id': X} dict to just the string X, causing a crash in the
-        generator at `hosting.get('id')`. Using {'id': ..., 'name': ...} preserves the dict.
-        """
+        """VirtualDevice instance with hosting_device → _assign_segment_to_hosts called with hypervisor id."""
         gen = _make_gen()
         gen._assign_segment_to_hosts = AsyncMock()
         gen._assign_vip_to_lb = AsyncMock()
@@ -204,8 +201,13 @@ class TestAppComponentGeneratorGenerate:
 
         data = _comp_response(
             vip_id=None,
-            capabilities=[
-                {"id": "vm-1", "name": "vm-01", "hosting_device": {"id": "host-vm-1", "name": "hypervisor-01"}}
+            instances=[
+                {
+                    "id": "vm-1",
+                    "name": "vm-01",
+                    "typename": "DcimVirtualDevice",
+                    "hosting_device": {"id": "host-vm-1", "name": "hypervisor-01"},
+                }
             ],
         )
         asyncio.run(gen.generate(data))
@@ -215,10 +217,7 @@ class TestAppComponentGeneratorGenerate:
         assert "host-vm-1" in call_kwargs["host_ids"]
 
     def test_both_host_sources_merged(self):
-        """Both cluster hosts and VM hosting devices → combined set passed to _assign_segment_to_hosts.
-
-        Note: hosting_device must have more than just 'id' — see test_host_ids_from_vm_hosting_device.
-        """
+        """Physical device + VM instances → combined set passed to _assign_segment_to_hosts."""
         gen = _make_gen()
         gen._assign_segment_to_hosts = AsyncMock()
         gen._assign_vip_to_lb = AsyncMock()
@@ -226,16 +225,21 @@ class TestAppComponentGeneratorGenerate:
 
         data = _comp_response(
             vip_id=None,
-            cluster_capabilities=[{"node_pools": [{"physical_hosts": [{"id": "host-cluster-1"}]}]}],
-            capabilities=[
-                {"id": "vm-1", "name": "vm-01", "hosting_device": {"id": "host-vm-1", "name": "hypervisor-01"}}
+            instances=[
+                {"id": "host-physical-1", "name": "server-01", "typename": "DcimPhysicalDevice"},
+                {
+                    "id": "vm-1",
+                    "name": "vm-01",
+                    "typename": "DcimVirtualDevice",
+                    "hosting_device": {"id": "host-vm-1", "name": "hypervisor-01"},
+                },
             ],
         )
         asyncio.run(gen.generate(data))
 
         gen._assign_segment_to_hosts.assert_awaited_once()
         call_kwargs = gen._assign_segment_to_hosts.call_args.kwargs
-        assert "host-cluster-1" in call_kwargs["host_ids"]
+        assert "host-physical-1" in call_kwargs["host_ids"]
         assert "host-vm-1" in call_kwargs["host_ids"]
 
     def test_segment_kind_passed_correctly(self):
@@ -248,7 +252,7 @@ class TestAppComponentGeneratorGenerate:
         data = _comp_response(
             segment_typename="ManagedVlanSegment",
             vip_id=None,
-            cluster_capabilities=[{"node_pools": [{"physical_hosts": [{"id": "host-1"}]}]}],
+            instances=[{"id": "host-1", "name": "server-01", "typename": "DcimPhysicalDevice"}],
         )
         asyncio.run(gen.generate(data))
 
@@ -265,7 +269,7 @@ class TestAppComponentGeneratorGenerate:
         gen.client.get = AsyncMock(side_effect=Exception("not found"))
 
         data = _comp_response(
-            capabilities=[{"id": "vm-1", "name": "vm-01"}],
+            instances=[{"id": "vm-1", "name": "vm-01", "typename": "DcimVirtualDevice"}],
         )
         asyncio.run(gen.generate(data))
 
@@ -273,8 +277,8 @@ class TestAppComponentGeneratorGenerate:
         assert "vip" in warning_msgs.lower() or "VIP" in warning_msgs
         gen._wire_pool_member.assert_not_called()
 
-    def test_pool_members_created_for_each_capability(self):
-        """2 VMs in capabilities → _wire_pool_member called twice."""
+    def test_pool_members_created_for_each_vm_instance(self):
+        """2 VM instances → _wire_pool_member called twice."""
         gen = _make_gen()
         gen._assign_segment_to_hosts = AsyncMock()
         gen._assign_vip_to_lb = AsyncMock()
@@ -284,9 +288,9 @@ class TestAppComponentGeneratorGenerate:
         gen.client.get = AsyncMock(return_value=vip)
 
         data = _comp_response(
-            capabilities=[
-                {"id": "vm-1", "name": "vm-01"},
-                {"id": "vm-2", "name": "vm-02"},
+            instances=[
+                {"id": "vm-1", "name": "vm-01", "typename": "DcimVirtualDevice"},
+                {"id": "vm-2", "name": "vm-02", "typename": "DcimVirtualDevice"},
             ],
         )
         asyncio.run(gen.generate(data))

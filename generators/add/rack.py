@@ -288,6 +288,7 @@ class RackGenerator(CommonGenerator):
         device_count: int,
         device_type: str = "leaf",
         racks_in_previous_rows: int | None = None,
+        leafs_per_rack: int = 0,
     ) -> int:
         """Calculate cabling offset using simple formula based on rack position."""
 
@@ -316,13 +317,15 @@ class RackGenerator(CommonGenerator):
                 f"(mode=middle_rack) - intra-rack cabling"
             )
 
-        # For mixed deployment ToRs: static offset based on rack index
-        # Formula: (rack_index - 1) × tors_per_rack
+        # For mixed deployment ToRs: static offset based on row + rack index
+        # Formula: (row_index - 1) × tors_per_row + (rack_index - 1) × tors_per_rack
         elif deployment_type == "mixed" and device_type == "tor":
-            offset = (current_index - 1) * device_count
+            tors_per_row = max_tors_per_row if pod.design else device_count
+            offset = (self.data.row_index - 1) * tors_per_row + (current_index - 1) * device_count
             self.logger.info(
                 f"Calculated {device_type} offset={offset} for rack {self.data.name} "
-                f"(index={current_index}, tors_per_rack={device_count}, mode=mixed)"
+                f"(row_index={self.data.row_index}, index={current_index}, tors_per_rack={device_count}, "
+                f"tors_per_row={tors_per_row}, mode=mixed)"
             )
 
         # For mixed/middle_rack deployment leafs: calculate offset based on row position
@@ -333,6 +336,33 @@ class RackGenerator(CommonGenerator):
             self.logger.info(
                 f"Calculated {device_type} offset={offset} for rack {self.data.name} "
                 f"(row_index={self.data.row_index}, leafs_per_rack={device_count}, mode={deployment_type})"
+            )
+
+        # Border-leafs connect to pod spines after all regular leafs across all rows.
+        # Formula: total_rows × leafs_per_rack + (row_index - 1) × border_leaf_count
+        elif deployment_type in ("mixed", "middle_rack") and device_type == "border_leaf":
+            total_rows = pod.design.rows if pod.design else 1
+            base_bl_offset = total_rows * leafs_per_rack
+            offset = base_bl_offset + (self.data.row_index - 1) * device_count
+
+            self.logger.info(
+                f"Calculated {device_type} offset={offset} for rack {self.data.name} "
+                f"(row_index={self.data.row_index}, total_rows={total_rows}, "
+                f"leafs_per_rack={leafs_per_rack}, base_bl_offset={base_bl_offset}, mode={deployment_type})"
+            )
+
+        # For tor deployment border-leafs: offset past all ToRs, then row-based position.
+        # Formula: total_rows × tors_per_row + (row_index - 1) × border_leaf_count
+        elif deployment_type == "tor" and device_type == "border_leaf":
+            total_rows = pod.design.rows if pod.design else 1
+            tors_per_row = max_tors_per_row if pod.design else 0
+            base_bl_offset = total_rows * tors_per_row
+            offset = base_bl_offset + (self.data.row_index - 1) * device_count
+
+            self.logger.info(
+                f"Calculated {device_type} offset={offset} for rack {self.data.name} "
+                f"(row_index={self.data.row_index}, total_rows={total_rows}, "
+                f"tors_per_row={tors_per_row}, base_bl_offset={base_bl_offset}, mode={deployment_type})"
             )
 
         # For tor deployment ToRs: calculate cumulative offset across pod
@@ -893,11 +923,16 @@ class RackGenerator(CommonGenerator):
                 )
                 continue
 
-            # Border-leafs connect to pod spines, like regular leafs.
-            # Use the next free spine downlink slots after leafs in this rack.
+            # Border-leafs connect to pod spines after regular leafs.
+            # Offset accounts for all regular leaf downlinks already wired in this row.
             top_devices = spine_device_names
             top_interfaces = spine_interfaces
-            cabling_offset = self.calculate_cabling_offsets(device_count=bl_role.quantity, device_type="leaf")
+            leafs_per_rack = sum(r.quantity or 0 for r in self.data.leafs or [])
+            cabling_offset = self.calculate_cabling_offsets(
+                device_count=bl_role.quantity,
+                device_type="border_leaf",
+                leafs_per_rack=leafs_per_rack,
+            )
 
             await self._cable_and_route(
                 bottom_devices=bl_devices,
@@ -908,32 +943,6 @@ class RackGenerator(CommonGenerator):
                 offset=cabling_offset,
                 bottom_sorting=pod.leaf_interface_sorting_method,
                 top_sorting=pod.spine_interface_sorting_method,
-            )
-
-        # Process border-leaf devices: create with loopback + management only.
-        # Cabling to the fabric happens via the endpoint generator (which detects
-        # role=border-leaf and cables to the appropriate uplink/DCI interfaces).
-        for bl_role in self.data.border_leafs or []:
-            bl_indexes: list[int] = [
-                dc.index,
-                suite.index,
-                self.data.row_index,
-                self.data.index,
-            ]
-            await self.create_devices(
-                deployment_id=dc.id,
-                device_role="border-leaf",
-                amount=bl_role.quantity,
-                template=bl_role.template.model_dump(),
-                naming_convention=naming_conv,
-                options=DeviceOptions(
-                    indexes=bl_indexes,
-                    allocate_loopback=True,
-                    rack=self.data.id,
-                    loopback_pool=loopback_pool_id,
-                    loopback_prefix_length=128 if is_ipv6 else 32,
-                    management_pool=management_pool_id,
-                ),
             )
 
         # Generation completion summary

@@ -232,7 +232,7 @@ class PodTopologyGenerator(CommonGenerator):
             )
             skip_cabling = True
 
-        is_back_to_back = dc_design is not None and dc_design.inter_pod_connectivity == "back-to-back"
+        is_back_to_back = dc_design is not None and getattr(dc_design, "max_super_spines_per_fabric", 0) == 0
 
         if not skip_cabling:
             dc_max_spines = dc_design.max_spines_per_pod if dc_design else spine_count

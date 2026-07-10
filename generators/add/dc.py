@@ -102,7 +102,11 @@ class DCTopologyGenerator(CommonGenerator):
             "loopback": loopback_prefix,
             "management": management_prefix,
         }
-        design_mode = self.data.design.inter_pod_connectivity if self.data.design else "super-spine"
+        design_mode = (
+            "back-to-back"
+            if (self.data.design and getattr(self.data.design, "max_super_spines_per_fabric", 0) == 0)
+            else "super-spine"
+        )
         if amount_of_super_spines > 0 and super_spine_template and design_mode != "back-to-back":
             super_spine_loopback_prefix = calculate_super_spine_loopback_prefix(
                 max_super_spines=amount_of_super_spines,
@@ -211,7 +215,7 @@ class DCTopologyGenerator(CommonGenerator):
         super_spine_names: list[str] = []
         if design_mode == "back-to-back":
             self.logger.info(
-                f"DC {self.fabric_name}: inter_pod_connectivity=back-to-back — "
+                f"DC {self.fabric_name}: design_mode=back-to-back — "
                 "skipping super-spine tier, spines will connect directly across pods"
             )
         elif amount_of_super_spines > 0 and super_spine_template:

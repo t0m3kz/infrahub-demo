@@ -100,22 +100,6 @@ nodes:
           min_value: 1
           max_value: 8
 
-      - name: inter_pod_connectivity
-        label: "Inter-Pod Connectivity"
-        description: "How pods are interconnected: via a dedicated super-spine tier, or back-to-back spine connections"
-        kind: Dropdown
-        optional: false
-        default_value: super-spine
-        order_weight: 1800
-        choices:
-          - name: super-spine
-            label: "Super-Spine Tier"
-            description: "Dedicated super-spine switches aggregate all pods (M/L/XL fabrics)"
-            color: "#5fa8a8"
-          - name: back-to-back
-            label: "Back-to-Back Spines"
-            description: "Spine uplinks connect directly across pods — no super-spine tier (S fabrics)"
-            color: "#7fbfbf"
 
   - name: PodDesign
     namespace: Topology
@@ -214,6 +198,17 @@ nodes:
         parameters:
           min_value: 2
           max_value: 8
+
+      - name: max_border_leafs_per_pod
+        label: "Maximum Border-Leafs per Pod"
+        description: "Maximum border-leaf switches per pod."
+        kind: Number
+        optional: true
+        default_value: 1
+        order_weight: 1760
+        parameters:
+          min_value: 0
+          max_value: 2
 
   - name: Element
     namespace: Topology

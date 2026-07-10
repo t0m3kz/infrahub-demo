@@ -39,6 +39,7 @@ fragment PodDesignFields on TopologyPodDesign {
   max_tors_per_network_rack { value }
   max_tors_per_compute_rack { value }
   max_spines_per_pod { value }
+  max_border_leafs_per_pod { value }
 }
 
 fragment DataCenterFields on TopologyDataCenter {
@@ -67,7 +68,6 @@ fragment DataCenterFields on TopologyDataCenter {
       max_spines_per_pod { value }
       routing_strategy { value }
       underlay_protocol { value }
-      inter_pod_connectivity { value }
     }
   }
   super_spine_asn_pool {

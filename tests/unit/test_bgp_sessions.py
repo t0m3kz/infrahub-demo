@@ -248,8 +248,8 @@ class TestEdgeCases:
     def test_no_leafs_route_reflector(self) -> None:
         """Spines without clients create full-mesh sessions with each other.
 
-        This supports the back-to-back inter_pod_connectivity design where spines
-        from different pods peer directly as equals (no super-spine tier).
+        This supports the back-to-back design mode where spines from different pods
+        peer directly as equals (no super-spine tier).
         This mirrors super-spines-only behavior (see test_super_spines_only_peer_together).
         """
         devices = [
