@@ -26,7 +26,6 @@ query topology_dc($name: String!) {
               max_pods { value }
               max_super_spines_per_fabric { value }
               max_spines_per_pod { value }
-              inter_pod_connectivity { value }
             }
           }
           loopback_pool {

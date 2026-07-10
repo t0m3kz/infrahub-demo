@@ -16,6 +16,8 @@ def _build_generator(
     rack_index: int = 1,
     row_index: int = 1,
     maximum_tors_per_row: int | None = None,
+    rows: int = 1,
+    leafs_per_network_rack: int = 0,
 ) -> RackGenerator:
     """Create a RackGenerator instance with minimal data for offset calculation."""
 
@@ -25,20 +27,19 @@ def _build_generator(
         index=1,
     )
 
-    # Create mock design if maximum_tors_per_row is specified
-    # Formula: max_tors_per_row = compute_racks_per_row * max_tors_per_compute_rack
-    # For simplicity, use compute_racks_per_row=max_tors_per_row and max_tors_per_compute_rack=1
     from generators.models import PodDesign
 
     design = None
-    if maximum_tors_per_row is not None:
+    if maximum_tors_per_row is not None or rows != 1 or leafs_per_network_rack != 0:
+        tors_per_row = maximum_tors_per_row or 0
         design = PodDesign(
             id="design-1",
             name="test-design",
-            rows=1,
-            compute_racks_per_row=maximum_tors_per_row,  # Simple: each rack has 1 ToR
+            rows=rows,
+            compute_racks_per_row=tors_per_row,
             network_racks_per_row=1,
             max_tors_per_compute_rack=1,
+            max_leafs_per_network_rack=leafs_per_network_rack,
         )
 
     pod = RackPod(
@@ -93,13 +94,15 @@ def test_mixed_leaf_offset_scales_with_row(row_index: int, leafs_per_rack: int, 
     assert offset == expected
 
 
-def test_mixed_tor_offset_scales_by_rack_index() -> None:
-    """ToR offsets in mixed deployment increment by rack position with two uplinks each."""
+def test_mixed_tor_offset_scales_by_row_and_rack_index() -> None:
+    """ToR offsets in mixed deployment account for both row and rack position."""
 
+    # rack_index=3, row_index=2, device_count=2, no design → tors_per_row fallback = device_count = 2
+    # offset = (row_index-1) * tors_per_row + (rack_index-1) * device_count = 1*2 + 2*2 = 6
     generator = _build_generator(deployment_type="mixed", rack_index=3, row_index=2)
     offset = generator.calculate_cabling_offsets(device_count=2, device_type="tor")
 
-    assert offset == 4
+    assert offset == 6
 
 
 @pytest.mark.parametrize(
@@ -186,6 +189,121 @@ def test_dc1_pod3_tor_offset_with_actual_rack_count(
         f"Offset {offset} (rack {rack_index}, row {row_index}) would use spine interface "
         f"index {max_interface_index}, exceeding {SPINE_DOWNLINKS} available downlinks"
     )
+
+
+@pytest.mark.parametrize(
+    "deployment_type, rows, leafs_per_rack, row_index, bl_count, expected",
+    [
+        # mixed/middle_rack: BLs start after all rows' leafs
+        # base = rows * leafs_per_rack; offset = base + (row_index-1) * bl_count
+        ("mixed", 2, 2, 1, 1, 4),  # base=4, row1 BL → port 4
+        ("mixed", 2, 2, 2, 1, 5),  # base=4, row2 BL → port 5
+        ("mixed", 2, 2, 1, 2, 4),  # base=4, row1 pair → ports 4,5
+        ("mixed", 2, 2, 2, 2, 6),  # base=4, row2 pair → ports 6,7
+        ("middle_rack", 4, 4, 1, 1, 16),  # base=16, row1 BL → port 16
+        ("middle_rack", 4, 4, 3, 1, 18),  # base=16, row3 BL → port 18
+        ("middle_rack", 4, 4, 4, 2, 22),  # base=16, row4 pair → ports 22,23
+        # tor: BLs start after all rows' ToRs (tors_per_row = compute_racks * 1)
+        # base = rows * tors_per_row; offset = base + (row_index-1) * bl_count
+        ("tor", 2, 0, 1, 1, 20),  # 2 rows × 10 tors/row=20, row1 BL → port 20
+        ("tor", 2, 0, 2, 1, 21),  # row2 BL → port 21
+        ("tor", 2, 0, 1, 2, 20),  # row1 pair → ports 20,21
+    ],
+)
+def test_border_leaf_offset_starts_after_all_tors_or_leafs(
+    deployment_type: str,
+    rows: int,
+    leafs_per_rack: int,
+    row_index: int,
+    bl_count: int,
+    expected: int,
+) -> None:
+    """Border-leaf ports begin after all leaf/ToR rows to avoid spine port collisions."""
+
+    generator = _build_generator(
+        deployment_type=deployment_type,
+        row_index=row_index,
+        rows=rows,
+        leafs_per_network_rack=leafs_per_rack,
+        maximum_tors_per_row=10 if deployment_type == "tor" else None,
+    )
+    offset = generator.calculate_cabling_offsets(
+        device_count=bl_count,
+        device_type="border_leaf",
+        leafs_per_rack=leafs_per_rack,
+    )
+
+    assert offset == expected
+
+
+@pytest.mark.parametrize(
+    "row_index, rack_index, tors_per_row, device_count, expected",
+    [
+        # With design: tors_per_row from design
+        (1, 1, 18, 2, 0),  # first rack, first row → 0
+        (1, 2, 18, 2, 2),  # second rack, first row → 2
+        (1, 9, 18, 2, 16),  # last compute rack in row 1 (index 9+1=10 in mixed: network=1, compute=9)
+        (2, 1, 18, 2, 18),  # first rack, second row → 1*18 + 0 = 18
+        (2, 5, 18, 2, 26),  # row 2, rack 5 → 18 + 4*2 = 26
+        # Without design: falls back to device_count as tors_per_row
+        (2, 3, 0, 2, 6),  # no design: tors_per_row=2, (1)*2 + (2)*2 = 6
+    ],
+)
+def test_mixed_tor_offset_row_and_rack(
+    row_index: int,
+    rack_index: int,
+    tors_per_row: int,
+    device_count: int,
+    expected: int,
+) -> None:
+    """Mixed ToR offsets use both row index and rack index to avoid cross-row collisions."""
+
+    generator = _build_generator(
+        deployment_type="mixed",
+        rack_index=rack_index,
+        row_index=row_index,
+        maximum_tors_per_row=tors_per_row if tors_per_row > 0 else None,
+    )
+    offset = generator.calculate_cabling_offsets(device_count=device_count, device_type="tor")
+
+    assert offset == expected
+
+
+def test_no_collision_mixed_two_rows() -> None:
+    """Verify leaf, ToR, and border-leaf port ranges are disjoint in a 2-row mixed pod."""
+
+    # S_MIXED: 2 rows, 1 network rack/row with 2 leafs, 9 compute racks/row with 2 ToRs, 1 BL/pod
+    rows, leafs_per_rack, tors_per_row, bl_count = 2, 2, 18, 1
+
+    def get_offset(deployment_type: str, device_type: str, row_index: int, rack_index: int = 1) -> int:
+        g = _build_generator(
+            deployment_type=deployment_type,
+            rack_index=rack_index,
+            row_index=row_index,
+            rows=rows,
+            leafs_per_network_rack=leafs_per_rack,
+            maximum_tors_per_row=tors_per_row,
+        )
+        return g.calculate_cabling_offsets(
+            device_count=bl_count if device_type == "border_leaf" else leafs_per_rack,
+            device_type=device_type,
+            leafs_per_rack=leafs_per_rack,
+        )
+
+    # Collect all port ranges [offset, offset+count)
+    ranges: list[tuple[str, int, int]] = []
+    for row in (1, 2):
+        leaf_off = get_offset("mixed", "leaf", row)
+        ranges.append((f"leaf-row{row}", leaf_off, leaf_off + leafs_per_rack))
+
+    bl_row1 = get_offset("mixed", "border_leaf", 1)
+    ranges.append(("bl-row1", bl_row1, bl_row1 + bl_count))
+
+    # Check no two ranges overlap
+    for i, (name_a, start_a, end_a) in enumerate(ranges):
+        for name_b, start_b, end_b in ranges[i + 1 :]:
+            overlap = max(0, min(end_a, end_b) - max(start_a, start_b))
+            assert overlap == 0, f"Port collision: {name_a} [{start_a},{end_a}) overlaps {name_b} [{start_b},{end_b})"
 
 
 def test_dc1_pod3_design_max_overflows_without_actual_counts() -> None:

@@ -108,6 +108,7 @@ class PodDesign(BaseModel):
     max_tors_per_network_rack: int = 2
     max_tors_per_compute_rack: int = 1
     max_spines_per_pod: int = 2
+    max_border_leafs_per_pod: int = 0
 
     @property
     def derived_deployment_type(self) -> str:
@@ -137,7 +138,6 @@ class DataCenterDesignData(BaseModel):
     max_pods: int = 2
     max_super_spines_per_fabric: int = 2
     max_spines_per_pod: int = 4
-    inter_pod_connectivity: str = "super-spine"
 
     @property
     def is_ipv6(self) -> bool:

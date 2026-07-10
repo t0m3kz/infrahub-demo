@@ -35,7 +35,7 @@ spec:
       max_pods: 2
       max_super_spines_per_fabric: 2
       max_spines_per_pod: 4
-      inter_pod_connectivity: "back-to-back"
+
 
     - name: "S_EBGP_IBGP"
       description: >
@@ -48,7 +48,7 @@ spec:
       max_pods: 2
       max_super_spines_per_fabric: 2
       max_spines_per_pod: 4
-      inter_pod_connectivity: "back-to-back"
+
 
     - name: "S_EBGP_EBGP"
       description: >
@@ -61,7 +61,7 @@ spec:
       max_pods: 2
       max_super_spines_per_fabric: 2
       max_spines_per_pod: 4
-      inter_pod_connectivity: "back-to-back"
+
 
     # Medium Designs (4 pods)
     - name: "M_OSPF_IBGP"
@@ -75,7 +75,7 @@ spec:
       max_pods: 4
       max_super_spines_per_fabric: 2
       max_spines_per_pod: 4
-      inter_pod_connectivity: "super-spine"
+
 
     - name: "M_EBGP_EBGP"
       description: >
@@ -87,7 +87,7 @@ spec:
       max_pods: 4
       max_super_spines_per_fabric: 2
       max_spines_per_pod: 4
-      inter_pod_connectivity: "super-spine"
+
 
     - name: "M_EBGP_IBGP"
       description: >
@@ -100,7 +100,7 @@ spec:
       max_pods: 4
       max_super_spines_per_fabric: 2
       max_spines_per_pod: 4
-      inter_pod_connectivity: "super-spine"
+
 
     # Large Designs (8 pods)
     - name: "L_EBGP_EBGP"
@@ -113,7 +113,7 @@ spec:
       max_pods: 8
       max_super_spines_per_fabric: 4
       max_spines_per_pod: 4
-      inter_pod_connectivity: "super-spine"
+
 
     # Extra Large Designs (16 pods)
     - name: "XL_EBGP_EBGP"
@@ -126,4 +126,3 @@ spec:
       max_pods: 16
       max_super_spines_per_fabric: 4
       max_spines_per_pod: 4
-      inter_pod_connectivity: "super-spine"
