@@ -895,6 +895,7 @@ class RackGenerator(CommonGenerator):
         for bl_role in self.data.border_leafs or []:
             bl_indexes: list[int] = [
                 dc.index,
+                pod.index,
                 suite.index,
                 self.data.row_index,
                 self.data.index,
