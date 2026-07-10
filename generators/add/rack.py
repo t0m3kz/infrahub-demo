@@ -943,10 +943,13 @@ class RackGenerator(CommonGenerator):
             )
 
             # Border-leafs connect to pod spines after regular leafs.
-            # Offset accounts for all regular leaf downlinks already wired in this row.
+            # Use max_leafs_per_network_rack from the pod design so the base offset is
+            # consistent across all rows regardless of how many leafs a given row has.
+            # Using the current rack's leaf count causes collisions on rows with more leafs.
             top_devices = spine_device_names
             top_interfaces = spine_interfaces
-            leafs_per_rack = sum(r.quantity or 0 for r in self.data.leafs or [])
+            design_max_leafs = pod.design.max_leafs_per_network_rack if pod.design else 0
+            leafs_per_rack = max(design_max_leafs, sum(r.quantity or 0 for r in self.data.leafs or []))
             cabling_offset = self.calculate_cabling_offsets(
                 device_count=bl_role.quantity,
                 device_type="border_leaf",
