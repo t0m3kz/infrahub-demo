@@ -61,20 +61,6 @@ spec:
       max_border_leafs_per_pod: 1
 
     # Medium Designs (4 rows)
-    - name: "M_TOR"
-      description: >
-        Medium ToR-only deployment (4 rows × 10 racks = 40 racks total).
-        All compute racks with ToRs connecting directly to spines.
-        Total capacity: 0 leafs, 80 tors (4 rows × 10 racks × 2 tors), 3 spines.
-      rows: 4
-      compute_racks_per_row: 10
-      network_racks_per_row: 0
-      max_leafs_per_network_rack: 0
-      max_tors_per_network_rack: 0
-      max_tors_per_compute_rack: 2
-      max_spines_per_pod: 3
-      max_border_leafs_per_pod: 1
-
     - name: "M_MIXED"
       description: >
         Medium mixed deployment (4 rows × 10 racks = 40 racks total).
@@ -106,20 +92,6 @@ spec:
       max_border_leafs_per_pod: 1
 
     # Large Designs (8 rows)
-    - name: "L_TOR"
-      description: >
-        Large ToR-only deployment (8 rows × 10 racks = 80 racks total).
-        All compute racks with ToRs connecting directly to spines.
-        Total capacity: 0 leafs, 160 tors (8 × 10 × 2), 4 spines.
-      rows: 8
-      compute_racks_per_row: 10
-      network_racks_per_row: 0
-      max_leafs_per_network_rack: 0
-      max_tors_per_network_rack: 0
-      max_tors_per_compute_rack: 2
-      max_spines_per_pod: 4
-      max_border_leafs_per_pod: 2
-
     - name: "L_MIXED"
       description: >
         Large mixed deployment (8 rows × 10 racks = 80 racks total).
