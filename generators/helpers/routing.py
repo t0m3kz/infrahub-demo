@@ -98,13 +98,20 @@ class RoutingStrategy(str, Enum):
 
 
 def _safe_device_name(bgp: Any) -> str | None:
-    """Extract device name from a prefetched ManagedBGP/ManagedOSPF object."""
+    """Extract device name from a ManagedBGP/ManagedOSPF object.
+
+    Parses the deterministic name convention "{device-name}-bgp-{suffix}" or
+    "{device-name}-ospf-{suffix}" rather than traversing the inbound
+    `capabilities` relationship (direction=inbound peers are not populated by
+    client.filters() prefetch, so .peers is always empty).
+    """
     try:
-        peers = bgp.capabilities.peers
-        if peers:
-            return peers[0].name.value
+        name: str = bgp.name.value
+        for suffix in ("-bgp-underlay", "-bgp-overlay", "-ospf-underlay"):
+            if name.endswith(suffix):
+                return name[: -len(suffix)]
         return None
-    except (AttributeError, ValueError, IndexError):
+    except (AttributeError, ValueError):
         return None
 
 
