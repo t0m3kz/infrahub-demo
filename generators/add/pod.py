@@ -195,11 +195,10 @@ class PodTopologyGenerator(CommonGenerator):
             [iface.name for iface in parent.super_spine_template.interfaces] if parent.super_spine_template else []
         )
 
-        # Create spine underlay BGP processes immediately after device creation.
-        # Super-spines are declared as top_devices so the planner skips AS+BGP
-        # creation for them (already owned by DC generator). No underlay peerings
-        # are created here since cables don't exist yet — they are created in the
-        # second routing call after cabling is complete below.
+        # Pre-seed spine eBGP processes before cabling exists so parallel rack generators
+        # find them and don't try to create duplicates.
+        # OSPF_IBGP is excluded: spine overlay BGP needs overlay_as_id (resolved inside
+        # create_routing via _resolve_shared_objects) and is created in the post-cable call below.
         if (
             dc_design
             and dc_asn_pool_id
@@ -213,6 +212,7 @@ class PodTopologyGenerator(CommonGenerator):
                 bottom_devices=spines,
                 top_devices=super_spine_devices,
                 options=RoutingOptions(design=dc_design, asn_pool=dc_asn_pool_id),
+                p2p_interfaces=[],
             )
 
         spine_interfaces_data = spine_template.interfaces
@@ -237,13 +237,13 @@ class PodTopologyGenerator(CommonGenerator):
         if not skip_cabling:
             dc_max_spines = dc_design.max_spines_per_pod if dc_design else spine_count
             cabling_offset = (self.data.index - 1) * dc_max_spines
-
-            technical_pool = pod_pools.get("technical")
-
-            # Cable all spines to super-spines — upsert handles idempotency.
-            # Existing cables are re-saved (tracked by group), new ones are created.
             p2p_prefix_length = 127 if is_ipv6 else 31
-            await self.create_cabling(
+            routing_opts = (
+                RoutingOptions(design=dc_design, asn_pool=dc_asn_pool_id)
+                if dc_design and dc_asn_pool_id
+                else RoutingOptions()
+            )
+            p2p_pairs = await self.create_cabling(
                 bottom_devices=spines,
                 bottom_interfaces=spine_interfaces,
                 top_devices=super_spine_devices,
@@ -251,12 +251,19 @@ class PodTopologyGenerator(CommonGenerator):
                 strategy="pod",
                 options=CablingOptions(
                     cabling_offset=cabling_offset,
-                    pool=technical_pool,
+                    pool=pod_pools.get("technical"),
                     p2p_prefix_length=p2p_prefix_length,
                 ),
                 bottom_sorting=self.data.spine_interface_sorting_method,
                 top_sorting=parent.fabric_interface_sorting_method,
             )
+            if routing_opts.get("design"):
+                await self.create_routing(
+                    bottom_devices=spines,
+                    top_devices=super_spine_devices,
+                    options=routing_opts,
+                    p2p_interfaces=p2p_pairs,
+                )
         elif is_back_to_back:
             # Back-to-back: cable this pod's spines to spines in lower-index sibling pods.
             # Only connecting to lower-index pods avoids creating duplicate cables when
@@ -284,7 +291,12 @@ class PodTopologyGenerator(CommonGenerator):
                     f"Pod {self.data.name} (idx={self.data.index}): cabling to sibling pod idx={sibling_index} "
                     f"[{len(spines)} spines → {len(sibling_spine_names)} sibling spines, offset={cabling_offset}]"
                 )
-                await self.create_cabling(
+                routing_opts = (
+                    RoutingOptions(design=dc_design, asn_pool=dc_asn_pool_id)
+                    if dc_design and dc_asn_pool_id
+                    else RoutingOptions()
+                )
+                p2p_pairs = await self.create_cabling(
                     bottom_devices=spines,
                     bottom_interfaces=spine_interfaces,
                     top_devices=sibling_spine_names,
@@ -298,37 +310,14 @@ class PodTopologyGenerator(CommonGenerator):
                     bottom_sorting=self.data.spine_interface_sorting_method,
                     top_sorting=self.data.spine_interface_sorting_method,
                 )
-                # Create routing between this pod's spines and the sibling pod's spines
-                if dc_design and dc_asn_pool_id:
+                if routing_opts.get("design"):
                     await self.create_routing(
                         bottom_devices=spines,
                         top_devices=sibling_spine_names,
-                        options=RoutingOptions(design=dc_design, asn_pool=dc_asn_pool_id),
+                        options=routing_opts,
+                        p2p_interfaces=p2p_pairs,
                     )
 
-        # Create routing for super-spine ↔ spine peerings (after spine-to-super-spine cabling).
-        # Skipped when there are no super-spines (single-pod DC) — no cable means no peering.
-        # Also skipped for back-to-back designs (routing was handled per-sibling above).
-        if dc_design and not skip_cabling and not is_back_to_back:
-            super_spine_names = [device.name for device in (parent.devices or [])]
-
-            routing_options: RoutingOptions = RoutingOptions(design=dc_design)
-            if dc_asn_pool_id:
-                routing_options["asn_pool"] = dc_asn_pool_id
-
-            strategy = dc_design.routing_strategy
-
-            if super_spine_names:
-                self.logger.info(
-                    f"Creating spine ↔ super-spine peerings: {len(spines)} spine(s) + "
-                    f"{len(super_spine_names)} super-spine(s) [strategy={strategy}]"
-                )
-
-            await self.create_routing(
-                bottom_devices=spines,
-                top_devices=super_spine_names,
-                options=routing_options,
-            )
         await self.update_checksum()
 
     async def _get_sibling_pods_with_lower_index(self, dc_id: str) -> list[tuple[str, list[str], int]]:

@@ -403,6 +403,17 @@ class RoutingPlanner:
             b_name = id_to_name.get(b.device.id)
             if not a_name or not b_name:
                 continue
+            if a_name == b_name:
+                # Self-loop: both cable endpoints on the same device.
+                # Can occur due to a race between parallel rack generators tagging
+                # a spine interface twice before the TOR side is committed.
+                # Skipping prevents a BGP peering that references only one device.
+                if self.logger:
+                    self.logger.warning(
+                        f"Self-loop cable detected: both endpoints on '{a_name}' "
+                        f"({a.name.value} / {b.name.value}) — skipping"
+                    )
+                continue
             if a_name > b_name:
                 a, b = b, a
                 a_name, b_name = b_name, a_name

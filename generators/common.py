@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import ipaddress
-from typing import Any, Literal, Optional
+from typing import Any, Literal
 
 from infrahub_sdk.exceptions import ValidationError
 from infrahub_sdk.generator import InfrahubGenerator
@@ -49,7 +49,7 @@ class CommonGenerator(FailOnErrorLoggerMixin, RoutingMixin, InfrahubGenerator):
     # Instance variables - must be set in generate() before calling helper methods
     deployment_id: str = ""  # Required: set to DC/POP ID
     fabric_name: str = ""  # Required: set to fabric/DC name
-    pod_name: Optional[str] = None  # Optional: only for pod/rack generators
+    pod_name: str | None = None  # Optional: only for pod/rack generators
 
     async def _resolve_pool(
         self,
@@ -180,8 +180,8 @@ class CommonGenerator(FailOnErrorLoggerMixin, RoutingMixin, InfrahubGenerator):
         strategy: Literal["fabric", "pod"],
         pools: dict[str, Any],
         id: str,
-        ipv6: Optional[bool] = False,
-        dual_stack: Optional[bool] = False,
+        ipv6: bool = False,
+        dual_stack: bool = False,
     ) -> dict[str, Any]:
         """Ensure required per-pod / fabric pools exist.
 
@@ -329,7 +329,7 @@ class CommonGenerator(FailOnErrorLoggerMixin, RoutingMixin, InfrahubGenerator):
         fabric_name = self.fabric_name
         pod_name = self.pod_name or ""
         virtual: bool = bool(options.get("virtual", False))
-        indexes: Optional[list[int]] = options.get("indexes", None)
+        indexes: list[int] | None = options.get("indexes", None)
         allocate_loopback: bool = bool(options.get("allocate_loopback", False))
         rack: str = options.get("rack", "")
 
@@ -492,7 +492,7 @@ class CommonGenerator(FailOnErrorLoggerMixin, RoutingMixin, InfrahubGenerator):
         options: CablingOptions | None = None,
         bottom_sorting: Literal["top_down", "bottom_up"] = "bottom_up",
         top_sorting: Literal["top_down", "bottom_up"] = "bottom_up",
-    ) -> None:
+    ) -> list[tuple[Any, Any]]:
         """Create cabling connections between device layers.
 
         Simple approach: query interfaces → build plan → for each connection:
@@ -540,7 +540,7 @@ class CommonGenerator(FailOnErrorLoggerMixin, RoutingMixin, InfrahubGenerator):
                 f"Interfaces still not found after {_MAX_RETRIES} attempts "
                 f"(src={len(src_interfaces)}, dst={len(dst_interfaces)}) — skipping cabling"
             )
-            return
+            return []
 
         # Build lookup map for O(1) access after cabling plan is built
         iface_map: dict[str, Any] = {iface.id: iface for iface in src_interfaces + dst_interfaces}
@@ -559,7 +559,7 @@ class CommonGenerator(FailOnErrorLoggerMixin, RoutingMixin, InfrahubGenerator):
 
         if not cabling_plan:
             self.logger.warning("No cabling connections planned")
-            return
+            return []
 
         # Resolve technical pool for P2P address allocation
         technical_pool = await self._resolve_pool(
@@ -569,6 +569,7 @@ class CommonGenerator(FailOnErrorLoggerMixin, RoutingMixin, InfrahubGenerator):
         )
 
         # Execute plan: create cable → allocate IPs → save interfaces
+        cabled_pairs: list[tuple[Any, Any]] = []
         for src_interface, dst_interface in cabling_plan:
             endpoint_names = sorted(
                 [
@@ -619,38 +620,23 @@ class CommonGenerator(FailOnErrorLoggerMixin, RoutingMixin, InfrahubGenerator):
                 addrs = list(network)
                 ip_namespace = p2p_prefix.ip_namespace
 
-                src_ip = await self.client.create(
-                    kind=IpamIPAddress,
-                    data={
-                        "address": f"{addrs[0]}/{p2p_prefix_length}",
-                        "ip_namespace": ip_namespace,
-                    },
-                )
-                await src_ip.save(allow_upsert=True)
-                updated_src.ip_address = src_ip.id
+                for iface, addr in [(updated_src, addrs[0]), (updated_dst, addrs[1])]:
+                    ip = await self.client.create(
+                        kind=IpamIPAddress,
+                        data={"address": f"{addr}/{p2p_prefix_length}", "ip_namespace": ip_namespace},
+                    )
+                    await ip.save(allow_upsert=True)
+                    iface.ip_address = ip.id
 
-                dst_ip = await self.client.create(
-                    kind=IpamIPAddress,
-                    data={
-                        "address": f"{addrs[1]}/{p2p_prefix_length}",
-                        "ip_namespace": ip_namespace,
-                    },
-                )
-                await dst_ip.save(allow_upsert=True)
-                updated_dst.ip_address = dst_ip.id
-
-            # Save interfaces with fabric-p2p tag
             updated_src.description.value = cable_name
             updated_src.status.value = "active"
-            updated_src.tags.add({"hfid": "fabric-p2p"})
             await updated_src.save(allow_upsert=True)
 
             updated_dst.description.value = cable_name
             updated_dst.status.value = "active"
-            updated_dst.tags.add({"hfid": "fabric-p2p"})
             await updated_dst.save(allow_upsert=True)
 
+            cabled_pairs.append((updated_src, updated_dst))
             self.logger.info(f"  - Created connection {cable_name}")
 
-    # Routing methods (create_routing, _find_existing_overlay_as, _find_existing_ospf_area)
-    # are inherited from RoutingMixin — see generators/routing.py
+        return cabled_pairs

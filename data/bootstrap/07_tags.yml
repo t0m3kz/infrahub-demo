@@ -4,8 +4,6 @@ kind: Object
 spec:
   kind: BuiltinTag
   data:
-    - name: "fabric-p2p"
-      description: "P2P fabric interconnect interface for underlay routing"
     - name: "management"
       description: "Management interface"
     - name: "production"

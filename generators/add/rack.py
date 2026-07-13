@@ -416,6 +416,71 @@ class RackGenerator(CommonGenerator):
             return RackModel(**deployment_list[0])
         raise ValueError(f"Unknown data structure. Keys: {list(data.keys())}")
 
+    async def _checksum_ready(self) -> bool:
+        """Return True if this rack has a usable checksum; False if generation should abort.
+
+        When the checksum is missing the method attempts to inherit one from a sibling
+        rack (middle → ToR in mixed, sibling network → network in middle_rack).
+        A successful inheritance saves the rack and returns False so the generator
+        framework re-fires this rack with the new checksum.
+        """
+        if self.data.checksum:
+            return True
+
+        deployment_type = self.data.pod.deployment_type
+
+        if deployment_type == "mixed" and self.data.rack_type == "tor":
+            middle_racks = await self.client.filters(
+                kind=LocationRack,
+                pod__ids=[self.data.pod.id],
+                row_index__value=self.data.row_index,
+                rack_type__value="network",
+            )
+            if middle_racks and middle_racks[0].checksum.value:
+                rack_obj = await self.client.get(kind=LocationRack, id=self.data.id)
+                rack_obj.checksum.value = middle_racks[0].checksum.value
+                await rack_obj.save(allow_upsert=True)
+                self.logger.info(
+                    f"ToR rack {self.data.name} inherited checksum {middle_racks[0].checksum.value} "
+                    f"from middle rack {middle_racks[0].name.value}. "
+                    "Checksum update will trigger generator again to create devices."
+                )
+            else:
+                self.logger.warning(
+                    f"ToR rack {self.data.name} has no checksum and no middle rack found "
+                    f"in row {self.data.row_index} - skipping generation."
+                )
+            return False
+
+        if deployment_type == "middle_rack" and self.data.rack_type == "network":
+            sibling_racks = await self.client.filters(
+                kind=LocationRack,
+                pod__ids=[self.data.pod.id],
+                rack_type__value="network",
+            )
+            sibling_with_checksum = [r for r in sibling_racks if r.id != self.data.id and r.checksum.value]
+            if sibling_with_checksum:
+                rack_obj = await self.client.get(kind=LocationRack, id=self.data.id)
+                rack_obj.checksum.value = sibling_with_checksum[0].checksum.value
+                await rack_obj.save(allow_upsert=True)
+                self.logger.info(
+                    f"Network rack {self.data.name} inherited checksum {sibling_with_checksum[0].checksum.value} "
+                    f"from sibling rack {sibling_with_checksum[0].name.value}. "
+                    "Checksum update will trigger generator again to create devices."
+                )
+            else:
+                self.logger.warning(
+                    f"Network rack {self.data.name} has no checksum and no sibling racks found in pod "
+                    f"to inherit from — run pod generator first."
+                )
+            return False
+
+        self.logger.warning(
+            f"Rack {self.data.name} has no checksum set - skipping generation. "
+            "Checksum will be set by pod or middle rack generator."
+        )
+        return False
+
     async def _cable_and_route(
         self,
         *,
@@ -428,12 +493,7 @@ class RackGenerator(CommonGenerator):
         bottom_sorting: Literal["top_down", "bottom_up"] = "bottom_up",
         top_sorting: Literal["top_down", "bottom_up"] = "bottom_up",
     ) -> None:
-        """Create cabling then routing between two device layers.
-
-        Reads shared context stored on self by generate():
-        ``_technical_pool_id``, ``_p2p_prefix_length``, ``_routing_options``, ``_dc_design``.
-        """
-        await self.create_cabling(
+        p2p_pairs = await self.create_cabling(
             bottom_devices=bottom_devices,
             bottom_interfaces=bottom_interfaces,
             top_devices=top_devices,
@@ -447,11 +507,12 @@ class RackGenerator(CommonGenerator):
             bottom_sorting=bottom_sorting,
             top_sorting=top_sorting,
         )
-        if self._dc_design:
+        if self._routing_options.get("design"):
             await self.create_routing(
                 bottom_devices=bottom_devices,
                 top_devices=top_devices,
                 options=self._routing_options,
+                p2p_interfaces=p2p_pairs,
             )
 
     async def generate(self, data: dict) -> None:
@@ -479,70 +540,8 @@ class RackGenerator(CommonGenerator):
             f"Starting rack generation: {self.data.name} [type={self.data.rack_type}, deployment={deployment_type}]"
         )
 
-        # Validate checksum is set (required for proper generation ordering in mixed deployments)
-        if not self.data.checksum:
-            # Special case: ToR racks in mixed deployments can inherit checksum from middle rack
-            if deployment_type == "mixed" and self.data.rack_type == "tor":
-                # Query middle rack in same row to get checksum
-                middle_racks = await self.client.filters(
-                    kind=LocationRack,
-                    pod__ids=[self.data.pod.id],
-                    row_index__value=self.data.row_index,
-                    rack_type__value="network",  # Middle racks have network type
-                )
-
-                if middle_racks and middle_racks[0].checksum.value:
-                    # Inherit checksum from middle rack
-                    rack_obj = await self.client.get(kind=LocationRack, id=self.data.id)
-                    rack_obj.checksum.value = middle_racks[0].checksum.value
-                    await rack_obj.save(allow_upsert=True)
-                    self.logger.info(
-                        f"ToR rack {self.data.name} inherited checksum {middle_racks[0].checksum.value} "
-                        f"from middle rack {middle_racks[0].name.value}. "
-                        "Checksum update will trigger generator again to create devices."
-                    )
-                    # Return here - checksum update will trigger this generator again
-                    return
-                else:
-                    self.logger.warning(
-                        f"ToR rack {self.data.name} has no checksum and no middle rack found "
-                        f"in row {self.data.row_index} - skipping generation."
-                    )
-                    return
-
-            # Special case: new network racks in middle_rack deployments inherit checksum
-            # from a sibling rack in the same pod (all pod racks share the same pod checksum)
-            elif deployment_type == "middle_rack" and self.data.rack_type == "network":
-                sibling_racks = await self.client.filters(
-                    kind=LocationRack,
-                    pod__ids=[self.data.pod.id],
-                    rack_type__value="network",
-                )
-                sibling_with_checksum = [r for r in sibling_racks if r.id != self.data.id and r.checksum.value]
-
-                if sibling_with_checksum:
-                    rack_obj = await self.client.get(kind=LocationRack, id=self.data.id)
-                    rack_obj.checksum.value = sibling_with_checksum[0].checksum.value
-                    await rack_obj.save(allow_upsert=True)
-                    self.logger.info(
-                        f"Network rack {self.data.name} inherited checksum {sibling_with_checksum[0].checksum.value} "
-                        f"from sibling rack {sibling_with_checksum[0].name.value}. "
-                        "Checksum update will trigger generator again to create devices."
-                    )
-                    return
-                else:
-                    self.logger.warning(
-                        f"Network rack {self.data.name} has no checksum and no sibling racks found in pod "
-                        f"to inherit from — run pod generator first."
-                    )
-                    return
-
-            else:
-                self.logger.warning(
-                    f"Rack {self.data.name} has no checksum set - skipping generation. "
-                    "Checksum will be set by pod or middle rack generator."
-                )
-                return
+        if not await self._checksum_ready():
+            return
 
         # In mixed deployment, ToR racks should wait for middle rack to generate leafs first
         if deployment_type == "mixed" and self.data.rack_type == "tor":
@@ -669,7 +668,6 @@ class RackGenerator(CommonGenerator):
         self._technical_pool_id = technical_pool_id
         self._p2p_prefix_length = p2p_prefix_length
         self._routing_options = routing_options
-        self._dc_design = dc_design
 
         leaf_row_cache: tuple[list[str], list[str]] | None = None
 
@@ -772,12 +770,19 @@ class RackGenerator(CommonGenerator):
             ]
 
             tors_per_rack = sum(r.quantity or 0 for r in self.data.tors or [])
-            sibling_racks = await self.client.filters(kind="LocationRack", pod__ids=[pod.id])
-            prev_row_racks = sum(
-                1
-                for r in sibling_racks
-                if hasattr(r, "row_index") and r.row_index and r.row_index.value < self.data.row_index
-            )
+            # Use design data for racks-per-row count — avoids a race condition where
+            # parallel rack generators query the live DB before all row-1 racks are written,
+            # causing row-2 generators to compute a lower prev_row_racks and collide with
+            # row-1 offsets. The design value is static and always correct.
+            if pod.design is not None:
+                prev_row_racks = pod.design.compute_racks_per_row * (self.data.row_index - 1)
+            else:
+                sibling_racks = await self.client.filters(kind="LocationRack", pod__ids=[pod.id])
+                prev_row_racks = sum(
+                    1
+                    for r in sibling_racks
+                    if hasattr(r, "row_index") and r.row_index and r.row_index.value < self.data.row_index
+                )
             try:
                 cabling_offset = self.calculate_cabling_offsets(
                     device_count=tors_per_rack,
