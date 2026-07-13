@@ -10,7 +10,6 @@ if TYPE_CHECKING:
 
 from .helpers import RoutingPlanInput, RoutingPlanner, RoutingStrategy
 from .protocols import (
-    DcimPhysicalInterface,
     DcimVirtualInterface,
     ManagedBGP,
     ManagedBGPPeering,
@@ -42,17 +41,13 @@ class RoutingMixin:
         bottom_devices: list[str],
         top_devices: list[str],
         options: RoutingOptions | None = None,
+        p2p_interfaces: list[tuple[Any, Any]] = [],
     ) -> None:
-        """Create routing configuration between device layers.
+        """Create routing configuration for a layer pair.
 
-        Follows create_cabling pattern: collect data, plan, create objects sequentially.
-
-        Underlay always uses P2P interfaces, overlay always uses loopback interfaces.
-        Overlay is either iBGP (shared ASN) or eBGP (per-device ASN from underlay).
-
-        Existing shared objects (iBGP ASN, OSPF area) are queried here and passed
-        to the routing helper so it stays pure (no DB access).
-        See ``RoutingOptions`` for available option keys.
+        ``p2p_interfaces`` is the list of ``(src, dst)`` interface pairs returned by
+        ``create_cabling``.  Pass ``[]`` when there are no cables yet (process-only
+        calls such as the pre-cable spine BGP seeding in pod.py).
         """
         if options is None:
             options = RoutingOptions()
@@ -117,18 +112,12 @@ class RoutingMixin:
         # PHASE 1: DATA COLLECTION (4 parallel queries)
         # ================================================================
 
-        all_bgp, interfaces, loopback_interfaces = await asyncio.gather(
+        interfaces = [iface for pair in p2p_interfaces for iface in pair]
+        all_bgp, loopback_interfaces = await asyncio.gather(
             self.client.filters(
                 kind=ManagedBGP,
                 capabilities__name__values=all_device_names,
                 include=["local_as", "capabilities"],
-                prefetch_relationships=True,
-            ),
-            self.client.filters(
-                kind=DcimPhysicalInterface,
-                device__name__values=all_device_names,
-                tags__name__value="fabric-p2p",
-                include=["device", "cable"],
                 prefetch_relationships=True,
             ),
             self.client.filters(
