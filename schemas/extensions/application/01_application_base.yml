@@ -234,7 +234,7 @@ nodes:
         label: "VIP Service"
         description: "Frontend listener that routes traffic to this component"
       - name: proxy_service
-        peer: ManagedSaasService
+        peer: ManagedGeneric
         cardinality: one
         kind: Attribute
         optional: true
@@ -242,7 +242,7 @@ nodes:
         identifier: "app_component__proxy_service"
         order_weight: 850
         label: "Egress Service"
-        description: "SaaS service this component's traffic egresses through (proxy, SASE, or direct)"
+        description: "Egress proxy or SASE service (ManagedProxyHA, ManagedCloudProxyHA)"
 
 extensions:
   nodes:
