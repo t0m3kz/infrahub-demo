@@ -1,0 +1,231 @@
+---
+# SaaS Service capabilities
+#
+# ManagedSaasService — shared generic base for all cloud SaaS services.
+# Inherits ManagedGeneric so existing proxy_service / saas_service relationships
+# on AppComponent, VirtCluster, and TopologySaas all resolve to any subtype.
+#
+# Concrete nodes:
+#   ManagedConferencingService  — real-time media (Webex, Zoom, Teams)
+#   ManagedCRMService           — customer/sales platforms (Salesforce, HubSpot)
+#   ManagedStorageService       — file and object storage (SharePoint, Box, S3)
+#
+# ManagedCloudProxyHA (ha.yml) also inherits ManagedSaasService so SASE services
+# are reachable via the same saas_service relationship on TopologySaas.
+version: "1.0"
+
+generics:
+  - name: SaasService
+    namespace: Managed
+    description: "Shared base for all cloud SaaS service capability nodes"
+    label: SaaS Service
+    icon: "mdi:cloud-outline"
+    include_in_menu: false
+    inherit_from:
+      - ManagedGeneric
+    attributes:
+      - name: tenant_id
+        kind: Text
+        label: "Tenant / Org ID"
+        description: "Cloud tenant or organization account identifier"
+        optional: true
+        order_weight: 1100
+      - name: service_tier
+        kind: Dropdown
+        label: "Service Tier"
+        optional: true
+        default_value: standard
+        order_weight: 1200
+        choices:
+          - name: free
+            label: "Free"
+            color: "#95A5A6"
+          - name: standard
+            label: "Standard"
+            color: "#3498DB"
+          - name: enterprise
+            label: "Enterprise"
+            color: "#2ECC71"
+      - name: data_classification
+        kind: Dropdown
+        label: "Data Classification"
+        description: "Highest data sensitivity level handled by this service"
+        optional: true
+        default_value: confidential
+        order_weight: 1300
+        choices:
+          - name: public
+            label: "Public"
+            color: "#2ECC71"
+          - name: internal
+            label: "Internal"
+            color: "#3498DB"
+          - name: confidential
+            label: "Confidential"
+            color: "#F39C12"
+          - name: restricted
+            label: "Restricted"
+            color: "#E74C3C"
+      - name: contract_end_date
+        kind: Text
+        label: "Contract End Date"
+        description: "ISO 8601 contract expiry date (YYYY-MM-DD)"
+        optional: true
+        order_weight: 1400
+
+nodes:
+  # ── Conferencing ─────────────────────────────────────────────────────────────
+  - name: ConferencingService
+    namespace: Managed
+    description: "Real-time conferencing and collaboration SaaS (Webex, Zoom, Teams)"
+    label: Conferencing Service
+    icon: "mdi:video-outline"
+    include_in_menu: false
+    human_friendly_id:
+      - name__value
+    display_label: "{{name__value}}"
+    uniqueness_constraints:
+      - [name__value]
+    order_by:
+      - name__value
+    inherit_from:
+      - ManagedSaasService
+    attributes:
+      - name: provider
+        kind: Dropdown
+        label: "Provider"
+        optional: false
+        order_weight: 1500
+        choices:
+          - name: webex
+            label: "Cisco Webex"
+            color: "#1BA0D7"
+          - name: zoom
+            label: "Zoom"
+            color: "#2D8CFF"
+          - name: teams
+            label: "Microsoft Teams"
+            color: "#6264A7"
+          - name: meet
+            label: "Google Meet"
+            color: "#34A853"
+          - name: other
+            label: "Other"
+            color: "#95A5A6"
+      - name: media_optimization
+        kind: Boolean
+        label: "Media Optimization"
+        description: "Direct media breakout bypass — skips proxy inspection for RTP/SRTP"
+        optional: true
+        default_value: true
+        order_weight: 1600
+      - name: recording_region
+        kind: Text
+        label: "Recording Region"
+        description: "Cloud region where meeting recordings are stored"
+        optional: true
+        order_weight: 1700
+
+  # ── CRM ──────────────────────────────────────────────────────────────────────
+  - name: CRMService
+    namespace: Managed
+    description: "Customer relationship management SaaS (Salesforce, HubSpot)"
+    label: CRM Service
+    icon: "mdi:account-group-outline"
+    include_in_menu: false
+    human_friendly_id:
+      - name__value
+    display_label: "{{name__value}}"
+    uniqueness_constraints:
+      - [name__value]
+    order_by:
+      - name__value
+    inherit_from:
+      - ManagedSaasService
+    attributes:
+      - name: provider
+        kind: Dropdown
+        label: "Provider"
+        optional: false
+        order_weight: 1500
+        choices:
+          - name: salesforce
+            label: "Salesforce"
+            color: "#00A1E0"
+          - name: hubspot
+            label: "HubSpot"
+            color: "#FF7A59"
+          - name: dynamics
+            label: "Microsoft Dynamics"
+            color: "#0078D4"
+          - name: other
+            label: "Other"
+            color: "#95A5A6"
+      - name: instance_url
+        kind: Text
+        label: "Instance URL"
+        description: "Tenant-specific service URL (e.g. company.my.salesforce.com)"
+        optional: true
+        order_weight: 1600
+      - name: sandbox
+        kind: Boolean
+        label: "Sandbox"
+        description: "Whether this is a sandbox / non-production instance"
+        optional: true
+        default_value: false
+        order_weight: 1700
+
+  # ── Storage ───────────────────────────────────────────────────────────────────
+  - name: StorageService
+    namespace: Managed
+    description: "Cloud file and object storage SaaS (SharePoint, Box, S3)"
+    label: Storage Service
+    icon: "mdi:database-outline"
+    include_in_menu: false
+    human_friendly_id:
+      - name__value
+    display_label: "{{name__value}}"
+    uniqueness_constraints:
+      - [name__value]
+    order_by:
+      - name__value
+    inherit_from:
+      - ManagedSaasService
+    attributes:
+      - name: provider
+        kind: Dropdown
+        label: "Provider"
+        optional: false
+        order_weight: 1500
+        choices:
+          - name: sharepoint
+            label: "Microsoft SharePoint"
+            color: "#0078D4"
+          - name: box
+            label: "Box"
+            color: "#0061D5"
+          - name: s3
+            label: "AWS S3"
+            color: "#FF9900"
+          - name: gcs
+            label: "Google Cloud Storage"
+            color: "#4285F4"
+          - name: onedrive
+            label: "OneDrive"
+            color: "#0078D4"
+          - name: other
+            label: "Other"
+            color: "#95A5A6"
+      - name: storage_region
+        kind: Text
+        label: "Storage Region"
+        description: "Primary cloud region where data is stored"
+        optional: true
+        order_weight: 1600
+      - name: encryption_at_rest
+        kind: Boolean
+        label: "Encryption at Rest"
+        description: "Whether data is encrypted at rest (customer-managed keys)"
+        optional: true
+        default_value: true
+        order_weight: 1700

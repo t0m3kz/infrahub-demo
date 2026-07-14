@@ -248,9 +248,9 @@ nodes:
         order_weight: 2100
 
       - name: proxy_service
-        peer: ManagedGeneric
-        label: "Proxy Service"
-        description: "Cluster-wide egress proxy or SASE service."
+        peer: ManagedSaasService
+        label: "Egress Service"
+        description: "Cluster-wide egress SaaS service (proxy, SASE, or direct)."
         cardinality: one
         kind: Attribute
         optional: true
