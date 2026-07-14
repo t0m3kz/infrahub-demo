@@ -139,6 +139,11 @@ class DataCenterDesignData(BaseModel):
     max_super_spines_per_fabric: int = 2
     max_spines_per_pod: int = 4
 
+    # Address space sizing — defaults used when DC instance has no pools
+    loopback_prefix_length: int = 23
+    technical_prefix_length: int = 19
+    management_prefix_length: int = 25
+
     @property
     def is_ipv6(self) -> bool:
         return self.underlay_protocol == "ipv6"
@@ -173,9 +178,6 @@ class DCModel(BaseModel):
     overlay_technology: str = "vxlan_evpn"
     fabric_interface_sorting_method: Literal["top_down", "bottom_up"] = "bottom_up"
     spine_interface_sorting_method: Literal["top_down", "bottom_up"] = "bottom_up"
-    loopback_prefix_length: int = 23
-    technical_prefix_length: int = 19
-    management_prefix_length: int = 25
     amount_of_super_spines: int = 0
     super_spine_template: Optional[Template] = None
     loopback_pool: Optional[Pool] = None
