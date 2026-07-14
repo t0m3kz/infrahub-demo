@@ -310,6 +310,7 @@ nodes:
     inherit_from:
       - ManagedHA
       - ManagedGeneric
+      - ManagedSaasService
       - ManagedInlineService
       - ManagedProxyService
     uniqueness_constraints:
@@ -342,12 +343,6 @@ nodes:
           - name: other
             label: "Other"
             color: "#95A5A6"
-      - name: tenant_id
-        kind: Text
-        label: "Tenant / Org ID"
-        optional: true
-        order_weight: 1500
-        description: "Cloud tenant or organization identifier"
       - name: tunnel_endpoint
         kind: Text
         label: "Tunnel Endpoint"
