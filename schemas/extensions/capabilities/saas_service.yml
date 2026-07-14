@@ -21,8 +21,6 @@ generics:
     label: SaaS Service
     icon: "mdi:cloud-outline"
     include_in_menu: false
-    inherit_from:
-      - ManagedGeneric
     attributes:
       - name: tenant_id
         kind: Text
@@ -89,6 +87,7 @@ nodes:
     order_by:
       - name__value
     inherit_from:
+      - ManagedGeneric
       - ManagedSaasService
     attributes:
       - name: provider
@@ -141,6 +140,7 @@ nodes:
     order_by:
       - name__value
     inherit_from:
+      - ManagedGeneric
       - ManagedSaasService
     attributes:
       - name: provider
@@ -190,6 +190,7 @@ nodes:
     order_by:
       - name__value
     inherit_from:
+      - ManagedGeneric
       - ManagedSaasService
     attributes:
       - name: provider
