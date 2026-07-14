@@ -77,55 +77,55 @@ class DCTopologyGenerator(CommonGenerator):
             )
 
         naming_convention = self.data.naming_convention
-        is_ipv6 = self.data.design.is_ipv6
-        is_dual_stack = self.data.design.is_dual_stack
+        dc_design = self.data.design
+        is_ipv6 = dc_design.is_ipv6
+        is_dual_stack = dc_design.is_dual_stack
 
-        # Pool prefix lengths set explicitly on DC instance (operator knows their capacity plan).
-        # IPv6: technical and loopback get +96 offset (128-32 base difference).
+        # Prefix lengths come from the design; the DC instance can override by pre-attaching pools.
+        # Values must already match the underlay_protocol (IPv4 or IPv6) — no conversion needed.
         # Management is always IPv4.
-        base_technical = self.data.technical_prefix_length
-        base_loopback = self.data.loopback_prefix_length
-        management_prefix = self.data.management_prefix_length
+        technical_prefix = dc_design.technical_prefix_length
+        loopback_prefix = dc_design.loopback_prefix_length
+        management_prefix = dc_design.management_prefix_length
 
-        if is_ipv6:
-            technical_prefix = base_technical + 96
-            loopback_prefix = base_loopback + 96
-        elif is_dual_stack:
-            technical_prefix = base_technical + 96
-            loopback_prefix = base_loopback
-        else:
-            technical_prefix = base_technical
-            loopback_prefix = base_loopback
-
-        pools_to_allocate: dict[str, int] = {
-            "technical": technical_prefix,
-            "loopback": loopback_prefix,
-            "management": management_prefix,
+        # Collect pools that already exist on the DC instance — those are reused as-is.
+        # Only pools that are absent need to be allocated from the design defaults.
+        existing_dc_pools: dict[str, Any] = {}
+        pool_name_to_attr = {
+            "technical": "technical_pool",
+            "loopback": "loopback_pool",
+            "management": "management_pool",
         }
-        design_mode = (
-            "back-to-back"
-            if (self.data.design and getattr(self.data.design, "max_super_spines_per_fabric", 0) == 0)
-            else "super-spine"
-        )
+        for pool_key, attr in pool_name_to_attr.items():
+            existing = getattr(self.data, attr, None)
+            if existing:
+                existing_dc_pools[pool_key] = existing
+
+        pools_to_allocate: dict[str, int] = {}
+        for pool_key, prefix in [
+            ("technical", technical_prefix),
+            ("loopback", loopback_prefix),
+            ("management", management_prefix),
+        ]:
+            if pool_key not in existing_dc_pools:
+                pools_to_allocate[pool_key] = prefix
+
+        design_mode = "back-to-back" if getattr(dc_design, "max_super_spines_per_fabric", 0) == 0 else "super-spine"
         if amount_of_super_spines > 0 and super_spine_template and design_mode != "back-to-back":
             super_spine_loopback_prefix = calculate_super_spine_loopback_prefix(
                 max_super_spines=amount_of_super_spines,
                 ipv6=is_ipv6,
             )
             pools_to_allocate["super-spine-loopback"] = super_spine_loopback_prefix
-            self.logger.info(
-                f"Creating pools from design: technical=/{technical_prefix}, "
-                f"loopback=/{loopback_prefix}, management=/{management_prefix}, "
-                f"super-spine-loopback=/{super_spine_loopback_prefix}"
-            )
-        else:
-            reason = "back-to-back design" if design_mode == "back-to-back" else "no super-spines"
-            self.logger.info(
-                f"Creating pools from design: technical=/{technical_prefix}, "
-                f"loopback=/{loopback_prefix}, management=/{management_prefix} ({reason})"
-            )
 
-        dc_pools = await self.allocate_resource_pools(
+        reused = list(existing_dc_pools.keys())
+        creating = list(pools_to_allocate.keys())
+        if reused:
+            self.logger.info(f"Reusing existing DC pools: {reused}; creating: {creating}")
+        else:
+            self.logger.info(f"Creating pools from design: {creating}")
+
+        new_pools = await self.allocate_resource_pools(
             id=dc_id,
             strategy="fabric",
             pools=pools_to_allocate,
@@ -133,18 +133,22 @@ class DCTopologyGenerator(CommonGenerator):
             dual_stack=is_dual_stack,
         )
 
-        # Update DC with pool references (single fetch + save)
-        dc = await self.client.get(kind="TopologyDataCenter", id=dc_id)
-        if dc:
-            pool_attr_map: dict[str, str] = {
-                "loopback": "loopback_pool",
-                "management": "management_pool",
-                "technical": "technical_pool",
-            }
-            for pool_name, pool_obj in dc_pools.items():
-                if pool_name in pool_attr_map:
-                    setattr(dc, pool_attr_map[pool_name], {"id": pool_obj.id, "hfid": [pool_obj.hfid]})
-            await dc.save(allow_upsert=True)
+        # Merge existing + newly created into dc_pools for downstream use
+        dc_pools: dict[str, Any] = {**existing_dc_pools, **new_pools}
+
+        # Update DC with pool references for any newly created pools
+        if new_pools:
+            dc = await self.client.get(kind="TopologyDataCenter", id=dc_id)
+            if dc:
+                pool_attr_map: dict[str, str] = {
+                    "loopback": "loopback_pool",
+                    "management": "management_pool",
+                    "technical": "technical_pool",
+                }
+                for pool_name, pool_obj in new_pools.items():
+                    if pool_name in pool_attr_map:
+                        setattr(dc, pool_attr_map[pool_name], {"id": pool_obj.id, "hfid": [pool_obj.hfid]})
+                await dc.save(allow_upsert=True)
 
         # Derive deterministic ASN range from DC name (unique per site)
         max_pods = self.data.design.max_pods

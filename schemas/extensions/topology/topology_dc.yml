@@ -100,6 +100,42 @@ nodes:
           min_value: 1
           max_value: 8
 
+      # ADDRESS SPACE SIZING
+      # Used as defaults when a DC instance has no pools set.
+      # The DC instance may override by pre-attaching pools directly.
+      - name: loopback_prefix_length
+        label: "Loopback Pool Prefix Length"
+        description: "Loopback pool prefix — match underlay_protocol (/24 IPv4, /120 IPv6)."
+        kind: Number
+        optional: false
+        default_value: 23
+        order_weight: 1800
+        parameters:
+          min_value: 8
+          max_value: 128
+
+      - name: technical_prefix_length
+        label: "Technical Pool Prefix Length"
+        description: "P2P link pool prefix — match underlay_protocol (/19 IPv4, /115 IPv6)."
+        kind: Number
+        optional: false
+        default_value: 19
+        order_weight: 1810
+        parameters:
+          min_value: 8
+          max_value: 128
+
+      - name: management_prefix_length
+        label: "Management Pool Prefix Length"
+        description: "Prefix length for management pool — always IPv4 regardless of underlay_protocol."
+        kind: Number
+        optional: false
+        default_value: 25
+        order_weight: 1820
+        parameters:
+          min_value: 16
+          max_value: 30
+
 
   - name: PodDesign
     namespace: Topology
@@ -363,38 +399,6 @@ nodes:
           min_value: 0
 
 
-      - name: loopback_prefix_length
-        label: "Loopback Pool Prefix Length"
-        description: "IPv4 base prefix for loopback pool (e.g. 24 = /24 IPv4, /120 IPv6). Must fit all devices."
-        kind: Number
-        optional: false
-        default_value: 23
-        order_weight: 1020
-        parameters:
-          min_value: 16
-          max_value: 30
-
-      - name: technical_prefix_length
-        label: "Technical Pool Prefix Length"
-        description: "IPv4 base prefix for P2P link pool (e.g. 19 = /19 IPv4, /115 IPv6). Must fit all fabric links."
-        kind: Number
-        optional: false
-        default_value: 19
-        order_weight: 1030
-        parameters:
-          min_value: 16
-          max_value: 30
-
-      - name: management_prefix_length
-        label: "Management Pool Prefix Length"
-        description: "IPv4 prefix for management pool (always IPv4). Must fit all managed devices."
-        kind: Number
-        optional: false
-        default_value: 25
-        order_weight: 1040
-        parameters:
-          min_value: 16
-          max_value: 30
       - name: naming_convention
         label: "Naming Convention"
         description: "Device naming convention for this data center"
