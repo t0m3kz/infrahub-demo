@@ -9,9 +9,6 @@ spec:
       design: S_OSPF_IBGP
       naming_convention: flat
       overlay_technology: vxlan_evpn
-      loopback_prefix_length: 24
-      technical_prefix_length: 21
-      management_prefix_length: 26
       fabric_interface_sorting_method: top_down
       member_of_groups:
         - topologies_dc
