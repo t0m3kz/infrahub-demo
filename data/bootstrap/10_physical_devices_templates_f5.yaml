@@ -24,6 +24,10 @@ spec:
             name: "1.2"
             role: uplink
             interface_type: 25gbase-x-sfp28
+          - template_name: BIG-IP-i5800_LOAD_BALANCER_1.3
+            name: "1.3"
+            role: ha
+            interface_type: 25gbase-x-sfp28
           - template_name: BIG-IP-i5800_LOAD_BALANCER_2.1
             name: "2.1"
             role: customer

@@ -34,7 +34,7 @@ spec:
             interface_type: 100gbase-x-qsfp28
           - template_name: CP-26000_FIREWALL_sync
             name: sync
-            role: mlag-peer
+            role: ha
             interface_type: 10gbase-x-sfpp
 
     - template_name: PA-5260_FIREWALL
@@ -67,9 +67,9 @@ spec:
             interface_type: 100gbase-x-qsfp28
           - template_name: PA-5260_FIREWALL_ha1
             name: HA1
-            role: mlag-peer
+            role: ha
             interface_type: 1000base-t
           - template_name: PA-5260_FIREWALL_ha2
             name: HA2
-            role: mlag-peer
+            role: ha
             interface_type: 100gbase-x-qsfp28

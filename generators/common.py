@@ -409,7 +409,14 @@ class CommonGenerator(FailOnErrorLoggerMixin, RoutingMixin, InfrahubGenerator):
                         # Pass existing id so upsert matches by ID, not hfid lookup
                         **({"id": existing_device.id} if existing_device else {}),
                         "name": name,
-                        "object_template": {"id": template.get("id") if template else None},
+                        # Only send object_template on first creation — re-sending it on an existing
+                        # device triggers a server-side re-instantiation that fails with
+                        # "device is mandatory for DcimPhysicalInterface".
+                        **(
+                            {"object_template": {"id": template.get("id") if template else None}}
+                            if not existing_device
+                            else {}
+                        ),
                         "status": "active",
                         "role": device_role,
                         "deployment": {"id": deployment_id} if deployment_id else None,

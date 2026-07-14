@@ -20,6 +20,9 @@ spec:
           - template_name: CloudGuard_EDGE_eth0
             name: eth0
             role: management
-          - template_name: CloudGuard_EDGE_eth[1-7]
-            name: eth[1-7]
+          - template_name: CloudGuard_EDGE_eth[1-6]
+            name: eth[1-6]
             role: customer
+          - template_name: CloudGuard_EDGE_eth7
+            name: eth7
+            role: ha
