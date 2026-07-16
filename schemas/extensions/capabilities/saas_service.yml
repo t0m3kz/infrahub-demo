@@ -1,17 +1,15 @@
 ---
 # SaaS Service capabilities
 #
-# ManagedSaasService — shared generic base for all cloud SaaS services.
-# Inherits ManagedGeneric so existing proxy_service / saas_service relationships
-# on AppComponent, VirtCluster, and TopologySaas all resolve to any subtype.
+# ManagedSaasService — shared generic base for all cloud SaaS service capabilities.
+# Generics cannot inherit from other generics in Infrahub, so name/status/description
+# are defined directly here rather than pulled from ManagedGeneric.
 #
 # Concrete nodes:
 #   ManagedConferencingService  — real-time media (Webex, Zoom, Teams)
 #   ManagedCRMService           — customer/sales platforms (Salesforce, HubSpot)
 #   ManagedStorageService       — file and object storage (SharePoint, Box, S3)
-#
-# ManagedCloudProxyHA (ha.yml) also inherits ManagedSaasService so SASE services
-# are reachable via the same saas_service relationship on TopologySaas.
+#   ManagedCloudProxyHA         — SASE/cloud proxy (Zscaler ZIA, Netskope) — defined in ha.yml
 version: "1.0"
 
 generics:
