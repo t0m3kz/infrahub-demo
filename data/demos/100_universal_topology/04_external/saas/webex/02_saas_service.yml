@@ -35,8 +35,10 @@ spec:
     - name: WEBEX-EU-FRANKFURT
       parent: WEBEX
       region_name: eu-frankfurt
-      saas_service: WEBEX-SVC-FRA
+      saas_services:
+        - WEBEX-SVC-FRA
     - name: WEBEX-EU-AMSTERDAM
       parent: WEBEX
       region_name: eu-amsterdam
-      saas_service: WEBEX-SVC-AMS
+      saas_services:
+        - WEBEX-SVC-AMS
