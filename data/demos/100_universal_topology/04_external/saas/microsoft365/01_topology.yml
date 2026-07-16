@@ -4,11 +4,6 @@
 # Modelled as two separate TopologySaas nodes to reflect different service types:
 #   M365-TEAMS-EMEA    — real-time conferencing (service_type: conferencing)
 #   M365-STORAGE-EMEA  — file and object storage (service_type: storage)
-#
-# Both share the same regional PoP footprint (Amsterdam + Dublin for EMEA).
-# Per-region service capabilities carry data-residency and PoP-specific metadata.
-
-# ── Teams ─────────────────────────────────────────────────────────────────────
 
 apiVersion: infrahub.app/v1
 kind: Object
@@ -34,61 +29,6 @@ spec:
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
-  kind: ManagedConferencingService
-  data:
-    - name: M365-TEAMS-SVC
-      provider: teams
-      tenant_id: "m365-tenant-demo-001"
-      service_tier: enterprise
-      data_classification: confidential
-      media_optimization: true
-      status: active
-      description: "Microsoft Teams enterprise tenant — EMEA region"
-
-    - name: M365-TEAMS-SVC-EMEA-WEST
-      provider: teams
-      tenant_id: "m365-tenant-demo-001"
-      service_tier: enterprise
-      data_classification: confidential
-      media_optimization: true
-      status: active
-      description: "Microsoft Teams — EMEA West PoP (Amsterdam), recording region eu-west-1"
-
-    - name: M365-TEAMS-SVC-EMEA-NORTH
-      provider: teams
-      tenant_id: "m365-tenant-demo-001"
-      service_tier: enterprise
-      data_classification: confidential
-      media_optimization: true
-      status: active
-      description: "Microsoft Teams — EMEA North PoP (Dublin), recording region eu-west-1"
-
----
-apiVersion: infrahub.app/v1
-kind: Object
-spec:
-  kind: TopologySaas
-  data:
-    - name: M365-TEAMS-EMEA
-      saas_service: M365-TEAMS-SVC
-
----
-apiVersion: infrahub.app/v1
-kind: Object
-spec:
-  kind: TopologySaasRegion
-  data:
-    - name: M365-TEAMS-EMEA-EMEA-WEST
-      saas_service: M365-TEAMS-SVC-EMEA-WEST
-    - name: M365-TEAMS-EMEA-EMEA-NORTH
-      saas_service: M365-TEAMS-SVC-EMEA-NORTH
-
-# ── SharePoint / OneDrive ────────────────────────────────────────────────────
-
----
-apiVersion: infrahub.app/v1
-kind: Object
-spec:
   kind: TopologySaas
   data:
     - name: M365-STORAGE-EMEA
@@ -105,56 +45,3 @@ spec:
           - region_name: emea-north
             status: active
             location: dub
-
----
-apiVersion: infrahub.app/v1
-kind: Object
-spec:
-  kind: ManagedStorageService
-  data:
-    - name: M365-STORAGE-SVC
-      provider: sharepoint
-      tenant_id: "m365-tenant-demo-001"
-      service_tier: enterprise
-      data_classification: confidential
-      encryption_at_rest: true
-      status: active
-      description: "SharePoint Online + OneDrive — enterprise document platform"
-
-    - name: M365-STORAGE-SVC-EMEA-WEST
-      provider: sharepoint
-      tenant_id: "m365-tenant-demo-001"
-      service_tier: enterprise
-      data_classification: confidential
-      encryption_at_rest: true
-      status: active
-      description: "SharePoint — EMEA West PoP (Amsterdam), data residency eu-west-1"
-
-    - name: M365-STORAGE-SVC-EMEA-NORTH
-      provider: sharepoint
-      tenant_id: "m365-tenant-demo-001"
-      service_tier: enterprise
-      data_classification: confidential
-      encryption_at_rest: true
-      status: active
-      description: "SharePoint — EMEA North PoP (Dublin), data residency eu-west-1"
-
----
-apiVersion: infrahub.app/v1
-kind: Object
-spec:
-  kind: TopologySaas
-  data:
-    - name: M365-STORAGE-EMEA
-      saas_service: M365-STORAGE-SVC
-
----
-apiVersion: infrahub.app/v1
-kind: Object
-spec:
-  kind: TopologySaasRegion
-  data:
-    - name: M365-STORAGE-EMEA-EMEA-WEST
-      saas_service: M365-STORAGE-SVC-EMEA-WEST
-    - name: M365-STORAGE-EMEA-EMEA-NORTH
-      saas_service: M365-STORAGE-SVC-EMEA-NORTH

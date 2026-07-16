@@ -1,13 +1,9 @@
 ---
 # Cisco Webex — conferencing and collaboration SaaS
 #
-# Webex is a destination SaaS — no enforcement point on-prem.
-# Traffic is subject to media_optimization (direct-media breakout) so RTP/SRTP
-# bypasses proxy inspection and takes the most direct internet path.
-#
 # Two regional PoPs anchor the topology:
-#   WEBEX-EMEA-WEST    — Dublin (serves UK, NL, ES offices)
-#   WEBEX-EMEA-CENTRAL — Frankfurt (serves DE, FR offices)
+#   emea-west    — Dublin    (serves UK, NL, ES offices)
+#   emea-central — Frankfurt (serves DE, FR offices)
 
 apiVersion: infrahub.app/v1
 kind: Object
@@ -25,66 +21,6 @@ spec:
           - region_name: emea-west
             status: active
             location: dub
-
           - region_name: emea-central
             status: active
             location: fra
-
----
-# ManagedConferencingService — global contract metadata for Webex
-
-apiVersion: infrahub.app/v1
-kind: Object
-spec:
-  kind: ManagedConferencingService
-  data:
-    - name: WEBEX-EMEA-SVC
-      provider: webex
-      tenant_id: "webex-org-demo-001"
-      service_tier: enterprise
-      data_classification: internal
-      media_optimization: true
-      status: active
-      description: "Cisco Webex enterprise tenant — EMEA"
-
-    - name: WEBEX-EMEA-SVC-WEST
-      provider: webex
-      tenant_id: "webex-org-demo-001"
-      service_tier: enterprise
-      data_classification: internal
-      media_optimization: true
-      status: active
-      description: "Cisco Webex — EMEA West PoP (Dublin), recording region eu-west-1"
-
-    - name: WEBEX-EMEA-SVC-CENTRAL
-      provider: webex
-      tenant_id: "webex-org-demo-001"
-      service_tier: enterprise
-      data_classification: internal
-      media_optimization: true
-      status: active
-      description: "Cisco Webex — EMEA Central PoP (Frankfurt), recording region eu-central-1"
-
----
-# Link global service capability to topology node
-
-apiVersion: infrahub.app/v1
-kind: Object
-spec:
-  kind: TopologySaas
-  data:
-    - name: WEBEX-EMEA
-      saas_service: WEBEX-EMEA-SVC
-
----
-# Link per-region service capabilities to SaasRegion nodes
-
-apiVersion: infrahub.app/v1
-kind: Object
-spec:
-  kind: TopologySaasRegion
-  data:
-    - name: WEBEX-EMEA-EMEA-WEST
-      saas_service: WEBEX-EMEA-SVC-WEST
-    - name: WEBEX-EMEA-EMEA-CENTRAL
-      saas_service: WEBEX-EMEA-SVC-CENTRAL
