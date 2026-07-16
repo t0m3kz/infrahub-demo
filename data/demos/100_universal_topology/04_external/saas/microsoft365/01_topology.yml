@@ -4,6 +4,7 @@
 # Modelled as two separate TopologySaas nodes to reflect different service types:
 #   M365-TEAMS-EMEA    — real-time conferencing (service_type: conferencing)
 #   M365-STORAGE-EMEA  — file and object storage (service_type: storage)
+# Region names use Azure ARM identifiers (westeurope, northeurope)
 
 apiVersion: infrahub.app/v1
 kind: Object
@@ -18,10 +19,10 @@ spec:
       children:
         kind: TopologySaasRegion
         data:
-          - region_name: emea-west
+          - region_name: westeurope
             status: active
             location: ams
-          - region_name: emea-north
+          - region_name: northeurope
             status: active
             location: dub
 
@@ -35,13 +36,13 @@ spec:
       provider: microsoft
       service_type: storage
       status: active
-      description: "Microsoft SharePoint and OneDrive — EMEA document storage"
+      description: "Microsoft SharePoint and OneDrive — EMEA document storage (EUR data residency)"
       children:
         kind: TopologySaasRegion
         data:
-          - region_name: emea-west
+          - region_name: westeurope
             status: active
             location: ams
-          - region_name: emea-north
+          - region_name: northeurope
             status: active
             location: dub

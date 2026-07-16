@@ -1,29 +1,30 @@
 ---
 # Microsoft 365 — per-region service capability nodes
 # Links service metadata to each TopologySaasRegion via saas_service.
+# Region names: westeurope (Amsterdam), northeurope (Dublin) — Azure ARM identifiers
 
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
   kind: ManagedConferencingService
   data:
-    - name: M365-TEAMS-SVC-EMEA-WEST
+    - name: M365-TEAMS-SVC-WESTEUROPE
       provider: teams
       tenant_id: "m365-tenant-demo-001"
       service_tier: enterprise
       data_classification: confidential
       media_optimization: true
       status: active
-      description: "Microsoft Teams — EMEA West PoP (Amsterdam), recording region eu-west-1"
+      description: "Microsoft Teams — westeurope PoP (Amsterdam)"
 
-    - name: M365-TEAMS-SVC-EMEA-NORTH
+    - name: M365-TEAMS-SVC-NORTHEUROPE
       provider: teams
       tenant_id: "m365-tenant-demo-001"
       service_tier: enterprise
       data_classification: confidential
       media_optimization: true
       status: active
-      description: "Microsoft Teams — EMEA North PoP (Dublin), recording region eu-west-1"
+      description: "Microsoft Teams — northeurope PoP (Dublin)"
 
 ---
 apiVersion: infrahub.app/v1
@@ -31,10 +32,10 @@ kind: Object
 spec:
   kind: TopologySaasRegion
   data:
-    - name: M365-TEAMS-EMEA-EMEA-WEST
-      saas_service: M365-TEAMS-SVC-EMEA-WEST
-    - name: M365-TEAMS-EMEA-EMEA-NORTH
-      saas_service: M365-TEAMS-SVC-EMEA-NORTH
+    - name: M365-TEAMS-EMEA-WESTEUROPE
+      saas_service: M365-TEAMS-SVC-WESTEUROPE
+    - name: M365-TEAMS-EMEA-NORTHEUROPE
+      saas_service: M365-TEAMS-SVC-NORTHEUROPE
 
 ---
 apiVersion: infrahub.app/v1
@@ -42,23 +43,23 @@ kind: Object
 spec:
   kind: ManagedStorageService
   data:
-    - name: M365-STORAGE-SVC-EMEA-WEST
+    - name: M365-STORAGE-SVC-WESTEUROPE
       provider: sharepoint
       tenant_id: "m365-tenant-demo-001"
       service_tier: enterprise
       data_classification: confidential
       encryption_at_rest: true
       status: active
-      description: "SharePoint — EMEA West PoP (Amsterdam), data residency eu-west-1"
+      description: "SharePoint/OneDrive — westeurope PoP (Amsterdam), EUR data residency"
 
-    - name: M365-STORAGE-SVC-EMEA-NORTH
+    - name: M365-STORAGE-SVC-NORTHEUROPE
       provider: sharepoint
       tenant_id: "m365-tenant-demo-001"
       service_tier: enterprise
       data_classification: confidential
       encryption_at_rest: true
       status: active
-      description: "SharePoint — EMEA North PoP (Dublin), data residency eu-west-1"
+      description: "SharePoint/OneDrive — northeurope PoP (Dublin), EUR data residency"
 
 ---
 apiVersion: infrahub.app/v1
@@ -66,7 +67,7 @@ kind: Object
 spec:
   kind: TopologySaasRegion
   data:
-    - name: M365-STORAGE-EMEA-EMEA-WEST
-      saas_service: M365-STORAGE-SVC-EMEA-WEST
-    - name: M365-STORAGE-EMEA-EMEA-NORTH
-      saas_service: M365-STORAGE-SVC-EMEA-NORTH
+    - name: M365-STORAGE-EMEA-WESTEUROPE
+      saas_service: M365-STORAGE-SVC-WESTEUROPE
+    - name: M365-STORAGE-EMEA-NORTHEUROPE
+      saas_service: M365-STORAGE-SVC-NORTHEUROPE
