@@ -32,9 +32,7 @@ kind: Object
 spec:
   kind: TopologySaasRegion
   data:
-    - parent: ZSCALER-SASE
-      region_name: europe-west
+    - name: ZSCALER-SASE-EUROPE-WEST
       saas_service: ZSCALER-ZIA-EUROPE-WEST
-    - parent: ZSCALER-SASE
-      region_name: europe-central
+    - name: ZSCALER-SASE-EUROPE-CENTRAL
       saas_service: ZSCALER-ZIA-EUROPE-CENTRAL

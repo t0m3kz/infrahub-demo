@@ -23,8 +23,7 @@ kind: Object
 spec:
   kind: TopologySaasRegion
   data:
-    - parent: SALESFORCE-PROD
-      region_name: emea-west
+    - name: SALESFORCE-PROD-EMEA-WEST
       saas_service: SALESFORCE-PROD-SVC-EMEA-WEST
 
 ---
@@ -49,6 +48,5 @@ kind: Object
 spec:
   kind: TopologySaasRegion
   data:
-    - parent: SALESFORCE-SANDBOX
-      region_name: emea-west
+    - name: SALESFORCE-SANDBOX-EMEA-WEST
       saas_service: SALESFORCE-SANDBOX-SVC-EMEA-WEST

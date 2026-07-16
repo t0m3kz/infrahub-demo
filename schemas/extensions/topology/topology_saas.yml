@@ -107,9 +107,6 @@ nodes:
       - TopologyConnectableLocation
     parent: TopologySaas
     children: ""
-    human_friendly_id:
-      - parent__name__value
-      - region_name__value
     display_label: "{{ name__value }}"
     uniqueness_constraints:
       - [parent, region_name__value]
