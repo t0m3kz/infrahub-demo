@@ -1,13 +1,14 @@
 ---
 # Salesforce — per-region service capability nodes
 # Links service metadata to each TopologySaasRegion via saas_service.
+# Instance identifiers from api.status.salesforce.com/v1/instances (EMEA production)
 
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
   kind: ManagedCRMService
   data:
-    - name: SALESFORCE-PROD-SVC-EMEA-WEST
+    - name: SALESFORCE-PROD-SVC-ARE12
       provider: salesforce
       tenant_id: "sf-org-demo-001"
       service_tier: enterprise
@@ -15,7 +16,7 @@ spec:
       instance_url: "https://demo.my.salesforce.com"
       sandbox: false
       status: active
-      description: "Salesforce CRM — EMEA West PoP (Dublin), data residency eu-west-1"
+      description: "Salesforce CRM — instance ARE12 (Amsterdam, AM3 superpod)"
 
 ---
 apiVersion: infrahub.app/v1
@@ -23,8 +24,8 @@ kind: Object
 spec:
   kind: TopologySaasRegion
   data:
-    - name: SALESFORCE-PROD-EMEA-WEST
-      saas_service: SALESFORCE-PROD-SVC-EMEA-WEST
+    - name: SALESFORCE-PROD-ARE12
+      saas_service: SALESFORCE-PROD-SVC-ARE12
 
 ---
 apiVersion: infrahub.app/v1
@@ -32,7 +33,7 @@ kind: Object
 spec:
   kind: ManagedCRMService
   data:
-    - name: SALESFORCE-SANDBOX-SVC-EMEA-WEST
+    - name: SALESFORCE-SANDBOX-SVC-ARE2S
       provider: salesforce
       tenant_id: "sf-org-demo-001"
       service_tier: standard
@@ -40,7 +41,7 @@ spec:
       instance_url: "https://demo--sandbox.sandbox.my.salesforce.com"
       sandbox: true
       status: active
-      description: "Salesforce CRM sandbox — EMEA West PoP (Dublin)"
+      description: "Salesforce CRM sandbox — instance ARE2S (Amsterdam)"
 
 ---
 apiVersion: infrahub.app/v1
@@ -48,5 +49,5 @@ kind: Object
 spec:
   kind: TopologySaasRegion
   data:
-    - name: SALESFORCE-SANDBOX-EMEA-WEST
-      saas_service: SALESFORCE-SANDBOX-SVC-EMEA-WEST
+    - name: SALESFORCE-SANDBOX-ARE2S
+      saas_service: SALESFORCE-SANDBOX-SVC-ARE2S

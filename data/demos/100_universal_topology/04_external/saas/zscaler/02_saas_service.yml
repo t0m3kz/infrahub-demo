@@ -2,29 +2,30 @@
 # Zscaler ZIA — per-region ManagedCloudProxyHA enforcement capability nodes
 # Links service metadata to each TopologySaasRegion via saas_service.
 # Virtual circuit tunnel endpoints are modelled in 01_connectivity.yml.
+# Region names: ams2, fra4 — Zscaler node identifiers from cenr/json API
 
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
   kind: ManagedCloudProxyHA
   data:
-    - name: ZSCALER-ZIA-EUROPE-WEST
+    - name: ZSCALER-ZIA-AMS2
       provider: zscaler_zia
       tenant_id: "org-demo-001"
       service_tier: enterprise
       data_classification: confidential
       mode: cloud_managed
       status: active
-      description: "Zscaler ZIA — Europe West enforcement PoP (Amsterdam)"
+      description: "Zscaler ZIA — Amsterdam II PoP (ams2.sme.zscaler.net)"
 
-    - name: ZSCALER-ZIA-EUROPE-CENTRAL
+    - name: ZSCALER-ZIA-FRA4
       provider: zscaler_zia
       tenant_id: "org-demo-001"
       service_tier: enterprise
       data_classification: confidential
       mode: cloud_managed
       status: active
-      description: "Zscaler ZIA — Europe Central enforcement PoP (Frankfurt)"
+      description: "Zscaler ZIA — Frankfurt IV PoP (fra4.sme.zscaler.net)"
 
 ---
 apiVersion: infrahub.app/v1
@@ -32,7 +33,7 @@ kind: Object
 spec:
   kind: TopologySaasRegion
   data:
-    - name: ZSCALER-SASE-EUROPE-WEST
-      saas_service: ZSCALER-ZIA-EUROPE-WEST
-    - name: ZSCALER-SASE-EUROPE-CENTRAL
-      saas_service: ZSCALER-ZIA-EUROPE-CENTRAL
+    - name: ZSCALER-SASE-AMS2
+      saas_service: ZSCALER-ZIA-AMS2
+    - name: ZSCALER-SASE-FRA4
+      saas_service: ZSCALER-ZIA-FRA4

@@ -231,7 +231,7 @@ spec:
       provider: Zscaler
       locations:
         - AM1
-        - ZSCALER-SASE-EUROPE-WEST
+        - ZSCALER-SASE-AMS2
       interfaces:
         - - AM1-VCG-01
           - ZSC-AM1-WEST-PRI
@@ -246,7 +246,7 @@ spec:
       provider: Zscaler
       locations:
         - AM1
-        - ZSCALER-SASE-EUROPE-CENTRAL
+        - ZSCALER-SASE-FRA4
       interfaces:
         - - AM1-VCG-01
           - ZSC-AM1-CENTRAL-SEC
@@ -261,7 +261,7 @@ spec:
       provider: Zscaler
       locations:
         - FR6
-        - ZSCALER-SASE-EUROPE-CENTRAL
+        - ZSCALER-SASE-FRA4
       interfaces:
         - - FR6-VCG-01
           - ZSC-FR6-CENTRAL-PRI
@@ -276,7 +276,7 @@ spec:
       provider: Zscaler
       locations:
         - FR6
-        - ZSCALER-SASE-EUROPE-WEST
+        - ZSCALER-SASE-AMS2
       interfaces:
         - - FR6-VCG-01
           - ZSC-FR6-WEST-SEC
@@ -291,7 +291,7 @@ spec:
       provider: Zscaler
       locations:
         - PA4
-        - ZSCALER-SASE-EUROPE-CENTRAL
+        - ZSCALER-SASE-FRA4
       interfaces:
         - - PA4-VCG-01
           - ZSC-PA4-CENTRAL-PRI
@@ -306,7 +306,7 @@ spec:
       provider: Zscaler
       locations:
         - PA4
-        - ZSCALER-SASE-EUROPE-WEST
+        - ZSCALER-SASE-AMS2
       interfaces:
         - - PA4-VCG-01
           - ZSC-PA4-WEST-SEC
@@ -321,7 +321,7 @@ spec:
       provider: Zscaler
       locations:
         - PA6
-        - ZSCALER-SASE-EUROPE-CENTRAL
+        - ZSCALER-SASE-FRA4
       interfaces:
         - - PA6-VCG-01
           - ZSC-PA6-CENTRAL-PRI
@@ -336,7 +336,7 @@ spec:
       provider: Zscaler
       locations:
         - PA6
-        - ZSCALER-SASE-EUROPE-WEST
+        - ZSCALER-SASE-AMS2
       interfaces:
         - - PA6-VCG-01
           - ZSC-PA6-WEST-SEC
@@ -360,7 +360,7 @@ spec:
       provider: Zscaler
       locations:
         - OFC-LON-BRANCH-01
-        - ZSCALER-SASE-EUROPE-WEST
+        - ZSCALER-SASE-AMS2
       interfaces:
         - - OFC-LON-BRANCH-EDGE-01
           - ZSC-LON-WEST
@@ -375,7 +375,7 @@ spec:
       provider: Zscaler
       locations:
         - OFC-EDI-BRANCH-01
-        - ZSCALER-SASE-EUROPE-WEST
+        - ZSCALER-SASE-AMS2
       interfaces:
         - - OFC-EDI-BRANCH-EDGE-01
           - ZSC-EDI-WEST
@@ -390,7 +390,7 @@ spec:
       provider: Zscaler
       locations:
         - OFC-BCN-BRANCH-01
-        - ZSCALER-SASE-EUROPE-WEST
+        - ZSCALER-SASE-AMS2
       interfaces:
         - - OFC-BCN-BRANCH-EDGE-01
           - ZSC-BCN-WEST
@@ -405,7 +405,7 @@ spec:
       provider: Zscaler
       locations:
         - OFC-STR-BRANCH-01
-        - ZSCALER-SASE-EUROPE-CENTRAL
+        - ZSCALER-SASE-FRA4
       interfaces:
         - - OFC-STR-BRANCH-EDGE-01
           - ZSC-STR-CENTRAL
@@ -420,7 +420,7 @@ spec:
       provider: Zscaler
       locations:
         - OFC-MAD-REGIONAL-01
-        - ZSCALER-SASE-EUROPE-CENTRAL
+        - ZSCALER-SASE-FRA4
       interfaces:
         - - OFC-MAD-REGIONAL-EDGE-01
           - ZSC-MAD-01-CENTRAL
@@ -435,7 +435,7 @@ spec:
       provider: Zscaler
       locations:
         - OFC-MAD-REGIONAL-01
-        - ZSCALER-SASE-EUROPE-CENTRAL
+        - ZSCALER-SASE-FRA4
       interfaces:
         - - OFC-MAD-REGIONAL-EDGE-02
           - ZSC-MAD-02-CENTRAL

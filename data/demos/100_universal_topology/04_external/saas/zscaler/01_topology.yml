@@ -1,9 +1,10 @@
 ---
 # Zscaler SASE — cloud-delivered Secure Web Gateway / Zero Trust Network Access
 #
-# Two regional nodes cover the topology:
-#   europe-west    — Amsterdam PoP (primary for UK/NL/ES offices and AM1 hub)
-#   europe-central — Frankfurt PoP  (primary for DE/FR offices and FR6/PA4/PA6 hubs)
+# Two regional PoPs cover the topology:
+#   ams2  — Amsterdam PoP (primary for UK/NL/ES offices and AM1 hub)
+#   fra4  — Frankfurt PoP  (primary for DE/FR offices and FR6/PA4/PA6 hubs)
+# Region names use Zscaler's own node identifiers (from config.zscaler.com/api/zscaler.net/cenr/json)
 
 apiVersion: infrahub.app/v1
 kind: Object
@@ -18,10 +19,10 @@ spec:
       children:
         kind: TopologySaasRegion
         data:
-          - region_name: europe-west
+          - region_name: ams2
             status: active
             location: ams
-          - region_name: europe-central
+          - region_name: fra4
             status: active
             location: fra
 
