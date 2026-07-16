@@ -28,6 +28,12 @@ generics:
     label: Proxy Service
     icon: "mdi:swap-horizontal-bold"
     include_in_menu: false
+    attributes:
+      - name: name
+        kind: Text
+        label: Name
+        optional: false
+        order_weight: 1
 
   - name: HA
     namespace: Managed

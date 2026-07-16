@@ -391,7 +391,7 @@ nodes:
         order_weight: 1200
       - name: height
         label: Height (U)
-        optional: false
+        optional: true
         default_value: 1
         kind: Number
         order_weight: 1400
@@ -541,7 +541,7 @@ nodes:
         label: Rack Face
         description: On which face of the rack the device is mounted.
         kind: Dropdown
-        optional: false
+        optional: true
         default_value: front
         order_weight: 1515
         choices:

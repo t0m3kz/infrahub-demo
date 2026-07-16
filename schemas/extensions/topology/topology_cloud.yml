@@ -74,7 +74,7 @@ nodes:
       - name: status
         kind: Dropdown
         label: "Region Status"
-        optional: false
+        optional: true
         default_value: active
         order_weight: 300
         choices:
@@ -375,14 +375,9 @@ nodes:
     uniqueness_constraints:
       - [security_group, name__value]
     attributes:
-      - name: name
-        kind: Text
-        optional: false
-        unique: false
-        order_weight: 1000
       - name: direction
         kind: Dropdown
-        optional: false
+        optional: true
         default_value: ingress
         order_weight: 1100
         choices:
@@ -399,7 +394,7 @@ nodes:
         description: "Rule priority — lower = higher priority (provider-specific semantics)"
       - name: protocol
         kind: Dropdown
-        optional: false
+        optional: true
         default_value: tcp
         order_weight: 1300
         choices:
@@ -431,7 +426,7 @@ nodes:
           max_value: 65535
       - name: action
         kind: Dropdown
-        optional: false
+        optional: true
         default_value: allow
         order_weight: 1600
         choices:
@@ -493,12 +488,6 @@ nodes:
     display_label: "{{ name__value }}"
     uniqueness_constraints:
       - [virtual_network, name__value]
-    attributes:
-      - name: name
-        kind: Text
-        unique: true
-        description: Name of the security group
-        order_weight: 1000
     relationships:
       - name: virtual_network
         peer: CloudVirtualNetwork
@@ -544,11 +533,6 @@ nodes:
     uniqueness_constraints:
       - [account, cloud_id__value]
     attributes:
-      - name: name
-        kind: Text
-        unique: true
-        description: Name of the compute instance
-        order_weight: 1000
       - name: instance_type
         label: Instance Type
         kind: Text
@@ -658,12 +642,6 @@ nodes:
     display_label: "{{ name__value }}"
     uniqueness_constraints:
       - [virtual_network, name__value]
-    attributes:
-      - name: name
-        kind: Text
-        unique: true
-        description: Name of the internet gateway
-        order_weight: 1000
     relationships:
       - name: virtual_network
         peer: CloudVirtualNetwork
@@ -700,11 +678,6 @@ nodes:
     uniqueness_constraints:
       - [virtual_network, name__value]
     attributes:
-      - name: name
-        kind: Text
-        unique: true
-        description: Name of the NAT gateway
-        order_weight: 1000
       - name: public_ip
         label: Public IP Address
         kind: IPHost
@@ -754,11 +727,6 @@ nodes:
     uniqueness_constraints:
       - [virtual_network, name__value]
     attributes:
-      - name: name
-        kind: Text
-        unique: true
-        description: Name of the route table
-        order_weight: 1000
       - name: is_main
         label: Main Route Table
         kind: Boolean
@@ -799,11 +767,6 @@ nodes:
     uniqueness_constraints:
       - [account, public_ip__value]
     attributes:
-      - name: name
-        kind: Text
-        unique: true
-        description: Name of the Public IP
-        order_weight: 1000
       - name: public_ip
         label: Public IP Address
         kind: IPHost

@@ -29,7 +29,7 @@ generics:
         description: "Description of the load balancer"
       - name: status
         kind: Dropdown
-        optional: false
+        optional: true
         order_weight: 200
         description: "Operational status of the load balancer"
         choices:
@@ -283,7 +283,7 @@ nodes:
         order_weight: 110
       - name: status
         kind: Dropdown
-        optional: false
+        optional: true
         default_value: active
         order_weight: 200
         choices:

@@ -26,17 +26,6 @@ nodes:
     display_label: "{{name__value}}"
     order_by:
       - name__value
-    relationships:
-      - name: capabilities
-        peer: DcimCapabilities
-        label: "Peer Devices"
-        description: "The two devices that form this MLAG domain"
-        cardinality: many
-        optional: false
-        kind: Generic
-        direction: inbound
-        identifier: capabilities
-        order_weight: 900
     attributes:
       - name: domain_id
         kind: Number

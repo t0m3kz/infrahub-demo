@@ -21,7 +21,40 @@ generics:
     label: SaaS Service
     icon: "mdi:cloud-outline"
     include_in_menu: false
+    human_friendly_id:
+      - name__value
+    display_label: "{{name__value}}"
+    order_by:
+      - name__value
     attributes:
+      - name: name
+        kind: Text
+        label: Name
+        optional: false
+        order_weight: 1
+      - name: description
+        kind: Text
+        label: Description
+        optional: true
+        order_weight: 2
+      - name: status
+        kind: Dropdown
+        optional: true
+        order_weight: 30
+        default_value: provisioning
+        choices:
+          - name: provisioning
+            label: Provisioning
+            color: "#ffff7f"
+          - name: active
+            label: Active
+            color: "#7fbf7f"
+          - name: decommissioning
+            label: Decommissioning
+            color: "#fbfbfb"
+          - name: decommissioned
+            label: Decommissioned
+            color: "#bfbfbf"
       - name: tenant_id
         kind: Text
         label: "Tenant / Org ID"
@@ -79,15 +112,9 @@ nodes:
     label: Conferencing Service
     icon: "mdi:video-outline"
     include_in_menu: false
-    human_friendly_id:
-      - name__value
-    display_label: "{{name__value}}"
     uniqueness_constraints:
       - [name__value]
-    order_by:
-      - name__value
     inherit_from:
-      - ManagedGeneric
       - ManagedSaasService
     attributes:
       - name: provider
@@ -132,15 +159,9 @@ nodes:
     label: CRM Service
     icon: "mdi:account-group-outline"
     include_in_menu: false
-    human_friendly_id:
-      - name__value
-    display_label: "{{name__value}}"
     uniqueness_constraints:
       - [name__value]
-    order_by:
-      - name__value
     inherit_from:
-      - ManagedGeneric
       - ManagedSaasService
     attributes:
       - name: provider
@@ -182,15 +203,9 @@ nodes:
     label: Storage Service
     icon: "mdi:database-outline"
     include_in_menu: false
-    human_friendly_id:
-      - name__value
-    display_label: "{{name__value}}"
     uniqueness_constraints:
       - [name__value]
-    order_by:
-      - name__value
     inherit_from:
-      - ManagedGeneric
       - ManagedSaasService
     attributes:
       - name: provider

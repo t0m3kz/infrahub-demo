@@ -34,7 +34,7 @@ nodes:
       - name: provider_type
         kind: Dropdown
         label: Provider Type
-        optional: false
+        optional: true
         default_value: internet
         order_weight: 200
         choices:
@@ -50,7 +50,7 @@ nodes:
       - name: status
         kind: Dropdown
         label: Status
-        optional: false
+        optional: true
         default_value: active
         order_weight: 300
         choices:

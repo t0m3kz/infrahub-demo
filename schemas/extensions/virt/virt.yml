@@ -107,7 +107,7 @@ nodes:
 
       - name: status
         kind: Dropdown
-        optional: false
+        optional: true
         default_value: active
         order_weight: 1300
         choices:
@@ -136,7 +136,7 @@ nodes:
         kind: Boolean
         label: "HA Enabled"
         description: "Control plane HA (3+ nodes / vCenter HA / multi-AZ managed)."
-        optional: false
+        optional: true
         default_value: true
         order_weight: 1400
 
@@ -295,7 +295,7 @@ nodes:
       - name: pool_type
         kind: Dropdown
         label: "Pool Type"
-        optional: false
+        optional: true
         default_value: worker
         order_weight: 1100
         choices:
@@ -328,7 +328,7 @@ nodes:
       - name: scaling_mode
         kind: Dropdown
         label: "Scaling Mode"
-        optional: false
+        optional: true
         default_value: static
         order_weight: 1150
         choices:
@@ -347,7 +347,7 @@ nodes:
 
       - name: status
         kind: Dropdown
-        optional: false
+        optional: true
         default_value: active
         order_weight: 1200
         choices:

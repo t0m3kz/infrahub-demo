@@ -189,7 +189,7 @@ nodes:
         kind: Boolean
         label: "Default Storage Class"
         description: "Whether this is the default storage class for the cluster"
-        optional: false
+        optional: true
         default_value: false
         order_weight: 1300
 
@@ -197,7 +197,7 @@ nodes:
         kind: Dropdown
         label: "Reclaim Policy"
         description: "Volume reclaim policy when a PVC is deleted"
-        optional: false
+        optional: true
         default_value: delete
         order_weight: 1400
         choices:

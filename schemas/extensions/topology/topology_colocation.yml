@@ -64,7 +64,7 @@ nodes:
       - name: deployment_type
         kind: Dropdown
         label: Strategy
-        optional: false
+        optional: true
         order_weight: 650
         choices:
           - name: virtual

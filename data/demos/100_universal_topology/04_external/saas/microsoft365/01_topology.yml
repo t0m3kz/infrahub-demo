@@ -70,10 +70,10 @@ spec:
       children:
         kind: TopologySaasRegion
         data:
-          - region_name: emea-west
+          - region_name: sharepoint-emea-west
             status: active
             location: ams
-          - region_name: emea-north
+          - region_name: sharepoint-emea-north
             status: active
             location: dub
 

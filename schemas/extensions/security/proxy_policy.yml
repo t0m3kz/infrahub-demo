@@ -45,7 +45,7 @@ nodes:
       - name: category_type
         kind: Dropdown
         label: Category Type
-        optional: false
+        optional: true
         default_value: custom
         order_weight: 300
         choices:
@@ -118,7 +118,7 @@ nodes:
       - name: policy_type
         kind: Dropdown
         label: Policy Type
-        optional: false
+        optional: true
         default_value: customer
         order_weight: 300
         choices:
@@ -134,7 +134,7 @@ nodes:
         kind: Number
         label: Priority
         description: "Evaluation order — lower number processed first"
-        optional: false
+        optional: true
         default_value: 100
         order_weight: 400
       - name: enabled
@@ -147,7 +147,7 @@ nodes:
         kind: Dropdown
         label: Default Action
         description: "Action for traffic not matched by any rule"
-        optional: false
+        optional: true
         default_value: allow
         order_weight: 600
         choices:
@@ -193,13 +193,13 @@ nodes:
         kind: Number
         label: Priority
         description: "Evaluation order within the policy — lower number processed first"
-        optional: false
+        optional: true
         default_value: 10
         order_weight: 200
       - name: action
         kind: Dropdown
         label: Action
-        optional: false
+        optional: true
         default_value: block
         order_weight: 300
         choices:
@@ -226,7 +226,7 @@ nodes:
       - name: destination_type
         kind: Dropdown
         label: "Destination Type"
-        optional: false
+        optional: true
         default_value: category
         order_weight: 400
         choices:
