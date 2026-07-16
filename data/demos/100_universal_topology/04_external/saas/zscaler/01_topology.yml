@@ -11,7 +11,7 @@ kind: Object
 spec:
   kind: TopologySaas
   data:
-    - name: ZSCALER-SASE
+    - name: ZSCALER
       provider: zscaler
       service_type: sase
       status: active
