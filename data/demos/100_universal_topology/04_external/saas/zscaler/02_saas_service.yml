@@ -1,9 +1,10 @@
 ---
 # Zscaler ZIA — ManagedCloudProxyHA service capability
 #
-# Linked to the ZSCALER-SASE topology node via saas_service.
-# Carries operational metadata (tenant, tier, data classification) and
-# anchors shared proxy policies applied to all tenants on this service.
+# Global node carries tenant contract metadata.
+# Per-region nodes anchor the enforcement point at each PoP —
+# the virtual circuit model (01_connectivity.yml) captures the actual
+# tunnel endpoints; no need to duplicate them here.
 
 apiVersion: infrahub.app/v1
 kind: Object
@@ -15,14 +16,30 @@ spec:
       tenant_id: "org-demo-001"
       service_tier: enterprise
       data_classification: confidential
-      tunnel_endpoint: "gateway.zscaler.net"
-      pac_url: "https://pac.zscaler.net/org-demo-001/proxy.pac"
       mode: cloud_managed
       status: active
       description: "Zscaler Internet Access — SASE enforcement for all internet-bound traffic"
 
+    - name: ZSCALER-ZIA-EUROPE-WEST
+      provider: zscaler_zia
+      tenant_id: "org-demo-001"
+      service_tier: enterprise
+      data_classification: confidential
+      mode: cloud_managed
+      status: active
+      description: "Zscaler ZIA — Europe West enforcement PoP (Amsterdam)"
+
+    - name: ZSCALER-ZIA-EUROPE-CENTRAL
+      provider: zscaler_zia
+      tenant_id: "org-demo-001"
+      service_tier: enterprise
+      data_classification: confidential
+      mode: cloud_managed
+      status: active
+      description: "Zscaler ZIA — Europe Central enforcement PoP (Frankfurt)"
+
 ---
-# Link service capability back to topology node
+# Link global service capability to topology node
 
 apiVersion: infrahub.app/v1
 kind: Object
@@ -31,3 +48,16 @@ spec:
   data:
     - name: ZSCALER-SASE
       saas_service: ZSCALER-ZIA
+
+---
+# Link per-region enforcement capabilities to SaasRegion nodes
+
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologySaasRegion
+  data:
+    - name: ZSCALER-SASE-EUROPE-WEST
+      saas_service: ZSCALER-ZIA-EUROPE-WEST
+    - name: ZSCALER-SASE-EUROPE-CENTRAL
+      saas_service: ZSCALER-ZIA-EUROPE-CENTRAL

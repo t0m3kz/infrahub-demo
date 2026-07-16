@@ -145,12 +145,6 @@ nodes:
         optional: true
         default_value: true
         order_weight: 1600
-      - name: recording_region
-        kind: Text
-        label: "Recording Region"
-        description: "Cloud region where meeting recordings are stored"
-        optional: true
-        order_weight: 1700
 
   # ── CRM ──────────────────────────────────────────────────────────────────────
   - name: CRMService
@@ -232,12 +226,6 @@ nodes:
           - name: other
             label: "Other"
             color: "#95A5A6"
-      - name: storage_region
-        kind: Text
-        label: "Storage Region"
-        description: "Primary cloud region where data is stored"
-        optional: true
-        order_weight: 1600
       - name: encryption_at_rest
         kind: Boolean
         label: "Encryption at Rest"
