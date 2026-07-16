@@ -33,11 +33,11 @@ kind: Object
 spec:
   kind: TopologySaasRegion
   data:
-    - name: ZSCALER-SASE-AMS2
-      parent: ZSCALER-SASE
+    - name: ZSCALER-AMS2
+      parent: ZSCALER
       region_name: ams2
       saas_service: ZSCALER-ZIA-AMS2
-    - name: ZSCALER-SASE-FRA4
-      parent: ZSCALER-SASE
+    - name: ZSCALER-FRA4
+      parent: ZSCALER
       region_name: fra4
       saas_service: ZSCALER-ZIA-FRA4
