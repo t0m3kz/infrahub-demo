@@ -33,6 +33,10 @@ spec:
   kind: TopologySaasRegion
   data:
     - name: WEBEX-EMEA-EU-FRANKFURT
+      parent: WEBEX-EMEA
+      region_name: eu-frankfurt
       saas_service: WEBEX-EMEA-SVC-FRA
     - name: WEBEX-EMEA-EU-AMSTERDAM
+      parent: WEBEX-EMEA
+      region_name: eu-amsterdam
       saas_service: WEBEX-EMEA-SVC-AMS
