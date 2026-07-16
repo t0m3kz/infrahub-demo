@@ -21,7 +21,7 @@ nodes:
     attributes:
       - name: site_type
         kind: Dropdown
-        optional: false
+        optional: true
         default_value: branch
         order_weight: 650
         choices:

@@ -19,7 +19,7 @@ nodes:
       - name: provider
         kind: Dropdown
         label: Provider
-        optional: false
+        optional: true
         default_value: other
         order_weight: 200
         choices:
@@ -54,7 +54,7 @@ nodes:
       - name: service_type
         kind: Dropdown
         label: Service Type
-        optional: false
+        optional: true
         default_value: other
         order_weight: 300
         choices:
@@ -79,7 +79,7 @@ nodes:
       - name: status
         kind: Dropdown
         label: Status
-        optional: false
+        optional: true
         default_value: active
         order_weight: 400
         choices:
@@ -142,7 +142,7 @@ nodes:
       - name: status
         kind: Dropdown
         label: "Region Status"
-        optional: false
+        optional: true
         default_value: active
         order_weight: 300
         choices:

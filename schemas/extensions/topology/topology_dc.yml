@@ -28,7 +28,7 @@ nodes:
         kind: Dropdown
         label: "Routing Strategy"
         description: "Fabric routing protocol strategy"
-        optional: false
+        optional: true
         default_value: ebgp-ebgp
         order_weight: 1000
         choices:
@@ -49,7 +49,7 @@ nodes:
         label: "Underlay Protocol"
         description: "IPv6 by default (RFC 6164 /127 P2P); use IPv4 only when IPv6 is unsupported"
         kind: Dropdown
-        optional: false
+        optional: true
         default_value: ipv6
         order_weight: 1100
         choices:
@@ -71,7 +71,7 @@ nodes:
         label: "Maximum Pods"
         description: "Maximum number of pods this design can support"
         kind: Number
-        optional: false
+        optional: true
         default_value: 2
         order_weight: 1600
         parameters:
@@ -82,7 +82,7 @@ nodes:
         label: "Maximum Super-Spines"
         description: "Maximum number of super-spine switches per fabric"
         kind: Number
-        optional: false
+        optional: true
         default_value: 2
         order_weight: 1700
         parameters:
@@ -93,7 +93,7 @@ nodes:
         label: "Maximum Spines per Pod"
         description: "Maximum spine switches per pod in this fabric"
         kind: Number
-        optional: false
+        optional: true
         default_value: 4
         order_weight: 1750
         parameters:
@@ -107,7 +107,7 @@ nodes:
         label: "Loopback Pool Prefix Length"
         description: "Loopback pool prefix — match underlay_protocol (/24 IPv4, /120 IPv6)."
         kind: Number
-        optional: false
+        optional: true
         default_value: 23
         order_weight: 1800
         parameters:
@@ -118,7 +118,7 @@ nodes:
         label: "Technical Pool Prefix Length"
         description: "P2P link pool prefix — match underlay_protocol (/19 IPv4, /115 IPv6)."
         kind: Number
-        optional: false
+        optional: true
         default_value: 19
         order_weight: 1810
         parameters:
@@ -129,7 +129,7 @@ nodes:
         label: "Management Pool Prefix Length"
         description: "Prefix length for management pool — always IPv4 regardless of underlay_protocol."
         kind: Number
-        optional: false
+        optional: true
         default_value: 25
         order_weight: 1820
         parameters:
@@ -195,7 +195,7 @@ nodes:
         label: "Max Leafs per Network Rack"
         description: "Maximum leaf switches per network rack"
         kind: Number
-        optional: false
+        optional: true
         default_value: 4
         order_weight: 1300
         parameters:
@@ -206,7 +206,7 @@ nodes:
         label: "Max ToRs per Network Rack"
         description: "Maximum ToR switches per network rack"
         kind: Number
-        optional: false
+        optional: true
         default_value: 2
         order_weight: 1300
         parameters:
@@ -217,7 +217,7 @@ nodes:
         label: "Max ToRs per Compute Rack"
         description: "Maximum ToR switches per compute rack"
         kind: Number
-        optional: false
+        optional: true
         default_value: 1
         order_weight: 1400
         parameters:
@@ -228,7 +228,7 @@ nodes:
         label: "Max Spines per Pod"
         description: "Maximum spine switches per pod in this layout"
         kind: Number
-        optional: false
+        optional: true
         default_value: 2
         order_weight: 1500
         parameters:
@@ -363,7 +363,7 @@ nodes:
       - name: status
         kind: Dropdown
         label: Status
-        optional: false
+        optional: true
         default_value: provisioning
         order_weight: 550
         choices:
@@ -386,7 +386,7 @@ nodes:
       - name: fully_managed
         label: Fully Managed
         kind: Boolean
-        optional: false
+        optional: true
         default_value: true
         order_weight: 600
       - name: amount_of_super_spines
@@ -403,7 +403,7 @@ nodes:
         label: "Naming Convention"
         description: "Device naming convention for this data center"
         kind: Dropdown
-        optional: false
+        optional: true
         default_value: standard
         order_weight: 1050
         choices:
@@ -424,7 +424,7 @@ nodes:
         label: "Overlay Technology"
         description: "Data plane overlay technology for the fabric"
         kind: Dropdown
-        optional: false
+        optional: true
         default_value: vxlan_evpn
         order_weight: 1100
         choices:
@@ -581,7 +581,7 @@ nodes:
       - name: status
         kind: Dropdown
         label: Status
-        optional: false
+        optional: true
         default_value: provisioning
         order_weight: 140
         choices:

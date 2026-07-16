@@ -59,7 +59,7 @@ nodes:
             label: Management
             description: "Management network"
         default_value: internal
-        optional: false
+        optional: true
         order_weight: 1300
     relationships:
       - name: network_segments
@@ -190,7 +190,7 @@ nodes:
             label: Deny
             description: "Block by default"
         default_value: deny
-        optional: false
+        optional: true
         order_weight: 1200
       - name: enabled
         kind: Boolean
@@ -256,7 +256,7 @@ nodes:
             label: Reject
             description: "Reject with ICMP response"
         default_value: deny
-        optional: false
+        optional: true
         order_weight: 1200
       - name: protocol
         kind: Dropdown
@@ -276,7 +276,7 @@ nodes:
             label: Any
             description: "Any protocol"
         default_value: any
-        optional: false
+        optional: true
         order_weight: 1300
       - name: port_start
         kind: Number

@@ -72,7 +72,7 @@ nodes:
       - name: action
         kind: Dropdown
         label: Action
-        optional: false
+        optional: true
         default_value: permit
         order_weight: 300
         choices:

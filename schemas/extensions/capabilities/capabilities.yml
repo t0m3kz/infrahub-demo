@@ -28,7 +28,7 @@ generics:
         description: "Resource description"
       - name: status
         order_weight: 30
-        optional: false
+        optional: true
         kind: Dropdown
         choices:
           - name: provisioning

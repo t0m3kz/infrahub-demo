@@ -62,7 +62,7 @@ generics:
             color: "#6699ff"
       - name: status
         kind: Dropdown
-        optional: false
+        optional: true
         order_weight: 1300
         default_value: plugged
         choices:

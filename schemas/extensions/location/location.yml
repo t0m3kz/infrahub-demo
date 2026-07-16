@@ -67,7 +67,7 @@ nodes:
         order_weight: 1500
       - name: is_cloud
         kind: Boolean
-        optional: false
+        optional: true
         default_value: false
         order_weight: 1600
     relationships:
@@ -153,7 +153,7 @@ nodes:
         order_weight: 1100
       - name: height
         label: Height (U)
-        optional: false
+        optional: true
         default_value: 42
         kind: Number
     relationships:

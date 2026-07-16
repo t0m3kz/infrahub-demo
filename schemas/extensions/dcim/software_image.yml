@@ -45,7 +45,7 @@ nodes:
 
       - name: release_type
         kind: Dropdown
-        optional: false
+        optional: true
         default_value: ga
         order_weight: 300
         description: "Release track"
@@ -70,7 +70,7 @@ nodes:
       - name: is_approved
         kind: Boolean
         label: "Approved"
-        optional: false
+        optional: true
         default_value: false
         order_weight: 310
         description: "Explicitly approved for production deployment by the network/security team"
@@ -78,7 +78,7 @@ nodes:
       - name: is_recommended
         kind: Boolean
         label: "Recommended"
-        optional: false
+        optional: true
         default_value: false
         order_weight: 320
         description: "Preferred/golden image — new deployments should use this version"

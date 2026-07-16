@@ -86,7 +86,7 @@ nodes:
         optional: false
       - name: environment
         kind: Dropdown
-        optional: false
+        optional: true
         order_weight: 500
         default_value: p
         choices:
