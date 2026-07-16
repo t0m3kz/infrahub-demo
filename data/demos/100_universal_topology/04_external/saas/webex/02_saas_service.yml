@@ -31,9 +31,7 @@ kind: Object
 spec:
   kind: TopologySaasRegion
   data:
-    - parent: WEBEX-EMEA
-      region_name: emea-west
+    - name: WEBEX-EMEA-EMEA-WEST
       saas_service: WEBEX-EMEA-SVC-WEST
-    - parent: WEBEX-EMEA
-      region_name: emea-central
+    - name: WEBEX-EMEA-EMEA-CENTRAL
       saas_service: WEBEX-EMEA-SVC-CENTRAL
