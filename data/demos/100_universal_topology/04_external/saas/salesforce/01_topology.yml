@@ -1,43 +1,22 @@
 ---
-# Salesforce CRM — customer relationship management SaaS
+# Salesforce CRM — single topology for all Salesforce instances
 #
-# Production and sandbox instances are modelled separately so change-approval
-# flows can distinguish between prod and non-prod deployments.
-# Region names use Salesforce instance identifiers from api.status.salesforce.com:
-#   are12 — Amsterdam (AM3 superpod, production)
-#   are6  — Amsterdam (AM3 superpod, production)
+# Production and sandbox share the same Amsterdam (AM3 superpod) infrastructure.
+# Instance identifiers from api.status.salesforce.com/v1/instances
 
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
   kind: TopologySaas
   data:
-    - name: SALESFORCE-PROD
+    - name: SALESFORCE
       provider: salesforce
       service_type: crm
       status: active
-      description: "Salesforce CRM — production instance"
+      description: "Salesforce CRM — production and sandbox instances"
       children:
         kind: TopologySaasRegion
         data:
           - region_name: are12
-            status: active
-            location: ams
-
----
-apiVersion: infrahub.app/v1
-kind: Object
-spec:
-  kind: TopologySaas
-  data:
-    - name: SALESFORCE-SANDBOX
-      provider: salesforce
-      service_type: crm
-      status: active
-      description: "Salesforce CRM — sandbox / non-production instance"
-      children:
-        kind: TopologySaasRegion
-        data:
-          - region_name: are2s
             status: active
             location: ams

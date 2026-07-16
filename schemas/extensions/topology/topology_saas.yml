@@ -162,12 +162,12 @@ nodes:
         order_weight: 1000
         identifier: "saas__region__location"
         description: "Geographic mapping for provider region"
-      - name: saas_service
+      - name: saas_services
         peer: ManagedSaasService
-        label: "Regional Service"
-        description: "Per-region service capability (data residency, media PoP, enforcement point)"
-        cardinality: one
-        kind: Attribute
+        label: "Regional Services"
+        description: "Per-region service capabilities (data residency, media PoP, enforcement point)"
+        cardinality: many
+        kind: Component
         optional: true
         order_weight: 1100
-        identifier: "topology_saas_region__saas_service"
+        identifier: "topology_saas_region__saas_services"
