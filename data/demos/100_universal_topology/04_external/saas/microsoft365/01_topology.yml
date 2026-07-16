@@ -11,7 +11,7 @@ kind: Object
 spec:
   kind: TopologySaas
   data:
-    - name: M365-TEAMS-EMEA
+    - name: M365-TEAMS
       provider: microsoft
       service_type: conferencing
       status: active
@@ -32,7 +32,7 @@ kind: Object
 spec:
   kind: TopologySaas
   data:
-    - name: M365-STORAGE-EMEA
+    - name: M365-STORAGE
       provider: microsoft
       service_type: storage
       status: active

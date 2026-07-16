@@ -12,7 +12,7 @@ kind: Object
 spec:
   kind: TopologySaas
   data:
-    - name: WEBEX-EMEA
+    - name: WEBEX
       provider: cisco
       service_type: conferencing
       status: active

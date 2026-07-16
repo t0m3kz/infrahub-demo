@@ -32,12 +32,12 @@ kind: Object
 spec:
   kind: TopologySaasRegion
   data:
-    - name: M365-TEAMS-EMEA-WESTEUROPE
-      parent: M365-TEAMS-EMEA
+    - name: M365-TEAMS-WESTEUROPE
+      parent: M365-TEAMS
       region_name: westeurope
       saas_service: M365-TEAMS-SVC-WESTEUROPE
-    - name: M365-TEAMS-EMEA-NORTHEUROPE
-      parent: M365-TEAMS-EMEA
+    - name: M365-TEAMS-NORTHEUROPE
+      parent: M365-TEAMS
       region_name: northeurope
       saas_service: M365-TEAMS-SVC-NORTHEUROPE
 
@@ -71,11 +71,11 @@ kind: Object
 spec:
   kind: TopologySaasRegion
   data:
-    - name: M365-STORAGE-EMEA-WESTEUROPE
-      parent: M365-STORAGE-EMEA
+    - name: M365-STORAGE-WESTEUROPE
+      parent: M365-STORAGE
       region_name: westeurope
       saas_service: M365-STORAGE-SVC-WESTEUROPE
-    - name: M365-STORAGE-EMEA-NORTHEUROPE
-      parent: M365-STORAGE-EMEA
+    - name: M365-STORAGE-NORTHEUROPE
+      parent: M365-STORAGE
       region_name: northeurope
       saas_service: M365-STORAGE-SVC-NORTHEUROPE
