@@ -1,7 +1,6 @@
 ---
-# Salesforce — per-region service capability nodes
-# Links service metadata to each TopologySaasRegion via saas_service.
-# Instance identifiers from api.status.salesforce.com/v1/instances (EMEA production)
+# Salesforce — service capability nodes
+# Production and sandbox share the same regional PoP — linked via saas_services (cardinality many)
 
 apiVersion: infrahub.app/v1
 kind: Object
@@ -16,26 +15,9 @@ spec:
       instance_url: "https://demo.my.salesforce.com"
       sandbox: false
       status: active
-      description: "Salesforce CRM — instance ARE12 (Amsterdam, AM3 superpod)"
+      description: "Salesforce CRM — production instance ARE12 (Amsterdam, AM3 superpod)"
 
----
-apiVersion: infrahub.app/v1
-kind: Object
-spec:
-  kind: TopologySaasRegion
-  data:
-    - name: SALESFORCE-PROD-ARE12
-      parent: SALESFORCE-PROD
-      region_name: are12
-      saas_service: SALESFORCE-PROD-SVC-ARE12
-
----
-apiVersion: infrahub.app/v1
-kind: Object
-spec:
-  kind: ManagedCRMService
-  data:
-    - name: SALESFORCE-SANDBOX-SVC-ARE2S
+    - name: SALESFORCE-SANDBOX-SVC-ARE12
       provider: salesforce
       tenant_id: "sf-org-demo-001"
       service_tier: standard
@@ -43,7 +25,7 @@ spec:
       instance_url: "https://demo--sandbox.sandbox.my.salesforce.com"
       sandbox: true
       status: active
-      description: "Salesforce CRM sandbox — instance ARE2S (Amsterdam)"
+      description: "Salesforce CRM — sandbox instance ARE2S (Amsterdam, AM3 superpod)"
 
 ---
 apiVersion: infrahub.app/v1
@@ -51,7 +33,9 @@ kind: Object
 spec:
   kind: TopologySaasRegion
   data:
-    - name: SALESFORCE-SANDBOX-ARE2S
-      parent: SALESFORCE-SANDBOX
-      region_name: are2s
-      saas_service: SALESFORCE-SANDBOX-SVC-ARE2S
+    - name: SALESFORCE-ARE12
+      parent: SALESFORCE
+      region_name: are12
+      saas_services:
+        - SALESFORCE-PROD-SVC-ARE12
+        - SALESFORCE-SANDBOX-SVC-ARE12

@@ -1,7 +1,6 @@
 ---
-# Microsoft 365 — per-region service capability nodes
-# Links service metadata to each TopologySaasRegion via saas_service.
-# Region names: westeurope (Amsterdam), northeurope (Dublin) — Azure ARM identifiers
+# Microsoft 365 — service capability nodes per region
+# Multiple services share the same regional PoP — linked via saas_services (cardinality many)
 
 apiVersion: infrahub.app/v1
 kind: Object
@@ -25,21 +24,6 @@ spec:
       media_optimization: true
       status: active
       description: "Microsoft Teams — northeurope PoP (Dublin)"
-
----
-apiVersion: infrahub.app/v1
-kind: Object
-spec:
-  kind: TopologySaasRegion
-  data:
-    - name: M365-TEAMS-WESTEUROPE
-      parent: M365-TEAMS
-      region_name: westeurope
-      saas_service: M365-TEAMS-SVC-WESTEUROPE
-    - name: M365-TEAMS-NORTHEUROPE
-      parent: M365-TEAMS
-      region_name: northeurope
-      saas_service: M365-TEAMS-SVC-NORTHEUROPE
 
 ---
 apiVersion: infrahub.app/v1
@@ -71,11 +55,15 @@ kind: Object
 spec:
   kind: TopologySaasRegion
   data:
-    - name: M365-STORAGE-WESTEUROPE
-      parent: M365-STORAGE
+    - name: MICROSOFT-365-WESTEUROPE
+      parent: MICROSOFT-365
       region_name: westeurope
-      saas_service: M365-STORAGE-SVC-WESTEUROPE
-    - name: M365-STORAGE-NORTHEUROPE
-      parent: M365-STORAGE
+      saas_services:
+        - M365-TEAMS-SVC-WESTEUROPE
+        - M365-STORAGE-SVC-WESTEUROPE
+    - name: MICROSOFT-365-NORTHEUROPE
+      parent: MICROSOFT-365
       region_name: northeurope
-      saas_service: M365-STORAGE-SVC-NORTHEUROPE
+      saas_services:
+        - M365-TEAMS-SVC-NORTHEUROPE
+        - M365-STORAGE-SVC-NORTHEUROPE

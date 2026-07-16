@@ -1,9 +1,9 @@
 ---
-# Microsoft 365 — two distinct SaaS services sharing Microsoft infrastructure
+# Microsoft 365 — single topology for all M365 services
 #
-# Modelled as two separate TopologySaas nodes to reflect different service types:
-#   M365-TEAMS-EMEA    — real-time conferencing (service_type: conferencing)
-#   M365-STORAGE-EMEA  — file and object storage (service_type: storage)
+# Teams (conferencing) and SharePoint/OneDrive (storage) share the same
+# Microsoft Azure infrastructure — one region node per PoP, multiple
+# service capability nodes per region.
 # Region names use Azure ARM identifiers (westeurope, northeurope)
 
 apiVersion: infrahub.app/v1
@@ -11,32 +11,11 @@ kind: Object
 spec:
   kind: TopologySaas
   data:
-    - name: M365-TEAMS
+    - name: MICROSOFT-365
       provider: microsoft
-      service_type: conferencing
+      service_type: other
       status: active
-      description: "Microsoft Teams — EMEA conferencing and collaboration"
-      children:
-        kind: TopologySaasRegion
-        data:
-          - region_name: westeurope
-            status: active
-            location: ams
-          - region_name: northeurope
-            status: active
-            location: dub
-
----
-apiVersion: infrahub.app/v1
-kind: Object
-spec:
-  kind: TopologySaas
-  data:
-    - name: M365-STORAGE
-      provider: microsoft
-      service_type: storage
-      status: active
-      description: "Microsoft SharePoint and OneDrive — EMEA document storage (EUR data residency)"
+      description: "Microsoft 365 — Teams, SharePoint, OneDrive"
       children:
         kind: TopologySaasRegion
         data:
