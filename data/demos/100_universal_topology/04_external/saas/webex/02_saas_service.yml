@@ -8,7 +8,7 @@ kind: Object
 spec:
   kind: ManagedConferencingService
   data:
-    - name: WEBEX-EMEA-SVC-FRA
+    - name: WEBEX-SVC-FRA
       provider: webex
       tenant_id: "webex-org-demo-001"
       service_tier: enterprise
@@ -17,7 +17,7 @@ spec:
       status: active
       description: "Cisco Webex — EMEA primary PoP (Frankfurt)"
 
-    - name: WEBEX-EMEA-SVC-AMS
+    - name: WEBEX-SVC-AMS
       provider: webex
       tenant_id: "webex-org-demo-001"
       service_tier: enterprise
@@ -32,11 +32,11 @@ kind: Object
 spec:
   kind: TopologySaasRegion
   data:
-    - name: WEBEX-EMEA-EU-FRANKFURT
-      parent: WEBEX-EMEA
+    - name: WEBEX-EU-FRANKFURT
+      parent: WEBEX
       region_name: eu-frankfurt
-      saas_service: WEBEX-EMEA-SVC-FRA
-    - name: WEBEX-EMEA-EU-AMSTERDAM
-      parent: WEBEX-EMEA
+      saas_service: WEBEX-SVC-FRA
+    - name: WEBEX-EU-AMSTERDAM
+      parent: WEBEX
       region_name: eu-amsterdam
-      saas_service: WEBEX-EMEA-SVC-AMS
+      saas_service: WEBEX-SVC-AMS
