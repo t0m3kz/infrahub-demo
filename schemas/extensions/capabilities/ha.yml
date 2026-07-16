@@ -351,18 +351,6 @@ nodes:
           - name: other
             label: "Other"
             color: "#95A5A6"
-      - name: tunnel_endpoint
-        kind: Text
-        label: "Tunnel Endpoint"
-        optional: true
-        order_weight: 1600
-        description: "GRE or IPSec tunnel endpoint for traffic steering"
-      - name: pac_url
-        kind: Text
-        label: "PAC File URL"
-        optional: true
-        order_weight: 1700
-        description: "Proxy Auto-Config URL for explicit proxy deployments"
 
   # ── HA Interface capability ───────────────────────────────────────────────
   - name: HAInterface

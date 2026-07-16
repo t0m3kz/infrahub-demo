@@ -6,6 +6,7 @@
 #   M365-STORAGE-EMEA  — file and object storage (service_type: storage)
 #
 # Both share the same regional PoP footprint (Amsterdam + Dublin for EMEA).
+# Per-region service capabilities carry data-residency and PoP-specific metadata.
 
 # ── Teams ─────────────────────────────────────────────────────────────────────
 
@@ -41,9 +42,26 @@ spec:
       service_tier: enterprise
       data_classification: confidential
       media_optimization: true
-      recording_region: "eu-west-1"
       status: active
       description: "Microsoft Teams enterprise tenant — EMEA region"
+
+    - name: M365-TEAMS-SVC-EMEA-WEST
+      provider: teams
+      tenant_id: "m365-tenant-demo-001"
+      service_tier: enterprise
+      data_classification: confidential
+      media_optimization: true
+      status: active
+      description: "Microsoft Teams — EMEA West PoP (Amsterdam), recording region eu-west-1"
+
+    - name: M365-TEAMS-SVC-EMEA-NORTH
+      provider: teams
+      tenant_id: "m365-tenant-demo-001"
+      service_tier: enterprise
+      data_classification: confidential
+      media_optimization: true
+      status: active
+      description: "Microsoft Teams — EMEA North PoP (Dublin), recording region eu-west-1"
 
 ---
 apiVersion: infrahub.app/v1
@@ -53,6 +71,17 @@ spec:
   data:
     - name: M365-TEAMS-EMEA
       saas_service: M365-TEAMS-SVC
+
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologySaasRegion
+  data:
+    - name: M365-TEAMS-EMEA-EMEA-WEST
+      saas_service: M365-TEAMS-SVC-EMEA-WEST
+    - name: M365-TEAMS-EMEA-EMEA-NORTH
+      saas_service: M365-TEAMS-SVC-EMEA-NORTH
 
 # ── SharePoint / OneDrive ────────────────────────────────────────────────────
 
@@ -70,10 +99,10 @@ spec:
       children:
         kind: TopologySaasRegion
         data:
-          - region_name: sharepoint-emea-west
+          - region_name: emea-west
             status: active
             location: ams
-          - region_name: sharepoint-emea-north
+          - region_name: emea-north
             status: active
             location: dub
 
@@ -88,10 +117,27 @@ spec:
       tenant_id: "m365-tenant-demo-001"
       service_tier: enterprise
       data_classification: confidential
-      storage_region: "eu-west-1"
       encryption_at_rest: true
       status: active
       description: "SharePoint Online + OneDrive — enterprise document platform"
+
+    - name: M365-STORAGE-SVC-EMEA-WEST
+      provider: sharepoint
+      tenant_id: "m365-tenant-demo-001"
+      service_tier: enterprise
+      data_classification: confidential
+      encryption_at_rest: true
+      status: active
+      description: "SharePoint — EMEA West PoP (Amsterdam), data residency eu-west-1"
+
+    - name: M365-STORAGE-SVC-EMEA-NORTH
+      provider: sharepoint
+      tenant_id: "m365-tenant-demo-001"
+      service_tier: enterprise
+      data_classification: confidential
+      encryption_at_rest: true
+      status: active
+      description: "SharePoint — EMEA North PoP (Dublin), data residency eu-west-1"
 
 ---
 apiVersion: infrahub.app/v1
@@ -101,3 +147,14 @@ spec:
   data:
     - name: M365-STORAGE-EMEA
       saas_service: M365-STORAGE-SVC
+
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologySaasRegion
+  data:
+    - name: M365-STORAGE-EMEA-EMEA-WEST
+      saas_service: M365-STORAGE-SVC-EMEA-WEST
+    - name: M365-STORAGE-EMEA-EMEA-NORTH
+      saas_service: M365-STORAGE-SVC-EMEA-NORTH

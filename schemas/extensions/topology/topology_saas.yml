@@ -119,10 +119,11 @@ nodes:
     parent: TopologySaas
     children: ""
     human_friendly_id:
+      - parent__name__value
       - region_name__value
     display_label: "{{ name__value }}"
     uniqueness_constraints:
-      - ["region_name__value"]
+      - [parent, region_name__value]
     include_in_menu: false
     attributes:
       - name: name
@@ -175,3 +176,12 @@ nodes:
         order_weight: 1000
         identifier: "saas__region__location"
         description: "Geographic mapping for provider region"
+      - name: saas_service
+        peer: ManagedSaasService
+        label: "Regional Service"
+        description: "Per-region service capability (data residency, media PoP, enforcement point)"
+        cardinality: one
+        kind: Attribute
+        optional: true
+        order_weight: 1100
+        identifier: "topology_saas_region__saas_service"
