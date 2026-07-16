@@ -25,6 +25,8 @@ spec:
   kind: TopologySaasRegion
   data:
     - name: SALESFORCE-PROD-ARE12
+      parent: SALESFORCE-PROD
+      region_name: are12
       saas_service: SALESFORCE-PROD-SVC-ARE12
 
 ---
@@ -50,4 +52,6 @@ spec:
   kind: TopologySaasRegion
   data:
     - name: SALESFORCE-SANDBOX-ARE2S
+      parent: SALESFORCE-SANDBOX
+      region_name: are2s
       saas_service: SALESFORCE-SANDBOX-SVC-ARE2S
