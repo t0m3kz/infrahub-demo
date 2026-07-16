@@ -36,8 +36,10 @@ spec:
     - name: ZSCALER-AMS2
       parent: ZSCALER
       region_name: ams2
-      saas_service: ZSCALER-ZIA-AMS2
+      saas_services:
+        - ZSCALER-ZIA-AMS2
     - name: ZSCALER-FRA4
       parent: ZSCALER
       region_name: fra4
-      saas_service: ZSCALER-ZIA-FRA4
+      saas_services:
+        - ZSCALER-ZIA-FRA4
