@@ -1,0 +1,39 @@
+---
+# Cisco Webex — per-region ManagedConferencingService capability nodes
+# Links service metadata to each TopologySaasRegion via saas_service.
+
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: ManagedConferencingService
+  data:
+    - name: WEBEX-EMEA-SVC-WEST
+      provider: webex
+      tenant_id: "webex-org-demo-001"
+      service_tier: enterprise
+      data_classification: internal
+      media_optimization: true
+      status: active
+      description: "Cisco Webex — EMEA West PoP (Dublin), recording region eu-west-1"
+
+    - name: WEBEX-EMEA-SVC-CENTRAL
+      provider: webex
+      tenant_id: "webex-org-demo-001"
+      service_tier: enterprise
+      data_classification: internal
+      media_optimization: true
+      status: active
+      description: "Cisco Webex — EMEA Central PoP (Frankfurt), recording region eu-central-1"
+
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologySaasRegion
+  data:
+    - parent: WEBEX-EMEA
+      region_name: emea-west
+      saas_service: WEBEX-EMEA-SVC-WEST
+    - parent: WEBEX-EMEA
+      region_name: emea-central
+      saas_service: WEBEX-EMEA-SVC-CENTRAL

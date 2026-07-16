@@ -100,17 +100,6 @@ nodes:
         label: Description
         optional: true
         order_weight: 500
-    relationships:
-      - name: saas_service
-        peer: ManagedSaasService
-        label: "SaaS Service"
-        description: "Capability node representing the service contract and operational metadata"
-        cardinality: one
-        kind: Attribute
-        optional: true
-        order_weight: 1000
-        identifier: "topology_saas__saas_service"
-
   - name: SaasRegion
     namespace: Topology
     inherit_from:

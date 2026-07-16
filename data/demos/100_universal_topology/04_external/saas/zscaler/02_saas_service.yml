@@ -1,25 +1,13 @@
 ---
-# Zscaler ZIA — ManagedCloudProxyHA service capability
-#
-# Global node carries tenant contract metadata.
-# Per-region nodes anchor the enforcement point at each PoP —
-# the virtual circuit model (01_connectivity.yml) captures the actual
-# tunnel endpoints; no need to duplicate them here.
+# Zscaler ZIA — per-region ManagedCloudProxyHA enforcement capability nodes
+# Links service metadata to each TopologySaasRegion via saas_service.
+# Virtual circuit tunnel endpoints are modelled in 01_connectivity.yml.
 
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
   kind: ManagedCloudProxyHA
   data:
-    - name: ZSCALER-ZIA
-      provider: zscaler_zia
-      tenant_id: "org-demo-001"
-      service_tier: enterprise
-      data_classification: confidential
-      mode: cloud_managed
-      status: active
-      description: "Zscaler Internet Access — SASE enforcement for all internet-bound traffic"
-
     - name: ZSCALER-ZIA-EUROPE-WEST
       provider: zscaler_zia
       tenant_id: "org-demo-001"
@@ -39,25 +27,14 @@ spec:
       description: "Zscaler ZIA — Europe Central enforcement PoP (Frankfurt)"
 
 ---
-# Link global service capability to topology node
-
-apiVersion: infrahub.app/v1
-kind: Object
-spec:
-  kind: TopologySaas
-  data:
-    - name: ZSCALER-SASE
-      saas_service: ZSCALER-ZIA
-
----
-# Link per-region enforcement capabilities to SaasRegion nodes
-
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
   kind: TopologySaasRegion
   data:
-    - name: ZSCALER-SASE-EUROPE-WEST
+    - parent: ZSCALER-SASE
+      region_name: europe-west
       saas_service: ZSCALER-ZIA-EUROPE-WEST
-    - name: ZSCALER-SASE-EUROPE-CENTRAL
+    - parent: ZSCALER-SASE
+      region_name: europe-central
       saas_service: ZSCALER-ZIA-EUROPE-CENTRAL
