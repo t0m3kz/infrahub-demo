@@ -19,7 +19,6 @@ spec:
       ha_enabled: true
       deployment: DC3-1-POD-1
       ip_namespace: default
-      proxy_service: DC3-PRX-HA
 
     # ── POD3: VMware vSphere ──────────────────────────────────────────────────
     - name: DC3-VSPHERE-PROD
@@ -29,7 +28,6 @@ spec:
       ha_enabled: true
       deployment: DC3-1-POD-3
       ip_namespace: default
-      proxy_service: DC3-PRX-HA
 
     # ── POD4: Nutanix AHV ─────────────────────────────────────────────────────
     - name: DC3-NUTANIX-PROD
@@ -39,7 +37,6 @@ spec:
       ha_enabled: true
       deployment: DC3-1-POD-4
       ip_namespace: default
-      proxy_service: DC3-PRX-HA
 
 ---
 apiVersion: infrahub.app/v1
