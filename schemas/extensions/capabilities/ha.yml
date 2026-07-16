@@ -317,7 +317,6 @@ nodes:
       - "name__value"
     inherit_from:
       - ManagedHA
-      - ManagedGeneric
       - ManagedSaasService
       - ManagedInlineService
       - ManagedProxyService
