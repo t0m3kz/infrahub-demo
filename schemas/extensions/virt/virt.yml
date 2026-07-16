@@ -250,7 +250,7 @@ nodes:
       - name: proxy_service
         peer: ManagedProxyService
         label: "Egress Proxy"
-        description: "Cluster-wide egress proxy — on-prem (ManagedProxyHA) or cloud SASE (ManagedCloudProxyHA)."
+        description: "Cluster-wide egress proxy — on-prem (ManagedProxyHA) or cloud SASE (ManagedCloudProxy)."
         cardinality: one
         kind: Attribute
         optional: true

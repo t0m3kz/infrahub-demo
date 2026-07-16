@@ -242,7 +242,7 @@ nodes:
         identifier: "app_component__proxy_service"
         order_weight: 850
         label: "Egress Proxy"
-        description: "Egress proxy — on-prem (ManagedProxyHA) or cloud SASE (ManagedCloudProxyHA)"
+        description: "Egress proxy — on-prem (ManagedProxyHA) or cloud SASE (ManagedCloudProxy)"
 
 extensions:
   nodes:

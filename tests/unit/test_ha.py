@@ -502,7 +502,7 @@ class TestGetCapabilitiesHAFlag:
         result = get_capabilities(
             {
                 "capabilities": [
-                    {"typename": "ManagedCloudProxyHA"},
+                    {"typename": "ManagedCloudProxy"},
                 ]
             }
         )
@@ -510,7 +510,7 @@ class TestGetCapabilitiesHAFlag:
 
 
 # ---------------------------------------------------------------------------
-# get_ha — ManagedProxyHA and ManagedCloudProxyHA are matched
+# get_ha — ManagedProxyHA and ManagedCloudProxy are matched
 # ---------------------------------------------------------------------------
 
 
@@ -528,7 +528,7 @@ class TestGetHaProxyHA:
 
     def test_managed_cloud_proxy_ha_typename_is_matched(self) -> None:
         cap = {
-            "typename": "ManagedCloudProxyHA",
+            "typename": "ManagedCloudProxy",
             "name": "DC3-CPRX-HA",
             "group_id": 5,
             "mode": "active-passive",

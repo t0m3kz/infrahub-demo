@@ -7,7 +7,7 @@
 #   ProxyPolicyRule   — single action entry inside a policy
 #
 # Attachment:
-#   ManagedProxyHA / ManagedCloudProxyHA → shared_policies (base, all tenants)
+#   ManagedProxyHA / ManagedCloudProxy → shared_policies (base, all tenants)
 #   OrganizationCustomer                 → proxy_policies  (tenant overrides)
 #
 # Evaluation order: shared policies first (by priority asc), then customer policies.
@@ -302,7 +302,7 @@ extensions:
           identifier: proxyha__shared_policies
           description: "Base proxy policies applied to all tenants on this proxy"
 
-    - kind: ManagedCloudProxyHA
+    - kind: ManagedCloudProxy
       relationships:
         - name: shared_policies
           peer: ProxyPolicy

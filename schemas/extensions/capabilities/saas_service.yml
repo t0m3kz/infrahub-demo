@@ -9,7 +9,7 @@
 #   ManagedConferencingService  — real-time media (Webex, Zoom, Teams)
 #   ManagedCRMService           — customer/sales platforms (Salesforce, HubSpot)
 #   ManagedStorageService       — file and object storage (SharePoint, Box, S3)
-#   ManagedCloudProxyHA         — SASE/cloud proxy (Zscaler ZIA, Netskope) — defined in ha.yml
+#   ManagedCloudProxy           — cloud proxy: vendor SASE or self-managed on cloud VM — defined in ha.yml
 version: "1.0"
 
 generics:

@@ -307,16 +307,15 @@ nodes:
             color: "#95A5A6"
 
   # ── Cloud Proxy / SASE ────────────────────────────────────────────────────
-  - name: CloudProxyHA
+  - name: CloudProxy
     namespace: Managed
-    description: "Cloud-native proxy / SASE service (Zscaler ZIA, Netskope, Cloudflare Gateway)"
-    label: Cloud Proxy / SASE
+    description: "Cloud proxy service — vendor SASE (Zscaler, Netskope) or self-managed on cloud VM"
+    label: Cloud Proxy
     icon: "mdi:cloud-sync"
     include_in_menu: false
     human_friendly_id:
       - "name__value"
     inherit_from:
-      - ManagedHA
       - ManagedSaasService
       - ManagedInlineService
       - ManagedProxyService
@@ -326,11 +325,26 @@ nodes:
     order_by:
       - name__value
     attributes:
+      - name: deployment_model
+        kind: Dropdown
+        label: "Deployment Model"
+        optional: false
+        default_value: vendor_sase
+        order_weight: 1400
+        choices:
+          - name: vendor_sase
+            label: "Vendor SASE"
+            description: "Fully managed by vendor (Zscaler, Netskope, Cloudflare)"
+            color: "#00A3E0"
+          - name: self_managed
+            label: "Self-Managed"
+            description: "Self-operated proxy on cloud VM (Squid, HAProxy, Nginx)"
+            color: "#F39C12"
       - name: provider
         kind: Dropdown
-        label: "SASE Provider"
+        label: "Provider / Product"
         optional: false
-        order_weight: 1400
+        order_weight: 1450
         choices:
           - name: zscaler_zia
             label: "Zscaler ZIA"
@@ -347,9 +361,24 @@ nodes:
           - name: palo_prisma
             label: "Palo Alto Prisma Access"
             color: "#FA582D"
+          - name: squid
+            label: "Squid"
+            color: "#9B59B6"
+          - name: haproxy
+            label: "HAProxy"
+            color: "#1ABC9C"
+          - name: nginx
+            label: "Nginx"
+            color: "#2ECC71"
           - name: other
             label: "Other"
             color: "#95A5A6"
+      - name: region
+        kind: Text
+        label: "Cloud Region"
+        description: "Cloud region or availability zone (e.g. eu-west-1, westeurope)"
+        optional: true
+        order_weight: 1500
 
   # ── HA Interface capability ───────────────────────────────────────────────
   - name: HAInterface
