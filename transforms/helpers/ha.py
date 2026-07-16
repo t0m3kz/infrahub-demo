@@ -12,7 +12,7 @@ _HA_TYPENAMES = (
     "ManagedCloudFirewallHA",
     "ManagedLoadbalancerHA",
     "ManagedProxyHA",
-    "ManagedCloudProxyHA",
+    "ManagedCloudProxy",
 )
 
 
