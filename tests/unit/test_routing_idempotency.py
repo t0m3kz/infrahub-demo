@@ -12,7 +12,13 @@ Two properties that make routing "as stable as p2p cabling":
 from typing import Any
 from unittest.mock import MagicMock
 
-from generators.helpers.routing import RoutingPlan, RoutingPlanInput, RoutingPlanner
+from generators.helpers.routing import PendingASRef, RoutingPlan, RoutingPlanInput, RoutingPlanner
+
+
+def _local_as_signature(local_as: Any) -> tuple:
+    if isinstance(local_as, PendingASRef):
+        return ("pending", local_as.device)
+    return tuple(sorted(local_as.items()))
 
 
 def _make_loopback(name: str, device_id: str, role: str, ip: str, lb_id: str | None = None) -> MagicMock:
@@ -84,7 +90,7 @@ def _signature(plan: RoutingPlan) -> dict[str, Any]:
         "bgp_processes": sorted(
             (
                 p["name"],
-                tuple(sorted(p.get("local_as", {}).items())),
+                _local_as_signature(p.get("local_as", {})),
                 p["router_id"]["id"],
                 p["capabilities"][0]["id"],
             )
