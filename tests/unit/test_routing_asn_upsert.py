@@ -5,13 +5,13 @@ Tests verify:
 - New device path: from_pool allocation for genuinely new devices
 - Mixed scenarios: existing + new devices in same plan
 - Rerun idempotency: identical plans from identical inputs
-- BGP process references: existing AS by id, new AS by _for_device
+- BGP process references: existing AS by id, new AS by PendingASRef
 """
 
 from typing import Any
 from unittest.mock import MagicMock
 
-from generators.helpers.routing import RoutingPlanInput, RoutingPlanner
+from generators.helpers.routing import PendingASRef, RoutingPlanInput, RoutingPlanner
 
 # ================================================================
 # Helpers
@@ -333,7 +333,7 @@ class TestEbgpOverlayWithExistingAS:
 
         overlay_procs = [p for p in plan.bgp_processes if p["name"] == "leaf-1-bgp-overlay"]
         assert len(overlay_procs) == 1
-        assert overlay_procs[0]["local_as"] == {"_for_device": "leaf-1"}
+        assert overlay_procs[0]["local_as"] == PendingASRef(device="leaf-1")
 
     def test_mixed_overlay_processes(self) -> None:
         """Overlay processes: existing by id, new by _for_device."""
@@ -355,7 +355,7 @@ class TestEbgpOverlayWithExistingAS:
 
         overlay_procs = {p["name"]: p["local_as"] for p in plan.bgp_processes if p["name"].endswith("-bgp-overlay")}
         assert overlay_procs["spine-1-bgp-overlay"] == {"id": "as-s1"}
-        assert overlay_procs["leaf-1-bgp-overlay"] == {"_for_device": "leaf-1"}
+        assert overlay_procs["leaf-1-bgp-overlay"] == PendingASRef(device="leaf-1")
 
 
 # ================================================================

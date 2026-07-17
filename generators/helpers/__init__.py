@@ -31,10 +31,11 @@ from .pools import (
     calculate_super_spine_loopback_prefix,
     name_to_asn_range,
 )
-from .routing import RoutingPlan, RoutingPlanInput, RoutingPlanner, RoutingStrategy
+from .routing import PendingASRef, RoutingPlan, RoutingPlanInput, RoutingPlanner, RoutingStrategy
 
 __all__ = [
     # Routing
+    "PendingASRef",
     "RoutingPlan",
     "RoutingPlanInput",
     "RoutingPlanner",

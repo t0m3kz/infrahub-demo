@@ -50,6 +50,19 @@ class RoutingPlanInput:
     evpn_af_id: str = ""
 
 
+@dataclass(frozen=True)
+class PendingASRef:
+    """Placeholder for a BGP process's ``local_as`` before its AS is created.
+
+    The AS for ``device`` is allocated from a pool as part of the same plan,
+    so its id isn't known until after ``autonomous_systems`` is saved. The
+    generator swaps this for a real ``{"id": ...}`` ref once that happens —
+    see ``RoutingMixin.create_routing``.
+    """
+
+    device: str
+
+
 @dataclass
 class RoutingPlan:
     """Flat routing plan — all dicts, saved with allow_upsert=True.
@@ -64,7 +77,7 @@ class RoutingPlan:
 
     BGP dicts have "local_as" as either:
         - {"id": "known-id"} (existing AS)
-        - {"_for_device": "device-name"} (resolved after AS creation)
+        - PendingASRef(device="device-name") (resolved after AS creation)
     """
 
     autonomous_systems: list[dict] = field(default_factory=list)
@@ -124,7 +137,7 @@ def _make_bgp_proc(
     name: str,
     suffix: str,
     description: str,
-    local_as: dict,
+    local_as: dict | PendingASRef,
     router_id: dict,
     device_id: str,
     multipath: bool = False,
@@ -375,7 +388,7 @@ class RoutingPlanner:
                     self.logger.warning(f"No router-id for {name}, skipping BGP")
                 continue
 
-            local_as = {"id": existing_as_id} if existing_as_id else {"_for_device": name}
+            local_as = {"id": existing_as_id} if existing_as_id else PendingASRef(device=name)
             proc = _make_bgp_proc(
                 name,
                 "underlay",
@@ -476,14 +489,14 @@ class RoutingPlanner:
         desc_prefix = "iBGP process for" if is_ibgp else "eBGP process for"
         _top = top_device_names or set()
 
-        device_as_refs: dict[str, dict] = {}
+        device_as_refs: dict[str, dict | PendingASRef] = {}
         if not is_ibgp:
             for as_dict in plan.autonomous_systems:
                 dev_name = as_dict["_for_device"]
                 if "_existing_id" in as_dict:
                     device_as_refs[dev_name] = {"id": as_dict["_existing_id"]}
                 else:
-                    device_as_refs[dev_name] = {"_for_device": dev_name}
+                    device_as_refs[dev_name] = PendingASRef(device=dev_name)
 
         _OVERLAY_ROLES = frozenset(("leaf", "border-leaf", "tor", "spine", "super-spine"))
 
@@ -495,8 +508,9 @@ class RoutingPlanner:
             if info.get("role") not in _OVERLAY_ROLES:
                 continue
 
+            as_ref: dict | PendingASRef
             if is_ibgp:
-                as_ref: dict = {"id": overlay_as_id}
+                as_ref = {"id": overlay_as_id}
             else:
                 maybe_as_ref = device_as_refs.get(name)
                 if not maybe_as_ref:

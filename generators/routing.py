@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     import logging
 
-from .helpers import RoutingPlanInput, RoutingPlanner, RoutingStrategy
+from .helpers import PendingASRef, RoutingPlanInput, RoutingPlanner, RoutingStrategy
 from .protocols import (
     DcimVirtualInterface,
     ManagedBGP,
@@ -171,21 +171,14 @@ class RoutingMixin:
         # PHASE 3: CREATE SDK OBJECTS, SAVE IN DEPENDENCY ORDER
         # ================================================================
 
-        def _clean(d: dict, strip_local_as: bool = False) -> dict:
-            """Remove internal keys (prefixed with _) before passing to SDK."""
-            result = {k: v for k, v in d.items() if not k.startswith("_")}
-            if strip_local_as:
-                result.pop("local_as", None)
-            return result
-
         # Step 1: Create + save AS objects, build device -> AS ID mapping
         device_to_as_id = await self._save_autonomous_systems(plan.autonomous_systems)
 
-        # Step 2: Resolve local_as placeholders in BGP processes
+        # Step 2: Resolve PendingASRef placeholders in BGP processes
         for bgp in plan.bgp_processes:
-            local_as = bgp.get("local_as", {})
-            if isinstance(local_as, dict) and "_for_device" in local_as:
-                as_id = device_to_as_id.get(local_as["_for_device"])
+            local_as = bgp.get("local_as")
+            if isinstance(local_as, PendingASRef):
+                as_id = device_to_as_id.get(local_as.device)
                 if as_id:
                     bgp["local_as"] = {"id": as_id}
                 else:
@@ -196,18 +189,32 @@ class RoutingMixin:
         # existing ManagedBGP is safe: local_as is cardinality-one and upserts cleanly
         # (replaces, never duplicates — verified on Infrahub 1.9.6), so the upsert
         # also (re)registers it in the group context with no new/existing split.
-        plan.bgp_processes = [await self.client.create(kind=ManagedBGP, data=_clean(d)) for d in plan.bgp_processes]
-        plan.ospf_processes = [await self.client.create(kind=ManagedOSPF, data=_clean(d)) for d in plan.ospf_processes]
+        plan.bgp_processes = [await self.client.create(kind=ManagedBGP, data=d) for d in plan.bgp_processes]
+        plan.ospf_processes = [await self.client.create(kind=ManagedOSPF, data=d) for d in plan.ospf_processes]
         for obj in plan.bgp_processes + plan.ospf_processes:
             await obj.save(allow_upsert=True)
             self.logger.info(f"  Saved: {getattr(getattr(obj, 'name', None), 'value', obj.id)}")
 
-        # Step 4: Create peering + OSPF interface SDK objects, save sequentially
-        plan.bgp_peerings = [
-            await self.client.create(kind=ManagedBGPPeering, data=_clean(d)) for d in plan.bgp_peerings
-        ]
+        # Step 4: Resolve HFID refs to processes saved in this same run into direct id
+        # refs. HFID lookups go through the search index, which can lag just behind a
+        # write that landed a moment earlier in this run (NODE_NOT_FOUND). Refs to
+        # processes from earlier generator runs are left as HFID — no race there,
+        # those have had plenty of time to be indexed.
+        process_id_by_name = {obj.name.value: obj.id for obj in plan.bgp_processes + plan.ospf_processes}
+
+        def _resolve_hfid(ref: dict) -> dict:
+            fresh_id = process_id_by_name.get(ref.get("hfid"))
+            return {"id": fresh_id} if fresh_id else ref
+
+        for peering in plan.bgp_peerings:
+            peering["bgp_processes"] = [_resolve_hfid(ref) for ref in peering["bgp_processes"]]
+        for ospf_iface in plan.ospf_interfaces:
+            ospf_iface["ospf_process"] = _resolve_hfid(ospf_iface["ospf_process"])
+
+        # Step 5: Create peering + OSPF interface SDK objects, save sequentially
+        plan.bgp_peerings = [await self.client.create(kind=ManagedBGPPeering, data=d) for d in plan.bgp_peerings]
         plan.ospf_interfaces = [
-            await self.client.create(kind=RoutingOSPFInterface, data=_clean(d)) for d in plan.ospf_interfaces
+            await self.client.create(kind=RoutingOSPFInterface, data=d) for d in plan.ospf_interfaces
         ]
         for obj in plan.bgp_peerings + plan.ospf_interfaces:
             await obj.save(allow_upsert=True)
