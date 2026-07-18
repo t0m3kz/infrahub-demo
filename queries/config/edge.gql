@@ -95,6 +95,7 @@ query edge_config($device: String!) {
                           node {
                             router_id { node { address { value } } }
                             local_as { node { asn { value } } }
+                            capabilities { edges { node { name { value } } } }
                           }
                         }
                       }

@@ -76,9 +76,9 @@ def _make_peering(
     if local_asn is not None or remote_asn is not None:
         procs = []
         if local_asn is not None:
-            procs.append({"device": {"name": local_device}, "local_as": {"asn": local_asn}})
+            procs.append({"capabilities": [{"name": local_device}], "local_as": {"asn": local_asn}})
         if remote_asn is not None:
-            procs.append({"device": {"name": remote_device}, "local_as": {"asn": remote_asn}})
+            procs.append({"capabilities": [{"name": remote_device}], "local_as": {"asn": remote_asn}})
         peering["bgp_processes"] = procs
     return peering
 
@@ -334,8 +334,8 @@ class TestCircuitServiceTraversal:
                 {"name": "Ethernet25/1", "ip_address": None, "device": {"name": remote_device}},
             ],
             "bgp_processes": [
-                {"device": {"name": local_device}, "local_as": {"asn": 65001}},
-                {"device": {"name": remote_device}, "local_as": {"asn": 65002}},
+                {"capabilities": [{"name": local_device}], "local_as": {"asn": 65001}},
+                {"capabilities": [{"name": remote_device}], "local_as": {"asn": 65002}},
             ],
         }
 
@@ -523,8 +523,8 @@ class TestCircuitServiceTraversal:
                 {"name": "Ethernet1/31", "ip_address": None, "device": {"name": "dc1-super-spine-01"}},
             ],
             "bgp_processes": [
-                {"device": {"name": "dc2-super-spine-01"}, "local_as": {"asn": 65002}},
-                {"device": {"name": "dc1-super-spine-01"}, "local_as": {"asn": 65001}},
+                {"capabilities": [{"name": "dc2-super-spine-01"}], "local_as": {"asn": 65002}},
+                {"capabilities": [{"name": "dc1-super-spine-01"}], "local_as": {"asn": 65001}},
             ],
         }
         session = _build_session_from_peering(
