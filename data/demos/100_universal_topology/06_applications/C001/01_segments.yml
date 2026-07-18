@@ -17,9 +17,6 @@ spec:
       owner: "C001"
       security_tag: web-tier
       arp_suppression: true
-      prefix:
-        - - "10.1.10.0/24"
-          - "C001-PROD"
       gateway:
         - "10.1.10.1/24"
         - "C001-PROD"
@@ -61,9 +58,6 @@ spec:
       owner: "C001"
       security_tag: app-tier
       arp_suppression: true
-      prefix:
-        - - "10.1.20.0/24"
-          - "C001-PROD"
       gateway:
         - "10.1.20.1/24"
         - "C001-PROD"
@@ -100,9 +94,6 @@ spec:
       owner: "C001"
       security_tag: database
       arp_suppression: true
-      prefix:
-        - - "10.1.30.0/24"
-          - "C001-PROD"
       gateway:
         - "10.1.30.1/24"
         - "C001-PROD"
@@ -139,9 +130,6 @@ spec:
       owner: "C001"
       security_tag: cache-tier
       arp_suppression: true
-      prefix:
-        - - "10.1.40.0/24"
-          - "C001-PROD"
       gateway:
         - "10.1.40.1/24"
         - "C001-PROD"
@@ -169,9 +157,6 @@ spec:
       owner: "C001"
       security_tag: web-tier
       arp_suppression: true
-      prefix:
-        - - "10.1.110.0/24"
-          - "C001-NONPROD"
       gateway:
         - "10.1.110.1/24"
         - "C001-NONPROD"
@@ -196,9 +181,6 @@ spec:
       owner: "C001"
       security_tag: app-tier
       arp_suppression: true
-      prefix:
-        - - "10.1.120.0/24"
-          - "C001-NONPROD"
       gateway:
         - "10.1.120.1/24"
         - "C001-NONPROD"
@@ -218,9 +200,6 @@ spec:
       owner: "C001"
       security_tag: database
       arp_suppression: true
-      prefix:
-        - - "10.1.130.0/24"
-          - "C001-NONPROD"
       gateway:
         - "10.1.130.1/24"
         - "C001-NONPROD"

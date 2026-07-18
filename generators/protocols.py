@@ -202,7 +202,6 @@ class IpamIPAddress(BuiltinIPAddress):
 class IpamPrefix(BuiltinIPPrefix):
     broadcast_address: StringOptional
     description: StringOptional
-    gateway_ip: StringOptional
     hostmask: StringOptional
     is_pool: Boolean
     is_top_level: BooleanOptional
@@ -214,7 +213,6 @@ class IpamPrefix(BuiltinIPPrefix):
     status: Dropdown
     utilization: IntegerOptional
     children: RelationshipManager[CoreNode]
-    gateway: RelationshipAttribute[IpamIPAddress]
     ip_addresses: RelationshipManager[CoreNode]
     ip_namespace: RelationshipAttribute[CoreNode]
     member_of_groups: RelationshipManager[CoreNode]
@@ -307,7 +305,6 @@ class ManagedNetworkSegment(CoreNode):
     inline_service: RelationshipAttribute[ManagedGeneric]
     member_of_groups: RelationshipManager[CoreNode]
     owner: RelationshipAttribute[CoreNode]
-    prefix: RelationshipManager[IpamPrefix]
     profiles: RelationshipManager[CoreNode]
     security_policies: RelationshipManager[CoreNode]
     security_tag: RelationshipAttribute[CoreNode]
@@ -404,7 +401,6 @@ class ManagedVlanSegment(ManagedGeneric, ManagedNetworkSegment, ManagedGenericIn
     interface_capabilities: RelationshipManager[DcimInterface]
     member_of_groups: RelationshipManager[CoreNode]
     owner: RelationshipAttribute[CoreNode]
-    prefix: RelationshipManager[IpamPrefix]
     profiles: RelationshipManager[CoreNode]
     security_policies: RelationshipManager[CoreNode]
     security_tag: RelationshipAttribute[CoreNode]
@@ -432,7 +428,6 @@ class ManagedVxlanSegment(ManagedGeneric, ManagedNetworkSegment, ManagedGenericI
     interface_capabilities: RelationshipManager[DcimInterface]
     member_of_groups: RelationshipManager[CoreNode]
     owner: RelationshipAttribute[CoreNode]
-    prefix: RelationshipManager[IpamPrefix]
     profiles: RelationshipManager[CoreNode]
     security_policies: RelationshipManager[CoreNode]
     security_tag: RelationshipAttribute[CoreNode]
@@ -596,7 +591,6 @@ class CloudNetworkSegment(CloudResource, ManagedNetworkSegment):
     ip_prefixes: RelationshipManager[IpamPrefix]
     member_of_groups: RelationshipManager[CoreNode]
     owner: RelationshipAttribute[CoreNode]
-    prefix: RelationshipManager[IpamPrefix]
     profiles: RelationshipManager[CoreNode]
     security_policies: RelationshipManager[CoreNode]
     security_tag: RelationshipAttribute[CoreNode]

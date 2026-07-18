@@ -1,7 +1,9 @@
 ---
 # VXLAN segments — EVPN overlay with per-customer VRF isolation
 #
-# prefix: list of [prefix_cidr, namespace] tuples (HFID lookup)
+# gateway: [gateway_ip, namespace] tuple (HFID lookup) — the segment's anycast
+# gateway IpamIPAddress. VRF/subnet are derived from gateway.ip_prefix, so the
+# gateway address must fall inside a prefix already created in 02_prefixes.yml.
 # deployments: set per-demo file; triggers SegmentDeployment allocation
 #
 # HFID: {owner}__{environment}__{customer_name}
@@ -19,9 +21,9 @@ spec:
       environment: "p"
       owner: "Nordix Ltd."
       arp_suppression: true
-      prefix:
-        - - "10.1.10.0/24"
-          - "C001-PROD"
+      gateway:
+        - "10.1.10.1/24"
+        - "C001-PROD"
       member_of_groups:
         - vxlan_segments
 
@@ -29,9 +31,9 @@ spec:
       environment: "p"
       owner: "Nordix Ltd."
       arp_suppression: true
-      prefix:
-        - - "10.1.20.0/24"
-          - "C001-PROD"
+      gateway:
+        - "10.1.20.1/24"
+        - "C001-PROD"
       member_of_groups:
         - vxlan_segments
 
@@ -39,9 +41,9 @@ spec:
       environment: "p"
       owner: "Nordix Ltd."
       arp_suppression: true
-      prefix:
-        - - "10.1.30.0/24"
-          - "C001-PROD"
+      gateway:
+        - "10.1.30.1/24"
+        - "C001-PROD"
       member_of_groups:
         - vxlan_segments
 
@@ -52,9 +54,9 @@ spec:
       environment: "n"
       owner: "Nordix Ltd."
       arp_suppression: true
-      prefix:
-        - - "10.1.110.0/24"
-          - "C001-NONPROD"
+      gateway:
+        - "10.1.110.1/24"
+        - "C001-NONPROD"
       member_of_groups:
         - vxlan_segments
 
@@ -65,9 +67,9 @@ spec:
       environment: "p"
       owner: "SwiftGo GmbH"
       arp_suppression: true
-      prefix:
-        - - "10.2.10.0/24"
-          - "C002-PROD"
+      gateway:
+        - "10.2.10.1/24"
+        - "C002-PROD"
       member_of_groups:
         - vxlan_segments
 
@@ -75,9 +77,9 @@ spec:
       environment: "p"
       owner: "SwiftGo GmbH"
       arp_suppression: true
-      prefix:
-        - - "10.2.20.0/24"
-          - "C002-PROD"
+      gateway:
+        - "10.2.20.1/24"
+        - "C002-PROD"
       member_of_groups:
         - vxlan_segments
 
@@ -88,8 +90,8 @@ spec:
       environment: "p"
       owner: "Nordix Ltd."
       arp_suppression: false
-      prefix:
-        - - "10.255.1.0/24"
-          - "SHARED-SERVICES"
+      gateway:
+        - "10.255.1.1/24"
+        - "SHARED-SERVICES"
       member_of_groups:
         - vxlan_segments

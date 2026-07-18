@@ -48,20 +48,22 @@ def _make_activation(
     if owner_name is not None:
         ns["owner"] = {"name": owner_name}
 
-    prefix: dict = {"ip_namespace": ns}
+    gateway: dict = {"ip_prefix": {"ip_namespace": ns}}
     if gateway_ip is not None:
-        prefix["gateway_ip"] = gateway_ip
+        gateway["address"] = gateway_ip
+
+    segment: dict = {
+        "name": f"Owner - production - {customer_name}",
+        "customer_name": customer_name,
+        "arp_suppression": arp_suppression,
+        "gateway": gateway,
+    }
 
     return {
         "vlan_id": vlan_id,
         "vni": vni,
         "status": "active",
-        "segment": {
-            "name": f"Owner - production - {customer_name}",
-            "customer_name": customer_name,
-            "arp_suppression": arp_suppression,
-            "prefix": prefix,
-        },
+        "segment": segment,
     }
 
 
@@ -313,7 +315,7 @@ def _make_acl_activation(
         "name": f"Owner - production - {customer_name}",
         "customer_name": customer_name,
         "arp_suppression": True,
-        "prefix": {"ip_namespace": {"name": "tenant-a", "l3_vni": 50001}},
+        "gateway": {"ip_prefix": {"ip_namespace": {"name": "tenant-a", "l3_vni": 50001}}},
     }
     if seg_id is not None:
         seg["id"] = seg_id
@@ -359,7 +361,7 @@ def _rule(
 
 
 def _seg_ref(prefix: str) -> dict:
-    return {"id": "x", "name": "other", "prefix": {"prefix": prefix}}
+    return {"id": "x", "name": "other", "gateway": {"ip_prefix": {"prefix": prefix}}}
 
 
 class TestGetAclsEmpty:
@@ -495,7 +497,7 @@ class TestGetAclsMultipleActivations:
 
 def _seg_id_ref(seg_id: str, prefix: str) -> dict:
     """Build a destination_segment dict as clean_data() would produce (with id)."""
-    return {"id": seg_id, "name": "some-segment", "prefix": {"prefix": prefix}}
+    return {"id": seg_id, "name": "some-segment", "gateway": {"ip_prefix": {"prefix": prefix}}}
 
 
 class TestGetAclsEastWestMirroring:

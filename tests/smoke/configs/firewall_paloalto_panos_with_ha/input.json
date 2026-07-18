@@ -159,35 +159,11 @@
                               }
                             }
                           },
-                          "prefix": {
-                            "edges": [
-                              {
-                                "node": {
-                                  "prefix": {
-                                    "value": null
-                                  },
-                                  "gateway_ip": {
-                                    "value": null
-                                  },
-                                  "ip_namespace": {
-                                    "node": {
-                                      "name": {
-                                        "value": "VRF-INTERNAL"
-                                      },
-                                      "l3_vni": {
-                                        "value": null
-                                      },
-                                      "owner": {
-                                        "node": null
-                                      }
-                                    }
-                                  }
-                                }
-                              }
-                            ]
-                          },
                           "security_policies": {
                             "edges": []
+                          },
+                          "gateway": {
+                            "node": null
                           }
                         }
                       }
@@ -273,35 +249,11 @@
                               }
                             }
                           },
-                          "prefix": {
-                            "edges": [
-                              {
-                                "node": {
-                                  "prefix": {
-                                    "value": null
-                                  },
-                                  "gateway_ip": {
-                                    "value": null
-                                  },
-                                  "ip_namespace": {
-                                    "node": {
-                                      "name": {
-                                        "value": "VRF-DMZ"
-                                      },
-                                      "l3_vni": {
-                                        "value": null
-                                      },
-                                      "owner": {
-                                        "node": null
-                                      }
-                                    }
-                                  }
-                                }
-                              }
-                            ]
-                          },
                           "security_policies": {
                             "edges": []
+                          },
+                          "gateway": {
+                            "node": null
                           }
                         }
                       }
@@ -387,35 +339,11 @@
                               }
                             }
                           },
-                          "prefix": {
-                            "edges": [
-                              {
-                                "node": {
-                                  "prefix": {
-                                    "value": null
-                                  },
-                                  "gateway_ip": {
-                                    "value": null
-                                  },
-                                  "ip_namespace": {
-                                    "node": {
-                                      "name": {
-                                        "value": "VRF-EXTERNAL"
-                                      },
-                                      "l3_vni": {
-                                        "value": null
-                                      },
-                                      "owner": {
-                                        "node": null
-                                      }
-                                    }
-                                  }
-                                }
-                              }
-                            ]
-                          },
                           "security_policies": {
                             "edges": []
+                          },
+                          "gateway": {
+                            "node": null
                           }
                         }
                       }
@@ -457,10 +385,14 @@
                   "name": {
                     "value": "seg-10-0-1-0-24"
                   },
-                  "prefix": {
+                  "gateway": {
                     "node": {
-                      "prefix": {
-                        "value": "10.0.1.0/24"
+                      "ip_prefix": {
+                        "node": {
+                          "prefix": {
+                            "value": "10.0.1.0/24"
+                          }
+                        }
                       }
                     }
                   }
@@ -473,10 +405,14 @@
                   "name": {
                     "value": "seg-10-0-10-0-24"
                   },
-                  "prefix": {
+                  "gateway": {
                     "node": {
-                      "prefix": {
-                        "value": "10.0.10.0/24"
+                      "ip_prefix": {
+                        "node": {
+                          "prefix": {
+                            "value": "10.0.10.0/24"
+                          }
+                        }
                       }
                     }
                   }
@@ -509,10 +445,14 @@
                   "name": {
                     "value": "seg-10-0-2-0-24"
                   },
-                  "prefix": {
+                  "gateway": {
                     "node": {
-                      "prefix": {
-                        "value": "10.0.2.0/24"
+                      "ip_prefix": {
+                        "node": {
+                          "prefix": {
+                            "value": "10.0.2.0/24"
+                          }
+                        }
                       }
                     }
                   }

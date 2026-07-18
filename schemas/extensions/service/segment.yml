@@ -84,7 +84,7 @@ nodes:
   # specific data center. Values come from the DC's pool (vlan_pool,
   # vni_pool) via idempotent allocation.
   #
-  # Gateway IP is derived from segment.prefix.gateway (not stored here).
+  # Gateway IP is derived from segment.gateway (not stored here).
   # ARP suppression is read from segment.arp_suppression (VXLAN only).
   # Target DCs are derived from segment.deployments.
   #

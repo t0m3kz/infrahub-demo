@@ -30,22 +30,7 @@ query vxlan_segment_data($name: String!) {
             }
           }
         }
-        prefix {
-          edges {
-            node {
-              id
-              prefix { value }
-              gateway_ip { value }
-              ip_namespace {
-                node {
-                  id
-                  name { value }
-                  l3_vni { value }
-                }
-              }
-            }
-          }
-        }
+        gateway { node { id address { value } } }
       }
     }
   }

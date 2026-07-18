@@ -66,26 +66,26 @@ class TestSegCidr:
         seg = {"cidr_block": {"prefix": "10.0.1.0/24"}}
         assert _seg_cidr(seg) == "10.0.1.0/24"
 
-    def test_on_prem_segment_returns_first_prefix(self):
-        seg = {"prefix": [{"prefix": "192.168.1.0/24"}]}
+    def test_on_prem_segment_returns_gateway_prefix(self):
+        seg = {"gateway": {"ip_prefix": {"prefix": "192.168.1.0/24"}}}
         assert _seg_cidr(seg) == "192.168.1.0/24"
 
     def test_empty_dict_returns_none(self):
         assert _seg_cidr({}) is None
 
-    def test_cidr_block_takes_precedence_over_prefix_list(self):
+    def test_cidr_block_takes_precedence_over_gateway_prefix(self):
         seg = {
             "cidr_block": {"prefix": "172.16.0.0/12"},
-            "prefix": [{"prefix": "10.0.0.0/8"}],
+            "gateway": {"ip_prefix": {"prefix": "10.0.0.0/8"}},
         }
         assert _seg_cidr(seg) == "172.16.0.0/12"
 
-    def test_empty_cidr_block_falls_through_to_prefix_list(self):
-        seg = {"cidr_block": {}, "prefix": [{"prefix": "10.0.0.0/8"}]}
+    def test_empty_cidr_block_falls_through_to_gateway_prefix(self):
+        seg = {"cidr_block": {}, "gateway": {"ip_prefix": {"prefix": "10.0.0.0/8"}}}
         assert _seg_cidr(seg) == "10.0.0.0/8"
 
-    def test_empty_prefix_list_returns_none(self):
-        seg = {"prefix": []}
+    def test_no_gateway_returns_none(self):
+        seg = {"gateway": {}}
         assert _seg_cidr(seg) is None
 
 

@@ -12,9 +12,6 @@ spec:
       owner: "C003"
       security_tag: dmz
       arp_suppression: true
-      prefix:
-        - - "10.3.10.0/24"
-          - "C003-PROD"
       gateway:
         - "10.3.10.1/24"
         - "C003-PROD"
@@ -40,9 +37,6 @@ spec:
       owner: "C003"
       security_tag: app-tier
       arp_suppression: true
-      prefix:
-        - - "10.3.20.0/24"
-          - "C003-PROD"
       gateway:
         - "10.3.20.1/24"
         - "C003-PROD"
@@ -73,9 +67,6 @@ spec:
       owner: "C003"
       security_tag: app-tier
       arp_suppression: true
-      prefix:
-        - - "10.3.30.0/24"
-          - "C003-PROD"
       gateway:
         - "10.3.30.1/24"
         - "C003-PROD"
@@ -101,9 +92,6 @@ spec:
       owner: "C003"
       security_tag: database
       arp_suppression: true
-      prefix:
-        - - "10.3.40.0/24"
-          - "C003-PROD"
       gateway:
         - "10.3.40.1/24"
         - "C003-PROD"

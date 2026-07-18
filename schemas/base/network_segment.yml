@@ -194,16 +194,6 @@ generics:
         on_delete: no-action
         description: "Owner of the network segment"
         identifier: network_segment__owner
-      - name: prefix
-        peer: IpamPrefix
-        label: Prefixes
-        cardinality: many
-        kind: Generic
-        optional: true
-        order_weight: 3000
-        description: >-
-          IP prefixes for this segment (dual-stack: IPv4 and/or IPv6).
-          Determines VRF and anycast gateways. L2-only if absent.
       - name: gateway
         peer: IpamIPAddress
         label: Anycast Gateway
@@ -212,4 +202,6 @@ generics:
         optional: true
         order_weight: 3200
         identifier: network_segment__gateway
-        description: "Anycast gateway IP address for symmetric IRB (shared across all leaves in the fabric)."  # yamllint disable-line rule:line-length
+        description: >-
+          Anycast gateway (v4 or v6) for this SVI; also the only path to
+          subnet/VRF (gateway.ip_prefix). Absent if L2-only/inline-routed.

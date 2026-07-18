@@ -43,9 +43,6 @@ spec:
       environment: "p"
       owner: "C001"
       arp_suppression: false
-      prefix:
-        - - "10.255.1.0/24"
-          - "SHARED-SERVICES"
       gateway:
         - "10.255.1.1/24"
         - "SHARED-SERVICES"
