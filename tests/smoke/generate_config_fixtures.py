@@ -82,7 +82,7 @@ def _make_bgp_peering(
         "send_community": _v("standard-extended"),
         "ttl": _v(ttl),
         "route_reflector_client": _v(route_reflector_client),
-        "interfaces": _edges(
+        "interface_capabilities": _edges(
             [
                 {
                     "__typename": local_iface_type,
@@ -102,13 +102,13 @@ def _make_bgp_peering(
             [
                 {
                     "id": f"bgp-{device_name}",
-                    "device": _node({"name": _v(device_name)}),
+                    "capabilities": _edges([{"name": _v(device_name)}]),
                     "router_id": _node({"address": _v(device_ip)}),
                     "local_as": _node({"asn": _v(device_asn)}),
                 },
                 {
                     "id": f"bgp-{remote_name}",
-                    "device": _node({"name": _v(remote_name)}),
+                    "capabilities": _edges([{"name": _v(remote_name)}]),
                     "router_id": _node({"address": _v(remote_ip)}),
                     "local_as": _node({"asn": _v(remote_asn)}),
                 },
@@ -744,7 +744,7 @@ def _make_zone(
                 "id": seg_name,
                 "__typename": "ManagedVlanSegment",
                 "name": _v(seg_name),
-                "prefix": _node({"prefix": _v(cidr)}),
+                "gateway": _node({"ip_prefix": _node({"prefix": _v(cidr)})}),
             }
         )
     return {
@@ -949,7 +949,7 @@ def build_firewall_ha_data(*, device_name: str, platform: str) -> dict:
     data = build_firewall_data(device_name=device_name, platform=platform)
 
     ha_cap = {
-        "__typename": "ManagedHA",
+        "__typename": "ManagedFirewallHA",
         "name": _v("dc1-fw-ha"),
         "group_id": _v(1),
         "mode": _v("active-passive"),

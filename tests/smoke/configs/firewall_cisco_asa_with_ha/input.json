@@ -57,6 +57,9 @@
                   "ha_timer": {
                     "value": "aggressive"
                   },
+                  "virtual_ip": {
+                    "value": "10.0.0.254"
+                  },
                   "capabilities": {
                     "edges": [
                       {
@@ -117,6 +120,9 @@
                       }
                     }
                   },
+                  "ha_domain": {
+                    "node": null
+                  },
                   "interface_capabilities": {
                     "edges": [
                       {
@@ -159,11 +165,35 @@
                               }
                             }
                           },
-                          "security_policies": {
-                            "edges": []
-                          },
                           "gateway": {
                             "node": null
+                          },
+                          "prefix": {
+                            "edges": [
+                              {
+                                "node": {
+                                  "prefix": {
+                                    "value": null
+                                  },
+                                  "ip_namespace": {
+                                    "node": {
+                                      "name": {
+                                        "value": "VRF-INTERNAL"
+                                      },
+                                      "l3_vni": {
+                                        "value": null
+                                      },
+                                      "owner": {
+                                        "node": null
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                            ]
+                          },
+                          "security_policies": {
+                            "edges": []
                           }
                         }
                       }
@@ -207,6 +237,9 @@
                       }
                     }
                   },
+                  "ha_domain": {
+                    "node": null
+                  },
                   "interface_capabilities": {
                     "edges": [
                       {
@@ -249,11 +282,35 @@
                               }
                             }
                           },
-                          "security_policies": {
-                            "edges": []
-                          },
                           "gateway": {
                             "node": null
+                          },
+                          "prefix": {
+                            "edges": [
+                              {
+                                "node": {
+                                  "prefix": {
+                                    "value": null
+                                  },
+                                  "ip_namespace": {
+                                    "node": {
+                                      "name": {
+                                        "value": "VRF-DMZ"
+                                      },
+                                      "l3_vni": {
+                                        "value": null
+                                      },
+                                      "owner": {
+                                        "node": null
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                            ]
+                          },
+                          "security_policies": {
+                            "edges": []
                           }
                         }
                       }
@@ -297,6 +354,9 @@
                       }
                     }
                   },
+                  "ha_domain": {
+                    "node": null
+                  },
                   "interface_capabilities": {
                     "edges": [
                       {
@@ -339,11 +399,35 @@
                               }
                             }
                           },
-                          "security_policies": {
-                            "edges": []
-                          },
                           "gateway": {
                             "node": null
+                          },
+                          "prefix": {
+                            "edges": [
+                              {
+                                "node": {
+                                  "prefix": {
+                                    "value": null
+                                  },
+                                  "ip_namespace": {
+                                    "node": {
+                                      "name": {
+                                        "value": "VRF-EXTERNAL"
+                                      },
+                                      "l3_vni": {
+                                        "value": null
+                                      },
+                                      "owner": {
+                                        "node": null
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                            ]
+                          },
+                          "security_policies": {
+                            "edges": []
                           }
                         }
                       }

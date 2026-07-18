@@ -102,7 +102,7 @@
                           "route_reflector_client": {
                             "value": true
                           },
-                          "interfaces": {
+                          "interface_capabilities": {
                             "edges": [
                               {
                                 "node": {
@@ -155,12 +155,16 @@
                               {
                                 "node": {
                                   "id": "bgp-dc1-border-leaf-01",
-                                  "device": {
-                                    "node": {
-                                      "name": {
-                                        "value": "dc1-border-leaf-01"
+                                  "capabilities": {
+                                    "edges": [
+                                      {
+                                        "node": {
+                                          "name": {
+                                            "value": "dc1-border-leaf-01"
+                                          }
+                                        }
                                       }
-                                    }
+                                    ]
                                   },
                                   "router_id": {
                                     "node": {
@@ -181,12 +185,16 @@
                               {
                                 "node": {
                                   "id": "bgp-spine-01",
-                                  "device": {
-                                    "node": {
-                                      "name": {
-                                        "value": "spine-01"
+                                  "capabilities": {
+                                    "edges": [
+                                      {
+                                        "node": {
+                                          "name": {
+                                            "value": "spine-01"
+                                          }
+                                        }
                                       }
-                                    }
+                                    ]
                                   },
                                   "router_id": {
                                     "node": {
@@ -229,7 +237,7 @@
                           "route_reflector_client": {
                             "value": true
                           },
-                          "interfaces": {
+                          "interface_capabilities": {
                             "edges": [
                               {
                                 "node": {
@@ -282,12 +290,16 @@
                               {
                                 "node": {
                                   "id": "bgp-dc1-border-leaf-01",
-                                  "device": {
-                                    "node": {
-                                      "name": {
-                                        "value": "dc1-border-leaf-01"
+                                  "capabilities": {
+                                    "edges": [
+                                      {
+                                        "node": {
+                                          "name": {
+                                            "value": "dc1-border-leaf-01"
+                                          }
+                                        }
                                       }
-                                    }
+                                    ]
                                   },
                                   "router_id": {
                                     "node": {
@@ -308,12 +320,16 @@
                               {
                                 "node": {
                                   "id": "bgp-spine-02",
-                                  "device": {
-                                    "node": {
-                                      "name": {
-                                        "value": "spine-02"
+                                  "capabilities": {
+                                    "edges": [
+                                      {
+                                        "node": {
+                                          "name": {
+                                            "value": "spine-02"
+                                          }
+                                        }
                                       }
-                                    }
+                                    ]
                                   },
                                   "router_id": {
                                     "node": {
@@ -737,6 +753,13 @@
                           "security_zone": {
                             "node": null
                           },
+                          "gateway": {
+                            "node": {
+                              "address": {
+                                "value": "10.100.0.1/24"
+                              }
+                            }
+                          },
                           "prefix": {
                             "node": {
                               "ip_namespace": {
@@ -755,9 +778,6 @@
                                     }
                                   }
                                 }
-                              },
-                              "gateway_ip": {
-                                "value": "10.100.0.1/24"
                               }
                             }
                           },
@@ -801,6 +821,13 @@
                           "security_zone": {
                             "node": null
                           },
+                          "gateway": {
+                            "node": {
+                              "address": {
+                                "value": "10.200.0.1/24"
+                              }
+                            }
+                          },
                           "prefix": {
                             "node": {
                               "ip_namespace": {
@@ -815,9 +842,6 @@
                                     "node": null
                                   }
                                 }
-                              },
-                              "gateway_ip": {
-                                "value": "10.200.0.1/24"
                               }
                             }
                           },

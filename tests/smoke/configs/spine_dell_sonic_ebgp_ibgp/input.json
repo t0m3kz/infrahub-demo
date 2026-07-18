@@ -102,7 +102,7 @@
                           "route_reflector_client": {
                             "value": false
                           },
-                          "interfaces": {
+                          "interface_capabilities": {
                             "edges": [
                               {
                                 "node": {
@@ -155,12 +155,16 @@
                               {
                                 "node": {
                                   "id": "bgp-dc1-spine-01",
-                                  "device": {
-                                    "node": {
-                                      "name": {
-                                        "value": "dc1-spine-01"
+                                  "capabilities": {
+                                    "edges": [
+                                      {
+                                        "node": {
+                                          "name": {
+                                            "value": "dc1-spine-01"
+                                          }
+                                        }
                                       }
-                                    }
+                                    ]
                                   },
                                   "router_id": {
                                     "node": {
@@ -181,12 +185,16 @@
                               {
                                 "node": {
                                   "id": "bgp-spine-01",
-                                  "device": {
-                                    "node": {
-                                      "name": {
-                                        "value": "spine-01"
+                                  "capabilities": {
+                                    "edges": [
+                                      {
+                                        "node": {
+                                          "name": {
+                                            "value": "spine-01"
+                                          }
+                                        }
                                       }
-                                    }
+                                    ]
                                   },
                                   "router_id": {
                                     "node": {
@@ -229,7 +237,7 @@
                           "route_reflector_client": {
                             "value": false
                           },
-                          "interfaces": {
+                          "interface_capabilities": {
                             "edges": [
                               {
                                 "node": {
@@ -282,12 +290,16 @@
                               {
                                 "node": {
                                   "id": "bgp-dc1-spine-01",
-                                  "device": {
-                                    "node": {
-                                      "name": {
-                                        "value": "dc1-spine-01"
+                                  "capabilities": {
+                                    "edges": [
+                                      {
+                                        "node": {
+                                          "name": {
+                                            "value": "dc1-spine-01"
+                                          }
+                                        }
                                       }
-                                    }
+                                    ]
                                   },
                                   "router_id": {
                                     "node": {
@@ -308,12 +320,16 @@
                               {
                                 "node": {
                                   "id": "bgp-spine-02",
-                                  "device": {
-                                    "node": {
-                                      "name": {
-                                        "value": "spine-02"
+                                  "capabilities": {
+                                    "edges": [
+                                      {
+                                        "node": {
+                                          "name": {
+                                            "value": "spine-02"
+                                          }
+                                        }
                                       }
-                                    }
+                                    ]
                                   },
                                   "router_id": {
                                     "node": {
@@ -394,7 +410,7 @@
                           "route_reflector_client": {
                             "value": true
                           },
-                          "interfaces": {
+                          "interface_capabilities": {
                             "edges": [
                               {
                                 "node": {
@@ -447,12 +463,16 @@
                               {
                                 "node": {
                                   "id": "bgp-dc1-spine-01",
-                                  "device": {
-                                    "node": {
-                                      "name": {
-                                        "value": "dc1-spine-01"
+                                  "capabilities": {
+                                    "edges": [
+                                      {
+                                        "node": {
+                                          "name": {
+                                            "value": "dc1-spine-01"
+                                          }
+                                        }
                                       }
-                                    }
+                                    ]
                                   },
                                   "router_id": {
                                     "node": {
@@ -473,12 +493,16 @@
                               {
                                 "node": {
                                   "id": "bgp-spine-01",
-                                  "device": {
-                                    "node": {
-                                      "name": {
-                                        "value": "spine-01"
+                                  "capabilities": {
+                                    "edges": [
+                                      {
+                                        "node": {
+                                          "name": {
+                                            "value": "spine-01"
+                                          }
+                                        }
                                       }
-                                    }
+                                    ]
                                   },
                                   "router_id": {
                                     "node": {
@@ -521,7 +545,7 @@
                           "route_reflector_client": {
                             "value": true
                           },
-                          "interfaces": {
+                          "interface_capabilities": {
                             "edges": [
                               {
                                 "node": {
@@ -574,12 +598,16 @@
                               {
                                 "node": {
                                   "id": "bgp-dc1-spine-01",
-                                  "device": {
-                                    "node": {
-                                      "name": {
-                                        "value": "dc1-spine-01"
+                                  "capabilities": {
+                                    "edges": [
+                                      {
+                                        "node": {
+                                          "name": {
+                                            "value": "dc1-spine-01"
+                                          }
+                                        }
                                       }
-                                    }
+                                    ]
                                   },
                                   "router_id": {
                                     "node": {
@@ -600,12 +628,16 @@
                               {
                                 "node": {
                                   "id": "bgp-spine-02",
-                                  "device": {
-                                    "node": {
-                                      "name": {
-                                        "value": "spine-02"
+                                  "capabilities": {
+                                    "edges": [
+                                      {
+                                        "node": {
+                                          "name": {
+                                            "value": "spine-02"
+                                          }
+                                        }
                                       }
-                                    }
+                                    ]
                                   },
                                   "router_id": {
                                     "node": {
