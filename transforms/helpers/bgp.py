@@ -57,8 +57,9 @@ def _extract_remote_asn_from_peering(peering_node: dict, remote_device_name: str
         return None
 
     for proc in bgp_procs:
-        dev_name = (proc.get("device") or {}).get("name", "")
-        if dev_name == remote_device_name:
+        proc_devices = proc.get("capabilities") or []
+        dev_names = {d.get("name") for d in proc_devices if isinstance(d, dict)}
+        if remote_device_name in dev_names:
             local_as = proc.get("local_as")
             if isinstance(local_as, dict):
                 return local_as.get("asn")
