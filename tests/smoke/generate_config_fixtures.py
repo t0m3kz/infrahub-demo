@@ -281,6 +281,7 @@ def _make_segment_deployment(
                 "customer_name": _v("Customer-A"),
                 "arp_suppression": _v(True),
                 "security_zone": security_zone_node,
+                "gateway": _node({"address": _v(gateway_ip)} if gateway_ip else None),
                 "prefix": _node(
                     {
                         "ip_namespace": _node(
@@ -290,7 +291,6 @@ def _make_segment_deployment(
                                 "owner": _node({"name": _v("CustomerA")}),
                             }
                         ),
-                        "gateway_ip": _v(gateway_ip),
                     }
                 ),
             }
@@ -302,6 +302,7 @@ def _make_segment_deployment(
                 "name": _v(seg_name),
                 "customer_name": _v("Customer-A"),
                 "security_zone": security_zone_node,
+                "gateway": _node({"address": _v(gateway_ip)} if gateway_ip else None),
                 "prefix": _node(
                     {
                         "ip_namespace": _node(
@@ -311,7 +312,6 @@ def _make_segment_deployment(
                                 "owner": _node(None),
                             }
                         ),
-                        "gateway_ip": _v(gateway_ip),
                     }
                 ),
             }
@@ -698,11 +698,11 @@ def _make_firewall_interface(
         "arp_suppression": _v(True),
         "segment_deployments": _edges([{"vlan_id": _v(vlan_id), "vni": _v(None)}]),
         "security_zone": _node(zone_node),
+        "gateway": _node(None),
         "prefix": _edges(
             [
                 {
                     "prefix": _v(None),
-                    "gateway_ip": _v(None),
                     "ip_namespace": _node({"name": _v(namespace_name), "l3_vni": _v(None), "owner": _node(None)}),
                 }
             ]

@@ -36,11 +36,9 @@ def _seg_cidr(seg: dict) -> str | None:
     cidr_block = seg.get("cidr_block") or {}
     if cidr_block.get("prefix"):
         return cidr_block["prefix"]
-    # On-prem segment: prefix is a list
-    prefixes = seg.get("prefix") or []
-    if prefixes:
-        return prefixes[0].get("prefix")
-    return None
+    # On-prem segment: subnet is reached via gateway.ip_prefix
+    gateway = seg.get("gateway") or {}
+    return (gateway.get("ip_prefix") or {}).get("prefix")
 
 
 def _resolve_port(

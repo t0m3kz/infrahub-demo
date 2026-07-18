@@ -939,37 +939,6 @@
                               }
                             }
                           },
-                          "prefix": {
-                            "edges": [
-                              {
-                                "node": {
-                                  "prefix": {
-                                    "value": "10.100.0.0/24"
-                                  },
-                                  "gateway_ip": {
-                                    "value": "10.100.0.1/24"
-                                  },
-                                  "ip_namespace": {
-                                    "node": {
-                                      "name": {
-                                        "value": "VRF_A"
-                                      },
-                                      "l3_vni": {
-                                        "value": 50001
-                                      },
-                                      "owner": {
-                                        "node": {
-                                          "name": {
-                                            "value": "CustomerA"
-                                          }
-                                        }
-                                      }
-                                    }
-                                  }
-                                }
-                              }
-                            ]
-                          },
                           "security_policies": {
                             "edges": [
                               {
@@ -1058,6 +1027,37 @@
                                 }
                               }
                             ]
+                          },
+                          "gateway": {
+                            "node": {
+                              "address": {
+                                "value": "10.100.0.1/24"
+                              },
+                              "ip_prefix": {
+                                "node": {
+                                  "prefix": {
+                                    "value": "10.100.0.0/24"
+                                  },
+                                  "ip_namespace": {
+                                    "node": {
+                                      "name": {
+                                        "value": "VRF_A"
+                                      },
+                                      "l3_vni": {
+                                        "value": 50001
+                                      },
+                                      "owner": {
+                                        "node": {
+                                          "name": {
+                                            "value": "CustomerA"
+                                          }
+                                        }
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                            }
                           }
                         }
                       },
@@ -1097,33 +1097,6 @@
                                 "node": null
                               }
                             }
-                          },
-                          "prefix": {
-                            "edges": [
-                              {
-                                "node": {
-                                  "prefix": {
-                                    "value": "10.200.0.0/24"
-                                  },
-                                  "gateway_ip": {
-                                    "value": "10.200.0.1/24"
-                                  },
-                                  "ip_namespace": {
-                                    "node": {
-                                      "name": {
-                                        "value": "default"
-                                      },
-                                      "l3_vni": {
-                                        "value": null
-                                      },
-                                      "owner": {
-                                        "node": null
-                                      }
-                                    }
-                                  }
-                                }
-                              }
-                            ]
                           },
                           "security_policies": {
                             "edges": [
@@ -1179,6 +1152,33 @@
                                 }
                               }
                             ]
+                          },
+                          "gateway": {
+                            "node": {
+                              "address": {
+                                "value": "10.200.0.1/24"
+                              },
+                              "ip_prefix": {
+                                "node": {
+                                  "prefix": {
+                                    "value": "10.200.0.0/24"
+                                  },
+                                  "ip_namespace": {
+                                    "node": {
+                                      "name": {
+                                        "value": "default"
+                                      },
+                                      "l3_vni": {
+                                        "value": null
+                                      },
+                                      "owner": {
+                                        "node": null
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                            }
                           }
                         }
                       }

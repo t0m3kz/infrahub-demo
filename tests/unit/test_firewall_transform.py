@@ -284,12 +284,12 @@ def _make_smoke_data(platform: str) -> dict[str, Any]:
         "status": {"value": "active"},
         "arp_suppression": {"value": True},
         "segment_deployments": {"edges": [{"node": {"vlan_id": {"value": 100}, "vni": {"value": 10100}}}]},
+        "gateway": {"node": None},
         "prefix": {
             "edges": [
                 {
                     "node": {
                         "prefix": {"value": "10.10.10.0/24"},
-                        "gateway_ip": {"value": None},
                         "ip_namespace": {"node": {"name": {"value": "VRF-SMOKE"}, "l3_vni": {"value": None}}},
                     }
                 }

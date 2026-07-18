@@ -280,16 +280,18 @@ fragment NetworkSegmentFields on ManagedNetworkSegment {
         }
       }
     }
-    prefix {
-      edges {
-        node {
-          prefix { value }
-          gateway_ip { value }
-          ip_namespace {
-            node {
-              name { value }
-              l3_vni { value }
-              owner { node { name { value } } }
+    gateway {
+      node {
+        address { value }
+        ip_prefix {
+          node {
+            prefix { value }
+            ip_namespace {
+              node {
+                name { value }
+                l3_vni { value }
+                owner { node { name { value } } }
+              }
             }
           }
         }
@@ -309,16 +311,18 @@ fragment NetworkSegmentFields on ManagedNetworkSegment {
         }
       }
     }
-    prefix {
-      edges {
-        node {
-          prefix { value }
-          gateway_ip { value }
-          ip_namespace {
-            node {
-              name { value }
-              l3_vni { value }
-              owner { node { name { value } } }
+    gateway {
+      node {
+        address { value }
+        ip_prefix {
+          node {
+            prefix { value }
+            ip_namespace {
+              node {
+                name { value }
+                l3_vni { value }
+                owner { node { name { value } } }
+              }
             }
           }
         }

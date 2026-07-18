@@ -42,7 +42,7 @@ def _make_zone(
 
 def _make_segment_with_prefix(prefix: str) -> dict:
     """Build a minimal segment dict that _get_segment_prefix_str() can parse."""
-    return {"prefix": {"prefix": prefix}}
+    return {"gateway": {"ip_prefix": {"prefix": prefix}}}
 
 
 # ---------------------------------------------------------------------------

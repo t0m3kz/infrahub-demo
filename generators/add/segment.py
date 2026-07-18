@@ -340,7 +340,7 @@ class VxlanSegmentGenerator(BaseSegmentGenerator):
         - Finds the trunk/uplink physical interface (role=uplink or first physical interface)
         - Creates a DcimVirtualInterface named <parent>.<vlan_id> per deployment VLAN
         - Attaches the segment to interface_capabilities
-        - Assigns the gateway IP from segment.prefix
+        - Assigns the gateway IP from segment.gateway
         """
         cleaned = clean_data(data)
         segment_list = cleaned.get(self.graphql_root_key, [])
@@ -370,11 +370,12 @@ class VxlanSegmentGenerator(BaseSegmentGenerator):
             )
             return
 
-        # Collect gateway IPs and their namespaces from segment.prefix
-        # Each prefix entry may have a different gateway_ip (one per namespace/VRF)
-        prefix_entries = segment.get("prefix") or []
-        if not prefix_entries:
-            self.logger.warning(f"Segment '{segment_name}' has no prefix — sub-interfaces created without IP addresses")
+        # Gateway IP lives directly on the segment (one anycast address, v4 or v6)
+        gateway = segment.get("gateway") or {}
+        if not gateway.get("id"):
+            self.logger.warning(
+                f"Segment '{segment_name}' has no gateway — sub-interfaces created without IP addresses"
+            )
 
         # Collect per-deployment VLAN IDs by querying existing SegmentDeployments
         raw_deps = segment.get("deployments") or segment.get("deployment")
@@ -432,30 +433,8 @@ class VxlanSegmentGenerator(BaseSegmentGenerator):
             # Sub-interface name: <parent>.<vlan_id> (e.g. Ethernet1/1.100)
             sub_iface_name = f"{trunk_iface.name.value}.{vlan_id}"
 
-            # Pick gateway IP and namespace from the first prefix entry (no per-DC differentiation for FW)
-            gateway_ip_str: str | None = None
-            ip_namespace_id: str | None = None
-            if prefix_entries:
-                first_prefix = prefix_entries[0]
-                gateway_ip_str = first_prefix.get("gateway_ip")
-                ns = first_prefix.get("ip_namespace") or {}
-                ip_namespace_id = ns.get("id")
-
-            ip_address_data: Any = None
-            if gateway_ip_str and ip_namespace_id:
-                # Allocate/upsert the gateway IP address
-                try:
-                    ip_obj = await self.client.create(
-                        kind="IpamIPAddress",
-                        data={
-                            "address": gateway_ip_str,
-                            "ip_namespace": {"id": ip_namespace_id},
-                        },
-                    )
-                    await ip_obj.save(allow_upsert=True)
-                    ip_address_data = {"id": ip_obj.id}
-                except Exception as exc:
-                    self.logger.warning(f"  [{device_name}] Could not upsert gateway IP {gateway_ip_str}: {exc}")
+            gateway_ip_str: str | None = gateway.get("address")
+            ip_address_data: Any = {"id": gateway["id"]} if gateway.get("id") else None
 
             try:
                 sub_iface = await self.client.create(

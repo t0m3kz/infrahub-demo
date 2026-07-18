@@ -77,8 +77,8 @@ query firewall_config($device: String!) {
           edges {
             node {
               id
-              ... on ManagedVlanSegment { name { value } prefix { edges { node { prefix { value } } } } }
-              ... on ManagedVxlanSegment { name { value } prefix { edges { node { prefix { value } } } } }
+              ... on ManagedVlanSegment { name { value } gateway { node { ip_prefix { node { prefix { value } } } } } }
+              ... on ManagedVxlanSegment { name { value } gateway { node { ip_prefix { node { prefix { value } } } } } }
             }
           }
         }
@@ -111,15 +111,15 @@ query firewall_config($device: String!) {
               source_segment {
                 node {
                   id
-                  ... on ManagedVlanSegment { name { value } prefix { edges { node { prefix { value } } } } }
-                  ... on ManagedVxlanSegment { name { value } prefix { edges { node { prefix { value } } } } }
+                  ... on ManagedVlanSegment { name { value } gateway { node { ip_prefix { node { prefix { value } } } } } }
+                  ... on ManagedVxlanSegment { name { value } gateway { node { ip_prefix { node { prefix { value } } } } } }
                 }
               }
               destination_segment {
                 node {
                   id
-                  ... on ManagedVlanSegment { name { value } prefix { edges { node { prefix { value } } } } }
-                  ... on ManagedVxlanSegment { name { value } prefix { edges { node { prefix { value } } } } }
+                  ... on ManagedVlanSegment { name { value } gateway { node { ip_prefix { node { prefix { value } } } } } }
+                  ... on ManagedVxlanSegment { name { value } gateway { node { ip_prefix { node { prefix { value } } } } } }
                 }
               }
               security_profile { node { name { value } } }
@@ -138,12 +138,14 @@ fragment FirewallSegmentFields on ManagedNetworkSegment {
     segment_deployments(status__values: ["active", "provisioning"]) {
       edges { node { vlan_id { value } vni { value } } }
     }
-    prefix {
-      edges {
-        node {
-          prefix { value }
-          gateway_ip { value }
-          ip_namespace { node { name { value } l3_vni { value } owner { node { name { value } } } } }
+    gateway {
+      node {
+        address { value }
+        ip_prefix {
+          node {
+            prefix { value }
+            ip_namespace { node { name { value } l3_vni { value } owner { node { name { value } } } } }
+          }
         }
       }
     }
@@ -173,15 +175,15 @@ fragment FirewallSegmentFields on ManagedNetworkSegment {
                 source_segment {
                   node {
                     id
-                    ... on ManagedVxlanSegment { name { value } prefix { edges { node { prefix { value } } } } }
-                    ... on ManagedVlanSegment  { name { value } prefix { edges { node { prefix { value } } } } }
+                    ... on ManagedVxlanSegment { name { value } gateway { node { ip_prefix { node { prefix { value } } } } } }
+                    ... on ManagedVlanSegment  { name { value } gateway { node { ip_prefix { node { prefix { value } } } } } }
                   }
                 }
                 destination_segment {
                   node {
                     id
-                    ... on ManagedVxlanSegment { name { value } prefix { edges { node { prefix { value } } } } }
-                    ... on ManagedVlanSegment  { name { value } prefix { edges { node { prefix { value } } } } }
+                    ... on ManagedVxlanSegment { name { value } gateway { node { ip_prefix { node { prefix { value } } } } } }
+                    ... on ManagedVlanSegment  { name { value } gateway { node { ip_prefix { node { prefix { value } } } } } }
                   }
                 }
                 security_profile { node { name { value } } }
@@ -199,12 +201,14 @@ fragment FirewallSegmentFields on ManagedNetworkSegment {
     segment_deployments(status__values: ["active", "provisioning"]) {
       edges { node { vlan_id { value } vni { value } } }
     }
-    prefix {
-      edges {
-        node {
-          prefix { value }
-          gateway_ip { value }
-          ip_namespace { node { name { value } l3_vni { value } owner { node { name { value } } } } }
+    gateway {
+      node {
+        address { value }
+        ip_prefix {
+          node {
+            prefix { value }
+            ip_namespace { node { name { value } l3_vni { value } owner { node { name { value } } } } }
+          }
         }
       }
     }
@@ -234,15 +238,15 @@ fragment FirewallSegmentFields on ManagedNetworkSegment {
                 source_segment {
                   node {
                     id
-                    ... on ManagedVxlanSegment { name { value } prefix { edges { node { prefix { value } } } } }
-                    ... on ManagedVlanSegment  { name { value } prefix { edges { node { prefix { value } } } } }
+                    ... on ManagedVxlanSegment { name { value } gateway { node { ip_prefix { node { prefix { value } } } } } }
+                    ... on ManagedVlanSegment  { name { value } gateway { node { ip_prefix { node { prefix { value } } } } } }
                   }
                 }
                 destination_segment {
                   node {
                     id
-                    ... on ManagedVxlanSegment { name { value } prefix { edges { node { prefix { value } } } } }
-                    ... on ManagedVlanSegment  { name { value } prefix { edges { node { prefix { value } } } } }
+                    ... on ManagedVxlanSegment { name { value } gateway { node { ip_prefix { node { prefix { value } } } } } }
+                    ... on ManagedVlanSegment  { name { value } gateway { node { ip_prefix { node { prefix { value } } } } } }
                   }
                 }
                 security_profile { node { name { value } } }
