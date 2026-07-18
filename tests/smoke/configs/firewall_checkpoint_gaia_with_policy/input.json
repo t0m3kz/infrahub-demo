@@ -120,11 +120,35 @@
                               }
                             }
                           },
-                          "security_policies": {
-                            "edges": []
-                          },
                           "gateway": {
                             "node": null
+                          },
+                          "prefix": {
+                            "edges": [
+                              {
+                                "node": {
+                                  "prefix": {
+                                    "value": null
+                                  },
+                                  "ip_namespace": {
+                                    "node": {
+                                      "name": {
+                                        "value": "VRF-INTERNAL"
+                                      },
+                                      "l3_vni": {
+                                        "value": null
+                                      },
+                                      "owner": {
+                                        "node": null
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                            ]
+                          },
+                          "security_policies": {
+                            "edges": []
                           }
                         }
                       }
@@ -213,11 +237,35 @@
                               }
                             }
                           },
-                          "security_policies": {
-                            "edges": []
-                          },
                           "gateway": {
                             "node": null
+                          },
+                          "prefix": {
+                            "edges": [
+                              {
+                                "node": {
+                                  "prefix": {
+                                    "value": null
+                                  },
+                                  "ip_namespace": {
+                                    "node": {
+                                      "name": {
+                                        "value": "VRF-DMZ"
+                                      },
+                                      "l3_vni": {
+                                        "value": null
+                                      },
+                                      "owner": {
+                                        "node": null
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                            ]
+                          },
+                          "security_policies": {
+                            "edges": []
                           }
                         }
                       }
@@ -306,11 +354,35 @@
                               }
                             }
                           },
-                          "security_policies": {
-                            "edges": []
-                          },
                           "gateway": {
                             "node": null
+                          },
+                          "prefix": {
+                            "edges": [
+                              {
+                                "node": {
+                                  "prefix": {
+                                    "value": null
+                                  },
+                                  "ip_namespace": {
+                                    "node": {
+                                      "name": {
+                                        "value": "VRF-EXTERNAL"
+                                      },
+                                      "l3_vni": {
+                                        "value": null
+                                      },
+                                      "owner": {
+                                        "node": null
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                            ]
+                          },
+                          "security_policies": {
+                            "edges": []
                           }
                         }
                       }

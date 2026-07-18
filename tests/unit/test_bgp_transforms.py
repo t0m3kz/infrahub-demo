@@ -5,6 +5,7 @@ and route reflector client detection from peering_interfaces data.
 """
 
 from transforms.common import _build_peer_groups, _build_session_from_peering, get_bgp_profile
+from transforms.helpers.bgp import _extract_remote_asn_from_peering
 
 # ============================================================================
 # Helpers to build test data matching GraphQL response structure
@@ -264,6 +265,65 @@ class TestBuildSessionFromPeering:
         )
         assert session is not None
         assert session["route_reflector_client"] is False
+
+
+# ============================================================================
+# _extract_remote_asn_from_peering
+# ============================================================================
+
+
+class TestExtractRemoteAsnFromPeering:
+    """bgp_processes entries carry the owning device via `capabilities`
+    (ManagedBGP -> DcimCapabilities), not a `device` field. These tests pin
+    that shape down directly, independent of the higher-level session-building
+    tests, since a regression here silently drops every eBGP session."""
+
+    def test_matches_remote_device(self):
+        peering = {
+            "bgp_processes": [
+                {"capabilities": [{"name": "leaf-01"}], "local_as": {"asn": 65001}},
+                {"capabilities": [{"name": "spine-01"}], "local_as": {"asn": 65000}},
+            ]
+        }
+        assert _extract_remote_asn_from_peering(peering, "spine-01") == 65000
+
+    def test_no_matching_device_returns_none(self):
+        peering = {
+            "bgp_processes": [
+                {"capabilities": [{"name": "leaf-01"}], "local_as": {"asn": 65001}},
+                {"capabilities": [{"name": "spine-01"}], "local_as": {"asn": 65000}},
+            ]
+        }
+        assert _extract_remote_asn_from_peering(peering, "spine-99") is None
+
+    def test_missing_bgp_processes_returns_none(self):
+        assert _extract_remote_asn_from_peering({}, "spine-01") is None
+
+    def test_bgp_processes_not_a_list_returns_none(self):
+        assert _extract_remote_asn_from_peering({"bgp_processes": None}, "spine-01") is None
+
+    def test_missing_capabilities_on_process_returns_none(self):
+        """A bgp_process with no capabilities (device unresolved) can't match."""
+        peering = {"bgp_processes": [{"local_as": {"asn": 65000}}]}
+        assert _extract_remote_asn_from_peering(peering, "spine-01") is None
+
+    def test_empty_capabilities_list_returns_none(self):
+        peering = {"bgp_processes": [{"capabilities": [], "local_as": {"asn": 65000}}]}
+        assert _extract_remote_asn_from_peering(peering, "spine-01") is None
+
+    def test_missing_local_as_on_matched_process_returns_none(self):
+        peering = {"bgp_processes": [{"capabilities": [{"name": "spine-01"}]}]}
+        assert _extract_remote_asn_from_peering(peering, "spine-01") is None
+
+    def test_stops_at_first_matching_process(self):
+        """Two bgp_processes both claiming the same device — first match wins."""
+        peering = {
+            "bgp_processes": [
+                {"capabilities": [{"name": "spine-01"}], "local_as": {"asn": 65000}},
+                {"capabilities": [{"name": "spine-01"}], "local_as": {"asn": 99999}},
+            ]
+        }
+        assert _extract_remote_asn_from_peering(peering, "spine-01") == 65000
 
 
 # ============================================================================
