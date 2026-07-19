@@ -76,11 +76,6 @@ spec:
         - "10.255.0.1/32"
         - default
       local_as: "AS65000"
-      address_families:
-        - - ipv4
-          - unicast
-        - - l2vpn
-          - evpn
 
     - name: FR6-EDGE-01-DCI-BGP
       status: active
@@ -92,11 +87,6 @@ spec:
         - "10.255.0.2/32"
         - default
       local_as: "AS65000"
-      address_families:
-        - - ipv4
-          - unicast
-        - - l2vpn
-          - evpn
 
     - name: PA4-EDGE-01-DCI-BGP
       status: active
@@ -108,9 +98,6 @@ spec:
         - "10.255.0.3/32"
         - default
       local_as: "AS65000"
-      address_families:
-        - - ipv4
-          - unicast
 
     - name: PA6-EDGE-01-DCI-BGP
       status: active
@@ -122,9 +109,6 @@ spec:
         - "10.255.0.4/32"
         - default
       local_as: "AS65000"
-      address_families:
-        - - ipv4
-          - unicast
 
 ---
 # ── DCI BGP processes on DC1 border-leafs (WAN-facing) ────────────────────────
@@ -143,11 +127,6 @@ spec:
         - "10.255.11.51/32"
         - FABRIC-DC1
       local_as: "AS65001"
-      address_families:
-        - - ipv4
-          - unicast
-        - - l2vpn
-          - evpn
 
     - name: DC1-BL2-DCI-BGP
       status: active
@@ -159,11 +138,6 @@ spec:
         - "10.255.11.52/32"
         - FABRIC-DC1
       local_as: "AS65001"
-      address_families:
-        - - ipv4
-          - unicast
-        - - l2vpn
-          - evpn
 
     - name: DC2-BL1-DCI-BGP
       status: active
@@ -175,11 +149,6 @@ spec:
         - "10.255.12.51/32"
         - FABRIC-DC2
       local_as: "AS65270"
-      address_families:
-        - - ipv4
-          - unicast
-        - - l2vpn
-          - evpn
 
     - name: DC2-BL2-DCI-BGP
       status: active
@@ -191,11 +160,6 @@ spec:
         - "10.255.12.52/32"
         - FABRIC-DC2
       local_as: "AS65271"
-      address_families:
-        - - ipv4
-          - unicast
-        - - l2vpn
-          - evpn
 
     - name: DC3-BL1-DCI-BGP
       status: active
@@ -207,11 +171,6 @@ spec:
         - "10.255.13.51/32"
         - FABRIC-DC3
       local_as: "AS65370"
-      address_families:
-        - - ipv4
-          - unicast
-        - - l2vpn
-          - evpn
 
     - name: DC3-BL2-DCI-BGP
       status: active
@@ -223,11 +182,6 @@ spec:
         - "10.255.13.52/32"
         - FABRIC-DC3
       local_as: "AS65371"
-      address_families:
-        - - ipv4
-          - unicast
-        - - l2vpn
-          - evpn
 
 ---
 # ── DC1 border-leafs → Frankfurt eBGP peerings ────────────────────────────────

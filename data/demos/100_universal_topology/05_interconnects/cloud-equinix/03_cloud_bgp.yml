@@ -55,9 +55,6 @@ spec:
         - "10.255.0.5/32"
         - default
       local_as: "AS65000"
-      address_families:
-        - - ipv4
-          - unicast
 
 ---
 # ── Cloud BGP peering sessions ─────────────────────────────────────────────────

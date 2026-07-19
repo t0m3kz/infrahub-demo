@@ -103,11 +103,18 @@ def _build_session_from_peering(
             )
         return None
 
+    password_rel = peering_node.get("password") or {}
     session: dict[str, Any] = {
         "name": peering_node.get("name"),
         "session_type": peering_node.get("session_type"),
         "bfd_enabled": peering_node.get("bfd_enabled"),
         "send_community": peering_node.get("send_community"),
+        "send_extended_community": peering_node.get("send_extended_community"),
+        "maximum_routes": peering_node.get("maximum_routes"),
+        "local_pref": peering_node.get("local_pref"),
+        "med": peering_node.get("med"),
+        "remove_private_as": peering_node.get("remove_private_as"),
+        "password": password_rel.get("password"),
         "ttl": peering_node.get("ttl"),
         "route_reflector_client": peering_node.get("route_reflector_client", False),
         "enabled": True,
@@ -191,14 +198,18 @@ def _build_session_from_peering(
         return None
 
     # Address families: use explicit schema config if set, otherwise derive from TTL.
-    # Overlay (TTL != 1) → EVPN; underlay (TTL == 1) → IPv4 (empty = template default).
+    # Overlay (TTL != 1) → EVPN. Underlay (TTL == 1) → IPv4 or IPv6 unicast, based on
+    # the neighbor address family — never empty, so templates can rely on membership
+    # checks ('ipv4' in / 'evpn' in) instead of truthiness to decide what to activate.
     schema_afs = peering_node.get("address_families") or []
     if schema_afs:
         session["address_families"] = _normalize_afs(schema_afs)
     elif ttl != 1:
         session["address_families"] = ["evpn"]
     else:
-        session["address_families"] = []
+        remote_ip = session.get("remote_ip") or {}
+        remote_addr = remote_ip.get("address", "") if isinstance(remote_ip, dict) else ""
+        session["address_families"] = ["ipv6"] if ":" in remote_addr else ["ipv4"]
 
     return session
 
@@ -224,14 +235,20 @@ def _build_peer_groups(sessions: list[dict[str, Any]], device_role: str = "") ->
 
     if underlay:
         pg_name = "UNDERLAY-PEERS"
+        underlay_afs: list[str] = []
+        for af in ("ipv4", "ipv6"):
+            if any(af in (s.get("address_families") or []) for s in underlay) and af not in underlay_afs:
+                underlay_afs.append(af)
         peer_groups.append(
             {
                 "name": pg_name,
                 "type": "underlay",
                 "session_type": "EBGP",
                 "bfd_enabled": any(bool(s.get("bfd_enabled")) for s in underlay),
-                "send_community_extended": True,
-                "address_families": ["ipv4"],
+                "send_community": any(bool(s.get("send_community")) for s in underlay),
+                "send_extended_community": any(bool(s.get("send_extended_community")) for s in underlay),
+                "remove_private_as": any(bool(s.get("remove_private_as")) for s in underlay),
+                "address_families": underlay_afs or ["ipv4"],
             }
         )
         for session in underlay:
@@ -263,7 +280,9 @@ def _build_peer_groups(sessions: list[dict[str, Any]], device_role: str = "") ->
                 "type": "overlay",
                 "session_type": "IBGP",
                 "remote_as": remote_as,
-                "send_community_extended": True,
+                "send_community": any(bool(s.get("send_community")) for s in overlay_ibgp),
+                "send_extended_community": any(bool(s.get("send_extended_community")) for s in overlay_ibgp),
+                "remove_private_as": any(bool(s.get("remove_private_as")) for s in overlay_ibgp),
                 "route_reflector_client": rr_client,
                 "next_hop_unchanged": rr_client,  # RRs must not change next-hop for EVPN clients
                 "address_families": ["evpn"],
@@ -280,7 +299,9 @@ def _build_peer_groups(sessions: list[dict[str, Any]], device_role: str = "") ->
                 "name": pg_name,
                 "type": "overlay",
                 "session_type": "EBGP",
-                "send_community_extended": True,
+                "send_community": any(bool(s.get("send_community")) for s in overlay_ebgp),
+                "send_extended_community": any(bool(s.get("send_extended_community")) for s in overlay_ebgp),
+                "remove_private_as": any(bool(s.get("remove_private_as")) for s in overlay_ebgp),
                 "ebgp_multihop": 255,
                 "address_families": ["evpn"],
             }

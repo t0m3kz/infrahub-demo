@@ -246,7 +246,6 @@ class RoutingPlanner:
                 device_map,
                 overlay_as_id if overlay_type == "ibgp" else None,
                 set(inp.top_devices),
-                evpn_af_id=inp.evpn_af_id,
             )
 
         # ---- Overlay peerings ----
@@ -475,7 +474,6 @@ class RoutingPlanner:
         device_map: dict[str, dict],
         overlay_as_id: str | None,
         top_device_names: set[str] | None = None,
-        evpn_af_id: str = "",
     ) -> None:
         """Build overlay BGP processes. If overlay_as_id is set → iBGP (shared ASN); otherwise → eBGP (per-device ASN).
 
@@ -534,8 +532,6 @@ class RoutingPlanner:
                 router_id,
                 info["id"],
             )
-            if evpn_af_id:
-                proc["address_families"] = [{"id": evpn_af_id}]
             plan.bgp_processes.append(proc)
 
     # ================================================================

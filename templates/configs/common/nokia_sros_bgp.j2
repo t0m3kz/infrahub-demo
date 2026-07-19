@@ -31,13 +31,38 @@ A admin configure router "Base" bgp 1 group "{{ pg.name }}" cluster {{ bgp_confi
 {%- if 'ipv4' in (pg.address_families | default([])) %}
 A admin configure router "Base" bgp 1 group "{{ pg.name }}" family ipv4
 {%- endif %}
+{%- if 'ipv6' in (pg.address_families | default([])) %}
+A admin configure router "Base" bgp 1 group "{{ pg.name }}" family ipv6
+{%- endif %}
 {%- if pg.get('ebgp_multihop') %}
 A admin configure router "Base" bgp 1 group "{{ pg.name }}" multihop {{ pg.ebgp_multihop }}
 {%- endif %}
 {%- if pg.get('bfd_enabled') %}
 A admin configure router "Base" bgp 1 group "{{ pg.name }}" bfd-liveness true
 {%- endif %}
+{%- if pg.get('send_extended_community') %}
 A admin configure router "Base" bgp 1 group "{{ pg.name }}" send-community extended
+{%- elif pg.get('send_community') %}
+A admin configure router "Base" bgp 1 group "{{ pg.name }}" send-community standard
+{%- endif %}
+{%- if pg.get('remove_private_as') %}
+# NOTE: remove-private-as leaf name unverified for SR OS MD-CLI — best-effort guess
+A admin configure router "Base" bgp 1 group "{{ pg.name }}" remove-private-as true
+{%- endif %}
+{%- if pg.get('maximum_routes') %}
+# NOTE: prefix-limit leaf path unverified for SR OS MD-CLI — best-effort guess
+A admin configure router "Base" bgp 1 group "{{ pg.name }}" prefix-limit ipv4 maximum {{ pg.maximum_routes }}
+{%- endif %}
+{%- endfor %}
+{%- for session in bgp_config.sessions %}
+{%- if session.get('local_pref') %}
+A admin configure router "Base" policy-options policy-statement "{{ session.name }}-LOCAL-PREF-IN" entry 10 action local-preference set {{ session.local_pref }}
+A admin configure router "Base" policy-options policy-statement "{{ session.name }}-LOCAL-PREF-IN" entry 10 action action-type accept
+{%- endif %}
+{%- if session.get('med') %}
+A admin configure router "Base" policy-options policy-statement "{{ session.name }}-MED-OUT" entry 10 action metric set {{ session.med }}
+A admin configure router "Base" policy-options policy-statement "{{ session.name }}-MED-OUT" entry 10 action action-type accept
+{%- endif %}
 {%- endfor %}
 {#- BGP Neighbors -#}
 {%- for session in bgp_config.sessions %}
@@ -51,21 +76,46 @@ A admin configure router "Base" bgp 1 neighbor "{{ remote_ip }}" description "{{
 {%- if session.peer_group is defined %}
 A admin configure router "Base" bgp 1 neighbor "{{ remote_ip }}" group "{{ session.peer_group }}"
 {%- else %}
-{%- if session.address_families %}
-{#- Overlay session -#}
+{%- set _afs = session.address_families | default([]) %}
+{%- if 'evpn' in _afs %}
 A admin configure router "Base" bgp 1 neighbor "{{ remote_ip }}" local-address "{{ bgp_config.router_id.address.split('/')[0] }}"
 A admin configure router "Base" bgp 1 neighbor "{{ remote_ip }}" family evpn
 {%- if session.get('route_reflector_client') %}
 A admin configure router "Base" bgp 1 neighbor "{{ remote_ip }}" cluster {{ bgp_config.router_id.address.split('/')[0] }}
 {%- endif %}
-{%- else %}
-{#- Underlay session -#}
+{%- endif %}
+{%- if 'ipv4' in _afs %}
 A admin configure router "Base" bgp 1 neighbor "{{ remote_ip }}" family ipv4
 {%- endif %}
+{%- if 'ipv6' in _afs %}
+A admin configure router "Base" bgp 1 neighbor "{{ remote_ip }}" family ipv6
+{%- endif %}
+{%- if session.get('send_extended_community') %}
 A admin configure router "Base" bgp 1 neighbor "{{ remote_ip }}" send-community extended
+{%- elif session.get('send_community') %}
+A admin configure router "Base" bgp 1 neighbor "{{ remote_ip }}" send-community standard
+{%- endif %}
+{%- if session.get('remove_private_as') %}
+# NOTE: remove-private-as leaf name unverified for SR OS MD-CLI — best-effort guess
+A admin configure router "Base" bgp 1 neighbor "{{ remote_ip }}" remove-private-as true
+{%- endif %}
 {%- if session.get('bfd_enabled') %}
 A admin configure router "Base" bgp 1 neighbor "{{ remote_ip }}" bfd-liveness true
 {%- endif %}
+{%- endif %}
+{%- if session.get('maximum_routes') %}
+# NOTE: prefix-limit leaf path unverified for SR OS MD-CLI — best-effort guess
+A admin configure router "Base" bgp 1 neighbor "{{ remote_ip }}" prefix-limit ipv4 maximum {{ session.maximum_routes }}
+{%- endif %}
+{%- if session.get('password') %}
+# NOTE: authentication-key leaf name unverified for SR OS MD-CLI — best-effort guess
+A admin configure router "Base" bgp 1 neighbor "{{ remote_ip }}" authentication-key "{{ session.password }}"
+{%- endif %}
+{%- if session.get('local_pref') %}
+A admin configure router "Base" bgp 1 neighbor "{{ remote_ip }}" import policy "{{ session.name }}-LOCAL-PREF-IN"
+{%- endif %}
+{%- if session.get('med') %}
+A admin configure router "Base" bgp 1 neighbor "{{ remote_ip }}" export policy "{{ session.name }}-MED-OUT"
 {%- endif %}
 {%- endfor %}
 {#- Export policy for connected routes -#}

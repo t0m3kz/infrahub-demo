@@ -94,7 +94,25 @@
                             "value": true
                           },
                           "send_community": {
-                            "value": "standard-extended"
+                            "value": true
+                          },
+                          "send_extended_community": {
+                            "value": false
+                          },
+                          "maximum_routes": {
+                            "value": null
+                          },
+                          "local_pref": {
+                            "value": null
+                          },
+                          "med": {
+                            "value": null
+                          },
+                          "remove_private_as": {
+                            "value": false
+                          },
+                          "password": {
+                            "node": null
                           },
                           "ttl": {
                             "value": 1
@@ -229,7 +247,25 @@
                             "value": true
                           },
                           "send_community": {
-                            "value": "standard-extended"
+                            "value": true
+                          },
+                          "send_extended_community": {
+                            "value": false
+                          },
+                          "maximum_routes": {
+                            "value": null
+                          },
+                          "local_pref": {
+                            "value": null
+                          },
+                          "med": {
+                            "value": null
+                          },
+                          "remove_private_as": {
+                            "value": false
+                          },
+                          "password": {
+                            "node": null
                           },
                           "ttl": {
                             "value": 1
@@ -402,7 +438,25 @@
                             "value": true
                           },
                           "send_community": {
-                            "value": "standard-extended"
+                            "value": true
+                          },
+                          "send_extended_community": {
+                            "value": false
+                          },
+                          "maximum_routes": {
+                            "value": null
+                          },
+                          "local_pref": {
+                            "value": null
+                          },
+                          "med": {
+                            "value": null
+                          },
+                          "remove_private_as": {
+                            "value": false
+                          },
+                          "password": {
+                            "node": null
                           },
                           "ttl": {
                             "value": 2
@@ -537,7 +591,25 @@
                             "value": true
                           },
                           "send_community": {
-                            "value": "standard-extended"
+                            "value": true
+                          },
+                          "send_extended_community": {
+                            "value": false
+                          },
+                          "maximum_routes": {
+                            "value": null
+                          },
+                          "local_pref": {
+                            "value": null
+                          },
+                          "med": {
+                            "value": null
+                          },
+                          "remove_private_as": {
+                            "value": false
+                          },
+                          "password": {
+                            "node": null
                           },
                           "ttl": {
                             "value": 2

@@ -20,9 +20,6 @@ spec:
         - "10.255.12.51/32"
         - FABRIC-DC2
       local_as: "AS65002"
-      address_families:
-        - - l2vpn
-          - evpn
 
     - name: DC2-BL2-BGP-EVPN
       status: active
@@ -34,9 +31,6 @@ spec:
         - "10.255.12.52/32"
         - FABRIC-DC2
       local_as: "AS65002"
-      address_families:
-        - - l2vpn
-          - evpn
 
     - name: DC2-POD1-SP1-BGP-EVPN
       status: active
@@ -48,9 +42,6 @@ spec:
         - "10.255.12.11/32"
         - FABRIC-DC2
       local_as: "AS65002"
-      address_families:
-        - - l2vpn
-          - evpn
 
     - name: DC2-POD1-SP2-BGP-EVPN
       status: active
@@ -62,9 +53,6 @@ spec:
         - "10.255.12.12/32"
         - FABRIC-DC2
       local_as: "AS65002"
-      address_families:
-        - - l2vpn
-          - evpn
 
     - name: DC2-POD1-L1-BGP-EVPN
       status: active
@@ -76,9 +64,6 @@ spec:
         - "10.255.12.21/32"
         - FABRIC-DC2
       local_as: "AS65002"
-      address_families:
-        - - l2vpn
-          - evpn
 
     - name: DC2-POD1-L2-BGP-EVPN
       status: active
@@ -90,9 +75,6 @@ spec:
         - "10.255.12.22/32"
         - FABRIC-DC2
       local_as: "AS65002"
-      address_families:
-        - - l2vpn
-          - evpn
 
     - name: DC2-POD1-L3-BGP-EVPN
       status: active
@@ -104,9 +86,6 @@ spec:
         - "10.255.12.23/32"
         - FABRIC-DC2
       local_as: "AS65002"
-      address_families:
-        - - l2vpn
-          - evpn
 
     - name: DC2-POD1-L4-BGP-EVPN
       status: active
@@ -118,9 +97,6 @@ spec:
         - "10.255.12.24/32"
         - FABRIC-DC2
       local_as: "AS65002"
-      address_families:
-        - - l2vpn
-          - evpn
 
     - name: DC2-POD2-SP1-BGP-EVPN
       status: active
@@ -132,9 +108,6 @@ spec:
         - "10.255.12.13/32"
         - FABRIC-DC2
       local_as: "AS65002"
-      address_families:
-        - - l2vpn
-          - evpn
 
     - name: DC2-POD2-SP2-BGP-EVPN
       status: active
@@ -146,9 +119,6 @@ spec:
         - "10.255.12.14/32"
         - FABRIC-DC2
       local_as: "AS65002"
-      address_families:
-        - - l2vpn
-          - evpn
 
     - name: DC2-POD2-L1-BGP-EVPN
       status: active
@@ -160,9 +130,6 @@ spec:
         - "10.255.12.25/32"
         - FABRIC-DC2
       local_as: "AS65002"
-      address_families:
-        - - l2vpn
-          - evpn
 
     - name: DC2-POD2-L2-BGP-EVPN
       status: active
@@ -174,9 +141,6 @@ spec:
         - "10.255.12.26/32"
         - FABRIC-DC2
       local_as: "AS65002"
-      address_families:
-        - - l2vpn
-          - evpn
 
     - name: DC2-POD2-L3-BGP-EVPN
       status: active
@@ -188,9 +152,6 @@ spec:
         - "10.255.12.27/32"
         - FABRIC-DC2
       local_as: "AS65002"
-      address_families:
-        - - l2vpn
-          - evpn
 
     - name: DC2-POD2-L4-BGP-EVPN
       status: active
@@ -202,6 +163,3 @@ spec:
         - "10.255.12.28/32"
         - FABRIC-DC2
       local_as: "AS65002"
-      address_families:
-        - - l2vpn
-          - evpn

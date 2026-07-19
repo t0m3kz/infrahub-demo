@@ -79,8 +79,18 @@
 {%- if pg.get('bfd_enabled') -%}
 {%- set _ = pg_entry.update({'bfd': 'true'}) -%}
 {%- endif -%}
-{%- if pg.get('send_community_extended') -%}
+{%- if pg.get('send_extended_community') -%}
 {%- set _ = pg_entry.update({'send_community': 'extended'}) -%}
+{%- elif pg.get('send_community') -%}
+{%- set _ = pg_entry.update({'send_community': 'standard'}) -%}
+{%- endif -%}
+{%- if pg.get('remove_private_as') -%}
+{#- NOTE: 'remove_private_as' key unverified against real SONiC BGP_PEER_GROUP config-DB schema -#}
+{%- set _ = pg_entry.update({'remove_private_as': 'true'}) -%}
+{%- endif -%}
+{%- if pg.get('maximum_routes') -%}
+{#- NOTE: 'max_prefix_limit' key unverified against real SONiC BGP_PEER_GROUP_AF config-DB schema -#}
+{%- set _ = pg_entry.update({'max_prefix_limit': pg.maximum_routes|string}) -%}
 {%- endif -%}
 {%- set _ = bgp_peer_groups.update({pg.name: pg_entry}) -%}
 {#- Per-group address family activation -#}
@@ -122,8 +132,25 @@
 {%- if session.get('remote_device') -%}
 {%- set _ = neighbor_entry.update({'description': session.remote_device}) -%}
 {%- endif -%}
+{%- if session.peer_group is not defined -%}
+{%- if session.get('send_extended_community') -%}
+{%- set _ = neighbor_entry.update({'send_community': 'extended'}) -%}
+{%- elif session.get('send_community') -%}
+{%- set _ = neighbor_entry.update({'send_community': 'standard'}) -%}
+{%- endif -%}
+{%- if session.get('remove_private_as') -%}
+{#- NOTE: 'remove_private_as' key unverified against real SONiC BGP_NEIGHBOR config-DB schema -#}
+{%- set _ = neighbor_entry.update({'remove_private_as': 'true'}) -%}
+{%- endif -%}
+{%- if session.get('maximum_routes') -%}
+{#- NOTE: 'max_prefix_limit' key unverified against real SONiC BGP_NEIGHBOR_AF config-DB schema -#}
+{%- set _ = neighbor_entry.update({'max_prefix_limit': session.maximum_routes|string}) -%}
+{%- endif -%}
+{%- endif -%}
+{#- 'password'/'local_pref'/'med' intentionally not rendered here: BGP auth and route-map/policy
+    based attributes don't have a clean config-DB JSON representation in this file's model -#}
 {%- set _ = bgp_neighbors.update({neighbor_ip: neighbor_entry}) -%}
-{%- if session.peer_group is not defined and session.address_families -%}
+{%- if session.peer_group is not defined and 'evpn' in (session.address_families | default([])) -%}
 {%- set _sess_evpn_af = {'admin_status': 'true'} -%}
 {%- if session.get('route_reflector_client') -%}
 {%- set _ = _sess_evpn_af.update({'route_reflector_client': 'true'}) -%}

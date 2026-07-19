@@ -67,3 +67,26 @@ generics:
     label: Network Peering
     icon: "carbon:network-2"
     include_in_menu: false
+
+nodes:
+  - name: Password
+    namespace: Routing
+    description: "Shared routing-protocol authentication secret, reusable across peerings/interfaces."
+    label: "Routing Password"
+    icon: "mdi:key-variant"
+    include_in_menu: false
+    human_friendly_id:
+      - "name__value"
+    uniqueness_constraints:
+      - ["name__value"]
+    display_label: "{{ name__value }}"
+    attributes:
+      - name: name
+        kind: Text
+        description: "Unique identifier for this shared secret (e.g. 'DC1-UNDERLAY-KEY')"
+      - name: password
+        kind: Password
+        description: "Authentication secret"
+      - name: description
+        kind: Text
+        optional: true

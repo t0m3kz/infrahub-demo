@@ -49,11 +49,6 @@ spec:
         - "10.255.11.51/32"
         - FABRIC-DC1
       local_as: "AS65001"
-      address_families:
-        - - ipv4
-          - unicast
-        - - l2vpn
-          - evpn
 
     - name: DC1-BL2-BGP
       status: active
@@ -65,11 +60,6 @@ spec:
         - "10.255.11.52/32"
         - FABRIC-DC1
       local_as: "AS65001"
-      address_families:
-        - - ipv4
-          - unicast
-        - - l2vpn
-          - evpn
 
     - name: DC1-POD1-SP1-BGP
       status: active
@@ -81,11 +71,6 @@ spec:
         - "10.255.11.11/32"
         - FABRIC-DC1
       local_as: "AS65001"
-      address_families:
-        - - ipv4
-          - unicast
-        - - l2vpn
-          - evpn
 
     - name: DC1-POD1-SP2-BGP
       status: active
@@ -97,11 +82,6 @@ spec:
         - "10.255.11.12/32"
         - FABRIC-DC1
       local_as: "AS65001"
-      address_families:
-        - - ipv4
-          - unicast
-        - - l2vpn
-          - evpn
 
     - name: DC1-POD1-L1-BGP
       status: active
@@ -113,11 +93,6 @@ spec:
         - "10.255.11.21/32"
         - FABRIC-DC1
       local_as: "AS65001"
-      address_families:
-        - - ipv4
-          - unicast
-        - - l2vpn
-          - evpn
 
     - name: DC1-POD1-L2-BGP
       status: active
@@ -129,11 +104,6 @@ spec:
         - "10.255.11.22/32"
         - FABRIC-DC1
       local_as: "AS65001"
-      address_families:
-        - - ipv4
-          - unicast
-        - - l2vpn
-          - evpn
 
     - name: DC1-POD1-L3-BGP
       status: active
@@ -145,11 +115,6 @@ spec:
         - "10.255.11.23/32"
         - FABRIC-DC1
       local_as: "AS65001"
-      address_families:
-        - - ipv4
-          - unicast
-        - - l2vpn
-          - evpn
 
     - name: DC1-POD1-L4-BGP
       status: active
@@ -161,11 +126,6 @@ spec:
         - "10.255.11.24/32"
         - FABRIC-DC1
       local_as: "AS65001"
-      address_families:
-        - - ipv4
-          - unicast
-        - - l2vpn
-          - evpn
 
     - name: DC1-POD2-SP1-BGP
       status: active
@@ -177,11 +137,6 @@ spec:
         - "10.255.11.13/32"
         - FABRIC-DC1
       local_as: "AS65001"
-      address_families:
-        - - ipv4
-          - unicast
-        - - l2vpn
-          - evpn
 
     - name: DC1-POD2-SP2-BGP
       status: active
@@ -193,11 +148,6 @@ spec:
         - "10.255.11.14/32"
         - FABRIC-DC1
       local_as: "AS65001"
-      address_families:
-        - - ipv4
-          - unicast
-        - - l2vpn
-          - evpn
 
     - name: DC1-POD2-L1-BGP
       status: active
@@ -209,11 +159,6 @@ spec:
         - "10.255.11.25/32"
         - FABRIC-DC1
       local_as: "AS65001"
-      address_families:
-        - - ipv4
-          - unicast
-        - - l2vpn
-          - evpn
 
     - name: DC1-POD2-L2-BGP
       status: active
@@ -225,11 +170,6 @@ spec:
         - "10.255.11.26/32"
         - FABRIC-DC1
       local_as: "AS65001"
-      address_families:
-        - - ipv4
-          - unicast
-        - - l2vpn
-          - evpn
 
     - name: DC1-POD2-L3-BGP
       status: active
@@ -241,11 +181,6 @@ spec:
         - "10.255.11.27/32"
         - FABRIC-DC1
       local_as: "AS65001"
-      address_families:
-        - - ipv4
-          - unicast
-        - - l2vpn
-          - evpn
 
     - name: DC1-POD2-L4-BGP
       status: active
@@ -257,8 +192,3 @@ spec:
         - "10.255.11.28/32"
         - FABRIC-DC1
       local_as: "AS65001"
-      address_families:
-        - - ipv4
-          - unicast
-        - - l2vpn
-          - evpn

@@ -15,11 +15,6 @@ spec:
         - "10.255.13.51/32"
         - FABRIC-DC3
       local_as: "AS65370"
-      address_families:
-        - - ipv4
-          - unicast
-        - - l2vpn
-          - evpn
 
     - name: DC3-BL2-BGP
       status: active
@@ -31,11 +26,6 @@ spec:
         - "10.255.13.52/32"
         - FABRIC-DC3
       local_as: "AS65371"
-      address_families:
-        - - ipv4
-          - unicast
-        - - l2vpn
-          - evpn
 
     - name: DC3-SS1-BGP
       status: active
@@ -47,11 +37,6 @@ spec:
         - "10.255.13.1/32"
         - FABRIC-DC3
       local_as: "AS65300"
-      address_families:
-        - - ipv4
-          - unicast
-        - - l2vpn
-          - evpn
 
     - name: DC3-SS2-BGP
       status: active
@@ -63,11 +48,6 @@ spec:
         - "10.255.13.2/32"
         - FABRIC-DC3
       local_as: "AS65301"
-      address_families:
-        - - ipv4
-          - unicast
-        - - l2vpn
-          - evpn
 
     - name: DC3-POD1-SP1-BGP
       status: active
@@ -79,11 +59,6 @@ spec:
         - "10.255.13.11/32"
         - FABRIC-DC3
       local_as: "AS65311"
-      address_families:
-        - - ipv4
-          - unicast
-        - - l2vpn
-          - evpn
 
     - name: DC3-POD1-SP2-BGP
       status: active
@@ -95,11 +70,6 @@ spec:
         - "10.255.13.12/32"
         - FABRIC-DC3
       local_as: "AS65312"
-      address_families:
-        - - ipv4
-          - unicast
-        - - l2vpn
-          - evpn
 
     - name: DC3-POD1-L1-BGP
       status: active
@@ -111,11 +81,6 @@ spec:
         - "10.255.13.21/32"
         - FABRIC-DC3
       local_as: "AS65351"
-      address_families:
-        - - ipv4
-          - unicast
-        - - l2vpn
-          - evpn
 
     - name: DC3-POD1-L2-BGP
       status: active
@@ -127,11 +92,6 @@ spec:
         - "10.255.13.22/32"
         - FABRIC-DC3
       local_as: "AS65352"
-      address_families:
-        - - ipv4
-          - unicast
-        - - l2vpn
-          - evpn
 
     - name: DC3-POD1-L3-BGP
       status: active
@@ -143,11 +103,6 @@ spec:
         - "10.255.13.23/32"
         - FABRIC-DC3
       local_as: "AS65353"
-      address_families:
-        - - ipv4
-          - unicast
-        - - l2vpn
-          - evpn
 
     - name: DC3-POD1-L4-BGP
       status: active
@@ -159,11 +114,6 @@ spec:
         - "10.255.13.24/32"
         - FABRIC-DC3
       local_as: "AS65354"
-      address_families:
-        - - ipv4
-          - unicast
-        - - l2vpn
-          - evpn
 
     - name: DC3-POD2-SP1-BGP
       status: active
@@ -175,11 +125,6 @@ spec:
         - "10.255.13.13/32"
         - FABRIC-DC3
       local_as: "AS65321"
-      address_families:
-        - - ipv4
-          - unicast
-        - - l2vpn
-          - evpn
 
     - name: DC3-POD2-SP2-BGP
       status: active
@@ -191,11 +136,6 @@ spec:
         - "10.255.13.14/32"
         - FABRIC-DC3
       local_as: "AS65322"
-      address_families:
-        - - ipv4
-          - unicast
-        - - l2vpn
-          - evpn
 
     - name: DC3-POD2-L1-BGP
       status: active
@@ -207,11 +147,6 @@ spec:
         - "10.255.13.25/32"
         - FABRIC-DC3
       local_as: "AS65355"
-      address_families:
-        - - ipv4
-          - unicast
-        - - l2vpn
-          - evpn
 
     - name: DC3-POD2-L2-BGP
       status: active
@@ -223,11 +158,6 @@ spec:
         - "10.255.13.26/32"
         - FABRIC-DC3
       local_as: "AS65356"
-      address_families:
-        - - ipv4
-          - unicast
-        - - l2vpn
-          - evpn
 
     - name: DC3-POD2-L3-BGP
       status: active
@@ -239,11 +169,6 @@ spec:
         - "10.255.13.27/32"
         - FABRIC-DC3
       local_as: "AS65357"
-      address_families:
-        - - ipv4
-          - unicast
-        - - l2vpn
-          - evpn
 
     - name: DC3-POD2-L4-BGP
       status: active
@@ -255,11 +180,6 @@ spec:
         - "10.255.13.28/32"
         - FABRIC-DC3
       local_as: "AS65358"
-      address_families:
-        - - ipv4
-          - unicast
-        - - l2vpn
-          - evpn
 
     - name: DC3-POD3-SP1-BGP
       status: active
@@ -271,11 +191,6 @@ spec:
         - "10.255.13.15/32"
         - FABRIC-DC3
       local_as: "AS65331"
-      address_families:
-        - - ipv4
-          - unicast
-        - - l2vpn
-          - evpn
 
     - name: DC3-POD3-SP2-BGP
       status: active
@@ -287,11 +202,6 @@ spec:
         - "10.255.13.16/32"
         - FABRIC-DC3
       local_as: "AS65332"
-      address_families:
-        - - ipv4
-          - unicast
-        - - l2vpn
-          - evpn
 
     - name: DC3-POD3-L1-BGP
       status: active
@@ -303,11 +213,6 @@ spec:
         - "10.255.13.29/32"
         - FABRIC-DC3
       local_as: "AS65359"
-      address_families:
-        - - ipv4
-          - unicast
-        - - l2vpn
-          - evpn
 
     - name: DC3-POD3-L2-BGP
       status: active
@@ -319,11 +224,6 @@ spec:
         - "10.255.13.30/32"
         - FABRIC-DC3
       local_as: "AS65360"
-      address_families:
-        - - ipv4
-          - unicast
-        - - l2vpn
-          - evpn
 
     - name: DC3-POD4-SP1-BGP
       status: active
@@ -335,11 +235,6 @@ spec:
         - "10.255.13.17/32"
         - FABRIC-DC3
       local_as: "AS65341"
-      address_families:
-        - - ipv4
-          - unicast
-        - - l2vpn
-          - evpn
 
     - name: DC3-POD4-SP2-BGP
       status: active
@@ -351,11 +246,6 @@ spec:
         - "10.255.13.18/32"
         - FABRIC-DC3
       local_as: "AS65342"
-      address_families:
-        - - ipv4
-          - unicast
-        - - l2vpn
-          - evpn
 
     - name: DC3-POD4-L1-BGP
       status: active
@@ -367,11 +257,6 @@ spec:
         - "10.255.13.31/32"
         - FABRIC-DC3
       local_as: "AS65361"
-      address_families:
-        - - ipv4
-          - unicast
-        - - l2vpn
-          - evpn
 
     - name: DC3-POD4-L2-BGP
       status: active
@@ -383,8 +268,3 @@ spec:
         - "10.255.13.32/32"
         - FABRIC-DC3
       local_as: "AS65362"
-      address_families:
-        - - ipv4
-          - unicast
-        - - l2vpn
-          - evpn

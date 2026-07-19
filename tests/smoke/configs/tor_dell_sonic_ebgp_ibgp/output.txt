@@ -41,8 +41,7 @@ router bgp 65000
   neighbor EVPN-PEERS peer-group
   neighbor EVPN-PEERS remote-as 65000
   neighbor EVPN-PEERS update-source Loopback0
-  neighbor EVPN-PEERS send-community extended
-  neighbor EVPN-PEERS maximum-routes 0
+  neighbor EVPN-PEERS send-community
   neighbor 10.0.0.100 peer-group EVPN-PEERS
   neighbor 10.0.0.100 description spine-01
   neighbor 10.0.0.101 peer-group EVPN-PEERS
@@ -63,8 +62,7 @@ router bgp 65001
   maximum-paths 4 ecmp 64
   !
   neighbor UNDERLAY-PEERS peer-group
-  neighbor UNDERLAY-PEERS send-community extended
-  neighbor UNDERLAY-PEERS maximum-routes 0
+  neighbor UNDERLAY-PEERS send-community
   neighbor UNDERLAY-PEERS bfd
   neighbor 10.1.0.0 peer-group UNDERLAY-PEERS
   neighbor 10.1.0.0 remote-as 65100

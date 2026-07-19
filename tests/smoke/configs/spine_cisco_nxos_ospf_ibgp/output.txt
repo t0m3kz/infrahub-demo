@@ -54,7 +54,6 @@ router bgp 65000
   !
   template peer-policy EVPN-PEERS-POLICY
     send-community
-    send-community extended
     route-reflector-client
     next-hop-unchanged
   !

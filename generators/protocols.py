@@ -333,7 +333,6 @@ class ManagedBGP(ManagedGeneric, ManagedGenericDevice, ManagedRouting):
     multipath: Boolean
     name: String
     status: Dropdown
-    address_families: RelationshipManager[CoreNode]
     capabilities: RelationshipManager[CoreNode]
     local_as: RelationshipAttribute[RoutingAutonomousSystem]
     member_of_groups: RelationshipManager[CoreNode]
@@ -350,7 +349,6 @@ class ManagedBGPPeering(ManagedGeneric, ManagedPeering, ManagedGenericInterfaces
     maximum_routes: IntegerOptional
     med: IntegerOptional
     name: String
-    password: StringOptional
     remove_private_as: Boolean
     route_reflector_client: Boolean
     send_community: Boolean
@@ -362,9 +360,8 @@ class ManagedBGPPeering(ManagedGeneric, ManagedPeering, ManagedGenericInterfaces
     bgp_processes: RelationshipManager[ManagedBGP]
     interface_capabilities: RelationshipManager[DcimInterface]
     member_of_groups: RelationshipManager[CoreNode]
-    namespace: RelationshipAttribute[CoreNode]
+    password: RelationshipAttribute[RoutingPassword]
     profiles: RelationshipManager[CoreNode]
-    remote_peer: RelationshipAttribute[CoreNode]
     subscriber_of_groups: RelationshipManager[CoreNode]
 
 
@@ -467,7 +464,6 @@ class RoutingOSPFArea(CoreNode):
 
 
 class RoutingOSPFInterface(ManagedGeneric, ManagedGenericInterfaces):
-    authentication_key: StringOptional
     authentication_mode: DropdownOptional
     description: StringOptional
     metric: IntegerOptional
@@ -479,6 +475,16 @@ class RoutingOSPFInterface(ManagedGeneric, ManagedGenericInterfaces):
     member_of_groups: RelationshipManager[CoreNode]
     ospf_process: RelationshipAttribute[ManagedOSPF]
     ospf_services: RelationshipManager[ManagedOSPF]
+    password: RelationshipAttribute[RoutingPassword]
+    profiles: RelationshipManager[CoreNode]
+    subscriber_of_groups: RelationshipManager[CoreNode]
+
+
+class RoutingPassword(CoreNode):
+    description: StringOptional
+    name: String
+    password: StringOptional
+    member_of_groups: RelationshipManager[CoreNode]
     profiles: RelationshipManager[CoreNode]
     subscriber_of_groups: RelationshipManager[CoreNode]
 

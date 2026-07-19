@@ -46,7 +46,7 @@
     "EVPN-PEERS": {
       "asn": "65000",
       "local_addr": "10.0.0.1",
-      "send_community": "extended"
+      "send_community": "standard"
     }
   },
   "DEVICE_METADATA": {

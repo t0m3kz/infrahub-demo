@@ -54,12 +54,24 @@ def _make_peering(
     remote_iface_type: str = "DcimPhysicalInterface",
     local_asn: int | None = None,
     remote_asn: int | None = None,
+    maximum_routes: int | None = None,
+    local_pref: int | None = None,
+    med: int | None = None,
+    send_extended_community: bool = False,
+    remove_private_as: bool = False,
+    password: str | None = None,
 ):
     peering = {
         "name": name,
         "session_type": session_type,
         "bfd_enabled": bfd,
-        "send_community": "standard-extended",
+        "send_community": True,
+        "send_extended_community": send_extended_community,
+        "maximum_routes": maximum_routes,
+        "local_pref": local_pref,
+        "med": med,
+        "remove_private_as": remove_private_as,
+        "password": {"password": password} if password is not None else None,
         "ttl": ttl,
         "route_reflector_client": route_reflector_client,
         "interface_capabilities": _make_peering_interfaces(
@@ -228,7 +240,8 @@ class TestBuildSessionFromPeering:
         assert session is not None
         assert session["address_families"] == ["evpn"]
 
-    def test_underlay_address_families_empty(self):
+    def test_underlay_address_families_ipv4(self):
+        """Underlay session with an IPv4 neighbor resolves to ['ipv4'], never empty."""
         peering = _make_peering(
             session_type="EBGP",
             ttl=1,
@@ -244,7 +257,103 @@ class TestBuildSessionFromPeering:
             interfaces=None,
         )
         assert session is not None
-        assert session["address_families"] == []
+        assert session["address_families"] == ["ipv4"]
+
+    def test_underlay_address_families_ipv6(self):
+        """Underlay session with an IPv6 neighbor resolves to ['ipv6']."""
+        peering = _make_peering(
+            session_type="EBGP",
+            ttl=1,
+            local_device="leaf-01",
+            remote_device="spine-01",
+            local_ip="fd00:2100::1/127",
+            remote_ip="fd00:2100::0/127",
+            local_asn=65001,
+            remote_asn=65000,
+        )
+        session = _build_session_from_peering(
+            peering,
+            device_name="leaf-01",
+            local_as={"asn": 65001},
+            interfaces=None,
+        )
+        assert session is not None
+        assert session["address_families"] == ["ipv6"]
+
+    def test_explicit_schema_address_families_can_combine_ipv4_and_evpn(self):
+        """Explicit schema config (e.g. unnumbered iBGP carrying both AFs) is passed through as-is."""
+        peering = _make_peering(
+            session_type="IBGP",
+            ttl=1,
+            local_device="leaf-01",
+            remote_device="spine-01",
+        )
+        peering["address_families"] = [
+            {"afi": "ipv4", "safi": "unicast"},
+            {"afi": "l2vpn", "safi": "evpn"},
+        ]
+        session = _build_session_from_peering(
+            peering,
+            device_name="leaf-01",
+            local_as={"asn": 65000},
+            interfaces=None,
+        )
+        assert session is not None
+        assert session["address_families"] == ["ipv4", "evpn"]
+
+    def test_security_fields_pass_through(self):
+        """maximum_routes/local_pref/med/send_extended_community/remove_private_as/password
+        are threaded from the peering node into the session dict verbatim."""
+        peering = _make_peering(
+            session_type="EBGP",
+            ttl=1,
+            local_device="leaf-01",
+            remote_device="spine-01",
+            local_asn=65001,
+            remote_asn=65000,
+            maximum_routes=100,
+            local_pref=200,
+            med=50,
+            send_extended_community=True,
+            remove_private_as=True,
+            password="s3cr3t",
+        )
+        session = _build_session_from_peering(
+            peering,
+            device_name="leaf-01",
+            local_as={"asn": 65001},
+            interfaces=None,
+        )
+        assert session is not None
+        assert session["maximum_routes"] == 100
+        assert session["local_pref"] == 200
+        assert session["med"] == 50
+        assert session["send_extended_community"] is True
+        assert session["remove_private_as"] is True
+        assert session["password"] == "s3cr3t"
+
+    def test_security_fields_default_none(self):
+        peering = _make_peering(
+            session_type="EBGP",
+            ttl=1,
+            local_device="leaf-01",
+            remote_device="spine-01",
+            local_asn=65001,
+            remote_asn=65000,
+        )
+        session = _build_session_from_peering(
+            peering,
+            device_name="leaf-01",
+            local_as={"asn": 65001},
+            interfaces=None,
+        )
+        assert session is not None
+        assert session["maximum_routes"] is None
+        assert session["local_pref"] is None
+        assert session["med"] is None
+        assert session["send_extended_community"] is False
+        assert session["remove_private_as"] is False
+        assert session["password"] is None
 
     def test_route_reflector_client_default_false(self):
         peering = _make_peering(
@@ -604,18 +713,40 @@ class TestCircuitServiceTraversal:
 # ============================================================================
 
 
-def _session(session_type="EBGP", ttl=1, remote_as=None, rr_client=False, name="s"):
+def _session(
+    session_type="EBGP",
+    ttl=1,
+    remote_as=None,
+    rr_client=False,
+    name="s",
+    address_families=None,
+    send_community=True,
+    send_extended_community=False,
+    remove_private_as=False,
+    maximum_routes=None,
+    local_pref=None,
+    med=None,
+    password=None,
+):
     """Build a minimal session dict for peer group testing."""
     s = {
         "name": name,
         "session_type": session_type,
         "ttl": ttl,
         "bfd_enabled": True,
-        "send_community": "standard-extended",
+        "send_community": send_community,
+        "send_extended_community": send_extended_community,
+        "remove_private_as": remove_private_as,
+        "maximum_routes": maximum_routes,
+        "local_pref": local_pref,
+        "med": med,
+        "password": password,
         "route_reflector_client": rr_client,
     }
     if remote_as:
         s["remote_as"] = remote_as
+    if address_families is not None:
+        s["address_families"] = address_families
     return s
 
 
@@ -639,6 +770,30 @@ class TestBuildPeerGroups:
         assert len(pgs) == 1
         assert pgs[0]["name"] == "UNDERLAY-PEERS"
         assert sessions[0]["peer_group"] == "UNDERLAY-PEERS"
+
+    def test_underlay_peer_group_address_families_defaults_to_ipv4(self):
+        """No explicit AFs on sessions (legacy shape) — peer group falls back to ipv4."""
+        sessions = [_session(session_type="EBGP", ttl=1, name="u1")]
+        pgs = _build_peer_groups(sessions)
+        assert pgs[0]["address_families"] == ["ipv4"]
+
+    def test_underlay_peer_group_address_families_ipv6(self):
+        """Underlay sessions resolved to ipv6 — peer group reflects that, not a hardcoded ipv4."""
+        sessions = [
+            _session(session_type="EBGP", ttl=1, name="u1", address_families=["ipv6"]),
+            _session(session_type="EBGP", ttl=1, name="u2", address_families=["ipv6"]),
+        ]
+        pgs = _build_peer_groups(sessions)
+        assert pgs[0]["address_families"] == ["ipv6"]
+
+    def test_underlay_peer_group_address_families_mixed_ipv4_ipv6(self):
+        """Mixed-family underlay sessions — peer group activates both."""
+        sessions = [
+            _session(session_type="EBGP", ttl=1, name="u1", address_families=["ipv4"]),
+            _session(session_type="EBGP", ttl=1, name="u2", address_families=["ipv6"]),
+        ]
+        pgs = _build_peer_groups(sessions)
+        assert pgs[0]["address_families"] == ["ipv4", "ipv6"]
 
     def test_ibgp_overlay_peer_group_created(self):
         sessions = [
@@ -715,6 +870,35 @@ class TestBuildPeerGroups:
         pgs = _build_peer_groups(sessions, device_role="spine")
         names = {pg["name"] for pg in pgs}
         assert names == {"UNDERLAY-PEERS", "EVPN-PEERS"}
+
+    def test_underlay_peer_group_aggregates_send_extended_community_and_remove_private_as(self):
+        """If ANY grouped session wants send_extended_community/remove_private_as, the group gets it."""
+        sessions = [
+            _session(session_type="EBGP", ttl=1, name="u1", send_extended_community=False, remove_private_as=False),
+            _session(session_type="EBGP", ttl=1, name="u2", send_extended_community=True, remove_private_as=True),
+        ]
+        pgs = _build_peer_groups(sessions)
+        assert pgs[0]["send_extended_community"] is True
+        assert pgs[0]["remove_private_as"] is True
+
+    def test_underlay_peer_group_no_extended_community_when_no_session_wants_it(self):
+        sessions = [
+            _session(session_type="EBGP", ttl=1, name="u1", send_extended_community=False, remove_private_as=False),
+        ]
+        pgs = _build_peer_groups(sessions)
+        assert pgs[0]["send_extended_community"] is False
+        assert pgs[0]["remove_private_as"] is False
+
+    def test_per_neighbor_fields_not_present_on_peer_group_dict(self):
+        """maximum_routes/local_pref/med/password are per-neighbor only, never aggregated onto the group."""
+        sessions = [
+            _session(session_type="EBGP", ttl=1, name="u1", maximum_routes=100, local_pref=200, med=50, password="x"),
+        ]
+        pgs = _build_peer_groups(sessions)
+        assert "maximum_routes" not in pgs[0]
+        assert "local_pref" not in pgs[0]
+        assert "med" not in pgs[0]
+        assert "password" not in pgs[0]
 
     def test_ibgp_remote_as_from_peer_group(self):
         """iBGP sessions in a peer group get remote_as_from_peer_group flag."""
