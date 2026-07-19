@@ -145,6 +145,74 @@ class TestFindExistingOspfArea:
 
 
 # ---------------------------------------------------------------------------
+# _resolve_shared_passwords — underlay/overlay RoutingPassword lookup
+# ---------------------------------------------------------------------------
+
+
+def _mock_password_obj(obj_id: str) -> MagicMock:
+    obj = MagicMock()
+    obj.id = obj_id
+    return obj
+
+
+class TestResolveSharedPasswords:
+    @pytest.mark.asyncio
+    async def test_returns_both_ids_when_found(self) -> None:
+        m = _make_mixin(fabric_name="dc1")
+        underlay_obj = _mock_password_obj("pw-underlay-1")
+        overlay_obj = _mock_password_obj("pw-overlay-1")
+        m.client.get = AsyncMock(side_effect=[underlay_obj, overlay_obj])
+
+        underlay_id, overlay_id = await m._resolve_shared_passwords()
+
+        assert underlay_id == "pw-underlay-1"
+        assert overlay_id == "pw-overlay-1"
+        assert m.client.get.await_count == 2
+        first_call_kwargs = m.client.get.call_args_list[0][1]
+        assert first_call_kwargs["name__value"] == "dc1-underlay-key"
+        second_call_kwargs = m.client.get.call_args_list[1][1]
+        assert second_call_kwargs["name__value"] == "dc1-overlay-key"
+
+    @pytest.mark.asyncio
+    async def test_returns_none_when_not_found(self) -> None:
+        m = _make_mixin()
+        m.client.get = AsyncMock(return_value=None)
+        underlay_id, overlay_id = await m._resolve_shared_passwords()
+        assert underlay_id is None
+        assert overlay_id is None
+
+    @pytest.mark.asyncio
+    async def test_returns_none_on_exception(self) -> None:
+        m = _make_mixin()
+        m.client.get = AsyncMock(side_effect=Exception("db error"))
+        underlay_id, overlay_id = await m._resolve_shared_passwords()
+        assert underlay_id is None
+        assert overlay_id is None
+
+    @pytest.mark.asyncio
+    async def test_fabric_name_used_in_both_lookups(self) -> None:
+        m = _make_mixin(fabric_name="berlin-dc")
+        m.client.get = AsyncMock(return_value=None)
+        await m._resolve_shared_passwords()
+        names = [call[1]["name__value"] for call in m.client.get.call_args_list]
+        assert names == ["berlin-dc-underlay-key", "berlin-dc-overlay-key"]
+
+    @pytest.mark.asyncio
+    async def test_does_not_regenerate_or_touch_existing_password_value(self) -> None:
+        """Resolution is pure lookup — it must never call create()/save() on a
+        RoutingPassword, since that would risk rotating an already-deployed
+        BGP/OSPF auth key (secrets.token_urlsafe() is non-deterministic)."""
+        m = _make_mixin()
+        underlay_obj = _mock_password_obj("pw-1")
+        m.client.get = AsyncMock(return_value=underlay_obj)
+        m.client.create = AsyncMock()
+
+        await m._resolve_shared_passwords()
+
+        m.client.create.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
 # _save_autonomous_systems
 # ---------------------------------------------------------------------------
 
@@ -248,6 +316,57 @@ class TestGroupContextProtection:
         )
 
         assert "as-overlay-99" in m.client.group_context.related_node_ids
+
+    @pytest.mark.asyncio
+    async def test_resolved_passwords_added_to_related_node_ids(self) -> None:
+        """When underlay/overlay password IDs are resolved, both are appended
+        to group_context.related_node_ids, same as overlay_as_id/ospf_area_id."""
+        from generators.helpers.routing import RoutingStrategy
+        from generators.types import RoutingOptions
+
+        m = _make_mixin()
+        design = MagicMock()
+        design.routing_strategy = RoutingStrategy.EBGP_EBGP.value
+
+        options: RoutingOptions = RoutingOptions(design=design)
+        m.client.group_context = MagicMock()
+        m.client.group_context.related_node_ids = []
+        m._resolve_shared_passwords = AsyncMock(return_value=("pw-underlay-1", "pw-overlay-1"))
+        m.client.filters = AsyncMock(return_value=[])
+
+        await m.create_routing(
+            bottom_devices=["leaf-01"],
+            top_devices=["spine-01"],
+            options=options,
+        )
+
+        assert "pw-underlay-1" in m.client.group_context.related_node_ids
+        assert "pw-overlay-1" in m.client.group_context.related_node_ids
+
+    @pytest.mark.asyncio
+    async def test_missing_passwords_do_not_block_routing_creation(self) -> None:
+        """Unlike overlay_as_id/ospf_area_id, a missing password is non-fatal —
+        create_routing must proceed (not return early) when both are None."""
+        from generators.helpers.routing import RoutingStrategy
+        from generators.types import RoutingOptions
+
+        m = _make_mixin()
+        design = MagicMock()
+        design.routing_strategy = RoutingStrategy.EBGP_EBGP.value
+
+        options: RoutingOptions = RoutingOptions(design=design)
+        m.client.group_context = MagicMock()
+        m.client.group_context.related_node_ids = []
+        m._resolve_shared_passwords = AsyncMock(return_value=(None, None))
+        m.client.filters = AsyncMock(return_value=[])
+
+        await m.create_routing(
+            bottom_devices=["leaf-01"],
+            top_devices=["spine-01"],
+            options=options,
+        )
+
+        m.logger.error.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_missing_overlay_as_logs_error_and_returns(self) -> None:

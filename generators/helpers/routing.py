@@ -11,6 +11,11 @@ devices get their known AS ID for re-save.
 
 Save order: AS -> BGP + OSPF -> Peerings + OSPF Interfaces.
 
+Underlay/overlay peerings and OSPF interfaces optionally reference a shared
+RoutingPassword auth key (underlay_password_id / overlay_password_id on
+RoutingPlanInput), created once by the DC generator and resolved by
+RoutingMixin.create_routing — same conditional-add pattern as evpn_af_id.
+
 Strategies:
     - ebgp-ebgp: eBGP underlay + eBGP overlay (per-device ASN)
     - ebgp-ibgp: eBGP underlay + iBGP overlay (shared ASN)
@@ -48,6 +53,8 @@ class RoutingPlanInput:
     routing_strategy: str = "ebgp-ebgp"
     deployment_name: str = ""
     evpn_af_id: str = ""
+    underlay_password_id: str = ""
+    overlay_password_id: str = ""
 
 
 @dataclass(frozen=True)
@@ -216,6 +223,7 @@ class RoutingPlanner:
                     existing_as_by_device,
                     asn_pool,
                     set(inp.top_devices),
+                    password_id=inp.underlay_password_id,
                 )
             elif underlay_type == "ospf":
                 if not inp.deployment_name:
@@ -231,6 +239,7 @@ class RoutingPlanner:
                     inp.interfaces,
                     inp.deployment_name,
                     existing_ospf_area,
+                    password_id=inp.underlay_password_id,
                 )
             else:
                 raise ValueError(f"Unknown underlay: {underlay_type}")
@@ -280,6 +289,7 @@ class RoutingPlanner:
                     bottom_device_names=set(inp.bottom_devices),
                     top_device_names=set(inp.top_devices),
                     evpn_af_id=inp.evpn_af_id,
+                    password_id=inp.overlay_password_id,
                 )
 
         return plan
@@ -337,6 +347,7 @@ class RoutingPlanner:
         existing_as_by_device: dict[str, str],
         asn_pool: Any,
         top_device_names: set[str] | None = None,
+        password_id: str = "",
     ) -> None:
         """Build eBGP underlay by iterating cable pairs.
 
@@ -461,6 +472,7 @@ class RoutingPlanner:
                         {"hfid": f"{a_name}-bgp-underlay"},
                         {"hfid": f"{b_name}-bgp-underlay"},
                     ],
+                    **({"password": {"id": password_id}} if password_id else {}),
                 }
             )
 
@@ -545,6 +557,7 @@ class RoutingPlanner:
         interfaces: list[Any],
         deployment_name: str,
         existing_area_id: str,
+        password_id: str = "",
     ) -> None:
         """Build OSPF underlay: processes and P2P interface bindings."""
         area_ref: dict[str, Any] = {"id": existing_area_id}
@@ -592,6 +605,7 @@ class RoutingPlanner:
                         "ospf_process": {"hfid": ospf_name},
                         "area": area_ref,
                         "interface_capabilities": [{"id": iface.id}],
+                        **({"password": {"id": password_id}} if password_id else {}),
                     }
                 )
 
@@ -608,6 +622,7 @@ class RoutingPlanner:
         bottom_device_names: set[str] | None = None,
         top_device_names: set[str] | None = None,
         evpn_af_id: str = "",
+        password_id: str = "",
     ) -> None:
         """Build overlay peerings using device loopback IPs from device_map."""
         id_to_name = {info["id"]: name for name, info in device_map.items()}
@@ -700,6 +715,7 @@ class RoutingPlanner:
                 "send_extended_community": True,
                 "route_reflector_client": rr_client_session,
                 **({"address_families": [{"id": evpn_af_id}]} if evpn_af_id else {}),
+                **({"password": {"id": password_id}} if password_id else {}),
                 "bgp_processes": [{"hfid": bgp1["name"]}, {"hfid": bgp2["name"]}],
             }
             if peering_interfaces:
