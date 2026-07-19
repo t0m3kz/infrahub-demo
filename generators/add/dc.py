@@ -1,5 +1,6 @@
 """Infrastructure generator for data center topology."""
 
+import secrets
 from typing import Any, Literal, cast
 
 from utils.data_cleaning import clean_data
@@ -8,7 +9,7 @@ from ..common import CommonGenerator, DeviceOptions
 from ..helpers import calculate_super_spine_loopback_prefix, name_to_asn_range
 from ..helpers.routing import RoutingStrategy
 from ..models import DCModel
-from ..protocols import RoutingAutonomousSystem, RoutingOSPFArea, TopologyPod
+from ..protocols import RoutingAutonomousSystem, RoutingOSPFArea, RoutingPassword, TopologyPod
 from ..types import RoutingOptions
 
 
@@ -267,20 +268,66 @@ class DCTopologyGenerator(CommonGenerator):
 
         await self.update_checksum()
 
+    async def _ensure_routing_password(self, name: str, description: str) -> None:
+        """Find-or-create a shared RoutingPassword by deterministic name.
+
+        Query-first: an existing password's value is never regenerated or
+        upserted, since ``secrets.token_urlsafe()`` is non-deterministic —
+        re-running this on every DC generate would silently rotate the
+        BGP/OSPF auth key underneath already-deployed devices.
+        """
+        try:
+            existing = await self.client.get(kind=RoutingPassword, name__value=name, raise_when_missing=False)
+            if existing:
+                self.client.group_context.related_node_ids.append(existing.id)
+                self.logger.info(f"Found existing RoutingPassword: {name} ({existing.id})")
+                return
+        except Exception as e:
+            self.logger.warning(f"Error querying RoutingPassword {name}: {e}")
+            return
+
+        try:
+            obj = await self.client.create(
+                kind=RoutingPassword,
+                data={
+                    "name": name,
+                    "password": secrets.token_urlsafe(24),
+                    "description": description,
+                },
+            )
+            await obj.save(allow_upsert=True)
+            self.client.group_context.related_node_ids.append(obj.id)
+            self.logger.info(f"Created shared RoutingPassword: {name} ({obj.id})")
+        except Exception as e:
+            self.logger.error(f"Failed to create shared RoutingPassword {name}: {e}")
+
     async def _create_shared_routing_objects(self, overlay_asn: int) -> None:
         """Create fabric-wide shared routing objects once at DC level.
 
         Based on the routing strategy:
         - ``*-ibgp``: creates a single shared RoutingAutonomousSystem for iBGP overlay
         - ``ospf-*``: creates a single shared RoutingOSPFArea (area 0) for OSPF underlay
+        - all strategies: creates shared underlay + overlay BGP/OSPF auth keys
+          (RoutingPassword), each referenced by every underlay/overlay peering.
 
         These objects are created idempotently (allow_upsert) so re-running
-        the DC generator is safe.
+        the DC generator is safe. RoutingPassword is the one exception: its
+        secret value is generated once and never touched again on re-run
+        (see ``_ensure_routing_password``).
         """
         if not self.data.design:
             return
 
         strategy = self.data.design.routing_strategy
+
+        await self._ensure_routing_password(
+            name=f"{self.fabric_name}-underlay-key",
+            description=f"Shared eBGP/OSPF underlay auth key for {self.fabric_name}",
+        )
+        await self._ensure_routing_password(
+            name=f"{self.fabric_name}-overlay-key",
+            description=f"Shared BGP overlay/EVPN auth key for {self.fabric_name}",
+        )
 
         # iBGP overlay → ensure exactly one shared ASN exists with deterministic value
         if strategy in (RoutingStrategy.EBGP_IBGP.value, RoutingStrategy.OSPF_IBGP.value):

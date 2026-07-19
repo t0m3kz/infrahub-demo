@@ -17,6 +17,7 @@ from .protocols import (
     RoutingAutonomousSystem,
     RoutingOSPFArea,
     RoutingOSPFInterface,
+    RoutingPassword,
 )
 from .types import RoutingOptions
 
@@ -103,8 +104,25 @@ class RoutingMixin:
                     return
                 options["ospf_area_id"] = ospf_area_id
 
+        # Shared underlay/overlay BGP/OSPF auth keys — created once by the DC generator.
+        # Unlike overlay AS / OSPF area, a missing key is non-fatal: auth is a hardening
+        # add-on, not required for connectivity, so routing creation proceeds without it.
+        needs_underlay_password = not options.get("underlay_password_id") and not options.get("skip_underlay")
+        needs_overlay_password = not options.get("overlay_password_id")
+        if needs_underlay_password or needs_overlay_password:
+            underlay_password_id, overlay_password_id = await self._resolve_shared_passwords()
+            if needs_underlay_password and underlay_password_id:
+                options["underlay_password_id"] = underlay_password_id
+            if needs_overlay_password and overlay_password_id:
+                options["overlay_password_id"] = overlay_password_id
+
         # Protect shared DC-level objects from generator group cleanup
-        for shared_id in [options.get("overlay_as_id"), options.get("ospf_area_id")]:
+        for shared_id in [
+            options.get("overlay_as_id"),
+            options.get("ospf_area_id"),
+            options.get("underlay_password_id"),
+            options.get("overlay_password_id"),
+        ]:
             if shared_id and shared_id not in self.client.group_context.related_node_ids:
                 self.client.group_context.related_node_ids.append(shared_id)
 
@@ -164,6 +182,8 @@ class RoutingMixin:
                 routing_strategy=routing_strategy,
                 deployment_name=self.fabric_name,
                 evpn_af_id=evpn_af_id,
+                underlay_password_id=options.get("underlay_password_id") or "",
+                overlay_password_id=options.get("overlay_password_id") or "",
             )
         )
 
@@ -299,6 +319,36 @@ class RoutingMixin:
         except Exception as exc:
             self.logger.warning(f"Could not upsert RoutingBGPAddressFamily l2vpn/evpn: {exc}")
             return ""
+
+    async def _resolve_shared_passwords(self) -> tuple[str | None, str | None]:
+        """Find the fabric's shared underlay/overlay RoutingPassword IDs, by deterministic name.
+
+        These are created once by the DC generator (``_create_shared_routing_objects``);
+        pod/rack layers only look them up here — mirrors ``_resolve_shared_objects``
+        for ``overlay_as_id``/``ospf_area_id``. A missing password is non-fatal: it
+        just means auth wasn't configured (e.g. DC generator hasn't run yet, or ran
+        before this feature existed) — routing creation proceeds without it.
+        """
+        underlay_id: str | None = None
+        overlay_id: str | None = None
+
+        underlay_name = f"{self.fabric_name}-underlay-key"
+        try:
+            existing = await self.client.get(kind=RoutingPassword, name__value=underlay_name, raise_when_missing=False)
+            if existing:
+                underlay_id = existing.id
+        except Exception as e:
+            self.logger.debug(f"Error querying RoutingPassword {underlay_name}: {e}")
+
+        overlay_name = f"{self.fabric_name}-overlay-key"
+        try:
+            existing = await self.client.get(kind=RoutingPassword, name__value=overlay_name, raise_when_missing=False)
+            if existing:
+                overlay_id = existing.id
+        except Exception as e:
+            self.logger.debug(f"Error querying RoutingPassword {overlay_name}: {e}")
+
+        return underlay_id, overlay_id
 
     async def _resolve_shared_objects(self, routing_strategy: str) -> tuple[str | None, str | None]:
         """Find shared DC-level overlay AS and OSPF area. Returns (overlay_as_id, ospf_area_id)."""

@@ -52,3 +52,7 @@ class RoutingOptions(TypedDict, total=False):
     """Pre-resolved OSPF area ID to skip DB lookup in create_routing."""
     skip_underlay: bool
     """Skip underlay planning entirely (overlay BGP only). Used for super-spines in ospf-ibgp."""
+    underlay_password_id: str | None
+    """Pre-resolved shared underlay BGP/OSPF auth key (RoutingPassword) ID."""
+    overlay_password_id: str | None
+    """Pre-resolved shared overlay BGP auth key (RoutingPassword) ID."""
