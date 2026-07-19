@@ -45,17 +45,6 @@ query spine_config($device: String!) {
                 confederation_identifier { value }
                 local_as { node { asn { value } } }
                 router_id { node { address { value } } }
-                address_families {
-                  edges {
-                    node {
-                      afi { value }
-                      safi { value }
-                      advertise_all_vni { value }
-                      advertise_default_gw { value }
-                      advertise_svi_ip { value }
-                    }
-                  }
-                }
                 peerings {
                   edges {
                     node {
@@ -64,6 +53,12 @@ query spine_config($device: String!) {
                       session_type { value }
                       bfd_enabled { value }
                       send_community { value }
+                      send_extended_community { value }
+                      maximum_routes { value }
+                      local_pref { value }
+                      med { value }
+                      remove_private_as { value }
+                      password { node { password { value } } }
                       ttl { value }
                       route_reflector_client { value }
                       address_families {
@@ -261,6 +256,8 @@ query spine_config($device: String!) {
                       area { node { area { value } area_type { value } } }
                       mode { value }
                       metric { value }
+                      authentication_mode { value }
+                      password { node { password { value } } }
                     }
                   }
                 }

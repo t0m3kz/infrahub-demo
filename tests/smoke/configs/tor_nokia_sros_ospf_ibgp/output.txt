@@ -69,7 +69,7 @@ A admin configure router "Base" bgp 1 group "EVPN-PEERS" admin-state enable
 A admin configure router "Base" bgp 1 group "EVPN-PEERS" peer-as 65000
 A admin configure router "Base" bgp 1 group "EVPN-PEERS" local-address "10.0.0.1"
 A admin configure router "Base" bgp 1 group "EVPN-PEERS" family evpn
-A admin configure router "Base" bgp 1 group "EVPN-PEERS" send-community extended
+A admin configure router "Base" bgp 1 group "EVPN-PEERS" send-community standard
 A admin configure router "Base" bgp 1 neighbor "10.0.0.100" admin-state enable
 A admin configure router "Base" bgp 1 neighbor "10.0.0.100" peer-as 65000
 A admin configure router "Base" bgp 1 neighbor "10.0.0.100" description "spine-01"

@@ -276,11 +276,6 @@ nodes:
         default_value: true
         optional: true
         order_weight: 2100
-      - name: password
-        kind: Password
-        description: "BGP session authentication password"
-        optional: true
-        order_weight: 2200
       - name: ttl
         kind: Number
         description: "Maximum TTL hops for eBGP multihop or GTSM (0 = disabled, 1 = direct connection)"
@@ -307,24 +302,14 @@ nodes:
         identifier: "bgppeering__processes"
         order_weight: 3100
         description: "BGP processes participating in this peering (1-2 devices)"
-      - name: remote_peer
-        peer: ManagedExternalPeer
-        label: "Remote External Peer"
-        kind: Attribute
-        cardinality: one
+      - name: password
+        peer: RoutingPassword
         optional: true
-        identifier: "bgppeering__remote_peer"
-        order_weight: 3200
-        description: "External peer endpoint (for peering with non-managed devices)"
-      - name: namespace
-        peer: IpamNamespace
-        label: "IP Namespace"
-        kind: Attribute
         cardinality: one
-        optional: true
-        identifier: "bgppeering__namespace"
-        order_weight: 3300
-        description: "IP namespace (VRF) in which this BGP session runs — important for PoP/SaaS VRF separation"
+        kind: Attribute
+        order_weight: 2200
+        identifier: bgppeering__password
+        description: "Shared authentication key for this peering (optional)"
 
 extensions:
   nodes:
@@ -348,14 +333,6 @@ extensions:
 
     - kind: ManagedBGP
       relationships:
-        - name: address_families
-          label: "Address Families"
-          peer: RoutingBGPAddressFamily
-          cardinality: many
-          optional: true
-          identifier: "bgp_process__address_families"
-          order_weight: 1700
-          description: "BGP address families enabled on this process"
         - name: peerings
           peer: ManagedBGPPeering
           label: "BGP Peerings"

@@ -63,6 +63,13 @@ def _make_bgp_peering(
     route_reflector_client: bool = False,
     local_iface_name: str | None = None,
     remote_iface_name: str | None = None,
+    send_community: bool = True,
+    send_extended_community: bool = False,
+    maximum_routes: int | None = None,
+    local_pref: int | None = None,
+    med: int | None = None,
+    remove_private_as: bool = False,
+    password: str | None = None,
 ) -> dict:
     """Build a BGP peering with peering_interfaces and bgp_processes."""
     # For overlay (TTL!=1): interfaces are loopbacks
@@ -79,7 +86,13 @@ def _make_bgp_peering(
         "name": _v(f"peer-{device_name}-{remote_name}-{session_type.lower()}"),
         "session_type": _v(session_type),
         "bfd_enabled": _v(bfd),
-        "send_community": _v("standard-extended"),
+        "send_community": _v(send_community),
+        "send_extended_community": _v(send_extended_community),
+        "maximum_routes": _v(maximum_routes),
+        "local_pref": _v(local_pref),
+        "med": _v(med),
+        "remove_private_as": _v(remove_private_as),
+        "password": _node({"password": _v(password)}) if password is not None else _node(None),
         "ttl": _v(ttl),
         "route_reflector_client": _v(route_reflector_client),
         "interface_capabilities": _edges(
@@ -127,6 +140,8 @@ def _make_interface(
     ns_name: str = "default",
     typename: str = "DcimPhysicalInterface",
     ospf_area: str | None = None,
+    ospf_authentication_mode: str | None = None,
+    ospf_password: str | None = None,
     remote_name: str | None = None,
     remote_ip: str | None = None,
     remote_device: str | None = None,
@@ -207,6 +222,8 @@ def _make_interface(
                 ),
                 "mode": _v("point-to-point"),
                 "metric": _v(None),
+                "authentication_mode": _v(ospf_authentication_mode),
+                "password": _node({"password": _v(ospf_password)}) if ospf_password is not None else _node(None),
             }
         )
     iface["interface_capabilities"] = _edges(services)
@@ -346,6 +363,7 @@ def build_device_data(
     include_acls: bool = False,
     stretched_segments: bool = False,
     isolation_mode: str | None = None,
+    security_fields: bool = False,
 ) -> dict:
     """Build a complete raw GraphQL response for a device config query.
 
@@ -390,6 +408,18 @@ def build_device_data(
             ttl=1,
             local_iface_name="Ethernet1",
             remote_iface_name="Ethernet1/1",
+            **(
+                {
+                    "maximum_routes": 1000,
+                    "local_pref": 200,
+                    "med": 50,
+                    "send_extended_community": True,
+                    "remove_private_as": True,
+                    "password": "underlay-s3cr3t",
+                }
+                if security_fields
+                else {}
+            ),
         )
         underlay_peering_2 = _make_bgp_peering(
             device_name=device_name,
@@ -1247,6 +1277,7 @@ def _write_fixture(
     include_acls: bool = False,
     stretched_segments: bool = False,
     isolation_mode: str | None = None,
+    security_fields: bool = False,
 ) -> tuple[int, int]:
     test_dir = SMOKE_DIR / dir_name
     test_dir.mkdir(parents=True, exist_ok=True)
@@ -1260,6 +1291,7 @@ def _write_fixture(
         include_acls=include_acls,
         stretched_segments=stretched_segments,
         isolation_mode=isolation_mode,
+        security_fields=security_fields,
     )
 
     input_path = test_dir / "input.json"
@@ -1329,6 +1361,23 @@ def main() -> None:
             scenario="ebgp_ibgp",
             include_segments=True,
             include_acls=True,
+        )
+        generated += g
+        errors += e
+
+    # BGP security/hardening fields: maximum_routes, local_pref, med,
+    # send_extended_community, remove_private_as, password on the underlay peering
+    print("\nGenerating BGP security-fields fixtures (leaf):")
+    for platform in FABRIC_PLATFORMS:
+        g, e = _write_fixture(
+            Leaf,
+            dir_name=f"leaf_{platform}_bgp_security_fields",
+            dev_name="dc1-leaf-01",
+            role="leaf",
+            platform=platform,
+            scenario="ebgp_ibgp",
+            include_segments=False,
+            security_fields=True,
         )
         generated += g
         errors += e

@@ -33,6 +33,15 @@ interface {{ interface.name }}
 {%- if ospf.metric is not none %}
   ip ospf cost {{ ospf.metric }}
 {%- endif %}
+{%- if ospf.get('password') %}
+{%- if ospf.get('authentication_mode') == 'md5' %}
+  ip ospf authentication message-digest
+  ip ospf message-digest-key 1 md5 {{ ospf.password }}
+{%- else %}
+  ip ospf authentication
+  ip ospf authentication-key {{ ospf.password }}
+{%- endif %}
+{%- endif %}
 {%- endif %}
 {%- endfor %}
 {%- endif %}

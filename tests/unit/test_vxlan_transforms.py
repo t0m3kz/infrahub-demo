@@ -22,6 +22,7 @@ from transforms.common import (
     _transform_vxlan_arista,
     _vlans_from_activations,
     get_acls,
+    get_interfaces,
     get_vlans,
 )
 
@@ -923,3 +924,60 @@ class TestAristaLeafTemplateIsolationMode:
         ctx = _minimal_ctx(vlans=vlans, vxlan=_vxlan_with_anycast())
         rendered = arista_env.get_template(_LEAF_TEMPLATE_NAME).render(**ctx)
         assert "ISOLATED" in rendered
+
+
+# ---------------------------------------------------------------------------
+# get_interfaces() — OSPF interface authentication (password relationship)
+# ---------------------------------------------------------------------------
+
+
+def _make_ospf_interface(
+    *,
+    area: int = 0,
+    mode: str | None = None,
+    metric: int | None = None,
+    process_id: str | None = "1",
+    authentication_mode: str | None = None,
+    password: str | None = None,
+) -> dict:
+    """Build a cleaned RoutingOSPFInterface dict as it appears in interface_capabilities."""
+    entry: dict = {
+        "typename": "RoutingOSPFInterface",
+        "area": {"area": area},
+        "ospf_process": {"process_id": process_id},
+    }
+    if mode is not None:
+        entry["mode"] = mode
+    if metric is not None:
+        entry["metric"] = metric
+    if authentication_mode is not None:
+        entry["authentication_mode"] = authentication_mode
+    if password is not None:
+        entry["password"] = {"password": password}
+    return entry
+
+
+class TestGetInterfacesOspfAuthentication:
+    """get_interfaces() must thread OSPF authentication_mode/password through
+    the RoutingPassword relationship into interface.ospf, mirroring how BGP
+    resolves its own password relationship in _build_session_from_peering()."""
+
+    def test_password_and_mode_pass_through(self):
+        iface = {
+            "name": "Ethernet1",
+            "interface_capabilities": [
+                _make_ospf_interface(area=0, authentication_mode="md5", password="s3cr3t"),
+            ],
+        }
+        result = get_interfaces([iface])
+        assert result[0]["ospf"]["authentication_mode"] == "md5"
+        assert result[0]["ospf"]["password"] == "s3cr3t"
+
+    def test_no_password_defaults_to_none(self):
+        iface = {
+            "name": "Ethernet1",
+            "interface_capabilities": [_make_ospf_interface(area=0)],
+        }
+        result = get_interfaces([iface])
+        assert result[0]["ospf"]["authentication_mode"] is None
+        assert result[0]["ospf"]["password"] is None

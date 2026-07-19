@@ -59,7 +59,6 @@ router bgp 65000
   !
   template peer-policy EVPN-PEERS-POLICY
     send-community
-    send-community extended
   !
   template peer-session EVPN-PEERS-SESSION
     update-source loopback0

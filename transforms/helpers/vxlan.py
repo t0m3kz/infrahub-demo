@@ -107,6 +107,8 @@ def get_interfaces(
         ospf_process_ids = [
             (s.get("ospf_process") or {}).get("process_id") for s in ospf_configs if s.get("ospf_process")
         ]
+        ospf_auth_modes = [s.get("authentication_mode") for s in ospf_configs if s.get("authentication_mode")]
+        ospf_passwords = [(s.get("password") or {}).get("password") for s in ospf_configs if s.get("password")]
 
         # Extract circuit services (physical circuits)
         circuits = [
@@ -184,6 +186,8 @@ def get_interfaces(
                 "mode": ospf_modes[0] if ospf_modes else None,
                 "metric": ospf_metrics[0] if ospf_metrics else None,
                 "process_id": ospf_process_ids[0] if ospf_process_ids else None,
+                "authentication_mode": ospf_auth_modes[0] if ospf_auth_modes else None,
+                "password": ospf_passwords[0] if ospf_passwords else None,
             }
 
         if circuits:

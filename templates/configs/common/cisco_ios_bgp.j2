@@ -17,12 +17,33 @@ router bgp {{ bgp_config.local_as.asn }}
 {%- if pg.type == 'overlay' %}
   neighbor {{ pg.name }} update-source Loopback0
 {%- endif %}
+{%- if pg.get('send_community') and pg.get('send_extended_community') %}
   neighbor {{ pg.name }} send-community both
+{%- elif pg.get('send_extended_community') %}
+  neighbor {{ pg.name }} send-community extended
+{%- elif pg.get('send_community') %}
+  neighbor {{ pg.name }} send-community standard
+{%- endif %}
+{%- if pg.get('remove_private_as') %}
+  neighbor {{ pg.name }} remove-private-as
+{%- endif %}
 {%- if pg.get('bfd_enabled') %}
   neighbor {{ pg.name }} fall-over bfd
 {%- endif %}
 {%- if pg.get('ebgp_multihop') %}
   neighbor {{ pg.name }} ebgp-multihop {{ pg.ebgp_multihop }}
+{%- endif %}
+{%- endfor %}
+{%- for session in bgp_config.sessions %}
+{%- if session.get('local_pref') %}
+  route-map {{ session.name }}-LOCAL-PREF-IN permit 10
+    set local-preference {{ session.local_pref }}
+  !
+{%- endif %}
+{%- if session.get('med') %}
+  route-map {{ session.name }}-MED-OUT permit 10
+    set metric {{ session.med }}
+  !
 {%- endif %}
 {%- endfor %}
 {%- for session in bgp_config.sessions %}
@@ -38,13 +59,34 @@ router bgp {{ bgp_config.local_as.asn }}
 {%- if session.get('ttl') != 1 %}
   neighbor {{ remote_ip }} update-source Loopback0
 {%- endif %}
+{%- if session.get('send_community') and session.get('send_extended_community') %}
   neighbor {{ remote_ip }} send-community both
+{%- elif session.get('send_extended_community') %}
+  neighbor {{ remote_ip }} send-community extended
+{%- elif session.get('send_community') %}
+  neighbor {{ remote_ip }} send-community standard
+{%- endif %}
+{%- if session.get('remove_private_as') %}
+  neighbor {{ remote_ip }} remove-private-as
+{%- endif %}
 {%- if session.get('bfd_enabled') %}
   neighbor {{ remote_ip }} fall-over bfd
 {%- endif %}
 {%- endif %}
 {%- if session.get('remote_device') %}
   neighbor {{ remote_ip }} description {{ session.remote_device }}
+{%- endif %}
+{%- if session.get('maximum_routes') %}
+  neighbor {{ remote_ip }} maximum-prefix {{ session.maximum_routes }}
+{%- endif %}
+{%- if session.get('password') %}
+  neighbor {{ remote_ip }} password {{ session.password }}
+{%- endif %}
+{%- if session.get('local_pref') %}
+  neighbor {{ remote_ip }} route-map {{ session.name }}-LOCAL-PREF-IN in
+{%- endif %}
+{%- if session.get('med') %}
+  neighbor {{ remote_ip }} route-map {{ session.name }}-MED-OUT out
 {%- endif %}
 {%- endfor %}
   !
@@ -57,12 +99,19 @@ router bgp {{ bgp_config.local_as.asn }}
 {%- endfor %}
 {%- for session in bgp_config.sessions %}
 {%- set _is_u = session.get('interface_name') and not session.get('remote_ip') %}
-{%- if session.peer_group is not defined and not session.address_families %}
+{%- if session.peer_group is not defined and 'ipv4' in (session.address_families | default([])) %}
     neighbor {{ session.interface_name if _is_u else session.remote_ip.address.split('/')[0] }} activate
 {%- endif %}
 {%- endfor %}
   exit-address-family
-{%- if bgp_config.sessions | selectattr('address_families') | list | length > 0 %}
+{%- set ns = namespace(has_evpn=false) %}
+{%- for pg in bgp_config.peer_groups | default([]) %}
+{%- if 'evpn' in (pg.address_families | default([])) %}{% set ns.has_evpn = true %}{% endif %}
+{%- endfor %}
+{%- for session in bgp_config.sessions %}
+{%- if 'evpn' in (session.address_families | default([])) %}{% set ns.has_evpn = true %}{% endif %}
+{%- endfor %}
+{%- if ns.has_evpn %}
   !
   address-family l2vpn evpn
 {%- for pg in bgp_config.peer_groups | default([]) %}
@@ -75,7 +124,7 @@ router bgp {{ bgp_config.local_as.asn }}
 {%- endfor %}
 {%- for session in bgp_config.sessions %}
 {%- set _is_u = session.get('interface_name') and not session.get('remote_ip') %}
-{%- if session.peer_group is not defined and session.address_families %}
+{%- if session.peer_group is not defined and 'evpn' in (session.address_families | default([])) %}
 {%- set _evpn_nb = session.interface_name if _is_u else session.remote_ip.address.split('/')[0] %}
     neighbor {{ _evpn_nb }} activate
 {%- if session.get('route_reflector_client') %}
