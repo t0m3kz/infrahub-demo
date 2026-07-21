@@ -323,6 +323,24 @@ class PodTopologyGenerator(CommonGenerator):
                         bottom_role="spine",
                         top_role="spine",
                     )
+        elif dc_design and dc_design.routing_strategy == RoutingStrategy.OSPF_IBGP.value:
+            # No super-spines and not back-to-back — OSPF_IBGP design with super-spine
+            # support configured but zero super-spines actually deployed. Nothing above
+            # seeds spine overlay BGP for this case: the pre-seed block explicitly
+            # excludes OSPF_IBGP (needs overlay_as_id resolved inside create_routing),
+            # and the post-cable block never runs since cabling is skipped. eBGP
+            # strategies don't need this fallback — their pre-seed call above already
+            # runs with top_devices=[] when there are no super-spines. Seed overlay BGP
+            # only (skip_underlay=True): spines already have their OSPF underlay from
+            # rack.py's leaf<->spine cabling.
+            if dc_asn_pool_id:
+                await self.create_routing(
+                    bottom_devices=spines,
+                    top_devices=[],
+                    options=RoutingOptions(design=dc_design, asn_pool=dc_asn_pool_id, skip_underlay=True),
+                    p2p_interfaces=[],
+                    bottom_role="spine",
+                )
 
         await self.update_checksum()
 
