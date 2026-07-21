@@ -1,16 +1,32 @@
 """Infrastructure generator for data center topology."""
 
+import asyncio
 import secrets
 from typing import Any, Literal, cast
 
+from infrahub_sdk.task.models import TaskFilter, TaskState
+
 from utils.data_cleaning import clean_data
 
-from ..common import CommonGenerator, DeviceOptions
+from ..common import CablingOptions, CommonGenerator, DeviceOptions
 from ..helpers import calculate_super_spine_loopback_prefix, name_to_asn_range
 from ..helpers.routing import RoutingStrategy
 from ..models import DCModel
-from ..protocols import RoutingAutonomousSystem, RoutingOSPFArea, RoutingPassword, TopologyPod
+from ..protocols import (
+    DcimPhysicalDevice,
+    DcimPhysicalInterface,
+    RoutingAutonomousSystem,
+    RoutingOSPFArea,
+    RoutingPassword,
+    TopologyPod,
+)
 from ..types import RoutingOptions
+
+_POD_TASK_INITIAL_DELAY = 5.0  # seconds — lets the checksum-bump-triggered add_pod tasks get scheduled
+_POD_TASK_WAIT_MAX_ATTEMPTS = 12
+_POD_TASK_WAIT_POLL_INTERVAL = 5.0  # seconds
+_POD_TASK_STABLE_ZERO_COUNT = 2  # consecutive zero-in-flight checks before considering pods done
+_IN_FLIGHT_TASK_STATES = [TaskState.PENDING, TaskState.RUNNING, TaskState.SCHEDULED]
 
 
 class DCTopologyGenerator(CommonGenerator):
@@ -268,6 +284,151 @@ class DCTopologyGenerator(CommonGenerator):
             )
 
         await self.update_checksum()
+
+        # Back-to-back inter-pod spine cabling: designs whose super-spine tier is either
+        # absent by design (design_mode=back-to-back) or simply unconfigured for this DC
+        # (super_spine_names ended up empty above) need spines to connect directly across
+        # pods instead of via a super-spine. Done here, once, after every pod's own
+        # generator run has finished — rather than each pod generator racing its siblings
+        # independently — so there is exactly one writer for this cabling/routing, no
+        # inter-generator concurrency to reason about.
+        if not super_spine_names and len(existing_pods) >= 2:
+            await self._cable_pods_back_to_back(existing_pods, dc_design, ss_asn_pool_id, is_ipv6)
+
+    async def _wait_for_pod_generators(self, pod_ids: list[str]) -> None:
+        """Poll until no in-flight generator tasks remain for the given pods.
+
+        ``update_checksum()`` bumps every pod's checksum, which Infrahub's own event
+        system picks up and schedules ``add_pod`` for asynchronously — outside this
+        generator's own call stack. Mirrors the shape of the integration-test harness's
+        ``wait_for_tasks_completion`` (initial delay for scheduling + stable-zero-count
+        polling) using the same ``client.task.filter``/``TaskFilter``/``TaskState`` API,
+        without depending on test-only code.
+        """
+        await asyncio.sleep(_POD_TASK_INITIAL_DELAY)
+
+        consecutive_zero = 0
+        for attempt in range(1, _POD_TASK_WAIT_MAX_ATTEMPTS + 1):
+            in_flight = await self.client.task.filter(
+                filter=TaskFilter(
+                    state=_IN_FLIGHT_TASK_STATES,
+                    branch=self.branch_name,
+                    related_node__ids=pod_ids,
+                ),
+            )
+            if not in_flight:
+                consecutive_zero += 1
+                if consecutive_zero >= _POD_TASK_STABLE_ZERO_COUNT:
+                    self.logger.info(
+                        f"DC {self.fabric_name}: all pod generators finished "
+                        f"({consecutive_zero} consecutive zero checks)"
+                    )
+                    return
+            else:
+                consecutive_zero = 0
+                self.logger.info(
+                    f"DC {self.fabric_name}: waiting for {len(in_flight)} pod generator task(s) "
+                    f"to finish (attempt {attempt}/{_POD_TASK_WAIT_MAX_ATTEMPTS})"
+                )
+            await asyncio.sleep(_POD_TASK_WAIT_POLL_INTERVAL)
+
+        self.logger.warning(
+            f"DC {self.fabric_name}: pod generators still running after {_POD_TASK_WAIT_MAX_ATTEMPTS} "
+            "attempts — proceeding with whatever pod data exists"
+        )
+
+    async def _cable_pods_back_to_back(
+        self,
+        pods: list[Any],
+        dc_design: Any,
+        asn_pool_id: str | None,
+        is_ipv6: bool,
+    ) -> None:
+        """Cable every pod's spines to every lower-index pod's spines, in one pass.
+
+        Waits for all pods' own generator runs to finish first (see
+        ``_wait_for_pod_generators``), then fetches each pod's spine devices, an uplink
+        interface name (shared by every spine in that pod — same template), and technical
+        pool live, and builds the full pairwise mesh (index_i > index_j, mirroring the
+        "only connect to lower-index" dedup rule previously enforced per-pod-generator).
+        """
+        pod_ids = [pod.id for pod in pods]
+        await self._wait_for_pod_generators(pod_ids)
+
+        pod_spines: dict[str, list[str]] = {}
+        pod_uplink_interfaces: dict[str, list[str]] = {}
+        pod_technical_pool: dict[str, str | None] = {}
+        pod_index: dict[str, int] = {}
+
+        for pod in pods:
+            pod_index[pod.id] = pod.index.value
+
+            spines = await self.client.filters(
+                kind=DcimPhysicalDevice,
+                deployment__ids=[pod.id],
+                role__value="spine",
+            )
+            pod_spines[pod.id] = [s.name.value for s in spines]
+
+            # Every spine in a pod shares the same template, so the set of distinct
+            # uplink interface names is identical across devices — one query for the
+            # whole pod, not per-device.
+            uplinks = await self.client.filters(
+                kind=DcimPhysicalInterface,
+                device__name__values=pod_spines[pod.id],
+                role__value="uplink",
+            )
+            pod_uplink_interfaces[pod.id] = sorted({iface.name.value for iface in uplinks})
+
+            pod_obj = await self.client.get(kind=TopologyPod, id=pod.id, include=["prefix_pool"])
+            pod_technical_pool[pod.id] = pod_obj.prefix_pool.id if pod_obj.prefix_pool else None
+
+        dc_max_spines = dc_design.max_spines_per_pod if dc_design else 0
+        p2p_prefix_length = 127 if is_ipv6 else 31
+
+        for pod_i in pods:
+            spines_i = pod_spines[pod_i.id]
+            if not spines_i or not pod_uplink_interfaces[pod_i.id]:
+                continue
+            for pod_j in pods:
+                if pod_index[pod_j.id] >= pod_index[pod_i.id]:
+                    continue  # Only connect to lower-index pods — each pair cabled exactly once
+                spines_j = pod_spines[pod_j.id]
+                if not spines_j or not pod_uplink_interfaces[pod_j.id]:
+                    self.logger.warning(
+                        f"DC {self.fabric_name}: pod idx={pod_index[pod_j.id]} has no spine devices — "
+                        f"skipping inter-pod cabling from pod idx={pod_index[pod_i.id]}"
+                    )
+                    continue
+
+                cabling_offset = (pod_index[pod_j.id] - 1) * dc_max_spines
+                self.logger.info(
+                    f"DC {self.fabric_name}: cabling pod idx={pod_index[pod_i.id]} → "
+                    f"pod idx={pod_index[pod_j.id]} [{len(spines_i)} spines → {len(spines_j)} spines, "
+                    f"offset={cabling_offset}]"
+                )
+                routing_opts = RoutingOptions(design=dc_design, asn_pool=asn_pool_id) if dc_design else RoutingOptions()
+                p2p_pairs = await self.create_cabling(
+                    bottom_devices=spines_i,
+                    bottom_interfaces=pod_uplink_interfaces[pod_i.id],
+                    top_devices=spines_j,
+                    top_interfaces=pod_uplink_interfaces[pod_j.id],
+                    strategy="pod",
+                    options=CablingOptions(
+                        cabling_offset=cabling_offset,
+                        pool=pod_technical_pool[pod_i.id],
+                        p2p_prefix_length=p2p_prefix_length,
+                    ),
+                )
+                if routing_opts.get("design"):
+                    await self.create_routing(
+                        bottom_devices=spines_i,
+                        top_devices=spines_j,
+                        options=routing_opts,
+                        p2p_interfaces=p2p_pairs,
+                        bottom_role="spine",
+                        top_role="spine",
+                    )
 
     async def _ensure_routing_password(self, name: str, description: str) -> None:
         """Find-or-create a shared RoutingPassword by deterministic name.
