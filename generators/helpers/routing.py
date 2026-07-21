@@ -36,6 +36,15 @@ class RoutingPlanInput:
 
     All objects come pre-queried by the generator as SDK objects:
       - bottom_devices / top_devices: device name strings
+      - bottom_role / top_role: the caller's known role for every name in the
+        respective list (e.g. "leaf"/"spine", "border-leaf"/"spine",
+        "spine"/"super-spine") — every caller of create_routing() creates or
+        selects these devices for exactly one role, so this is always known
+        statically. Used as the authoritative role source in _build_device_map
+        instead of the queried DcimDevice.role, which has been observed to
+        intermittently resolve to None when queried from a different worker
+        process than the one that wrote it (a client/server consistency gap,
+        not a data bug — the role is correctly set in the database).
       - underlay: ManagedBGP underlay processes (SDK objects with device + local_as)
       - overlay: ManagedBGP overlay or ManagedOSPF (existing) SDK objects
       - interfaces: DcimPhysicalInterface fabric-p2p SDK objects (device, cable, name)
@@ -45,6 +54,8 @@ class RoutingPlanInput:
 
     bottom_devices: list[str] = field(default_factory=list)
     top_devices: list[str] = field(default_factory=list)
+    bottom_role: str = ""
+    top_role: str = ""
     underlay: list[Any] = field(default_factory=list)
     overlay: list[Any] = field(default_factory=list)
     interfaces: list[Any] = field(default_factory=list)
@@ -193,8 +204,15 @@ class RoutingPlanner:
                 self.logger.warning("No routing devices provided")
             return plan
 
-        # Build device map from loopback interfaces
-        device_map = self._build_device_map(inp.loopback_interfaces)
+        # Build device map from loopback interfaces. Known roles for
+        # bottom_devices/top_devices override the queried role (see
+        # RoutingPlanInput.bottom_role/top_role docstring).
+        known_roles: dict[str, str] = {}
+        if inp.bottom_role:
+            known_roles.update({name: inp.bottom_role for name in inp.bottom_devices})
+        if inp.top_role:
+            known_roles.update({name: inp.top_role for name in inp.top_devices})
+        device_map = self._build_device_map(inp.loopback_interfaces, known_roles=known_roles)
 
         # Extract existing AS IDs from underlay BGP so existing devices reuse their
         # ASN instead of drawing a new one from the pool (Number-pool allocation is
@@ -299,7 +317,9 @@ class RoutingPlanner:
     # ================================================================
 
     @staticmethod
-    def _build_device_map(loopback_interfaces: list[Any]) -> dict[str, dict[str, Any]]:
+    def _build_device_map(
+        loopback_interfaces: list[Any], known_roles: dict[str, str] | None = None
+    ) -> dict[str, dict[str, Any]]:
         """Build device info from loopback interfaces.
 
         Returns dict keyed by device name::
@@ -310,8 +330,17 @@ class RoutingPlanner:
 
         Loopback interfaces must be queried with:
             include=["device", "ip_address"], prefetch_relationships=True
+
+        ``known_roles`` (device name -> role), when provided, takes priority
+        over the queried ``DcimDevice.role`` — the role has been observed to
+        intermittently resolve to None when queried from a worker process
+        other than the one that wrote it, even though it's correctly set in
+        the database (a client/server consistency gap). Callers that already
+        know a device's role statically (every create_routing() caller does)
+        should pass it here instead of trusting the query.
         """
         device_map: dict[str, dict[str, Any]] = {}
+        known_roles = known_roles or {}
 
         # Sort by interface id so router_id selection is deterministic regardless of
         # query-return order: the lowest-id loopback with a valid IP wins per device.
@@ -319,7 +348,7 @@ class RoutingPlanner:
             dev = lb.device.peer
             name = dev.name.value
             dev_id = dev.id
-            role = dev.role.value
+            role = known_roles.get(name) or dev.role.value
 
             if name not in device_map:
                 device_map[name] = {"id": dev_id, "role": role}

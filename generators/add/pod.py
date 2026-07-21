@@ -213,6 +213,8 @@ class PodTopologyGenerator(CommonGenerator):
                 top_devices=super_spine_devices,
                 options=RoutingOptions(design=dc_design, asn_pool=dc_asn_pool_id),
                 p2p_interfaces=[],
+                bottom_role="spine",
+                top_role="super-spine",
             )
 
         spine_interfaces_data = spine_template.interfaces
@@ -263,6 +265,8 @@ class PodTopologyGenerator(CommonGenerator):
                     top_devices=super_spine_devices,
                     options=routing_opts,
                     p2p_interfaces=p2p_pairs,
+                    bottom_role="spine",
+                    top_role="super-spine",
                 )
         elif is_back_to_back:
             # Back-to-back: cable this pod's spines to spines in lower-index sibling pods.
@@ -316,6 +320,8 @@ class PodTopologyGenerator(CommonGenerator):
                         top_devices=sibling_spine_names,
                         options=routing_opts,
                         p2p_interfaces=p2p_pairs,
+                        bottom_role="spine",
+                        top_role="spine",
                     )
 
         await self.update_checksum()

@@ -43,12 +43,22 @@ class RoutingMixin:
         top_devices: list[str],
         options: RoutingOptions | None = None,
         p2p_interfaces: list[tuple[Any, Any]] = [],
+        bottom_role: str = "",
+        top_role: str = "",
     ) -> None:
         """Create routing configuration for a layer pair.
 
         ``p2p_interfaces`` is the list of ``(src, dst)`` interface pairs returned by
         ``create_cabling``.  Pass ``[]`` when there are no cables yet (process-only
         calls such as the pre-cable spine BGP seeding in pod.py).
+
+        ``bottom_role``/``top_role`` are the caller's known role for every
+        device in ``bottom_devices``/``top_devices`` (e.g. "leaf"/"spine").
+        Every caller creates or selects these devices for exactly one role,
+        so pass it — it's used as the authoritative role source instead of
+        querying ``DcimDevice.role``, which has been observed to
+        intermittently resolve to None when queried from a different worker
+        process than the one that wrote it.
         """
         if options is None:
             options = RoutingOptions()
@@ -174,6 +184,8 @@ class RoutingMixin:
             RoutingPlanInput(
                 bottom_devices=bottom_devices,
                 top_devices=top_devices,
+                bottom_role=bottom_role,
+                top_role=top_role,
                 underlay=underlay,
                 overlay=overlay,
                 interfaces=interfaces,

@@ -264,6 +264,7 @@ class DCTopologyGenerator(CommonGenerator):
                 top_devices=[],
                 options=routing_opts,
                 p2p_interfaces=[],
+                bottom_role="super-spine",
             )
 
         await self.update_checksum()
