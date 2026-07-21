@@ -23,6 +23,25 @@ PROJECT_DIRECTORY = TEST_DIRECTORY.parent.parent
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
 
+class _PatchedInfrahubDockerCompose(InfrahubDockerCompose):
+    """Work around a docker-compose --wait regression with zero-replica services.
+
+    ``task-manager-background-svc`` is scaled via
+    ``INFRAHUB_TESTING_TASKMGR_BACKGROUND_SVC_REPLICAS`` (default ``0``) in the
+    vendored docker-compose.test.yml, and nothing depends on it. Docker Compose
+    5.3.1 doesn't recognize an env-var-driven zero-replica service as
+    intentionally absent when using `--wait`, and aborts the whole `up` with
+    "is missing dependency task-manager-background-svc" — even though every
+    other service starts and becomes healthy. Passing `--scale ...=0`
+    explicitly (verified to fix it) makes compose treat it as intentional.
+    """
+
+    def _run_command(self, cmd, context=None):  # noqa: ANN001
+        if isinstance(cmd, list) and "up" in cmd and "--wait" in cmd:
+            cmd = [*cmd, "--scale", "task-manager-background-svc=0"]
+        return super()._run_command(cmd=cmd, context=context)
+
+
 # ======================================================================
 # Session-scoped fixtures (module-level so they are shared across classes)
 # ======================================================================
@@ -69,7 +88,7 @@ def infrahub_compose(
     infrahub_version: str,
     deployment_type: str | None,
 ) -> InfrahubDockerCompose:
-    return InfrahubDockerCompose.init(
+    return _PatchedInfrahubDockerCompose.init(
         directory=tmp_directory,
         version=infrahub_version,
         deployment_type=deployment_type,
