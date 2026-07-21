@@ -151,6 +151,17 @@ def _safe_as_id(bgp: Any) -> str | None:
     return bgp.local_as.id or None
 
 
+def _bgp_process_ref(bgp_process: dict) -> dict:
+    """Reference a planned BGP process by direct id when known, else by HFID.
+
+    A direct id (set when the process was found already existing — see
+    ``build_routing_plan``'s "existing overlay BGP" block) avoids a search-index
+    lookup that can race a concurrent generator call's write to the same process.
+    """
+    process_id = bgp_process.get("id")
+    return {"id": process_id} if process_id else {"hfid": bgp_process["name"]}
+
+
 def _make_bgp_proc(
     name: str,
     suffix: str,
@@ -280,19 +291,25 @@ class RoutingPlanner:
             overlay_bgp = [b for b in plan.bgp_processes if b["name"].endswith("-bgp-overlay")]
             planned_device_ids = {b["capabilities"][0]["id"] for b in overlay_bgp}
 
-            # Include remote devices with existing overlay BGP not yet in plan
-            existing_overlay_names: set[str] = set()
+            # Include remote devices with existing overlay BGP not yet in plan.
+            # Carry the process's real id (obj.id) rather than only its name — the
+            # process was saved by a different, possibly concurrent generator call
+            # (e.g. a sibling rack), so an HFID-only ref risks NODE_NOT_FOUND if the
+            # search index hasn't caught up yet with that other call's write.
+            existing_overlay_id_by_name: dict[str, str] = {}
             for obj in inp.overlay:
                 dev_name = _safe_device_name(obj)
                 if dev_name:
-                    existing_overlay_names.add(dev_name)
+                    existing_overlay_id_by_name[dev_name] = obj.id
 
             for name, info in device_map.items():
                 if info["id"] in planned_device_ids:
                     continue
-                if name in existing_overlay_names and info.get("router_id"):
+                overlay_process_id = existing_overlay_id_by_name.get(name)
+                if overlay_process_id and info.get("router_id"):
                     overlay_bgp.append(
                         {
+                            "id": overlay_process_id,
                             "name": f"{name}-bgp-overlay",
                             "capabilities": [{"id": info["id"]}],
                         }
@@ -745,7 +762,7 @@ class RoutingPlanner:
                 "route_reflector_client": rr_client_session,
                 **({"address_families": [{"id": evpn_af_id}]} if evpn_af_id else {}),
                 **({"password": {"id": password_id}} if password_id else {}),
-                "bgp_processes": [{"hfid": bgp1["name"]}, {"hfid": bgp2["name"]}],
+                "bgp_processes": [_bgp_process_ref(bgp1), _bgp_process_ref(bgp2)],
             }
             if peering_interfaces:
                 peering["interface_capabilities"] = peering_interfaces
