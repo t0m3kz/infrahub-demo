@@ -490,6 +490,8 @@ class RackGenerator(CommonGenerator):
         top_interfaces: list[str],
         strategy: Literal["pod", "rack", "intra_rack", "intra_rack_middle", "intra_rack_mixed"],
         offset: int,
+        bottom_role: str,
+        top_role: str,
         bottom_sorting: Literal["top_down", "bottom_up"] = "bottom_up",
         top_sorting: Literal["top_down", "bottom_up"] = "bottom_up",
     ) -> None:
@@ -513,6 +515,8 @@ class RackGenerator(CommonGenerator):
                 top_devices=top_devices,
                 options=self._routing_options,
                 p2p_interfaces=p2p_pairs,
+                bottom_role=bottom_role,
+                top_role=top_role,
             )
 
     async def generate(self, data: dict) -> None:
@@ -723,6 +727,8 @@ class RackGenerator(CommonGenerator):
                 top_interfaces=spine_interfaces,
                 strategy="rack",
                 offset=cabling_offset,
+                bottom_role="leaf",
+                top_role="spine",
                 bottom_sorting=pod.leaf_interface_sorting_method,
                 top_sorting=pod.spine_interface_sorting_method,
             )
@@ -807,6 +813,8 @@ class RackGenerator(CommonGenerator):
                 top_interfaces=spine_interfaces,
                 strategy="rack",
                 offset=cabling_offset,
+                bottom_role="tor",
+                top_role="spine",
                 bottom_sorting=pod.leaf_interface_sorting_method,
                 top_sorting=pod.spine_interface_sorting_method,
             )
@@ -969,6 +977,8 @@ class RackGenerator(CommonGenerator):
                 top_interfaces=top_interfaces,
                 strategy="rack",
                 offset=cabling_offset,
+                bottom_role="border-leaf",
+                top_role="spine",
                 bottom_sorting=pod.leaf_interface_sorting_method,
                 top_sorting=pod.spine_interface_sorting_method,
             )
