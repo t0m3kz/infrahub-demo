@@ -24,7 +24,7 @@ import pytest
 from infrahub_sdk import InfrahubClient, InfrahubClientSync
 
 from .conftest import TestInfrahubDockerWithClient
-from .verify_helpers import verify_artifacts_generated, verify_devices_created, verify_proposed_change_diff
+from .test_helpers import fetch_artifacts, fetch_device_counts, fetch_proposed_change_diff
 from .workflow_helpers import (
     create_and_validate_proposed_change,
     merge_proposed_change,
@@ -158,11 +158,13 @@ class TestDC1AddSpine(TestInfrahubDockerWithClient):
         """Verify devices exist on the branch after generator ran."""
         logging.info("=== %s - Step 3: Verify Devices ===", SCENARIO_NAME)
 
-        result = await verify_devices_created(
+        result = await fetch_device_counts(
             client=async_client_main,
             branch=scenario_branch,
-            expected_min_count=1,
             device_types=["spine"],
+        )
+        assert result["device_count"] >= 1, (
+            f"Expected at least 1 device, found {result['device_count']}\n  Branch: {scenario_branch}"
         )
 
         before = workflow_state["dc1_add_spine_before"]
@@ -228,13 +230,20 @@ class TestDC1AddSpine(TestInfrahubDockerWithClient):
         """Verify the proposed change diff contains expected changed objects."""
         logging.info("=== %s - Step 5b: Verify PC Diff ===", SCENARIO_NAME)
 
-        result = await verify_proposed_change_diff(
-            client=async_client_main,
-            branch=scenario_branch,
-            expected_counts={
-                "DcimPhysicalDevice": {"added": 1},
-                "TopologyPod": {"updated": 1},
-            },
+        result = await fetch_proposed_change_diff(client=async_client_main, branch=scenario_branch)
+
+        expected_counts = {
+            "DcimPhysicalDevice": {"added": 1},
+            "TopologyPod": {"updated": 1},
+        }
+        errors = []
+        for kind, action_counts in expected_counts.items():
+            for action, expected in action_counts.items():
+                actual = result["by_kind"].get(kind, {}).get(action, 0)
+                if actual < expected:
+                    errors.append(f"{kind}.{action}: expected >= {expected}, got {actual}")
+        assert not errors, f"DiffTree verification failed for branch '{scenario_branch}':\n" + "\n".join(
+            f"  - {e}" for e in errors
         )
 
         logging.info("Diff verified: %d nodes changed", result["node_count"])
@@ -250,10 +259,9 @@ class TestDC1AddSpine(TestInfrahubDockerWithClient):
         """Verify artifacts generated in the proposed change."""
         logging.info("=== %s - Step 5c: Verify Artifacts ===", SCENARIO_NAME)
 
-        result = await verify_artifacts_generated(
-            client=async_client_main,
-            branch=scenario_branch,
-        )
+        result = await fetch_artifacts(client=async_client_main, branch=scenario_branch)
+        for art in result["failed"]:
+            raise AssertionError(f"Artifact '{art['name']}' for {art['object']} has status '{art['status']}'")
 
         logging.info("Artifacts verified: %d total", result["total"])
 
@@ -290,11 +298,13 @@ class TestDC1AddSpine(TestInfrahubDockerWithClient):
         """Verify devices still present on main after merge."""
         logging.info("=== %s - Step 7: Verify in Main ===", SCENARIO_NAME)
 
-        result = await verify_devices_created(
+        result = await fetch_device_counts(
             client=async_client_main,
             branch="main",
-            expected_min_count=1,
             device_types=["spine"],
+        )
+        assert result["device_count"] >= 1, (
+            f"Expected at least 1 device, found {result['device_count']}\n  Branch: main"
         )
 
         logging.info("Spines in main: %d", result["breakdown"].get("spine", 0))

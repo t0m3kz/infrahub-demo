@@ -25,7 +25,7 @@ from infrahub_sdk import InfrahubClient, InfrahubClientSync
 
 from .conftest import TestInfrahubDockerWithClient
 from .test_constants import DEMO_SERVERS_DATA
-from .verify_helpers import verify_artifacts_generated, verify_devices_created, verify_proposed_change_diff
+from .test_helpers import fetch_artifacts, fetch_device_counts, fetch_proposed_change_diff
 from .workflow_helpers import (
     create_and_validate_proposed_change,
     merge_proposed_change,
@@ -139,11 +139,13 @@ class TestDC1AddEndpoints(TestInfrahubDockerWithClient):
         """Verify all endpoint devices exist on the branch."""
         logging.info("=== %s - Step 3: Verify Devices ===", SCENARIO_NAME)
 
-        result = await verify_devices_created(
+        result = await fetch_device_counts(
             client=async_client_main,
             branch=scenario_branch,
-            expected_min_count=9,
             device_types=["endpoint"],
+        )
+        assert result["device_count"] >= 9, (
+            f"Expected at least 9 device(s), found {result['device_count']}\n  Branch: {scenario_branch}"
         )
 
         logging.info("Devices verified: %d endpoint(s)", result["breakdown"].get("endpoint", 0))
@@ -197,12 +199,17 @@ class TestDC1AddEndpoints(TestInfrahubDockerWithClient):
         """Verify the proposed change diff contains expected changed objects."""
         logging.info("=== %s - Step 5b: Verify PC Diff ===", SCENARIO_NAME)
 
-        result = await verify_proposed_change_diff(
-            client=async_client_main,
-            branch=scenario_branch,
-            expected_counts={
-                "DcimPhysicalDevice": {"added": 9},
-            },
+        result = await fetch_proposed_change_diff(client=async_client_main, branch=scenario_branch)
+
+        expected_counts = {"DcimPhysicalDevice": {"added": 9}}
+        errors = []
+        for kind, action_counts in expected_counts.items():
+            for action, expected in action_counts.items():
+                actual = result["by_kind"].get(kind, {}).get(action, 0)
+                if actual < expected:
+                    errors.append(f"{kind}.{action}: expected >= {expected}, got {actual}")
+        assert not errors, f"DiffTree verification failed for branch '{scenario_branch}':\n" + "\n".join(
+            f"  - {e}" for e in errors
         )
 
         logging.info("Diff verified: %d nodes changed", result["node_count"])
@@ -218,10 +225,9 @@ class TestDC1AddEndpoints(TestInfrahubDockerWithClient):
         """Verify artifacts generated in the proposed change."""
         logging.info("=== %s - Step 5c: Verify Artifacts ===", SCENARIO_NAME)
 
-        result = await verify_artifacts_generated(
-            client=async_client_main,
-            branch=scenario_branch,
-        )
+        result = await fetch_artifacts(client=async_client_main, branch=scenario_branch)
+        for art in result["failed"]:
+            raise AssertionError(f"Artifact '{art['name']}' for {art['object']} has status '{art['status']}'")
 
         logging.info("Artifacts verified: %d total", result["total"])
 
@@ -262,11 +268,13 @@ class TestDC1AddEndpoints(TestInfrahubDockerWithClient):
         """Verify endpoint devices exist on main after merge."""
         logging.info("=== %s - Step 7: Verify in Main ===", SCENARIO_NAME)
 
-        result = await verify_devices_created(
+        result = await fetch_device_counts(
             client=async_client_main,
             branch="main",
-            expected_min_count=9,
             device_types=["endpoint"],
+        )
+        assert result["device_count"] >= 9, (
+            f"Expected at least 9 device(s), found {result['device_count']}\n  Branch: main"
         )
 
         logging.info("Endpoints in main: %d", result["breakdown"].get("endpoint", 0))

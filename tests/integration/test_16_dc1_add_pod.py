@@ -26,14 +26,13 @@ from infrahub_sdk import InfrahubClient, InfrahubClientSync
 
 from .conftest import TestInfrahubDockerWithClient
 from .test_constants import DEMO_POD_DATA
-from .verify_helpers import (
+from .test_helpers import (
+    compute_device_count_deltas,
+    fetch_artifacts,
+    fetch_device_counts,
+    fetch_proposed_change_diff,
     snapshot_device_counts_by_role,
     snapshot_underlay_asn_by_role,
-    verify_artifacts_generated,
-    verify_device_counts_growth,
-    verify_devices_created,
-    verify_proposed_change_diff,
-    verify_underlay_asn_unchanged,
 )
 from .workflow_helpers import (
     create_and_validate_proposed_change,
@@ -47,6 +46,41 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(
 
 SCENARIO_NAME = "Scenario 4: Add Pod to DC"
 BRANCH_NAME = "dc1-add-pod"
+
+MIN_GROWTH_BY_ROLE = {"spine": 1, "leaf": 0, "tor": 1, "super-spine": 0}
+
+
+def _assert_growth(branch: str, current: dict[str, int], baseline: dict[str, int]) -> None:
+    deltas = compute_device_count_deltas(current, baseline)
+    failures = [
+        f"{role}: expected +{MIN_GROWTH_BY_ROLE.get(role, 0)}, got {deltas[role]}"
+        for role in deltas
+        if deltas[role] < MIN_GROWTH_BY_ROLE.get(role, 0)
+    ]
+    assert not failures, f"Device count growth check failed on branch '{branch}':\n" + "\n".join(
+        f"  - {line}" for line in failures
+    )
+    logging.info("Per-role device growth verified on branch '%s': deltas=%s", branch, deltas)
+
+
+def _assert_asn_unchanged(branch: str, role: str, current: dict[str, int], baseline: dict[str, int]) -> None:
+    missing = sorted([name for name in baseline if name not in current])
+    changed = sorted(
+        [
+            (name, baseline[name], current[name])
+            for name in baseline
+            if name in current and current[name] != baseline[name]
+        ]
+    )
+    errors = []
+    if missing:
+        errors.append(f"Missing {role} device(s): {missing}")
+    if changed:
+        changed_str = ", ".join(f"{name}: AS{old} -> AS{new}" for name, old, new in changed)
+        errors.append(f"ASN changed for {role} device(s): {changed_str}")
+    assert not errors, f"Underlay ASN stability check failed on branch '{branch}' for role '{role}':\n" + "\n".join(
+        f"  - {e}" for e in errors
+    )
 
 
 class TestDC1AddPod(TestInfrahubDockerWithClient):
@@ -154,21 +188,23 @@ class TestDC1AddPod(TestInfrahubDockerWithClient):
 
         await wait_for_tasks_completion(async_client_main, scenario_branch)
 
-        await verify_device_counts_growth(
+        baseline_counts = workflow_state["dc1_add_pod_role_counts_baseline"]
+        current_counts = await snapshot_device_counts_by_role(
             client=async_client_main,
             branch=scenario_branch,
-            baseline_counts=workflow_state["dc1_add_pod_role_counts_baseline"],
-            min_growth_by_role={"spine": 1, "leaf": 0, "tor": 1, "super-spine": 0},
+            roles=list(baseline_counts.keys()),
         )
+        _assert_growth(scenario_branch, current_counts, baseline_counts)
 
         for role in ["spine", "leaf", "tor"]:
-            await verify_underlay_asn_unchanged(
+            baseline_asn = workflow_state.get(f"dc1_add_pod_{role}_asn_baseline", {})
+            current_asn = await snapshot_underlay_asn_by_role(
                 client=async_client_main,
                 branch=scenario_branch,
                 dc_name="DC1",
                 role=role,
-                expected_asn_by_device=workflow_state.get(f"dc1_add_pod_{role}_asn_baseline", {}),
             )
+            _assert_asn_unchanged(scenario_branch, role, current_asn, baseline_asn)
 
         logging.info("All tasks completed")
 
@@ -202,19 +238,22 @@ class TestDC1AddPod(TestInfrahubDockerWithClient):
         """Verify devices exist on the branch after generator ran."""
         logging.info("=== %s - Step 4: Verify Devices ===", SCENARIO_NAME)
 
-        result = await verify_devices_created(
+        result = await fetch_device_counts(
             client=async_client_main,
             branch=scenario_branch,
-            expected_min_count=1,
             device_types=["spine", "tor"],
         )
+        assert result["device_count"] >= 1, (
+            f"Expected at least 1 device, found {result['device_count']}\n  Branch: {scenario_branch}"
+        )
 
-        await verify_device_counts_growth(
+        baseline_counts = workflow_state["dc1_add_pod_role_counts_baseline"]
+        current_counts = await snapshot_device_counts_by_role(
             client=async_client_main,
             branch=scenario_branch,
-            baseline_counts=workflow_state["dc1_add_pod_role_counts_baseline"],
-            min_growth_by_role={"spine": 1, "leaf": 0, "tor": 1, "super-spine": 0},
+            roles=list(baseline_counts.keys()),
         )
+        _assert_growth(scenario_branch, current_counts, baseline_counts)
 
         logging.info(
             "Devices verified: %d total (spine: %d, tor: %d)",
@@ -268,14 +307,21 @@ class TestDC1AddPod(TestInfrahubDockerWithClient):
         """Verify the proposed change diff contains expected changed objects."""
         logging.info("=== %s - Step 6b: Verify PC Diff ===", SCENARIO_NAME)
 
-        result = await verify_proposed_change_diff(
-            client=async_client_main,
-            branch=scenario_branch,
-            expected_counts={
-                "DcimPhysicalDevice": {"added": 2},
-                "DcimCable": {"added": 1},
-                "TopologyPod": {"added": 1},
-            },
+        result = await fetch_proposed_change_diff(client=async_client_main, branch=scenario_branch)
+
+        expected_counts = {
+            "DcimPhysicalDevice": {"added": 2},
+            "DcimCable": {"added": 1},
+            "TopologyPod": {"added": 1},
+        }
+        errors = []
+        for kind, action_counts in expected_counts.items():
+            for action, expected in action_counts.items():
+                actual = result["by_kind"].get(kind, {}).get(action, 0)
+                if actual < expected:
+                    errors.append(f"{kind}.{action}: expected >= {expected}, got {actual}")
+        assert not errors, f"DiffTree verification failed for branch '{scenario_branch}':\n" + "\n".join(
+            f"  - {e}" for e in errors
         )
 
         logging.info("Diff verified: %d nodes changed", result["node_count"])
@@ -291,10 +337,9 @@ class TestDC1AddPod(TestInfrahubDockerWithClient):
         """Verify artifacts generated in the proposed change."""
         logging.info("=== %s - Step 6c: Verify Artifacts ===", SCENARIO_NAME)
 
-        result = await verify_artifacts_generated(
-            client=async_client_main,
-            branch=scenario_branch,
-        )
+        result = await fetch_artifacts(client=async_client_main, branch=scenario_branch)
+        for art in result["failed"]:
+            raise AssertionError(f"Artifact '{art['name']}' for {art['object']} has status '{art['status']}'")
 
         logging.info("Artifacts verified: %d total", result["total"])
 
@@ -332,28 +377,32 @@ class TestDC1AddPod(TestInfrahubDockerWithClient):
         """Verify devices still present on main after merge."""
         logging.info("=== %s - Step 8: Verify in Main ===", SCENARIO_NAME)
 
-        result = await verify_devices_created(
+        result = await fetch_device_counts(
             client=async_client_main,
             branch="main",
-            expected_min_count=1,
             device_types=["spine", "tor"],
         )
-
-        await verify_device_counts_growth(
-            client=async_client_main,
-            branch="main",
-            baseline_counts=workflow_state["dc1_add_pod_role_counts_baseline"],
-            min_growth_by_role={"spine": 1, "leaf": 0, "tor": 1, "super-spine": 0},
+        assert result["device_count"] >= 1, (
+            f"Expected at least 1 device, found {result['device_count']}\n  Branch: main"
         )
 
+        baseline_counts = workflow_state["dc1_add_pod_role_counts_baseline"]
+        current_counts = await snapshot_device_counts_by_role(
+            client=async_client_main,
+            branch="main",
+            roles=list(baseline_counts.keys()),
+        )
+        _assert_growth("main", current_counts, baseline_counts)
+
         for role in ["spine", "leaf", "tor"]:
-            await verify_underlay_asn_unchanged(
+            baseline_asn = workflow_state.get(f"dc1_add_pod_{role}_asn_baseline", {})
+            current_asn = await snapshot_underlay_asn_by_role(
                 client=async_client_main,
                 branch="main",
                 dc_name="DC1",
                 role=role,
-                expected_asn_by_device=workflow_state.get(f"dc1_add_pod_{role}_asn_baseline", {}),
             )
+            _assert_asn_unchanged("main", role, current_asn, baseline_asn)
 
         logging.info("Devices in main: %d total", result["device_count"])
         logging.info("=== %s - COMPLETED ===", SCENARIO_NAME)

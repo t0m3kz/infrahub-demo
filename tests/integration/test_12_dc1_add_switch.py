@@ -24,12 +24,11 @@ from infrahub_sdk import InfrahubClient, InfrahubClientSync
 
 from .conftest import TestInfrahubDockerWithClient
 from .test_constants import DEMO_SWITCH_DATA
-from .verify_helpers import (
+from .test_helpers import (
+    compute_device_count_deltas,
+    fetch_device_counts,
     snapshot_device_counts_by_role,
     snapshot_underlay_asn_by_role,
-    verify_device_counts_growth,
-    verify_devices_created,
-    verify_underlay_asn_unchanged,
 )
 from .workflow_helpers import (
     create_and_validate_proposed_change,
@@ -42,6 +41,21 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(
 
 SCENARIO_NAME = "Scenario 2: Add Switch to Rack"
 BRANCH_NAME = "dc1-add-switch"
+
+MIN_GROWTH_BY_ROLE = {"leaf": 0, "tor": 1, "spine": 0, "super-spine": 0}
+
+
+def _assert_growth(branch: str, current: dict[str, int], baseline: dict[str, int]) -> None:
+    deltas = compute_device_count_deltas(current, baseline)
+    failures = [
+        f"{role}: expected +{MIN_GROWTH_BY_ROLE.get(role, 0)}, got {deltas[role]}"
+        for role in deltas
+        if deltas[role] < MIN_GROWTH_BY_ROLE.get(role, 0)
+    ]
+    assert not failures, f"Device count growth check failed on branch '{branch}':\n" + "\n".join(
+        f"  - {line}" for line in failures
+    )
+    logging.info("Per-role device growth verified on branch '%s': deltas=%s", branch, deltas)
 
 
 class TestDC1AddSwitch(TestInfrahubDockerWithClient):
@@ -130,12 +144,12 @@ class TestDC1AddSwitch(TestInfrahubDockerWithClient):
 
         await wait_for_tasks_completion(async_client_main, scenario_branch)
 
-        await verify_device_counts_growth(
+        current = await snapshot_device_counts_by_role(
             client=async_client_main,
             branch=scenario_branch,
-            baseline_counts=workflow_state["dc1_add_sw_role_counts_baseline"],
-            min_growth_by_role={"leaf": 0, "tor": 1, "spine": 0, "super-spine": 0},
+            roles=list(workflow_state["dc1_add_sw_role_counts_baseline"].keys()),
         )
+        _assert_growth(scenario_branch, current, workflow_state["dc1_add_sw_role_counts_baseline"])
 
         logging.info("All tasks completed")
 
@@ -169,19 +183,21 @@ class TestDC1AddSwitch(TestInfrahubDockerWithClient):
         """Verify devices exist on the branch after generator ran."""
         logging.info("=== %s - Step 3: Verify Devices ===", SCENARIO_NAME)
 
-        result = await verify_devices_created(
+        result = await fetch_device_counts(
             client=async_client_main,
             branch=scenario_branch,
-            expected_min_count=1,
             device_types=["tor", "leaf"],
         )
+        assert result["device_count"] >= 1, (
+            f"Expected at least 1 device, found {result['device_count']}\n  Branch: {scenario_branch}"
+        )
 
-        await verify_device_counts_growth(
+        current = await snapshot_device_counts_by_role(
             client=async_client_main,
             branch=scenario_branch,
-            baseline_counts=workflow_state["dc1_add_sw_role_counts_baseline"],
-            min_growth_by_role={"leaf": 0, "tor": 1, "spine": 0, "super-spine": 0},
+            roles=list(workflow_state["dc1_add_sw_role_counts_baseline"].keys()),
         )
+        _assert_growth(scenario_branch, current, workflow_state["dc1_add_sw_role_counts_baseline"])
 
         logging.info("Devices verified: %d total", result["device_count"])
 
@@ -253,29 +269,48 @@ class TestDC1AddSwitch(TestInfrahubDockerWithClient):
         """Verify devices and pre-existing ToR ASN values in main after merge."""
         logging.info("=== %s - Step 7: Verify in Main ===", SCENARIO_NAME)
 
-        result = await verify_devices_created(
+        result = await fetch_device_counts(
             client=async_client_main,
             branch="main",
-            expected_min_count=1,
             device_types=["tor", "leaf"],
+        )
+        assert result["device_count"] >= 1, (
+            f"Expected at least 1 device, found {result['device_count']}\n  Branch: main"
         )
 
         baseline = workflow_state["dc1_add_sw_tor_asn_baseline"]
-        asn_result = await verify_underlay_asn_unchanged(
+        current_asn = await snapshot_underlay_asn_by_role(
             client=async_client_main,
             branch="main",
             dc_name="DC1",
             role="tor",
-            expected_asn_by_device=baseline,
+        )
+        missing = sorted([name for name in baseline if name not in current_asn])
+        changed = sorted(
+            [
+                (name, baseline[name], current_asn[name])
+                for name in baseline
+                if name in current_asn and current_asn[name] != baseline[name]
+            ]
+        )
+        errors = []
+        if missing:
+            errors.append(f"Missing tor device(s): {missing}")
+        if changed:
+            changed_str = ", ".join(f"{name}: AS{old} -> AS{new}" for name, old, new in changed)
+            errors.append(f"ASN changed for tor device(s): {changed_str}")
+        assert not errors, (
+            "Underlay ASN stability check failed on branch 'main' for role 'tor' in DC 'DC1':\n"
+            + "\n".join(f"  - {e}" for e in errors)
         )
 
-        await verify_device_counts_growth(
+        current = await snapshot_device_counts_by_role(
             client=async_client_main,
             branch="main",
-            baseline_counts=workflow_state["dc1_add_sw_role_counts_baseline"],
-            min_growth_by_role={"leaf": 0, "tor": 1, "spine": 0, "super-spine": 0},
+            roles=list(workflow_state["dc1_add_sw_role_counts_baseline"].keys()),
         )
+        _assert_growth("main", current, workflow_state["dc1_add_sw_role_counts_baseline"])
 
         logging.info("Devices in main: %d total", result["device_count"])
-        logging.info("ToR ASN stability verified for %d baseline devices", asn_result["checked_count"])
+        logging.info("ToR ASN stability verified for %d baseline devices", len(baseline))
         logging.info("=== %s - COMPLETED ===", SCENARIO_NAME)

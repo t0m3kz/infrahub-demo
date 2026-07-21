@@ -18,7 +18,7 @@ import pytest
 from infrahub_sdk import InfrahubClient, InfrahubClientSync
 
 from .conftest import TestInfrahubDockerWithClient
-from .verify_helpers import verify_segment_deployments
+from .test_helpers import fetch_segment_deployments
 from .workflow_helpers import (
     create_and_validate_proposed_change,
     merge_proposed_change,
@@ -198,11 +198,16 @@ class TestDC1Segments(TestInfrahubDockerWithClient):
         """Verify ManagedSegmentDeployment records with correct VLAN and VNI."""
         logging.info("=== %s - Step 5: Verify Segment Deployments ===", SCENARIO_NAME)
 
-        result = await verify_segment_deployments(
+        result = await fetch_segment_deployments(
             client=async_client_main,
             branch=scenario_branch,
             expected_count=2,
             deployment_name="DC1",
+        )
+        assert result["deployment_count"] >= 2, (
+            f"Expected 2 segment deployment(s), found {result['deployment_count']}\n"
+            f"  Branch: {scenario_branch}\n"
+            f"  Deployment filter: DC1"
         )
 
         deployments = result["deployments"]
@@ -301,11 +306,16 @@ class TestDC1Segments(TestInfrahubDockerWithClient):
         """Verify segment deployments exist on main after merge."""
         logging.info("=== %s - Step 9: Verify in Main ===", SCENARIO_NAME)
 
-        result = await verify_segment_deployments(
+        result = await fetch_segment_deployments(
             client=async_client_main,
             branch="main",
             expected_count=2,
             deployment_name="DC1",
+        )
+        assert result["deployment_count"] >= 2, (
+            f"Expected 2 segment deployment(s), found {result['deployment_count']}\n"
+            f"  Branch: main\n"
+            f"  Deployment filter: DC1"
         )
 
         logging.info(
