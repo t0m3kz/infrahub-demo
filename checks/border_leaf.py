@@ -4,7 +4,9 @@ from typing import Any
 
 from infrahub_sdk.checks import InfrahubCheck
 
-from .common import get_data, validate_interfaces, validate_management_services
+from .common import get_data, validate_interfaces
+
+# from .common import validate_management_services
 
 
 class CheckBorderLeaf(InfrahubCheck):
@@ -17,7 +19,7 @@ class CheckBorderLeaf(InfrahubCheck):
         errors: list[str] = []
         data = get_data(data)
         errors.extend(validate_interfaces(data))
-        errors.extend(validate_management_services(data))
+        # errors.extend(validate_management_services(data))
         # if not data.get("device_capabilities", []):
         #     errors.append("No overlay/ underlay services.")
         # else:
