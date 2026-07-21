@@ -770,19 +770,20 @@ class RackGenerator(CommonGenerator):
             ]
 
             tors_per_rack = sum(r.quantity or 0 for r in self.data.tors or [])
-            # Use design data for racks-per-row count — avoids a race condition where
-            # parallel rack generators query the live DB before all row-1 racks are written,
-            # causing row-2 generators to compute a lower prev_row_racks and collide with
-            # row-1 offsets. The design value is static and always correct.
-            if pod.design is not None:
-                prev_row_racks = pod.design.compute_racks_per_row * (self.data.row_index - 1)
-            else:
-                sibling_racks = await self.client.filters(kind="LocationRack", pod__ids=[pod.id])
-                prev_row_racks = sum(
-                    1
-                    for r in sibling_racks
-                    if hasattr(r, "row_index") and r.row_index and r.row_index.value < self.data.row_index
-                )
+            # Count actual racks in previous rows via a live query rather than
+            # design.compute_racks_per_row (the design's max capacity, not the
+            # actual deployed count) — a pod deployed with fewer racks per row
+            # than its design allows would otherwise get an inflated offset and
+            # overflow past the real number of spine downlink interfaces.
+            # Rack objects (with static row_index/index) are loaded in full
+            # before any generator runs, so this live count is deterministic —
+            # no race with sibling rack generators, which only mutate checksum.
+            sibling_racks = await self.client.filters(kind="LocationRack", pod__ids=[pod.id])
+            prev_row_racks = sum(
+                1
+                for r in sibling_racks
+                if hasattr(r, "row_index") and r.row_index and r.row_index.value < self.data.row_index
+            )
             try:
                 cabling_offset = self.calculate_cabling_offsets(
                     device_count=tors_per_rack,
