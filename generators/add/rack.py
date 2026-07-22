@@ -289,6 +289,7 @@ class RackGenerator(CommonGenerator):
         device_type: str = "leaf",
         racks_in_previous_rows: int | None = None,
         leafs_per_rack: int = 0,
+        total_tors_in_pod: int | None = None,
     ) -> int:
         """Calculate cabling offset using simple formula based on rack position."""
 
@@ -352,17 +353,23 @@ class RackGenerator(CommonGenerator):
             )
 
         # For tor deployment border-leafs: offset past all ToRs, then row-based position.
-        # Formula: total_rows × tors_per_row + (row_index - 1) × border_leaf_count
+        # Formula: total_tors_in_pod + (row_index - 1) × border_leaf_count
+        # Uses the actual deployed ToR count (passed in), not design.rows ×
+        # design-max tors_per_row — a pod deployed with fewer racks/tors per row
+        # than its design allows would otherwise get an inflated offset that
+        # overflows past the real number of spine downlink interfaces.
         elif deployment_type == "tor" and device_type == "border_leaf":
-            total_rows = pod.design.rows if pod.design else 1
-            tors_per_row = max_tors_per_row if pod.design else 0
-            base_bl_offset = total_rows * tors_per_row
+            if total_tors_in_pod is not None:
+                base_bl_offset = total_tors_in_pod
+            else:
+                total_rows = pod.design.rows if pod.design else 1
+                tors_per_row = max_tors_per_row if pod.design else 0
+                base_bl_offset = total_rows * tors_per_row
             offset = base_bl_offset + (self.data.row_index - 1) * device_count
 
             self.logger.info(
                 f"Calculated {device_type} offset={offset} for rack {self.data.name} "
-                f"(row_index={self.data.row_index}, total_rows={total_rows}, "
-                f"tors_per_row={tors_per_row}, base_bl_offset={base_bl_offset}, mode={deployment_type})"
+                f"(row_index={self.data.row_index}, base_bl_offset={base_bl_offset}, mode={deployment_type})"
             )
 
         # For tor deployment ToRs: calculate cumulative offset across pod
@@ -964,10 +971,32 @@ class RackGenerator(CommonGenerator):
             top_interfaces = spine_interfaces
             design_max_leafs = pod.design.max_leafs_per_network_rack if pod.design else 0
             leafs_per_rack = max(design_max_leafs, sum(r.quantity or 0 for r in self.data.leafs or []))
+
+            total_tors_in_pod: int | None = None
+            if deployment_type == "tor":
+                # Count actual ToR racks in the pod live, combined with the design's
+                # per-rack ToR capacity, rather than design.rows * design-max
+                # tors_per_row (the design's max capacity for the WHOLE pod) — a pod
+                # deployed with fewer racks per row than its design allows would
+                # otherwise get an inflated base offset that overflows past the real
+                # number of spine downlink interfaces. Rack objects (with static
+                # row_index/index) are loaded in full before any generator runs, so
+                # this live rack count is deterministic — no race with sibling rack
+                # generators, which only mutate checksum. This rack (border-leaf, a
+                # network rack) has no ToR templates of its own to read a per-rack
+                # quantity from, so max_tors_per_compute_rack (a static per-rack-type
+                # design constant) stands in for it.
+                max_tors_per_compute_rack = pod.design.max_tors_per_compute_rack if pod.design else 0
+                sibling_tor_racks = await self.client.filters(
+                    kind=LocationRack, pod__ids=[pod.id], rack_type__value="tor"
+                )
+                total_tors_in_pod = len(sibling_tor_racks) * max_tors_per_compute_rack
+
             cabling_offset = self.calculate_cabling_offsets(
                 device_count=bl_role.quantity,
                 device_type="border_leaf",
                 leafs_per_rack=leafs_per_rack,
+                total_tors_in_pod=total_tors_in_pod,
             )
 
             await self._cable_and_route(
