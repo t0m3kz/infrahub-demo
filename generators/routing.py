@@ -5,6 +5,8 @@ from __future__ import annotations
 import asyncio
 from typing import TYPE_CHECKING, Any
 
+from infrahub_sdk.exceptions import GraphQLError
+
 if TYPE_CHECKING:
     import logging
 
@@ -21,6 +23,42 @@ from .protocols import (
     RoutingPassword,
 )
 from .types import RoutingOptions
+
+_PEERING_SAVE_MAX_RETRIES = 5
+_PEERING_SAVE_RETRY_DELAY = 2.0
+
+
+async def _save_peering_with_retry(obj: Any, logger: logging.Logger) -> None:
+    """Save a peering/interface object, retrying on a NODE_NOT_FOUND write race.
+
+    Peerings reference sibling processes/interfaces by direct id where possible
+    (see ``_resolve_hfid`` below) specifically to avoid the search-index lag a
+    plain HFID lookup would hit. But when several devices' ``create_routing()``
+    calls run concurrently and write onto the SAME shared node (e.g. every pod's
+    spines peering to the same 2 super-spine ManagedBGP processes — pod.py's
+    pre-seed/post-cable calls), that write contention can make a just-created
+    process transiently NODE_NOT_FOUND to a peering save issued a moment later
+    in a different concurrent call. Retrying resolves it without needing to
+    serialize those calls. Mirrors the interface-readiness retry already in
+    ``CommonGenerator.create_cabling``.
+    """
+    name = getattr(getattr(obj, "name", None), "value", obj.id)
+    for attempt in range(_PEERING_SAVE_MAX_RETRIES):
+        try:
+            await obj.save(allow_upsert=True)
+            logger.info(f"  Saved: {name}")
+            return
+        except GraphQLError as exc:
+            if not any(e.get("extensions", {}).get("code") == "NODE_NOT_FOUND" for e in exc.errors):
+                raise
+            if attempt == _PEERING_SAVE_MAX_RETRIES - 1:
+                raise
+            logger.info(
+                f"  NODE_NOT_FOUND saving {name} (referenced node not yet visible — "
+                f"likely concurrent write contention on a shared process) — "
+                f"retrying in {_PEERING_SAVE_RETRY_DELAY}s (attempt {attempt + 1}/{_PEERING_SAVE_MAX_RETRIES})"
+            )
+            await asyncio.sleep(_PEERING_SAVE_RETRY_DELAY)
 
 
 class RoutingMixin:
@@ -252,11 +290,18 @@ class RoutingMixin:
         # ospf_interface HFID refs can be resolved to direct ids the same way
         # process refs are resolved above — they reference objects created in
         # this same run, so the same NODE_NOT_FOUND-avoidance applies.
+        # Peerings additionally retry on save (_save_peering_with_retry): unlike
+        # processes, a peering can reference a process id created by a DIFFERENT,
+        # concurrently-running create_routing() call against the same shared
+        # device (e.g. every pod's spines peering to the same super-spines) — a
+        # write-contention race the HFID resolution above doesn't cover.
         plan.bgp_peerings = [await self.client.create(kind=ManagedBGPPeering, data=d) for d in plan.bgp_peerings]
         plan.ospf_interfaces = [
             await self.client.create(kind=RoutingOSPFInterface, data=d) for d in plan.ospf_interfaces
         ]
-        for obj in plan.bgp_peerings + plan.ospf_interfaces:
+        for obj in plan.bgp_peerings:
+            await _save_peering_with_retry(obj, self.logger)
+        for obj in plan.ospf_interfaces:
             await obj.save(allow_upsert=True)
             self.logger.info(f"  Saved: {getattr(getattr(obj, 'name', None), 'value', obj.id)}")
 
@@ -269,8 +314,7 @@ class RoutingMixin:
 
         plan.ospf_peerings = [await self.client.create(kind=ManagedOSPFPeering, data=d) for d in plan.ospf_peerings]
         for obj in plan.ospf_peerings:
-            await obj.save(allow_upsert=True)
-            self.logger.info(f"  Saved: {getattr(getattr(obj, 'name', None), 'value', obj.id)}")
+            await _save_peering_with_retry(obj, self.logger)
 
         total = (
             len(plan.autonomous_systems)
