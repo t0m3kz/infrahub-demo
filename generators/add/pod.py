@@ -1,5 +1,6 @@
 """Infrastructure generator for pod topology creation."""
 
+import asyncio
 from typing import Any, Literal, cast
 
 from utils.data_cleaning import clean_data
@@ -7,7 +8,10 @@ from utils.data_cleaning import clean_data
 from ..common import CablingOptions, CommonGenerator, DeviceOptions, RoutingOptions
 from ..helpers.routing import RoutingStrategy
 from ..models import PodModel
-from ..protocols import LocationRack
+from ..protocols import DcimPhysicalDevice, DcimPhysicalInterface, LocationRack, TopologyPod
+
+_SIBLING_SPINE_MAX_RETRIES = 10
+_SIBLING_SPINE_RETRY_DELAY = 3.0
 
 
 class PodTopologyGenerator(CommonGenerator):
@@ -238,9 +242,7 @@ class PodTopologyGenerator(CommonGenerator):
             # (skip_underlay=True — underlay comes from rack.py's leaf<->spine cabling)
             # so it exists before any rack generator's leaf-to-spine routing call runs.
             # Those calls treat spines as top_devices and rely on an existing overlay
-            # BGP process for them — without this, dc.py's own back-to-back inter-pod
-            # mesh (which pre-seeds all pods only after waiting for every pod/rack
-            # generator to finish) would always run too late for this to exist yet.
+            # BGP process for them.
             if dc_design:
                 await self.create_routing(
                     bottom_devices=spines,
@@ -249,6 +251,16 @@ class PodTopologyGenerator(CommonGenerator):
                     p2p_interfaces=[],
                     bottom_role="spine",
                 )
+
+            await self._cable_to_existing_sibling_pods(
+                spines=spines,
+                spine_interfaces=[iface.name for iface in spine_template.interfaces if iface.role == "uplink"],
+                dc=dc,
+                dc_design=dc_design,
+                dc_asn_pool_id=dc_asn_pool_id,
+                pod_pools=pod_pools,
+                is_ipv6=is_ipv6,
+            )
 
         if not skip_cabling:
             dc_max_spines = dc_design.max_spines_per_pod if dc_design else spine_count
@@ -283,8 +295,112 @@ class PodTopologyGenerator(CommonGenerator):
                     top_role="super-spine",
                 )
         # When there are no super-spines to cable to (skip_cabling), inter-pod
-        # back-to-back spine cabling is handled entirely by dc.py — it cables the
-        # full pod mesh in one pass after confirming every pod's generator has
-        # finished, rather than each pod generator racing its siblings independently.
+        # back-to-back spine cabling is handled above by _cable_to_existing_sibling_pods.
 
         await self.update_checksum()
+
+    async def _cable_to_existing_sibling_pods(
+        self,
+        spines: list[str],
+        spine_interfaces: list[str],
+        dc: Any,
+        dc_design: Any,
+        dc_asn_pool_id: str | None,
+        pod_pools: dict[str, Any],
+        is_ipv6: bool,
+    ) -> None:
+        """Cable this pod's spines to every EXISTING lower-index sibling pod (back-to-back mesh).
+
+        Decentralized: each pod cables itself to its lower-index siblings, rather
+        than a DC-level step waiting for every pod to finish before cabling the
+        whole mesh in one pass. Only the higher-index pod in any given pair ever
+        writes that pair's cabling/routing — pod 1 never initiates anything, pod 2
+        only cables to pod 1, pod 3 to pods 1 and 2, etc. — so there is exactly one
+        writer per pair regardless of how many pods run concurrently; the only
+        remaining concern is data availability (has the sibling's spine/overlay
+        BGP landed yet), which create_cabling's own interface-readiness retry and
+        create_routing's overlay-BGP-readiness retry already absorb.
+
+        This also makes incremental single-pod-add correct for free: a pod added
+        later simply finds its existing lower-index siblings already fully formed
+        and cables to them immediately — no dc.py-level orchestration required.
+        """
+        if not spine_interfaces:
+            self.logger.warning(f"Pod {self.data.name}: no spine uplink interfaces — skipping inter-pod mesh cabling")
+            return
+
+        siblings = await self.client.filters(kind=TopologyPod, parent__ids=[dc.id])
+        lower_siblings = [s for s in siblings if s.index.value < self.data.index]
+        if not lower_siblings:
+            self.logger.info(f"Pod {self.data.name}: no lower-index sibling pods yet — nothing to mesh-cable")
+            return
+
+        dc_max_spines = dc_design.max_spines_per_pod if dc_design else 0
+        p2p_prefix_length = 127 if is_ipv6 else 31
+        routing_opts = RoutingOptions(design=dc_design, asn_pool=dc_asn_pool_id) if dc_design else RoutingOptions()
+
+        for sibling in sorted(lower_siblings, key=lambda s: s.index.value):
+            # Retry: during INITIAL bulk DC creation, every pod's TopologyPod object
+            # already exists (loaded together before any generator runs), but a lower-
+            # index sibling's own add_pod run may not have reached spine creation yet.
+            # For an incremental single-pod-add, the sibling is already fully formed
+            # and this resolves on the first attempt. Mirrors create_cabling's own
+            # interface-readiness retry.
+            sibling_spines: list[str] = []
+            sibling_uplink_names: list[str] = []
+            for attempt in range(_SIBLING_SPINE_MAX_RETRIES):
+                sibling_spines_devices = await self.client.filters(
+                    kind=DcimPhysicalDevice,
+                    deployment__ids=[sibling.id],
+                    role__value="spine",
+                )
+                sibling_spines = [s.name.value for s in sibling_spines_devices]
+                if sibling_spines:
+                    sibling_uplinks = await self.client.filters(
+                        kind=DcimPhysicalInterface,
+                        device__name__values=sibling_spines,
+                        role__value="uplink",
+                    )
+                    sibling_uplink_names = sorted({iface.name.value for iface in sibling_uplinks})
+                    if sibling_uplink_names:
+                        break
+                if attempt < _SIBLING_SPINE_MAX_RETRIES - 1:
+                    self.logger.info(
+                        f"Pod {self.data.name}: sibling pod idx={sibling.index.value} spines/uplinks not ready yet — "
+                        f"retrying in {_SIBLING_SPINE_RETRY_DELAY}s (attempt {attempt + 1}/{_SIBLING_SPINE_MAX_RETRIES})"
+                    )
+                    await asyncio.sleep(_SIBLING_SPINE_RETRY_DELAY)
+
+            if not sibling_spines or not sibling_uplink_names:
+                self.logger.warning(
+                    f"Pod {self.data.name}: sibling pod idx={sibling.index.value} still has no spine "
+                    f"devices/uplinks after {_SIBLING_SPINE_MAX_RETRIES} attempts — skipping this pair"
+                )
+                continue
+
+            cabling_offset = (sibling.index.value - 1) * dc_max_spines
+            self.logger.info(
+                f"Pod {self.data.name} (idx={self.data.index}): cabling to sibling pod idx={sibling.index.value} "
+                f"[offset={cabling_offset}]"
+            )
+            p2p_pairs = await self.create_cabling(
+                bottom_devices=spines,
+                bottom_interfaces=spine_interfaces,
+                top_devices=sibling_spines,
+                top_interfaces=sibling_uplink_names,
+                strategy="pod",
+                options=CablingOptions(
+                    cabling_offset=cabling_offset,
+                    pool=pod_pools.get("technical"),
+                    p2p_prefix_length=p2p_prefix_length,
+                ),
+            )
+            if routing_opts.get("design"):
+                await self.create_routing(
+                    bottom_devices=spines,
+                    top_devices=sibling_spines,
+                    options=routing_opts,
+                    p2p_interfaces=p2p_pairs,
+                    bottom_role="spine",
+                    top_role="spine",
+                )

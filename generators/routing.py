@@ -11,6 +11,7 @@ if TYPE_CHECKING:
     import logging
 
 from .helpers import PendingASRef, RoutingPlanInput, RoutingPlanner, RoutingStrategy
+from .helpers.routing import _safe_device_name
 from .protocols import (
     DcimVirtualInterface,
     ManagedBGP,
@@ -26,6 +27,8 @@ from .types import RoutingOptions
 
 _PEERING_SAVE_MAX_RETRIES = 5
 _PEERING_SAVE_RETRY_DELAY = 2.0
+_OVERLAY_BGP_MAX_RETRIES = 5
+_OVERLAY_BGP_RETRY_DELAY = 3.0
 
 
 async def _save_peering_with_retry(obj: Any, logger: logging.Logger) -> None:
@@ -180,21 +183,46 @@ class RoutingMixin:
         # ================================================================
 
         interfaces = [iface for pair in p2p_interfaces for iface in pair]
-        all_bgp, loopback_interfaces = await asyncio.gather(
-            self.client.filters(
-                kind=ManagedBGP,
-                capabilities__name__values=all_device_names,
-                include=["local_as", "capabilities"],
-                prefetch_relationships=True,
-            ),
-            self.client.filters(
-                kind=DcimVirtualInterface,
-                device__name__values=all_device_names,
-                role__value="loopback",
-                include=["device", "ip_address"],
-                prefetch_relationships=True,
-            ),
-        )
+
+        # Retry the overlay BGP query if any top_devices are still missing their
+        # overlay process. Callers like pod.py's decentralized mesh cabling query
+        # a sibling pod's spines directly (no dc.py-level wait) — the sibling's own
+        # spines can exist while its overlay-BGP pre-seed (a separate create_routing
+        # call inside that sibling's own generator run) hasn't landed yet. Retrying
+        # here closes that narrow gap without serializing pod generation.
+        top_device_set = set(top_devices)
+        for attempt in range(_OVERLAY_BGP_MAX_RETRIES):
+            all_bgp, loopback_interfaces = await asyncio.gather(
+                self.client.filters(
+                    kind=ManagedBGP,
+                    capabilities__name__values=all_device_names,
+                    include=["local_as", "capabilities"],
+                    prefetch_relationships=True,
+                ),
+                self.client.filters(
+                    kind=DcimVirtualInterface,
+                    device__name__values=all_device_names,
+                    role__value="loopback",
+                    include=["device", "ip_address"],
+                    prefetch_relationships=True,
+                ),
+            )
+            if not top_device_set:
+                break
+            overlay_device_names = {_safe_device_name(b) for b in all_bgp if b.name.value.endswith("-bgp-overlay")} - {
+                None
+            }
+            missing = top_device_set - overlay_device_names
+            if not missing:
+                break
+            if attempt < _OVERLAY_BGP_MAX_RETRIES - 1:
+                self.logger.info(
+                    f"Overlay BGP not yet visible for top device(s) {sorted(missing)} — "
+                    f"retrying in {_OVERLAY_BGP_RETRY_DELAY}s "
+                    f"(attempt {attempt + 1}/{_OVERLAY_BGP_MAX_RETRIES})"
+                )
+                await asyncio.sleep(_OVERLAY_BGP_RETRY_DELAY)
+
         underlay_type = routing_strategy.split("-")[0]
 
         if underlay_type == "ospf":
