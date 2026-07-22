@@ -156,15 +156,18 @@ class RoutingMixin:
                 prefetch_relationships=True,
             ),
         )
-        underlay = [b for b in all_bgp if "underlay" in b.name.value]
+        underlay_type = routing_strategy.split("-")[0]
 
-        if routing_strategy == RoutingStrategy.OSPF_IBGP:
-            overlay = await self.client.filters(
+        if underlay_type == "ospf":
+            underlay = await self.client.filters(
                 kind=ManagedOSPF,
                 capabilities__name__values=all_device_names,
             )
         else:
-            overlay = [b for b in all_bgp if "overlay" in b.name.value]
+            underlay = [b for b in all_bgp if "underlay" in b.name.value]
+
+        # Overlay is always iBGP/eBGP (ManagedBGP) — only the underlay can be OSPF.
+        overlay = [b for b in all_bgp if "overlay" in b.name.value]
 
         self.logger.info(
             f"Collected: {len(interfaces)} P2P interface(s), "

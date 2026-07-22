@@ -230,12 +230,15 @@ class RoutingPlanner:
         # not idempotent across create()). BGP processes themselves are always
         # re-saved with allow_upsert=True — local_as is cardinality-one and upserts
         # cleanly (verified on Infrahub 1.9.6), so no new/existing split is needed.
+        # Only applies to eBGP underlay — inp.underlay holds ManagedOSPF objects
+        # (no local_as) when underlay_type == "ospf".
         existing_as_by_device: dict[str, str] = {}
-        for bgp in inp.underlay:
-            dev_name = _safe_device_name(bgp)
-            as_id = _safe_as_id(bgp)
-            if dev_name and as_id:
-                existing_as_by_device[dev_name] = as_id
+        if underlay_type == "ebgp":
+            for bgp in inp.underlay:
+                dev_name = _safe_device_name(bgp)
+                as_id = _safe_as_id(bgp)
+                if dev_name and as_id:
+                    existing_as_by_device[dev_name] = as_id
 
         design = inp.options.get("design")
         asn_pool = inp.options.get("asn_pool")
