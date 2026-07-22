@@ -386,6 +386,11 @@ class DCTopologyGenerator(CommonGenerator):
         dc_max_spines = dc_design.max_spines_per_pod if dc_design else 0
         p2p_prefix_length = 127 if is_ipv6 else 31
 
+        # Each pod's own spine overlay BGP is pre-seeded by pod.py itself (before any
+        # rack generator runs, so leaf-to-spine routing calls find it already in place)
+        # — not here. By the time this DC-level step runs, every pod/rack generator has
+        # already finished, which is too late for that purpose; this step only needs to
+        # add the inter-pod (spine-to-spine across pods) cabling/routing on top.
         for pod_i in pods:
             spines_i = pod_spines[pod_i.id]
             if not spines_i or not pod_uplink_interfaces[pod_i.id]:
