@@ -209,21 +209,28 @@ def _make_interface(
             {
                 "__typename": "RoutingOSPFInterface",
                 "name": _v(f"ospf-{name}"),
-                "ospf_process": _node(
-                    {
-                        "router_id": _node({"address": _v("10.0.0.1/32")}),
-                    }
-                ),
-                "area": _node(
-                    {
-                        "area": _v(ospf_area),
-                        "area_type": _v("standard"),
-                    }
-                ),
                 "mode": _v("point-to-point"),
                 "metric": _v(None),
                 "authentication_mode": _v(ospf_authentication_mode),
                 "password": _node({"password": _v(ospf_password)}) if ospf_password is not None else _node(None),
+                "peering": _node(
+                    {
+                        "ospf_process": _node(
+                            {
+                                "process_id": _v(1),
+                                "router_id": _node({"address": _v("10.0.0.1/32")}),
+                            }
+                        ),
+                        "ospf_area": _node(
+                            {
+                                "area": _v(ospf_area),
+                                "area_type": _v("standard"),
+                            }
+                        ),
+                        "network_type": _v("point-to-point"),
+                        "cost": _v(None),
+                    }
+                ),
             }
         )
     iface["interface_capabilities"] = _edges(services)

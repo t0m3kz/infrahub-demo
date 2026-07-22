@@ -86,7 +86,8 @@ class RoutingPlan:
     """Flat routing plan — all dicts, saved with allow_upsert=True.
 
     Save order: autonomous_systems -> bgp_processes + ospf_processes
-                -> bgp_peerings + ospf_interfaces.
+                -> bgp_peerings + ospf_interfaces -> ospf_peerings (references
+                the just-created ospf_interfaces, so it saves last).
 
     AS dicts have either:
         - "_existing_id": known AS ID (re-save for group tracking)
@@ -103,6 +104,7 @@ class RoutingPlan:
     ospf_processes: list[Any] = field(default_factory=list)
     ospf_interfaces: list[Any] = field(default_factory=list)
     bgp_peerings: list[Any] = field(default_factory=list)
+    ospf_peerings: list[Any] = field(default_factory=list)
 
 
 class BGPSession(NamedTuple):
@@ -646,15 +648,25 @@ class RoutingPlanner:
                 if not (iface.cable and iface.cable.id):
                     continue
                 iname = iface.name.value
+                ospf_iface_name = f"{name}-{iname}-ospf-underlay"
                 plan.ospf_interfaces.append(
                     {
-                        "name": f"{name}-{iname}-ospf-underlay",
+                        "name": ospf_iface_name,
                         "description": f"OSPF config for {name}:{iname}",
                         "mode": "peer_to_peer",
-                        "ospf_process": {"hfid": ospf_name},
-                        "area": area_ref,
                         "interface_capabilities": [{"id": iface.id}],
                         **({"password": {"id": password_id}} if password_id else {}),
+                    }
+                )
+                plan.ospf_peerings.append(
+                    {
+                        "name": f"{name}-{iname}-ospf-peering",
+                        "description": f"OSPF peering for {name}:{iname}",
+                        "network_type": "point-to-point",
+                        "ospf_process": {"hfid": ospf_name},
+                        "ospf_area": area_ref,
+                        "ospf_interface": {"hfid": ospf_iface_name},
+                        "interface_capabilities": [{"id": iface.id}],
                     }
                 )
 

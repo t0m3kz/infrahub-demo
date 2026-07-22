@@ -254,12 +254,18 @@ query edge_config($device: String!) {
                     __typename
                     ... on RoutingOSPFInterface {
                       name { value }
-                      ospf_process { node { router_id { node { address { value } } } } }
-                      area { node { area { value } area_type { value } } }
                       mode { value }
                       metric { value }
                       authentication_mode { value }
                       password { node { password { value } } }
+                      peering {
+                        node {
+                          ospf_process { node { process_id { value } router_id { node { address { value } } } } }
+                          ospf_area { node { area { value } area_type { value } } }
+                          network_type { value }
+                          cost { value }
+                        }
+                      }
                     }
                     ...NetworkSegmentFields
                   }
