@@ -234,6 +234,22 @@ class PodTopologyGenerator(CommonGenerator):
             )
             skip_cabling = True
 
+            # No super-spine tier: pre-seed this pod's own spine overlay BGP now
+            # (skip_underlay=True — underlay comes from rack.py's leaf<->spine cabling)
+            # so it exists before any rack generator's leaf-to-spine routing call runs.
+            # Those calls treat spines as top_devices and rely on an existing overlay
+            # BGP process for them — without this, dc.py's own back-to-back inter-pod
+            # mesh (which pre-seeds all pods only after waiting for every pod/rack
+            # generator to finish) would always run too late for this to exist yet.
+            if dc_design:
+                await self.create_routing(
+                    bottom_devices=spines,
+                    top_devices=[],
+                    options=RoutingOptions(design=dc_design, asn_pool=dc_asn_pool_id, skip_underlay=True),
+                    p2p_interfaces=[],
+                    bottom_role="spine",
+                )
+
         if not skip_cabling:
             dc_max_spines = dc_design.max_spines_per_pod if dc_design else spine_count
             cabling_offset = (self.data.index - 1) * dc_max_spines
