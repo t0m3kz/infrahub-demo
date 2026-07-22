@@ -945,7 +945,7 @@ def _make_ospf_interface(
         "typename": "RoutingOSPFInterface",
         "peering": {
             "ospf_area": {"area": area},
-            "ospf_process": {"process_id": process_id},
+            "ospf_process": [{"process_id": process_id, "capabilities": [{"name": "dev1"}]}],
         },
     }
     if mode is not None:

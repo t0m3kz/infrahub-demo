@@ -610,15 +610,18 @@ class RoutingPlanner:
         existing_area_id: str,
         password_id: str = "",
     ) -> None:
-        """Build OSPF underlay: processes and P2P interface bindings."""
+        """Build OSPF underlay: processes, per-interface configs, and cable-paired peerings.
+
+        Mirrors ``_plan_ebgp_underlay``'s shape: one OSPF process per device
+        (decoupled from cabling), one RoutingOSPFInterface per device-interface
+        (interface-level settings — mode/metric/auth/password — are genuinely
+        per-device, so this stays 1:1), and ONE ManagedOSPFPeering per cable
+        pair, referencing BOTH devices' process + interface-config and both
+        physical interfaces — the same "one peering object models the session,
+        not just one side of it" shape as BGPPeering.
+        """
         area_ref: dict[str, Any] = {"id": existing_area_id}
         id_to_name = {info["id"]: name for name, info in device_map.items()}
-        # Group interfaces by device name
-        device_interfaces: dict[str, list] = defaultdict(list)
-        for iface in interfaces:
-            dev_name = id_to_name.get(iface.device.id)
-            if dev_name:
-                device_interfaces[dev_name].append(iface)
 
         for name in sorted(device_map.keys()):
             info = device_map[name]
@@ -644,31 +647,81 @@ class RoutingPlanner:
                 }
             )
 
-            for iface in device_interfaces.get(name, []):
-                if not (iface.cable and iface.cable.id):
-                    continue
-                iname = iface.name.value
-                ospf_iface_name = f"{name}-{iname}-ospf-underlay"
-                plan.ospf_interfaces.append(
-                    {
-                        "name": ospf_iface_name,
-                        "description": f"OSPF config for {name}:{iname}",
-                        "mode": "peer_to_peer",
-                        "interface_capabilities": [{"id": iface.id}],
-                        **({"password": {"id": password_id}} if password_id else {}),
-                    }
-                )
-                plan.ospf_peerings.append(
-                    {
-                        "name": f"{name}-{iname}-ospf-peering",
-                        "description": f"OSPF peering for {name}:{iname}",
-                        "network_type": "point-to-point",
-                        "ospf_process": {"hfid": ospf_name},
-                        "ospf_area": area_ref,
-                        "ospf_interface": {"hfid": ospf_iface_name},
-                        "interface_capabilities": [{"id": iface.id}],
-                    }
-                )
+        # Interface configs — decoupled from pairing, one per device-interface.
+        for iface in interfaces:
+            dev_name = id_to_name.get(iface.device.id)
+            if not dev_name or not (iface.cable and iface.cable.id):
+                continue
+            iname = iface.name.value
+            ospf_iface_name = f"{dev_name}-{iname}-ospf-underlay"
+            plan.ospf_interfaces.append(
+                {
+                    "name": ospf_iface_name,
+                    "description": f"OSPF config for {dev_name}:{iname}",
+                    "mode": "peer_to_peer",
+                    "interface_capabilities": [{"id": iface.id}],
+                    **({"password": {"id": password_id}} if password_id else {}),
+                }
+            )
+
+        # Peerings — cable-driven, one ManagedOSPFPeering per physical link.
+        cable_map: dict[str, list] = defaultdict(list)
+        for iface in interfaces:
+            if iface.cable and iface.cable.id:
+                cable_map[iface.cable.id].append(iface)
+
+        cable_pairs: list[tuple] = []
+        for ifaces in cable_map.values():
+            if len(ifaces) != 2:
+                continue
+            a, b = ifaces
+            a_name = id_to_name.get(a.device.id)
+            b_name = id_to_name.get(b.device.id)
+            if not a_name or not b_name:
+                continue
+            if a_name == b_name:
+                if self.logger:
+                    self.logger.warning(
+                        f"Self-loop cable detected: both endpoints on '{a_name}' "
+                        f"({a.name.value} / {b.name.value}) — skipping"
+                    )
+                continue
+            if a_name > b_name:
+                a, b = b, a
+                a_name, b_name = b_name, a_name
+            cable_pairs.append((a, b, a_name, b_name))
+
+        cable_pairs.sort(key=lambda x: (x[2], x[3]))
+        seen_pairs: set[tuple[str, str]] = set()
+
+        for a, b, a_name, b_name in cable_pairs:
+            pair = (a_name, b_name)
+            if pair in seen_pairs:
+                continue
+            seen_pairs.add(pair)
+
+            ia = a.name.value
+            ib = b.name.value
+            ia_h = ia.replace("/", "_")
+            ib_h = ib.replace("/", "_")
+
+            plan.ospf_peerings.append(
+                {
+                    "name": f"{a_name}--{ia_h}--{b_name}--{ib_h}-ospf-peering",
+                    "description": f"OSPF peering: {a_name} ({ia}) <-> {b_name} ({ib})",
+                    "network_type": "point-to-point",
+                    "ospf_area": area_ref,
+                    "interface_capabilities": [{"id": a.id}, {"id": b.id}],
+                    "ospf_process": [
+                        {"hfid": f"{a_name}-ospf-underlay"},
+                        {"hfid": f"{b_name}-ospf-underlay"},
+                    ],
+                    "ospf_interface": [
+                        {"hfid": f"{a_name}-{ia}-ospf-underlay"},
+                        {"hfid": f"{b_name}-{ib}-ospf-underlay"},
+                    ],
+                }
+            )
 
     # ================================================================
     # Overlay Peerings (loopback-based)

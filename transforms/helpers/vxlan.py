@@ -64,6 +64,7 @@ def _l3_from_activations(activations: list[dict[str, Any]]) -> list[dict[str, An
 def get_interfaces(
     data: list,
     activations: list[dict[str, Any]] | None = None,
+    device_name: str = "",
 ) -> list[dict[str, Any]]:
     """
     Returns a list of interface dictionaries sorted by interface name.
@@ -96,10 +97,13 @@ def get_interfaces(
             if s.get("typename") in ("ManagedVlanSegment", "ManagedVxlanSegment") and s.get("name") in segment_vlan
         ]
 
-        # Extract OSPF interface configuration. Area/process/network_type/cost live on
-        # the peering (ManagedOSPFPeering), reached via the interface's `peering`
+        # Extract OSPF interface configuration. Area/network_type/cost live on the
+        # peering (ManagedOSPFPeering), reached via the interface's `peering`
         # relationship — not on RoutingOSPFInterface itself (mode/metric/auth/password
-        # are the only OSPF fields still on the interface).
+        # are the only OSPF fields still on the interface). The peering's
+        # ospf_process is cardinality-many (both ends of the link, like a BGP
+        # peering's bgp_processes) — select this device's own process by matching
+        # its capabilities.device name, mirroring _extract_remote_asn_from_peering.
         # After clean_data: area is a dict like {"area": 0, "name": "backbone", "area_type": "standard"}
         ospf_configs = [
             s for s in (iface.get("interface_capabilities") or []) if s.get("typename") == "RoutingOSPFInterface"
@@ -108,9 +112,13 @@ def get_interfaces(
         ospf_areas = [p.get("ospf_area", {}).get("area") for p in ospf_peerings if p.get("ospf_area")]
         ospf_modes = [s.get("mode") for s in ospf_configs if s.get("mode")]
         ospf_metrics = [s.get("metric") for s in ospf_configs if s.get("metric") is not None]
-        ospf_process_ids = [
-            (p.get("ospf_process") or {}).get("process_id") for p in ospf_peerings if p.get("ospf_process")
-        ]
+        ospf_process_ids = []
+        for p in ospf_peerings:
+            for proc in p.get("ospf_process") or []:
+                proc_devices = {d.get("name") for d in (proc.get("capabilities") or []) if isinstance(d, dict)}
+                if not device_name or device_name in proc_devices:
+                    ospf_process_ids.append(proc.get("process_id"))
+                    break
         ospf_auth_modes = [s.get("authentication_mode") for s in ospf_configs if s.get("authentication_mode")]
         ospf_passwords = [(s.get("password") or {}).get("password") for s in ospf_configs if s.get("password")]
 

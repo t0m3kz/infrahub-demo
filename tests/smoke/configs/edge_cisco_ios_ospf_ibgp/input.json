@@ -570,18 +570,33 @@
                           "peering": {
                             "node": {
                               "ospf_process": {
-                                "node": {
-                                  "process_id": {
-                                    "value": 1
-                                  },
-                                  "router_id": {
+                                "edges": [
+                                  {
                                     "node": {
-                                      "address": {
-                                        "value": "10.0.0.1/32"
+                                      "process_id": {
+                                        "value": 1
+                                      },
+                                      "router_id": {
+                                        "node": {
+                                          "address": {
+                                            "value": "10.0.0.1/32"
+                                          }
+                                        }
+                                      },
+                                      "capabilities": {
+                                        "edges": [
+                                          {
+                                            "node": {
+                                              "name": {
+                                                "value": "dc1-edge-01"
+                                              }
+                                            }
+                                          }
+                                        ]
                                       }
                                     }
                                   }
-                                }
+                                ]
                               },
                               "ospf_area": {
                                 "node": {
@@ -718,18 +733,33 @@
                           "peering": {
                             "node": {
                               "ospf_process": {
-                                "node": {
-                                  "process_id": {
-                                    "value": 1
-                                  },
-                                  "router_id": {
+                                "edges": [
+                                  {
                                     "node": {
-                                      "address": {
-                                        "value": "10.0.0.1/32"
+                                      "process_id": {
+                                        "value": 1
+                                      },
+                                      "router_id": {
+                                        "node": {
+                                          "address": {
+                                            "value": "10.0.0.1/32"
+                                          }
+                                        }
+                                      },
+                                      "capabilities": {
+                                        "edges": [
+                                          {
+                                            "node": {
+                                              "name": {
+                                                "value": "dc1-edge-01"
+                                              }
+                                            }
+                                          }
+                                        ]
                                       }
                                     }
                                   }
-                                }
+                                ]
                               },
                               "ospf_area": {
                                 "node": {
