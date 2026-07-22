@@ -943,8 +943,10 @@ def _make_ospf_interface(
     """Build a cleaned RoutingOSPFInterface dict as it appears in interface_capabilities."""
     entry: dict = {
         "typename": "RoutingOSPFInterface",
-        "area": {"area": area},
-        "ospf_process": {"process_id": process_id},
+        "peering": {
+            "ospf_area": {"area": area},
+            "ospf_process": {"process_id": process_id},
+        },
     }
     if mode is not None:
         entry["mode"] = mode

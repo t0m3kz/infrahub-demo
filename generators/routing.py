@@ -14,6 +14,7 @@ from .protocols import (
     ManagedBGP,
     ManagedBGPPeering,
     ManagedOSPF,
+    ManagedOSPFPeering,
     RoutingAutonomousSystem,
     RoutingOSPFArea,
     RoutingOSPFInterface,
@@ -243,15 +244,30 @@ class RoutingMixin:
 
         for peering in plan.bgp_peerings:
             peering["bgp_processes"] = [_resolve_hfid(ref) for ref in peering["bgp_processes"]]
-        for ospf_iface in plan.ospf_interfaces:
-            ospf_iface["ospf_process"] = _resolve_hfid(ospf_iface["ospf_process"])
+        for ospf_peering in plan.ospf_peerings:
+            ospf_peering["ospf_process"] = _resolve_hfid(ospf_peering["ospf_process"])
 
-        # Step 5: Create peering + OSPF interface SDK objects, save sequentially
+        # Step 5: Create peering + OSPF interface SDK objects, save sequentially.
+        # ospf_interfaces are created before ospf_peerings so the latter's
+        # ospf_interface HFID ref can be resolved to a direct id the same way
+        # process refs are resolved above — it references an object created in
+        # this same run, so the same NODE_NOT_FOUND-avoidance applies.
         plan.bgp_peerings = [await self.client.create(kind=ManagedBGPPeering, data=d) for d in plan.bgp_peerings]
         plan.ospf_interfaces = [
             await self.client.create(kind=RoutingOSPFInterface, data=d) for d in plan.ospf_interfaces
         ]
         for obj in plan.bgp_peerings + plan.ospf_interfaces:
+            await obj.save(allow_upsert=True)
+            self.logger.info(f"  Saved: {getattr(getattr(obj, 'name', None), 'value', obj.id)}")
+
+        ospf_iface_id_by_name = {obj.name.value: obj.id for obj in plan.ospf_interfaces}
+        for ospf_peering in plan.ospf_peerings:
+            fresh_id = ospf_iface_id_by_name.get(ospf_peering["ospf_interface"].get("hfid"))
+            if fresh_id:
+                ospf_peering["ospf_interface"] = {"id": fresh_id}
+
+        plan.ospf_peerings = [await self.client.create(kind=ManagedOSPFPeering, data=d) for d in plan.ospf_peerings]
+        for obj in plan.ospf_peerings:
             await obj.save(allow_upsert=True)
             self.logger.info(f"  Saved: {getattr(getattr(obj, 'name', None), 'value', obj.id)}")
 
@@ -261,6 +277,7 @@ class RoutingMixin:
             + len(plan.ospf_processes)
             + len(plan.ospf_interfaces)
             + len(plan.bgp_peerings)
+            + len(plan.ospf_peerings)
         )
         self.logger.info(f"Routing completed: {total} object(s) saved")
 

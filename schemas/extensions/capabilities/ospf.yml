@@ -65,22 +65,6 @@ nodes:
         optional: true
         order_weight: 1225
     relationships:
-      - name: ospf_process
-        peer: ManagedOSPF
-        label: OSPF Process
-        cardinality: one
-        optional: false
-        identifier: "ospfinterface__process"
-        order_weight: 2000
-        description: "OSPF process this interface configuration belongs to"
-      - name: area
-        peer: RoutingOSPFArea
-        label: OSPF Area
-        cardinality: one
-        optional: false
-        identifier: "ospfinterface__area"
-        order_weight: 2100
-        description: "OSPF area for this interface"
       - name: password
         peer: RoutingPassword
         optional: true
@@ -194,16 +178,18 @@ nodes:
         kind: Attribute
         order_weight: 1500
         description: "Router ID for this OSPF process (namespace derived from this IP)"
-      - name: interface_configs
-        peer: RoutingOSPFInterface
+      - name: peerings
+        peer: ManagedOSPFPeering
         cardinality: many
         optional: true
         kind: Generic
-        identifier: "ospfinterface__process"
+        identifier: "ospfpeering__process"
         order_weight: 2000
-        description: "Per-interface OSPF configuration (area, cost, mode) for this process"
+        description: "OSPF peerings this process participates in"
 
-  # Note: Interface-specific OSPF config (area, cost, etc.) is in RoutingOSPFInterface
+  # Note: Interface-level OSPF config (metric, mode, authentication) is in
+  # RoutingOSPFInterface; area/process/link-level settings (network_type, cost)
+  # live here instead, linked back to the interface via ospf_interface.
   - name: OSPFPeering
     namespace: Managed
     description: "OSPF peering session — area, cost, and network type for P2P or broadcast links"
@@ -217,11 +203,6 @@ nodes:
       - ManagedPeering
       - ManagedGenericInterfaces
     attributes:
-      - name: ospf_area
-        kind: Text
-        label: "OSPF Area"
-        order_weight: 1400
-        description: "OSPF area identifier for this link (e.g. 0.0.0.0)"
       - name: network_type
         kind: Dropdown
         order_weight: 1500
@@ -255,6 +236,24 @@ nodes:
         identifier: "ospfpeering__process"
         order_weight: 3100
         description: "Local OSPF process this peering belongs to"
+      - name: ospf_area
+        peer: RoutingOSPFArea
+        label: "OSPF Area"
+        kind: Attribute
+        cardinality: one
+        optional: false
+        identifier: "ospfpeering__area"
+        order_weight: 3150
+        description: "OSPF area for this link"
+      - name: ospf_interface
+        peer: RoutingOSPFInterface
+        label: "OSPF Interface"
+        kind: Attribute
+        cardinality: one
+        optional: false
+        identifier: "ospfpeering__interface"
+        order_weight: 3175
+        description: "The interface-level OSPF config this peering belongs to"
       - name: namespace
         peer: IpamNamespace
         label: "IP Namespace"
@@ -276,3 +275,12 @@ extensions:
           optional: true
           peer: ManagedOSPF
           order_weight: 2000
+        - name: peering
+          peer: ManagedOSPFPeering
+          label: "OSPF Peering"
+          kind: Generic
+          cardinality: one
+          optional: true
+          identifier: "ospfpeering__interface"
+          order_weight: 2100
+          description: "OSPF peering this interface config participates in"

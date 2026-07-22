@@ -374,10 +374,24 @@ class ManagedOSPF(ManagedGeneric, ManagedGenericDevice, ManagedRouting):
     status: Dropdown
     version: Dropdown
     capabilities: RelationshipManager[CoreNode]
-    interface_configs: RelationshipManager[RoutingOSPFInterface]
     member_of_groups: RelationshipManager[CoreNode]
+    peerings: RelationshipManager[ManagedOSPFPeering]
     profiles: RelationshipManager[CoreNode]
     router_id: RelationshipAttribute[IpamIPAddress]
+    subscriber_of_groups: RelationshipManager[CoreNode]
+
+
+class ManagedOSPFPeering(ManagedGeneric, ManagedPeering, ManagedGenericInterfaces):
+    cost: IntegerOptional
+    name: String
+    network_type: Dropdown
+    interface_capabilities: RelationshipManager[DcimInterface]
+    member_of_groups: RelationshipManager[CoreNode]
+    namespace: RelationshipAttribute[CoreNode]
+    ospf_area: RelationshipAttribute[RoutingOSPFArea]
+    ospf_interface: RelationshipAttribute[RoutingOSPFInterface]
+    ospf_process: RelationshipAttribute[ManagedOSPF]
+    profiles: RelationshipManager[CoreNode]
     subscriber_of_groups: RelationshipManager[CoreNode]
 
 
@@ -470,12 +484,11 @@ class RoutingOSPFInterface(ManagedGeneric, ManagedGenericInterfaces):
     mode: Dropdown
     name: String
     status: Dropdown
-    area: RelationshipAttribute[RoutingOSPFArea]
     interface_capabilities: RelationshipManager[DcimInterface]
     member_of_groups: RelationshipManager[CoreNode]
-    ospf_process: RelationshipAttribute[ManagedOSPF]
     ospf_services: RelationshipManager[ManagedOSPF]
     password: RelationshipAttribute[RoutingPassword]
+    peering: RelationshipAttribute[ManagedOSPFPeering]
     profiles: RelationshipManager[CoreNode]
     subscriber_of_groups: RelationshipManager[CoreNode]
 

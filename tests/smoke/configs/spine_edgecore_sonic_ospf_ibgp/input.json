@@ -555,27 +555,6 @@
                           "name": {
                             "value": "ospf-Ethernet1"
                           },
-                          "ospf_process": {
-                            "node": {
-                              "router_id": {
-                                "node": {
-                                  "address": {
-                                    "value": "10.0.0.1/32"
-                                  }
-                                }
-                              }
-                            }
-                          },
-                          "area": {
-                            "node": {
-                              "area": {
-                                "value": "0.0.0.0"
-                              },
-                              "area_type": {
-                                "value": "standard"
-                              }
-                            }
-                          },
                           "mode": {
                             "value": "point-to-point"
                           },
@@ -587,6 +566,40 @@
                           },
                           "password": {
                             "node": null
+                          },
+                          "peering": {
+                            "node": {
+                              "ospf_process": {
+                                "node": {
+                                  "process_id": {
+                                    "value": 1
+                                  },
+                                  "router_id": {
+                                    "node": {
+                                      "address": {
+                                        "value": "10.0.0.1/32"
+                                      }
+                                    }
+                                  }
+                                }
+                              },
+                              "ospf_area": {
+                                "node": {
+                                  "area": {
+                                    "value": "0.0.0.0"
+                                  },
+                                  "area_type": {
+                                    "value": "standard"
+                                  }
+                                }
+                              },
+                              "network_type": {
+                                "value": "point-to-point"
+                              },
+                              "cost": {
+                                "value": null
+                              }
+                            }
                           }
                         }
                       }
@@ -690,27 +703,6 @@
                           "name": {
                             "value": "ospf-Ethernet2"
                           },
-                          "ospf_process": {
-                            "node": {
-                              "router_id": {
-                                "node": {
-                                  "address": {
-                                    "value": "10.0.0.1/32"
-                                  }
-                                }
-                              }
-                            }
-                          },
-                          "area": {
-                            "node": {
-                              "area": {
-                                "value": "0.0.0.0"
-                              },
-                              "area_type": {
-                                "value": "standard"
-                              }
-                            }
-                          },
                           "mode": {
                             "value": "point-to-point"
                           },
@@ -722,6 +714,40 @@
                           },
                           "password": {
                             "node": null
+                          },
+                          "peering": {
+                            "node": {
+                              "ospf_process": {
+                                "node": {
+                                  "process_id": {
+                                    "value": 1
+                                  },
+                                  "router_id": {
+                                    "node": {
+                                      "address": {
+                                        "value": "10.0.0.1/32"
+                                      }
+                                    }
+                                  }
+                                }
+                              },
+                              "ospf_area": {
+                                "node": {
+                                  "area": {
+                                    "value": "0.0.0.0"
+                                  },
+                                  "area_type": {
+                                    "value": "standard"
+                                  }
+                                }
+                              },
+                              "network_type": {
+                                "value": "point-to-point"
+                              },
+                              "cost": {
+                                "value": null
+                              }
+                            }
                           }
                         }
                       }

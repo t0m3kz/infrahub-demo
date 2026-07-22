@@ -96,16 +96,20 @@ def get_interfaces(
             if s.get("typename") in ("ManagedVlanSegment", "ManagedVxlanSegment") and s.get("name") in segment_vlan
         ]
 
-        # Extract OSPF interface configuration
+        # Extract OSPF interface configuration. Area/process/network_type/cost live on
+        # the peering (ManagedOSPFPeering), reached via the interface's `peering`
+        # relationship — not on RoutingOSPFInterface itself (mode/metric/auth/password
+        # are the only OSPF fields still on the interface).
         # After clean_data: area is a dict like {"area": 0, "name": "backbone", "area_type": "standard"}
         ospf_configs = [
             s for s in (iface.get("interface_capabilities") or []) if s.get("typename") == "RoutingOSPFInterface"
         ]
-        ospf_areas = [s.get("area", {}).get("area") for s in ospf_configs if s.get("area")]
+        ospf_peerings = [s.get("peering") or {} for s in ospf_configs if s.get("peering")]
+        ospf_areas = [p.get("ospf_area", {}).get("area") for p in ospf_peerings if p.get("ospf_area")]
         ospf_modes = [s.get("mode") for s in ospf_configs if s.get("mode")]
         ospf_metrics = [s.get("metric") for s in ospf_configs if s.get("metric") is not None]
         ospf_process_ids = [
-            (s.get("ospf_process") or {}).get("process_id") for s in ospf_configs if s.get("ospf_process")
+            (p.get("ospf_process") or {}).get("process_id") for p in ospf_peerings if p.get("ospf_process")
         ]
         ospf_auth_modes = [s.get("authentication_mode") for s in ospf_configs if s.get("authentication_mode")]
         ospf_passwords = [(s.get("password") or {}).get("password") for s in ospf_configs if s.get("password")]

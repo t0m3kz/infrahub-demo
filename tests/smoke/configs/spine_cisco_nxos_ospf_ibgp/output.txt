@@ -36,8 +36,9 @@ interface Loopback0
 router ospf 1
   router-id 10.0.0.1
   auto-cost reference-bandwidth 100000
-  area None authentication message-digest
   passive-interface default
+  no passive-interface Ethernet1
+  no passive-interface Ethernet2
 !
 interface Ethernet1
   ip router ospf 1 area 0.0.0.0
