@@ -215,11 +215,14 @@ def _make_interface(
                 "password": _node({"password": _v(ospf_password)}) if ospf_password is not None else _node(None),
                 "peering": _node(
                     {
-                        "ospf_process": _node(
-                            {
-                                "process_id": _v(1),
-                                "router_id": _node({"address": _v("10.0.0.1/32")}),
-                            }
+                        "ospf_process": _edges(
+                            [
+                                {
+                                    "process_id": _v(1),
+                                    "router_id": _node({"address": _v("10.0.0.1/32")}),
+                                    "capabilities": _edges([{"name": _v(device_name)}]),
+                                }
+                            ]
                         ),
                         "ospf_area": _node(
                             {

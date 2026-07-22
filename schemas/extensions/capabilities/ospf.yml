@@ -229,13 +229,13 @@ nodes:
     relationships:
       - name: ospf_process
         peer: ManagedOSPF
-        label: "OSPF Process"
-        kind: Attribute
-        cardinality: one
+        label: "OSPF Processes"
+        kind: Generic
+        cardinality: many
         optional: false
         identifier: "ospfpeering__process"
         order_weight: 3100
-        description: "Local OSPF process this peering belongs to"
+        description: "OSPF processes participating in this peering (1-2 devices)"
       - name: ospf_area
         peer: RoutingOSPFArea
         label: "OSPF Area"
@@ -247,13 +247,13 @@ nodes:
         description: "OSPF area for this link"
       - name: ospf_interface
         peer: RoutingOSPFInterface
-        label: "OSPF Interface"
-        kind: Attribute
-        cardinality: one
+        label: "OSPF Interfaces"
+        kind: Generic
+        cardinality: many
         optional: false
         identifier: "ospfpeering__interface"
         order_weight: 3175
-        description: "The interface-level OSPF config this peering belongs to"
+        description: "Interface-level OSPF configs participating in this peering (1-2 devices)"
       - name: namespace
         peer: IpamNamespace
         label: "IP Namespace"

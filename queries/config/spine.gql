@@ -258,10 +258,26 @@ query spine_config($device: String!) {
                       password { node { password { value } } }
                       peering {
                         node {
-                          ospf_process { node { process_id { value } router_id { node { address { value } } } } }
+                          ospf_process {
+                            edges {
+                              node {
+                                process_id { value }
+                                router_id { node { address { value } } }
+                                capabilities { edges { node { name { value } } } }
+                              }
+                            }
+                          }
                           ospf_area { node { area { value } area_type { value } } }
                           network_type { value }
                           cost { value }
+                          interface_capabilities {
+                            edges {
+                              node {
+                                name { value }
+                                device { node { name { value } } }
+                              }
+                            }
+                          }
                         }
                       }
                     }

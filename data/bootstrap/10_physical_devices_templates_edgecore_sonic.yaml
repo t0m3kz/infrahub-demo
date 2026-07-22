@@ -611,7 +611,7 @@ spec:
             interface_type: 100gbase-x-qsfp28
           - template_name: 7726_32X_O_BORDER_LEAF_Ethernet120
             name: Ethernet120
-            role: load-balancer
+            role: uplink
             interface_type: 100gbase-x-qsfp28
           - template_name: 7726_32X_O_BORDER_LEAF_Ethernet124
             name: Ethernet124

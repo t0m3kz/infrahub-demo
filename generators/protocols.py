@@ -389,8 +389,8 @@ class ManagedOSPFPeering(ManagedGeneric, ManagedPeering, ManagedGenericInterface
     member_of_groups: RelationshipManager[CoreNode]
     namespace: RelationshipAttribute[CoreNode]
     ospf_area: RelationshipAttribute[RoutingOSPFArea]
-    ospf_interface: RelationshipAttribute[RoutingOSPFInterface]
-    ospf_process: RelationshipAttribute[ManagedOSPF]
+    ospf_interface: RelationshipManager[RoutingOSPFInterface]
+    ospf_process: RelationshipManager[ManagedOSPF]
     profiles: RelationshipManager[CoreNode]
     subscriber_of_groups: RelationshipManager[CoreNode]
 

@@ -188,7 +188,7 @@ class BaseDeviceTransform(InfrahubTransform):
             "name": device_name,
             "hostname": device_name,
             "device_role": data.get("role", ""),
-            "interfaces": get_interfaces(interfaces, activations=activations),
+            "interfaces": get_interfaces(interfaces, activations=activations, device_name=device_name),
             "bgp": get_bgp_profile(
                 device_capabilities,
                 interfaces,

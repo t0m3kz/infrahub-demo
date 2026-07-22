@@ -245,12 +245,12 @@ class RoutingMixin:
         for peering in plan.bgp_peerings:
             peering["bgp_processes"] = [_resolve_hfid(ref) for ref in peering["bgp_processes"]]
         for ospf_peering in plan.ospf_peerings:
-            ospf_peering["ospf_process"] = _resolve_hfid(ospf_peering["ospf_process"])
+            ospf_peering["ospf_process"] = [_resolve_hfid(ref) for ref in ospf_peering["ospf_process"]]
 
         # Step 5: Create peering + OSPF interface SDK objects, save sequentially.
         # ospf_interfaces are created before ospf_peerings so the latter's
-        # ospf_interface HFID ref can be resolved to a direct id the same way
-        # process refs are resolved above — it references an object created in
+        # ospf_interface HFID refs can be resolved to direct ids the same way
+        # process refs are resolved above — they reference objects created in
         # this same run, so the same NODE_NOT_FOUND-avoidance applies.
         plan.bgp_peerings = [await self.client.create(kind=ManagedBGPPeering, data=d) for d in plan.bgp_peerings]
         plan.ospf_interfaces = [
@@ -262,9 +262,10 @@ class RoutingMixin:
 
         ospf_iface_id_by_name = {obj.name.value: obj.id for obj in plan.ospf_interfaces}
         for ospf_peering in plan.ospf_peerings:
-            fresh_id = ospf_iface_id_by_name.get(ospf_peering["ospf_interface"].get("hfid"))
-            if fresh_id:
-                ospf_peering["ospf_interface"] = {"id": fresh_id}
+            ospf_peering["ospf_interface"] = [
+                {"id": ospf_iface_id_by_name[ref["hfid"]]} if ref.get("hfid") in ospf_iface_id_by_name else ref
+                for ref in ospf_peering["ospf_interface"]
+            ]
 
         plan.ospf_peerings = [await self.client.create(kind=ManagedOSPFPeering, data=d) for d in plan.ospf_peerings]
         for obj in plan.ospf_peerings:
