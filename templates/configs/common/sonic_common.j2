@@ -22,7 +22,14 @@
 {%- endfor -%}
 {%- for interface in interfaces -%}
 {%- if 'loopback' not in interface.name|lower -%}
-{%- set _ = physical_interfaces.update({interface.name: {}}) -%}
+{%- set iface_entry = {'admin_status': 'up' if interface.status == 'active' else 'down'} -%}
+{%- if interface.description -%}
+{%- set _ = iface_entry.update({'description': interface.description}) -%}
+{%- endif -%}
+{%- if interface.mtu -%}
+{%- set _ = iface_entry.update({'mtu': interface.mtu|string}) -%}
+{%- endif -%}
+{%- set _ = physical_interfaces.update({interface.name: iface_entry}) -%}
 {%- endif -%}
 {%- endfor -%}
 {%- for interface in interfaces -%}

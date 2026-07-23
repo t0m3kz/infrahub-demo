@@ -85,9 +85,21 @@
   },
   "EVPN_NVO": {},
   "INTERFACE": {
-    "Ethernet1": {},
-    "Ethernet10": {},
-    "Ethernet2": {}
+    "Ethernet1": {
+      "admin_status": "up",
+      "description": "to spine-01",
+      "mtu": "9000"
+    },
+    "Ethernet10": {
+      "admin_status": "up",
+      "description": "to server-01",
+      "mtu": "9000"
+    },
+    "Ethernet2": {
+      "admin_status": "up",
+      "description": "to spine-02",
+      "mtu": "9000"
+    }
   },
   "INTERFACE_IP": {
     "Ethernet1|10.1.0.1/31": {},
