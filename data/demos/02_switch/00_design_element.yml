@@ -5,5 +5,5 @@ spec:
   kind: TopologyElement
   data:
     - quantity: 4
-      role: tor
+      role: l2-leaf
       template: PowerSwitch-S5224F-ON_TOR

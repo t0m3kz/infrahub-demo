@@ -1,0 +1,20 @@
+
+
+{
+  "DEVICE_METADATA": {
+    "localhost": {
+      "hostname": "dc1-l2-leaf-01",
+      "type": "L2Leaf"
+    }
+  },
+  "INTERFACE": {
+    "Ethernet1": {},
+    "Ethernet2": {}
+  },
+  "INTERFACE_IP": {
+    "Ethernet1|10.1.0.1/31": {},
+    "Ethernet2|10.1.0.3/31": {}
+  },
+  "VLAN": {},
+  "VLAN_INTERFACE": {}
+}

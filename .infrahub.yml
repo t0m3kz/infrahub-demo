@@ -35,6 +35,13 @@ artifact_definitions:
     transformation: tor
     parameters:
       device: name__value
+  - name: l2_leaf_config
+    artifact_name: l2-leaf
+    content_type: text/plain
+    targets: l2-leafs
+    transformation: l2_leaf
+    parameters:
+      device: name__value
   - name: spine_config
     artifact_name: spine
     content_type: text/plain
@@ -190,6 +197,9 @@ python_transforms:
   - name: tor
     class_name: ToR
     file_path: transforms/config/tor.py
+  - name: l2_leaf
+    class_name: L2Leaf
+    file_path: transforms/config/l2_leaf.py
   - name: spine
     class_name: Spine
     file_path: transforms/config/spine.py

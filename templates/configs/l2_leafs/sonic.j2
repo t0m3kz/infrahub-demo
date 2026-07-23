@@ -1,0 +1,29 @@
+{#- Sonic JSON L2-Leaf Configuration (L2-only aggregation, no VTEP/BGP/OSPF) -#}
+{%- set device_metadata = {
+  'localhost': {
+    'hostname': hostname,
+    'type': 'L2Leaf'
+  }
+} -%}
+
+{%- set vlan_config = {} -%}
+{%- set loopback_interfaces = {} -%}
+{%- set physical_interfaces = {} -%}
+{%- set interface_ips = {} -%}
+{%- set vlan_interfaces = {} -%}
+{%- set bgp_neighbors = {} -%}
+{%- set bgp_globals = {'default': {}} -%}
+{%- set bgp_peer_groups = {} -%}
+{%- set bgp_globals_af = {} -%}
+{%- set ospf_router = {} -%}
+{%- include 'common/sonic_common.j2' %}
+
+{{ {
+  'DEVICE_METADATA': device_metadata,
+  'VLAN': vlan_config,
+  'INTERFACE': physical_interfaces,
+  'INTERFACE_IP': interface_ips,
+  'VLAN_INTERFACE': vlan_interfaces
+} | tojson(indent=2) }}
+{%- include 'common/sonic_mclag.j2' -%}
+{%- include 'common/sonic_management.j2' %}
