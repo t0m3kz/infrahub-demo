@@ -111,8 +111,13 @@ class PodDesign(BaseModel):
     max_border_leafs_per_pod: int = 0
 
     @property
-    def derived_deployment_type(self) -> str:
-        """Derive deployment type from rack layout when not explicitly set."""
+    def deployment_type(self) -> Literal["middle_rack", "tor", "mixed"]:
+        """Derive deployment type from the physical rack layout.
+
+        network_racks_per_row=0 -> tor (all compute racks with ToRs)
+        max_tors_per_compute_rack=0 -> middle_rack (leafs+tors in network racks)
+        both > 0 -> mixed (leafs in network racks, tors in compute racks)
+        """
         if self.network_racks_per_row == 0:
             return "tor"
         if self.max_tors_per_compute_rack == 0:
@@ -175,7 +180,6 @@ class DCModel(BaseModel):
     index: int
     design: Optional[DataCenterDesignData] = None
     naming_convention: str = "standard"
-    overlay_technology: str = "vxlan_evpn"
     fabric_interface_sorting_method: Literal["top_down", "bottom_up"] = "bottom_up"
     spine_interface_sorting_method: Literal["top_down", "bottom_up"] = "bottom_up"
     amount_of_super_spines: int = 0
@@ -233,10 +237,10 @@ class PodModel(BaseModel):
     """Pod instance model with capacity calculated from PodDesign.
 
     Pod makes DEPLOYMENT DECISIONS within constraints:
-    - deployment_type: Deployment decision (from TopologyPod, default=tor)
     - amount_of_spines: Actual spine count (default=4, constrained by design.max_spines_per_pod)
 
-    Capacity is CALCULATED from design:
+    Everything else is CALCULATED from design:
+    - deployment_type: design.deployment_type (derived from rack layout)
     - max_leafs_per_row: design.network_racks_per_row × max_leafs_per_network_rack
     - max_tors_per_row: design.compute_racks_per_row × max_tors_per_compute_rack
     """
@@ -247,11 +251,13 @@ class PodModel(BaseModel):
     index: int
     # Design relationship is optional in schema
     design: Optional[PodDesign] = None
-    # Schema: optional with defaults — always provided by Infrahub
-    deployment_type: Literal["middle_rack", "tor", "mixed"] = "tor"
     amount_of_spines: int = 4
 
     leaf_interface_sorting_method: Literal["top_down", "bottom_up"] = "bottom_up"
+
+    @property
+    def deployment_type(self) -> Literal["middle_rack", "tor", "mixed"]:
+        return self.design.deployment_type if self.design else "tor"
 
     @property
     def max_leafs_per_row(self) -> int:
@@ -337,11 +343,14 @@ class RackPod(BaseModel):
     prefix_pool: Optional[Pool] = None
     asn_pool: Optional[Pool] = None
     design: Optional[PodDesign] = None
-    deployment_type: str = "tor"
     # Schema: required relationship (optional: false)
     spine_template: Template
     # Spine devices with cable info (from GQL query)
     devices: List[SpineDevice] = []
+
+    @property
+    def deployment_type(self) -> Literal["middle_rack", "tor", "mixed"]:
+        return self.design.deployment_type if self.design else "tor"
 
     @field_validator("design", "loopback_pool", "prefix_pool", "asn_pool", "spine_template", mode="before")
     @classmethod
@@ -422,9 +431,18 @@ class EndpointPod(BaseModel):
 
     id: str
     name: str
-    deployment_type: str
+    design: Optional[PodDesign] = None
     index: int
     parent: EndpointDataCenter
+
+    @field_validator("design", mode="before")
+    @classmethod
+    def handle_empty_design(cls, v: Any) -> Any:
+        return _unwrap_node(v)
+
+    @property
+    def deployment_type(self) -> Literal["middle_rack", "tor", "mixed"]:
+        return self.design.deployment_type if self.design else "tor"
 
 
 class EndpointRack(BaseModel):

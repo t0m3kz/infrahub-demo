@@ -84,12 +84,7 @@ fragment PodFields on TopologyPod {
   index {
     value
   }
-  # New three-layer architecture
   design { node { ...PodDesignFields } }
-  # Legacy attributes (for backward compatibility)
-  deployment_type {
-    value
-  }
   parent {
     node {
       ... on TopologyDataCenter {

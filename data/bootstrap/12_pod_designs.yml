@@ -3,8 +3,9 @@
 # These define the physical floor plan and operational parameters
 # Loaded at bootstrap time, referenced by DC and Pod instances at deployment
 #
-# deployment_type is derived from rack layout:
-#   - network_racks=0 → tor (all compute racks with ToRs)
+# Pod.deployment_type is derived from this design's rack layout
+# (PodDesign.deployment_type property in generators/models.py):
+#   - network_racks_per_row=0 → tor (all compute racks with ToRs)
 #   - max_tors_per_compute_rack=0 → middle_rack (leafs+tors in network racks)
 #   - both > 0 → mixed (leafs in network racks, tors in compute racks)
 #

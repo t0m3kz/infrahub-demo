@@ -14,7 +14,6 @@ query topology_dc($name: String!) {
             value
           }
           naming_convention { value }
-          overlay_technology { value }
           design {
             node {
               id

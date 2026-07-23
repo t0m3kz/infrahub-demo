@@ -201,31 +201,29 @@ class DCTopologyGenerator(CommonGenerator):
             parent_attr="vlan_pool",
         )
 
-        # Create VNI and L3 VNI pools only when overlay is VXLAN-EVPN
-        overlay_technology = self.data.overlay_technology
-        if overlay_technology == "vxlan_evpn":
-            await self.upsert_number_pool(
-                pool_name=f"{self.fabric_name}-vni-pool",
-                description=f"L2 VNI pool for {self.fabric_name.upper()}",
-                start_range=10001,
-                end_range=16777215,
-                node="ManagedSegmentDeployment",
-                node_attribute="vni",
-                parent_kind="TopologyDataCenter",
-                parent_id=dc_id,
-                parent_attr="vni_pool",
-            )
-            await self.upsert_number_pool(
-                pool_name=f"{self.fabric_name}-l3vni-pool",
-                description=f"L3 VNI pool for {self.fabric_name.upper()} VRFs",
-                start_range=50001,
-                end_range=59999,
-                node="BuiltinIPNamespace",
-                node_attribute="l3_vni",
-                parent_kind="TopologyDataCenter",
-                parent_id=dc_id,
-                parent_attr="l3_vni_pool",
-            )
+        # Create VNI and L3 VNI pools for the VXLAN-EVPN overlay
+        await self.upsert_number_pool(
+            pool_name=f"{self.fabric_name}-vni-pool",
+            description=f"L2 VNI pool for {self.fabric_name.upper()}",
+            start_range=10001,
+            end_range=16777215,
+            node="ManagedSegmentDeployment",
+            node_attribute="vni",
+            parent_kind="TopologyDataCenter",
+            parent_id=dc_id,
+            parent_attr="vni_pool",
+        )
+        await self.upsert_number_pool(
+            pool_name=f"{self.fabric_name}-l3vni-pool",
+            description=f"L3 VNI pool for {self.fabric_name.upper()} VRFs",
+            start_range=50001,
+            end_range=59999,
+            node="BuiltinIPNamespace",
+            node_attribute="l3_vni",
+            parent_kind="TopologyDataCenter",
+            parent_id=dc_id,
+            parent_attr="l3_vni_pool",
+        )
 
         super_spine_names: list[str] = []
         if design_mode == "back-to-back":

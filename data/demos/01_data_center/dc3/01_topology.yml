@@ -8,7 +8,6 @@ spec:
       index: 1
       design: S_OSPF_IBGP
       naming_convention: flat
-      overlay_technology: vxlan_evpn
       fabric_interface_sorting_method: top_down
       member_of_groups:
         - topologies_dc
@@ -19,13 +18,11 @@ spec:
             design: S_MIXED
             spine_template: PowerSwitch-S5232F-ON_SPINE
             amount_of_spines: 2
-            deployment_type: mixed
             member_of_groups:
               - topologies_pod
           - index: 2
             design: S_MIXED
             spine_template: PowerSwitch-S5232F-ON_SPINE
             amount_of_spines: 2
-            deployment_type: mixed
             member_of_groups:
               - topologies_pod

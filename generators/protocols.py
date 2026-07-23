@@ -668,7 +668,6 @@ class TopologyCloudZone(TopologyDeployment):
 class TopologyPod(TopologyDeployment, GeneratorTarget, TopologyRackHosting, TopologyDeviceHosting):
     amount_of_spines: Integer
     checksum: StringOptional
-    deployment_type: Dropdown
     index: Integer
     leaf_interface_sorting_method: Dropdown
     name: String

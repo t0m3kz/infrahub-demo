@@ -29,16 +29,26 @@ def _build_generator(
 
     from generators.models import PodDesign
 
+    # deployment_type is now derived from PodDesign's layout numbers
+    # (PodDesign.deployment_type): network_racks_per_row=0 -> tor;
+    # max_tors_per_compute_rack=0 (with network_racks_per_row>0) -> middle_rack;
+    # both nonzero -> mixed. Build a design encoding the requested type, except
+    # for the one "tor, no layout params given" case that intentionally leaves
+    # pod.design unset to exercise calculate_cabling_offsets' no-design fallback
+    # (RackPod.deployment_type falls back to "tor" when design is None, so that
+    # fallback stays consistent with a bare tor request).
     design = None
-    if maximum_tors_per_row is not None or rows != 1 or leafs_per_network_rack != 0:
-        tors_per_row = maximum_tors_per_row or 0
+    needs_design = (
+        deployment_type != "tor" or maximum_tors_per_row is not None or rows != 1 or leafs_per_network_rack != 0
+    )
+    if needs_design:
         design = PodDesign(
             id="design-1",
             name="test-design",
             rows=rows,
-            compute_racks_per_row=tors_per_row,
-            network_racks_per_row=1,
-            max_tors_per_compute_rack=1,
+            compute_racks_per_row=maximum_tors_per_row or 0,
+            network_racks_per_row=0 if deployment_type == "tor" else 1,
+            max_tors_per_compute_rack=0 if deployment_type == "middle_rack" else 1,
             max_leafs_per_network_rack=leafs_per_network_rack,
         )
 
@@ -50,7 +60,6 @@ def _build_generator(
         amount_of_spines=2,
         leaf_interface_sorting_method="top_down",
         spine_interface_sorting_method="bottom_up",
-        deployment_type=deployment_type,
         spine_template=Template(id="tmpl-spine"),
         design=design,
     )
@@ -97,9 +106,9 @@ def test_mixed_leaf_offset_scales_with_row(row_index: int, leafs_per_rack: int, 
 def test_mixed_tor_offset_scales_by_row_and_rack_index() -> None:
     """ToR offsets in mixed deployment account for both row and rack position."""
 
-    # rack_index=3, row_index=2, device_count=2, no design → tors_per_row fallback = device_count = 2
+    # rack_index=3, row_index=2, device_count=2, tors_per_row=2 (from design)
     # offset = (row_index-1) * tors_per_row + (rack_index-1) * device_count = 1*2 + 2*2 = 6
-    generator = _build_generator(deployment_type="mixed", rack_index=3, row_index=2)
+    generator = _build_generator(deployment_type="mixed", rack_index=3, row_index=2, maximum_tors_per_row=2)
     offset = generator.calculate_cabling_offsets(device_count=2, device_type="tor")
 
     assert offset == 6
@@ -239,14 +248,13 @@ def test_border_leaf_offset_starts_after_all_tors_or_leafs(
 @pytest.mark.parametrize(
     "row_index, rack_index, tors_per_row, device_count, expected",
     [
-        # With design: tors_per_row from design
+        # tors_per_row comes from the design (mixed deployment_type is only derivable
+        # when a design exists, so "mixed with no design" is no longer a reachable state)
         (1, 1, 18, 2, 0),  # first rack, first row → 0
         (1, 2, 18, 2, 2),  # second rack, first row → 2
         (1, 9, 18, 2, 16),  # last compute rack in row 1 (index 9+1=10 in mixed: network=1, compute=9)
         (2, 1, 18, 2, 18),  # first rack, second row → 1*18 + 0 = 18
         (2, 5, 18, 2, 26),  # row 2, rack 5 → 18 + 4*2 = 26
-        # Without design: falls back to device_count as tors_per_row
-        (2, 3, 0, 2, 6),  # no design: tors_per_row=2, (1)*2 + (2)*2 = 6
     ],
 )
 def test_mixed_tor_offset_row_and_rack(
@@ -262,7 +270,7 @@ def test_mixed_tor_offset_row_and_rack(
         deployment_type="mixed",
         rack_index=rack_index,
         row_index=row_index,
-        maximum_tors_per_row=tors_per_row if tors_per_row > 0 else None,
+        maximum_tors_per_row=tors_per_row,
     )
     offset = generator.calculate_cabling_offsets(device_count=device_count, device_type="tor")
 

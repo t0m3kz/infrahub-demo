@@ -15,7 +15,16 @@ from unittest.mock import AsyncMock, MagicMock, call, patch
 import pytest
 
 from generators.add.rack import RackGenerator
-from generators.models import DeviceRole, Interface, LocationSuiteModel, RackModel, RackParent, RackPod, Template
+from generators.models import (
+    DeviceRole,
+    Interface,
+    LocationSuiteModel,
+    PodDesign,
+    RackModel,
+    RackParent,
+    RackPod,
+    Template,
+)
 
 # ---------------------------------------------------------------------------
 # Helpers (shared with test_rack_offset_calculation.py)
@@ -23,6 +32,23 @@ from generators.models import DeviceRole, Interface, LocationSuiteModel, RackMod
 
 
 _DEFAULT_LEAF = DeviceRole(role="leaf", quantity=2, template=Template(id="tmpl-leaf"))
+
+
+def _design_for(deployment_type: str) -> PodDesign:
+    """Build a PodDesign whose layout derives the given deployment_type.
+
+    deployment_type is now a computed property (PodDesign.deployment_type),
+    derived from network_racks_per_row / max_tors_per_compute_rack — see
+    generators/models.py.
+    """
+    return PodDesign(
+        id="design-1",
+        name="test-design",
+        rows=1,
+        compute_racks_per_row=1,
+        network_racks_per_row=0 if deployment_type == "tor" else 1,
+        max_tors_per_compute_rack=0 if deployment_type == "middle_rack" else 1,
+    )
 
 
 def _build_rack_generator(
@@ -44,9 +70,8 @@ def _build_rack_generator(
         amount_of_spines=2,
         leaf_interface_sorting_method="top_down",
         spine_interface_sorting_method="bottom_up",
-        deployment_type=deployment_type,
         spine_template=Template(id="tmpl-spine"),
-        design=None,
+        design=_design_for(deployment_type),
     )
     suite = LocationSuiteModel(index=1)
     rack = RackModel(
@@ -116,7 +141,6 @@ class TestParseRackData:
                 "id": "pod-1",
                 "name": "pod-1",
                 "index": 1,
-                "deployment_type": "mixed",
                 "amount_of_spines": 2,
                 "leaf_interface_sorting_method": "top_down",
                 "spine_interface_sorting_method": "bottom_up",
@@ -161,7 +185,6 @@ class TestParseRackData:
                                     "id": "pod-2",
                                     "name": {"value": "pod-2"},
                                     "index": {"value": 2},
-                                    "deployment_type": {"value": "tor"},
                                     "amount_of_spines": {"value": 2},
                                     "leaf_interface_sorting_method": {"value": "bottom_up"},
                                     "spine_interface_sorting_method": {"value": "top_down"},

@@ -295,10 +295,8 @@ class RackGenerator(CommonGenerator):
 
         current_index = self.data.index
 
-        # Get deployment_type from pod and max_tors from design
+        # deployment_type and max_tors_per_row are both derived from pod.design
         pod = self.data.pod
-
-        # deployment_type is on pod, max_tors_per_row can be calculated from design
         deployment_type = pod.deployment_type
         if pod.design is None:
             self.logger.warning(
@@ -540,11 +538,7 @@ class RackGenerator(CommonGenerator):
         shape = "direct node data" if "name" in data and isinstance(data.get("name"), dict) else "query result"
         self.logger.info(f"Processing {shape}")
 
-        # Get deployment_type from design or fall back to legacy pod attribute
         pod = self.data.pod
-
-        # deployment_type is on the pod, not the design
-        # PodDesign contains physical layout, pod contains deployment decisions
         deployment_type = pod.deployment_type
 
         self.logger.info(
