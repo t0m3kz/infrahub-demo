@@ -18,8 +18,8 @@
 #   underlay: EBGP, OSPF
 #   overlay:  EBGP, IBGP
 #
-# naming_convention and overlay_technology live on TopologyDataCenter (per-DC choice),
-# not on the design (which defines routing architecture only).
+# naming_convention lives on TopologyDataCenter (per-DC choice), not on the
+# design (which defines routing architecture only).
 #
 # Prefix lengths are stored in the correct format for the design's underlay_protocol.
 # IPv4 designs use IPv4 prefix lengths; IPv6/dual-stack designs use IPv6 prefix lengths.

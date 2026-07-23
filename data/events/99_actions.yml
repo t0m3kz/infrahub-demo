@@ -89,18 +89,6 @@ spec:
           - attribute_name: amount_of_spines
             value_match: any
 
-    - name: trigger-pod-generator-update-deployment
-      branch_scope: "other_branches"
-      node_kind: TopologyPod
-      mutation_action: "updated"
-      action: run-pod-generator
-      matches:
-        kind: CoreNodeTriggerAttributeMatch
-        data:
-          - attribute_name: deployment_type
-            value_match: any
-
-
     # Auto-trigger for rack generator on creation commented out to
     # prevent race conditions. Rack updates are still active and safe
 

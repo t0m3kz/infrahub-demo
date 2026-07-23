@@ -8,7 +8,6 @@ spec:
     - index: 4
       design: M_MIDDLE
       amount_of_spines: 2
-      deployment_type: middle_rack
       spine_template: N9K-C9336C-FX2_SPINE
       parent: DC6
       member_of_groups:

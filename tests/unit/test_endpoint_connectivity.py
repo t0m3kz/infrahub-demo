@@ -27,11 +27,28 @@ from generators.models import (
 # Test Data Fixtures
 # ============================================================================
 
+
+def _design_for(deployment_type: str) -> dict:
+    """Build a PodDesign dict whose layout derives the given deployment_type.
+
+    deployment_type is now a computed property (PodDesign.deployment_type in
+    generators/models.py), derived from network_racks_per_row /
+    max_tors_per_compute_rack rather than stored directly on the pod.
+    """
+    return {
+        "id": "design-1",
+        "rows": 1,
+        "compute_racks_per_row": 1,
+        "network_racks_per_row": 0 if deployment_type == "tor" else 1,
+        "max_tors_per_compute_rack": 0 if deployment_type == "middle_rack" else 1,
+    }
+
+
 # Shared pod/dc context
 _POD_DATA = {
     "id": "pod-1",
     "name": "DC1-1-POD-1",
-    "deployment_type": "middle_rack",
+    "design": _design_for("middle_rack"),
     "index": 1,
     "parent": {"id": "dc-1", "name": "DC1"},
 }
@@ -66,7 +83,7 @@ def _make_endpoint_data(
     deployment_type: str = "middle_rack",
 ) -> dict:
     """Build a complete endpoint data dict for EndpointModel parsing."""
-    pod = {**_POD_DATA, "deployment_type": deployment_type}
+    pod = {**_POD_DATA, "design": _design_for(deployment_type)}
     rack = {
         **_RACK_BASE,
         "rack_type": rack_type,

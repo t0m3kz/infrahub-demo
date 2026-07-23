@@ -57,7 +57,6 @@ fragment DataCenterFields on TopologyDataCenter {
   index { value }
   amount_of_super_spines { value }
   naming_convention { value }
-  overlay_technology { value }
   fabric_interface_sorting_method { value }
   super_spine_template { node { ...SuperSpineTemplateFields } }
   design {
@@ -92,10 +91,7 @@ query topology_pod($name: String!) {
         name { value }
         checksum { value }
         index { value }
-        # New three-layer architecture
         design { node { ...PodDesignFields } }
-        # Legacy attributes (for backward compatibility)
-        deployment_type { value }
         amount_of_spines { value }
         leaf_interface_sorting_method { value }
         spine_interface_sorting_method { value }

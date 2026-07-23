@@ -128,7 +128,7 @@ class EndpointConnectivityGenerator(CommonGenerator):
             await self._connect_to_border_leaf(dc_id=dc.id, bl_port_role=bl_port_role)
             return
 
-        # Access deployment_type directly from pod (not through design)
+        # deployment_type is derived from pod.design's layout (EndpointPod.deployment_type)
         deployment_type = self.data.rack.pod.deployment_type
         self.pod_name = self.data.rack.pod.name.lower()
         pod_id = self.data.rack.pod.id

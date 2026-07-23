@@ -420,23 +420,6 @@ nodes:
             description: "dcroleNNNN (no separators)"
             color: "#BF7FBF"
 
-      - name: overlay_technology
-        label: "Overlay Technology"
-        description: "Data plane overlay technology for the fabric"
-        kind: Dropdown
-        optional: true
-        default_value: vxlan_evpn
-        order_weight: 1100
-        choices:
-          - name: none
-            label: "None (traditional L2/L3)"
-            description: "Pure 802.1Q VLANs, no overlay"
-            color: "#95A5A6"
-          - name: vxlan_evpn
-            label: "VXLAN-EVPN"
-            description: "VXLAN data plane with EVPN control plane"
-            color: "#2ECC71"
-
       - name: fabric_interface_sorting_method
         kind: Dropdown
         label: Fabric interface assignment
@@ -619,24 +602,6 @@ nodes:
         parameters:
           min_value: 1
           max_value: 8
-      - name: deployment_type
-        kind: Dropdown
-        optional: true
-        order_weight: 150
-        choices:
-          - name: middle_rack
-            label: Middle Rack
-            description: Middle Rack deployment
-            color: "#7f7fff"
-          - name: tor
-            label: Top of Rack
-            description: Top of Rack deployment
-            color: "#bf7fbf"
-          - name: mixed
-            label: ToR and Middle Rack
-            description: Mix of ToR and Middle Rack deployment
-            color: "#bf7f7f"
-        default_value: tor
       - name: leaf_interface_sorting_method
         kind: Dropdown
         choices:

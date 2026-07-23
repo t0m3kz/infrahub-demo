@@ -41,7 +41,6 @@ class PodTopologyGenerator(CommonGenerator):
         # backward compatibility (e.g., if called without running full generate()).
         pod_checksum = self.calculate_checksum()
 
-        # Get deployment type from pod (design doesn't have deployment_type)
         deployment_type = self.data.deployment_type
 
         for rack in racks:

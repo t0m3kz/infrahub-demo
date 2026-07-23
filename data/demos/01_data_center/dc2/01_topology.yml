@@ -8,7 +8,6 @@ spec:
       index: 2
       design: S_OSPF_IBGP
       naming_convention: hierarchical
-      overlay_technology: vxlan_evpn
       fabric_interface_sorting_method: top_down
       member_of_groups:
         - topologies_dc
@@ -19,13 +18,11 @@ spec:
             design: S_MIDDLE
             spine_template: DCS-7050CX3-32C-R_SPINE
             amount_of_spines: 2
-            deployment_type: middle_rack
             member_of_groups:
               - topologies_pod
           - index: 2
             design: S_MIDDLE
             spine_template: DCS-7050CX3-32C-R_SPINE
             amount_of_spines: 2
-            deployment_type: middle_rack
             member_of_groups:
               - topologies_pod
