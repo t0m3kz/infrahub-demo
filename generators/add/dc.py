@@ -96,6 +96,11 @@ class DCTopologyGenerator(CommonGenerator):
 
         # Collect pools that already exist on the DC instance — those are reused as-is.
         # Only pools that are absent need to be allocated from the design defaults.
+        # self.data.<attr>_pool is a plain Pydantic Pool model (id/name only, parsed
+        # from the GraphQL query) — not a real SDK node, so it has no .get_kind().
+        # Store just the id (matching pod.py/rack.py's own management_pool_id pattern)
+        # so downstream _resolve_pool() correctly re-fetches the real SDK object via
+        # client.get(id=...) instead of treating this as an already-resolved node.
         existing_dc_pools: dict[str, Any] = {}
         pool_name_to_attr = {
             "technical": "technical_pool",
@@ -105,7 +110,7 @@ class DCTopologyGenerator(CommonGenerator):
         for pool_key, attr in pool_name_to_attr.items():
             existing = getattr(self.data, attr, None)
             if existing:
-                existing_dc_pools[pool_key] = existing
+                existing_dc_pools[pool_key] = existing.id
 
         pools_to_allocate: dict[str, int] = {}
         for pool_key, prefix in [
