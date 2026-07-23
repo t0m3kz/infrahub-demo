@@ -1,0 +1,37 @@
+!
+! {{ name }} Configuration
+!
+hostname {{ name }}
+!
+feature interface-vlan
+feature lacp
+feature vpc
+feature lldp
+!
+{%- include 'common/cisco_nxos_vpc.j2' %}
+! VLANs
+{%- for vlan in vlans %}
+vlan {{ vlan.vlan_id }}
+  name {{ vlan.name }}
+!
+{%- endfor %}
+!
+! Interfaces
+{%- for interface in interfaces if interface.role != 'mlag-peer' %}
+interface {{ interface.name }}
+{%- if interface.status == 'active' %}
+  no shutdown
+{%- endif %}
+{%- include 'common/cisco_nxos_interface_ip.j2' %}
+{%- if interface.vlans %}
+  switchport
+  switchport mode access
+  switchport access vlan {{ interface.vlans[0] }}
+{%- endif %}
+!
+{%- endfor %}
+!
+! Management
+line console
+line vty
+!

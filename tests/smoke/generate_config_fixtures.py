@@ -23,6 +23,7 @@ from unittest.mock import AsyncMock, MagicMock
 from transforms.config.border_leaf import BorderLeaf
 from transforms.config.edge import Edge
 from transforms.config.firewall import Firewall
+from transforms.config.l2_leaf import L2Leaf
 from transforms.config.leaf import Leaf
 from transforms.config.proxy import Proxy
 from transforms.config.spine import Spine
@@ -1261,6 +1262,9 @@ def run_transform(transform_cls: type, data: dict) -> str:
 # ============================================================================
 
 FABRIC_PLATFORMS = ["arista_eos", "cisco_nxos", "dell_sonic", "nokia_sros", "sonic"]
+# l2-leafs are pure L2 aggregation — no Nokia SROS template exists for this role
+# (not used by any l2-leaf design element in this project's data).
+L2_LEAF_PLATFORMS = ["arista_eos", "cisco_nxos", "dell_sonic", "sonic"]
 SCENARIOS = ["ebgp_ibgp", "ospf_ibgp"]
 # ACL smoke tests: leaf only (ACLs are rendered on VLAN SVIs, a leaf concern)
 ACL_PLATFORMS = FABRIC_PLATFORMS
@@ -1272,6 +1276,7 @@ DEVICE_CONFIGS: list[tuple[type, str, str, list[str]]] = [
     (SuperSpine, "super_spine", "super_spine", FABRIC_PLATFORMS),
     (BorderLeaf, "border_leaf", "border_leaf", FABRIC_PLATFORMS),
     (ToR, "tor", "tor", FABRIC_PLATFORMS),
+    (L2Leaf, "l2-leaf", "l2_leaf", L2_LEAF_PLATFORMS),
     (Edge, "edge", "edge", ["cisco_nxos", "cisco_ios"]),
 ]
 
@@ -1337,7 +1342,7 @@ def main() -> None:
                     role=role,
                     platform=platform,
                     scenario=scenario,
-                    include_segments=role in ("leaf", "tor", "border_leaf"),
+                    include_segments=role in ("leaf", "tor", "border_leaf", "l2-leaf"),
                 )
                 generated += g
                 errors += e

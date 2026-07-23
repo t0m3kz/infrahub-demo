@@ -21,6 +21,7 @@ from transforms.cloud.vpc_terraform import CloudVpcTerraform
 from transforms.config.border_leaf import BorderLeaf
 from transforms.config.edge import Edge
 from transforms.config.firewall import Firewall
+from transforms.config.l2_leaf import L2Leaf
 from transforms.config.leaf import Leaf
 from transforms.config.proxy import Proxy
 from transforms.config.spine import Spine
@@ -30,7 +31,8 @@ from transforms.config.tor import ToR
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 CONFIGS_DIR = Path(__file__).resolve().parent / "configs"
 
-# Sorted longest-first so "super_spine" matches before "spine", "border_leaf" before "leaf"
+# Sorted longest-first so "super_spine" matches before "spine", "border_leaf" before "leaf",
+# "l2_leaf" before "leaf"
 _PREFIX_TO_CLASS: list[tuple[str, type]] = sorted(
     [
         ("super_spine", SuperSpine),
@@ -39,6 +41,7 @@ _PREFIX_TO_CLASS: list[tuple[str, type]] = sorted(
         ("firewall", Firewall),
         ("spine", Spine),
         ("proxy", Proxy),
+        ("l2_leaf", L2Leaf),
         ("leaf", Leaf),
         ("tor", ToR),
         ("edge", Edge),

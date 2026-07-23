@@ -42,7 +42,7 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(
 SCENARIO_NAME = "Scenario 2: Add Switch to Rack"
 BRANCH_NAME = "dc1-add-switch"
 
-MIN_GROWTH_BY_ROLE = {"leaf": 0, "tor": 1, "spine": 0, "super-spine": 0}
+MIN_GROWTH_BY_ROLE = {"leaf": 0, "tor": 0, "l2-leaf": 1, "spine": 0, "super-spine": 0}
 
 
 def _assert_growth(branch: str, current: dict[str, int], baseline: dict[str, int]) -> None:
@@ -86,7 +86,7 @@ class TestDC1AddSwitch(TestInfrahubDockerWithClient):
         role_counts = await snapshot_device_counts_by_role(
             client=async_client_main,
             branch="main",
-            roles=["spine", "leaf", "tor", "super-spine"],
+            roles=["spine", "leaf", "tor", "l2-leaf", "super-spine"],
         )
 
         assert baseline, "No baseline ToR underlay ASN values found in main before Scenario 2"

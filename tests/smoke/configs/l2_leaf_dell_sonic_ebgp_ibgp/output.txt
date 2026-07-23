@@ -1,0 +1,25 @@
+! Hostname configuration
+hostname dc1-l2-leaf-01
+
+! Enable required features
+feature interface-vlan
+interface Ethernet1
+  description to spine-01
+  ip address 10.1.0.1/31
+  no shutdown
+!
+
+interface Ethernet2
+  description to spine-02
+  ip address 10.1.0.3/31
+  no shutdown
+!
+
+interface Loopback0
+  description Router ID
+  ip address 10.0.0.1/32
+  no shutdown
+!
+
+
+! End of configuration
