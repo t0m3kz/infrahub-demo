@@ -871,8 +871,9 @@ class RackGenerator(CommonGenerator):
                     strategy="intra_rack_middle",
                     options=CablingOptions(
                         cabling_offset=0,
-                        pool=self._technical_pool_id,
-                        p2p_prefix_length=self._p2p_prefix_length,
+                        # No pool: l2-leaf<->leaf links are 802.1Q trunks (L2-only), not
+                        # routed P2P links — no IP address belongs on either end.
+                        pool=None,
                     ),
                 )
             else:
@@ -904,8 +905,9 @@ class RackGenerator(CommonGenerator):
                     strategy="intra_rack_mixed",
                     options=CablingOptions(
                         cabling_offset=cabling_offset,
-                        pool=self._technical_pool_id,
-                        p2p_prefix_length=self._p2p_prefix_length,
+                        # No pool: l2-leaf<->leaf links are 802.1Q trunks (L2-only), not
+                        # routed P2P links — no IP address belongs on either end.
+                        pool=None,
                     ),
                 )
 

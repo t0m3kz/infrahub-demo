@@ -4,7 +4,7 @@ from typing import Any
 
 from infrahub_sdk.checks import InfrahubCheck
 
-from .common import get_data, validate_interfaces
+from .common import get_data, validate_interfaces, validate_routing_password
 
 
 class CheckToR(InfrahubCheck):
@@ -17,6 +17,7 @@ class CheckToR(InfrahubCheck):
         errors: list[str] = []
         data = get_data(data)
         errors.extend(validate_interfaces(data))
+        errors.extend(validate_routing_password(data))
         # if not data.get("device_capabilities", []):
         #     errors.append("No overlay/ underlay services.")
         # else:
