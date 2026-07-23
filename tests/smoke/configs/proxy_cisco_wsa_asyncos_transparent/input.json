@@ -1,0 +1,157 @@
+{
+  "DcimPhysicalDevice": {
+    "edges": [
+      {
+        "node": {
+          "__typename": "DcimPhysicalDevice",
+          "id": "dev-DC3-PRX-01",
+          "name": {
+            "value": "DC3-PRX-01"
+          },
+          "role": {
+            "value": "proxy"
+          },
+          "platform": {
+            "node": {
+              "id": "plat-cisco_wsa_asyncos",
+              "name": {
+                "value": "cisco_wsa_asyncos"
+              },
+              "netmiko_device_type": {
+                "value": "cisco_wsa_asyncos"
+              },
+              "napalm_driver": {
+                "value": "cisco_wsa_asyncos"
+              },
+              "ansible_network_os": {
+                "value": "cisco_wsa_asyncos"
+              }
+            }
+          },
+          "primary_address": {
+            "node": null
+          },
+          "tags": {
+            "edges": []
+          },
+          "capabilities": {
+            "edges": [
+              {
+                "node": {
+                  "__typename": "ManagedProxyHA",
+                  "name": {
+                    "value": "DC3-PRX-01-HA"
+                  },
+                  "group_id": {
+                    "value": 1
+                  },
+                  "mode": {
+                    "value": "active-passive"
+                  },
+                  "priority": {
+                    "value": 100
+                  },
+                  "preempt": {
+                    "value": false
+                  },
+                  "proxy_type": {
+                    "value": "transparent"
+                  },
+                  "proxy_vendor": {
+                    "value": "cisco_wsa"
+                  },
+                  "capabilities": {
+                    "edges": [
+                      {
+                        "node": {
+                          "name": {
+                            "value": "DC3-PRX-01"
+                          }
+                        }
+                      },
+                      {
+                        "node": {
+                          "name": {
+                            "value": "DC3-PRX-02"
+                          }
+                        }
+                      }
+                    ]
+                  }
+                }
+              }
+            ]
+          },
+          "interfaces": {
+            "edges": [
+              {
+                "node": {
+                  "__typename": "DcimPhysicalInterface",
+                  "name": {
+                    "value": "mgmt"
+                  },
+                  "description": {
+                    "value": "OOB management"
+                  },
+                  "status": {
+                    "value": "active"
+                  },
+                  "role": {
+                    "value": "management"
+                  },
+                  "ip_address": {
+                    "node": {
+                      "address": {
+                        "value": "192.168.1.1/24"
+                      }
+                    }
+                  }
+                }
+              },
+              {
+                "node": {
+                  "__typename": "DcimPhysicalInterface",
+                  "name": {
+                    "value": "eth0"
+                  },
+                  "description": {
+                    "value": "Ingress uplink"
+                  },
+                  "status": {
+                    "value": "active"
+                  },
+                  "role": {
+                    "value": "uplink"
+                  },
+                  "ip_address": {
+                    "node": null
+                  }
+                }
+              },
+              {
+                "node": {
+                  "__typename": "DcimPhysicalInterface",
+                  "name": {
+                    "value": "eth1"
+                  },
+                  "description": {
+                    "value": "Egress uplink"
+                  },
+                  "status": {
+                    "value": "active"
+                  },
+                  "role": {
+                    "value": "uplink"
+                  },
+                  "ip_address": {
+                    "node": null
+                  }
+                }
+              }
+            ]
+          }
+        }
+      }
+    ]
+  }
+}
