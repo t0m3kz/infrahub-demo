@@ -14,6 +14,8 @@ spec:
       description: All ToR switches (VTEP — tor-deployment, connects to spines)
     - name: l2-leafs
       description: All L2-leaf switches (L2-only aggregation — middle_rack/mixed, connects to leafs)
+    - name: access-leafs
+      description: All access-leaf switches (VXLAN-EVPN VTEP — connects to leafs, not spines)
     - name: border-leafs
       description: All border leafs
     - name: spines

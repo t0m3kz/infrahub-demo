@@ -382,6 +382,7 @@ class RackModel(BaseModel):
     leafs: Optional[List[DeviceRole]] = []
     tors: Optional[List[DeviceRole]] = []
     l2_leafs: Optional[List[DeviceRole]] = []
+    access_leafs: Optional[List[DeviceRole]] = []
     border_leafs: Optional[List[DeviceRole]] = []
     pod: RackPod
 

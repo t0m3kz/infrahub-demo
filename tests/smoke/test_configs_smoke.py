@@ -18,6 +18,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from transforms.cloud.vpc_terraform import CloudVpcTerraform
+from transforms.config.access_leaf import AccessLeaf
 from transforms.config.border_leaf import BorderLeaf
 from transforms.config.edge import Edge
 from transforms.config.firewall import Firewall
@@ -32,7 +33,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 CONFIGS_DIR = Path(__file__).resolve().parent / "configs"
 
 # Sorted longest-first so "super_spine" matches before "spine", "border_leaf" before "leaf",
-# "l2_leaf" before "leaf"
+# "l2_leaf"/"access_leaf" before "leaf"
 _PREFIX_TO_CLASS: list[tuple[str, type]] = sorted(
     [
         ("super_spine", SuperSpine),
@@ -42,6 +43,7 @@ _PREFIX_TO_CLASS: list[tuple[str, type]] = sorted(
         ("spine", Spine),
         ("proxy", Proxy),
         ("l2_leaf", L2Leaf),
+        ("access_leaf", AccessLeaf),
         ("leaf", Leaf),
         ("tor", ToR),
         ("edge", Edge),

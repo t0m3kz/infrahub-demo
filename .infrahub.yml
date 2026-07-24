@@ -42,6 +42,13 @@ artifact_definitions:
     transformation: l2_leaf
     parameters:
       device: name__value
+  - name: access_leaf_config
+    artifact_name: access-leaf
+    content_type: text/plain
+    targets: access-leafs
+    transformation: access_leaf
+    parameters:
+      device: name__value
   - name: spine_config
     artifact_name: spine
     content_type: text/plain
@@ -162,6 +169,12 @@ check_definitions:
     targets: tors
     parameters:
       device: name__value
+  - name: validate_access_leaf
+    class_name: CheckAccessLeaf
+    file_path: checks/access_leaf.py
+    targets: access-leafs
+    parameters:
+      device: name__value
   - name: validate_border_leaf
     class_name: CheckBorderLeaf
     file_path: checks/border_leaf.py
@@ -200,6 +213,9 @@ python_transforms:
   - name: l2_leaf
     class_name: L2Leaf
     file_path: transforms/config/l2_leaf.py
+  - name: access_leaf
+    class_name: AccessLeaf
+    file_path: transforms/config/access_leaf.py
   - name: spine
     class_name: Spine
     file_path: transforms/config/spine.py
