@@ -1,7 +1,6 @@
 """Infrastructure generator for pod topology creation."""
 
 import asyncio
-import random
 from typing import Any, Literal, cast
 
 from utils.data_cleaning import clean_data
@@ -13,11 +12,6 @@ from ..protocols import DcimPhysicalDevice, DcimPhysicalInterface, LocationRack,
 
 _SIBLING_SPINE_MAX_RETRIES = 10
 _SIBLING_SPINE_RETRY_DELAY = 3.0
-
-
-def _retry_delay(base: float, attempt: int, cap: float = 20.0, jitter: float = 0.25) -> float:
-    """Jittered exponential backoff for sibling readiness retries."""
-    return min(base * (2**attempt), cap) + random.uniform(0, jitter)
 
 
 class PodTopologyGenerator(CommonGenerator):
@@ -48,10 +42,11 @@ class PodTopologyGenerator(CommonGenerator):
         pod_checksum = self.calculate_checksum()
 
         deployment_type = self.data.deployment_type
+        related_node_ids = self.client.group_context.related_node_ids
 
         for rack in racks:
             # Always add to group context to prevent deletion
-            self.client.group_context.related_node_ids.append(rack.id)
+            related_node_ids.append(rack.id)
 
             # Determine if this rack's checksum should be updated based on deployment type
             # For mixed: only update network racks (ToR racks inherit from middle racks after leafs are created)
@@ -370,7 +365,7 @@ class PodTopologyGenerator(CommonGenerator):
                     if sibling_uplink_names:
                         break
                 if attempt < _SIBLING_SPINE_MAX_RETRIES - 1:
-                    delay = _retry_delay(_SIBLING_SPINE_RETRY_DELAY, attempt)
+                    delay = self._retry_delay(_SIBLING_SPINE_RETRY_DELAY, attempt)
                     self.logger.info(
                         f"Pod {self.data.name}: sibling pod idx={sibling.index.value} spines/uplinks not ready yet — "
                         f"retrying in {delay:.2f}s (attempt {attempt + 1}/{_SIBLING_SPINE_MAX_RETRIES})"

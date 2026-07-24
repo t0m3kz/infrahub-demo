@@ -22,6 +22,7 @@ from .cabling import (
     PodCablingStrategy,
     RackCablingStrategy,
 )
+from .common import retry_delay
 from .interface_naming import get_lag_name, get_loopback_name
 from .naming import DeviceNamingConfig
 from .pools import (
@@ -56,6 +57,7 @@ __all__ = [
     "calculate_fabric_asn_block_size",
     "calculate_super_spine_loopback_prefix",
     "name_to_asn_range",
+    "retry_delay",
     # Interfaces
     "InterfaceSpeedMatcher",
     "CableTypeDetector",

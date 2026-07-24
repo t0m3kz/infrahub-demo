@@ -43,7 +43,7 @@ class CheckProxy(InfrahubCheck):
 
         # Proxy should always be in an HA pair
         capabilities = device.get("capabilities") or []
-        ha_domains = [c for c in capabilities if c.get("__typename") == "ManagedProxyHA"]
+        ha_domains = [c for c in capabilities if c.get("typename") == "ManagedProxyHA"]
         if not ha_domains:
             self.log_error(message=f"Device '{device_name}' has no HA domain — standalone proxy has no redundancy")
         else:

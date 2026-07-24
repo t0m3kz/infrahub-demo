@@ -4,6 +4,8 @@ Tests verify correct BGP session building, peer group assignment,
 and route reflector client detection from peering_interfaces data.
 """
 
+import pytest
+
 from transforms.common import _build_peer_groups, _build_session_from_peering, get_bgp_profile
 from transforms.helpers.bgp import _extract_remote_asn_from_peering
 
@@ -206,21 +208,40 @@ class TestBuildSessionFromPeering:
         assert session is not None
         assert session["remote_as"] == local_as
 
-    def test_invalid_peering_interfaces_returns_none(self):
-        """Peering with wrong number of interfaces returns None."""
+    def test_invalid_peering_interfaces_raises_value_error(self):
+        """Malformed peerings must fail loudly instead of being silently dropped."""
         peering = {
             "name": "bad",
             "session_type": "EBGP",
             "ttl": 1,
             "interface_capabilities": [{"device": {"name": "leaf-01"}}],  # only 1
         }
-        session = _build_session_from_peering(
-            peering,
-            device_name="leaf-01",
-            local_as=None,
-            interfaces=None,
-        )
-        assert session is None
+        with pytest.raises(ValueError, match="expected 2 interface_capabilities"):
+            _build_session_from_peering(
+                peering,
+                device_name="leaf-01",
+                local_as=None,
+                interfaces=None,
+            )
+
+    def test_invalid_local_remote_mapping_raises_value_error(self):
+        """Two interfaces that don't map local+remote for this device are malformed."""
+        peering = {
+            "name": "bad-mapping",
+            "session_type": "IBGP",
+            "ttl": 255,
+            "interface_capabilities": [
+                {"device": {"name": "spine-01"}, "ip_address": {"address": "10.0.0.1/32"}},
+                {"device": {"name": "spine-02"}, "ip_address": {"address": "10.0.0.2/32"}},
+            ],
+        }
+        with pytest.raises(ValueError, match="missing local/remote interface mapping"):
+            _build_session_from_peering(
+                peering,
+                device_name="leaf-01",
+                local_as={"asn": 65000},
+                interfaces=None,
+            )
 
     def test_overlay_address_families_evpn(self):
         peering = _make_peering(

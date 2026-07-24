@@ -38,8 +38,7 @@ class DCTopologyGenerator(CommonGenerator):
             self.logger.info(f"Checksum updated: {pod.name.value} → {fabric_checksum} (triggers pod re-generation)")
 
         self.logger.info(
-            f"DC checksum propagation completed: {len([p for p in pods if p.checksum.value == fabric_checksum])} "
-            f"pod(s) updated to checksum {fabric_checksum}"
+            f"DC checksum propagation completed: {len(pods_to_update)} pod(s) updated to checksum {fabric_checksum}"
         )
 
     async def generate(self, data: dict[str, Any]) -> None:
@@ -60,8 +59,9 @@ class DCTopologyGenerator(CommonGenerator):
 
         # Add existing pods to group context to prevent deletion
         existing_pods = await self.client.filters(kind=TopologyPod, parent__ids=[self.data.id])
+        related_node_ids = self.client.group_context.related_node_ids
         for pod in existing_pods:
-            self.client.group_context.related_node_ids.append(pod.id)
+            related_node_ids.append(pod.id)
 
         dc_id = self.data.id
         self.deployment_id = dc_id  # Store for cable linking
@@ -360,7 +360,7 @@ class DCTopologyGenerator(CommonGenerator):
                     },
                 )
                 await area_obj.save(allow_upsert=True)
-                self.logger.info(f"Created shared OSPF area: {area_name} ({area_obj.id})")
                 self.client.group_context.related_node_ids.append(area_obj.id)
+                self.logger.info(f"Created shared OSPF area: {area_name}")
             except Exception as e:
                 self.logger.error(f"Failed to create shared OSPF area: {e}")

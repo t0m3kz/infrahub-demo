@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-import random
 from typing import TYPE_CHECKING, Any
 
 from infrahub_sdk.exceptions import GraphQLError
@@ -12,6 +11,7 @@ if TYPE_CHECKING:
     import logging
 
 from .helpers import PendingASRef, RoutingPlanInput, RoutingPlanner, RoutingStrategy
+from .helpers.common import retry_delay
 from .helpers.routing import _safe_device_name
 from .protocols import (
     DcimVirtualInterface,
@@ -30,11 +30,6 @@ _PEERING_SAVE_MAX_RETRIES = 5
 _PEERING_SAVE_RETRY_DELAY = 2.0
 _OVERLAY_BGP_MAX_RETRIES = 5
 _OVERLAY_BGP_RETRY_DELAY = 3.0
-
-
-def _retry_delay(base: float, attempt: int, cap: float = 20.0, jitter: float = 0.25) -> float:
-    """Jittered exponential backoff used by transient race-retry loops."""
-    return min(base * (2**attempt), cap) + random.uniform(0, jitter)
 
 
 async def _save_peering_with_retry(obj: Any, logger: logging.Logger) -> None:
@@ -62,7 +57,7 @@ async def _save_peering_with_retry(obj: Any, logger: logging.Logger) -> None:
                 raise
             if attempt == _PEERING_SAVE_MAX_RETRIES - 1:
                 raise
-            delay = _retry_delay(_PEERING_SAVE_RETRY_DELAY, attempt)
+            delay = retry_delay(_PEERING_SAVE_RETRY_DELAY, attempt)
             logger.info(
                 f"  NODE_NOT_FOUND saving {name} (referenced node not yet visible — "
                 f"likely concurrent write contention on a shared process) — "
@@ -184,7 +179,7 @@ class RoutingMixin:
             options.get("underlay_password_id"),
             options.get("overlay_password_id"),
         ]:
-            if shared_id and shared_id not in self.client.group_context.related_node_ids:
+            if shared_id:
                 self.client.group_context.related_node_ids.append(shared_id)
 
         # ================================================================
@@ -225,7 +220,7 @@ class RoutingMixin:
             if not missing:
                 break
             if attempt < _OVERLAY_BGP_MAX_RETRIES - 1:
-                delay = _retry_delay(_OVERLAY_BGP_RETRY_DELAY, attempt)
+                delay = retry_delay(_OVERLAY_BGP_RETRY_DELAY, attempt)
                 self.logger.info(
                     f"Overlay BGP not yet visible for top device(s) {sorted(missing)} — "
                     f"retrying in {delay:.2f}s "
@@ -383,8 +378,7 @@ class RoutingMixin:
             existing_id = as_dict.get("_existing_id")
 
             if existing_id:
-                if existing_id not in self.client.group_context.related_node_ids:
-                    self.client.group_context.related_node_ids.append(existing_id)
+                self.client.group_context.related_node_ids.append(existing_id)
                 device_to_as_id[device_name] = existing_id
                 self.logger.info(f"  Tracked existing AS for {device_name}")
             else:
@@ -411,8 +405,7 @@ class RoutingMixin:
             )
             if existing:
                 node_id = existing[0].id
-                if node_id not in self.client.group_context.related_node_ids:
-                    self.client.group_context.related_node_ids.append(node_id)
+                self.client.group_context.related_node_ids.append(node_id)
                 return node_id
         except Exception as exc:
             self.logger.debug(f"Could not query RoutingBGPAddressFamily: {exc}")

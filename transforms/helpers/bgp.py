@@ -76,15 +76,19 @@ def _build_session_from_peering(
     """Build a BGP session dict from a peering node using interfaces.
 
     Determines local vs remote by matching device name in interfaces.
-    Returns None if the peering cannot be processed.
+    Returns None only for valid "skip" conditions (for example no physical
+    underlay path, or unresolved remote ASN on eBGP session).
 
-    If ``warnings`` is provided (a list), a message is appended for each
-    peering that is silently dropped due to missing interface_capabilities.
+    Raises:
+        ValueError: When peering data shape is malformed.
     """
     # Get interfaces (2 entries: local + remote)
     peering_ifaces = peering_node.get("interface_capabilities", [])
     if not isinstance(peering_ifaces, list) or len(peering_ifaces) != 2:
-        return None
+        raise ValueError(
+            f"Overlay peering '{peering_node.get('name')}' expected 2 interface_capabilities, "
+            f"got {len(peering_ifaces) if isinstance(peering_ifaces, list) else 'invalid'}"
+        )
 
     # Determine local vs remote interface by device name
     local_iface = None
@@ -97,11 +101,9 @@ def _build_session_from_peering(
             remote_iface = iface
 
     if not local_iface or not remote_iface:
-        if warnings is not None:
-            warnings.append(
-                f"Overlay peering '{peering_node.get('name')}' dropped — no interface_capabilities for {device_name}"
-            )
-        return None
+        raise ValueError(
+            f"Overlay peering '{peering_node.get('name')}' missing local/remote interface mapping for {device_name}"
+        )
 
     password_rel = peering_node.get("password") or {}
     session: dict[str, Any] = {
