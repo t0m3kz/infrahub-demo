@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import ipaddress
+import random
 from typing import Any, Literal
 
 from infrahub_sdk.exceptions import ValidationError
@@ -519,6 +520,8 @@ class CommonGenerator(FailOnErrorLoggerMixin, RoutingMixin, InfrahubGenerator):
         # Templates are applied asynchronously; a fixed sleep is fragile under load.
         _MAX_RETRIES = 10
         _RETRY_DELAY = 3.0
+        _RETRY_CAP = 20.0
+        _RETRY_JITTER = 0.25
         src_interfaces: list = []
         dst_interfaces: list = []
         for _attempt in range(_MAX_RETRIES):
@@ -536,11 +539,13 @@ class CommonGenerator(FailOnErrorLoggerMixin, RoutingMixin, InfrahubGenerator):
             )
             if src_interfaces and dst_interfaces:
                 break
+            delay = min(_RETRY_DELAY * (2**_attempt), _RETRY_CAP) + random.uniform(0, _RETRY_JITTER)
             self.logger.info(
                 f"Interfaces not ready yet (src={len(src_interfaces)}, dst={len(dst_interfaces)}) — "
-                f"retrying in {_RETRY_DELAY}s (attempt {_attempt + 1}/{_MAX_RETRIES})"
+                f"retrying in {delay:.2f}s (attempt {_attempt + 1}/{_MAX_RETRIES})"
             )
-            await asyncio.sleep(_RETRY_DELAY)
+            if _attempt < _MAX_RETRIES - 1:
+                await asyncio.sleep(delay)
 
         if not src_interfaces or not dst_interfaces:
             self.logger.error(

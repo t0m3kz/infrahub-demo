@@ -4,16 +4,30 @@ import asyncio
 from pathlib import Path
 from typing import Literal, cast
 
-from utils.data_cleaning import clean_data
-
 from ..common import CablingOptions, CommonGenerator, DeviceOptions, RoutingOptions
 from ..helpers import DeviceNamingConfig
+from ..helpers.rack import calculate_cabling_offsets as calculate_rack_cabling_offsets
+from ..helpers.rack import (
+    expected_device_names,
+    parse_rack_data,
+    rack_sort_key,
+)
 from ..models import RackModel
 from ..protocols import DcimPhysicalDevice, DcimPhysicalInterface, LocationRack
 
 
 class RackGenerator(CommonGenerator):
     """Generator for creating rack infrastructure based on fabric templates."""
+
+    @staticmethod
+    def _rack_sort_key(rack: LocationRack) -> tuple[int, int, str]:
+        """Compatibility wrapper retained for existing tests/callers."""
+        return rack_sort_key(rack)
+
+    @staticmethod
+    def _parse_rack_data(data: dict) -> RackModel:
+        """Compatibility wrapper retained for existing tests/callers."""
+        return parse_rack_data(data)
 
     async def fetch_rack_devices_with_interfaces(
         self,
@@ -103,8 +117,14 @@ class RackGenerator(CommonGenerator):
             pod__ids=[self.data.pod.id],
             row_index__value=self.data.row_index,
         )
-        network_racks = [r for r in row_racks if r.rack_type.value == "network"]
-        tor_racks = [r for r in row_racks if r.rack_type.value == "tor"]
+        network_racks = sorted(
+            (r for r in row_racks if r.rack_type.value == "network"),
+            key=rack_sort_key,
+        )
+        tor_racks = sorted(
+            (r for r in row_racks if r.rack_type.value == "tor"),
+            key=rack_sort_key,
+        )
 
         if not network_racks:
             self.logger.warning(
@@ -346,135 +366,16 @@ class RackGenerator(CommonGenerator):
         leafs_per_rack: int = 0,
         total_tors_in_pod: int | None = None,
     ) -> int:
-        """Calculate cabling offset using simple formula based on rack position."""
-
-        current_index = self.data.index
-
-        # deployment_type and max_tors_per_row are both derived from pod.design
-        pod = self.data.pod
-        deployment_type = pod.deployment_type
-        if pod.design is None:
-            self.logger.warning(
-                f"Rack {self.data.name}: pod '{pod.name}' has no design set — "
-                "falling back to max_tors_per_row=8 for offset calculation. "
-                "Run pod generator first for accurate cabling."
-            )
-            max_tors_per_row = 8
-        else:
-            max_tors_per_row = pod.design.compute_racks_per_row * pod.design.max_tors_per_compute_rack
-
-        # For middle_rack deployment ToRs: always offset=0 (ToRs connect to leafs in same rack)
-        if deployment_type == "middle_rack" and device_type == "tor":
-            offset = 0
-            self.logger.info(
-                f"Calculated {device_type} offset={offset} for rack {self.data.name} "
-                f"(mode=middle_rack) - intra-rack cabling"
-            )
-
-        # For mixed deployment ToRs: static offset based on row + rack index
-        # Formula: (row_index - 1) × tors_per_row + (rack_index - 1) × tors_per_rack
-        elif deployment_type == "mixed" and device_type == "tor":
-            tors_per_row = max_tors_per_row if pod.design else device_count
-            offset = (self.data.row_index - 1) * tors_per_row + (current_index - 1) * device_count
-            self.logger.info(
-                f"Calculated {device_type} offset={offset} for rack {self.data.name} "
-                f"(row_index={self.data.row_index}, index={current_index}, tors_per_rack={device_count}, "
-                f"tors_per_row={tors_per_row}, mode=mixed)"
-            )
-
-        # For mixed/middle_rack deployment leafs: calculate offset based on row position
-        # Middle rack leafs serve all ToRs in their row
-        elif deployment_type in ("mixed", "middle_rack") and device_type == "leaf":
-            offset = (self.data.row_index - 1) * device_count
-
-            self.logger.info(
-                f"Calculated {device_type} offset={offset} for rack {self.data.name} "
-                f"(row_index={self.data.row_index}, leafs_per_rack={device_count}, mode={deployment_type})"
-            )
-
-        # Border-leafs connect to pod spines after all regular leafs across all rows.
-        # Formula: total_rows × leafs_per_rack + (row_index - 1) × border_leaf_count
-        elif deployment_type in ("mixed", "middle_rack") and device_type == "border_leaf":
-            total_rows = pod.design.rows if pod.design else 1
-            base_bl_offset = total_rows * leafs_per_rack
-            offset = base_bl_offset + (self.data.row_index - 1) * device_count
-
-            self.logger.info(
-                f"Calculated {device_type} offset={offset} for rack {self.data.name} "
-                f"(row_index={self.data.row_index}, total_rows={total_rows}, "
-                f"leafs_per_rack={leafs_per_rack}, base_bl_offset={base_bl_offset}, mode={deployment_type})"
-            )
-
-        # For tor deployment border-leafs: offset past all ToRs, then row-based position.
-        # Formula: total_tors_in_pod + (row_index - 1) × border_leaf_count
-        # Uses the actual deployed ToR count (passed in), not design.rows ×
-        # design-max tors_per_row — a pod deployed with fewer racks/tors per row
-        # than its design allows would otherwise get an inflated offset that
-        # overflows past the real number of spine downlink interfaces.
-        elif deployment_type == "tor" and device_type == "border_leaf":
-            if total_tors_in_pod is not None:
-                base_bl_offset = total_tors_in_pod
-            else:
-                total_rows = pod.design.rows if pod.design else 1
-                tors_per_row = max_tors_per_row if pod.design else 0
-                base_bl_offset = total_rows * tors_per_row
-            offset = base_bl_offset + (self.data.row_index - 1) * device_count
-
-            self.logger.info(
-                f"Calculated {device_type} offset={offset} for rack {self.data.name} "
-                f"(row_index={self.data.row_index}, base_bl_offset={base_bl_offset}, mode={deployment_type})"
-            )
-
-        # For tor deployment ToRs: calculate cumulative offset across pod
-        # ToRs connect to spines, need cumulative offset across all rows
-        # Uses actual racks in previous rows (passed in) to avoid exceeding spine port capacity
-        elif deployment_type == "tor" and device_type == "tor":
-            if racks_in_previous_rows is not None:
-                tors_in_previous_rows = racks_in_previous_rows * device_count
-            else:
-                # Fallback to design max if actual count not provided
-                max_tors_int = int(max_tors_per_row)
-                tors_in_previous_rows = max_tors_int * (self.data.row_index - 1)
-
-            # Offset from previous racks in current row
-            offset_in_current_row = device_count * (current_index - 1)
-
-            offset = tors_in_previous_rows + offset_in_current_row
-
-            self.logger.info(
-                f"Calculated {device_type} offset={offset} for rack {self.data.name} "
-                f"(row={self.data.row_index}, index={current_index}, tors_in_rack={device_count}, "
-                f"tors_in_previous_rows={tors_in_previous_rows}, mode={deployment_type})"
-            )
-
-        else:
-            # Other cases: no offset needed
-            offset = 0
-            self.logger.info(f"No offset needed for {device_type} in rack {self.data.name} (mode={deployment_type})")
-
-        return offset
-
-    @staticmethod
-    def _parse_rack_data(data: dict) -> RackModel:
-        """Normalize trigger/query data into a RackModel.
-
-        Raises:
-            ValueError: when data has an unknown shape or contains no rack edges.
-        """
-        if "name" in data and isinstance(data.get("name"), dict):
-            return RackModel(**data)
-        if "LocationRack" in data:
-            raw = data["LocationRack"]
-            if isinstance(raw, dict) and "edges" in raw and not raw["edges"]:
-                raise ValueError(
-                    "GraphQL query returned no edges for LocationRack — "
-                    "rack may not exist or query parameters may be incorrect."
-                )
-            deployment_list = clean_data(data).get("LocationRack", [])
-            if not deployment_list:
-                raise ValueError("No rack found after clean_data — rack exists but has an invalid data structure.")
-            return RackModel(**deployment_list[0])
-        raise ValueError(f"Unknown data structure. Keys: {list(data.keys())}")
+        """Thin wrapper around helper function for readability and compatibility."""
+        return calculate_rack_cabling_offsets(
+            data=self.data,
+            logger=self.logger,
+            device_count=device_count,
+            device_type=device_type,
+            racks_in_previous_rows=racks_in_previous_rows,
+            leafs_per_rack=leafs_per_rack,
+            total_tors_in_pod=total_tors_in_pod,
+        )
 
     async def _checksum_ready(self) -> bool:
         """Return True if this rack has a usable checksum; False if generation should abort.
@@ -496,13 +397,15 @@ class RackGenerator(CommonGenerator):
                 row_index__value=self.data.row_index,
                 rack_type__value="network",
             )
-            if middle_racks and middle_racks[0].checksum.value:
+            sorted_middle_racks = sorted(middle_racks, key=rack_sort_key)
+            source_middle_rack = next((r for r in sorted_middle_racks if r.checksum.value), None)
+            if source_middle_rack:
                 rack_obj = await self.client.get(kind=LocationRack, id=self.data.id)
-                rack_obj.checksum.value = middle_racks[0].checksum.value
+                rack_obj.checksum.value = source_middle_rack.checksum.value
                 await rack_obj.save(allow_upsert=True)
                 self.logger.info(
-                    f"ToR rack {self.data.name} inherited checksum {middle_racks[0].checksum.value} "
-                    f"from middle rack {middle_racks[0].name.value}. "
+                    f"ToR rack {self.data.name} inherited checksum {source_middle_rack.checksum.value} "
+                    f"from middle rack {source_middle_rack.name.value}. "
                     "Checksum update will trigger generator again to create devices."
                 )
             else:
@@ -518,7 +421,10 @@ class RackGenerator(CommonGenerator):
                 pod__ids=[self.data.pod.id],
                 rack_type__value="network",
             )
-            sibling_with_checksum = [r for r in sibling_racks if r.id != self.data.id and r.checksum.value]
+            sibling_with_checksum = sorted(
+                (r for r in sibling_racks if r.id != self.data.id and r.checksum.value),
+                key=rack_sort_key,
+            )
             if sibling_with_checksum:
                 rack_obj = await self.client.get(kind=LocationRack, id=self.data.id)
                 rack_obj.checksum.value = sibling_with_checksum[0].checksum.value
@@ -585,7 +491,7 @@ class RackGenerator(CommonGenerator):
             self.logger.error("Generator received empty data")
             return
         try:
-            self.data = self._parse_rack_data(data)
+            self.data = parse_rack_data(data)
         except (ValueError, KeyError, IndexError) as exc:
             self.logger.error(f"Generation failed due to {exc}")
             return
@@ -653,8 +559,9 @@ class RackGenerator(CommonGenerator):
             )
             return False
 
+        source_network_rack = sorted(network_racks, key=rack_sort_key)[0]
         leaf_data = await self.fetch_rack_devices_with_interfaces(
-            rack=network_racks[0],
+            rack=source_network_rack,
             role_filter="leaf",
         )
 
@@ -738,19 +645,6 @@ class RackGenerator(CommonGenerator):
         self._routing_options = routing_options
         return True
 
-    def _expected_device_names(self, role: str, quantity: int) -> set[str]:
-        """Device names a role template of the given quantity would create."""
-        return {
-            DeviceNamingConfig(strategy=self._naming_conv).format_device_name(
-                self.fabric_name,
-                role,
-                index=idx,
-                fabric_name=self.fabric_name,
-                indexes=self._device_indexes,
-            )
-            for idx in range(1, quantity + 1)
-        }
-
     async def _generate_leafs(self, created_leaf_devices: list[str]) -> bool:
         """Create → cable → route leaf devices. Appends to created_leaf_devices in place.
 
@@ -758,7 +652,13 @@ class RackGenerator(CommonGenerator):
         """
         pod = self.data.pod
         for leaf_role in self.data.leafs or []:
-            expected_names = self._expected_device_names("leaf", leaf_role.quantity)
+            expected_names = expected_device_names(
+                naming_config=DeviceNamingConfig(strategy=self._naming_conv),
+                fabric_name=self.fabric_name,
+                device_indexes=self._device_indexes,
+                role="leaf",
+                quantity=leaf_role.quantity,
+            )
             if expected_names <= self._created_device_names:
                 self.logger.info(
                     f"Skipping duplicate leaf template (devices already created: {sorted(expected_names)})"
@@ -813,7 +713,13 @@ class RackGenerator(CommonGenerator):
         """
         pod = self.data.pod
         for tor_role in self.data.tors or []:
-            expected_names = self._expected_device_names("tor", tor_role.quantity)
+            expected_names = expected_device_names(
+                naming_config=DeviceNamingConfig(strategy=self._naming_conv),
+                fabric_name=self.fabric_name,
+                device_indexes=self._device_indexes,
+                role="tor",
+                quantity=tor_role.quantity,
+            )
             if expected_names <= self._created_device_names:
                 self.logger.info(f"Skipping duplicate tor template (devices already created: {sorted(expected_names)})")
                 continue
@@ -1016,6 +922,8 @@ class RackGenerator(CommonGenerator):
                     management_pool=self._management_pool_id,
                 ),
             )
+
+            self._created_device_names.update(bl_devices)
 
             # Uplinks sorted by name: [0..max_super_spines) reserved for DCI, then pod spines.
             all_bl_uplinks = sorted([iface.name for iface in bl_role.template.interfaces if iface.role == "uplink"])

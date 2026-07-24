@@ -8,6 +8,7 @@ Covers:
 
 from __future__ import annotations
 
+from types import SimpleNamespace
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
@@ -287,7 +288,65 @@ class TestSaveAutonomousSystems:
 
 class TestGroupContextProtection:
     @pytest.mark.asyncio
-    async def test_overlay_as_added_to_related_node_ids(self) -> None:
+    async def test_overlay_visibility_retry_attempts_and_sleep_count(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Overlay lookup retries max attempts and sleeps between attempts only."""
+        from generators.helpers.routing import RoutingStrategy
+        from generators.types import RoutingOptions
+
+        m = _make_mixin()
+        design = MagicMock()
+        design.routing_strategy = RoutingStrategy.EBGP_EBGP.value
+        options: RoutingOptions = RoutingOptions(
+            design=design,
+            underlay_password_id="pw-underlay",
+            overlay_password_id="pw-overlay",
+        )
+
+        sleep_mock = AsyncMock()
+        monkeypatch.setattr("generators.routing.asyncio.sleep", sleep_mock)
+
+        class _NoopPlanner:
+            def __init__(self, deployment_id: str, logger: Any) -> None:
+                self.deployment_id = deployment_id
+                self.logger = logger
+
+            def build_routing_plan(self, _plan_input: Any) -> SimpleNamespace:
+                return SimpleNamespace(
+                    autonomous_systems=[],
+                    bgp_processes=[],
+                    ospf_processes=[],
+                    ospf_interfaces=[],
+                    bgp_peerings=[],
+                    ospf_peerings=[],
+                )
+
+        monkeypatch.setattr("generators.routing.RoutingPlanner", _NoopPlanner)
+
+        async def _filters_side_effect(*args: Any, **kwargs: Any) -> list[Any]:
+            kind = kwargs.get("kind")
+            if getattr(kind, "__name__", "") in {"ManagedBGP", "DcimVirtualInterface"}:
+                return []
+            return []
+
+        m.client.filters = AsyncMock(side_effect=_filters_side_effect)
+        m._ensure_evpn_af_node = AsyncMock(return_value="evpn-af-1")
+
+        await m.create_routing(
+            bottom_devices=["leaf-01"],
+            top_devices=["spine-01"],
+            options=options,
+        )
+
+        managed_bgp_filter_calls = [
+            call
+            for call in m.client.filters.await_args_list
+            if getattr(call.kwargs.get("kind"), "__name__", "") == "ManagedBGP"
+        ]
+        assert len(managed_bgp_filter_calls) == 5
+        assert sleep_mock.await_count == 4
+
+    @pytest.mark.asyncio
+    async def test_overlay_as_added_to_related_node_ids(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """When overlay_as_id is resolved, it is appended to group_context.related_node_ids."""
         from generators.helpers.routing import RoutingStrategy
         from generators.types import RoutingOptions
@@ -303,6 +362,8 @@ class TestGroupContextProtection:
 
         m.client.group_context = MagicMock()
         m.client.group_context.related_node_ids = []
+        # Avoid real backoff sleeps from overlay visibility retries.
+        monkeypatch.setattr("generators.routing.asyncio.sleep", AsyncMock())
 
         # Stub shared-object lookup to return a known overlay AS ID
         m._resolve_shared_objects = AsyncMock(return_value=("as-overlay-99", None))
@@ -318,7 +379,7 @@ class TestGroupContextProtection:
         assert "as-overlay-99" in m.client.group_context.related_node_ids
 
     @pytest.mark.asyncio
-    async def test_resolved_passwords_added_to_related_node_ids(self) -> None:
+    async def test_resolved_passwords_added_to_related_node_ids(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """When underlay/overlay password IDs are resolved, both are appended
         to group_context.related_node_ids, same as overlay_as_id/ospf_area_id."""
         from generators.helpers.routing import RoutingStrategy
@@ -331,6 +392,8 @@ class TestGroupContextProtection:
         options: RoutingOptions = RoutingOptions(design=design)
         m.client.group_context = MagicMock()
         m.client.group_context.related_node_ids = []
+        # Avoid real backoff sleeps from overlay visibility retries.
+        monkeypatch.setattr("generators.routing.asyncio.sleep", AsyncMock())
         m._resolve_shared_passwords = AsyncMock(return_value=("pw-underlay-1", "pw-overlay-1"))
         m.client.filters = AsyncMock(return_value=[])
 
@@ -344,7 +407,7 @@ class TestGroupContextProtection:
         assert "pw-overlay-1" in m.client.group_context.related_node_ids
 
     @pytest.mark.asyncio
-    async def test_missing_passwords_do_not_block_routing_creation(self) -> None:
+    async def test_missing_passwords_do_not_block_routing_creation(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Unlike overlay_as_id/ospf_area_id, a missing password is non-fatal —
         create_routing must proceed (not return early) when both are None."""
         from generators.helpers.routing import RoutingStrategy
@@ -357,6 +420,8 @@ class TestGroupContextProtection:
         options: RoutingOptions = RoutingOptions(design=design)
         m.client.group_context = MagicMock()
         m.client.group_context.related_node_ids = []
+        # Avoid real backoff sleeps from overlay visibility retries.
+        monkeypatch.setattr("generators.routing.asyncio.sleep", AsyncMock())
         m._resolve_shared_passwords = AsyncMock(return_value=(None, None))
         m.client.filters = AsyncMock(return_value=[])
 

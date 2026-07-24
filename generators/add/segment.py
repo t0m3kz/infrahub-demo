@@ -116,7 +116,7 @@ class BaseSegmentGenerator(CommonGenerator):
                 self.logger.info(
                     f"  [{deployment_name}] SegmentDeployment already exists for {segment_name} — skipping"
                 )
-                await existing[0].save()  # register with tracker
+                await existing[0].save(allow_upsert=True)  # register with tracker
                 return
         except Exception as exc:
             self.logger.warning(f"  [{deployment_name}] Error checking existing activations: {exc}")

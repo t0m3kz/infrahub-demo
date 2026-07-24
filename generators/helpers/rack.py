@@ -1,0 +1,180 @@
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Any
+
+from utils.data_cleaning import clean_data
+
+from ..models import RackModel
+from ..protocols import LocationRack
+
+if TYPE_CHECKING:
+    import logging
+
+
+def rack_sort_key(rack: LocationRack) -> tuple[int, int, str]:
+    """Deterministic rack ordering for stable idempotent selections."""
+    row_raw = rack.row_index.value if getattr(rack, "row_index", None) else 0
+    index_raw = rack.index.value if getattr(rack, "index", None) else 0
+    name_raw = rack.name.value if getattr(rack, "name", None) else ""
+
+    row = row_raw if isinstance(row_raw, int) else 0
+    index = index_raw if isinstance(index_raw, int) else 0
+    name = name_raw if isinstance(name_raw, str) else ""
+    return row, index, name
+
+
+def parse_rack_data(data: dict[str, Any]) -> RackModel:
+    """Normalize trigger/query data into a RackModel."""
+    if "name" in data and isinstance(data.get("name"), dict):
+        return RackModel(**data)
+    if "LocationRack" in data:
+        raw = data["LocationRack"]
+        if isinstance(raw, dict) and "edges" in raw and not raw["edges"]:
+            raise ValueError(
+                "GraphQL query returned no edges for LocationRack — "
+                "rack may not exist or query parameters may be incorrect."
+            )
+        deployment_list = clean_data(data).get("LocationRack", [])
+        if not deployment_list:
+            raise ValueError("No rack found after clean_data — rack exists but has an invalid data structure.")
+        return RackModel(**deployment_list[0])
+    raise ValueError(f"Unknown data structure. Keys: {list(data.keys())}")
+
+
+def expected_device_names(
+    *,
+    naming_config: Any,
+    fabric_name: str,
+    device_indexes: list[int],
+    role: str,
+    quantity: int,
+) -> set[str]:
+    """Build deterministic device names for one role template."""
+    return {
+        naming_config.format_device_name(
+            fabric_name,
+            role,
+            index=idx,
+            fabric_name=fabric_name,
+            indexes=device_indexes,
+        )
+        for idx in range(1, quantity + 1)
+    }
+
+
+def calculate_cabling_offsets(
+    *,
+    data: Any,
+    logger: logging.Logger,
+    device_count: int,
+    device_type: str = "leaf",
+    racks_in_previous_rows: int | None = None,
+    leafs_per_rack: int = 0,
+    total_tors_in_pod: int | None = None,
+) -> int:
+    """Calculate cabling offset using simple formula based on rack position."""
+
+    current_index = data.index
+
+    # deployment_type and max_tors_per_row are both derived from pod.design
+    pod = data.pod
+    deployment_type = pod.deployment_type
+    if pod.design is None:
+        logger.warning(
+            f"Rack {data.name}: pod '{pod.name}' has no design set — "
+            "falling back to max_tors_per_row=8 for offset calculation. "
+            "Run pod generator first for accurate cabling."
+        )
+        max_tors_per_row = 8
+    else:
+        max_tors_per_row = pod.design.compute_racks_per_row * pod.design.max_tors_per_compute_rack
+
+    # For middle_rack deployment ToRs: always offset=0 (ToRs connect to leafs in same rack)
+    if deployment_type == "middle_rack" and device_type == "tor":
+        offset = 0
+        logger.info(
+            f"Calculated {device_type} offset={offset} for rack {data.name} (mode=middle_rack) - intra-rack cabling"
+        )
+
+    # For mixed deployment ToRs: static offset based on row + rack index
+    # Formula: (row_index - 1) × tors_per_row + (rack_index - 1) × tors_per_rack
+    elif deployment_type == "mixed" and device_type == "tor":
+        tors_per_row = max_tors_per_row if pod.design else device_count
+        offset = (data.row_index - 1) * tors_per_row + (current_index - 1) * device_count
+        logger.info(
+            f"Calculated {device_type} offset={offset} for rack {data.name} "
+            f"(row_index={data.row_index}, index={current_index}, tors_per_rack={device_count}, "
+            f"tors_per_row={tors_per_row}, mode=mixed)"
+        )
+
+    # For mixed/middle_rack deployment leafs: calculate offset based on row position
+    # Middle rack leafs serve all ToRs in their row
+    elif deployment_type in ("mixed", "middle_rack") and device_type == "leaf":
+        offset = (data.row_index - 1) * device_count
+
+        logger.info(
+            f"Calculated {device_type} offset={offset} for rack {data.name} "
+            f"(row_index={data.row_index}, leafs_per_rack={device_count}, mode={deployment_type})"
+        )
+
+    # Border-leafs connect to pod spines after all regular leafs across all rows.
+    # Formula: total_rows × leafs_per_rack + (row_index - 1) × border_leaf_count
+    elif deployment_type in ("mixed", "middle_rack") and device_type == "border_leaf":
+        total_rows = pod.design.rows if pod.design else 1
+        base_bl_offset = total_rows * leafs_per_rack
+        offset = base_bl_offset + (data.row_index - 1) * device_count
+
+        logger.info(
+            f"Calculated {device_type} offset={offset} for rack {data.name} "
+            f"(row_index={data.row_index}, total_rows={total_rows}, "
+            f"leafs_per_rack={leafs_per_rack}, base_bl_offset={base_bl_offset}, mode={deployment_type})"
+        )
+
+    # For tor deployment border-leafs: offset past all ToRs, then row-based position.
+    # Formula: total_tors_in_pod + (row_index - 1) × border_leaf_count
+    # Uses the actual deployed ToR count (passed in), not design.rows ×
+    # design-max tors_per_row — a pod deployed with fewer racks/tors per row
+    # than its design allows would otherwise get an inflated offset that
+    # overflows past the real number of spine downlink interfaces.
+    elif deployment_type == "tor" and device_type == "border_leaf":
+        if total_tors_in_pod is not None:
+            base_bl_offset = total_tors_in_pod
+        else:
+            total_rows = pod.design.rows if pod.design else 1
+            tors_per_row = max_tors_per_row if pod.design else 0
+            base_bl_offset = total_rows * tors_per_row
+        offset = base_bl_offset + (data.row_index - 1) * device_count
+
+        logger.info(
+            f"Calculated {device_type} offset={offset} for rack {data.name} "
+            f"(row_index={data.row_index}, base_bl_offset={base_bl_offset}, mode={deployment_type})"
+        )
+
+    # For tor deployment ToRs: calculate cumulative offset across pod
+    # ToRs connect to spines, need cumulative offset across all rows
+    # Uses actual racks in previous rows (passed in) to avoid exceeding spine port capacity
+    elif deployment_type == "tor" and device_type == "tor":
+        if racks_in_previous_rows is not None:
+            tors_in_previous_rows = racks_in_previous_rows * device_count
+        else:
+            # Fallback to design max if actual count not provided
+            max_tors_int = int(max_tors_per_row)
+            tors_in_previous_rows = max_tors_int * (data.row_index - 1)
+
+        # Offset from previous racks in current row
+        offset_in_current_row = device_count * (current_index - 1)
+
+        offset = tors_in_previous_rows + offset_in_current_row
+
+        logger.info(
+            f"Calculated {device_type} offset={offset} for rack {data.name} "
+            f"(row={data.row_index}, index={current_index}, tors_in_rack={device_count}, "
+            f"tors_in_previous_rows={tors_in_previous_rows}, mode={deployment_type})"
+        )
+
+    else:
+        # Other cases: no offset needed
+        offset = 0
+        logger.info(f"No offset needed for {device_type} in rack {data.name} (mode={deployment_type})")
+
+    return offset
