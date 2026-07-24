@@ -8,10 +8,8 @@ spec:
     - name: DC2-POD1-SP1-Ethernet1-3-OSPF
       description: "OSPF P2P — DC2-POD1-SP1 Ethernet1/3"
       mode: peer_to_peer
-      ospf_process: DC2-POD1-SP1-OSPF
-      area:
-        - DC2-AREA-0
-        - "0"
+      ospf_services:
+        - DC2-POD1-SP1-OSPF
       interface_capabilities:
         - kind: DcimPhysicalInterface
           data:
@@ -21,10 +19,8 @@ spec:
     - name: DC2-POD1-SP1-Ethernet1-4-OSPF
       description: "OSPF P2P — DC2-POD1-SP1 Ethernet1/4"
       mode: peer_to_peer
-      ospf_process: DC2-POD1-SP1-OSPF
-      area:
-        - DC2-AREA-0
-        - "0"
+      ospf_services:
+        - DC2-POD1-SP1-OSPF
       interface_capabilities:
         - kind: DcimPhysicalInterface
           data:
@@ -34,10 +30,8 @@ spec:
     - name: DC2-POD1-SP1-Ethernet1-5-OSPF
       description: "OSPF P2P — DC2-POD1-SP1 Ethernet1/5"
       mode: peer_to_peer
-      ospf_process: DC2-POD1-SP1-OSPF
-      area:
-        - DC2-AREA-0
-        - "0"
+      ospf_services:
+        - DC2-POD1-SP1-OSPF
       interface_capabilities:
         - kind: DcimPhysicalInterface
           data:
@@ -47,10 +41,8 @@ spec:
     - name: DC2-POD1-SP1-Ethernet1-6-OSPF
       description: "OSPF P2P — DC2-POD1-SP1 Ethernet1/6"
       mode: peer_to_peer
-      ospf_process: DC2-POD1-SP1-OSPF
-      area:
-        - DC2-AREA-0
-        - "0"
+      ospf_services:
+        - DC2-POD1-SP1-OSPF
       interface_capabilities:
         - kind: DcimPhysicalInterface
           data:
@@ -60,10 +52,8 @@ spec:
     - name: DC2-POD1-SP1-Ethernet1-11-OSPF
       description: "OSPF P2P — DC2-POD1-SP1 Ethernet1/11"
       mode: peer_to_peer
-      ospf_process: DC2-POD1-SP1-OSPF
-      area:
-        - DC2-AREA-0
-        - "0"
+      ospf_services:
+        - DC2-POD1-SP1-OSPF
       interface_capabilities:
         - kind: DcimPhysicalInterface
           data:
@@ -73,10 +63,8 @@ spec:
     - name: DC2-POD1-SP1-Ethernet1-12-OSPF
       description: "OSPF P2P — DC2-POD1-SP1 Ethernet1/12"
       mode: peer_to_peer
-      ospf_process: DC2-POD1-SP1-OSPF
-      area:
-        - DC2-AREA-0
-        - "0"
+      ospf_services:
+        - DC2-POD1-SP1-OSPF
       interface_capabilities:
         - kind: DcimPhysicalInterface
           data:
@@ -86,10 +74,8 @@ spec:
     - name: DC2-POD1-SP1-Ethernet1-13-OSPF
       description: "OSPF P2P — DC2-POD1-SP1 Ethernet1/13"
       mode: peer_to_peer
-      ospf_process: DC2-POD1-SP1-OSPF
-      area:
-        - DC2-AREA-0
-        - "0"
+      ospf_services:
+        - DC2-POD1-SP1-OSPF
       interface_capabilities:
         - kind: DcimPhysicalInterface
           data:
@@ -99,10 +85,8 @@ spec:
     - name: DC2-POD1-SP1-Ethernet1-14-OSPF
       description: "OSPF P2P — DC2-POD1-SP1 Ethernet1/14"
       mode: peer_to_peer
-      ospf_process: DC2-POD1-SP1-OSPF
-      area:
-        - DC2-AREA-0
-        - "0"
+      ospf_services:
+        - DC2-POD1-SP1-OSPF
       interface_capabilities:
         - kind: DcimPhysicalInterface
           data:
@@ -112,10 +96,8 @@ spec:
     - name: DC2-POD1-SP2-Ethernet1-3-OSPF
       description: "OSPF P2P — DC2-POD1-SP2 Ethernet1/3"
       mode: peer_to_peer
-      ospf_process: DC2-POD1-SP2-OSPF
-      area:
-        - DC2-AREA-0
-        - "0"
+      ospf_services:
+        - DC2-POD1-SP2-OSPF
       interface_capabilities:
         - kind: DcimPhysicalInterface
           data:
@@ -125,10 +107,8 @@ spec:
     - name: DC2-POD1-SP2-Ethernet1-4-OSPF
       description: "OSPF P2P — DC2-POD1-SP2 Ethernet1/4"
       mode: peer_to_peer
-      ospf_process: DC2-POD1-SP2-OSPF
-      area:
-        - DC2-AREA-0
-        - "0"
+      ospf_services:
+        - DC2-POD1-SP2-OSPF
       interface_capabilities:
         - kind: DcimPhysicalInterface
           data:
@@ -138,10 +118,8 @@ spec:
     - name: DC2-POD1-SP2-Ethernet1-5-OSPF
       description: "OSPF P2P — DC2-POD1-SP2 Ethernet1/5"
       mode: peer_to_peer
-      ospf_process: DC2-POD1-SP2-OSPF
-      area:
-        - DC2-AREA-0
-        - "0"
+      ospf_services:
+        - DC2-POD1-SP2-OSPF
       interface_capabilities:
         - kind: DcimPhysicalInterface
           data:
@@ -151,10 +129,8 @@ spec:
     - name: DC2-POD1-SP2-Ethernet1-6-OSPF
       description: "OSPF P2P — DC2-POD1-SP2 Ethernet1/6"
       mode: peer_to_peer
-      ospf_process: DC2-POD1-SP2-OSPF
-      area:
-        - DC2-AREA-0
-        - "0"
+      ospf_services:
+        - DC2-POD1-SP2-OSPF
       interface_capabilities:
         - kind: DcimPhysicalInterface
           data:
@@ -164,10 +140,8 @@ spec:
     - name: DC2-POD1-SP2-Ethernet1-21-OSPF
       description: "OSPF P2P — DC2-POD1-SP2 Ethernet1/21"
       mode: peer_to_peer
-      ospf_process: DC2-POD1-SP2-OSPF
-      area:
-        - DC2-AREA-0
-        - "0"
+      ospf_services:
+        - DC2-POD1-SP2-OSPF
       interface_capabilities:
         - kind: DcimPhysicalInterface
           data:
@@ -177,10 +151,8 @@ spec:
     - name: DC2-POD1-SP2-Ethernet1-22-OSPF
       description: "OSPF P2P — DC2-POD1-SP2 Ethernet1/22"
       mode: peer_to_peer
-      ospf_process: DC2-POD1-SP2-OSPF
-      area:
-        - DC2-AREA-0
-        - "0"
+      ospf_services:
+        - DC2-POD1-SP2-OSPF
       interface_capabilities:
         - kind: DcimPhysicalInterface
           data:
@@ -190,10 +162,8 @@ spec:
     - name: DC2-POD1-SP2-Ethernet1-23-OSPF
       description: "OSPF P2P — DC2-POD1-SP2 Ethernet1/23"
       mode: peer_to_peer
-      ospf_process: DC2-POD1-SP2-OSPF
-      area:
-        - DC2-AREA-0
-        - "0"
+      ospf_services:
+        - DC2-POD1-SP2-OSPF
       interface_capabilities:
         - kind: DcimPhysicalInterface
           data:
@@ -203,10 +173,8 @@ spec:
     - name: DC2-POD1-SP2-Ethernet1-24-OSPF
       description: "OSPF P2P — DC2-POD1-SP2 Ethernet1/24"
       mode: peer_to_peer
-      ospf_process: DC2-POD1-SP2-OSPF
-      area:
-        - DC2-AREA-0
-        - "0"
+      ospf_services:
+        - DC2-POD1-SP2-OSPF
       interface_capabilities:
         - kind: DcimPhysicalInterface
           data:
@@ -216,10 +184,8 @@ spec:
     - name: DC2-POD2-SP1-Ethernet1-3-OSPF
       description: "OSPF P2P — DC2-POD2-SP1 Ethernet1/3"
       mode: peer_to_peer
-      ospf_process: DC2-POD2-SP1-OSPF
-      area:
-        - DC2-AREA-0
-        - "0"
+      ospf_services:
+        - DC2-POD2-SP1-OSPF
       interface_capabilities:
         - kind: DcimPhysicalInterface
           data:
@@ -229,10 +195,8 @@ spec:
     - name: DC2-POD2-SP1-Ethernet1-4-OSPF
       description: "OSPF P2P — DC2-POD2-SP1 Ethernet1/4"
       mode: peer_to_peer
-      ospf_process: DC2-POD2-SP1-OSPF
-      area:
-        - DC2-AREA-0
-        - "0"
+      ospf_services:
+        - DC2-POD2-SP1-OSPF
       interface_capabilities:
         - kind: DcimPhysicalInterface
           data:
@@ -242,10 +206,8 @@ spec:
     - name: DC2-POD2-SP1-Ethernet1-5-OSPF
       description: "OSPF P2P — DC2-POD2-SP1 Ethernet1/5"
       mode: peer_to_peer
-      ospf_process: DC2-POD2-SP1-OSPF
-      area:
-        - DC2-AREA-0
-        - "0"
+      ospf_services:
+        - DC2-POD2-SP1-OSPF
       interface_capabilities:
         - kind: DcimPhysicalInterface
           data:
@@ -255,10 +217,8 @@ spec:
     - name: DC2-POD2-SP1-Ethernet1-6-OSPF
       description: "OSPF P2P — DC2-POD2-SP1 Ethernet1/6"
       mode: peer_to_peer
-      ospf_process: DC2-POD2-SP1-OSPF
-      area:
-        - DC2-AREA-0
-        - "0"
+      ospf_services:
+        - DC2-POD2-SP1-OSPF
       interface_capabilities:
         - kind: DcimPhysicalInterface
           data:
@@ -268,10 +228,8 @@ spec:
     - name: DC2-POD2-SP1-Ethernet1-11-OSPF
       description: "OSPF P2P — DC2-POD2-SP1 Ethernet1/11"
       mode: peer_to_peer
-      ospf_process: DC2-POD2-SP1-OSPF
-      area:
-        - DC2-AREA-0
-        - "0"
+      ospf_services:
+        - DC2-POD2-SP1-OSPF
       interface_capabilities:
         - kind: DcimPhysicalInterface
           data:
@@ -281,10 +239,8 @@ spec:
     - name: DC2-POD2-SP1-Ethernet1-12-OSPF
       description: "OSPF P2P — DC2-POD2-SP1 Ethernet1/12"
       mode: peer_to_peer
-      ospf_process: DC2-POD2-SP1-OSPF
-      area:
-        - DC2-AREA-0
-        - "0"
+      ospf_services:
+        - DC2-POD2-SP1-OSPF
       interface_capabilities:
         - kind: DcimPhysicalInterface
           data:
@@ -294,10 +250,8 @@ spec:
     - name: DC2-POD2-SP1-Ethernet1-13-OSPF
       description: "OSPF P2P — DC2-POD2-SP1 Ethernet1/13"
       mode: peer_to_peer
-      ospf_process: DC2-POD2-SP1-OSPF
-      area:
-        - DC2-AREA-0
-        - "0"
+      ospf_services:
+        - DC2-POD2-SP1-OSPF
       interface_capabilities:
         - kind: DcimPhysicalInterface
           data:
@@ -307,10 +261,8 @@ spec:
     - name: DC2-POD2-SP1-Ethernet1-14-OSPF
       description: "OSPF P2P — DC2-POD2-SP1 Ethernet1/14"
       mode: peer_to_peer
-      ospf_process: DC2-POD2-SP1-OSPF
-      area:
-        - DC2-AREA-0
-        - "0"
+      ospf_services:
+        - DC2-POD2-SP1-OSPF
       interface_capabilities:
         - kind: DcimPhysicalInterface
           data:
@@ -320,10 +272,8 @@ spec:
     - name: DC2-POD2-SP2-Ethernet1-3-OSPF
       description: "OSPF P2P — DC2-POD2-SP2 Ethernet1/3"
       mode: peer_to_peer
-      ospf_process: DC2-POD2-SP2-OSPF
-      area:
-        - DC2-AREA-0
-        - "0"
+      ospf_services:
+        - DC2-POD2-SP2-OSPF
       interface_capabilities:
         - kind: DcimPhysicalInterface
           data:
@@ -333,10 +283,8 @@ spec:
     - name: DC2-POD2-SP2-Ethernet1-4-OSPF
       description: "OSPF P2P — DC2-POD2-SP2 Ethernet1/4"
       mode: peer_to_peer
-      ospf_process: DC2-POD2-SP2-OSPF
-      area:
-        - DC2-AREA-0
-        - "0"
+      ospf_services:
+        - DC2-POD2-SP2-OSPF
       interface_capabilities:
         - kind: DcimPhysicalInterface
           data:
@@ -346,10 +294,8 @@ spec:
     - name: DC2-POD2-SP2-Ethernet1-5-OSPF
       description: "OSPF P2P — DC2-POD2-SP2 Ethernet1/5"
       mode: peer_to_peer
-      ospf_process: DC2-POD2-SP2-OSPF
-      area:
-        - DC2-AREA-0
-        - "0"
+      ospf_services:
+        - DC2-POD2-SP2-OSPF
       interface_capabilities:
         - kind: DcimPhysicalInterface
           data:
@@ -359,10 +305,8 @@ spec:
     - name: DC2-POD2-SP2-Ethernet1-6-OSPF
       description: "OSPF P2P — DC2-POD2-SP2 Ethernet1/6"
       mode: peer_to_peer
-      ospf_process: DC2-POD2-SP2-OSPF
-      area:
-        - DC2-AREA-0
-        - "0"
+      ospf_services:
+        - DC2-POD2-SP2-OSPF
       interface_capabilities:
         - kind: DcimPhysicalInterface
           data:
@@ -372,10 +316,8 @@ spec:
     - name: DC2-POD2-SP2-Ethernet1-21-OSPF
       description: "OSPF P2P — DC2-POD2-SP2 Ethernet1/21"
       mode: peer_to_peer
-      ospf_process: DC2-POD2-SP2-OSPF
-      area:
-        - DC2-AREA-0
-        - "0"
+      ospf_services:
+        - DC2-POD2-SP2-OSPF
       interface_capabilities:
         - kind: DcimPhysicalInterface
           data:
@@ -385,10 +327,8 @@ spec:
     - name: DC2-POD2-SP2-Ethernet1-22-OSPF
       description: "OSPF P2P — DC2-POD2-SP2 Ethernet1/22"
       mode: peer_to_peer
-      ospf_process: DC2-POD2-SP2-OSPF
-      area:
-        - DC2-AREA-0
-        - "0"
+      ospf_services:
+        - DC2-POD2-SP2-OSPF
       interface_capabilities:
         - kind: DcimPhysicalInterface
           data:
@@ -398,10 +338,8 @@ spec:
     - name: DC2-POD2-SP2-Ethernet1-23-OSPF
       description: "OSPF P2P — DC2-POD2-SP2 Ethernet1/23"
       mode: peer_to_peer
-      ospf_process: DC2-POD2-SP2-OSPF
-      area:
-        - DC2-AREA-0
-        - "0"
+      ospf_services:
+        - DC2-POD2-SP2-OSPF
       interface_capabilities:
         - kind: DcimPhysicalInterface
           data:
@@ -411,10 +349,8 @@ spec:
     - name: DC2-POD2-SP2-Ethernet1-24-OSPF
       description: "OSPF P2P — DC2-POD2-SP2 Ethernet1/24"
       mode: peer_to_peer
-      ospf_process: DC2-POD2-SP2-OSPF
-      area:
-        - DC2-AREA-0
-        - "0"
+      ospf_services:
+        - DC2-POD2-SP2-OSPF
       interface_capabilities:
         - kind: DcimPhysicalInterface
           data:
@@ -424,10 +360,8 @@ spec:
     - name: DC2-BL1-Ethernet1-1-OSPF
       description: "OSPF P2P — DC2-BL1 Ethernet1/1"
       mode: peer_to_peer
-      ospf_process: DC2-BL1-OSPF
-      area:
-        - DC2-AREA-0
-        - "0"
+      ospf_services:
+        - DC2-BL1-OSPF
       interface_capabilities:
         - kind: DcimPhysicalInterface
           data:
@@ -437,10 +371,8 @@ spec:
     - name: DC2-BL1-Ethernet1-2-OSPF
       description: "OSPF P2P — DC2-BL1 Ethernet1/2"
       mode: peer_to_peer
-      ospf_process: DC2-BL1-OSPF
-      area:
-        - DC2-AREA-0
-        - "0"
+      ospf_services:
+        - DC2-BL1-OSPF
       interface_capabilities:
         - kind: DcimPhysicalInterface
           data:
@@ -450,10 +382,8 @@ spec:
     - name: DC2-BL1-Ethernet1-3-OSPF
       description: "OSPF P2P — DC2-BL1 Ethernet1/3"
       mode: peer_to_peer
-      ospf_process: DC2-BL1-OSPF
-      area:
-        - DC2-AREA-0
-        - "0"
+      ospf_services:
+        - DC2-BL1-OSPF
       interface_capabilities:
         - kind: DcimPhysicalInterface
           data:
@@ -463,10 +393,8 @@ spec:
     - name: DC2-BL1-Ethernet1-4-OSPF
       description: "OSPF P2P — DC2-BL1 Ethernet1/4"
       mode: peer_to_peer
-      ospf_process: DC2-BL1-OSPF
-      area:
-        - DC2-AREA-0
-        - "0"
+      ospf_services:
+        - DC2-BL1-OSPF
       interface_capabilities:
         - kind: DcimPhysicalInterface
           data:
@@ -476,10 +404,8 @@ spec:
     - name: DC2-BL2-Ethernet1-1-OSPF
       description: "OSPF P2P — DC2-BL2 Ethernet1/1"
       mode: peer_to_peer
-      ospf_process: DC2-BL2-OSPF
-      area:
-        - DC2-AREA-0
-        - "0"
+      ospf_services:
+        - DC2-BL2-OSPF
       interface_capabilities:
         - kind: DcimPhysicalInterface
           data:
@@ -489,10 +415,8 @@ spec:
     - name: DC2-BL2-Ethernet1-2-OSPF
       description: "OSPF P2P — DC2-BL2 Ethernet1/2"
       mode: peer_to_peer
-      ospf_process: DC2-BL2-OSPF
-      area:
-        - DC2-AREA-0
-        - "0"
+      ospf_services:
+        - DC2-BL2-OSPF
       interface_capabilities:
         - kind: DcimPhysicalInterface
           data:
@@ -502,10 +426,8 @@ spec:
     - name: DC2-BL2-Ethernet1-3-OSPF
       description: "OSPF P2P — DC2-BL2 Ethernet1/3"
       mode: peer_to_peer
-      ospf_process: DC2-BL2-OSPF
-      area:
-        - DC2-AREA-0
-        - "0"
+      ospf_services:
+        - DC2-BL2-OSPF
       interface_capabilities:
         - kind: DcimPhysicalInterface
           data:
@@ -515,10 +437,8 @@ spec:
     - name: DC2-BL2-Ethernet1-4-OSPF
       description: "OSPF P2P — DC2-BL2 Ethernet1/4"
       mode: peer_to_peer
-      ospf_process: DC2-BL2-OSPF
-      area:
-        - DC2-AREA-0
-        - "0"
+      ospf_services:
+        - DC2-BL2-OSPF
       interface_capabilities:
         - kind: DcimPhysicalInterface
           data:
@@ -528,10 +448,8 @@ spec:
     - name: DC2-POD1-L1-Ethernet1-1-OSPF
       description: "OSPF P2P — DC2-POD1-L1 Ethernet1/1"
       mode: peer_to_peer
-      ospf_process: DC2-POD1-L1-OSPF
-      area:
-        - DC2-AREA-0
-        - "0"
+      ospf_services:
+        - DC2-POD1-L1-OSPF
       interface_capabilities:
         - kind: DcimPhysicalInterface
           data:
@@ -541,10 +459,8 @@ spec:
     - name: DC2-POD1-L1-Ethernet1-2-OSPF
       description: "OSPF P2P — DC2-POD1-L1 Ethernet1/2"
       mode: peer_to_peer
-      ospf_process: DC2-POD1-L1-OSPF
-      area:
-        - DC2-AREA-0
-        - "0"
+      ospf_services:
+        - DC2-POD1-L1-OSPF
       interface_capabilities:
         - kind: DcimPhysicalInterface
           data:
@@ -554,10 +470,8 @@ spec:
     - name: DC2-POD1-L2-Ethernet1-1-OSPF
       description: "OSPF P2P — DC2-POD1-L2 Ethernet1/1"
       mode: peer_to_peer
-      ospf_process: DC2-POD1-L2-OSPF
-      area:
-        - DC2-AREA-0
-        - "0"
+      ospf_services:
+        - DC2-POD1-L2-OSPF
       interface_capabilities:
         - kind: DcimPhysicalInterface
           data:
@@ -567,10 +481,8 @@ spec:
     - name: DC2-POD1-L2-Ethernet1-2-OSPF
       description: "OSPF P2P — DC2-POD1-L2 Ethernet1/2"
       mode: peer_to_peer
-      ospf_process: DC2-POD1-L2-OSPF
-      area:
-        - DC2-AREA-0
-        - "0"
+      ospf_services:
+        - DC2-POD1-L2-OSPF
       interface_capabilities:
         - kind: DcimPhysicalInterface
           data:
@@ -580,10 +492,8 @@ spec:
     - name: DC2-POD1-L3-Ethernet1-1-OSPF
       description: "OSPF P2P — DC2-POD1-L3 Ethernet1/1"
       mode: peer_to_peer
-      ospf_process: DC2-POD1-L3-OSPF
-      area:
-        - DC2-AREA-0
-        - "0"
+      ospf_services:
+        - DC2-POD1-L3-OSPF
       interface_capabilities:
         - kind: DcimPhysicalInterface
           data:
@@ -593,10 +503,8 @@ spec:
     - name: DC2-POD1-L3-Ethernet1-2-OSPF
       description: "OSPF P2P — DC2-POD1-L3 Ethernet1/2"
       mode: peer_to_peer
-      ospf_process: DC2-POD1-L3-OSPF
-      area:
-        - DC2-AREA-0
-        - "0"
+      ospf_services:
+        - DC2-POD1-L3-OSPF
       interface_capabilities:
         - kind: DcimPhysicalInterface
           data:
@@ -606,10 +514,8 @@ spec:
     - name: DC2-POD1-L4-Ethernet1-1-OSPF
       description: "OSPF P2P — DC2-POD1-L4 Ethernet1/1"
       mode: peer_to_peer
-      ospf_process: DC2-POD1-L4-OSPF
-      area:
-        - DC2-AREA-0
-        - "0"
+      ospf_services:
+        - DC2-POD1-L4-OSPF
       interface_capabilities:
         - kind: DcimPhysicalInterface
           data:
@@ -619,10 +525,8 @@ spec:
     - name: DC2-POD1-L4-Ethernet1-2-OSPF
       description: "OSPF P2P — DC2-POD1-L4 Ethernet1/2"
       mode: peer_to_peer
-      ospf_process: DC2-POD1-L4-OSPF
-      area:
-        - DC2-AREA-0
-        - "0"
+      ospf_services:
+        - DC2-POD1-L4-OSPF
       interface_capabilities:
         - kind: DcimPhysicalInterface
           data:
@@ -632,10 +536,8 @@ spec:
     - name: DC2-POD2-L1-Ethernet1-1-OSPF
       description: "OSPF P2P — DC2-POD2-L1 Ethernet1/1"
       mode: peer_to_peer
-      ospf_process: DC2-POD2-L1-OSPF
-      area:
-        - DC2-AREA-0
-        - "0"
+      ospf_services:
+        - DC2-POD2-L1-OSPF
       interface_capabilities:
         - kind: DcimPhysicalInterface
           data:
@@ -645,10 +547,8 @@ spec:
     - name: DC2-POD2-L1-Ethernet1-2-OSPF
       description: "OSPF P2P — DC2-POD2-L1 Ethernet1/2"
       mode: peer_to_peer
-      ospf_process: DC2-POD2-L1-OSPF
-      area:
-        - DC2-AREA-0
-        - "0"
+      ospf_services:
+        - DC2-POD2-L1-OSPF
       interface_capabilities:
         - kind: DcimPhysicalInterface
           data:
@@ -658,10 +558,8 @@ spec:
     - name: DC2-POD2-L2-Ethernet1-1-OSPF
       description: "OSPF P2P — DC2-POD2-L2 Ethernet1/1"
       mode: peer_to_peer
-      ospf_process: DC2-POD2-L2-OSPF
-      area:
-        - DC2-AREA-0
-        - "0"
+      ospf_services:
+        - DC2-POD2-L2-OSPF
       interface_capabilities:
         - kind: DcimPhysicalInterface
           data:
@@ -671,10 +569,8 @@ spec:
     - name: DC2-POD2-L2-Ethernet1-2-OSPF
       description: "OSPF P2P — DC2-POD2-L2 Ethernet1/2"
       mode: peer_to_peer
-      ospf_process: DC2-POD2-L2-OSPF
-      area:
-        - DC2-AREA-0
-        - "0"
+      ospf_services:
+        - DC2-POD2-L2-OSPF
       interface_capabilities:
         - kind: DcimPhysicalInterface
           data:
@@ -684,10 +580,8 @@ spec:
     - name: DC2-POD2-L3-Ethernet1-1-OSPF
       description: "OSPF P2P — DC2-POD2-L3 Ethernet1/1"
       mode: peer_to_peer
-      ospf_process: DC2-POD2-L3-OSPF
-      area:
-        - DC2-AREA-0
-        - "0"
+      ospf_services:
+        - DC2-POD2-L3-OSPF
       interface_capabilities:
         - kind: DcimPhysicalInterface
           data:
@@ -697,10 +591,8 @@ spec:
     - name: DC2-POD2-L3-Ethernet1-2-OSPF
       description: "OSPF P2P — DC2-POD2-L3 Ethernet1/2"
       mode: peer_to_peer
-      ospf_process: DC2-POD2-L3-OSPF
-      area:
-        - DC2-AREA-0
-        - "0"
+      ospf_services:
+        - DC2-POD2-L3-OSPF
       interface_capabilities:
         - kind: DcimPhysicalInterface
           data:
@@ -710,10 +602,8 @@ spec:
     - name: DC2-POD2-L4-Ethernet1-1-OSPF
       description: "OSPF P2P — DC2-POD2-L4 Ethernet1/1"
       mode: peer_to_peer
-      ospf_process: DC2-POD2-L4-OSPF
-      area:
-        - DC2-AREA-0
-        - "0"
+      ospf_services:
+        - DC2-POD2-L4-OSPF
       interface_capabilities:
         - kind: DcimPhysicalInterface
           data:
@@ -723,10 +613,8 @@ spec:
     - name: DC2-POD2-L4-Ethernet1-2-OSPF
       description: "OSPF P2P — DC2-POD2-L4 Ethernet1/2"
       mode: peer_to_peer
-      ospf_process: DC2-POD2-L4-OSPF
-      area:
-        - DC2-AREA-0
-        - "0"
+      ospf_services:
+        - DC2-POD2-L4-OSPF
       interface_capabilities:
         - kind: DcimPhysicalInterface
           data:
