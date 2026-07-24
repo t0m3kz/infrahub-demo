@@ -127,6 +127,21 @@ nodes:
         kind: Text
         optional: true
         order_weight: 700
+      - name: ingress_mode
+        kind: Dropdown
+        optional: true
+        order_weight: 750
+        default_value: frontend
+        description: "How this application is exposed at ingress"
+        choices:
+          - name: frontend
+            label: "Frontend"
+            color: "#61DAFB"
+            description: "Application is exposed by a frontend/VIP path"
+          - name: dns
+            label: "DNS"
+            color: "#4CAF50"
+            description: "Application exposure is DNS-driven (without frontend VIP mapping)"
     relationships:
       - name: ingress
         peer: LoadbalancerVIP

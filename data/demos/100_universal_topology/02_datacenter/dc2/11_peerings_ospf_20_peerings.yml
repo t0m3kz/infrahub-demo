@@ -7,9 +7,15 @@ spec:
   data:
     - name: DC2-POD1-SP1-POD2-SP1-OSPF
       description: "OSPF P2P — DC2-POD1-SP1 Ethernet1/3 ↔ DC2-POD2-SP1 Ethernet1/3"
-      ospf_area: "0.0.0.0"
+      ospf_area:
+        - DC2-AREA-0
+        - "0"
       network_type: point-to-point
-      ospf_process: DC2-POD1-SP1-OSPF
+      ospf_process:
+        - DC2-POD1-SP1-OSPF
+      ospf_interface:
+        - DC2-POD1-SP1-Ethernet1-3-OSPF
+        - DC2-POD2-SP1-Ethernet1-3-OSPF
       interface_capabilities:
         - kind: DcimPhysicalInterface
           data:
@@ -22,9 +28,15 @@ spec:
 
     - name: DC2-POD1-SP1-POD2-SP2-OSPF
       description: "OSPF P2P — DC2-POD1-SP1 Ethernet1/4 ↔ DC2-POD2-SP2 Ethernet1/3"
-      ospf_area: "0.0.0.0"
+      ospf_area:
+        - DC2-AREA-0
+        - "0"
       network_type: point-to-point
-      ospf_process: DC2-POD1-SP1-OSPF
+      ospf_process:
+        - DC2-POD1-SP1-OSPF
+      ospf_interface:
+        - DC2-POD1-SP1-Ethernet1-4-OSPF
+        - DC2-POD2-SP2-Ethernet1-3-OSPF
       interface_capabilities:
         - kind: DcimPhysicalInterface
           data:
@@ -37,9 +49,15 @@ spec:
 
     - name: DC2-POD1-SP2-POD2-SP1-OSPF
       description: "OSPF P2P — DC2-POD1-SP2 Ethernet1/3 ↔ DC2-POD2-SP1 Ethernet1/4"
-      ospf_area: "0.0.0.0"
+      ospf_area:
+        - DC2-AREA-0
+        - "0"
       network_type: point-to-point
-      ospf_process: DC2-POD1-SP2-OSPF
+      ospf_process:
+        - DC2-POD1-SP2-OSPF
+      ospf_interface:
+        - DC2-POD1-SP2-Ethernet1-3-OSPF
+        - DC2-POD2-SP1-Ethernet1-4-OSPF
       interface_capabilities:
         - kind: DcimPhysicalInterface
           data:
@@ -52,9 +70,15 @@ spec:
 
     - name: DC2-POD1-SP2-POD2-SP2-OSPF
       description: "OSPF P2P — DC2-POD1-SP2 Ethernet1/4 ↔ DC2-POD2-SP2 Ethernet1/4"
-      ospf_area: "0.0.0.0"
+      ospf_area:
+        - DC2-AREA-0
+        - "0"
       network_type: point-to-point
-      ospf_process: DC2-POD1-SP2-OSPF
+      ospf_process:
+        - DC2-POD1-SP2-OSPF
+      ospf_interface:
+        - DC2-POD1-SP2-Ethernet1-4-OSPF
+        - DC2-POD2-SP2-Ethernet1-4-OSPF
       interface_capabilities:
         - kind: DcimPhysicalInterface
           data:
@@ -67,9 +91,15 @@ spec:
 
     - name: DC2-BL1-POD1-SP1-OSPF
       description: "OSPF P2P — DC2-BL1 Ethernet1/1 ↔ DC2-POD1-SP1 Ethernet1/5"
-      ospf_area: "0.0.0.0"
+      ospf_area:
+        - DC2-AREA-0
+        - "0"
       network_type: point-to-point
-      ospf_process: DC2-BL1-OSPF
+      ospf_process:
+        - DC2-BL1-OSPF
+      ospf_interface:
+        - DC2-BL1-Ethernet1-1-OSPF
+        - DC2-POD1-SP1-Ethernet1-5-OSPF
       interface_capabilities:
         - kind: DcimPhysicalInterface
           data:
@@ -82,9 +112,15 @@ spec:
 
     - name: DC2-BL1-POD1-SP2-OSPF
       description: "OSPF P2P — DC2-BL1 Ethernet1/2 ↔ DC2-POD1-SP2 Ethernet1/5"
-      ospf_area: "0.0.0.0"
+      ospf_area:
+        - DC2-AREA-0
+        - "0"
       network_type: point-to-point
-      ospf_process: DC2-BL1-OSPF
+      ospf_process:
+        - DC2-BL1-OSPF
+      ospf_interface:
+        - DC2-BL1-Ethernet1-2-OSPF
+        - DC2-POD1-SP2-Ethernet1-5-OSPF
       interface_capabilities:
         - kind: DcimPhysicalInterface
           data:
@@ -97,9 +133,15 @@ spec:
 
     - name: DC2-BL1-POD2-SP1-OSPF
       description: "OSPF P2P — DC2-BL1 Ethernet1/3 ↔ DC2-POD2-SP1 Ethernet1/5"
-      ospf_area: "0.0.0.0"
+      ospf_area:
+        - DC2-AREA-0
+        - "0"
       network_type: point-to-point
-      ospf_process: DC2-BL1-OSPF
+      ospf_process:
+        - DC2-BL1-OSPF
+      ospf_interface:
+        - DC2-BL1-Ethernet1-3-OSPF
+        - DC2-POD2-SP1-Ethernet1-5-OSPF
       interface_capabilities:
         - kind: DcimPhysicalInterface
           data:
@@ -112,9 +154,15 @@ spec:
 
     - name: DC2-BL1-POD2-SP2-OSPF
       description: "OSPF P2P — DC2-BL1 Ethernet1/4 ↔ DC2-POD2-SP2 Ethernet1/5"
-      ospf_area: "0.0.0.0"
+      ospf_area:
+        - DC2-AREA-0
+        - "0"
       network_type: point-to-point
-      ospf_process: DC2-BL1-OSPF
+      ospf_process:
+        - DC2-BL1-OSPF
+      ospf_interface:
+        - DC2-BL1-Ethernet1-4-OSPF
+        - DC2-POD2-SP2-Ethernet1-5-OSPF
       interface_capabilities:
         - kind: DcimPhysicalInterface
           data:
@@ -127,9 +175,15 @@ spec:
 
     - name: DC2-BL2-POD1-SP1-OSPF
       description: "OSPF P2P — DC2-BL2 Ethernet1/1 ↔ DC2-POD1-SP1 Ethernet1/6"
-      ospf_area: "0.0.0.0"
+      ospf_area:
+        - DC2-AREA-0
+        - "0"
       network_type: point-to-point
-      ospf_process: DC2-BL2-OSPF
+      ospf_process:
+        - DC2-BL2-OSPF
+      ospf_interface:
+        - DC2-BL2-Ethernet1-1-OSPF
+        - DC2-POD1-SP1-Ethernet1-6-OSPF
       interface_capabilities:
         - kind: DcimPhysicalInterface
           data:
@@ -142,9 +196,15 @@ spec:
 
     - name: DC2-BL2-POD1-SP2-OSPF
       description: "OSPF P2P — DC2-BL2 Ethernet1/2 ↔ DC2-POD1-SP2 Ethernet1/6"
-      ospf_area: "0.0.0.0"
+      ospf_area:
+        - DC2-AREA-0
+        - "0"
       network_type: point-to-point
-      ospf_process: DC2-BL2-OSPF
+      ospf_process:
+        - DC2-BL2-OSPF
+      ospf_interface:
+        - DC2-BL2-Ethernet1-2-OSPF
+        - DC2-POD1-SP2-Ethernet1-6-OSPF
       interface_capabilities:
         - kind: DcimPhysicalInterface
           data:
@@ -157,9 +217,15 @@ spec:
 
     - name: DC2-BL2-POD2-SP1-OSPF
       description: "OSPF P2P — DC2-BL2 Ethernet1/3 ↔ DC2-POD2-SP1 Ethernet1/6"
-      ospf_area: "0.0.0.0"
+      ospf_area:
+        - DC2-AREA-0
+        - "0"
       network_type: point-to-point
-      ospf_process: DC2-BL2-OSPF
+      ospf_process:
+        - DC2-BL2-OSPF
+      ospf_interface:
+        - DC2-BL2-Ethernet1-3-OSPF
+        - DC2-POD2-SP1-Ethernet1-6-OSPF
       interface_capabilities:
         - kind: DcimPhysicalInterface
           data:
@@ -172,9 +238,15 @@ spec:
 
     - name: DC2-BL2-POD2-SP2-OSPF
       description: "OSPF P2P — DC2-BL2 Ethernet1/4 ↔ DC2-POD2-SP2 Ethernet1/6"
-      ospf_area: "0.0.0.0"
+      ospf_area:
+        - DC2-AREA-0
+        - "0"
       network_type: point-to-point
-      ospf_process: DC2-BL2-OSPF
+      ospf_process:
+        - DC2-BL2-OSPF
+      ospf_interface:
+        - DC2-BL2-Ethernet1-4-OSPF
+        - DC2-POD2-SP2-Ethernet1-6-OSPF
       interface_capabilities:
         - kind: DcimPhysicalInterface
           data:
@@ -187,9 +259,15 @@ spec:
 
     - name: DC2-POD1-SP1-POD1-L1-OSPF
       description: "OSPF P2P — DC2-POD1-SP1 Ethernet1/11 ↔ DC2-POD1-L1 Ethernet1/1"
-      ospf_area: "0.0.0.0"
+      ospf_area:
+        - DC2-AREA-0
+        - "0"
       network_type: point-to-point
-      ospf_process: DC2-POD1-SP1-OSPF
+      ospf_process:
+        - DC2-POD1-SP1-OSPF
+      ospf_interface:
+        - DC2-POD1-SP1-Ethernet1-11-OSPF
+        - DC2-POD1-L1-Ethernet1-1-OSPF
       interface_capabilities:
         - kind: DcimPhysicalInterface
           data:
@@ -202,9 +280,15 @@ spec:
 
     - name: DC2-POD1-SP1-POD1-L2-OSPF
       description: "OSPF P2P — DC2-POD1-SP1 Ethernet1/12 ↔ DC2-POD1-L2 Ethernet1/1"
-      ospf_area: "0.0.0.0"
+      ospf_area:
+        - DC2-AREA-0
+        - "0"
       network_type: point-to-point
-      ospf_process: DC2-POD1-SP1-OSPF
+      ospf_process:
+        - DC2-POD1-SP1-OSPF
+      ospf_interface:
+        - DC2-POD1-SP1-Ethernet1-12-OSPF
+        - DC2-POD1-L2-Ethernet1-1-OSPF
       interface_capabilities:
         - kind: DcimPhysicalInterface
           data:
@@ -217,9 +301,15 @@ spec:
 
     - name: DC2-POD1-SP1-POD1-L3-OSPF
       description: "OSPF P2P — DC2-POD1-SP1 Ethernet1/13 ↔ DC2-POD1-L3 Ethernet1/1"
-      ospf_area: "0.0.0.0"
+      ospf_area:
+        - DC2-AREA-0
+        - "0"
       network_type: point-to-point
-      ospf_process: DC2-POD1-SP1-OSPF
+      ospf_process:
+        - DC2-POD1-SP1-OSPF
+      ospf_interface:
+        - DC2-POD1-SP1-Ethernet1-13-OSPF
+        - DC2-POD1-L3-Ethernet1-1-OSPF
       interface_capabilities:
         - kind: DcimPhysicalInterface
           data:
@@ -232,9 +322,15 @@ spec:
 
     - name: DC2-POD1-SP1-POD1-L4-OSPF
       description: "OSPF P2P — DC2-POD1-SP1 Ethernet1/14 ↔ DC2-POD1-L4 Ethernet1/1"
-      ospf_area: "0.0.0.0"
+      ospf_area:
+        - DC2-AREA-0
+        - "0"
       network_type: point-to-point
-      ospf_process: DC2-POD1-SP1-OSPF
+      ospf_process:
+        - DC2-POD1-SP1-OSPF
+      ospf_interface:
+        - DC2-POD1-SP1-Ethernet1-14-OSPF
+        - DC2-POD1-L4-Ethernet1-1-OSPF
       interface_capabilities:
         - kind: DcimPhysicalInterface
           data:
@@ -247,9 +343,15 @@ spec:
 
     - name: DC2-POD1-SP2-POD1-L1-OSPF
       description: "OSPF P2P — DC2-POD1-SP2 Ethernet1/21 ↔ DC2-POD1-L1 Ethernet1/2"
-      ospf_area: "0.0.0.0"
+      ospf_area:
+        - DC2-AREA-0
+        - "0"
       network_type: point-to-point
-      ospf_process: DC2-POD1-SP2-OSPF
+      ospf_process:
+        - DC2-POD1-SP2-OSPF
+      ospf_interface:
+        - DC2-POD1-SP2-Ethernet1-21-OSPF
+        - DC2-POD1-L1-Ethernet1-2-OSPF
       interface_capabilities:
         - kind: DcimPhysicalInterface
           data:
@@ -262,9 +364,15 @@ spec:
 
     - name: DC2-POD1-SP2-POD1-L2-OSPF
       description: "OSPF P2P — DC2-POD1-SP2 Ethernet1/22 ↔ DC2-POD1-L2 Ethernet1/2"
-      ospf_area: "0.0.0.0"
+      ospf_area:
+        - DC2-AREA-0
+        - "0"
       network_type: point-to-point
-      ospf_process: DC2-POD1-SP2-OSPF
+      ospf_process:
+        - DC2-POD1-SP2-OSPF
+      ospf_interface:
+        - DC2-POD1-SP2-Ethernet1-22-OSPF
+        - DC2-POD1-L2-Ethernet1-2-OSPF
       interface_capabilities:
         - kind: DcimPhysicalInterface
           data:
@@ -277,9 +385,15 @@ spec:
 
     - name: DC2-POD1-SP2-POD1-L3-OSPF
       description: "OSPF P2P — DC2-POD1-SP2 Ethernet1/23 ↔ DC2-POD1-L3 Ethernet1/2"
-      ospf_area: "0.0.0.0"
+      ospf_area:
+        - DC2-AREA-0
+        - "0"
       network_type: point-to-point
-      ospf_process: DC2-POD1-SP2-OSPF
+      ospf_process:
+        - DC2-POD1-SP2-OSPF
+      ospf_interface:
+        - DC2-POD1-SP2-Ethernet1-23-OSPF
+        - DC2-POD1-L3-Ethernet1-2-OSPF
       interface_capabilities:
         - kind: DcimPhysicalInterface
           data:
@@ -292,9 +406,15 @@ spec:
 
     - name: DC2-POD1-SP2-POD1-L4-OSPF
       description: "OSPF P2P — DC2-POD1-SP2 Ethernet1/24 ↔ DC2-POD1-L4 Ethernet1/2"
-      ospf_area: "0.0.0.0"
+      ospf_area:
+        - DC2-AREA-0
+        - "0"
       network_type: point-to-point
-      ospf_process: DC2-POD1-SP2-OSPF
+      ospf_process:
+        - DC2-POD1-SP2-OSPF
+      ospf_interface:
+        - DC2-POD1-SP2-Ethernet1-24-OSPF
+        - DC2-POD1-L4-Ethernet1-2-OSPF
       interface_capabilities:
         - kind: DcimPhysicalInterface
           data:
@@ -307,9 +427,15 @@ spec:
 
     - name: DC2-POD2-SP1-POD2-L1-OSPF
       description: "OSPF P2P — DC2-POD2-SP1 Ethernet1/11 ↔ DC2-POD2-L1 Ethernet1/1"
-      ospf_area: "0.0.0.0"
+      ospf_area:
+        - DC2-AREA-0
+        - "0"
       network_type: point-to-point
-      ospf_process: DC2-POD2-SP1-OSPF
+      ospf_process:
+        - DC2-POD2-SP1-OSPF
+      ospf_interface:
+        - DC2-POD2-SP1-Ethernet1-11-OSPF
+        - DC2-POD2-L1-Ethernet1-1-OSPF
       interface_capabilities:
         - kind: DcimPhysicalInterface
           data:
@@ -322,9 +448,15 @@ spec:
 
     - name: DC2-POD2-SP1-POD2-L2-OSPF
       description: "OSPF P2P — DC2-POD2-SP1 Ethernet1/12 ↔ DC2-POD2-L2 Ethernet1/1"
-      ospf_area: "0.0.0.0"
+      ospf_area:
+        - DC2-AREA-0
+        - "0"
       network_type: point-to-point
-      ospf_process: DC2-POD2-SP1-OSPF
+      ospf_process:
+        - DC2-POD2-SP1-OSPF
+      ospf_interface:
+        - DC2-POD2-SP1-Ethernet1-12-OSPF
+        - DC2-POD2-L2-Ethernet1-1-OSPF
       interface_capabilities:
         - kind: DcimPhysicalInterface
           data:
@@ -337,9 +469,15 @@ spec:
 
     - name: DC2-POD2-SP1-POD2-L3-OSPF
       description: "OSPF P2P — DC2-POD2-SP1 Ethernet1/13 ↔ DC2-POD2-L3 Ethernet1/1"
-      ospf_area: "0.0.0.0"
+      ospf_area:
+        - DC2-AREA-0
+        - "0"
       network_type: point-to-point
-      ospf_process: DC2-POD2-SP1-OSPF
+      ospf_process:
+        - DC2-POD2-SP1-OSPF
+      ospf_interface:
+        - DC2-POD2-SP1-Ethernet1-13-OSPF
+        - DC2-POD2-L3-Ethernet1-1-OSPF
       interface_capabilities:
         - kind: DcimPhysicalInterface
           data:
@@ -352,9 +490,15 @@ spec:
 
     - name: DC2-POD2-SP1-POD2-L4-OSPF
       description: "OSPF P2P — DC2-POD2-SP1 Ethernet1/14 ↔ DC2-POD2-L4 Ethernet1/1"
-      ospf_area: "0.0.0.0"
+      ospf_area:
+        - DC2-AREA-0
+        - "0"
       network_type: point-to-point
-      ospf_process: DC2-POD2-SP1-OSPF
+      ospf_process:
+        - DC2-POD2-SP1-OSPF
+      ospf_interface:
+        - DC2-POD2-SP1-Ethernet1-14-OSPF
+        - DC2-POD2-L4-Ethernet1-1-OSPF
       interface_capabilities:
         - kind: DcimPhysicalInterface
           data:
@@ -367,9 +511,15 @@ spec:
 
     - name: DC2-POD2-SP2-POD2-L1-OSPF
       description: "OSPF P2P — DC2-POD2-SP2 Ethernet1/21 ↔ DC2-POD2-L1 Ethernet1/2"
-      ospf_area: "0.0.0.0"
+      ospf_area:
+        - DC2-AREA-0
+        - "0"
       network_type: point-to-point
-      ospf_process: DC2-POD2-SP2-OSPF
+      ospf_process:
+        - DC2-POD2-SP2-OSPF
+      ospf_interface:
+        - DC2-POD2-SP2-Ethernet1-21-OSPF
+        - DC2-POD2-L1-Ethernet1-2-OSPF
       interface_capabilities:
         - kind: DcimPhysicalInterface
           data:
@@ -382,9 +532,15 @@ spec:
 
     - name: DC2-POD2-SP2-POD2-L2-OSPF
       description: "OSPF P2P — DC2-POD2-SP2 Ethernet1/22 ↔ DC2-POD2-L2 Ethernet1/2"
-      ospf_area: "0.0.0.0"
+      ospf_area:
+        - DC2-AREA-0
+        - "0"
       network_type: point-to-point
-      ospf_process: DC2-POD2-SP2-OSPF
+      ospf_process:
+        - DC2-POD2-SP2-OSPF
+      ospf_interface:
+        - DC2-POD2-SP2-Ethernet1-22-OSPF
+        - DC2-POD2-L2-Ethernet1-2-OSPF
       interface_capabilities:
         - kind: DcimPhysicalInterface
           data:
@@ -397,9 +553,15 @@ spec:
 
     - name: DC2-POD2-SP2-POD2-L3-OSPF
       description: "OSPF P2P — DC2-POD2-SP2 Ethernet1/23 ↔ DC2-POD2-L3 Ethernet1/2"
-      ospf_area: "0.0.0.0"
+      ospf_area:
+        - DC2-AREA-0
+        - "0"
       network_type: point-to-point
-      ospf_process: DC2-POD2-SP2-OSPF
+      ospf_process:
+        - DC2-POD2-SP2-OSPF
+      ospf_interface:
+        - DC2-POD2-SP2-Ethernet1-23-OSPF
+        - DC2-POD2-L3-Ethernet1-2-OSPF
       interface_capabilities:
         - kind: DcimPhysicalInterface
           data:
@@ -412,9 +574,15 @@ spec:
 
     - name: DC2-POD2-SP2-POD2-L4-OSPF
       description: "OSPF P2P — DC2-POD2-SP2 Ethernet1/24 ↔ DC2-POD2-L4 Ethernet1/2"
-      ospf_area: "0.0.0.0"
+      ospf_area:
+        - DC2-AREA-0
+        - "0"
       network_type: point-to-point
-      ospf_process: DC2-POD2-SP2-OSPF
+      ospf_process:
+        - DC2-POD2-SP2-OSPF
+      ospf_interface:
+        - DC2-POD2-SP2-Ethernet1-24-OSPF
+        - DC2-POD2-L4-Ethernet1-2-OSPF
       interface_capabilities:
         - kind: DcimPhysicalInterface
           data:
