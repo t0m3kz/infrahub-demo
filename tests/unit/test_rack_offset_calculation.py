@@ -6,8 +6,8 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from generators.add.rack import RackGenerator
 from generators.models import LocationSuiteModel, RackModel, RackParent, RackPod, Template
+from generators.topology.rack import RackGenerator
 
 
 def _build_generator(

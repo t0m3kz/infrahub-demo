@@ -2,32 +2,67 @@ from __future__ import annotations
 
 import asyncio
 from pathlib import Path
-from typing import Literal, cast
+from typing import Literal
 
-from ..common import CablingOptions, CommonGenerator, DeviceOptions, RoutingOptions
-from ..helpers import DeviceNamingConfig
-from ..helpers.rack import calculate_cabling_offsets as calculate_rack_cabling_offsets
-from ..helpers.rack import (
-    expected_device_names,
-    parse_rack_data,
-    rack_sort_key,
-)
+from ..common import CablingOptions, CommonGenerator
+from ..helpers.rack import RackPlanner, RackRolesHelper, parse_rack_data
 from ..models import RackModel
 from ..protocols import DcimPhysicalDevice, DcimPhysicalInterface, LocationRack
+from ..rack import RackMixin
 
 
-class RackGenerator(CommonGenerator):
+class RackGenerator(RackMixin, CommonGenerator):
     """Generator for creating rack infrastructure based on fabric templates."""
+
+    @property
+    def _plan(self) -> RackPlanner:
+        """Lazily initialized helper for deterministic rack planning primitives."""
+        helper = getattr(self, "_planning_helper", None)
+        if helper is None:
+            helper = RackPlanner()
+            self._planning_helper = helper
+        return helper
+
+    @property
+    def _roles(self) -> RackRolesHelper:
+        """Lazily initialized helper for role-specific generation pipelines."""
+        helper = getattr(self, "_roles_helper", None)
+        if helper is None:
+            helper = RackRolesHelper(self)
+            self._roles_helper = helper
+        return helper
+
+    def _has_role_templates(self, roles: list | None) -> bool:
+        """Return True when at least one role template has positive quantity."""
+        if not roles:
+            return False
+        return any((getattr(role, "quantity", 0) or 0) > 0 for role in roles)
+
+    def _has_tor_like_templates(self) -> bool:
+        """ToR-side switch templates (physical ToR, l2-leaf, access-leaf)."""
+        return (
+            self._has_role_templates(self.data.tors)
+            or self._has_role_templates(self.data.l2_leafs)
+            or self._has_role_templates(self.data.access_leafs)
+        )
+
+    def _has_any_switch_templates(self) -> bool:
+        """Any switch template that rack generator can materialize."""
+        return (
+            self._has_role_templates(self.data.leafs)
+            or self._has_tor_like_templates()
+            or self._has_role_templates(self.data.border_leafs)
+        )
 
     @staticmethod
     def _rack_sort_key(rack: LocationRack) -> tuple[int, int, str]:
         """Compatibility wrapper retained for existing tests/callers."""
-        return rack_sort_key(rack)
+        return RackPlanner.rack_sort_key(rack)
 
     @staticmethod
     def _parse_rack_data(data: dict) -> RackModel:
         """Compatibility wrapper retained for existing tests/callers."""
-        return parse_rack_data(data)
+        return RackPlanner.parse_rack_data(data)
 
     async def fetch_rack_devices_with_interfaces(
         self,
@@ -119,11 +154,11 @@ class RackGenerator(CommonGenerator):
         )
         network_racks = sorted(
             (r for r in row_racks if r.rack_type.value == "network"),
-            key=rack_sort_key,
+            key=self._rack_sort_key,
         )
         tor_racks = sorted(
             (r for r in row_racks if r.rack_type.value == "tor"),
-            key=rack_sort_key,
+            key=self._rack_sort_key,
         )
 
         if not network_racks:
@@ -144,102 +179,6 @@ class RackGenerator(CommonGenerator):
             self.logger.info(
                 f"Rack {rack.name.value} (type={rack.rack_type.value}) has been updated to checksum {network_checksum}"
             )
-
-    def _derive_spine_info(self) -> tuple[list[str], list[str]]:
-        """Derive spine device names and interface names from query data.
-
-        The rack.gql query already fetches pod.amount_of_spines,
-        pod.spine_template.interfaces(role="downlink"), and all naming
-        indexes (dc.index, pod.index).  The pod generator always creates
-        spines with strategy="standard" and indexes=[dc.index, pod.index],
-        so spine names are deterministic — no API call needed.
-
-        Returns:
-            Tuple of (device_names, interface_names) for create_cabling
-        """
-        pod = self.data.pod
-        dc = pod.parent
-        spine_count = pod.amount_of_spines
-        spine_template = pod.spine_template
-
-        if not spine_count or not spine_template:
-            raise RuntimeError(
-                f"Rack {self.data.name}: Cannot derive spine info - "
-                f"amount_of_spines={spine_count}, spine_template={'set' if spine_template else 'None'}"
-            )
-
-        # Pod generator uses naming convention from DC with indexes=[dc.index, pod.index]
-        naming = DeviceNamingConfig(strategy=dc.naming_convention)
-        spine_indexes = [dc.index, pod.index]
-        device_names = sorted(
-            [
-                naming.format_device_name(
-                    self.fabric_name,
-                    "spine",
-                    index=idx,
-                    fabric_name=self.fabric_name,
-                    indexes=spine_indexes,
-                )
-                for idx in range(1, spine_count + 1)
-            ]
-        )
-
-        # Interface names from spine template — query pre-filters to role=downlink
-        interface_names = sorted(iface.name for iface in spine_template.interfaces)
-
-        if not interface_names:
-            raise RuntimeError(f"Rack {self.data.name}: Spine template has no downlink interfaces")
-
-        self.logger.info(
-            f"Derived {len(device_names)} spine device names with "
-            f"{len(interface_names)} downlink interface(s) from query data"
-        )
-        return device_names, interface_names
-
-    def _derive_super_spine_info(self) -> tuple[list[str], list[str]]:
-        """Derive super-spine device names and uplink interface names from query data.
-
-        The DC generator always creates super-spines with indexes=[dc.index], so names
-        are deterministic — no API call needed.  Super-spine template interfaces are
-        pre-filtered to role="uplink" in rack.gql.
-
-        Returns:
-            Tuple of (device_names, interface_names) for create_cabling.
-
-        Raises:
-            RuntimeError: when super-spine count or template is not set on the DC.
-        """
-        dc = self.data.pod.parent
-        count = dc.amount_of_super_spines
-        template = dc.super_spine_template
-
-        if not count or not template:
-            raise RuntimeError(
-                f"Rack {self.data.name}: Cannot derive super-spine info — "
-                f"amount_of_super_spines={count}, super_spine_template={'set' if template else 'None'}"
-            )
-
-        naming = DeviceNamingConfig(strategy=self.data.pod.parent.naming_convention)
-        device_names = sorted(
-            naming.format_device_name(
-                self.fabric_name,
-                "super-spine",
-                index=idx,
-                fabric_name=self.fabric_name,
-                indexes=[dc.index],
-            )
-            for idx in range(1, count + 1)
-        )
-
-        interface_names = sorted(iface.name for iface in template.interfaces if iface.role == "uplink")
-        if not interface_names:
-            raise RuntimeError(f"Rack {self.data.name}: Super-spine template has no uplink interfaces")
-
-        self.logger.info(
-            f"Derived {len(device_names)} super-spine device names with "
-            f"{len(interface_names)} uplink interface(s) from query data"
-        )
-        return device_names, interface_names
 
     async def _get_leaf_devices_in_row(self, pod_id: str, row_index: int) -> tuple[list[str], list[str]]:
         """Query leaf devices in same row and their interfaces for ToR-to-leaf cabling.
@@ -367,7 +306,7 @@ class RackGenerator(CommonGenerator):
         total_tors_in_pod: int | None = None,
     ) -> int:
         """Thin wrapper around helper function for readability and compatibility."""
-        return calculate_rack_cabling_offsets(
+        return self._plan.calculate_cabling_offsets(
             data=self.data,
             logger=self.logger,
             device_count=device_count,
@@ -376,76 +315,6 @@ class RackGenerator(CommonGenerator):
             leafs_per_rack=leafs_per_rack,
             total_tors_in_pod=total_tors_in_pod,
         )
-
-    async def _checksum_ready(self) -> bool:
-        """Return True if this rack has a usable checksum; False if generation should abort.
-
-        When the checksum is missing the method attempts to inherit one from a sibling
-        rack (middle → ToR in mixed, sibling network → network in middle_rack).
-        A successful inheritance saves the rack and returns False so the generator
-        framework re-fires this rack with the new checksum.
-        """
-        if self.data.checksum:
-            return True
-
-        deployment_type = self.data.pod.deployment_type
-
-        if deployment_type == "mixed" and self.data.rack_type == "tor":
-            middle_racks = await self.client.filters(
-                kind=LocationRack,
-                pod__ids=[self.data.pod.id],
-                row_index__value=self.data.row_index,
-                rack_type__value="network",
-            )
-            sorted_middle_racks = sorted(middle_racks, key=rack_sort_key)
-            source_middle_rack = next((r for r in sorted_middle_racks if r.checksum.value), None)
-            if source_middle_rack:
-                rack_obj = await self.client.get(kind=LocationRack, id=self.data.id)
-                rack_obj.checksum.value = source_middle_rack.checksum.value
-                await rack_obj.save(allow_upsert=True)
-                self.logger.info(
-                    f"ToR rack {self.data.name} inherited checksum {source_middle_rack.checksum.value} "
-                    f"from middle rack {source_middle_rack.name.value}. "
-                    "Checksum update will trigger generator again to create devices."
-                )
-            else:
-                self.logger.warning(
-                    f"ToR rack {self.data.name} has no checksum and no middle rack found "
-                    f"in row {self.data.row_index} - skipping generation."
-                )
-            return False
-
-        if deployment_type == "middle_rack" and self.data.rack_type == "network":
-            sibling_racks = await self.client.filters(
-                kind=LocationRack,
-                pod__ids=[self.data.pod.id],
-                rack_type__value="network",
-            )
-            sibling_with_checksum = sorted(
-                (r for r in sibling_racks if r.id != self.data.id and r.checksum.value),
-                key=rack_sort_key,
-            )
-            if sibling_with_checksum:
-                rack_obj = await self.client.get(kind=LocationRack, id=self.data.id)
-                rack_obj.checksum.value = sibling_with_checksum[0].checksum.value
-                await rack_obj.save(allow_upsert=True)
-                self.logger.info(
-                    f"Network rack {self.data.name} inherited checksum {sibling_with_checksum[0].checksum.value} "
-                    f"from sibling rack {sibling_with_checksum[0].name.value}. "
-                    "Checksum update will trigger generator again to create devices."
-                )
-            else:
-                self.logger.warning(
-                    f"Network rack {self.data.name} has no checksum and no sibling racks found in pod "
-                    f"to inherit from — run pod generator first."
-                )
-            return False
-
-        self.logger.warning(
-            f"Rack {self.data.name} has no checksum set - skipping generation. "
-            "Checksum will be set by pod or middle rack generator."
-        )
-        return False
 
     async def _cable_and_route(
         self,
@@ -491,6 +360,8 @@ class RackGenerator(CommonGenerator):
             self.logger.error("Generator received empty data")
             return
         try:
+            # Keep module-level wrapper usage for compatibility with existing tests
+            # that patch generators.topology.rack.parse_rack_data.
             self.data = parse_rack_data(data)
         except (ValueError, KeyError, IndexError) as exc:
             self.logger.error(f"Generation failed due to {exc}")
@@ -506,10 +377,26 @@ class RackGenerator(CommonGenerator):
             f"Starting rack generation: {self.data.name} [type={self.data.rack_type}, deployment={deployment_type}]"
         )
 
+        # Endpoint-only racks (no switch templates) are handled by endpoint flows.
+        # Skip rack generation here to avoid unnecessary checksum/dependency gating.
+        if not self._has_any_switch_templates():
+            self.logger.info(
+                f"Rack {self.data.name} has no switch templates — skipping rack generator (endpoint-only rack)."
+            )
+            return
+
         if not await self._checksum_ready():
             return
 
-        if deployment_type == "mixed" and self.data.rack_type == "tor" and not await self._tor_leafs_ready():
+        if not await self._earlier_rows_ready():
+            return
+
+        if (
+            deployment_type == "mixed"
+            and self.data.rack_type == "tor"
+            and self._has_tor_like_templates()
+            and not await self._tor_leafs_ready()
+        ):
             return
 
         self.logger.info(f"Generating topology for rack {self.data.name}")
@@ -544,121 +431,14 @@ class RackGenerator(CommonGenerator):
         if deployment_type == "mixed" and self.data.rack_type == "network" and self.data.leafs:
             await self.update_checksum()
 
-    async def _tor_leafs_ready(self) -> bool:
-        """Mixed deployment: ToR racks wait for the network rack's leafs to exist first."""
-        network_racks = await self.client.filters(
-            kind=LocationRack,
-            pod__ids=[self.data.pod.id],
-            row_index__value=self.data.row_index,
-            rack_type__value="network",
-        )
-
-        if not network_racks:
-            self.logger.info(
-                f"ToR rack {self.data.name} waiting for network rack in row {self.data.row_index} - skipping this run."
-            )
-            return False
-
-        source_network_rack = sorted(network_racks, key=rack_sort_key)[0]
-        leaf_data = await self.fetch_rack_devices_with_interfaces(
-            rack=source_network_rack,
-            role_filter="leaf",
-        )
-
-        if not leaf_data:
-            self.logger.info(
-                f"ToR rack {self.data.name} waiting for leafs to be generated in row {self.data.row_index} - skipping this run."
-            )
-            return False
-
-        self.logger.info(
-            f"ToR rack {self.data.name} found {len(leaf_data)} leaf devices in row {self.data.row_index} "
-            "- proceeding with ToR generation"
-        )
-        return True
-
-    def _prepare_generation_context(self) -> bool:
-        """Compute and store shared context needed by every per-role generation method.
-
-        Returns False if a prerequisite is missing (already logged) and generation should abort.
-        """
-        pod = self.data.pod
-        dc = pod.parent
-        self.deployment_id = dc.id  # Store for cable linking
-        self.pod_name = pod.name.lower()
-        self.fabric_name = dc.name.lower()
-
-        # Validate pools exist - they should be created by pod generator
-        # Failing fast prevents race conditions when multiple racks are created simultaneously
-        if not pod.loopback_pool or not pod.prefix_pool:
-            self.logger.error(
-                f"Rack {self.data.name}: Pod {pod.name} pools not found. "
-                f"Run pod generator first: infrahubctl generator generate_pod name={pod.name}"
-            )
-            return False
-
-        # Pass pool IDs from query data — _resolve_pool resolves by ID directly,
-        # avoiding name-based fallback lookups
-        self._management_pool_id = dc.management_pool.id if dc.management_pool else None
-        self._loopback_pool_id = pod.loopback_pool.id if pod.loopback_pool else None
-
-        # Indexes for leaf/ToR/l2-leaf/access-leaf naming, e.g. dc1-fab1-pod1-suite1-row1-rack5-leaf-01
-        suite = self.data.parent  # LocationSuite
-        self._device_indexes: list[int] = [
-            dc.index,
-            pod.index,
-            suite.index,
-            self.data.row_index,
-            self.data.index,
-        ]
-
-        if pod.deployment_type == "tor":
-            self.logger.info(
-                f"ToR rack {self.data.name}: using suite={suite.index}, row={self.data.row_index}, "
-                f"rack_index={self.data.index}"
-            )
-
-        # Get naming convention from DC design (wired through GQL query)
-        dc_design = dc.design
-        self._naming_conv = cast(
-            Literal["standard", "hierarchical", "flat"],
-            dc.naming_convention,
-        )
-        self._is_ipv6 = dc_design.is_ipv6 if dc_design else False
-
-        # Derive spine info once from query data (no API calls)
-        try:
-            self._spine_device_names, self._spine_interfaces = self._derive_spine_info()
-        except RuntimeError as exc:
-            self.logger.error(str(exc))
-            return False
-
-        # Prepare routing options once for all create_routing calls
-        routing_options: RoutingOptions = RoutingOptions(design=dc_design)
-        if pod.asn_pool and pod.asn_pool.id:
-            routing_options["asn_pool"] = pod.asn_pool.id
-
-        # Store shared cabling/routing context for _cable_and_route calls
-        self._technical_pool_id = pod.prefix_pool.id if pod.prefix_pool else None
-        # P2P prefix length: /127 for IPv6/dual-stack (default), /31 for IPv4 (exception)
-        self._p2p_prefix_length = 127 if dc_design and getattr(dc_design, "p2p_ipv6", False) else 31
-        self._routing_options = routing_options
-        return True
-
     async def _generate_leafs(self, created_leaf_devices: list[str]) -> bool:
-        """Create → cable → route leaf devices. Appends to created_leaf_devices in place.
+        """Create -> cable -> route leaf devices.
 
         Returns False on a fatal error (already logged).
         """
         pod = self.data.pod
         for leaf_role in self.data.leafs or []:
-            expected_names = expected_device_names(
-                naming_config=DeviceNamingConfig(strategy=self._naming_conv),
-                fabric_name=self.fabric_name,
-                device_indexes=self._device_indexes,
-                role="leaf",
-                quantity=leaf_role.quantity,
-            )
+            expected_names = self._roles.expected_names(role="leaf", quantity=leaf_role.quantity)
             if expected_names <= self._created_device_names:
                 self.logger.info(
                     f"Skipping duplicate leaf template (devices already created: {sorted(expected_names)})"
@@ -671,20 +451,13 @@ class RackGenerator(CommonGenerator):
                 amount=leaf_role.quantity,
                 template=leaf_role.template.model_dump(),
                 naming_convention=self._naming_conv,
-                options=DeviceOptions(
-                    indexes=self._device_indexes,
-                    allocate_loopback=True,
-                    rack=self.data.id,
-                    loopback_pool=self._loopback_pool_id,
-                    loopback_prefix_length=128 if self._is_ipv6 else 32,
-                    management_pool=self._management_pool_id,
-                ),
+                options=self._roles.build_device_options(allocate_loopback=True),
             )
 
             self._created_device_names.update(leaf_devices)
             created_leaf_devices.extend(leaf_devices)
 
-            leaf_interfaces = [interface.name for interface in leaf_role.template.interfaces]
+            leaf_interfaces = self._roles.template_interfaces(leaf_role.template)
             try:
                 cabling_offset = self.calculate_cabling_offsets(device_count=leaf_role.quantity, device_type="leaf")
             except RuntimeError as exc:
@@ -706,20 +479,14 @@ class RackGenerator(CommonGenerator):
         return True
 
     async def _generate_tors(self) -> bool:
-        """Create → cable → route ToR devices (always VTEPs, cabled directly to spines).
+        """Create -> cable -> route ToR devices.
 
         L2-only aggregation switches below leafs use role "l2-leaf"/"access-leaf" instead.
         Returns False on a fatal error (already logged).
         """
         pod = self.data.pod
         for tor_role in self.data.tors or []:
-            expected_names = expected_device_names(
-                naming_config=DeviceNamingConfig(strategy=self._naming_conv),
-                fabric_name=self.fabric_name,
-                device_indexes=self._device_indexes,
-                role="tor",
-                quantity=tor_role.quantity,
-            )
+            expected_names = self._roles.expected_names(role="tor", quantity=tor_role.quantity)
             if expected_names <= self._created_device_names:
                 self.logger.info(f"Skipping duplicate tor template (devices already created: {sorted(expected_names)})")
                 continue
@@ -730,27 +497,18 @@ class RackGenerator(CommonGenerator):
                 amount=tor_role.quantity,
                 template=tor_role.template.model_dump(),
                 naming_convention=self._naming_conv,
-                options=DeviceOptions(
-                    indexes=self._device_indexes,
-                    allocate_loopback=True,
-                    rack=self.data.id,
-                    loopback_pool=self._loopback_pool_id,
-                    loopback_prefix_length=128 if self._is_ipv6 else 32,
-                    management_pool=self._management_pool_id,
-                ),
+                options=self._roles.build_device_options(allocate_loopback=True),
             )
 
             self._created_device_names.update(tor_devices)
 
-            tor_interfaces = [
-                interface.name for interface in tor_role.template.interfaces if interface.role == "uplink"
-            ]
+            tor_interfaces = self._roles.template_interfaces(tor_role.template, role="uplink")
 
             tors_per_rack = sum(r.quantity or 0 for r in self.data.tors or [])
-            # Live count, not design.compute_racks_per_row (a max capacity) — a pod with
+            # Live count, not design.compute_racks_per_row (a max capacity) - a pod with
             # fewer racks per row than its design allows would otherwise get an inflated
             # offset that overflows past the real spine downlink interfaces.
-            sibling_racks = await self.client.filters(kind="LocationRack", pod__ids=[pod.id])
+            sibling_racks = await self.client.filters(kind=LocationRack, pod__ids=[pod.id])
             prev_row_racks = sum(
                 1
                 for r in sibling_racks
@@ -768,7 +526,7 @@ class RackGenerator(CommonGenerator):
 
             if not self._spine_device_names:
                 self.logger.error(
-                    f"Rack {self.data.name}: No spine devices found in pod — cannot cable ToRs to spines."
+                    f"Rack {self.data.name}: No spine devices found in pod - cannot cable ToRs to spines."
                 )
                 return False
 
@@ -787,7 +545,7 @@ class RackGenerator(CommonGenerator):
         return True
 
     async def _generate_l2_leafs(self, created_leaf_devices: list[str]) -> None:
-        """Create l2-leaf devices and cable them to local leafs. No routing — L2-only."""
+        """Create l2-leaf devices and cable them to local leafs. No routing - L2-only."""
         pod = self.data.pod
         for l2_leaf_role in self.data.l2_leafs or []:
             l2_leaf_devices = await self.create_devices(
@@ -796,19 +554,12 @@ class RackGenerator(CommonGenerator):
                 amount=l2_leaf_role.quantity,
                 template=l2_leaf_role.template.model_dump(),
                 naming_convention=self._naming_conv,
-                options=DeviceOptions(
-                    indexes=self._device_indexes,
-                    allocate_loopback=False,
-                    rack=self.data.id,
-                    management_pool=self._management_pool_id,
-                ),
+                options=self._roles.build_device_options(allocate_loopback=False),
             )
 
             self._created_device_names.update(l2_leaf_devices)
 
-            l2_leaf_interfaces = [
-                interface.name for interface in l2_leaf_role.template.interfaces if interface.role == "uplink"
-            ]
+            l2_leaf_interfaces = self._roles.template_interfaces(l2_leaf_role.template, role="uplink")
 
             target = await self._resolve_local_leaf_cabling_target(
                 created_leaf_devices=created_leaf_devices,
@@ -830,7 +581,7 @@ class RackGenerator(CommonGenerator):
                 strategy=strategy,
                 options=CablingOptions(
                     cabling_offset=cabling_offset,
-                    pool=None,  # l2-leaf<->leaf links are 802.1Q trunks — no IP either end.
+                    pool=None,  # l2-leaf<->leaf links are 802.1Q trunks - no IP either end.
                 ),
             )
 
@@ -838,8 +589,7 @@ class RackGenerator(CommonGenerator):
         """Create access-leaf devices: routed VTEPs in the same position as l2-leafs.
 
         Cabled to the local leaf pair (underlay eBGP/OSPF), plus a second,
-        underlay-less overlay EVPN session straight to the pod's spines (mirrors
-        pod.py's skip_underlay=True spine pre-seed).
+        underlay-less overlay EVPN session straight to the pod's spines.
         """
         pod = self.data.pod
         for access_leaf_role in self.data.access_leafs or []:
@@ -849,21 +599,12 @@ class RackGenerator(CommonGenerator):
                 amount=access_leaf_role.quantity,
                 template=access_leaf_role.template.model_dump(),
                 naming_convention=self._naming_conv,
-                options=DeviceOptions(
-                    indexes=self._device_indexes,
-                    allocate_loopback=True,
-                    rack=self.data.id,
-                    loopback_pool=self._loopback_pool_id,
-                    loopback_prefix_length=128 if self._is_ipv6 else 32,
-                    management_pool=self._management_pool_id,
-                ),
+                options=self._roles.build_device_options(allocate_loopback=True),
             )
 
             self._created_device_names.update(access_leaf_devices)
 
-            access_leaf_interfaces = [
-                interface.name for interface in access_leaf_role.template.interfaces if interface.role == "uplink"
-            ]
+            access_leaf_interfaces = self._roles.template_interfaces(access_leaf_role.template, role="uplink")
 
             target = await self._resolve_local_leaf_cabling_target(
                 created_leaf_devices=created_leaf_devices,
@@ -888,8 +629,7 @@ class RackGenerator(CommonGenerator):
                 top_role="leaf",
             )
             if self._routing_options.get("design"):
-                # No physical link to spines — skip underlay planning for this call.
-                overlay_only_options: RoutingOptions = {**self._routing_options, "skip_underlay": True}
+                overlay_only_options = self._roles.overlay_only_routing_options()
                 await self.create_routing(
                     bottom_devices=access_leaf_devices,
                     top_devices=self._spine_device_names,
@@ -900,10 +640,7 @@ class RackGenerator(CommonGenerator):
                 )
 
     async def _generate_border_leafs(self, deployment_type: str) -> None:
-        """Create border-leaf devices and cable uplinks to pod spines (always, same as leafs).
-
-        Endpoint generator only handles FW/LB → border-leaf connections.
-        """
+        """Create border-leaf devices and cable uplinks to pod spines (always, same as leafs)."""
         pod = self.data.pod
         dc = pod.parent
         for bl_role in self.data.border_leafs or []:
@@ -913,54 +650,42 @@ class RackGenerator(CommonGenerator):
                 amount=bl_role.quantity,
                 template=bl_role.template.model_dump(),
                 naming_convention=self._naming_conv,
-                options=DeviceOptions(
-                    indexes=self._device_indexes,
-                    allocate_loopback=True,
-                    rack=self.data.id,
-                    loopback_pool=self._loopback_pool_id,
-                    loopback_prefix_length=128 if self._is_ipv6 else 32,
-                    management_pool=self._management_pool_id,
-                ),
+                options=self._roles.build_device_options(allocate_loopback=True),
             )
 
             self._created_device_names.update(bl_devices)
 
-            # Uplinks sorted by name: [0..max_super_spines) reserved for DCI, then pod spines.
-            all_bl_uplinks = sorted([iface.name for iface in bl_role.template.interfaces if iface.role == "uplink"])
+            all_bl_uplinks = self._roles.template_interfaces(bl_role.template, role="uplink")
             if not all_bl_uplinks:
                 self.logger.warning(
-                    f"Rack {self.data.name}: border-leaf template has no uplink interfaces — skipping fabric cabling"
+                    f"Rack {self.data.name}: border-leaf template has no uplink interfaces - skipping fabric cabling"
                 )
                 continue
 
             max_super_spines = dc.amount_of_super_spines
             spine_count = pod.amount_of_spines
-            bl_uplink_interfaces = all_bl_uplinks[max_super_spines : max_super_spines + spine_count]
+            dci_reserved, bl_uplink_interfaces = self._roles.split_border_leaf_uplinks(
+                uplink_interfaces=all_bl_uplinks,
+                reserved_dci_count=max_super_spines,
+                spine_count=spine_count,
+            )
             if not bl_uplink_interfaces:
                 self.logger.warning(
                     f"Rack {self.data.name}: not enough border-leaf uplinks for pod spines "
                     f"(uplinks={len(all_bl_uplinks)}, reserved_dci={max_super_spines}, "
-                    f"needed={spine_count}) — skipping fabric cabling"
+                    f"needed={spine_count}) - skipping fabric cabling"
                 )
                 continue
 
             self.logger.info(
                 f"Rack {self.data.name}: border-leaf fabric uplinks {bl_uplink_interfaces} "
-                f"(DCI reserved: {all_bl_uplinks[:max_super_spines]})"
+                f"(DCI reserved: {dci_reserved})"
             )
 
-            # Border-leafs connect to pod spines after regular leafs. Use the design's
-            # max_leafs_per_network_rack (not this rack's own leaf count) so the base
-            # offset stays consistent across rows with different leaf counts.
-            design_max_leafs = pod.design.max_leafs_per_network_rack if pod.design else 0
-            leafs_per_rack = max(design_max_leafs, sum(r.quantity or 0 for r in self.data.leafs or []))
+            leafs_per_rack = self._roles.border_leafs_per_rack()
 
             total_tors_in_pod: int | None = None
             if deployment_type == "tor":
-                # Live ToR-rack count (not design.rows * design-max, a whole-pod max
-                # capacity) so a pod with fewer racks per row than its design allows
-                # doesn't get an inflated offset. This rack has no ToR templates of its
-                # own, so max_tors_per_compute_rack stands in for its per-rack quantity.
                 max_tors_per_compute_rack = pod.design.max_tors_per_compute_rack if pod.design else 0
                 sibling_tor_racks = await self.client.filters(
                     kind=LocationRack, pod__ids=[pod.id], rack_type__value="tor"

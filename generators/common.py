@@ -566,10 +566,9 @@ class CommonGenerator(FailOnErrorLoggerMixin, RoutingMixin, InfrahubGenerator):
         if options is None:
             options = CablingOptions()
         cabling_offset: int = int(options.get("cabling_offset", 0))
-
         self.logger.info(
             f"Creating cabling: {len(bottom_devices)} bottom → {len(top_devices)} top "
-            f"[strategy={strategy}, offset={cabling_offset}]"
+            f"[strategy={strategy}, offset={cabling_offset}, strict_speed_validation=True]"
         )
 
         # Retry querying interfaces until template instantiation completes.
@@ -620,9 +619,17 @@ class CommonGenerator(FailOnErrorLoggerMixin, RoutingMixin, InfrahubGenerator):
             bottom_sorting=bottom_sorting,
             top_sorting=top_sorting,
         )
+        strict_plan_profile = {
+            # Always enforce speed-aware strict matching for physical cabling plans.
+            # Creating mismatched links is not useful operationally.
+            "speed_aware": True,
+            "validate_speeds": True,
+            "strict_speed_validation": True,
+        }
         cabling_plan = planner.build_cabling_plan(
             scenario=strategy,
             cabling_offset=cabling_offset,
+            **strict_plan_profile,
         )
 
         if not cabling_plan:

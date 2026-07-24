@@ -10,7 +10,7 @@ from __future__ import annotations
 import asyncio
 from unittest.mock import AsyncMock, MagicMock
 
-from generators.add.circuit import PhysicalCircuitGenerator, VirtualCircuitGenerator
+from generators.topology.circuit import PhysicalCircuitGenerator, VirtualCircuitGenerator
 
 # ---------------------------------------------------------------------------
 # Minimal AsyncMock generator harness

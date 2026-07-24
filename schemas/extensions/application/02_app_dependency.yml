@@ -8,9 +8,8 @@ version: "1.0"
 # a proper intermediary node so that port, port range, and protocol can be
 # stored on the edge itself.
 #
-# When port_start / port_end / protocol are left unset the security-rules
-# generator falls back to the built-in PORT_MAP heuristic (component type pair
-# lookup). Explicit values always take priority over the heuristic.
+# Security-rule generation expects explicit protocol/port information on each
+# dependency edge. Dependencies without protocol and port_start are skipped.
 # ============================================================================
 
 nodes:
@@ -27,6 +26,7 @@ nodes:
     display_label: "{{ name__value }}"
     uniqueness_constraints:
       - ["name__value"]
+      - [source, target, protocol__value, port_start__value, port_end__value]
     attributes:
       - name: name
         kind: Text
@@ -37,7 +37,7 @@ nodes:
         kind: Dropdown
         optional: true
         order_weight: 300
-        description: "IP protocol for this dependency (overrides PORT_MAP when set)"
+        description: "IP protocol for this dependency edge"
         choices:
           - name: tcp
             label: "TCP"
@@ -55,7 +55,7 @@ nodes:
         kind: Number
         optional: true
         order_weight: 400
-        description: "Destination port (or start of port range); overrides PORT_MAP"
+        description: "Destination port (or start of port range)"
       - name: port_end
         kind: Number
         optional: true

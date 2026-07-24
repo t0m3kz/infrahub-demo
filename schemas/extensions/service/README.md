@@ -20,7 +20,7 @@ Both side A and side B interfaces consume/reference the same managed circuit.
 
 **Purpose**: Operational management for provider circuit
 
-**Created by**: WAN connectivity generator (`generators/add/wan.py`)
+**Created by**: WAN connectivity generator (`generators/topology/wan.py`)
 
 **Usage**: Active - Created ONCE per circuit, consumed by both sides
 
@@ -61,7 +61,7 @@ DcimCable
 
 ## References
 
-- [WAN Generator](../../generators/add/wan.py) - Creates circuits and managed entities
+- [WAN Generator](../../generators/topology/wan.py) - Creates circuits and managed entities
 - [TopologyCircuit Schema](../topology/topology_connectivity.yml) - Provider circuit definition
 
 ## Design Rationale
@@ -284,6 +284,6 @@ For the complete three-layer architecture, create:
 
 ## Implementation References
 
-- [WAN Generator](../../generators/add/wan.py) - Creates all three circuit objects
+- [WAN Generator](../../generators/topology/wan.py) - Creates all three circuit objects
 - [Common Transform](../../transforms/common.py) - Extracts circuit services from interfaces
 - [TopologyCircuit Schema](../topology/topology_connectivity.yml) - Base circuit definition

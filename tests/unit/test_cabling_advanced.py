@@ -561,3 +561,41 @@ class TestBuildSpeedAwarePlan:
             planner.build_cabling_plan(scenario="rack", speed_aware=False)
 
         mock_speed.assert_not_called()
+
+    def test_build_cabling_plan_forwards_strict_speed_validation_true(self) -> None:
+        """When strict_speed_validation=True, build path forwards strict=True."""
+        bottom = [_make_speed_interface("Eth1", "leaf-01", "100GBASE-SR4")]
+        top = [_make_speed_interface("Eth1", "spine-01", "100GBASE-LR4")]
+
+        planner = CablingPlanner(bottom, top)
+        fake_plan = [(bottom[0], top[0])]
+
+        with patch.object(planner._strategies["rack"], "build_plan", return_value=fake_plan):
+            with patch.object(planner, "_validate_interface_speeds", return_value=fake_plan) as mock_validate:
+                planner.build_cabling_plan(
+                    scenario="rack",
+                    speed_aware=False,
+                    validate_speeds=True,
+                    strict_speed_validation=True,
+                )
+
+        mock_validate.assert_called_once_with(cabling_plan=fake_plan, strict=True)
+
+    def test_build_cabling_plan_forwards_strict_speed_validation_false(self) -> None:
+        """When strict_speed_validation=False, build path forwards strict=False."""
+        bottom = [_make_speed_interface("Eth1", "leaf-01", "100GBASE-SR4")]
+        top = [_make_speed_interface("Eth1", "spine-01", "100GBASE-LR4")]
+
+        planner = CablingPlanner(bottom, top)
+        fake_plan = [(bottom[0], top[0])]
+
+        with patch.object(planner._strategies["rack"], "build_plan", return_value=fake_plan):
+            with patch.object(planner, "_validate_interface_speeds", return_value=fake_plan) as mock_validate:
+                planner.build_cabling_plan(
+                    scenario="rack",
+                    speed_aware=False,
+                    validate_speeds=True,
+                    strict_speed_validation=False,
+                )
+
+        mock_validate.assert_called_once_with(cabling_plan=fake_plan, strict=False)

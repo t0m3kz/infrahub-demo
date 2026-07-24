@@ -35,13 +35,23 @@ The flagship customer. Three production applications, each decomposed into front
 backend, and database components, mapped to VM capabilities and VXLAN segments.
 
 ```text
+06_applications/
+├── 00_shared.yml        # Shared services segment (DNS/NTP/monitoring)
+├── 05_service_ports.yml # Global AppServicePort catalog (shared by all customers)
+├── C001/
+├── C002/
+└── C003/
+
 C001/
 ├── 00_namespaces.yml     # IP namespaces: C001-PROD, C001-NONPROD
 ├── 01_segments.yml       # Network segments per tier: web-frontend, app-backend, database, cache
 ├── 02_portfolio.yml      # AppPortfolio: owner C001
 ├── 03_applications.yml   # trade-portal (p+n), auth-platform (p), risk-engine (p), nlb-app (p)
 ├── 04_vms.yml            # DcimVirtualDevice nodes per segment
+├── 05_backend_pools.yml  # LB pool/member wiring
 ├── 06_components.yml     # AppComponent: segment + VM capability mapping
+├── 08_dependencies.yml   # AppDependency edges with protocol/port
+├── 10_nautobot.yml       # AKS-hosted Nautobot stack
 └── 07_nlb_listeners.yml  # NLB listener config for nlb-app
 ```
 
@@ -71,7 +81,9 @@ C002/
 ├── 02_portfolio.yml
 ├── 03_applications.yml   # shipment-tracker (p+n), fleet-manager (p)
 ├── 04_vms.yml
-└── 06_components.yml     # AppComponent mapping for all three applications
+├── 05_backend_pools.yml
+├── 06_components.yml     # AppComponent mapping for all three applications
+└── 08_dependencies.yml
 ```
 
 ---
@@ -88,7 +100,10 @@ C003/
 ├── 02_portfolio.yml
 ├── 03_applications.yml   # vault-core (p), compliance-portal (p)
 ├── 04_vms.yml
-└── 06_components.yml
+├── 05_backend_pools.yml
+├── 06_components.yml
+├── 08_dependencies.yml
+└── 09_audit_service.yml
 ```
 
 > *Vaultex has never had a staging environment. Their MTTR is surprisingly low.

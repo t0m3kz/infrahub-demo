@@ -27,7 +27,7 @@ from ..logger import FailOnErrorLoggerMixin
 _PEER_LINK_LAG_ID = 100
 
 
-class MLAGWiringGenerator(FailOnErrorLoggerMixin, InfrahubGenerator):
+class MLAGGenerator(FailOnErrorLoggerMixin, InfrahubGenerator):
     """Wire capabilities and peer-link interfaces for both devices in an MLAG domain."""
 
     async def generate(self, data: dict[str, Any]) -> None:
