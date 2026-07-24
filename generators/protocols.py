@@ -685,3 +685,72 @@ class TopologyPod(TopologyDeployment, GeneratorTarget, TopologyRackHosting, Topo
     racks: RelationshipManager[LocationRack]
     spine_template: RelationshipAttribute[CoreNode]
     subscriber_of_groups: RelationshipManager[CoreNode]
+
+
+class AppComponent(AppGeneric):
+    member_of_groups: RelationshipManager[CoreNode]
+    profiles: RelationshipManager[CoreNode]
+    subscriber_of_groups: RelationshipManager[CoreNode]
+
+
+class AppDependency(CoreNode):
+    member_of_groups: RelationshipManager[CoreNode]
+    profiles: RelationshipManager[CoreNode]
+    source: RelationshipAttribute[AppComponent]
+    subscriber_of_groups: RelationshipManager[CoreNode]
+    target: RelationshipAttribute[AppComponent]
+
+
+class AppServicePort(CoreNode):
+    port: Integer
+    port_end: IntegerOptional
+    protocol: Dropdown
+    member_of_groups: RelationshipManager[CoreNode]
+    profiles: RelationshipManager[CoreNode]
+    subscriber_of_groups: RelationshipManager[CoreNode]
+
+
+class ManagedLoadbalancerHA(CoreNode):
+    member_of_groups: RelationshipManager[CoreNode]
+    profiles: RelationshipManager[CoreNode]
+    subscriber_of_groups: RelationshipManager[CoreNode]
+
+
+class SecurityPolicy(CoreNode):
+    member_of_groups: RelationshipManager[CoreNode]
+    profiles: RelationshipManager[CoreNode]
+    rules: RelationshipManager[SecurityPolicyRule]
+    subscriber_of_groups: RelationshipManager[CoreNode]
+
+
+class SecurityPolicyRule(CoreNode):
+    member_of_groups: RelationshipManager[CoreNode]
+    policy: RelationshipAttribute[SecurityPolicy]
+    profiles: RelationshipManager[CoreNode]
+    subscriber_of_groups: RelationshipManager[CoreNode]
+
+
+class CloudSecurityGroup(CloudResource):
+    member_of_groups: RelationshipManager[CoreNode]
+    profiles: RelationshipManager[CoreNode]
+    rules: RelationshipManager[CloudSecurityGroupRule]
+    subscriber_of_groups: RelationshipManager[CoreNode]
+
+
+class CloudSecurityGroupRule(CloudResource):
+    member_of_groups: RelationshipManager[CoreNode]
+    profiles: RelationshipManager[CoreNode]
+    security_group: RelationshipAttribute[CloudSecurityGroup]
+    subscriber_of_groups: RelationshipManager[CoreNode]
+
+
+class SecuritySecurityProfile(CoreNode):
+    member_of_groups: RelationshipManager[CoreNode]
+    profiles: RelationshipManager[CoreNode]
+    subscriber_of_groups: RelationshipManager[CoreNode]
+
+
+class SecurityZone(CoreNode):
+    member_of_groups: RelationshipManager[CoreNode]
+    profiles: RelationshipManager[CoreNode]
+    subscriber_of_groups: RelationshipManager[CoreNode]

@@ -14,7 +14,8 @@ import asyncio
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
-from generators.add.app_component import AppComponentGenerator
+from generators.protocols import LoadbalancerPoolInterface, LoadbalancerPoolMember
+from generators.topology.application import AppComponentGenerator
 
 # ---------------------------------------------------------------------------
 # Harness helpers
@@ -469,7 +470,7 @@ class TestWirePoolMember:
         assert "already exists" in info_msgs
 
     def test_creates_pool_member_with_correct_data(self):
-        """Happy path → client.create called with kind='LoadbalancerPoolMember', correct data."""
+        """Happy path → client.create called with kind=LoadbalancerPoolMember, correct data."""
         gen = _make_gen()
         gen.client.filters = AsyncMock(
             side_effect=[
@@ -489,7 +490,7 @@ class TestWirePoolMember:
 
         assert gen.client.create.call_count >= 1
         first_create_kwargs = gen.client.create.call_args_list[0].kwargs
-        assert first_create_kwargs["kind"] == "LoadbalancerPoolMember"
+        assert first_create_kwargs["kind"] == LoadbalancerPoolMember
         data = first_create_kwargs["data"]
         assert data["name"] == self._CALL["member_name"]
         assert data["vip_service"] == {"id": "vip-1"}
@@ -517,7 +518,7 @@ class TestWirePoolMember:
         # Second create call is for PoolInterface
         assert gen.client.create.call_count >= 2
         pi_create_kwargs = gen.client.create.call_args_list[1].kwargs
-        assert pi_create_kwargs["kind"] == "LoadbalancerPoolInterface"
+        assert pi_create_kwargs["kind"] == LoadbalancerPoolInterface
         assert pi_create_kwargs["data"]["port"] == 8443
 
     def test_no_backend_port_omitted_from_pool_interface(self):
@@ -541,7 +542,7 @@ class TestWirePoolMember:
 
         assert gen.client.create.call_count >= 2
         pi_create_kwargs = gen.client.create.call_args_list[1].kwargs
-        assert pi_create_kwargs["kind"] == "LoadbalancerPoolInterface"
+        assert pi_create_kwargs["kind"] == LoadbalancerPoolInterface
         assert "port" not in pi_create_kwargs["data"]
 
     def test_pool_member_create_failure_logs_error(self):

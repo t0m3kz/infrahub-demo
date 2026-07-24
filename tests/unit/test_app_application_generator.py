@@ -13,7 +13,8 @@ import asyncio
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
-from generators.add.application import (
+from generators.protocols import CloudSecurityGroup, CloudSecurityGroupRule
+from generators.topology.application import (
     AppApplicationGenerator,
     _resolve_port,
     _seg_cidr,
@@ -165,7 +166,7 @@ class TestGetOrCreateSg:
         assert result is new_sg
         gen.client.create.assert_called_once()
         call_kwargs = gen.client.create.call_args.kwargs
-        assert call_kwargs["kind"] == "CloudSecurityGroup"
+        assert call_kwargs["kind"] == CloudSecurityGroup
         data = call_kwargs["data"]
         assert data["name"] == "sg-myapp"
         assert data["virtual_network"] == {"id": "vnet-99"}
@@ -266,9 +267,7 @@ class TestCreateCloudRule:
         dst_comp = self._comp(self._cloud_seg(), "api", "backend")
         dep = _dep(protocol="tcp", port_start=443)
 
-        asyncio.run(
-            gen._create_cloud_rule("myapp", src_comp, dst_comp, dep, "myapp-frontend-to-api", "frontend", "backend")
-        )
+        asyncio.run(gen._create_cloud_rule("myapp", src_comp, dst_comp, dep, "myapp-frontend-to-api"))
 
         rule_data = gen.client.create.call_args.kwargs["data"]
         assert rule_data["direction"] == "ingress"
@@ -279,7 +278,7 @@ class TestCreateCloudRule:
         dst_comp = self._comp(self._onprem_seg(), "db", "database")
         dep = _dep(protocol="tcp", port_start=5432)
 
-        asyncio.run(gen._create_cloud_rule("myapp", src_comp, dst_comp, dep, "myapp-api-to-db", "backend", "database"))
+        asyncio.run(gen._create_cloud_rule("myapp", src_comp, dst_comp, dep, "myapp-api-to-db"))
 
         rule_data = gen.client.create.call_args.kwargs["data"]
         assert rule_data["direction"] == "egress"
@@ -294,7 +293,7 @@ class TestCreateCloudRule:
         dst_comp = self._comp(self._cloud_seg(), "api", "backend")
         dep = _dep(protocol="tcp", port_start=8200)
 
-        asyncio.run(gen._create_cloud_rule("myapp", src_comp, dst_comp, dep, "myapp-fe-to-api", "frontend", "backend"))
+        asyncio.run(gen._create_cloud_rule("myapp", src_comp, dst_comp, dep, "myapp-fe-to-api"))
 
         rule_data = gen.client.create.call_args.kwargs["data"]
         assert rule_data["protocol"] == "tcp"
@@ -306,7 +305,7 @@ class TestCreateCloudRule:
         dst_comp = self._comp(self._cloud_seg(), "api", "backend")
         dep = _dep(protocol="tcp", port_start=8000, port_end=8080)
 
-        asyncio.run(gen._create_cloud_rule("myapp", src_comp, dst_comp, dep, "myapp-fe-to-api", "frontend", "backend"))
+        asyncio.run(gen._create_cloud_rule("myapp", src_comp, dst_comp, dep, "myapp-fe-to-api"))
 
         rule_data = gen.client.create.call_args.kwargs["data"]
         assert rule_data["port_start"] == 8000
@@ -319,9 +318,7 @@ class TestCreateCloudRule:
         dst_comp = self._comp(self._cloud_seg(), "api", "backend")
         dep = _dep()  # no protocol, no port_start
 
-        result = asyncio.run(
-            gen._create_cloud_rule("myapp", src_comp, dst_comp, dep, "myapp-fe-to-api", "frontend", "backend")
-        )
+        result = asyncio.run(gen._create_cloud_rule("myapp", src_comp, dst_comp, dep, "myapp-fe-to-api"))
 
         assert result is False
         gen.client.create.assert_not_called()
@@ -343,9 +340,7 @@ class TestCreateCloudRule:
         dst_comp = self._comp(cloud_seg_no_vnet, "api", "backend")
         dep = _dep(protocol="tcp", port_start=443)
 
-        result = asyncio.run(
-            gen._create_cloud_rule("myapp", src_comp, dst_comp, dep, "myapp-fe-to-api", "frontend", "backend")
-        )
+        result = asyncio.run(gen._create_cloud_rule("myapp", src_comp, dst_comp, dep, "myapp-fe-to-api"))
 
         assert result is False
         gen._get_or_create_sg.assert_not_called()
@@ -363,9 +358,7 @@ class TestCreateCloudRule:
         dst_comp = self._comp(self._cloud_seg(), "api", "backend")
         dep = _dep(protocol="tcp", port_start=443)
 
-        result = asyncio.run(
-            gen._create_cloud_rule("myapp", src_comp, dst_comp, dep, "myapp-fe-to-api", "frontend", "backend")
-        )
+        result = asyncio.run(gen._create_cloud_rule("myapp", src_comp, dst_comp, dep, "myapp-fe-to-api"))
 
         assert result is True
         gen.client.create.assert_not_called()
@@ -381,14 +374,12 @@ class TestCreateCloudRule:
         dst_comp = self._comp(self._cloud_seg(), "api", "backend")
         dep = _dep(protocol="tcp", port_start=443)
 
-        result = asyncio.run(
-            gen._create_cloud_rule("myapp", src_comp, dst_comp, dep, "myapp-fe-to-api", "frontend", "backend")
-        )
+        result = asyncio.run(gen._create_cloud_rule("myapp", src_comp, dst_comp, dep, "myapp-fe-to-api"))
 
         assert result is True
         gen.client.create.assert_called_once()
         call_kwargs = gen.client.create.call_args.kwargs
-        assert call_kwargs["kind"] == "CloudSecurityGroupRule"
+        assert call_kwargs["kind"] == CloudSecurityGroupRule
         rule_data = call_kwargs["data"]
         assert rule_data["security_group"] == {"id": "sg-id-1"}
         assert rule_data["direction"] == "ingress"
@@ -407,7 +398,7 @@ class TestCreateCloudRule:
         dst_comp = self._comp(self._cloud_seg(), "api", "backend")
         dep = _dep(protocol="tcp", port_start=443)
 
-        asyncio.run(gen._create_cloud_rule("myapp", src_comp, dst_comp, dep, "myapp-fe-to-api", "frontend", "backend"))
+        asyncio.run(gen._create_cloud_rule("myapp", src_comp, dst_comp, dep, "myapp-fe-to-api"))
 
         rule_data = gen.client.create.call_args.kwargs["data"]
         assert rule_data["source_cidr"] == "10.1.0.0/24"
@@ -422,9 +413,7 @@ class TestCreateCloudRule:
         dst_comp = self._comp(self._cloud_seg(), "api", "backend")
         dep = _dep(protocol="tcp", port_start=443)
 
-        result = asyncio.run(
-            gen._create_cloud_rule("myapp", src_comp, dst_comp, dep, "myapp-fe-to-api", "frontend", "backend")
-        )
+        result = asyncio.run(gen._create_cloud_rule("myapp", src_comp, dst_comp, dep, "myapp-fe-to-api"))
 
         assert result is False
         gen.logger.error.assert_called_once()

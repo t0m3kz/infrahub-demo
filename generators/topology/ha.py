@@ -28,7 +28,7 @@ def _iface_kind(typename: str) -> str:
     return typename if typename else "DcimPhysicalInterface"
 
 
-class HAInterfaceGenerator(FailOnErrorLoggerMixin, InfrahubGenerator):
+class HAGenerator(FailOnErrorLoggerMixin, InfrahubGenerator):
     """Create ManagedHAInterface nodes for all member devices in an HA domain."""
 
     async def generate(self, data: dict[str, Any]) -> None:

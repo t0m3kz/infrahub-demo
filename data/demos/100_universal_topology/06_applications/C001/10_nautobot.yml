@@ -31,17 +31,6 @@ spec:
       member_of_groups:
         - app_applications
 
-# ── Service port (8080 — unique to Nautobot, not in shared pool) ──────────────
----
-apiVersion: infrahub.app/v1
-kind: Object
-spec:
-  kind: AppServicePort
-  data:
-    - port: 8080
-      protocol: tcp
-      description: "Nautobot web (Django/Gunicorn internal port)"
-
 # ── AKS worker nodes (CloudInstance) ─────────────────────────────────────────
 # Represent the actual AKS worker nodes provisioned from the node pool.
 # Named after the pool with an index — Kubernetes schedules pods across them.

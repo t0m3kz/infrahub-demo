@@ -1,0 +1,34 @@
+---
+# Global AppServicePort catalog for 100_universal_topology application demos.
+#
+# AppServicePort nodes are shared across all customers/applications.
+# Keep this list deduplicated and range-aware (port + port_end + protocol).
+
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: AppServicePort
+  data:
+    - port: 80
+      protocol: tcp
+
+    - port: 443
+      protocol: tcp
+
+    - port: 5432
+      protocol: tcp
+
+    - port: 6379
+      protocol: tcp
+
+    - port: 8080
+      protocol: tcp
+
+    - port: 8200
+      protocol: tcp
+
+    - port: 8443
+      protocol: tcp
+
+    - port: 9200
+      protocol: tcp

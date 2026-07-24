@@ -16,7 +16,7 @@ import asyncio
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
-from generators.add.segment import VlanSegmentGenerator, VxlanSegmentGenerator
+from generators.topology.segment import VlanSegmentGenerator, VxlanSegmentGenerator
 
 # ---------------------------------------------------------------------------
 # Harness helpers

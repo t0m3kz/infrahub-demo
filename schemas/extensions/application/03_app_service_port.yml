@@ -12,7 +12,7 @@ version: "1.0"
 #     "Relationship has not been initialized yet" errors during Upsert mutations.
 #   - port_end covers port-range rules derived from AppDependency.port_end.
 #
-# Uniqueness: port + protocol (port_end is supplementary metadata).
+# Uniqueness: port + port_end + protocol (range-aware).
 # HFID:       name__value  (e.g. "443/tcp", "9200/tcp", "8080-8090/tcp")
 # ============================================================================
 
@@ -29,7 +29,7 @@ nodes:
       - name__value
     display_label: "{{ name__value }}"
     uniqueness_constraints:
-      - [port__value, protocol__value]
+      - [port__value, port_end__value, protocol__value]
     attributes:
       - name: name
         kind: Text

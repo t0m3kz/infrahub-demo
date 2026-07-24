@@ -13,7 +13,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from generators.add.dc import DCTopologyGenerator
+from generators.topology.dc import DCTopologyGenerator
 
 
 def _make_generator(fabric_name: str = "dc1") -> Any:
