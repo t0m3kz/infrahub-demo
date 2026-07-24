@@ -94,32 +94,18 @@ class DCTopologyGenerator(CommonGenerator):
         loopback_prefix = dc_design.loopback_prefix_length
         management_prefix = dc_design.management_prefix_length
 
-        # Collect pools that already exist on the DC instance — those are reused as-is.
-        # Only pools that are absent need to be allocated from the design defaults.
-        # self.data.<attr>_pool is a plain Pydantic Pool model (id/name only, parsed
-        # from the GraphQL query) — not a real SDK node, so it has no .get_kind().
-        # Store just the id (matching pod.py/rack.py's own management_pool_id pattern)
-        # so downstream _resolve_pool() correctly re-fetches the real SDK object via
-        # client.get(id=...) instead of treating this as an already-resolved node.
-        existing_dc_pools: dict[str, Any] = {}
-        pool_name_to_attr = {
-            "technical": "technical_pool",
-            "loopback": "loopback_pool",
-            "management": "management_pool",
+        # Always (re-)allocate every DC pool on every run — never skip an object just
+        # because it already exists. allocate_resource_pools()'s identifier-keyed
+        # allocation and the pool's own name-based upsert both make this idempotent,
+        # and skipping a pool here means it never gets re-registered in this run's
+        # group context, so the generator framework's delete-unused-nodes sync treats
+        # it as orphaned and deletes it on the next run (matches pod.py/rack.py, which
+        # never gate object creation on "does it already exist" either).
+        pools_to_allocate: dict[str, int] = {
+            "technical": technical_prefix,
+            "loopback": loopback_prefix,
+            "management": management_prefix,
         }
-        for pool_key, attr in pool_name_to_attr.items():
-            existing = getattr(self.data, attr, None)
-            if existing:
-                existing_dc_pools[pool_key] = existing.id
-
-        pools_to_allocate: dict[str, int] = {}
-        for pool_key, prefix in [
-            ("technical", technical_prefix),
-            ("loopback", loopback_prefix),
-            ("management", management_prefix),
-        ]:
-            if pool_key not in existing_dc_pools:
-                pools_to_allocate[pool_key] = prefix
 
         design_mode = "back-to-back" if getattr(dc_design, "max_super_spines_per_fabric", 0) == 0 else "super-spine"
         if amount_of_super_spines > 0 and super_spine_template and design_mode != "back-to-back":
@@ -129,14 +115,9 @@ class DCTopologyGenerator(CommonGenerator):
             )
             pools_to_allocate["super-spine-loopback"] = super_spine_loopback_prefix
 
-        reused = list(existing_dc_pools.keys())
-        creating = list(pools_to_allocate.keys())
-        if reused:
-            self.logger.info(f"Reusing existing DC pools: {reused}; creating: {creating}")
-        else:
-            self.logger.info(f"Creating pools from design: {creating}")
+        self.logger.info(f"Allocating DC pools: {list(pools_to_allocate.keys())}")
 
-        new_pools = await self.allocate_resource_pools(
+        dc_pools = await self.allocate_resource_pools(
             id=dc_id,
             strategy="fabric",
             pools=pools_to_allocate,
@@ -144,22 +125,20 @@ class DCTopologyGenerator(CommonGenerator):
             dual_stack=is_dual_stack,
         )
 
-        # Merge existing + newly created into dc_pools for downstream use
-        dc_pools: dict[str, Any] = {**existing_dc_pools, **new_pools}
-
-        # Update DC with pool references for any newly created pools
-        if new_pools:
-            dc = await self.client.get(kind="TopologyDataCenter", id=dc_id)
-            if dc:
-                pool_attr_map: dict[str, str] = {
-                    "loopback": "loopback_pool",
-                    "management": "management_pool",
-                    "technical": "technical_pool",
-                }
-                for pool_name, pool_obj in new_pools.items():
-                    if pool_name in pool_attr_map:
-                        setattr(dc, pool_attr_map[pool_name], {"id": pool_obj.id})
-                await dc.save(allow_upsert=True)
+        # Attach pool references to the DC every run — allocate_resource_pools()
+        # returns the same (upserted) pool objects whether they were just created or
+        # already existed, so this setattr+save is itself idempotent.
+        dc = await self.client.get(kind="TopologyDataCenter", id=dc_id)
+        if dc:
+            pool_attr_map: dict[str, str] = {
+                "loopback": "loopback_pool",
+                "management": "management_pool",
+                "technical": "technical_pool",
+            }
+            for pool_name, pool_obj in dc_pools.items():
+                if pool_name in pool_attr_map:
+                    setattr(dc, pool_attr_map[pool_name], {"id": pool_obj.id})
+            await dc.save(allow_upsert=True)
 
         # Derive deterministic ASN range from DC name (unique per site)
         max_pods = self.data.design.max_pods
