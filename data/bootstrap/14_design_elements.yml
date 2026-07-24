@@ -37,6 +37,13 @@ spec:
     - quantity: 4
       role: tor
       template: N9K-C9336C-FX2_TOR
+    # Cisco Access-Leaf (routed VTEP — connects to leafs, not spines)
+    - quantity: 2
+      role: access-leaf
+      template: N9K-C9336C-FX2_ACCESS
+    - quantity: 4
+      role: access-leaf
+      template: N9K-C9336C-FX2_ACCESS
     # Cisco L2-Leaf (L2-only — middle_rack/mixed deployments, connects to leafs)
     - quantity: 2
       role: l2-leaf
@@ -105,6 +112,13 @@ spec:
     - quantity: 2
       role: tor
       template: DCS-7050SX3-24YC4C-S-R_TOR
+    # Arista Access-Leafs (routed VTEP — connects to leafs, not spines)
+    - quantity: 2
+      role: access-leaf
+      template: DCS-7050CX3-32C-R_ACCESS
+    - quantity: 2
+      role: access-leaf
+      template: DCS-7050SX3-24YC4C-S-R_ACCESS
     # Arista L2-Leafs (L2-only — middle_rack/mixed deployments)
     - quantity: 2
       role: l2-leaf
@@ -148,6 +162,13 @@ spec:
     - quantity: 2
       role: tor
       template: PowerSwitch-S5248F-ON_TOR
+    # Dell Access-Leafs (routed VTEP — connects to leafs, not spines)
+    - quantity: 2
+      role: access-leaf
+      template: PowerSwitch-S5224F-ON_ACCESS
+    - quantity: 2
+      role: access-leaf
+      template: PowerSwitch-S5248F-ON_ACCESS
     # Dell L2-Leafs (L2-only — middle_rack/mixed deployments)
     - quantity: 2
       role: l2-leaf
@@ -169,6 +190,10 @@ spec:
     - quantity: 2
       role: tor
       template: Edgecore-7AS7326-56X-O-48V-F_TOR
+    # Edgecore Access-Leaf (routed VTEP — connects to leafs, not spines)
+    - quantity: 2
+      role: access-leaf
+      template: Edgecore-7AS7326-56X-O-48V-F_ACCESS
     # Edgecore L2-Leaf (L2-only — middle_rack/mixed deployments)
     - quantity: 2
       role: l2-leaf
