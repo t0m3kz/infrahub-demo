@@ -291,6 +291,35 @@ class TestIBGPOverlayPeerings:
         for p in peerings:
             assert "l2-leaf" not in p["name"]
 
+    def test_access_leafs_included(self) -> None:
+        """access-leaf devices are routed VTEPs — included in overlay peering, unlike l2-leaf."""
+        device_map = dict(
+            [
+                *_SPINE_LEAF_DEVICE_MAP.items(),
+                _device_map_entry("access-leaf-1", "al1", "access-leaf", "10.0.3.1"),
+                _device_map_entry("access-leaf-2", "al2", "access-leaf", "10.0.3.2"),
+            ]
+        )
+        bgp_procs = _spine_leaf_bgp_processes() + [
+            _bgp_process("access-leaf-1-bgp-overlay", "al1"),
+            _bgp_process("access-leaf-2-bgp-overlay", "al2"),
+        ]
+
+        planner = RoutingPlanner(deployment_id="dc-1")
+        peerings = _call_plan_overlay(
+            planner,
+            overlay_type="ibgp",
+            bgp_processes=bgp_procs,
+            device_map=device_map,
+        )
+
+        # (leafs + access-leafs) × spines: 4 clients × 2 spines = 8.
+        assert len(peerings) == 8
+        access_leaf_peerings = [p for p in peerings if "access-leaf" in p["name"]]
+        assert len(access_leaf_peerings) == 4
+        for p in access_leaf_peerings:
+            assert p["route_reflector_client"] is True
+
 
 # ================================================================
 # eBGP Overlay Tests

@@ -247,6 +247,13 @@ query RackGenerator($name: String) {
             }
           }
         }
+        access_leafs: fabric_templates(role__value: "access-leaf") {
+          edges {
+            node {
+              ...FabricTemplateFields
+            }
+          }
+        }
         pod {
           node {
             ...PodFields

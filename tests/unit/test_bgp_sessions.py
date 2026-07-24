@@ -131,6 +131,32 @@ class TestRouteReflectorTopology:
         l2_sessions = [s for s in sessions if "l2-leaf" in s[0]]
         assert len(l2_sessions) == 0
 
+    def test_access_leafs_included_in_overlay(self) -> None:
+        """access-leaf devices are routed VTEPs — they DO get overlay BGP, unlike l2-leaf."""
+        devices = [
+            _BGPDevice("spine-1", "s1", "spine"),
+            _BGPDevice("spine-2", "s2", "spine"),
+            _BGPDevice("leaf-1", "l1", "leaf"),
+            _BGPDevice("leaf-2", "l2", "leaf"),
+            _BGPDevice("access-leaf-1", "al1", "access-leaf"),
+            _BGPDevice("access-leaf-2", "al2", "access-leaf"),
+        ]
+
+        planner = BGPSessionPlanner(devices=devices)
+        sessions = planner.build_session_plan(session_type="ibgp")
+
+        # leafs + access-leafs both get overlay: (2 + 2) × 2 spines = 8 sessions.
+        assert len(sessions) == 8
+
+        access_leaf_sessions = [s for s in sessions if "access-leaf" in s[0]]
+        assert len(access_leaf_sessions) == 4
+
+        for session in access_leaf_sessions:
+            dev1_name, _, dev2_name, _, sess_type, _ = session
+            assert "access-leaf" in dev1_name
+            assert "spine" in dev2_name
+            assert sess_type == "ibgp"
+
     def test_route_reflector_with_tors_middle_rack_deployment(self) -> None:
         """In middle_rack, ToR-role devices are replaced by l2-leaf. Remaining tors→spines."""
         devices = [

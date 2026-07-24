@@ -20,6 +20,7 @@ from pathlib import Path
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
+from transforms.config.access_leaf import AccessLeaf
 from transforms.config.border_leaf import BorderLeaf
 from transforms.config.edge import Edge
 from transforms.config.firewall import Firewall
@@ -1277,6 +1278,7 @@ DEVICE_CONFIGS: list[tuple[type, str, str, list[str]]] = [
     (BorderLeaf, "border_leaf", "border_leaf", FABRIC_PLATFORMS),
     (ToR, "tor", "tor", FABRIC_PLATFORMS),
     (L2Leaf, "l2-leaf", "l2_leaf", L2_LEAF_PLATFORMS),
+    (AccessLeaf, "access-leaf", "access_leaf", FABRIC_PLATFORMS),
     (Edge, "edge", "edge", ["cisco_nxos", "cisco_ios"]),
 ]
 
@@ -1342,7 +1344,7 @@ def main() -> None:
                     role=role,
                     platform=platform,
                     scenario=scenario,
-                    include_segments=role in ("leaf", "tor", "border_leaf", "l2-leaf"),
+                    include_segments=role in ("leaf", "tor", "border_leaf", "l2-leaf", "access-leaf"),
                 )
                 generated += g
                 errors += e

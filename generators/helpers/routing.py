@@ -559,7 +559,7 @@ class RoutingPlanner:
                 else:
                     device_as_refs[dev_name] = PendingASRef(device=dev_name)
 
-        _OVERLAY_ROLES = frozenset(("leaf", "border-leaf", "tor", "spine", "super-spine"))
+        _OVERLAY_ROLES = frozenset(("leaf", "border-leaf", "tor", "access-leaf", "spine", "super-spine"))
 
         for name in sorted(device_map.keys()):
             if name in _top:
@@ -790,7 +790,7 @@ class RoutingPlanner:
 
         _SUPER_SPINE = frozenset(("super-spine",))
         _SPINE = frozenset(("spine",))
-        _LEAF_CLIENTS = frozenset(("leaf", "border-leaf", "tor"))
+        _LEAF_CLIENTS = frozenset(("leaf", "border-leaf", "tor", "access-leaf"))
 
         for d1_name, d1_id, d2_name, d2_id, stype, af_types in session_plan:
             if d1_id not in device_bgp_map or d2_id not in device_bgp_map:
@@ -855,7 +855,11 @@ class _BGPSessionPlanner:
         return [s if isinstance(s, BGPSession) else BGPSession(*s) for s in sessions]
 
     def _build_route_reflector(self, session_type: str) -> list[tuple]:
-        """Spines + super-spines as RR, leafs/border-leafs/tors as clients. l2-leaf is L2-only.
+        """Spines + super-spines as RR, leafs/border-leafs/tors/access-leafs as clients.
+
+        l2-leaf is L2-only and never appears here. access-leaf has no physical link to
+        spines (it cables to leafs) but still peers overlay EVPN with them as an RR client,
+        same as leaf/tor.
 
         Special cases:
         - Super-spines only (no clients): full mesh between super-spines (DC-level seeding)
@@ -864,7 +868,7 @@ class _BGPSessionPlanner:
         """
         roles = {d.role for d in self.devices}
         rrs = [d for d in self.devices if d.role in ("super-spine", "spine")]
-        clients = [d for d in self.devices if d.role in ("leaf", "border-leaf", "tor")]
+        clients = [d for d in self.devices if d.role in ("leaf", "border-leaf", "tor", "access-leaf")]
         af = ["evpn"]
         has_super_spine = "super-spine" in roles
         has_only_spines = roles == {"spine"}  # back-to-back: spines peer as equals

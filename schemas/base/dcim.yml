@@ -79,6 +79,10 @@ generics:
             label: L2 Leaf Switch
             description: L2-only aggregation switch (connects to leafs, not spines; no VXLAN/overlay BGP).
             color: "#d0e8fd"
+          - name: access-leaf
+            label: Access Leaf Switch
+            description: Routed VTEP aggregation switch (connects to leafs, not spines; full VXLAN/overlay BGP).
+            color: "#a8d8b8"
           - name: oob
             label: Out of Band Switch
             description: OOB switch part of a Fabric.
