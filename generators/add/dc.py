@@ -158,7 +158,7 @@ class DCTopologyGenerator(CommonGenerator):
                 }
                 for pool_name, pool_obj in new_pools.items():
                     if pool_name in pool_attr_map:
-                        setattr(dc, pool_attr_map[pool_name], {"id": pool_obj.id, "hfid": [pool_obj.hfid]})
+                        setattr(dc, pool_attr_map[pool_name], {"id": pool_obj.id})
                 await dc.save(allow_upsert=True)
 
         # Derive deterministic ASN range from DC name (unique per site)
