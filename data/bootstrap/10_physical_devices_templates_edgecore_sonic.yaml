@@ -480,6 +480,32 @@ spec:
             name: xe[57-58]
             role: management
             interface_type: 10gbase-x-sfpp
+    - template_name: Edgecore-7AS7326-56X-O-48V-F_ACCESS
+      device_type: 7AS7326-56X-O-48V-F
+      platform: sonic
+      role: access-leaf
+      status: provisioning
+      interfaces:
+        kind: TemplateDcimPhysicalInterface
+        parameters:
+          expand_range: true
+        data:
+          - template_name: 7AS7326-56X-O-48V-F_ACCESS_eth0
+            name: eth0
+            role: management
+            interface_type: 1000base-t
+          - template_name: 7AS7326-56X-O-48V-F_ACCESS_xe[1-48]
+            name: xe[1-48]
+            role: customer
+            interface_type: 25gbase-x-sfp28
+          - template_name: 7AS7326-56X-O-48V-F_ACCESS_ce[49-56]
+            name: xe[49-56]
+            role: uplink
+            interface_type: 25gbase-x-sfp28
+          - template_name: 7AS7326-56X-O-48V-F_ACCESS_xe[57-58]
+            name: xe[57-58]
+            role: management
+            interface_type: 10gbase-x-sfpp
 
     - template_name: Edgecore-7726-32X-O_BORDER_LEAF
       device_type: 7726-32X-O
