@@ -146,7 +146,8 @@ class CommonGenerator(FailOnErrorLoggerMixin, RoutingMixin, InfrahubGenerator):
         if parent_kind and parent_id and parent_attr:
             parent = await self.client.get(kind=parent_kind, id=parent_id)
             if parent:
-                setattr(parent, parent_attr, {"id": pool.id, "hfid": [pool.hfid]})
+                pool_ref = {"id": pool.id} if pool.id else {"hfid": pool.hfid}
+                setattr(parent, parent_attr, pool_ref)
                 await parent.save(allow_upsert=True)
                 self.logger.info("- Updated %s with %s (id: %s)", parent_kind, parent_attr, pool.id)
 
@@ -299,8 +300,7 @@ class CommonGenerator(FailOnErrorLoggerMixin, RoutingMixin, InfrahubGenerator):
             pod_updated = False
             for pool_name, pool_obj in created_pools.items():
                 if pool_name in pool_attribute_map:
-                    pool_ref = {"id": pool_obj.id, "hfid": [pool_obj.hfid]}
-                    setattr(pod, pool_attribute_map[pool_name], pool_ref)
+                    setattr(pod, pool_attribute_map[pool_name], {"id": pool_obj.id})
                     self.logger.info(f"- Attaching pool {pool_obj.hfid} to pod (id: {pool_obj.id})")
                     pod_updated = True
             if pod_updated:
