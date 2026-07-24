@@ -26,7 +26,7 @@ from transforms.helpers.firewall import (
     get_zone_policies,
 )
 from transforms.helpers.ha import _HA_TYPENAMES, get_ha
-from transforms.helpers.management import get_aaa, get_ntp, get_snmp, get_syslog
+from transforms.helpers.management import get_management_services
 from transforms.helpers.mlag import get_mlag
 from transforms.helpers.ospf import get_ospf
 from transforms.helpers.segments import (
@@ -184,6 +184,7 @@ class BaseDeviceTransform(InfrahubTransform):
         device_capabilities = data.get("capabilities") or []
         device_name = data.get("name", "")
         activations = data.get("segment_deployments")
+        management_services = get_management_services(device_capabilities)
         config = {
             "name": device_name,
             "hostname": device_name,
@@ -197,10 +198,10 @@ class BaseDeviceTransform(InfrahubTransform):
             ),
             "ospf": get_ospf(device_capabilities),
             "mlag": get_mlag(device_capabilities, interfaces),
-            "ntp": get_ntp(device_capabilities),
-            "syslog": get_syslog(device_capabilities),
-            "snmp": get_snmp(device_capabilities),
-            "aaa": get_aaa(device_capabilities),
+            "ntp": management_services["ntp"],
+            "syslog": management_services["syslog"],
+            "snmp": management_services["snmp"],
+            "aaa": management_services["aaa"],
         }
         capabilities = get_capabilities(data)
         if capabilities:

@@ -35,6 +35,15 @@ class BaseSegmentGenerator(CommonGenerator):
     # Whether this generator allocates VNI from vni_pool
     allocate_vni: bool = False
 
+    @staticmethod
+    def _extract_existing_vni(existing_deployments: list[Any]) -> int | None:
+        """Return the first already allocated VNI from existing deployments, if any."""
+        for deployment in existing_deployments:
+            existing_vni = getattr(deployment, "vni", None)
+            if existing_vni and getattr(existing_vni, "value", None):
+                return existing_vni.value
+        return None
+
     async def generate(self, data: dict[str, Any]) -> None:
         """Create or upsert ManagedSegmentDeployment records for the segment."""
         cleaned = clean_data(data)
@@ -74,9 +83,30 @@ class BaseSegmentGenerator(CommonGenerator):
             f"{[d.get('name', d.get('id')) for d in target_deployments]}"
         )
 
+        existing_by_deployment_id: dict[str, Any] = {}
+        reusable_vni: int | None = None
+        try:
+            existing_deployments = await self.client.filters(
+                kind="ManagedSegmentDeployment",
+                segment__ids=[segment_id],
+            )
+            for existing in existing_deployments:
+                await existing.resolve()
+                deployment_rel = getattr(existing, "deployment", None)
+                deployment_peer = getattr(deployment_rel, "peer", None)
+                deployment_obj = deployment_peer or deployment_rel
+                deployment_id = getattr(deployment_obj, "id", None)
+                if deployment_id and deployment_id not in existing_by_deployment_id:
+                    existing_by_deployment_id[deployment_id] = existing
+            if self.allocate_vni:
+                reusable_vni = self._extract_existing_vni(existing_deployments)
+        except Exception as exc:
+            self.logger.warning(f"Segment {segment_name}: failed to prefetch existing deployments: {exc}")
+
         # ----------------------------------------------------------------
         # Create/upsert SegmentDeployment per deployment
         # ----------------------------------------------------------------
+        failed_deployments: list[str] = []
         for dep in target_deployments:
             dep_id: str = dep.get("id", "")
             dep_name: str = dep.get("name", dep_id)
@@ -84,11 +114,21 @@ class BaseSegmentGenerator(CommonGenerator):
                 self.logger.warning("Deployment entry missing id — skipping")
                 continue
 
-            await self._activate_segment_in_deployment(
+            success = await self._activate_segment_in_deployment(
                 segment_id=segment_id,
                 segment_name=segment_name,
                 deployment_id=dep_id,
                 deployment_name=dep_name,
+                existing_deployment=existing_by_deployment_id.get(dep_id),
+                reusable_vni=reusable_vni,
+            )
+            if not success:
+                failed_deployments.append(dep_name)
+
+        if failed_deployments:
+            self.logger.error(
+                f"Segment {segment_name}: activation failed for deployments {failed_deployments}. "
+                "State may be partially applied."
             )
 
     async def _activate_segment_in_deployment(
@@ -97,7 +137,9 @@ class BaseSegmentGenerator(CommonGenerator):
         segment_name: str,
         deployment_id: str,
         deployment_name: str,
-    ) -> None:
+        existing_deployment: Any | None = None,
+        reusable_vni: int | None = None,
+    ) -> bool:
         """Create or upsert one SegmentDeployment record.
 
         VLAN ID is always allocated from the DC's vlan_pool via from_pool.
@@ -105,21 +147,40 @@ class BaseSegmentGenerator(CommonGenerator):
         Idempotency: checks for existing SegmentDeployment first — from_pool
         is only called for genuinely new deployments.
         """
-        # --- Check idempotency first ---
-        try:
-            existing = await self.client.filters(
-                kind="ManagedSegmentDeployment",
-                segment__ids=[segment_id],
-                deployment__ids=[deployment_id],
-            )
-            if existing:
-                self.logger.info(
-                    f"  [{deployment_name}] SegmentDeployment already exists for {segment_name} — skipping"
+        # Backward-compatible fallback for direct invocations that do not pass
+        # prefetched context from generate().
+        if existing_deployment is None:
+            try:
+                existing = await self.client.filters(
+                    kind="ManagedSegmentDeployment",
+                    segment__ids=[segment_id],
+                    deployment__ids=[deployment_id],
                 )
-                await existing[0].save(allow_upsert=True)  # register with tracker
-                return
-        except Exception as exc:
-            self.logger.warning(f"  [{deployment_name}] Error checking existing activations: {exc}")
+                if existing:
+                    existing_deployment = existing[0]
+            except Exception as exc:
+                self.logger.warning(
+                    f"Error checking existing activations for {segment_name} in {deployment_name}: {exc}"
+                )
+
+        if self.allocate_vni and reusable_vni is None:
+            try:
+                existing_for_segment = await self.client.filters(
+                    kind="ManagedSegmentDeployment",
+                    segment__ids=[segment_id],
+                )
+                reusable_vni = self._extract_existing_vni(existing_for_segment)
+            except Exception as exc:
+                self.logger.warning(f"Error checking reusable VNI for {segment_name}: {exc}")
+
+        # --- Check idempotency first ---
+        if existing_deployment:
+            self.logger.info(f"  [{deployment_name}] SegmentDeployment already exists for {segment_name} — skipping")
+            try:
+                await existing_deployment.save(allow_upsert=True)  # register with tracker
+            except Exception as exc:
+                self.logger.warning(f"  [{deployment_name}] Failed to re-save existing activation: {exc}")
+            return True
 
         # --- VLAN ID (always from pool via from_pool) ---
         vlan_pool = await self._get_dc_pool(deployment_id, deployment_name, "vlan_pool")
@@ -127,7 +188,7 @@ class BaseSegmentGenerator(CommonGenerator):
             self.logger.error(
                 f"  [{deployment_name}] No vlan_pool for {segment_name}. Attach a CoreNumberPool to the DC's vlan_pool."
             )
-            return
+            return False
 
         # Unique identifier per segment+deployment ensures stable allocation
         vlan_identifier = f"{segment_id}-{deployment_id}-vlan"
@@ -140,26 +201,13 @@ class BaseSegmentGenerator(CommonGenerator):
         # of the same segment. Only fall back to pool allocation when this is the
         # first DC to activate the segment (no prior SegmentDeployment exists yet).
         vni_from_pool: dict[str, Any] | None = None
-        vni_literal: int | None = None
+        vni_literal: int | None = reusable_vni
         if self.allocate_vni:
-            # Check if another DC already allocated a VNI for this segment
-            try:
-                existing_deployments = await self.client.filters(
-                    kind="ManagedSegmentDeployment",
-                    segment__ids=[segment_id],
+            if vni_literal is not None:
+                self.logger.info(
+                    f"  [{deployment_name}] Reusing VNI {vni_literal} "
+                    f"from existing SegmentDeployment for {segment_name}"
                 )
-                for ed in existing_deployments:
-                    await ed.resolve()
-                    existing_vni = getattr(ed, "vni", None)
-                    if existing_vni and getattr(existing_vni, "value", None):
-                        vni_literal = existing_vni.value
-                        self.logger.info(
-                            f"  [{deployment_name}] Reusing VNI {vni_literal} "
-                            f"from existing SegmentDeployment for {segment_name}"
-                        )
-                        break
-            except Exception as exc:
-                self.logger.warning(f"  [{deployment_name}] Could not check existing VNIs: {exc}")
 
             if vni_literal is None:
                 # First DC to activate this segment — allocate from pool
@@ -196,8 +244,10 @@ class BaseSegmentGenerator(CommonGenerator):
                 f"  [{deployment_name}] SegmentDeployment saved "
                 f"(segment={segment_name}, vlan=from_pool, vni={'from_pool' if vni_from_pool else 'none'})"
             )
+            return True
         except Exception as exc:
             self.logger.error(f"  [{deployment_name}] Failed to create SegmentDeployment for {segment_name}: {exc}")
+            return False
 
     async def _get_dc_pool(self, deployment_id: str, deployment_name: str, pool_attr: str) -> Any:
         """Fetch a pool (vlan_pool, vni_pool, l3_vni_pool) from the TopologyDataCenter.
@@ -316,20 +366,29 @@ class VxlanSegmentGenerator(BaseSegmentGenerator):
             return
 
         assigned = 0
+        updated = 0
         for iface in interfaces:
             iface_services = getattr(iface, "interface_capabilities")
             await iface_services.fetch()
             existing_ids = {peer.id for peer in iface_services.peers}
+            changed = False
+
             if segment_id not in existing_ids:
                 await iface_services.add(segment_obj)
-            iface.status.value = "active"
-            await iface.save(allow_upsert=True)
-            if segment_id not in existing_ids:
                 assigned += 1
+                changed = True
+
+            if iface.status.value != "active":
+                iface.status.value = "active"
+                changed = True
+
+            if changed:
+                await iface.save(allow_upsert=True)
+                updated += 1
 
         self.logger.info(
             f"  [{deployment_name}] Assigned segment '{segment_name}' to {assigned} interface(s) "
-            f"({len(interfaces) - assigned} already assigned)"
+            f"({len(interfaces) - assigned} already assigned, {updated} interface(s) updated)"
         )
 
     async def _create_inline_sub_interfaces(self, data: dict[str, Any]) -> None:
@@ -384,21 +443,24 @@ class VxlanSegmentGenerator(BaseSegmentGenerator):
 
         # Fetch SegmentDeployments to get the allocated VLAN IDs
         vlan_by_dep: dict[str, int] = {}
-        for dep_id in dep_ids:
+        if dep_ids:
             try:
                 existing = await self.client.filters(
                     kind="ManagedSegmentDeployment",
                     segment__ids=[segment_id],
-                    deployment__ids=[dep_id],
+                    deployment__ids=dep_ids,
                 )
                 for sd in existing:
                     await sd.resolve()
+                    deployment_rel = getattr(sd, "deployment", None)
+                    deployment_peer = getattr(deployment_rel, "peer", None)
+                    deployment_obj = deployment_peer or deployment_rel
+                    dep_id = getattr(deployment_obj, "id", None)
                     vlan_val = getattr(getattr(sd, "vlan_id", None), "value", None)
-                    if vlan_val:
+                    if dep_id and vlan_val and dep_id not in vlan_by_dep:
                         vlan_by_dep[dep_id] = vlan_val
-                        break
             except Exception as exc:
-                self.logger.warning(f"Could not fetch SegmentDeployment for dep {dep_id}: {exc}")
+                self.logger.warning(f"Could not fetch SegmentDeployments for inline termination: {exc}")
 
         if not vlan_by_dep:
             self.logger.warning(

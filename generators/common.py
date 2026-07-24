@@ -3,7 +3,6 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import ipaddress
-import random
 from typing import Any, Literal
 
 from infrahub_sdk.exceptions import ValidationError
@@ -11,6 +10,7 @@ from infrahub_sdk.generator import InfrahubGenerator
 from infrahub_sdk.protocols import CoreIPAddressPool, CoreIPPrefixPool, CoreStandardGroup
 
 from .helpers import CableTypeDetector, CablingPlanner, DeviceNamingConfig, get_loopback_name
+from .helpers.common import retry_delay
 from .logger import FailOnErrorLoggerMixin, GeneratorError  # noqa: F401
 from .protocols import (
     DcimCable,
@@ -52,6 +52,11 @@ class CommonGenerator(FailOnErrorLoggerMixin, RoutingMixin, InfrahubGenerator):
     fabric_name: str = ""  # Required: set to fabric/DC name
     pod_name: str | None = None  # Optional: only for pod/rack generators
 
+    @staticmethod
+    def _retry_delay(base: float, attempt: int, cap: float = 20.0, jitter: float = 0.25) -> float:
+        """Shared jittered exponential backoff for generator retry loops."""
+        return retry_delay(base=base, attempt=attempt, cap=cap, jitter=jitter)
+
     async def _resolve_pool(
         self,
         provided: Any,
@@ -69,12 +74,25 @@ class CommonGenerator(FailOnErrorLoggerMixin, RoutingMixin, InfrahubGenerator):
         This avoids redundant client.get() calls when pool IDs are already
         available from GraphQL query data.
         """
+        cache = getattr(self, "_pool_cache", None)
+        if cache is None:
+            cache = {}
+            self._pool_cache = cache
+
+        kind_key = getattr(kind, "__name__", str(kind))
+
         if provided is None:
             if fallback_name is None:
                 return None
-            return await self.client.get(kind=kind, name__value=fallback_name)
+            cache_key = (kind_key, f"name:{fallback_name}")
+            if cache_key not in cache:
+                cache[cache_key] = await self.client.get(kind=kind, name__value=fallback_name)
+            return cache[cache_key]
         if isinstance(provided, str):
-            return await self.client.get(kind=kind, id=provided)
+            cache_key = (kind_key, f"id:{provided}")
+            if cache_key not in cache:
+                cache[cache_key] = await self.client.get(kind=kind, id=provided)
+            return cache[cache_key]
         # Already an SDK object
         return provided
 
@@ -91,7 +109,8 @@ class CommonGenerator(FailOnErrorLoggerMixin, RoutingMixin, InfrahubGenerator):
         Returns:
             SHA256 hexdigest of the configuration data.
         """
-        related_ids = self.client.group_context.related_group_ids + self.client.group_context.related_node_ids
+        # De-duplicate ids so accidental repeated tracking does not perturb checksums.
+        related_ids = set(self.client.group_context.related_group_ids) | set(self.client.group_context.related_node_ids)
         sorted_ids = sorted(related_ids)
         joined = ",".join(sorted_ids)
         return hashlib.sha256(joined.encode("utf-8")).hexdigest()
@@ -388,9 +407,26 @@ class CommonGenerator(FailOnErrorLoggerMixin, RoutingMixin, InfrahubGenerator):
             existing_devices_list = await self.client.filters(
                 kind=device_kind,
                 name__values=device_names,
-                include=["member_of_groups"],
+                include=["member_of_groups", "primary_address"],
             )
             existing_devices_map = {device.name.value: device for device in existing_devices_list}
+
+            existing_loopbacks_by_device: dict[str, Any] = {}
+            if loopback_pool:
+                existing_loopbacks = await self.client.filters(
+                    kind=DcimVirtualInterface,
+                    device__name__values=device_names,
+                    role__value="loopback",
+                    include=["device", "ip_address"],
+                )
+                for loopback in existing_loopbacks:
+                    device_rel = getattr(loopback, "device", None)
+                    device_peer = getattr(device_rel, "peer", None)
+                    device_obj = device_peer or device_rel
+                    device_name_attr = getattr(device_obj, "name", None)
+                    device_name = getattr(device_name_attr, "value", None)
+                    if device_name:
+                        existing_loopbacks_by_device[device_name] = loopback
 
             # Add device objects and related loopback interfaces (if any) to the batch
             for name in device_names:
@@ -403,6 +439,20 @@ class CommonGenerator(FailOnErrorLoggerMixin, RoutingMixin, InfrahubGenerator):
                 # Ensure the new group is not duplicated
                 if device_group.id not in groups:
                     groups.append(device_group.id)
+
+                primary_address_rel = getattr(existing_device, "primary_address", None) if existing_device else None
+                primary_address_peer = getattr(primary_address_rel, "peer", None)
+                primary_address_obj = primary_address_peer or primary_address_rel
+                primary_address_id = getattr(primary_address_obj, "id", None)
+                if primary_address_id:
+                    primary_address_data: Any = {"id": primary_address_id}
+                else:
+                    primary_address_data = await self.client.allocate_next_ip_address(
+                        resource_pool=management_pool,
+                        identifier=name,
+                        prefix_length=32,
+                        data={"description": f"Management IP for {name}"},
+                    )
 
                 obj = await self.client.create(
                     kind=device_kind,
@@ -423,12 +473,7 @@ class CommonGenerator(FailOnErrorLoggerMixin, RoutingMixin, InfrahubGenerator):
                         "deployment": {"id": deployment_id} if deployment_id else None,
                         "device_type": template.get("device_type"),
                         "platform": template.get("platform"),
-                        "primary_address": await self.client.allocate_next_ip_address(
-                            resource_pool=management_pool,
-                            identifier=name,
-                            prefix_length=32,
-                            data={"description": f"Management IP for {name}"},
-                        ),
+                        "primary_address": primary_address_data,
                         "rack": {"id": rack} if rack else None,
                         "member_of_groups": [{"id": group_id} for group_id in groups],
                     },
@@ -437,21 +482,32 @@ class CommonGenerator(FailOnErrorLoggerMixin, RoutingMixin, InfrahubGenerator):
 
                 loopback_obj = None
                 if loopback_pool:
+                    existing_loopback = existing_loopbacks_by_device.get(name)
+                    loopback_ip_rel = getattr(existing_loopback, "ip_address", None) if existing_loopback else None
+                    loopback_ip_peer = getattr(loopback_ip_rel, "peer", None)
+                    loopback_ip_obj = loopback_ip_peer or loopback_ip_rel
+                    loopback_ip_id = getattr(loopback_ip_obj, "id", None)
+                    if loopback_ip_id:
+                        loopback_ip_data: Any = {"id": loopback_ip_id}
+                    else:
+                        loopback_ip_data = await self.client.allocate_next_ip_address(
+                            resource_pool=loopback_pool,
+                            identifier=name,
+                            prefix_length=options.get("loopback_prefix_length", 32),
+                            data={"description": f"Loopback IP for {name}"},
+                        )
+
                     loopback_obj = await self.client.create(
                         kind=DcimVirtualInterface,
                         data={
+                            **({"id": existing_loopback.id} if existing_loopback else {}),
                             "name": get_loopback_name((template.get("platform") or {}).get("name") or "", 0),
                             "description": "Loopback interface",
                             # Reference device object directly
                             "device": obj,
                             "status": "active",
                             "role": "loopback",
-                            "ip_address": await self.client.allocate_next_ip_address(
-                                resource_pool=loopback_pool,
-                                identifier=name,
-                                prefix_length=options.get("loopback_prefix_length", 32),
-                                data={"description": f"Loopback IP for {name}"},
-                            ),
+                            "ip_address": loopback_ip_data,
                         },
                     )
                     batch_loopbacks.add(task=loopback_obj.save, allow_upsert=True, node=loopback_obj)
@@ -539,7 +595,7 @@ class CommonGenerator(FailOnErrorLoggerMixin, RoutingMixin, InfrahubGenerator):
             )
             if src_interfaces and dst_interfaces:
                 break
-            delay = min(_RETRY_DELAY * (2**_attempt), _RETRY_CAP) + random.uniform(0, _RETRY_JITTER)
+            delay = self._retry_delay(_RETRY_DELAY, _attempt, cap=_RETRY_CAP, jitter=_RETRY_JITTER)
             self.logger.info(
                 f"Interfaces not ready yet (src={len(src_interfaces)}, dst={len(dst_interfaces)}) — "
                 f"retrying in {delay:.2f}s (attempt {_attempt + 1}/{_MAX_RETRIES})"
