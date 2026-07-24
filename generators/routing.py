@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import random
 from typing import TYPE_CHECKING, Any
 
 from infrahub_sdk.exceptions import GraphQLError
@@ -31,6 +32,11 @@ _OVERLAY_BGP_MAX_RETRIES = 5
 _OVERLAY_BGP_RETRY_DELAY = 3.0
 
 
+def _retry_delay(base: float, attempt: int, cap: float = 20.0, jitter: float = 0.25) -> float:
+    """Jittered exponential backoff used by transient race-retry loops."""
+    return min(base * (2**attempt), cap) + random.uniform(0, jitter)
+
+
 async def _save_peering_with_retry(obj: Any, logger: logging.Logger) -> None:
     """Save a peering/interface object, retrying on a NODE_NOT_FOUND write race.
 
@@ -56,12 +62,13 @@ async def _save_peering_with_retry(obj: Any, logger: logging.Logger) -> None:
                 raise
             if attempt == _PEERING_SAVE_MAX_RETRIES - 1:
                 raise
+            delay = _retry_delay(_PEERING_SAVE_RETRY_DELAY, attempt)
             logger.info(
                 f"  NODE_NOT_FOUND saving {name} (referenced node not yet visible — "
                 f"likely concurrent write contention on a shared process) — "
-                f"retrying in {_PEERING_SAVE_RETRY_DELAY}s (attempt {attempt + 1}/{_PEERING_SAVE_MAX_RETRIES})"
+                f"retrying in {delay:.2f}s (attempt {attempt + 1}/{_PEERING_SAVE_MAX_RETRIES})"
             )
-            await asyncio.sleep(_PEERING_SAVE_RETRY_DELAY)
+            await asyncio.sleep(delay)
 
 
 class RoutingMixin:
@@ -84,7 +91,7 @@ class RoutingMixin:
         bottom_devices: list[str],
         top_devices: list[str],
         options: RoutingOptions | None = None,
-        p2p_interfaces: list[tuple[Any, Any]] = [],
+        p2p_interfaces: list[tuple[Any, Any]] | None = None,
         bottom_role: str = "",
         top_role: str = "",
     ) -> None:
@@ -104,6 +111,8 @@ class RoutingMixin:
         """
         if options is None:
             options = RoutingOptions()
+        if p2p_interfaces is None:
+            p2p_interfaces = []
         design = options.get("design")
 
         if not design or not hasattr(design, "routing_strategy"):
@@ -209,19 +218,20 @@ class RoutingMixin:
             )
             if not top_device_set:
                 break
-            overlay_device_names = {_safe_device_name(b) for b in all_bgp if b.name.value.endswith("-bgp-overlay")} - {
-                None
+            overlay_device_names = {
+                name for b in all_bgp if b.name.value.endswith("-bgp-overlay") and (name := _safe_device_name(b))
             }
             missing = top_device_set - overlay_device_names
             if not missing:
                 break
             if attempt < _OVERLAY_BGP_MAX_RETRIES - 1:
+                delay = _retry_delay(_OVERLAY_BGP_RETRY_DELAY, attempt)
                 self.logger.info(
                     f"Overlay BGP not yet visible for top device(s) {sorted(missing)} — "
-                    f"retrying in {_OVERLAY_BGP_RETRY_DELAY}s "
+                    f"retrying in {delay:.2f}s "
                     f"(attempt {attempt + 1}/{_OVERLAY_BGP_MAX_RETRIES})"
                 )
-                await asyncio.sleep(_OVERLAY_BGP_RETRY_DELAY)
+                await asyncio.sleep(delay)
 
         underlay_type = routing_strategy.split("-")[0]
 
