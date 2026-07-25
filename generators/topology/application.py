@@ -640,18 +640,35 @@ class AppDependencyRuleGenerator(AppApplicationGenerator):
             if profile:
                 rule_data["security_profile"] = {"id": profile.id}
 
-        try:
-            rule = await self.client.create(kind=SecurityPolicyRule, data=rule_data)
-            await rule.save(allow_upsert=True)
-            self.logger.info(
-                "Reconciled dependency rule '%s' [%d] for app %s",
-                rule_name,
-                rule_index,
-                app_name,
-            )
-        except Exception as exc:
-            self.logger.error("Failed to reconcile dependency rule '%s': %s", rule_name, exc)
-            return
+        for attempt in range(1, 4):
+            try:
+                rule_data["index"] = rule_index
+                rule = await self.client.create(kind=SecurityPolicyRule, data=rule_data)
+                await rule.save(allow_upsert=True)
+                self.logger.info(
+                    "Reconciled dependency rule '%s' [%d] for app %s",
+                    rule_name,
+                    rule_index,
+                    app_name,
+                )
+                break
+            except Exception as exc:
+                msg = str(exc)
+                if "policy-index" in msg and attempt < 3:
+                    refreshed = await self.client.filters(kind=SecurityPolicyRule, policy__ids=[policy_id])
+                    used = {
+                        int(r.index.value) for r in refreshed if getattr(r, "index", None) and r.index.value is not None
+                    }
+                    rule_index = (max(used) + RULE_INDEX_STEP) if used else RULE_INDEX_START
+                    self.logger.warning(
+                        "Index collision for '%s', retrying with index %d (attempt %d/3)",
+                        rule_name,
+                        rule_index,
+                        attempt + 1,
+                    )
+                    continue
+                self.logger.error("Failed to reconcile dependency rule '%s': %s", rule_name, exc)
+                return
 
         await self._attach_policy_to_segments(policy_id, [(src_comp, dst_comp)])
 
