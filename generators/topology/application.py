@@ -130,7 +130,6 @@ class AppApplicationGenerator(CommonGenerator):
         used_indexes: set[int] = set()
         existing_names: set[str] = set()
         for r in existing_rules:
-            await r.resolve()
             if getattr(r, "index", None) and r.index.value:
                 used_indexes.add(int(r.index.value))
             if getattr(r, "name", None) and r.name.value:
@@ -490,7 +489,7 @@ class AppApplicationGenerator(CommonGenerator):
                     await policies_rel.fetch()
                     existing_policy_ids = {peer.id for peer in policies_rel.peers}
                     if policy_id not in existing_policy_ids:
-                        await policies_rel.add({"id": policy_id})
+                        policies_rel.add({"id": policy_id})
                         await seg_obj.save(allow_upsert=True)
                         self.logger.info(
                             "  Attached policy to segment %s",
@@ -589,7 +588,6 @@ class AppDependencyRuleGenerator(AppApplicationGenerator):
         used_indexes: set[int] = set()
         matched_rule = None
         for rule in existing_rules:
-            await rule.resolve()
             if getattr(rule, "index", None) and rule.index.value is not None:
                 used_indexes.add(int(rule.index.value))
             if getattr(rule, "name", None) and rule.name.value == rule_name:
@@ -737,7 +735,6 @@ class AppServicePortGenerator(_AppServicePortMixin, CommonGenerator):
                 target__ids=[component_id],
             )
             for dep in inbound_deps:
-                await dep.resolve()
                 port_start = getattr(getattr(dep, "port_start", None), "value", None)
                 port_end = getattr(getattr(dep, "port_end", None), "value", None)
                 proto_raw = getattr(getattr(dep, "protocol", None), "value", None) or ""
@@ -774,7 +771,7 @@ class AppServicePortGenerator(_AppServicePortMixin, CommonGenerator):
                 self.logger.info("  Upserted AppServicePort %s/%s (id: %s)", range_str, protocol, port_obj.id)
 
                 if port_obj.id not in existing_port_ids:
-                    await service_ports_rel.add(port_obj)
+                    service_ports_rel.add(port_obj)
                     existing_port_ids.add(port_obj.id)
                     component_updated = True
 
@@ -853,7 +850,7 @@ class AppDependencyServicePortGenerator(_AppServicePortMixin, CommonGenerator):
                 )
                 return
 
-            await service_ports_rel.add(port_obj)
+            service_ports_rel.add(port_obj)
             await component_obj.save(allow_upsert=True)
             self.logger.info(
                 "Linked dependency-driven port %s/%s to %s",
@@ -938,7 +935,6 @@ class AppComponentGenerator(CommonGenerator):
             self.logger.warning("  VIP %s not found — skipping", vip_id)
             return
 
-        await vip_obj.resolve()
         vip_hostname: str = getattr(getattr(vip_obj, "hostname", None), "value", vip_id)
         vip_proto: str = getattr(getattr(vip_obj, "protocol", None), "value", "")
         vip_port: str = str(getattr(getattr(vip_obj, "port", None), "value", ""))
@@ -1005,7 +1001,7 @@ class AppComponentGenerator(CommonGenerator):
             await iface_caps.fetch()
             existing_ids = {peer.id for peer in iface_caps.peers}
             if segment_id not in existing_ids:
-                await iface_caps.add(segment_obj)
+                iface_caps.add(segment_obj)
                 assigned += 1
             await iface.save(allow_upsert=True)
 
@@ -1066,7 +1062,7 @@ class AppComponentGenerator(CommonGenerator):
                     await iface_caps.fetch()
                     existing_ids = {peer.id for peer in iface_caps.peers}
                     if vip_id not in existing_ids:
-                        await iface_caps.add(vip_obj)
+                        iface_caps.add(vip_obj)
                         self.logger.info("  Assigned VIP %s to %s:1.1", vip_hostname, lb_dev_name)
                     await iface.save(allow_upsert=True)
                 except Exception as exc:
@@ -1138,7 +1134,7 @@ class AppComponentGenerator(CommonGenerator):
                 await vm_caps.fetch()
                 existing_cap_ids = {peer.id for peer in vm_caps.peers}
                 if pool_member.id not in existing_cap_ids:
-                    await vm_caps.add(pool_member)
+                    vm_caps.add(pool_member)
                     await vm_full.save(allow_upsert=True)
             except Exception as exc:
                 self.logger.warning("  Could not link PoolMember to VM %s capabilities: %s", vm_name, exc)
@@ -1189,7 +1185,7 @@ class AppComponentGenerator(CommonGenerator):
                     await pi_caps.fetch()
                     existing_pi_ids = {peer.id for peer in pi_caps.peers}
                     if pool_iface.id not in existing_pi_ids:
-                        await pi_caps.add(pool_iface)
+                        pi_caps.add(pool_iface)
                         await target_iface.save(allow_upsert=True)
                 except Exception as exc:
                     self.logger.warning("  Could not link PoolInterface to %s interface: %s", vm_name, exc)

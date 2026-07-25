@@ -12,6 +12,8 @@ spec:
     - label: vault-core
       environment: p
       criticality: critical
+      fqdn: vault-core.c003.internal.local
+      ingress_mode: dns
       parent: C003
       member_of_groups:
         - app_applications
@@ -19,6 +21,8 @@ spec:
     - label: compliance-portal
       environment: p
       criticality: high
+      fqdn: compliance-portal.c003.demo.local
+      ingress_mode: frontend
       parent: C003
       member_of_groups:
         - app_applications

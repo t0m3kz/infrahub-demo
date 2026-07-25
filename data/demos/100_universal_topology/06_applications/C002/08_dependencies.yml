@@ -74,12 +74,16 @@ spec:
       parent: c002-shipment-tracker-p
       depends_on:
         - c002-shipment-tracker-p-web-frontend--c002-shipment-tracker-p-tracking-api
+      member_of_groups:
+        - app_components
 
     - name: tracking-api
       component_type: backend
       parent: c002-shipment-tracker-p
       depends_on:
         - c002-shipment-tracker-p-tracking-api--c002-shipment-tracker-p-shipment-db
+      member_of_groups:
+        - app_components
 
     # ── shipment-tracker / nonprod ────────────────────────────────────────────
 
@@ -88,6 +92,8 @@ spec:
       parent: c002-shipment-tracker-n
       depends_on:
         - c002-shipment-tracker-n-web-frontend--c002-shipment-tracker-n-tracking-api
+      member_of_groups:
+        - app_components
 
     # ── fleet-manager / production ────────────────────────────────────────────
 
@@ -97,9 +103,13 @@ spec:
       depends_on:
         - c002-fleet-manager-p-dispatch-portal--c002-fleet-manager-p-telematics-api
         - c002-fleet-manager-p-dispatch-portal--c002-shipment-tracker-p-tracking-api
+      member_of_groups:
+        - app_components
 
     - name: telematics-api
       component_type: backend
       parent: c002-fleet-manager-p
       depends_on:
         - c002-fleet-manager-p-telematics-api--c002-fleet-manager-p-fleet-db
+      member_of_groups:
+        - app_components

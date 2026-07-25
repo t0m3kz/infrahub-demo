@@ -61,6 +61,8 @@ spec:
       parent: c003-vault-core-p
       depends_on:
         - c003-vault-core-p-vault-api--c003-vault-core-p-vault-db
+      member_of_groups:
+        - app_components
 
     # ── compliance-portal / production ────────────────────────────────────────
 
@@ -69,6 +71,8 @@ spec:
       parent: c003-compliance-portal-p
       depends_on:
         - c003-compliance-portal-p-audit-dashboard--c003-compliance-portal-p-policy-engine
+      member_of_groups:
+        - app_components
 
     - name: policy-engine
       component_type: backend
@@ -76,3 +80,5 @@ spec:
       depends_on:
         - c003-compliance-portal-p-policy-engine--c003-compliance-portal-p-audit-db
         - c003-compliance-portal-p-policy-engine--c003-vault-core-p-vault-api
+      member_of_groups:
+        - app_components

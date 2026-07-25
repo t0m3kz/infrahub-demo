@@ -15,6 +15,8 @@ spec:
     - name: "e-commerce-platform"
       description: "Main e-commerce website and backend services"
       environment: "p"
+      fqdn: "e-commerce-platform.nordix.demo.local"
+      ingress_mode: frontend
       owner: "Nordix Ltd. Engineering Team"
       customer: "Nordix Ltd."
       criticality: high
@@ -25,6 +27,8 @@ spec:
     - name: "e-commerce-platform-staging"
       description: "E-commerce staging environment on GCP"
       environment: "s"
+      fqdn: "e-commerce-platform-staging.nordix.demo.local"
+      ingress_mode: frontend
       owner: "Nordix Ltd. Engineering Team"
       customer: "Nordix Ltd."
 
@@ -35,6 +39,8 @@ spec:
     - name: "e-commerce-platform-dev"
       description: "E-commerce development environment on Azure"
       environment: "d"
+      fqdn: "e-commerce-platform-dev.nordix.demo.local"
+      ingress_mode: frontend
       owner: "Nordix Ltd. Engineering Team"
       customer: "Nordix Ltd."
       criticality: low
@@ -45,6 +51,8 @@ spec:
     - name: "analytics-dashboard"
       description: "Real-time analytics and reporting dashboard"
       environment: "p"
+      fqdn: "analytics-dashboard.nordix.demo.local"
+      ingress_mode: frontend
       owner: "Nordix Ltd. Engineering Team"
       customer: "Nordix Ltd."
     # ========================================================================
@@ -53,6 +61,8 @@ spec:
     - name: "analytics-dashboard-staging"
       description: "Analytics staging environment on Azure"
       environment: "s"
+      fqdn: "analytics-dashboard-staging.nordix.demo.local"
+      ingress_mode: frontend
       owner: "Nordix Ltd. Engineering Team"
       customer: "Nordix Ltd."
       criticality: low
@@ -63,6 +73,8 @@ spec:
     - name: "analytics-dashboard-dev"
       description: "Analytics development environment on AWS"
       environment: "d"
+      fqdn: "analytics-dashboard-dev.nordix.demo.local"
+      ingress_mode: frontend
       owner: "Nordix Ltd. Engineering Team"
       customer: "Nordix Ltd."
       criticality: low
@@ -74,6 +86,8 @@ spec:
     - name: "customer-portal"
       description: "Customer self-service portal"
       environment: "p"
+      fqdn: "customer-portal.nordix.demo.local"
+      ingress_mode: frontend
       owner: "Nordix Ltd. Engineering Team"
       customer: "Nordix Ltd."
 
@@ -83,6 +97,8 @@ spec:
     - name: "customer-portal-staging"
       description: "Customer portal staging environment on AWS"
       environment: "s"
+      fqdn: "customer-portal-staging.nordix.demo.local"
+      ingress_mode: frontend
       owner: "Nordix Ltd. Engineering Team"
       customer: "Nordix Ltd."
 
@@ -92,5 +108,7 @@ spec:
     - name: "customer-portal-dev"
       description: "Customer portal development environment on GCP"
       environment: "d"
+      fqdn: "customer-portal-dev.nordix.demo.local"
+      ingress_mode: frontend
       owner: "Nordix Ltd. Engineering Team"
       customer: "Nordix Ltd."
