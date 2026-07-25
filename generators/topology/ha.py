@@ -28,6 +28,11 @@ def _iface_kind(typename: str) -> str:
     return typename if typename else "DcimPhysicalInterface"
 
 
+def _device_kind(typename: str) -> str:
+    """Map GraphQL __typename to the device kind string."""
+    return typename if typename else "DcimPhysicalDevice"
+
+
 class HAGenerator(FailOnErrorLoggerMixin, InfrahubGenerator):
     """Create ManagedHAInterface nodes for all member devices in an HA domain."""
 
@@ -122,8 +127,26 @@ class HAGenerator(FailOnErrorLoggerMixin, InfrahubGenerator):
         for device in devices:
             dev_id: str = device["id"]
             dev_name: str = device["name"]
-            device_obj = await self.client.get(kind="DcimPhysicalDevice", id=dev_id)
-            caps = getattr(device_obj, "capabilities")
+            dev_kind: str = _device_kind(device.get("typename", "DcimPhysicalDevice"))
+            device["resolved_kind"] = dev_kind
+
+            try:
+                device_obj = await self.client.get(kind=dev_kind, id=dev_id)
+            except Exception as exc:
+                self.logger.warning(
+                    "  [%s] Unable to load capability member (%s:%s): %s",
+                    dev_name,
+                    dev_kind,
+                    dev_id,
+                    exc,
+                )
+                continue
+
+            caps = getattr(device_obj, "capabilities", None)
+            if not caps:
+                self.logger.info("  [%s] %s has no capabilities relation — skipping", dev_name, dev_kind)
+                continue
+
             await caps.fetch()
             existing_cap_ids = {peer.id for peer in caps.peers}
             if ha_id not in existing_cap_ids:
@@ -148,16 +171,62 @@ class HAGenerator(FailOnErrorLoggerMixin, InfrahubGenerator):
 
         for device in devices:
             dev_name: str = device["name"]
+            dev_id: str = device["id"]
+            dev_kind: str = device.get("resolved_kind", _device_kind(device.get("typename", "")))
             interfaces: list[dict] = device.get("interfaces", [])
 
             sync_ifaces = [i for i in interfaces if _is_sync_iface(i)]
             if not sync_ifaces:
-                self.logger.error("[%s] No HA sync interface found (expected role=ha)", dev_name)
+                if dev_kind == "DcimVirtualDevice":
+                    self.logger.info("[%s] Virtual device has no HA sync interface — creating one", dev_name)
+                    candidate_name = "eth7"
+                    existing = await self.client.filters(
+                        kind="DcimVirtualInterface",
+                        device__ids=[dev_id],
+                        name__value=candidate_name,
+                    )
+
+                    if existing:
+                        sync_obj = existing[0]
+                        getattr(sync_obj, "role").value = "ha"
+                        getattr(sync_obj, "status").value = "active"
+                        getattr(sync_obj, "description").value = f"HA sync — {dev_name}"
+                        await sync_obj.save(allow_upsert=True)
+                        sync_ifaces = [
+                            {
+                                "id": sync_obj.id,
+                                "name": getattr(sync_obj, "name").value,
+                                "typename": "DcimVirtualInterface",
+                                "role": "ha",
+                            }
+                        ]
+                    else:
+                        sync_obj = await self.client.create(
+                            kind="DcimVirtualInterface",
+                            data={
+                                "name": candidate_name,
+                                "device": {"id": dev_id},
+                                "status": "active",
+                                "role": "ha",
+                                "description": f"HA sync — {dev_name}",
+                            },
+                        )
+                        await sync_obj.save(allow_upsert=True)
+                        sync_ifaces = [
+                            {
+                                "id": sync_obj.id,
+                                "name": candidate_name,
+                                "typename": "DcimVirtualInterface",
+                                "role": "ha",
+                            }
+                        ]
+                else:
+                    self.logger.error("[%s] No HA sync interface found (expected role=ha)", dev_name)
 
             for iface in sync_ifaces:
-                iface_id: str = iface["id"]
-                iface_name: str = iface["name"]
-                iface_typename: str = iface.get("typename", "DcimPhysicalInterface")
+                iface_id = str(iface.get("id") or "")
+                iface_name = str(iface.get("name") or "")
+                iface_typename = str(iface.get("typename") or "DcimPhysicalInterface")
 
                 # Always activate the HA sync interface (idempotent)
                 iface_obj = await self.client.get(kind=_iface_kind(iface_typename), id=iface_id)
@@ -207,4 +276,8 @@ class HAGenerator(FailOnErrorLoggerMixin, InfrahubGenerator):
                 self.logger.info(f"  [{dev_name}:{iface_name}] Created {node_name}")
 
         # Create HA sync cables between peer devices
-        await self._ensure_ha_cables(ha_name, devices)
+        physical_devices = [d for d in devices if d.get("resolved_kind") == "DcimPhysicalDevice"]
+        if len(physical_devices) == len(devices):
+            await self._ensure_ha_cables(ha_name, devices)
+        else:
+            self.logger.info("[%s] Skipping cable creation for non-physical HA domain", ha_name)

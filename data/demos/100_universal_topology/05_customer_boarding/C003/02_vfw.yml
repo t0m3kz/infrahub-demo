@@ -11,6 +11,7 @@ spec:
   kind: DcimVirtualDevice
   data:
     - name: DC3-C003-VSX-01
+      object_template: CloudGuard_EDGE
       role: firewall
       status: active
       device_type: CloudGuard
@@ -22,6 +23,7 @@ spec:
         - firewalls
 
     - name: DC3-C003-VSX-02
+      object_template: CloudGuard_EDGE
       role: firewall
       status: active
       device_type: CloudGuard

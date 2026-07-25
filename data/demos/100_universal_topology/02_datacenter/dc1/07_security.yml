@@ -45,7 +45,7 @@ spec:
             description: "Outside (return) — DC1-BL1"
           - name: ge-0/0/2
             interface_type: 10gbase-x-sfpp
-            role: management
+            role: ha
             status: active
             description: "HA sync — DC1-C001-FW-02"
 
@@ -72,7 +72,7 @@ spec:
             description: "Outside (return standby) — DC1-BL2"
           - name: ge-0/0/2
             interface_type: 10gbase-x-sfpp
-            role: management
+            role: ha
             status: active
             description: "HA sync — DC1-C001-FW-01"
 
@@ -100,7 +100,7 @@ spec:
             description: "Outside (return) — DC1-BL1"
           - name: ge-0/0/2
             interface_type: 10gbase-x-sfpp
-            role: management
+            role: ha
             status: active
             description: "HA sync — DC1-C002-FW-02"
 
@@ -127,7 +127,7 @@ spec:
             description: "Outside (return standby) — DC1-BL2"
           - name: ge-0/0/2
             interface_type: 10gbase-x-sfpp
-            role: management
+            role: ha
             status: active
             description: "HA sync — DC1-C002-FW-01"
 
