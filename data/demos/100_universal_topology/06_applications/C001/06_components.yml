@@ -17,10 +17,6 @@ spec:
         - C001-WEB-VM-02
       network_segment: c001-web-frontend-p
       proxy_service: DC3-PRX-HA
-      vip_service:
-        - c001-trade-web.dc3.internal
-        - https
-        - "443"
       member_of_groups:
         - app_components
 
@@ -32,10 +28,6 @@ spec:
         - C001-APP-VM-02
       network_segment: c001-app-backend-p
       proxy_service: DC3-PRX-HA
-      vip_service:
-        - c001-trade-api.dc3.internal
-        - https
-        - "8443"
       member_of_groups:
         - app_components
 
@@ -46,10 +38,6 @@ spec:
         - C001-DB-VM-01
         - C001-DB-VM-02
       network_segment: c001-database-p
-      vip_service:
-        - c001-trade-db.dc3.internal
-        - tcp
-        - "5432"
       member_of_groups:
         - app_components
 
@@ -71,10 +59,6 @@ spec:
         - C001-WEB-NP-VM-01
       network_segment: c001-web-frontend-n
       proxy_service: DC3-PRX-HA
-      vip_service:
-        - c001-trade-web-n.dc3.internal
-        - https
-        - "443"
       member_of_groups:
         - app_components
 
@@ -85,10 +69,6 @@ spec:
         - C001-APP-NP-VM-01
       network_segment: c001-app-backend-n
       proxy_service: DC3-PRX-HA
-      vip_service:
-        - c001-trade-api-n.dc3.internal
-        - https
-        - "8443"
       member_of_groups:
         - app_components
 
@@ -98,10 +78,6 @@ spec:
       instances:
         - C001-DB-NP-VM-01
       network_segment: c001-database-n
-      vip_service:
-        - c001-trade-db-n.dc3.internal
-        - tcp
-        - "5432"
       member_of_groups:
         - app_components
 
@@ -115,10 +91,6 @@ spec:
         - C001-AUTH-VM-02
       network_segment: c001-app-backend-p
       proxy_service: DC3-PRX-HA
-      vip_service:
-        - c001-auth-api.dc3.internal
-        - https
-        - "8443"
       member_of_groups:
         - app_components
 
@@ -128,10 +100,6 @@ spec:
       instances:
         - C001-DB-VM-01
       network_segment: c001-database-p
-      vip_service:
-        - c001-auth-db.dc3.internal
-        - tcp
-        - "5432"
       member_of_groups:
         - app_components
 
@@ -145,10 +113,6 @@ spec:
         - C001-RISK-VM-02
       network_segment: c001-app-backend-p
       proxy_service: DC3-PRX-HA
-      vip_service:
-        - c001-risk-api.dc3.internal
-        - https
-        - "8443"
       member_of_groups:
         - app_components
 
@@ -158,9 +122,5 @@ spec:
       instances:
         - C001-DB-VM-02
       network_segment: c001-database-p
-      vip_service:
-        - c001-risk-db.dc3.internal
-        - tcp
-        - "5432"
       member_of_groups:
         - app_components

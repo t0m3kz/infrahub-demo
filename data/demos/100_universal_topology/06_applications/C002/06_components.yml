@@ -17,10 +17,6 @@ spec:
         - C002-WEB-VM-02
       network_segment: c002-web-frontend-p
       proxy_service: DC3-PRX-HA
-      vip_service:
-        - c002-ship-web.dc3.internal
-        - https
-        - "443"
       member_of_groups:
         - app_components
 
@@ -32,10 +28,6 @@ spec:
         - C002-APP-VM-02
       network_segment: c002-app-backend-p
       proxy_service: DC3-PRX-HA
-      vip_service:
-        - c002-ship-api.dc3.internal
-        - https
-        - "8443"
       member_of_groups:
         - app_components
 
@@ -45,10 +37,6 @@ spec:
       instances:
         - C002-DB-VM-01
       network_segment: c002-database-p
-      vip_service:
-        - c002-ship-db.dc3.internal
-        - tcp
-        - "5432"
       member_of_groups:
         - app_components
 
@@ -61,10 +49,6 @@ spec:
         - C002-WEB-NP-VM-01
       network_segment: c002-web-frontend-n
       proxy_service: DC3-PRX-HA
-      vip_service:
-        - c002-ship-web-n.dc3.internal
-        - https
-        - "443"
       member_of_groups:
         - app_components
 
@@ -75,10 +59,6 @@ spec:
         - C002-APP-NP-VM-01
       network_segment: c002-app-backend-n
       proxy_service: DC3-PRX-HA
-      vip_service:
-        - c002-ship-api-n.dc3.internal
-        - https
-        - "8443"
       member_of_groups:
         - app_components
 
@@ -91,10 +71,6 @@ spec:
         - C002-FLEET-WEB-VM-01
       network_segment: c002-web-frontend-p
       proxy_service: DC3-PRX-HA
-      vip_service:
-        - c002-fleet-web.dc3.internal
-        - https
-        - "443"
       member_of_groups:
         - app_components
 
@@ -105,10 +81,6 @@ spec:
         - C002-FLEET-APP-VM-01
       network_segment: c002-app-backend-p
       proxy_service: DC3-PRX-HA
-      vip_service:
-        - c002-fleet-api.dc3.internal
-        - https
-        - "8443"
       member_of_groups:
         - app_components
 
@@ -118,9 +90,5 @@ spec:
       instances:
         - C002-FLEET-DB-VM-01
       network_segment: c002-database-p
-      vip_service:
-        - c002-fleet-db.dc3.internal
-        - tcp
-        - "5432"
       member_of_groups:
         - app_components

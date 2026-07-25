@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from typing import Any
 
 
@@ -166,3 +167,90 @@ class ApplicationComponentPlanner:
         if not service_ports:
             return None
         return service_ports[0].get("port")
+
+    @staticmethod
+    def select_primary_service_port(service_ports: list[dict[str, Any]]) -> tuple[int, str] | None:
+        """Select a deterministic primary service port for VIP auto-creation."""
+        if not service_ports:
+            return None
+
+        protocol_rank = {
+            "https": 0,
+            "http": 1,
+            "tls": 2,
+            "tcp": 3,
+            "udp": 4,
+            "tcp_udp": 5,
+        }
+
+        candidates: list[tuple[int, int, str]] = []
+        for sp in service_ports:
+            port_val = sp.get("port")
+            if port_val is None:
+                continue
+            try:
+                port_int = int(port_val)
+            except (TypeError, ValueError):
+                continue
+
+            proto = str(sp.get("protocol") or "tcp").lower()
+            rank = protocol_rank.get(proto, 99)
+            candidates.append((rank, port_int, proto))
+
+        if not candidates:
+            return None
+
+        _rank, selected_port, selected_proto = sorted(candidates, key=lambda x: (x[0], x[1]))[0]
+        return (selected_port, selected_proto)
+
+    @staticmethod
+    def to_vip_protocol(service_port_protocol: str, port: int) -> str:
+        """Map AppServicePort protocol into LoadbalancerVIP protocol choices."""
+        proto = (service_port_protocol or "tcp").lower()
+
+        if proto == "tcp_udp":
+            proto = "tcp"
+
+        if proto == "tcp" and port == 443:
+            return "https"
+        if proto == "tcp" and port == 80:
+            return "http"
+
+        if proto in {"http", "https", "tls", "tcp", "udp"}:
+            return proto
+
+        return "tcp"
+
+    @staticmethod
+    def extract_app_fqdn(parent: dict[str, Any]) -> str:
+        """Return parent application FQDN value if present."""
+        fqdn = parent.get("fqdn")
+        if isinstance(fqdn, dict):
+            return str(fqdn.get("value") or "").strip().lower()
+        return str(fqdn or "").strip().lower()
+
+    @staticmethod
+    def _sanitize_dns_label(value: str) -> str:
+        """Sanitize arbitrary text into a DNS label."""
+        normalized = re.sub(r"[^a-z0-9-]", "-", value.strip().lower())
+        normalized = re.sub(r"-+", "-", normalized).strip("-")
+        return normalized or "component"
+
+    @classmethod
+    def derive_vip_hostname(
+        cls,
+        app_fqdn: str,
+        component_name: str,
+        component_type: str,
+        component_slug: str,
+    ) -> str:
+        """Derive deterministic VIP hostname from app/context data."""
+        safe_component = cls._sanitize_dns_label(component_name or component_slug)
+        safe_slug = cls._sanitize_dns_label(component_slug or component_name)
+
+        if app_fqdn:
+            if component_type == "frontend":
+                return app_fqdn
+            return f"{safe_component}.{app_fqdn}"
+
+        return f"{safe_slug}.internal"

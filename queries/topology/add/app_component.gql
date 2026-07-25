@@ -13,20 +13,6 @@ query app_component_data($name: String!) {
             __typename
           }
         }
-        vip_service {
-          node {
-            id
-            hostname { value }
-            protocol { value }
-            port { value }
-            load_balancer {
-              node {
-                id
-                name { value }
-              }
-            }
-          }
-        }
         instances {
           edges {
             node {

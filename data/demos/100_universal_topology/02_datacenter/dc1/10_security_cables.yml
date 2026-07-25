@@ -57,7 +57,7 @@ spec:
             device: DC1-C001-FW-02
             name: ge-0/0/1
 
-    - name: CBL-DC1-C001FW01-C001FW02-HA-SYNC
+    - name: CBL-DC1-C001-FW-HA-SYNC
       type: smf
       deployment: DC1
       endpoints:
@@ -123,7 +123,7 @@ spec:
             device: DC1-C002-FW-02
             name: ge-0/0/1
 
-    - name: CBL-DC1-C002FW01-C002FW02-HA-SYNC
+    - name: CBL-DC1-C002-FW-HA-SYNC
       type: smf
       deployment: DC1
       endpoints:

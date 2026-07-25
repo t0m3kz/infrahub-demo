@@ -100,7 +100,7 @@ def _comp_response(
     segment_id: str = "seg-1",
     segment_name: str = "c001-web-frontend-p",
     segment_typename: str = "ManagedVxlanSegment",
-    vip_id: str | None = "vip-1",
+    lb_ha_id: str | None = None,
     instances: list | None = None,
 ) -> dict:
     """Build cleaned AppComponent data (no edges/node wrapping — already clean_data'd).
@@ -120,7 +120,7 @@ def _comp_response(
                     "name": segment_name,
                     "typename": segment_typename,
                 },
-                "vip_service": {"id": vip_id, "typename": "LoadbalancerVIP"} if vip_id else {},
+                "load_balancer": {"id": lb_ha_id, "typename": "ManagedLoadbalancerHA"} if lb_ha_id else {},
                 "instances": instances or [],
             }
         ]
@@ -144,20 +144,17 @@ class TestAppComponentGeneratorGenerate:
         error_msg = gen.logger.error.call_args[0][0]
         assert "AppComponent" in error_msg
 
-    def test_no_vip_service_skips_lb_wiring(self):
-        """Component with no vip_service → client.get is never called for VIP."""
+    def test_no_load_balancer_skips_lb_wiring(self):
+        """Component with no load_balancer assigned skips LB workflow."""
         gen = _make_gen()
         gen._assign_segment_to_hosts = AsyncMock()
+        gen.client.get = AsyncMock(return_value=None)
 
-        data = _comp_response(vip_id=None)
+        data = _comp_response(lb_ha_id=None)
         asyncio.run(gen.generate(data))
 
-        # No client.get for LoadbalancerVIP
-        for call_args in gen.client.get.call_args_list:
-            assert call_args.kwargs.get("kind") != "LoadbalancerVIP"
-        # Info log about no vip_service
         info_msgs = " ".join(str(c) for c in gen.logger.info.call_args_list)
-        assert "vip_service" in info_msgs or "LB wiring" in info_msgs
+        assert "no load_balancer assigned" in info_msgs
 
     def test_cloud_segment_skips_host_assignment(self):
         """CloudNetworkSegment typename → _assign_segment_to_hosts NOT called."""
@@ -168,7 +165,7 @@ class TestAppComponentGeneratorGenerate:
 
         data = _comp_response(
             segment_typename="CloudNetworkSegment",
-            vip_id=None,
+            lb_ha_id=None,
             instances=[{"id": "host-1", "typename": "DcimPhysicalDevice"}],
         )
         asyncio.run(gen.generate(data))
@@ -183,7 +180,7 @@ class TestAppComponentGeneratorGenerate:
         gen._wire_pool_member = AsyncMock()
 
         data = _comp_response(
-            vip_id=None,
+            lb_ha_id=None,
             instances=[{"id": "host-physical-1", "name": "server-01", "typename": "DcimPhysicalDevice"}],
         )
         asyncio.run(gen.generate(data))
@@ -200,7 +197,7 @@ class TestAppComponentGeneratorGenerate:
         gen._wire_pool_member = AsyncMock()
 
         data = _comp_response(
-            vip_id=None,
+            lb_ha_id=None,
             instances=[
                 {
                     "id": "vm-1",
@@ -224,7 +221,7 @@ class TestAppComponentGeneratorGenerate:
         gen._wire_pool_member = AsyncMock()
 
         data = _comp_response(
-            vip_id=None,
+            lb_ha_id=None,
             instances=[
                 {"id": "host-physical-1", "name": "server-01", "typename": "DcimPhysicalDevice"},
                 {
@@ -251,7 +248,7 @@ class TestAppComponentGeneratorGenerate:
 
         data = _comp_response(
             segment_typename="ManagedVlanSegment",
-            vip_id=None,
+            lb_ha_id=None,
             instances=[{"id": "host-1", "name": "server-01", "typename": "DcimPhysicalDevice"}],
         )
         asyncio.run(gen.generate(data))
@@ -260,8 +257,8 @@ class TestAppComponentGeneratorGenerate:
         call_kwargs = gen._assign_segment_to_hosts.call_args.kwargs
         assert call_kwargs["segment_kind"] == "ManagedVlanSegment"
 
-    def test_vip_fetch_failure_logs_warning(self):
-        """client.get raising for VIP → warning logged, _wire_pool_member not called."""
+    def test_lb_resolution_failure_logs_warning(self):
+        """Failure while resolving component LB relationship logs warning and skips pool wiring."""
         gen = _make_gen()
         gen._assign_segment_to_hosts = AsyncMock()
         gen._assign_vip_to_lb = AsyncMock()
@@ -274,7 +271,7 @@ class TestAppComponentGeneratorGenerate:
         asyncio.run(gen.generate(data))
 
         warning_msgs = " ".join(str(c) for c in gen.logger.warning.call_args_list)
-        assert "vip" in warning_msgs.lower() or "VIP" in warning_msgs
+        assert "load_balancer" in warning_msgs.lower() or "resolve" in warning_msgs.lower()
         gen._wire_pool_member.assert_not_called()
 
     def test_pool_members_created_for_each_vm_instance(self):
@@ -285,9 +282,11 @@ class TestAppComponentGeneratorGenerate:
         gen._wire_pool_member = AsyncMock()
 
         vip = _mock_vip()
-        gen.client.get = AsyncMock(return_value=vip)
+        gen._resolve_component_lb_ha_id = AsyncMock(return_value="lbha-1")
+        gen._ensure_vip_service_from_ports = AsyncMock(return_value=vip)
 
         data = _comp_response(
+            lb_ha_id="lbha-1",
             instances=[
                 {"id": "vm-1", "name": "vm-01", "typename": "DcimVirtualDevice"},
                 {"id": "vm-2", "name": "vm-02", "typename": "DcimVirtualDevice"},
@@ -558,3 +557,197 @@ class TestWirePoolMember:
         assert "PoolMember" in error_msgs or "pool" in error_msgs.lower()
         # Only one create attempt — no PoolInterface was created
         gen.client.create.assert_awaited_once()
+
+
+# ===========================================================================
+# TestAutoVipHealthChecks
+# ===========================================================================
+
+
+class TestAutoVipHealthChecks:
+    """Tests for health-check behavior used by auto-created VIP services."""
+
+    def test_health_check_mapping_http(self):
+        assert AppComponentGenerator._health_check_type_for_vip("http") == "http"
+
+    def test_health_check_mapping_https(self):
+        assert AppComponentGenerator._health_check_type_for_vip("https") == "ssl"
+
+    def test_health_check_mapping_tls(self):
+        assert AppComponentGenerator._health_check_type_for_vip("tls") == "ssl"
+
+    def test_health_check_mapping_fallback_tcp(self):
+        assert AppComponentGenerator._health_check_type_for_vip("udp") == "tcp"
+
+    def test_attach_default_health_check_adds_when_missing(self):
+        gen = _make_gen()
+
+        hc_obj = MagicMock()
+        hc_obj.id = "hc-1"
+        hc_obj.save = AsyncMock()
+        gen.client.create = AsyncMock(return_value=hc_obj)
+
+        vip_obj = MagicMock()
+        vip_obj.save = AsyncMock()
+        rel = MagicMock()
+        rel.fetch = AsyncMock()
+        rel.peers = []
+        vip_obj.health_checks = rel
+
+        asyncio.run(
+            gen._attach_default_health_check(
+                vip_obj=vip_obj,
+                vip_protocol="https",
+                comp_slug="c001-trade-portal-p-web-frontend",
+            )
+        )
+
+        create_kwargs = gen.client.create.call_args.kwargs
+        assert create_kwargs["data"]["check"] == "ssl"
+        rel.add.assert_called_once_with(hc_obj)
+        vip_obj.save.assert_awaited_once()
+
+    def test_attach_default_health_check_is_idempotent(self):
+        gen = _make_gen()
+
+        hc_obj = MagicMock()
+        hc_obj.id = "hc-1"
+        hc_obj.save = AsyncMock()
+        gen.client.create = AsyncMock(return_value=hc_obj)
+
+        vip_obj = MagicMock()
+        vip_obj.save = AsyncMock()
+        rel = MagicMock()
+        rel.fetch = AsyncMock()
+        rel.peers = [MagicMock(id="hc-1")]
+        vip_obj.health_checks = rel
+
+        asyncio.run(
+            gen._attach_default_health_check(
+                vip_obj=vip_obj,
+                vip_protocol="http",
+                comp_slug="c001-trade-portal-p-web-frontend",
+            )
+        )
+
+        rel.add.assert_not_called()
+        vip_obj.save.assert_not_called()
+
+    def test_attach_default_health_check_returns_health_check_object(self):
+        gen = _make_gen()
+
+        hc_obj = MagicMock()
+        hc_obj.id = "hc-1"
+        hc_obj.save = AsyncMock()
+        gen.client.create = AsyncMock(return_value=hc_obj)
+
+        vip_obj = MagicMock()
+        vip_obj.save = AsyncMock()
+        rel = MagicMock()
+        rel.fetch = AsyncMock()
+        rel.peers = []
+        vip_obj.health_checks = rel
+
+        result = asyncio.run(
+            gen._attach_default_health_check(
+                vip_obj=vip_obj,
+                vip_protocol="http",
+                comp_slug="c001-trade-portal-p-web-frontend",
+            )
+        )
+
+        assert result is hc_obj
+
+    def test_attach_health_check_to_component_adds_when_missing(self):
+        gen = _make_gen()
+
+        hc_obj = MagicMock()
+        hc_obj.id = "hc-1"
+
+        component_obj = MagicMock()
+        component_obj.save = AsyncMock()
+        rel = MagicMock()
+        rel.fetch = AsyncMock()
+        rel.peers = []
+        component_obj.health_checks = rel
+
+        gen.client.get = AsyncMock(return_value=component_obj)
+
+        asyncio.run(
+            gen._attach_health_check_to_component(
+                component_id="comp-1",
+                health_check=hc_obj,
+                comp_slug="c001-trade-portal-p-web-frontend",
+            )
+        )
+
+        rel.add.assert_called_once_with(hc_obj)
+        component_obj.save.assert_awaited_once()
+
+    def test_attach_health_check_to_component_is_idempotent(self):
+        gen = _make_gen()
+
+        hc_obj = MagicMock()
+        hc_obj.id = "hc-1"
+
+        component_obj = MagicMock()
+        component_obj.save = AsyncMock()
+        rel = MagicMock()
+        rel.fetch = AsyncMock()
+        rel.peers = [MagicMock(id="hc-1")]
+        component_obj.health_checks = rel
+
+        gen.client.get = AsyncMock(return_value=component_obj)
+
+        asyncio.run(
+            gen._attach_health_check_to_component(
+                component_id="comp-1",
+                health_check=hc_obj,
+                comp_slug="c001-trade-portal-p-web-frontend",
+            )
+        )
+
+        rel.add.assert_not_called()
+        component_obj.save.assert_not_called()
+
+    def test_attach_component_to_vip_adds_when_missing(self):
+        gen = _make_gen()
+
+        vip_obj = MagicMock()
+        vip_obj.save = AsyncMock()
+        rel = MagicMock()
+        rel.fetch = AsyncMock()
+        rel.peers = []
+        vip_obj.app_components = rel
+
+        asyncio.run(
+            gen._attach_component_to_vip(
+                vip_obj=vip_obj,
+                component_id="comp-1",
+                comp_slug="c001-trade-portal-p-web-frontend",
+            )
+        )
+
+        rel.add.assert_called_once_with({"id": "comp-1"})
+        vip_obj.save.assert_awaited_once()
+
+    def test_attach_component_to_vip_is_idempotent(self):
+        gen = _make_gen()
+
+        vip_obj = MagicMock()
+        vip_obj.save = AsyncMock()
+        rel = MagicMock()
+        rel.fetch = AsyncMock()
+        rel.peers = [MagicMock(id="comp-1")]
+        vip_obj.app_components = rel
+
+        asyncio.run(
+            gen._attach_component_to_vip(
+                vip_obj=vip_obj,
+                component_id="comp-1",
+                comp_slug="c001-trade-portal-p-web-frontend",
+            )
+        )
+
+        rel.add.assert_not_called()
+        vip_obj.save.assert_not_called()

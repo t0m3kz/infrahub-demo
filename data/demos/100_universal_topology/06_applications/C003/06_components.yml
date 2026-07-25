@@ -17,10 +17,6 @@ spec:
         - C003-VAULT-VM-02
       network_segment: c003-vault-core-p
       proxy_service: DC3-PRX-HA
-      vip_service:
-        - c003-vault-api.dc3.internal
-        - https
-        - "8200"
       member_of_groups:
         - app_components
 
@@ -30,10 +26,6 @@ spec:
       instances:
         - C003-VAULT-DB-VM-01
       network_segment: c003-database-p
-      vip_service:
-        - c003-vault-db.dc3.internal
-        - tcp
-        - "5432"
       member_of_groups:
         - app_components
 
@@ -46,10 +38,6 @@ spec:
         - C003-COMP-WEB-VM-01
       network_segment: c003-dmz-p
       proxy_service: DC3-PRX-HA
-      vip_service:
-        - c003-comp-web.dc3.internal
-        - https
-        - "443"
       member_of_groups:
         - app_components
 
@@ -60,10 +48,6 @@ spec:
         - C003-COMP-APP-VM-01
       network_segment: c003-app-backend-p
       proxy_service: DC3-PRX-HA
-      vip_service:
-        - c003-comp-api.dc3.internal
-        - https
-        - "8443"
       member_of_groups:
         - app_components
 
@@ -73,9 +57,5 @@ spec:
       instances:
         - C003-COMP-DB-VM-01
       network_segment: c003-database-p
-      vip_service:
-        - c003-comp-db.dc3.internal
-        - tcp
-        - "5432"
       member_of_groups:
         - app_components
