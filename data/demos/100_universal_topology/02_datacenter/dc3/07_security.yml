@@ -57,7 +57,7 @@ spec:
             description: "Outside (inline to LB) — DC3-LB-01:1.1"
           - name: sync
             interface_type: 10gbase-x-sfpp
-            role: management
+            role: ha
             status: active
             description: "HA sync — DC3-FW-02"
 
@@ -84,7 +84,7 @@ spec:
             description: "Outside (inline to LB standby) — DC3-LB-02:1.1"
           - name: sync
             interface_type: 10gbase-x-sfpp
-            role: management
+            role: ha
             status: active
             description: "HA sync — DC3-FW-01"
 

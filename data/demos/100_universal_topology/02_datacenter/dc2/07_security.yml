@@ -44,7 +44,7 @@ spec:
             description: "Outside/return — DC2-BL1:Ethernet1/6"
           - name: ethernet1/3
             interface_type: 10gbase-x-sfpp
-            role: management
+            role: ha
             status: active
             description: "HA sync — back-to-back with DC2-FW-02"
 
@@ -71,7 +71,7 @@ spec:
             description: "Outside/return — DC2-BL2:Ethernet1/6"
           - name: ethernet1/3
             interface_type: 10gbase-x-sfpp
-            role: management
+            role: ha
             status: active
             description: "HA sync — back-to-back with DC2-FW-01"
 
