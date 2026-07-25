@@ -57,6 +57,7 @@ class TestFirewallCheck:
                             "name": "rule-1",
                             "disabled": False,
                             "source_zone": {"name": "zone-empty"},
+                            "destination_zone": {"name": "zone-empty"},
                         }
                     ],
                 }
@@ -66,7 +67,7 @@ class TestFirewallCheck:
         check.validate(payload)
 
         assert check._captured_errors == []
-        assert len(check._captured_infos) == 1
+        assert len(check._captured_infos) == 2
         assert "has no member segments" in check._captured_infos[0]
 
     def test_disabled_policy_and_rule_are_skipped(self) -> None:

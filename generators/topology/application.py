@@ -176,7 +176,17 @@ class AppApplicationGenerator(CommonGenerator):
 
             src_zone = (src_seg.get("security_zone") or {}).get("name")
             dst_zone = (dst_seg.get("security_zone") or {}).get("name")
-            cross_zone = src_zone != dst_zone
+            if src_zone and dst_zone:
+                cross_zone = src_zone != dst_zone
+            else:
+                # Missing zone metadata should never reduce inspection/logging.
+                cross_zone = True
+                self.logger.warning(
+                    "  Dependency '%s' has incomplete zone mapping (%s -> %s); treating as cross-zone",
+                    dep.get("name", dep.get("id", "?")),
+                    src_zone or "<missing>",
+                    dst_zone or "<missing>",
+                )
 
             if rule_name in existing_names:
                 self.logger.info("  Rule '%s' already exists — registering with tracker", rule_name)
@@ -184,6 +194,13 @@ class AppApplicationGenerator(CommonGenerator):
                     if getattr(r, "name", None) and r.name.value == rule_name:
                         await r.save(allow_upsert=True)
                         break
+                await self._reconcile_tag_rule_from_segments(
+                    src_seg=src_seg,
+                    dst_seg=dst_seg,
+                    app_name=app_name,
+                    dep_name=dep.get("name", dep.get("id", "?")),
+                    log=cross_zone,
+                )
                 rules_skipped += 1
                 continue
 
@@ -245,6 +262,13 @@ class AppApplicationGenerator(CommonGenerator):
                 used_indexes.add(next_index)
                 next_index += RULE_INDEX_STEP
                 rules_created += 1
+                await self._reconcile_tag_rule_from_segments(
+                    src_seg=src_seg,
+                    dst_seg=dst_seg,
+                    app_name=app_name,
+                    dep_name=dep.get("name", dep.get("id", "?")),
+                    log=cross_zone,
+                )
             except Exception as exc:
                 self.logger.error("  Failed to create rule '%s': %s", rule_name, exc)
 
@@ -496,6 +520,60 @@ class AppApplicationGenerator(CommonGenerator):
                         exc,
                     )
 
+    async def _reconcile_tag_rule_from_segments(
+        self,
+        src_seg: dict[str, Any],
+        dst_seg: dict[str, Any],
+        app_name: str,
+        dep_name: str,
+        log: bool,
+    ) -> None:
+        """Create or re-register a SecurityTagRule when both segments carry security tags."""
+        src_tag = src_seg.get("security_tag") or {}
+        dst_tag = dst_seg.get("security_tag") or {}
+        src_tag_id = str(src_tag.get("id") or "")
+        dst_tag_id = str(dst_tag.get("id") or "")
+
+        if not src_tag_id or not dst_tag_id:
+            return
+
+        try:
+            existing = await self.client.filters(
+                kind="SecurityTagRule",
+                source_tag__ids=[src_tag_id],
+                destination_tag__ids=[dst_tag_id],
+            )
+            if existing:
+                await existing[0].save(allow_upsert=True)
+                return
+        except Exception:
+            pass
+
+        try:
+            tag_rule = await self.client.create(
+                kind="SecurityTagRule",
+                data={
+                    "source_tag": {"id": src_tag_id},
+                    "destination_tag": {"id": dst_tag_id},
+                    "action": "permit",
+                    "log": log,
+                    "description": f"Auto-generated from {app_name} dependency {dep_name}",
+                },
+            )
+            await tag_rule.save(allow_upsert=True)
+            self.logger.info(
+                "  Reconciled SecurityTagRule %s -> %s",
+                src_tag.get("name", src_tag_id),
+                dst_tag.get("name", dst_tag_id),
+            )
+        except Exception as exc:
+            self.logger.warning(
+                "  Could not reconcile SecurityTagRule for %s -> %s: %s",
+                src_tag.get("name", src_tag_id),
+                dst_tag.get("name", dst_tag_id),
+                exc,
+            )
+
     @staticmethod
     def _pick_profile(app_security_profile: str, cross_zone: bool) -> str | None:
         """Select a concrete SecuritySecurityProfile from app-level security posture."""
@@ -587,7 +665,16 @@ class AppDependencyRuleGenerator(AppApplicationGenerator):
 
         src_zone = (src_seg.get("security_zone") or {}).get("name")
         dst_zone = (dst_seg.get("security_zone") or {}).get("name")
-        cross_zone = src_zone != dst_zone
+        if src_zone and dst_zone:
+            cross_zone = src_zone != dst_zone
+        else:
+            cross_zone = True
+            self.logger.warning(
+                "Dependency '%s' has incomplete zone mapping (%s -> %s); treating as cross-zone",
+                dep.get("name", dep.get("id", "?")),
+                src_zone or "<missing>",
+                dst_zone or "<missing>",
+            )
 
         rule_data: dict[str, Any] = {
             "policy": {"id": policy_id},
@@ -636,6 +723,13 @@ class AppDependencyRuleGenerator(AppApplicationGenerator):
                     rule_name,
                     rule_index,
                     app_name,
+                )
+                await self._reconcile_tag_rule_from_segments(
+                    src_seg=src_seg,
+                    dst_seg=dst_seg,
+                    app_name=app_name,
+                    dep_name=dep.get("name", dep.get("id", "?")),
+                    log=cross_zone,
                 )
                 break
             except Exception as exc:
