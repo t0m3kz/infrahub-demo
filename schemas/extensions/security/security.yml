@@ -368,6 +368,42 @@ nodes:
         order_weight: 2400
         identifier: policyrule_destination_segment
         description: "Destination network segment (micro-segmentation)"
+      - name: source_ip_addresses
+        peer: IpamIPAddress
+        label: Source IP Addresses
+        cardinality: many
+        kind: Attribute
+        optional: true
+        order_weight: 2410
+        identifier: policyrule_source_ip_addresses
+        description: "Source IP selectors for IP-exact intent rules"
+      - name: destination_ip_addresses
+        peer: IpamIPAddress
+        label: Destination IP Addresses
+        cardinality: many
+        kind: Attribute
+        optional: true
+        order_weight: 2420
+        identifier: policyrule_destination_ip_addresses
+        description: "Destination IP selectors for IP-exact intent rules"
+      - name: source_prefixes
+        peer: IpamPrefix
+        label: Source Prefixes
+        cardinality: many
+        kind: Attribute
+        optional: true
+        order_weight: 2430
+        identifier: policyrule_source_prefixes
+        description: "Source prefix selectors for prefix- and hybrid-intent rules"
+      - name: destination_prefixes
+        peer: IpamPrefix
+        label: Destination Prefixes
+        cardinality: many
+        kind: Attribute
+        optional: true
+        order_weight: 2440
+        identifier: policyrule_destination_prefixes
+        description: "Destination prefix selectors for prefix- and hybrid-intent rules"
       # Inspection profile
       - name: security_profile
         peer: SecuritySecurityProfile

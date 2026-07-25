@@ -1,0 +1,91 @@
+query security_intent_rule_validation {
+  SecurityIntentRule {
+    edges {
+      node {
+        id
+        name {
+          value
+        }
+        match_mode {
+          value
+        }
+        protocol {
+          value
+        }
+        port_start {
+          value
+        }
+        port_end {
+          value
+        }
+        policy {
+          node {
+            id
+          }
+        }
+        source_zone {
+          node {
+            id
+          }
+        }
+        destination_zone {
+          node {
+            id
+          }
+        }
+        source_tag {
+          node {
+            id
+          }
+        }
+        destination_tag {
+          node {
+            id
+          }
+        }
+        source_segments {
+          edges {
+            node {
+              id
+            }
+          }
+        }
+        destination_segments {
+          edges {
+            node {
+              id
+            }
+          }
+        }
+        source_ip_addresses {
+          edges {
+            node {
+              id
+            }
+          }
+        }
+        destination_ip_addresses {
+          edges {
+            node {
+              id
+            }
+          }
+        }
+        source_prefixes {
+          edges {
+            node {
+              id
+            }
+          }
+        }
+        destination_prefixes {
+          edges {
+            node {
+              id
+            }
+          }
+        }
+      }
+    }
+  }
+}

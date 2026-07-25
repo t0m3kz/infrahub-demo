@@ -61,11 +61,14 @@ class ApplicationSegmentRulePlanner:
     @staticmethod
     def rule_name(app_name: str, src: dict[str, Any], dst: dict[str, Any]) -> str:
         """Build deterministic, human-readable rule name."""
-        src_slug = src.get("slug") or src.get("name", "src")
-        dst_slug = dst.get("slug") or dst.get("name", "dst")
-        src_short = src_slug.split("-")[-1] if "-" in src_slug else src_slug
-        dst_short = dst_slug.split("-")[-1] if "-" in dst_slug else dst_slug
-        return f"{app_name}-{src_short}-to-{dst_short}"
+        src_label = src.get("label") or src.get("slug") or src.get("name", "src")
+        dst_label = dst.get("label") or dst.get("slug") or dst.get("name", "dst")
+
+        # Keep full labels/slugs to avoid collisions such as
+        # "payments-api" and "internal-api" both collapsing to "api".
+        src_norm = str(src_label).lower().replace(" ", "-")
+        dst_norm = str(dst_label).lower().replace(" ", "-")
+        return f"{app_name}-{src_norm}-to-{dst_norm}"
 
     @staticmethod
     def rule_description(dep: dict[str, Any], src_comp: dict[str, Any], dst_comp: dict[str, Any]) -> str:

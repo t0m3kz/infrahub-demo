@@ -1,0 +1,124 @@
+query security_intent_rule($name: String!) {
+  SecurityIntentRule(name__value: $name) {
+    edges {
+      node {
+        id
+        name { value }
+        match_mode { value }
+        priority { value }
+        action { value }
+        protocol { value }
+        port_start { value }
+        port_end { value }
+        log { value }
+        enabled { value }
+        description { value }
+        policy {
+          node {
+            id
+            name { value }
+          }
+        }
+        security_profile {
+          node {
+            id
+            name { value }
+          }
+        }
+        source_zone {
+          node {
+            id
+            name { value }
+          }
+        }
+        destination_zone {
+          node {
+            id
+            name { value }
+          }
+        }
+        source_tag {
+          node {
+            id
+            name { value }
+          }
+        }
+        destination_tag {
+          node {
+            id
+            name { value }
+          }
+        }
+        source_segments {
+          edges {
+            node {
+              id
+              name { value }
+            }
+          }
+        }
+        destination_segments {
+          edges {
+            node {
+              id
+              name { value }
+            }
+          }
+        }
+        source_ip_addresses {
+          edges {
+            node {
+              id
+              address { value }
+              ip_prefix {
+                node {
+                  id
+                  prefix { value }
+                }
+              }
+            }
+          }
+        }
+        destination_ip_addresses {
+          edges {
+            node {
+              id
+              address { value }
+              ip_prefix {
+                node {
+                  id
+                  prefix { value }
+                }
+              }
+            }
+          }
+        }
+        source_prefixes {
+          edges {
+            node {
+              id
+              prefix { value }
+            }
+          }
+        }
+        destination_prefixes {
+          edges {
+            node {
+              id
+              prefix { value }
+            }
+          }
+        }
+        rendered_rules {
+          edges {
+            node {
+              id
+              name { value }
+              index { value }
+            }
+          }
+        }
+      }
+    }
+  }
+}
