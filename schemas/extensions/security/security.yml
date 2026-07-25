@@ -418,6 +418,14 @@ extensions:
   nodes:
     - kind: ManagedNetworkSegment
       relationships:
+        - name: security_policies
+          peer: SecurityPolicy
+          cardinality: many
+          kind: Generic
+          optional: true
+          order_weight: 905
+          identifier: network_segment__security_policies
+          description: "Security policies attached to this segment"
         - name: security_zone
           peer: SecurityZone
           cardinality: one

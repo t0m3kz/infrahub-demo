@@ -23,6 +23,7 @@ policy + index uniqueness constraint guarantees this via allow_upsert=True).
 
 from __future__ import annotations
 
+import inspect
 from typing import Any, Protocol
 
 from utils.data_cleaning import clean_data
@@ -42,6 +43,7 @@ from ..protocols import (
     DcimPhysicalInterface,
     DcimVirtualDevice,
     DcimVirtualInterface,
+    LoadbalancerHealthCheck,
     LoadbalancerPoolInterface,
     LoadbalancerPoolMember,
     LoadbalancerVIP,
@@ -158,17 +160,7 @@ class AppApplicationGenerator(CommonGenerator):
                 )
                 continue
 
-            is_cloud = planner.is_cloud_dependency(src_seg, dst_seg)
-
             rule_name = planner.rule_name(app_name, src_comp, dst_comp)
-
-            if is_cloud:
-                ok = await self._create_cloud_rule(app_name, src_comp, dst_comp, dep, rule_name)
-                if ok:
-                    rules_created += 1
-                else:
-                    rules_skipped += 1
-                continue
 
             port_info = _resolve_port(dep)
             if port_info is None:
@@ -566,12 +558,6 @@ class AppDependencyRuleGenerator(AppApplicationGenerator):
 
         rule_name = planner.rule_name(app_name, src_comp, dst_comp)
 
-        if planner.is_cloud_dependency(src_seg, dst_seg):
-            ok = await self._create_cloud_rule(app_name, src_comp, dst_comp, dep, rule_name)
-            if ok:
-                await self._attach_policy_to_segments(policy_id, [(src_comp, dst_comp)])
-            return
-
         port_info = _resolve_port(dep)
         if port_info is None:
             self.logger.warning(
@@ -736,14 +722,6 @@ class AppServicePortGenerator(_AppServicePortMixin, CommonGenerator):
         self.logger.info("Processing service ports for component: %s", component_slug)
 
         ports: set[tuple[int, int | None, str]] = set()
-
-        vip_services = component.get("vip_services") or []
-        vip_ports, vip_warnings = planner.derive_ports_from_vips(vip_services)
-        for warning in vip_warnings:
-            self.logger.warning("  %s", warning)
-        ports.update(vip_ports)
-        for port, _port_end, proto in sorted(vip_ports):
-            self.logger.info("  VIP → port %s/%s", port, proto)
 
         try:
             inbound_deps = await self.client.filters(
@@ -931,25 +909,17 @@ class AppComponentGenerator(CommonGenerator):
                 comp_slug,
             )
 
-        vip_service = comp.get("vip_service") or {}
-        vip_id: str = vip_service.get("id", "")
-
-        if not vip_id:
-            self.logger.info("  %s has no vip_service — skipping LB wiring", comp_slug)
+        lb_ha_id = await self._resolve_component_lb_ha_id(comp=comp, comp_slug=comp_slug)
+        if not lb_ha_id:
+            self.logger.info("  %s has no load_balancer assigned — skipping LB wiring", comp_slug)
             return
 
-        try:
-            vip_obj = await self.client.get(
-                kind=LoadbalancerVIP,
-                id=vip_id,
-                prefetch_relationships=True,
-            )
-        except Exception as exc:
-            self.logger.warning("  Could not fetch VIP %s: %s", vip_id, exc)
-            return
+        vip_obj = await self._ensure_vip_service_from_ports(comp=comp, comp_slug=comp_slug, lb_ha_id=lb_ha_id)
         if not vip_obj:
-            self.logger.warning("  VIP %s not found — skipping", vip_id)
+            self.logger.info("  %s has no creatable VIP from service_ports — skipping LB wiring", comp_slug)
             return
+
+        vip_id = vip_obj.id
 
         vip_hostname: str = getattr(getattr(vip_obj, "hostname", None), "value", vip_id)
         vip_proto: str = getattr(getattr(vip_obj, "protocol", None), "value", "")
@@ -976,6 +946,239 @@ class AppComponentGenerator(CommonGenerator):
                 vip_port=vip_port,
                 backend_port=backend_port,
             )
+
+    async def _ensure_vip_service_from_ports(
+        self,
+        comp: dict[str, Any],
+        comp_slug: str,
+        lb_ha_id: str,
+    ) -> Any | None:
+        """Create or upsert one deterministic VIP from service_ports."""
+        planner = ApplicationComponentPlanner()
+
+        service_ports: list[dict[str, Any]] = comp.get("service_ports") or []
+        selected = planner.select_primary_service_port(service_ports)
+        if selected is None:
+            self.logger.info("  %s has LB HA assigned but no service_ports — skipping VIP auto-create", comp_slug)
+            return None
+
+        port, service_port_protocol = selected
+
+        app_fqdn = ""
+        component_name = str(comp.get("name") or comp_slug)
+        component_type = str(comp.get("component_type") or "backend")
+        vip_hostname = planner.derive_vip_hostname(app_fqdn, component_name, component_type, comp_slug)
+        vip_protocol = planner.to_vip_protocol(service_port_protocol=service_port_protocol, port=port)
+
+        try:
+            vip_obj = await self.client.create(
+                kind=LoadbalancerVIP,
+                data={
+                    "hostname": vip_hostname,
+                    "protocol": vip_protocol,
+                    "port": port,
+                    "status": "active",
+                    "load_balancing_algorithm": "round_robin",
+                    "load_balancer": {"id": lb_ha_id},
+                },
+            )
+            await vip_obj.save(allow_upsert=True)
+            self.logger.info(
+                "  Upserted VIP %s (%s/%s) on LB HA %s",
+                vip_hostname,
+                vip_protocol,
+                port,
+                lb_ha_id,
+            )
+        except Exception as exc:
+            self.logger.error(
+                "  Failed auto VIP create for %s on LB HA %s: %s",
+                comp_slug,
+                lb_ha_id,
+                exc,
+            )
+            return None
+
+        component_id = str(comp.get("id") or "")
+        if component_id:
+            await self._attach_component_to_vip(
+                vip_obj=vip_obj,
+                component_id=component_id,
+                comp_slug=comp_slug,
+            )
+
+        health_check = await self._attach_default_health_check(
+            vip_obj=vip_obj, vip_protocol=vip_protocol, comp_slug=comp_slug
+        )
+
+        if health_check and component_id:
+            await self._attach_health_check_to_component(
+                component_id=component_id,
+                health_check=health_check,
+                comp_slug=comp_slug,
+            )
+
+        return vip_obj
+
+    @staticmethod
+    async def _safe_rel_add(rel: Any, obj: Any) -> None:
+        """Add a relationship peer while supporting sync and async add() variants."""
+        result = rel.add(obj)
+        if inspect.isawaitable(result):
+            await result
+
+    async def _resolve_component_lb_ha_id(self, comp: dict[str, Any], comp_slug: str) -> str:
+        """Resolve assigned LB HA id for component from query data or SDK object."""
+        load_balancer = comp.get("load_balancer") or {}
+        lb_ha_id = str(load_balancer.get("id") or "")
+        if lb_ha_id:
+            return lb_ha_id
+
+        component_id = str(comp.get("id") or "")
+        if not component_id:
+            return ""
+
+        try:
+            component_obj = await self.client.get(kind=AppComponent, id=component_id, prefetch_relationships=True)
+            if component_obj is None:
+                return ""
+            lb_rel = getattr(component_obj, "load_balancer", None)
+            lb_peer = getattr(lb_rel, "peer", None) if lb_rel else None
+            resolved_id = str(getattr(lb_peer, "id", "") or "")
+            if resolved_id:
+                return resolved_id
+        except Exception as exc:
+            self.logger.warning("  Could not resolve load_balancer for %s: %s", comp_slug, exc)
+
+        return ""
+
+    async def _attach_default_health_check(
+        self,
+        vip_obj: Any,
+        vip_protocol: str,
+        comp_slug: str,
+    ) -> Any | None:
+        """Attach one default health check to VIP in an idempotent way."""
+        check_type = self._health_check_type_for_vip(vip_protocol)
+
+        try:
+            health_check = await self.client.create(
+                kind=LoadbalancerHealthCheck,
+                data={
+                    "check": check_type,
+                    "rise": 3,
+                    "fall": 3,
+                    "timeout": 1000,
+                },
+            )
+            await health_check.save(allow_upsert=True)
+        except Exception as exc:
+            self.logger.warning(
+                "  Could not upsert default health check (%s) for %s: %s",
+                check_type,
+                comp_slug,
+                exc,
+            )
+            return None
+
+        try:
+            vip_hc_rel = getattr(vip_obj, "health_checks", None)
+            if vip_hc_rel is None:
+                self.logger.warning("  VIP health_checks relationship missing for %s", comp_slug)
+                return health_check
+
+            await vip_hc_rel.fetch()
+            existing_ids = {peer.id for peer in vip_hc_rel.peers}
+            if health_check.id in existing_ids:
+                return health_check
+
+            await self._safe_rel_add(vip_hc_rel, health_check)
+            await vip_obj.save(allow_upsert=True)
+            self.logger.info("  Attached %s health-check to VIP for %s", check_type, comp_slug)
+        except Exception as exc:
+            self.logger.warning(
+                "  Could not attach health check to VIP for %s: %s",
+                comp_slug,
+                exc,
+            )
+
+        return health_check
+
+    async def _attach_component_to_vip(
+        self,
+        vip_obj: Any,
+        component_id: str,
+        comp_slug: str,
+    ) -> None:
+        """Attach AppComponent to VIP for VIP-centric component visibility."""
+        vip_components_rel = getattr(vip_obj, "app_components", None)
+        if vip_components_rel is None:
+            self.logger.debug("  VIP relation app_components missing for %s", comp_slug)
+            return
+
+        try:
+            await vip_components_rel.fetch()
+            existing_ids = {peer.id for peer in vip_components_rel.peers}
+            if component_id in existing_ids:
+                return
+
+            await self._safe_rel_add(vip_components_rel, {"id": component_id})
+            await vip_obj.save(allow_upsert=True)
+            self.logger.info("  Attached AppComponent %s to VIP", comp_slug)
+        except Exception as exc:
+            self.logger.warning(
+                "  Could not attach AppComponent %s to VIP: %s",
+                comp_slug,
+                exc,
+            )
+
+    async def _attach_health_check_to_component(
+        self,
+        component_id: str,
+        health_check: Any,
+        comp_slug: str,
+    ) -> None:
+        """Attach health check to application component for component-centric mapping."""
+        try:
+            component_obj = await self.client.get(kind=AppComponent, id=component_id, prefetch_relationships=True)
+        except Exception as exc:
+            self.logger.warning("  Could not fetch AppComponent %s for health-check mapping: %s", component_id, exc)
+            return
+
+        if component_obj is None:
+            return
+
+        component_hc_rel = getattr(component_obj, "health_checks", None)
+        if component_hc_rel is None:
+            self.logger.debug("  Component %s has no health_checks relationship", component_id)
+            return
+
+        try:
+            await component_hc_rel.fetch()
+            existing_ids = {peer.id for peer in component_hc_rel.peers}
+            if health_check.id in existing_ids:
+                return
+
+            await self._safe_rel_add(component_hc_rel, health_check)
+            await component_obj.save(allow_upsert=True)
+            self.logger.info("  Attached health-check to AppComponent %s", comp_slug)
+        except Exception as exc:
+            self.logger.warning(
+                "  Could not attach health-check to AppComponent %s (%s): %s",
+                comp_slug,
+                component_id,
+                exc,
+            )
+
+    @staticmethod
+    def _health_check_type_for_vip(vip_protocol: str) -> str:
+        """Map VIP protocol to one supported LB health-check type."""
+        proto = (vip_protocol or "tcp").lower()
+        if proto == "http":
+            return "http"
+        if proto in {"https", "tls"}:
+            return "ssl"
+        return "tcp"
 
     async def _assign_segment_to_hosts(
         self,

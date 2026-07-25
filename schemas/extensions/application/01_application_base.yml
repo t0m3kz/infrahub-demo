@@ -239,17 +239,26 @@ nodes:
         order_weight: 760
         identifier: "app_component__instances"
         description: "Compute instances (physical, virtual, or cloud) running this component"
-      - name: vip_service
-        peer: LoadbalancerVIP
+      - name: load_balancer
+        peer: ManagedLoadbalancerHA
         cardinality: one
         kind: Generic
-        direction: outbound
         optional: true
         on_delete: no-action
-        identifier: "app_component__vip_service"
-        order_weight: 840
-        label: "VIP Service"
-        description: "Frontend listener that routes traffic to this component"
+        identifier: "app_component__load_balancer"
+        order_weight: 845
+        label: "Load Balancer HA"
+        description: "Assigned LB HA domain used for automatic VIP creation from service ports"
+      - name: health_checks
+        peer: LoadbalancerHealthCheck
+        cardinality: many
+        kind: Attribute
+        optional: true
+        on_delete: no-action
+        identifier: "app_component__health_checks"
+        order_weight: 846
+        label: "Health Checks"
+        description: "Health checks associated with this application component"
       - name: proxy_service
         peer: ManagedProxyService
         cardinality: one
@@ -263,28 +272,16 @@ nodes:
 
 extensions:
   nodes:
-    - kind: AppApplication
+    - kind: LoadbalancerVIP
       relationships:
-        - name: security_policies
-          peer: SecurityPolicy
-          cardinality: many
-          kind: Generic
-          optional: true
-          order_weight: 900
-          identifier: "app_application__security_policies"
-          label: "Security Policies"
-          description: "Security policies governing this application's traffic"
-          state: absent
-
-        - name: ingress
-          peer: LoadbalancerVIP
+        - name: app_components
+          peer: AppComponent
           cardinality: many
           kind: Attribute
           optional: true
-          identifier: "app_application__ingress"
-          order_weight: 800
-          label: "Ingress"
-          state: absent
+          order_weight: 2200
+          identifier: "vip_service__app_components"
+          description: "Application components exposed by this VIP"
 
     - kind: OrganizationCustomer
       relationships:

@@ -428,17 +428,3 @@ extensions:
           order_weight: 2100
           identifier: vip_service__health_checks
           description: "VIP services using this health check"
-
-    - kind: LoadbalancerVIP
-      relationships:
-        - name: components
-          peer: AppComponent
-          cardinality: many
-          kind: Generic
-          direction: inbound
-          optional: true
-          on_delete: no-action
-          identifier: "app_component__vip_service"
-          order_weight: 700
-          label: "App Components"
-          description: "Application components routed through this VIP"

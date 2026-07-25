@@ -4,13 +4,6 @@ query app_service_ports($slug: String!) {
       node {
         id
         slug { value }
-        vip_service {
-          node {
-            id
-            port { value }
-            protocol { value }
-          }
-        }
       }
     }
   }

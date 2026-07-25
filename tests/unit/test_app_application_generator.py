@@ -13,9 +13,10 @@ import asyncio
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
-from generators.protocols import CloudSecurityGroup, CloudSecurityGroupRule
+from generators.protocols import CloudSecurityGroup, CloudSecurityGroupRule, SecurityPolicyRule
 from generators.topology.application import (
     AppApplicationGenerator,
+    AppDependencyRuleGenerator,
     _resolve_port,
     _seg_cidr,
 )
@@ -417,3 +418,78 @@ class TestCreateCloudRule:
 
         assert result is False
         gen.logger.error.assert_called_once()
+
+
+# ===========================================================================
+# TestDependencyRuleGenerator
+# ===========================================================================
+
+
+class TestDependencyRuleGenerator:
+    def test_cloud_dependency_uses_shared_security_policy_rule_model(self):
+        """Cloud dependencies should reconcile into SecurityPolicyRule, not cloud-specific rule objects."""
+        gen = AppDependencyRuleGenerator.__new__(AppDependencyRuleGenerator)
+        gen.client = AsyncMock()
+        gen.logger = MagicMock()
+
+        policy = MagicMock()
+        policy.id = "policy-1"
+        gen._get_or_create_policy = AsyncMock(return_value=policy)
+        gen._get_zone = AsyncMock(return_value=None)
+        gen._get_profile = AsyncMock(return_value=None)
+        gen._attach_policy_to_segments = AsyncMock()
+        gen._create_cloud_rule = AsyncMock(return_value=True)
+
+        existing_rules: list[MagicMock] = []
+        gen.client.filters = AsyncMock(return_value=existing_rules)
+        created_rule = MagicMock()
+        created_rule.save = AsyncMock()
+        gen.client.create = AsyncMock(return_value=created_rule)
+
+        dep_data = {
+            "AppDependency": [
+                {
+                    "id": "dep-1",
+                    "name": "fe-to-api",
+                    "protocol": "tcp",
+                    "port_start": 443,
+                    "port_end": None,
+                    "description": "frontend to api",
+                    "source": {
+                        "id": "comp-fe",
+                        "name": "frontend",
+                        "component_type": "frontend",
+                        "parent": {"name": "myapp", "security_profile": "internal_standard"},
+                        "network_segment": {
+                            "id": "cloud-seg-src",
+                            "name": "cloud-src",
+                            "typename": "CloudNetworkSegment",
+                            "cidr_block": {"prefix": "10.10.0.0/24"},
+                        },
+                    },
+                    "target": {
+                        "id": "comp-api",
+                        "name": "api",
+                        "component_type": "backend",
+                        "parent": {"name": "myapp", "security_profile": "internal_standard"},
+                        "network_segment": {
+                            "id": "cloud-seg-dst",
+                            "name": "cloud-dst",
+                            "typename": "CloudNetworkSegment",
+                            "cidr_block": {"prefix": "10.20.0.0/24"},
+                        },
+                    },
+                }
+            ]
+        }
+
+        asyncio.run(gen.generate(dep_data))
+
+        gen._create_cloud_rule.assert_not_called()
+        gen.client.create.assert_called_once()
+
+        call_kwargs = gen.client.create.call_args.kwargs
+        assert call_kwargs["kind"] == SecurityPolicyRule
+        rule_data = call_kwargs["data"]
+        assert rule_data["source_segment"] == {"id": "cloud-seg-src"}
+        assert rule_data["destination_segment"] == {"id": "cloud-seg-dst"}
