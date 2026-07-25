@@ -59,6 +59,8 @@ spec:
       instances:
         - C001-CACHE-VM-01
       network_segment: c001-cache-p
+      member_of_groups:
+        - app_components
 
     # ── trade-portal / nonprod ────────────────────────────────────────────────
 

@@ -127,6 +127,11 @@ nodes:
         kind: Text
         optional: true
         order_weight: 700
+      - name: fqdn
+        kind: Text
+        optional: false
+        order_weight: 725
+        description: "Canonical FQDN for application access/identification"
       - name: ingress_mode
         kind: Dropdown
         optional: true
@@ -143,14 +148,6 @@ nodes:
             color: "#4CAF50"
             description: "Application exposure is DNS-driven (without frontend VIP mapping)"
     relationships:
-      - name: ingress
-        peer: LoadbalancerVIP
-        cardinality: many
-        kind: Attribute
-        optional: true
-        identifier: "app_application__ingress"
-        order_weight: 800
-        label: "Ingress"
       - name: security_policies
         peer: SecurityPolicy
         label: "Security Policies"
@@ -261,6 +258,18 @@ nodes:
 
 extensions:
   nodes:
+    - kind: AppApplication
+      relationships:
+        - name: ingress
+          peer: LoadbalancerVIP
+          cardinality: many
+          kind: Attribute
+          optional: true
+          identifier: "app_application__ingress"
+          order_weight: 800
+          label: "Ingress"
+          state: absent
+
     - kind: OrganizationCustomer
       relationships:
         - name: portfolios

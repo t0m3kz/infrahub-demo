@@ -27,6 +27,8 @@ spec:
     - label: nautobot
       environment: p
       criticality: critical
+      fqdn: nautobot.c001.demo.local
+      ingress_mode: frontend
       parent: C001
       member_of_groups:
         - app_applications
@@ -178,15 +180,21 @@ spec:
       parent: c001-nautobot-p
       service_ports:
         - "8080/tcp"
+      member_of_groups:
+        - app_components
 
     - name: database
       component_type: database
       parent: c001-nautobot-p
       service_ports:
         - "5432/tcp"
+      member_of_groups:
+        - app_components
 
     - name: cache
       component_type: cache
       parent: c001-nautobot-p
       service_ports:
         - "6379/tcp"
+      member_of_groups:
+        - app_components

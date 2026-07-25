@@ -38,7 +38,6 @@ def _mock_iface(iface_id: str = "iface-1", existing_cap_ids: set | None = None) 
 
     caps = MagicMock()
     caps.fetch = AsyncMock()
-    caps.add = AsyncMock()
     caps.peers = [MagicMock(id=cap_id) for cap_id in (existing_cap_ids or set())]
     iface.interface_capabilities = caps
 
@@ -358,7 +357,7 @@ class TestAssignSegmentToHosts:
 
         self._run(gen)
 
-        iface.interface_capabilities.add.assert_awaited_once_with(segment_obj)
+        iface.interface_capabilities.add.assert_called_once_with(segment_obj)
         iface.save.assert_awaited_once()
 
     def test_already_assigned_interface_skipped(self):
@@ -427,7 +426,6 @@ class TestWirePoolMember:
 
         caps = MagicMock()
         caps.fetch = AsyncMock()
-        caps.add = AsyncMock()
         caps.peers = []
         vm.capabilities = caps
         vm.save = AsyncMock()
@@ -452,7 +450,6 @@ class TestWirePoolMember:
         viface.save = AsyncMock()
         pi_caps = MagicMock()
         pi_caps.fetch = AsyncMock()
-        pi_caps.add = AsyncMock()
         pi_caps.peers = []
         viface.interface_capabilities = pi_caps
         return viface

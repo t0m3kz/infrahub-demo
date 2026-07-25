@@ -61,6 +61,8 @@ spec:
         - cnrd-nlb-app.example.com
         - tcp
         - "443"
+      member_of_groups:
+        - app_components
 
     - name: tcp-80-targets
       component_type: backend
@@ -70,3 +72,5 @@ spec:
         - cnrd-nlb-app.example.com
         - tcp
         - "80"
+      member_of_groups:
+        - app_components

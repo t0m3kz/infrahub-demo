@@ -22,6 +22,8 @@ spec:
     - label: audit-service
       environment: p
       criticality: critical
+      fqdn: audit-service.c003.internal.local
+      ingress_mode: dns
       parent: C003
       member_of_groups:
         - app_applications
@@ -32,16 +34,22 @@ spec:
             component_type: backend
             network_segment: c003-app-backend-p
             description: "Ingests audit events from all vault-core and compliance-portal services"
+            member_of_groups:
+              - app_components
 
           - name: event-store
             component_type: database
             network_segment: c003-database-p
             description: "Append-only PostgreSQL store for immutable audit records"
+            member_of_groups:
+              - app_components
 
           - name: audit-api
             component_type: backend
             network_segment: c003-app-backend-p
             description: "Read-only HTTPS API for compliance and reporting consumers"
+            member_of_groups:
+              - app_components
 
 ---
 # ── Virtual machines ──────────────────────────────────────────────────────────
@@ -126,6 +134,8 @@ spec:
         - C003-AUDIT-COL-VM-02
       depends_on:
         - c003-audit-service-p-event-collector--c003-audit-service-p-event-store
+      member_of_groups:
+        - app_components
 
     - name: event-store
       component_type: database
@@ -133,6 +143,8 @@ spec:
       instances:
         - C003-AUDIT-DB-VM-01
         - C003-AUDIT-DB-VM-02
+      member_of_groups:
+        - app_components
 
     - name: audit-api
       component_type: backend
@@ -141,3 +153,5 @@ spec:
         - C003-AUDIT-API-VM-01
       depends_on:
         - c003-audit-service-p-audit-api--c003-audit-service-p-event-store
+      member_of_groups:
+        - app_components
