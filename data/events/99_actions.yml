@@ -220,34 +220,24 @@ spec:
       mutation_action: "updated"
       action: ha-generator
     # ── App Security Rules ────────────────────────────────────────────────────
-    # Re-run the security rules generator whenever an AppComponent is created
-    # or its depends_on / network_segment relationships change.
-    # Trigger is scoped to other_branches so engineers review in a Proposed Change.
+    # Keep trigger node kind aligned with generator target group:
+    # - add_app_application targets app_applications (AppApplication events)
+    # - add_app_application_from_dependency targets app_dependencies (AppDependency events)
 
-    - name: trigger-app-security-rules-on-component-created
+    - name: trigger-app-security-rules-on-application-created
       branch_scope: "other_branches"
-      node_kind: AppComponent
+      node_kind: AppApplication
       mutation_action: "created"
       action: run-app-application-generator
 
-    - name: trigger-app-security-rules-on-depends-on-updated
+    - name: trigger-app-security-rules-on-dependency-created
       branch_scope: "other_branches"
-      node_kind: AppComponent
-      mutation_action: "updated"
-      action: run-app-application-generator
-      matches:
-        kind: CoreNodeTriggerRelationshipMatch
-        data:
-          - relationship_name: depends_on
-            modification_type: updated
+      node_kind: AppDependency
+      mutation_action: "created"
+      action: run-app-dependency-rule-generator
 
-    - name: trigger-app-security-rules-on-segment-updated
+    - name: trigger-app-security-rules-on-dependency-updated
       branch_scope: "other_branches"
-      node_kind: AppComponent
+      node_kind: AppDependency
       mutation_action: "updated"
-      action: run-app-application-generator
-      matches:
-        kind: CoreNodeTriggerRelationshipMatch
-        data:
-          - relationship_name: network_segment
-            modification_type: updated
+      action: run-app-dependency-rule-generator

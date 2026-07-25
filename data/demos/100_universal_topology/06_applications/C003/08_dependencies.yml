@@ -23,6 +23,9 @@ spec:
       port_start: 5432
       description: "Vault API → vault DB (PostgreSQL)"
 
+      member_of_groups:
+        - app_dependencies
+
     # ── compliance-portal / production ────────────────────────────────────────
 
     - name: c003-compliance-portal-p-audit-dashboard--c003-compliance-portal-p-policy-engine
@@ -32,6 +35,9 @@ spec:
       port_start: 8443
       description: "Audit dashboard → policy engine (mTLS 8443)"
 
+      member_of_groups:
+        - app_dependencies
+
     - name: c003-compliance-portal-p-policy-engine--c003-compliance-portal-p-audit-db
       source: c003-compliance-portal-p-policy-engine
       target: c003-compliance-portal-p-audit-db
@@ -39,12 +45,18 @@ spec:
       port_start: 5432
       description: "Policy engine → audit DB (PostgreSQL)"
 
+      member_of_groups:
+        - app_dependencies
+
     - name: c003-compliance-portal-p-policy-engine--c003-vault-core-p-vault-api
       source: c003-compliance-portal-p-policy-engine
       target: c003-vault-core-p-vault-api
       protocol: tcp
       port_start: 8200
       description: "Policy engine → vault API (cross-app, HashiCorp Vault port)"
+
+      member_of_groups:
+        - app_dependencies
 
 # ── Wire depends_on on each AppComponent ─────────────────────────────────────
 ---

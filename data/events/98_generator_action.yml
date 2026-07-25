@@ -35,6 +35,9 @@ spec:
     - name: run-app-application-generator
       description: Derive security policy rules from application component dependencies
       generator: add_app_application
+    - name: run-app-dependency-rule-generator
+      description: Reconcile a single application dependency security rule
+      generator: add_app_application_from_dependency
 # - name: run-endpoint-generator
 #   description: Run Endpoint Connectivity Generator
 #   generator: add_endpoint

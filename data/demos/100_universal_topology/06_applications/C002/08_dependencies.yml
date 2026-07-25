@@ -20,12 +20,18 @@ spec:
       port_start: 443
       description: "Web frontend → tracking API (HTTPS)"
 
+      member_of_groups:
+        - app_dependencies
+
     - name: c002-shipment-tracker-p-tracking-api--c002-shipment-tracker-p-shipment-db
       source: c002-shipment-tracker-p-tracking-api
       target: c002-shipment-tracker-p-shipment-db
       protocol: tcp
       port_start: 5432
       description: "Tracking API → shipment DB (PostgreSQL)"
+
+      member_of_groups:
+        - app_dependencies
 
     # ── shipment-tracker / nonprod ────────────────────────────────────────────
 
@@ -36,6 +42,9 @@ spec:
       port_start: 443
       description: "Web frontend → tracking API (HTTPS, nonprod)"
 
+      member_of_groups:
+        - app_dependencies
+
     # ── fleet-manager / production ────────────────────────────────────────────
 
     - name: c002-fleet-manager-p-dispatch-portal--c002-fleet-manager-p-telematics-api
@@ -45,6 +54,9 @@ spec:
       port_start: 8080
       description: "Dispatch portal → telematics API (HTTP/2)"
 
+      member_of_groups:
+        - app_dependencies
+
     - name: c002-fleet-manager-p-dispatch-portal--c002-shipment-tracker-p-tracking-api
       source: c002-fleet-manager-p-dispatch-portal
       target: c002-shipment-tracker-p-tracking-api
@@ -52,12 +64,18 @@ spec:
       port_start: 443
       description: "Dispatch portal → tracking API (cross-app, HTTPS)"
 
+      member_of_groups:
+        - app_dependencies
+
     - name: c002-fleet-manager-p-telematics-api--c002-fleet-manager-p-fleet-db
       source: c002-fleet-manager-p-telematics-api
       target: c002-fleet-manager-p-fleet-db
       protocol: tcp
       port_start: 5432
       description: "Telematics API → fleet DB (PostgreSQL)"
+
+      member_of_groups:
+        - app_dependencies
 
 # ── Wire depends_on on each AppComponent ─────────────────────────────────────
 ---

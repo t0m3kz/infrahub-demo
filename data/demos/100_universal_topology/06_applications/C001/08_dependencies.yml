@@ -24,12 +24,18 @@ spec:
       port_start: 443
       description: "Web frontend → API gateway (HTTPS)"
 
+      member_of_groups:
+        - app_dependencies
+
     - name: c001-trade-portal-p-api-gateway--c001-trade-portal-p-order-db
       source: c001-trade-portal-p-api-gateway
       target: c001-trade-portal-p-order-db
       protocol: tcp
       port_start: 5432
       description: "API gateway → order DB (PostgreSQL)"
+
+      member_of_groups:
+        - app_dependencies
 
     - name: c001-trade-portal-p-api-gateway--c001-trade-portal-p-session-cache
       source: c001-trade-portal-p-api-gateway
@@ -38,12 +44,18 @@ spec:
       port_start: 6379
       description: "API gateway → session cache (Redis)"
 
+      member_of_groups:
+        - app_dependencies
+
     - name: c001-trade-portal-p-api-gateway--c001-auth-platform-p-auth-api
       source: c001-trade-portal-p-api-gateway
       target: c001-auth-platform-p-auth-api
       protocol: tcp
       port_start: 8443
       description: "API gateway → auth API (cross-app, mTLS 8443)"
+
+      member_of_groups:
+        - app_dependencies
 
     # ── trade-portal / nonprod ────────────────────────────────────────────────
 
@@ -54,12 +66,18 @@ spec:
       port_start: 443
       description: "Web frontend → API gateway (HTTPS, nonprod)"
 
+      member_of_groups:
+        - app_dependencies
+
     - name: c001-trade-portal-n-api-gateway--c001-trade-portal-n-order-db
       source: c001-trade-portal-n-api-gateway
       target: c001-trade-portal-n-order-db
       protocol: tcp
       port_start: 5432
       description: "API gateway → order DB (PostgreSQL, nonprod)"
+
+      member_of_groups:
+        - app_dependencies
 
     # ── auth-platform / production ────────────────────────────────────────────
 
@@ -70,6 +88,9 @@ spec:
       port_start: 5432
       description: "Auth API → identity DB (PostgreSQL)"
 
+      member_of_groups:
+        - app_dependencies
+
     # ── risk-engine / production ──────────────────────────────────────────────
 
     - name: c001-risk-engine-p-analytics-worker--c001-risk-engine-p-risk-db
@@ -79,12 +100,18 @@ spec:
       port_start: 5432
       description: "Analytics worker → risk DB (PostgreSQL)"
 
+      member_of_groups:
+        - app_dependencies
+
     - name: c001-risk-engine-p-analytics-worker--c001-trade-portal-p-order-db
       source: c001-risk-engine-p-analytics-worker
       target: c001-trade-portal-p-order-db
       protocol: tcp
       port_start: 5432
       description: "Analytics worker → order DB (cross-app read, PostgreSQL)"
+
+      member_of_groups:
+        - app_dependencies
 
 # ── Wire depends_on on each AppComponent ─────────────────────────────────────
 ---
