@@ -109,15 +109,6 @@ query security_intent_rule($name: String!) {
             }
           }
         }
-        rendered_rules {
-          edges {
-            node {
-              id
-              name { value }
-              index { value }
-            }
-          }
-        }
       }
     }
   }
