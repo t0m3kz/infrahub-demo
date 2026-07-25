@@ -111,6 +111,8 @@ query firewall_config($device: String!) {
               source_segment {
                 node {
                   id
+                  security_zone { node { name { value } } }
+                  security_tag { node { id name { value } } }
                   ... on ManagedVlanSegment { name { value } gateway { node { ip_prefix { node { prefix { value } } } } } }
                   ... on ManagedVxlanSegment { name { value } gateway { node { ip_prefix { node { prefix { value } } } } } }
                 }
@@ -118,14 +120,30 @@ query firewall_config($device: String!) {
               destination_segment {
                 node {
                   id
+                  security_zone { node { name { value } } }
+                  security_tag { node { id name { value } } }
                   ... on ManagedVlanSegment { name { value } gateway { node { ip_prefix { node { prefix { value } } } } } }
                   ... on ManagedVxlanSegment { name { value } gateway { node { ip_prefix { node { prefix { value } } } } } }
                 }
               }
+              source_ip_addresses { edges { node { id address { value } } } }
+              destination_ip_addresses { edges { node { id address { value } } } }
+              source_prefixes { edges { node { id prefix { value } } } }
+              destination_prefixes { edges { node { id prefix { value } } } }
               security_profile { node { name { value } } }
             }
           }
         }
+      }
+    }
+  }
+
+  SecurityTagRule {
+    edges {
+      node {
+        source_tag { node { id name { value } } }
+        destination_tag { node { id name { value } } }
+        action { value }
       }
     }
   }

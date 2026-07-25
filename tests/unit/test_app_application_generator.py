@@ -420,6 +420,80 @@ class TestCreateCloudRule:
         gen.logger.error.assert_called_once()
 
 
+class TestReconcileTagRuleFromSegments:
+    def test_skips_when_tag_missing(self):
+        gen = _make_gen()
+        gen.client.filters = AsyncMock()
+        gen.client.create = AsyncMock()
+
+        src_seg = {"id": "seg-1", "name": "src"}
+        dst_seg = {"id": "seg-2", "name": "dst", "security_tag": {"id": "tag-dst", "name": "dst-tier"}}
+
+        asyncio.run(
+            gen._reconcile_tag_rule_from_segments(
+                src_seg=src_seg,
+                dst_seg=dst_seg,
+                app_name="myapp",
+                dep_name="web-to-api",
+                log=True,
+            )
+        )
+
+        gen.client.filters.assert_not_called()
+        gen.client.create.assert_not_called()
+
+    def test_reuses_existing_tag_rule(self):
+        gen = _make_gen()
+        existing_rule = MagicMock()
+        existing_rule.save = AsyncMock()
+        gen.client.filters = AsyncMock(return_value=[existing_rule])
+        gen.client.create = AsyncMock()
+
+        src_seg = {"security_tag": {"id": "tag-src", "name": "web-tier"}}
+        dst_seg = {"security_tag": {"id": "tag-dst", "name": "app-tier"}}
+
+        asyncio.run(
+            gen._reconcile_tag_rule_from_segments(
+                src_seg=src_seg,
+                dst_seg=dst_seg,
+                app_name="myapp",
+                dep_name="web-to-api",
+                log=True,
+            )
+        )
+
+        gen.client.create.assert_not_called()
+        existing_rule.save.assert_called_once()
+
+    def test_creates_tag_rule_when_missing(self):
+        gen = _make_gen()
+        gen.client.filters = AsyncMock(return_value=[])
+        created_rule = MagicMock()
+        created_rule.save = AsyncMock()
+        gen.client.create = AsyncMock(return_value=created_rule)
+
+        src_seg = {"security_tag": {"id": "tag-src", "name": "web-tier"}}
+        dst_seg = {"security_tag": {"id": "tag-dst", "name": "app-tier"}}
+
+        asyncio.run(
+            gen._reconcile_tag_rule_from_segments(
+                src_seg=src_seg,
+                dst_seg=dst_seg,
+                app_name="myapp",
+                dep_name="web-to-api",
+                log=False,
+            )
+        )
+
+        call_kwargs = gen.client.create.call_args.kwargs
+        assert call_kwargs["kind"] == "SecurityTagRule"
+        data = call_kwargs["data"]
+        assert data["source_tag"] == {"id": "tag-src"}
+        assert data["destination_tag"] == {"id": "tag-dst"}
+        assert data["action"] == "permit"
+        assert data["log"] is False
+
+
 # ===========================================================================
 # TestDependencyRuleGenerator
 # ===========================================================================

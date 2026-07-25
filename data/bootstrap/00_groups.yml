@@ -90,5 +90,3 @@ spec:
       description: Application component instances — target for AppServicePortGenerator
     - name: app_dependencies
       description: Application dependency edges — target for dependency-driven generators
-    - name: security_intent_rules
-      description: Security intent rules — target for intent-to-policy materialization generator
