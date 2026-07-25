@@ -12,6 +12,7 @@ spec:
     - label: shipment-tracker
       environment: p
       criticality: high
+      security_profile: internet_exposed
       fqdn: shipment-tracker.c002.demo.local
       ingress_mode: frontend
       parent: C002
@@ -21,6 +22,7 @@ spec:
     - label: shipment-tracker
       environment: n
       criticality: low
+      security_profile: internet_exposed
       fqdn: shipment-tracker-np.c002.demo.local
       ingress_mode: frontend
       parent: C002
@@ -30,6 +32,7 @@ spec:
     - label: fleet-manager
       environment: p
       criticality: high
+      security_profile: internet_exposed
       fqdn: fleet-manager.c002.demo.local
       ingress_mode: frontend
       parent: C002

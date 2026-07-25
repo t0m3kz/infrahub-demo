@@ -123,6 +123,22 @@ nodes:
           - name: critical
             label: "Critical"
             color: "#FF0000"
+      - name: security_profile
+        kind: Dropdown
+        optional: false
+        order_weight: 650
+        default_value: internal_standard
+        description: "Global security posture used by rule generation"
+        choices:
+          - name: fintech_strict
+            label: "Fintech Strict"
+            color: "#C62828"
+          - name: internal_standard
+            label: "Internal Standard"
+            color: "#2E7D32"
+          - name: internet_exposed
+            label: "Internet Exposed"
+            color: "#EF6C00"
       - name: cost_center
         kind: Text
         optional: true
@@ -147,17 +163,6 @@ nodes:
             label: "DNS"
             color: "#4CAF50"
             description: "Application exposure is DNS-driven (without frontend VIP mapping)"
-    relationships:
-      - name: security_policies
-        peer: SecurityPolicy
-        label: "Security Policies"
-        cardinality: many
-        kind: Generic
-        optional: true
-        order_weight: 900
-        identifier: "app_application__security_policies"
-        description: "Security policies governing this application's traffic"
-
   # ── Component ─────────────────────────────────────────────────────────────
   # Logical service tier within an application (frontend, backend, db, etc.)
   - name: Component
@@ -260,6 +265,17 @@ extensions:
   nodes:
     - kind: AppApplication
       relationships:
+        - name: security_policies
+          peer: SecurityPolicy
+          cardinality: many
+          kind: Generic
+          optional: true
+          order_weight: 900
+          identifier: "app_application__security_policies"
+          label: "Security Policies"
+          description: "Security policies governing this application's traffic"
+          state: absent
+
         - name: ingress
           peer: LoadbalancerVIP
           cardinality: many

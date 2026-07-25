@@ -13,6 +13,7 @@ spec:
     - label: trade-portal
       environment: p
       criticality: critical
+      security_profile: internet_exposed
       fqdn: trade-portal.c001.demo.local
       ingress_mode: frontend
       parent: C001
@@ -22,6 +23,7 @@ spec:
     - label: trade-portal
       environment: n
       criticality: medium
+      security_profile: internet_exposed
       fqdn: trade-portal-np.c001.demo.local
       ingress_mode: frontend
       parent: C001
@@ -31,6 +33,7 @@ spec:
     - label: auth-platform
       environment: p
       criticality: critical
+      security_profile: internet_exposed
       fqdn: auth-platform.c001.demo.local
       ingress_mode: frontend
       parent: C001
@@ -40,6 +43,7 @@ spec:
     - label: risk-engine
       environment: p
       criticality: high
+      security_profile: fintech_strict
       fqdn: risk-engine.c001.internal.local
       ingress_mode: dns
       parent: C001
@@ -49,6 +53,7 @@ spec:
     - label: nlb-app
       environment: p
       criticality: high
+      security_profile: internet_exposed
       fqdn: nlb-app.c001.demo.local
       ingress_mode: frontend
       parent: C001

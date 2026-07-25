@@ -22,6 +22,7 @@ spec:
     - label: audit-service
       environment: p
       criticality: critical
+      security_profile: fintech_strict
       fqdn: audit-service.c003.internal.local
       ingress_mode: dns
       parent: C003

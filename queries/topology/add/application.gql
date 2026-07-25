@@ -13,6 +13,7 @@ query app_security_rules($name: String!) {
         name { value }
         environment { value }
         criticality { value }
+        security_profile { value }
         children {
           edges {
             node {
