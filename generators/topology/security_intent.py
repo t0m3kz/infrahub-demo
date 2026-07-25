@@ -29,7 +29,6 @@ class SecurityIntentRuleGenerator(CommonGenerator):
         await self._render_intent_rule(intent)
 
     async def _render_intent_rule(self, intent: dict[str, Any]) -> None:
-        intent_id = intent.get("id", "")
         intent_name = intent.get("name", "")
         mode = intent.get("match_mode", "ip_exact")
 
@@ -61,7 +60,11 @@ class SecurityIntentRuleGenerator(CommonGenerator):
         dst_prefixes = intent.get("destination_prefixes") or []
 
         # Reconcile SecurityPolicyRule
-        existing_rules = await self.client.filters(kind="SecurityPolicyRule", rendered_from_intent__ids=[intent_id])
+        existing_rules = await self.client.filters(
+            kind="SecurityPolicyRule",
+            policy__ids=[policy_id],
+            name__value=intent_name,
+        )
         existing_rule = existing_rules[0] if existing_rules else None
 
         if existing_rule:
@@ -87,7 +90,6 @@ class SecurityIntentRuleGenerator(CommonGenerator):
             "log": log,
             "disabled": not enabled,
             "description": description,
-            "rendered_from_intent": {"id": intent_id},
             "apply_on_switch": mode in {"segment", "hybrid"},
         }
 
@@ -155,8 +157,22 @@ class SecurityIntentRuleGenerator(CommonGenerator):
                 "description": f"Rendered from SecurityIntentRule {intent_name}",
             }
             try:
-                tag_rule = await self.client.create(kind="SecurityTagRule", data=tag_rule_data)
-                await tag_rule.save(allow_upsert=True)
+                existing_tag_rules = await self.client.filters(
+                    kind="SecurityTagRule",
+                    source_tag__ids=[src_tag["id"]],
+                    destination_tag__ids=[dst_tag["id"]],
+                )
+                existing_tag_rule = existing_tag_rules[0] if existing_tag_rules else None
+
+                if existing_tag_rule:
+                    existing_tag_rule.action.value = tag_rule_data["action"]
+                    existing_tag_rule.log.value = tag_rule_data["log"]
+                    existing_tag_rule.description.value = tag_rule_data["description"]
+                    await existing_tag_rule.save()
+                else:
+                    tag_rule = await self.client.create(kind="SecurityTagRule", data=tag_rule_data)
+                    await tag_rule.save(allow_upsert=True)
+
                 self.logger.info(
                     "Rendered SecurityTagRule %s -> %s from intent '%s'",
                     src_tag.get("name", "source"),

@@ -426,12 +426,3 @@ extensions:
           order_weight: 900
           description: "Security zone assignment (macro trust classification)"
           identifier: network_segment__security_zone
-        - name: security_policies
-          peer: SecurityPolicy
-          label: Security Policies
-          cardinality: many
-          kind: Generic
-          optional: true
-          order_weight: 920
-          identifier: network_segment__security_policies
-          description: "Security policies governing this segment (zero-trust contracts)"

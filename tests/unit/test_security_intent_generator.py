@@ -69,7 +69,6 @@ class TestSecurityIntentGenerator:
         kwargs = gen.client.create.call_args.kwargs
         assert kwargs["kind"] == "SecurityPolicyRule"
         data = kwargs["data"]
-        assert data["rendered_from_intent"] == {"id": "intent-1"}
         assert data["source_ip_addresses"] == [{"id": "ip-src-1"}]
         assert data["destination_ip_addresses"] == [{"id": "ip-dst-1"}]
         assert data["source_prefixes"] == [{"id": "pfx-src-1"}]
@@ -78,7 +77,7 @@ class TestSecurityIntentGenerator:
     def test_renders_tag_rule_when_tags_present(self) -> None:
         gen = _make_gen()
 
-        gen.client.filters = AsyncMock(side_effect=[[], []])
+        gen.client.filters = AsyncMock(side_effect=[[], [], []])
         policy_rule = _rule_obj(rule_id="spr-2", index=120)
         tag_rule = _rule_obj(rule_id="str-1", index=0)
         gen.client.create = AsyncMock(side_effect=[policy_rule, tag_rule])
@@ -118,3 +117,50 @@ class TestSecurityIntentGenerator:
         assert second["kind"] == "SecurityTagRule"
         assert second["data"]["source_tag"] == {"id": "tag-dmz"}
         assert second["data"]["destination_tag"] == {"id": "tag-web"}
+
+    def test_updates_existing_tag_rule_for_same_tag_pair(self) -> None:
+        gen = _make_gen()
+
+        gen.client.filters = AsyncMock(side_effect=[[], [], [self._existing_tag_rule()]])
+        policy_rule = _rule_obj(rule_id="spr-3", index=130)
+        gen.client.create = AsyncMock(return_value=policy_rule)
+
+        intent = {
+            "id": "intent-3",
+            "name": "intent-existing-tag-rule",
+            "match_mode": "label",
+            "priority": 130,
+            "action": "deny",
+            "protocol": "tcp",
+            "port_start": 443,
+            "port_end": None,
+            "log": True,
+            "enabled": True,
+            "description": "existing tag rule",
+            "policy": {"id": "pol-3", "name": "policy-3"},
+            "source_zone": {},
+            "destination_zone": {},
+            "source_segments": [],
+            "destination_segments": [],
+            "source_ip_addresses": [],
+            "destination_ip_addresses": [],
+            "source_prefixes": [],
+            "destination_prefixes": [],
+            "source_tag": {"id": "tag-a", "name": "a"},
+            "destination_tag": {"id": "tag-b", "name": "b"},
+            "security_profile": {},
+        }
+
+        asyncio.run(gen._render_intent_rule(intent))
+
+        # Only policy rule is created; tag rule is updated in place.
+        assert gen.client.create.call_count == 1
+
+    @staticmethod
+    def _existing_tag_rule() -> Any:
+        tag_rule = MagicMock()
+        tag_rule.action = SimpleNamespace(value="permit")
+        tag_rule.log = SimpleNamespace(value=False)
+        tag_rule.description = SimpleNamespace(value="old")
+        tag_rule.save = AsyncMock()
+        return tag_rule

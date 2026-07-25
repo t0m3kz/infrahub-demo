@@ -209,30 +209,9 @@ nodes:
         optional: true
         order_weight: 2200
         identifier: security_intent_rule__destination_prefixes
-      - name: rendered_rules
-        peer: SecurityPolicyRule
-        label: Rendered Rules
-        cardinality: many
-        kind: Generic
-        optional: true
-        order_weight: 2300
-        identifier: security_intent_rule__rendered_rules
-        description: "Materialized policy rules generated from this intent"
 
 extensions:
   nodes:
-    - kind: SecurityPolicy
-      relationships:
-        - name: intent_rules
-          peer: SecurityIntentRule
-          label: Intent Rules
-          cardinality: many
-          kind: Generic
-          optional: true
-          order_weight: 2060
-          identifier: security_intent_rule__policy
-          description: "Intent-layer rules associated with this policy"
-
     - kind: ManagedNetworkSegment
       relationships:
         - name: intent_rules_as_source
@@ -253,15 +232,3 @@ extensions:
           order_weight: 940
           identifier: security_intent_rule__destination_segments
           description: "Intent rules where this segment appears on the destination side"
-
-    - kind: SecurityPolicyRule
-      relationships:
-        - name: rendered_from_intent
-          peer: SecurityIntentRule
-          label: Rendered From Intent
-          cardinality: one
-          kind: Attribute
-          optional: true
-          order_weight: 2550
-          identifier: security_intent_rule__rendered_rules
-          description: "Source intent rule that rendered this policy rule"
