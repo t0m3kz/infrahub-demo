@@ -148,12 +148,18 @@ spec:
       port_start: 5432
       description: "Web → PostgreSQL (ORM queries)"
 
+      member_of_groups:
+        - app_dependencies
+
     - name: c001-nautobot-p-web--c001-nautobot-p-cache
       source: c001-nautobot-p-web
       target: c001-nautobot-p-cache
       protocol: tcp
       port_start: 6379
       description: "Web → Redis (session + caching)"
+
+      member_of_groups:
+        - app_dependencies
 
     - name: c001-nautobot-p-worker--c001-nautobot-p-database
       source: c001-nautobot-p-worker
@@ -162,12 +168,18 @@ spec:
       port_start: 5432
       description: "Worker → PostgreSQL (job results)"
 
+      member_of_groups:
+        - app_dependencies
+
     - name: c001-nautobot-p-worker--c001-nautobot-p-cache
       source: c001-nautobot-p-worker
       target: c001-nautobot-p-cache
       protocol: tcp
       port_start: 6379
       description: "Worker → Redis (task queue)"
+
+      member_of_groups:
+        - app_dependencies
 
 # ── Wire service ports onto components ───────────────────────────────────────
 ---

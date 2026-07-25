@@ -113,12 +113,18 @@ spec:
       port_start: 5432
       description: "Event collector → event store (write, PostgreSQL)"
 
+      member_of_groups:
+        - app_dependencies
+
     - name: c003-audit-service-p-audit-api--c003-audit-service-p-event-store
       source: c003-audit-service-p-audit-api
       target: c003-audit-service-p-event-store
       protocol: tcp
       port_start: 5432
       description: "Audit API → event store (read-only, PostgreSQL)"
+
+      member_of_groups:
+        - app_dependencies
 
 ---
 # ── Wire instances and depends_on back onto components ────────────────────────
