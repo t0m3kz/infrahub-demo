@@ -12,6 +12,7 @@ spec:
     - label: vault-core
       environment: p
       criticality: critical
+      security_profile: fintech_strict
       fqdn: vault-core.c003.internal.local
       ingress_mode: dns
       parent: C003
@@ -21,6 +22,7 @@ spec:
     - label: compliance-portal
       environment: p
       criticality: high
+      security_profile: internet_exposed
       fqdn: compliance-portal.c003.demo.local
       ingress_mode: frontend
       parent: C003

@@ -27,6 +27,7 @@ query app_dependency_rule($name: String!) {
                   ... on AppApplication {
                     name { value }
                     criticality { value }
+                    security_profile { value }
                   }
                 }
               }
@@ -74,6 +75,7 @@ query app_dependency_rule($name: String!) {
                   ... on AppApplication {
                     name { value }
                     criticality { value }
+                    security_profile { value }
                   }
                 }
               }

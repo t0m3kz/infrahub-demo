@@ -27,6 +27,7 @@ spec:
     - label: nautobot
       environment: p
       criticality: critical
+      security_profile: internet_exposed
       fqdn: nautobot.c001.demo.local
       ingress_mode: frontend
       parent: C001

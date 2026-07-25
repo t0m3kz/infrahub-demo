@@ -94,7 +94,7 @@ class AppApplicationGenerator(CommonGenerator):
 
         app = app_list[0]
         app_name: str = app.get("name", "")
-        criticality: str = app.get("criticality", "medium")
+        app_security_profile: str = app.get("security_profile", "internal_standard")
         self.logger.info("Processing security rules for application: %s", app_name)
 
         components: list[dict] = app.get("children", [])
@@ -225,8 +225,8 @@ class AppApplicationGenerator(CommonGenerator):
             if port_end is not None:
                 rule_data["port_end"] = port_end
 
-            # Attach a security profile based on app criticality + cross-zone
-            profile_name = self._pick_profile(criticality, cross_zone)
+            # Attach a security profile based on explicit app security profile.
+            profile_name = self._pick_profile(app_security_profile, cross_zone)
             if profile_name:
                 profile = await self._get_profile(profile_name)
                 if profile:
@@ -505,17 +505,16 @@ class AppApplicationGenerator(CommonGenerator):
                     )
 
     @staticmethod
-    def _pick_profile(criticality: str, cross_zone: bool) -> str | None:
-        """Select a threat-prevention profile based on app criticality and flow type."""
+    def _pick_profile(app_security_profile: str, cross_zone: bool) -> str | None:
+        """Select a concrete SecuritySecurityProfile from app-level security posture."""
         if not cross_zone:
             return None  # same-zone east-west — no profile needed
         mapping = {
-            "critical": "strict",
-            "high": "strict",
-            "medium": "standard",
-            "low": "lightweight",
+            "fintech_strict": "strict",
+            "internal_standard": "standard",
+            "internet_exposed": "strict",
         }
-        return mapping.get(criticality, "standard")
+        return mapping.get(app_security_profile, "standard")
 
 
 class AppDependencyRuleGenerator(AppApplicationGenerator):
@@ -546,7 +545,7 @@ class AppDependencyRuleGenerator(AppApplicationGenerator):
             self.logger.warning("Dependency source has no parent application name — skipping")
             return
 
-        criticality = app.get("criticality", "medium")
+        app_security_profile = app.get("security_profile", "internal_standard")
         policy_name = f"app-{app_name}-dependencies"
         policy = await self._get_or_create_policy(policy_name, app_name)
         if policy is None:
@@ -635,7 +634,7 @@ class AppDependencyRuleGenerator(AppApplicationGenerator):
         if port_end is not None:
             rule_data["port_end"] = port_end
 
-        profile_name = self._pick_profile(criticality, cross_zone)
+        profile_name = self._pick_profile(app_security_profile, cross_zone)
         if profile_name:
             profile = await self._get_profile(profile_name)
             if profile:
