@@ -150,49 +150,6 @@ fragment FirewallSegmentFields on ManagedNetworkSegment {
       }
     }
     security_zone { node { name { value } trust_level { value } zone_type { value } } }
-    security_policies {
-      edges {
-        node {
-          id
-          name { value }
-          enabled { value }
-          default_action { value }
-          rules {
-            edges {
-              node {
-                index { value }
-                name { value }
-                action { value }
-                protocol { value }
-                port_start { value }
-                port_end { value }
-                log { value }
-                disabled { value }
-                apply_on_switch { value }
-                description { value }
-                source_zone { node { name { value } } }
-                destination_zone { node { name { value } } }
-                source_segment {
-                  node {
-                    id
-                    ... on ManagedVxlanSegment { name { value } gateway { node { ip_prefix { node { prefix { value } } } } } }
-                    ... on ManagedVlanSegment  { name { value } gateway { node { ip_prefix { node { prefix { value } } } } } }
-                  }
-                }
-                destination_segment {
-                  node {
-                    id
-                    ... on ManagedVxlanSegment { name { value } gateway { node { ip_prefix { node { prefix { value } } } } } }
-                    ... on ManagedVlanSegment  { name { value } gateway { node { ip_prefix { node { prefix { value } } } } } }
-                  }
-                }
-                security_profile { node { name { value } } }
-              }
-            }
-          }
-        }
-      }
-    }
   }
   ... on ManagedVxlanSegment {
     name { value }
@@ -213,48 +170,5 @@ fragment FirewallSegmentFields on ManagedNetworkSegment {
       }
     }
     security_zone { node { name { value } trust_level { value } zone_type { value } } }
-    security_policies {
-      edges {
-        node {
-          id
-          name { value }
-          enabled { value }
-          default_action { value }
-          rules {
-            edges {
-              node {
-                index { value }
-                name { value }
-                action { value }
-                protocol { value }
-                port_start { value }
-                port_end { value }
-                log { value }
-                disabled { value }
-                apply_on_switch { value }
-                description { value }
-                source_zone { node { name { value } } }
-                destination_zone { node { name { value } } }
-                source_segment {
-                  node {
-                    id
-                    ... on ManagedVxlanSegment { name { value } gateway { node { ip_prefix { node { prefix { value } } } } } }
-                    ... on ManagedVlanSegment  { name { value } gateway { node { ip_prefix { node { prefix { value } } } } } }
-                  }
-                }
-                destination_segment {
-                  node {
-                    id
-                    ... on ManagedVxlanSegment { name { value } gateway { node { ip_prefix { node { prefix { value } } } } } }
-                    ... on ManagedVlanSegment  { name { value } gateway { node { ip_prefix { node { prefix { value } } } } } }
-                  }
-                }
-                security_profile { node { name { value } } }
-              }
-            }
-          }
-        }
-      }
-    }
   }
 }

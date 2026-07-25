@@ -363,8 +363,7 @@ fragment NetworkSegmentFields on ManagedNetworkSegment {
   }
 }
 
-# SecurityPolicyFields is spread inside each concrete segment type (ManagedVlan/VxlanSegment)
-# because security_policies lives on ManagedNetworkSegment — all segment types inherit it.
+# SecurityPolicyFields is spread inside each concrete segment type (ManagedVlan/VxlanSegment).
 fragment SecurityPolicyFields on ManagedNetworkSegment {
   inline_service {
     node { id name { value } }
@@ -383,46 +382,6 @@ fragment SecurityPolicyFields on ManagedNetworkSegment {
               node {
                 name { value }
                 group_id { value }
-              }
-            }
-          }
-        }
-      }
-    }
-  }
-  security_policies {
-    edges {
-      node {
-        name { value }
-        default_action { value }
-        enabled { value }
-        rules {
-          edges {
-            node {
-              index { value }
-              name { value }
-              action { value }
-              protocol { value }
-              port_start { value }
-              port_end { value }
-              log { value }
-              disabled { value }
-              apply_on_switch { value }
-              source_zone { node { name { value } } }
-              destination_zone { node { name { value } } }
-              source_segment {
-                node {
-                  id
-                  ... on ManagedVlanSegment { name { value } gateway { node { ip_prefix { node { prefix { value } } } } } }
-                  ... on ManagedVxlanSegment { name { value } gateway { node { ip_prefix { node { prefix { value } } } } } }
-                }
-              }
-              destination_segment {
-                node {
-                  id
-                  ... on ManagedVlanSegment { name { value } gateway { node { ip_prefix { node { prefix { value } } } } } }
-                  ... on ManagedVxlanSegment { name { value } gateway { node { ip_prefix { node { prefix { value } } } } } }
-                }
               }
             }
           }

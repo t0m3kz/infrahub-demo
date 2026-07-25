@@ -1,7 +1,6 @@
 fragment SegmentSecurityFields on ManagedNetworkSegment {
   isolation_mode { value }
   security_zone { node { name { value } trust_level { value } } }
-  security_policies { edges { node { id name { value } } } }
   gateway { node { ip_prefix { node { prefix { value } } } } }
 }
 
