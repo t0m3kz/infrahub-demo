@@ -181,13 +181,6 @@ class DcimVirtualInterface(DcimInterface):
     tags: RelationshipManager[CoreNode]
 
 
-class GeneratorTarget(CoreNode):
-    checksum: StringOptional
-    member_of_groups: RelationshipManager[CoreNode]
-    profiles: RelationshipManager[CoreNode]
-    subscriber_of_groups: RelationshipManager[CoreNode]
-
-
 class IpamIPAddress(BuiltinIPAddress):
     address: IPHost
     description: StringOptional
@@ -245,8 +238,7 @@ class LocationGeneric(CoreNode):
     tags: RelationshipManager[CoreNode]
 
 
-class LocationRack(LocationGeneric, GeneratorTarget, CoreArtifactTarget):
-    checksum: StringOptional
+class LocationRack(LocationGeneric, CoreArtifactTarget):
     facility_id: StringOptional
     height: Integer
     index: Integer
@@ -646,7 +638,7 @@ class TopologyDeviceHosting(CoreNode):
     subscriber_of_groups: RelationshipManager[CoreNode]
 
 
-class TopologyDataCenter(TopologyDeployment, GeneratorTarget, TopologyRackHosting, TopologyDeviceHosting):
+class TopologyDataCenter(TopologyDeployment, TopologyRackHosting, TopologyDeviceHosting):
     name: String
     status: Dropdown
     member_of_groups: RelationshipManager[CoreNode]
@@ -665,9 +657,8 @@ class TopologyCloudZone(TopologyDeployment):
     subscriber_of_groups: RelationshipManager[CoreNode]
 
 
-class TopologyPod(TopologyDeployment, GeneratorTarget, TopologyRackHosting, TopologyDeviceHosting):
+class TopologyPod(TopologyDeployment, TopologyRackHosting, TopologyDeviceHosting):
     amount_of_spines: Integer
-    checksum: StringOptional
     index: Integer
     leaf_interface_sorting_method: Dropdown
     name: String

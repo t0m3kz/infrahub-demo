@@ -21,43 +21,40 @@ class PodTopologyGenerator(CommonGenerator):
     within a pod topology.
     """
 
-    async def update_checksum(self) -> None:
-        """Update checksum for racks in the pod and add them to group context for protection.
+    async def _fan_out_to_racks(self) -> None:
+        """Protect every rack in this pod from deletion, then fan out to add_rack
+        for the racks this pod is directly responsible for starting.
 
-        Combined operation to avoid querying racks twice:
-        1. Protects all existing racks from deletion
-        2. Updates checksum for network/tor racks to trigger their generation
+        - middle_rack/tor: fan out to every rack (all have their own fabric_templates
+          and cable straight to this pod's spines — middle_rack's "network" racks
+          create their own local leaf + l2-leaf/access-leaf pair in one generate()
+          call; there's no separate row-dependent rack to wait for).
+        - mixed: fan out to "network" racks only. Each network rack cables its own
+          leafs, then — once its own generate() has finished — fans out to the
+          "tor"/"compute" racks in its own row itself (see RackGenerator.generate()),
+          since those need the network rack's leafs to already exist.
+
+        Racks not fanned out to here (mixed's tor/compute racks) still need
+        protecting from the tracking group's delete-unused-nodes cleanup, since
+        this pod generator run never touches them directly.
         """
-
-        # Query all racks in this pod once
         racks = await self.client.filters(
             kind=LocationRack,
             pod__ids=[self.data.id],
             rack_type__values=["network", "tor", "compute"],
         )
 
-        # Use the pre-routing snapshot if available (captured before protection IDs
-        # are added to related_node_ids). Falls back to live calculation for
-        # backward compatibility (e.g., if called without running full generate()).
-        pod_checksum = self.calculate_checksum()
-
-        deployment_type = self.data.deployment_type
         related_node_ids = self.client.group_context.related_node_ids
-
         for rack in racks:
-            # Always add to group context to prevent deletion
             related_node_ids.append(rack.id)
 
-            # Determine if this rack's checksum should be updated based on deployment type
-            # For mixed: only update network racks (ToR racks inherit from middle racks after leafs are created)
-            should_update = deployment_type in ["tor", "middle_rack"] or (
-                deployment_type == "mixed" and rack.rack_type.value == "network"
-            )
+        deployment_type = self.data.deployment_type
+        if deployment_type == "mixed":
+            fan_out_ids = [rack.id for rack in racks if rack.rack_type.value == "network"]
+        else:
+            fan_out_ids = [rack.id for rack in racks]
 
-            if should_update and rack.checksum.value != pod_checksum:
-                rack.checksum.value = pod_checksum
-                await rack.save(allow_upsert=True)
-                self.logger.info(f"Checksum updated: {rack.name.value} → {pod_checksum} (triggers rack re-generation)")
+        await self.run_generator_and_wait("add_rack", fan_out_ids)
 
     async def generate(self, data: dict[str, Any]) -> None:
         """Generate pod topology infrastructure."""
@@ -297,7 +294,7 @@ class PodTopologyGenerator(CommonGenerator):
         # When there are no super-spines to cable to (skip_cabling), inter-pod
         # back-to-back spine cabling is handled above by _cable_to_existing_sibling_pods.
 
-        await self.update_checksum()
+        await self._fan_out_to_racks()
 
     async def _cable_to_existing_sibling_pods(
         self,

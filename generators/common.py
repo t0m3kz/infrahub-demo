@@ -1,14 +1,13 @@
 from __future__ import annotations
 
 import asyncio
-import hashlib
 import inspect
 import ipaddress
 from typing import Any, Literal
 
 from infrahub_sdk.exceptions import ValidationError
 from infrahub_sdk.generator import InfrahubGenerator
-from infrahub_sdk.protocols import CoreIPAddressPool, CoreIPPrefixPool, CoreStandardGroup
+from infrahub_sdk.protocols import CoreGeneratorDefinition, CoreIPAddressPool, CoreIPPrefixPool, CoreStandardGroup
 
 from .helpers import CableTypeDetector, CablingPlanner, DeviceNamingConfig, get_loopback_name
 from .helpers.common import retry_delay
@@ -104,24 +103,42 @@ class CommonGenerator(FailOnErrorLoggerMixin, RoutingMixin, InfrahubGenerator):
         # Already an SDK object
         return provided
 
-    def calculate_checksum(self) -> str:
-        """Calculate a SHA256 checksum based on configuration data.
+    async def run_generator_and_wait(self, generator_name: str, node_ids: list[str]) -> None:
+        """Run another generator definition for the given nodes and wait for it to finish.
 
-        Creates a deterministic checksum from the configuration that will be
-        used to generate infrastructure. This ensures the same configuration
-        always produces the same checksum, regardless of what was created.
+        Used for parent-to-child fan-out (DC -> pods, pod -> racks, network rack ->
+        row-dependent racks) instead of writing a checksum and relying on an `updated`
+        event trigger. `wait_until_completion=true` blocks until the child generator's
+        task reaches COMPLETED, so the child always sees data the parent just created —
+        no readiness gate (checksum inheritance, row-ordering, leaf-readiness polling)
+        is needed on the child side.
 
-        Args:
-            data: Configuration data dictionary (e.g., design pattern, capacities)
-
-        Returns:
-            SHA256 hexdigest of the configuration data.
+        No-ops if node_ids is empty (nothing to fan out to).
         """
-        # De-duplicate ids so accidental repeated tracking does not perturb checksums.
-        related_ids = set(self.client.group_context.related_group_ids) | set(self.client.group_context.related_node_ids)
-        sorted_ids = sorted(related_ids)
-        joined = ",".join(sorted_ids)
-        return hashlib.sha256(joined.encode("utf-8")).hexdigest()
+        if not node_ids:
+            return
+
+        definition = await self.client.get(kind=CoreGeneratorDefinition, name__value=generator_name)
+        mutation = """
+        mutation($id: String!, $nodes: [String!]) {
+          CoreGeneratorDefinitionRun(
+            data: { id: $id, nodes: $nodes }
+            wait_until_completion: true
+          ) {
+            ok
+          }
+        }
+        """
+        result = await self.client.execute_graphql(
+            query=mutation,
+            variables={"id": definition.id, "nodes": node_ids},
+            branch_name=self.branch_name,
+        )
+        ok = result.get("CoreGeneratorDefinitionRun", {}).get("ok", False)
+        if not ok:
+            self.logger.error(f"Nested run of generator '{generator_name}' for {node_ids} did not report ok=true")
+        else:
+            self.logger.info(f"Generator '{generator_name}' completed for {len(node_ids)} node(s): {node_ids}")
 
     async def upsert_number_pool(
         self,

@@ -549,7 +549,6 @@ nodes:
     namespace: Topology
     inherit_from:
       - TopologyDeployment
-      - GeneratorTarget
       - TopologyRackHosting
       - TopologyDeviceHosting
     parent: TopologyDataCenter

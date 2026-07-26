@@ -99,7 +99,6 @@ nodes:
     inherit_from:
       - TopologyCircuit
       - ManagedGeneric
-      - GeneratorTarget
     human_friendly_id:
       - circuit_id__value
     display_label: "{{ circuit_id__value }} - {{ provider__name__value }}"
@@ -195,7 +194,6 @@ nodes:
     inherit_from:
       - TopologyCircuit
       - ManagedGeneric
-      - GeneratorTarget
     human_friendly_id:
       - name__value
     display_label: "{{ name__value }} ({{ link_type__value|upper }})"
