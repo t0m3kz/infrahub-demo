@@ -15,7 +15,7 @@ spec:
       member_of_groups: [topologies_rack]
       fabric_templates:
         - ["2", "leaf", "PowerSwitch-S5232F-ON_LEAF_MR"]
-        - ["2", "tor", "PowerSwitch-S5224F-ON_TOR"]
+        - ["2", "access-leaf", "PowerSwitch-S5224F-ON_ACCESS"]
 
     # Network rack in POD-4 Row 2
     - index: 1
@@ -27,4 +27,4 @@ spec:
       member_of_groups: [topologies_rack]
       fabric_templates:
         - ["2", "leaf", "PowerSwitch-S5232F-ON_LEAF_MR"]
-        - ["2", "tor", "PowerSwitch-S5224F-ON_TOR"]
+        - ["2", "access-leaf", "PowerSwitch-S5224F-ON_ACCESS"]
