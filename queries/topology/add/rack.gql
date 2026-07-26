@@ -42,11 +42,20 @@ fragment FabricTemplateFields on TopologyElement {
 }
 
 fragment SpineInterfaceFields on DcimPhysicalInterface {
-  ...PhysicalInterfaceCableNameFields
+  id
+  name { value }
+  cable {
+    node {
+      id
+      name { value }
+    }
+  }
 }
 
 fragment SpineDeviceFields on DcimPhysicalDevice {
-  ...PhysicalDeviceIdentityRoleFields
+  id
+  name { value }
+  role { value }
   interfaces(role__value: "downlink") {
     edges {
       node {
