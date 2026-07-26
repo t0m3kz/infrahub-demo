@@ -123,9 +123,7 @@ fragment DeviceCapabilitiesFields on DcimCapabilities {
           status { value }
         }
 
-        ... on ManagedBGP {
-          ...ManagedBGPServiceFields
-        }
+        ...ManagedBGPServiceFields
 
         ... on ManagedOSPF {
           process_id { value }
@@ -135,21 +133,13 @@ fragment DeviceCapabilitiesFields on DcimCapabilities {
           router_id { node { address { value } } }
         }
 
-        ... on ManagedNTP {
-          ...ManagedNTPServiceFields
-        }
+        ...ManagedNTPServiceFields
 
-        ... on ManagedSyslog {
-          ...ManagedSyslogServiceFields
-        }
+        ...ManagedSyslogServiceFields
 
-        ... on ManagedSNMP {
-          ...ManagedSNMPServiceFields
-        }
+        ...ManagedSNMPServiceFields
 
-        ... on ManagedAAA {
-          ...ManagedAAAServiceFields
-        }
+        ...ManagedAAAServiceFields
 
         ... on ManagedMLAG {
           domain_id { value }

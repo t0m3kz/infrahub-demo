@@ -35,9 +35,7 @@ fragment InterfaceCapabilitiesFields on DcimInterface {
     edges {
       node {
         __typename
-        ... on RoutingOSPFInterface {
-          ...OspfInterfaceCapabilityFields
-        }
+        ...OspfInterfaceCapabilityFields
       }
     }
   }
@@ -48,9 +46,7 @@ fragment InterfaceCapabilitiesWithSegmentFields on DcimInterface {
     edges {
       node {
         __typename
-        ... on RoutingOSPFInterface {
-          ...OspfInterfaceCapabilityFields
-        }
+        ...OspfInterfaceCapabilityFields
         ...NetworkSegmentFields
       }
     }
