@@ -95,14 +95,21 @@ spec:
           - attribute_name: amount_of_spines
             value_match: any
 
-    # Rack creation has no created-trigger of its own: pod_rack_cascade (fired by
-    # the pod's own created/updated triggers above) fans out to add_rack for every
-    # rack that already exists under that pod — including racks bulk-loaded
-    # alongside the pod. A rack added standalone under an already-existing,
-    # unchanged pod still needs a manual add_rack run. A network rack's own
+    # A rack created standalone under an already-existing, unchanged pod (e.g. a
+    # standalone switch add) needs its own created-trigger to bootstrap — a bulk
+    # pod+rack load is also covered by this, since add_rack.generate() waits for
+    # an in-flight add_pod/pod_rack_cascade on its parent pod before reading
+    # pod-level data (see rack.py's generate()), so this can never race the
+    # cascade fan-out from trigger-pod-update-* above. A network rack's own
     # tor/compute row-dependents are, in turn, started unconditionally by that
     # network rack's own generate() (RackGenerator._fan_out_to_row_dependent_racks)
     # — this one level is not split into its own cascade generator.
+
+    - name: trigger-rack-generator-on-created
+      branch_scope: "other_branches"
+      node_kind: LocationRack
+      mutation_action: "created"
+      action: run-rack-generator
 
     - name: trigger-rack-generator-update-index
       branch_scope: "other_branches"

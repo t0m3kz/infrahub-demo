@@ -105,7 +105,7 @@ extensions:
           cardinality: many
           direction: outbound
           kind: Generic
-          on_delete: no-action
+          on_delete: cascade
           identifier: capabilities
     - kind: DcimInterface
       relationships:

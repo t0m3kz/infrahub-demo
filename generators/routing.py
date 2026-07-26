@@ -433,7 +433,9 @@ class RoutingMixin:
 
         These are created once by the DC generator (``_create_shared_routing_objects``);
         pod/rack layers only look them up here — mirrors ``_resolve_shared_objects``
-        for ``overlay_as_id``/``ospf_area_id``. A missing password is non-fatal: it
+        for ``overlay_as_id``/``ospf_area_id``. Protecting the resolved IDs from
+        generator group cleanup is the caller's job (create_routing already does
+        this for every shared_id it collects). A missing password is non-fatal: it
         just means auth wasn't configured (e.g. DC generator hasn't run yet, or ran
         before this feature existed) — routing creation proceeds without it.
         """
@@ -459,7 +461,13 @@ class RoutingMixin:
         return underlay_id, overlay_id
 
     async def _resolve_shared_objects(self, routing_strategy: str) -> tuple[str | None, str | None]:
-        """Find shared DC-level overlay AS and OSPF area. Returns (overlay_as_id, ospf_area_id)."""
+        """Find shared DC-level overlay AS and OSPF area. Returns (overlay_as_id, ospf_area_id).
+
+        Protecting the resolved IDs from generator group cleanup is the caller's
+        job (create_routing already does this for every shared_id it collects,
+        from here or from options) — see the "Protect shared DC-level objects"
+        block there.
+        """
         overlay_as_id: str | None = None
         ospf_area_id: str | None = None
 

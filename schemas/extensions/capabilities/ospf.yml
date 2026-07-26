@@ -183,6 +183,7 @@ nodes:
         cardinality: many
         optional: true
         kind: Generic
+        on_delete: cascade
         identifier: "ospfpeering__process"
         order_weight: 2000
         description: "OSPF peerings this process participates in"

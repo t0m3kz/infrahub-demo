@@ -339,6 +339,7 @@ extensions:
           kind: Generic
           cardinality: many
           optional: true
+          on_delete: cascade
           identifier: "bgppeering__processes"
           order_weight: 5000
           description: "BGP peerings this process participates in"

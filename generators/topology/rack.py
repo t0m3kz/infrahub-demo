@@ -702,32 +702,28 @@ class RackGenerator(RackMixin, CommonGenerator):
 
             self._created_device_names.update(bl_devices)
 
-            all_bl_uplinks = self._roles.template_interfaces(bl_role.template, role="uplink")
+            all_bl_uplinks = sorted(self._roles.template_interfaces(bl_role.template, role="uplink"))
             if not all_bl_uplinks:
                 self.logger.warning(
                     f"Rack {self.data.name}: border-leaf template has no uplink interfaces - skipping fabric cabling"
                 )
                 continue
 
-            max_super_spines = dc.amount_of_super_spines
-            spine_count = pod.amount_of_spines
-            dci_reserved, bl_uplink_interfaces = self._roles.split_border_leaf_uplinks(
-                uplink_interfaces=all_bl_uplinks,
-                reserved_dci_count=max_super_spines,
-                spine_count=spine_count,
-            )
-            if not bl_uplink_interfaces:
+            # Uplinks fan out to the pod's full spine capacity (design.max_spines_per_pod),
+            # not the currently deployed amount_of_spines — otherwise adding spines later
+            # would need ports already handed to border-leaf-to-spine cabling, and two
+            # border-leaf racks sized against different live spine counts could compute
+            # overlapping port ranges.
+            spine_count = pod.design.max_spines_per_pod if pod.design else pod.amount_of_spines
+            bl_uplink_interfaces = all_bl_uplinks[:spine_count]
+            if len(bl_uplink_interfaces) < spine_count:
                 self.logger.warning(
                     f"Rack {self.data.name}: not enough border-leaf uplinks for pod spines "
-                    f"(uplinks={len(all_bl_uplinks)}, reserved_dci={max_super_spines}, "
-                    f"needed={spine_count}) - skipping fabric cabling"
+                    f"(uplinks={len(all_bl_uplinks)}, needed={spine_count}) - skipping fabric cabling"
                 )
                 continue
 
-            self.logger.info(
-                f"Rack {self.data.name}: border-leaf fabric uplinks {bl_uplink_interfaces} "
-                f"(DCI reserved: {dci_reserved})"
-            )
+            self.logger.info(f"Rack {self.data.name}: border-leaf fabric uplinks {bl_uplink_interfaces}")
 
             leafs_per_rack = self._roles.border_leafs_per_rack()
 
