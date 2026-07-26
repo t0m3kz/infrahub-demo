@@ -1,6 +1,5 @@
 query firewall_config(
   $device: String!
-  $segment_status_values: [String!] = ["active", "provisioning"]
 ) {
   DcimPhysicalDevice(name__value: $device) {
     edges {
@@ -58,7 +57,7 @@ query firewall_config(
                 edges {
                   node {
                     __typename
-                    ...FirewallSegmentFields
+                    ...NetworkSegmentFields
                   }
                 }
               }
@@ -149,21 +148,5 @@ query firewall_config(
         action { value }
       }
     }
-  }
-}
-
-fragment FirewallSegmentFields on ManagedNetworkSegment {
-  ... on ManagedVlanSegment {
-    ...SegmentStatusFields
-    ...SegmentDeploymentsActiveFields
-    ...SegmentGatewayWithNamespaceFields
-    ...SegmentSecurityZoneFields
-  }
-  ... on ManagedVxlanSegment {
-    ...SegmentStatusFields
-    arp_suppression { value }
-    ...SegmentDeploymentsActiveFields
-    ...SegmentGatewayWithNamespaceFields
-    ...SegmentSecurityZoneFields
   }
 }

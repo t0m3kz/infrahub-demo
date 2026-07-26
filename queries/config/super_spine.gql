@@ -1,6 +1,5 @@
 query super_spine_config(
   $device: String!
-  $segment_status_values: [String!] = ["active", "provisioning"]
 ) {
   DcimDevice(name__value: $device) {
     edges {
@@ -27,9 +26,7 @@ query super_spine_config(
         }
 
         # Device Services (BGP, OSPF) with nested peerings
-        ... on DcimCapabilities {
-          ...DeviceCapabilitiesFields
-        }
+        ...DeviceCapabilitiesOnDeviceFields
 
         # Interface Information
         interfaces {
@@ -110,17 +107,5 @@ query super_spine_config(
         }
       }
     }
-  }
-}
-
-
-fragment NetworkSegmentFields on ManagedNetworkSegment {
-  ... on ManagedVxlanSegment {
-    id
-    name { value }
-    customer_name { value }
-    arp_suppression { value }
-    ...SegmentDeploymentsActiveFields
-    ...SegmentGatewayWithNamespaceFields
   }
 }

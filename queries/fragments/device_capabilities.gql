@@ -161,3 +161,9 @@ fragment DeviceCapabilitiesFields on DcimCapabilities {
     }
   }
 }
+
+fragment DeviceCapabilitiesOnDeviceFields on DcimDevice {
+  ... on DcimCapabilities {
+    ...DeviceCapabilitiesFields
+  }
+}

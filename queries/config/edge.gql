@@ -30,9 +30,7 @@ query edge_config($device: String!) {
         }
 
         # Device Services (BGP, OSPF) with nested peerings
-        ... on DcimCapabilities {
-          ...DeviceCapabilitiesFields
-        }
+        ...DeviceCapabilitiesOnDeviceFields
 
         # Interface Information
         interfaces {
@@ -113,17 +111,5 @@ query edge_config($device: String!) {
         }
       }
     }
-  }
-}
-
-fragment NetworkSegmentFields on ManagedNetworkSegment {
-  ... on ManagedVlanSegment {
-    ...SegmentBaseFields
-    ...SegmentGatewayWithNamespaceFields
-  }
-  ... on ManagedVxlanSegment {
-    ...SegmentBaseFields
-    arp_suppression { value }
-    ...SegmentGatewayWithNamespaceFields
   }
 }

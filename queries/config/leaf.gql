@@ -1,6 +1,5 @@
 query leaf_config(
   $device: String!
-  $segment_status_values: [String!] = ["active", "provisioning"]
 ) {
   DcimDevice(name__value: $device) {
     edges {
@@ -28,9 +27,7 @@ query leaf_config(
         }
 
         # Device Services (BGP, OSPF) with nested peerings
-        ... on DcimCapabilities {
-          ...DeviceCapabilitiesFields
-        }
+        ...DeviceCapabilitiesOnDeviceFields
 
         # Interface Information
         interfaces {
@@ -119,48 +116,4 @@ query leaf_config(
     }
   }
 
-}
-
-fragment NetworkSegmentFields on ManagedNetworkSegment {
-  ... on ManagedVlanSegment {
-    ...SegmentBaseFields
-    ...SegmentDeploymentsActiveFields
-    ...SegmentGatewayWithNamespaceFields
-    ...SecurityPolicyFields
-  }
-  ... on ManagedVxlanSegment {
-    ...SegmentBaseFields
-    arp_suppression { value }
-    ...SegmentDeploymentsActiveFields
-    ...SegmentGatewayWithNamespaceFields
-    ...SecurityPolicyFields
-  }
-}
-
-# SecurityPolicyFields is spread inside each concrete segment type (ManagedVlan/VxlanSegment).
-fragment SecurityPolicyFields on ManagedNetworkSegment {
-  inline_service {
-    node { id name { value } }
-  }
-  isolation_mode { value }
-  security_tag {
-    node {
-      name { value }
-      group_id { value }
-      rules_as_source {
-        edges {
-          node {
-            action { value }
-            log { value }
-            destination_tag {
-              node {
-                name { value }
-                group_id { value }
-              }
-            }
-          }
-        }
-      }
-    }
-  }
 }
