@@ -8,6 +8,7 @@ from typing import Any, Literal
 from infrahub_sdk.exceptions import ValidationError
 from infrahub_sdk.generator import InfrahubGenerator
 from infrahub_sdk.protocols import CoreGeneratorDefinition, CoreIPAddressPool, CoreIPPrefixPool, CoreStandardGroup
+from infrahub_sdk.task.models import TaskFilter, TaskState
 
 from .helpers import CableTypeDetector, CablingPlanner, DeviceNamingConfig, get_loopback_name
 from .helpers.common import retry_delay
@@ -25,6 +26,10 @@ from .routing import RoutingMixin
 
 # Re-export TypedDicts so existing imports (from .common import DeviceOptions, ...) keep working
 from .types import CablingOptions, DeviceOptions, RoutingOptions  # noqa: F401
+
+_PARENT_WAIT_TIMEOUT = 1800  # 30 min, matches tasks/demo.py's own generator-wait timeout
+_PARENT_WAIT_POLL_INTERVAL = 3
+_IN_FLIGHT_STATES = [TaskState.PENDING, TaskState.RUNNING, TaskState.SCHEDULED]
 
 
 class CommonGenerator(FailOnErrorLoggerMixin, RoutingMixin, InfrahubGenerator):
@@ -103,15 +108,23 @@ class CommonGenerator(FailOnErrorLoggerMixin, RoutingMixin, InfrahubGenerator):
         # Already an SDK object
         return provided
 
-    async def run_generator_and_wait(self, generator_name: str, node_ids: list[str]) -> None:
-        """Run another generator definition for the given nodes and wait for it to finish.
+    async def run_generator(self, generator_name: str, node_ids: list[str], *, wait: bool = True) -> None:
+        """Run another generator definition for the given nodes.
 
         Used for parent-to-child fan-out (DC -> pods, pod -> racks, network rack ->
         row-dependent racks) instead of writing a checksum and relying on an `updated`
-        event trigger. `wait_until_completion=true` blocks until the child generator's
-        task reaches COMPLETED, so the child always sees data the parent just created —
-        no readiness gate (checksum inheritance, row-ordering, leaf-readiness polling)
-        is needed on the child side.
+        event trigger.
+
+        wait=True (default): `wait_until_completion=true` blocks until the child
+        generator's task reaches COMPLETED, so the child always sees data the parent
+        just created — no readiness gate (checksum inheritance, row-ordering,
+        leaf-readiness polling) is needed on the child side.
+
+        wait=False: fires the child without blocking. Used by a cascade generator's
+        terminal fan-out (e.g. dc_pod_cascade -> pod_rack_cascade, pod_rack_cascade ->
+        add_rack): by that point the cascade has already done its own bootstrap write
+        in this same call, so there's nothing left for this call to block on — the
+        fanned-out generator runs as its own independently tracked task.
 
         No-ops if node_ids is empty (nothing to fan out to).
         """
@@ -119,15 +132,19 @@ class CommonGenerator(FailOnErrorLoggerMixin, RoutingMixin, InfrahubGenerator):
             return
 
         definition = await self.client.get(kind=CoreGeneratorDefinition, name__value=generator_name)
-        mutation = """
-        mutation($id: String!, $nodes: [String!]) {
+        wait_literal = "true" if wait else "false"
+        mutation = f"""
+        mutation($id: String!, $nodes: [String!]) {{
           CoreGeneratorDefinitionRun(
-            data: { id: $id, nodes: $nodes }
-            wait_until_completion: true
-          ) {
+            data: {{ id: $id, nodes: $nodes }}
+            wait_until_completion: {wait_literal}
+          ) {{
             ok
-          }
-        }
+            task {{
+              id
+            }}
+          }}
+        }}
         """
         result = await self.client.execute_graphql(
             query=mutation,
@@ -135,10 +152,54 @@ class CommonGenerator(FailOnErrorLoggerMixin, RoutingMixin, InfrahubGenerator):
             branch_name=self.branch_name,
         )
         ok = result.get("CoreGeneratorDefinitionRun", {}).get("ok", False)
+        task_id = result.get("CoreGeneratorDefinitionRun", {}).get("task", {}).get("id")
         if not ok:
             self.logger.error(f"Nested run of generator '{generator_name}' for {node_ids} did not report ok=true")
-        else:
+        elif wait:
             self.logger.info(f"Generator '{generator_name}' completed for {len(node_ids)} node(s): {node_ids}")
+        else:
+            self.logger.info(
+                f"Generator '{generator_name}' started for {len(node_ids)} node(s): {node_ids} (task={task_id})"
+            )
+
+    async def wait_for_parent_generator_and_refetch(self, generator_name: str, parent_id: str) -> dict | None:
+        """If the parent's own bootstrap generator is currently running for parent_id,
+        wait for it and return freshly re-collected data; otherwise return None.
+
+        Used by a cascade generator that also fires on the parent's created-trigger
+        (or is run manually while an event-driven bootstrap is in flight on the same
+        branch): the parent's own bootstrap (e.g. add_dc) and this cascade run could
+        otherwise both act on the parent's data at once, before the bootstrap's own
+        writes have landed. This checks for the parent's OWN generator task (a
+        different generator_definition, e.g. "add_dc") by title + related_node —
+        never for a cascade generator's own task — so this never deadlocks: add_dc's
+        bootstrap never waits on this generator (see dc.py/pod.py's docstrings), so
+        "Run generator add_dc"/"Run generator add_pod" only report RUNNING while
+        doing their own work, never while blocked on this one.
+
+        Returns the re-collected `data` dict if a wait happened, or None if there was
+        nothing in flight (caller should keep using its already-collected data).
+        """
+        in_flight = await self.client.task.filter(
+            filter=TaskFilter(
+                branch=self.branch_name,
+                related_node__ids=[parent_id],
+                state=_IN_FLIGHT_STATES,
+            )
+        )
+        parent_task_title = f"Run generator {generator_name}"
+        matching = [task for task in in_flight if task.title == parent_task_title]
+        if not matching:
+            return None
+
+        self.logger.info(
+            f"Parent generator '{generator_name}' is running for {parent_id} — waiting for it before proceeding"
+        )
+        for task in matching:
+            await self.client.task.wait_for_completion(
+                id=task.id, interval=_PARENT_WAIT_POLL_INTERVAL, timeout=_PARENT_WAIT_TIMEOUT
+            )
+        return await self.collect_data()
 
     async def upsert_number_pool(
         self,

@@ -353,6 +353,24 @@ generator_definitions:
     execute_after_merge: false
     parameters:
       name: name__value
+  - name: dc_pod_cascade
+    file_path: generators/topology/dc_pod_cascade.py
+    targets: topologies_dc
+    query: topology_dc
+    class_name: DCPodCascadeGenerator
+    execute_in_proposed_change: false
+    execute_after_merge: false
+    parameters:
+      name: name__value
+  - name: pod_rack_cascade
+    file_path: generators/topology/pod_rack_cascade.py
+    targets: topologies_pod
+    query: topology_pod
+    class_name: PodRackCascadeGenerator
+    execute_in_proposed_change: false
+    execute_after_merge: false
+    parameters:
+      name: name__value
   - name: decommission_pod
     file_path: generators/decommission/pod.py
     targets: topologies_pod

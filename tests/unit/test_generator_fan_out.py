@@ -1,11 +1,17 @@
 """Unit tests for the parent-to-child generator fan-out mechanism.
 
 Covers:
-- CommonGenerator.run_generator_and_wait() — resolves the generator definition,
-  calls CoreGeneratorDefinitionRun with wait_until_completion, no-ops on empty input
-- DCTopologyGenerator: fans out to add_pod for every existing pod
-- PodTopologyGenerator._fan_out_to_racks(): protects all racks, fans out to add_rack
-  for the racks this pod is directly responsible for (network-only under mixed)
+- CommonGenerator.run_generator() — resolves the generator definition, calls
+  CoreGeneratorDefinitionRun with wait_until_completion true/false depending on
+  the wait= kwarg (default True), no-ops on empty input
+- CommonGenerator.wait_for_parent_generator_and_refetch() — waits on an in-flight
+  parent bootstrap task and re-collects data, or no-ops when nothing is in flight
+- DCPodCascadeGenerator: subclasses DCTopologyGenerator's generate() and, after
+  it runs (mocked here), fans out (fire-and-forget) to pod_rack_cascade for
+  every existing pod
+- PodRackCascadeGenerator: subclasses PodTopologyGenerator's generate() and,
+  after it runs (mocked here), fans out (fire-and-forget) to add_rack for the
+  racks a pod is directly responsible for (network-only under mixed)
 """
 
 from __future__ import annotations
@@ -16,8 +22,9 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from generators.common import CommonGenerator
-from generators.models import PodDesign, PodModel, PodParent, Template
-from generators.topology.pod import PodTopologyGenerator
+from generators.models import DCModel
+from generators.topology.dc_pod_cascade import DCPodCascadeGenerator
+from generators.topology.pod_rack_cascade import PodRackCascadeGenerator
 
 
 def _build_common_gen() -> Any:
@@ -29,46 +36,186 @@ def _build_common_gen() -> Any:
     return gen
 
 
-class TestRunGeneratorAndWait:
+class TestRunGenerator:
     @pytest.mark.asyncio
     async def test_empty_node_ids_is_a_noop(self) -> None:
         gen = _build_common_gen()
         gen.client.get = AsyncMock()
         gen.client.execute_graphql = AsyncMock()
 
-        await gen.run_generator_and_wait("add_pod", [])
+        await gen.run_generator("add_pod", [])
 
         gen.client.get.assert_not_awaited()
         gen.client.execute_graphql.assert_not_awaited()
 
     @pytest.mark.asyncio
-    async def test_resolves_definition_and_calls_mutation_with_wait(self) -> None:
+    async def test_defaults_to_waiting(self) -> None:
         gen = _build_common_gen()
         definition = MagicMock(id="def-123")
         gen.client.get = AsyncMock(return_value=definition)
-        gen.client.execute_graphql = AsyncMock(return_value={"CoreGeneratorDefinitionRun": {"ok": True}})
+        gen.client.execute_graphql = AsyncMock(
+            return_value={"CoreGeneratorDefinitionRun": {"ok": True, "task": {"id": "task-1"}}}
+        )
 
-        await gen.run_generator_and_wait("add_rack", ["rack-1", "rack-2"])
+        await gen.run_generator("add_rack", ["rack-1", "rack-2"])
 
         gen.client.get.assert_awaited_once()
         get_kwargs = gen.client.get.call_args.kwargs
         assert get_kwargs["name__value"] == "add_rack"
 
-        gen.client.execute_graphql.assert_awaited_once()
         exec_kwargs = gen.client.execute_graphql.call_args.kwargs
         assert exec_kwargs["variables"] == {"id": "def-123", "nodes": ["rack-1", "rack-2"]}
-        assert "wait_until_completion" in exec_kwargs["query"]
+        assert "wait_until_completion: true" in exec_kwargs["query"]
         assert exec_kwargs["branch_name"] == "test-branch"
+
+    @pytest.mark.asyncio
+    async def test_wait_false_does_not_block(self) -> None:
+        gen = _build_common_gen()
+        definition = MagicMock(id="def-123")
+        gen.client.get = AsyncMock(return_value=definition)
+        gen.client.execute_graphql = AsyncMock(
+            return_value={"CoreGeneratorDefinitionRun": {"ok": True, "task": {"id": "task-1"}}}
+        )
+
+        await gen.run_generator("add_rack", ["rack-1"], wait=False)
+
+        exec_kwargs = gen.client.execute_graphql.call_args.kwargs
+        assert "wait_until_completion: false" in exec_kwargs["query"]
 
     @pytest.mark.asyncio
     async def test_logs_error_when_mutation_reports_not_ok(self) -> None:
         gen = _build_common_gen()
         gen.client.get = AsyncMock(return_value=MagicMock(id="def-123"))
-        gen.client.execute_graphql = AsyncMock(return_value={"CoreGeneratorDefinitionRun": {"ok": False}})
+        gen.client.execute_graphql = AsyncMock(
+            return_value={"CoreGeneratorDefinitionRun": {"ok": False, "task": {"id": None}}}
+        )
 
-        await gen.run_generator_and_wait("add_pod", ["pod-1"])
+        await gen.run_generator("add_pod", ["pod-1"])
 
         gen.logger.error.assert_called_once()
+
+
+def _mock_task(*, id: str, title: str) -> MagicMock:
+    t = MagicMock()
+    t.id = id
+    t.title = title
+    return t
+
+
+class TestWaitForParentGeneratorAndRefetch:
+    @pytest.mark.asyncio
+    async def test_no_in_flight_task_returns_none(self) -> None:
+        gen = _build_common_gen()
+        gen.client.task = MagicMock()
+        gen.client.task.filter = AsyncMock(return_value=[])
+
+        result = await gen.wait_for_parent_generator_and_refetch("add_dc", "dc-1")
+
+        assert result is None
+        gen.client.task.filter.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_unrelated_task_title_returns_none(self) -> None:
+        gen = _build_common_gen()
+        gen.client.task = MagicMock()
+        gen.client.task.filter = AsyncMock(return_value=[_mock_task(id="t-1", title="Run generator add_rack")])
+
+        result = await gen.wait_for_parent_generator_and_refetch("add_dc", "dc-1")
+
+        assert result is None
+
+    @pytest.mark.asyncio
+    async def test_matching_task_waits_and_refetches(self) -> None:
+        gen = _build_common_gen()
+        gen.client.task = MagicMock()
+        gen.client.task.filter = AsyncMock(return_value=[_mock_task(id="t-1", title="Run generator add_dc")])
+        gen.client.task.wait_for_completion = AsyncMock()
+        gen.collect_data = AsyncMock(return_value={"refetched": True})
+
+        result = await gen.wait_for_parent_generator_and_refetch("add_dc", "dc-1")
+
+        gen.client.task.wait_for_completion.assert_awaited_once()
+        assert gen.client.task.wait_for_completion.call_args.kwargs["id"] == "t-1"
+        gen.collect_data.assert_awaited_once()
+        assert result == {"refetched": True}
+
+
+def _mock_pod(name: str) -> MagicMock:
+    p = MagicMock()
+    p.id = f"id-{name}"
+    p.name = MagicMock(value=name)
+    return p
+
+
+def _build_dc_cascade_gen() -> Any:
+    """Return a DCPodCascadeGenerator with its inherited bootstrap generate()
+    replaced by a stub that just sets self.data, isolating the cascade logic
+    added in DCPodCascadeGenerator.generate() from DCTopologyGenerator's own
+    (extensively covered elsewhere) pool/device/routing work."""
+    gen = DCPodCascadeGenerator.__new__(DCPodCascadeGenerator)
+    gen.logger = MagicMock()
+    gen.client = MagicMock()
+    gen.client.group_context = MagicMock()
+    gen.client.group_context.related_node_ids = []
+    gen.run_generator = AsyncMock()
+
+    async def _fake_bootstrap(data: dict[str, Any]) -> None:
+        deployment_list = data.get("TopologyDeployment", [])
+        if not deployment_list:
+            gen.logger.error("No TopologyDeployment data found in GraphQL response")
+            return
+        gen.data = DCModel(**deployment_list[0])
+
+    gen._bootstrap_generate = _fake_bootstrap
+    return gen
+
+
+class TestDCPodCascadeGenerator:
+    @pytest.mark.asyncio
+    async def test_fans_out_to_every_existing_pod(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        gen = _build_dc_cascade_gen()
+        monkeypatch.setattr(
+            "generators.topology.dc.DCTopologyGenerator.generate",
+            lambda self, data: gen._bootstrap_generate(data),
+        )
+        pod1, pod2 = _mock_pod("POD-1"), _mock_pod("POD-2")
+        gen.client.filters = AsyncMock(return_value=[pod1, pod2])
+
+        await gen.generate({"TopologyDeployment": [{"id": "dc-1", "name": "DC1", "index": 1}]})
+
+        gen.run_generator.assert_awaited_once_with("pod_rack_cascade", [pod1.id, pod2.id], wait=False)
+        assert pod1.id in gen.client.group_context.related_node_ids
+        assert pod2.id in gen.client.group_context.related_node_ids
+
+    @pytest.mark.asyncio
+    async def test_no_existing_pods_skips_fan_out(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        gen = _build_dc_cascade_gen()
+        monkeypatch.setattr(
+            "generators.topology.dc.DCTopologyGenerator.generate",
+            lambda self, data: gen._bootstrap_generate(data),
+        )
+        gen.client.filters = AsyncMock(return_value=[])
+
+        await gen.generate({"TopologyDeployment": [{"id": "dc-1", "name": "DC1", "index": 1}]})
+
+        gen.run_generator.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_bootstrap_failure_skips_fan_out(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """If the inherited bootstrap bails out early (e.g. bad data), self.data
+        never gets set — the cascade must not fan out on incomplete state."""
+        gen = _build_dc_cascade_gen()
+        monkeypatch.setattr(
+            "generators.topology.dc.DCTopologyGenerator.generate",
+            lambda self, data: gen._bootstrap_generate(data),
+        )
+        gen.client.filters = AsyncMock(return_value=[])
+
+        await gen.generate({"TopologyDeployment": []})
+
+        gen.logger.error.assert_called_once()
+        gen.client.filters.assert_not_awaited()
+        gen.run_generator.assert_not_awaited()
 
 
 def _mock_rack(name: str, rack_type: str) -> MagicMock:
@@ -79,85 +226,139 @@ def _mock_rack(name: str, rack_type: str) -> MagicMock:
     return r
 
 
-def _build_pod_gen(*, deployment_type: str) -> Any:
-    """Return a PodTopologyGenerator typed as Any so ty allows mock attribute assignments."""
-    design = PodDesign(
-        id="design-1",
-        name="test-design",
-        rows=1,
-        compute_racks_per_row=1,
-        network_racks_per_row=0 if deployment_type == "tor" else 1,
-        max_tors_per_compute_rack=0 if deployment_type == "middle_rack" else 1,
-    )
-    parent = PodParent(id="dc-1", name="DC1", index=1, devices=[])
-    pod = PodModel(
-        id="pod-1",
-        name="pod-1",
-        index=1,
-        parent=parent,
-        spine_template=Template(id="tmpl-spine"),
-        design=design,
-    )
-    gen = PodTopologyGenerator.__new__(PodTopologyGenerator)
-    gen.data = pod
+def _pod_data(*, deployment_type: str) -> dict[str, Any]:
+    design = {
+        "id": "design-1",
+        "name": "test-design",
+        "rows": 1,
+        "compute_racks_per_row": 1,
+        "network_racks_per_row": 0 if deployment_type == "tor" else 1,
+        "max_tors_per_compute_rack": 0 if deployment_type == "middle_rack" else 1,
+    }
+    return {
+        "TopologyPod": [
+            {
+                "id": "pod-1",
+                "name": "pod-1",
+                "index": 1,
+                "design": design,
+                "spine_template": {"node": {"id": "tmpl-spine"}},
+                "parent": {"node": {"id": "dc-1", "name": "DC1", "index": 1, "devices": {"edges": []}}},
+            }
+        ]
+    }
+
+
+def _build_pod_rack_cascade_gen() -> Any:
+    """Return a PodRackCascadeGenerator with its inherited bootstrap generate()
+    replaced by a stub that just sets self.data, isolating the cascade logic
+    added in PodRackCascadeGenerator.generate() from PodTopologyGenerator's own
+    (extensively covered elsewhere) pool/device/routing work."""
+    from generators.models import PodModel
+
+    gen = PodRackCascadeGenerator.__new__(PodRackCascadeGenerator)
     gen.logger = MagicMock()
     gen.client = MagicMock()
     gen.client.group_context = MagicMock()
     gen.client.group_context.related_node_ids = []
-    gen.run_generator_and_wait = AsyncMock()
+    gen.run_generator = AsyncMock()
+
+    async def _fake_bootstrap(data: dict[str, Any]) -> None:
+        from utils.data_cleaning import clean_data
+
+        deployment_list = clean_data(data).get("TopologyPod", [])
+        if not deployment_list:
+            gen.logger.error("No Pod Deployment data found in GraphQL response")
+            return
+        gen.data = PodModel(**deployment_list[0])
+
+    gen._bootstrap_generate = _fake_bootstrap
     return gen
 
 
-class TestFanOutToRacks:
-    """PodTopologyGenerator._fan_out_to_racks(): protect every rack from the
-    tracking group's delete-unused-nodes cleanup, then fan out to add_rack only
-    for the racks this pod is directly responsible for starting."""
+class TestPodRackCascadeGenerator:
+    """PodRackCascadeGenerator.generate(): protect every rack from the tracking
+    group's delete-unused-nodes cleanup, then fan out to add_rack only for the
+    racks this pod is directly responsible for starting."""
 
     @pytest.mark.asyncio
-    async def test_middle_rack_fans_out_to_every_rack(self) -> None:
-        gen = _build_pod_gen(deployment_type="middle_rack")
+    async def test_middle_rack_fans_out_to_every_rack(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        gen = _build_pod_rack_cascade_gen()
+        monkeypatch.setattr(
+            "generators.topology.pod.PodTopologyGenerator.generate",
+            lambda self, data: gen._bootstrap_generate(data),
+        )
         network_rack = _mock_rack("NET-1", "network")
         gen.client.filters = AsyncMock(return_value=[network_rack])
 
-        await gen._fan_out_to_racks()
+        await gen.generate(_pod_data(deployment_type="middle_rack"))
 
-        gen.run_generator_and_wait.assert_awaited_once_with("add_rack", [network_rack.id])
+        gen.run_generator.assert_awaited_once_with("add_rack", [network_rack.id], wait=False)
         assert network_rack.id in gen.client.group_context.related_node_ids
 
     @pytest.mark.asyncio
-    async def test_tor_fans_out_to_every_rack(self) -> None:
-        gen = _build_pod_gen(deployment_type="tor")
+    async def test_tor_fans_out_to_every_rack(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        gen = _build_pod_rack_cascade_gen()
+        monkeypatch.setattr(
+            "generators.topology.pod.PodTopologyGenerator.generate",
+            lambda self, data: gen._bootstrap_generate(data),
+        )
         tor_rack = _mock_rack("TOR-1", "tor")
         gen.client.filters = AsyncMock(return_value=[tor_rack])
 
-        await gen._fan_out_to_racks()
+        await gen.generate(_pod_data(deployment_type="tor"))
 
-        gen.run_generator_and_wait.assert_awaited_once_with("add_rack", [tor_rack.id])
+        gen.run_generator.assert_awaited_once_with("add_rack", [tor_rack.id], wait=False)
 
     @pytest.mark.asyncio
-    async def test_mixed_fans_out_to_network_racks_only(self) -> None:
+    async def test_mixed_fans_out_to_network_racks_only(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """mixed's tor/compute racks are started by their network rack's own
-        _fan_out_to_row_dependent_racks(), not by the pod directly — but they're
-        still protected from the tracking group's cleanup here."""
-        gen = _build_pod_gen(deployment_type="mixed")
+        _fan_out_to_row_dependent_racks(), not by this cascade directly — but
+        they're still protected from the tracking group's cleanup here."""
+        gen = _build_pod_rack_cascade_gen()
+        monkeypatch.setattr(
+            "generators.topology.pod.PodTopologyGenerator.generate",
+            lambda self, data: gen._bootstrap_generate(data),
+        )
         network_rack = _mock_rack("NET-1", "network")
         tor_rack = _mock_rack("TOR-1", "tor")
         compute_rack = _mock_rack("COMP-1", "compute")
         gen.client.filters = AsyncMock(return_value=[network_rack, tor_rack, compute_rack])
 
-        await gen._fan_out_to_racks()
+        await gen.generate(_pod_data(deployment_type="mixed"))
 
-        gen.run_generator_and_wait.assert_awaited_once_with("add_rack", [network_rack.id])
+        gen.run_generator.assert_awaited_once_with("add_rack", [network_rack.id], wait=False)
         related = gen.client.group_context.related_node_ids
         assert network_rack.id in related
         assert tor_rack.id in related
         assert compute_rack.id in related
 
     @pytest.mark.asyncio
-    async def test_no_racks_calls_with_empty_list(self) -> None:
-        gen = _build_pod_gen(deployment_type="mixed")
+    async def test_no_racks_skips_fan_out(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        gen = _build_pod_rack_cascade_gen()
+        monkeypatch.setattr(
+            "generators.topology.pod.PodTopologyGenerator.generate",
+            lambda self, data: gen._bootstrap_generate(data),
+        )
         gen.client.filters = AsyncMock(return_value=[])
 
-        await gen._fan_out_to_racks()
+        await gen.generate(_pod_data(deployment_type="mixed"))
 
-        gen.run_generator_and_wait.assert_awaited_once_with("add_rack", [])
+        gen.run_generator.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_bootstrap_failure_skips_fan_out(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """If the inherited bootstrap bails out early (e.g. bad data), self.data
+        never gets set — the cascade must not fan out on incomplete state."""
+        gen = _build_pod_rack_cascade_gen()
+        monkeypatch.setattr(
+            "generators.topology.pod.PodTopologyGenerator.generate",
+            lambda self, data: gen._bootstrap_generate(data),
+        )
+        gen.client.filters = AsyncMock(return_value=[])
+
+        await gen.generate({"TopologyPod": []})
+
+        gen.logger.error.assert_called_once()
+        gen.client.filters.assert_not_awaited()
+        gen.run_generator.assert_not_awaited()

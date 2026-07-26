@@ -169,8 +169,8 @@ class RackGenerator(RackMixin, CommonGenerator):
         leafs (or, indirectly, to a local ToR fed by them). Their generator run must
         not start until this network rack's own leafs actually exist, which is
         already guaranteed here: this method only runs after generate() has finished
-        creating them, and run_generator_and_wait blocks until each fanned-out rack's
-        generator has itself fully completed.
+        creating them, and run_generator (wait=True by default) blocks until each
+        fanned-out rack's generator has itself fully completed.
         """
         deployment_type = self.data.pod.deployment_type
 
@@ -194,7 +194,7 @@ class RackGenerator(RackMixin, CommonGenerator):
             key=self._rack_sort_key,
         )
 
-        await self.run_generator_and_wait("add_rack", [rack.id for rack in row_dependent_racks])
+        await self.run_generator("add_rack", [rack.id for rack in row_dependent_racks])
 
     async def _get_leaf_devices_in_row(self, pod_id: str, row_index: int) -> tuple[list[str], list[str]]:
         """Query leaf devices in same row and their interfaces for ToR-to-leaf cabling.
@@ -386,8 +386,49 @@ class RackGenerator(RackMixin, CommonGenerator):
         shape = "direct node data" if "name" in data and isinstance(data.get("name"), dict) else "query result"
         self.logger.info(f"Processing {shape}")
 
+        # This bootstrap reads pod-level data (spine devices, ASN pool, loopback/
+        # technical pools) written by add_pod/pod_rack_cascade. If either is still
+        # running for our parent pod (e.g. a bulk pod+rack load, or a structural
+        # pod change firing add_pod + pod_rack_cascade in parallel), wait for it
+        # and re-parse rather than risk running on partial data.
+        for parent_generator in ("add_pod", "pod_rack_cascade"):
+            refreshed = await self.wait_for_parent_generator_and_refetch(parent_generator, self.data.pod.id)
+            if refreshed is not None:
+                data = refreshed
+                try:
+                    self.data = parse_rack_data(data)
+                except (ValueError, KeyError, IndexError) as exc:
+                    self.logger.error(f"Generation failed due to {exc}")
+                    return
+
         pod = self.data.pod
         deployment_type = pod.deployment_type
+
+        # A row-dependent (tor/compute) rack in a mixed deployment cables to its
+        # row's network rack's leafs, created by that network rack's own add_rack
+        # run (RackMixin._fan_out_to_row_dependent_racks fans out to this rack only
+        # after they exist). If this rack was instead triggered independently (e.g.
+        # a standalone-created rack) while that network rack's add_rack is still
+        # running, wait for it and re-parse rather than risk cabling against leafs
+        # that don't exist yet.
+        if deployment_type == "mixed" and self.data.rack_type in ROW_DEPENDENT_RACK_TYPES:
+            network_racks = await self.client.filters(
+                kind=LocationRack,
+                pod__ids=[pod.id],
+                row_index__value=self.data.row_index,
+                rack_type__value="network",
+            )
+            for network_rack in network_racks:
+                refreshed = await self.wait_for_parent_generator_and_refetch("add_rack", network_rack.id)
+                if refreshed is not None:
+                    data = refreshed
+                    try:
+                        self.data = parse_rack_data(data)
+                    except (ValueError, KeyError, IndexError) as exc:
+                        self.logger.error(f"Generation failed due to {exc}")
+                        return
+                    pod = self.data.pod
+                    deployment_type = pod.deployment_type
 
         self.logger.info(
             f"Starting rack generation: {self.data.name} [type={self.data.rack_type}, deployment={deployment_type}]"

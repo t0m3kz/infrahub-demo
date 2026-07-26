@@ -234,11 +234,11 @@ class DCTopologyGenerator(CommonGenerator):
                 bottom_role="super-spine",
             )
 
-        # Fan out to every pod's own generator now that super-spines/routing exist,
-        # and wait for each to finish before returning — the pod generator can then
-        # safely assume its spines/uplinks are already in place, no readiness gate
-        # or retry needed on its side.
-        await self.run_generator_and_wait("add_pod", [pod.id for pod in existing_pods])
+        # Fan-out to every pod's own add_pod run is handled by the sibling
+        # dc_pod_cascade generator, not here — see that module's docstring for why
+        # (add_pod's own fan-out to add_rack keeps its task RUNNING while waiting on
+        # a child; if add_dc waited on add_pod the same way here, a standalone-created
+        # pod's own wait-for-parent guard would deadlock against it).
         # Back-to-back inter-pod spine mesh cabling (designs with no super-spine tier)
         # is handled by pod.py itself — each pod cables to its existing lower-index
         # siblings directly (see PodTopologyGenerator._cable_to_existing_sibling_pods).

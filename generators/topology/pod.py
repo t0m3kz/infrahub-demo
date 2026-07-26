@@ -8,7 +8,7 @@ from utils.data_cleaning import clean_data
 from ..common import CablingOptions, CommonGenerator, DeviceOptions, RoutingOptions
 from ..helpers.routing import RoutingStrategy
 from ..models import PodModel
-from ..protocols import DcimPhysicalDevice, DcimPhysicalInterface, LocationRack, TopologyPod
+from ..protocols import DcimPhysicalDevice, DcimPhysicalInterface, TopologyPod
 
 _SIBLING_SPINE_MAX_RETRIES = 10
 _SIBLING_SPINE_RETRY_DELAY = 3.0
@@ -19,42 +19,14 @@ class PodTopologyGenerator(CommonGenerator):
 
     Creates resource pools (technical and management) and creates spine devices
     within a pod topology.
+
+    This is a pure bootstrap: it never fans out to add_rack itself. That fan-out
+    lives in PodRackCascadeGenerator, a subclass that reuses this generate() via
+    super() — see generators/topology/pod_rack_cascade.py's docstring for why.
+
+    Waits for an in-flight add_dc/dc_pod_cascade run on its parent DC before
+    reading DC-level data (see CommonGenerator.wait_for_parent_generator_and_refetch).
     """
-
-    async def _fan_out_to_racks(self) -> None:
-        """Protect every rack in this pod from deletion, then fan out to add_rack
-        for the racks this pod is directly responsible for starting.
-
-        - middle_rack/tor: fan out to every rack (all have their own fabric_templates
-          and cable straight to this pod's spines — middle_rack's "network" racks
-          create their own local leaf + l2-leaf/access-leaf pair in one generate()
-          call; there's no separate row-dependent rack to wait for).
-        - mixed: fan out to "network" racks only. Each network rack cables its own
-          leafs, then — once its own generate() has finished — fans out to the
-          "tor"/"compute" racks in its own row itself (see RackGenerator.generate()),
-          since those need the network rack's leafs to already exist.
-
-        Racks not fanned out to here (mixed's tor/compute racks) still need
-        protecting from the tracking group's delete-unused-nodes cleanup, since
-        this pod generator run never touches them directly.
-        """
-        racks = await self.client.filters(
-            kind=LocationRack,
-            pod__ids=[self.data.id],
-            rack_type__values=["network", "tor", "compute"],
-        )
-
-        related_node_ids = self.client.group_context.related_node_ids
-        for rack in racks:
-            related_node_ids.append(rack.id)
-
-        deployment_type = self.data.deployment_type
-        if deployment_type == "mixed":
-            fan_out_ids = [rack.id for rack in racks if rack.rack_type.value == "network"]
-        else:
-            fan_out_ids = [rack.id for rack in racks]
-
-        await self.run_generator_and_wait("add_rack", fan_out_ids)
 
     async def generate(self, data: dict[str, Any]) -> None:
         """Generate pod topology infrastructure."""
@@ -64,6 +36,22 @@ class PodTopologyGenerator(CommonGenerator):
             if not deployment_list:
                 self.logger.error("No Pod Deployment data found in GraphQL response")
                 return
+
+            # This bootstrap reads DC-level data (super-spine devices, ASN pool,
+            # management pool) written by add_dc/dc_pod_cascade. If either is
+            # still running for our parent DC (e.g. a bulk DC+pod+rack load, or a
+            # structural DC change firing add_dc + dc_pod_cascade in parallel),
+            # wait for it and re-parse rather than risk running on partial data.
+            dc_id = deployment_list[0].get("parent", {}).get("id")
+            if dc_id:
+                for parent_generator in ("add_dc", "dc_pod_cascade"):
+                    refreshed = await self.wait_for_parent_generator_and_refetch(parent_generator, dc_id)
+                    if refreshed is not None:
+                        data = refreshed
+                        deployment_list = clean_data(data).get("TopologyPod", [])
+                        if not deployment_list:
+                            self.logger.error("No Pod Deployment data found in GraphQL response")
+                            return
 
             self.data = PodModel(**deployment_list[0])
         except (ValueError, KeyError, IndexError) as exc:
@@ -293,8 +281,8 @@ class PodTopologyGenerator(CommonGenerator):
                 )
         # When there are no super-spines to cable to (skip_cabling), inter-pod
         # back-to-back spine cabling is handled above by _cable_to_existing_sibling_pods.
-
-        await self._fan_out_to_racks()
+        # Fan-out to add_rack is handled by the sibling pod_rack_cascade generator,
+        # not here — see PodTopologyGenerator's class docstring.
 
     async def _cable_to_existing_sibling_pods(
         self,
