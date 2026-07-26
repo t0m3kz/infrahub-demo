@@ -56,3 +56,11 @@ fragment InterfaceCapabilitiesWithSegmentFields on DcimInterface {
     }
   }
 }
+
+fragment InterfaceCapabilitiesOnInterfaceFields on DcimInterface {
+  ...InterfaceCapabilitiesFields
+}
+
+fragment InterfaceCapabilitiesWithSegmentOnInterfaceFields on DcimInterface {
+  ...InterfaceCapabilitiesWithSegmentFields
+}

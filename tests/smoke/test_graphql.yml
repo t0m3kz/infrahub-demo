@@ -27,6 +27,30 @@ infrahub_tests:
           kind: graphql-query-smoke
 
   - resource: GraphQLQuery
+    resource_name: proxy_config
+    tests:
+      - name: syntax_check
+        spec:
+          path: queries/config/proxy.gql
+          kind: graphql-query-smoke
+
+  - resource: GraphQLQuery
+    resource_name: loadbalancer_cloud
+    tests:
+      - name: syntax_check
+        spec:
+          path: queries/config/loadbalancer_cloud.gql
+          kind: graphql-query-smoke
+
+  - resource: GraphQLQuery
+    resource_name: cloud_vpc_config
+    tests:
+      - name: syntax_check
+        spec:
+          path: queries/config/cloud_vpc.gql
+          kind: graphql-query-smoke
+
+  - resource: GraphQLQuery
     resource_name: oob_config
     tests:
       - name: syntax_check
@@ -132,9 +156,130 @@ infrahub_tests:
           kind: graphql-query-smoke
 
   - resource: GraphQLQuery
-    resource_name: decomission_pod
+    resource_name: pod_decommission
     tests:
       - name: syntax_check
         spec:
           path: queries/topology/decomission/pod.gql
+          kind: graphql-query-smoke
+
+  - resource: GraphQLQuery
+    resource_name: rack
+    tests:
+      - name: syntax_check
+        spec:
+          path: queries/topology/add/rack.gql
+          kind: graphql-query-smoke
+
+  - resource: GraphQLQuery
+    resource_name: rack_devices_with_interfaces
+    tests:
+      - name: syntax_check
+        spec:
+          path: queries/topology/add/rack_devices_with_interfaces.gql
+          kind: graphql-query-smoke
+
+  - resource: GraphQLQuery
+    resource_name: virt_cluster_capacity
+    tests:
+      - name: syntax_check
+        spec:
+          path: queries/topology/add/virt_cluster_capacity.gql
+          kind: graphql-query-smoke
+
+  - resource: GraphQLQuery
+    resource_name: application
+    tests:
+      - name: syntax_check
+        spec:
+          path: queries/topology/add/application.gql
+          kind: graphql-query-smoke
+
+  - resource: GraphQLQuery
+    resource_name: vlan_segment_data
+    tests:
+      - name: syntax_check
+        spec:
+          path: queries/topology/add/vlan_segment.gql
+          kind: graphql-query-smoke
+
+  - resource: GraphQLQuery
+    resource_name: vxlan_segment_data
+    tests:
+      - name: syntax_check
+        spec:
+          path: queries/topology/add/vxlan_segment.gql
+          kind: graphql-query-smoke
+
+  - resource: GraphQLQuery
+    resource_name: vrf_namespace_data
+    tests:
+      - name: syntax_check
+        spec:
+          path: queries/topology/add/vrf_namespace.gql
+          kind: graphql-query-smoke
+
+  - resource: GraphQLQuery
+    resource_name: circuit_data
+    tests:
+      - name: syntax_check
+        spec:
+          path: queries/topology/add/circuit.gql
+          kind: graphql-query-smoke
+
+  - resource: GraphQLQuery
+    resource_name: virtual_circuit_data
+    tests:
+      - name: syntax_check
+        spec:
+          path: queries/topology/add/virtual_circuit.gql
+          kind: graphql-query-smoke
+
+  - resource: GraphQLQuery
+    resource_name: proposed_change_artifacts
+    tests:
+      - name: syntax_check
+        spec:
+          path: queries/topology/add/proposed_change_artifacts.gql
+          kind: graphql-query-smoke
+
+  - resource: GraphQLQuery
+    resource_name: ha_domain_data
+    tests:
+      - name: syntax_check
+        spec:
+          path: queries/topology/add/ha_domain.gql
+          kind: graphql-query-smoke
+
+  - resource: GraphQLQuery
+    resource_name: mlag_domain_data
+    tests:
+      - name: syntax_check
+        spec:
+          path: queries/topology/add/mlag_domain.gql
+          kind: graphql-query-smoke
+
+  # ==================== VALIDATION QUERIES ====================
+  - resource: GraphQLQuery
+    resource_name: capability_guard
+    tests:
+      - name: syntax_check
+        spec:
+          path: queries/validation/capability_guard.gql
+          kind: graphql-query-smoke
+
+  - resource: GraphQLQuery
+    resource_name: loadbalancer_validation
+    tests:
+      - name: syntax_check
+        spec:
+          path: queries/validation/lb.gql
+          kind: graphql-query-smoke
+
+  - resource: GraphQLQuery
+    resource_name: proxy_validation
+    tests:
+      - name: syntax_check
+        spec:
+          path: queries/validation/proxy.gql
           kind: graphql-query-smoke

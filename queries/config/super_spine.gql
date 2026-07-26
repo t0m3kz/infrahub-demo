@@ -101,7 +101,7 @@ query super_spine_config(
                   }
                 }
               }
-              ...InterfaceCapabilitiesWithSegmentFields
+              ...InterfaceCapabilitiesWithSegmentOnInterfaceFields
             }
           }
         }

@@ -108,7 +108,7 @@ query leaf_config(
                   }
                 }
               }
-              ...InterfaceCapabilitiesWithSegmentFields
+              ...InterfaceCapabilitiesWithSegmentOnInterfaceFields
             }
           }
         }

@@ -105,7 +105,7 @@ query edge_config($device: String!) {
                   }
                 }
               }
-              ...InterfaceCapabilitiesWithSegmentFields
+              ...InterfaceCapabilitiesWithSegmentOnInterfaceFields
             }
           }
         }
