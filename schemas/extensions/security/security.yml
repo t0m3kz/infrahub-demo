@@ -226,6 +226,7 @@ nodes:
       - name__value
     uniqueness_constraints:
       - [policy, index__value]
+      - [policy, name__value]
     attributes:
       - name: index
         kind: Number
