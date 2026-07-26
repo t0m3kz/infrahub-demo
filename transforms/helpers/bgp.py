@@ -354,11 +354,8 @@ def get_bgp_profile(
             "graceful_restart": service.get("graceful_restart"),
             "confederation_identifier": service.get("confederation_identifier"),
             "local_as": local_as,
+            "router_id": cast(dict[str, Any], service["router_id"]),
         }
-
-        router_id = service.get("router_id")
-        if router_id:
-            bgp_config["router_id"] = router_id
 
         sessions = []
         dropped_warnings: list[str] = []
@@ -390,8 +387,6 @@ def get_bgp_profile(
         else:
             existing = by_asn[asn]
             existing["sessions"].extend(bgp_config.get("sessions", []))
-            if not existing.get("router_id") and bgp_config.get("router_id"):
-                existing["router_id"] = bgp_config["router_id"]
 
     merged = list(by_asn.values())
 
@@ -409,7 +404,6 @@ def get_bgp_profile(
         # makes the intent clear and is considered best practice.
         is_rr = any(pg.get("route_reflector_client") for pg in bgp_config["peer_groups"])
         if is_rr:
-            router_id_address = (bgp_config.get("router_id") or {}).get("address", "")
-            bgp_config["cluster_id"] = router_id_address.split("/")[0] if router_id_address else ""
+            bgp_config["cluster_id"] = cast(dict[str, Any], bgp_config["router_id"])["address"].split("/")[0]
 
     return merged

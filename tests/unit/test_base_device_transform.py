@@ -154,7 +154,14 @@ class TestBuildConfig:
     def test_capabilities_bgp_true_when_service_present(self) -> None:
         t = _make_transform()
         data = _device_data(
-            device_capabilities=[{"typename": "ManagedBGP", "local_as": {"asn": 65001}, "peerings": []}]
+            device_capabilities=[
+                {
+                    "typename": "ManagedBGP",
+                    "local_as": {"asn": 65001},
+                    "router_id": {"address": "10.0.0.1/32"},
+                    "peerings": [],
+                }
+            ]
         )
         cfg = t._build_config(data, "arista_eos")
         assert cfg["capabilities"]["bgp_enabled"] is True
