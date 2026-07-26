@@ -5,8 +5,8 @@ spec:
   kind: LocationRack
   data:
     - index: 5
-      row_index: 3
-      shortname: ktw-1-s-1-r-3-5
+      row_index: 4
+      shortname: ktw-1-s-1-r-4-5
       rack_type: network
       pod: DC6-1-POD-1
       parent: ktw-1-s-1
