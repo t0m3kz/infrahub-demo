@@ -257,14 +257,8 @@ python_transforms:
     file_path: transforms/fields/virt_cluster_capacity.py
 
 graphql_fragments:
-  - name: network_segment
-    file_path: queries/fragments/network_segment.gql
-  - name: device
-    file_path: queries/fragments/device.gql
-  - name: device_capabilities
-    file_path: queries/fragments/device_capabilities.gql
-  - name: interface_capabilities
-    file_path: queries/fragments/interface_capabilities.gql
+  - name: all_fragments
+    file_path: queries/fragments/
 
 queries:
   - name: placeholder
