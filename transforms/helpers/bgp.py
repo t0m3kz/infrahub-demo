@@ -336,23 +336,29 @@ def get_bgp_profile(
     if not device_capabilities:
         return []
 
+    bgp_services = [svc for svc in device_capabilities if svc.get("typename") == "ManagedBGP"]
+    if not bgp_services:
+        return []
+
     bgp_configs = []
 
-    for service in device_capabilities:
-        if service.get("typename") != "ManagedBGP":
-            continue
+    for service in bgp_services:
+        service_name = service.get("name")
+
+        local_as = service.get("local_as")
+        if not isinstance(local_as, dict) or local_as.get("asn") is None:
+            raise ValueError(
+                f"ManagedBGP service '{service_name}' on device '{device_name}' is missing required local_as.asn"
+            )
 
         bgp_config = {
-            "name": service.get("name"),
+            "name": service_name,
             "status": service.get("status"),
             "multipath": service.get("multipath"),
             "graceful_restart": service.get("graceful_restart"),
             "confederation_identifier": service.get("confederation_identifier"),
+            "local_as": local_as,
         }
-
-        local_as = service.get("local_as")
-        if local_as:
-            bgp_config["local_as"] = local_as
 
         router_id = service.get("router_id")
         if router_id:
@@ -368,6 +374,8 @@ def get_bgp_profile(
                     peering_node, device_name, local_as, interfaces, warnings=dropped_warnings
                 )
                 if session:
+                    # Peering templates expect local_as on each session object.
+                    session["local_as"] = local_as
                     sessions.append(session)
 
         for msg in dropped_warnings:
