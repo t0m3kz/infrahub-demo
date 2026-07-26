@@ -1107,9 +1107,63 @@ class TestGetBgpProfile:
         assert len(result) == 1
         assert len(result[0]["sessions"]) == 2
 
-    def test_non_bgp_services_ignored(self):
+    def test_mixed_capabilities_processes_only_managed_bgp(self):
+        peerings = [
+            _make_peering(
+                name="underlay-1",
+                session_type="EBGP",
+                ttl=1,
+                local_device="leaf-01",
+                remote_device="spine-01",
+                local_asn=65001,
+                remote_asn=65000,
+            ),
+        ]
         services = [
             {"typename": "ManagedOSPF", "name": "ospf-1"},
+            self._make_service(peerings, local_asn=65001),
         ]
         result = get_bgp_profile(services, device_name="leaf-01")
-        assert result == []
+        assert len(result) == 1
+        assert result[0]["name"] == "bgp-fabric"
+
+    def test_sessions_include_local_as_for_templates(self):
+        """Each built session should expose local_as for peering templates."""
+        peerings = [
+            _make_peering(
+                name="overlay-1",
+                session_type="IBGP",
+                ttl=255,
+                local_device="leaf-01",
+                remote_device="spine-01",
+                local_ip="10.0.0.1/32",
+                remote_ip="10.0.0.100/32",
+                local_iface_type="DcimVirtualInterface",
+                remote_iface_type="DcimVirtualInterface",
+            ),
+        ]
+        service = self._make_service(peerings, local_asn=65000)
+        result = get_bgp_profile([service], device_name="leaf-01", device_role="leaf")
+
+        assert len(result) == 1
+        assert len(result[0]["sessions"]) == 1
+        assert result[0]["sessions"][0]["local_as"] == {"asn": 65000}
+
+    def test_service_without_local_as_raises_value_error(self):
+        """ManagedBGP service without local ASN should fail fast."""
+        peerings = [
+            _make_peering(
+                name="underlay-1",
+                session_type="EBGP",
+                ttl=1,
+                local_device="leaf-01",
+                remote_device="spine-01",
+                local_asn=65001,
+                remote_asn=65000,
+            ),
+        ]
+        service = self._make_service(peerings, local_asn=65001)
+        service["local_as"] = None
+
+        with pytest.raises(ValueError, match="missing required local_as\.asn"):
+            get_bgp_profile([service], device_name="leaf-01")
