@@ -1,20 +1,12 @@
 fragment PhysicalInterfaceFields on DcimPhysicalInterface {
-  id
-  name { value }
+  ...PhysicalInterfaceCableIdFields
   interface_type { value }
   role { value }
   status { value }
-  cable {
-    node {
-      id
-    }
-  }
 }
 
 fragment RackDeviceFields on DcimPhysicalDevice {
-  id
-  name { value }
-  role { value }
+  ...PhysicalDeviceIdentityRoleFields
   rack {
     node {
       id
@@ -75,9 +67,7 @@ query GetEndpointForConnectivity($device_name: String!) {
   DcimDevice(name__value: $device_name) {
     edges {
       node {
-        id
-        name { value }
-        role { value }
+        ...DeviceIdentityRoleFields
         ... on DcimPhysicalDevice {
           rack {
             node {

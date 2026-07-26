@@ -255,6 +255,17 @@ python_transforms:
   - name: virt_cluster_total_storage_gb
     class_name: VirtClusterTotalStorageGb
     file_path: transforms/fields/virt_cluster_capacity.py
+
+graphql_fragments:
+  - name: network_segment
+    file_path: queries/fragments/network_segment.gql
+  - name: device
+    file_path: queries/fragments/device.gql
+  - name: device_capabilities
+    file_path: queries/fragments/device_capabilities.gql
+  - name: interface_capabilities
+    file_path: queries/fragments/interface_capabilities.gql
+
 queries:
   - name: placeholder
     file_path: queries/placeholder.gql
@@ -301,8 +312,6 @@ queries:
     file_path: queries/topology/add/virt_cluster_capacity.gql
   - name: application
     file_path: queries/topology/add/application.gql
-  - name: app_component_data
-    file_path: queries/topology/add/app_component.gql
   - name: vlan_segment_data
     file_path: queries/topology/add/vlan_segment.gql
   - name: vxlan_segment_data
@@ -330,12 +339,6 @@ queries:
     file_path: queries/topology/add/ha_domain.gql
   - name: mlag_domain_data
     file_path: queries/topology/add/mlag_domain.gql
-  - name: app_service_ports
-    file_path: queries/topology/add/app_service_ports.gql
-  - name: app_dependency_service_port
-    file_path: queries/topology/add/app_dependency_service_port.gql
-  - name: app_dependency_rule
-    file_path: queries/topology/add/app_dependency_rule.gql
 
 generator_definitions:
   - name: add_dc
@@ -455,24 +458,6 @@ generator_definitions:
     execute_after_merge: false
     parameters:
       name: name__value
-  - name: add_app_service_ports
-    file_path: generators/topology/application_service_ports.py
-    targets: app_components
-    query: app_service_ports
-    class_name: AppServicePortGenerator
-    execute_in_proposed_change: false
-    execute_after_merge: false
-    parameters:
-      slug: slug__value
-  - name: add_app_service_ports_from_dependency
-    file_path: generators/topology/application_service_ports.py
-    targets: app_dependencies
-    query: app_dependency_service_port
-    class_name: AppDependencyServicePortGenerator
-    execute_in_proposed_change: false
-    execute_after_merge: false
-    parameters:
-      name: name__value
   - name: add_app_application
     file_path: generators/topology/application_security.py
     targets: app_applications
@@ -482,24 +467,6 @@ generator_definitions:
     execute_after_merge: false
     parameters:
       name: name__value
-  - name: add_app_application_from_dependency
-    file_path: generators/topology/application_security.py
-    targets: app_dependencies
-    query: app_dependency_rule
-    class_name: AppDependencyRuleGenerator
-    execute_in_proposed_change: false
-    execute_after_merge: false
-    parameters:
-      name: name__value
-  - name: add_app_components
-    file_path: generators/topology/application_components.py
-    targets: app_components
-    query: app_component_data
-    class_name: AppComponentGenerator
-    execute_in_proposed_change: false
-    execute_after_merge: false
-    parameters:
-      name: slug__value
 # - name: create_pop
 #   file_path: generators/generate_pop.py
 #   targets: topologies_pop

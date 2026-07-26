@@ -1,0 +1,58 @@
+fragment OspfInterfaceCapabilityFields on RoutingOSPFInterface {
+  name { value }
+  mode { value }
+  metric { value }
+  authentication_mode { value }
+  password { node { password { value } } }
+  peering {
+    node {
+      ospf_process {
+        edges {
+          node {
+            process_id { value }
+            router_id { node { address { value } } }
+            capabilities { edges { node { name { value } } } }
+          }
+        }
+      }
+      ospf_area { node { area { value } area_type { value } } }
+      network_type { value }
+      cost { value }
+      interface_capabilities {
+        edges {
+          node {
+            name { value }
+            device { node { name { value } } }
+          }
+        }
+      }
+    }
+  }
+}
+
+fragment InterfaceCapabilitiesFields on DcimInterface {
+  interface_capabilities {
+    edges {
+      node {
+        __typename
+        ... on RoutingOSPFInterface {
+          ...OspfInterfaceCapabilityFields
+        }
+      }
+    }
+  }
+}
+
+fragment InterfaceCapabilitiesWithSegmentFields on DcimInterface {
+  interface_capabilities {
+    edges {
+      node {
+        __typename
+        ... on RoutingOSPFInterface {
+          ...OspfInterfaceCapabilityFields
+        }
+        ...NetworkSegmentFields
+      }
+    }
+  }
+}

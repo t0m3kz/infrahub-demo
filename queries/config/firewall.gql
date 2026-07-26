@@ -1,4 +1,7 @@
-query firewall_config($device: String!) {
+query firewall_config(
+  $device: String!
+  $segment_status_values: [String!] = ["active", "provisioning"]
+) {
   DcimPhysicalDevice(name__value: $device) {
     edges {
       node {
@@ -151,42 +154,16 @@ query firewall_config($device: String!) {
 
 fragment FirewallSegmentFields on ManagedNetworkSegment {
   ... on ManagedVlanSegment {
-    name { value }
-    status { value }
-    segment_deployments(status__values: ["active", "provisioning"]) {
-      edges { node { vlan_id { value } vni { value } } }
-    }
-    gateway {
-      node {
-        address { value }
-        ip_prefix {
-          node {
-            prefix { value }
-            ip_namespace { node { name { value } l3_vni { value } owner { node { name { value } } } } }
-          }
-        }
-      }
-    }
-    security_zone { node { name { value } trust_level { value } zone_type { value } } }
+    ...SegmentStatusFields
+    ...SegmentDeploymentsActiveFields
+    ...SegmentGatewayWithNamespaceFields
+    ...SegmentSecurityZoneFields
   }
   ... on ManagedVxlanSegment {
-    name { value }
-    status { value }
+    ...SegmentStatusFields
     arp_suppression { value }
-    segment_deployments(status__values: ["active", "provisioning"]) {
-      edges { node { vlan_id { value } vni { value } } }
-    }
-    gateway {
-      node {
-        address { value }
-        ip_prefix {
-          node {
-            prefix { value }
-            ip_namespace { node { name { value } l3_vni { value } owner { node { name { value } } } } }
-          }
-        }
-      }
-    }
-    security_zone { node { name { value } trust_level { value } zone_type { value } } }
+    ...SegmentDeploymentsActiveFields
+    ...SegmentGatewayWithNamespaceFields
+    ...SegmentSecurityZoneFields
   }
 }

@@ -77,30 +77,44 @@ class RuleLifecycleMixin:
                 else await allocate_index(parent_id)
             )
 
-            payload = dict(rule_data)
-            payload["id"] = existing_rule.id
-            payload[index_attr] = existing_index
-
             existing_expires_attr = getattr(existing_rule, expires_attr, None)
             existing_expires_at = getattr(existing_expires_attr, "value", None) if existing_expires_attr else None
-            if expires_attr not in payload:
-                payload[expires_attr] = existing_expires_at or RuleLifecycleMixin._default_expiry_iso(
-                    default_validity_days
-                )
-
             existing_disabled_attr = getattr(existing_rule, disabled_attr, None)
             existing_disabled = (
                 bool(getattr(existing_disabled_attr, "value", False)) if existing_disabled_attr else False
             )
-            payload[disabled_attr] = bool(
-                existing_disabled
-                or payload.get(disabled_attr, False)
-                or RuleLifecycleMixin._is_expired_datetime(payload.get(expires_attr))
-            )
 
-            rule = await self.client.create(kind=rule_kind, data=payload)
-            await rule.save(allow_upsert=True)
-            return rule, existing_index
+            for attempt in range(1, max_attempts + 1):
+                payload = dict(rule_data)
+                payload["id"] = existing_rule.id
+                assigned_index = existing_index if attempt == 1 else await allocate_index(parent_id)
+                payload[index_attr] = assigned_index
+
+                if expires_attr not in payload:
+                    payload[expires_attr] = existing_expires_at or RuleLifecycleMixin._default_expiry_iso(
+                        default_validity_days
+                    )
+
+                payload[disabled_attr] = bool(
+                    existing_disabled
+                    or payload.get(disabled_attr, False)
+                    or RuleLifecycleMixin._is_expired_datetime(payload.get(expires_attr))
+                )
+
+                try:
+                    rule = await self.client.create(kind=rule_kind, data=payload)
+                    await rule.save(allow_upsert=True)
+                    return rule, int(assigned_index)
+                except Exception as exc:
+                    if collision_hint in str(exc) and attempt < max_attempts:
+                        self.logger.warning(
+                            "Index collision for existing rule '%s', retrying with refreshed index (attempt %d/%d)",
+                            rule_name,
+                            attempt + 1,
+                            max_attempts,
+                        )
+                        continue
+                    raise
 
         last_exc: Exception | None = None
         for attempt in range(1, max_attempts + 1):

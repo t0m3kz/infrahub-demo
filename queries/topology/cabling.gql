@@ -6,16 +6,7 @@ fragment PhysicalInterfaceFields on DcimPhysicalInterface {
   device {
     node {
       ... on DcimPhysicalDevice {
-        name {
-          value
-        }
-        rack {
-          node {
-            name {
-              value
-            }
-          }
-        }
+        ...PhysicalDeviceRackNameFields
       }
     }
   }

@@ -5,152 +5,160 @@ fragment SegmentSecurityFields on ManagedNetworkSegment {
   gateway { node { ip_prefix { node { prefix { value } } } } }
 }
 
-query app_security_rules($name: String!) {
-  AppApplication(name__value: $name) {
+fragment AppComponentSecurityFields on AppComponent {
+  id
+  name { value }
+  slug { value }
+  component_type { value }
+  load_balancer {
+    node {
+      id
+      ... on ManagedLoadbalancerHA {
+        name { value }
+      }
+    }
+  }
+  instances {
     edges {
       node {
         id
         name { value }
-        environment { value }
-        criticality { value }
-        security_profile { value }
-        children {
-          edges {
+        __typename
+        ... on DcimPhysicalDevice {
+          role { value }
+        }
+        ... on DcimVirtualDevice {
+          role { value }
+          hosting_device {
             node {
               id
-              ... on AppComponent {
-                name { value }
-                slug { value }
-                component_type { value }
-                parent {
-                  node {
-                    id
-                    ... on AppApplication {
-                      name { value }
-                      parent {
-                        node {
-                          id
-                          ... on AppPortfolio {
-                            owner {
-                              node {
-                                id
-                                org_id { value }
-                                name { value }
-                              }
-                            }
-                          }
-                        }
-                      }
-                    }
-                  }
-                }
-                network_segment {
-                  node {
-                    id
-                    __typename
-                    ...SegmentSecurityFields
-                    ... on CloudNetworkSegment {
-                      name { value }
-                      segment_type { value }
-                      cidr_block {
-                        node {
-                          prefix { value }
-                        }
-                      }
-                      virtual_network {
-                        node {
-                          id
-                          name { value }
-                          account {
-                            node {
-                              id
-                              name { value }
-                            }
-                          }
-                        }
-                      }
-                    }
-                  }
-                }
-                depends_on {
-                  edges {
-                    node {
-                      id
-                      name { value }
-                      protocol { value }
-                      port_start { value }
-                      port_end { value }
-                      description { value }
-                      access_status { value }
-                      decision_reason { value }
-                      access_expires_at { value }
-                      target {
-                        node {
-                          id
-                          ... on AppComponent {
-                            name { value }
-                            slug { value }
-                            component_type { value }
-                            parent {
-                              node {
-                                id
-                                ... on AppApplication {
-                                  name { value }
-                                  parent {
-                                    node {
-                                      id
-                                      ... on AppPortfolio {
-                                        owner {
-                                          node {
-                                            id
-                                            org_id { value }
-                                            name { value }
-                                          }
-                                        }
-                                      }
-                                    }
-                                  }
-                                }
-                              }
-                            }
-                            network_segment {
-                              node {
-                                id
-                                __typename
-                                ...SegmentSecurityFields
-                                ... on CloudNetworkSegment {
-                                  name { value }
-                                  segment_type { value }
-                                  cidr_block {
-                                    node {
-                                      prefix { value }
-                                    }
-                                  }
-                                  virtual_network {
-                                    node {
-                                      id
-                                      name { value }
-                                      account {
-                                        node {
-                                          id
-                                          name { value }
-                                        }
-                                      }
-                                    }
-                                  }
-                                }
-                              }
-                            }
-                          }
-                        }
-                      }
-                    }
-                  }
+              name { value }
+            }
+          }
+        }
+      }
+    }
+  }
+  service_ports {
+    edges {
+      node {
+        id
+        name { value }
+        port { value }
+        port_end { value }
+        protocol { value }
+      }
+    }
+  }
+  parent {
+    node {
+      id
+      ... on AppApplication {
+        name { value }
+        parent {
+          node {
+            id
+            ... on AppPortfolio {
+              owner {
+                node {
+                  id
+                  org_id { value }
+                  name { value }
                 }
               }
             }
           }
         }
+      }
+    }
+  }
+  network_segment {
+    node {
+      id
+      __typename
+      ...SegmentSecurityFields
+      ... on CloudNetworkSegment {
+        name { value }
+        segment_type { value }
+        cidr_block {
+          node {
+            prefix { value }
+          }
+        }
+        virtual_network {
+          node {
+            id
+            name { value }
+            account {
+              node {
+                id
+                name { value }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+  health_checks {
+    edges {
+      node {
+        id
+      }
+    }
+  }
+}
+
+fragment AppDependencySecurityFields on AppDependency {
+  id
+  name { value }
+  protocol { value }
+  port_start { value }
+  port_end { value }
+  description { value }
+  access_status { value }
+  decision_reason { value }
+  access_expires_at { value }
+  source {
+    node {
+      ...AppComponentSecurityFields
+    }
+  }
+  target {
+    node {
+      ...AppComponentSecurityFields
+    }
+  }
+}
+
+fragment AppApplicationSecurityFields on AppApplication {
+  id
+  name { value }
+  environment { value }
+  criticality { value }
+  security_profile { value }
+  children {
+    edges {
+      node {
+        ...AppComponentSecurityFields
+      }
+    }
+  }
+}
+
+query application($name: String!) {
+  AppApplication(name__value: $name) {
+    edges {
+      node {
+        ...AppApplicationSecurityFields
+      }
+    }
+  }
+
+  AppDependency {
+    edges {
+      node {
+        ...AppDependencySecurityFields
       }
     }
   }

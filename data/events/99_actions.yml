@@ -220,24 +220,10 @@ spec:
       mutation_action: "updated"
       action: ha-generator
     # ── App Security Rules ────────────────────────────────────────────────────
-    # Keep trigger node kind aligned with generator target group:
-    # - add_app_application targets app_applications (AppApplication events)
-    # - add_app_application_from_dependency targets app_dependencies (AppDependency events)
+    # Single trigger path: AppApplication events invoke the canonical app generator.
 
     - name: trigger-app-security-rules-on-application-created
       branch_scope: "other_branches"
       node_kind: AppApplication
       mutation_action: "created"
       action: run-app-application-generator
-
-    - name: trigger-app-security-rules-on-dependency-created
-      branch_scope: "other_branches"
-      node_kind: AppDependency
-      mutation_action: "created"
-      action: run-app-dependency-rule-generator
-
-    - name: trigger-app-security-rules-on-dependency-updated
-      branch_scope: "other_branches"
-      node_kind: AppDependency
-      mutation_action: "updated"
-      action: run-app-dependency-rule-generator
