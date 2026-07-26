@@ -147,6 +147,9 @@ fragment PodFields on TopologyPod {
   spine_interface_sorting_method {
     value
   }
+  mlag_create {
+    value
+  }
   loopback_pool {
     node {
       id

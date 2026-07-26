@@ -627,6 +627,26 @@ nodes:
             description: Assign interfaces top-down.
         default_value: bottom_up
         order_weight: 4000
+      - name: mlag_create
+        label: "MLAG Creation"
+        kind: Dropdown
+        description: "Whether add_rack automatically pairs same-role ToR/leaf devices into an MLAG domain"
+        choices:
+          - name: "no"
+            label: "Don't create MLAGs"
+            color: "#BFBFBF"
+            description: "Devices are not automatically paired into MLAG domains."
+          - name: "back-to-back"
+            label: "Create back-to-back MLAG"
+            color: "#7FBF7F"
+            description: "Pair devices with a physical peer-link (DcimLAGInterface over mlag-peer physical interfaces)."
+          - name: virtual
+            label: "Create virtual MLAG"
+            color: "#869FB3"
+            description: "Pair devices with a virtual (loopback) peer-link instead of a physical LAG."
+        default_value: "no"
+        optional: true
+        order_weight: 4500
     relationships:
       - name: design
         label: "Pod Design"

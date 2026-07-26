@@ -200,6 +200,12 @@ spec:
             # Endpoint trigger when server device added to endpoints
 
     # ── MLAG Wiring ───────────────────────────────────────────────────────────
+    - name: trigger-mlag-on-created
+      branch_scope: "other_branches"
+      node_kind: ManagedMLAG
+      mutation_action: "created"
+      action: mlag-generator
+
     - name: trigger-mlag-on-update
       branch_scope: "other_branches"
       node_kind: ManagedMLAG
