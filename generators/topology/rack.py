@@ -557,7 +557,7 @@ class RackGenerator(RackMixin, CommonGenerator):
 
             await self._ensure_mlag_pairs(leaf_devices, role_label="leaf", template=leaf_role.template)
 
-            leaf_interfaces = self._roles.template_interfaces(leaf_role.template)
+            leaf_interfaces = self._roles.template_interfaces(leaf_role.template, role="uplink")
             try:
                 cabling_offset = self.calculate_cabling_offsets(device_count=leaf_role.quantity, device_type="leaf")
             except RuntimeError as exc:
