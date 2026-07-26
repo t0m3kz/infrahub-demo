@@ -316,7 +316,9 @@ class TestProxyTransformContext:
         transform = _make_proxy_transform()
         cleaned = _cleaned_device()
         # Replace ManagedProxyHA with an unrelated capability
-        cleaned["DcimPhysicalDevice"][0]["capabilities"] = [{"typename": "ManagedBGP"}]
+        cleaned["DcimPhysicalDevice"][0]["capabilities"] = [
+            {"typename": "ManagedBGP", "local_as": {"asn": 65001}, "peerings": []}
+        ]
         with patch(_PROXY_CLEAN_DATA_PATH, return_value=cleaned):
             with patch("transforms.common.Environment") as mock_env:
                 mock_template = MagicMock()
@@ -329,7 +331,9 @@ class TestProxyTransformContext:
     async def test_proxy_vendor_defaults_to_haproxy_when_no_proxy_ha_cap(self) -> None:
         transform = _make_proxy_transform()
         cleaned = _cleaned_device()
-        cleaned["DcimPhysicalDevice"][0]["capabilities"] = [{"typename": "ManagedBGP"}]
+        cleaned["DcimPhysicalDevice"][0]["capabilities"] = [
+            {"typename": "ManagedBGP", "local_as": {"asn": 65001}, "peerings": []}
+        ]
         with patch(_PROXY_CLEAN_DATA_PATH, return_value=cleaned):
             with patch("transforms.common.Environment") as mock_env:
                 mock_template = MagicMock()

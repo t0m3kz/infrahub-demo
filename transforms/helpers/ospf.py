@@ -7,19 +7,18 @@ def get_ospf(device_capabilities: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """
     Extract OSPF configuration information.
     """
-    if not device_capabilities:
+    ospf_services = [svc for svc in device_capabilities if svc.get("typename") == "ManagedOSPF"]
+    if not ospf_services:
         return []
 
-    ospf_configs: list[dict[str, Any]] = []
+    ospf_configs = [
+        {
+            "process_id": service["process_id"],
+            "router_id": service["router_id"]["address"],
+            "reference_bandwidth": service.get("reference_bandwidth", 100000),
+        }
+        for service in ospf_services
+    ]
 
-    for service in device_capabilities:
-        if service.get("typename") == "ManagedOSPF":
-            ospf_config = {
-                "process_id": service.get("process_id", 1),
-                "router_id": service.get("router_id", {}).get("address", ""),
-                "reference_bandwidth": service.get("reference_bandwidth", 400000),
-            }
-            ospf_configs.append(ospf_config)
-
-    ospf_configs.sort(key=lambda c: c.get("process_id") or 0)
+    ospf_configs.sort(key=lambda c: c["process_id"])
     return ospf_configs
