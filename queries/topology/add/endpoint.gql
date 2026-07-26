@@ -75,7 +75,9 @@ query GetEndpointForConnectivity($device_name: String!) {
   DcimDevice(name__value: $device_name) {
     edges {
       node {
-        ...DeviceIdentityRoleFields
+        id
+        name { value }
+        role { value }
         ... on DcimPhysicalDevice {
           rack {
             node {
