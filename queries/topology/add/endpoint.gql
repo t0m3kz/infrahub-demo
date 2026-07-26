@@ -1,12 +1,20 @@
 fragment PhysicalInterfaceFields on DcimPhysicalInterface {
-  ...PhysicalInterfaceCableIdFields
+  id
+  name { value }
   interface_type { value }
   role { value }
   status { value }
+  cable {
+    node {
+      id
+    }
+  }
 }
 
 fragment RackDeviceFields on DcimPhysicalDevice {
-  ...PhysicalDeviceIdentityRoleFields
+  id
+  name { value }
+  role { value }
   rack {
     node {
       id
