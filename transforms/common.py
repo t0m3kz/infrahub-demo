@@ -196,7 +196,7 @@ class BaseDeviceTransform(InfrahubTransform):
                 device_name=device_name,
                 device_role=data.get("role", ""),
             ),
-            "ospf": get_ospf(device_capabilities),
+            "ospf": get_ospf(device_capabilities, interfaces),
             "mlag": get_mlag(device_capabilities, interfaces),
             "ntp": management_services["ntp"],
             "syslog": management_services["syslog"],

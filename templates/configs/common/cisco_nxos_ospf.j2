@@ -1,11 +1,8 @@
 {%- if capabilities is not defined or capabilities.ospf_enabled is not defined or capabilities.ospf_enabled %}
 {%- for ospf_config in ospf %}
-{%- set process_id = ospf_config.process_id or 1 %}
-router ospf {{ process_id }}
+router ospf {{ ospf_config.process_id }}
   router-id {{ ospf_config.router_id.split('/')[0] }}
-{%- if ospf_config.reference_bandwidth %}
   auto-cost reference-bandwidth {{ ospf_config.reference_bandwidth }}
-{%- endif %}
 {%- if ospf_config.area is defined %}
   area {{ ospf_config.area }} authentication message-digest
 {%- endif %}

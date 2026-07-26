@@ -82,7 +82,7 @@
   },
   "OSPF_ROUTER": {
     "default": {
-      "reference_bandwidth": 100000,
+      "reference_bandwidth": 10000,
       "router_id": "10.0.0.1"
     }
   },

@@ -36,7 +36,7 @@ A admin configure router "Base" interface "Loopback0" ipv4 primary address "10.0
 
 A admin configure router "Base" ospf 1 admin-state enable
 A admin configure router "Base" ospf 1 router-id "10.0.0.1"
-A admin configure router "Base" ospf 1 reference-bandwidth 100000
+A admin configure router "Base" ospf 1 reference-bandwidth 10000
 A admin configure router "Base" ospf 1 traffic-engineering admin-state enable
 A admin configure router "Base" ospf 1 interface "Ethernet1" admin-state enable
 A admin configure router "Base" ospf 1 interface "Ethernet1" area "0.0.0.0"

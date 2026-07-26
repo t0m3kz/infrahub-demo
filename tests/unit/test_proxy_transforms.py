@@ -317,7 +317,12 @@ class TestProxyTransformContext:
         cleaned = _cleaned_device()
         # Replace ManagedProxyHA with an unrelated capability
         cleaned["DcimPhysicalDevice"][0]["capabilities"] = [
-            {"typename": "ManagedBGP", "local_as": {"asn": 65001}, "peerings": []}
+            {
+                "typename": "ManagedBGP",
+                "local_as": {"asn": 65001},
+                "router_id": {"address": "10.0.0.1/32"},
+                "peerings": [],
+            }
         ]
         with patch(_PROXY_CLEAN_DATA_PATH, return_value=cleaned):
             with patch("transforms.common.Environment") as mock_env:
@@ -332,7 +337,12 @@ class TestProxyTransformContext:
         transform = _make_proxy_transform()
         cleaned = _cleaned_device()
         cleaned["DcimPhysicalDevice"][0]["capabilities"] = [
-            {"typename": "ManagedBGP", "local_as": {"asn": 65001}, "peerings": []}
+            {
+                "typename": "ManagedBGP",
+                "local_as": {"asn": 65001},
+                "router_id": {"address": "10.0.0.1/32"},
+                "peerings": [],
+            }
         ]
         with patch(_PROXY_CLEAN_DATA_PATH, return_value=cleaned):
             with patch("transforms.common.Environment") as mock_env:
