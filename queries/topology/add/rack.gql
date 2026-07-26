@@ -196,16 +196,10 @@ query RackGenerator($name: String) {
         name {
           value
         }
-        checksum {
-          value
-        }
         index {
           value
         }
         rack_type {
-          value
-        }
-        checksum {
           value
         }
         row_index {
