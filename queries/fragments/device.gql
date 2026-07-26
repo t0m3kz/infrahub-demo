@@ -1,0 +1,44 @@
+fragment DeviceIdentityRoleFields on DcimDevice {
+  id
+  name { value }
+  role { value }
+}
+
+fragment PhysicalDeviceIdentityRoleFields on DcimPhysicalDevice {
+  id
+  name { value }
+  role { value }
+}
+
+fragment PhysicalDeviceRackNameFields on DcimPhysicalDevice {
+  name { value }
+  rack {
+    node {
+      name { value }
+    }
+  }
+}
+
+fragment PhysicalInterfaceIdentityFields on DcimPhysicalInterface {
+  id
+  name { value }
+}
+
+fragment PhysicalInterfaceCableIdFields on DcimPhysicalInterface {
+  ...PhysicalInterfaceIdentityFields
+  cable {
+    node {
+      id
+    }
+  }
+}
+
+fragment PhysicalInterfaceCableNameFields on DcimPhysicalInterface {
+  ...PhysicalInterfaceIdentityFields
+  cable {
+    node {
+      id
+      name { value }
+    }
+  }
+}

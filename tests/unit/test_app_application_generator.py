@@ -15,10 +15,9 @@ from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
 from generators.helpers.rules import RulesPlanner
-from generators.protocols import CloudSecurityGroup, CloudSecurityGroupRule, SecurityPolicyRule
+from generators.protocols import CloudSecurityGroup, CloudSecurityGroupRule
 from generators.topology.application_security import (
     AppApplicationGenerator,
-    AppDependencyRuleGenerator,
     _resolve_port,
     _seg_cidr,
 )
@@ -658,58 +657,25 @@ class TestSourceSegmentPolicyHelpers:
 
 
 class TestDependencyRuleGenerator:
-    def test_cloud_dependency_uses_shared_security_policy_rule_model(self):
-        """Cloud dependencies should reconcile into SecurityPolicyRule, not cloud-specific rule objects."""
-        gen = AppDependencyRuleGenerator.__new__(AppDependencyRuleGenerator)
+    def test_dependency_generator_triggers_full_parent_application_reconcile(self):
+        gen = AppApplicationGenerator.__new__(AppApplicationGenerator)
         gen.client = AsyncMock()
         gen.logger = MagicMock()
-
-        policy = MagicMock()
-        policy.id = "policy-1"
-        gen._get_or_create_policy = AsyncMock(return_value=policy)
-        gen._get_zone = AsyncMock(return_value=None)
-        gen._get_profile = AsyncMock(return_value=None)
-        gen._attach_policy_to_segments = AsyncMock()
-        gen._create_cloud_rule = AsyncMock(return_value=True)
-
-        existing_rules: list[MagicMock] = []
-        gen.client.filters = AsyncMock(return_value=existing_rules)
-        created_rule = MagicMock()
-        created_rule.save = AsyncMock()
-        gen.client.create = AsyncMock(return_value=created_rule)
+        gen._run_for_application_name = AsyncMock()
 
         dep_data = {
             "AppDependency": [
                 {
                     "id": "dep-1",
                     "name": "fe-to-api",
-                    "protocol": "tcp",
-                    "port_start": 443,
-                    "port_end": None,
-                    "description": "frontend to api",
                     "source": {
                         "id": "comp-fe",
                         "name": "frontend",
-                        "component_type": "frontend",
                         "parent": {"name": "myapp", "security_profile": "internal_standard"},
-                        "network_segment": {
-                            "id": "cloud-seg-src",
-                            "name": "cloud-src",
-                            "typename": "CloudNetworkSegment",
-                            "cidr_block": {"prefix": "10.10.0.0/24"},
-                        },
                     },
                     "target": {
                         "id": "comp-api",
                         "name": "api",
-                        "component_type": "backend",
-                        "parent": {"name": "myapp", "security_profile": "internal_standard"},
-                        "network_segment": {
-                            "id": "cloud-seg-dst",
-                            "name": "cloud-dst",
-                            "typename": "CloudNetworkSegment",
-                            "cidr_block": {"prefix": "10.20.0.0/24"},
-                        },
                     },
                 }
             ]
@@ -717,68 +683,64 @@ class TestDependencyRuleGenerator:
 
         asyncio.run(gen.generate(dep_data))
 
-        gen._create_cloud_rule.assert_not_called()
-        gen.client.create.assert_called_once()
+        gen._run_for_application_name.assert_awaited_once()
+        await_call = gen._run_for_application_name.await_args
+        assert await_call is not None
+        args, kwargs = await_call
+        assert args == ("myapp",)
+        assert len(kwargs["forced_edges"]) == 1
+        src_comp, dep, dst_comp = kwargs["forced_edges"][0]
+        assert src_comp["id"] == "comp-fe"
+        assert dep["id"] == "dep-1"
+        assert dst_comp["id"] == "comp-api"
 
-        call_kwargs = gen.client.create.call_args.kwargs
-        assert call_kwargs["kind"] == SecurityPolicyRule
-        rule_data = call_kwargs["data"]
-        assert rule_data["source_segment"] == {"id": "cloud-seg-src"}
-        assert rule_data["destination_segment"] == {"id": "cloud-seg-dst"}
-
-    def test_dependency_generator_uses_source_segment_policy(self):
-        gen = AppDependencyRuleGenerator.__new__(AppDependencyRuleGenerator)
+    def test_dependency_generator_skips_when_source_missing(self):
+        gen = AppApplicationGenerator.__new__(AppApplicationGenerator)
         gen.client = AsyncMock()
         gen.logger = MagicMock()
-
-        policy = MagicMock()
-        policy.id = "policy-1"
-        gen._get_or_create_policy = AsyncMock(return_value=policy)
-        gen._get_zone = AsyncMock(return_value=None)
-        gen._get_profile = AsyncMock(return_value=None)
-        gen._attach_policy_to_source_segment = AsyncMock()
-        gen._reconcile_tag_rule_from_segments = AsyncMock()
-        gen._create_cloud_rule = AsyncMock(return_value=True)
+        gen._run_for_application_name = AsyncMock()
 
         dep_data = {
             "AppDependency": [
                 {
                     "id": "dep-1",
                     "name": "fe-to-api",
-                    "protocol": "tcp",
-                    "port_start": 443,
-                    "port_end": None,
-                    "description": "frontend to api",
-                    "source": {
-                        "id": "comp-fe",
-                        "name": "frontend",
-                        "component_type": "frontend",
-                        "parent": {"name": "myapp", "security_profile": "internal_standard"},
-                        "network_segment": {
-                            "id": "src-seg-1",
-                            "name": "c001-web-frontend-p",
-                            "typename": "ManagedVxlanSegment",
-                        },
-                    },
-                    "target": {
-                        "id": "comp-api",
-                        "name": "api",
-                        "component_type": "backend",
-                        "parent": {"name": "myapp", "security_profile": "internal_standard"},
-                        "network_segment": {
-                            "id": "dst-seg-1",
-                            "name": "c001-app-backend-p",
-                            "typename": "ManagedVxlanSegment",
-                        },
-                    },
                 }
             ]
         }
 
         asyncio.run(gen.generate(dep_data))
 
-        gen._get_or_create_policy.assert_called_once_with("seg-c001-web-frontend-p-egress", "c001-web-frontend-p")
-        gen._attach_policy_to_source_segment.assert_called_once()
+        gen._run_for_application_name.assert_not_called()
+
+
+class TestComponentRuleGenerator:
+    def test_component_generator_triggers_full_parent_application_reconcile(self):
+        gen = AppApplicationGenerator.__new__(AppApplicationGenerator)
+        gen.client = AsyncMock()
+        gen.logger = MagicMock()
+        gen._reconcile_application_rules = AsyncMock()
+
+        component_data = {
+            "AppComponent": [
+                {
+                    "id": "comp-1",
+                    "slug": "frontend",
+                    "parent": {
+                        "name": "myapp",
+                    },
+                }
+            ]
+        }
+
+        asyncio.run(gen.generate(component_data))
+
+        gen._reconcile_application_rules.assert_awaited_once()
+        await_call = gen._reconcile_application_rules.await_args
+        assert await_call is not None
+        args, kwargs = await_call
+        assert args == ({"name": "myapp"},)
+        assert kwargs["forced_edges"] == []
 
     def test_create_or_update_policy_rule_retries_on_policy_index_collision(self):
         gen = _make_gen()
@@ -802,3 +764,37 @@ class TestDependencyRuleGenerator:
         assert rule is second_rule
         assert index == 110
         assert gen.client.create.call_count == 2
+
+    def test_create_or_update_policy_rule_existing_rule_retries_on_policy_index_collision(self):
+        gen = _make_gen()
+
+        existing_rule = MagicMock()
+        existing_rule.id = "rule-existing"
+        existing_rule.index = MagicMock()
+        existing_rule.index.value = 100
+        existing_rule.expires_at = MagicMock()
+        existing_rule.expires_at.value = ""
+        existing_rule.disabled = MagicMock()
+        existing_rule.disabled.value = False
+
+        gen._find_existing_policy_rule = AsyncMock(return_value=existing_rule)
+        gen._allocate_policy_rule_index = AsyncMock(return_value=110)
+
+        first_rule = MagicMock()
+        first_rule.save = AsyncMock(side_effect=[Exception("Violates uniqueness constraint 'policy-index'")])
+        second_rule = MagicMock()
+        second_rule.save = AsyncMock()
+        gen.client.create = AsyncMock(side_effect=[first_rule, second_rule])
+
+        rule, index = asyncio.run(
+            gen._create_or_update_policy_rule(
+                policy_id="policy-1",
+                rule_name="rule-1",
+                rule_data={"policy": {"id": "policy-1"}, "name": "rule-1"},
+            )
+        )
+
+        assert rule is second_rule
+        assert index == 110
+        assert gen.client.create.call_count == 2
+        assert gen._allocate_policy_rule_index.await_count == 1

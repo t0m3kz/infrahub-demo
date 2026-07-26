@@ -2,13 +2,17 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 
 from utils.data_cleaning import clean_data
 
 from ..common import CommonGenerator
+from ..helpers.ports import PortsPlanner
 from ..helpers.rules import RulesPlanner
+from ..protocols import AppComponent as AppComponentKind
 from ..protocols import (
+    AppServicePort,
     CloudSecurityGroup,
     CloudSecurityGroupRule,
     SecurityPolicy,
@@ -23,6 +27,7 @@ RULE_INDEX_START = 100
 RULE_INDEX_STEP = 10
 RULE_SAVE_ATTEMPTS = 5
 RULE_DEFAULT_VALIDITY_DAYS = 180
+_APPLICATION_QUERY_PATH = Path(__file__).resolve().parents[2] / "queries/topology/add/application.gql"
 
 
 def _seg_cidr(seg: dict) -> str | None:
@@ -39,14 +44,122 @@ class AppApplicationGenerator(RuleLifecycleMixin, CommonGenerator):
     """Generate segment-scoped security rules from app dependencies."""
 
     async def generate(self, data: dict[str, Any]) -> None:
-        planner = RulesPlanner()
         cleaned = clean_data(data)
+
+        deps = cleaned.get("AppDependency", [])
+        if deps:
+            dep = deps[0]
+            src_comp = dep.get("source") or {}
+            dst_comp = dep.get("target") or {}
+            if not src_comp:
+                self.logger.warning("Dependency missing source component - skipping")
+                return
+            if not dst_comp:
+                self.logger.warning("Dependency missing target component - skipping")
+                return
+
+            app = src_comp.get("parent") or {}
+            app_name = app.get("name", "")
+            if not app_name:
+                self.logger.warning("Dependency source has no parent application name - skipping")
+                return
+
+            self.logger.info(
+                "Dependency trigger '%s' -> full application rule reconciliation for %s",
+                dep.get("name", dep.get("id", "?")),
+                app_name,
+            )
+            await self._run_for_application_name(
+                app_name,
+                forced_edges=[(src_comp, dep, dst_comp)],
+            )
+            return
+
+        components = cleaned.get("AppComponent", [])
+        if components:
+            component = components[0]
+            app = component.get("parent") or {}
+            app_name = app.get("name", "")
+            if not app_name:
+                self.logger.warning(
+                    "Component %s has no parent application name - skipping",
+                    component.get("slug", component.get("id", "?")),
+                )
+                return
+
+            self.logger.info(
+                "Component trigger '%s' -> full application rule reconciliation for %s",
+                component.get("slug", component.get("id", "?")),
+                app_name,
+            )
+            payload_deps = cleaned.get("AppDependency", [])
+            forced_edges = self._dependency_edges_from_payload(payload_deps, app_name)
+            if forced_edges:
+                self.logger.info("Using %d dependency edge(s) from application_component payload", len(forced_edges))
+
+            await self._reconcile_application_rules(
+                app,
+                forced_edges=forced_edges,
+            )
+            return
+
         app_list = cleaned.get("AppApplication", [])
         if not app_list:
-            self.logger.error("No AppApplication data in GraphQL response")
+            self.logger.error("No AppApplication/AppDependency/AppComponent data in GraphQL response")
             return
 
         app = app_list[0]
+        app_name = str(app.get("name") or "")
+        payload_deps = cleaned.get("AppDependency", [])
+        forced_edges = self._dependency_edges_from_payload(payload_deps, app_name) if app_name else []
+        if forced_edges:
+            self.logger.info("Using %d dependency edge(s) from application payload", len(forced_edges))
+
+        await self._reconcile_application_rules(
+            app,
+            forced_edges=forced_edges,
+        )
+
+    async def _run_for_application_name(
+        self,
+        app_name: str,
+        forced_edges: list[tuple[dict[str, Any], dict[str, Any], dict[str, Any]]] | None = None,
+    ) -> None:
+        if not app_name:
+            self.logger.warning("Cannot run application rule reconciliation without application name")
+            return
+
+        try:
+            result = await self.client.execute_graphql(
+                query=_APPLICATION_QUERY_PATH.read_text(),
+                variables={"name": app_name},
+            )
+        except Exception as exc:
+            self.logger.error("Failed to fetch application payload for '%s': %s", app_name, exc)
+            return
+
+        cleaned = clean_data(result)
+        app_list = cleaned.get("AppApplication", [])
+        if not app_list:
+            self.logger.warning("Application '%s' not found for rule reconciliation", app_name)
+            return
+
+        payload_deps = cleaned.get("AppDependency", [])
+        payload_edges = self._dependency_edges_from_payload(payload_deps, app_name)
+
+        merged_edges: list[tuple[dict[str, Any], dict[str, Any], dict[str, Any]]] = payload_edges
+        if forced_edges:
+            merged_edges = payload_edges + forced_edges
+
+        await self._reconcile_application_rules(app_list[0], forced_edges=merged_edges)
+
+    async def _reconcile_application_rules(
+        self,
+        app: dict[str, Any],
+        forced_edges: list[tuple[dict[str, Any], dict[str, Any], dict[str, Any]]] | None = None,
+    ) -> None:
+        planner = RulesPlanner()
+
         app_name: str = app.get("name", "")
         app_security_profile: str = app.get("security_profile", "internal_standard")
         self.logger.info("Processing security rules for application: %s", app_name)
@@ -56,7 +169,16 @@ class AppApplicationGenerator(RuleLifecycleMixin, CommonGenerator):
             self.logger.warning("Application %s has no components - nothing to do", app_name)
             return
 
-        edges, warnings = planner.collect_dependency_edges(components)
+        edges: list[tuple[dict[str, Any], dict[str, Any], dict[str, Any]]] = []
+        warnings: list[str] = []
+        if forced_edges:
+            all_edges = edges + forced_edges
+            deduped: dict[str, tuple[dict[str, Any], dict[str, Any], dict[str, Any]]] = {}
+            for src_comp, dep, dst_comp in all_edges:
+                key = str(dep.get("id") or dep.get("name") or f"{src_comp.get('id')}->{dst_comp.get('id')}")
+                deduped[key] = (src_comp, dep, dst_comp)
+            edges = list(deduped.values())
+            self.logger.info("Applied %d dependency edge(s) from trigger context", len(forced_edges))
         for warning in warnings:
             self.logger.warning(warning)
 
@@ -65,6 +187,8 @@ class AppApplicationGenerator(RuleLifecycleMixin, CommonGenerator):
             return
 
         self.logger.info("Found %d dependency edge(s) for %s", len(edges), app_name)
+
+        await self._reconcile_component_service_ports(components, edges)
 
         rules_created = 0
         rules_skipped = 0
@@ -215,6 +339,23 @@ class AppApplicationGenerator(RuleLifecycleMixin, CommonGenerator):
             rules_created,
             rules_skipped,
         )
+
+    @staticmethod
+    def _dependency_edges_from_payload(
+        deps: list[dict[str, Any]],
+        app_name: str,
+    ) -> list[tuple[dict[str, Any], dict[str, Any], dict[str, Any]]]:
+        edges: list[tuple[dict[str, Any], dict[str, Any], dict[str, Any]]] = []
+        for dep in deps:
+            src_comp = dep.get("source") or {}
+            dst_comp = dep.get("target") or {}
+            if not src_comp or not dst_comp:
+                continue
+            src_app_name = str((src_comp.get("parent") or {}).get("name") or "")
+            if src_app_name != app_name:
+                continue
+            edges.append((src_comp, dep, dst_comp))
+        return edges
 
     async def _get_or_create_sg(self, sg_name: str, vnet_id: str, acct_id: str | None) -> Any | None:
         """Legacy cloud-SG helper retained for backward compatibility/tests."""
@@ -540,136 +681,101 @@ class AppApplicationGenerator(RuleLifecycleMixin, CommonGenerator):
     def _pick_profile(app_security_profile: str, cross_zone: bool) -> str | None:
         return RulesPlanner.pick_profile_name(app_security_profile, cross_zone)
 
+    async def _upsert_service_port_object(
+        self,
+        port: int,
+        port_end: int | None,
+        protocol: str,
+    ) -> Any:
+        port_data: dict[str, Any] = {"port": port, "protocol": protocol}
+        if port_end is not None:
+            port_data["port_end"] = port_end
+        port_obj = await self.client.create(kind=AppServicePort, data=port_data)
+        await port_obj.save(allow_upsert=True)
+        return port_obj
 
-class AppDependencyRuleGenerator(AppApplicationGenerator):
-    """Reconcile one dependency rule without full application recompute."""
+    async def _get_component_with_ports(
+        self,
+        component_id: str,
+    ) -> tuple[Any, Any, set[str]] | None:
+        component_obj = await self.client.get(kind=AppComponentKind, id=component_id)
+        if component_obj is None:
+            self.logger.error("Could not fetch AppComponent object for id %s", component_id)
+            return None
+        service_ports_rel = getattr(component_obj, "service_ports")
+        await service_ports_rel.fetch()
+        existing_port_ids = {peer.id for peer in service_ports_rel.peers}
+        return component_obj, service_ports_rel, existing_port_ids
 
-    async def generate(self, data: dict[str, Any]) -> None:
-        planner = RulesPlanner()
-        cleaned = clean_data(data)
-        deps = cleaned.get("AppDependency", [])
-        if not deps:
-            self.logger.error("No AppDependency data in GraphQL response")
-            return
+    @staticmethod
+    def _port_range_str(port: int, port_end: int | None) -> str:
+        return f"{port}-{port_end}" if port_end else str(port)
 
-        dep = deps[0]
-        src_comp = dep.get("source") or {}
-        dst_comp = dep.get("target") or {}
+    async def _reconcile_component_service_ports(
+        self,
+        components: list[dict[str, Any]],
+        edges: list[tuple[dict[str, Any], dict[str, Any], dict[str, Any]]],
+    ) -> None:
+        ports_by_target: dict[str, set[tuple[int, int | None, str]]] = {}
 
-        if not src_comp or not dst_comp:
-            self.logger.warning("Dependency missing source or target component - skipping")
-            return
+        for _src_comp, dep, dst_comp in edges:
+            target_id = str(dst_comp.get("id") or "")
+            if not target_id:
+                continue
 
-        app = src_comp.get("parent") or {}
-        app_name = app.get("name", "")
-        if not app_name:
-            self.logger.warning("Dependency source has no parent application name - skipping")
-            return
-
-        src_seg = src_comp.get("network_segment") or {}
-        dst_seg = dst_comp.get("network_segment") or {}
-        src_seg_id = src_seg.get("id")
-        dst_seg_id = dst_seg.get("id")
-        src_seg_name = str(src_seg.get("name") or src_seg_id or app_name)
-        if not src_seg_id or not dst_seg_id:
-            self.logger.warning(
-                "Dependency %s -> %s: one or both components lack a network_segment - skipping",
-                src_comp.get("name", "?"),
-                dst_comp.get("name", "?"),
+            derived = PortsPlanner.derive_port_from_dependency_values(
+                port_start=dep.get("port_start"),
+                port_end=dep.get("port_end"),
+                protocol_raw=dep.get("protocol"),
             )
+            if derived is None:
+                port_start = dep.get("port_start")
+                protocol_raw = str(dep.get("protocol") or "").strip().lower()
+                if port_start is not None and protocol_raw not in PortsPlanner.SKIP_DEP_PROTOCOLS:
+                    self.logger.warning("  Dep -> unknown protocol '%s' - skipping AppServicePort", protocol_raw)
+                continue
+
+            ports_by_target.setdefault(target_id, set()).add(derived)
+
+        if not ports_by_target:
             return
 
-        authorized, auth_reason = planner.dependency_is_authorized(src_comp=src_comp, dst_comp=dst_comp, dep=dep)
-        if not authorized:
-            self.logger.warning(
-                "Dependency '%s' (%s -> %s) is not authorized: %s",
-                dep.get("name", dep.get("id", "?")),
-                src_comp.get("name", "?"),
-                dst_comp.get("name", "?"),
-                auth_reason or "missing approval",
-            )
-            return
+        known_components: dict[str, dict[str, Any]] = {
+            str(comp.get("id") or ""): comp for comp in components if comp.get("id")
+        }
 
-        app_security_profile = app.get("security_profile", "internal_standard")
-        policy_name = planner.segment_policy_name(src_seg)
-        policy = await self._get_or_create_policy(policy_name, src_seg_name)
-        if policy is None:
-            return
-        policy_id = policy.id
+        for target_id, ports in sorted(ports_by_target.items()):
+            component_ref = known_components.get(target_id) or {}
+            component_slug = str(component_ref.get("slug") or component_ref.get("name") or target_id)
 
-        rule_name = planner.rule_name(app_name, src_comp, dst_comp)
+            component_state = await self._get_component_with_ports(target_id)
+            if component_state is None:
+                continue
 
-        port_info = _resolve_port(dep)
-        if port_info is None:
-            self.logger.warning(
-                "Dependency '%s' (%s -> %s) has no protocol/port - skipping rule creation",
-                dep.get("name", dep.get("id", "?")),
-                src_comp.get("name", "?"),
-                dst_comp.get("name", "?"),
-            )
-            return
-        protocol, port_start, port_end = port_info
+            component_obj, service_ports_rel, existing_port_ids = component_state
+            component_updated = False
 
-        src_zone, dst_zone, cross_zone = planner.zone_context(src_seg=src_seg, dst_seg=dst_seg, dep=dep)
-        if src_zone is None or dst_zone is None:
-            cross_zone = True
-            self.logger.warning(
-                "Dependency '%s' has incomplete zone mapping (%s -> %s); treating as cross-zone",
-                dep.get("name", dep.get("id", "?")),
-                src_zone or "<missing>",
-                dst_zone or "<missing>",
-            )
+            for port, port_end, protocol in sorted(ports):
+                range_str = self._port_range_str(port, port_end)
+                try:
+                    port_obj = await self._upsert_service_port_object(port=port, port_end=port_end, protocol=protocol)
+                    if port_obj.id in existing_port_ids:
+                        continue
+                    await self._safe_rel_add(service_ports_rel, port_obj)
+                    existing_port_ids.add(port_obj.id)
+                    component_updated = True
+                    self.logger.info("  Linked AppServicePort %s/%s to %s", range_str, protocol, component_slug)
+                except Exception as exc:
+                    self.logger.error(
+                        "  Failed AppServicePort upsert/link %s/%s for %s: %s",
+                        range_str,
+                        protocol,
+                        component_slug,
+                        exc,
+                    )
 
-        rule_data = planner.build_rule_payload(
-            policy_id=policy_id,
-            rule_name=rule_name,
-            dep=dep,
-            src_comp=src_comp,
-            dst_comp=dst_comp,
-            src_seg=src_seg,
-            dst_seg=dst_seg,
-            protocol=protocol,
-            port_start=port_start,
-            port_end=port_end,
-            cross_zone=cross_zone,
-        )
-
-        if src_zone:
-            src_zone_obj = await self._get_zone(src_zone)
-            if src_zone_obj:
-                rule_data["source_zone"] = {"id": src_zone_obj.id}
-        if dst_zone:
-            dst_zone_obj = await self._get_zone(dst_zone)
-            if dst_zone_obj:
-                rule_data["destination_zone"] = {"id": dst_zone_obj.id}
-
-        profile_name = planner.pick_profile_name(app_security_profile, cross_zone)
-        if profile_name:
-            profile = await self._get_profile(profile_name)
-            if profile:
-                rule_data["security_profile"] = {"id": profile.id}
-
-        try:
-            _rule, rule_index = await self._create_or_update_policy_rule(
-                policy_id=policy_id,
-                rule_name=rule_name,
-                rule_data=rule_data,
-            )
-            self.logger.info(
-                "Reconciled dependency rule '%s' [%d] for source segment %s",
-                rule_name,
-                rule_index,
-                src_seg_name,
-            )
-            await self._reconcile_tag_rule_from_segments(
-                src_seg=src_seg,
-                dst_seg=dst_seg,
-                app_name=app_name,
-                dep_name=dep.get("name", dep.get("id", "?")),
-                log=cross_zone,
-            )
-        except Exception as exc:
-            self.logger.error("Failed to reconcile dependency rule '%s': %s", rule_name, exc)
-            return
-
-        await self._attach_policy_to_source_segment(segment=src_seg, policy_id=policy_id)
+            if component_updated:
+                try:
+                    await component_obj.save(allow_upsert=True)
+                except Exception as exc:
+                    self.logger.error("  Failed to save component %s service_ports: %s", component_slug, exc)

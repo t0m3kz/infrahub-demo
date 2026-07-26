@@ -1,0 +1,163 @@
+fragment ManagedBGPServiceFields on ManagedBGP {
+  multipath { value }
+  graceful_restart { value }
+  confederation_identifier { value }
+  local_as { node { asn { value } } }
+  router_id { node { address { value } } }
+  peerings {
+    edges {
+      node {
+        id
+        name { value }
+        session_type { value }
+        bfd_enabled { value }
+        send_community { value }
+        send_extended_community { value }
+        maximum_routes { value }
+        local_pref { value }
+        med { value }
+        remove_private_as { value }
+        password { node { password { value } } }
+        ttl { value }
+        route_reflector_client { value }
+        address_families {
+          edges {
+            node {
+              afi { value }
+              safi { value }
+            }
+          }
+        }
+        interface_capabilities {
+          edges {
+            node {
+              name { value }
+              ... on DcimPhysicalInterface {
+                ip_address { node { address { value } } }
+              }
+              ... on DcimVirtualInterface {
+                ip_address { node { address { value } } }
+              }
+              device { node { name { value } } }
+            }
+          }
+        }
+        bgp_processes {
+          edges {
+            node {
+              router_id { node { address { value } } }
+              local_as { node { asn { value } } }
+              capabilities { edges { node { name { value } } } }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+fragment ManagedNTPServiceFields on ManagedNTP {
+  timezone { value }
+  servers {
+    edges {
+      node {
+        address { node { address { value } } }
+        prefer { value }
+        version { value }
+      }
+    }
+  }
+}
+
+fragment ManagedSyslogServiceFields on ManagedSyslog {
+  servers {
+    edges {
+      node {
+        address { node { address { value } } }
+        port { value }
+        severity { value }
+      }
+    }
+  }
+}
+
+fragment ManagedSNMPServiceFields on ManagedSNMP {
+  version { value }
+  community_ro { value }
+  location { value }
+  contact { value }
+  trap_targets {
+    edges {
+      node {
+        address { node { address { value } } }
+        port { value }
+      }
+    }
+  }
+}
+
+fragment ManagedAAAServiceFields on ManagedAAA {
+  authentication_order { value }
+  authorization_commands { value }
+  accounting_enabled { value }
+  servers {
+    edges {
+      node {
+        address { node { address { value } } }
+        protocol { value }
+        port { value }
+        timeout { value }
+      }
+    }
+  }
+}
+
+fragment DeviceCapabilitiesFields on DcimCapabilities {
+  capabilities {
+    edges {
+      node {
+        __typename
+
+        ... on ManagedGeneric {
+          name { value }
+          status { value }
+        }
+
+        ... on ManagedBGP {
+          ...ManagedBGPServiceFields
+        }
+
+        ... on ManagedOSPF {
+          process_id { value }
+          version { value }
+          router_type { value }
+          reference_bandwidth { value }
+          router_id { node { address { value } } }
+        }
+
+        ... on ManagedNTP {
+          ...ManagedNTPServiceFields
+        }
+
+        ... on ManagedSyslog {
+          ...ManagedSyslogServiceFields
+        }
+
+        ... on ManagedSNMP {
+          ...ManagedSNMPServiceFields
+        }
+
+        ... on ManagedAAA {
+          ...ManagedAAAServiceFields
+        }
+
+        ... on ManagedMLAG {
+          domain_id { value }
+          reload_delay { value }
+          reload_delay_non_mlag { value }
+          capabilities { edges { node { name { value } } } }
+        }
+      }
+    }
+  }
+}

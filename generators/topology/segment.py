@@ -289,9 +289,6 @@ class VxlanSegmentGenerator(BaseSegmentGenerator):
     """VXLAN segment generator — allocates VLAN ID + VNI from pools, assigns
     the segment to leaf/tor customer-facing interfaces and physical host uplinks,
     and creates inline sub-interfaces when terminate_inline is set.
-
-    VIP/pool-member wiring is handled by AppComponentGenerator (triggered when
-    AppComponent nodes are created or updated).
     """
 
     graphql_root_key = "ManagedVxlanSegment"

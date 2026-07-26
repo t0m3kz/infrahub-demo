@@ -47,9 +47,7 @@ fragment DataCenterFields on TopologyDataCenter {
   devices(role__value: "super-spine") {
     edges {
       node {
-        id
-        name { value }
-        role { value }
+        ...PhysicalDeviceIdentityRoleFields
       }
     }
   }

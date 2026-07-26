@@ -1,0 +1,86 @@
+fragment SegmentBaseFields on ManagedNetworkSegment {
+  name { value }
+  description { value }
+  status { value }
+}
+
+fragment SegmentStatusFields on ManagedNetworkSegment {
+  name { value }
+  status { value }
+}
+
+fragment SegmentDeploymentsFields on ManagedNetworkSegment {
+  ... on ManagedVlanSegment {
+    segment_deployments {
+      edges {
+        node {
+          vlan_id { value }
+          vni { value }
+        }
+      }
+    }
+  }
+  ... on ManagedVxlanSegment {
+    segment_deployments {
+      edges {
+        node {
+          vlan_id { value }
+          vni { value }
+        }
+      }
+    }
+  }
+}
+
+fragment SegmentDeploymentsActiveFields on ManagedNetworkSegment {
+  ... on ManagedVlanSegment {
+    segment_deployments(status__values: $segment_status_values) {
+      edges {
+        node {
+          vlan_id { value }
+          vni { value }
+        }
+      }
+    }
+  }
+  ... on ManagedVxlanSegment {
+    segment_deployments(status__values: $segment_status_values) {
+      edges {
+        node {
+          vlan_id { value }
+          vni { value }
+        }
+      }
+    }
+  }
+}
+
+fragment SegmentGatewayWithNamespaceFields on ManagedNetworkSegment {
+  gateway {
+    node {
+      address { value }
+      ip_prefix {
+        node {
+          prefix { value }
+          ip_namespace {
+            node {
+              name { value }
+              l3_vni { value }
+              owner { node { name { value } } }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+fragment SegmentSecurityZoneFields on ManagedNetworkSegment {
+  security_zone {
+    node {
+      name { value }
+      trust_level { value }
+      zone_type { value }
+    }
+  }
+}
