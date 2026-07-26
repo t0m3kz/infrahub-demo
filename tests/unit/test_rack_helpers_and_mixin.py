@@ -197,6 +197,29 @@ class TestRackMixinAdditional:
         rack_obj.save.assert_awaited_once_with(allow_upsert=True)
 
     @pytest.mark.asyncio
+    async def test_checksum_ready_mixed_compute_inherits(self) -> None:
+        """compute racks (l2-leaf/access-leaf, no local leaf) inherit checksum
+        from the row's middle rack exactly like tor racks."""
+        gen = _build_gen(deployment_type="mixed", rack_type="compute", checksum="")
+
+        source = MagicMock()
+        source.checksum = MagicMock(value="middle-cs")
+        source.name = MagicMock(value="NET-R1")
+
+        rack_obj = MagicMock()
+        rack_obj.checksum = MagicMock(value="")
+        rack_obj.save = AsyncMock()
+
+        gen.client.filters = AsyncMock(return_value=[source])
+        gen.client.get = AsyncMock(return_value=rack_obj)
+
+        ready = await gen._checksum_ready()
+
+        assert ready is False
+        assert rack_obj.checksum.value == "middle-cs"
+        rack_obj.save.assert_awaited_once_with(allow_upsert=True)
+
+    @pytest.mark.asyncio
     async def test_checksum_ready_middle_rack_no_sibling(self) -> None:
         gen = _build_gen(deployment_type="middle_rack", rack_type="network", checksum="")
         gen.client.filters = AsyncMock(return_value=[])

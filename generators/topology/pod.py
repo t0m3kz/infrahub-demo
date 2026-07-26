@@ -33,7 +33,7 @@ class PodTopologyGenerator(CommonGenerator):
         racks = await self.client.filters(
             kind=LocationRack,
             pod__ids=[self.data.id],
-            rack_type__values=["network", "tor"],
+            rack_type__values=["network", "tor", "compute"],
         )
 
         # Use the pre-routing snapshot if available (captured before protection IDs

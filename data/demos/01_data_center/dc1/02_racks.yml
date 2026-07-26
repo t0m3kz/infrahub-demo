@@ -61,7 +61,7 @@ spec:
         - ["2", "leaf", "N9K-C9336C-FX2_LEAF_MIXED"]
     - index: 1
       row_index: 1
-      rack_type: tor
+      rack_type: compute
       shortname: muc-1-s-2-r-1-1
       pod: DC1-1-POD-2
       parent: muc-1-s-2
@@ -70,7 +70,7 @@ spec:
         - ["2", "l2-leaf", "N9K-C9336C-FX2_TOR"]
     - index: 9
       row_index: 1
-      rack_type: tor
+      rack_type: compute
       shortname: muc-1-s-2-r-1-9
       pod: DC1-1-POD-2
       parent: muc-1-s-2
@@ -107,7 +107,7 @@ spec:
         - ["2", "leaf", "N9K-C9336C-FX2_LEAF_MIXED"]
     - index: 1
       row_index: 4
-      rack_type: tor
+      rack_type: compute
       shortname: muc-1-s-2-r-4-1
       pod: DC1-1-POD-2
       parent: muc-1-s-2
@@ -116,7 +116,7 @@ spec:
         - ["2", "l2-leaf", "N9K-C9336C-FX2_TOR"]
     - index: 9
       row_index: 4
-      rack_type: tor
+      rack_type: compute
       shortname: muc-1-s-2-r-4-9
       pod: DC1-1-POD-2
       parent: muc-1-s-2
