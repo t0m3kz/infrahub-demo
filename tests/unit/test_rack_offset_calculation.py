@@ -71,7 +71,6 @@ def _build_generator(
     rack = RackModel(
         id="rack-1",
         name="rack-1",
-        checksum="checksum",
         index=rack_index,
         rack_type="network",
         row_index=row_index,

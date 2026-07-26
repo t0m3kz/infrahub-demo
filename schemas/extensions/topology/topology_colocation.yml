@@ -47,7 +47,6 @@ nodes:
       - TopologyDeployment
       - TopologyPhysicalDeployment
       - TopologyConnectableLocation
-      - GeneratorTarget
       - TopologyRackHosting
       - TopologyDeviceHosting
       - TopologyClusterHosting

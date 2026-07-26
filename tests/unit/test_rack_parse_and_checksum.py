@@ -1,16 +1,15 @@
-"""Unit tests for RackGenerator parsing and checksum cascade.
+"""Unit tests for RackGenerator parsing and row-dependent-rack fan-out.
 
 Covers:
-- _parse_rack_data()      – direct node dict vs GQL result vs unknown shape
-- update_checksum()       – only fires for mixed+network; stagger sleep called
-- update_checksum()       – no ToR racks → no sleep; single ToR → no sleep
-- update_checksum()       – skips when no leafs in rack
+- _parse_rack_data()                    – direct node dict vs GQL result vs unknown shape
+- _fan_out_to_row_dependent_racks()      – only fires for mixed+network with leafs
+- generate() role-vs-deployment gate     – _role_compatibility_errors
 """
 
 from __future__ import annotations
 
 from typing import Any
-from unittest.mock import AsyncMock, MagicMock, call, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -57,7 +56,6 @@ def _build_rack_generator(
     rack_type: str = "network",
     rack_index: int = 5,
     row_index: int = 1,
-    checksum: str = "abc123",
     leafs: list[DeviceRole] | None = None,
 ) -> Any:
     """Return a RackGenerator typed as Any so ty allows mock attribute assignments."""
@@ -77,7 +75,6 @@ def _build_rack_generator(
     rack = RackModel(
         id="rack-net-1",
         name="MUC-1-S-1-R-1-5",
-        checksum=checksum,
         index=rack_index,
         rack_type=rack_type,
         row_index=row_index,
@@ -94,13 +91,12 @@ def _build_rack_generator(
     return gen
 
 
-def _mock_rack(name: str, rack_type: str, checksum: str = "", row_index: int = 1) -> MagicMock:
+def _mock_rack(name: str, rack_type: str, row_index: int = 1) -> MagicMock:
     r = MagicMock()
     r.id = f"id-{name}"
     r.name = MagicMock(value=name)
     r.rack_type = MagicMock(value=rack_type)
     r.row_index = MagicMock(value=row_index)
-    r.checksum = MagicMock(value=checksum)
     r.save = AsyncMock()
     return r
 
@@ -296,302 +292,106 @@ class TestDeriveSpineInfo:
 # ---------------------------------------------------------------------------
 
 
-class TestUpdateChecksumMixed:
+class TestFanOutToRowDependentRacks:
+    """_fan_out_to_row_dependent_racks(): network rack -> add_rack for tor/compute
+    racks in its own row (mixed deployment only), via run_generator_and_wait
+    instead of a checksum write."""
+
     @pytest.mark.asyncio
     async def test_non_mixed_deployment_does_nothing(self) -> None:
         gen = _build_rack_generator(deployment_type="middle_rack", rack_type="network")
-        gen.fetch_rack_devices_with_interfaces = AsyncMock(return_value=[])
         gen.client.filters = AsyncMock(return_value=[])
+        gen.run_generator_and_wait = AsyncMock()
 
-        await gen.update_checksum()
+        await gen._fan_out_to_row_dependent_racks()
 
         gen.client.filters.assert_not_awaited()
+        gen.run_generator_and_wait.assert_not_awaited()
 
     @pytest.mark.asyncio
     async def test_tor_rack_type_does_nothing(self) -> None:
         gen = _build_rack_generator(deployment_type="mixed", rack_type="tor")
-        gen.fetch_rack_devices_with_interfaces = AsyncMock(return_value=[])
         gen.client.filters = AsyncMock(return_value=[])
+        gen.run_generator_and_wait = AsyncMock()
 
-        await gen.update_checksum()
+        await gen._fan_out_to_row_dependent_racks()
 
         gen.client.filters.assert_not_awaited()
+        gen.run_generator_and_wait.assert_not_awaited()
 
     @pytest.mark.asyncio
-    async def test_no_leafs_skips_cascade(self) -> None:
+    async def test_no_leafs_skips_fan_out(self) -> None:
         gen = _build_rack_generator(deployment_type="mixed", rack_type="network", leafs=[])
-        gen.fetch_rack_devices_with_interfaces = AsyncMock(return_value=[])
         gen.client.filters = AsyncMock(return_value=[])
+        gen.run_generator_and_wait = AsyncMock()
 
-        await gen.update_checksum()
+        await gen._fan_out_to_row_dependent_racks()
 
         gen.client.filters.assert_not_awaited()
+        gen.run_generator_and_wait.assert_not_awaited()
         gen.logger.warning.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_no_network_rack_logs_warning(self) -> None:
+    async def test_fans_out_to_tor_and_compute_racks_in_same_row(self) -> None:
         gen = _build_rack_generator(deployment_type="mixed", rack_type="network")
-        leaf_data = [{"device_id": "leaf-1", "device_name": "leaf-01", "interfaces": []}]
-        gen.fetch_rack_devices_with_interfaces = AsyncMock(return_value=leaf_data)
+        tor_rack = _mock_rack("TOR-RACK-1", "tor")
+        compute_rack = _mock_rack("COMP-RACK-1", "compute")
+        network_rack = _mock_rack("NET-RACK-2", "network")  # sibling network rack, not fanned out to
+        gen.client.filters = AsyncMock(return_value=[tor_rack, compute_rack, network_rack])
+        gen.run_generator_and_wait = AsyncMock()
 
-        # Only ToR racks returned (no network rack in row)
-        tor_rack = _mock_rack("TOR-RACK-1", "tor", checksum="")
-        gen.client.filters = AsyncMock(return_value=[tor_rack])
+        await gen._fan_out_to_row_dependent_racks()
 
-        await gen.update_checksum()
-
-        gen.logger.warning.assert_called_once()
-        tor_rack.save.assert_not_awaited()
-
-    @pytest.mark.asyncio
-    async def test_single_tor_rack_no_stagger(self) -> None:
-        gen = _build_rack_generator(deployment_type="mixed", rack_type="network", checksum="new-cs")
-        leaf_data = [{"device_id": "leaf-1", "device_name": "leaf-01", "interfaces": []}]
-        gen.fetch_rack_devices_with_interfaces = AsyncMock(return_value=leaf_data)
-
-        net_rack = _mock_rack("NET-RACK-1", "network", checksum="new-cs")
-        tor_rack = _mock_rack("TOR-RACK-1", "tor", checksum="")
-        gen.client.filters = AsyncMock(return_value=[net_rack, tor_rack])
-
-        with patch("generators.topology.rack.asyncio.sleep", new_callable=AsyncMock) as mock_sleep:
-            await gen.update_checksum()
-
-        mock_sleep.assert_not_called()
-        tor_rack.save.assert_awaited_once_with(allow_upsert=True)
+        gen.run_generator_and_wait.assert_awaited_once()
+        args, _ = gen.run_generator_and_wait.call_args
+        assert args[0] == "add_rack"
+        assert sorted(args[1]) == sorted([tor_rack.id, compute_rack.id])
 
     @pytest.mark.asyncio
-    async def test_multiple_tor_racks_stagger_sleep(self) -> None:
-        gen = _build_rack_generator(deployment_type="mixed", rack_type="network", checksum="new-cs")
-        leaf_data = [{"device_id": "leaf-1", "device_name": "leaf-01", "interfaces": []}]
-        gen.fetch_rack_devices_with_interfaces = AsyncMock(return_value=leaf_data)
-
-        net_rack = _mock_rack("NET-RACK-1", "network", checksum="new-cs")
-        tor1 = _mock_rack("TOR-RACK-1", "tor", checksum="")
-        tor2 = _mock_rack("TOR-RACK-9", "tor", checksum="")
-        gen.client.filters = AsyncMock(return_value=[net_rack, tor1, tor2])
-
-        with patch("generators.topology.rack.asyncio.sleep", new_callable=AsyncMock) as mock_sleep:
-            await gen.update_checksum()
-
-        # First ToR: no sleep; second ToR: sleep(5)
-        mock_sleep.assert_called_once_with(5)
-        tor1.save.assert_awaited_once_with(allow_upsert=True)
-        tor2.save.assert_awaited_once_with(allow_upsert=True)
-
-    @pytest.mark.asyncio
-    async def test_checksum_set_on_tor_rack(self) -> None:
-        gen = _build_rack_generator(deployment_type="mixed", rack_type="network", checksum="new-cs")
-        leaf_data = [{"device_id": "leaf-1", "device_name": "leaf-01", "interfaces": []}]
-        gen.fetch_rack_devices_with_interfaces = AsyncMock(return_value=leaf_data)
-
-        net_rack = _mock_rack("NET-RACK-1", "network", checksum="new-cs")
-        tor_rack = _mock_rack("TOR-RACK-1", "tor", checksum="")
-        gen.client.filters = AsyncMock(return_value=[net_rack, tor_rack])
-
-        with patch("generators.topology.rack.asyncio.sleep", new_callable=AsyncMock):
-            await gen.update_checksum()
-
-        assert tor_rack.checksum.value == "new-cs"
-
-    @pytest.mark.asyncio
-    async def test_three_tor_racks_sleep_called_twice(self) -> None:
-        gen = _build_rack_generator(deployment_type="mixed", rack_type="network", checksum="cs-3")
-        leaf_data = [{"device_id": "leaf-1", "device_name": "leaf-01", "interfaces": []}]
-        gen.fetch_rack_devices_with_interfaces = AsyncMock(return_value=leaf_data)
-
-        net_rack = _mock_rack("NET-RACK-1", "network", checksum="cs-3")
-        tors = [_mock_rack(f"TOR-RACK-{i}", "tor", checksum="") for i in range(3)]
-        gen.client.filters = AsyncMock(return_value=[net_rack] + tors)
-
-        with patch("generators.topology.rack.asyncio.sleep", new_callable=AsyncMock) as mock_sleep:
-            await gen.update_checksum()
-
-        assert mock_sleep.call_count == 2
-        assert mock_sleep.call_args_list == [call(5), call(5)]
-
-    @pytest.mark.asyncio
-    async def test_compute_rack_receives_checksum_alongside_tor(self) -> None:
-        """compute racks (l2-leaf/access-leaf, no local leaf) cascade identically to tor racks."""
-        gen = _build_rack_generator(deployment_type="mixed", rack_type="network", checksum="new-cs")
-        leaf_data = [{"device_id": "leaf-1", "device_name": "leaf-01", "interfaces": []}]
-        gen.fetch_rack_devices_with_interfaces = AsyncMock(return_value=leaf_data)
-
-        net_rack = _mock_rack("NET-RACK-1", "network", checksum="new-cs")
-        compute_rack = _mock_rack("COMP-RACK-1", "compute", checksum="")
-        gen.client.filters = AsyncMock(return_value=[net_rack, compute_rack])
-
-        with patch("generators.topology.rack.asyncio.sleep", new_callable=AsyncMock):
-            await gen.update_checksum()
-
-        assert compute_rack.checksum.value == "new-cs"
-        compute_rack.save.assert_awaited_once_with(allow_upsert=True)
-
-
-class TestEarlierRowsReady:
-    @pytest.mark.asyncio
-    async def test_first_row_is_ready_without_queries(self) -> None:
-        gen = _build_rack_generator(deployment_type="mixed", rack_type="network", row_index=1)
+    async def test_no_row_dependent_racks_calls_with_empty_list(self) -> None:
+        gen = _build_rack_generator(deployment_type="mixed", rack_type="network")
         gen.client.filters = AsyncMock(return_value=[])
+        gen.run_generator_and_wait = AsyncMock()
 
-        ready = await gen._earlier_rows_ready()
+        await gen._fan_out_to_row_dependent_racks()
 
-        assert ready is True
-        gen.client.filters.assert_not_awaited()
-
-    @pytest.mark.asyncio
-    async def test_network_rack_waits_for_earlier_row_network_checksum(self) -> None:
-        gen = _build_rack_generator(deployment_type="mixed", rack_type="network", row_index=3)
-        prev_ready = _mock_rack("NET-R1", "network", checksum="cs-1", row_index=1)
-        prev_blocked = _mock_rack("NET-R2", "network", checksum="", row_index=2)
-        gen.client.filters = AsyncMock(return_value=[prev_ready, prev_blocked])
-
-        ready = await gen._earlier_rows_ready()
-
-        assert ready is False
-        gen.client.filters.assert_awaited_once()
-        gen.logger.info.assert_called()
-
-    @pytest.mark.asyncio
-    async def test_network_rack_proceeds_when_earlier_rows_ready(self) -> None:
-        gen = _build_rack_generator(deployment_type="middle_rack", rack_type="network", row_index=3)
-        prev_1 = _mock_rack("NET-R1", "network", checksum="cs-1", row_index=1)
-        prev_2 = _mock_rack("NET-R2", "network", checksum="cs-2", row_index=2)
-        gen.client.filters = AsyncMock(return_value=[prev_1, prev_2])
-
-        ready = await gen._earlier_rows_ready()
-
-        assert ready is True
-
-    @pytest.mark.asyncio
-    async def test_tor_rack_checks_tor_and_compute_siblings(self) -> None:
-        """tor and compute racks both wait on earlier rows — both have no local leaf."""
-        gen = _build_rack_generator(deployment_type="mixed", rack_type="tor", row_index=2)
-        prev_tor = _mock_rack("TOR-R1", "tor", checksum="", row_index=1)
-        gen.client.filters = AsyncMock(return_value=[prev_tor])
-
-        ready = await gen._earlier_rows_ready()
-
-        assert ready is False
-        kwargs = gen.client.filters.call_args.kwargs
-        assert sorted(kwargs["rack_type__values"]) == ["compute", "tor"]
-
-    @pytest.mark.asyncio
-    async def test_compute_rack_checks_tor_and_compute_siblings(self) -> None:
-        """compute racks (l2-leaf/access-leaf, no local leaf) gate identically to tor racks."""
-        gen = _build_rack_generator(deployment_type="mixed", rack_type="compute", row_index=2)
-        prev_compute = _mock_rack("COMP-R1", "compute", checksum="", row_index=1)
-        gen.client.filters = AsyncMock(return_value=[prev_compute])
-
-        ready = await gen._earlier_rows_ready()
-
-        assert ready is False
-        kwargs = gen.client.filters.call_args.kwargs
-        assert sorted(kwargs["rack_type__values"]) == ["compute", "tor"]
-
-    @pytest.mark.asyncio
-    async def test_non_ordered_rack_type_skips_gate(self) -> None:
-        gen = _build_rack_generator(deployment_type="mixed", rack_type="storage", row_index=3)
-        gen.client.filters = AsyncMock(return_value=[])
-
-        ready = await gen._earlier_rows_ready()
-
-        assert ready is True
-        gen.client.filters.assert_not_awaited()
+        gen.run_generator_and_wait.assert_awaited_once_with("add_rack", [])
 
 
 class TestGenerateRackGating:
     @pytest.mark.asyncio
     async def test_empty_input_logs_error_and_stops(self) -> None:
         gen = _build_rack_generator(deployment_type="mixed", rack_type="network")
-        gen._checksum_ready = AsyncMock(return_value=True)
-        gen._earlier_rows_ready = AsyncMock(return_value=True)
-        gen._tor_leafs_ready = AsyncMock(return_value=True)
-
         with patch("generators.topology.rack.parse_rack_data") as mock_parse:
             await gen.generate({})
 
         mock_parse.assert_not_called()
         gen.logger.error.assert_called_once_with("Generator received empty data")
-        gen._checksum_ready.assert_not_awaited()
-        gen._earlier_rows_ready.assert_not_awaited()
-        gen._tor_leafs_ready.assert_not_awaited()
 
     @pytest.mark.asyncio
     async def test_parse_failure_logs_error_and_stops(self) -> None:
         gen = _build_rack_generator(deployment_type="mixed", rack_type="network")
-        gen._checksum_ready = AsyncMock(return_value=True)
-        gen._earlier_rows_ready = AsyncMock(return_value=True)
-        gen._tor_leafs_ready = AsyncMock(return_value=True)
 
         with patch("generators.topology.rack.parse_rack_data", side_effect=ValueError("boom")):
             await gen.generate({"any": "shape"})
 
         gen.logger.error.assert_called_once()
         assert "Generation failed due to boom" in gen.logger.error.call_args.args[0]
-        gen._checksum_ready.assert_not_awaited()
-        gen._earlier_rows_ready.assert_not_awaited()
-        gen._tor_leafs_ready.assert_not_awaited()
 
     @pytest.mark.asyncio
-    async def test_endpoint_only_rack_skips_before_checksum_gate(self) -> None:
+    async def test_endpoint_only_rack_skips_before_role_check(self) -> None:
         gen = _build_rack_generator(deployment_type="mixed", rack_type="compute", leafs=[])
         gen.data.tors = []
         gen.data.l2_leafs = []
         gen.data.access_leafs = []
         gen.data.border_leafs = []
-
-        gen._checksum_ready = AsyncMock(return_value=True)
-        gen._earlier_rows_ready = AsyncMock(return_value=True)
-        gen._tor_leafs_ready = AsyncMock(return_value=True)
+        gen._role_compatibility_errors = MagicMock()
+        gen._prepare_generation_context = MagicMock()
 
         with patch("generators.topology.rack.parse_rack_data", return_value=gen.data):
             await gen.generate({"any": "shape"})
 
-        gen._checksum_ready.assert_not_awaited()
-        gen._earlier_rows_ready.assert_not_awaited()
-        gen._tor_leafs_ready.assert_not_awaited()
-
-    @pytest.mark.asyncio
-    async def test_mixed_tor_without_tor_like_templates_does_not_wait_for_leafs(self) -> None:
-        gen = _build_rack_generator(deployment_type="mixed", rack_type="tor", leafs=[])
-        gen.data.tors = []
-        gen.data.l2_leafs = []
-        gen.data.access_leafs = []
-        # Keep one switch template so generator doesn't early-return as endpoint-only.
-        gen.data.border_leafs = [DeviceRole(role="border-leaf", quantity=1, template=Template(id="tmpl-bl"))]
-
-        gen._checksum_ready = AsyncMock(return_value=True)
-        gen._earlier_rows_ready = AsyncMock(return_value=True)
-        gen._tor_leafs_ready = AsyncMock(return_value=False)
-        gen._prepare_generation_context = MagicMock(return_value=False)
-
-        with patch("generators.topology.rack.parse_rack_data", return_value=gen.data):
-            await gen.generate({"any": "shape"})
-
-        gen._checksum_ready.assert_awaited_once()
-        gen._earlier_rows_ready.assert_awaited_once()
-        gen._tor_leafs_ready.assert_not_awaited()
-        gen._prepare_generation_context.assert_called_once()
-
-    @pytest.mark.asyncio
-    async def test_mixed_tor_with_tor_like_templates_waits_for_middle_rack_leafs(self) -> None:
-        gen = _build_rack_generator(deployment_type="mixed", rack_type="tor", leafs=[])
-        gen.data.tors = [DeviceRole(role="tor", quantity=1, template=Template(id="tmpl-tor"))]
-        gen.data.l2_leafs = []
-        gen.data.access_leafs = []
-        gen.data.border_leafs = []
-
-        gen._checksum_ready = AsyncMock(return_value=True)
-        gen._earlier_rows_ready = AsyncMock(return_value=True)
-        gen._tor_leafs_ready = AsyncMock(return_value=False)
-        gen._prepare_generation_context = MagicMock(return_value=True)
-
-        with patch("generators.topology.rack.parse_rack_data", return_value=gen.data):
-            await gen.generate({"any": "shape"})
-
-        gen._checksum_ready.assert_awaited_once()
-        gen._earlier_rows_ready.assert_awaited_once()
-        gen._tor_leafs_ready.assert_awaited_once()
+        gen._role_compatibility_errors.assert_not_called()
         gen._prepare_generation_context.assert_not_called()
 
 
@@ -664,21 +464,18 @@ class TestRoleDeploymentCompatibility:
         assert "leaf" in errors[0]
 
     @pytest.mark.asyncio
-    async def test_generate_stops_before_checksum_gate_on_role_conflict(self) -> None:
-        """The role-compatibility gate runs before _checksum_ready, so a bad rack
-        never reaches the checksum-inheritance side effects."""
+    async def test_generate_stops_before_prepare_context_on_role_conflict(self) -> None:
+        """The role-compatibility gate runs before _prepare_generation_context, so a
+        bad rack never reaches device creation."""
         gen = _build_rack_generator(deployment_type="middle_rack", rack_type="network")
         gen.data.tors = [DeviceRole(role="tor", quantity=2, template=Template(id="tmpl-tor"))]
         gen.data.l2_leafs = []
         gen.data.access_leafs = []
         gen.data.border_leafs = []
-
-        gen._checksum_ready = AsyncMock(return_value=True)
-        gen._earlier_rows_ready = AsyncMock(return_value=True)
+        gen._prepare_generation_context = MagicMock()
 
         with patch("generators.topology.rack.parse_rack_data", return_value=gen.data):
             await gen.generate({"any": "shape"})
 
-        gen._checksum_ready.assert_not_awaited()
-        gen._earlier_rows_ready.assert_not_awaited()
+        gen._prepare_generation_context.assert_not_called()
         gen.logger.error.assert_called()

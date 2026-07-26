@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from typing import Any
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -32,7 +32,7 @@ def _design_for(deployment_type: str) -> PodDesign:
     )
 
 
-def _build_gen(*, deployment_type: str = "mixed", rack_type: str = "network", checksum: str = "cs") -> Any:
+def _build_gen(*, deployment_type: str = "mixed", rack_type: str = "network") -> Any:
     parent = RackParent(
         id="dc-1",
         name="DC1",
@@ -80,7 +80,6 @@ def _build_gen(*, deployment_type: str = "mixed", rack_type: str = "network", ch
     rack = RackModel(
         id="rack-1",
         name="RACK-1",
-        checksum=checksum,
         index=2,
         rack_type=rack_type,
         row_index=2,
@@ -175,78 +174,6 @@ class TestRackRolesHelper:
 
 
 class TestRackMixinAdditional:
-    @pytest.mark.asyncio
-    async def test_checksum_ready_mixed_tor_inherits(self) -> None:
-        gen = _build_gen(deployment_type="mixed", rack_type="tor", checksum="")
-
-        source = MagicMock()
-        source.checksum = MagicMock(value="middle-cs")
-        source.name = MagicMock(value="NET-R1")
-
-        rack_obj = MagicMock()
-        rack_obj.checksum = MagicMock(value="")
-        rack_obj.save = AsyncMock()
-
-        gen.client.filters = AsyncMock(return_value=[source])
-        gen.client.get = AsyncMock(return_value=rack_obj)
-
-        ready = await gen._checksum_ready()
-
-        assert ready is False
-        assert rack_obj.checksum.value == "middle-cs"
-        rack_obj.save.assert_awaited_once_with(allow_upsert=True)
-
-    @pytest.mark.asyncio
-    async def test_checksum_ready_mixed_compute_inherits(self) -> None:
-        """compute racks (l2-leaf/access-leaf, no local leaf) inherit checksum
-        from the row's middle rack exactly like tor racks."""
-        gen = _build_gen(deployment_type="mixed", rack_type="compute", checksum="")
-
-        source = MagicMock()
-        source.checksum = MagicMock(value="middle-cs")
-        source.name = MagicMock(value="NET-R1")
-
-        rack_obj = MagicMock()
-        rack_obj.checksum = MagicMock(value="")
-        rack_obj.save = AsyncMock()
-
-        gen.client.filters = AsyncMock(return_value=[source])
-        gen.client.get = AsyncMock(return_value=rack_obj)
-
-        ready = await gen._checksum_ready()
-
-        assert ready is False
-        assert rack_obj.checksum.value == "middle-cs"
-        rack_obj.save.assert_awaited_once_with(allow_upsert=True)
-
-    @pytest.mark.asyncio
-    async def test_checksum_ready_middle_rack_no_sibling(self) -> None:
-        gen = _build_gen(deployment_type="middle_rack", rack_type="network", checksum="")
-        gen.client.filters = AsyncMock(return_value=[])
-
-        ready = await gen._checksum_ready()
-
-        assert ready is False
-        gen.logger.warning.assert_called()
-
-    @pytest.mark.asyncio
-    async def test_tor_leafs_ready_happy_path(self) -> None:
-        gen = _build_gen(deployment_type="mixed", rack_type="tor")
-
-        net_rack = MagicMock()
-        net_rack.id = "rack-net"
-        net_rack.row_index = MagicMock(value=2)
-        net_rack.pod = MagicMock(id="pod-1")
-
-        gen.client.filters = AsyncMock(return_value=[net_rack])
-        gen.fetch_rack_devices_with_interfaces = AsyncMock(
-            return_value=[{"device_name": "leaf-01", "interfaces": ["Eth1/1"]}]
-        )
-
-        ready = await gen._tor_leafs_ready()
-
-        assert ready is True
-
     def test_prepare_generation_context_missing_pools(self) -> None:
         gen = _build_gen()
         gen.data.pod.loopback_pool = None

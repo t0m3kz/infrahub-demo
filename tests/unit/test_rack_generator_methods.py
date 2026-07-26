@@ -57,7 +57,6 @@ def _build_gen() -> Any:
     rack = RackModel(
         id="rack-1",
         name="RACK-1",
-        checksum="cs",
         index=2,
         rack_type="network",
         row_index=1,

@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import asyncio
 from pathlib import Path
 from typing import Literal
 
@@ -163,66 +162,39 @@ class RackGenerator(RackMixin, CommonGenerator):
 
         return devices_with_interfaces
 
-    async def update_checksum(self) -> None:
-        """Update checksum for ToR racks in same row (mixed mode only).
+    async def _fan_out_to_row_dependent_racks(self) -> None:
+        """Fan out to the row-dependent (tor/compute) racks' own add_rack runs (mixed mode only).
 
-        Verifies middle rack leafs exist before updating ToR checksums.
-        Queries network rack checksum to handle cases where ToR racks are added later.
+        Row-dependent racks have no local leaf — they cable to this network rack's
+        leafs (or, indirectly, to a local ToR fed by them). Their generator run must
+        not start until this network rack's own leafs actually exist, which is
+        already guaranteed here: this method only runs after generate() has finished
+        creating them, and run_generator_and_wait blocks until each fanned-out rack's
+        generator has itself fully completed.
         """
         deployment_type = self.data.pod.deployment_type
 
-        # Only update ToR racks in mixed deployment mode, and only from middle/network racks
+        # Only network racks in mixed deployment feed row-dependent racks.
         if deployment_type != "mixed" or self.data.rack_type != "network":
             return
 
         # Skip racks that have no leaf template — e.g. border-leaf-only racks.
         # These are valid network racks but have no leafs to cascade from.
         if not self.data.leafs:
-            self.logger.warning(f"Rack {self.data.name} has no leaf template — skipping ToR checksum cascade")
+            self.logger.warning(f"Rack {self.data.name} has no leaf template — skipping row-dependent rack fan-out")
             return
 
-        # Verify leafs were created in this rack before cascading to ToR racks
-        leaf_data = await self.fetch_rack_devices_with_interfaces(role_filter="leaf")
-
-        if not leaf_data:
-            # Graceful degradation: ToR cascade is optional enhancement in mixed deployment
-            self.logger.warning(f"Middle rack {self.data.name} has no leafs - skipping ToR cascade (non-critical)")
-            return
-
-        # Single query for all racks in same pod/row, then split by type
         row_racks = await self.client.filters(
             kind=LocationRack,
             pod__ids=[self.data.pod.id],
             row_index__value=self.data.row_index,
-        )
-        network_racks = sorted(
-            (r for r in row_racks if r.rack_type.value == "network"),
-            key=self._rack_sort_key,
         )
         row_dependent_racks = sorted(
             (r for r in row_racks if r.rack_type.value in ROW_DEPENDENT_RACK_TYPES),
             key=self._rack_sort_key,
         )
 
-        if not network_racks:
-            self.logger.warning(
-                f"No network rack found in row {self.data.row_index} - skipping ToR cascade (non-critical)"
-            )
-            return
-
-        network_checksum = network_racks[0].checksum.value if network_racks[0].checksum else self.data.checksum
-
-        for i, rack in enumerate(row_dependent_racks):
-            # Stagger triggers so the middle rack generator finishes creating leafs
-            # before each row-dependent rack's generator fires — they depend on
-            # those leaf devices existing (directly or via a local ToR).
-            if i > 0:
-                await asyncio.sleep(5)
-            rack.checksum.value = network_checksum
-            await rack.save(allow_upsert=True)
-            self.logger.info(
-                f"Rack {rack.name.value} (type={rack.rack_type.value}) has been updated to checksum {network_checksum}"
-            )
+        await self.run_generator_and_wait("add_rack", [rack.id for rack in row_dependent_racks])
 
     async def _get_leaf_devices_in_row(self, pod_id: str, row_index: int) -> tuple[list[str], list[str]]:
         """Query leaf devices in same row and their interfaces for ToR-to-leaf cabling.
@@ -437,20 +409,6 @@ class RackGenerator(RackMixin, CommonGenerator):
                 )
             return
 
-        if not await self._checksum_ready():
-            return
-
-        if not await self._earlier_rows_ready():
-            return
-
-        if (
-            deployment_type == "mixed"
-            and self.data.rack_type in ROW_DEPENDENT_RACK_TYPES
-            and self._has_tor_like_templates()
-            and not await self._tor_leafs_ready()
-        ):
-            return
-
         self.logger.info(f"Generating topology for rack {self.data.name}")
 
         if not self._prepare_generation_context():
@@ -477,11 +435,7 @@ class RackGenerator(RackMixin, CommonGenerator):
             f"Rack generation completed: {self.data.name} - {total_devices} device(s) created with connectivity"
         )
 
-        # For mixed deployment with network rack that has leafs: trigger ToR rack checksum updates
-        # This ensures ToR racks in the same row are generated after network rack completes.
-        # Border-leaf-only racks are skipped — they have no leafs to cascade from.
-        if deployment_type == "mixed" and self.data.rack_type == "network" and self.data.leafs:
-            await self.update_checksum()
+        await self._fan_out_to_row_dependent_racks()
 
     async def _generate_leafs(self, created_leaf_devices: list[str]) -> bool:
         """Create -> cable -> route leaf devices.

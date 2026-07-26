@@ -109,7 +109,6 @@ nodes:
     namespace: Location
     inherit_from:
       - LocationGeneric
-      - GeneratorTarget
       - CoreArtifactTarget
     include_in_menu: false
     menu_placement: "LocationGeneric"

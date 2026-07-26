@@ -21,26 +21,6 @@ from ..types import RoutingOptions
 class DCTopologyGenerator(CommonGenerator):
     """Generate data center topology with super-spine infrastructure."""
 
-    async def update_checksum(self) -> None:
-        """Update checksum for all pods in the data center.
-
-        The checksum is based on DC configuration.
-        """
-        pods = await self.client.filters(kind=TopologyPod, parent__ids=[self.data.id])
-
-        fabric_checksum = self.calculate_checksum()
-
-        pods_to_update = [pod for pod in pods if pod.checksum.value != fabric_checksum]
-
-        for pod in pods_to_update:
-            pod.checksum.value = fabric_checksum
-            await pod.save(allow_upsert=True)
-            self.logger.info(f"Checksum updated: {pod.name.value} → {fabric_checksum} (triggers pod re-generation)")
-
-        self.logger.info(
-            f"DC checksum propagation completed: {len(pods_to_update)} pod(s) updated to checksum {fabric_checksum}"
-        )
-
     async def generate(self, data: dict[str, Any]) -> None:
         """Generate data center topology."""
 
@@ -254,7 +234,11 @@ class DCTopologyGenerator(CommonGenerator):
                 bottom_role="super-spine",
             )
 
-        await self.update_checksum()
+        # Fan out to every pod's own generator now that super-spines/routing exist,
+        # and wait for each to finish before returning — the pod generator can then
+        # safely assume its spines/uplinks are already in place, no readiness gate
+        # or retry needed on its side.
+        await self.run_generator_and_wait("add_pod", [pod.id for pod in existing_pods])
         # Back-to-back inter-pod spine mesh cabling (designs with no super-spine tier)
         # is handled by pod.py itself — each pod cables to its existing lower-index
         # siblings directly (see PodTopologyGenerator._cable_to_existing_sibling_pods).

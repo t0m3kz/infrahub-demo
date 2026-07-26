@@ -1,4 +1,4 @@
-"""Rack mixin for rack generator lifecycle gates and context bootstrap."""
+"""Rack mixin for rack generator context bootstrap and role/deployment compatibility."""
 
 from __future__ import annotations
 
@@ -8,7 +8,6 @@ if TYPE_CHECKING:
     import logging
 
 from .helpers import DeviceNamingConfig
-from .helpers.rack import rack_sort_key
 from .protocols import LocationRack
 from .types import RoutingOptions
 
@@ -159,144 +158,6 @@ class RackMixin:
             f"{len(interface_names)} uplink interface(s) from query data"
         )
         return device_names, interface_names
-
-    async def _checksum_ready(self) -> bool:
-        """Return True if this rack has a usable checksum; False if generation should abort."""
-        if self.data.checksum:
-            return True
-
-        deployment_type = self.data.pod.deployment_type
-
-        if deployment_type == "mixed" and self.data.rack_type in ROW_DEPENDENT_RACK_TYPES:
-            middle_racks = await self.client.filters(
-                kind=LocationRack,
-                pod__ids=[self.data.pod.id],
-                row_index__value=self.data.row_index,
-                rack_type__value="network",
-            )
-            sorted_middle_racks = sorted(middle_racks, key=rack_sort_key)
-            source_middle_rack = next((r for r in sorted_middle_racks if r.checksum.value), None)
-            if source_middle_rack:
-                rack_obj = await self.client.get(kind=LocationRack, id=self.data.id)
-                rack_obj.checksum.value = source_middle_rack.checksum.value
-                await rack_obj.save(allow_upsert=True)
-                self.logger.info(
-                    f"Rack {self.data.name} inherited checksum {source_middle_rack.checksum.value} "
-                    f"from middle rack {source_middle_rack.name.value}. "
-                    "Checksum update will trigger generator again to create devices."
-                )
-            else:
-                self.logger.warning(
-                    f"Rack {self.data.name} has no checksum and no middle rack found "
-                    f"in row {self.data.row_index} - skipping generation."
-                )
-            return False
-
-        if deployment_type == "middle_rack" and self.data.rack_type == "network":
-            sibling_racks = await self.client.filters(
-                kind=LocationRack,
-                pod__ids=[self.data.pod.id],
-                row_index__value=self.data.row_index,
-                rack_type__value="network",
-            )
-            sibling_with_checksum = sorted(
-                (r for r in sibling_racks if r.id != self.data.id and r.checksum.value),
-                key=rack_sort_key,
-            )
-            if sibling_with_checksum:
-                rack_obj = await self.client.get(kind=LocationRack, id=self.data.id)
-                rack_obj.checksum.value = sibling_with_checksum[0].checksum.value
-                await rack_obj.save(allow_upsert=True)
-                self.logger.info(
-                    f"Network rack {self.data.name} inherited checksum {sibling_with_checksum[0].checksum.value} "
-                    f"from sibling rack {sibling_with_checksum[0].name.value}. "
-                    "Checksum update will trigger generator again to create devices."
-                )
-            else:
-                self.logger.warning(
-                    f"Network rack {self.data.name} has no checksum and no sibling network rack found "
-                    f"in row {self.data.row_index} to inherit from - run pod generator first."
-                )
-            return False
-
-        self.logger.warning(
-            f"Rack {self.data.name} has no checksum set - skipping generation. "
-            "Checksum will be set by pod or middle rack generator."
-        )
-        return False
-
-    async def _earlier_rows_ready(self) -> bool:
-        """Row-by-row gate for deterministic generation order."""
-        current_row = self.data.row_index
-        if current_row <= 1:
-            return True
-
-        deployment_type = self.data.pod.deployment_type
-        rack_type = self.data.rack_type
-
-        ordered_rack_types: list[str] | None = None
-        if rack_type == "network" and deployment_type in ("mixed", "middle_rack"):
-            ordered_rack_types = ["network"]
-        elif rack_type in ROW_DEPENDENT_RACK_TYPES and deployment_type in ("tor", "mixed"):
-            ordered_rack_types = sorted(ROW_DEPENDENT_RACK_TYPES)
-
-        if not ordered_rack_types:
-            return True
-
-        sibling_racks = await self.client.filters(
-            kind=LocationRack,
-            pod__ids=[self.data.pod.id],
-            rack_type__values=ordered_rack_types,
-        )
-
-        previous_rows = [r for r in sibling_racks if getattr(getattr(r, "row_index", None), "value", 0) < current_row]
-        if not previous_rows:
-            return True
-
-        blocked = [
-            r for r in previous_rows if not (getattr(r, "checksum", None) and getattr(r.checksum, "value", None))
-        ]
-        if not blocked:
-            return True
-
-        blocked_names = sorted(getattr(getattr(r, "name", None), "value", "unknown-rack") for r in blocked)
-        self.logger.info(
-            f"Rack {self.data.name} waiting for earlier row {'/'.join(ordered_rack_types)} rack(s): {blocked_names}"
-        )
-        return False
-
-    async def _tor_leafs_ready(self) -> bool:
-        """Mixed deployment: ToR racks wait for the network rack's leafs to exist first."""
-        network_racks = await self.client.filters(
-            kind=LocationRack,
-            pod__ids=[self.data.pod.id],
-            row_index__value=self.data.row_index,
-            rack_type__value="network",
-        )
-
-        if not network_racks:
-            self.logger.info(
-                f"ToR rack {self.data.name} waiting for network rack in row {self.data.row_index} - skipping this run."
-            )
-            return False
-
-        source_network_rack = sorted(network_racks, key=rack_sort_key)[0]
-        leaf_data = await self.fetch_rack_devices_with_interfaces(
-            rack=source_network_rack,
-            role_filter="leaf",
-        )
-
-        if not leaf_data:
-            self.logger.info(
-                f"ToR rack {self.data.name} waiting for leafs to be generated in row {self.data.row_index} - skipping this run."
-            )
-            return False
-
-        self.logger.info(
-            f"ToR rack {self.data.name} found {len(leaf_data)} leaf devices in row {self.data.row_index} "
-            "- proceeding with ToR generation"
-        )
-        return True
 
     def _prepare_generation_context(self) -> bool:
         """Compute and store shared context needed by every per-role generation method."""

@@ -171,7 +171,6 @@ class DataCenterDesignData(BaseModel):
 # DC model
 class DCPod(BaseModel):
     id: str
-    checksum: Optional[str] = None
 
 
 class DCModel(BaseModel):
@@ -247,7 +246,6 @@ class PodModel(BaseModel):
 
     id: str
     name: str
-    checksum: Optional[str] = None
     index: int
     # Design relationship is optional in schema
     design: Optional[PodDesign] = None
@@ -374,7 +372,6 @@ class LocationSuiteModel(BaseModel):
 class RackModel(BaseModel):
     id: str
     name: str
-    checksum: Optional[str] = None
     index: int
     rack_type: str
     row_index: int
