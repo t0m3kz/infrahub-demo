@@ -38,6 +38,7 @@ query border_leaf_config(
               description { value }
               status { value }
               role { value }
+              ...InterfaceCapabilitiesWithSegmentOnInterfaceFields
               ... on DcimPhysicalInterface {
                 interface_type { value }
                 mtu { value }
@@ -102,7 +103,7 @@ query border_leaf_config(
                   }
                 }
               }
-              ...InterfaceCapabilitiesWithSegmentFields
+
             }
           }
         }

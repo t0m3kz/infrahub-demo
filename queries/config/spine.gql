@@ -103,7 +103,7 @@ query spine_config($device: String!) {
                   }
                 }
               }
-              ...InterfaceCapabilitiesFields
+              ...InterfaceCapabilitiesOnInterfaceFields
             }
           }
         }
