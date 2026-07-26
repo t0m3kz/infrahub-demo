@@ -15,6 +15,9 @@ query app_dependency_rule($name: String!) {
         port_start { value }
         port_end { value }
         description { value }
+        access_status { value }
+        decision_reason { value }
+        access_expires_at { value }
         source {
           node {
             id
@@ -29,6 +32,20 @@ query app_dependency_rule($name: String!) {
                     name { value }
                     criticality { value }
                     security_profile { value }
+                    parent {
+                      node {
+                        id
+                        ... on AppPortfolio {
+                          owner {
+                            node {
+                              id
+                              org_id { value }
+                              name { value }
+                            }
+                          }
+                        }
+                      }
+                    }
                   }
                 }
               }
@@ -77,6 +94,20 @@ query app_dependency_rule($name: String!) {
                     name { value }
                     criticality { value }
                     security_profile { value }
+                    parent {
+                      node {
+                        id
+                        ... on AppPortfolio {
+                          owner {
+                            node {
+                              id
+                              org_id { value }
+                              name { value }
+                            }
+                          }
+                        }
+                      }
+                    }
                   }
                 }
               }

@@ -22,6 +22,28 @@ query app_security_rules($name: String!) {
                 name { value }
                 slug { value }
                 component_type { value }
+                parent {
+                  node {
+                    id
+                    ... on AppApplication {
+                      name { value }
+                      parent {
+                        node {
+                          id
+                          ... on AppPortfolio {
+                            owner {
+                              node {
+                                id
+                                org_id { value }
+                                name { value }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
                 network_segment {
                   node {
                     id
@@ -59,6 +81,9 @@ query app_security_rules($name: String!) {
                       port_start { value }
                       port_end { value }
                       description { value }
+                      access_status { value }
+                      decision_reason { value }
+                      access_expires_at { value }
                       target {
                         node {
                           id
@@ -66,6 +91,28 @@ query app_security_rules($name: String!) {
                             name { value }
                             slug { value }
                             component_type { value }
+                            parent {
+                              node {
+                                id
+                                ... on AppApplication {
+                                  name { value }
+                                  parent {
+                                    node {
+                                      id
+                                      ... on AppPortfolio {
+                                        owner {
+                                          node {
+                                            id
+                                            org_id { value }
+                                            name { value }
+                                          }
+                                        }
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                            }
                             network_segment {
                               node {
                                 id

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+import inspect
 import ipaddress
 from typing import Any, Literal
 
@@ -56,6 +57,13 @@ class CommonGenerator(FailOnErrorLoggerMixin, RoutingMixin, InfrahubGenerator):
     def _retry_delay(base: float, attempt: int, cap: float = 20.0, jitter: float = 0.25) -> float:
         """Shared jittered exponential backoff for generator retry loops."""
         return retry_delay(base=base, attempt=attempt, cap=cap, jitter=jitter)
+
+    @staticmethod
+    async def _safe_rel_add(rel: Any, obj: Any) -> None:
+        """Add relation peer while supporting sync and async add() implementations."""
+        result = rel.add(obj)
+        if inspect.isawaitable(result):
+            await result
 
     async def _resolve_pool(
         self,

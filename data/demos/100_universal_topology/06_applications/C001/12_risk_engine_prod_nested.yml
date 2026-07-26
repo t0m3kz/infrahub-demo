@@ -1,0 +1,37 @@
+---
+# C001 (Nordix Ltd.) — risk-engine production (fully nested)
+
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: AppApplication
+  data:
+    - label: risk-engine
+      environment: p
+      criticality: high
+      security_profile: fintech_strict
+      fqdn: risk-engine.c001.internal.local
+      ingress_mode: dns
+      parent: C001
+      member_of_groups:
+        - app_applications
+      children:
+        kind: AppComponent
+        data:
+          - name: analytics-worker
+            component_type: worker
+            network_segment: c001-app-backend-p
+            proxy_service: DC3-PRX-HA
+            instances:
+              - C001-RISK-VM-01
+              - C001-RISK-VM-02
+            member_of_groups:
+              - app_components
+
+          - name: risk-db
+            component_type: database
+            network_segment: c001-database-p
+            instances:
+              - C001-DB-VM-02
+            member_of_groups:
+              - app_components

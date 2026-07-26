@@ -25,7 +25,7 @@ not a ticket to four teams.
 | --- | --- | --- | --- |
 | Nordix Ltd. | C001 | trade-portal, auth-platform, risk-engine, nlb-app | production + non-prod |
 | SwiftGo GmbH | C002 | shipment-tracker, fleet-manager | production + non-prod |
-| Vaultex Inc. | C003 | vault-core, compliance-portal | production |
+| Vaultex Inc. | C003 | vault-core, compliance-portal, audit-service | production |
 
 ---
 
@@ -44,15 +44,16 @@ backend, and database components, mapped to VM capabilities and VXLAN segments.
 
 C001/
 ├── 00_namespaces.yml     # IP namespaces: C001-PROD, C001-NONPROD
-├── 01_segments.yml       # Network segments per tier: web-frontend, app-backend, database, cache
+├── 01_segments.yml       # Network segments per tier (mainly production)
 ├── 02_portfolio.yml      # AppPortfolio: owner C001
-├── 03_applications.yml   # trade-portal (p+n), auth-platform (p), risk-engine (p), nlb-app (p)
-├── 04_vms.yml            # DcimVirtualDevice nodes per segment
+├── 04_vms.yml            # DcimVirtualDevice nodes (production/shared)
 ├── 05_backend_pools.yml  # LB pool/member wiring
-├── 06_components.yml     # AppComponent: segment + VM capability mapping
-├── 08_dependencies.yml   # AppDependency edges with protocol/port
-├── 10_nautobot.yml       # AKS-hosted Nautobot stack
-└── 07_nlb_listeners.yml  # NLB listener config for nlb-app
+├── 07_nlb_listeners.yml  # NLB listener config + nlb-app declaration
+├── 09_trade_portal_nonprod_nested.yml # One-file nested boarding for trade-portal nonprod
+├── 10_auth_platform_prod_nested.yml   # One-file nested boarding for auth-platform prod
+├── 11_trade_portal_prod_nested.yml    # One-file nested boarding for trade-portal prod
+├── 12_risk_engine_prod_nested.yml     # One-file nested boarding for risk-engine prod
+└── 10_nautobot.yml       # AKS-hosted Nautobot stack
 ```
 
 **Application → segment → VM mapping (production):**
@@ -90,7 +91,7 @@ C002/
 
 ## C003 — Vaultex Inc
 
-Financial services. Two production applications with zero non-production environments
+Financial services. Three production applications with zero non-production environments
 because Vaultex does not believe in staging. They believe in prayer and change windows.
 
 ```text

@@ -10,11 +10,13 @@ Covers:
 from __future__ import annotations
 
 import asyncio
+from datetime import datetime, timedelta, timezone
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
+from generators.helpers.rules import RulesPlanner
 from generators.protocols import CloudSecurityGroup, CloudSecurityGroupRule, SecurityPolicyRule
-from generators.topology.application import (
+from generators.topology.application_security import (
     AppApplicationGenerator,
     AppDependencyRuleGenerator,
     _resolve_port,
@@ -442,6 +444,17 @@ class TestReconcileTagRuleFromSegments:
         gen.client.filters.assert_not_called()
         gen.client.create.assert_not_called()
 
+
+class TestSourceSegmentPolicyHelpers:
+    def test_segment_policy_name_uses_source_segment_name(self):
+        assert (
+            AppApplicationGenerator._segment_policy_name({"name": "c001-web-frontend-p"})
+            == "seg-c001-web-frontend-p-egress"
+        )
+
+    def test_segment_policy_name_falls_back_to_id(self):
+        assert AppApplicationGenerator._segment_policy_name({"id": "seg-123"}) == "seg-seg-123-egress"
+
     def test_reuses_existing_tag_rule(self):
         gen = _make_gen()
         existing_rule = MagicMock()
@@ -492,6 +505,151 @@ class TestReconcileTagRuleFromSegments:
         assert data["destination_tag"] == {"id": "tag-dst"}
         assert data["action"] == "permit"
         assert data["log"] is False
+
+    def test_cross_owner_dependency_requires_approved_status(self):
+        gen = _make_gen()
+        src_comp = {
+            "parent": {"parent": {"owner": {"org_id": "C001"}}},
+        }
+        dst_comp = {
+            "parent": {"parent": {"owner": {"org_id": "C002"}}},
+        }
+        dep = {"access_status": "pending"}
+
+        allowed, reason = gen._dependency_is_authorized(src_comp=src_comp, dst_comp=dst_comp, dep=dep)
+
+        assert allowed is False
+        assert reason is not None
+        assert "requires access_status=approved" in reason
+
+    def test_cross_owner_dependency_denied_is_blocked(self):
+        gen = _make_gen()
+        src_comp = {
+            "parent": {"parent": {"owner": {"org_id": "C001"}}},
+        }
+        dst_comp = {
+            "parent": {"parent": {"owner": {"org_id": "C002"}}},
+        }
+        dep = {
+            "access_status": "denied",
+        }
+
+        allowed, reason = gen._dependency_is_authorized(src_comp=src_comp, dst_comp=dst_comp, dep=dep)
+
+        assert allowed is False
+        assert reason is not None
+        assert "explicitly denied" in reason
+
+    def test_cross_owner_dependency_allows_when_approved_by_destination_owner(self):
+        gen = _make_gen()
+        src_comp = {
+            "parent": {"parent": {"owner": {"org_id": "C001"}}},
+        }
+        dst_comp = {
+            "parent": {"parent": {"owner": {"org_id": "C002"}}},
+        }
+        dep = {
+            "access_status": "approved",
+        }
+
+        allowed, reason = gen._dependency_is_authorized(src_comp=src_comp, dst_comp=dst_comp, dep=dep)
+
+        assert allowed is True
+        assert reason is None
+
+    def test_create_or_update_assigns_default_expiry_for_new_rule(self):
+        gen = _make_gen()
+        gen._find_existing_policy_rule = AsyncMock(return_value=None)
+        gen._allocate_policy_rule_index = AsyncMock(return_value=100)
+
+        created_rule = MagicMock()
+        created_rule.save = AsyncMock()
+        gen.client.create = AsyncMock(return_value=created_rule)
+
+        asyncio.run(
+            gen._create_or_update_policy_rule(
+                policy_id="policy-1",
+                rule_name="rule-1",
+                rule_data={"policy": {"id": "policy-1"}, "name": "rule-1", "disabled": False},
+            )
+        )
+
+        payload = gen.client.create.call_args.kwargs["data"]
+        assert "expires_at" in payload
+        assert isinstance(payload["expires_at"], str)
+        assert payload["disabled"] is False
+
+    def test_create_or_update_disables_rule_when_expired(self):
+        gen = _make_gen()
+        gen._find_existing_policy_rule = AsyncMock(return_value=None)
+        gen._allocate_policy_rule_index = AsyncMock(return_value=100)
+
+        created_rule = MagicMock()
+        created_rule.save = AsyncMock()
+        gen.client.create = AsyncMock(return_value=created_rule)
+
+        expired_at = (datetime.now(timezone.utc) - timedelta(days=1)).replace(microsecond=0).isoformat()
+
+        asyncio.run(
+            gen._create_or_update_policy_rule(
+                policy_id="policy-1",
+                rule_name="rule-1",
+                rule_data={
+                    "policy": {"id": "policy-1"},
+                    "name": "rule-1",
+                    "expires_at": expired_at,
+                    "disabled": False,
+                },
+            )
+        )
+
+        payload = gen.client.create.call_args.kwargs["data"]
+        assert payload["disabled"] is True
+
+    def test_planner_build_rule_payload_contains_governance_and_switch_flag(self):
+        dep = {"description": None, "access_status": "approved", "decision_reason": "ticket-123"}
+        src_comp = {
+            "name": "frontend",
+            "component_type": "frontend",
+            "parent": {"parent": {"owner": {"org_id": "C001"}}},
+        }
+        dst_comp = {
+            "name": "api",
+            "component_type": "backend",
+            "parent": {"parent": {"owner": {"org_id": "C002"}}},
+        }
+        src_seg = {"id": "seg-src", "isolation_mode": "normal"}
+        dst_seg = {"id": "seg-dst", "isolation_mode": "microsegmented"}
+
+        payload = RulesPlanner.build_rule_payload(
+            policy_id="policy-1",
+            rule_name="rule-1",
+            dep=dep,
+            src_comp=src_comp,
+            dst_comp=dst_comp,
+            src_seg=src_seg,
+            dst_seg=dst_seg,
+            protocol="tcp",
+            port_start=443,
+            port_end=None,
+            cross_zone=True,
+        )
+
+        assert payload["policy"] == {"id": "policy-1"}
+        assert payload["source_segment"] == {"id": "seg-src"}
+        assert payload["destination_segment"] == {"id": "seg-dst"}
+        assert payload["apply_on_switch"] is True
+        assert payload["port_start"] == 443
+        assert "governance:" in payload["description"]
+
+    def test_planner_zone_context_handles_missing_zone_as_cross_zone(self):
+        src_seg = {"security_zone": {"name": "internal"}}
+        dst_seg = {}
+        src_zone, dst_zone, cross_zone = RulesPlanner.zone_context(src_seg=src_seg, dst_seg=dst_seg, dep={})
+
+        assert src_zone == "internal"
+        assert dst_zone is None
+        assert cross_zone is True
 
 
 # ===========================================================================
@@ -567,3 +725,80 @@ class TestDependencyRuleGenerator:
         rule_data = call_kwargs["data"]
         assert rule_data["source_segment"] == {"id": "cloud-seg-src"}
         assert rule_data["destination_segment"] == {"id": "cloud-seg-dst"}
+
+    def test_dependency_generator_uses_source_segment_policy(self):
+        gen = AppDependencyRuleGenerator.__new__(AppDependencyRuleGenerator)
+        gen.client = AsyncMock()
+        gen.logger = MagicMock()
+
+        policy = MagicMock()
+        policy.id = "policy-1"
+        gen._get_or_create_policy = AsyncMock(return_value=policy)
+        gen._get_zone = AsyncMock(return_value=None)
+        gen._get_profile = AsyncMock(return_value=None)
+        gen._attach_policy_to_source_segment = AsyncMock()
+        gen._reconcile_tag_rule_from_segments = AsyncMock()
+        gen._create_cloud_rule = AsyncMock(return_value=True)
+
+        dep_data = {
+            "AppDependency": [
+                {
+                    "id": "dep-1",
+                    "name": "fe-to-api",
+                    "protocol": "tcp",
+                    "port_start": 443,
+                    "port_end": None,
+                    "description": "frontend to api",
+                    "source": {
+                        "id": "comp-fe",
+                        "name": "frontend",
+                        "component_type": "frontend",
+                        "parent": {"name": "myapp", "security_profile": "internal_standard"},
+                        "network_segment": {
+                            "id": "src-seg-1",
+                            "name": "c001-web-frontend-p",
+                            "typename": "ManagedVxlanSegment",
+                        },
+                    },
+                    "target": {
+                        "id": "comp-api",
+                        "name": "api",
+                        "component_type": "backend",
+                        "parent": {"name": "myapp", "security_profile": "internal_standard"},
+                        "network_segment": {
+                            "id": "dst-seg-1",
+                            "name": "c001-app-backend-p",
+                            "typename": "ManagedVxlanSegment",
+                        },
+                    },
+                }
+            ]
+        }
+
+        asyncio.run(gen.generate(dep_data))
+
+        gen._get_or_create_policy.assert_called_once_with("seg-c001-web-frontend-p-egress", "c001-web-frontend-p")
+        gen._attach_policy_to_source_segment.assert_called_once()
+
+    def test_create_or_update_policy_rule_retries_on_policy_index_collision(self):
+        gen = _make_gen()
+        gen._find_existing_policy_rule = AsyncMock(return_value=None)
+        gen._allocate_policy_rule_index = AsyncMock(side_effect=[100, 110])
+
+        first_rule = MagicMock()
+        first_rule.save = AsyncMock(side_effect=[Exception("Violates uniqueness constraint 'policy-index'")])
+        second_rule = MagicMock()
+        second_rule.save = AsyncMock()
+        gen.client.create = AsyncMock(side_effect=[first_rule, second_rule])
+
+        rule, index = asyncio.run(
+            gen._create_or_update_policy_rule(
+                policy_id="policy-1",
+                rule_name="rule-1",
+                rule_data={"policy": {"id": "policy-1"}, "name": "rule-1"},
+            )
+        )
+
+        assert rule is second_rule
+        assert index == 110
+        assert gen.client.create.call_count == 2

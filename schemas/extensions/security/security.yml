@@ -315,6 +315,12 @@ nodes:
         default_value: false
         optional: true
         order_weight: 1800
+      - name: expires_at
+        kind: DateTime
+        label: Expires At
+        description: "When rule validity ends; expired rules should be disabled"
+        optional: true
+        order_weight: 1825
       - name: apply_on_switch
         kind: Boolean
         label: Apply on Switch
