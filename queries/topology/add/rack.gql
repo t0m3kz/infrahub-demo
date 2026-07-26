@@ -12,7 +12,7 @@ fragment TemplateDeviceFields on TemplateDcimPhysicalDevice {
       id
     }
   }
-  interfaces(role__value: "uplink") {
+  interfaces(role__values: ["uplink", "mlag-peer"]) {
     edges {
       node {
         name {
