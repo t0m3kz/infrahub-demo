@@ -28,9 +28,7 @@ query spine_config($device: String!) {
         }
 
         # Device Services (BGP, OSPF) with nested peerings
-        ... on DcimCapabilities {
-          ...DeviceCapabilitiesFields
-        }
+        ...DeviceCapabilitiesOnDeviceFields
 
         # Interface Information
         interfaces {

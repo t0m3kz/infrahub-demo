@@ -84,3 +84,101 @@ fragment SegmentSecurityZoneFields on ManagedNetworkSegment {
     }
   }
 }
+
+fragment SegmentSecurityPolicyFields on ManagedNetworkSegment {
+  inline_service {
+    node { id name { value } }
+  }
+  isolation_mode { value }
+  security_tag {
+    node {
+      name { value }
+      group_id { value }
+      rules_as_source {
+        edges {
+          node {
+            action { value }
+            log { value }
+            destination_tag {
+              node {
+                name { value }
+                group_id { value }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+fragment NetworkSegmentFields on ManagedNetworkSegment {
+  ... on ManagedVlanSegment {
+    id
+    name { value }
+    description { value }
+    status { value }
+    segment_deployments(status__values: ["active", "provisioning"]) {
+      edges {
+        node {
+          vlan_id { value }
+          vni { value }
+        }
+      }
+    }
+    gateway {
+      node {
+        address { value }
+        ip_prefix {
+          node {
+            prefix { value }
+            ip_namespace {
+              node {
+                name { value }
+                l3_vni { value }
+                owner { node { name { value } } }
+              }
+            }
+          }
+        }
+      }
+    }
+    ...SegmentSecurityZoneFields
+    ...SegmentSecurityPolicyFields
+  }
+  ... on ManagedVxlanSegment {
+    id
+    name { value }
+    description { value }
+    status { value }
+    customer_name { value }
+    arp_suppression { value }
+    segment_deployments(status__values: ["active", "provisioning"]) {
+      edges {
+        node {
+          vlan_id { value }
+          vni { value }
+        }
+      }
+    }
+    gateway {
+      node {
+        address { value }
+        ip_prefix {
+          node {
+            prefix { value }
+            ip_namespace {
+              node {
+                name { value }
+                l3_vni { value }
+                owner { node { name { value } } }
+              }
+            }
+          }
+        }
+      }
+    }
+    ...SegmentSecurityZoneFields
+    ...SegmentSecurityPolicyFields
+  }
+}

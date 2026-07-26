@@ -1,6 +1,5 @@
 query border_leaf_config(
   $device: String!
-  $segment_status_values: [String!] = ["active", "provisioning"]
 ) {
   DcimDevice(name__value: $device) {
     edges {
@@ -28,9 +27,7 @@ query border_leaf_config(
         }
 
         # Device Services (BGP, OSPF) with nested peerings
-        ... on DcimCapabilities {
-          ...DeviceCapabilitiesFields
-        }
+        ...DeviceCapabilitiesOnDeviceFields
 
         # Interface Information
         interfaces {
@@ -111,19 +108,5 @@ query border_leaf_config(
         }
       }
     }
-  }
-}
-
-fragment NetworkSegmentFields on ManagedNetworkSegment {
-  ... on ManagedVlanSegment {
-    ...SegmentBaseFields
-    ...SegmentDeploymentsActiveFields
-    ...SegmentGatewayWithNamespaceFields
-  }
-  ... on ManagedVxlanSegment {
-    ...SegmentBaseFields
-    arp_suppression { value }
-    ...SegmentDeploymentsActiveFields
-    ...SegmentGatewayWithNamespaceFields
   }
 }
