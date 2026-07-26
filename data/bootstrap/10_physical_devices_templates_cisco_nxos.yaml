@@ -262,8 +262,12 @@ spec:
             name: Ethernet1/[1-30]
             role: customer
             interface_type: 100gbase-x-qsfp28
-          - template_name: N9K-C9336C-FX2_TOR_Ethernet1/[31-36]
-            name: Ethernet1/[31-36]
+          - template_name: N9K-C9336C-FX2_TOR_Ethernet1/[31-32]
+            name: Ethernet1/[31-32]
+            role: mlag-peer
+            interface_type: 100gbase-x-qsfp28
+          - template_name: N9K-C9336C-FX2_TOR_Ethernet1/[33-36]
+            name: Ethernet1/[33-36]
             role: uplink
             interface_type: 100gbase-x-qsfp28
           - template_name: N9K-C9336C-FX2_TOR_mgmt0

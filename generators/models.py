@@ -337,6 +337,7 @@ class RackPod(BaseModel):
     amount_of_spines: int
     leaf_interface_sorting_method: Literal["top_down", "bottom_up"] = "bottom_up"
     spine_interface_sorting_method: Literal["top_down", "bottom_up"] = "bottom_up"
+    mlag_create: Literal["no", "back-to-back", "virtual"] = "no"
     loopback_pool: Optional[Pool] = None
     prefix_pool: Optional[Pool] = None
     asn_pool: Optional[Pool] = None

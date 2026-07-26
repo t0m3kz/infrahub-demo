@@ -5,7 +5,7 @@ from typing import Literal
 
 from ..common import CablingOptions, CommonGenerator
 from ..helpers.rack import RackPlanner, RackRolesHelper, parse_rack_data
-from ..models import RackModel
+from ..models import RackModel, Template
 from ..protocols import DcimPhysicalDevice, DcimPhysicalInterface, LocationRack
 from ..rack import (
     MUTUALLY_EXCLUSIVE_ROLE_GROUPS,
@@ -478,6 +478,57 @@ class RackGenerator(RackMixin, CommonGenerator):
 
         await self._fan_out_to_row_dependent_racks()
 
+    async def _ensure_mlag_pairs(self, device_names: list[str], *, role_label: str, template: Template) -> None:
+        """Pair up same-role devices created in this rack into MLAG domains, per
+        pod.mlag_create ("no" / "back-to-back" / "virtual"). Devices are paired
+        two-at-a-time in sorted (deterministic) order; an odd device out is left
+        unpaired.
+
+        back-to-back requires the device's own template to reserve at least one
+        physical interface with role=mlag-peer — the actual LAG/cabling is done by
+        the mlag generator (triggered on ManagedMLAG created/updated), not here.
+        A template without one is skipped with a warning rather than creating an
+        MLAG domain the mlag generator can never wire up.
+        """
+        mlag_create = self.data.pod.mlag_create
+        if mlag_create == "no" or len(device_names) < 2:
+            return
+
+        if mlag_create == "back-to-back" and not self._roles.template_interfaces(template, role="mlag-peer"):
+            self.logger.warning(
+                f"Rack {self.data.name}: template {template.id} has no mlag-peer interface — "
+                f"skipping back-to-back MLAG for {role_label}s"
+            )
+            return
+
+        sorted_names = sorted(device_names)
+        for pair_index, (first, second) in enumerate(zip(sorted_names[0::2], sorted_names[1::2]), start=1):
+            mlag_name = f"{first}-{second}-mlag"
+            existing = await self.client.filters(kind="ManagedMLAG", name__value=mlag_name)
+            if existing:
+                self.client.group_context.related_node_ids.append(existing[0].id)
+                continue
+
+            devices = await self.client.filters(kind=DcimPhysicalDevice, name__values=[first, second])
+            if len(devices) != 2:
+                self.logger.warning(f"MLAG pair {first}/{second}: could not resolve both devices — skipping")
+                continue
+
+            mlag_obj = await self.client.create(
+                kind="ManagedMLAG",
+                data={
+                    "name": mlag_name,
+                    "domain_id": pair_index,
+                    "virtual_peer_link": mlag_create == "virtual",
+                    "status": "active",
+                    "capabilities": [{"id": dev.id} for dev in devices],
+                },
+            )
+            await mlag_obj.save(allow_upsert=True)
+            self.logger.info(
+                f"Rack {self.data.name}: created MLAG domain {mlag_name} ({mlag_create}) for {role_label}s"
+            )
+
     async def _generate_leafs(self, created_leaf_devices: list[str]) -> bool:
         """Create -> cable -> route leaf devices.
 
@@ -503,6 +554,8 @@ class RackGenerator(RackMixin, CommonGenerator):
 
             self._created_device_names.update(leaf_devices)
             created_leaf_devices.extend(leaf_devices)
+
+            await self._ensure_mlag_pairs(leaf_devices, role_label="leaf", template=leaf_role.template)
 
             leaf_interfaces = self._roles.template_interfaces(leaf_role.template)
             try:
@@ -548,6 +601,8 @@ class RackGenerator(RackMixin, CommonGenerator):
             )
 
             self._created_device_names.update(tor_devices)
+
+            await self._ensure_mlag_pairs(tor_devices, role_label="tor", template=tor_role.template)
 
             tor_interfaces = self._roles.template_interfaces(tor_role.template, role="uplink")
 
