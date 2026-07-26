@@ -261,3 +261,53 @@ class TestRackGeneratorMethods:
 
         gen.logger.warning.assert_called()
         gen._cable_and_route.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_generate_border_leafs_uses_design_max_spines_not_live_count(self) -> None:
+        """Uplink count must size against design.max_spines_per_pod (stable
+        capacity), not pod.amount_of_spines (live count) — otherwise adding spines
+        later would need ports already handed to border-leaf-to-spine cabling."""
+        gen = _build_gen()
+        gen.data.pod.amount_of_spines = 2
+        gen.data.pod.design.max_spines_per_pod = 3
+        bl_template = Template(
+            id="tmpl-bl",
+            interfaces=[
+                Interface(name="Eth1/1", role="uplink"),
+                Interface(name="Eth1/2", role="uplink"),
+                Interface(name="Eth1/3", role="uplink"),
+            ],
+        )
+        gen.data.border_leafs = [DeviceRole(role="border-leaf", quantity=1, template=bl_template)]
+        gen.create_devices = AsyncMock(return_value=["bl-1"])
+        gen._cable_and_route = AsyncMock()
+
+        await gen._generate_border_leafs("mixed")
+
+        gen._cable_and_route.assert_awaited_once()
+        call_kwargs = gen._cable_and_route.call_args.kwargs
+        # All 3 uplinks must be used to reach 3 spines (max_spines_per_pod), not
+        # capped at 2 (amount_of_spines).
+        assert call_kwargs["bottom_interfaces"] == ["Eth1/1", "Eth1/2", "Eth1/3"]
+
+    @pytest.mark.asyncio
+    async def test_generate_border_leafs_insufficient_uplinks_skips(self) -> None:
+        """Fewer uplinks than spines needed must skip cabling entirely rather than
+        wrap around and double-connect a port to two different spines."""
+        gen = _build_gen()
+        gen.data.pod.design.max_spines_per_pod = 3
+        bl_template = Template(
+            id="tmpl-bl",
+            interfaces=[
+                Interface(name="Eth1/1", role="uplink"),
+                Interface(name="Eth1/2", role="uplink"),
+            ],
+        )
+        gen.data.border_leafs = [DeviceRole(role="border-leaf", quantity=1, template=bl_template)]
+        gen.create_devices = AsyncMock(return_value=["bl-1"])
+        gen._cable_and_route = AsyncMock()
+
+        await gen._generate_border_leafs("mixed")
+
+        gen.logger.warning.assert_called()
+        gen._cable_and_route.assert_not_awaited()

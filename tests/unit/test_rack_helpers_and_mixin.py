@@ -139,7 +139,7 @@ class TestRackRolesHelper:
         assert without_loopback["allocate_loopback"] is False
         assert "loopback_pool" not in without_loopback
 
-    def test_template_interfaces_and_split_uplinks(self) -> None:
+    def test_template_interfaces_filters_by_role(self) -> None:
         template = Template(
             id="tmpl",
             interfaces=[
@@ -151,16 +151,9 @@ class TestRackRolesHelper:
 
         all_ifaces = RackRolesHelper.template_interfaces(template)
         uplinks = RackRolesHelper.template_interfaces(template, role="uplink")
-        dci, fabric = RackRolesHelper.split_border_leaf_uplinks(
-            uplink_interfaces=uplinks,
-            reserved_dci_count=1,
-            spine_count=1,
-        )
 
         assert all_ifaces == ["Eth1/1", "Eth1/2", "Eth1/3"]
         assert uplinks == ["Eth1/1", "Eth1/3"]
-        assert dci == ["Eth1/1"]
-        assert fabric == ["Eth1/3"]
 
     def test_border_leafs_per_rack_and_overlay_options(self) -> None:
         gen = _build_gen()

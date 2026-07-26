@@ -263,19 +263,6 @@ class RackRolesHelper:
             return [interface.name for interface in template.interfaces]
         return [interface.name for interface in template.interfaces if interface.role == role]
 
-    @staticmethod
-    def split_border_leaf_uplinks(
-        *,
-        uplink_interfaces: list[str],
-        reserved_dci_count: int,
-        spine_count: int,
-    ) -> tuple[list[str], list[str]]:
-        """Split border-leaf uplinks into DCI-reserved and spine-facing groups."""
-        sorted_uplinks = sorted(uplink_interfaces)
-        dci_reserved = sorted_uplinks[:reserved_dci_count]
-        fabric_uplinks = sorted_uplinks[reserved_dci_count : reserved_dci_count + spine_count]
-        return dci_reserved, fabric_uplinks
-
     def border_leafs_per_rack(self) -> int:
         """Compute base leaf count used for border-leaf offset calculations."""
         pod = self.ctx.data.pod
