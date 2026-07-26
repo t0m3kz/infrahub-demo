@@ -68,7 +68,7 @@ spec:
     - index: 1
       row_index: 1
       shortname: ktw-1-s-3-r-1-1
-      rack_type: tor
+      rack_type: compute
       pod: DC6-1-POD-3
       parent: ktw-1-s-3
       member_of_groups: [topologies_rack]
@@ -86,7 +86,7 @@ spec:
     - index: 7
       row_index: 1
       shortname: ktw-1-s-3-r-1-7
-      rack_type: tor
+      rack_type: compute
       pod: DC6-1-POD-3
       parent: ktw-1-s-3
       member_of_groups: [topologies_rack]
@@ -96,7 +96,7 @@ spec:
     - index: 1
       row_index: 2
       shortname: ktw-1-s-3-r-2-1
-      rack_type: tor
+      rack_type: compute
       pod: DC6-1-POD-3
       parent: ktw-1-s-3
       member_of_groups: [topologies_rack]
@@ -114,7 +114,7 @@ spec:
     - index: 7
       row_index: 2
       shortname: ktw-1-s-3-r-2-7
-      rack_type: tor
+      rack_type: compute
       pod: DC6-1-POD-3
       parent: ktw-1-s-3
       member_of_groups: [topologies_rack]

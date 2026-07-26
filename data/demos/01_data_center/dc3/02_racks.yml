@@ -17,7 +17,7 @@ spec:
     - index: 2
       row_index: 1
       shortname: lon-1-s-1-r-1-2
-      rack_type: tor
+      rack_type: compute
       pod: DC3-1-POD-1
       parent: lon-1-s-1
       member_of_groups: [topologies_rack]
@@ -35,7 +35,7 @@ spec:
     - index: 2
       row_index: 2
       shortname: lon-1-s-1-r-2-2
-      rack_type: tor
+      rack_type: compute
       pod: DC3-1-POD-1
       parent: lon-1-s-1
       member_of_groups: [topologies_rack]
@@ -55,7 +55,7 @@ spec:
     - index: 2
       row_index: 1
       shortname: lon-1-s-2-r-1-2
-      rack_type: tor
+      rack_type: compute
       pod: DC3-1-POD-2
       parent: lon-1-s-2
       member_of_groups: [topologies_rack]
@@ -73,7 +73,7 @@ spec:
     - index: 2
       row_index: 2
       shortname: lon-1-s-2-r-2-2
-      rack_type: tor
+      rack_type: compute
       pod: DC3-1-POD-2
       parent: lon-1-s-2
       member_of_groups: [topologies_rack]

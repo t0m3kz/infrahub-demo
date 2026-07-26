@@ -18,7 +18,7 @@ spec:
     - index: 2
       row_index: 1
       shortname: ber-1-s-1-r-1-2
-      rack_type: tor
+      rack_type: compute
       pod: DC4-1-POD-1
       parent: ber-1-s-1
       member_of_groups: [topologies_rack]
@@ -36,7 +36,7 @@ spec:
     - index: 2
       row_index: 2
       shortname: ber-1-s-1-r-2-2
-      rack_type: tor
+      rack_type: compute
       pod: DC4-1-POD-1
       parent: ber-1-s-1
       member_of_groups: [topologies_rack]

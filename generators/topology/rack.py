@@ -8,7 +8,12 @@ from ..common import CablingOptions, CommonGenerator
 from ..helpers.rack import RackPlanner, RackRolesHelper, parse_rack_data
 from ..models import RackModel
 from ..protocols import DcimPhysicalDevice, DcimPhysicalInterface, LocationRack
-from ..rack import RackMixin
+from ..rack import (
+    MUTUALLY_EXCLUSIVE_ROLE_GROUPS,
+    ROLES_BY_DEPLOYMENT_TYPE,
+    ROW_DEPENDENT_RACK_TYPES,
+    RackMixin,
+)
 
 
 class RackGenerator(RackMixin, CommonGenerator):
@@ -53,6 +58,44 @@ class RackGenerator(RackMixin, CommonGenerator):
             or self._has_tor_like_templates()
             or self._has_role_templates(self.data.border_leafs)
         )
+
+    def _present_roles(self) -> set[str]:
+        """Role names with at least one positive-quantity fabric_templates entry on this rack."""
+        role_templates = {
+            "leaf": self.data.leafs,
+            "tor": self.data.tors,
+            "l2_leaf": self.data.l2_leafs,
+            "access_leaf": self.data.access_leafs,
+            "border_leaf": self.data.border_leafs,
+        }
+        return {role for role, templates in role_templates.items() if self._has_role_templates(templates)}
+
+    def _role_compatibility_errors(self, deployment_type: str) -> list[str]:
+        """Return human-readable errors for fabric_templates roles this rack can't actually cable.
+
+        Two independent checks:
+        - ROLES_BY_DEPLOYMENT_TYPE: is each present role valid for this pod's deployment_type
+          at all (e.g. "tor" has no cabling strategy under middle_rack).
+        - MUTUALLY_EXCLUSIVE_ROLE_GROUPS: "tor" (cables to a spine) and "l2_leaf"/"access_leaf"
+          (cable to a local leaf pair) can't coexist on one rack regardless of deployment_type.
+        """
+        present = self._present_roles()
+        errors: list[str] = []
+
+        allowed = ROLES_BY_DEPLOYMENT_TYPE.get(deployment_type, frozenset())
+        incompatible = sorted(present - allowed)
+        if incompatible:
+            errors.append(
+                f"role(s) {incompatible} are not valid for deployment_type={deployment_type!r} "
+                f"(allowed: {sorted(allowed)})"
+            )
+
+        for group in MUTUALLY_EXCLUSIVE_ROLE_GROUPS:
+            conflicting = sorted(present & group)
+            if len(conflicting) > 1:
+                errors.append(f"role(s) {conflicting} are mutually exclusive on the same rack")
+
+        return errors
 
     @staticmethod
     def _rack_sort_key(rack: LocationRack) -> tuple[int, int, str]:
@@ -156,8 +199,8 @@ class RackGenerator(RackMixin, CommonGenerator):
             (r for r in row_racks if r.rack_type.value == "network"),
             key=self._rack_sort_key,
         )
-        tor_racks = sorted(
-            (r for r in row_racks if r.rack_type.value == "tor"),
+        row_dependent_racks = sorted(
+            (r for r in row_racks if r.rack_type.value in ROW_DEPENDENT_RACK_TYPES),
             key=self._rack_sort_key,
         )
 
@@ -169,9 +212,10 @@ class RackGenerator(RackMixin, CommonGenerator):
 
         network_checksum = network_racks[0].checksum.value if network_racks[0].checksum else self.data.checksum
 
-        for i, rack in enumerate(tor_racks):
-            # Stagger ToR rack triggers so the middle rack generator finishes creating leafs
-            # before each ToR rack generator fires. ToR racks depend on leaf devices existing.
+        for i, rack in enumerate(row_dependent_racks):
+            # Stagger triggers so the middle rack generator finishes creating leafs
+            # before each row-dependent rack's generator fires — they depend on
+            # those leaf devices existing (directly or via a local ToR).
             if i > 0:
                 await asyncio.sleep(5)
             rack.checksum.value = network_checksum
@@ -385,6 +429,14 @@ class RackGenerator(RackMixin, CommonGenerator):
             )
             return
 
+        role_errors = self._role_compatibility_errors(deployment_type)
+        if role_errors:
+            for error in role_errors:
+                self.logger.error(
+                    f"Rack {self.data.name}: {error} — fix the rack's fabric_templates instead of running the generator."
+                )
+            return
+
         if not await self._checksum_ready():
             return
 
@@ -393,7 +445,7 @@ class RackGenerator(RackMixin, CommonGenerator):
 
         if (
             deployment_type == "mixed"
-            and self.data.rack_type == "tor"
+            and self.data.rack_type in ROW_DEPENDENT_RACK_TYPES
             and self._has_tor_like_templates()
             and not await self._tor_leafs_ready()
         ):

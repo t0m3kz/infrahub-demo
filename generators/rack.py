@@ -12,6 +12,39 @@ from .helpers.rack import rack_sort_key
 from .protocols import LocationRack
 from .types import RoutingOptions
 
+# Which fabric_templates roles a pod's deployment_type knows how to cable.
+#
+# - "tor" cables to the pod spines: directly (tor deployment, cumulative
+#   offset across the pod) or to the middle rack's leafs in the same row
+#   (mixed deployment, calculate_cabling_offsets' mixed+tor branch). Neither
+#   path exists for middle_rack — there every leaf lives in the same rack as
+#   its ToRs, and _generate_tors() has no local-leaf cabling branch for it.
+# - "l2_leaf"/"access_leaf" always cable to a local leaf pair — in the same
+#   rack for middle_rack/network racks, or the middle rack in the same row
+#   for mixed compute racks (_resolve_local_leaf_cabling_target). tor
+#   deployment has no leafs anywhere in the pod, so neither role has a
+#   target to cable to.
+ROLES_BY_DEPLOYMENT_TYPE: dict[str, frozenset[str]] = {
+    "tor": frozenset({"tor", "border_leaf"}),
+    "mixed": frozenset({"leaf", "tor", "l2_leaf", "access_leaf", "border_leaf"}),
+    "middle_rack": frozenset({"leaf", "l2_leaf", "access_leaf", "border_leaf"}),
+}
+
+# "tor" cables to a spine; "l2_leaf"/"access_leaf" cable to a local leaf pair.
+# No cabling strategy satisfies both on the same rack, so they're mutually
+# exclusive there regardless of deployment_type.
+MUTUALLY_EXCLUSIVE_ROLE_GROUPS: tuple[frozenset[str], ...] = (frozenset({"tor", "l2_leaf", "access_leaf"}),)
+
+# rack_type values for racks with no leaf template of their own — they wait
+# for, and cable to, the leaf pair in the network/middle rack that shares
+# their row. "tor" holds real ToRs (role="tor", cables to spines) and/or
+# l2-leaf/access-leaf switches (cable to the row's leaf pair); "compute" is
+# the same "no local leaf" shape used for a rack whose fabric_templates are
+# l2-leaf/access-leaf only (no role="tor" — see ROLES_BY_DEPLOYMENT_TYPE).
+# Checksum inheritance and row-ordering gates treat both identically; only
+# the per-role cabling target (spine vs. row leaf) differs.
+ROW_DEPENDENT_RACK_TYPES: frozenset[str] = frozenset({"tor", "compute"})
+
 
 class RackMixin:
     """Mixin extracting rack-specific lifecycle checks and context setup."""
@@ -134,7 +167,7 @@ class RackMixin:
 
         deployment_type = self.data.pod.deployment_type
 
-        if deployment_type == "mixed" and self.data.rack_type == "tor":
+        if deployment_type == "mixed" and self.data.rack_type in ROW_DEPENDENT_RACK_TYPES:
             middle_racks = await self.client.filters(
                 kind=LocationRack,
                 pod__ids=[self.data.pod.id],
@@ -148,13 +181,13 @@ class RackMixin:
                 rack_obj.checksum.value = source_middle_rack.checksum.value
                 await rack_obj.save(allow_upsert=True)
                 self.logger.info(
-                    f"ToR rack {self.data.name} inherited checksum {source_middle_rack.checksum.value} "
+                    f"Rack {self.data.name} inherited checksum {source_middle_rack.checksum.value} "
                     f"from middle rack {source_middle_rack.name.value}. "
                     "Checksum update will trigger generator again to create devices."
                 )
             else:
                 self.logger.warning(
-                    f"ToR rack {self.data.name} has no checksum and no middle rack found "
+                    f"Rack {self.data.name} has no checksum and no middle rack found "
                     f"in row {self.data.row_index} - skipping generation."
                 )
             return False
@@ -201,19 +234,19 @@ class RackMixin:
         deployment_type = self.data.pod.deployment_type
         rack_type = self.data.rack_type
 
-        ordered_rack_type: str | None = None
+        ordered_rack_types: list[str] | None = None
         if rack_type == "network" and deployment_type in ("mixed", "middle_rack"):
-            ordered_rack_type = "network"
-        elif rack_type == "tor" and deployment_type in ("tor", "mixed"):
-            ordered_rack_type = "tor"
+            ordered_rack_types = ["network"]
+        elif rack_type in ROW_DEPENDENT_RACK_TYPES and deployment_type in ("tor", "mixed"):
+            ordered_rack_types = sorted(ROW_DEPENDENT_RACK_TYPES)
 
-        if not ordered_rack_type:
+        if not ordered_rack_types:
             return True
 
         sibling_racks = await self.client.filters(
             kind=LocationRack,
             pod__ids=[self.data.pod.id],
-            rack_type__value=ordered_rack_type,
+            rack_type__values=ordered_rack_types,
         )
 
         previous_rows = [r for r in sibling_racks if getattr(getattr(r, "row_index", None), "value", 0) < current_row]
@@ -227,7 +260,9 @@ class RackMixin:
             return True
 
         blocked_names = sorted(getattr(getattr(r, "name", None), "value", "unknown-rack") for r in blocked)
-        self.logger.info(f"Rack {self.data.name} waiting for earlier row {ordered_rack_type} rack(s): {blocked_names}")
+        self.logger.info(
+            f"Rack {self.data.name} waiting for earlier row {'/'.join(ordered_rack_types)} rack(s): {blocked_names}"
+        )
         return False
 
     async def _tor_leafs_ready(self) -> bool:

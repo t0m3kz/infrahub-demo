@@ -409,6 +409,23 @@ class TestUpdateChecksumMixed:
         assert mock_sleep.call_count == 2
         assert mock_sleep.call_args_list == [call(5), call(5)]
 
+    @pytest.mark.asyncio
+    async def test_compute_rack_receives_checksum_alongside_tor(self) -> None:
+        """compute racks (l2-leaf/access-leaf, no local leaf) cascade identically to tor racks."""
+        gen = _build_rack_generator(deployment_type="mixed", rack_type="network", checksum="new-cs")
+        leaf_data = [{"device_id": "leaf-1", "device_name": "leaf-01", "interfaces": []}]
+        gen.fetch_rack_devices_with_interfaces = AsyncMock(return_value=leaf_data)
+
+        net_rack = _mock_rack("NET-RACK-1", "network", checksum="new-cs")
+        compute_rack = _mock_rack("COMP-RACK-1", "compute", checksum="")
+        gen.client.filters = AsyncMock(return_value=[net_rack, compute_rack])
+
+        with patch("generators.topology.rack.asyncio.sleep", new_callable=AsyncMock):
+            await gen.update_checksum()
+
+        assert compute_rack.checksum.value == "new-cs"
+        compute_rack.save.assert_awaited_once_with(allow_upsert=True)
+
 
 class TestEarlierRowsReady:
     @pytest.mark.asyncio
@@ -446,7 +463,8 @@ class TestEarlierRowsReady:
         assert ready is True
 
     @pytest.mark.asyncio
-    async def test_tor_rack_checks_only_tor_siblings(self) -> None:
+    async def test_tor_rack_checks_tor_and_compute_siblings(self) -> None:
+        """tor and compute racks both wait on earlier rows — both have no local leaf."""
         gen = _build_rack_generator(deployment_type="mixed", rack_type="tor", row_index=2)
         prev_tor = _mock_rack("TOR-R1", "tor", checksum="", row_index=1)
         gen.client.filters = AsyncMock(return_value=[prev_tor])
@@ -455,11 +473,24 @@ class TestEarlierRowsReady:
 
         assert ready is False
         kwargs = gen.client.filters.call_args.kwargs
-        assert kwargs["rack_type__value"] == "tor"
+        assert sorted(kwargs["rack_type__values"]) == ["compute", "tor"]
+
+    @pytest.mark.asyncio
+    async def test_compute_rack_checks_tor_and_compute_siblings(self) -> None:
+        """compute racks (l2-leaf/access-leaf, no local leaf) gate identically to tor racks."""
+        gen = _build_rack_generator(deployment_type="mixed", rack_type="compute", row_index=2)
+        prev_compute = _mock_rack("COMP-R1", "compute", checksum="", row_index=1)
+        gen.client.filters = AsyncMock(return_value=[prev_compute])
+
+        ready = await gen._earlier_rows_ready()
+
+        assert ready is False
+        kwargs = gen.client.filters.call_args.kwargs
+        assert sorted(kwargs["rack_type__values"]) == ["compute", "tor"]
 
     @pytest.mark.asyncio
     async def test_non_ordered_rack_type_skips_gate(self) -> None:
-        gen = _build_rack_generator(deployment_type="mixed", rack_type="compute", row_index=3)
+        gen = _build_rack_generator(deployment_type="mixed", rack_type="storage", row_index=3)
         gen.client.filters = AsyncMock(return_value=[])
 
         ready = await gen._earlier_rows_ready()
@@ -562,3 +593,92 @@ class TestGenerateRackGating:
         gen._earlier_rows_ready.assert_awaited_once()
         gen._tor_leafs_ready.assert_awaited_once()
         gen._prepare_generation_context.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# _role_compatibility_errors / generate() role-vs-deployment gate
+#
+# middle_rack has no cabling strategy for "tor" (_generate_tors always
+# targets the pod spines; only middle_rack's offset=0 branch claims
+# otherwise) — see ROLES_BY_DEPLOYMENT_TYPE. "tor" and "l2_leaf"/
+# "access_leaf" are mutually exclusive on the same rack in any deployment.
+# ---------------------------------------------------------------------------
+
+
+class TestRoleDeploymentCompatibility:
+    def test_middle_rack_with_tor_is_incompatible(self) -> None:
+        gen = _build_rack_generator(deployment_type="middle_rack", rack_type="network")
+        gen.data.tors = [DeviceRole(role="tor", quantity=2, template=Template(id="tmpl-tor"))]
+        gen.data.l2_leafs = []
+        gen.data.access_leafs = []
+        gen.data.border_leafs = []
+
+        errors = gen._role_compatibility_errors("middle_rack")
+
+        assert len(errors) == 1
+        assert "tor" in errors[0]
+        assert "middle_rack" in errors[0]
+
+    def test_middle_rack_with_access_leaf_is_compatible(self) -> None:
+        gen = _build_rack_generator(deployment_type="middle_rack", rack_type="network")
+        gen.data.tors = []
+        gen.data.l2_leafs = []
+        gen.data.access_leafs = [DeviceRole(role="access-leaf", quantity=2, template=Template(id="tmpl-al"))]
+        gen.data.border_leafs = []
+
+        assert gen._role_compatibility_errors("middle_rack") == []
+
+    def test_tor_and_access_leaf_mutually_exclusive_regardless_of_deployment(self) -> None:
+        gen = _build_rack_generator(deployment_type="mixed", rack_type="compute")
+        gen.data.tors = [DeviceRole(role="tor", quantity=2, template=Template(id="tmpl-tor"))]
+        gen.data.l2_leafs = []
+        gen.data.access_leafs = [DeviceRole(role="access-leaf", quantity=2, template=Template(id="tmpl-al"))]
+        gen.data.border_leafs = []
+
+        errors = gen._role_compatibility_errors("mixed")
+
+        assert len(errors) == 1
+        assert "mutually exclusive" in errors[0]
+
+    def test_mixed_tor_alone_is_compatible(self) -> None:
+        """mixed+tor is a real, cabled path (calculate_cabling_offsets' mixed+tor branch)."""
+        gen = _build_rack_generator(deployment_type="mixed", rack_type="compute", leafs=[])
+        gen.data.tors = [DeviceRole(role="tor", quantity=2, template=Template(id="tmpl-tor"))]
+        gen.data.l2_leafs = []
+        gen.data.access_leafs = []
+        gen.data.border_leafs = []
+
+        assert gen._role_compatibility_errors("mixed") == []
+
+    def test_tor_deployment_with_leaf_is_incompatible(self) -> None:
+        gen = _build_rack_generator(deployment_type="tor", rack_type="tor", leafs=[])
+        gen.data.leafs = [DeviceRole(role="leaf", quantity=2, template=Template(id="tmpl-leaf"))]
+        gen.data.tors = []
+        gen.data.l2_leafs = []
+        gen.data.access_leafs = []
+        gen.data.border_leafs = []
+
+        errors = gen._role_compatibility_errors("tor")
+
+        assert len(errors) == 1
+        assert "leaf" in errors[0]
+
+    @pytest.mark.asyncio
+    async def test_generate_stops_before_checksum_gate_on_role_conflict(self) -> None:
+        """The role-compatibility gate runs before _checksum_ready, so a bad rack
+        never reaches the checksum-inheritance side effects."""
+        gen = _build_rack_generator(deployment_type="middle_rack", rack_type="network")
+        gen.data.tors = [DeviceRole(role="tor", quantity=2, template=Template(id="tmpl-tor"))]
+        gen.data.l2_leafs = []
+        gen.data.access_leafs = []
+        gen.data.border_leafs = []
+
+        gen._checksum_ready = AsyncMock(return_value=True)
+        gen._earlier_rows_ready = AsyncMock(return_value=True)
+
+        with patch("generators.topology.rack.parse_rack_data", return_value=gen.data):
+            await gen.generate({"any": "shape"})
+
+        gen._checksum_ready.assert_not_awaited()
+        gen._earlier_rows_ready.assert_not_awaited()
+        gen.logger.error.assert_called()
