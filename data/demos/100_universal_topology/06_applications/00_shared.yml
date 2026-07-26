@@ -24,6 +24,7 @@ spec:
       ip_namespace: "SHARED-SERVICES"
 
 ---
+
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
@@ -34,6 +35,7 @@ spec:
       ip_namespace: "SHARED-SERVICES"
 
 ---
+
 apiVersion: infrahub.app/v1
 kind: Object
 spec:

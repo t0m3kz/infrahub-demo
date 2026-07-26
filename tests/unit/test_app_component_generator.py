@@ -15,7 +15,7 @@ from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
 from generators.protocols import LoadbalancerPoolInterface, LoadbalancerPoolMember
-from generators.topology.application import AppComponentGenerator
+from generators.topology.application_components import AppComponentGenerator
 
 # ---------------------------------------------------------------------------
 # Harness helpers

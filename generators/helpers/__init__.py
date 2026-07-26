@@ -32,7 +32,9 @@ from .pools import (
     calculate_super_spine_loopback_prefix,
     name_to_asn_range,
 )
+from .ports import PortProfileHelper, PortsPlanner
 from .routing import PendingASRef, RoutingPlan, RoutingPlanInput, RoutingPlanner, RoutingStrategy
+from .rules import RulePlanningHelper, RulesPlanner
 
 __all__ = [
     # Routing
@@ -65,4 +67,8 @@ __all__ = [
     # Interface naming
     "get_lag_name",
     "get_loopback_name",
+    "PortProfileHelper",
+    "PortsPlanner",
+    "RulePlanningHelper",
+    "RulesPlanner",
 ]

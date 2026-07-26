@@ -456,7 +456,7 @@ generator_definitions:
     parameters:
       name: name__value
   - name: add_app_service_ports
-    file_path: generators/topology/application.py
+    file_path: generators/topology/application_service_ports.py
     targets: app_components
     query: app_service_ports
     class_name: AppServicePortGenerator
@@ -465,7 +465,7 @@ generator_definitions:
     parameters:
       slug: slug__value
   - name: add_app_service_ports_from_dependency
-    file_path: generators/topology/application.py
+    file_path: generators/topology/application_service_ports.py
     targets: app_dependencies
     query: app_dependency_service_port
     class_name: AppDependencyServicePortGenerator
@@ -474,7 +474,7 @@ generator_definitions:
     parameters:
       name: name__value
   - name: add_app_application
-    file_path: generators/topology/application.py
+    file_path: generators/topology/application_security.py
     targets: app_applications
     query: application
     class_name: AppApplicationGenerator
@@ -483,7 +483,7 @@ generator_definitions:
     parameters:
       name: name__value
   - name: add_app_application_from_dependency
-    file_path: generators/topology/application.py
+    file_path: generators/topology/application_security.py
     targets: app_dependencies
     query: app_dependency_rule
     class_name: AppDependencyRuleGenerator
@@ -492,7 +492,7 @@ generator_definitions:
     parameters:
       name: name__value
   - name: add_app_components
-    file_path: generators/topology/application.py
+    file_path: generators/topology/application_components.py
     targets: app_components
     query: app_component_data
     class_name: AppComponentGenerator

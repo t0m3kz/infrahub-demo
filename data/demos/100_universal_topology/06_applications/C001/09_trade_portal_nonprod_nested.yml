@@ -1,0 +1,137 @@
+---
+# C001 (Nordix Ltd.) — trade-portal nonprod (fully nested pilot)
+
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: AppApplication
+  data:
+    - label: trade-portal
+      environment: n
+      criticality: medium
+      security_profile: internet_exposed
+      fqdn: trade-portal-np.c001.demo.local
+      ingress_mode: frontend
+      parent: C001
+      member_of_groups:
+        - app_applications
+      children:
+        kind: AppComponent
+        data:
+          - name: web-frontend
+            component_type: frontend
+            proxy_service: DC3-PRX-HA
+            network_segment:
+              kind: ManagedVxlanSegment
+              data:
+                customer_name: "web-frontend"
+                environment: "n"
+                owner: "C001"
+                security_tag: web-tier
+                arp_suppression: true
+                gateway:
+                  - "10.1.110.1/24"
+                  - "C001-NONPROD"
+                deployments:
+                  - DC1
+                member_of_groups:
+                  - vxlan_segments
+                interface_capabilities:
+                  - kind: DcimLAGInterface
+                    data:
+                      device: DC1-POD1-SRV-02
+                      name: bond0
+                      lag_id: 1
+                  - kind: DcimLAGInterface
+                    data:
+                      device: DC1-POD1-SRV-ASS-01
+                      name: bond0
+                      lag_id: 1
+            instances:
+              - kind: DcimVirtualDevice
+                data:
+                  name: C001-WEB-NP-VM-01
+                  role: endpoint
+                  status: active
+                  device_type: linux-vm
+                  platform: linux
+                  software_image: linux-22.04.3
+                  deployment: DC1
+                  hosting_device: DC1-POD1-SRV-ASS-01
+            member_of_groups:
+              - app_components
+
+          - name: api-gateway
+            component_type: backend
+            proxy_service: DC3-PRX-HA
+            network_segment:
+              kind: ManagedVxlanSegment
+              data:
+                customer_name: "app-backend"
+                environment: "n"
+                owner: "C001"
+                security_tag: app-tier
+                arp_suppression: true
+                gateway:
+                  - "10.1.120.1/24"
+                  - "C001-NONPROD"
+                deployments:
+                  - DC1
+                member_of_groups:
+                  - vxlan_segments
+                interface_capabilities:
+                  - kind: DcimLAGInterface
+                    data:
+                      device: DC1-POD1-SRV-ASS-01
+                      name: bond0
+                      lag_id: 1
+            instances:
+              - kind: DcimVirtualDevice
+                data:
+                  name: C001-APP-NP-VM-01
+                  role: endpoint
+                  status: active
+                  device_type: linux-vm
+                  platform: linux
+                  software_image: linux-22.04.3
+                  deployment: DC1
+                  hosting_device: DC1-POD1-SRV-ASS-01
+            member_of_groups:
+              - app_components
+
+          - name: order-db
+            component_type: database
+            network_segment:
+              kind: ManagedVxlanSegment
+              data:
+                customer_name: "database"
+                environment: "n"
+                owner: "C001"
+                security_tag: database
+                arp_suppression: true
+                gateway:
+                  - "10.1.130.1/24"
+                  - "C001-NONPROD"
+                deployments:
+                  - DC1
+                member_of_groups:
+                  - vxlan_segments
+                interface_capabilities:
+                  - kind: DcimLAGInterface
+                    data:
+                      device: DC1-POD1-SRV-ASS-01
+                      name: bond0
+                      lag_id: 1
+            instances:
+              - kind: DcimVirtualDevice
+                data:
+                  name: C001-DB-NP-VM-01
+                  role: endpoint
+                  status: active
+                  device_type: linux-vm
+                  platform: linux
+                  software_image: linux-22.04.3
+                  deployment: DC1
+                  hosting_device: DC1-POD1-SRV-ASS-01
+            member_of_groups:
+              - app_components

@@ -1,4 +1,21 @@
 ---
+# nlb-app application anchor (kept with listener artifacts)
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: AppApplication
+  data:
+    - label: nlb-app
+      environment: p
+      criticality: high
+      security_profile: internet_exposed
+      fqdn: nlb-app.c001.demo.local
+      ingress_mode: frontend
+      parent: C001
+      member_of_groups:
+        - app_applications
+
+---
 # Health check: TCP, 2 successes to go UP, 3 failures to go DOWN, 5s timeout
 apiVersion: infrahub.app/v1
 kind: Object
@@ -44,33 +61,3 @@ spec:
           - "2"
           - "3"
           - "5000"
-
----
-# NLB target groups modelled as AppComponents under the nlb-app application.
-# Each component declares its VIP, LB config, and compute members.
-apiVersion: infrahub.app/v1
-kind: Object
-spec:
-  kind: AppComponent
-  data:
-    - name: tcp-443-targets
-      component_type: backend
-      description: "TLS passthrough targets — all 4 EKS app instances"
-      parent: c001-nlb-app-p
-      vip_service:
-        - cnrd-nlb-app.example.com
-        - tcp
-        - "443"
-      member_of_groups:
-        - app_components
-
-    - name: tcp-80-targets
-      component_type: backend
-      description: "Plain TCP targets — all 4 EKS app instances"
-      parent: c001-nlb-app-p
-      vip_service:
-        - cnrd-nlb-app.example.com
-        - tcp
-        - "80"
-      member_of_groups:
-        - app_components
