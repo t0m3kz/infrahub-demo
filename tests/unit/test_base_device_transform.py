@@ -153,7 +153,9 @@ class TestBuildConfig:
 
     def test_capabilities_bgp_true_when_service_present(self) -> None:
         t = _make_transform()
-        data = _device_data(device_capabilities=[{"typename": "ManagedBGP"}])
+        data = _device_data(
+            device_capabilities=[{"typename": "ManagedBGP", "local_as": {"asn": 65001}, "peerings": []}]
+        )
         cfg = t._build_config(data, "arista_eos")
         assert cfg["capabilities"]["bgp_enabled"] is True
         assert cfg["capabilities"]["ospf_enabled"] is False
@@ -235,6 +237,7 @@ class TestTransformDataRouting:
                         "id": "seg-1",
                         "typename": "ManagedVxlanSegment",
                         "name": "seg-100",
+                        "customer_name": "seg-100",
                         "segment_deployments": [{"vlan_id": 100, "vni": 10100}],
                     }
                 ],

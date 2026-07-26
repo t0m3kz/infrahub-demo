@@ -2,7 +2,7 @@
 
 import logging
 from ipaddress import ip_address
-from typing import Any
+from typing import Any, cast
 
 _log = logging.getLogger(__name__)
 
@@ -69,7 +69,7 @@ def _extract_remote_asn_from_peering(peering_node: dict, remote_device_name: str
 def _build_session_from_peering(
     peering_node: dict[str, Any],
     device_name: str,
-    local_as: dict | None,
+    local_as: dict[str, Any],
     interfaces: list[dict[str, Any]] | None,
     warnings: list[str] | None = None,
 ) -> dict[str, Any] | None:
@@ -184,7 +184,7 @@ def _build_session_from_peering(
 
     # Remote ASN resolution
     session_type = str(peering_node.get("session_type", "")).upper()
-    if session_type == "IBGP" and local_as:
+    if session_type == "IBGP":
         session["remote_as"] = local_as
     else:
         remote_asn = _extract_remote_asn_from_peering(peering_node, remote_device_name)
@@ -345,11 +345,7 @@ def get_bgp_profile(
     for service in bgp_services:
         service_name = service.get("name")
 
-        local_as = service.get("local_as")
-        if not isinstance(local_as, dict) or local_as.get("asn") is None:
-            raise ValueError(
-                f"ManagedBGP service '{service_name}' on device '{device_name}' is missing required local_as.asn"
-            )
+        local_as = cast(dict[str, Any], service["local_as"])
 
         bgp_config = {
             "name": service_name,
@@ -386,14 +382,9 @@ def get_bgp_profile(
 
     # Merge BGP processes that share the same local ASN into a single config block.
     # This handles eBGP-eBGP where underlay and overlay processes reuse the same per-device ASN.
-    by_asn: dict[int, dict] = {}
-    ungrouped: list[dict] = []
+    by_asn: dict[Any, dict] = {}
     for bgp_config in bgp_configs:
-        local_as = bgp_config.get("local_as") or {}
-        asn = local_as.get("asn") if isinstance(local_as, dict) else None
-        if asn is None:
-            ungrouped.append(bgp_config)
-            continue
+        asn = cast(dict[str, Any], bgp_config["local_as"])["asn"]
         if asn not in by_asn:
             by_asn[asn] = bgp_config
         else:
@@ -402,10 +393,10 @@ def get_bgp_profile(
             if not existing.get("router_id") and bgp_config.get("router_id"):
                 existing["router_id"] = bgp_config["router_id"]
 
-    merged = list(by_asn.values()) + ungrouped
+    merged = list(by_asn.values())
 
     # Sort BGP configs by local ASN for deterministic output
-    merged.sort(key=lambda c: (c.get("local_as") or {}).get("asn") or 0)
+    merged.sort(key=lambda c: cast(dict[str, Any], c["local_as"])["asn"])
 
     # Assign peer groups to sessions with common attributes
     for bgp_config in merged:

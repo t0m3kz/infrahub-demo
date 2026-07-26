@@ -62,16 +62,16 @@ def _vlans_from_activations(activations: list[dict[str, Any]]) -> list[dict[str,
     vlans: list[dict[str, Any]] = []
     seen: set[int] = set()
     for act in activations:
-        vlan_id = act.get("vlan_id")
-        if not vlan_id or vlan_id in seen:
+        vlan_id = act["vlan_id"]
+        if vlan_id in seen:
             continue
-        seg = act.get("segment") or {}
+        seg = act["segment"]
         gateway_ip, gateway_ipv6, vrf, _ = _get_segment_gateways(seg)
         sgt = seg.get("security_tag") or {}
         vlans.append(
             {
                 "vlan_id": vlan_id,
-                "name": seg.get("customer_name") or seg.get("name") or f"VLAN_{vlan_id}",
+                "name": seg["customer_name"],
                 "gateway_ip": gateway_ip,
                 "gateway_ipv6": gateway_ipv6,
                 "arp_suppression": seg.get("arp_suppression", True),
@@ -82,5 +82,5 @@ def _vlans_from_activations(activations: list[dict[str, Any]]) -> list[dict[str,
             }
         )
         seen.add(vlan_id)
-    vlans.sort(key=lambda v: v.get("vlan_id") or 0)
+    vlans.sort(key=lambda v: v["vlan_id"])
     return vlans
