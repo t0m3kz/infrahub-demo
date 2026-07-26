@@ -5,39 +5,49 @@ spec:
   kind: CoreNodeTriggerRule
   data:
 
-    # - name: trigger-dc-generator-on-merge
-    #   branch_scope: "default_branch"
-    #   node_kind: TopologyDataCenter
-    #   mutation_action: "created"
-    #   action: run-dc-generator
+    # dc_pod_cascade subclasses DCTopologyGenerator (add_dc) and runs its entire
+    # bootstrap via super().generate() before fanning out — a strict superset of
+    # add_dc's own work (see generators/topology/dc_pod_cascade.py's docstring).
+    # A DC created standalone (e.g. a bulk DC+pod+rack load) only needs its own
+    # bootstrap — fanning out to pods that were just bulk-loaded alongside it would
+    # be redundant with the manual dc_pod_cascade run that follows the load (see
+    # tasks/demo.py), so `created` fires plain add_dc, not the cascade. Structural
+    # DC-level changes that EXISTING pods (and their racks) need to reconcile
+    # against fire the cascade instead.
 
-    - name: trigger-dc-generator-update-super-spines
+    - name: trigger-dc-generator-on-created
+      branch_scope: "other_branches"
+      node_kind: TopologyDataCenter
+      mutation_action: "created"
+      action: run-dc-generator
+
+    - name: trigger-dc-update-super-spines
       branch_scope: "other_branches"
       node_kind: TopologyDataCenter
       mutation_action: "updated"
-      action: run-dc-generator
+      action: run-dc-pod-cascade
       matches:
         kind: CoreNodeTriggerAttributeMatch
         data:
           - attribute_name: amount_of_super_spines
             value_match: any
 
-    - name: trigger-dc-generator-update-super-spine-template
+    - name: trigger-dc-update-super-spine-template
       branch_scope: "other_branches"
       node_kind: TopologyDataCenter
       mutation_action: "updated"
-      action: run-dc-generator
+      action: run-dc-pod-cascade
       matches:
         kind: CoreNodeTriggerRelationshipMatch
         data:
           - relationship_name: super_spine_template
             modification_type: updated
 
-    - name: trigger-dc-generator-status
+    - name: trigger-dc-status
       branch_scope: "other_branches"
       node_kind: TopologyDataCenter
       mutation_action: updated
-      action: run-dc-generator
+      action: run-dc-pod-cascade
       matches:
         kind: CoreNodeTriggerAttributeMatch
         data:
@@ -46,37 +56,53 @@ spec:
             value: active
             value_previous: provisioning
 
-    # Pod/rack creation no longer needs an event trigger: add_dc/add_pod fan out
-    # to add_pod/add_rack directly via CoreGeneratorDefinitionRun(wait_until_completion=true)
-    # at the end of their own generate() (see CommonGenerator.run_generator_and_wait),
-    # so the child generator only ever runs once its parent's data already exists —
-    # no checksum write, no readiness polling on the child's side.
+    # pod_rack_cascade is the same pattern one level down: it subclasses
+    # PodTopologyGenerator (add_pod) and runs its entire bootstrap via
+    # super().generate() before fanning out to add_rack (see generators/topology/
+    # pod_rack_cascade.py's docstring). A pod created standalone (e.g. a bulk
+    # pod+rack load, or bulk-loaded alongside its DC) only needs its own
+    # bootstrap — fanning out to racks that were just bulk-loaded alongside it
+    # would be redundant with the manual pod_rack_cascade/dc_pod_cascade run
+    # that follows the load, so `created` fires plain add_pod, not the cascade.
+    # Structural pod-level changes that EXISTING racks need to reconcile
+    # against fire the cascade instead.
 
-    - name: trigger-pod-generator-update-index
+    - name: trigger-pod-generator-on-created
+      branch_scope: "other_branches"
+      node_kind: TopologyPod
+      mutation_action: "created"
+      action: run-pod-generator
+
+    - name: trigger-pod-update-index
       branch_scope: "other_branches"
       node_kind: TopologyPod
       mutation_action: "updated"
-      action: run-pod-generator
+      action: run-pod-rack-cascade
       matches:
         kind: CoreNodeTriggerAttributeMatch
         data:
           - attribute_name: index
             value_match: any
 
-    - name: trigger-pod-generator-update-amount-of-spines
+    - name: trigger-pod-update-amount-of-spines
       branch_scope: "other_branches"
       node_kind: TopologyPod
       mutation_action: "updated"
-      action: run-pod-generator
+      action: run-pod-rack-cascade
       matches:
         kind: CoreNodeTriggerAttributeMatch
         data:
           - attribute_name: amount_of_spines
             value_match: any
 
-    # Rack creation is started by its parent (see comment above trigger-pod-generator-update-index).
-    # A network rack's own tor/compute row-dependents are, in turn, started by that
-    # network rack's generate() (RackGenerator._fan_out_to_row_dependent_racks).
+    # Rack creation has no created-trigger of its own: pod_rack_cascade (fired by
+    # the pod's own created/updated triggers above) fans out to add_rack for every
+    # rack that already exists under that pod — including racks bulk-loaded
+    # alongside the pod. A rack added standalone under an already-existing,
+    # unchanged pod still needs a manual add_rack run. A network rack's own
+    # tor/compute row-dependents are, in turn, started unconditionally by that
+    # network rack's own generate() (RackGenerator._fan_out_to_row_dependent_racks)
+    # — this one level is not split into its own cascade generator.
 
     - name: trigger-rack-generator-update-index
       branch_scope: "other_branches"

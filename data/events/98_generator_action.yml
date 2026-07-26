@@ -10,6 +10,12 @@ spec:
     - name: run-pod-generator
       description: Run Pod Generator
       generator: add_pod
+    - name: run-dc-pod-cascade
+      description: Re-run every existing pod's generator after a DC-level capacity change
+      generator: dc_pod_cascade
+    - name: run-pod-rack-cascade
+      description: Re-run the racks a pod is directly responsible for after a pod-level capacity change
+      generator: pod_rack_cascade
     - name: run-rack-generator
       description: Run Rack Generator
       generator: add_rack

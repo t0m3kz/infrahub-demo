@@ -418,7 +418,7 @@ async def _phase_single_dc(
     skip_generators: bool,
     skip_merge: bool,
 ) -> None:
-    """Load one DC, run add_dc generator, create PC and merge.
+    """Load one DC, run dc_pod_cascade generator, create PC and merge.
 
     Designed to be called concurrently via asyncio.gather().
     Each DC gets its own branch: demo-dc1, demo-dc2, …
@@ -445,9 +445,9 @@ async def _phase_single_dc(
     _load_objects(f"{_DEMOS_ROOT}/01_data_center/{dc_folder}", branch, dry_run)
 
     # Wait for any event-triggered generators that fired during object load
-    # (e.g. add_dc, add_pod, add_rack from topology/rack creation).
-    # This prevents running the explicit add_dc while a parallel event-driven
-    # instance is already in flight on the same branch.
+    # (e.g. dc_pod_cascade, pod_rack_cascade, add_rack from topology/rack creation).
+    # This prevents running the explicit dc_pod_cascade while a parallel
+    # event-driven instance is already in flight on the same branch.
     if not dry_run:
         await _wait_for_tasks(dc_client, branch)
 
@@ -456,7 +456,7 @@ async def _phase_single_dc(
         dc = await dc_client.get(kind=TopologyDataCenter, name__value=dc_name, populate_store=True)
         if not dc:
             raise RuntimeError(f"{dc_name} not found after data load on branch '{branch}'")
-        await _run_generator(dc_client, "add_dc", [dc.id], branch, dry_run)
+        await _run_generator(dc_client, "dc_pod_cascade", [dc.id], branch, dry_run)
 
     await _create_pc_and_merge(dc_client, f"demo-{dc_folder}", branch, dry_run, skip_merge)
     log.info("  ✓ %s complete", dc_name)
@@ -546,9 +546,9 @@ async def _phase_03_rack(
 ) -> None:
     """Phase 03 – add a new network rack (row 3) to DC6-POD-1 (middle_rack deployment).
 
-    Runs add_dc, which fans out to add_pod → add_rack for its children
-    (via CoreGeneratorDefinitionRun), reliably triggering device generation
-    on the new rack.
+    Runs dc_pod_cascade, which runs the full add_dc bootstrap then fans out to
+    pod_rack_cascade → add_rack for its children (via CoreGeneratorDefinitionRun),
+    reliably triggering device generation on the new rack.
     """
     branch = "demo-rack"
     log.info("══════════════════════════════════════════════")
@@ -569,7 +569,7 @@ async def _phase_03_rack(
         if not dc:
             raise RuntimeError("DC6 not found on branch after data load")
         assert isinstance(dc.id, str)
-        await _run_generator(c, "add_dc", [dc.id], branch, dry_run)
+        await _run_generator(c, "dc_pod_cascade", [dc.id], branch, dry_run)
 
         log.info("  Waiting for cascading pod/rack generators …")
         await _wait_for_tasks(c, branch)
@@ -586,9 +586,9 @@ async def _phase_04_pod(
 ) -> None:
     """Phase 04 – add a new POD-4 to DC6.
 
-    Runs add_dc, which fans out to add_pod → add_rack (via
-    CoreGeneratorDefinitionRun) for the new pod and its racks, reliably
-    generating devices and configs.
+    Runs dc_pod_cascade, which runs the full add_dc bootstrap then fans out to
+    pod_rack_cascade → add_rack (via CoreGeneratorDefinitionRun) for the new
+    pod and its racks, reliably generating devices and configs.
     """
     branch = "demo-pod"
     log.info("══════════════════════════════════════════════")
@@ -611,7 +611,7 @@ async def _phase_04_pod(
         if not dc:
             raise RuntimeError("DC6 not found on branch after data load")
         assert isinstance(dc.id, str)
-        await _run_generator(c, "add_dc", [dc.id], branch, dry_run)
+        await _run_generator(c, "dc_pod_cascade", [dc.id], branch, dry_run)
 
         log.info("  Waiting for cascading pod/rack generators …")
         await _wait_for_tasks(c, branch)

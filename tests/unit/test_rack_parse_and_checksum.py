@@ -88,6 +88,10 @@ def _build_rack_generator(
     gen.client = MagicMock()
     gen.client.group_context = MagicMock()
     gen.client.group_context.related_node_ids = []
+    gen.client.filters = AsyncMock(return_value=[])
+    gen.branch = "test-branch"
+    gen.client.task = MagicMock()
+    gen.client.task.filter = AsyncMock(return_value=[])
     return gen
 
 
@@ -294,41 +298,41 @@ class TestDeriveSpineInfo:
 
 class TestFanOutToRowDependentRacks:
     """_fan_out_to_row_dependent_racks(): network rack -> add_rack for tor/compute
-    racks in its own row (mixed deployment only), via run_generator_and_wait
+    racks in its own row (mixed deployment only), via run_generator
     instead of a checksum write."""
 
     @pytest.mark.asyncio
     async def test_non_mixed_deployment_does_nothing(self) -> None:
         gen = _build_rack_generator(deployment_type="middle_rack", rack_type="network")
         gen.client.filters = AsyncMock(return_value=[])
-        gen.run_generator_and_wait = AsyncMock()
+        gen.run_generator = AsyncMock()
 
         await gen._fan_out_to_row_dependent_racks()
 
         gen.client.filters.assert_not_awaited()
-        gen.run_generator_and_wait.assert_not_awaited()
+        gen.run_generator.assert_not_awaited()
 
     @pytest.mark.asyncio
     async def test_tor_rack_type_does_nothing(self) -> None:
         gen = _build_rack_generator(deployment_type="mixed", rack_type="tor")
         gen.client.filters = AsyncMock(return_value=[])
-        gen.run_generator_and_wait = AsyncMock()
+        gen.run_generator = AsyncMock()
 
         await gen._fan_out_to_row_dependent_racks()
 
         gen.client.filters.assert_not_awaited()
-        gen.run_generator_and_wait.assert_not_awaited()
+        gen.run_generator.assert_not_awaited()
 
     @pytest.mark.asyncio
     async def test_no_leafs_skips_fan_out(self) -> None:
         gen = _build_rack_generator(deployment_type="mixed", rack_type="network", leafs=[])
         gen.client.filters = AsyncMock(return_value=[])
-        gen.run_generator_and_wait = AsyncMock()
+        gen.run_generator = AsyncMock()
 
         await gen._fan_out_to_row_dependent_racks()
 
         gen.client.filters.assert_not_awaited()
-        gen.run_generator_and_wait.assert_not_awaited()
+        gen.run_generator.assert_not_awaited()
         gen.logger.warning.assert_called_once()
 
     @pytest.mark.asyncio
@@ -338,12 +342,12 @@ class TestFanOutToRowDependentRacks:
         compute_rack = _mock_rack("COMP-RACK-1", "compute")
         network_rack = _mock_rack("NET-RACK-2", "network")  # sibling network rack, not fanned out to
         gen.client.filters = AsyncMock(return_value=[tor_rack, compute_rack, network_rack])
-        gen.run_generator_and_wait = AsyncMock()
+        gen.run_generator = AsyncMock()
 
         await gen._fan_out_to_row_dependent_racks()
 
-        gen.run_generator_and_wait.assert_awaited_once()
-        args, _ = gen.run_generator_and_wait.call_args
+        gen.run_generator.assert_awaited_once()
+        args, _ = gen.run_generator.call_args
         assert args[0] == "add_rack"
         assert sorted(args[1]) == sorted([tor_rack.id, compute_rack.id])
 
@@ -351,11 +355,11 @@ class TestFanOutToRowDependentRacks:
     async def test_no_row_dependent_racks_calls_with_empty_list(self) -> None:
         gen = _build_rack_generator(deployment_type="mixed", rack_type="network")
         gen.client.filters = AsyncMock(return_value=[])
-        gen.run_generator_and_wait = AsyncMock()
+        gen.run_generator = AsyncMock()
 
         await gen._fan_out_to_row_dependent_racks()
 
-        gen.run_generator_and_wait.assert_awaited_once_with("add_rack", [])
+        gen.run_generator.assert_awaited_once_with("add_rack", [])
 
 
 class TestGenerateRackGating:
