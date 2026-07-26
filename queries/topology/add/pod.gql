@@ -89,7 +89,6 @@ query topology_pod($name: String!) {
       node {
         id
         name { value }
-        checksum { value }
         index { value }
         design { node { ...PodDesignFields } }
         amount_of_spines { value }

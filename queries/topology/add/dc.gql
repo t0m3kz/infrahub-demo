@@ -55,11 +55,6 @@ query topology_dc($name: String!) {
             edges {
               node {
                 id
-                ... on TopologyPod {
-                  checksum {
-                    value
-                  }
-                }
               }
             }
           }

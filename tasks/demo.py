@@ -546,8 +546,9 @@ async def _phase_03_rack(
 ) -> None:
     """Phase 03 – add a new network rack (row 3) to DC6-POD-1 (middle_rack deployment).
 
-    Runs add_dc so its update_checksum cascades: DC → pod (add_pod) → racks
-    (add_rack), reliably triggering device generation on the new rack.
+    Runs add_dc, which fans out to add_pod → add_rack for its children
+    (via CoreGeneratorDefinitionRun), reliably triggering device generation
+    on the new rack.
     """
     branch = "demo-rack"
     log.info("══════════════════════════════════════════════")
@@ -585,8 +586,9 @@ async def _phase_04_pod(
 ) -> None:
     """Phase 04 – add a new POD-4 to DC6.
 
-    Runs add_dc so its update_checksum cascades: DC → new pod (add_pod) →
-    new racks (add_rack), reliably generating devices and configs.
+    Runs add_dc, which fans out to add_pod → add_rack (via
+    CoreGeneratorDefinitionRun) for the new pod and its racks, reliably
+    generating devices and configs.
     """
     branch = "demo-pod"
     log.info("══════════════════════════════════════════════")
