@@ -5,7 +5,7 @@ spec:
   kind: DcimPhysicalDevice
   data:
     - name: muc-server-1
-      rack: muc-1-s-1-r-1-1
+      rack: ktw-1-s-3-r-1-1
       role: endpoint
       status: active
       position: 10
@@ -14,127 +14,219 @@ spec:
       member_of_groups:
         - endpoints
       interfaces:
-        kind: DcimPhysicalInterface
-        data:
-          - name: eth0
+        - kind: DcimPhysicalInterface
+          data:
+            name: eth0
             interface_type: 100gbase-x-qsfp28
-            role: uplink
-          - name: eth1
+            role: lag
+        - kind: DcimPhysicalInterface
+          data:
+            name: eth1
             interface_type: 100gbase-x-qsfp28
-            role: uplink
-          - name: eth2
+            role: lag
+        - kind: DcimPhysicalInterface
+          data:
+            name: eth2
             interface_type: 100gbase-x-qsfp28
-            role: uplink
-          - name: eth3
+            role: lag
+        - kind: DcimPhysicalInterface
+          data:
+            name: eth3
             interface_type: 100gbase-x-qsfp28
-            role: uplink
+            role: lag
+        - kind: DcimLAGInterface
+          data:
+            name: bond0
+            status: active
+            role: lag
+            lag_id: 1
+            lacp_mode: active
+            mtu: 9000
+            minimum_links: 1
+            member_interfaces:
+              - ["muc-server-1", "eth0"]
+              - ["muc-server-1", "eth1"]
+        - kind: DcimLAGInterface
+          data:
+            name: bond1
+            status: active
+            role: lag
+            lag_id: 2
+            lacp_mode: active
+            mtu: 9000
+            minimum_links: 1
+            member_interfaces:
+              - ["muc-server-1", "eth2"]
+              - ["muc-server-1", "eth3"]
     - name: muc-server-2
-      rack: muc-1-s-1-r-1-9
+      rack: ktw-1-s-3-r-1-7
       role: endpoint
       status: active
       position: 10
       device_type: [DELL-R740XD2]
       platform: linux
       interfaces:
-        kind: DcimPhysicalInterface
-        data:
-          - name: eth0
+        - kind: DcimPhysicalInterface
+          data:
+            name: eth0
             interface_type: 100gbase-x-qsfp28
-            role: uplink
-          - name: eth1
+            role: lag
+        - kind: DcimPhysicalInterface
+          data:
+            name: eth1
             interface_type: 100gbase-x-qsfp28
-            role: uplink
-          - name: eth2
+            role: lag
+        - kind: DcimPhysicalInterface
+          data:
+            name: eth2
             interface_type: 100gbase-x-qsfp28
-            role: uplink
-          - name: eth3
+            role: lag
+        - kind: DcimPhysicalInterface
+          data:
+            name: eth3
             interface_type: 100gbase-x-qsfp28
-            role: uplink
+            role: lag
+        - kind: DcimLAGInterface
+          data:
+            name: bond0
+            status: active
+            role: lag
+            lag_id: 1
+            lacp_mode: active
+            mtu: 9000
+            minimum_links: 1
+            member_interfaces:
+              - ["muc-server-2", "eth0"]
+              - ["muc-server-2", "eth1"]
+        - kind: DcimLAGInterface
+          data:
+            name: bond1
+            status: active
+            role: lag
+            lag_id: 2
+            lacp_mode: active
+            mtu: 9000
+            minimum_links: 1
+            member_interfaces:
+              - ["muc-server-2", "eth2"]
+              - ["muc-server-2", "eth3"]
     - name: muc-server-3
-      rack: muc-1-s-1-r-3-1
+      rack: ktw-1-s-3-r-2-1
       role: endpoint
       status: active
       position: 12
       device_type: [DELL-R740XD2]
       platform: linux
       interfaces:
-        kind: DcimPhysicalInterface
-        data:
-          - name: eth0
+        - kind: DcimPhysicalInterface
+          data:
+            name: eth0
             interface_type: 100gbase-x-qsfp28
-            role: uplink
-          - name: eth1
+            role: lag
+        - kind: DcimPhysicalInterface
+          data:
+            name: eth1
             interface_type: 100gbase-x-qsfp28
-            role: uplink
-          - name: eth2
-            interface_type: 100gbase-x-qsfp28
-            role: uplink
-          - name: eth3
-            interface_type: 100gbase-x-qsfp28
-            role: uplink
+            role: lag
+        - kind: DcimLAGInterface
+          data:
+            name: bond0
+            status: active
+            role: lag
+            lag_id: 1
+            lacp_mode: active
+            mtu: 9000
+            minimum_links: 1
+            member_interfaces:
+              - ["muc-server-3", "eth0"]
+              - ["muc-server-3", "eth1"]
     - name: muc-server-4
-      rack: muc-1-s-1-r-3-9
+      rack: ktw-1-s-3-r-2-7
       role: endpoint
       status: active
       position: 14
       device_type: [DELL-R740XD2]
       platform: linux
       interfaces:
-        kind: DcimPhysicalInterface
-        data:
-          - name: eth0
+        - kind: DcimPhysicalInterface
+          data:
+            name: eth0
             interface_type: 100gbase-x-qsfp28
-            role: uplink
-          - name: eth1
+            role: lag
+        - kind: DcimPhysicalInterface
+          data:
+            name: eth1
             interface_type: 100gbase-x-qsfp28
-            role: uplink
-          - name: eth2
-            interface_type: 100gbase-x-qsfp28
-            role: uplink
-          - name: eth3
-            interface_type: 100gbase-x-qsfp28
-            role: uplink
+            role: lag
+        - kind: DcimLAGInterface
+          data:
+            name: bond0
+            status: active
+            role: lag
+            lag_id: 1
+            lacp_mode: active
+            mtu: 9000
+            minimum_links: 1
+            member_interfaces:
+              - ["muc-server-4", "eth0"]
+              - ["muc-server-4", "eth1"]
     - name: muc-server-5
-      rack: muc-1-s-2-r-2-1
+      rack: ktw-1-s-3-r-1-1
       role: endpoint
       status: active
       position: 16
       device_type: [DELL-R740XD2]
       platform: linux
       interfaces:
-        kind: DcimPhysicalInterface
-        data:
-          - name: eth0
+        - kind: DcimPhysicalInterface
+          data:
+            name: eth0
             interface_type: 100gbase-x-qsfp28
-            role: uplink
-          - name: eth1
+            role: lag
+        - kind: DcimPhysicalInterface
+          data:
+            name: eth1
             interface_type: 100gbase-x-qsfp28
-            role: uplink
-          - name: eth2
-            interface_type: 100gbase-x-qsfp28
-            role: uplink
-          - name: eth3
-            interface_type: 100gbase-x-qsfp28
-            role: uplink
+            role: lag
+        - kind: DcimLAGInterface
+          data:
+            name: bond0
+            status: active
+            role: lag
+            lag_id: 1
+            lacp_mode: active
+            mtu: 9000
+            minimum_links: 1
+            member_interfaces:
+              - ["muc-server-5", "eth0"]
+              - ["muc-server-5", "eth1"]
     - name: muc-server-6
-      rack: muc-1-s-2-r-2-9
+      rack: ktw-1-s-3-r-1-7
       role: endpoint
       status: active
       position: 18
       device_type: [DELL-R740XD2]
       platform: linux
       interfaces:
-        kind: DcimPhysicalInterface
-        data:
-          - name: eth0
+        - kind: DcimPhysicalInterface
+          data:
+            name: eth0
             interface_type: 100gbase-x-qsfp28
-            role: uplink
-          - name: eth1
+            role: lag
+        - kind: DcimPhysicalInterface
+          data:
+            name: eth1
             interface_type: 100gbase-x-qsfp28
-            role: uplink
-          - name: eth2
-            interface_type: 100gbase-x-qsfp28
-            role: uplink
-          - name: eth3
-            interface_type: 100gbase-x-qsfp28
-            role: uplink
+            role: lag
+        - kind: DcimLAGInterface
+          data:
+            name: bond0
+            status: active
+            role: lag
+            lag_id: 1
+            lacp_mode: active
+            mtu: 9000
+            minimum_links: 1
+            member_interfaces:
+              - ["muc-server-6", "eth0"]
+              - ["muc-server-6", "eth1"]

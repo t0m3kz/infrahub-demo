@@ -3,9 +3,10 @@ from __future__ import annotations
 import asyncio
 import inspect
 import ipaddress
+from datetime import datetime, timezone
 from typing import Any, Literal
 
-from infrahub_sdk.exceptions import ValidationError
+from infrahub_sdk.exceptions import GraphQLError, ValidationError
 from infrahub_sdk.generator import InfrahubGenerator
 from infrahub_sdk.protocols import CoreGeneratorDefinition, CoreIPAddressPool, CoreIPPrefixPool, CoreStandardGroup
 from infrahub_sdk.task.models import TaskFilter, TaskState
@@ -30,6 +31,10 @@ from .types import CablingOptions, DeviceOptions, RoutingOptions  # noqa: F401
 _PARENT_WAIT_TIMEOUT = 1800  # 30 min, matches tasks/demo.py's own generator-wait timeout
 _PARENT_WAIT_POLL_INTERVAL = 3
 _IN_FLIGHT_STATES = [TaskState.PENDING, TaskState.RUNNING, TaskState.SCHEDULED]
+
+_RESOURCE_LOCK_MAX_ATTEMPTS = 20
+_RESOURCE_LOCK_RETRY_DELAY = 2.0
+_RESOURCE_LOCK_STALE_AFTER_SECONDS = 300  # longer than any single realistic cabling run
 
 
 class CommonGenerator(FailOnErrorLoggerMixin, RoutingMixin, InfrahubGenerator):
@@ -200,6 +205,77 @@ class CommonGenerator(FailOnErrorLoggerMixin, RoutingMixin, InfrahubGenerator):
                 id=task.id, interval=_PARENT_WAIT_POLL_INTERVAL, timeout=_PARENT_WAIT_TIMEOUT
             )
         return await self.collect_data()
+
+    async def acquire_resource_lock(self, resource_key: str) -> str:
+        """Serialize concurrent generator runs that would otherwise race for the same
+        shared resource (e.g. two endpoint devices cabling into the same rack/row with
+        no per-device port offset to keep them apart, unlike rack-to-spine cabling).
+
+        Sibling generator instances for the SAME generator definition can run truly
+        concurrently (the backend fans out via asyncio.gather — see
+        infrahub.generators.tasks.request_generator_definition_run), so a
+        check-then-act guard like wait_for_parent_generator_and_refetch is not safe
+        here: two instances could both see "nothing running yet" in the same instant.
+
+        Uses CoreStandardGroup's uniqueness_constraint on name as a mutex: the
+        backend takes a distributed lock keyed on that constraint before checking
+        uniqueness (infrahub.core.node.lock_utils.get_lock_names_on_object_mutation),
+        so two concurrent create() calls with the same name are serialized server-side
+        — exactly one succeeds, the other gets a uniqueness-violation GraphQLError.
+
+        Retries with backoff on that error. A lock older than
+        _RESOURCE_LOCK_STALE_AFTER_SECONDS is treated as abandoned (owner crashed
+        mid-run) and is deleted, then re-acquired.
+
+        Returns the acquired lock's id — pass it to release_resource_lock when done.
+        """
+        lock_name = f"lock-{resource_key}"
+        for attempt in range(_RESOURCE_LOCK_MAX_ATTEMPTS):
+            try:
+                lock = await self.client.create(kind=CoreStandardGroup, data={"name": lock_name})
+                await lock.save(update_group_context=False)
+                return lock.id
+            except GraphQLError as exc:
+                if not any("uniqueness constraint" in str(e.get("message", "")) for e in exc.errors):
+                    raise
+                await self._reclaim_stale_lock(lock_name)
+                delay = self._retry_delay(_RESOURCE_LOCK_RETRY_DELAY, attempt, cap=10.0)
+                self.logger.info(
+                    f"Resource '{resource_key}' is locked by another generator run — "
+                    f"retrying in {delay:.2f}s (attempt {attempt + 1}/{_RESOURCE_LOCK_MAX_ATTEMPTS})"
+                )
+                await asyncio.sleep(delay)
+        raise GeneratorError(
+            f"Could not acquire lock for resource '{resource_key}' after {_RESOURCE_LOCK_MAX_ATTEMPTS} attempts"
+        )
+
+    async def _reclaim_stale_lock(self, lock_name: str) -> None:
+        """Delete an abandoned lock (owner crashed before release_resource_lock ran)."""
+        existing = await self.client.get(
+            kind=CoreStandardGroup, name__value=lock_name, include_metadata=True, raise_when_missing=False
+        )
+        if not existing:
+            return
+        metadata = existing.get_node_metadata()
+        created_at = metadata.created_at if metadata else None
+        if not created_at:
+            return
+        age_seconds = (datetime.now(timezone.utc) - datetime.fromisoformat(created_at)).total_seconds()
+        if age_seconds < _RESOURCE_LOCK_STALE_AFTER_SECONDS:
+            return
+        self.logger.warning(f"Reclaiming stale lock '{lock_name}' (held for {age_seconds:.0f}s) — owner likely crashed")
+        try:
+            await self.client.delete(kind=CoreStandardGroup, id=existing.id)
+        except GraphQLError:
+            pass  # another waiter already reclaimed it
+
+    async def release_resource_lock(self, lock_id: str) -> None:
+        """Release a lock acquired via acquire_resource_lock. Safe to call even if
+        the lock was already reclaimed as stale by another waiter."""
+        try:
+            await self.client.delete(kind=CoreStandardGroup, id=lock_id)
+        except GraphQLError:
+            pass
 
     async def upsert_number_pool(
         self,

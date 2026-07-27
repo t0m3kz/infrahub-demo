@@ -96,6 +96,27 @@ class DcimCable(CoreNode):
     subscriber_of_groups: RelationshipManager[CoreNode]
 
 
+class DcimLAGInterface(DcimInterface):
+    description: StringOptional
+    index: StringOptional
+    lacp_mode: Dropdown
+    lag_id: Integer
+    minimum_links: Integer
+    mtu: Integer
+    name: String
+    role: DropdownOptional
+    status: Dropdown
+    device: RelationshipAttribute[DcimDevice]
+    interface_capabilities: RelationshipManager[CoreNode]
+    ip_address: RelationshipAttribute[IpamIPAddress]
+    member_interfaces: RelationshipManager[DcimPhysicalInterface]
+    member_of_groups: RelationshipManager[CoreNode]
+    mlag_domain: RelationshipAttribute[CoreNode]
+    profiles: RelationshipManager[CoreNode]
+    subscriber_of_groups: RelationshipManager[CoreNode]
+    tags: RelationshipManager[CoreNode]
+
+
 class DcimPhysicalDevice(CoreArtifactTarget, DcimDevice, DcimCapabilities):
     description: StringOptional
     name: StringOptional

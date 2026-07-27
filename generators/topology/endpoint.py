@@ -13,8 +13,6 @@ Features:
 
 from __future__ import annotations
 
-import re
-from dataclasses import dataclass
 from typing import Any, Literal
 
 from netutils.interface import sort_interface_list
@@ -22,26 +20,13 @@ from netutils.interface import sort_interface_list
 from utils.data_cleaning import clean_data
 
 from ..common import CablingOptions, CommonGenerator
-from ..helpers.cabling import ConnectionValidator, InterfaceSpeedMatcher
+from ..endpoint import EndpointUplinkMixin
+from ..helpers.interface_naming import get_lag_name
 from ..models import ConnectionFingerprint, EndpointModel
-from ..protocols import DcimPhysicalDevice, DcimPhysicalInterface, LocationRack
+from ..protocols import DcimLAGInterface, DcimPhysicalDevice, DcimPhysicalInterface, LocationRack
 
 
-@dataclass
-class InterfaceData:
-    """Simple interface data container for GraphQL results."""
-
-    id: str
-    name: str
-    role: str
-    status: str
-    interface_type: str | None
-    speed: int | None
-    device_id: str
-    device_name: str
-
-
-class EndpointConnectivityGenerator(CommonGenerator):
+class EndpointConnectivityGenerator(EndpointUplinkMixin, CommonGenerator):
     """Generate connectivity for endpoint devices based on deployment patterns.
 
     Deployment strategies:
@@ -99,8 +84,12 @@ class EndpointConnectivityGenerator(CommonGenerator):
                 self.logger.error("No Endpoint Device data found in GraphQL response")
                 return
 
-            # Filter out empty interface nodes (virtual interfaces don't match PhysicalInterface fragment)
+            # Filter out empty interface nodes (interfaces not matching the
+            # PhysicalInterfaceFields fragment — e.g. a server's own
+            # DcimLAGInterface bond alongside its DcimPhysicalInterface members)
             deployment_data = deployment_list[0]
+            if "interfaces" in deployment_data:
+                deployment_data["interfaces"] = [intf for intf in deployment_data["interfaces"] if intf]
             if "rack" in deployment_data and "devices" in deployment_data.get("rack", {}):
                 for device in deployment_data["rack"]["devices"]:
                     if "interfaces" in device:
@@ -125,7 +114,15 @@ class EndpointConnectivityGenerator(CommonGenerator):
             self.deployment_id = dc.id
             self.fabric_name = dc.name.lower()
             bl_port_role = "firewall" if "firewall" in device_role else "load-balancer"
-            await self._connect_to_border_leaf(dc_id=dc.id, bl_port_role=bl_port_role)
+            # No per-device port offset here (unlike rack-to-spine cabling), so
+            # concurrent endpoint generator instances (backend fans siblings out via
+            # asyncio.gather) targeting the same DC's border-leaf pair could both pick
+            # the same "free" port — serialize per DC.
+            lock_id = await self.acquire_resource_lock(f"endpoint-cabling-dc-{dc.id}")
+            try:
+                await self._connect_to_border_leaf(dc_id=dc.id, bl_port_role=bl_port_role)
+            finally:
+                await self.release_resource_lock(lock_id)
             return
 
         # deployment_type is derived from pod.design's layout (EndpointPod.deployment_type)
@@ -145,6 +142,26 @@ class EndpointConnectivityGenerator(CommonGenerator):
             endpoint_device.deployment = pod_id
             await endpoint_device.save(allow_upsert=True)
             self.logger.info(f"Updated {self.data.name} deployment to pod {self.pod_name}")
+
+        # LAG-based endpoints (server declares role=lag physical NICs bundled into
+        # DcimLAGInterface bond(s) in its own object-load data) get switch-side
+        # port-channels wired into the target pair's ManagedMLAG domain instead of
+        # plain 1:1 uplink cabling — see _process_lag_endpoint_connections.
+        server_bonds: list[DcimLAGInterface] = await self.client.filters(
+            kind=DcimLAGInterface,
+            device__ids=[self.data.id],
+            role__value="lag",
+            include=["member_interfaces"],
+        )
+        if server_bonds:
+            lock_id = await self.acquire_resource_lock(
+                f"endpoint-cabling-pod-{self.data.rack.pod.id}-row-{self.data.rack.row_index}"
+            )
+            try:
+                await self._process_lag_endpoint_connections(server_bonds, deployment_type)
+            finally:
+                await self.release_resource_lock(lock_id)
+            return
 
         # Get all uplink interfaces from endpoint device (idempotency)
         # Note: Endpoint devices use "uplink" role, ToR/Leaf devices use "customer" role
@@ -183,14 +200,23 @@ class EndpointConnectivityGenerator(CommonGenerator):
         self._free_interfaces = endpoint_interfaces
         self._already_connected = existing_connections > 0
 
-        if deployment_type == "middle_rack":
-            await self._connect_middle_rack_deployment()
-        elif deployment_type == "tor":
-            await self._connect_tor_deployment()
-        elif deployment_type == "mixed":
-            await self._connect_mixed_deployment()
-        else:
-            self.logger.error(f"Unknown deployment type '{deployment_type}' for endpoint {self.data.name}")
+        # Rack-to-spine cabling avoids port collisions via a deterministic per-device
+        # offset (calculate_cabling_offsets); endpoint cabling has no such offset — it
+        # picks the first free port it sees. Concurrent siblings (the backend fans
+        # multiple endpoint generator instances out via asyncio.gather — see
+        # acquire_resource_lock's docstring) targeting the same rack/row could both
+        # pick the same "free" port before either saves its cable. Lock on
+        # (pod, row) rather than just the rack: the tor/mixed fallback path also
+        # reaches into every rack in the same row, not just this endpoint's own.
+        lock_id = await self.acquire_resource_lock(
+            f"endpoint-cabling-pod-{self.data.rack.pod.id}-row-{self.data.rack.row_index}"
+        )
+        try:
+            all_target_interfaces = await self._resolve_target_interfaces(deployment_type)
+            if all_target_interfaces:
+                await self._process_endpoint_connections(all_target_interfaces)
+        finally:
+            await self.release_resource_lock(lock_id)
 
     async def _connect_to_border_leaf(self, dc_id: str, bl_port_role: str) -> None:
         """Connect firewall or load-balancer to dedicated ports on border-leaf switches.
@@ -321,8 +347,25 @@ class EndpointConnectivityGenerator(CommonGenerator):
 
         self.logger.info(f"{self.data.name}: created {connections_made} connection(s) to border-leaf pair")
 
-    async def _connect_middle_rack_deployment(self) -> None:
-        """Connect endpoint in middle_rack deployment.
+    async def _resolve_target_interfaces(self, deployment_type: str) -> list[DcimPhysicalInterface]:
+        """Resolve the target switch interfaces for this endpoint's deployment type.
+
+        Shared by both the plain uplink flow (_process_endpoint_connections)
+        and the LAG flow (_process_lag_endpoint_connections) — deployment-type
+        routing (which racks/roles to search) is identical for both; only
+        what's done with the resulting interfaces differs.
+        """
+        if deployment_type == "middle_rack":
+            return await self._connect_middle_rack_deployment()
+        if deployment_type == "tor":
+            return await self._connect_tor_deployment()
+        if deployment_type == "mixed":
+            return await self._connect_mixed_deployment()
+        self.logger.error(f"Unknown deployment type '{deployment_type}' for endpoint {self.data.name}")
+        return []
+
+    async def _connect_middle_rack_deployment(self) -> list[DcimPhysicalInterface]:
+        """Resolve target interfaces for middle_rack deployment.
 
         Strategy: Server in compute rack connects to switches in the middle rack (network rack) in same row.
         Middle_rack topology has one network rack per row containing ToR or Leaf switches that serve compute racks.
@@ -376,10 +419,10 @@ class EndpointConnectivityGenerator(CommonGenerator):
             )
             raise RuntimeError(f"Endpoint {self.data.name}: Cannot connect - no interfaces found in middle rack")
 
-        await self._process_endpoint_connections(all_target_interfaces)
+        return all_target_interfaces
 
-    async def _connect_tor_deployment(self) -> None:
-        """Connect endpoint in tor deployment.
+    async def _connect_tor_deployment(self) -> list[DcimPhysicalInterface]:
+        """Resolve target interfaces for tor deployment.
 
         Strategy: Connect to ToR switches in same rack, fallback to same row.
         """
@@ -422,10 +465,10 @@ class EndpointConnectivityGenerator(CommonGenerator):
             )
             raise RuntimeError(f"Endpoint {self.data.name}: Cannot connect - no ToR interfaces found in deployment")
 
-        await self._process_endpoint_connections(all_target_interfaces)
+        return all_target_interfaces
 
-    async def _connect_mixed_deployment(self) -> None:
-        """Connect endpoint in mixed deployment.
+    async def _connect_mixed_deployment(self) -> list[DcimPhysicalInterface]:
+        """Resolve target interfaces for mixed deployment.
 
         Strategy: Connect to ToR/Leaf devices in same rack, fallback to middle rack leafs in same row.
         """
@@ -468,7 +511,7 @@ class EndpointConnectivityGenerator(CommonGenerator):
             )
             raise RuntimeError(f"Endpoint {self.data.name}: Cannot connect - no interfaces found in mixed deployment")
 
-        await self._process_endpoint_connections(all_target_interfaces)
+        return all_target_interfaces
 
     async def _query_interfaces_by_location(
         self,
@@ -632,289 +675,143 @@ class EndpointConnectivityGenerator(CommonGenerator):
             f"Completed all connectivity for {self.data.name}: {len(self.planned_connections)} total connection(s) established"
         )
 
-    async def _process_speed_aware(
-        self,
-        available_endpoint_interfaces: list[Any],
-        all_target_interfaces: list[DcimPhysicalInterface],
-        target_device_names: list[str],
+    async def _process_lag_endpoint_connections(
+        self, server_bonds: list[DcimLAGInterface], deployment_type: str
     ) -> None:
-        """Process connections using speed-aware mode (group by speed first).
+        """Wire a LAG-based endpoint's bond(s) to a switch pair's ManagedMLAG domain.
 
-        Current default behavior: Only connect interfaces with matching speeds.
+        Each server bond fans out to one port-channel on EACH target switch —
+        every switch owns its own port-channel (member = the physical port this
+        bond's cable lands on), and both port-channels reference the same
+        mlag_domain so they act as one logical vPC/MLAG-attached-host link.
+        Mirrors mlag.py's peer-link pattern one level down (server<->switch
+        instead of switch<->switch).
+
+        Requires the target pair to already share exactly one ManagedMLAG
+        domain — per user direction, a pair with no shared domain is skipped
+        with a warning rather than auto-provisioned here (unlike
+        rack.py's _ensure_mlag_pairs, which creates the domain for switch
+        pairs it itself creates).
         """
-        # Group by speed for mixed-speed deployments
-        speed_groups = InterfaceSpeedMatcher.group_by_speed(
-            server_interfaces=available_endpoint_interfaces,
-            switch_interfaces=all_target_interfaces,
-        )
-
-        if not speed_groups:
-            self.logger.error(
-                f"Endpoint {self.data.name}: No matching speed groups found between endpoint and {target_device_names}. "
-                "Cannot create endpoint connectivity (speed-aware mode)."
-            )
-            raise RuntimeError(
-                f"Endpoint {self.data.name}: Cannot connect - no matching interface speeds with {target_device_names}"
-            )
-
-        self.logger.info(f"Found {len(speed_groups)} speed group(s): {sorted(speed_groups.keys())}Gbps")
-
-        # Process each speed group independently
-        for speed, (server_intfs, switch_intfs) in sorted(speed_groups.items()):
-            self.logger.info(
-                f"Processing {speed}Gbps group: {len(server_intfs)} server interfaces, "
-                f"{len(switch_intfs)} switch interfaces"
-            )
-
-            # Build connection plan for this speed group
-            connection_plan = self._build_connection_plan(
-                server_interfaces=server_intfs,
-                switch_interfaces=switch_intfs,
-                target_device_names=target_device_names,
-            )
-
-            if not connection_plan:
-                self.logger.warning(f"No connection plan created for {speed}Gbps group")
-                continue
-
-            # Validate the plan (check for duplicates, no minimum requirement)
-            is_valid, message = ConnectionValidator.validate_plan(connection_plan, min_connections=1)
-            if not is_valid:
-                self.logger.error(f"Connection plan validation failed for {speed}Gbps: {message}")
-                continue
-
-            self.logger.info(f"Connection plan for {speed}Gbps: {len(connection_plan)} connection(s) planned")
-
-            # Add to planned connections
-            self.planned_connections.update(connection_plan)
-
-            # Execute cabling
-            await self._execute_cabling(connection_plan, target_device_names)
-
-            self.logger.info(f"Successfully created {len(connection_plan)} connections for {speed}Gbps group")
-
-    async def _process_with_validation(
-        self,
-        available_endpoint_interfaces: list[Any],
-        all_target_interfaces: list[DcimPhysicalInterface],
-        target_device_names: list[str],
-    ) -> None:
-        """Process connections with validation-only mode (connect all, validate afterward).
-
-        Flexible mode: Connects interfaces regardless of speed, then validates.
-        Useful for transition scenarios (e.g., upgrading from 10G to 25G).
-        """
-        self.logger.info(
-            f"Processing {len(available_endpoint_interfaces)} endpoint interfaces with "
-            f"{len(all_target_interfaces)} target interfaces (validation-only mode)"
-        )
-
-        # Build connection plan using all available interfaces
-        connection_plan = self._build_connection_plan(
-            server_interfaces=available_endpoint_interfaces,
-            switch_interfaces=all_target_interfaces,
-            target_device_names=target_device_names,
-        )
-
-        if not connection_plan:
-            self.logger.warning("No connection plan created")
+        all_target_interfaces = await self._resolve_target_interfaces(deployment_type)
+        if not all_target_interfaces:
             return
 
-        # Validate speed compatibility if requested
-        if self.validate_speeds:
-            connection_plan = self._validate_connection_speeds(
-                connection_plan=connection_plan,
-                available_endpoint_interfaces=available_endpoint_interfaces,
-                all_target_interfaces=all_target_interfaces,
-            )
-
-        # Validate the final plan
-        is_valid, message = ConnectionValidator.validate_plan(connection_plan, min_connections=2)
-        if not is_valid:
-            self.logger.error(f"Connection plan validation failed: {message}")
-            return
-
-        self.logger.info(f"Connection plan validated: {message}")
-
-        # Add to planned connections
-        self.planned_connections.update(connection_plan)
-
-        # Execute cabling
-        await self._execute_cabling(connection_plan, target_device_names)
-
-        self.logger.info(f"Successfully created {len(connection_plan)} connections")
-
-    def _validate_connection_speeds(
-        self,
-        connection_plan: list[ConnectionFingerprint],
-        available_endpoint_interfaces: list[Any],
-        all_target_interfaces: list[DcimPhysicalInterface],
-    ) -> list[ConnectionFingerprint]:
-        """Validate interface speed compatibility in connection plan.
-
-        Similar to CablingPlanner._validate_interface_speeds() but works with ConnectionFingerprint objects.
-        """
-        validated_plan = []
-        mismatches = []
-
-        # Build lookup maps for speed extraction
-        endpoint_speed_map: dict[str, int | None] = {}
-        for intf in available_endpoint_interfaces:
-            if hasattr(intf, "interface_type") and intf.interface_type:
-                speed = InterfaceSpeedMatcher.extract_speed(str(intf.interface_type))
-                endpoint_speed_map[intf.name] = speed
-
-        target_speed_map: dict[str, int | None] = {}
+        device_groups: dict[str, list[DcimPhysicalInterface]] = {}
         for intf in all_target_interfaces:
-            if hasattr(intf, "interface_type") and intf.interface_type:
-                intf_type = intf.interface_type.value if hasattr(intf.interface_type, "value") else intf.interface_type
-                speed = InterfaceSpeedMatcher.extract_speed(str(intf_type)) if intf_type else None
-                target_speed_map[intf.name.value] = speed
-
-        # Check each connection
-        for conn in connection_plan:
-            endpoint_speed = endpoint_speed_map.get(conn.server_interface)
-            target_speed = target_speed_map.get(conn.switch_interface)
-
-            # Check compatibility
-            if endpoint_speed and target_speed and endpoint_speed != target_speed:
-                mismatch_msg = (
-                    f"Speed mismatch: {conn.server_name}:{conn.server_interface} "
-                    f"({endpoint_speed}G) ↔ {conn.switch_name}:{conn.switch_interface} ({target_speed}G)"
-                )
-                mismatches.append(mismatch_msg)
-
-                if self.strict_speed_validation:
-                    self.logger.warning(f"Skipping connection due to speed mismatch: {mismatch_msg}")
-                    continue
-                else:
-                    self.logger.warning(f"Speed mismatch detected (connection will proceed): {mismatch_msg}")
-
-            validated_plan.append(conn)
-
-        if mismatches:
-            self.logger.info(f"Speed validation found {len(mismatches)} mismatches")
-
-        return validated_plan
-
-    async def _execute_cabling(
-        self,
-        connection_plan: list[ConnectionFingerprint],
-        target_device_names: list[str],
-    ) -> None:
-        """Execute cabling for a connection plan."""
-        # Sort interfaces using netutils for proper ordering
-        endpoint_intf_names = sort_interface_list([conn.server_interface for conn in connection_plan])
-        target_intf_names = sort_interface_list(list(set(conn.switch_interface for conn in connection_plan)))
-
-        await self.create_cabling(
-            bottom_devices=[self.data.name],
-            bottom_interfaces=endpoint_intf_names,
-            top_devices=target_device_names,
-            top_interfaces=target_intf_names,
-            strategy="intra_rack",
-            options=CablingOptions(
-                cabling_offset=0,
-                pool=None,  # No IP allocation for endpoint connections
-            ),
-        )
-
-    def _build_connection_plan(
-        self,
-        server_interfaces: list[Any],
-        switch_interfaces: list[DcimPhysicalInterface],
-        target_device_names: list[str],
-    ) -> list[ConnectionFingerprint]:
-        """Build connection plan with fingerprinting for idempotency.
-
-        Args:
-            server_interfaces: Server interface models
-            switch_interfaces: Switch interface models
-            target_device_names: List of target switch names for dual-homing
-
-        Returns:
-            List of ConnectionFingerprint objects representing planned connections
-        """
-        plan: list[ConnectionFingerprint] = []
-
-        # Group switch interfaces by device for dual-homing
-        switch_by_device: dict[str, list[DcimPhysicalInterface]] = {}
-        for intf in switch_interfaces:
             device_name = self._extract_device_name(intf)
-            if not device_name:
-                self.logger.warning(f"Could not determine device name for interface {intf.name.value}")
-                continue
+            if device_name:
+                device_groups.setdefault(device_name, []).append(intf)
 
-            if device_name not in switch_by_device:
-                switch_by_device[device_name] = []
-            switch_by_device[device_name].append(intf)
-
-        # Sort interfaces within each device using netutils for proper ordering
-        for device_name, intfs in switch_by_device.items():
-            interface_map = {intf.name.value: intf for intf in intfs}
-            sorted_names = sort_interface_list(list(interface_map.keys()))
-            switch_by_device[device_name] = [interface_map[name] for name in sorted_names]
-
-        # Debug: log device grouping
-        self.logger.info(
-            f"Grouped {len(switch_interfaces)} interfaces into {len(switch_by_device)} devices: {list(switch_by_device.keys())}"
-        )
-        for dev_name, intfs in switch_by_device.items():
-            self.logger.debug(f"  {dev_name}: {len(intfs)} interfaces")
-
-        # Take up to 4 server interfaces (2 per switch for dual-homing)
-        server_intfs = server_interfaces[:4]
-
-        self.logger.info(
-            f"Planning connections for {len(server_intfs)} server interfaces (requested: {len(server_interfaces)})"
-        )
-        self.logger.info(f"Target devices: {target_device_names}")
-
-        # Alternate between switches for dual-homing
-        for idx, server_intf in enumerate(server_intfs):
-            switch_name = target_device_names[idx % 2]
-            available_switch_intfs = switch_by_device.get(switch_name, [])
-
-            server_intf_name = server_intf.name.value if hasattr(server_intf.name, "value") else str(server_intf.name)
-
-            if not available_switch_intfs:
-                self.logger.warning(f"No available interfaces on {switch_name} for {server_intf.name}")
-                continue
-
-            # Take first available interface from sorted list
-            switch_intf = available_switch_intfs.pop(0)
-
-            fingerprint = ConnectionFingerprint(
-                server_name=self.data.name,
-                server_interface=server_intf_name,
-                switch_name=switch_name,
-                switch_interface=switch_intf.name.value,
+        device_names = list(device_groups.keys())
+        if len(device_names) < 2:
+            self.logger.error(
+                f"Endpoint {self.data.name}: Need 2 switches for MLAG-attached bonds, found {len(device_names)}."
             )
+            return
+        switch_a_name, switch_b_name = device_names[:2]
 
-            # Check if already planned (idempotency within this run)
-            if fingerprint not in self.planned_connections:
-                plan.append(fingerprint)
+        switches = await self.client.filters(
+            kind=DcimPhysicalDevice, name__values=[switch_a_name, switch_b_name], include=["capabilities", "platform"]
+        )
+        switch_by_name = {s.name.value: s for s in switches}
+        mlag_ids_by_switch: dict[str, set[str]] = {}
+        for name, switch in switch_by_name.items():
+            caps = getattr(switch, "capabilities")
+            mlag_ids_by_switch[name] = {peer.id for peer in caps.peers if peer.typename == "ManagedMLAG"}
 
-        return plan
+        shared_domains = mlag_ids_by_switch.get(switch_a_name, set()) & mlag_ids_by_switch.get(switch_b_name, set())
+        if len(shared_domains) != 1:
+            self.logger.warning(
+                f"Endpoint {self.data.name}: {switch_a_name}/{switch_b_name} share "
+                f"{len(shared_domains)} MLAG domain(s) (need exactly 1) — skipping LAG bond(s). "
+                "Pair the switches into a ManagedMLAG domain first."
+            )
+            return
+        mlag_domain_id = next(iter(shared_domains))
 
-    def _select_consecutive_device_pair(self, devices: list[dict[str, Any]], role: str) -> list[dict[str, Any]]:
-        """Select pair of consecutive devices for dual-homing."""
+        existing_lag_ids: set[int] = set()
+        for name in (switch_a_name, switch_b_name):
+            lags = await self.client.filters(kind=DcimLAGInterface, device__ids=[switch_by_name[name].id])
+            existing_lag_ids.update(lag.lag_id.value for lag in lags)
 
-        def extract_id(name: str) -> int | None:
-            match = re.search(r"(\d+)$", name)
-            return int(match.group(1)) if match else None
+        for bond in server_bonds:
+            member_ifaces = getattr(bond, "member_interfaces")
+            member_peers = [peer.peer for peer in member_ifaces.peers]
+            bond_name = bond.name.value
 
-        device_map = {}
-        for device in devices:
-            name = device.get("name", {}).get("value", "")
-            dev_id = extract_id(name)
-            if dev_id is not None:
-                device_map[dev_id] = device
+            if len(member_peers) < 2:
+                self.logger.warning(f"Bond {bond_name} on {self.data.name} has < 2 member interfaces — skipping")
+                continue
 
-        sorted_ids = sorted(device_map.keys())
-        for i in range(len(sorted_ids) - 1):
-            id1, id2 = sorted_ids[i], sorted_ids[i + 1]
-            if id2 - id1 == 1 and id1 % 2 == 1:
-                return [device_map[id1], device_map[id2]]
+            # Idempotency: a bond whose server-side members already have cables
+            # was already wired by a previous run — re-allocating a port/lag_id
+            # for it here would create a second, unwanted port-channel.
+            if any(getattr(member, "cable", None) and member.cable.id for member in member_peers):
+                self.logger.info(f"Bond {bond_name} on {self.data.name} already cabled — skipping")
+                continue
 
-        return devices[:2]
+            member_names = sort_interface_list([m.name.value for m in member_peers])
+
+            free_ports_by_switch: dict[str, list[DcimPhysicalInterface]] = {}
+            for name in (switch_a_name, switch_b_name):
+                free_ports_by_switch[name] = [p for p in device_groups[name] if not (p.cable and p.cable.id)]
+
+            if not free_ports_by_switch[switch_a_name] or not free_ports_by_switch[switch_b_name]:
+                self.logger.warning(f"Bond {bond_name} on {self.data.name}: no free ports on both switches — skipping")
+                continue
+
+            lag_id = self._next_free_lag_id(existing_lag_ids)
+            existing_lag_ids.add(lag_id)
+
+            for switch_name, server_interface_name in zip((switch_a_name, switch_b_name), member_names):
+                switch = switch_by_name[switch_name]
+                switch_port = free_ports_by_switch[switch_name].pop(0)
+                device_groups[switch_name].remove(switch_port)
+
+                fingerprint = ConnectionFingerprint(
+                    server_name=self.data.name,
+                    server_interface=server_interface_name,
+                    switch_name=switch_name,
+                    switch_interface=switch_port.name.value,
+                )
+                if fingerprint not in self.planned_connections:
+                    self.planned_connections.add(fingerprint)
+                    await self.create_cabling(
+                        bottom_devices=[self.data.name],
+                        bottom_interfaces=[server_interface_name],
+                        top_devices=[switch_name],
+                        top_interfaces=[switch_port.name.value],
+                        strategy="intra_rack",
+                        options=CablingOptions(cabling_offset=0, pool=None),
+                    )
+
+                platform = getattr(switch, "platform")
+                platform_name = platform.peer.name.value if platform.peer else ""
+                lag_obj = await self.client.create(
+                    kind=DcimLAGInterface,
+                    data={
+                        "name": get_lag_name(platform_name, lag_id),
+                        "device": {"id": switch.id},
+                        "status": "active",
+                        "role": "lag",
+                        "lag_id": lag_id,
+                        "lacp_mode": "active",
+                        "mlag_domain": {"id": mlag_domain_id},
+                        "member_interfaces": [{"id": switch_port.id}],
+                    },
+                )
+                await lag_obj.save(allow_upsert=True)
+                self.logger.info(
+                    f"{self.data.name}: bond {bond_name} → {switch_name}:{get_lag_name(platform_name, lag_id)} "
+                    f"(member {switch_port.name.value}, mlag_domain={mlag_domain_id})"
+                )
+
+    @staticmethod
+    def _next_free_lag_id(existing_ids: set[int]) -> int:
+        """Smallest positive lag_id not already in use (100 reserved for MLAG peer-link, see mlag.py)."""
+        candidate = 1
+        taken = existing_ids | {100}
+        while candidate in taken:
+            candidate += 1
+        return candidate
