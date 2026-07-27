@@ -1,17 +1,14 @@
-"""Unit tests for RackGenerator's firewall/load-balancer provisioning + cabling.
+"""Unit tests for RackGenerator's firewall/load-balancer device provisioning.
 
 Covers:
-- _resolve_dc_border_leaf_pair: DC-wide lookup, warns (not errors) when < 2 found
-- _resolve_bl_port_names: sorted, deduplicated port names by role
 - _ensure_ha_pair: HA domain creation mirrors _ensure_mlag_pairs' pairing shape
   (create when exactly 2 devices, track existing instead of recreating, no-op
   otherwise)
-- _cable_pbr_independent: independent BL<->FW / BL<->LB fan-out cabling,
-  errors (not warnings) on missing uplinks/ports
-- _cable_inline_service_chain: BL->FW->LB->BL 3-link chain, equal-quantity
-  requirement with no partial-chain fallback, errors on insufficient ports
-- _generate_firewalls_and_load_balancers: end-to-end orchestration branching
-  on connectivity_mode
+- _create_role_devices_with_ha: device creation + HA pairing at quantity == 2
+- _generate_firewalls_and_load_balancers: creates firewall/load-balancer
+  devices for every fabric_templates role entry; no-op when neither role is
+  present. Cabling to the DC's border-leaf pair is deferred to a follow-up
+  and not covered here.
 """
 
 from __future__ import annotations
@@ -106,13 +103,6 @@ def _mock_device(name: str) -> MagicMock:
     return dev
 
 
-def _mock_interface(name: str) -> MagicMock:
-    intf = MagicMock()
-    intf.name = MagicMock(value=name)
-    intf.cable = None
-    return intf
-
-
 def _mock_group(group_id: str = "ha-domains-group") -> MagicMock:
     group = MagicMock()
     group.id = group_id
@@ -127,133 +117,6 @@ _LB_TEMPLATE = Template(
     id="tmpl-lb",
     interfaces=[Interface(name="1.1", role="uplink"), Interface(name="1.2", role="uplink")],
 )
-
-
-class TestResolveDcBorderLeafPair:
-    @pytest.mark.asyncio
-    async def test_resolves_sorted_pair(self) -> None:
-        gen = _build_gen()
-        gen.client.filters = AsyncMock(return_value=[_mock_device("dc1-bl-02"), _mock_device("dc1-bl-01")])
-
-        result = await gen._resolve_dc_border_leaf_pair("dc-1")
-
-        assert result == ["dc1-bl-01", "dc1-bl-02"]
-
-    @pytest.mark.asyncio
-    async def test_fewer_than_two_errors_and_returns_none(self) -> None:
-        gen = _build_gen()
-        gen.client.filters = AsyncMock(return_value=[_mock_device("dc1-bl-01")])
-
-        result = await gen._resolve_dc_border_leaf_pair("dc-1")
-
-        assert result is None
-        gen.logger.error.assert_called_once()
-
-    @pytest.mark.asyncio
-    async def test_more_than_two_truncates_to_first_two_sorted(self) -> None:
-        gen = _build_gen()
-        gen.client.filters = AsyncMock(
-            return_value=[_mock_device("dc1-bl-03"), _mock_device("dc1-bl-01"), _mock_device("dc1-bl-02")]
-        )
-
-        result = await gen._resolve_dc_border_leaf_pair("dc-1")
-
-        assert result == ["dc1-bl-01", "dc1-bl-02"]
-
-
-class TestResolveBlPortNames:
-    @pytest.mark.asyncio
-    async def test_sorted_deduplicated_names(self) -> None:
-        gen = _build_gen()
-        gen.client.filters = AsyncMock(
-            return_value=[
-                _mock_interface("Ethernet1/26"),
-                _mock_interface("Ethernet1/25"),
-                _mock_interface("Ethernet1/25"),
-            ]
-        )
-
-        result = await gen._resolve_bl_port_names(["dc1-bl-01", "dc1-bl-02"], role="firewall")
-
-        assert result == ["Ethernet1/25", "Ethernet1/26"]
-        call_kwargs = gen.client.filters.call_args.kwargs
-        assert call_kwargs["role__value"] == "firewall"
-        assert call_kwargs["device__name__values"] == ["dc1-bl-01", "dc1-bl-02"]
-
-
-def _mock_uplink_with_cable(*, iface_id: str, cable_id: str) -> MagicMock:
-    intf = MagicMock()
-    intf.id = iface_id
-    intf.cable = MagicMock(id=cable_id)
-    return intf
-
-
-def _mock_cable_far_end(*, peer_id: str, device_name: str) -> MagicMock:
-    peer = MagicMock()
-    peer.id = peer_id
-    peer.device = MagicMock()
-    peer.device.peer = None
-    peer.device.name = MagicMock(value=device_name)
-    return peer
-
-
-def _mock_cable(*, name: str, far_ends: list[MagicMock]) -> MagicMock:
-    cable_obj = MagicMock()
-    cable_obj.name = MagicMock(value=name)
-    cable_obj.endpoints = MagicMock()
-    cable_obj.endpoints.peers = far_ends
-    return cable_obj
-
-
-class TestDisconnectStaleUplinks:
-    @pytest.mark.asyncio
-    async def test_no_uplinks_is_a_noop(self) -> None:
-        gen = _build_gen()
-        gen.client.filters = AsyncMock(return_value=[])
-        gen.client.delete = AsyncMock()
-
-        await gen._disconnect_stale_uplinks(["fw-01"], valid_far_ends={"bl-01"})
-
-        gen.client.delete.assert_not_awaited()
-
-    @pytest.mark.asyncio
-    async def test_uncabled_uplink_is_skipped(self) -> None:
-        gen = _build_gen()
-        uplink = MagicMock()
-        uplink.cable = None
-        gen.client.filters = AsyncMock(return_value=[uplink])
-        gen.client.delete = AsyncMock()
-
-        await gen._disconnect_stale_uplinks(["fw-01"], valid_far_ends={"bl-01"})
-
-        gen.client.delete.assert_not_awaited()
-
-    @pytest.mark.asyncio
-    async def test_valid_far_end_is_left_connected(self) -> None:
-        gen = _build_gen()
-        uplink = _mock_uplink_with_cable(iface_id="iface-1", cable_id="cable-1")
-        gen.client.filters = AsyncMock(return_value=[uplink])
-        far_end = _mock_cable_far_end(peer_id="peer-1", device_name="bl-01")
-        gen.client.get = AsyncMock(return_value=_mock_cable(name="cbl", far_ends=[far_end]))
-        gen.client.delete = AsyncMock()
-
-        await gen._disconnect_stale_uplinks(["fw-01"], valid_far_ends={"bl-01"})
-
-        gen.client.delete.assert_not_awaited()
-
-    @pytest.mark.asyncio
-    async def test_stale_far_end_is_disconnected(self) -> None:
-        gen = _build_gen()
-        uplink = _mock_uplink_with_cable(iface_id="iface-1", cable_id="cable-1")
-        gen.client.filters = AsyncMock(return_value=[uplink])
-        far_end = _mock_cable_far_end(peer_id="peer-1", device_name="bl-02")
-        gen.client.get = AsyncMock(return_value=_mock_cable(name="cbl", far_ends=[far_end]))
-        gen.client.delete = AsyncMock()
-
-        await gen._disconnect_stale_uplinks(["fw-01"], valid_far_ends={"bl-01"})
-
-        gen.client.delete.assert_awaited_once()
-        assert gen.client.delete.call_args.kwargs["id"] == "cable-1"
 
 
 class TestEnsureHaPair:
@@ -338,167 +201,10 @@ class TestCreateRoleDevicesWithHa:
         assert create_kwargs["options"].get("group_name") is None
 
 
-class TestCablePbrIndependent:
-    @pytest.mark.asyncio
-    async def test_no_uplinks_errors(self) -> None:
-        gen = _build_gen()
-        gen.create_cabling = AsyncMock()
-        empty_template = Template(id="tmpl-empty", interfaces=[])
-
-        await gen._cable_pbr_independent(
-            ["fw-01"], empty_template, ["bl-01", "bl-02"], bl_port_role="firewall", role_label="firewall"
-        )
-
-        gen.create_cabling.assert_not_awaited()
-        gen.logger.error.assert_called_once()
-
-    @pytest.mark.asyncio
-    async def test_insufficient_bl_ports_errors(self) -> None:
-        gen = _build_gen()
-        gen.client.filters = AsyncMock(return_value=[_mock_interface("Ethernet1/25")])
-        gen.create_cabling = AsyncMock()
-
-        await gen._cable_pbr_independent(
-            ["fw-01", "fw-02"], _FW_TEMPLATE, ["bl-01", "bl-02"], bl_port_role="firewall", role_label="firewall"
-        )
-
-        gen.create_cabling.assert_not_awaited()
-        gen.logger.error.assert_called_once()
-
-    @pytest.mark.asyncio
-    async def test_cables_with_rack_strategy(self) -> None:
-        gen = _build_gen()
-        gen.client.filters = AsyncMock(return_value=[_mock_interface("Ethernet1/25"), _mock_interface("Ethernet1/26")])
-        gen.create_cabling = AsyncMock()
-
-        await gen._cable_pbr_independent(
-            ["fw-01", "fw-02"], _FW_TEMPLATE, ["bl-01", "bl-02"], bl_port_role="firewall", role_label="firewall"
-        )
-
-        gen.create_cabling.assert_awaited_once()
-        call_kwargs = gen.create_cabling.call_args.kwargs
-        assert call_kwargs["bottom_devices"] == ["fw-01", "fw-02"]
-        assert call_kwargs["bottom_interfaces"] == ["eth1", "eth2"]
-        assert call_kwargs["top_devices"] == ["bl-01", "bl-02"]
-        assert call_kwargs["top_interfaces"] == ["Ethernet1/25", "Ethernet1/26"]
-        assert call_kwargs["strategy"] == "rack"
-
-
-class TestCableInlineServiceChain:
-    @pytest.mark.asyncio
-    async def test_mismatched_quantities_errors_no_partial_chain(self) -> None:
-        gen = _build_gen()
-        gen.create_cabling = AsyncMock()
-
-        await gen._cable_inline_service_chain(["fw-01", "fw-02"], ["lb-01"], ["bl-01", "bl-02"])
-
-        gen.create_cabling.assert_not_awaited()
-        gen.logger.error.assert_called_once()
-
-    @pytest.mark.asyncio
-    async def test_empty_devices_is_a_noop(self) -> None:
-        gen = _build_gen()
-        gen.create_cabling = AsyncMock()
-
-        await gen._cable_inline_service_chain([], [], ["bl-01", "bl-02"])
-
-        gen.create_cabling.assert_not_awaited()
-        gen.logger.error.assert_not_called()
-
-    @pytest.mark.asyncio
-    async def test_fewer_than_two_border_leafs_errors(self) -> None:
-        gen = _build_gen()
-        gen.create_cabling = AsyncMock()
-
-        await gen._cable_inline_service_chain(["fw-01"], ["lb-01"], ["bl-01"])
-
-        gen.create_cabling.assert_not_awaited()
-        gen.logger.error.assert_called_once()
-
-    @pytest.mark.asyncio
-    async def test_insufficient_uplinks_errors(self) -> None:
-        gen = _build_gen()
-        gen.data.firewalls = [DeviceRole(role="firewall", quantity=1, template=Template(id="t", interfaces=[]))]
-        gen.data.load_balancers = [DeviceRole(role="load-balancer", quantity=1, template=_LB_TEMPLATE)]
-        gen.create_cabling = AsyncMock()
-
-        await gen._cable_inline_service_chain(["fw-01"], ["lb-01"], ["bl-01", "bl-02"])
-
-        gen.create_cabling.assert_not_awaited()
-        gen.logger.error.assert_called_once()
-
-    @pytest.mark.asyncio
-    async def test_insufficient_bl_ports_errors(self) -> None:
-        gen = _build_gen()
-        gen.data.firewalls = [DeviceRole(role="firewall", quantity=1, template=_FW_TEMPLATE)]
-        gen.data.load_balancers = [DeviceRole(role="load-balancer", quantity=1, template=_LB_TEMPLATE)]
-        gen.client.filters = AsyncMock(return_value=[])
-        gen.create_cabling = AsyncMock()
-
-        await gen._cable_inline_service_chain(["fw-01"], ["lb-01"], ["bl-01", "bl-02"])
-
-        gen.create_cabling.assert_not_awaited()
-        gen.logger.error.assert_called_once()
-
-    @pytest.mark.asyncio
-    async def test_builds_three_link_chain(self) -> None:
-        gen = _build_gen()
-        gen.data.firewalls = [DeviceRole(role="firewall", quantity=1, template=_FW_TEMPLATE)]
-        gen.data.load_balancers = [DeviceRole(role="load-balancer", quantity=1, template=_LB_TEMPLATE)]
-        gen.client.filters = AsyncMock(
-            side_effect=[
-                [_mock_interface("Ethernet1/25")],  # bl0 firewall ports
-                [_mock_interface("Ethernet1/29")],  # bl1 load-balancer ports
-                [],  # _disconnect_stale_uplinks(sorted_fw) — no existing fw uplinks to reconcile
-                [],  # _disconnect_stale_uplinks(sorted_lb) — no existing lb uplinks to reconcile
-            ]
-        )
-        gen.create_cabling = AsyncMock()
-
-        await gen._cable_inline_service_chain(["fw-01"], ["lb-01"], ["bl-01", "bl-02"])
-
-        assert gen.create_cabling.await_count == 3
-        calls = gen.create_cabling.call_args_list
-
-        # Link 1: BL[0] firewall-port <-> FW-in
-        link1 = calls[0].kwargs
-        assert link1["bottom_devices"] == ["fw-01"]
-        assert link1["bottom_interfaces"] == ["eth1"]
-        assert link1["top_devices"] == ["bl-01"]
-        assert link1["top_interfaces"] == ["Ethernet1/25"]
-
-        # Link 3 (issued second): LB-out <-> BL[1] load-balancer-port
-        link3 = calls[1].kwargs
-        assert link3["bottom_devices"] == ["lb-01"]
-        assert link3["bottom_interfaces"] == ["1.2"]
-        assert link3["top_devices"] == ["bl-02"]
-        assert link3["top_interfaces"] == ["Ethernet1/29"]
-
-        # Link 2 (issued last, in the pairing loop): FW-out <-> LB-in
-        # (direct 1:1, intra_rack, single-element both sides)
-        link2 = calls[2].kwargs
-        assert link2["bottom_devices"] == ["fw-01"]
-        assert link2["bottom_interfaces"] == ["eth2"]
-        assert link2["top_devices"] == ["lb-01"]
-        assert link2["top_interfaces"] == ["1.1"]
-        assert link2["strategy"] == "intra_rack"
-
-
 class TestGenerateFirewallsAndLoadBalancers:
     @pytest.mark.asyncio
     async def test_no_roles_is_a_noop(self) -> None:
         gen = _build_gen()
-        gen._resolve_dc_border_leaf_pair = AsyncMock()
-
-        await gen._generate_firewalls_and_load_balancers()
-
-        gen._resolve_dc_border_leaf_pair.assert_not_awaited()
-
-    @pytest.mark.asyncio
-    async def test_missing_border_leaf_pair_skips_device_creation(self) -> None:
-        gen = _build_gen()
-        gen.data.firewalls = [DeviceRole(role="firewall", quantity=1, template=_FW_TEMPLATE)]
-        gen._resolve_dc_border_leaf_pair = AsyncMock(return_value=None)
         gen._create_role_devices_with_ha = AsyncMock()
 
         await gen._generate_firewalls_and_load_balancers()
@@ -506,46 +212,38 @@ class TestGenerateFirewallsAndLoadBalancers:
         gen._create_role_devices_with_ha.assert_not_awaited()
 
     @pytest.mark.asyncio
-    async def test_pbr_mode_cables_each_role_independently(self) -> None:
-        gen = _build_gen(connectivity_mode="pbr")
+    async def test_creates_devices_for_each_role_present(self) -> None:
+        gen = _build_gen()
         gen.data.firewalls = [DeviceRole(role="firewall", quantity=1, template=_FW_TEMPLATE)]
         gen.data.load_balancers = [DeviceRole(role="load-balancer", quantity=1, template=_LB_TEMPLATE)]
-        gen._resolve_dc_border_leaf_pair = AsyncMock(return_value=["bl-01", "bl-02"])
         gen._create_role_devices_with_ha = AsyncMock(side_effect=[["fw-01"], ["lb-01"]])
-        gen._cable_pbr_independent = AsyncMock()
-        gen._cable_inline_service_chain = AsyncMock()
 
         await gen._generate_firewalls_and_load_balancers()
 
-        assert gen._cable_pbr_independent.await_count == 2
-        gen._cable_inline_service_chain.assert_not_awaited()
-        first_call, second_call = gen._cable_pbr_independent.call_args_list
-        assert first_call.kwargs["bl_port_role"] == "firewall"
-        assert second_call.kwargs["bl_port_role"] == "load-balancer"
+        assert gen._create_role_devices_with_ha.await_count == 2
+        first_call, second_call = gen._create_role_devices_with_ha.call_args_list
+        assert first_call.kwargs["device_role"] == "firewall"
+        assert first_call.kwargs["ha_kind"] == "ManagedFirewallHA"
+        assert second_call.kwargs["device_role"] == "load-balancer"
+        assert second_call.kwargs["ha_kind"] == "ManagedLoadbalancerHA"
 
     @pytest.mark.asyncio
-    async def test_inline_mode_builds_chain_once_after_both_roles_created(self) -> None:
-        gen = _build_gen(connectivity_mode="inline")
+    async def test_firewall_only_skips_load_balancer_role(self) -> None:
+        gen = _build_gen()
         gen.data.firewalls = [DeviceRole(role="firewall", quantity=1, template=_FW_TEMPLATE)]
-        gen.data.load_balancers = [DeviceRole(role="load-balancer", quantity=1, template=_LB_TEMPLATE)]
-        gen._resolve_dc_border_leaf_pair = AsyncMock(return_value=["bl-01", "bl-02"])
-        gen._create_role_devices_with_ha = AsyncMock(side_effect=[["fw-01"], ["lb-01"]])
-        gen._cable_pbr_independent = AsyncMock()
-        gen._cable_inline_service_chain = AsyncMock()
+        gen._create_role_devices_with_ha = AsyncMock(return_value=["fw-01"])
 
         await gen._generate_firewalls_and_load_balancers()
 
-        gen._cable_pbr_independent.assert_not_awaited()
-        gen._cable_inline_service_chain.assert_awaited_once_with(["fw-01"], ["lb-01"], ["bl-01", "bl-02"])
+        gen._create_role_devices_with_ha.assert_awaited_once()
+        assert gen._create_role_devices_with_ha.call_args.kwargs["device_role"] == "firewall"
 
     @pytest.mark.asyncio
     async def test_quantity_two_triggers_ha_pairing(self) -> None:
-        gen = _build_gen(connectivity_mode="pbr")
+        gen = _build_gen()
         gen.data.firewalls = [DeviceRole(role="firewall", quantity=2, template=_FW_TEMPLATE)]
-        gen._resolve_dc_border_leaf_pair = AsyncMock(return_value=["bl-01", "bl-02"])
         gen.create_devices = AsyncMock(return_value=["fw-01", "fw-02"])
         gen._ensure_ha_pair = AsyncMock()
-        gen._cable_pbr_independent = AsyncMock()
 
         await gen._generate_firewalls_and_load_balancers()
 
@@ -555,12 +253,10 @@ class TestGenerateFirewallsAndLoadBalancers:
 
     @pytest.mark.asyncio
     async def test_quantity_one_does_not_trigger_ha_pairing(self) -> None:
-        gen = _build_gen(connectivity_mode="pbr")
+        gen = _build_gen()
         gen.data.firewalls = [DeviceRole(role="firewall", quantity=1, template=_FW_TEMPLATE)]
-        gen._resolve_dc_border_leaf_pair = AsyncMock(return_value=["bl-01", "bl-02"])
         gen.create_devices = AsyncMock(return_value=["fw-01"])
         gen._ensure_ha_pair = AsyncMock()
-        gen._cable_pbr_independent = AsyncMock()
 
         await gen._generate_firewalls_and_load_balancers()
 

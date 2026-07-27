@@ -175,9 +175,12 @@ class TestRackRolesHelper:
 
 
 def _mock_pod_pools(*, loopback_id: str | None, prefix_id: str | None) -> MagicMock:
+    """Mirror RelatedNode.id, which returns None when unset (unlike .peer.id,
+    which raises ValueError if neither an id nor an hfid is set — see
+    RelatedNode.get()'s docstring)."""
     pod_obj = MagicMock()
-    pod_obj.loopback_pool = MagicMock(peer=MagicMock(id=loopback_id) if loopback_id else None)
-    pod_obj.prefix_pool = MagicMock(peer=MagicMock(id=prefix_id) if prefix_id else None)
+    pod_obj.loopback_pool = MagicMock(id=loopback_id)
+    pod_obj.prefix_pool = MagicMock(id=prefix_id)
     return pod_obj
 
 

@@ -186,9 +186,11 @@ class RackMixin:
         """
         for attempt in range(_POD_POOL_MAX_RETRIES):
             pod_obj = await self.client.get(kind=TopologyPod, id=pod.id, include=["loopback_pool", "prefix_pool"])
-            if pod_obj.loopback_pool.peer and pod_obj.prefix_pool.peer:
-                pod.loopback_pool = Pool(id=pod_obj.loopback_pool.peer.id)
-                pod.prefix_pool = Pool(id=pod_obj.prefix_pool.peer.id)
+            loopback_pool_id = pod_obj.loopback_pool.id
+            prefix_pool_id = pod_obj.prefix_pool.id
+            if loopback_pool_id and prefix_pool_id:
+                pod.loopback_pool = Pool(id=loopback_pool_id)
+                pod.prefix_pool = Pool(id=prefix_pool_id)
                 return pod
             if attempt < _POD_POOL_MAX_RETRIES - 1:
                 delay = self._retry_delay(
