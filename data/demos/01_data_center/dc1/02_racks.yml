@@ -16,6 +16,8 @@ spec:
         - ["1", "border-leaf", "N9K-C9336C-FX2_BORDER_LEAF"]
         - ["2", "leaf", "N9K-C9336C-FX2_LEAF_MR"]
         - ["2", "l2-leaf", "N9K-C9336C-FX2_TOR"]
+        - ["1", "firewall", "CP-26000_FIREWALL"]
+        - ["1", "load-balancer", "BIG-IP-i5800_LOAD_BALANCER"]
     - index: 5
       row_index: 2
       shortname: muc-1-s-1-r-2-1

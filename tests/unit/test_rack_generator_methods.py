@@ -158,12 +158,18 @@ class TestRackGeneratorMethods:
         assert interfaces == ["Eth1/1"]
 
     @pytest.mark.asyncio
-    async def test_get_leaf_devices_in_row_no_racks_raises(self) -> None:
+    async def test_get_leaf_devices_in_row_no_racks_logs_error(self) -> None:
+        # In production self.logger.error() raises GeneratorError immediately
+        # (FailOnErrorLoggerMixin), so execution never reaches the later checks.
+        # The mocked logger here doesn't raise, so all three checks fire in
+        # sequence — only the first call is asserted, matching real behavior.
         gen = _build_gen()
         gen.client.filters = AsyncMock(return_value=[])
 
-        with pytest.raises(RuntimeError, match="no racks"):
-            await gen._get_leaf_devices_in_row("pod-1", 1)
+        await gen._get_leaf_devices_in_row("pod-1", 1)
+
+        first_call_message = gen.logger.error.call_args_list[0].args[0]
+        assert "no racks" in first_call_message.lower()
 
     @pytest.mark.asyncio
     async def test_resolve_local_leaf_target_with_created_leafs(self) -> None:
@@ -226,27 +232,29 @@ class TestRackGeneratorMethods:
         gen.calculate_cabling_offsets = MagicMock(return_value=3)
 
         created: list[str] = []
-        ok = await gen._generate_leafs(created)
+        await gen._generate_leafs(created)
 
-        assert ok is True
         assert created == ["leaf-a", "leaf-b"]
         gen._cable_and_route.assert_awaited_once()
 
         # second pass should skip as duplicate
-        ok = await gen._generate_leafs(created)
-        assert ok is True
+        await gen._generate_leafs(created)
 
     @pytest.mark.asyncio
-    async def test_generate_tors_no_spine_devices_fails(self) -> None:
+    async def test_generate_tors_no_spine_devices_logs_error(self) -> None:
         gen = _build_gen()
         gen.create_devices = AsyncMock(return_value=["tor-a"])
         gen.calculate_cabling_offsets = MagicMock(return_value=1)
         gen.client.filters = AsyncMock(return_value=[])
         gen._spine_device_names = []
+        # In production self.logger.error() raises GeneratorError immediately
+        # (FailOnErrorLoggerMixin), stopping before cabling is attempted. The
+        # mocked logger here doesn't raise, so _cable_and_route must be stubbed
+        # to avoid a real create_cabling retry loop against an empty spine list.
+        gen._cable_and_route = AsyncMock()
 
-        ok = await gen._generate_tors()
+        await gen._generate_tors()
 
-        assert ok is False
         gen.logger.error.assert_called()
 
     @pytest.mark.asyncio
@@ -259,7 +267,7 @@ class TestRackGeneratorMethods:
 
         await gen._generate_border_leafs("mixed")
 
-        gen.logger.warning.assert_called()
+        gen.logger.error.assert_called()
         gen._cable_and_route.assert_not_awaited()
 
     @pytest.mark.asyncio
@@ -309,5 +317,5 @@ class TestRackGeneratorMethods:
 
         await gen._generate_border_leafs("mixed")
 
-        gen.logger.warning.assert_called()
+        gen.logger.error.assert_called()
         gen._cable_and_route.assert_not_awaited()

@@ -240,10 +240,22 @@ spec:
             value_match: any
 
     # ── HA Interfaces ─────────────────────────────────────────────────────────
+    - name: trigger-ha-on-firewall-created
+      branch_scope: "other_branches"
+      node_kind: ManagedFirewallHA
+      mutation_action: "created"
+      action: ha-generator
+
     - name: trigger-ha-on-firewall-update
       branch_scope: "other_branches"
       node_kind: ManagedFirewallHA
       mutation_action: "updated"
+      action: ha-generator
+
+    - name: trigger-ha-on-lb-created
+      branch_scope: "other_branches"
+      node_kind: ManagedLoadbalancerHA
+      mutation_action: "created"
       action: ha-generator
 
     - name: trigger-ha-on-lb-update

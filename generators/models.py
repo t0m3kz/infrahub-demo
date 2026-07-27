@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, List, Literal, Optional
+from typing import Any, Literal
 
 from pydantic import BaseModel, field_validator
 
@@ -18,7 +18,7 @@ def _unwrap_node(value: Any) -> Any:
 # Shared models
 class Platform(BaseModel):
     id: str
-    name: Optional[str] = None
+    name: str | None = None
 
 
 class DeviceType(BaseModel):
@@ -27,14 +27,14 @@ class DeviceType(BaseModel):
 
 class Interface(BaseModel):
     name: str
-    role: Optional[str] = None
+    role: str | None = None
 
 
 class Template(BaseModel):
     id: str
-    platform: Optional[Platform] = None
-    device_type: Optional[DeviceType] = None
-    interfaces: List[Interface] = []
+    platform: Platform | None = None
+    device_type: DeviceType | None = None
+    interfaces: list[Interface] = []
 
 
 class DeviceRack(BaseModel):
@@ -47,20 +47,20 @@ class DeviceRack(BaseModel):
 
 class Device(BaseModel):
     name: str
-    role: Optional[str] = None
-    rack: Optional[DeviceRack] = None  # For leaf devices in mixed deployment
-    interfaces: List[Interface] = []
+    role: str | None = None
+    rack: DeviceRack | None = None  # For leaf devices in mixed deployment
+    interfaces: list[Interface] = []
 
 
 class SpineCable(BaseModel):
     id: str
-    name: Optional[str] = None
+    name: str | None = None
 
 
 class SpineInterface(BaseModel):
     id: str
     name: str
-    cable: Optional[SpineCable] = None
+    cable: SpineCable | None = None
 
     @field_validator("cable", mode="before")
     @classmethod
@@ -73,7 +73,7 @@ class SpineInterface(BaseModel):
 class SpineDevice(BaseModel):
     id: str
     name: str
-    interfaces: List[SpineInterface] = []
+    interfaces: list[SpineInterface] = []
 
     @property
     def cabled_port_names(self) -> set[str]:
@@ -83,7 +83,7 @@ class SpineDevice(BaseModel):
 
 class Pool(BaseModel):
     id: str
-    name: Optional[str] = None
+    name: str | None = None
 
 
 # Pod Design model (three-layer architecture)
@@ -96,7 +96,7 @@ class PodDesign(BaseModel):
     """
 
     id: str
-    name: Optional[str] = None
+    name: str | None = None
 
     # Physical layout — required in schema, no defaults
     rows: int
@@ -133,7 +133,7 @@ class DataCenterDesignData(BaseModel):
     T-shirt sizing: S(<=2 pods), M(<=4), L(<=8), XL(<=16).
     """
 
-    id: Optional[str] = None
+    id: str | None = None
 
     # Routing architecture
     routing_strategy: str = "ebgp-ebgp"
@@ -177,17 +177,17 @@ class DCModel(BaseModel):
     id: str
     name: str
     index: int
-    design: Optional[DataCenterDesignData] = None
+    design: DataCenterDesignData | None = None
     naming_convention: str = "standard"
     fabric_interface_sorting_method: Literal["top_down", "bottom_up"] = "bottom_up"
     spine_interface_sorting_method: Literal["top_down", "bottom_up"] = "bottom_up"
     amount_of_super_spines: int = 0
-    super_spine_template: Optional[Template] = None
-    loopback_pool: Optional[Pool] = None
-    technical_pool: Optional[Pool] = None
-    management_pool: Optional[Pool] = None
-    super_spine_asn_pool: Optional[Pool] = None
-    children: List[DCPod] = []
+    super_spine_template: Template | None = None
+    loopback_pool: Pool | None = None
+    technical_pool: Pool | None = None
+    management_pool: Pool | None = None
+    super_spine_asn_pool: Pool | None = None
+    children: list[DCPod] = []
 
     @field_validator(
         "loopback_pool",
@@ -199,7 +199,7 @@ class DCModel(BaseModel):
         mode="before",
     )
     @classmethod
-    def extract_node(cls, value: Any) -> Optional[Any]:
+    def extract_node(cls, value: Any) -> Any | None:
         unwrapped = _unwrap_node(value)
         if isinstance(unwrapped, dict) and unwrapped.get("id") is None:
             return None
@@ -209,22 +209,22 @@ class DCModel(BaseModel):
 # Pod model
 class PodParent(BaseModel):
     id: str
-    devices: List[Device]
+    devices: list[Device]
     name: str
     index: int
     # Schema: optional — only set for fabrics with super-spine tier
-    super_spine_template: Optional[Template] = None
+    super_spine_template: Template | None = None
     amount_of_super_spines: int = 0
-    design: Optional[DataCenterDesignData] = None
+    design: DataCenterDesignData | None = None
     naming_convention: str = "standard"
     fabric_interface_sorting_method: Literal["top_down", "bottom_up"] = "bottom_up"
     spine_interface_sorting_method: Literal["top_down", "bottom_up"] = "bottom_up"
-    super_spine_asn_pool: Optional[Pool] = None
-    management_pool: Optional[Pool] = None
+    super_spine_asn_pool: Pool | None = None
+    management_pool: Pool | None = None
 
     @field_validator("management_pool", "super_spine_asn_pool", "design", "super_spine_template", mode="before")
     @classmethod
-    def extract_parent_node(cls, value: Any) -> Optional[Any]:
+    def extract_parent_node(cls, value: Any) -> Any | None:
         unwrapped = _unwrap_node(value)
         # super_spine_template node wrapper may resolve to {"id": null} when not set
         if isinstance(unwrapped, dict) and unwrapped.get("id") is None:
@@ -248,7 +248,7 @@ class PodModel(BaseModel):
     name: str
     index: int
     # Design relationship is optional in schema
-    design: Optional[PodDesign] = None
+    design: PodDesign | None = None
     amount_of_spines: int = 4
 
     leaf_interface_sorting_method: Literal["top_down", "bottom_up"] = "bottom_up"
@@ -275,9 +275,9 @@ class PodModel(BaseModel):
     # Schema: required relationship (optional: false)
     spine_template: Template
     parent: PodParent
-    loopback_pool: Optional[Pool] = None
-    prefix_pool: Optional[Pool] = None
-    asn_pool: Optional[Pool] = None
+    loopback_pool: Pool | None = None
+    prefix_pool: Pool | None = None
+    asn_pool: Pool | None = None
 
     @field_validator("design", "loopback_pool", "prefix_pool", "asn_pool", "spine_template", mode="before")
     @classmethod
@@ -297,16 +297,17 @@ class RackParent(BaseModel):
     id: str
     name: str
     index: int
-    design: Optional[DataCenterDesignData] = None
+    design: DataCenterDesignData | None = None
     naming_convention: str = "standard"
     fabric_interface_sorting_method: Literal["top_down", "bottom_up"] = "bottom_up"
-    management_pool: Optional[Pool] = None
+    management_pool: Pool | None = None
     amount_of_super_spines: int = 0
-    super_spine_template: Optional[Template] = None
+    super_spine_template: Template | None = None
+    connectivity_mode: Literal["pbr", "inline"] = "pbr"
 
     @field_validator("management_pool", "design", "super_spine_template", mode="before")
     @classmethod
-    def extract_rack_parent_node(cls, value: Any) -> Optional[Any]:
+    def extract_rack_parent_node(cls, value: Any) -> Any | None:
         unwrapped = _unwrap_node(value)
         if isinstance(unwrapped, dict) and unwrapped.get("id") is None:
             return None
@@ -325,8 +326,8 @@ class SimpleRack(BaseModel):
     id: str
     index: int
     row_index: int
-    leafs: Optional[List[QuantityOnly]] = []
-    tors: Optional[List[QuantityOnly]] = []
+    leafs: list[QuantityOnly] | None = []
+    tors: list[QuantityOnly] | None = []
 
 
 class RackPod(BaseModel):
@@ -338,14 +339,14 @@ class RackPod(BaseModel):
     leaf_interface_sorting_method: Literal["top_down", "bottom_up"] = "bottom_up"
     spine_interface_sorting_method: Literal["top_down", "bottom_up"] = "bottom_up"
     mlag_create: Literal["no", "back-to-back", "virtual"] = "no"
-    loopback_pool: Optional[Pool] = None
-    prefix_pool: Optional[Pool] = None
-    asn_pool: Optional[Pool] = None
-    design: Optional[PodDesign] = None
+    loopback_pool: Pool | None = None
+    prefix_pool: Pool | None = None
+    asn_pool: Pool | None = None
+    design: PodDesign | None = None
     # Schema: required relationship (optional: false)
     spine_template: Template
     # Spine devices with cable info (from GQL query)
-    devices: List[SpineDevice] = []
+    devices: list[SpineDevice] = []
 
     @property
     def deployment_type(self) -> Literal["middle_rack", "tor", "mixed"]:
@@ -364,10 +365,10 @@ class LocationSuiteModel(BaseModel):
     """LocationSuite model for rack parent hierarchy."""
 
     index: int  # Required for device naming
-    id: Optional[str] = None
-    name: Optional[str] = None
-    shortname: Optional[str] = None
-    suite_name: Optional[str] = None
+    id: str | None = None
+    name: str | None = None
+    shortname: str | None = None
+    suite_name: str | None = None
 
 
 class RackModel(BaseModel):
@@ -377,11 +378,13 @@ class RackModel(BaseModel):
     rack_type: str
     row_index: int
     parent: LocationSuiteModel
-    leafs: Optional[List[DeviceRole]] = []
-    tors: Optional[List[DeviceRole]] = []
-    l2_leafs: Optional[List[DeviceRole]] = []
-    access_leafs: Optional[List[DeviceRole]] = []
-    border_leafs: Optional[List[DeviceRole]] = []
+    leafs: list[DeviceRole] | None = []
+    tors: list[DeviceRole] | None = []
+    l2_leafs: list[DeviceRole] | None = []
+    access_leafs: list[DeviceRole] | None = []
+    border_leafs: list[DeviceRole] | None = []
+    firewalls: list[DeviceRole] | None = []
+    load_balancers: list[DeviceRole] | None = []
     pod: RackPod
 
 
@@ -397,10 +400,10 @@ class EndpointInterface(BaseModel):
 
     id: str
     name: str
-    interface_type: Optional[str] = None
-    role: Optional[str] = None
-    status: Optional[str] = None
-    cable: Optional[Cable] = None
+    interface_type: str | None = None
+    role: str | None = None
+    status: str | None = None
+    cable: Cable | None = None
 
     @field_validator("cable", mode="before")
     @classmethod
@@ -413,9 +416,9 @@ class RackDevice(BaseModel):
 
     id: str
     name: str
-    role: Optional[str] = None
-    rack_row_index: Optional[int] = None
-    interfaces: List[EndpointInterface] = []
+    role: str | None = None
+    rack_row_index: int | None = None
+    interfaces: list[EndpointInterface] = []
 
 
 class EndpointDataCenter(BaseModel):
@@ -430,7 +433,7 @@ class EndpointPod(BaseModel):
 
     id: str
     name: str
-    design: Optional[PodDesign] = None
+    design: PodDesign | None = None
     index: int
     parent: EndpointDataCenter
 
@@ -453,7 +456,7 @@ class EndpointRack(BaseModel):
     row_index: int
     rack_type: str
     pod: EndpointPod
-    devices: List[RackDevice] = []  # Leafs and ToRs in same rack
+    devices: list[RackDevice] = []  # Leafs and ToRs in same rack
 
 
 class EndpointDevice(BaseModel):
@@ -461,9 +464,9 @@ class EndpointDevice(BaseModel):
 
     id: str
     name: str
-    role: Optional[str] = None
-    rack: Optional[EndpointRack] = None
-    interfaces: List[EndpointInterface] = []
+    role: str | None = None
+    rack: EndpointRack | None = None
+    interfaces: list[EndpointInterface] = []
 
 
 class EndpointModel(BaseModel):

@@ -7,7 +7,7 @@ from infrahub_sdk.protocols import CoreStandardGroup
 
 from ..common import CablingOptions, CommonGenerator
 from ..helpers.rack import RackPlanner, RackRolesHelper, parse_rack_data
-from ..models import RackModel, Template
+from ..models import DeviceRole, RackModel, Template
 from ..protocols import DcimPhysicalDevice, DcimPhysicalInterface, LocationRack
 from ..rack import (
     MUTUALLY_EXCLUSIVE_ROLE_GROUPS,
@@ -53,11 +53,16 @@ class RackGenerator(RackMixin, CommonGenerator):
         )
 
     def _has_any_switch_templates(self) -> bool:
-        """Any switch template that rack generator can materialize."""
+        """Any switch, firewall, or load-balancer template this generator can materialize
+        (firewall/load_balancer aren't switches, but are handled here too — a rack with
+        only those must not be skipped as "endpoint-only").
+        """
         return (
             self._has_role_templates(self.data.leafs)
             or self._has_tor_like_templates()
             or self._has_role_templates(self.data.border_leafs)
+            or self._has_role_templates(self.data.firewalls)
+            or self._has_role_templates(self.data.load_balancers)
         )
 
     def _present_roles(self) -> set[str]:
@@ -68,6 +73,8 @@ class RackGenerator(RackMixin, CommonGenerator):
             "l2_leaf": self.data.l2_leafs,
             "access_leaf": self.data.access_leafs,
             "border_leaf": self.data.border_leafs,
+            "firewall": self.data.firewalls,
+            "load_balancer": self.data.load_balancers,
         }
         return {role for role, templates in role_templates.items() if self._has_role_templates(templates)}
 
@@ -116,13 +123,7 @@ class RackGenerator(RackMixin, CommonGenerator):
     ) -> list[dict]:
         """Fetch devices and their interfaces from a rack using the registered GQL query.
 
-        Args:
-            rack: Optional SDK rack object. If None, uses self.data context (pod + row)
-            role_filter: Optional device role to filter by (e.g., "leaf", "spine")
-            interface_role: Interface role filter (default: "downlink")
-
-        Returns:
-            List of dicts with device name, interfaces list, and role
+        Uses self.data context (pod + row) when ``rack`` is not given.
         """
         if rack:
             rack_obj = await self.client.get(kind=LocationRack, id=rack.id)
@@ -168,20 +169,12 @@ class RackGenerator(RackMixin, CommonGenerator):
         """Fan out to the row-dependent (tor/compute) racks' own add_rack runs (mixed mode only).
 
         Row-dependent racks have no local leaf — they cable to this network rack's
-        leafs (or, indirectly, to a local ToR fed by them). Their generator run must
-        not start until this network rack's own leafs actually exist, which is
-        already guaranteed here: this method only runs after generate() has finished
-        creating them.
+        leafs, which this method only runs after they exist.
 
-        Fires with wait=False (fire-and-forget), not wait=True: a row-dependent
-        rack's own generate() waits for an in-flight "Run generator add_rack" task
-        on this network rack before reading pod-level data (self-nesting guard —
-        same generator name on both sides, since this level isn't split into a
-        separate cascade generator like dc_pod_cascade/pod_rack_cascade are). If
-        this call blocked until the fanned-out rack's own run completed, this
-        network rack's own task would stay RUNNING for that entire duration —
-        which the row-dependent rack's guard would then see as "still in flight"
-        and wait on, deadlocking against the very call that's waiting on it.
+        wait=False, not wait=True: a row-dependent rack's own generate() waits for
+        an in-flight add_rack task on this network rack (self-nesting guard — same
+        generator name on both sides). Blocking here would keep this task RUNNING,
+        which that guard would see as "still in flight" and wait on — deadlock.
         """
         deployment_type = self.data.pod.deployment_type
 
@@ -208,16 +201,7 @@ class RackGenerator(RackMixin, CommonGenerator):
         await self.run_generator("add_rack", [rack.id for rack in row_dependent_racks], wait=False)
 
     async def _get_leaf_devices_in_row(self, pod_id: str, row_index: int) -> tuple[list[str], list[str]]:
-        """Query leaf devices in same row and their interfaces for ToR-to-leaf cabling.
-
-        Args:
-            pod_id: Pod ID to filter devices
-            row_index: Row index to filter leaf devices by same row
-
-        Returns:
-            Tuple of (device_names, interface_names) for create_cabling
-        """
-        # Step 1: Query racks in same row
+        """Query leaf devices in same row and their downlink interfaces, for ToR-to-leaf cabling."""
         racks_in_row = await self.client.filters(
             kind=LocationRack,
             pod__ids=[pod_id],
@@ -229,9 +213,7 @@ class RackGenerator(RackMixin, CommonGenerator):
                 f"Rack {self.data.name}: No racks found in row {row_index}. "
                 "Cannot create ToR-to-leaf cabling for mixed deployment."
             )
-            raise RuntimeError(f"Rack {self.data.name}: Cannot cable ToRs - no racks in row {row_index}")
 
-        # Step 2: Query leaf devices and their downlink interfaces
         leaf_devices = await self.client.filters(
             kind=DcimPhysicalDevice,
             role__value="leaf",
@@ -243,7 +225,6 @@ class RackGenerator(RackMixin, CommonGenerator):
                 f"Rack {self.data.name}: No leaf devices found in row {row_index}. "
                 "Cannot create ToR-to-leaf cabling for mixed deployment."
             )
-            raise RuntimeError(f"Rack {self.data.name}: Cannot cable ToRs - no leaf devices in row {row_index}")
 
         device_names = [dev.name.value for dev in leaf_devices]
         leaf_interfaces = await self.client.filters(
@@ -257,12 +238,8 @@ class RackGenerator(RackMixin, CommonGenerator):
                 f"Rack {self.data.name}: No downlink interfaces found on leaf devices in row {row_index}. "
                 "Cannot create ToR-to-leaf cabling for mixed deployment."
             )
-            raise RuntimeError(
-                f"Rack {self.data.name}: Cannot cable ToRs - no downlink interfaces on leafs in row {row_index}"
-            )
 
-        # Extract unique interface names
-        interface_names = sorted(set(iface.name.value for iface in leaf_interfaces))
+        interface_names = sorted({iface.name.value for iface in leaf_interfaces})
 
         self.logger.info(
             f"Found {len(device_names)} leaf devices in row {row_index} with {len(interface_names)} unique downlink interfaces"
@@ -277,16 +254,10 @@ class RackGenerator(RackMixin, CommonGenerator):
         devices_per_rack: int,
         role_label: str,
     ) -> tuple[list[str], list[str], int, Literal["intra_rack_middle", "intra_rack_mixed"]] | None:
-        """Resolve the leaf devices/interfaces a rack's l2-leaf or access-leaf batch cables to.
-
-        Both roles sit below leafs (not spines) with the identical two cases:
-        network rack — cable to the local leaf pair created earlier in this same
-        run; compute rack (mixed deployment) — cable to the middle-rack leafs in
-        the same row, looked up once per rack and cached by the caller.
-
-        Returns (leaf_devices, leaf_interfaces, cabling_offset, strategy), or
-        None if the target couldn't be resolved (already logged) — the caller
-        should ``continue`` to the next role template.
+        """Resolve the leaf devices/interfaces a rack's l2-leaf or access-leaf batch
+        cables to: the local leaf pair created earlier this run (network rack), or
+        the middle-rack leafs in the same row (compute rack, mixed deployment).
+        Returns None if unresolved (already logged) — caller should ``continue``.
         """
         if created_leaf_devices:
             leaf_interfaces_objects = await self.client.filters(
@@ -299,20 +270,14 @@ class RackGenerator(RackMixin, CommonGenerator):
                     f"Rack {self.data.name}: No downlink interfaces on leafs — cannot cable {role_label}s."
                 )
                 return None
-            leaf_interfaces = sorted(set(iface.name.value for iface in leaf_interfaces_objects))
+            leaf_interfaces = sorted({iface.name.value for iface in leaf_interfaces_objects})
             return created_leaf_devices, leaf_interfaces, 0, "intra_rack_middle"
 
         # Compute rack (mixed deployment): cable to middle-rack leafs in same row
         cabling_offset = (self.data.index - 1) * devices_per_rack
 
         if leaf_row_cache is None:
-            try:
-                leaf_row_cache = await self._get_leaf_devices_in_row(
-                    pod_id=self.data.pod.id, row_index=self.data.row_index
-                )
-            except RuntimeError as exc:
-                self.logger.error(str(exc))
-                return None
+            leaf_row_cache = await self._get_leaf_devices_in_row(pod_id=self.data.pod.id, row_index=self.data.row_index)
         leaf_device_names, leaf_interfaces = leaf_row_cache
 
         if not leaf_device_names:
@@ -397,11 +362,8 @@ class RackGenerator(RackMixin, CommonGenerator):
         shape = "direct node data" if "name" in data and isinstance(data.get("name"), dict) else "query result"
         self.logger.info(f"Processing {shape}")
 
-        # This bootstrap reads pod-level data (spine devices, ASN pool, loopback/
-        # technical pools) written by add_pod/pod_rack_cascade. If either is still
-        # running for our parent pod (e.g. a bulk pod+rack load, or a structural
-        # pod change firing add_pod + pod_rack_cascade in parallel), wait for it
-        # and re-parse rather than risk running on partial data.
+        # Wait for an in-flight add_pod/pod_rack_cascade on our pod before reading
+        # pod-level data (spine devices, ASN/loopback pools) — avoid partial data.
         for parent_generator in ("add_pod", "pod_rack_cascade"):
             refreshed = await self.wait_for_parent_generator_and_refetch(parent_generator, self.data.pod.id)
             if refreshed is not None:
@@ -415,13 +377,9 @@ class RackGenerator(RackMixin, CommonGenerator):
         pod = self.data.pod
         deployment_type = pod.deployment_type
 
-        # A row-dependent (tor/compute) rack in a mixed deployment cables to its
-        # row's network rack's leafs, created by that network rack's own add_rack
-        # run (RackMixin._fan_out_to_row_dependent_racks fans out to this rack only
-        # after they exist). If this rack was instead triggered independently (e.g.
-        # a standalone-created rack) while that network rack's add_rack is still
-        # running, wait for it and re-parse rather than risk cabling against leafs
-        # that don't exist yet.
+        # A row-dependent (tor/compute) rack cables to its row's network rack's
+        # leafs. If triggered independently while that rack's add_rack is still
+        # running, wait for it rather than cabling against leafs that don't exist yet.
         if deployment_type == "mixed" and self.data.rack_type in ROW_DEPENDENT_RACK_TYPES:
             network_racks = await self.client.filters(
                 kind=LocationRack,
@@ -463,8 +421,7 @@ class RackGenerator(RackMixin, CommonGenerator):
 
         self.logger.info(f"Generating topology for rack {self.data.name}")
 
-        if not self._prepare_generation_context():
-            return
+        self._prepare_generation_context()
 
         # Names created THIS run, to skip duplicate templates within this invocation.
         # Do NOT pre-populate with existing devices — every object must be re-upserted
@@ -473,13 +430,12 @@ class RackGenerator(RackMixin, CommonGenerator):
         self._leaf_row_cache: tuple[list[str], list[str]] | None = None
         created_leaf_devices: list[str] = []
 
-        if not await self._generate_leafs(created_leaf_devices):
-            return
-        if not await self._generate_tors():
-            return
+        await self._generate_leafs(created_leaf_devices)
+        await self._generate_tors()
         await self._generate_l2_leafs(created_leaf_devices)
         await self._generate_access_leafs(created_leaf_devices)
         await self._generate_border_leafs(deployment_type)
+        await self._generate_firewalls_and_load_balancers()
 
         # Generation completion summary
         total_devices = len(created_leaf_devices) + sum(tor_role.quantity for tor_role in (self.data.tors or []))
@@ -489,26 +445,33 @@ class RackGenerator(RackMixin, CommonGenerator):
 
         await self._fan_out_to_row_dependent_racks()
 
-    async def _ensure_mlag_pairs(self, device_names: list[str], *, role_label: str, template: Template) -> None:
-        """Pair up same-role devices created in this rack into MLAG domains, per
-        pod.mlag_create ("no" / "back-to-back" / "virtual"). Devices are paired
-        two-at-a-time in sorted (deterministic) order; an odd device out is left
-        unpaired.
+    async def _ensure_mlag_pairs(
+        self, device_names: list[str], *, role_label: str, template: Template, supports_virtual: bool = True
+    ) -> None:
+        """Pair same-role devices two-at-a-time (sorted, odd one unpaired) into MLAG
+        domains, per pod.mlag_create ("no" / "back-to-back" / "virtual").
 
-        back-to-back requires the device's own template to reserve at least one
-        physical interface with role=mlag-peer — the actual LAG/cabling is done by
-        the mlag generator (triggered on ManagedMLAG created/updated), not here.
-        A template without one is skipped with a warning rather than creating an
-        MLAG domain the mlag generator can never wire up.
+        back-to-back needs a role=mlag-peer interface on the template — the mlag
+        generator (triggered on ManagedMLAG created/updated) does the actual wiring.
+        virtual anchors on a loopback (mlag.py's _ensure_virtual_peer_link), so
+        supports_virtual=False (l2-leaf: no loopback, L2-only by design) rejects it
+        rather than silently allocating one. Both cases error out (fail the task).
         """
         mlag_create = self.data.pod.mlag_create
         if mlag_create == "no" or len(device_names) < 2:
             return
 
+        if mlag_create == "virtual" and not supports_virtual:
+            self.logger.error(
+                f"Rack {self.data.name}: {role_label} has no routing/loopback — "
+                f"cannot create virtual-peer-link MLAG for {role_label}s. Use back-to-back instead."
+            )
+            return
+
         if mlag_create == "back-to-back" and not self._roles.template_interfaces(template, role="mlag-peer"):
-            self.logger.warning(
+            self.logger.error(
                 f"Rack {self.data.name}: template {template.id} has no mlag-peer interface — "
-                f"skipping back-to-back MLAG for {role_label}s"
+                f"cannot create back-to-back MLAG for {role_label}s."
             )
             return
 
@@ -523,7 +486,7 @@ class RackGenerator(RackMixin, CommonGenerator):
 
             devices = await self.client.filters(kind=DcimPhysicalDevice, name__values=[first, second])
             if len(devices) != 2:
-                self.logger.warning(f"MLAG pair {first}/{second}: could not resolve both devices — skipping")
+                self.logger.error(f"MLAG pair {first}/{second}: could not resolve both devices.")
                 continue
 
             mlag_obj = await self.client.create(
@@ -542,12 +505,68 @@ class RackGenerator(RackMixin, CommonGenerator):
                 f"Rack {self.data.name}: created MLAG domain {mlag_name} ({mlag_create}) for {role_label}s"
             )
 
-    async def _generate_leafs(self, created_leaf_devices: list[str]) -> bool:
-        """Create -> cable -> route leaf devices.
+    async def _create_devices_for_role(
+        self,
+        role: DeviceRole,
+        *,
+        device_role: str,
+        deployment_id: str,
+        allocate_loopback: bool,
+        group_name: str | None = None,
+    ) -> list[str]:
+        """create_devices() + _created_device_names bookkeeping shared by every
+        role generator method (leaf/tor/border-leaf/firewall/load-balancer)."""
+        devices = await self.create_devices(
+            deployment_id=deployment_id,
+            device_role=device_role,
+            amount=role.quantity,
+            template=role.template.model_dump(),
+            naming_convention=self._naming_conv,
+            options=self._roles.build_device_options(allocate_loopback=allocate_loopback, group_name=group_name),
+        )
+        self._created_device_names.update(devices)
+        return devices
 
-        Returns False on a fatal error (already logged).
+    async def _generate_spine_attached_role(
+        self,
+        role: DeviceRole,
+        *,
+        device_role: Literal["leaf", "tor", "border-leaf"],
+        deployment_id: str,
+        bottom_interfaces: list[str],
+        offset: int,
+        mlag: bool,
+    ) -> list[str]:
+        """Shared executor for every role that dual-homes to the pod's spines:
+        create devices, optionally MLAG-pair them, cable+route against
+        self._spine_device_names at the given offset. Offset formula and
+        bottom_interfaces selection differ per role (leaf/tor/border-leaf each
+        compute them differently — see their own methods) and are passed in
+        rather than recomputed here.
         """
         pod = self.data.pod
+        devices = await self._create_devices_for_role(
+            role, device_role=device_role, deployment_id=deployment_id, allocate_loopback=True
+        )
+        if mlag:
+            await self._ensure_mlag_pairs(devices, role_label=device_role, template=role.template)
+
+        await self._cable_and_route(
+            bottom_devices=devices,
+            bottom_interfaces=bottom_interfaces,
+            top_devices=self._spine_device_names,
+            top_interfaces=self._spine_interfaces,
+            strategy="rack",
+            offset=offset,
+            bottom_role=device_role,
+            top_role="spine",
+            bottom_sorting=pod.leaf_interface_sorting_method,
+            top_sorting=pod.spine_interface_sorting_method,
+        )
+        return devices
+
+    async def _generate_leafs(self, created_leaf_devices: list[str]) -> None:
+        """Create -> cable -> route leaf devices."""
         for leaf_role in self.data.leafs or []:
             expected_names = self._roles.expected_names(role="leaf", quantity=leaf_role.quantity)
             if expected_names <= self._created_device_names:
@@ -556,46 +575,20 @@ class RackGenerator(RackMixin, CommonGenerator):
                 )
                 continue
 
-            leaf_devices = await self.create_devices(
-                deployment_id=pod.id,
+            leaf_devices = await self._generate_spine_attached_role(
+                leaf_role,
                 device_role="leaf",
-                amount=leaf_role.quantity,
-                template=leaf_role.template.model_dump(),
-                naming_convention=self._naming_conv,
-                options=self._roles.build_device_options(allocate_loopback=True),
+                deployment_id=self.data.pod.id,
+                bottom_interfaces=self._roles.template_interfaces(leaf_role.template, role="uplink"),
+                offset=self.calculate_cabling_offsets(device_count=leaf_role.quantity, device_type="leaf"),
+                mlag=True,
             )
-
-            self._created_device_names.update(leaf_devices)
             created_leaf_devices.extend(leaf_devices)
 
-            await self._ensure_mlag_pairs(leaf_devices, role_label="leaf", template=leaf_role.template)
-
-            leaf_interfaces = self._roles.template_interfaces(leaf_role.template, role="uplink")
-            try:
-                cabling_offset = self.calculate_cabling_offsets(device_count=leaf_role.quantity, device_type="leaf")
-            except RuntimeError as exc:
-                self.logger.error(str(exc))
-                return False
-
-            await self._cable_and_route(
-                bottom_devices=leaf_devices,
-                bottom_interfaces=leaf_interfaces,
-                top_devices=self._spine_device_names,
-                top_interfaces=self._spine_interfaces,
-                strategy="rack",
-                offset=cabling_offset,
-                bottom_role="leaf",
-                top_role="spine",
-                bottom_sorting=pod.leaf_interface_sorting_method,
-                top_sorting=pod.spine_interface_sorting_method,
-            )
-        return True
-
-    async def _generate_tors(self) -> bool:
+    async def _generate_tors(self) -> None:
         """Create -> cable -> route ToR devices.
 
         L2-only aggregation switches below leafs use role "l2-leaf"/"access-leaf" instead.
-        Returns False on a fatal error (already logged).
         """
         pod = self.data.pod
         for tor_role in self.data.tors or []:
@@ -603,21 +596,6 @@ class RackGenerator(RackMixin, CommonGenerator):
             if expected_names <= self._created_device_names:
                 self.logger.info(f"Skipping duplicate tor template (devices already created: {sorted(expected_names)})")
                 continue
-
-            tor_devices = await self.create_devices(
-                deployment_id=pod.id,
-                device_role="tor",
-                amount=tor_role.quantity,
-                template=tor_role.template.model_dump(),
-                naming_convention=self._naming_conv,
-                options=self._roles.build_device_options(allocate_loopback=True),
-            )
-
-            self._created_device_names.update(tor_devices)
-
-            await self._ensure_mlag_pairs(tor_devices, role_label="tor", template=tor_role.template)
-
-            tor_interfaces = self._roles.template_interfaces(tor_role.template, role="uplink")
 
             tors_per_rack = sum(r.quantity or 0 for r in self.data.tors or [])
             # Live count, not design.compute_racks_per_row (a max capacity) - a pod with
@@ -629,68 +607,82 @@ class RackGenerator(RackMixin, CommonGenerator):
                 for r in sibling_racks
                 if hasattr(r, "row_index") and r.row_index and r.row_index.value < self.data.row_index
             )
-            try:
-                cabling_offset = self.calculate_cabling_offsets(
-                    device_count=tors_per_rack,
-                    device_type="tor",
-                    racks_in_previous_rows=prev_row_racks,
-                )
-            except RuntimeError as exc:
-                self.logger.error(str(exc))
-                return False
 
             if not self._spine_device_names:
                 self.logger.error(
                     f"Rack {self.data.name}: No spine devices found in pod - cannot cable ToRs to spines."
                 )
-                return False
 
-            await self._cable_and_route(
-                bottom_devices=tor_devices,
-                bottom_interfaces=tor_interfaces,
-                top_devices=self._spine_device_names,
-                top_interfaces=self._spine_interfaces,
-                strategy="rack",
-                offset=cabling_offset,
-                bottom_role="tor",
-                top_role="spine",
-                bottom_sorting=pod.leaf_interface_sorting_method,
-                top_sorting=pod.spine_interface_sorting_method,
+            await self._generate_spine_attached_role(
+                tor_role,
+                device_role="tor",
+                deployment_id=pod.id,
+                bottom_interfaces=self._roles.template_interfaces(tor_role.template, role="uplink"),
+                offset=self.calculate_cabling_offsets(
+                    device_count=tors_per_rack, device_type="tor", racks_in_previous_rows=prev_row_racks
+                ),
+                mlag=True,
             )
-        return True
+
+    async def _create_local_leaf_role_devices(
+        self,
+        role: DeviceRole,
+        *,
+        device_role: Literal["l2-leaf", "access-leaf"],
+        allocate_loopback: bool,
+        created_leaf_devices: list[str],
+    ) -> (
+        tuple[
+            list[str],
+            list[str],
+            tuple[list[str], list[str], int, Literal["intra_rack_middle", "intra_rack_mixed"]],
+        ]
+        | None
+    ):
+        """Create + MLAG-pair one l2-leaf/access-leaf role entry, and resolve its
+        local-leaf cabling target — shared by _generate_l2_leafs/_generate_access_leafs.
+        Returns None if unresolved (already logged) — caller should ``continue``.
+        """
+        devices = await self._create_devices_for_role(
+            role, device_role=device_role, deployment_id=self.data.pod.id, allocate_loopback=allocate_loopback
+        )
+        # allocate_loopback doubles as "participates in routing/EVPN" here:
+        # l2-leaf (False) is L2-only by design, access-leaf (True) is a routed VTEP.
+        await self._ensure_mlag_pairs(
+            devices, role_label=device_role, template=role.template, supports_virtual=allocate_loopback
+        )
+        interfaces = self._roles.template_interfaces(role.template, role="uplink")
+
+        target = await self._resolve_local_leaf_cabling_target(
+            created_leaf_devices=created_leaf_devices,
+            leaf_row_cache=self._leaf_row_cache,
+            devices_per_rack=len(devices),
+            role_label=device_role,
+        )
+        if target is None:
+            return None
+        leaf_device_names, leaf_interfaces, _, _ = target
+        if not created_leaf_devices:
+            self._leaf_row_cache = (leaf_device_names, leaf_interfaces)
+
+        return devices, interfaces, target
 
     async def _generate_l2_leafs(self, created_leaf_devices: list[str]) -> None:
         """Create l2-leaf devices and cable them to local leafs. No routing - L2-only."""
-        pod = self.data.pod
         for l2_leaf_role in self.data.l2_leafs or []:
-            l2_leaf_devices = await self.create_devices(
-                deployment_id=pod.id,
+            result = await self._create_local_leaf_role_devices(
+                l2_leaf_role,
                 device_role="l2-leaf",
-                amount=l2_leaf_role.quantity,
-                template=l2_leaf_role.template.model_dump(),
-                naming_convention=self._naming_conv,
-                options=self._roles.build_device_options(allocate_loopback=False),
-            )
-
-            self._created_device_names.update(l2_leaf_devices)
-
-            l2_leaf_interfaces = self._roles.template_interfaces(l2_leaf_role.template, role="uplink")
-
-            target = await self._resolve_local_leaf_cabling_target(
+                allocate_loopback=False,
                 created_leaf_devices=created_leaf_devices,
-                leaf_row_cache=self._leaf_row_cache,
-                devices_per_rack=len(l2_leaf_devices),
-                role_label="l2-leaf",
             )
-            if target is None:
+            if result is None:
                 continue
-            leaf_device_names, leaf_interfaces, cabling_offset, strategy = target
-            if not created_leaf_devices:
-                self._leaf_row_cache = (leaf_device_names, leaf_interfaces)
+            devices, interfaces, (leaf_device_names, leaf_interfaces, cabling_offset, strategy) = result
 
             await self.create_cabling(
-                bottom_devices=l2_leaf_devices,
-                bottom_interfaces=l2_leaf_interfaces,
+                bottom_devices=devices,
+                bottom_interfaces=interfaces,
                 top_devices=leaf_device_names,
                 top_interfaces=leaf_interfaces,
                 strategy=strategy,
@@ -706,36 +698,20 @@ class RackGenerator(RackMixin, CommonGenerator):
         Cabled to the local leaf pair (underlay eBGP/OSPF), plus a second,
         underlay-less overlay EVPN session straight to the pod's spines.
         """
-        pod = self.data.pod
         for access_leaf_role in self.data.access_leafs or []:
-            access_leaf_devices = await self.create_devices(
-                deployment_id=pod.id,
+            result = await self._create_local_leaf_role_devices(
+                access_leaf_role,
                 device_role="access-leaf",
-                amount=access_leaf_role.quantity,
-                template=access_leaf_role.template.model_dump(),
-                naming_convention=self._naming_conv,
-                options=self._roles.build_device_options(allocate_loopback=True),
-            )
-
-            self._created_device_names.update(access_leaf_devices)
-
-            access_leaf_interfaces = self._roles.template_interfaces(access_leaf_role.template, role="uplink")
-
-            target = await self._resolve_local_leaf_cabling_target(
+                allocate_loopback=True,
                 created_leaf_devices=created_leaf_devices,
-                leaf_row_cache=self._leaf_row_cache,
-                devices_per_rack=len(access_leaf_devices),
-                role_label="access-leaf",
             )
-            if target is None:
+            if result is None:
                 continue
-            leaf_device_names, leaf_interfaces, cabling_offset, strategy = target
-            if not created_leaf_devices:
-                self._leaf_row_cache = (leaf_device_names, leaf_interfaces)
+            devices, interfaces, (leaf_device_names, leaf_interfaces, cabling_offset, strategy) = result
 
             await self._cable_and_route(
-                bottom_devices=access_leaf_devices,
-                bottom_interfaces=access_leaf_interfaces,
+                bottom_devices=devices,
+                bottom_interfaces=interfaces,
                 top_devices=leaf_device_names,
                 top_interfaces=leaf_interfaces,
                 strategy=strategy,
@@ -746,7 +722,7 @@ class RackGenerator(RackMixin, CommonGenerator):
             if self._routing_options.get("design"):
                 overlay_only_options = self._roles.overlay_only_routing_options()
                 await self.create_routing(
-                    bottom_devices=access_leaf_devices,
+                    bottom_devices=devices,
                     top_devices=self._spine_device_names,
                     options=overlay_only_options,
                     p2p_interfaces=[],
@@ -759,35 +735,21 @@ class RackGenerator(RackMixin, CommonGenerator):
         pod = self.data.pod
         dc = pod.parent
         for bl_role in self.data.border_leafs or []:
-            bl_devices = await self.create_devices(
-                deployment_id=dc.id,
-                device_role="border-leaf",
-                amount=bl_role.quantity,
-                template=bl_role.template.model_dump(),
-                naming_convention=self._naming_conv,
-                options=self._roles.build_device_options(allocate_loopback=True),
-            )
-
-            self._created_device_names.update(bl_devices)
-
             all_bl_uplinks = sorted(self._roles.template_interfaces(bl_role.template, role="uplink"))
             if not all_bl_uplinks:
-                self.logger.warning(
-                    f"Rack {self.data.name}: border-leaf template has no uplink interfaces - skipping fabric cabling"
+                self.logger.error(
+                    f"Rack {self.data.name}: border-leaf template has no uplink interfaces - cannot cable fabric."
                 )
                 continue
 
-            # Uplinks fan out to the pod's full spine capacity (design.max_spines_per_pod),
-            # not the currently deployed amount_of_spines — otherwise adding spines later
-            # would need ports already handed to border-leaf-to-spine cabling, and two
-            # border-leaf racks sized against different live spine counts could compute
-            # overlapping port ranges.
+            # Size against design.max_spines_per_pod (stable capacity), not the live
+            # amount_of_spines — avoids overlapping port ranges as spines are added.
             spine_count = pod.design.max_spines_per_pod if pod.design else pod.amount_of_spines
             bl_uplink_interfaces = all_bl_uplinks[:spine_count]
             if len(bl_uplink_interfaces) < spine_count:
-                self.logger.warning(
+                self.logger.error(
                     f"Rack {self.data.name}: not enough border-leaf uplinks for pod spines "
-                    f"(uplinks={len(all_bl_uplinks)}, needed={spine_count}) - skipping fabric cabling"
+                    f"(uplinks={len(all_bl_uplinks)}, needed={spine_count}) - cannot cable fabric."
                 )
                 continue
 
@@ -803,22 +765,267 @@ class RackGenerator(RackMixin, CommonGenerator):
                 )
                 total_tors_in_pod = len(sibling_tor_racks) * max_tors_per_compute_rack
 
-            cabling_offset = self.calculate_cabling_offsets(
-                device_count=bl_role.quantity,
-                device_type="border_leaf",
-                leafs_per_rack=leafs_per_rack,
-                total_tors_in_pod=total_tors_in_pod,
+            await self._generate_spine_attached_role(
+                bl_role,
+                device_role="border-leaf",
+                deployment_id=dc.id,
+                bottom_interfaces=bl_uplink_interfaces,
+                offset=self.calculate_cabling_offsets(
+                    device_count=bl_role.quantity,
+                    device_type="border_leaf",
+                    leafs_per_rack=leafs_per_rack,
+                    total_tors_in_pod=total_tors_in_pod,
+                ),
+                mlag=False,
             )
 
-            await self._cable_and_route(
-                bottom_devices=bl_devices,
-                bottom_interfaces=bl_uplink_interfaces,
-                top_devices=self._spine_device_names,
-                top_interfaces=self._spine_interfaces,
-                strategy="rack",
-                offset=cabling_offset,
-                bottom_role="border-leaf",
-                top_role="spine",
-                bottom_sorting=pod.leaf_interface_sorting_method,
-                top_sorting=pod.spine_interface_sorting_method,
+    async def _resolve_dc_border_leaf_pair(self, dc_id: str) -> list[str] | None:
+        """Resolve the DC's border-leaf pair (2 device names, sorted), or None if not
+        both created yet. Border-leaf devices are split one-per-rack across two
+        border-leaf racks in the DC, so this needs a DC-wide lookup, not self.data.border_leafs.
+        """
+        border_leafs = await self.client.filters(
+            kind=DcimPhysicalDevice,
+            deployment__ids=[dc_id],
+            role__value="border-leaf",
+            status__values=["active", "provisioning", "free"],
+        )
+        if len(border_leafs) < 2:
+            self.logger.error(
+                f"Rack {self.data.name}: DC has {len(border_leafs)} border-leaf device(s) (need 2) — "
+                "cannot cable firewall/load-balancer. Run add_rack on both border-leaf racks first."
+            )
+            return None
+        return sorted(bl.name.value for bl in border_leafs)[:2]
+
+    async def _resolve_bl_port_names(self, bl_names: list[str], *, role: str) -> list[str]:
+        """Sorted, deduplicated dedicated port names for `role` across the given border-leaf device(s)."""
+        interfaces = await self.client.filters(
+            kind=DcimPhysicalInterface,
+            device__name__values=bl_names,
+            role__value=role,
+        )
+        return sorted({intf.name.value for intf in interfaces})
+
+    async def _ensure_ha_pair(
+        self,
+        device_names: list[str],
+        *,
+        ha_kind: Literal["ManagedFirewallHA", "ManagedLoadbalancerHA"],
+        role_label: str,
+    ) -> None:
+        """Pair exactly 2 same-role devices into an HA domain, setting only
+        `capabilities` — ha.py (triggered on created/updated) owns the actual
+        sync-interface/cable wiring, not this method.
+        """
+        if len(device_names) != 2:
+            return
+
+        first, second = sorted(device_names)
+        ha_name = f"{first}-{second}-ha"
+        existing = await self.client.filters(kind=ha_kind, name__value=ha_name)
+        if existing:
+            self.client.group_context.related_node_ids.append(existing[0].id)
+            return
+
+        devices = await self.client.filters(kind=DcimPhysicalDevice, name__values=[first, second])
+        if len(devices) != 2:
+            self.logger.error(f"HA pair {first}/{second}: could not resolve both devices.")
+            return
+
+        ha_group = await self.client.get(kind=CoreStandardGroup, name__value="ha_domains")
+        ha_obj = await self.client.create(
+            kind=ha_kind,
+            data={
+                "name": ha_name,
+                "status": "active",
+                "capabilities": [{"id": dev.id} for dev in devices],
+                "member_of_groups": [{"id": ha_group.id}],
+            },
+        )
+        await ha_obj.save(allow_upsert=True)
+        self.logger.info(f"Rack {self.data.name}: created HA domain {ha_name} for {role_label}s")
+
+    async def _create_role_devices_with_ha(
+        self,
+        role: DeviceRole,
+        *,
+        device_role: Literal["firewall", "load-balancer"],
+        dc_id: str,
+        ha_kind: Literal["ManagedFirewallHA", "ManagedLoadbalancerHA"],
+    ) -> list[str]:
+        """Create firewall/load-balancer devices for one fabric_templates role entry,
+        pairing them into an HA domain when quantity == 2. No loopback allocation —
+        firewalls/load-balancers aren't part of the underlay/overlay routing.
+
+        device_role="load-balancer" tracks into the pre-existing "loadbalancers"
+        group instead of create_devices()'s f"{device_role}s" default ("load-balancers").
+        """
+        devices = await self._create_devices_for_role(
+            role,
+            device_role=device_role,
+            deployment_id=dc_id,
+            allocate_loopback=False,
+            group_name="loadbalancers" if device_role == "load-balancer" else None,
+        )
+
+        if role.quantity == 2:
+            await self._ensure_ha_pair(devices, ha_kind=ha_kind, role_label=device_role)
+
+        return devices
+
+    async def _cable_pbr_independent(
+        self,
+        devices: list[str],
+        template: Template,
+        bl_names: list[str],
+        *,
+        bl_port_role: Literal["firewall", "load-balancer"],
+        role_label: str,
+    ) -> None:
+        """PBR mode: each device dual-homes to both border-leafs on dedicated
+        bl_port_role ports — device[i]'s uplink[k] -> bl_names[k]'s port[i]
+        (strategy="rack" any-to-any fan-out, same pattern leaf/tor/border-leaf
+        use against spines). Deterministic index-based port assignment means a
+        re-run always targets the same ports regardless of current cable state,
+        so nothing here is ever skipped as "already cabled".
+        """
+        uplinks = sorted(self._roles.template_interfaces(template, role="uplink"))
+        if not uplinks:
+            self.logger.error(f"Rack {self.data.name}: {role_label} template has no uplink interfaces - cannot cable.")
+            return
+
+        bl_ports = await self._resolve_bl_port_names(bl_names, role=bl_port_role)
+        if len(bl_ports) < len(devices):
+            self.logger.error(
+                f"Rack {self.data.name}: not enough {bl_port_role!r} ports on border-leaf pair "
+                f"(have {len(bl_ports)}, need {len(devices)}) - cannot cable {role_label}s."
+            )
+            return
+
+        await self.create_cabling(
+            bottom_devices=devices,
+            bottom_interfaces=uplinks,
+            top_devices=bl_names,
+            top_interfaces=bl_ports,
+            strategy="rack",
+            options=CablingOptions(cabling_offset=0, pool=None),
+        )
+
+    async def _cable_inline_service_chain(
+        self,
+        fw_devices: list[str],
+        lb_devices: list[str],
+        bl_names: list[str],
+    ) -> None:
+        """Inline mode: BL[0]-port(firewall) <-> FW-in, FW-out <-> LB-in,
+        LB-out <-> BL[1]-port(load-balancer). Firewalls/load-balancers are
+        paired 1:1 by sorted device name; equal quantities are required with
+        no partial-chain fallback on mismatch (per explicit user decision).
+        """
+        if len(fw_devices) != len(lb_devices):
+            self.logger.error(
+                f"Rack {self.data.name}: inline connectivity_mode requires equal firewall/load_balancer "
+                f"quantities (firewalls={len(fw_devices)}, load_balancers={len(lb_devices)}) - "
+                "fix the rack's fabric_templates quantities."
+            )
+            return
+        if not fw_devices:
+            return
+        if len(bl_names) < 2:
+            self.logger.error(f"Rack {self.data.name}: inline service chain needs 2 border-leaf devices.")
+            return
+
+        fw_uplinks = sorted(self._roles.template_interfaces(self.data.firewalls[0].template, role="uplink"))
+        lb_uplinks = sorted(self._roles.template_interfaces(self.data.load_balancers[0].template, role="uplink"))
+        if len(fw_uplinks) < 2 or len(lb_uplinks) < 2:
+            self.logger.error(
+                f"Rack {self.data.name}: inline service chain needs 2 uplink interfaces per firewall/"
+                f"load-balancer template (firewall={len(fw_uplinks)}, load_balancer={len(lb_uplinks)})."
+            )
+            return
+        fw_in, fw_out = fw_uplinks[0], fw_uplinks[1]
+        lb_in, lb_out = lb_uplinks[0], lb_uplinks[1]
+
+        sorted_fw = sorted(fw_devices)
+        sorted_lb = sorted(lb_devices)
+
+        bl0_ports = await self._resolve_bl_port_names([bl_names[0]], role="firewall")
+        bl1_ports = await self._resolve_bl_port_names([bl_names[1]], role="load-balancer")
+        if len(bl0_ports) < len(sorted_fw) or len(bl1_ports) < len(sorted_lb):
+            self.logger.error(
+                f"Rack {self.data.name}: not enough dedicated border-leaf ports for inline service chain "
+                f"(bl0 firewall ports={len(bl0_ports)}, needed={len(sorted_fw)}; "
+                f"bl1 load-balancer ports={len(bl1_ports)}, needed={len(sorted_lb)})."
+            )
+            return
+
+        # Link 1: BL[0] firewall-port[i] <-> FW[i]-in
+        await self.create_cabling(
+            bottom_devices=sorted_fw,
+            bottom_interfaces=[fw_in],
+            top_devices=[bl_names[0]],
+            top_interfaces=bl0_ports,
+            strategy="rack",
+            options=CablingOptions(cabling_offset=0, pool=None),
+        )
+        # Link 3: LB[i]-out <-> BL[1] load-balancer-port[i]
+        await self.create_cabling(
+            bottom_devices=sorted_lb,
+            bottom_interfaces=[lb_out],
+            top_devices=[bl_names[1]],
+            top_interfaces=bl1_ports,
+            strategy="rack",
+            options=CablingOptions(cabling_offset=0, pool=None),
+        )
+        # Link 2: FW[i]-out <-> LB[i]-in — single-element devices/interfaces per
+        # call is how this codebase gets an exact 1:1 link, not a fan-out.
+        for fw_name, lb_name in zip(sorted_fw, sorted_lb):
+            await self.create_cabling(
+                bottom_devices=[fw_name],
+                bottom_interfaces=[fw_out],
+                top_devices=[lb_name],
+                top_interfaces=[lb_in],
+                strategy="intra_rack",
+                options=CablingOptions(cabling_offset=0, pool=None),
+            )
+
+    # (device_role, fabric_templates attribute, HA domain kind)
+    _FW_LB_ROLES: tuple[
+        tuple[Literal["firewall", "load-balancer"], str, Literal["ManagedFirewallHA", "ManagedLoadbalancerHA"]], ...
+    ] = (
+        ("firewall", "firewalls", "ManagedFirewallHA"),
+        ("load-balancer", "load_balancers", "ManagedLoadbalancerHA"),
+    )
+
+    async def _generate_firewalls_and_load_balancers(self) -> None:
+        """Create firewall/load-balancer devices and cable them to the DC's
+        border-leaf pair, per pod.parent.connectivity_mode ("pbr" or "inline").
+        """
+        if not self.data.firewalls and not self.data.load_balancers:
+            return
+
+        dc = self.data.pod.parent
+        connectivity_mode = dc.connectivity_mode
+
+        if (bl_names := await self._resolve_dc_border_leaf_pair(dc.id)) is None:
+            return
+
+        devices_by_role: dict[Literal["firewall", "load-balancer"], list[str]] = {}
+        for device_role, data_attr, ha_kind in self._FW_LB_ROLES:
+            role_devices: list[str] = []
+            for role in getattr(self.data, data_attr) or []:
+                created = await self._create_role_devices_with_ha(
+                    role, device_role=device_role, dc_id=dc.id, ha_kind=ha_kind
+                )
+                role_devices.extend(created)
+                if connectivity_mode == "pbr":
+                    await self._cable_pbr_independent(
+                        created, role.template, bl_names, bl_port_role=device_role, role_label=device_role
+                    )
+            devices_by_role[device_role] = role_devices
+
+        if connectivity_mode == "inline":
+            await self._cable_inline_service_chain(
+                devices_by_role["firewall"], devices_by_role["load-balancer"], bl_names
             )

@@ -22,6 +22,11 @@ class DeviceOptions(TypedDict, total=False):
     """SDK pool object or pool ID string for management IPs."""
     rack: str
     """Rack ID for device placement."""
+    group_name: str
+    """Override the CoreStandardGroup devices are tracked in — default is
+    f"{device_role}s". Needed when a role's group predates and doesn't follow
+    that naming convention (e.g. device_role="load-balancer" would mechanically
+    resolve to "load-balancers", but the pre-existing group is "loadbalancers")."""
 
 
 class CablingOptions(TypedDict, total=False):

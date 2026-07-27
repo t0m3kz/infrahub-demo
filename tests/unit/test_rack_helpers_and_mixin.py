@@ -137,7 +137,15 @@ class TestRackRolesHelper:
         assert with_loopback["loopback_pool"] == "lo-pool"
         assert with_loopback["loopback_prefix_length"] == 32
         assert without_loopback["allocate_loopback"] is False
-        assert "loopback_pool" not in without_loopback
+        assert "group_name" not in without_loopback
+
+    def test_build_device_options_group_name_override(self) -> None:
+        gen = _build_gen()
+        helper = RackRolesHelper(gen)
+
+        options = helper.build_device_options(allocate_loopback=False, group_name="loadbalancers")
+
+        assert options["group_name"] == "loadbalancers"
 
     def test_template_interfaces_filters_by_role(self) -> None:
         template = Template(
@@ -171,17 +179,15 @@ class TestRackMixinAdditional:
         gen = _build_gen()
         gen.data.pod.loopback_pool = None
 
-        ok = gen._prepare_generation_context()
+        gen._prepare_generation_context()
 
-        assert ok is False
         gen.logger.error.assert_called_once()
 
     def test_prepare_generation_context_success_sets_fields(self) -> None:
         gen = _build_gen()
 
-        ok = gen._prepare_generation_context()
+        gen._prepare_generation_context()
 
-        assert ok is True
         assert gen.deployment_id == "dc-1"
         assert gen.pod_name == "pod-1"
         assert gen.fabric_name == "dc1"

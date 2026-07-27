@@ -8,6 +8,7 @@ spec:
       index: 2
       design: S_OSPF_IBGP
       naming_convention: hierarchical
+      connectivity_mode: pbr
       fabric_interface_sorting_method: top_down
       member_of_groups:
         - topologies_dc

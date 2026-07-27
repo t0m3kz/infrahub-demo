@@ -118,7 +118,20 @@ class TestEnsureMlagPairs:
         gen.client.create.assert_not_awaited()
 
     @pytest.mark.asyncio
-    async def test_back_to_back_without_mlag_peer_interface_skips_with_warning(self) -> None:
+    async def test_virtual_rejected_when_supports_virtual_false(self) -> None:
+        gen = _build_gen(mlag_create="virtual")
+        gen.client.create = AsyncMock()
+        template = Template(id="tmpl", interfaces=[])
+
+        await gen._ensure_mlag_pairs(
+            ["l2-01", "l2-02"], role_label="l2-leaf", template=template, supports_virtual=False
+        )
+
+        gen.client.create.assert_not_awaited()
+        gen.logger.error.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_back_to_back_without_mlag_peer_interface_errors(self) -> None:
         gen = _build_gen(mlag_create="back-to-back")
         gen.client.create = AsyncMock()
         template = Template(id="tmpl", interfaces=[Interface(name="Eth1/1", role="uplink")])
@@ -126,7 +139,7 @@ class TestEnsureMlagPairs:
         await gen._ensure_mlag_pairs(["tor-01", "tor-02"], role_label="tor", template=template)
 
         gen.client.create.assert_not_awaited()
-        gen.logger.warning.assert_called_once()
+        gen.logger.error.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_back_to_back_with_mlag_peer_interface_creates_domain(self) -> None:

@@ -13,7 +13,7 @@ from infrahub_sdk.task.models import TaskFilter, TaskState
 
 from .helpers import CableTypeDetector, CablingPlanner, DeviceNamingConfig, get_loopback_name
 from .helpers.common import retry_delay
-from .logger import FailOnErrorLoggerMixin, GeneratorError  # noqa: F401
+from .logger import FailOnErrorLoggerMixin, GeneratorError
 from .protocols import (
     DcimCable,
     DcimPhysicalDevice,
@@ -581,7 +581,8 @@ class CommonGenerator(FailOnErrorLoggerMixin, RoutingMixin, InfrahubGenerator):
         batch_devices = await self.client.create_batch()
         batch_loopbacks = await self.client.create_batch()
 
-        device_group = await self.client.get(kind=CoreStandardGroup, name__value=f"{device_role}s")
+        group_name = options.get("group_name") or f"{device_role}s"
+        device_group = await self.client.get(kind=CoreStandardGroup, name__value=group_name)
         try:
             # Fetch all existing devices in a single batch to optimize performance
             existing_devices_list = await self.client.filters(

@@ -23,10 +23,13 @@ from .types import RoutingOptions
 #   for mixed compute racks (_resolve_local_leaf_cabling_target). tor
 #   deployment has no leafs anywhere in the pod, so neither role has a
 #   target to cable to.
+# - "firewall"/"load_balancer" cable to the DC's border-leaf pair's dedicated
+#   firewall/load-balancer ports (_generate_firewalls_and_load_balancers) —
+#   valid wherever "border_leaf" is valid, since they depend on it existing.
 ROLES_BY_DEPLOYMENT_TYPE: dict[str, frozenset[str]] = {
-    "tor": frozenset({"tor", "border_leaf"}),
-    "mixed": frozenset({"leaf", "tor", "l2_leaf", "access_leaf", "border_leaf"}),
-    "middle_rack": frozenset({"leaf", "l2_leaf", "access_leaf", "border_leaf"}),
+    "tor": frozenset({"tor", "border_leaf", "firewall", "load_balancer"}),
+    "mixed": frozenset({"leaf", "tor", "l2_leaf", "access_leaf", "border_leaf", "firewall", "load_balancer"}),
+    "middle_rack": frozenset({"leaf", "l2_leaf", "access_leaf", "border_leaf", "firewall", "load_balancer"}),
 }
 
 # "tor" cables to a spine; "l2_leaf"/"access_leaf" cable to a local leaf pair.
@@ -159,7 +162,7 @@ class RackMixin:
         )
         return device_names, interface_names
 
-    def _prepare_generation_context(self) -> bool:
+    def _prepare_generation_context(self) -> None:
         """Compute and store shared context needed by every per-role generation method."""
         pod = self.data.pod
         dc = pod.parent
@@ -172,7 +175,6 @@ class RackMixin:
                 f"Rack {self.data.name}: Pod {pod.name} pools not found. "
                 f"Run pod generator first: infrahubctl generator generate_pod name={pod.name}"
             )
-            return False
 
         self._management_pool_id = dc.management_pool.id if dc.management_pool else None
         self._loopback_pool_id = pod.loopback_pool.id if pod.loopback_pool else None
@@ -203,7 +205,6 @@ class RackMixin:
             self._spine_device_names, self._spine_interfaces = self._derive_spine_info()
         except RuntimeError as exc:
             self.logger.error(str(exc))
-            return False
 
         routing_options: RoutingOptions = RoutingOptions(design=dc_design)
         if pod.asn_pool and pod.asn_pool.id:
@@ -212,4 +213,3 @@ class RackMixin:
         self._technical_pool_id = pod.prefix_pool.id if pod.prefix_pool else None
         self._p2p_prefix_length = 127 if dc_design and getattr(dc_design, "p2p_ipv6", False) else 31
         self._routing_options = routing_options
-        return True

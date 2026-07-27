@@ -130,6 +130,8 @@ spec:
       member_of_groups: [topologies_rack]
       fabric_templates:
         - ["1", "border-leaf", "PowerSwitch-S5232F-ON_BORDER_LEAF"]
+        - ["1", "firewall", "CP-26000_FIREWALL"]
+        - ["1", "load-balancer", "NetScaler-MPX-26000-100G_LOAD_BALANCER"]
     - index: 1
       row_index: 3
       rack_type: network
