@@ -158,18 +158,42 @@ class TestRackGeneratorMethods:
         assert interfaces == ["Eth1/1"]
 
     @pytest.mark.asyncio
-    async def test_get_leaf_devices_in_row_no_racks_logs_error(self) -> None:
+    async def test_get_leaf_devices_in_row_no_racks_logs_error(self, monkeypatch: pytest.MonkeyPatch) -> None:
         # In production self.logger.error() raises GeneratorError immediately
         # (FailOnErrorLoggerMixin), so execution never reaches the later checks.
         # The mocked logger here doesn't raise, so all three checks fire in
         # sequence — only the first call is asserted, matching real behavior.
+        # Nothing ever appears across every retry attempt — error fires only
+        # after retries are exhausted.
         gen = _build_gen()
         gen.client.filters = AsyncMock(return_value=[])
+        monkeypatch.setattr("generators.topology.rack.asyncio.sleep", AsyncMock())
 
         await gen._get_leaf_devices_in_row("pod-1", 1)
 
         first_call_message = gen.logger.error.call_args_list[0].args[0]
         assert "no racks" in first_call_message.lower()
+
+    @pytest.mark.asyncio
+    async def test_get_leaf_devices_in_row_recovers_after_retry(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Nothing found on the first attempt, everything present on the second — no error."""
+        gen = _build_gen()
+        rack_obj = MagicMock(id="rack-a")
+        leaf_dev = MagicMock()
+        leaf_dev.name = MagicMock(value="leaf-01")
+        leaf_if = MagicMock()
+        leaf_if.name = MagicMock(value="Eth1/1")
+
+        gen.client.filters = AsyncMock(side_effect=[[], [], [rack_obj], [leaf_dev], [leaf_if]])
+        sleep_mock = AsyncMock()
+        monkeypatch.setattr("generators.topology.rack.asyncio.sleep", sleep_mock)
+
+        devices, interfaces = await gen._get_leaf_devices_in_row("pod-1", 1)
+
+        assert devices == ["leaf-01"]
+        assert interfaces == ["Eth1/1"]
+        sleep_mock.assert_awaited_once()
+        gen.logger.error.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_resolve_local_leaf_target_with_created_leafs(self) -> None:

@@ -109,6 +109,7 @@ def _mock_device(name: str) -> MagicMock:
 def _mock_interface(name: str) -> MagicMock:
     intf = MagicMock()
     intf.name = MagicMock(value=name)
+    intf.cable = None
     return intf
 
 
@@ -178,6 +179,81 @@ class TestResolveBlPortNames:
         call_kwargs = gen.client.filters.call_args.kwargs
         assert call_kwargs["role__value"] == "firewall"
         assert call_kwargs["device__name__values"] == ["dc1-bl-01", "dc1-bl-02"]
+
+
+def _mock_uplink_with_cable(*, iface_id: str, cable_id: str) -> MagicMock:
+    intf = MagicMock()
+    intf.id = iface_id
+    intf.cable = MagicMock(id=cable_id)
+    return intf
+
+
+def _mock_cable_far_end(*, peer_id: str, device_name: str) -> MagicMock:
+    peer = MagicMock()
+    peer.id = peer_id
+    peer.device = MagicMock()
+    peer.device.peer = None
+    peer.device.name = MagicMock(value=device_name)
+    return peer
+
+
+def _mock_cable(*, name: str, far_ends: list[MagicMock]) -> MagicMock:
+    cable_obj = MagicMock()
+    cable_obj.name = MagicMock(value=name)
+    cable_obj.endpoints = MagicMock()
+    cable_obj.endpoints.peers = far_ends
+    return cable_obj
+
+
+class TestDisconnectStaleUplinks:
+    @pytest.mark.asyncio
+    async def test_no_uplinks_is_a_noop(self) -> None:
+        gen = _build_gen()
+        gen.client.filters = AsyncMock(return_value=[])
+        gen.client.delete = AsyncMock()
+
+        await gen._disconnect_stale_uplinks(["fw-01"], valid_far_ends={"bl-01"})
+
+        gen.client.delete.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_uncabled_uplink_is_skipped(self) -> None:
+        gen = _build_gen()
+        uplink = MagicMock()
+        uplink.cable = None
+        gen.client.filters = AsyncMock(return_value=[uplink])
+        gen.client.delete = AsyncMock()
+
+        await gen._disconnect_stale_uplinks(["fw-01"], valid_far_ends={"bl-01"})
+
+        gen.client.delete.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_valid_far_end_is_left_connected(self) -> None:
+        gen = _build_gen()
+        uplink = _mock_uplink_with_cable(iface_id="iface-1", cable_id="cable-1")
+        gen.client.filters = AsyncMock(return_value=[uplink])
+        far_end = _mock_cable_far_end(peer_id="peer-1", device_name="bl-01")
+        gen.client.get = AsyncMock(return_value=_mock_cable(name="cbl", far_ends=[far_end]))
+        gen.client.delete = AsyncMock()
+
+        await gen._disconnect_stale_uplinks(["fw-01"], valid_far_ends={"bl-01"})
+
+        gen.client.delete.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_stale_far_end_is_disconnected(self) -> None:
+        gen = _build_gen()
+        uplink = _mock_uplink_with_cable(iface_id="iface-1", cable_id="cable-1")
+        gen.client.filters = AsyncMock(return_value=[uplink])
+        far_end = _mock_cable_far_end(peer_id="peer-1", device_name="bl-02")
+        gen.client.get = AsyncMock(return_value=_mock_cable(name="cbl", far_ends=[far_end]))
+        gen.client.delete = AsyncMock()
+
+        await gen._disconnect_stale_uplinks(["fw-01"], valid_far_ends={"bl-01"})
+
+        gen.client.delete.assert_awaited_once()
+        assert gen.client.delete.call_args.kwargs["id"] == "cable-1"
 
 
 class TestEnsureHaPair:
@@ -373,6 +449,8 @@ class TestCableInlineServiceChain:
             side_effect=[
                 [_mock_interface("Ethernet1/25")],  # bl0 firewall ports
                 [_mock_interface("Ethernet1/29")],  # bl1 load-balancer ports
+                [],  # _disconnect_stale_uplinks(sorted_fw) — no existing fw uplinks to reconcile
+                [],  # _disconnect_stale_uplinks(sorted_lb) — no existing lb uplinks to reconcile
             ]
         )
         gen.create_cabling = AsyncMock()

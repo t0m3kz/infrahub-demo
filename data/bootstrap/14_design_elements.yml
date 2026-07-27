@@ -230,6 +230,23 @@ spec:
     - quantity: 2
       role: firewall
       template: SRX-1500_DC_FIREWALL
+
+    # Border-leaf-attached firewalls (rack generator, one per border-leaf rack)
+    - quantity: 1
+      role: firewall
+      template: CP-26000_FIREWALL
+    - quantity: 1
+      role: firewall
+      template: PA-5260_FIREWALL
+
+    # Border-leaf-attached load-balancers (rack generator, one per border-leaf rack)
+    - quantity: 1
+      role: load-balancer
+      template: BIG-IP-i5800_LOAD_BALANCER
+    - quantity: 1
+      role: load-balancer
+      template: NetScaler-MPX-26000-100G_LOAD_BALANCER
+
     # Perle Consoles
     - quantity: 2
       role: console

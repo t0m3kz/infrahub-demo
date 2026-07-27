@@ -43,6 +43,21 @@ spec:
           - relationship_name: super_spine_template
             modification_type: updated
 
+    # Re-cables every rack's firewall/load-balancer links to match the new
+    # mode — pbr and inline target different ports/far-ends on the same
+    # firewall/load-balancer uplink interfaces, so an existing rack must be
+    # re-run, not just newly-provisioned ones.
+    - name: trigger-dc-update-connectivity-mode
+      branch_scope: "other_branches"
+      node_kind: TopologyDataCenter
+      mutation_action: "updated"
+      action: run-dc-pod-cascade
+      matches:
+        kind: CoreNodeTriggerAttributeMatch
+        data:
+          - attribute_name: connectivity_mode
+            value_match: any
+
     - name: trigger-dc-status
       branch_scope: "other_branches"
       node_kind: TopologyDataCenter
@@ -208,7 +223,35 @@ spec:
           - relationship_name: deployments
             modification_type: updated
 
-            # Endpoint trigger when server device added to endpoints
+    # ── Endpoint Connectivity ────────────────────────────────────────────────
+    # Endpoint targets (data/bootstrap/00_groups.yml's `endpoints` group) are
+    # server devices with role=endpoint. `created` bootstraps a fresh server's
+    # uplink cabling immediately; the `interfaces` relationship trigger catches
+    # servers that gain new uplink/lag NICs after creation (e.g. a follow-up
+    # object-load adding a bond) — mirrors the created/updated split used for
+    # DC/pod/rack above.
+    - name: trigger-endpoint-generator-on-created
+      branch_scope: "other_branches"
+      node_kind: DcimPhysicalDevice
+      mutation_action: "created"
+      action: run-endpoint-generator
+      matches:
+        kind: CoreNodeTriggerAttributeMatch
+        data:
+          - attribute_name: role
+            value_match: value
+            value: endpoint
+
+    - name: trigger-endpoint-generator-update-interfaces
+      branch_scope: "other_branches"
+      node_kind: DcimPhysicalDevice
+      mutation_action: "updated"
+      action: run-endpoint-generator
+      matches:
+        kind: CoreNodeTriggerRelationshipMatch
+        data:
+          - relationship_name: interfaces
+            modification_type: added
 
     # ── MLAG Wiring ───────────────────────────────────────────────────────────
     - name: trigger-mlag-on-created

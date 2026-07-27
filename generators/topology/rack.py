@@ -1,20 +1,26 @@
 from __future__ import annotations
 
+import asyncio
 from pathlib import Path
-from typing import Literal
+from typing import Any, Literal
 
 from infrahub_sdk.protocols import CoreStandardGroup
 
 from ..common import CablingOptions, CommonGenerator
 from ..helpers.rack import RackPlanner, RackRolesHelper, parse_rack_data
 from ..models import DeviceRole, RackModel, Template
-from ..protocols import DcimPhysicalDevice, DcimPhysicalInterface, LocationRack
+from ..protocols import DcimCable, DcimPhysicalDevice, DcimPhysicalInterface, LocationRack
 from ..rack import (
     MUTUALLY_EXCLUSIVE_ROLE_GROUPS,
     ROLES_BY_DEPLOYMENT_TYPE,
     ROW_DEPENDENT_RACK_TYPES,
     RackMixin,
 )
+
+_ROW_LEAF_MAX_RETRIES = 10
+_ROW_LEAF_RETRY_DELAY = 3.0
+_ROW_LEAF_RETRY_CAP = 20.0
+_ROW_LEAF_RETRY_JITTER = 0.25
 
 
 class RackGenerator(RackMixin, CommonGenerator):
@@ -201,24 +207,57 @@ class RackGenerator(RackMixin, CommonGenerator):
         await self.run_generator("add_rack", [rack.id for rack in row_dependent_racks], wait=False)
 
     async def _get_leaf_devices_in_row(self, pod_id: str, row_index: int) -> tuple[list[str], list[str]]:
-        """Query leaf devices in same row and their downlink interfaces, for ToR-to-leaf cabling."""
-        racks_in_row = await self.client.filters(
-            kind=LocationRack,
-            pod__ids=[pod_id],
-            row_index__value=row_index,
-        )
+        """Query leaf devices in same row and their downlink interfaces, for ToR-to-leaf cabling.
+
+        Retries: a row-dependent (compute/tor) rack's created-trigger can fire
+        and reach this before its row's network rack has created its leaf
+        devices — nesting racks under their pod in one object-load mutation
+        removed the incidental ordering that made this reliable in practice.
+        Checking the actual devices/interfaces (not a task list) closes that
+        race regardless of trigger-dispatch timing.
+        """
+        racks_in_row: list[Any] = []
+        leaf_devices: list[Any] = []
+        leaf_interfaces: list[Any] = []
+        for attempt in range(_ROW_LEAF_MAX_RETRIES):
+            racks_in_row = await self.client.filters(
+                kind=LocationRack,
+                pod__ids=[pod_id],
+                row_index__value=row_index,
+            )
+            leaf_devices = await self.client.filters(
+                kind=DcimPhysicalDevice,
+                role__value="leaf",
+                rack__ids=[rack.id for rack in racks_in_row],
+            )
+            device_names = [dev.name.value for dev in leaf_devices]
+            leaf_interfaces = (
+                await self.client.filters(
+                    kind=DcimPhysicalInterface,
+                    device__name__values=device_names,
+                    role__value="downlink",
+                )
+                if device_names
+                else []
+            )
+            if racks_in_row and leaf_devices and leaf_interfaces:
+                break
+            if attempt < _ROW_LEAF_MAX_RETRIES - 1:
+                delay = self._retry_delay(
+                    _ROW_LEAF_RETRY_DELAY, attempt, cap=_ROW_LEAF_RETRY_CAP, jitter=_ROW_LEAF_RETRY_JITTER
+                )
+                self.logger.info(
+                    f"Rack {self.data.name}: row {row_index} leaf devices/interfaces not ready yet "
+                    f"(racks={len(racks_in_row)}, leafs={len(leaf_devices)}, interfaces={len(leaf_interfaces)}) — "
+                    f"retrying in {delay:.2f}s (attempt {attempt + 1}/{_ROW_LEAF_MAX_RETRIES})"
+                )
+                await asyncio.sleep(delay)
 
         if not racks_in_row:
             self.logger.error(
                 f"Rack {self.data.name}: No racks found in row {row_index}. "
                 "Cannot create ToR-to-leaf cabling for mixed deployment."
             )
-
-        leaf_devices = await self.client.filters(
-            kind=DcimPhysicalDevice,
-            role__value="leaf",
-            rack__ids=[rack.id for rack in racks_in_row],
-        )
 
         if not leaf_devices:
             self.logger.error(
@@ -227,11 +266,6 @@ class RackGenerator(RackMixin, CommonGenerator):
             )
 
         device_names = [dev.name.value for dev in leaf_devices]
-        leaf_interfaces = await self.client.filters(
-            kind=DcimPhysicalInterface,
-            device__name__values=device_names,
-            role__value="downlink",
-        )
 
         if not leaf_interfaces:
             self.logger.error(
@@ -421,7 +455,7 @@ class RackGenerator(RackMixin, CommonGenerator):
 
         self.logger.info(f"Generating topology for rack {self.data.name}")
 
-        self._prepare_generation_context()
+        await self._prepare_generation_context()
 
         # Names created THIS run, to skip duplicate templates within this invocation.
         # Do NOT pre-populate with existing devices — every object must be re-upserted
@@ -481,7 +515,19 @@ class RackGenerator(RackMixin, CommonGenerator):
             mlag_name = f"{first}-{second}-mlag"
             existing = await self.client.filters(kind="ManagedMLAG", name__value=mlag_name)
             if existing:
-                self.client.group_context.related_node_ids.append(existing[0].id)
+                existing_mlag = existing[0]
+                self.client.group_context.related_node_ids.append(existing_mlag.id)
+                # mlag_create may have changed since this domain was created (e.g.
+                # back-to-back <-> virtual) — mlag.py's peer-link wiring branches on
+                # this flag, so it must reflect the current setting, not the one at
+                # creation time, or a re-run would silently keep wiring the old mode.
+                wants_virtual = mlag_create == "virtual"
+                if existing_mlag.virtual_peer_link.value != wants_virtual:
+                    existing_mlag.virtual_peer_link.value = wants_virtual
+                    await existing_mlag.save(allow_upsert=True)
+                    self.logger.info(
+                        f"Rack {self.data.name}: updated MLAG domain {mlag_name} to {mlag_create} peer-link"
+                    )
                 continue
 
             devices = await self.client.filters(kind=DcimPhysicalDevice, name__values=[first, second])
@@ -591,27 +637,30 @@ class RackGenerator(RackMixin, CommonGenerator):
         L2-only aggregation switches below leafs use role "l2-leaf"/"access-leaf" instead.
         """
         pod = self.data.pod
-        for tor_role in self.data.tors or []:
+        if not (tor_roles := self.data.tors or []):
+            return
+
+        if not self._spine_device_names:
+            self.logger.error(f"Rack {self.data.name}: No spine devices found in pod - cannot cable ToRs to spines.")
+
+        # Both invariant across tor_roles (not derived from any single role) —
+        # computed once rather than once per role template.
+        tors_per_rack = sum(r.quantity or 0 for r in tor_roles)
+        # Live count, not design.compute_racks_per_row (a max capacity) - a pod with
+        # fewer racks per row than its design allows would otherwise get an inflated
+        # offset that overflows past the real spine downlink interfaces.
+        sibling_racks = await self.client.filters(kind=LocationRack, pod__ids=[pod.id])
+        prev_row_racks = sum(
+            1
+            for r in sibling_racks
+            if hasattr(r, "row_index") and r.row_index and r.row_index.value < self.data.row_index
+        )
+
+        for tor_role in tor_roles:
             expected_names = self._roles.expected_names(role="tor", quantity=tor_role.quantity)
             if expected_names <= self._created_device_names:
                 self.logger.info(f"Skipping duplicate tor template (devices already created: {sorted(expected_names)})")
                 continue
-
-            tors_per_rack = sum(r.quantity or 0 for r in self.data.tors or [])
-            # Live count, not design.compute_racks_per_row (a max capacity) - a pod with
-            # fewer racks per row than its design allows would otherwise get an inflated
-            # offset that overflows past the real spine downlink interfaces.
-            sibling_racks = await self.client.filters(kind=LocationRack, pod__ids=[pod.id])
-            prev_row_racks = sum(
-                1
-                for r in sibling_racks
-                if hasattr(r, "row_index") and r.row_index and r.row_index.value < self.data.row_index
-            )
-
-            if not self._spine_device_names:
-                self.logger.error(
-                    f"Rack {self.data.name}: No spine devices found in pod - cannot cable ToRs to spines."
-                )
 
             await self._generate_spine_attached_role(
                 tor_role,
@@ -734,7 +783,18 @@ class RackGenerator(RackMixin, CommonGenerator):
         """Create border-leaf devices and cable uplinks to pod spines (always, same as leafs)."""
         pod = self.data.pod
         dc = pod.parent
-        for bl_role in self.data.border_leafs or []:
+        if not (bl_roles := self.data.border_leafs or []):
+            return
+
+        # Both invariant across bl_roles — computed once rather than once per role template.
+        leafs_per_rack = self._roles.border_leafs_per_rack()
+        total_tors_in_pod: int | None = None
+        if deployment_type == "tor":
+            max_tors_per_compute_rack = pod.design.max_tors_per_compute_rack if pod.design else 0
+            sibling_tor_racks = await self.client.filters(kind=LocationRack, pod__ids=[pod.id], rack_type__value="tor")
+            total_tors_in_pod = len(sibling_tor_racks) * max_tors_per_compute_rack
+
+        for bl_role in bl_roles:
             all_bl_uplinks = sorted(self._roles.template_interfaces(bl_role.template, role="uplink"))
             if not all_bl_uplinks:
                 self.logger.error(
@@ -754,16 +814,6 @@ class RackGenerator(RackMixin, CommonGenerator):
                 continue
 
             self.logger.info(f"Rack {self.data.name}: border-leaf fabric uplinks {bl_uplink_interfaces}")
-
-            leafs_per_rack = self._roles.border_leafs_per_rack()
-
-            total_tors_in_pod: int | None = None
-            if deployment_type == "tor":
-                max_tors_per_compute_rack = pod.design.max_tors_per_compute_rack if pod.design else 0
-                sibling_tor_racks = await self.client.filters(
-                    kind=LocationRack, pod__ids=[pod.id], rack_type__value="tor"
-                )
-                total_tors_in_pod = len(sibling_tor_racks) * max_tors_per_compute_rack
 
             await self._generate_spine_attached_role(
                 bl_role,
@@ -806,6 +856,39 @@ class RackGenerator(RackMixin, CommonGenerator):
             role__value=role,
         )
         return sorted({intf.name.value for intf in interfaces})
+
+    async def _disconnect_stale_uplinks(self, device_names: list[str], *, valid_far_ends: set[str]) -> None:
+        """Delete any cable on a firewall/load-balancer device's uplink port whose far
+        end isn't in `valid_far_ends` — reconciles a rack left cabled under the DC's
+        previous connectivity_mode (pbr <-> inline target different far ends on the
+        same physical ports) before this mode's own cabling call runs. A same-mode
+        re-run finds every far end already valid, so nothing is touched — idempotency
+        for the steady-state case is unaffected.
+        """
+        uplinks = await self.client.filters(
+            kind=DcimPhysicalInterface,
+            device__name__values=device_names,
+            role__value="uplink",
+            include=["cable"],
+        )
+        for uplink in uplinks:
+            if not (uplink.cable and uplink.cable.id):
+                continue
+            cable_obj = await self.client.get(kind=DcimCable, id=uplink.cable.id, include=["endpoints"])
+            far_ends = [p for p in cable_obj.endpoints.peers if p.id != uplink.id]
+            if far_ends and self._extract_device_name(far_ends[0]) not in valid_far_ends:
+                self.logger.info(
+                    f"Rack {self.data.name}: disconnecting stale cable {cable_obj.name.value} "
+                    "(left over from a previous connectivity_mode)"
+                )
+                await self.client.delete(kind=DcimCable, id=uplink.cable.id)
+
+    @staticmethod
+    def _extract_device_name(intf: Any) -> str | None:
+        """Extract the device name from a RelatedNode interface object."""
+        device_obj = getattr(intf.device, "peer", None) or getattr(intf, "device", None)
+        name_attr = getattr(device_obj, "name", None)
+        return str(name_attr.value if hasattr(name_attr, "value") else name_attr) if device_obj else None
 
     async def _ensure_ha_pair(
         self,
@@ -903,6 +986,7 @@ class RackGenerator(RackMixin, CommonGenerator):
             )
             return
 
+        await self._disconnect_stale_uplinks(devices, valid_far_ends=set(bl_names))
         await self.create_cabling(
             bottom_devices=devices,
             bottom_interfaces=uplinks,
@@ -959,6 +1043,12 @@ class RackGenerator(RackMixin, CommonGenerator):
                 f"bl1 load-balancer ports={len(bl1_ports)}, needed={len(sorted_lb)})."
             )
             return
+
+        # Reconcile ports left cabled by a previous connectivity_mode (e.g. pbr's
+        # FW-uplink[1] -> bl_names[1] is invalid under inline, where that same
+        # port must instead land on an lb device).
+        await self._disconnect_stale_uplinks(sorted_fw, valid_far_ends={bl_names[0], *sorted_lb})
+        await self._disconnect_stale_uplinks(sorted_lb, valid_far_ends={bl_names[1], *sorted_fw})
 
         # Link 1: BL[0] firewall-port[i] <-> FW[i]-in
         await self.create_cabling(
