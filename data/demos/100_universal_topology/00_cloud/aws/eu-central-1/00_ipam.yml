@@ -8,8 +8,6 @@ spec:
   data:
     - name: "C001-AWS-EU-CENTRAL-1"
       description: "CNRD AWS VPC eu-central-1 routing domain"
-      status: "active"
-      owner: "C001"
 
 ---
 # VPC CIDR and subnet ranges

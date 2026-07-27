@@ -10,7 +10,6 @@ spec:
     - name: "SHARED-SERVICES"
       description: "Shared infrastructure services VRF (DNS, NTP, monitoring)"
       l3_vni: 50100
-      status: "active"
 
 ---
 apiVersion: infrahub.app/v1

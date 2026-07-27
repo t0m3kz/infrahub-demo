@@ -9,8 +9,6 @@ spec:
   data:
     - name: "C002-PROD"
       description: "SwiftGo GmbH production VRF"
-      status: "active"
-      owner: "C002"
       member_of_groups:
         - vrf_namespaces
 

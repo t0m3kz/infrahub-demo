@@ -15,8 +15,6 @@ spec:
     - name: "C001-DC3-PROD"
       description: "Nordix Ltd. production VRF on DC3"
       l3_vni: 50011
-      status: "active"
-      owner: "C001"
       member_of_groups:
         - vrf_namespaces
 
