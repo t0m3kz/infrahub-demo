@@ -226,10 +226,11 @@ spec:
     # ── Endpoint Connectivity ────────────────────────────────────────────────
     # Endpoint targets (data/bootstrap/00_groups.yml's `endpoints` group) are
     # server devices with role=endpoint. `created` bootstraps a fresh server's
-    # uplink cabling immediately; the `interfaces` relationship trigger catches
-    # servers that gain new uplink/lag NICs after creation (e.g. a follow-up
-    # object-load adding a bond) — mirrors the created/updated split used for
-    # DC/pod/rack above.
+    # uplink cabling immediately. No relationship-based `interfaces added`
+    # trigger here: that fires on ANY DcimPhysicalDevice (border-leafs, ToRs,
+    # spines all gain interfaces during add_rack), and add_endpoint's target
+    # group (`endpoints`) rejects non-member node ids outright — see the
+    # ValueError this caused in production before removal.
     - name: trigger-endpoint-generator-on-created
       branch_scope: "other_branches"
       node_kind: DcimPhysicalDevice
@@ -241,17 +242,6 @@ spec:
           - attribute_name: role
             value_match: value
             value: endpoint
-
-    - name: trigger-endpoint-generator-update-interfaces
-      branch_scope: "other_branches"
-      node_kind: DcimPhysicalDevice
-      mutation_action: "updated"
-      action: run-endpoint-generator
-      matches:
-        kind: CoreNodeTriggerRelationshipMatch
-        data:
-          - relationship_name: interfaces
-            modification_type: added
 
     # ── MLAG Wiring ───────────────────────────────────────────────────────────
     - name: trigger-mlag-on-created
