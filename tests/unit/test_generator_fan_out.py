@@ -6,6 +6,9 @@ Covers:
   the wait= kwarg (default True), no-ops on empty input
 - CommonGenerator.wait_for_parent_generator_and_refetch() — waits on an in-flight
   parent bootstrap task and re-collects data, or no-ops when nothing is in flight
+- CommonGenerator._get_parent_pool_with_retry() — retries a CoreIPPrefixPool
+  lookup that races the parent generator's own pool creation (e.g. add_pod
+  reading add_dc's DC-level technical pool before it's committed)
 - DCPodCascadeGenerator: subclasses DCTopologyGenerator's generate() and, after
   it runs (mocked here), fans out (fire-and-forget) to pod_rack_cascade for
   every existing pod
@@ -20,6 +23,7 @@ from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from infrahub_sdk.exceptions import NodeNotFoundError
 
 from generators.common import CommonGenerator
 from generators.models import DCModel
@@ -138,6 +142,50 @@ class TestWaitForParentGeneratorAndRefetch:
         assert gen.client.task.wait_for_completion.call_args.kwargs["id"] == "t-1"
         gen.collect_data.assert_awaited_once()
         assert result == {"refetched": True}
+
+
+class TestGetParentPoolWithRetry:
+    @pytest.mark.asyncio
+    async def test_pool_found_immediately_returns_it(self) -> None:
+        gen = _build_common_gen()
+        pool = MagicMock()
+        gen.client.get = AsyncMock(return_value=pool)
+
+        result = await gen._get_parent_pool_with_retry("dc5-technical-pool")
+
+        assert result is pool
+        gen.client.get.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_pool_appears_after_retry(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """add_dc's own allocate_resource_pools() call hasn't committed the DC-level
+        pool yet on the first lookup — retries until it has."""
+        gen = _build_common_gen()
+        pool = MagicMock()
+        gen.client.get = AsyncMock(
+            side_effect=[
+                NodeNotFoundError(identifier={"name__value": ["dc5-technical-pool"]}),
+                pool,
+            ]
+        )
+        sleep_mock = AsyncMock()
+        monkeypatch.setattr("generators.common.asyncio.sleep", sleep_mock)
+
+        result = await gen._get_parent_pool_with_retry("dc5-technical-pool")
+
+        assert result is pool
+        sleep_mock.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_pool_never_appears_raises_after_exhausting_retries(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        gen = _build_common_gen()
+        gen.client.get = AsyncMock(side_effect=NodeNotFoundError(identifier={"name__value": ["dc5-technical-pool"]}))
+        monkeypatch.setattr("generators.common.asyncio.sleep", AsyncMock())
+
+        with pytest.raises(NodeNotFoundError):
+            await gen._get_parent_pool_with_retry("dc5-technical-pool")
+
+        assert gen.client.get.await_count == 10
 
 
 def _mock_pod(name: str) -> MagicMock:

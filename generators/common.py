@@ -6,7 +6,7 @@ import ipaddress
 from datetime import datetime, timezone
 from typing import Any, Literal
 
-from infrahub_sdk.exceptions import GraphQLError, ValidationError
+from infrahub_sdk.exceptions import GraphQLError, NodeNotFoundError, ValidationError
 from infrahub_sdk.generator import InfrahubGenerator
 from infrahub_sdk.protocols import CoreGeneratorDefinition, CoreIPAddressPool, CoreIPPrefixPool, CoreStandardGroup
 from infrahub_sdk.task.models import TaskFilter, TaskState
@@ -376,6 +376,40 @@ class CommonGenerator(FailOnErrorLoggerMixin, RoutingMixin, InfrahubGenerator):
             parent_attr=parent_attr,
         )
 
+    async def _get_parent_pool_with_retry(self, parent_pool_name: str) -> CoreIPPrefixPool:
+        """Fetch a parent CoreIPPrefixPool by name, retrying if it doesn't exist yet.
+
+        A pod-level allocate_resource_pools() call needs the DC-level pool
+        (e.g. "dc5-technical-pool") that add_dc's own allocate_resource_pools()
+        call creates — the same class of race fixed for add_rack's pod-pool
+        wait: add_pod's created-trigger can fire and be dispatched before
+        add_dc's task is even visible in the task list (see
+        wait_for_parent_generator_and_refetch's docstring), so checking the
+        pool node's actual existence with a retry closes the gap regardless
+        of task-list indexing timing.
+        """
+        _MAX_RETRIES = 10
+        _RETRY_DELAY = 3.0
+        _RETRY_CAP = 20.0
+        _RETRY_JITTER = 0.25
+        for attempt in range(_MAX_RETRIES):
+            try:
+                return await self.client.get(kind=CoreIPPrefixPool, name__value=parent_pool_name)
+            except NodeNotFoundError:
+                if attempt == _MAX_RETRIES - 1:
+                    raise
+                delay = self._retry_delay(_RETRY_DELAY, attempt, cap=_RETRY_CAP, jitter=_RETRY_JITTER)
+                self.logger.info(
+                    f"Parent pool '{parent_pool_name}' not found yet — "
+                    f"retrying in {delay:.2f}s (attempt {attempt + 1}/{_MAX_RETRIES})"
+                )
+                await asyncio.sleep(delay)
+        raise NodeNotFoundError(
+            branch_name=self.branch_name,
+            node_type="CoreIPPrefixPool",
+            identifier={"name__value": [parent_pool_name]},
+        )
+
     async def allocate_resource_pools(
         self,
         strategy: Literal["fabric", "pod"],
@@ -433,10 +467,7 @@ class CommonGenerator(FailOnErrorLoggerMixin, RoutingMixin, InfrahubGenerator):
             else:
                 parent_pool_name = f"{fabric_name}-{pool_name}-pool"
 
-            parent_pool = await self.client.get(
-                kind=CoreIPPrefixPool,
-                name__value=parent_pool_name,
-            )
+            parent_pool = await self._get_parent_pool_with_retry(parent_pool_name)
             self.logger.info(
                 f"Allocating next IP prefix for pool '{pool_name}' (/{pool_size}) in parent '{parent_pool_name}'"
             )
