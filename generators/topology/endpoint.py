@@ -135,13 +135,18 @@ class EndpointConnectivityGenerator(EndpointUplinkMixin, CommonGenerator):
 
         self.logger.info(f"Generating connectivity for endpoint {self.data.name} in {deployment_type} deployment")
 
-        # Update endpoint device to set deployment to pod
+        # Update endpoint device to set deployment to pod. Always saved (even when
+        # deployment is already correct) so this run's tracking group always
+        # includes the device — a conditional save here would leave the device
+        # untracked on a no-op re-run, and delete_unused_nodes would then delete
+        # the still-valid device as "unused" (same failure mode create_devices()
+        # in common.py works around by always re-upserting every run).
         endpoint_device = await self.client.get(kind=DcimPhysicalDevice, id=self.data.id)
         current_deployment = endpoint_device.deployment.id
         if current_deployment != pod_id:
             endpoint_device.deployment = pod_id
-            await endpoint_device.save(allow_upsert=True)
             self.logger.info(f"Updated {self.data.name} deployment to pod {self.pod_name}")
+        await endpoint_device.save(allow_upsert=True)
 
         # LAG-based endpoints (server declares role=lag physical NICs bundled into
         # DcimLAGInterface bond(s) in its own object-load data) get switch-side
@@ -722,9 +727,9 @@ class EndpointConnectivityGenerator(EndpointUplinkMixin, CommonGenerator):
 
         shared_domains = mlag_ids_by_switch.get(switch_a_name, set()) & mlag_ids_by_switch.get(switch_b_name, set())
         if len(shared_domains) != 1:
-            self.logger.warning(
+            self.logger.error(
                 f"Endpoint {self.data.name}: {switch_a_name}/{switch_b_name} share "
-                f"{len(shared_domains)} MLAG domain(s) (need exactly 1) — skipping LAG bond(s). "
+                f"{len(shared_domains)} MLAG domain(s) (need exactly 1) — cannot wire LAG bond(s). "
                 "Pair the switches into a ManagedMLAG domain first."
             )
             return
@@ -741,7 +746,7 @@ class EndpointConnectivityGenerator(EndpointUplinkMixin, CommonGenerator):
             bond_name = bond.name.value
 
             if len(member_peers) < 2:
-                self.logger.warning(f"Bond {bond_name} on {self.data.name} has < 2 member interfaces — skipping")
+                self.logger.error(f"Bond {bond_name} on {self.data.name} has < 2 member interfaces — cannot wire it")
                 continue
 
             # Idempotency: a bond whose server-side members already have cables
@@ -758,7 +763,7 @@ class EndpointConnectivityGenerator(EndpointUplinkMixin, CommonGenerator):
                 free_ports_by_switch[name] = [p for p in device_groups[name] if not (p.cable and p.cable.id)]
 
             if not free_ports_by_switch[switch_a_name] or not free_ports_by_switch[switch_b_name]:
-                self.logger.warning(f"Bond {bond_name} on {self.data.name}: no free ports on both switches — skipping")
+                self.logger.error(f"Bond {bond_name} on {self.data.name}: no free ports on both switches")
                 continue
 
             lag_id = self._next_free_lag_id(existing_lag_ids)
