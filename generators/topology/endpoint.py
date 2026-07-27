@@ -23,7 +23,7 @@ from ..common import CablingOptions, CommonGenerator
 from ..endpoint import EndpointUplinkMixin
 from ..helpers.interface_naming import get_lag_name
 from ..models import ConnectionFingerprint, EndpointModel
-from ..protocols import DcimLAGInterface, DcimPhysicalDevice, DcimPhysicalInterface, LocationRack
+from ..protocols import DcimCable, DcimLAGInterface, DcimPhysicalDevice, DcimPhysicalInterface, LocationRack
 
 
 class EndpointConnectivityGenerator(EndpointUplinkMixin, CommonGenerator):
@@ -749,30 +749,55 @@ class EndpointConnectivityGenerator(EndpointUplinkMixin, CommonGenerator):
                 self.logger.error(f"Bond {bond_name} on {self.data.name} has < 2 member interfaces — cannot wire it")
                 continue
 
-            # Idempotency: a bond whose server-side members already have cables
-            # was already wired by a previous run — re-allocating a port/lag_id
-            # for it here would create a second, unwanted port-channel.
-            if any(getattr(member, "cable", None) and member.cable.id for member in member_peers):
-                self.logger.info(f"Bond {bond_name} on {self.data.name} already cabled — skipping")
-                continue
-
             member_names = sort_interface_list([m.name.value for m in member_peers])
+            member_by_name = {m.name.value: m for m in member_peers}
 
+            # Resolve each switch's port for this bond: reuse the existing one if
+            # a prior run already cabled this member (read off the far end of its
+            # cable), else claim the next free port. Reusing — rather than
+            # skipping outright — keeps the cable/port-channel/switch port
+            # re-touched (create_cabling + the LAG save below are both
+            # allow_upsert=True) so this run's tracking group re-includes them;
+            # otherwise delete_unused_nodes would delete still-valid prior-run
+            # objects that nothing in THIS run touched again.
             free_ports_by_switch: dict[str, list[DcimPhysicalInterface]] = {}
             for name in (switch_a_name, switch_b_name):
                 free_ports_by_switch[name] = [p for p in device_groups[name] if not (p.cable and p.cable.id)]
 
-            if not free_ports_by_switch[switch_a_name] or not free_ports_by_switch[switch_b_name]:
-                self.logger.error(f"Bond {bond_name} on {self.data.name}: no free ports on both switches")
+            switch_port_by_name: dict[str, DcimPhysicalInterface] = {}
+            for switch_name, server_interface_name in zip((switch_a_name, switch_b_name), member_names):
+                member = member_by_name[server_interface_name]
+                existing_cable = getattr(member, "cable", None)
+                if existing_cable and existing_cable.id:
+                    cable_obj = await self.client.get(kind=DcimCable, id=existing_cable.id, include=["endpoints"])
+                    far_ends = [p for p in getattr(cable_obj, "endpoints").peers if p.id != member.id]
+                    if far_ends:
+                        switch_port_by_name[switch_name] = await self.client.get(
+                            kind=DcimPhysicalInterface, id=far_ends[0].id, include=["lag"]
+                        )
+                        continue
+                if not free_ports_by_switch[switch_name]:
+                    self.logger.error(f"Bond {bond_name} on {self.data.name}: no free port on {switch_name}")
+                    continue
+                switch_port = free_ports_by_switch[switch_name].pop(0)
+                device_groups[switch_name].remove(switch_port)
+                switch_port_by_name[switch_name] = switch_port
+
+            if switch_a_name not in switch_port_by_name or switch_b_name not in switch_port_by_name:
                 continue
 
-            lag_id = self._next_free_lag_id(existing_lag_ids)
-            existing_lag_ids.add(lag_id)
+            existing_lag_objs = [getattr(switch_port_by_name[n], "lag", None) for n in (switch_a_name, switch_b_name)]
+            lag_id = next(
+                (lag.peer.lag_id.value for lag in existing_lag_objs if lag and lag.id and lag.peer),
+                None,
+            )
+            if lag_id is None:
+                lag_id = self._next_free_lag_id(existing_lag_ids)
+                existing_lag_ids.add(lag_id)
 
             for switch_name, server_interface_name in zip((switch_a_name, switch_b_name), member_names):
                 switch = switch_by_name[switch_name]
-                switch_port = free_ports_by_switch[switch_name].pop(0)
-                device_groups[switch_name].remove(switch_port)
+                switch_port = switch_port_by_name[switch_name]
 
                 fingerprint = ConnectionFingerprint(
                     server_name=self.data.name,
@@ -797,6 +822,7 @@ class EndpointConnectivityGenerator(EndpointUplinkMixin, CommonGenerator):
                     kind=DcimLAGInterface,
                     data={
                         "name": get_lag_name(platform_name, lag_id),
+                        "description": f"{self.data.name}:{bond_name}",
                         "device": {"id": switch.id},
                         "status": "active",
                         "role": "lag",
