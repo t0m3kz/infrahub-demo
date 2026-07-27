@@ -9,7 +9,7 @@ from infrahub_sdk.protocols import CoreStandardGroup
 from ..common import CablingOptions, CommonGenerator
 from ..helpers.rack import RackPlanner, RackRolesHelper, parse_rack_data
 from ..models import DeviceRole, RackModel, Template
-from ..protocols import DcimCable, DcimPhysicalDevice, DcimPhysicalInterface, LocationRack
+from ..protocols import DcimPhysicalDevice, DcimPhysicalInterface, LocationRack
 from ..rack import (
     MUTUALLY_EXCLUSIVE_ROLE_GROUPS,
     ROLES_BY_DEPLOYMENT_TYPE,
@@ -829,67 +829,6 @@ class RackGenerator(RackMixin, CommonGenerator):
                 mlag=False,
             )
 
-    async def _resolve_dc_border_leaf_pair(self, dc_id: str) -> list[str] | None:
-        """Resolve the DC's border-leaf pair (2 device names, sorted), or None if not
-        both created yet. Border-leaf devices are split one-per-rack across two
-        border-leaf racks in the DC, so this needs a DC-wide lookup, not self.data.border_leafs.
-        """
-        border_leafs = await self.client.filters(
-            kind=DcimPhysicalDevice,
-            deployment__ids=[dc_id],
-            role__value="border-leaf",
-            status__values=["active", "provisioning", "free"],
-        )
-        if len(border_leafs) < 2:
-            self.logger.error(
-                f"Rack {self.data.name}: DC has {len(border_leafs)} border-leaf device(s) (need 2) — "
-                "cannot cable firewall/load-balancer. Run add_rack on both border-leaf racks first."
-            )
-            return None
-        return sorted(bl.name.value for bl in border_leafs)[:2]
-
-    async def _resolve_bl_port_names(self, bl_names: list[str], *, role: str) -> list[str]:
-        """Sorted, deduplicated dedicated port names for `role` across the given border-leaf device(s)."""
-        interfaces = await self.client.filters(
-            kind=DcimPhysicalInterface,
-            device__name__values=bl_names,
-            role__value=role,
-        )
-        return sorted({intf.name.value for intf in interfaces})
-
-    async def _disconnect_stale_uplinks(self, device_names: list[str], *, valid_far_ends: set[str]) -> None:
-        """Delete any cable on a firewall/load-balancer device's uplink port whose far
-        end isn't in `valid_far_ends` — reconciles a rack left cabled under the DC's
-        previous connectivity_mode (pbr <-> inline target different far ends on the
-        same physical ports) before this mode's own cabling call runs. A same-mode
-        re-run finds every far end already valid, so nothing is touched — idempotency
-        for the steady-state case is unaffected.
-        """
-        uplinks = await self.client.filters(
-            kind=DcimPhysicalInterface,
-            device__name__values=device_names,
-            role__value="uplink",
-            include=["cable"],
-        )
-        for uplink in uplinks:
-            if not (uplink.cable and uplink.cable.id):
-                continue
-            cable_obj = await self.client.get(kind=DcimCable, id=uplink.cable.id, include=["endpoints"])
-            far_ends = [p for p in cable_obj.endpoints.peers if p.id != uplink.id]
-            if far_ends and self._extract_device_name(far_ends[0]) not in valid_far_ends:
-                self.logger.info(
-                    f"Rack {self.data.name}: disconnecting stale cable {cable_obj.name.value} "
-                    "(left over from a previous connectivity_mode)"
-                )
-                await self.client.delete(kind=DcimCable, id=uplink.cable.id)
-
-    @staticmethod
-    def _extract_device_name(intf: Any) -> str | None:
-        """Extract the device name from a RelatedNode interface object."""
-        device_obj = getattr(intf.device, "peer", None) or getattr(intf, "device", None)
-        name_attr = getattr(device_obj, "name", None)
-        return str(name_attr.value if hasattr(name_attr, "value") else name_attr) if device_obj else None
-
     async def _ensure_ha_pair(
         self,
         device_names: list[str],
@@ -957,129 +896,6 @@ class RackGenerator(RackMixin, CommonGenerator):
 
         return devices
 
-    async def _cable_pbr_independent(
-        self,
-        devices: list[str],
-        template: Template,
-        bl_names: list[str],
-        *,
-        bl_port_role: Literal["firewall", "load-balancer"],
-        role_label: str,
-    ) -> None:
-        """PBR mode: each device dual-homes to both border-leafs on dedicated
-        bl_port_role ports — device[i]'s uplink[k] -> bl_names[k]'s port[i]
-        (strategy="rack" any-to-any fan-out, same pattern leaf/tor/border-leaf
-        use against spines). Deterministic index-based port assignment means a
-        re-run always targets the same ports regardless of current cable state,
-        so nothing here is ever skipped as "already cabled".
-        """
-        uplinks = sorted(self._roles.template_interfaces(template, role="uplink"))
-        if not uplinks:
-            self.logger.error(f"Rack {self.data.name}: {role_label} template has no uplink interfaces - cannot cable.")
-            return
-
-        bl_ports = await self._resolve_bl_port_names(bl_names, role=bl_port_role)
-        if len(bl_ports) < len(devices):
-            self.logger.error(
-                f"Rack {self.data.name}: not enough {bl_port_role!r} ports on border-leaf pair "
-                f"(have {len(bl_ports)}, need {len(devices)}) - cannot cable {role_label}s."
-            )
-            return
-
-        await self._disconnect_stale_uplinks(devices, valid_far_ends=set(bl_names))
-        await self.create_cabling(
-            bottom_devices=devices,
-            bottom_interfaces=uplinks,
-            top_devices=bl_names,
-            top_interfaces=bl_ports,
-            strategy="rack",
-            options=CablingOptions(cabling_offset=0, pool=None),
-        )
-
-    async def _cable_inline_service_chain(
-        self,
-        fw_devices: list[str],
-        lb_devices: list[str],
-        bl_names: list[str],
-    ) -> None:
-        """Inline mode: BL[0]-port(firewall) <-> FW-in, FW-out <-> LB-in,
-        LB-out <-> BL[1]-port(load-balancer). Firewalls/load-balancers are
-        paired 1:1 by sorted device name; equal quantities are required with
-        no partial-chain fallback on mismatch (per explicit user decision).
-        """
-        if len(fw_devices) != len(lb_devices):
-            self.logger.error(
-                f"Rack {self.data.name}: inline connectivity_mode requires equal firewall/load_balancer "
-                f"quantities (firewalls={len(fw_devices)}, load_balancers={len(lb_devices)}) - "
-                "fix the rack's fabric_templates quantities."
-            )
-            return
-        if not fw_devices:
-            return
-        if len(bl_names) < 2:
-            self.logger.error(f"Rack {self.data.name}: inline service chain needs 2 border-leaf devices.")
-            return
-
-        fw_uplinks = sorted(self._roles.template_interfaces(self.data.firewalls[0].template, role="uplink"))
-        lb_uplinks = sorted(self._roles.template_interfaces(self.data.load_balancers[0].template, role="uplink"))
-        if len(fw_uplinks) < 2 or len(lb_uplinks) < 2:
-            self.logger.error(
-                f"Rack {self.data.name}: inline service chain needs 2 uplink interfaces per firewall/"
-                f"load-balancer template (firewall={len(fw_uplinks)}, load_balancer={len(lb_uplinks)})."
-            )
-            return
-        fw_in, fw_out = fw_uplinks[0], fw_uplinks[1]
-        lb_in, lb_out = lb_uplinks[0], lb_uplinks[1]
-
-        sorted_fw = sorted(fw_devices)
-        sorted_lb = sorted(lb_devices)
-
-        bl0_ports = await self._resolve_bl_port_names([bl_names[0]], role="firewall")
-        bl1_ports = await self._resolve_bl_port_names([bl_names[1]], role="load-balancer")
-        if len(bl0_ports) < len(sorted_fw) or len(bl1_ports) < len(sorted_lb):
-            self.logger.error(
-                f"Rack {self.data.name}: not enough dedicated border-leaf ports for inline service chain "
-                f"(bl0 firewall ports={len(bl0_ports)}, needed={len(sorted_fw)}; "
-                f"bl1 load-balancer ports={len(bl1_ports)}, needed={len(sorted_lb)})."
-            )
-            return
-
-        # Reconcile ports left cabled by a previous connectivity_mode (e.g. pbr's
-        # FW-uplink[1] -> bl_names[1] is invalid under inline, where that same
-        # port must instead land on an lb device).
-        await self._disconnect_stale_uplinks(sorted_fw, valid_far_ends={bl_names[0], *sorted_lb})
-        await self._disconnect_stale_uplinks(sorted_lb, valid_far_ends={bl_names[1], *sorted_fw})
-
-        # Link 1: BL[0] firewall-port[i] <-> FW[i]-in
-        await self.create_cabling(
-            bottom_devices=sorted_fw,
-            bottom_interfaces=[fw_in],
-            top_devices=[bl_names[0]],
-            top_interfaces=bl0_ports,
-            strategy="rack",
-            options=CablingOptions(cabling_offset=0, pool=None),
-        )
-        # Link 3: LB[i]-out <-> BL[1] load-balancer-port[i]
-        await self.create_cabling(
-            bottom_devices=sorted_lb,
-            bottom_interfaces=[lb_out],
-            top_devices=[bl_names[1]],
-            top_interfaces=bl1_ports,
-            strategy="rack",
-            options=CablingOptions(cabling_offset=0, pool=None),
-        )
-        # Link 2: FW[i]-out <-> LB[i]-in — single-element devices/interfaces per
-        # call is how this codebase gets an exact 1:1 link, not a fan-out.
-        for fw_name, lb_name in zip(sorted_fw, sorted_lb):
-            await self.create_cabling(
-                bottom_devices=[fw_name],
-                bottom_interfaces=[fw_out],
-                top_devices=[lb_name],
-                top_interfaces=[lb_in],
-                strategy="intra_rack",
-                options=CablingOptions(cabling_offset=0, pool=None),
-            )
-
     # (device_role, fabric_templates attribute, HA domain kind)
     _FW_LB_ROLES: tuple[
         tuple[Literal["firewall", "load-balancer"], str, Literal["ManagedFirewallHA", "ManagedLoadbalancerHA"]], ...
@@ -1089,33 +905,15 @@ class RackGenerator(RackMixin, CommonGenerator):
     )
 
     async def _generate_firewalls_and_load_balancers(self) -> None:
-        """Create firewall/load-balancer devices and cable them to the DC's
-        border-leaf pair, per pod.parent.connectivity_mode ("pbr" or "inline").
+        """Create firewall/load-balancer devices (with HA pairing at quantity == 2).
+
+        Cabling to the DC's border-leaf pair is not handled here yet — deferred
+        to a follow-up; for now this only deploys the devices themselves.
         """
         if not self.data.firewalls and not self.data.load_balancers:
             return
 
         dc = self.data.pod.parent
-        connectivity_mode = dc.connectivity_mode
-
-        if (bl_names := await self._resolve_dc_border_leaf_pair(dc.id)) is None:
-            return
-
-        devices_by_role: dict[Literal["firewall", "load-balancer"], list[str]] = {}
         for device_role, data_attr, ha_kind in self._FW_LB_ROLES:
-            role_devices: list[str] = []
             for role in getattr(self.data, data_attr) or []:
-                created = await self._create_role_devices_with_ha(
-                    role, device_role=device_role, dc_id=dc.id, ha_kind=ha_kind
-                )
-                role_devices.extend(created)
-                if connectivity_mode == "pbr":
-                    await self._cable_pbr_independent(
-                        created, role.template, bl_names, bl_port_role=device_role, role_label=device_role
-                    )
-            devices_by_role[device_role] = role_devices
-
-        if connectivity_mode == "inline":
-            await self._cable_inline_service_chain(
-                devices_by_role["firewall"], devices_by_role["load-balancer"], bl_names
-            )
+                await self._create_role_devices_with_ha(role, device_role=device_role, dc_id=dc.id, ha_kind=ha_kind)
