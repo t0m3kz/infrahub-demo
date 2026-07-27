@@ -90,6 +90,12 @@ def _mock_device(name: str) -> MagicMock:
     return dev
 
 
+def _mock_group() -> MagicMock:
+    group = MagicMock()
+    group.id = "mlag-domains-group"
+    return group
+
+
 class TestEnsureMlagPairs:
     @pytest.mark.asyncio
     async def test_no_mode_never_creates(self) -> None:
@@ -126,6 +132,7 @@ class TestEnsureMlagPairs:
     async def test_back_to_back_with_mlag_peer_interface_creates_domain(self) -> None:
         gen = _build_gen(mlag_create="back-to-back")
         gen.client.filters = AsyncMock(side_effect=[[], [_mock_device("tor-01"), _mock_device("tor-02")]])
+        gen.client.get = AsyncMock(return_value=_mock_group())
         mlag_obj = MagicMock()
         mlag_obj.id = "mlag-1"
         mlag_obj.save = AsyncMock()
@@ -146,6 +153,7 @@ class TestEnsureMlagPairs:
     async def test_virtual_mode_creates_domain_without_interface_requirement(self) -> None:
         gen = _build_gen(mlag_create="virtual")
         gen.client.filters = AsyncMock(side_effect=[[], [_mock_device("leaf-01"), _mock_device("leaf-02")]])
+        gen.client.get = AsyncMock(return_value=_mock_group())
         mlag_obj = MagicMock()
         mlag_obj.id = "mlag-1"
         mlag_obj.save = AsyncMock()
@@ -162,6 +170,7 @@ class TestEnsureMlagPairs:
     async def test_odd_device_out_is_unpaired(self) -> None:
         gen = _build_gen(mlag_create="virtual")
         gen.client.filters = AsyncMock(side_effect=[[], [_mock_device("tor-01"), _mock_device("tor-02")]])
+        gen.client.get = AsyncMock(return_value=_mock_group())
         mlag_obj = MagicMock()
         mlag_obj.id = "mlag-1"
         mlag_obj.save = AsyncMock()
@@ -178,6 +187,7 @@ class TestEnsureMlagPairs:
         existing = MagicMock()
         existing.id = "existing-mlag-1"
         gen.client.filters = AsyncMock(return_value=[existing])
+        gen.client.get = AsyncMock(return_value=_mock_group())
         gen.client.create = AsyncMock()
         template = Template(id="tmpl", interfaces=[])
 

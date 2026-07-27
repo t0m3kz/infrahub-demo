@@ -3,6 +3,8 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Literal
 
+from infrahub_sdk.protocols import CoreStandardGroup
+
 from ..common import CablingOptions, CommonGenerator
 from ..helpers.rack import RackPlanner, RackRolesHelper, parse_rack_data
 from ..models import RackModel, Template
@@ -169,8 +171,17 @@ class RackGenerator(RackMixin, CommonGenerator):
         leafs (or, indirectly, to a local ToR fed by them). Their generator run must
         not start until this network rack's own leafs actually exist, which is
         already guaranteed here: this method only runs after generate() has finished
-        creating them, and run_generator (wait=True by default) blocks until each
-        fanned-out rack's generator has itself fully completed.
+        creating them.
+
+        Fires with wait=False (fire-and-forget), not wait=True: a row-dependent
+        rack's own generate() waits for an in-flight "Run generator add_rack" task
+        on this network rack before reading pod-level data (self-nesting guard —
+        same generator name on both sides, since this level isn't split into a
+        separate cascade generator like dc_pod_cascade/pod_rack_cascade are). If
+        this call blocked until the fanned-out rack's own run completed, this
+        network rack's own task would stay RUNNING for that entire duration —
+        which the row-dependent rack's guard would then see as "still in flight"
+        and wait on, deadlocking against the very call that's waiting on it.
         """
         deployment_type = self.data.pod.deployment_type
 
@@ -194,7 +205,7 @@ class RackGenerator(RackMixin, CommonGenerator):
             key=self._rack_sort_key,
         )
 
-        await self.run_generator("add_rack", [rack.id for rack in row_dependent_racks])
+        await self.run_generator("add_rack", [rack.id for rack in row_dependent_racks], wait=False)
 
     async def _get_leaf_devices_in_row(self, pod_id: str, row_index: int) -> tuple[list[str], list[str]]:
         """Query leaf devices in same row and their interfaces for ToR-to-leaf cabling.
@@ -502,6 +513,7 @@ class RackGenerator(RackMixin, CommonGenerator):
             return
 
         sorted_names = sorted(device_names)
+        mlag_group = await self.client.get(kind=CoreStandardGroup, name__value="mlag_domains")
         for pair_index, (first, second) in enumerate(zip(sorted_names[0::2], sorted_names[1::2]), start=1):
             mlag_name = f"{first}-{second}-mlag"
             existing = await self.client.filters(kind="ManagedMLAG", name__value=mlag_name)
@@ -522,6 +534,7 @@ class RackGenerator(RackMixin, CommonGenerator):
                     "virtual_peer_link": mlag_create == "virtual",
                     "status": "active",
                     "capabilities": [{"id": dev.id} for dev in devices],
+                    "member_of_groups": [{"id": mlag_group.id}],
                 },
             )
             await mlag_obj.save(allow_upsert=True)

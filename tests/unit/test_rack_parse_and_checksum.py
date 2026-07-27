@@ -347,9 +347,14 @@ class TestFanOutToRowDependentRacks:
         await gen._fan_out_to_row_dependent_racks()
 
         gen.run_generator.assert_awaited_once()
-        args, _ = gen.run_generator.call_args
+        args, kwargs = gen.run_generator.call_args
         assert args[0] == "add_rack"
         assert sorted(args[1]) == sorted([tor_rack.id, compute_rack.id])
+        # fire-and-forget: a network rack's own task must not stay RUNNING while
+        # waiting on its row-dependent racks, or their own wait-for-parent guard
+        # (checking for an in-flight "Run generator add_rack" on this same rack)
+        # would deadlock against the very call waiting on it.
+        assert kwargs["wait"] is False
 
     @pytest.mark.asyncio
     async def test_no_row_dependent_racks_calls_with_empty_list(self) -> None:
@@ -359,7 +364,7 @@ class TestFanOutToRowDependentRacks:
 
         await gen._fan_out_to_row_dependent_racks()
 
-        gen.run_generator.assert_awaited_once_with("add_rack", [])
+        gen.run_generator.assert_awaited_once_with("add_rack", [], wait=False)
 
 
 class TestGenerateRackGating:
