@@ -20,9 +20,81 @@ spec:
             amount_of_spines: 2
             member_of_groups:
               - topologies_pod
+            racks:
+              kind: LocationRack
+              data:
+                - index: 1
+                  row_index: 1
+                  shortname: ber-1-s-1-r-1-1
+                  rack_type: network
+                  parent: ber-1-s-1
+                  member_of_groups: [topologies_rack]
+                  fabric_templates:
+                    - ["2", "leaf", "Edgecore-7726-32X-O_LEAF_MR"]
+                - index: 2
+                  row_index: 1
+                  shortname: ber-1-s-1-r-1-2
+                  rack_type: compute
+                  parent: ber-1-s-1
+                  member_of_groups: [topologies_rack]
+                  fabric_templates:
+                    - ["2", "l2-leaf", "Edgecore-7AS7326-56X-O-48V-F_TOR"]
+                - index: 1
+                  row_index: 2
+                  shortname: ber-1-s-1-r-2-1
+                  rack_type: network
+                  parent: ber-1-s-1
+                  member_of_groups: [topologies_rack]
+                  fabric_templates:
+                    - ["2", "leaf", "Edgecore-7726-32X-O_LEAF_MR"]
+                - index: 2
+                  row_index: 2
+                  shortname: ber-1-s-1-r-2-2
+                  rack_type: compute
+                  parent: ber-1-s-1
+                  member_of_groups: [topologies_rack]
+                  fabric_templates:
+                    - ["2", "l2-leaf", "Edgecore-7AS7326-56X-O-48V-F_TOR"]
+                - index: 1
+                  row_index: 3
+                  rack_type: network
+                  shortname: ber-1-s-1-r-3-1
+                  parent: ber-1-s-1
+                  member_of_groups: [topologies_rack]
+                  fabric_templates:
+                    - ["1", "border-leaf", "Edgecore-7726-32X-O_BORDER_LEAF"]
+                    - ["1", "firewall", "CP-26000_FIREWALL"]
+                    - ["1", "load-balancer", "NetScaler-MPX-26000-100G_LOAD_BALANCER"]
           - index: 2
             design: S_TOR
             spine_template: Edgecore-7726-32X-O_SPINE
             amount_of_spines: 2
             member_of_groups:
               - topologies_pod
+            racks:
+              kind: LocationRack
+              data:
+                - index: 1
+                  row_index: 1
+                  shortname: ber-1-s-2-r-1-1
+                  rack_type: tor
+                  parent: ber-1-s-2
+                  member_of_groups: [topologies_rack]
+                  fabric_templates:
+                    - ["2", "tor", "Edgecore-7AS7326-56X-O-48V-F_TOR"]
+                - index: 1
+                  row_index: 2
+                  shortname: ber-1-s-2-r-2-1
+                  rack_type: tor
+                  parent: ber-1-s-2
+                  member_of_groups: [topologies_rack]
+                  fabric_templates:
+                    - ["2", "tor", "Edgecore-7AS7326-56X-O-48V-F_TOR"]
+                - index: 1
+                  row_index: 3
+                  rack_type: network
+                  shortname: ber-1-s-2-r-3-1
+                  parent: ber-1-s-2
+                  member_of_groups: [topologies_rack]
+                  fabric_templates:
+                    - ["1", "border-leaf", "Edgecore-7726-32X-O_BORDER_LEAF"]

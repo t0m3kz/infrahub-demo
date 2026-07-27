@@ -2,14 +2,22 @@
 
 from __future__ import annotations
 
+import asyncio
+from collections.abc import Callable
 from typing import TYPE_CHECKING, Any, Literal, cast
 
 if TYPE_CHECKING:
     import logging
 
 from .helpers import DeviceNamingConfig
-from .protocols import LocationRack
+from .models import Pool
+from .protocols import LocationRack, TopologyPod
 from .types import RoutingOptions
+
+_POD_POOL_MAX_RETRIES = 10
+_POD_POOL_RETRY_DELAY = 3.0
+_POD_POOL_RETRY_CAP = 20.0
+_POD_POOL_RETRY_JITTER = 0.25
 
 # Which fabric_templates roles a pod's deployment_type knows how to cable.
 #
@@ -58,6 +66,9 @@ class RackMixin:
     deployment_id: str
     pod_name: str
     fabric_name: str
+    # CommonGenerator._retry_delay — annotation only (no method body), so this
+    # mixin never shadows the real staticmethod at runtime via MRO.
+    _retry_delay: Callable[..., float]
 
     async def fetch_rack_devices_with_interfaces(
         self,
@@ -162,13 +173,44 @@ class RackMixin:
         )
         return device_names, interface_names
 
-    def _prepare_generation_context(self) -> None:
+    async def _wait_for_pod_pools(self, pod: Any) -> Any:
+        """Retry-refetch the pod directly until add_pod has written its pools.
+
+        A rack's own created-trigger can fire and reach here before add_pod's
+        created-trigger task is even visible in the task list — nesting racks
+        under their pod in one object-load mutation removed the incidental
+        delay that made wait_for_parent_generator_and_refetch's task-list check
+        reliable in practice. Checking the pod NODE's actual persisted state
+        (not the task list) closes that race regardless of task-list indexing
+        timing.
+        """
+        for attempt in range(_POD_POOL_MAX_RETRIES):
+            pod_obj = await self.client.get(kind=TopologyPod, id=pod.id, include=["loopback_pool", "prefix_pool"])
+            if pod_obj.loopback_pool.peer and pod_obj.prefix_pool.peer:
+                pod.loopback_pool = Pool(id=pod_obj.loopback_pool.peer.id)
+                pod.prefix_pool = Pool(id=pod_obj.prefix_pool.peer.id)
+                return pod
+            if attempt < _POD_POOL_MAX_RETRIES - 1:
+                delay = self._retry_delay(
+                    _POD_POOL_RETRY_DELAY, attempt, cap=_POD_POOL_RETRY_CAP, jitter=_POD_POOL_RETRY_JITTER
+                )
+                self.logger.info(
+                    f"Rack {self.data.name}: Pod {pod.name} pools not ready yet — "
+                    f"retrying in {delay:.2f}s (attempt {attempt + 1}/{_POD_POOL_MAX_RETRIES})"
+                )
+                await asyncio.sleep(delay)
+        return pod
+
+    async def _prepare_generation_context(self) -> None:
         """Compute and store shared context needed by every per-role generation method."""
         pod = self.data.pod
         dc = pod.parent
         self.deployment_id = dc.id
         self.pod_name = pod.name.lower()
         self.fabric_name = dc.name.lower()
+
+        if not pod.loopback_pool or not pod.prefix_pool:
+            pod = await self._wait_for_pod_pools(pod)
 
         if not pod.loopback_pool or not pod.prefix_pool:
             self.logger.error(

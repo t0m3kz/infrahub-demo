@@ -22,15 +22,127 @@ spec:
             spine_template: N9K-C9336C-FX2_SPINE
             member_of_groups:
               - topologies_pod
+            racks:
+              kind: LocationRack
+              data:
+                - index: 5
+                  row_index: 1
+                  shortname: ktw-1-s-1-r-1-5
+                  rack_type: network
+                  parent: ktw-1-s-1
+                  member_of_groups: [topologies_rack]
+                  fabric_templates:
+                    - ["2", "leaf", "PowerSwitch-S5232F-ON_LEAF_MR"]
+                    - ["2", "l2-leaf", "PowerSwitch-S5224F-ON_TOR"]
+                    - ["1", "border-leaf", "PowerSwitch-S5232F-ON_BORDER_LEAF"]
+                    - ["1", "firewall", "CP-26000_FIREWALL"]
+                    - ["1", "load-balancer", "NetScaler-MPX-26000-100G_LOAD_BALANCER"]
+                - index: 5
+                  row_index: 2
+                  shortname: ktw-1-s-1-r-2-5
+                  rack_type: network
+                  parent: ktw-1-s-1
+                  member_of_groups: [topologies_rack]
+                  fabric_templates:
+                    - ["2", "leaf", "PowerSwitch-S5232F-ON_LEAF_MR"]
+                    - ["2", "l2-leaf", "PowerSwitch-S5224F-ON_TOR"]
           - index: 2
             design: S_TOR
             amount_of_spines: 2
             spine_template: N9K-C9336C-FX2_SPINE
             member_of_groups:
               - topologies_pod
+            racks:
+              kind: LocationRack
+              data:
+                - index: 1
+                  row_index: 1
+                  shortname: ktw-1-s-2-r-1-1
+                  rack_type: tor
+                  parent: ktw-1-s-2
+                  member_of_groups: [topologies_rack]
+                  fabric_templates:
+                    - ["2", "tor", "N9K-C9336C-FX2_TOR"]
+                - index: 5
+                  row_index: 1
+                  shortname: ktw-1-s-2-r-1-5
+                  rack_type: tor
+                  parent: ktw-1-s-2
+                  member_of_groups: [topologies_rack]
+                  fabric_templates:
+                    - ["2", "tor", "N9K-C9336C-FX2_TOR"]
+                - index: 1
+                  row_index: 2
+                  shortname: ktw-1-s-2-r-2-1
+                  rack_type: tor
+                  parent: ktw-1-s-2
+                  member_of_groups: [topologies_rack]
+                  fabric_templates:
+                    - ["2", "tor", "PowerSwitch-S5224F-ON_TOR"]
+                - index: 5
+                  row_index: 2
+                  shortname: ktw-1-s-2-r-2-5
+                  rack_type: tor
+                  parent: ktw-1-s-2
+                  member_of_groups: [topologies_rack]
+                  fabric_templates:
+                    - ["2", "tor", "PowerSwitch-S5224F-ON_TOR"]
           - index: 3
             design: M_MIXED
             amount_of_spines: 2
             spine_template: N9K-C9336C-FX2_SPINE
             member_of_groups:
               - topologies_pod
+            racks:
+              kind: LocationRack
+              data:
+                - index: 1
+                  row_index: 1
+                  shortname: ktw-1-s-3-r-1-1
+                  rack_type: compute
+                  parent: ktw-1-s-3
+                  member_of_groups: [topologies_rack]
+                  fabric_templates:
+                    - ["2", "l2-leaf", "DCS-7050CX3-32C-R_TOR"]
+                - index: 4
+                  row_index: 1
+                  shortname: ktw-1-s-3-r-1-4
+                  rack_type: network
+                  parent: ktw-1-s-3
+                  member_of_groups: [topologies_rack]
+                  fabric_templates:
+                    - ["2", "leaf", "DCS-7050CX3-32C-R_LEAF_MIXED"]
+                - index: 7
+                  row_index: 1
+                  shortname: ktw-1-s-3-r-1-7
+                  rack_type: compute
+                  parent: ktw-1-s-3
+                  member_of_groups: [topologies_rack]
+                  fabric_templates:
+                    - ["2", "l2-leaf", "DCS-7050CX3-32C-R_TOR"]
+                - index: 1
+                  row_index: 2
+                  shortname: ktw-1-s-3-r-2-1
+                  rack_type: compute
+                  parent: ktw-1-s-3
+                  member_of_groups: [topologies_rack]
+                  fabric_templates:
+                    - ["2", "l2-leaf", "DCS-7050CX3-32C-R_TOR"]
+                - index: 4
+                  row_index: 2
+                  shortname: ktw-1-s-3-r-2-4
+                  rack_type: network
+                  parent: ktw-1-s-3
+                  member_of_groups: [topologies_rack]
+                  fabric_templates:
+                    - ["2", "leaf", "DCS-7050CX3-32C-R_LEAF_MIXED"]
+                    - ["1", "firewall", "CP-26000_FIREWALL"]
+                    - ["1", "load-balancer", "NetScaler-MPX-26000-100G_LOAD_BALANCER"]
+                - index: 7
+                  row_index: 2
+                  shortname: ktw-1-s-3-r-2-7
+                  rack_type: compute
+                  parent: ktw-1-s-3
+                  member_of_groups: [topologies_rack]
+                  fabric_templates:
+                    - ["2", "l2-leaf", "DCS-7050CX3-32C-R_TOR"]

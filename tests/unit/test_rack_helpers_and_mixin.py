@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from typing import Any
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -174,19 +174,53 @@ class TestRackRolesHelper:
         assert "skip_underlay" not in gen._routing_options
 
 
+def _mock_pod_pools(*, loopback_id: str | None, prefix_id: str | None) -> MagicMock:
+    pod_obj = MagicMock()
+    pod_obj.loopback_pool = MagicMock(peer=MagicMock(id=loopback_id) if loopback_id else None)
+    pod_obj.prefix_pool = MagicMock(peer=MagicMock(id=prefix_id) if prefix_id else None)
+    return pod_obj
+
+
 class TestRackMixinAdditional:
-    def test_prepare_generation_context_missing_pools(self) -> None:
+    @pytest.mark.asyncio
+    async def test_prepare_generation_context_missing_pools(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Pools stay missing across every retry attempt — error fires after exhausting retries."""
         gen = _build_gen()
         gen.data.pod.loopback_pool = None
+        gen.client.get = AsyncMock(return_value=_mock_pod_pools(loopback_id=None, prefix_id=None))
+        monkeypatch.setattr("generators.rack.asyncio.sleep", AsyncMock())
 
-        gen._prepare_generation_context()
+        await gen._prepare_generation_context()
 
         gen.logger.error.assert_called_once()
 
-    def test_prepare_generation_context_success_sets_fields(self) -> None:
+    @pytest.mark.asyncio
+    async def test_prepare_generation_context_pools_recover_after_retry(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Pools missing on the first refetch, present on the second — no error, ids updated."""
+        gen = _build_gen()
+        gen.data.pod.loopback_pool = None
+        gen.data.pod.prefix_pool = None
+        gen.client.get = AsyncMock(
+            side_effect=[
+                _mock_pod_pools(loopback_id=None, prefix_id=None),
+                _mock_pod_pools(loopback_id="lo-pool-2", prefix_id="p2p-pool-2"),
+            ]
+        )
+        sleep_mock = AsyncMock()
+        monkeypatch.setattr("generators.rack.asyncio.sleep", sleep_mock)
+
+        await gen._prepare_generation_context()
+
+        gen.logger.error.assert_not_called()
+        sleep_mock.assert_awaited_once()
+        assert gen._loopback_pool_id == "lo-pool-2"
+        assert gen._technical_pool_id == "p2p-pool-2"
+
+    @pytest.mark.asyncio
+    async def test_prepare_generation_context_success_sets_fields(self) -> None:
         gen = _build_gen()
 
-        gen._prepare_generation_context()
+        await gen._prepare_generation_context()
 
         assert gen.deployment_id == "dc-1"
         assert gen.pod_name == "pod-1"

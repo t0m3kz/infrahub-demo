@@ -85,7 +85,9 @@ class MLAGGenerator(FailOnErrorLoggerMixin, InfrahubGenerator):
 
         await self._assert_interface_capabilities(mlag_obj, mlag_name, peer_link_iface_ids)
 
-        if not virtual_peer_link:
+        if virtual_peer_link:
+            await self._disconnect_stale_peer_link_cable(mlag_name, devices)
+        else:
             await self._ensure_peer_link_cables(mlag_name, devices)
 
     async def _assert_capability(
@@ -121,9 +123,44 @@ class MLAGGenerator(FailOnErrorLoggerMixin, InfrahubGenerator):
         virtual_peer_link: bool,
     ) -> str | None:
         """Create or locate the peer-link interface on this device. Returns its ID."""
+        await self._disconnect_stale_peer_link(
+            mlag_name=mlag_name, dev_name=dev_name, interfaces=interfaces, virtual_peer_link=virtual_peer_link
+        )
         if virtual_peer_link:
             return await self._ensure_virtual_peer_link(mlag_name, dev_id, dev_name, platform, interfaces)
         return await self._ensure_lag_peer_link(mlag_obj, mlag_id, mlag_name, dev_id, dev_name, platform, interfaces)
+
+    async def _disconnect_stale_peer_link(
+        self,
+        *,
+        mlag_name: str,
+        dev_name: str,
+        interfaces: list[dict],
+        virtual_peer_link: bool,
+    ) -> None:
+        """Delete the peer-link interface node left over from the OTHER mode
+        when pod.mlag_create switched since this domain was last wired —
+        physical (DcimLAGInterface) and virtual (DcimVirtualInterface loopback)
+        peer-links are mutually exclusive representations of the same domain.
+        """
+        if virtual_peer_link:
+            stale = next(
+                (i for i in interfaces if i.get("typename") == "DcimLAGInterface" and i.get("role") == "mlag-peer"),
+                None,
+            )
+            kind = "DcimLAGInterface"
+        else:
+            stale = next(
+                (i for i in interfaces if i.get("typename") == "DcimVirtualInterface" and i.get("role") == "mlag-peer"),
+                None,
+            )
+            kind = "DcimVirtualInterface"
+        if stale:
+            self.logger.info(
+                f"  [{dev_name}] Removing stale {kind} peer-link {stale['name']} "
+                f"({mlag_name} switched to {'virtual' if virtual_peer_link else 'physical'})"
+            )
+            await self.client.delete(kind=kind, id=stale["id"])
 
     async def _ensure_lag_peer_link(
         self,
@@ -276,6 +313,28 @@ class MLAGGenerator(FailOnErrorLoggerMixin, InfrahubGenerator):
             cable_obj = await self.client.create(kind="DcimCable", data=cable_data)
             await cable_obj.save(allow_upsert=True)
             self.logger.info(f"  [{mlag_name}] Created {cable_name}")
+
+    async def _disconnect_stale_peer_link_cable(self, mlag_name: str, devices: list[dict]) -> None:
+        """Delete the physical peer-link cable(s) _ensure_peer_link_cables created
+        under a previous back-to-back run — pod.mlag_create switched to virtual,
+        which has no cable of its own (the peer-link is a loopback).
+        """
+        if len(devices) != 2:
+            return
+        mlag_peer_count = max(
+            sum(
+                1
+                for i in dev.get("interfaces", [])
+                if i.get("typename") == "DcimPhysicalInterface" and i.get("role") == "mlag-peer"
+            )
+            for dev in devices
+        )
+        for idx in range(1, mlag_peer_count + 1):
+            cable_name = f"CBL-{mlag_name}-PL{idx}"
+            existing = await self.client.filters(kind="DcimCable", name__value=cable_name)
+            if existing:
+                self.logger.info(f"  [{mlag_name}] Removing stale physical peer-link cable {cable_name}")
+                await self.client.delete(kind="DcimCable", id=str(existing[0].id))
 
     async def _ensure_virtual_peer_link(
         self,
