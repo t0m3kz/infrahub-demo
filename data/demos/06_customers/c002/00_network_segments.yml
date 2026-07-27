@@ -9,7 +9,6 @@ spec:
   data:
     - name: "C002-PROD"
       description: "SwiftGo GmbH production VRF"
-      l3_vni: 50021
       status: "active"
       owner: "C002"
       member_of_groups:
