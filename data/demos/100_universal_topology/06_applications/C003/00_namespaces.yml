@@ -9,8 +9,6 @@ spec:
     - name: "C003-PROD"
       description: "Vaultex Inc. production VRF"
       l3_vni: 50005
-      status: "active"
-      owner: "C003"
       member_of_groups:
         - vrf_namespaces
 

@@ -10,16 +10,12 @@ spec:
     - name: "C001-PROD"
       description: "Nordix Ltd. production VRF"
       l3_vni: 50001
-      status: "active"
-      owner: "C001"
       member_of_groups:
         - vrf_namespaces
 
     - name: "C001-NONPROD"
       description: "Nordix Ltd. non-production VRF"
       l3_vni: 50002
-      status: "active"
-      owner: "C001"
       member_of_groups:
         - vrf_namespaces
 

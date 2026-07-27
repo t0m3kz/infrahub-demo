@@ -9,16 +9,12 @@ spec:
     - name: "C002-PROD"
       description: "SwiftGo GmbH production VRF"
       l3_vni: 50003
-      status: "active"
-      owner: "C002"
       member_of_groups:
         - vrf_namespaces
 
     - name: "C002-NONPROD"
       description: "SwiftGo GmbH non-production VRF"
       l3_vni: 50004
-      status: "active"
-      owner: "C002"
       member_of_groups:
         - vrf_namespaces
 

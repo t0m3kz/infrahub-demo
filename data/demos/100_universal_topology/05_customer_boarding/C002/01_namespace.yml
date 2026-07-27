@@ -15,8 +15,6 @@ spec:
     - name: "C002-DC3-PROD"
       description: "SwiftGo GmbH production VRF on DC3"
       l3_vni: 50012
-      status: "active"
-      owner: "C002"
       member_of_groups:
         - vrf_namespaces
 
