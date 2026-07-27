@@ -585,55 +585,59 @@ spec:
             interface_type: 100gbase-x-qsfp28
           - template_name: 7726_32X_O_BORDER_LEAF_Ethernet64
             name: Ethernet64
-            role: downlink
+            role: dci
             interface_type: 100gbase-x-qsfp28
           - template_name: 7726_32X_O_BORDER_LEAF_Ethernet68
             name: Ethernet68
-            role: downlink
+            role: dci
             interface_type: 100gbase-x-qsfp28
           - template_name: 7726_32X_O_BORDER_LEAF_Ethernet72
             name: Ethernet72
-            role: downlink
+            role: dci
             interface_type: 100gbase-x-qsfp28
           - template_name: 7726_32X_O_BORDER_LEAF_Ethernet76
             name: Ethernet76
-            role: downlink
+            role: dci
             interface_type: 100gbase-x-qsfp28
           - template_name: 7726_32X_O_BORDER_LEAF_Ethernet80
             name: Ethernet80
-            role: downlink
+            role: firewall
             interface_type: 100gbase-x-qsfp28
           - template_name: 7726_32X_O_BORDER_LEAF_Ethernet84
             name: Ethernet84
-            role: downlink
+            role: firewall
             interface_type: 100gbase-x-qsfp28
           - template_name: 7726_32X_O_BORDER_LEAF_Ethernet88
             name: Ethernet88
-            role: downlink
+            role: firewall
+            interface_type: 100gbase-x-qsfp28
+          - template_name: 7726_32X_O_BORDER_LEAF_Ethernet92
+            name: Ethernet92
+            role: firewall
             interface_type: 100gbase-x-qsfp28
           - template_name: 7726_32X_O_BORDER_LEAF_Ethernet96
             name: Ethernet96
-            role: firewall
+            role: load-balancer
             interface_type: 100gbase-x-qsfp28
           - template_name: 7726_32X_O_BORDER_LEAF_Ethernet100
             name: Ethernet100
-            role: firewall
+            role: load-balancer
             interface_type: 100gbase-x-qsfp28
           - template_name: 7726_32X_O_BORDER_LEAF_Ethernet104
             name: Ethernet104
-            role: firewall
+            role: load-balancer
             interface_type: 100gbase-x-qsfp28
           - template_name: 7726_32X_O_BORDER_LEAF_Ethernet108
             name: Ethernet108
-            role: firewall
+            role: load-balancer
             interface_type: 100gbase-x-qsfp28
           - template_name: 7726_32X_O_BORDER_LEAF_Ethernet112
             name: Ethernet112
-            role: load-balancer
+            role: uplink
             interface_type: 100gbase-x-qsfp28
           - template_name: 7726_32X_O_BORDER_LEAF_Ethernet116
             name: Ethernet116
-            role: load-balancer
+            role: uplink
             interface_type: 100gbase-x-qsfp28
           - template_name: 7726_32X_O_BORDER_LEAF_Ethernet120
             name: Ethernet120

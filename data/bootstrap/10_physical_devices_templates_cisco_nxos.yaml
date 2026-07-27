@@ -306,9 +306,13 @@ spec:
         parameters:
           expand_range: true
         data:
-          - template_name: N9K-C9316D-GX_EDGE_Ethernet1/[1-12]
-            name: Ethernet1/[1-12]
+          - template_name: N9K-C9316D-GX_EDGE_Ethernet1/[1-8]
+            name: Ethernet1/[1-8]
             role: customer
+            interface_type: 100gbase-x-qsfp28
+          - template_name: N9K-C9316D-GX_EDGE_Ethernet1/[9-12]
+            name: Ethernet1/[9-12]
+            role: dci
             interface_type: 100gbase-x-qsfp28
           - template_name: N9K-C9316D-GX_EDGE_Ethernet1/[13-16]
             name: Ethernet1/[13-16]
@@ -416,6 +420,10 @@ spec:
           - template_name: N9K-C9336C-FX2_EDGE_Ethernet1/[10-13]
             name: Ethernet1/[10-13]
             role: uplink
+            interface_type: 100gbase-x-qsfp28
+          - template_name: N9K-C9336C-FX2_EDGE_Ethernet1/[20-23]
+            name: Ethernet1/[20-23]
+            role: dci
             interface_type: 100gbase-x-qsfp28
           - template_name: N9K-C9336C-FX2_EDGE_mgmt0
             name: mgmt0
