@@ -7,6 +7,7 @@ spec:
     - template_name: HA-PROXY_PROXY
       device_type: HA-PROXY
       platform: haproxy_technologies
+      software_image: haproxy_technologies-2.8.9
       role: proxy
       status: provisioning
       interfaces:

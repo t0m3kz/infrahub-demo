@@ -172,3 +172,302 @@ spec:
       end_of_life: "2028-03-01T00:00:00+00:00"
       platform: panos
       description: "PAN-OS 11.1 — current recommended release"
+
+    # ── Cisco IOS (Catalyst access/OOB switches) ──────────────────────────────
+    - name: cisco_ios-17.9.4a
+      version: "17.9.4a"
+      release_type: lts
+      is_approved: true
+      is_recommended: false
+      release_date: "2023-03-31T00:00:00+00:00"
+      end_of_support: "2026-06-30T00:00:00+00:00"
+      end_of_life: "2027-06-30T00:00:00+00:00"
+      platform: cisco_ios
+      description: "IOS XE 17.9 (Amsterdam) — Extended Maintenance, approved for existing Catalyst 9200 deployments"
+
+    - name: cisco_ios-17.12.4
+      version: "17.12.4"
+      release_type: ga
+      is_approved: true
+      is_recommended: true
+      release_date: "2024-05-31T00:00:00+00:00"
+      end_of_support: "2027-08-31T00:00:00+00:00"
+      end_of_life: "2028-08-31T00:00:00+00:00"
+      platform: cisco_ios
+      description: "IOS XE 17.12 (Dublin) — current recommended release for Catalyst 9200 access switches"
+
+    # ── Cisco IOS XE (ISR/C8000V edge routers) ────────────────────────────────
+    - name: cisco_xe-17.3.8a
+      version: "17.3.8a"
+      release_type: lts
+      is_approved: true
+      is_recommended: false
+      release_date: "2022-06-24T00:00:00+00:00"
+      end_of_support: "2025-07-31T00:00:00+00:00"
+      end_of_life: "2026-07-31T00:00:00+00:00"
+      platform: cisco_xe
+      description: "IOS XE 17.3 (Amsterdam) Extended Maintenance — approved, migrate off before EoS"
+
+    - name: cisco_xe-17.12.4
+      version: "17.12.4"
+      release_type: ga
+      is_approved: true
+      is_recommended: true
+      release_date: "2024-05-31T00:00:00+00:00"
+      end_of_support: "2027-08-31T00:00:00+00:00"
+      end_of_life: "2028-08-31T00:00:00+00:00"
+      platform: cisco_xe
+      description: "IOS XE 17.12 (Dublin) — current recommended release for ISR4451-X and C8000V"
+
+    # ── Cisco NX-OS (Nexus 9000 spine/leaf/border-leaf) ───────────────────────
+    - name: cisco_nxos-9.3.11
+      version: "9.3(11)"
+      release_type: lts
+      is_approved: true
+      is_recommended: false
+      release_date: "2022-09-15T00:00:00+00:00"
+      end_of_support: "2026-09-15T00:00:00+00:00"
+      end_of_life: "2027-09-15T00:00:00+00:00"
+      platform: cisco_nxos
+      description: "NX-OS 9.3(11) — approved, superseded by 10.3"
+
+    - name: cisco_nxos-10.3.3
+      version: "10.3(3)"
+      release_type: ga
+      is_approved: true
+      is_recommended: true
+      release_date: "2023-11-01T00:00:00+00:00"
+      end_of_support: "2027-11-01T00:00:00+00:00"
+      end_of_life: "2028-11-01T00:00:00+00:00"
+      platform: cisco_nxos
+      description: "NX-OS 10.3(3) — current recommended release for Nexus 9000 fabric roles"
+
+    # ── Dell Enterprise SONiC (PowerSwitch) ───────────────────────────────────
+    - name: dell_sonic-4.1.1
+      version: "4.1.1"
+      release_type: lts
+      is_approved: true
+      is_recommended: false
+      release_date: "2022-12-01T00:00:00+00:00"
+      end_of_support: "2025-12-01T00:00:00+00:00"
+      end_of_life: "2026-12-01T00:00:00+00:00"
+      platform: dell_sonic
+      description: "Dell Enterprise SONiC Distribution 4.1 — approved, migrate to 4.4"
+
+    - name: dell_sonic-4.4.1
+      version: "4.4.1"
+      release_type: ga
+      is_approved: true
+      is_recommended: true
+      release_date: "2024-05-01T00:00:00+00:00"
+      end_of_support: "2027-05-01T00:00:00+00:00"
+      end_of_life: "2028-05-01T00:00:00+00:00"
+      platform: dell_sonic
+      description: "Dell Enterprise SONiC Distribution 4.4 — current recommended release for PowerSwitch fabric roles"
+
+    # ── SONiC (Edgecore open-network switches) ────────────────────────────────
+    - name: sonic-202211
+      version: "202211"
+      release_type: lts
+      is_approved: true
+      is_recommended: false
+      release_date: "2022-11-15T00:00:00+00:00"
+      end_of_support: "2025-11-15T00:00:00+00:00"
+      end_of_life: "2026-11-15T00:00:00+00:00"
+      platform: sonic
+      description: "Community SONiC 202211 branch — approved, migrate to 202405"
+
+    - name: sonic-202405
+      version: "202405"
+      release_type: ga
+      is_approved: true
+      is_recommended: true
+      release_date: "2024-05-20T00:00:00+00:00"
+      end_of_support: "2027-05-20T00:00:00+00:00"
+      end_of_life: "2028-05-20T00:00:00+00:00"
+      platform: sonic
+      description: "Community SONiC 202405 branch — current recommended release for Edgecore switches"
+
+    # ── Juniper Junos (vJunos/switch fabric roles) ────────────────────────────
+    - name: juniper_junos-21.4R3
+      version: "21.4R3"
+      release_type: lts
+      is_approved: true
+      is_recommended: false
+      release_date: "2022-06-15T00:00:00+00:00"
+      end_of_support: "2025-12-15T00:00:00+00:00"
+      end_of_life: "2026-12-15T00:00:00+00:00"
+      platform: juniper_junos
+      description: "Junos 21.4R3 EEOL — approved, migrate to 23.4"
+
+    - name: juniper_junos-23.4R2
+      version: "23.4R2"
+      release_type: ga
+      is_approved: true
+      is_recommended: true
+      release_date: "2024-03-01T00:00:00+00:00"
+      end_of_support: "2027-09-01T00:00:00+00:00"
+      end_of_life: "2028-09-01T00:00:00+00:00"
+      platform: juniper_junos
+      description: "Junos 23.4R2 EEOL — current recommended release"
+
+    # ── Junos (SRX firewall) ───────────────────────────────────────────────────
+    - name: junos-21.4R3
+      version: "21.4R3"
+      release_type: lts
+      is_approved: true
+      is_recommended: false
+      release_date: "2022-06-15T00:00:00+00:00"
+      end_of_support: "2025-12-15T00:00:00+00:00"
+      end_of_life: "2026-12-15T00:00:00+00:00"
+      platform: junos
+      description: "Junos 21.4R3 EEOL — approved for existing SRX-1500 deployments"
+
+    - name: junos-23.4R2
+      version: "23.4R2"
+      release_type: ga
+      is_approved: true
+      is_recommended: true
+      release_date: "2024-03-01T00:00:00+00:00"
+      end_of_support: "2027-09-01T00:00:00+00:00"
+      end_of_life: "2028-09-01T00:00:00+00:00"
+      platform: junos
+      description: "Junos 23.4R2 EEOL — current recommended release for SRX-1500 firewalls"
+
+    # ── Perle IOLAN (console servers) ──────────────────────────────────────────
+    - name: perle_iolan-4.8
+      version: "4.8"
+      release_type: lts
+      is_approved: true
+      is_recommended: false
+      release_date: "2021-05-01T00:00:00+00:00"
+      end_of_support: "2025-05-01T00:00:00+00:00"
+      end_of_life: "2026-05-01T00:00:00+00:00"
+      platform: perle_iolan
+      description: "IOLAN firmware 4.8 — approved, migrate to 5.0"
+
+    - name: perle_iolan-5.0
+      version: "5.0"
+      release_type: ga
+      is_approved: true
+      is_recommended: true
+      release_date: "2023-09-01T00:00:00+00:00"
+      end_of_support: "2027-09-01T00:00:00+00:00"
+      end_of_life: "2028-09-01T00:00:00+00:00"
+      platform: perle_iolan
+      description: "IOLAN firmware 5.0 — current recommended release for console servers"
+
+    # ── VeloCloud / Arista SD-WAN Edge OS ──────────────────────────────────────
+    - name: velocloud-5.2.0
+      version: "5.2.0"
+      release_type: lts
+      is_approved: true
+      is_recommended: false
+      release_date: "2022-10-01T00:00:00+00:00"
+      end_of_support: "2025-10-01T00:00:00+00:00"
+      end_of_life: "2026-10-01T00:00:00+00:00"
+      platform: velocloud
+      description: "Edge OS 5.2 — approved, migrate to 6.0"
+
+    - name: velocloud-6.0.0
+      version: "6.0.0"
+      release_type: ga
+      is_approved: true
+      is_recommended: true
+      release_date: "2024-04-01T00:00:00+00:00"
+      end_of_support: "2027-04-01T00:00:00+00:00"
+      end_of_life: "2028-04-01T00:00:00+00:00"
+      platform: velocloud
+      description: "Edge OS 6.0 — current recommended release for VCE-610/VCG-VA/VCO-VA"
+
+    # ── HAProxy ─────────────────────────────────────────────────────────────────
+    - name: haproxy_technologies-2.6.14
+      version: "2.6.14"
+      release_type: lts
+      is_approved: true
+      is_recommended: false
+      release_date: "2022-05-16T00:00:00+00:00"
+      end_of_support: "2027-05-31T00:00:00+00:00"
+      end_of_life: "2027-05-31T00:00:00+00:00"
+      platform: haproxy_technologies
+      description: "HAProxy 2.6 LTS — approved, migrate to 2.8 LTS"
+
+    - name: haproxy_technologies-2.8.9
+      version: "2.8.9"
+      release_type: lts
+      is_approved: true
+      is_recommended: true
+      release_date: "2024-06-01T00:00:00+00:00"
+      end_of_support: "2029-05-31T00:00:00+00:00"
+      end_of_life: "2029-05-31T00:00:00+00:00"
+      platform: haproxy_technologies
+      description: "HAProxy 2.8 LTS — current recommended release for HA-PROXY appliances"
+
+    # ── Squid Cache ───────────────────────────────────────────────────────────
+    - name: squid_cache-5.9
+      version: "5.9"
+      release_type: lts
+      is_approved: true
+      is_recommended: false
+      release_date: "2023-01-27T00:00:00+00:00"
+      end_of_support: "2025-12-31T00:00:00+00:00"
+      end_of_life: "2026-12-31T00:00:00+00:00"
+      platform: squid_cache
+      description: "Squid 5.9 — approved, migrate to 6.x"
+
+    - name: squid_cache-6.6
+      version: "6.6"
+      release_type: ga
+      is_approved: true
+      is_recommended: true
+      release_date: "2024-01-31T00:00:00+00:00"
+      end_of_support: "2027-12-31T00:00:00+00:00"
+      end_of_life: "2028-12-31T00:00:00+00:00"
+      platform: squid_cache
+      description: "Squid 6.6 — current recommended release for SQUID-PROXY appliances"
+
+    # ── Blue Coat / Symantec ProxySG SGOS ──────────────────────────────────────
+    - name: bluecoat_sgos-6.7.5.1
+      version: "6.7.5.1"
+      release_type: lts
+      is_approved: true
+      is_recommended: false
+      release_date: "2021-11-01T00:00:00+00:00"
+      end_of_support: "2025-11-01T00:00:00+00:00"
+      end_of_life: "2026-11-01T00:00:00+00:00"
+      platform: bluecoat_sgos
+      description: "SGOS 6.7.5.1 — approved, migrate to 7.3.x"
+
+    - name: bluecoat_sgos-7.3.9.1
+      version: "7.3.9.1"
+      release_type: ga
+      is_approved: true
+      is_recommended: true
+      release_date: "2023-12-01T00:00:00+00:00"
+      end_of_support: "2027-12-01T00:00:00+00:00"
+      end_of_life: "2028-12-01T00:00:00+00:00"
+      platform: bluecoat_sgos
+      description: "SGOS 7.3.9.1 — current recommended release for BLUECOAT-SG900 proxies"
+
+    # ── Cisco WSA (AsyncOS for Web) ─────────────────────────────────────────────
+    - name: cisco_wsa-14.5.1-011
+      version: "14.5.1-011"
+      release_type: lts
+      is_approved: true
+      is_recommended: false
+      release_date: "2022-11-01T00:00:00+00:00"
+      end_of_support: "2026-05-01T00:00:00+00:00"
+      end_of_life: "2027-05-01T00:00:00+00:00"
+      platform: cisco_wsa
+      description: "AsyncOS for Web 14.5 — approved, migrate to 15.0"
+
+    - name: cisco_wsa-15.0.0-355
+      version: "15.0.0-355"
+      release_type: ga
+      is_approved: true
+      is_recommended: true
+      release_date: "2023-10-01T00:00:00+00:00"
+      end_of_support: "2027-10-01T00:00:00+00:00"
+      end_of_life: "2028-10-01T00:00:00+00:00"
+      platform: cisco_wsa
+      description: "AsyncOS for Web 15.0 — current recommended release for CISCO-WSA-S195 proxies"

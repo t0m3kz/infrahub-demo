@@ -7,6 +7,7 @@ spec:
     - template_name: SCG50R_CONSOLE
       device_type: SCG50R
       platform: perle_iolan
+      software_image: perle_iolan-5.0
       role: edge
       status: provisioning
       interfaces:

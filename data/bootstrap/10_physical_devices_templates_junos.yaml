@@ -7,6 +7,7 @@ spec:
     - template_name: SRX-1500_EDGE_FIREWALL
       device_type: SRX-1500
       platform: junos
+      software_image: junos-23.4R2
       role: firewall
       status: provisioning
       interfaces:
@@ -26,6 +27,7 @@ spec:
     - template_name: SRX-1500_DC_FIREWALL
       device_type: SRX-1500
       platform: junos
+      software_image: junos-23.4R2
       role: firewall
       status: provisioning
       interfaces:
@@ -53,6 +55,7 @@ spec:
     - template_name: SRX-1500_EDGE_FIREWALL
       device_type: SRX-1500
       platform: juniper_junos
+      software_image: juniper_junos-23.4R2
       role: firewall
       status: provisioning
       interfaces:
@@ -64,6 +67,7 @@ spec:
     - template_name: SRX-1500_DC_FIREWALL
       device_type: SRX-1500
       platform: juniper_junos
+      software_image: juniper_junos-23.4R2
       role: firewall
       status: provisioning
       interfaces:

@@ -8,6 +8,7 @@ spec:
       device_type: CloudGuard
       role: firewall
       platform: checkpoint_gaia
+      software_image: checkpoint_gaia-R81.20
       status: active
       cpu: 2
       memory: 8

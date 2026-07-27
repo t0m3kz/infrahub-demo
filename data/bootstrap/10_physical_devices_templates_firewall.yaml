@@ -7,6 +7,7 @@ spec:
     - template_name: CP-26000_FIREWALL
       device_type: CP-26000
       platform: checkpoint_gaia
+      software_image: checkpoint_gaia-R81.20
       role: firewall
       status: provisioning
       interfaces:
@@ -40,6 +41,7 @@ spec:
     - template_name: PA-5260_FIREWALL
       device_type: PA-5260
       platform: panos
+      software_image: panos-11.1.3
       role: firewall
       status: provisioning
       interfaces:

@@ -7,6 +7,7 @@ spec:
     - template_name: NetScaler-MPX-26000-100G_LOAD_BALANCER
       device_type: NetScaler-MPX-26000-100G
       platform: netscaler
+      software_image: netscaler-14.1.17.16
       role: load-balancer
       status: provisioning
       interfaces:
@@ -60,6 +61,7 @@ spec:
     - template_name: NetScaler-MPX-26100-100G_LOAD_BALANCER
       device_type: NetScaler-MPX-26100-100G
       platform: netscaler
+      software_image: netscaler-14.1.17.16
       role: load-balancer
       status: provisioning
       interfaces:
@@ -113,6 +115,7 @@ spec:
     - template_name: NetScaler-MPX-26160-100G_LOAD_BALANCER
       device_type: NetScaler-MPX-26160-100G
       platform: netscaler
+      software_image: netscaler-14.1.17.16
       role: load-balancer
       status: provisioning
       interfaces:
@@ -166,6 +169,7 @@ spec:
     - template_name: NetScaler-MPX-26200-100G_LOAD_BALANCER
       device_type: NetScaler-MPX-26200-100G
       platform: netscaler
+      software_image: netscaler-14.1.17.16
       role: load-balancer
       status: provisioning
       interfaces:
@@ -219,6 +223,7 @@ spec:
     - template_name: NetScaler-ADC-VPX_LOAD_BALANCER
       device_type: NetScaler-ADC-VPX
       platform: netscaler
+      software_image: netscaler-14.1.17.16
       role: load-balancer
       status: provisioning
       interfaces:

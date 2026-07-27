@@ -7,6 +7,7 @@ spec:
     - template_name: BIG-IP-i5800_LOAD_BALANCER
       device_type: BIG-IP-i5800
       platform: f5_tmos
+      software_image: f5_tmos-17.1.1
       role: load-balancer
       status: provisioning
       interfaces:
