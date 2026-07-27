@@ -206,11 +206,27 @@ spec:
       mutation_action: "created"
       action: mlag-generator
 
-    - name: trigger-mlag-on-update
+    - name: trigger-mlag-on-update-capabilities
       branch_scope: "other_branches"
       node_kind: ManagedMLAG
       mutation_action: "updated"
       action: mlag-generator
+      matches:
+        kind: CoreNodeTriggerRelationshipMatch
+        data:
+          - relationship_name: capabilities
+            modification_type: updated
+
+    - name: trigger-mlag-on-update-virtual-peer-link
+      branch_scope: "other_branches"
+      node_kind: ManagedMLAG
+      mutation_action: "updated"
+      action: mlag-generator
+      matches:
+        kind: CoreNodeTriggerAttributeMatch
+        data:
+          - attribute_name: virtual_peer_link
+            value_match: any
 
     # ── HA Interfaces ─────────────────────────────────────────────────────────
     - name: trigger-ha-on-firewall-update

@@ -103,9 +103,9 @@ class MLAGGenerator(FailOnErrorLoggerMixin, InfrahubGenerator):
 
         existing_ids = {peer.id for peer in caps.peers}
         if mlag_id in existing_ids:
-            self.logger.info(f"  [{dev_name}] capability already set — ensuring state")
-        else:
-            self.logger.info(f"  [{dev_name}] Adding MLAG capability → {mlag_name}")
+            self.logger.info(f"  [{dev_name}] capability already set")
+            return
+        self.logger.info(f"  [{dev_name}] Adding MLAG capability → {mlag_name}")
         caps.add(mlag_obj)
         await device_obj.save(allow_upsert=True)
 
@@ -138,22 +138,26 @@ class MLAGGenerator(FailOnErrorLoggerMixin, InfrahubGenerator):
         """Create or locate a DcimLAGInterface peer-link, bundling mlag-peer physical interfaces."""
         lag_name = get_lag_name(platform, _PEER_LINK_LAG_ID)
 
-        # Always activate all mlag-peer physical interfaces (idempotent)
-        member_iface_ids = [
-            i["id"] for i in interfaces if i.get("typename") == "DcimPhysicalInterface" and i.get("role") == "mlag-peer"
+        member_ifaces = [
+            i for i in interfaces if i.get("typename") == "DcimPhysicalInterface" and i.get("role") == "mlag-peer"
         ]
 
-        if not member_iface_ids:
+        if not member_ifaces:
             self.logger.error(
                 "[%s] No physical interfaces with role=mlag-peer found — cannot create peer-link LAG",
                 dev_name,
             )
             return None
 
-        for iid in member_iface_ids:
-            member_obj = await self.client.get(kind="DcimPhysicalInterface", id=iid)
+        member_iface_ids = [i["id"] for i in member_ifaces]
+        for iface in member_ifaces:
+            if iface.get("status") == "active":
+                continue
+            member_obj = await self.client.get(kind="DcimPhysicalInterface", id=iface["id"])
             getattr(member_obj, "status").value = "active"
-            await member_obj.save(allow_upsert=True)
+            # update_group_context=False: a physical interface belongs to the device's
+            # object_template, not to this generator run — never a delete_unused_nodes candidate.
+            await member_obj.save(allow_upsert=True, update_group_context=False)
 
         # Check if peer-link LAG already exists
         existing_lag = next(
@@ -163,11 +167,18 @@ class MLAGGenerator(FailOnErrorLoggerMixin, InfrahubGenerator):
 
         if existing_lag:
             existing_id = existing_lag["id"]
-            self.logger.info(f"  [{dev_name}] Peer-link LAG {existing_lag['name']} already exists — ensuring state")
-            lag_obj = await self.client.get(kind="DcimLAGInterface", id=existing_id)
-            getattr(lag_obj, "status").value = "active"
             current_domain = existing_lag.get("mlag_domain")
-            if not current_domain or current_domain.get("id") != mlag_id:
+            needs_domain_update = not current_domain or current_domain.get("id") != mlag_id
+            needs_status_update = existing_lag.get("status") != "active"
+            if not needs_domain_update and not needs_status_update:
+                self.logger.info(f"  [{dev_name}] Peer-link LAG {existing_lag['name']} already wired")
+                return existing_id
+
+            self.logger.info(f"  [{dev_name}] Peer-link LAG {existing_lag['name']} already exists — updating state")
+            lag_obj = await self.client.get(kind="DcimLAGInterface", id=existing_id)
+            if needs_status_update:
+                getattr(lag_obj, "status").value = "active"
+            if needs_domain_update:
                 lag_obj.mlag_domain = mlag_obj  # type: ignore[attr-defined]
                 self.logger.info(f"  [{dev_name}:{existing_lag['name']}] Wired mlag_domain → {mlag_name}")
             await lag_obj.save(allow_upsert=True)
@@ -237,8 +248,7 @@ class MLAGGenerator(FailOnErrorLoggerMixin, InfrahubGenerator):
 
             existing = await self.client.filters(kind="DcimCable", name__value=cable_name)
             if existing:
-                self.logger.info(f"  [{mlag_name}] Cable {cable_name} already exists — ensuring state")
-                await existing[0].save(allow_upsert=True)
+                self.logger.info(f"  [{mlag_name}] Cable {cable_name} already exists")
                 continue
 
             # Check if either endpoint already has a cable (orphan from a partial run)
@@ -284,9 +294,10 @@ class MLAGGenerator(FailOnErrorLoggerMixin, InfrahubGenerator):
         )
 
         if existing_virt:
-            self.logger.info(
-                f"  [{dev_name}] Virtual peer-link {existing_virt['name']} already exists — ensuring state"
-            )
+            if existing_virt.get("status") == "active":
+                self.logger.info(f"  [{dev_name}] Virtual peer-link {existing_virt['name']} already wired")
+                return existing_virt["id"]
+            self.logger.info(f"  [{dev_name}] Virtual peer-link {existing_virt['name']} already exists — activating")
             virt_obj = await self.client.get(kind="DcimVirtualInterface", id=existing_virt["id"])
             getattr(virt_obj, "status").value = "active"
             await virt_obj.save(allow_upsert=True)

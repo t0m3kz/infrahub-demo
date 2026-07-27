@@ -789,13 +789,19 @@ class CommonGenerator(FailOnErrorLoggerMixin, RoutingMixin, InfrahubGenerator):
                     await ip.save(allow_upsert=True)
                     iface.ip_address = ip.id
 
+            # update_group_context=False: physical interfaces come from the device's
+            # object_template, not from this generator run — they must never be
+            # candidates for the tracking group's delete_unused_nodes cleanup (e.g.
+            # a port dropped from this run's cabling plan because amount_of_spines
+            # shrank would otherwise be deleted as "unused" even though it's a real,
+            # still-existing hardware interface).
             updated_src.description.value = cable_name
             updated_src.status.value = "active"
-            await updated_src.save(allow_upsert=True)
+            await updated_src.save(allow_upsert=True, update_group_context=False)
 
             updated_dst.description.value = cable_name
             updated_dst.status.value = "active"
-            await updated_dst.save(allow_upsert=True)
+            await updated_dst.save(allow_upsert=True, update_group_context=False)
 
             cabled_pairs.append((updated_src, updated_dst))
             self.logger.info(f"  - Created connection {cable_name}")
