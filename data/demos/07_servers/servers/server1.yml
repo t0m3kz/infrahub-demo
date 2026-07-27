@@ -4,7 +4,7 @@ kind: Object
 spec:
   kind: DcimPhysicalDevice
   data:
-    - name: muc-server-1
+    - name: ktw-server-1
       rack: ktw-1-s-3-r-1-1
       role: endpoint
       status: active
@@ -44,8 +44,8 @@ spec:
             mtu: 9000
             minimum_links: 1
             member_interfaces:
-              - ["muc-server-1", "eth0"]
-              - ["muc-server-1", "eth1"]
+              - ["ktw-server-1", "eth0"]
+              - ["ktw-server-1", "eth1"]
         - kind: DcimLAGInterface
           data:
             name: bond1
@@ -56,9 +56,9 @@ spec:
             mtu: 9000
             minimum_links: 1
             member_interfaces:
-              - ["muc-server-1", "eth2"]
-              - ["muc-server-1", "eth3"]
-    - name: muc-server-2
+              - ["ktw-server-1", "eth2"]
+              - ["ktw-server-1", "eth3"]
+    - name: ktw-server-2
       rack: ktw-1-s-3-r-1-7
       role: endpoint
       status: active
@@ -96,8 +96,8 @@ spec:
             mtu: 9000
             minimum_links: 1
             member_interfaces:
-              - ["muc-server-2", "eth0"]
-              - ["muc-server-2", "eth1"]
+              - ["ktw-server-2", "eth0"]
+              - ["ktw-server-2", "eth1"]
         - kind: DcimLAGInterface
           data:
             name: bond1
@@ -108,9 +108,9 @@ spec:
             mtu: 9000
             minimum_links: 1
             member_interfaces:
-              - ["muc-server-2", "eth2"]
-              - ["muc-server-2", "eth3"]
-    - name: muc-server-3
+              - ["ktw-server-2", "eth2"]
+              - ["ktw-server-2", "eth3"]
+    - name: ktw-server-3
       rack: ktw-1-s-3-r-2-1
       role: endpoint
       status: active
@@ -138,9 +138,9 @@ spec:
             mtu: 9000
             minimum_links: 1
             member_interfaces:
-              - ["muc-server-3", "eth0"]
-              - ["muc-server-3", "eth1"]
-    - name: muc-server-4
+              - ["ktw-server-3", "eth0"]
+              - ["ktw-server-3", "eth1"]
+    - name: ktw-server-4
       rack: ktw-1-s-3-r-2-7
       role: endpoint
       status: active
@@ -168,9 +168,9 @@ spec:
             mtu: 9000
             minimum_links: 1
             member_interfaces:
-              - ["muc-server-4", "eth0"]
-              - ["muc-server-4", "eth1"]
-    - name: muc-server-5
+              - ["ktw-server-4", "eth0"]
+              - ["ktw-server-4", "eth1"]
+    - name: ktw-server-5
       rack: ktw-1-s-3-r-1-1
       role: endpoint
       status: active
@@ -198,9 +198,9 @@ spec:
             mtu: 9000
             minimum_links: 1
             member_interfaces:
-              - ["muc-server-5", "eth0"]
-              - ["muc-server-5", "eth1"]
-    - name: muc-server-6
+              - ["ktw-server-5", "eth0"]
+              - ["ktw-server-5", "eth1"]
+    - name: ktw-server-6
       rack: ktw-1-s-3-r-1-7
       role: endpoint
       status: active
@@ -228,5 +228,5 @@ spec:
             mtu: 9000
             minimum_links: 1
             member_interfaces:
-              - ["muc-server-6", "eth0"]
-              - ["muc-server-6", "eth1"]
+              - ["ktw-server-6", "eth0"]
+              - ["ktw-server-6", "eth1"]
