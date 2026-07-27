@@ -250,22 +250,40 @@ class CommonGenerator(FailOnErrorLoggerMixin, RoutingMixin, InfrahubGenerator):
         )
 
     async def _reclaim_stale_lock(self, lock_name: str) -> None:
-        """Delete an abandoned lock (owner crashed before release_resource_lock ran)."""
-        existing = await self.client.get(
-            kind=CoreStandardGroup, name__value=lock_name, include_metadata=True, raise_when_missing=False
+        """Delete an abandoned lock (owner crashed before release_resource_lock ran).
+
+        Uses a hand-written query instead of client.get(..., include_metadata=True):
+        the SDK's auto-generated include_metadata query also requests
+        node_metadata on CoreGroup's `parent` hierarchy edge, which 500s server-side
+        on this Infrahub version ("Cannot return null for non-nullable field
+        NestedEdgedCoreGroup.node_metadata") for any CoreStandardGroup — verified
+        live on dc6, not specific to lock groups. Requesting node_metadata only at
+        the top-level edge (skipping `parent`) avoids that path entirely.
+        """
+        query = """
+        query($name: String!) {
+          CoreStandardGroup(name__value: $name) {
+            edges {
+              node { id }
+              node_metadata { created_at }
+            }
+          }
+        }
+        """
+        result = await self.client.execute_graphql(
+            query=query, variables={"name": lock_name}, branch_name=self.branch_name
         )
-        if not existing:
+        edges = result.get("CoreStandardGroup", {}).get("edges", [])
+        if not edges:
             return
-        metadata = existing.get_node_metadata()
-        created_at = metadata.created_at if metadata else None
-        if not created_at:
-            return
+        lock_id = edges[0]["node"]["id"]
+        created_at = edges[0]["node_metadata"]["created_at"]
         age_seconds = (datetime.now(timezone.utc) - datetime.fromisoformat(created_at)).total_seconds()
         if age_seconds < _RESOURCE_LOCK_STALE_AFTER_SECONDS:
             return
         self.logger.warning(f"Reclaiming stale lock '{lock_name}' (held for {age_seconds:.0f}s) — owner likely crashed")
         try:
-            await self.client.delete(kind=CoreStandardGroup, id=existing.id)
+            await self.client.delete(kind=CoreStandardGroup, id=lock_id)
         except GraphQLError:
             pass  # another waiter already reclaimed it
 
