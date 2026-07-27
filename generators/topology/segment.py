@@ -380,7 +380,10 @@ class VxlanSegmentGenerator(BaseSegmentGenerator):
                 changed = True
 
             if changed:
-                await iface.save(allow_upsert=True)
+                # update_group_context=False: a physical interface belongs to the
+                # device's object_template, not to this generator run — never a
+                # delete_unused_nodes candidate.
+                await iface.save(allow_upsert=True, update_group_context=False)
                 updated += 1
 
         self.logger.info(

@@ -38,10 +38,12 @@ query mlag_domain_data($name: String!) {
                       __typename
                       ... on DcimPhysicalInterface {
                         role { value }
+                        status { value }
                         cable { node { id name { value } } }
                       }
                       ... on DcimLAGInterface {
                         role { value }
+                        status { value }
                         lag_id { value }
                         lacp_mode { value }
                         mlag_domain {
@@ -61,6 +63,7 @@ query mlag_domain_data($name: String!) {
                       }
                       ... on DcimVirtualInterface {
                         role { value }
+                        status { value }
                       }
                     }
                   }
