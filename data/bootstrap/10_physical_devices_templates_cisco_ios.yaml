@@ -7,6 +7,7 @@ spec:
     - template_name: C9200L-24P-4G_OOB
       device_type: C9200L-24P-4G
       platform: cisco_ios
+      software_image: cisco_ios-17.12.4
       role: oob
       status: provisioning
       interfaces:
@@ -25,6 +26,7 @@ spec:
     - template_name: C9200L-48P-4G_OOB
       device_type: C9200L-24P-4G
       platform: cisco_ios
+      software_image: cisco_ios-17.12.4
       role: edge
       status: provisioning
       interfaces:
@@ -44,6 +46,7 @@ spec:
     - template_name: C9200L-24P-4G_OOB
       device_type: C9200L-24P-4G
       platform: cisco_ios
+      software_image: cisco_ios-17.12.4
       role: edge
       status: provisioning
       interfaces:
@@ -55,6 +58,7 @@ spec:
     - template_name: C9200L-48P-4G_OOB
       device_type: C9200L-48P-4G
       platform: cisco_ios
+      software_image: cisco_ios-17.12.4
       role: edge
       status: provisioning
       interfaces:
@@ -66,6 +70,7 @@ spec:
     - template_name: C9200L-24P-4G_ACCESS
       device_type: C9200L-24P-4G
       platform: cisco_ios
+      software_image: cisco_ios-17.12.4
       role: edge
       status: provisioning
       interfaces:
@@ -88,6 +93,7 @@ spec:
     - template_name: C9200L-24P-4G_ACCESS_DUAL_UPLINK
       device_type: C9200L-24P-4G
       platform: cisco_ios
+      software_image: cisco_ios-17.12.4
       role: edge
       status: provisioning
       interfaces:
@@ -110,6 +116,7 @@ spec:
     - template_name: C9130AXI-B_AP
       device_type: C9130AXI-B
       platform: cisco_ios
+      software_image: cisco_ios-17.12.4
       role: endpoint
       status: provisioning
       interfaces:
@@ -122,6 +129,7 @@ spec:
     - template_name: ISR4451-X_EDGE
       device_type: ISR4451-X
       platform: cisco_xe
+      software_image: cisco_xe-17.12.4
       role: edge
       status: provisioning
       interfaces:

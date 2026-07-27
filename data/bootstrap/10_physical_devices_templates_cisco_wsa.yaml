@@ -7,6 +7,7 @@ spec:
     - template_name: CISCO-WSA-S195_PROXY
       device_type: CISCO-WSA-S195
       platform: cisco_wsa
+      software_image: cisco_wsa-15.0.0-355
       role: proxy
       status: provisioning
       interfaces:

@@ -7,6 +7,7 @@ spec:
     - template_name: DCS-7050CX3-32C-R_SUPER_SPINE
       device_type: DCS-7050CX3-32C-R
       platform: arista_eos
+      software_image: arista_eos-4.32.1F
       role: super-spine
       status: provisioning
       interfaces:
@@ -33,6 +34,7 @@ spec:
     - template_name: DCS-7050PX4-32S-R_SUPER_SPINE
       device_type: DCS-7050PX4-32S-R
       platform: arista_eos
+      software_image: arista_eos-4.32.1F
       role: super-spine
       status: provisioning
       interfaces:
@@ -59,6 +61,7 @@ spec:
     - template_name: DCS-7050PX4-32S-R_SPINE
       device_type: DCS-7050PX4-32S-R
       platform: arista_eos
+      software_image: arista_eos-4.32.1F
       role: spine
       status: provisioning
       interfaces:
@@ -85,6 +88,7 @@ spec:
     - template_name: DCS-7050CX3-32C-R_SPINE
       device_type: DCS-7050CX3-32C-R
       platform: arista_eos
+      software_image: arista_eos-4.32.1F
       role: spine
       status: provisioning
       interfaces:
@@ -111,6 +115,7 @@ spec:
     - template_name: DCS-7050CX3-32C-R_LEAF
       device_type: DCS-7050CX3-32C-R
       platform: arista_eos
+      software_image: arista_eos-4.32.1F
       role: leaf
       status: provisioning
       interfaces:
@@ -141,6 +146,7 @@ spec:
     - template_name: DCS-7050CX3-32C-R_LEAF_MR
       device_type: DCS-7050CX3-32C-R
       platform: arista_eos
+      software_image: arista_eos-4.32.1F
       role: leaf
       status: provisioning
       interfaces:
@@ -175,6 +181,7 @@ spec:
     - template_name: DCS-7050CX3-32C-R_LEAF_MIXED
       device_type: DCS-7050CX3-32C-R
       platform: arista_eos
+      software_image: arista_eos-4.32.1F
       role: leaf
       status: provisioning
       interfaces:
@@ -209,6 +216,7 @@ spec:
     - template_name: DCS-7050CX3-32C-R_TOR
       device_type: DCS-7050CX3-32C-R
       platform: arista_eos
+      software_image: arista_eos-4.32.1F
       role: leaf
       status: provisioning
       interfaces:
@@ -235,6 +243,7 @@ spec:
     - template_name: DCS-7050CX3-32C-R_ACCESS
       device_type: DCS-7050CX3-32C-R
       platform: arista_eos
+      software_image: arista_eos-4.32.1F
       role: access-leaf
       status: provisioning
       interfaces:
@@ -261,6 +270,7 @@ spec:
     - template_name: DCS-7050CX4M-48D8-F_LEAF
       device_type: DCS-7050CX3-32C-R
       platform: arista_eos
+      software_image: arista_eos-4.32.1F
       role: leaf
       status: provisioning
       interfaces:
@@ -283,6 +293,7 @@ spec:
     - template_name: DCS-7050SX3-24YC4C-S-R_LEAF
       device_type: DCS-7050SX3-24YC4C-S-R
       platform: arista_eos
+      software_image: arista_eos-4.32.1F
       role: leaf
       status: provisioning
       interfaces:
@@ -305,6 +316,7 @@ spec:
     - template_name: DCS-7050SX3-24YC4C-S-R_TOR
       device_type: DCS-7050SX3-24YC4C-S-R
       platform: arista_eos
+      software_image: arista_eos-4.32.1F
       role: leaf
       status: provisioning
       interfaces:
@@ -327,6 +339,7 @@ spec:
     - template_name: DCS-7050SX3-24YC4C-S-R_ACCESS
       device_type: DCS-7050SX3-24YC4C-S-R
       platform: arista_eos
+      software_image: arista_eos-4.32.1F
       role: access-leaf
       status: provisioning
       interfaces:
@@ -351,6 +364,7 @@ spec:
       device_type: DCS-7050CX3-32C-R
       role: border-leaf
       platform: arista_eos
+      software_image: arista_eos-4.32.1F
       status: provisioning
       interfaces:
         kind: TemplateDcimPhysicalInterface

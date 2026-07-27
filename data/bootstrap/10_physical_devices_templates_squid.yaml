@@ -7,6 +7,7 @@ spec:
     - template_name: SQUID-PROXY_PROXY
       device_type: SQUID-PROXY
       platform: squid_cache
+      software_image: squid_cache-6.6
       role: proxy
       status: provisioning
       interfaces:

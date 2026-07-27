@@ -7,6 +7,7 @@ spec:
     - template_name: VCG-VA_CLOUD
       device_type: VCG-VA
       platform: velocloud
+      software_image: velocloud-6.0.0
       role: edge
       status: active
       cpu: 4
@@ -32,6 +33,7 @@ spec:
     - template_name: VCO-VA_ORCHESTRATOR
       device_type: VCO-VA
       platform: velocloud
+      software_image: velocloud-6.0.0
       role: edge
       status: active
       cpu: 8

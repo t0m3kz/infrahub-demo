@@ -7,6 +7,7 @@ spec:
     - template_name: N9K-C9336C-FX2_SUPER_SPINE
       device_type: N9K-C9336C-FX2
       platform: cisco_nxos
+      software_image: cisco_nxos-10.3.3
       role: super-spine
       status: provisioning
       interfaces:
@@ -29,6 +30,7 @@ spec:
     - template_name: N9K-C9316D-GX_SUPER_SPINE
       device_type: N9K-C9316D-GX
       platform: cisco_nxos
+      software_image: cisco_nxos-10.3.3
       role: super-spine
       status: provisioning
       interfaces:
@@ -52,6 +54,7 @@ spec:
       device_type: N9K-C9336C-FX2
       role: spine
       platform: cisco_nxos
+      software_image: cisco_nxos-10.3.3
       status: provisioning
       interfaces:
         kind: TemplateDcimPhysicalInterface
@@ -73,6 +76,7 @@ spec:
     - template_name: N9K-C9364C-GX_SPINE
       device_type: N9K-C9364C-GX
       platform: cisco_nxos
+      software_image: cisco_nxos-10.3.3
       role: spine
       status: provisioning
       interfaces:
@@ -95,6 +99,7 @@ spec:
     - template_name: N9K-C9336C-FX2_LEAF
       device_type: N9K-C9336C-FX2
       platform: cisco_nxos
+      software_image: cisco_nxos-10.3.3
       role: leaf
       status: provisioning
       interfaces:
@@ -121,6 +126,7 @@ spec:
     - template_name: N9K-C9336C-FX2_LEAF_MR
       device_type: N9K-C9336C-FX2
       platform: cisco_nxos
+      software_image: cisco_nxos-10.3.3
       role: leaf
       status: provisioning
       interfaces:
@@ -155,6 +161,7 @@ spec:
     - template_name: N9K-C9336C-FX2_LEAF_MIXED
       device_type: N9K-C9336C-FX2
       platform: cisco_nxos
+      software_image: cisco_nxos-10.3.3
       role: leaf
       status: provisioning
       interfaces:
@@ -185,6 +192,7 @@ spec:
     - template_name: N9K-C9316D-GX_LEAF
       device_type: N9K-C9316D-GX
       platform: cisco_nxos
+      software_image: cisco_nxos-10.3.3
       role: leaf
       status: provisioning
       interfaces:
@@ -207,6 +215,7 @@ spec:
     - template_name: N9K-C9316D-GX_LEAF_MIXED
       device_type: N9K-C9316D-GX
       platform: cisco_nxos
+      software_image: cisco_nxos-10.3.3
       role: leaf
       status: provisioning
       interfaces:
@@ -229,6 +238,7 @@ spec:
     - template_name: N9K-C9316D-GX_TOR
       device_type: N9K-C9316D-GX
       platform: cisco_nxos
+      software_image: cisco_nxos-10.3.3
       role: leaf
       status: provisioning
       interfaces:
@@ -251,6 +261,7 @@ spec:
     - template_name: N9K-C9336C-FX2_TOR
       device_type: N9K-C9336C-FX2
       platform: cisco_nxos
+      software_image: cisco_nxos-10.3.3
       role: leaf
       status: provisioning
       interfaces:
@@ -277,6 +288,7 @@ spec:
     - template_name: N9K-C9336C-FX2_ACCESS
       device_type: N9K-C9336C-FX2
       platform: cisco_nxos
+      software_image: cisco_nxos-10.3.3
       role: access-leaf
       status: provisioning
       interfaces:
@@ -299,6 +311,7 @@ spec:
     - template_name: N9K-C9316D-GX_EDGE
       device_type: N9K-C9316D-GX
       platform: cisco_nxos
+      software_image: cisco_nxos-10.3.3
       role: edge
       status: provisioning
       interfaces:
@@ -325,6 +338,7 @@ spec:
     - template_name: N9K-C9336C-FX2_SPINE
       device_type: N9K-C9336C-FX2
       platform: cisco_nxos
+      software_image: cisco_nxos-10.3.3
       role: spine
       status: provisioning
       interfaces:
@@ -336,6 +350,7 @@ spec:
     - template_name: N9K-C9336C-FX2_LEAF
       device_type: N9K-C9336C-FX2
       platform: cisco_nxos
+      software_image: cisco_nxos-10.3.3
       role: leaf
       status: provisioning
       interfaces:
@@ -347,6 +362,7 @@ spec:
     - template_name: N9K-C9316D-GX_SPINE
       device_type: N9K-C9316D-GX
       platform: cisco_nxos
+      software_image: cisco_nxos-10.3.3
       role: spine
       status: provisioning
       interfaces:
@@ -358,6 +374,7 @@ spec:
     - template_name: N9K-C9316D-GX_LEAF
       device_type: N9K-C9316D-GX
       platform: cisco_nxos
+      software_image: cisco_nxos-10.3.3
       role: leaf
       status: provisioning
       interfaces:
@@ -369,6 +386,7 @@ spec:
     - template_name: N9K-C9316D-GX_EDGE
       device_type: N9K-C9316D-GX
       platform: cisco_nxos
+      software_image: cisco_nxos-10.3.3
       role: edge
       status: provisioning
       interfaces:
@@ -380,6 +398,7 @@ spec:
     - template_name: N9K-C9336C-FX2_LEAF_SERVER
       device_type: N9K-C9336C-FX2
       platform: cisco_nxos
+      software_image: cisco_nxos-10.3.3
       role: leaf
       status: provisioning
       interfaces:
@@ -406,6 +425,7 @@ spec:
     - template_name: N9K-C9336C-FX2_EDGE
       device_type: N9K-C9336C-FX2
       platform: cisco_nxos
+      software_image: cisco_nxos-10.3.3
       role: edge
       status: provisioning
       interfaces:
@@ -434,6 +454,7 @@ spec:
       device_type: N9K-C9336C-FX2
       role: border-leaf
       platform: cisco_nxos
+      software_image: cisco_nxos-10.3.3
       status: provisioning
       interfaces:
         kind: TemplateDcimPhysicalInterface
@@ -465,6 +486,7 @@ spec:
       device_type: N9K-C9364C-GX
       role: border-leaf
       platform: cisco_nxos
+      software_image: cisco_nxos-10.3.3
       status: provisioning
       interfaces:
         kind: TemplateDcimPhysicalInterface
