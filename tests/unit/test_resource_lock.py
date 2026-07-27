@@ -26,6 +26,7 @@ def _build_gen() -> Any:
     gen = CommonGenerator.__new__(CommonGenerator)
     gen.logger = MagicMock()
     gen.client = MagicMock()
+    gen.branch = "test-branch"
     return gen
 
 
@@ -69,7 +70,7 @@ class TestAcquireResourceLock:
         lock_obj = MagicMock(id="lock-2")
         lock_obj.save = AsyncMock()
         gen.client.create = AsyncMock(side_effect=[_uniqueness_error(), lock_obj])
-        gen.client.get = AsyncMock(return_value=None)  # no existing lock to reclaim
+        gen.client.execute_graphql = AsyncMock(return_value={"CoreStandardGroup": {"edges": []}})
         monkeypatch.setattr("asyncio.sleep", AsyncMock())
 
         lock_id = await gen.acquire_resource_lock("res-1")
@@ -81,7 +82,7 @@ class TestAcquireResourceLock:
     async def test_exhausts_retries_and_raises(self, monkeypatch: pytest.MonkeyPatch) -> None:
         gen = _build_gen()
         gen.client.create = AsyncMock(side_effect=_uniqueness_error())
-        gen.client.get = AsyncMock(return_value=None)
+        gen.client.execute_graphql = AsyncMock(return_value={"CoreStandardGroup": {"edges": []}})
         monkeypatch.setattr("asyncio.sleep", AsyncMock())
         monkeypatch.setattr("generators.common._RESOURCE_LOCK_MAX_ATTEMPTS", 2)
 
@@ -97,11 +98,14 @@ class TestAcquireResourceLock:
         lock_obj.save = AsyncMock()
         gen.client.create = AsyncMock(side_effect=[_uniqueness_error(), lock_obj])
 
-        stale_lock = MagicMock(id="stale-lock-id")
-        metadata = MagicMock()
-        metadata.created_at = (datetime.now(timezone.utc) - timedelta(seconds=600)).isoformat()
-        stale_lock.get_node_metadata = MagicMock(return_value=metadata)
-        gen.client.get = AsyncMock(return_value=stale_lock)
+        stale_created_at = (datetime.now(timezone.utc) - timedelta(seconds=600)).isoformat()
+        gen.client.execute_graphql = AsyncMock(
+            return_value={
+                "CoreStandardGroup": {
+                    "edges": [{"node": {"id": "stale-lock-id"}, "node_metadata": {"created_at": stale_created_at}}]
+                }
+            }
+        )
         gen.client.delete = AsyncMock()
         monkeypatch.setattr("asyncio.sleep", AsyncMock())
 
@@ -117,11 +121,14 @@ class TestAcquireResourceLock:
         lock_obj.save = AsyncMock()
         gen.client.create = AsyncMock(side_effect=[_uniqueness_error(), lock_obj])
 
-        fresh_lock = MagicMock(id="fresh-lock-id")
-        metadata = MagicMock()
-        metadata.created_at = datetime.now(timezone.utc).isoformat()
-        fresh_lock.get_node_metadata = MagicMock(return_value=metadata)
-        gen.client.get = AsyncMock(return_value=fresh_lock)
+        fresh_created_at = datetime.now(timezone.utc).isoformat()
+        gen.client.execute_graphql = AsyncMock(
+            return_value={
+                "CoreStandardGroup": {
+                    "edges": [{"node": {"id": "fresh-lock-id"}, "node_metadata": {"created_at": fresh_created_at}}]
+                }
+            }
+        )
         gen.client.delete = AsyncMock()
         monkeypatch.setattr("asyncio.sleep", AsyncMock())
 
