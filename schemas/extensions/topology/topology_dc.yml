@@ -452,6 +452,22 @@ nodes:
             color: "#004E64"
         default_value: bottom_up
         order_weight: 1300
+      - name: connectivity_mode
+        label: "Firewall/LB Connectivity"
+        description: "How border-leaf-attached firewalls/load-balancers are cabled"
+        kind: Dropdown
+        optional: true
+        default_value: pbr
+        order_weight: 1400
+        choices:
+          - name: pbr
+            label: "Policy-Based Routing"
+            description: "BL<->FW and BL<->LB cabled independently"
+            color: "#7FBF7F"
+          - name: inline
+            label: "Inline Service Chain"
+            description: "BL->FW->LB->BL physical chain; FW and LB sit directly in the forwarding path"
+            color: "#BF7F7F"
     relationships:
       - name: design
         label: "Data Center Design"

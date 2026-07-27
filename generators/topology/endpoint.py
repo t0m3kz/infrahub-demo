@@ -106,25 +106,6 @@ class EndpointConnectivityGenerator(EndpointUplinkMixin, CommonGenerator):
             self.logger.error(f"Endpoint {self.data.name} has no rack assigned - cannot determine connectivity")
             return
 
-        device_role = self.data.role or ""
-
-        # Firewalls and load-balancers connect to border-leaf dedicated ports, not to pod switches
-        if device_role in ("firewall", "firewall-active", "firewall-passive", "load-balancer"):
-            dc = self.data.rack.pod.parent
-            self.deployment_id = dc.id
-            self.fabric_name = dc.name.lower()
-            bl_port_role = "firewall" if "firewall" in device_role else "load-balancer"
-            # No per-device port offset here (unlike rack-to-spine cabling), so
-            # concurrent endpoint generator instances (backend fans siblings out via
-            # asyncio.gather) targeting the same DC's border-leaf pair could both pick
-            # the same "free" port — serialize per DC.
-            lock_id = await self.acquire_resource_lock(f"endpoint-cabling-dc-{dc.id}")
-            try:
-                await self._connect_to_border_leaf(dc_id=dc.id, bl_port_role=bl_port_role)
-            finally:
-                await self.release_resource_lock(lock_id)
-            return
-
         # deployment_type is derived from pod.design's layout (EndpointPod.deployment_type)
         deployment_type = self.data.rack.pod.deployment_type
         self.pod_name = self.data.rack.pod.name.lower()
@@ -223,135 +204,6 @@ class EndpointConnectivityGenerator(EndpointUplinkMixin, CommonGenerator):
         finally:
             await self.release_resource_lock(lock_id)
 
-    async def _connect_to_border_leaf(self, dc_id: str, bl_port_role: str) -> None:
-        """Connect firewall or load-balancer to dedicated ports on border-leaf switches.
-
-        Deterministic per-interface assignment:
-          uplink[0] (sorted by name) → BL-1 (sorted by name)
-          uplink[1]                  → BL-2
-
-        This ensures BFD + static route redundancy without VPC:
-        each uplink has an independent path to a separate BL.
-        """
-        assert self.data.rack is not None
-
-        # Find the DC's border-leaf pair (always exactly 2, sorted by name)
-        border_leafs = await self.client.filters(
-            kind=DcimPhysicalDevice,
-            deployment__ids=[dc_id],
-            role__value="border-leaf",
-            status__values=["active", "provisioning", "free"],
-        )
-
-        if not border_leafs:
-            self.logger.error(
-                f"{self.data.name}: No border-leaf devices found in DC {dc_id}. "
-                "Cannot connect firewall/LB — run add_dc generator first."
-            )
-            return
-
-        sorted_bls = sorted(border_leafs, key=lambda bl: bl.name.value)
-
-        # Get uplink interfaces on this device, sorted by name
-        all_uplinks: list[DcimPhysicalInterface] = await self.client.filters(
-            kind=DcimPhysicalInterface,
-            device__ids=[self.data.id],
-            role__value="uplink",
-            status__values=["free", "planned", "active"],
-            include=["device", "interface_type", "cable"],
-        )
-
-        free_uplinks = [i for i in all_uplinks if not (i.cable and i.cable.id)]
-        existing = len(all_uplinks) - len(free_uplinks)
-
-        if not free_uplinks:
-            if existing > 0:
-                self.logger.info(f"{self.data.name}: already fully connected to border-leaf ({existing} cables)")
-            else:
-                self.logger.info(f"{self.data.name}: no uplink interfaces, skipping")
-            return
-
-        # Sort uplinks so assignment is stable across re-runs
-        uplink_name_map = {u.name.value: u for u in free_uplinks}
-        sorted_uplink_names = sort_interface_list(list(uplink_name_map.keys()))
-        sorted_uplinks = [uplink_name_map[n] for n in sorted_uplink_names]
-
-        self.logger.info(
-            f"{self.data.name} ({self.data.role}): {len(sorted_uplinks)} free uplink(s), "
-            f"{len(sorted_bls)} border-leaf(s) — deterministic assignment uplink[N] → BL[N]"
-        )
-
-        # For each uplink[i], cable to the first free bl_port_role port on BL[i]
-        connections_made = 0
-        for idx, uplink in enumerate(sorted_uplinks):
-            if idx >= len(sorted_bls):
-                self.logger.warning(
-                    f"{self.data.name}: uplink {uplink.name.value} has no BL to assign "
-                    f"(only {len(sorted_bls)} BL(s) available)"
-                )
-                break
-
-            target_bl = sorted_bls[idx]
-
-            # Find first free dedicated port on this specific BL
-            bl_ports: list[DcimPhysicalInterface] = await self.client.filters(
-                kind=DcimPhysicalInterface,
-                device__ids=[target_bl.id],
-                role__value=bl_port_role,
-                include=["device", "interface_type", "cable"],
-                status__values=["free", "planned", "active"] if existing > 0 else [],
-            )
-            if not existing:
-                bl_ports = await self.client.filters(
-                    kind=DcimPhysicalInterface,
-                    device__ids=[target_bl.id],
-                    role__value=bl_port_role,
-                    include=["device", "interface_type", "cable"],
-                    status__value="free",
-                )
-
-            free_bl_ports = [p for p in bl_ports if not (p.cable and p.cable.id)]
-
-            if not free_bl_ports:
-                self.logger.error(
-                    f"{self.data.name}: No free {bl_port_role!r} ports on {target_bl.name.value} "
-                    f"for uplink {uplink.name.value}"
-                )
-                continue
-
-            # Pick first free port (sorted for stability)
-            bl_port_name_map = {p.name.value: p for p in free_bl_ports}
-            first_free_port = bl_port_name_map[sort_interface_list(list(bl_port_name_map.keys()))[0]]
-
-            fingerprint = ConnectionFingerprint(
-                server_name=self.data.name,
-                server_interface=uplink.name.value,
-                switch_name=target_bl.name.value,
-                switch_interface=first_free_port.name.value,
-            )
-
-            if fingerprint in self.planned_connections:
-                self.logger.info(f"{self.data.name}: connection {fingerprint} already planned, skipping")
-                continue
-
-            self.planned_connections.add(fingerprint)
-
-            await self.create_cabling(
-                bottom_devices=[self.data.name],
-                bottom_interfaces=[uplink.name.value],
-                top_devices=[target_bl.name.value],
-                top_interfaces=[first_free_port.name.value],
-                strategy="intra_rack",
-                options=CablingOptions(cabling_offset=0, pool=None),
-            )
-
-            self.logger.info(
-                f"{self.data.name}: cabled {uplink.name.value} → {target_bl.name.value}:{first_free_port.name.value}"
-            )
-            connections_made += 1
-
-        self.logger.info(f"{self.data.name}: created {connections_made} connection(s) to border-leaf pair")
-
     async def _resolve_target_interfaces(self, deployment_type: str) -> list[DcimPhysicalInterface]:
         """Resolve the target switch interfaces for this endpoint's deployment type.
 
@@ -396,9 +248,7 @@ class EndpointConnectivityGenerator(EndpointUplinkMixin, CommonGenerator):
             self.logger.error(
                 f"Endpoint {self.data.name}: No network rack found in row {self.data.rack.row_index} for middle_rack deployment."
             )
-            raise RuntimeError(
-                f"Endpoint {self.data.name}: Cannot connect - no network rack in row {self.data.rack.row_index}"
-            )
+            return []
 
         # Try ToR devices first in network rack (preferred for aggregation)
         rack_ids = [rack.id for rack in racks]
@@ -422,7 +272,6 @@ class EndpointConnectivityGenerator(EndpointUplinkMixin, CommonGenerator):
                 f"Endpoint {self.data.name}: No free interfaces found on ToR or Leaf devices in middle rack. "
                 "Cannot create endpoint connectivity."
             )
-            raise RuntimeError(f"Endpoint {self.data.name}: Cannot connect - no interfaces found in middle rack")
 
         return all_target_interfaces
 
@@ -468,7 +317,6 @@ class EndpointConnectivityGenerator(EndpointUplinkMixin, CommonGenerator):
                 f"Endpoint {self.data.name}: No ToR interfaces found in tor deployment. "
                 "Cannot create endpoint connectivity."
             )
-            raise RuntimeError(f"Endpoint {self.data.name}: Cannot connect - no ToR interfaces found in deployment")
 
         return all_target_interfaces
 
@@ -514,7 +362,6 @@ class EndpointConnectivityGenerator(EndpointUplinkMixin, CommonGenerator):
                 f"Endpoint {self.data.name}: No ToR or Leaf interfaces found in mixed deployment. "
                 "Cannot create endpoint connectivity."
             )
-            raise RuntimeError(f"Endpoint {self.data.name}: Cannot connect - no interfaces found in mixed deployment")
 
         return all_target_interfaces
 
@@ -629,7 +476,7 @@ class EndpointConnectivityGenerator(EndpointUplinkMixin, CommonGenerator):
                 f"Endpoint {self.data.name}: No compatible interfaces found on target devices. "
                 "Cannot create endpoint connectivity."
             )
-            raise RuntimeError(f"Endpoint {self.data.name}: Cannot connect - no compatible interfaces")
+            return
 
         # Group interfaces by device for dual-homing
         device_groups = {}
@@ -650,9 +497,7 @@ class EndpointConnectivityGenerator(EndpointUplinkMixin, CommonGenerator):
                 f"Endpoint {self.data.name}: Need at least 2 devices for dual-homing, found {len(device_names)}. "
                 "Cannot create endpoint connectivity."
             )
-            raise RuntimeError(
-                f"Endpoint {self.data.name}: Cannot connect - insufficient devices for dual-homing (need 2, found {len(device_names)})"
-            )
+            return
 
         # For simplicity, take first two devices (can be enhanced with consecutive pair selection)
         selected_devices = device_names[:2]
@@ -722,7 +567,7 @@ class EndpointConnectivityGenerator(EndpointUplinkMixin, CommonGenerator):
         switch_by_name = {s.name.value: s for s in switches}
         mlag_ids_by_switch: dict[str, set[str]] = {}
         for name, switch in switch_by_name.items():
-            caps = getattr(switch, "capabilities")
+            caps = switch.capabilities
             mlag_ids_by_switch[name] = {peer.id for peer in caps.peers if peer.typename == "ManagedMLAG"}
 
         shared_domains = mlag_ids_by_switch.get(switch_a_name, set()) & mlag_ids_by_switch.get(switch_b_name, set())
@@ -741,7 +586,7 @@ class EndpointConnectivityGenerator(EndpointUplinkMixin, CommonGenerator):
             existing_lag_ids.update(lag.lag_id.value for lag in lags)
 
         for bond in server_bonds:
-            member_ifaces = getattr(bond, "member_interfaces")
+            member_ifaces = bond.member_interfaces
             member_peers = [peer.peer for peer in member_ifaces.peers]
             bond_name = bond.name.value
 
@@ -770,7 +615,7 @@ class EndpointConnectivityGenerator(EndpointUplinkMixin, CommonGenerator):
                 existing_cable = getattr(member, "cable", None)
                 if existing_cable and existing_cable.id:
                     cable_obj = await self.client.get(kind=DcimCable, id=existing_cable.id, include=["endpoints"])
-                    far_ends = [p for p in getattr(cable_obj, "endpoints").peers if p.id != member.id]
+                    far_ends = [p for p in cable_obj.endpoints.peers if p.id != member.id]
                     if far_ends:
                         switch_port_by_name[switch_name] = await self.client.get(
                             kind=DcimPhysicalInterface, id=far_ends[0].id, include=["lag"]
@@ -816,7 +661,7 @@ class EndpointConnectivityGenerator(EndpointUplinkMixin, CommonGenerator):
                         options=CablingOptions(cabling_offset=0, pool=None),
                     )
 
-                platform = getattr(switch, "platform")
+                platform = switch.platform
                 platform_name = platform.peer.name.value if platform.peer else ""
                 lag_obj = await self.client.create(
                     kind=DcimLAGInterface,

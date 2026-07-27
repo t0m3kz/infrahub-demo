@@ -105,6 +105,9 @@ fragment PodFields on TopologyPod {
         fabric_interface_sorting_method {
           value
         }
+        connectivity_mode {
+          value
+        }
         management_pool {
           node {
             id
@@ -232,6 +235,20 @@ query RackGenerator($name: String) {
           }
         }
         border_leafs: fabric_templates(role__value: "border-leaf") {
+          edges {
+            node {
+              ...FabricTemplateFields
+            }
+          }
+        }
+        firewalls: fabric_templates(role__value: "firewall") {
+          edges {
+            node {
+              ...FabricTemplateFields
+            }
+          }
+        }
+        load_balancers: fabric_templates(role__value: "load-balancer") {
           edges {
             node {
               ...FabricTemplateFields
