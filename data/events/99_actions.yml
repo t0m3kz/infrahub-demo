@@ -95,6 +95,17 @@ spec:
           - attribute_name: amount_of_spines
             value_match: any
 
+    - name: trigger-pod-update-mlag-create
+      branch_scope: "other_branches"
+      node_kind: TopologyPod
+      mutation_action: "updated"
+      action: run-pod-rack-cascade
+      matches:
+        kind: CoreNodeTriggerAttributeMatch
+        data:
+          - attribute_name: mlag_create
+            value_match: any
+
     # A rack created standalone under an already-existing, unchanged pod (e.g. a
     # standalone switch add) needs its own created-trigger to bootstrap — a bulk
     # pod+rack load is also covered by this, since add_rack.generate() waits for
