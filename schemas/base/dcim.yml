@@ -325,6 +325,10 @@ generics:
             label: High Availability
             description: "Dedicated port for high availability attachment"
             color: "#4EDEC4"
+          - name: dci
+            label: DCI
+            description: "Dedicated port for data center interconnect on a border-leaf"
+            color: "#8B5CF6"
         order_weight: 1250
       - name: index
         kind: Text
