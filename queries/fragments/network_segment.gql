@@ -53,7 +53,6 @@ fragment SegmentGatewayWithNamespaceFields on ManagedNetworkSegment {
             node {
               name { value }
               l3_vni { value }
-              owner { node { name { value } } }
             }
           }
         }
@@ -73,8 +72,10 @@ fragment SegmentSecurityZoneFields on ManagedNetworkSegment {
 }
 
 fragment SegmentSecurityPolicyFields on ManagedNetworkSegment {
-  inline_service {
-    node { id name { value } }
+  ... on ManagedVxlanSegment {
+    inline_service {
+      node { id name { value } }
+    }
   }
   isolation_mode { value }
   security_tag {
@@ -116,7 +117,6 @@ fragment NetworkSegmentFields on ManagedNetworkSegment {
               node {
                 name { value }
                 l3_vni { value }
-                owner { node { name { value } } }
               }
             }
           }
@@ -151,7 +151,6 @@ fragment NetworkSegmentFields on ManagedNetworkSegment {
               node {
                 name { value }
                 l3_vni { value }
-                owner { node { name { value } } }
               }
             }
           }

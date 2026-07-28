@@ -17,7 +17,6 @@ def _collect_l3_vni_from_namespaces(namespaces) -> list[dict[str, Any]]:
             seen[ns_name] = {
                 "vrf_name": ns_name,
                 "l3_vni": l3_vni,
-                "owner": (ns.get("owner") or {}).get("name", ""),
             }
     return sorted(seen.values(), key=lambda v: v.get("vrf_name", ""))
 
