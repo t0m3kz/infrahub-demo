@@ -15,7 +15,7 @@ spec:
       security_profile: internet_exposed
       fqdn: shipment-tracker.c002.demo.local
       ingress_mode: frontend
-      parent: C002
+      owner: C002
       member_of_groups:
         - app_applications
 
@@ -25,7 +25,7 @@ spec:
       security_profile: internet_exposed
       fqdn: shipment-tracker-np.c002.demo.local
       ingress_mode: frontend
-      parent: C002
+      owner: C002
       member_of_groups:
         - app_applications
 
@@ -35,6 +35,6 @@ spec:
       security_profile: internet_exposed
       fqdn: fleet-manager.c002.demo.local
       ingress_mode: frontend
-      parent: C002
+      owner: C002
       member_of_groups:
         - app_applications

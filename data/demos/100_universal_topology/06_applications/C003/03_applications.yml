@@ -15,7 +15,7 @@ spec:
       security_profile: fintech_strict
       fqdn: vault-core.c003.internal.local
       ingress_mode: dns
-      parent: C003
+      owner: C003
       member_of_groups:
         - app_applications
 
@@ -25,6 +25,6 @@ spec:
       security_profile: internet_exposed
       fqdn: compliance-portal.c003.demo.local
       ingress_mode: frontend
-      parent: C003
+      owner: C003
       member_of_groups:
         - app_applications

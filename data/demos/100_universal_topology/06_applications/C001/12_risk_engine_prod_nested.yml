@@ -12,7 +12,7 @@ spec:
       security_profile: fintech_strict
       fqdn: risk-engine.c001.internal.local
       ingress_mode: dns
-      parent: C001
+      owner: C001
       member_of_groups:
         - app_applications
       children:

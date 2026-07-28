@@ -25,7 +25,7 @@ spec:
       security_profile: fintech_strict
       fqdn: audit-service.c003.internal.local
       ingress_mode: dns
-      parent: C003
+      owner: C003
       member_of_groups:
         - app_applications
       children:
