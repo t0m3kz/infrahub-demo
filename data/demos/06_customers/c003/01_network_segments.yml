@@ -1,0 +1,61 @@
+---
+# C003 (Vaultex Inc.) — production subnets and VXLAN segments activated on DC6.
+# VRF namespace lives in 00_environments.yml (loads first, alphabetically).
+#
+# Network segments are defined nested under OrganizationCustomer.network_segments
+# (equivalent to setting owner: "C003" directly on the segment — same relationship,
+# identifier network_segment__owner, from the customer side).
+
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: OrganizationCustomer
+  data:
+    - org_id: "C003"
+      name: "Vaultex Inc."
+      network_segments:
+        - kind: ManagedVxlanSegment
+          data:
+            - customer_name: "web-frontend"
+              environment: "p"
+              arp_suppression: true
+              prefixes:
+                - kind: IpamPrefix
+                  data:
+                    - prefix: "10.3.10.0/24"
+                      description: "C003 prod web-frontend subnet (DC6)"
+                      status: active
+                      role: customer
+                      ip_namespace: "C003-PROD"
+              gateway:
+                kind: IpamIPAddress
+                data:
+                  - address: "10.3.10.1/24"
+                    description: "Anycast GW — C003 prod web-frontend (DC6)"
+                    ip_namespace: "C003-PROD"
+              deployments:
+                - DC6
+              member_of_groups:
+                - vxlan_segments
+
+            - customer_name: "app-backend"
+              environment: "p"
+              arp_suppression: true
+              prefixes:
+                - kind: IpamPrefix
+                  data:
+                    - prefix: "10.3.20.0/24"
+                      description: "C003 prod app-backend subnet (DC6)"
+                      status: active
+                      role: customer
+                      ip_namespace: "C003-PROD"
+              gateway:
+                kind: IpamIPAddress
+                data:
+                  - address: "10.3.20.1/24"
+                    description: "Anycast GW — C003 prod app-backend (DC6)"
+                    ip_namespace: "C003-PROD"
+              deployments:
+                - DC6
+              member_of_groups:
+                - vxlan_segments

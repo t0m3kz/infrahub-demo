@@ -6,41 +6,101 @@ spec:
   data:
     - name: "Nordix Ltd."
       org_id: "C001"
+      profile: "Standard"
+      member_of_groups:
+        - boarded_customers
     - name: "SwiftGo GmbH"
       org_id: "C002"
+      profile: "Standard"
+      member_of_groups:
+        - boarded_customers
     - name: "Vaultex Inc."
       org_id: "C003"
+      profile: "Standard"
+      member_of_groups:
+        - boarded_customers
     - name: "Peakora AG"
       org_id: "C004"
+      profile: "Starter"
+      member_of_groups:
+        - boarded_customers
     - name: "Drentec BV"
       org_id: "C005"
+      profile: "Starter"
+      member_of_groups:
+        - boarded_customers
     - name: "Lumivex SA"
       org_id: "C006"
+      profile: "Starter"
+      member_of_groups:
+        - boarded_customers
     - name: "Orbisan Ltd."
       org_id: "C007"
+      profile: "Starter"
+      member_of_groups:
+        - boarded_customers
     - name: "Krafven GmbH"
       org_id: "C008"
+      profile: "Starter"
+      member_of_groups:
+        - boarded_customers
     - name: "Tavelo Inc."
       org_id: "C009"
+      profile: "Starter"
+      member_of_groups:
+        - boarded_customers
     - name: "Zindra Corp."
       org_id: "C010"
+      profile: "Starter"
+      member_of_groups:
+        - boarded_customers
     - name: "Flarex Ltd."
       org_id: "C011"
+      profile: "Starter"
+      member_of_groups:
+        - boarded_customers
     - name: "Quelion BV"
       org_id: "C012"
+      profile: "Starter"
+      member_of_groups:
+        - boarded_customers
     - name: "Mertova SA"
       org_id: "C013"
+      profile: "Starter"
+      member_of_groups:
+        - boarded_customers
     - name: "Dathrex AG"
       org_id: "C014"
+      profile: "Starter"
+      member_of_groups:
+        - boarded_customers
     - name: "Novantis GmbH"
       org_id: "C015"
+      profile: "Starter"
+      member_of_groups:
+        - boarded_customers
     - name: "Prolexar Inc."
       org_id: "C016"
+      profile: "Starter"
+      member_of_groups:
+        - boarded_customers
     - name: "Stelvix Ltd."
       org_id: "C017"
+      profile: "Starter"
+      member_of_groups:
+        - boarded_customers
     - name: "Calduno BV"
       org_id: "C018"
+      profile: "Starter"
+      member_of_groups:
+        - boarded_customers
     - name: "Wexford Corp."
       org_id: "C019"
+      profile: "Starter"
+      member_of_groups:
+        - boarded_customers
     - name: "Bryntec SA"
       org_id: "C020"
+      profile: "Starter"
+      member_of_groups:
+        - boarded_customers

@@ -1,0 +1,105 @@
+---
+# C001 (Nordix Ltd.) — production subnets and VXLAN segments activated on DC1.
+# VRF namespace lives in 00_environments.yml (loads first, alphabetically).
+#
+# Network segments are defined nested under OrganizationCustomer.network_segments
+# (equivalent to setting owner: "C001" directly on the segment — same relationship,
+# identifier network_segment__owner, from the customer side).
+
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: OrganizationCustomer
+  data:
+    - org_id: "C001"
+      name: "Nordix Ltd."
+      network_segments:
+        - kind: ManagedVxlanSegment
+          data:
+            - customer_name: "web-frontend"
+              environment: "p"
+              arp_suppression: true
+              prefixes:
+                - kind: IpamPrefix
+                  data:
+                    - prefix: "10.1.10.0/24"
+                      description: "C001 prod web-frontend subnet (DC1)"
+                      status: active
+                      role: customer
+                      ip_namespace: "C001-PROD"
+              gateway:
+                kind: IpamIPAddress
+                data:
+                  - address: "10.1.10.1/24"
+                    description: "Anycast GW — C001 prod web-frontend (DC1)"
+                    ip_namespace: "C001-PROD"
+              deployments:
+                - DC1
+              member_of_groups:
+                - vxlan_segments
+
+            - customer_name: "app-backend"
+              environment: "p"
+              arp_suppression: true
+              prefixes:
+                - kind: IpamPrefix
+                  data:
+                    - prefix: "10.1.20.0/24"
+                      description: "C001 prod app-backend subnet (DC1)"
+                      status: active
+                      role: customer
+                      ip_namespace: "C001-PROD"
+              gateway:
+                kind: IpamIPAddress
+                data:
+                  - address: "10.1.20.1/24"
+                    description: "Anycast GW — C001 prod app-backend (DC1)"
+                    ip_namespace: "C001-PROD"
+              deployments:
+                - DC1
+              member_of_groups:
+                - vxlan_segments
+
+            - customer_name: "database"
+              environment: "p"
+              arp_suppression: true
+              prefixes:
+                - kind: IpamPrefix
+                  data:
+                    - prefix: "10.1.30.0/24"
+                      description: "C001 prod database subnet (DC1)"
+                      status: active
+                      role: customer
+                      ip_namespace: "C001-PROD"
+              gateway:
+                kind: IpamIPAddress
+                data:
+                  - address: "10.1.30.1/24"
+                    description: "Anycast GW — C001 prod database (DC1)"
+                    ip_namespace: "C001-PROD"
+              deployments:
+                - DC1
+              member_of_groups:
+                - vxlan_segments
+
+            - customer_name: "cache"
+              environment: "p"
+              arp_suppression: true
+              prefixes:
+                - kind: IpamPrefix
+                  data:
+                    - prefix: "10.1.40.0/24"
+                      description: "C001 prod cache subnet (DC1)"
+                      status: active
+                      role: customer
+                      ip_namespace: "C001-PROD"
+              gateway:
+                kind: IpamIPAddress
+                data:
+                  - address: "10.1.40.1/24"
+                    description: "Anycast GW — C001 prod cache (DC1)"
+                    ip_namespace: "C001-PROD"
+              deployments:
+                - DC1
+              member_of_groups:
+                - vxlan_segments

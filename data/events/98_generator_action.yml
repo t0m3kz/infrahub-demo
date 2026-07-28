@@ -44,3 +44,6 @@ spec:
     - name: run-endpoint-generator
       description: Run Endpoint Connectivity Generator
       generator: add_endpoint
+    - name: run-customer-boarding-generator
+      description: Board a customer onto namespaces/prefixes from its profile
+      generator: add_customer_boarding

@@ -1,0 +1,62 @@
+---
+# C003 (Vaultex Inc.) — "custody-ledger" application: portfolio + frontend/
+# backend/database/cache components, wired to the segments
+# (01_network_segments.yml) and servers (02_servers.yml) already boarded
+# for this customer.
+
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: AppPortfolio
+  data:
+    - owner: "C003"
+
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: AppApplication
+  data:
+    - label: custody-ledger
+      environment: p
+      criticality: critical
+      security_profile: fintech_strict
+      fqdn: custody-ledger.c003.demo.local
+      ingress_mode: frontend
+      parent: C003
+      member_of_groups:
+        - app_applications
+      children:
+        kind: AppComponent
+        data:
+          - name: web-frontend
+            component_type: frontend
+            network_segment: c003-web-frontend-p
+            instances:
+              - C003-WEB-01
+            member_of_groups:
+              - app_components
+
+          - name: app-backend
+            component_type: backend
+            network_segment: c003-app-backend-p
+            instances:
+              - C003-APP-01
+            member_of_groups:
+              - app_components
+
+          - name: order-db
+            component_type: database
+            network_segment: c003-database-p
+            instances:
+              - C003-DB-01
+            member_of_groups:
+              - app_components
+
+          - name: session-cache
+            component_type: cache
+            network_segment: c003-cache-p
+            instances:
+              - C003-CACHE-01
+            member_of_groups:
+              - app_components
