@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, cast
 
 from checks.capability_guard import CheckCapabilityGuard
 
 
 def _check() -> Any:
-    check = CheckCapabilityGuard.__new__(CheckCapabilityGuard)
+    check = cast(Any, CheckCapabilityGuard.__new__(CheckCapabilityGuard))
     errors: list[str] = []
     check._captured_errors = errors
     check.log_error = lambda message: errors.append(message)

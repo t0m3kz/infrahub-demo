@@ -13,16 +13,6 @@ generics:
         optional: true
         description: "Unique organization identifier (e.g. C001, P001)"
         order_weight: 900
-    relationships:
-      - name: network_segments
-        peer: ManagedNetworkSegment
-        cardinality: many
-        kind: Component
-        on_delete: cascade
-        optional: true
-        description: "Owned network segments"
-        order_weight: 2200
-        identifier: network_segment__owner
 
   - name: Generic
     namespace: Organization

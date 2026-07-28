@@ -1,0 +1,16 @@
+---
+apiVersion: infrahub.app/v1
+version: "1.0"
+kind: Object
+spec:
+  kind: LocationMetro
+  data:
+    - name: "Paris"
+      shortname: "par"
+      children:
+        kind: LocationBuilding
+        data:
+          - name: "PA4"
+            shortname: "pa4"
+          - name: "PA6"
+            shortname: "pa6"

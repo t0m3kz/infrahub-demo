@@ -79,11 +79,6 @@ infrahub_tests:
         spec:
           kind: python-transform-unit-process
           directory: configs/leaf_sonic_with_acl
-      - name: arista_eos_vlan_pod
-        expect: PASS
-        spec:
-          kind: python-transform-unit-process
-          directory: configs/leaf_arista_eos_vlan_pod
       - name: arista_eos_mlag
         expect: PASS
         spec:

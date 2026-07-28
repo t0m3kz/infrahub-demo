@@ -1,15 +1,21 @@
-"""Generators for network segment deployment activations.
+"""Generator for VXLAN segment deployment activations.
 
-Two generators handle different segment types:
-  - VlanSegmentGenerator:  traditional 802.1Q VLAN (allocates VLAN ID only)
-  - VxlanSegmentGenerator: VXLAN overlay (allocates VLAN ID + VNI)
+VlanSegment has no generator — its vlan_id is a plain manual attribute
+(single-site, no pool allocation, no SegmentDeployment realization record).
+Overlap validation across VlanSegments on the same fabric is a device check,
+not generator logic.
 
-Both share the same base class that handles:
-  1. Determine target deployments from segment.deployments
-  2. For each target deployment, create (or upsert) a ManagedSegmentDeployment
-     with locally-allocated VLAN ID (and VNI for VXLAN) from DC pool ranges.
+VxlanSegmentGenerator handles:
+  1. Determine target customer deployments from segment.customer_deployments
+  2. Resolve each customer deployment's parent (TopologyDataCenter or
+     TopologyColocationMetro) — VLAN/VNI pools and SegmentDeployment records
+     live on the parent (TopologySegmentHosting), not on the customer footprint.
+  3. For each resolved parent, create (or upsert) a ManagedSegmentDeployment
+     with locally-allocated VLAN ID + VNI from its pool ranges.
+  4. Assign the segment to leaf/tor customer-facing interfaces.
+  5. Create inline sub-interfaces when terminate_inline is set.
 
-VLAN IDs and VNIs are allocated from the DC's CoreNumberPool via from_pool.
+VLAN IDs and VNIs are allocated from the parent's CoreNumberPool via from_pool.
 The idempotency check (existing SegmentDeployment lookup) ensures from_pool
 is only called for genuinely new deployments, avoiding double allocation.
 """
@@ -23,17 +29,14 @@ from utils.data_cleaning import clean_data
 from ..common import CommonGenerator
 from ..protocols import DcimPhysicalDevice, DcimPhysicalInterface, DcimVirtualInterface
 
-# Typename constants for both segment types
-MANAGED_SEGMENT_TYPES = ("ManagedVlanSegment", "ManagedVxlanSegment")
 
+class VxlanSegmentGenerator(CommonGenerator):
+    """VXLAN segment generator — allocates VLAN ID + VNI from pools, assigns
+    the segment to leaf/tor customer-facing interfaces and physical host uplinks,
+    and creates inline sub-interfaces when terminate_inline is set.
+    """
 
-class BaseSegmentGenerator(CommonGenerator):
-    """Shared segment activation logic for VLAN and VXLAN segments."""
-
-    # Subclasses set this to their concrete GraphQL root key
-    graphql_root_key: str = ""
-    # Whether this generator allocates VNI from vni_pool
-    allocate_vni: bool = False
+    graphql_root_key = "ManagedVxlanSegment"
 
     @staticmethod
     def _extract_existing_vni(existing_deployments: list[Any]) -> int | None:
@@ -62,19 +65,9 @@ class BaseSegmentGenerator(CommonGenerator):
 
         self.logger.info(f"Processing segment: {segment_name}")
 
-        # ----------------------------------------------------------------
-        # Resolve target deployments directly from segment
-        # VlanSegment: single deployment (cardinality one, key "deployment")
-        # VxlanSegment: multiple deployments (cardinality many, key "deployments")
-        # ----------------------------------------------------------------
-        raw = segment.get("deployments") or segment.get("deployment")
-        if isinstance(raw, dict):
-            target_deployments: list[dict] = [raw]
-        else:
-            target_deployments: list[dict] = raw or []
-
+        target_deployments = self._resolve_target_deployments(segment, segment_name)
         if not target_deployments:
-            self.logger.warning(f"Segment {segment_name} has no target deployments (assign deployment to the segment)")
+            self.logger.error(f"Segment {segment_name}: could not resolve any hosting parent — cannot proceed")
             return
 
         self.logger.info(
@@ -98,8 +91,7 @@ class BaseSegmentGenerator(CommonGenerator):
                 deployment_id = getattr(deployment_obj, "id", None)
                 if deployment_id and deployment_id not in existing_by_deployment_id:
                     existing_by_deployment_id[deployment_id] = existing
-            if self.allocate_vni:
-                reusable_vni = self._extract_existing_vni(existing_deployments)
+            reusable_vni = self._extract_existing_vni(existing_deployments)
         except Exception as exc:
             self.logger.warning(f"Segment {segment_name}: failed to prefetch existing deployments: {exc}")
 
@@ -131,6 +123,54 @@ class BaseSegmentGenerator(CommonGenerator):
                 "State may be partially applied."
             )
 
+        await self._assign_to_deployment_interfaces(segment, target_deployments)
+        await self._create_inline_sub_interfaces(segment, target_deployments)
+
+    def _resolve_target_deployments(self, segment: dict[str, Any], segment_name: str) -> list[dict[str, Any]]:
+        """Resolve segment.customer_deployments to their hosting parents.
+
+        VLAN/VNI pools and SegmentDeployment records live on the parent
+        (TopologyDataCenter / TopologyColocationMetro via TopologySegmentHosting),
+        not on the customer footprint itself.
+        """
+        customer_deployments: list[dict] = segment.get("customer_deployments") or []
+        if not customer_deployments:
+            self.logger.warning(
+                f"Segment {segment_name} has no customer deployments (assign customer_deployments to the segment)"
+            )
+            return []
+
+        return [
+            hosting_parent
+            for cust_dep in customer_deployments
+            if (hosting_parent := self._resolve_hosting_parent(cust_dep, segment_name))
+        ]
+
+    def _resolve_hosting_parent(self, customer_deployment: dict[str, Any], segment_name: str) -> dict[str, Any] | None:
+        """Resolve a customer footprint (CustomerDC/CustomerColocation) to its hosting parent.
+
+        VLAN/VNI pools and SegmentDeployment records live on the parent
+        (TopologyDataCenter / TopologyColocationMetro via TopologySegmentHosting),
+        not on the customer footprint itself. The parent must be present in the
+        GraphQL response (see the ... on TopologyCustomerDC/Colocation fragments
+        in the vxlan_segment query) — no fallback fetch.
+        """
+        cust_id: str = customer_deployment.get("id", "")
+        cust_name: str = customer_deployment.get("name", cust_id)
+        if not cust_id:
+            self.logger.warning("Customer deployment entry missing id — skipping")
+            return None
+
+        parent = customer_deployment.get("parent")
+        if isinstance(parent, dict) and parent.get("id"):
+            return parent
+
+        self.logger.error(
+            f"Segment {segment_name}: customer deployment {cust_name} has no parent in the query response "
+            "— check the query includes the parent fragment for its concrete type"
+        )
+        return None
+
     async def _activate_segment_in_deployment(
         self,
         segment_id: str,
@@ -142,8 +182,7 @@ class BaseSegmentGenerator(CommonGenerator):
     ) -> bool:
         """Create or upsert one SegmentDeployment record.
 
-        VLAN ID is always allocated from the DC's vlan_pool via from_pool.
-        VNI is allocated from vni_pool only for VXLAN segments.
+        VLAN ID and VNI are always allocated from the deployment's pools.
         Idempotency: checks for existing SegmentDeployment first — from_pool
         is only called for genuinely new deployments.
         """
@@ -163,7 +202,7 @@ class BaseSegmentGenerator(CommonGenerator):
                     f"Error checking existing activations for {segment_name} in {deployment_name}: {exc}"
                 )
 
-        if self.allocate_vni and reusable_vni is None:
+        if reusable_vni is None:
             try:
                 existing_for_segment = await self.client.filters(
                     kind="ManagedSegmentDeployment",
@@ -194,7 +233,7 @@ class BaseSegmentGenerator(CommonGenerator):
         vlan_identifier = f"{segment_id}-{deployment_id}-vlan"
         self.logger.info(f"  [{deployment_name}] Allocating VLAN ID from pool {vlan_pool.name.value}")
 
-        # --- VNI (only for VXLAN segments) ---
+        # --- VNI ---
         # VNI must be globally consistent — the same segment must carry the same VNI
         # in every DC so that EVPN type-2/3 routes stitch correctly across DCI.
         # Strategy: reuse the VNI already allocated for another DC's SegmentDeployment
@@ -202,25 +241,21 @@ class BaseSegmentGenerator(CommonGenerator):
         # first DC to activate the segment (no prior SegmentDeployment exists yet).
         vni_from_pool: dict[str, Any] | None = None
         vni_literal: int | None = reusable_vni
-        if self.allocate_vni:
-            if vni_literal is not None:
-                self.logger.info(
-                    f"  [{deployment_name}] Reusing VNI {vni_literal} "
-                    f"from existing SegmentDeployment for {segment_name}"
+        if vni_literal is not None:
+            self.logger.info(
+                f"  [{deployment_name}] Reusing VNI {vni_literal} from existing SegmentDeployment for {segment_name}"
+            )
+        else:
+            # First DC to activate this segment — allocate from pool
+            vni_pool = await self._get_dc_pool(deployment_id, deployment_name, "vni_pool")
+            if vni_pool is not None:
+                vni_identifier = f"{segment_id}-vni"
+                vni_from_pool = {"from_pool": {"id": vni_pool.id}, "identifier": vni_identifier}
+                self.logger.info(f"  [{deployment_name}] Allocating VNI from pool {vni_pool.name.value}")
+            else:
+                self.logger.warning(
+                    f"  [{deployment_name}] No vni_pool — VXLAN segment {segment_name} will not have L2 VNI allocated"
                 )
-
-            if vni_literal is None:
-                # First DC to activate this segment — allocate from pool
-                vni_pool = await self._get_dc_pool(deployment_id, deployment_name, "vni_pool")
-                if vni_pool is not None:
-                    vni_identifier = f"{segment_id}-vni"
-                    vni_from_pool = {"from_pool": {"id": vni_pool.id}, "identifier": vni_identifier}
-                    self.logger.info(f"  [{deployment_name}] Allocating VNI from pool {vni_pool.name.value}")
-                else:
-                    self.logger.warning(
-                        f"  [{deployment_name}] No vni_pool — VXLAN segment {segment_name} "
-                        "will not have L2 VNI allocated"
-                    )
 
         # --- Create SegmentDeployment with pool-allocated values ---
         activation_data: dict[str, Any] = {
@@ -250,23 +285,26 @@ class BaseSegmentGenerator(CommonGenerator):
             return False
 
     async def _get_dc_pool(self, deployment_id: str, deployment_name: str, pool_attr: str) -> Any:
-        """Fetch a pool (vlan_pool, vni_pool, l3_vni_pool) from the TopologyDataCenter.
+        """Fetch a pool (vlan_pool, vni_pool, l3_vni_pool) from a TopologySegmentHosting parent.
 
+        deployment_id is a TopologyDataCenter or TopologyColocationMetro id — both
+        inherit the pool relationships from TopologySegmentHosting, so the generic
+        kind resolves either concrete type.
         Returns the pool SDK object, or None if not found.
-        Uses a per-run cache to avoid re-fetching the DC for each pool attribute.
+        Uses a per-run cache to avoid re-fetching the parent for each pool attribute.
         """
         cache = getattr(self, "_dc_cache", {})
         if deployment_id not in cache:
             try:
                 cache[deployment_id] = await self.client.get(
-                    kind="TopologyDataCenter",
+                    kind="TopologySegmentHosting",
                     id=deployment_id,
                     include=["vlan_pool", "vni_pool", "l3_vni_pool"],
                     prefetch_relationships=True,
                 )
                 self._dc_cache = cache
             except Exception:
-                self.logger.debug(f"  [{deployment_name}] Could not fetch DC {deployment_id}")
+                self.logger.debug(f"  [{deployment_name}] Could not fetch deployment {deployment_id}")
                 return None
 
         dc = cache.get(deployment_id)
@@ -277,41 +315,12 @@ class BaseSegmentGenerator(CommonGenerator):
         self.logger.debug(f"  [{deployment_name}] No {pool_attr} on deployment {deployment_id}")
         return None
 
-
-class VlanSegmentGenerator(BaseSegmentGenerator):
-    """VLAN segment generator — allocates only VLAN ID from vlan_pool."""
-
-    graphql_root_key = "ManagedVlanSegment"
-    allocate_vni = False
-
-
-class VxlanSegmentGenerator(BaseSegmentGenerator):
-    """VXLAN segment generator — allocates VLAN ID + VNI from pools, assigns
-    the segment to leaf/tor customer-facing interfaces and physical host uplinks,
-    and creates inline sub-interfaces when terminate_inline is set.
-    """
-
-    graphql_root_key = "ManagedVxlanSegment"
-    allocate_vni = True
-
-    async def generate(self, data: dict[str, Any]) -> None:
-        await super().generate(data)
-        await self._assign_to_deployment_interfaces(data)
-        await self._create_inline_sub_interfaces(data)
-
-    async def _assign_to_deployment_interfaces(self, data: dict[str, Any]) -> None:
+    async def _assign_to_deployment_interfaces(
+        self, segment: dict[str, Any], target_deployments: list[dict[str, Any]]
+    ) -> None:
         """Assign this segment to all leaf/tor customer-facing interfaces in each deployment."""
-        cleaned = clean_data(data)
-        segment_list = cleaned.get(self.graphql_root_key, [])
-        if not segment_list:
-            return
-
-        segment = segment_list[0]
         segment_id: str = segment.get("id", "")
         segment_name: str = segment.get("name", "")
-        raw = segment.get("deployments") or segment.get("deployment")
-        target_deployments: list[dict] = [raw] if isinstance(raw, dict) else (raw or [])
-
         if not segment_id or not target_deployments:
             return
 
@@ -391,7 +400,9 @@ class VxlanSegmentGenerator(BaseSegmentGenerator):
             f"({len(interfaces) - assigned} already assigned, {updated} interface(s) updated)"
         )
 
-    async def _create_inline_sub_interfaces(self, data: dict[str, Any]) -> None:
+    async def _create_inline_sub_interfaces(
+        self, segment: dict[str, Any], target_deployments: list[dict[str, Any]]
+    ) -> None:
         """When terminate_inline is true, create DcimVirtualInterface sub-interfaces
         on all inline_service (ManagedHA) member devices.
 
@@ -401,12 +412,6 @@ class VxlanSegmentGenerator(BaseSegmentGenerator):
         - Attaches the segment to interface_capabilities
         - Assigns the gateway IP from segment.gateway
         """
-        cleaned = clean_data(data)
-        segment_list = cleaned.get(self.graphql_root_key, [])
-        if not segment_list:
-            return
-
-        segment = segment_list[0]
         terminate_inline = segment.get("terminate_inline") or False
         if not terminate_inline:
             return
@@ -436,9 +441,6 @@ class VxlanSegmentGenerator(BaseSegmentGenerator):
                 f"Segment '{segment_name}' has no gateway — sub-interfaces created without IP addresses"
             )
 
-        # Collect per-deployment VLAN IDs by querying existing SegmentDeployments
-        raw_deps = segment.get("deployments") or segment.get("deployment")
-        target_deployments: list[dict] = [raw_deps] if isinstance(raw_deps, dict) else (raw_deps or [])
         dep_ids: list[str] = [d["id"] for d in target_deployments if d.get("id")]
 
         # Fetch SegmentDeployments to get the allocated VLAN IDs

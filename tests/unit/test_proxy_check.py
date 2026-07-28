@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, cast
 
 from checks.proxy import CheckProxy
 
 
 def _check() -> Any:
-    check = CheckProxy.__new__(CheckProxy)
+    check = cast(Any, CheckProxy.__new__(CheckProxy))
     errors: list[str] = []
     check._captured_errors = errors
     check.log_error = lambda message: errors.append(message)

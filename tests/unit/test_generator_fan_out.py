@@ -19,7 +19,7 @@ Covers:
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, cast
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -200,7 +200,7 @@ def _build_dc_cascade_gen() -> Any:
     replaced by a stub that just sets self.data, isolating the cascade logic
     added in DCPodCascadeGenerator.generate() from DCTopologyGenerator's own
     (extensively covered elsewhere) pool/device/routing work."""
-    gen = DCPodCascadeGenerator.__new__(DCPodCascadeGenerator)
+    gen = cast(Any, DCPodCascadeGenerator.__new__(DCPodCascadeGenerator))
     gen.logger = MagicMock()
     gen.client = MagicMock()
     gen.client.group_context = MagicMock()
@@ -304,7 +304,7 @@ def _build_pod_rack_cascade_gen() -> Any:
     (extensively covered elsewhere) pool/device/routing work."""
     from generators.models import PodModel
 
-    gen = PodRackCascadeGenerator.__new__(PodRackCascadeGenerator)
+    gen = cast(Any, PodRackCascadeGenerator.__new__(PodRackCascadeGenerator))
     gen.logger = MagicMock()
     gen.client = MagicMock()
     gen.client.group_context = MagicMock()

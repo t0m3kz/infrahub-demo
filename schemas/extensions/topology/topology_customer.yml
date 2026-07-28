@@ -1,0 +1,454 @@
+---
+version: "1.0"
+
+# ============================================================================
+# TopologyCustomer — a customer's deployment footprint inside an existing
+# topology deployment (DC, Colocation, or Cloud).
+#
+# One shared generic (TopologyCustomer) carries the common fields (owner,
+# environment, status, namespace), and one concrete node per parent
+# deployment type (CustomerDC, CustomerColocation, CustomerCloud) sets
+# parent: to that specific deployment kind, so the hierarchy is explicit
+# in the schema rather than relying on the bare-generic TopologyDeployment
+# parent trick (confirmed valid via `infrahubctl schema check`, but less
+# self-documenting than naming the concrete parent per node).
+#
+# TopologyCustomerTemplate is a second, unrelated generic: a reusable
+# boarding blueprint, not part of the topology hierarchy (no parent/
+# children) — it carries the defaults a boarding generator applies when
+# instantiating a CustomerDC/CustomerColocation/CustomerCloud.
+# ============================================================================
+
+generics:
+  - name: Customer
+    namespace: Topology
+    description: "A customer's deployment footprint within a parent topology deployment (DC, Colocation, or Cloud)"  # yamllint disable-line rule:line-length
+    label: "Customer Deployment"
+    icon: "mdi:account-network-outline"
+    include_in_menu: false
+    hierarchical: false
+    human_friendly_id:
+      - owner__org_id__value
+      - environment__value
+    order_by:
+      - name__value
+    display_label: "{{ name__value }}"
+    uniqueness_constraints:
+      - ["owner", "environment__value"]
+    attributes:
+      - name: name
+        kind: Text
+        order_weight: 100
+        computed_attribute:
+          kind: Jinja2
+          jinja2_template: "{{ owner__org_id__value|upper }}-{{ environment__label|upper }}"
+        read_only: true
+        optional: false
+
+      - name: environment
+        kind: Dropdown
+        description: "Environment this customer deployment footprint represents"
+        optional: true
+        default_value: p
+        order_weight: 200
+        choices:
+          - name: p
+            label: Production
+            color: "#A9CCE3"
+          - name: n
+            label: Non-Production
+            color: "#A9DFBF"
+          - name: s
+            label: Staging
+            color: "#FFA500"
+          - name: d
+            label: Development
+            color: "#7f7fff"
+          - name: t
+            label: Testing
+            color: "#D2B4DE"
+
+      - name: status
+        kind: Dropdown
+        optional: true
+        default_value: active
+        order_weight: 300
+        choices:
+          - name: active
+            label: Active
+            color: "#7fbf7f"
+          - name: provisioning
+            label: Provisioning
+            color: "#ffff7f"
+          - name: decommissioned
+            label: Decommissioned
+            color: "#bfbfbf"
+
+    relationships:
+      - name: owner
+        peer: OrganizationCustomer
+        label: "Customer"
+        cardinality: one
+        kind: Attribute
+        optional: false
+        order_weight: 150
+        identifier: "topology_customer__owner"
+        description: "Customer this deployment footprint belongs to"
+
+  - name: CustomerTemplate
+    namespace: Topology
+    description: "Reusable boarding blueprint for a customer deployment"
+    label: "Customer Deployment Template"
+    icon: "mdi:account-network"
+    include_in_menu: false
+    human_friendly_id:
+      - name__value
+    order_by:
+      - name__value
+    display_label: "{{ name__value }}"
+    uniqueness_constraints:
+      - [name__value]
+    attributes:
+      - name: name
+        kind: Text
+        unique: true
+        optional: false
+        order_weight: 100
+
+      - name: description
+        kind: Text
+        optional: true
+        order_weight: 150
+
+      - name: default_environment
+        kind: Dropdown
+        description: "Environment applied to deployments created from this template"
+        optional: true
+        default_value: p
+        order_weight: 200
+        choices:
+          - name: p
+            label: Production
+            color: "#A9CCE3"
+          - name: n
+            label: Non-Production
+            color: "#A9DFBF"
+          - name: s
+            label: Staging
+            color: "#FFA500"
+          - name: d
+            label: Development
+            color: "#7f7fff"
+          - name: t
+            label: Testing
+            color: "#D2B4DE"
+
+      - name: size
+        kind: Dropdown
+        label: "Size"
+        description: "T-shirt size label for this template's capacity tier (naming convention only — does not drive defaults)"  # yamllint disable-line rule:line-length
+        optional: true
+        default_value: s
+        order_weight: 250
+        choices:
+          - name: s
+            label: Small
+            description: "Shared firewall/LB/proxy, single network segment"
+            color: "#A9DFBF"
+          - name: m
+            label: Medium
+            description: "Shared firewall/LB/proxy, a few network segments"
+            color: "#A9CCE3"
+          - name: l
+            label: Large
+            description: "Dedicated firewall and/or LB, several network segments"
+            color: "#FFA500"
+          - name: xl
+            label: Extra Large
+            description: "Dedicated firewall, LB, and proxy; many network segments"
+            color: "#BF7F7F"
+
+      - name: dedicated_firewall
+        kind: Boolean
+        label: "Dedicated Firewall"
+        description: "Per-customer dedicated firewall instead of shared multi-tenant firewall capacity"
+        optional: true
+        default_value: false
+        order_weight: 300
+
+      - name: dedicated_loadbalancer
+        kind: Boolean
+        label: "Dedicated Load Balancer"
+        description: "Per-customer dedicated load balancer instead of shared LB service"
+        optional: true
+        default_value: false
+        order_weight: 310
+
+      - name: dedicated_proxy
+        kind: Boolean
+        label: "Dedicated Proxy"
+        description: "Per-customer dedicated proxy instead of shared proxy capacity"
+        optional: true
+        default_value: false
+        order_weight: 320
+
+      - name: network_segment_count
+        kind: Number
+        label: "Network Segments"
+        description: "Number of network segments to provision for this customer deployment"
+        optional: true
+        default_value: 1
+        order_weight: 330
+        parameters:
+          min_value: 1
+
+nodes:
+  - name: CustomerDC
+    namespace: Topology
+    description: "Customer deployment footprint inside a data center"
+    label: "Customer (Data Center)"
+    inherit_from:
+      - TopologyCustomer
+      - TopologyDeployment
+    parent: TopologyDataCenter
+    children: ""
+    include_in_menu: false
+    human_friendly_id:
+      - owner__org_id__value
+      - environment__value
+    order_by:
+      - name__value
+    display_label: "{{ name__value }}"
+    uniqueness_constraints:
+      - ["owner", "environment__value", "parent"]
+    attributes:
+      - name: name
+        kind: Text
+        order_weight: 100
+        computed_attribute:
+          kind: Jinja2
+          jinja2_template: "{{ owner__org_id__value|upper }}-{{ environment__value|upper }}-{{ parent__name__value|upper }}"  # yamllint disable-line rule:line-length
+        read_only: true
+        optional: true
+    relationships:
+      - name: design
+        peer: TopologyCustomerTemplateDC
+        label: "DC Design"
+        cardinality: one
+        kind: Attribute
+        optional: true
+        order_weight: 200
+
+  - name: CustomerColocation
+    namespace: Topology
+    description: "Customer deployment footprint inside a colocation metro"
+    label: "Customer (Colocation)"
+    inherit_from:
+      - TopologyCustomer
+      - TopologyDeployment
+    parent: TopologyColocationMetro
+    children: ""
+    include_in_menu: false
+    human_friendly_id:
+      - owner__org_id__value
+      - environment__value
+    order_by:
+      - name__value
+    display_label: "{{ name__value }}"
+    uniqueness_constraints:
+      - ["owner", "environment__value", "parent"]
+    attributes:
+      - name: name
+        kind: Text
+        order_weight: 100
+        computed_attribute:
+          kind: Jinja2
+          jinja2_template: "{{ owner__org_id__value|upper }}-{{ environment__value|upper }}-{{ parent__name__value|upper }}"  # yamllint disable-line rule:line-length
+        read_only: true
+        optional: true
+
+
+  - name: CustomerCloud
+    namespace: Topology
+    description: "Customer deployment footprint inside a cloud region"
+    label: "Customer (Cloud)"
+    inherit_from:
+      - TopologyCustomer
+      - TopologyDeployment
+    parent: TopologyCloudRegion
+    children: ""
+    include_in_menu: false
+    human_friendly_id:
+      - owner__org_id__value
+      - environment__value
+    order_by:
+      - name__value
+    display_label: "{{ name__value }}"
+    uniqueness_constraints:
+      - ["owner", "environment__value", "parent"]
+    attributes:
+      - name: name
+        kind: Text
+        order_weight: 100
+        computed_attribute:
+          kind: Jinja2
+          jinja2_template: "{{ owner__org_id__value|upper }}-{{ customer_name__value|upper }}-{{ environment__value|upper }}-{{ parent__name__value|upper }}"  # yamllint disable-line rule:line-length
+        read_only: true
+        optional: true
+      - name: customer_name
+        kind: Text
+        unique: true
+        optional: false
+        order_weight: 100
+    relationships:
+      - name: cloud_account
+        peer: CloudAccount
+        label: "Cloud Account"
+        cardinality: one
+        kind: Attribute
+        optional: true
+        order_weight: 200
+
+  - name: CustomerTemplateDC
+    namespace: Topology
+    description: "Boarding blueprint for a data center customer deployment"
+    label: "Customer Template (Data Center)"
+    inherit_from:
+      - TopologyCustomerTemplate
+    include_in_menu: false
+    human_friendly_id:
+      - name__value
+    order_by:
+      - name__value
+    display_label: "{{ name__value }}"
+    uniqueness_constraints:
+      - [name__value]
+    attributes:
+      - name: uplink_10g_count
+        kind: Number
+        label: "10G Uplinks"
+        description: "Number of 10 Gbps uplink ports to provision"
+        optional: true
+        default_value: 0
+        order_weight: 400
+        parameters:
+          min_value: 0
+      - name: uplink_40g_count
+        kind: Number
+        label: "40G Uplinks"
+        description: "Number of 40 Gbps uplink ports to provision"
+        optional: true
+        default_value: 0
+        order_weight: 410
+        parameters:
+          min_value: 0
+      - name: uplink_100g_count
+        kind: Number
+        label: "100G Uplinks"
+        description: "Number of 100 Gbps uplink ports to provision"
+        optional: true
+        default_value: 0
+        order_weight: 420
+        parameters:
+          min_value: 0
+      - name: uplink_400g_count
+        kind: Number
+        label: "400G Uplinks"
+        description: "Number of 400 Gbps uplink ports to provision"
+        optional: true
+        default_value: 0
+        order_weight: 430
+        parameters:
+          min_value: 0
+
+  - name: CustomerTemplateColo
+    namespace: Topology
+    description: "Boarding blueprint for a colocation customer deployment"
+    label: "Customer Template (Colocation)"
+    inherit_from:
+      - TopologyCustomerTemplate
+    include_in_menu: false
+    human_friendly_id:
+      - name__value
+    order_by:
+      - name__value
+    display_label: "{{ name__value }}"
+    uniqueness_constraints:
+      - [name__value]
+    attributes:
+      - name: uplink_10g_count
+        kind: Number
+        label: "10G Uplinks"
+        description: "Number of 10 Gbps cross-connect ports to provision"
+        optional: true
+        default_value: 0
+        order_weight: 400
+        parameters:
+          min_value: 0
+      - name: uplink_40g_count
+        kind: Number
+        label: "40G Uplinks"
+        description: "Number of 40 Gbps cross-connect ports to provision"
+        optional: true
+        default_value: 0
+        order_weight: 410
+        parameters:
+          min_value: 0
+      - name: uplink_100g_count
+        kind: Number
+        label: "100G Uplinks"
+        description: "Number of 100 Gbps cross-connect ports to provision"
+        optional: true
+        default_value: 0
+        order_weight: 420
+        parameters:
+          min_value: 0
+      - name: uplink_400g_count
+        kind: Number
+        label: "400G Uplinks"
+        description: "Number of 400 Gbps cross-connect ports to provision"
+        optional: true
+        default_value: 0
+        order_weight: 430
+        parameters:
+          min_value: 0
+
+  - name: CustomerTemplateCloud
+    namespace: Topology
+    description: "Boarding blueprint for a cloud customer deployment"
+    label: "Customer Template (Cloud)"
+    inherit_from:
+      - TopologyCustomerTemplate
+    include_in_menu: false
+    human_friendly_id:
+      - name__value
+    order_by:
+      - name__value
+    display_label: "{{ name__value }}"
+    uniqueness_constraints:
+      - [name__value]
+
+extensions:
+  nodes:
+    - kind: CloudInstance
+      relationships:
+        - name: node_pool
+          peer: VirtNodePool
+          cardinality: one
+          kind: Attribute
+          optional: true
+          identifier: "virt_pool__instances"
+          description: "Node pool / ASG that manages this instance."
+          order_weight: 2600
+
+    - kind: OrganizationCustomer
+      relationships:
+        - name: deployments
+          label: Topology Deployments
+          kind: Generic
+          cardinality: many
+          optional: true
+          peer: TopologyCustomer
+          identifier: "topology_customer__owner"
+          description: "All topology deployments owned by this customer"
+          order_weight: 2000

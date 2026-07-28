@@ -1,0 +1,15 @@
+---
+# Cloud subnet (CloudNetworkSegment) for C015 in AWS eu-central-1b.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: CloudNetworkSegment
+  data:
+    - owner: "C015"
+      customer_name: "novantis-subnet-prod"
+      environment: "p"
+      segment_type: "aws_vpc_subnet"
+      virtual_network: "novantis-vpc-prod"
+      availability_zone: ["eu-central-1", "eu-central-1b"]
+      cidr_block: ["10.150.1.0/24", "default"]
+      customer_deployment: ["C015", "p"]

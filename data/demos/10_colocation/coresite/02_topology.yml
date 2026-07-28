@@ -1,0 +1,33 @@
+---
+# CoreSite real-world colocation topology
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologyColocation
+  data:
+    - name: CORESITE
+      children:
+        kind: TopologyColocationMetro
+        data:
+          - name: NY
+            location: ["nyc"]
+            children:
+              kind: TopologyColocationZone
+              data:
+                - name: NY1
+                - name: NY2
+
+          - name: VA
+            location: ["iad"]
+            children:
+              kind: TopologyColocationZone
+              data:
+                - name: VA1
+                - name: VA2
+
+          - name: SV
+            location: ["sjc"]
+            children:
+              kind: TopologyColocationZone
+              data:
+                - name: SV1

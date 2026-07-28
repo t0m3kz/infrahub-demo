@@ -1,0 +1,11 @@
+---
+# Paris Megaport building
+apiVersion: infrahub.app/v1
+version: "1.0"
+kind: Object
+spec:
+  kind: LocationBuilding
+  data:
+    - name: "MCR-PAR1"
+      shortname: "mcr-par1"
+      parent: "par"

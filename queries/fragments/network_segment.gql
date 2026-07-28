@@ -11,14 +11,7 @@ fragment SegmentStatusFields on ManagedNetworkSegment {
 
 fragment SegmentDeploymentsFields on ManagedNetworkSegment {
   ... on ManagedVlanSegment {
-    segment_deployments {
-      edges {
-        node {
-          vlan_id { value }
-          vni { value }
-        }
-      }
-    }
+    vlan_id { value }
   }
   ... on ManagedVxlanSegment {
     segment_deployments {
@@ -34,14 +27,8 @@ fragment SegmentDeploymentsFields on ManagedNetworkSegment {
 
 fragment SegmentDeploymentsActiveFields on ManagedNetworkSegment {
   ... on ManagedVlanSegment {
-    segment_deployments(status__values: $segment_status_values) {
-      edges {
-        node {
-          vlan_id { value }
-          vni { value }
-        }
-      }
-    }
+    status { value }
+    vlan_id { value }
   }
   ... on ManagedVxlanSegment {
     segment_deployments(status__values: $segment_status_values) {
@@ -118,14 +105,7 @@ fragment NetworkSegmentFields on ManagedNetworkSegment {
     name { value }
     description { value }
     status { value }
-    segment_deployments(status__values: ["active", "provisioning"]) {
-      edges {
-        node {
-          vlan_id { value }
-          vni { value }
-        }
-      }
-    }
+    vlan_id { value }
     gateway {
       node {
         address { value }

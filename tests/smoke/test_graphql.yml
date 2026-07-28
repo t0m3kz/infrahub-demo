@@ -196,14 +196,6 @@ infrahub_tests:
           kind: graphql-query-smoke
 
   - resource: GraphQLQuery
-    resource_name: vlan_segment_data
-    tests:
-      - name: syntax_check
-        spec:
-          path: queries/topology/add/vlan_segment.gql
-          kind: graphql-query-smoke
-
-  - resource: GraphQLQuery
     resource_name: vxlan_segment_data
     tests:
       - name: syntax_check

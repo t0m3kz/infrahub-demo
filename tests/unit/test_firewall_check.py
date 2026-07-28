@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, cast
 
 from checks.firewall import CheckFirewall
 
 
 def _check() -> Any:
-    check = CheckFirewall.__new__(CheckFirewall)
+    check = cast(Any, CheckFirewall.__new__(CheckFirewall))
     errors: list[str] = []
     infos: list[str] = []
     check._captured_errors = errors

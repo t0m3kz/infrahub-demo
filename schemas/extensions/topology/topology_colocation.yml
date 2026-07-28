@@ -22,6 +22,7 @@ nodes:
       - CoreArtifactTarget
       - TopologyDeployment
       - TopologyClusterHosting
+      - TopologySegmentHosting
     uniqueness_constraints:
       - ["name__value"]
     human_friendly_id:
@@ -30,7 +31,7 @@ nodes:
     display_label: "{{ name__value}}"
     label: Colocation Center
     parent: TopologyColocation
-    children: TopologyColocationZone
+    children: ""
     relationships:
       - name: location
         peer: LocationMetro

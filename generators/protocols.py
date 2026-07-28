@@ -6,13 +6,31 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from infrahub_sdk.protocols import BuiltinIPAddress, BuiltinIPPrefix, CoreArtifactTarget, CoreNode
+from infrahub_sdk.protocols import (
+    BuiltinIPAddress,
+    BuiltinIPNamespace,
+    BuiltinIPPrefix,
+    BuiltinTag,
+    CoreArtifact,
+    CoreArtifactTarget,
+    CoreGroup,
+    CoreIPAddressPool,
+    CoreIPPrefixPool,
+    CoreNode,
+    CoreNumberPool,
+    CoreObjectComponentTemplate,
+    CoreObjectTemplate,
+    CoreProfile,
+    IpamNamespace,
+    LineageSource,
+)
 
 if TYPE_CHECKING:
     from infrahub_sdk.node import RelationshipAttribute, RelationshipManager
     from infrahub_sdk.protocols_base import (
         Boolean,
         BooleanOptional,
+        DateTimeOptional,
         Dropdown,
         DropdownOptional,
         Integer,
@@ -20,26 +38,181 @@ if TYPE_CHECKING:
         IPHost,
         IPHostOptional,
         IPNetwork,
+        IPNetworkOptional,
         String,
         StringOptional,
+        URLOptional,
     )
 
 
-class AppGeneric(CoreNode):
+class TemplateAppInstance(CoreNode):
+    template_name: String
+    member_of_groups: RelationshipManager[CoreGroup]
+    profiles: RelationshipManager[CoreProfile]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class TemplateBuiltinIPAddress(CoreNode):
+    address: IPHost
     description: StringOptional
-    children: RelationshipManager[AppGeneric]
-    member_of_groups: RelationshipManager[CoreNode]
-    parent: RelationshipAttribute[AppGeneric]
-    profiles: RelationshipManager[CoreNode]
-    subscriber_of_groups: RelationshipManager[CoreNode]
+    template_name: String
+    ip_namespace: RelationshipAttribute[BuiltinIPNamespace]
+    ip_prefix: RelationshipAttribute[BuiltinIPPrefix]
+    ip_prefix_from_resource_pool: RelationshipAttribute[CoreIPPrefixPool]
+    member_of_groups: RelationshipManager[CoreGroup]
+    profiles: RelationshipManager[CoreProfile]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
 
 
 class DcimCapabilities(CoreNode):
     name: StringOptional
-    capabilities: RelationshipManager[CoreNode]
-    member_of_groups: RelationshipManager[CoreNode]
-    profiles: RelationshipManager[CoreNode]
-    subscriber_of_groups: RelationshipManager[CoreNode]
+    capabilities: RelationshipManager[ManagedGenericDevice]
+    member_of_groups: RelationshipManager[CoreGroup]
+    profiles: RelationshipManager[CoreProfile]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class TopologyCircuit(CoreNode):
+    bandwidth: IntegerOptional
+    description: StringOptional
+    name: String
+    status: Dropdown
+    locations: RelationshipManager[TopologyConnectableLocation]
+    member_of_groups: RelationshipManager[CoreGroup]
+    profiles: RelationshipManager[CoreProfile]
+    provider: RelationshipAttribute[OrganizationProvider]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class TopologyClusterHosting(CoreNode):
+    name: String
+    clusters: RelationshipManager[VirtCluster]
+    member_of_groups: RelationshipManager[CoreGroup]
+    profiles: RelationshipManager[CoreProfile]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class TopologyConnectableLocation(CoreNode):
+    name: String
+    circuits: RelationshipManager[TopologyCircuit]
+    member_of_groups: RelationshipManager[CoreGroup]
+    profiles: RelationshipManager[CoreProfile]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class TopologyConnector(CoreNode):
+    description: String
+    name: String
+    member_of_groups: RelationshipManager[CoreGroup]
+    profiles: RelationshipManager[CoreProfile]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class TemplateCoreArtifactTarget(CoreNode):
+    template_name: String
+    artifacts: RelationshipManager[CoreArtifact]
+    member_of_groups: RelationshipManager[CoreGroup]
+    profiles: RelationshipManager[CoreProfile]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class TopologyCustomer(CoreNode):
+    environment: Dropdown
+    name: String
+    status: Dropdown
+    member_of_groups: RelationshipManager[CoreGroup]
+    network_segments: RelationshipManager[ManagedNetworkSegment]
+    owner: RelationshipAttribute[OrganizationCustomer]
+    profiles: RelationshipManager[CoreProfile]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class TopologyCustomerTemplate(CoreNode):
+    dedicated_firewall: Boolean
+    dedicated_loadbalancer: Boolean
+    dedicated_proxy: Boolean
+    default_environment: Dropdown
+    description: StringOptional
+    name: String
+    network_segment_count: Integer
+    size: Dropdown
+    member_of_groups: RelationshipManager[CoreGroup]
+    profiles: RelationshipManager[CoreProfile]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class TemplateDcimCapabilities(CoreNode):
+    template_name: String
+    capabilities: RelationshipManager[ManagedGenericDevice]
+    member_of_groups: RelationshipManager[CoreGroup]
+    profiles: RelationshipManager[CoreProfile]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class TemplateDcimDevice(CoreNode):
+    description: StringOptional
+    os_version: StringOptional
+    role: DropdownOptional
+    status: Dropdown
+    template_name: String
+    device_type: RelationshipAttribute[DcimDeviceType]
+    interfaces: RelationshipManager[TemplateDcimInterface]
+    member_of_groups: RelationshipManager[CoreGroup]
+    platform: RelationshipAttribute[DcimPlatform]
+    primary_address: RelationshipAttribute[TemplateIpamIPAddress]
+    primary_address_from_resource_pool: RelationshipAttribute[CoreIPAddressPool]
+    profiles: RelationshipManager[CoreProfile]
+    software_image: RelationshipAttribute[DcimSoftwareImage]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+    tags: RelationshipManager[BuiltinTag]
+
+
+class TemplateDcimEndpoint(CoreNode):
+    template_name: String
+    cable: RelationshipAttribute[DcimCable]
+    member_of_groups: RelationshipManager[CoreGroup]
+    profiles: RelationshipManager[CoreProfile]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class TemplateDcimInterface(CoreNode):
+    description: StringOptional
+    name: String
+    role: DropdownOptional
+    status: Dropdown
+    template_name: String
+    device: RelationshipAttribute[TemplateDcimDevice]
+    interface_capabilities: RelationshipManager[ManagedGenericInterfaces]
+    member_of_groups: RelationshipManager[CoreGroup]
+    profiles: RelationshipManager[CoreProfile]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+    tags: RelationshipManager[BuiltinTag]
+
+
+class TemplateDcimSubInterface(CoreNode):
+    template_name: String
+    member_of_groups: RelationshipManager[CoreGroup]
+    profiles: RelationshipManager[CoreProfile]
+    sub_interfaces: RelationshipManager[DcimVirtualInterface]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class TopologyDeployment(CoreNode):
+    name: String
+    children: RelationshipManager[TopologyDeployment]
+    member_of_groups: RelationshipManager[CoreGroup]
+    parent: RelationshipAttribute[TopologyDeployment]
+    profiles: RelationshipManager[CoreProfile]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+    parent: RelationshipAttribute[TopologyDeployment]
+    children: RelationshipManager[TopologyDeployment]
+
+
+class TopologyDesign(CoreNode):
+    name: String
+    member_of_groups: RelationshipManager[CoreGroup]
+    profiles: RelationshipManager[CoreProfile]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
 
 
 class DcimDevice(CoreNode):
@@ -48,21 +221,149 @@ class DcimDevice(CoreNode):
     os_version: StringOptional
     role: DropdownOptional
     status: Dropdown
-    device_type: RelationshipAttribute[CoreNode]
+    device_type: RelationshipAttribute[DcimDeviceType]
     interfaces: RelationshipManager[DcimInterface]
-    member_of_groups: RelationshipManager[CoreNode]
-    platform: RelationshipAttribute[CoreNode]
+    member_of_groups: RelationshipManager[CoreGroup]
+    platform: RelationshipAttribute[DcimPlatform]
     primary_address: RelationshipAttribute[IpamIPAddress]
-    profiles: RelationshipManager[CoreNode]
-    subscriber_of_groups: RelationshipManager[CoreNode]
-    tags: RelationshipManager[CoreNode]
+    profiles: RelationshipManager[CoreProfile]
+    software_image: RelationshipAttribute[DcimSoftwareImage]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+    tags: RelationshipManager[BuiltinTag]
+
+
+class TopologyDeviceHosting(CoreNode):
+    name: String
+    devices: RelationshipManager[DcimDevice]
+    member_of_groups: RelationshipManager[CoreGroup]
+    profiles: RelationshipManager[CoreProfile]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
 
 
 class DcimEndpoint(CoreNode):
     cable: RelationshipAttribute[DcimCable]
-    member_of_groups: RelationshipManager[CoreNode]
-    profiles: RelationshipManager[CoreNode]
-    subscriber_of_groups: RelationshipManager[CoreNode]
+    member_of_groups: RelationshipManager[CoreGroup]
+    profiles: RelationshipManager[CoreProfile]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class OrganizationEntity(CoreNode):
+    org_id: StringOptional
+    member_of_groups: RelationshipManager[CoreGroup]
+    profiles: RelationshipManager[CoreProfile]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class ManagedExternalEndpoint(CoreNode):
+    asn: RelationshipAttribute[RoutingAutonomousSystem]
+    bgp_ip: RelationshipAttribute[IpamIPAddress]
+    member_of_groups: RelationshipManager[CoreGroup]
+    profiles: RelationshipManager[CoreProfile]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class LocationGeneric(CoreNode):
+    name: String
+    shortname: String
+    children: RelationshipManager[LocationGeneric]
+    member_of_groups: RelationshipManager[CoreGroup]
+    parent: RelationshipAttribute[LocationGeneric]
+    profiles: RelationshipManager[CoreProfile]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+    tags: RelationshipManager[BuiltinTag]
+    parent: RelationshipAttribute[LocationGeneric]
+    children: RelationshipManager[LocationGeneric]
+
+
+class OrganizationGeneric(CoreNode):
+    description: StringOptional
+    name: String
+    asn: RelationshipManager[RoutingAutonomousSystem]
+    member_of_groups: RelationshipManager[CoreGroup]
+    profiles: RelationshipManager[CoreProfile]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+    tags: RelationshipManager[BuiltinTag]
+
+
+class AppGeneric(CoreNode):
+    description: StringOptional
+    children: RelationshipManager[AppGeneric]
+    member_of_groups: RelationshipManager[CoreGroup]
+    parent: RelationshipAttribute[AppGeneric]
+    profiles: RelationshipManager[CoreProfile]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+    parent: RelationshipAttribute[AppGeneric]
+    children: RelationshipManager[AppGeneric]
+
+
+class ManagedGeneric(CoreNode):
+    description: StringOptional
+    name: String
+    status: Dropdown
+    member_of_groups: RelationshipManager[CoreGroup]
+    profiles: RelationshipManager[CoreProfile]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class ManagedGenericCluster(CoreNode):
+    cluster_capabilities: RelationshipManager[VirtCluster]
+    member_of_groups: RelationshipManager[CoreGroup]
+    profiles: RelationshipManager[CoreProfile]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class ManagedGenericDevice(CoreNode):
+    capabilities: RelationshipManager[DcimCapabilities]
+    member_of_groups: RelationshipManager[CoreGroup]
+    profiles: RelationshipManager[CoreProfile]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class ManagedGenericInterfaces(CoreNode):
+    interface_capabilities: RelationshipManager[DcimInterface]
+    member_of_groups: RelationshipManager[CoreGroup]
+    profiles: RelationshipManager[CoreProfile]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class DcimGenericSFP(CoreNode):
+    form_factor: Dropdown
+    serial: StringOptional
+    sfp_type: Dropdown
+    status: Dropdown
+    interface: RelationshipAttribute[DcimInterface]
+    manufacturer: RelationshipAttribute[OrganizationManufacturer]
+    member_of_groups: RelationshipManager[CoreGroup]
+    profiles: RelationshipManager[CoreProfile]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class ManagedHA(CoreNode):
+    group_id: IntegerOptional
+    mode: Dropdown
+    preempt: Boolean
+    priority: Integer
+    member_of_groups: RelationshipManager[CoreGroup]
+    profiles: RelationshipManager[CoreProfile]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class CoreIPPool(CoreNode):
+    member_of_groups: RelationshipManager[CoreGroup]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class ManagedInlineService(CoreNode):
+    member_of_groups: RelationshipManager[CoreGroup]
+    profiles: RelationshipManager[CoreProfile]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class AppInstance(CoreNode):
+    name: String
+    member_of_groups: RelationshipManager[CoreGroup]
+    profiles: RelationshipManager[CoreProfile]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
 
 
 class DcimInterface(CoreNode):
@@ -72,235 +373,35 @@ class DcimInterface(CoreNode):
     role: DropdownOptional
     status: Dropdown
     device: RelationshipAttribute[DcimDevice]
-    interface_capabilities: RelationshipManager[CoreNode]
-    member_of_groups: RelationshipManager[CoreNode]
-    profiles: RelationshipManager[CoreNode]
-    subscriber_of_groups: RelationshipManager[CoreNode]
-    tags: RelationshipManager[CoreNode]
+    interface_capabilities: RelationshipManager[ManagedGenericInterfaces]
+    member_of_groups: RelationshipManager[CoreGroup]
+    profiles: RelationshipManager[CoreProfile]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+    tags: RelationshipManager[BuiltinTag]
 
 
-class DcimSubInterface(CoreNode):
-    member_of_groups: RelationshipManager[CoreNode]
-    profiles: RelationshipManager[CoreNode]
-    sub_interfaces: RelationshipManager[DcimVirtualInterface]
-    subscriber_of_groups: RelationshipManager[CoreNode]
-
-
-class DcimCable(CoreNode):
+class ManagedLoadBalancer(CoreNode):
+    description: StringOptional
+    lb_type: DropdownOptional
+    lb_vendor: DropdownOptional
     name: String
-    type: Dropdown
-    deployment: RelationshipAttribute[CoreNode]
-    endpoints: RelationshipManager[DcimEndpoint]
-    member_of_groups: RelationshipManager[CoreNode]
-    profiles: RelationshipManager[CoreNode]
-    subscriber_of_groups: RelationshipManager[CoreNode]
-
-
-class DcimLAGInterface(DcimInterface):
-    description: StringOptional
-    index: StringOptional
-    lacp_mode: Dropdown
-    lag_id: Integer
-    minimum_links: Integer
-    mtu: Integer
-    name: String
-    role: DropdownOptional
+    scheme: DropdownOptional
     status: Dropdown
-    device: RelationshipAttribute[DcimDevice]
-    interface_capabilities: RelationshipManager[CoreNode]
-    ip_address: RelationshipAttribute[IpamIPAddress]
-    member_interfaces: RelationshipManager[DcimPhysicalInterface]
-    member_of_groups: RelationshipManager[CoreNode]
-    mlag_domain: RelationshipAttribute[CoreNode]
-    profiles: RelationshipManager[CoreNode]
-    subscriber_of_groups: RelationshipManager[CoreNode]
-    tags: RelationshipManager[CoreNode]
+    member_of_groups: RelationshipManager[CoreGroup]
+    profiles: RelationshipManager[CoreProfile]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+    tags: RelationshipManager[BuiltinTag]
 
 
-class DcimPhysicalDevice(CoreArtifactTarget, DcimDevice, DcimCapabilities):
-    description: StringOptional
-    name: StringOptional
-    os_version: StringOptional
-    position: IntegerOptional
-    rack_face: Dropdown
-    role: DropdownOptional
-    serial: StringOptional
-    status: Dropdown
-    artifacts: RelationshipManager[CoreNode]
-    capabilities: RelationshipManager[CoreNode]
-    deployment: RelationshipAttribute[CoreNode]
-    device_type: RelationshipAttribute[CoreNode]
-    interfaces: RelationshipManager[DcimInterface]
-    member_of_groups: RelationshipManager[CoreNode]
-    object_template: RelationshipAttribute[CoreNode]
-    platform: RelationshipAttribute[CoreNode]
-    primary_address: RelationshipAttribute[IpamIPAddress]
-    profiles: RelationshipManager[CoreNode]
-    rack: RelationshipAttribute[LocationRack]
-    subscriber_of_groups: RelationshipManager[CoreNode]
-    tags: RelationshipManager[CoreNode]
-
-
-class DcimPhysicalInterface(DcimInterface, DcimEndpoint, DcimSubInterface):
-    description: StringOptional
-    index: StringOptional
-    interface_type: Dropdown
-    mtu: Integer
-    name: String
-    role: DropdownOptional
-    status: Dropdown
-    cable: RelationshipAttribute[DcimCable]
-    device: RelationshipAttribute[DcimDevice]
-    interface_capabilities: RelationshipManager[CoreNode]
-    ip_address: RelationshipAttribute[IpamIPAddress]
-    lag: RelationshipAttribute[CoreNode]
-    member_of_groups: RelationshipManager[CoreNode]
-    plugged_sfp: RelationshipAttribute[CoreNode]
-    profiles: RelationshipManager[CoreNode]
-    sub_interfaces: RelationshipManager[DcimVirtualInterface]
-    subscriber_of_groups: RelationshipManager[CoreNode]
-    tags: RelationshipManager[CoreNode]
-
-
-class DcimVirtualDevice(CoreArtifactTarget, DcimDevice, DcimCapabilities):
-    cpu: IntegerOptional
-    description: StringOptional
-    memory: IntegerOptional
-    name: StringOptional
-    os_version: StringOptional
-    role: DropdownOptional
-    status: Dropdown
-    storage: IntegerOptional
-    artifacts: RelationshipManager[CoreNode]
-    capabilities: RelationshipManager[CoreNode]
-    deployment: RelationshipAttribute[CoreNode]
-    device_type: RelationshipAttribute[CoreNode]
-    hosting_device: RelationshipAttribute[DcimPhysicalDevice]
-    interfaces: RelationshipManager[DcimInterface]
-    member_of_groups: RelationshipManager[CoreNode]
-    object_template: RelationshipAttribute[CoreNode]
-    platform: RelationshipAttribute[CoreNode]
-    primary_address: RelationshipAttribute[IpamIPAddress]
-    profiles: RelationshipManager[CoreNode]
-    subscriber_of_groups: RelationshipManager[CoreNode]
-    tags: RelationshipManager[CoreNode]
-
-
-class DcimVirtualInterface(DcimInterface):
-    description: StringOptional
-    index: StringOptional
-    name: String
-    role: DropdownOptional
-    status: Dropdown
-    device: RelationshipAttribute[DcimDevice]
-    interface_capabilities: RelationshipManager[CoreNode]
-    ip_address: RelationshipAttribute[IpamIPAddress]
-    member_of_groups: RelationshipManager[CoreNode]
-    parent_interface: RelationshipAttribute[DcimPhysicalInterface]
-    profiles: RelationshipManager[CoreNode]
-    subscriber_of_groups: RelationshipManager[CoreNode]
-    tags: RelationshipManager[CoreNode]
-
-
-class IpamIPAddress(BuiltinIPAddress):
-    address: IPHost
-    description: StringOptional
-    fqdn: StringOptional
-    ip_namespace: RelationshipAttribute[CoreNode]
-    ip_prefix: RelationshipAttribute[CoreNode]
-    member_of_groups: RelationshipManager[CoreNode]
-    profiles: RelationshipManager[CoreNode]
-    subscriber_of_groups: RelationshipManager[CoreNode]
-
-
-class IpamPrefix(BuiltinIPPrefix):
-    broadcast_address: StringOptional
-    description: StringOptional
-    hostmask: StringOptional
-    is_pool: Boolean
-    is_top_level: BooleanOptional
-    member_type: Dropdown
-    netmask: StringOptional
-    network_address: StringOptional
-    prefix: IPNetwork
-    role: DropdownOptional
-    status: Dropdown
-    utilization: IntegerOptional
-    children: RelationshipManager[CoreNode]
-    ip_addresses: RelationshipManager[CoreNode]
-    ip_namespace: RelationshipAttribute[CoreNode]
-    member_of_groups: RelationshipManager[CoreNode]
-    parent: RelationshipAttribute[CoreNode]
-    profiles: RelationshipManager[CoreNode]
-    resource_pool: RelationshipManager[CoreNode]
-    subscriber_of_groups: RelationshipManager[CoreNode]
-
-
-class LoadbalancerHealthCheck(CoreNode):
-    check: Dropdown
-    description: String
-    fall: Integer
-    rise: Integer
-    timeout: Integer
-    member_of_groups: RelationshipManager[CoreNode]
-    profiles: RelationshipManager[CoreNode]
-    subscriber_of_groups: RelationshipManager[CoreNode]
-    vip_services: RelationshipManager[LoadbalancerVIP]
-
-
-class LocationGeneric(CoreNode):
-    name: String
-    shortname: String
-    children: RelationshipManager[LocationGeneric]
-    member_of_groups: RelationshipManager[CoreNode]
-    parent: RelationshipAttribute[LocationGeneric]
-    profiles: RelationshipManager[CoreNode]
-    subscriber_of_groups: RelationshipManager[CoreNode]
-    tags: RelationshipManager[CoreNode]
-
-
-class LocationRack(LocationGeneric, CoreArtifactTarget):
-    facility_id: StringOptional
-    height: Integer
-    index: Integer
-    name: String
-    rack_type: Dropdown
-    row_index: Integer
-    shortname: String
-    artifacts: RelationshipManager[CoreNode]
-    children: RelationshipManager[LocationGeneric]
-    devices: RelationshipManager[DcimPhysicalDevice]
-    fabric_templates: RelationshipManager[CoreNode]
-    member_of_groups: RelationshipManager[CoreNode]
-    owner: RelationshipAttribute[CoreNode]
-    parent: RelationshipAttribute[CoreNode]
-    pod: RelationshipAttribute[CoreNode]
-    profiles: RelationshipManager[CoreNode]
-    subscriber_of_groups: RelationshipManager[CoreNode]
-    tags: RelationshipManager[CoreNode]
-
-
-class ManagedGeneric(CoreNode):
+class NetworkManagementServer(CoreNode):
     description: StringOptional
     name: String
     status: Dropdown
-    member_of_groups: RelationshipManager[CoreNode]
-    profiles: RelationshipManager[CoreNode]
-    subscriber_of_groups: RelationshipManager[CoreNode]
-
-
-class ManagedGenericDevice(CoreNode):
-    capabilities: RelationshipManager[CoreNode]
-    member_of_groups: RelationshipManager[CoreNode]
-    profiles: RelationshipManager[CoreNode]
-    subscriber_of_groups: RelationshipManager[CoreNode]
-
-
-class ManagedGenericInterfaces(CoreNode):
-    interface_capabilities: RelationshipManager[DcimInterface]
-    member_of_groups: RelationshipManager[CoreNode]
-    profiles: RelationshipManager[CoreNode]
-    subscriber_of_groups: RelationshipManager[CoreNode]
+    ip_addresses: RelationshipManager[IpamIPAddress]
+    location: RelationshipManager[LocationGeneric]
+    member_of_groups: RelationshipManager[CoreGroup]
+    profiles: RelationshipManager[CoreProfile]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
 
 
 class ManagedNetworkSegment(CoreNode):
@@ -313,30 +414,173 @@ class ManagedNetworkSegment(CoreNode):
     segment_role: Dropdown
     segment_type: DropdownOptional
     status: Dropdown
-    terminate_inline: Boolean
     gateway: RelationshipAttribute[IpamIPAddress]
-    inline_service: RelationshipAttribute[ManagedGeneric]
-    member_of_groups: RelationshipManager[CoreNode]
-    owner: RelationshipAttribute[CoreNode]
-    profiles: RelationshipManager[CoreNode]
-    security_policies: RelationshipManager[CoreNode]
-    security_tag: RelationshipAttribute[CoreNode]
-    security_zone: RelationshipAttribute[CoreNode]
-    subscriber_of_groups: RelationshipManager[CoreNode]
-    virt_clusters: RelationshipManager[CoreNode]
+    member_of_groups: RelationshipManager[CoreGroup]
+    owner: RelationshipAttribute[OrganizationCustomer]
+    profiles: RelationshipManager[CoreProfile]
+    security_policies: RelationshipManager[SecurityPolicy]
+    security_tag: RelationshipAttribute[SecurityTag]
+    security_zone: RelationshipAttribute[SecurityZone]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
 
 
 class ManagedPeering(CoreNode):
-    member_of_groups: RelationshipManager[CoreNode]
-    profiles: RelationshipManager[CoreNode]
-    subscriber_of_groups: RelationshipManager[CoreNode]
+    member_of_groups: RelationshipManager[CoreGroup]
+    profiles: RelationshipManager[CoreProfile]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class TopologyPhysicalDeployment(CoreNode):
+    name: String
+    cables: RelationshipManager[DcimCable]
+    member_of_groups: RelationshipManager[CoreGroup]
+    profiles: RelationshipManager[CoreProfile]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class RoutingProtocol(CoreNode):
+    description: String
+    status: Dropdown
+    device: RelationshipAttribute[DcimDevice]
+    member_of_groups: RelationshipManager[CoreGroup]
+    profiles: RelationshipManager[CoreProfile]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class ManagedProxyService(CoreNode):
+    name: String
+    member_of_groups: RelationshipManager[CoreGroup]
+    profiles: RelationshipManager[CoreProfile]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class TopologyRackHosting(CoreNode):
+    name: String
+    member_of_groups: RelationshipManager[CoreGroup]
+    profiles: RelationshipManager[CoreProfile]
+    racks: RelationshipManager[LocationRack]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class CloudResource(CoreNode):
+    cloud_id: StringOptional
+    description: StringOptional
+    name: String
+    status: DropdownOptional
+    member_of_groups: RelationshipManager[CoreGroup]
+    profiles: RelationshipManager[CoreProfile]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+    virtual_circuits: RelationshipManager[TopologyVirtualCircuit]
 
 
 class ManagedRouting(CoreNode):
     name: String
-    member_of_groups: RelationshipManager[CoreNode]
-    profiles: RelationshipManager[CoreNode]
-    subscriber_of_groups: RelationshipManager[CoreNode]
+    member_of_groups: RelationshipManager[CoreGroup]
+    profiles: RelationshipManager[CoreProfile]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class ManagedSaasService(CoreNode):
+    contract_end_date: StringOptional
+    data_classification: Dropdown
+    description: StringOptional
+    name: String
+    service_tier: Dropdown
+    status: Dropdown
+    tenant_id: StringOptional
+    member_of_groups: RelationshipManager[CoreGroup]
+    profiles: RelationshipManager[CoreProfile]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class TopologySegmentHosting(CoreNode):
+    name: String
+    l3_vni_pool: RelationshipAttribute[CoreNumberPool]
+    member_of_groups: RelationshipManager[CoreGroup]
+    profiles: RelationshipManager[CoreProfile]
+    segment_deployments: RelationshipManager[ManagedSegmentDeployment]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+    vlan_pool: RelationshipAttribute[CoreNumberPool]
+    vni_pool: RelationshipAttribute[CoreNumberPool]
+
+
+class DcimSubInterface(CoreNode):
+    member_of_groups: RelationshipManager[CoreGroup]
+    profiles: RelationshipManager[CoreProfile]
+    sub_interfaces: RelationshipManager[DcimVirtualInterface]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class ManagedAAA(ManagedGeneric, ManagedGenericDevice):
+    accounting_enabled: Boolean
+    authentication_order: Dropdown
+    authorization_commands: Boolean
+    description: StringOptional
+    name: String
+    status: Dropdown
+    capabilities: RelationshipManager[DcimCapabilities]
+    member_of_groups: RelationshipManager[CoreGroup]
+    profiles: RelationshipManager[CoreProfile]
+    servers: RelationshipManager[ManagedAAAServer]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class ManagedAAAServer(CoreNode):
+    name: String
+    port: IntegerOptional
+    protocol: Dropdown
+    secret_key: StringOptional
+    timeout: Integer
+    aaa_config: RelationshipAttribute[ManagedAAA]
+    address: RelationshipAttribute[IpamIPAddress]
+    member_of_groups: RelationshipManager[CoreGroup]
+    profiles: RelationshipManager[CoreProfile]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class CloudAccount(CloudResource, CoreArtifactTarget):
+    account_id: StringOptional
+    cloud_id: StringOptional
+    description: StringOptional
+    environment: DropdownOptional
+    name: String
+    status: DropdownOptional
+    artifacts: RelationshipManager[CoreArtifact]
+    member_of_groups: RelationshipManager[CoreGroup]
+    owner: RelationshipAttribute[OrganizationEntity]
+    profiles: RelationshipManager[CoreProfile]
+    provider: RelationshipAttribute[OrganizationProvider]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+    virtual_circuits: RelationshipManager[TopologyVirtualCircuit]
+
+
+class AppApplication(AppGeneric):
+    cost_center: StringOptional
+    criticality: Dropdown
+    description: StringOptional
+    environment: Dropdown
+    fqdn: String
+    ingress_mode: Dropdown
+    label: String
+    name: StringOptional
+    security_profile: Dropdown
+    children: RelationshipManager[AppComponent]
+    member_of_groups: RelationshipManager[CoreGroup]
+    owner: RelationshipAttribute[OrganizationCustomer]
+    parent: RelationshipAttribute[AppGeneric]
+    profiles: RelationshipManager[CoreProfile]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class RoutingAutonomousSystem(CoreNode):
+    asn: Integer
+    description: StringOptional
+    name: String
+    location: RelationshipAttribute[LocationGeneric]
+    member_of_groups: RelationshipManager[CoreGroup]
+    owner: RelationshipAttribute[OrganizationProvider]
+    profiles: RelationshipManager[CoreProfile]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
 
 
 class ManagedBGP(ManagedGeneric, ManagedGenericDevice, ManagedRouting):
@@ -346,13 +590,25 @@ class ManagedBGP(ManagedGeneric, ManagedGenericDevice, ManagedRouting):
     multipath: Boolean
     name: String
     status: Dropdown
-    capabilities: RelationshipManager[CoreNode]
+    capabilities: RelationshipManager[DcimCapabilities]
     local_as: RelationshipAttribute[RoutingAutonomousSystem]
-    member_of_groups: RelationshipManager[CoreNode]
+    member_of_groups: RelationshipManager[CoreGroup]
     peerings: RelationshipManager[ManagedBGPPeering]
-    profiles: RelationshipManager[CoreNode]
+    profiles: RelationshipManager[CoreProfile]
     router_id: RelationshipAttribute[IpamIPAddress]
-    subscriber_of_groups: RelationshipManager[CoreNode]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class RoutingBGPAddressFamily(CoreNode):
+    advertise_all_vni: Boolean
+    advertise_default_gw: Boolean
+    advertise_svi_ip: Boolean
+    afi: Dropdown
+    description: StringOptional
+    safi: Dropdown
+    member_of_groups: RelationshipManager[CoreGroup]
+    profiles: RelationshipManager[CoreProfile]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
 
 
 class ManagedBGPPeering(ManagedGeneric, ManagedPeering, ManagedGenericInterfaces):
@@ -369,215 +625,660 @@ class ManagedBGPPeering(ManagedGeneric, ManagedPeering, ManagedGenericInterfaces
     session_type: Dropdown
     status: Dropdown
     ttl: Integer
-    address_families: RelationshipManager[CoreNode]
+    address_families: RelationshipManager[RoutingBGPAddressFamily]
     bgp_processes: RelationshipManager[ManagedBGP]
     interface_capabilities: RelationshipManager[DcimInterface]
-    member_of_groups: RelationshipManager[CoreNode]
+    member_of_groups: RelationshipManager[CoreGroup]
     password: RelationshipAttribute[RoutingPassword]
-    profiles: RelationshipManager[CoreNode]
-    subscriber_of_groups: RelationshipManager[CoreNode]
+    profiles: RelationshipManager[CoreProfile]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
 
 
-class ManagedOSPF(ManagedGeneric, ManagedGenericDevice, ManagedRouting):
-    description: StringOptional
-    name: String
-    process_id: String
-    reference_bandwidth: Integer
-    router_type: Dropdown
+class DcimBidiSFP(DcimGenericSFP):
+    form_factor: Dropdown
+    serial: StringOptional
+    sfp_type: Dropdown
     status: Dropdown
-    version: Dropdown
-    capabilities: RelationshipManager[CoreNode]
-    member_of_groups: RelationshipManager[CoreNode]
-    peerings: RelationshipManager[ManagedOSPFPeering]
-    profiles: RelationshipManager[CoreNode]
-    router_id: RelationshipAttribute[IpamIPAddress]
-    subscriber_of_groups: RelationshipManager[CoreNode]
+    wavelength_rx: Integer
+    wavelength_tx: Integer
+    interface: RelationshipAttribute[DcimInterface]
+    manufacturer: RelationshipAttribute[OrganizationManufacturer]
+    member_of_groups: RelationshipManager[CoreGroup]
+    profiles: RelationshipManager[CoreProfile]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
 
 
-class ManagedOSPFPeering(ManagedGeneric, ManagedPeering, ManagedGenericInterfaces):
-    cost: IntegerOptional
+class LocationBuilding(LocationGeneric):
+    facility_id: StringOptional
+    is_cloud: Boolean
     name: String
-    network_type: Dropdown
-    interface_capabilities: RelationshipManager[DcimInterface]
-    member_of_groups: RelationshipManager[CoreNode]
-    namespace: RelationshipAttribute[CoreNode]
-    ospf_area: RelationshipAttribute[RoutingOSPFArea]
-    ospf_interface: RelationshipManager[RoutingOSPFInterface]
-    ospf_process: RelationshipManager[ManagedOSPF]
-    profiles: RelationshipManager[CoreNode]
-    subscriber_of_groups: RelationshipManager[CoreNode]
+    physical_address: StringOptional
+    shortname: String
+    children: RelationshipManager[LocationSuite]
+    member_of_groups: RelationshipManager[CoreGroup]
+    owner: RelationshipAttribute[OrganizationGeneric]
+    parent: RelationshipAttribute[LocationMetro]
+    profiles: RelationshipManager[CoreProfile]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+    tags: RelationshipManager[BuiltinTag]
 
 
-class ManagedVlanSegment(ManagedGeneric, ManagedNetworkSegment, ManagedGenericInterfaces):
-    customer_name: String
+class VirtCNI(ManagedGeneric, ManagedGenericCluster):
+    bgp_enabled: Boolean
     description: StringOptional
-    environment: Dropdown
-    isolation_mode: Dropdown
+    encapsulation: DropdownOptional
     name: String
-    pbr_enabled: Boolean
-    segment_role: Dropdown
-    segment_type: Dropdown
+    plugin: Dropdown
+    pod_cidr: StringOptional
+    service_cidr: StringOptional
     status: Dropdown
-    terminate_inline: Boolean
-    deployment: RelationshipAttribute[CoreNode]
-    gateway: RelationshipAttribute[IpamIPAddress]
-    inline_service: RelationshipAttribute[ManagedGeneric]
-    interface_capabilities: RelationshipManager[DcimInterface]
-    member_of_groups: RelationshipManager[CoreNode]
-    owner: RelationshipAttribute[CoreNode]
-    profiles: RelationshipManager[CoreNode]
-    security_policies: RelationshipManager[CoreNode]
-    security_tag: RelationshipAttribute[CoreNode]
-    security_zone: RelationshipAttribute[CoreNode]
-    segment_deployments: RelationshipManager[CoreNode]
-    subscriber_of_groups: RelationshipManager[CoreNode]
-    virt_clusters: RelationshipManager[CoreNode]
+    version: StringOptional
+    bgp_peers: RelationshipManager[RoutingAutonomousSystem]
+    cluster_capabilities: RelationshipManager[VirtCluster]
+    member_of_groups: RelationshipManager[CoreGroup]
+    profiles: RelationshipManager[CoreProfile]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
 
 
-class ManagedVxlanSegment(ManagedGeneric, ManagedNetworkSegment, ManagedGenericInterfaces):
-    arp_suppression: Boolean
-    customer_name: String
+class ManagedCRMService(ManagedSaasService):
+    contract_end_date: StringOptional
+    data_classification: Dropdown
     description: StringOptional
-    environment: Dropdown
-    isolation_mode: Dropdown
+    instance_url: StringOptional
     name: String
-    pbr_enabled: Boolean
-    segment_role: Dropdown
-    segment_type: Dropdown
+    provider: Dropdown
+    sandbox: Boolean
+    service_tier: Dropdown
     status: Dropdown
-    terminate_inline: Boolean
-    deployments: RelationshipManager[CoreNode]
-    gateway: RelationshipAttribute[IpamIPAddress]
-    inline_service: RelationshipAttribute[ManagedGeneric]
-    interface_capabilities: RelationshipManager[DcimInterface]
-    member_of_groups: RelationshipManager[CoreNode]
-    owner: RelationshipAttribute[CoreNode]
-    profiles: RelationshipManager[CoreNode]
-    security_policies: RelationshipManager[CoreNode]
-    security_tag: RelationshipAttribute[CoreNode]
-    security_zone: RelationshipAttribute[CoreNode]
-    segment_deployments: RelationshipManager[CoreNode]
-    subscriber_of_groups: RelationshipManager[CoreNode]
-    virt_clusters: RelationshipManager[CoreNode]
+    tenant_id: StringOptional
+    member_of_groups: RelationshipManager[CoreGroup]
+    profiles: RelationshipManager[CoreProfile]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
 
 
-class ManagedProxyService(ManagedGeneric):
+class DcimCable(CoreNode):
     name: String
-    status: DropdownOptional
-    member_of_groups: RelationshipManager[CoreNode]
-    profiles: RelationshipManager[CoreNode]
-    subscriber_of_groups: RelationshipManager[CoreNode]
+    type: Dropdown
+    deployment: RelationshipAttribute[TopologyPhysicalDeployment]
+    endpoints: RelationshipManager[DcimEndpoint]
+    member_of_groups: RelationshipManager[CoreGroup]
+    profiles: RelationshipManager[CoreProfile]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
 
 
-class RoutingAutonomousSystem(CoreNode):
-    asn: Integer
-    description: StringOptional
+class TopologyCloud(TopologyDeployment):
     name: String
-    location: RelationshipAttribute[CoreNode]
-    member_of_groups: RelationshipManager[CoreNode]
-    owner: RelationshipAttribute[CoreNode]
-    profiles: RelationshipManager[CoreNode]
-    subscriber_of_groups: RelationshipManager[CoreNode]
+    children: RelationshipManager[TopologyCloudRegion]
+    member_of_groups: RelationshipManager[CoreGroup]
+    parent: RelationshipAttribute[TopologyDeployment]
+    profiles: RelationshipManager[CoreProfile]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
 
 
-class RoutingOSPFArea(CoreNode):
-    area: Integer
-    area_type: Dropdown
+class ManagedCloudFirewallHA(ManagedHA, ManagedGeneric, ManagedInlineService):
     description: StringOptional
-    name: String
-    member_of_groups: RelationshipManager[CoreNode]
-    profiles: RelationshipManager[CoreNode]
-    subscriber_of_groups: RelationshipManager[CoreNode]
-
-
-class RoutingOSPFInterface(ManagedGeneric, ManagedGenericInterfaces):
-    authentication_mode: DropdownOptional
-    description: StringOptional
-    metric: IntegerOptional
+    group_id: IntegerOptional
     mode: Dropdown
     name: String
+    policy_arn: StringOptional
+    preempt: Boolean
+    priority: Integer
+    provider: Dropdown
+    region: StringOptional
     status: Dropdown
-    interface_capabilities: RelationshipManager[DcimInterface]
-    member_of_groups: RelationshipManager[CoreNode]
-    ospf_services: RelationshipManager[ManagedOSPF]
-    password: RelationshipAttribute[RoutingPassword]
-    peering: RelationshipAttribute[ManagedOSPFPeering]
-    profiles: RelationshipManager[CoreNode]
-    subscriber_of_groups: RelationshipManager[CoreNode]
+    member_of_groups: RelationshipManager[CoreGroup]
+    profiles: RelationshipManager[CoreProfile]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
 
 
-class RoutingPassword(CoreNode):
+class ManagedCloudProxy(ManagedSaasService, ManagedInlineService, ManagedProxyService):
+    contract_end_date: StringOptional
+    data_classification: Dropdown
+    deployment_model: Dropdown
     description: StringOptional
     name: String
-    password: StringOptional
-    member_of_groups: RelationshipManager[CoreNode]
-    profiles: RelationshipManager[CoreNode]
-    subscriber_of_groups: RelationshipManager[CoreNode]
-
-
-class LoadbalancerPoolInterface(ManagedGeneric, ManagedGenericInterfaces):
-    description: StringOptional
-    name: String
-    port: IntegerOptional
+    provider: Dropdown
+    region: StringOptional
+    service_tier: Dropdown
     status: Dropdown
-    interface_capabilities: RelationshipManager[DcimInterface]
-    ip_address: RelationshipAttribute[IpamIPAddress]
-    member_of_groups: RelationshipManager[CoreNode]
-    pool_member: RelationshipAttribute[LoadbalancerPoolMember]
-    profiles: RelationshipManager[CoreNode]
-    subscriber_of_groups: RelationshipManager[CoreNode]
+    tenant_id: StringOptional
+    member_of_groups: RelationshipManager[CoreGroup]
+    profiles: RelationshipManager[CoreProfile]
+    shared_policies: RelationshipManager[ProxyPolicy]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
 
 
-class LoadbalancerPoolMember(ManagedGeneric, ManagedGenericDevice):
-    description: StringOptional
-    drain_timeout: IntegerOptional
+class TopologyCloudRegion(TopologyDeployment, TopologyConnectableLocation, TopologyClusterHosting):
     name: String
     status: Dropdown
-    weight: Integer
-    capabilities: RelationshipManager[CoreNode]
-    member_of_groups: RelationshipManager[CoreNode]
-    pool_interfaces: RelationshipManager[LoadbalancerPoolInterface]
-    profiles: RelationshipManager[CoreNode]
-    subscriber_of_groups: RelationshipManager[CoreNode]
+    children: RelationshipManager[TopologyDeployment]
+    circuits: RelationshipManager[TopologyCircuit]
+    clusters: RelationshipManager[VirtCluster]
+    direct_connects: RelationshipManager[CloudDirectConnect]
+    location: RelationshipAttribute[LocationMetro]
+    member_of_groups: RelationshipManager[CoreGroup]
+    parent: RelationshipAttribute[TopologyCloud]
+    profiles: RelationshipManager[CoreProfile]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+    virtual_networks: RelationshipManager[CloudVirtualNetwork]
+    vpn_gateways: RelationshipManager[CloudVPNGateway]
+
+
+class TopologyCloudZone(TopologyDeployment):
+    name: String
+    children: RelationshipManager[TopologyDeployment]
+    instances: RelationshipManager[CloudInstance]
+    member_of_groups: RelationshipManager[CoreGroup]
+    network_segments: RelationshipManager[CloudNetworkSegment]
+    parent: RelationshipAttribute[TopologyCloudRegion]
+    profiles: RelationshipManager[CoreProfile]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class VirtCluster(CoreNode):
+    description: StringOptional
+    ha_enabled: Boolean
+    name: String
+    platform: Dropdown
+    status: Dropdown
+    total_cpu: StringOptional
+    total_memory_gb: StringOptional
+    total_storage_gb: StringOptional
+    version: StringOptional
+    cloud_account: RelationshipAttribute[CloudAccount]
+    cluster_capabilities: RelationshipManager[ManagedGenericCluster]
+    deployment: RelationshipAttribute[TopologyDeployment]
+    ip_namespace: RelationshipAttribute[IpamNamespace]
+    member_of_groups: RelationshipManager[CoreGroup]
+    node_pools: RelationshipManager[VirtNodePool]
+    profiles: RelationshipManager[CoreProfile]
+    proxy_service: RelationshipAttribute[ManagedProxyService]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+    tags: RelationshipManager[BuiltinTag]
     vip_service: RelationshipAttribute[LoadbalancerVIP]
+    virtual_network: RelationshipAttribute[CloudVirtualNetwork]
 
 
-class LoadbalancerVIP(ManagedGenericInterfaces):
+class TopologyColocation(CoreArtifactTarget, TopologyDeployment):
+    name: String
+    artifacts: RelationshipManager[CoreArtifact]
+    children: RelationshipManager[TopologyColocationMetro]
+    member_of_groups: RelationshipManager[CoreGroup]
+    parent: RelationshipAttribute[TopologyDeployment]
+    profiles: RelationshipManager[CoreProfile]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class TopologyColocationMetro(CoreArtifactTarget, TopologyDeployment, TopologyClusterHosting, TopologySegmentHosting):
+    name: String
+    artifacts: RelationshipManager[CoreArtifact]
+    children: RelationshipManager[TopologyDeployment]
+    clusters: RelationshipManager[VirtCluster]
+    l3_vni_pool: RelationshipAttribute[CoreNumberPool]
+    location: RelationshipAttribute[LocationMetro]
+    member_of_groups: RelationshipManager[CoreGroup]
+    parent: RelationshipAttribute[TopologyColocation]
+    profiles: RelationshipManager[CoreProfile]
+    segment_deployments: RelationshipManager[ManagedSegmentDeployment]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+    vlan_pool: RelationshipAttribute[CoreNumberPool]
+    vni_pool: RelationshipAttribute[CoreNumberPool]
+
+
+class TopologyColocationZone(
+    TopologyDeployment,
+    TopologyPhysicalDeployment,
+    TopologyConnectableLocation,
+    TopologyRackHosting,
+    TopologyDeviceHosting,
+    TopologyClusterHosting,
+):
+    deployment_type: Dropdown
+    name: String
+    cables: RelationshipManager[DcimCable]
+    children: RelationshipManager[TopologyDeployment]
+    circuits: RelationshipManager[TopologyCircuit]
+    clusters: RelationshipManager[VirtCluster]
+    devices: RelationshipManager[DcimDevice]
+    member_of_groups: RelationshipManager[CoreGroup]
+    parent: RelationshipAttribute[TopologyColocationMetro]
+    profiles: RelationshipManager[CoreProfile]
+    racks: RelationshipManager[LocationRack]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class AppComponent(AppGeneric):
+    component_type: Dropdown
     description: StringOptional
-    hostname: String
-    load_balancing_algorithm: DropdownOptional
-    max_connections: IntegerOptional
-    port: Integer
-    protocol: Dropdown
-    session_persistence: DropdownOptional
-    ssl_certificate: StringOptional
-    ssl_redirect: Boolean
-    status: Dropdown
-    timeout_client: IntegerOptional
-    timeout_server: IntegerOptional
-    components: RelationshipManager[CoreNode]
+    name: String
+    slug: StringOptional
+    children: RelationshipManager[AppGeneric]
+    depends_on: RelationshipManager[AppDependency]
     health_checks: RelationshipManager[LoadbalancerHealthCheck]
-    interface_capabilities: RelationshipManager[DcimInterface]
-    load_balancer: RelationshipAttribute[CoreNode]
-    member_of_groups: RelationshipManager[CoreNode]
-    members: RelationshipManager[LoadbalancerPoolMember]
-    profiles: RelationshipManager[CoreNode]
-    subscriber_of_groups: RelationshipManager[CoreNode]
-    vip_ip: RelationshipAttribute[IpamIPAddress]
+    instances: RelationshipManager[AppInstance]
+    load_balancer: RelationshipAttribute[ManagedLoadbalancerHA]
+    member_of_groups: RelationshipManager[CoreGroup]
+    network_segment: RelationshipAttribute[ManagedNetworkSegment]
+    parent: RelationshipAttribute[AppApplication]
+    profiles: RelationshipManager[CoreProfile]
+    proxy_service: RelationshipAttribute[ManagedProxyService]
+    service_ports: RelationshipManager[AppServicePort]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
 
 
-class CloudResource(CoreNode):
+class ManagedConferencingService(ManagedSaasService):
+    contract_end_date: StringOptional
+    data_classification: Dropdown
+    description: StringOptional
+    media_optimization: Boolean
+    name: String
+    provider: Dropdown
+    service_tier: Dropdown
+    status: Dropdown
+    tenant_id: StringOptional
+    member_of_groups: RelationshipManager[CoreGroup]
+    profiles: RelationshipManager[CoreProfile]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class DcimConsoleInterface(DcimInterface, DcimEndpoint, CoreArtifactTarget):
+    description: StringOptional
+    index: StringOptional
+    name: String
+    port: Integer
+    role: DropdownOptional
+    speed: Integer
+    status: Dropdown
+    artifacts: RelationshipManager[CoreArtifact]
+    cable: RelationshipAttribute[DcimCable]
+    device: RelationshipAttribute[DcimDevice]
+    interface_capabilities: RelationshipManager[ManagedGenericInterfaces]
+    member_of_groups: RelationshipManager[CoreGroup]
+    profiles: RelationshipManager[CoreProfile]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+    tags: RelationshipManager[BuiltinTag]
+
+
+class LocationCountry(LocationGeneric):
+    name: String
+    shortname: String
+    timezone: StringOptional
+    children: RelationshipManager[LocationMetro]
+    member_of_groups: RelationshipManager[CoreGroup]
+    parent: RelationshipAttribute[LocationRegion]
+    profiles: RelationshipManager[CoreProfile]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+    tags: RelationshipManager[BuiltinTag]
+
+
+class OrganizationCustomer(OrganizationGeneric, OrganizationEntity):
+    description: StringOptional
+    name: String
+    org_id: StringOptional
+    applications: RelationshipManager[AppApplication]
+    asn: RelationshipManager[RoutingAutonomousSystem]
+    deployments: RelationshipManager[TopologyCustomer]
+    member_of_groups: RelationshipManager[CoreGroup]
+    portfolios: RelationshipManager[AppPortfolio]
+    profiles: RelationshipManager[CoreProfile]
+    proxy_policies: RelationshipManager[ProxyPolicy]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+    tags: RelationshipManager[BuiltinTag]
+
+
+class TopologyCustomerCloud(TopologyCustomer, TopologyDeployment):
+    customer_name: String
+    environment: Dropdown
+    name: StringOptional
+    status: Dropdown
+    children: RelationshipManager[TopologyDeployment]
+    cloud_account: RelationshipAttribute[CloudAccount]
+    member_of_groups: RelationshipManager[CoreGroup]
+    network_segments: RelationshipManager[ManagedNetworkSegment]
+    owner: RelationshipAttribute[OrganizationCustomer]
+    parent: RelationshipAttribute[TopologyCloudRegion]
+    profiles: RelationshipManager[CoreProfile]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class TopologyCustomerColocation(TopologyCustomer, TopologyDeployment):
+    environment: Dropdown
+    name: StringOptional
+    status: Dropdown
+    children: RelationshipManager[TopologyDeployment]
+    member_of_groups: RelationshipManager[CoreGroup]
+    network_segments: RelationshipManager[ManagedNetworkSegment]
+    owner: RelationshipAttribute[OrganizationCustomer]
+    parent: RelationshipAttribute[TopologyColocationMetro]
+    profiles: RelationshipManager[CoreProfile]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class TopologyCustomerDC(TopologyCustomer, TopologyDeployment):
+    environment: Dropdown
+    name: StringOptional
+    status: Dropdown
+    children: RelationshipManager[TopologyDeployment]
+    design: RelationshipAttribute[TopologyCustomerTemplateDC]
+    member_of_groups: RelationshipManager[CoreGroup]
+    network_segments: RelationshipManager[ManagedNetworkSegment]
+    owner: RelationshipAttribute[OrganizationCustomer]
+    parent: RelationshipAttribute[TopologyDataCenter]
+    profiles: RelationshipManager[CoreProfile]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class CloudCustomerGateway(CloudResource):
     cloud_id: StringOptional
+    description: StringOptional
+    device_type: DropdownOptional
+    name: String
+    status: DropdownOptional
+    account: RelationshipAttribute[CloudAccount]
+    asn: RelationshipAttribute[RoutingAutonomousSystem]
+    ip_address: RelationshipAttribute[IpamIPAddress]
+    member_of_groups: RelationshipManager[CoreGroup]
+    physical_device: RelationshipAttribute[DcimDevice]
+    profiles: RelationshipManager[CoreProfile]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+    virtual_circuits: RelationshipManager[TopologyVirtualCircuit]
+
+
+class TopologyCustomerTemplateCloud(TopologyCustomerTemplate):
+    dedicated_firewall: Boolean
+    dedicated_loadbalancer: Boolean
+    dedicated_proxy: Boolean
+    default_environment: Dropdown
+    description: StringOptional
+    name: String
+    network_segment_count: Integer
+    size: Dropdown
+    member_of_groups: RelationshipManager[CoreGroup]
+    profiles: RelationshipManager[CoreProfile]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class TopologyCustomerTemplateColo(TopologyCustomerTemplate):
+    dedicated_firewall: Boolean
+    dedicated_loadbalancer: Boolean
+    dedicated_proxy: Boolean
+    default_environment: Dropdown
+    description: StringOptional
+    name: String
+    network_segment_count: Integer
+    size: Dropdown
+    uplink_100g_count: Integer
+    uplink_10g_count: Integer
+    uplink_400g_count: Integer
+    uplink_40g_count: Integer
+    member_of_groups: RelationshipManager[CoreGroup]
+    profiles: RelationshipManager[CoreProfile]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class TopologyCustomerTemplateDC(TopologyCustomerTemplate):
+    dedicated_firewall: Boolean
+    dedicated_loadbalancer: Boolean
+    dedicated_proxy: Boolean
+    default_environment: Dropdown
+    description: StringOptional
+    name: String
+    network_segment_count: Integer
+    size: Dropdown
+    uplink_100g_count: Integer
+    uplink_10g_count: Integer
+    uplink_400g_count: Integer
+    uplink_40g_count: Integer
+    member_of_groups: RelationshipManager[CoreGroup]
+    profiles: RelationshipManager[CoreProfile]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class TopologyDataCenter(
+    CoreArtifactTarget,
+    TopologyDeployment,
+    TopologyPhysicalDeployment,
+    TopologyConnectableLocation,
+    TopologyDeviceHosting,
+    TopologyClusterHosting,
+    TopologySegmentHosting,
+):
+    amount_of_super_spines: Integer
+    connectivity_mode: Dropdown
+    fabric_interface_sorting_method: Dropdown
+    fully_managed: Boolean
+    index: Integer
+    name: String
+    naming_convention: Dropdown
+    spine_interface_sorting_method: Dropdown
+    status: Dropdown
+    artifacts: RelationshipManager[CoreArtifact]
+    cables: RelationshipManager[DcimCable]
+    children: RelationshipManager[TopologyDeployment]
+    circuits: RelationshipManager[TopologyCircuit]
+    clusters: RelationshipManager[VirtCluster]
+    design: RelationshipAttribute[TopologyDataCenterDesign]
+    devices: RelationshipManager[DcimDevice]
+    l3_vni_pool: RelationshipAttribute[CoreNumberPool]
+    loopback_pool: RelationshipAttribute[CoreIPPrefixPool]
+    management_pool: RelationshipAttribute[CoreIPAddressPool]
+    member_of_groups: RelationshipManager[CoreGroup]
+    parent: RelationshipAttribute[TopologyDeployment]
+    profiles: RelationshipManager[CoreProfile]
+    segment_deployments: RelationshipManager[ManagedSegmentDeployment]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+    super_spine_asn_pool: RelationshipAttribute[CoreNumberPool]
+    super_spine_template: RelationshipAttribute[TemplateDcimPhysicalDevice]
+    technical_pool: RelationshipAttribute[CoreIPPrefixPool]
+    vlan_pool: RelationshipAttribute[CoreNumberPool]
+    vni_pool: RelationshipAttribute[CoreNumberPool]
+
+
+class TopologyDataCenterDesign(TopologyDesign):
+    description: StringOptional
+    loopback_prefix_length: Integer
+    management_prefix_length: Integer
+    max_pods: Integer
+    max_spines_per_pod: Integer
+    max_super_spines_per_fabric: Integer
+    name: String
+    routing_strategy: Dropdown
+    technical_prefix_length: Integer
+    underlay_protocol: Dropdown
+    member_of_groups: RelationshipManager[CoreGroup]
+    profiles: RelationshipManager[CoreProfile]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class AppDependency(CoreNode):
+    access_expires_at: DateTimeOptional
+    access_status: Dropdown
+    decision_at: DateTimeOptional
+    decision_reason: StringOptional
+    description: StringOptional
+    name: String
+    port_end: IntegerOptional
+    port_start: IntegerOptional
+    protocol: DropdownOptional
+    member_of_groups: RelationshipManager[CoreGroup]
+    profiles: RelationshipManager[CoreProfile]
+    source: RelationshipAttribute[AppComponent]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+    target: RelationshipAttribute[AppComponent]
+
+
+class DcimDeviceType(CoreNode):
+    core_count: IntegerOptional
+    cpu_count: IntegerOptional
+    description: StringOptional
+    full_depth: Boolean
+    height: Integer
+    max_routes: IntegerOptional
+    memory_gb: IntegerOptional
+    name: String
+    part_number: StringOptional
+    storage_gb: IntegerOptional
+    tcam_entries: IntegerOptional
+    weight: IntegerOptional
+    manufacturer: RelationshipAttribute[OrganizationManufacturer]
+    member_of_groups: RelationshipManager[CoreGroup]
+    platform: RelationshipAttribute[DcimPlatform]
+    profiles: RelationshipManager[CoreProfile]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+    tags: RelationshipManager[BuiltinTag]
+
+
+class CloudDirectConnect(CloudResource):
+    bandwidth: String
+    cloud_id: StringOptional
+    connection_type: Dropdown
     description: StringOptional
     name: String
     status: DropdownOptional
-    member_of_groups: RelationshipManager[CoreNode]
-    profiles: RelationshipManager[CoreNode]
-    subscriber_of_groups: RelationshipManager[CoreNode]
-    virtual_circuits: RelationshipManager[CoreNode]
+    vlan_id: IntegerOptional
+    account: RelationshipAttribute[CloudAccount]
+    location: RelationshipAttribute[LocationBuilding]
+    member_of_groups: RelationshipManager[CoreGroup]
+    physical_devices: RelationshipManager[DcimDevice]
+    profiles: RelationshipManager[CoreProfile]
+    region: RelationshipAttribute[TopologyCloudRegion]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+    virtual_circuits: RelationshipManager[TopologyVirtualCircuit]
+    virtual_interfaces: RelationshipManager[CloudVirtualInterface]
 
 
-class CloudInstance(CloudResource, DcimCapabilities):
+class TopologyElement(CoreNode):
+    quantity: Integer
+    role: DropdownOptional
+    member_of_groups: RelationshipManager[CoreGroup]
+    profiles: RelationshipManager[CoreProfile]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+    template: RelationshipAttribute[CoreObjectTemplate]
+
+
+class TopologyExternal(TopologyDeployment):
+    name: String
+    children: RelationshipManager[TopologyExternalProviders]
+    member_of_groups: RelationshipManager[CoreGroup]
+    parent: RelationshipAttribute[TopologyDeployment]
+    profiles: RelationshipManager[CoreProfile]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class ManagedExternalFabricPeering(ManagedGeneric):
+    bfd_enabled: Boolean
+    checksum: StringOptional
+    description: StringOptional
+    max_prefixes: IntegerOptional
+    name: String
+    role: Dropdown
+    scope: DropdownOptional
+    session_type: Dropdown
+    status: Dropdown
+    deployment: RelationshipAttribute[TopologyDeployment]
+    external_peer: RelationshipAttribute[ManagedExternalPeer]
+    member_of_groups: RelationshipManager[CoreGroup]
+    namespace: RelationshipAttribute[IpamNamespace]
+    profiles: RelationshipManager[CoreProfile]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class ManagedExternalPeer(ManagedGeneric, ManagedExternalEndpoint):
+    circuit_id: StringOptional
+    description: StringOptional
+    name: String
+    noc_contact: StringOptional
+    peer_type: Dropdown
+    provider_name: StringOptional
+    status: Dropdown
+    vlan_id: IntegerOptional
+    asn: RelationshipAttribute[RoutingAutonomousSystem]
+    bgp_ip: RelationshipAttribute[IpamIPAddress]
+    member_of_groups: RelationshipManager[CoreGroup]
+    profiles: RelationshipManager[CoreProfile]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class TopologyExternalProviders(TopologyDeployment, TopologyConnectableLocation, TopologyDeviceHosting):
+    name: String
+    provider_type: Dropdown
+    status: Dropdown
+    children: RelationshipManager[TopologyDeployment]
+    circuits: RelationshipManager[TopologyCircuit]
+    devices: RelationshipManager[DcimDevice]
+    member_of_groups: RelationshipManager[CoreGroup]
+    parent: RelationshipAttribute[TopologyExternal]
+    profiles: RelationshipManager[CoreProfile]
+    provider: RelationshipAttribute[OrganizationProvider]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class ManagedFirewallHA(ManagedHA, ManagedGeneric, ManagedGenericDevice, ManagedInlineService):
+    description: StringOptional
+    group_id: IntegerOptional
+    ha_protocol: Dropdown
+    ha_timer: Dropdown
+    mode: Dropdown
+    name: String
+    preempt: Boolean
+    priority: Integer
+    status: Dropdown
+    capabilities: RelationshipManager[DcimCapabilities]
+    member_of_groups: RelationshipManager[CoreGroup]
+    profiles: RelationshipManager[CoreProfile]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class ManagedHAInterface(ManagedGeneric, ManagedGenericInterfaces):
+    description: StringOptional
+    link_type: Dropdown
+    name: String
+    status: Dropdown
+    ha_domain: RelationshipAttribute[ManagedHA]
+    interface_capabilities: RelationshipManager[DcimInterface]
+    member_of_groups: RelationshipManager[CoreGroup]
+    profiles: RelationshipManager[CoreProfile]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class LoadbalancerHealthCheck(CoreNode):
+    check: Dropdown
+    description: String
+    fall: Integer
+    rise: Integer
+    timeout: Integer
+    member_of_groups: RelationshipManager[CoreGroup]
+    profiles: RelationshipManager[CoreProfile]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+    vip_services: RelationshipManager[LoadbalancerVIP]
+
+
+class IpamIPAddress(BuiltinIPAddress):
+    address: IPHost
+    description: StringOptional
+    fqdn: StringOptional
+    ip_namespace: RelationshipAttribute[BuiltinIPNamespace]
+    ip_prefix: RelationshipAttribute[BuiltinIPPrefix]
+    member_of_groups: RelationshipManager[CoreGroup]
+    profiles: RelationshipManager[CoreProfile]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class VirtIngress(ManagedGeneric, ManagedGenericCluster):
+    address_pool: StringOptional
+    controller: Dropdown
+    description: StringOptional
+    name: String
+    status: Dropdown
+    version: StringOptional
+    cluster_capabilities: RelationshipManager[VirtCluster]
+    member_of_groups: RelationshipManager[CoreGroup]
+    profiles: RelationshipManager[CoreProfile]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+    vip_prefix: RelationshipAttribute[IpamPrefix]
+
+
+class CloudInstance(CloudResource, DcimCapabilities, AppInstance):
     cloud_id: StringOptional
     cpu_count: IntegerOptional
     description: StringOptional
@@ -590,16 +1291,207 @@ class CloudInstance(CloudResource, DcimCapabilities):
     public_ip: IPHostOptional
     root_volume_size_gb: IntegerOptional
     status: DropdownOptional
-    account: RelationshipAttribute[CoreNode]
+    account: RelationshipAttribute[CloudAccount]
     availability_zone: RelationshipAttribute[TopologyCloudZone]
-    capabilities: RelationshipManager[CoreNode]
-    member_of_groups: RelationshipManager[CoreNode]
+    capabilities: RelationshipManager[ManagedGenericDevice]
+    member_of_groups: RelationshipManager[CoreGroup]
     network_segment: RelationshipAttribute[CloudNetworkSegment]
-    node_pool: RelationshipAttribute[CoreNode]
-    profiles: RelationshipManager[CoreNode]
-    security_groups: RelationshipManager[CoreNode]
-    subscriber_of_groups: RelationshipManager[CoreNode]
-    virtual_circuits: RelationshipManager[CoreNode]
+    node_pool: RelationshipAttribute[VirtNodePool]
+    profiles: RelationshipManager[CoreProfile]
+    security_groups: RelationshipManager[CloudSecurityGroup]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+    virtual_circuits: RelationshipManager[TopologyVirtualCircuit]
+
+
+class CloudInternetGateway(CloudResource):
+    cloud_id: StringOptional
+    description: StringOptional
+    name: String
+    status: DropdownOptional
+    account: RelationshipAttribute[CloudAccount]
+    member_of_groups: RelationshipManager[CoreGroup]
+    profiles: RelationshipManager[CoreProfile]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+    virtual_circuits: RelationshipManager[TopologyVirtualCircuit]
+    virtual_network: RelationshipAttribute[CloudVirtualNetwork]
+
+
+class DcimLAGInterface(DcimInterface):
+    description: StringOptional
+    index: StringOptional
+    lacp_mode: Dropdown
+    lag_id: Integer
+    minimum_links: Integer
+    mtu: Integer
+    name: String
+    role: DropdownOptional
+    status: Dropdown
+    device: RelationshipAttribute[DcimDevice]
+    interface_capabilities: RelationshipManager[ManagedGenericInterfaces]
+    ip_address: RelationshipAttribute[IpamIPAddress]
+    member_interfaces: RelationshipManager[DcimPhysicalInterface]
+    member_of_groups: RelationshipManager[CoreGroup]
+    mlag_domain: RelationshipAttribute[ManagedMLAG]
+    profiles: RelationshipManager[CoreProfile]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+    tags: RelationshipManager[BuiltinTag]
+
+
+class CloudLoadBalancer(ManagedLoadBalancer, CloudResource, CoreArtifactTarget):
+    cloud_id: StringOptional
+    description: StringOptional
+    lb_type: DropdownOptional
+    lb_vendor: DropdownOptional
+    name: String
+    scheme: DropdownOptional
+    status: DropdownOptional
+    artifacts: RelationshipManager[CoreArtifact]
+    member_of_groups: RelationshipManager[CoreGroup]
+    network_segments: RelationshipManager[CloudNetworkSegment]
+    profiles: RelationshipManager[CoreProfile]
+    public_ips: RelationshipManager[CloudPublicIP]
+    security_groups: RelationshipManager[CloudSecurityGroup]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+    tags: RelationshipManager[BuiltinTag]
+    virtual_circuits: RelationshipManager[TopologyVirtualCircuit]
+    virtual_network: RelationshipAttribute[CloudVirtualNetwork]
+
+
+class OnpremLoadbalancer(ManagedLoadBalancer, ManagedGeneric, CoreArtifactTarget):
+    description: StringOptional
+    lb_type: DropdownOptional
+    lb_vendor: DropdownOptional
+    name: String
+    scheme: DropdownOptional
+    status: Dropdown
+    artifacts: RelationshipManager[CoreArtifact]
+    deployment: RelationshipAttribute[TopologyDeployment]
+    member_of_groups: RelationshipManager[CoreGroup]
+    profiles: RelationshipManager[CoreProfile]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+    tags: RelationshipManager[BuiltinTag]
+
+
+class ManagedLoadbalancerHA(ManagedHA, ManagedGeneric, ManagedGenericDevice, ManagedInlineService, ManagedLoadBalancer):
+    description: StringOptional
+    group_id: IntegerOptional
+    lb_type: DropdownOptional
+    lb_vendor: DropdownOptional
+    mode: Dropdown
+    name: String
+    preempt: Boolean
+    priority: Integer
+    scheme: DropdownOptional
+    status: Dropdown
+    capabilities: RelationshipManager[DcimCapabilities]
+    member_of_groups: RelationshipManager[CoreGroup]
+    profiles: RelationshipManager[CoreProfile]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+    tags: RelationshipManager[BuiltinTag]
+
+
+class ManagedMLAG(ManagedGeneric, ManagedGenericDevice, ManagedGenericInterfaces):
+    description: StringOptional
+    domain_id: Integer
+    name: String
+    reload_delay: Integer
+    reload_delay_non_mlag: Integer
+    status: Dropdown
+    virtual_peer_link: Boolean
+    capabilities: RelationshipManager[DcimCapabilities]
+    interface_capabilities: RelationshipManager[DcimInterface]
+    member_of_groups: RelationshipManager[CoreGroup]
+    profiles: RelationshipManager[CoreProfile]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class VirtManagementPlane(ManagedGeneric, ManagedGenericCluster):
+    auth_method: DropdownOptional
+    description: StringOptional
+    endpoint: StringOptional
+    endpoint_access: DropdownOptional
+    name: String
+    port: IntegerOptional
+    status: Dropdown
+    cluster_capabilities: RelationshipManager[VirtCluster]
+    management_ip: RelationshipAttribute[IpamIPAddress]
+    member_of_groups: RelationshipManager[CoreGroup]
+    profiles: RelationshipManager[CoreProfile]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class OrganizationManufacturer(CoreNode):
+    description: StringOptional
+    name: String
+    device_type: RelationshipManager[DcimDeviceType]
+    member_of_groups: RelationshipManager[CoreGroup]
+    platform: RelationshipManager[DcimPlatform]
+    profiles: RelationshipManager[CoreProfile]
+    sfps: RelationshipManager[DcimGenericSFP]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class LocationMetro(LocationGeneric):
+    name: String
+    shortname: String
+    children: RelationshipManager[LocationBuilding]
+    member_of_groups: RelationshipManager[CoreGroup]
+    parent: RelationshipAttribute[LocationCountry]
+    profiles: RelationshipManager[CoreProfile]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+    tags: RelationshipManager[BuiltinTag]
+
+
+class VirtMonitoring(ManagedGeneric, ManagedGenericCluster):
+    description: StringOptional
+    name: String
+    remote_write: StringOptional
+    retention_days: IntegerOptional
+    stack: Dropdown
+    status: Dropdown
+    version: StringOptional
+    cluster_capabilities: RelationshipManager[VirtCluster]
+    member_of_groups: RelationshipManager[CoreGroup]
+    profiles: RelationshipManager[CoreProfile]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class CloudNATGateway(CloudResource):
+    cloud_id: StringOptional
+    description: StringOptional
+    name: String
+    public_ip: IPHostOptional
+    status: DropdownOptional
+    account: RelationshipAttribute[CloudAccount]
+    member_of_groups: RelationshipManager[CoreGroup]
+    network_segments: RelationshipManager[CloudNetworkSegment]
+    profiles: RelationshipManager[CoreProfile]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+    virtual_circuits: RelationshipManager[TopologyVirtualCircuit]
+    virtual_network: RelationshipAttribute[CloudVirtualNetwork]
+
+
+class ManagedNTP(ManagedGeneric, ManagedGenericDevice):
+    description: StringOptional
+    name: String
+    status: Dropdown
+    timezone: String
+    capabilities: RelationshipManager[DcimCapabilities]
+    member_of_groups: RelationshipManager[CoreGroup]
+    profiles: RelationshipManager[CoreProfile]
+    servers: RelationshipManager[ManagedNTPServer]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class ManagedNTPServer(CoreNode):
+    name: String
+    prefer: Boolean
+    version: Integer
+    address: RelationshipAttribute[IpamIPAddress]
+    member_of_groups: RelationshipManager[CoreGroup]
+    ntp_config: RelationshipAttribute[ManagedNTP]
+    profiles: RelationshipManager[CoreProfile]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
 
 
 class CloudNetworkSegment(CloudResource, ManagedNetworkSegment):
@@ -615,154 +1507,3533 @@ class CloudNetworkSegment(CloudResource, ManagedNetworkSegment):
     segment_role: Dropdown
     segment_type: Dropdown
     status: Dropdown
-    terminate_inline: Boolean
     availability_zone: RelationshipAttribute[TopologyCloudZone]
     cidr_block: RelationshipAttribute[IpamPrefix]
+    customer_deployment: RelationshipAttribute[TopologyCustomer]
     gateway: RelationshipAttribute[IpamIPAddress]
-    inline_service: RelationshipAttribute[ManagedGeneric]
     ip_prefixes: RelationshipManager[IpamPrefix]
-    member_of_groups: RelationshipManager[CoreNode]
-    owner: RelationshipAttribute[CoreNode]
-    profiles: RelationshipManager[CoreNode]
-    security_policies: RelationshipManager[CoreNode]
-    security_tag: RelationshipAttribute[CoreNode]
-    security_zone: RelationshipAttribute[CoreNode]
-    subscriber_of_groups: RelationshipManager[CoreNode]
-    tags: RelationshipManager[CoreNode]
-    virt_clusters: RelationshipManager[CoreNode]
-    virtual_circuits: RelationshipManager[CoreNode]
-    virtual_network: RelationshipAttribute[CoreNode]
+    member_of_groups: RelationshipManager[CoreGroup]
+    owner: RelationshipAttribute[OrganizationCustomer]
+    profiles: RelationshipManager[CoreProfile]
+    security_policies: RelationshipManager[SecurityPolicy]
+    security_tag: RelationshipAttribute[SecurityTag]
+    security_zone: RelationshipAttribute[SecurityZone]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+    tags: RelationshipManager[BuiltinTag]
+    virtual_circuits: RelationshipManager[TopologyVirtualCircuit]
+    virtual_network: RelationshipAttribute[CloudVirtualNetwork]
 
 
-class TopologyDeployment(CoreNode):
+class VirtNodePool(CoreNode):
+    cpu_per_node: IntegerOptional
+    desired_capacity: IntegerOptional
+    image: StringOptional
+    instance_flavor: StringOptional
+    max_size: IntegerOptional
+    memory_per_node_gb: IntegerOptional
+    min_size: IntegerOptional
     name: String
-    children: RelationshipManager[TopologyDeployment]
-    member_of_groups: RelationshipManager[CoreNode]
-    parent: RelationshipAttribute[TopologyDeployment]
-    profiles: RelationshipManager[CoreNode]
-    subscriber_of_groups: RelationshipManager[CoreNode]
+    node_count: IntegerOptional
+    os_type: DropdownOptional
+    os_version: StringOptional
+    pool_type: Dropdown
+    scaling_mode: Dropdown
+    status: Dropdown
+    storage_per_node_gb: IntegerOptional
+    cluster: RelationshipAttribute[VirtCluster]
+    instances: RelationshipManager[CloudInstance]
+    management_ip: RelationshipAttribute[IpamIPAddress]
+    member_of_groups: RelationshipManager[CoreGroup]
+    network_segments: RelationshipManager[ManagedNetworkSegment]
+    physical_hosts: RelationshipManager[DcimPhysicalDevice]
+    profiles: RelationshipManager[CoreProfile]
+    security_groups: RelationshipManager[CloudSecurityGroup]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+    tags: RelationshipManager[BuiltinTag]
 
 
-class TopologyRackHosting(CoreNode):
+class ManagedOSPF(ManagedGeneric, ManagedGenericDevice, ManagedRouting):
+    description: StringOptional
     name: String
-    member_of_groups: RelationshipManager[CoreNode]
-    profiles: RelationshipManager[CoreNode]
-    racks: RelationshipManager[LocationRack]
-    subscriber_of_groups: RelationshipManager[CoreNode]
+    process_id: String
+    reference_bandwidth: Integer
+    router_type: Dropdown
+    status: Dropdown
+    version: Dropdown
+    capabilities: RelationshipManager[DcimCapabilities]
+    member_of_groups: RelationshipManager[CoreGroup]
+    peerings: RelationshipManager[ManagedOSPFPeering]
+    profiles: RelationshipManager[CoreProfile]
+    router_id: RelationshipAttribute[IpamIPAddress]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
 
 
-class TopologyDeviceHosting(CoreNode):
+class RoutingOSPFArea(CoreNode):
+    area: Integer
+    area_type: Dropdown
+    description: StringOptional
     name: String
-    devices: RelationshipManager[DcimDevice]
-    member_of_groups: RelationshipManager[CoreNode]
-    profiles: RelationshipManager[CoreNode]
-    subscriber_of_groups: RelationshipManager[CoreNode]
+    member_of_groups: RelationshipManager[CoreGroup]
+    profiles: RelationshipManager[CoreProfile]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
 
 
-class TopologyDataCenter(TopologyDeployment, TopologyRackHosting, TopologyDeviceHosting):
+class RoutingOSPFInterface(ManagedGeneric, ManagedGenericInterfaces):
+    authentication_mode: DropdownOptional
+    description: StringOptional
+    metric: IntegerOptional
+    mode: Dropdown
     name: String
     status: Dropdown
-    member_of_groups: RelationshipManager[CoreNode]
-    profiles: RelationshipManager[CoreNode]
-    subscriber_of_groups: RelationshipManager[CoreNode]
+    interface_capabilities: RelationshipManager[DcimInterface]
+    member_of_groups: RelationshipManager[CoreGroup]
+    ospf_services: RelationshipManager[ManagedOSPF]
+    password: RelationshipAttribute[RoutingPassword]
+    peering: RelationshipAttribute[ManagedOSPFPeering]
+    profiles: RelationshipManager[CoreProfile]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
 
 
-class TopologyCloudZone(TopologyDeployment):
+class ManagedOSPFPeering(ManagedGeneric, ManagedPeering, ManagedGenericInterfaces):
+    cost: IntegerOptional
+    description: StringOptional
     name: String
+    network_type: Dropdown
+    status: Dropdown
+    interface_capabilities: RelationshipManager[DcimInterface]
+    member_of_groups: RelationshipManager[CoreGroup]
+    namespace: RelationshipAttribute[IpamNamespace]
+    ospf_area: RelationshipAttribute[RoutingOSPFArea]
+    ospf_interface: RelationshipManager[RoutingOSPFInterface]
+    ospf_process: RelationshipManager[ManagedOSPF]
+    profiles: RelationshipManager[CoreProfile]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class TopologyOffice(
+    CoreArtifactTarget,
+    TopologyDeployment,
+    TopologyPhysicalDeployment,
+    TopologyConnectableLocation,
+    TopologyDeviceHosting,
+):
+    name: String
+    site_type: Dropdown
+    artifacts: RelationshipManager[CoreArtifact]
+    cables: RelationshipManager[DcimCable]
     children: RelationshipManager[TopologyDeployment]
-    instances: RelationshipManager[CloudInstance]
-    member_of_groups: RelationshipManager[CoreNode]
-    network_segments: RelationshipManager[CloudNetworkSegment]
-    parent: RelationshipAttribute[CoreNode]
-    profiles: RelationshipManager[CoreNode]
-    subscriber_of_groups: RelationshipManager[CoreNode]
+    circuits: RelationshipManager[TopologyCircuit]
+    devices: RelationshipManager[DcimDevice]
+    locations: RelationshipManager[LocationBuilding]
+    member_of_groups: RelationshipManager[CoreGroup]
+    parent: RelationshipAttribute[TopologyDeployment]
+    profiles: RelationshipManager[CoreProfile]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class RoutingPassword(CoreNode):
+    description: StringOptional
+    name: String
+    password: String
+    member_of_groups: RelationshipManager[CoreGroup]
+    profiles: RelationshipManager[CoreProfile]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class TopologyPhysicalCircuit(TopologyCircuit, ManagedGeneric):
+    bandwidth: IntegerOptional
+    circuit_id: String
+    circuit_type: Dropdown
+    committed_rate: IntegerOptional
+    contract_end_date: StringOptional
+    description: StringOptional
+    install_date: StringOptional
+    name: String
+    status: Dropdown
+    interfaces: RelationshipManager[DcimInterface]
+    locations: RelationshipManager[TopologyConnectableLocation]
+    member_of_groups: RelationshipManager[CoreGroup]
+    profiles: RelationshipManager[CoreProfile]
+    provider: RelationshipAttribute[OrganizationProvider]
+    provider_a: RelationshipAttribute[DcimInterface]
+    provider_z: RelationshipAttribute[DcimInterface]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class DcimPhysicalDevice(CoreArtifactTarget, DcimDevice, DcimCapabilities, AppInstance):
+    description: StringOptional
+    name: String
+    os_version: StringOptional
+    position: IntegerOptional
+    rack_face: Dropdown
+    role: DropdownOptional
+    serial: StringOptional
+    status: Dropdown
+    artifacts: RelationshipManager[CoreArtifact]
+    capabilities: RelationshipManager[ManagedGenericDevice]
+    deployment: RelationshipAttribute[TopologyDeployment]
+    device_type: RelationshipAttribute[DcimDeviceType]
+    interfaces: RelationshipManager[DcimInterface]
+    member_of_groups: RelationshipManager[CoreGroup]
+    object_template: RelationshipAttribute[TemplateDcimPhysicalDevice]
+    platform: RelationshipAttribute[DcimPlatform]
+    primary_address: RelationshipAttribute[IpamIPAddress]
+    profiles: RelationshipManager[CoreProfile]
+    rack: RelationshipAttribute[LocationRack]
+    software_image: RelationshipAttribute[DcimSoftwareImage]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+    tags: RelationshipManager[BuiltinTag]
+
+
+class DcimPhysicalInterface(DcimInterface, DcimEndpoint, DcimSubInterface):
+    description: StringOptional
+    index: StringOptional
+    interface_type: Dropdown
+    mtu: Integer
+    name: String
+    role: DropdownOptional
+    status: Dropdown
+    cable: RelationshipAttribute[DcimCable]
+    device: RelationshipAttribute[DcimDevice]
+    interface_capabilities: RelationshipManager[ManagedGenericInterfaces]
+    ip_address: RelationshipAttribute[IpamIPAddress]
+    lag: RelationshipAttribute[DcimLAGInterface]
+    member_of_groups: RelationshipManager[CoreGroup]
+    plugged_sfp: RelationshipAttribute[DcimGenericSFP]
+    profiles: RelationshipManager[CoreProfile]
+    sub_interfaces: RelationshipManager[DcimVirtualInterface]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+    tags: RelationshipManager[BuiltinTag]
+
+
+class DcimPlatform(CoreNode):
+    ansible_network_os: StringOptional
+    containerlab_os: StringOptional
+    description: StringOptional
+    name: String
+    napalm_driver: StringOptional
+    netmiko_device_type: StringOptional
+    nornir_platform: StringOptional
+    devices: RelationshipManager[DcimDevice]
+    manufacturer: RelationshipAttribute[OrganizationManufacturer]
+    member_of_groups: RelationshipManager[CoreGroup]
+    profiles: RelationshipManager[CoreProfile]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
 
 
 class TopologyPod(TopologyDeployment, TopologyRackHosting, TopologyDeviceHosting):
     amount_of_spines: Integer
     index: Integer
     leaf_interface_sorting_method: Dropdown
+    mlag_create: Dropdown
     name: String
     spine_interface_sorting_method: Dropdown
     status: Dropdown
-    asn_pool: RelationshipAttribute[CoreNode]
+    asn_pool: RelationshipAttribute[CoreNumberPool]
     children: RelationshipManager[TopologyDeployment]
-    design: RelationshipAttribute[CoreNode]
+    design: RelationshipAttribute[TopologyPodDesign]
     devices: RelationshipManager[DcimDevice]
-    loopback_pool: RelationshipAttribute[CoreNode]
-    member_of_groups: RelationshipManager[CoreNode]
-    parent: RelationshipAttribute[CoreNode]
-    prefix_pool: RelationshipAttribute[CoreNode]
-    profiles: RelationshipManager[CoreNode]
+    loopback_pool: RelationshipAttribute[CoreIPAddressPool]
+    member_of_groups: RelationshipManager[CoreGroup]
+    parent: RelationshipAttribute[TopologyDataCenter]
+    prefix_pool: RelationshipAttribute[CoreIPPrefixPool]
+    profiles: RelationshipManager[CoreProfile]
     racks: RelationshipManager[LocationRack]
-    spine_template: RelationshipAttribute[CoreNode]
-    subscriber_of_groups: RelationshipManager[CoreNode]
+    spine_template: RelationshipAttribute[TemplateDcimPhysicalDevice]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
 
 
-class AppComponent(AppGeneric):
-    member_of_groups: RelationshipManager[CoreNode]
-    profiles: RelationshipManager[CoreNode]
-    subscriber_of_groups: RelationshipManager[CoreNode]
+class TopologyPodDesign(TopologyDesign):
+    compute_racks_per_row: Integer
+    description: StringOptional
+    max_border_leafs_per_pod: Integer
+    max_leafs_per_network_rack: Integer
+    max_spines_per_pod: Integer
+    max_tors_per_compute_rack: Integer
+    max_tors_per_network_rack: Integer
+    name: String
+    network_racks_per_row: Integer
+    rows: Integer
+    member_of_groups: RelationshipManager[CoreGroup]
+    profiles: RelationshipManager[CoreProfile]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
 
 
-class AppDependency(CoreNode):
-    member_of_groups: RelationshipManager[CoreNode]
-    profiles: RelationshipManager[CoreNode]
-    source: RelationshipAttribute[AppComponent]
-    subscriber_of_groups: RelationshipManager[CoreNode]
-    target: RelationshipAttribute[AppComponent]
+class ProxyPolicy(CoreNode):
+    default_action: Dropdown
+    description: StringOptional
+    enabled: Boolean
+    name: String
+    policy_type: Dropdown
+    priority: Integer
+    member_of_groups: RelationshipManager[CoreGroup]
+    profiles: RelationshipManager[CoreProfile]
+    rules: RelationshipManager[ProxyPolicyRule]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
 
 
-class AppServicePort(CoreNode):
-    port: Integer
-    port_end: IntegerOptional
-    protocol: Dropdown
-    member_of_groups: RelationshipManager[CoreNode]
-    profiles: RelationshipManager[CoreNode]
-    subscriber_of_groups: RelationshipManager[CoreNode]
-
-
-class ManagedLoadbalancerHA(CoreNode):
-    member_of_groups: RelationshipManager[CoreNode]
-    profiles: RelationshipManager[CoreNode]
-    subscriber_of_groups: RelationshipManager[CoreNode]
-
-
-class SecurityPolicy(CoreNode):
-    member_of_groups: RelationshipManager[CoreNode]
-    profiles: RelationshipManager[CoreNode]
+class SecurityPolicy(ManagedGenericDevice):
+    default_action: Dropdown
+    description: StringOptional
+    enabled: Boolean
+    name: String
+    capabilities: RelationshipManager[DcimCapabilities]
+    member_of_groups: RelationshipManager[CoreGroup]
+    profiles: RelationshipManager[CoreProfile]
     rules: RelationshipManager[SecurityPolicyRule]
-    subscriber_of_groups: RelationshipManager[CoreNode]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class ProxyPolicyRule(CoreNode):
+    action: Dropdown
+    description: StringOptional
+    destination: StringOptional
+    destination_type: Dropdown
+    disabled: Boolean
+    log: Boolean
+    name: String
+    priority: Integer
+    categories: RelationshipManager[ProxyURLCategory]
+    member_of_groups: RelationshipManager[CoreGroup]
+    policy: RelationshipAttribute[ProxyPolicy]
+    profiles: RelationshipManager[CoreProfile]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
 
 
 class SecurityPolicyRule(CoreNode):
-    member_of_groups: RelationshipManager[CoreNode]
+    action: Dropdown
+    apply_on_switch: Boolean
+    description: StringOptional
+    disabled: Boolean
+    expires_at: DateTimeOptional
+    index: Integer
+    log: Boolean
+    name: String
+    port_end: IntegerOptional
+    port_start: IntegerOptional
+    protocol: Dropdown
+    destination_ip_addresses: RelationshipManager[IpamIPAddress]
+    destination_prefixes: RelationshipManager[IpamPrefix]
+    destination_segment: RelationshipAttribute[ManagedNetworkSegment]
+    destination_zone: RelationshipAttribute[SecurityZone]
+    member_of_groups: RelationshipManager[CoreGroup]
     policy: RelationshipAttribute[SecurityPolicy]
-    profiles: RelationshipManager[CoreNode]
-    subscriber_of_groups: RelationshipManager[CoreNode]
+    profiles: RelationshipManager[CoreProfile]
+    security_profile: RelationshipAttribute[SecuritySecurityProfile]
+    source_ip_addresses: RelationshipManager[IpamIPAddress]
+    source_prefixes: RelationshipManager[IpamPrefix]
+    source_segment: RelationshipAttribute[ManagedNetworkSegment]
+    source_zone: RelationshipAttribute[SecurityZone]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class LoadbalancerPoolInterface(ManagedGeneric, ManagedGenericInterfaces):
+    description: StringOptional
+    name: String
+    port: IntegerOptional
+    status: Dropdown
+    interface_capabilities: RelationshipManager[DcimInterface]
+    ip_address: RelationshipAttribute[IpamIPAddress]
+    member_of_groups: RelationshipManager[CoreGroup]
+    pool_member: RelationshipAttribute[LoadbalancerPoolMember]
+    profiles: RelationshipManager[CoreProfile]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class LoadbalancerPoolMember(ManagedGeneric, ManagedGenericDevice):
+    description: StringOptional
+    drain_timeout: IntegerOptional
+    name: String
+    status: Dropdown
+    weight: Integer
+    capabilities: RelationshipManager[DcimCapabilities]
+    member_of_groups: RelationshipManager[CoreGroup]
+    pool_interfaces: RelationshipManager[LoadbalancerPoolInterface]
+    profiles: RelationshipManager[CoreProfile]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+    vip_service: RelationshipAttribute[LoadbalancerVIP]
+
+
+class AppPortfolio(AppGeneric):
+    description: StringOptional
+    org_id: StringOptional
+    children: RelationshipManager[AppApplication]
+    member_of_groups: RelationshipManager[CoreGroup]
+    owner: RelationshipAttribute[OrganizationCustomer]
+    parent: RelationshipAttribute[AppGeneric]
+    profiles: RelationshipManager[CoreProfile]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class IpamPrefix(BuiltinIPPrefix):
+    broadcast_address: StringOptional
+    description: StringOptional
+    hostmask: StringOptional
+    is_pool: Boolean
+    is_top_level: BooleanOptional
+    member_type: Dropdown
+    netmask: StringOptional
+    network_address: StringOptional
+    prefix: IPNetwork
+    role: DropdownOptional
+    status: Dropdown
+    utilization: IntegerOptional
+    children: RelationshipManager[BuiltinIPPrefix]
+    ip_addresses: RelationshipManager[BuiltinIPAddress]
+    ip_namespace: RelationshipAttribute[BuiltinIPNamespace]
+    member_of_groups: RelationshipManager[CoreGroup]
+    parent: RelationshipAttribute[BuiltinIPPrefix]
+    profiles: RelationshipManager[CoreProfile]
+    resource_pool: RelationshipManager[CoreIPPool]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class OrganizationProvider(OrganizationGeneric, OrganizationEntity):
+    description: StringOptional
+    name: String
+    org_id: StringOptional
+    asn: RelationshipManager[RoutingAutonomousSystem]
+    asns: RelationshipManager[RoutingAutonomousSystem]
+    location: RelationshipManager[LocationBuilding]
+    member_of_groups: RelationshipManager[CoreGroup]
+    profiles: RelationshipManager[CoreProfile]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+    tags: RelationshipManager[BuiltinTag]
+
+
+class ManagedProxyHA(ManagedHA, ManagedGeneric, ManagedGenericDevice, ManagedInlineService, ManagedProxyService):
+    description: StringOptional
+    group_id: IntegerOptional
+    mode: Dropdown
+    name: String
+    preempt: Boolean
+    priority: Integer
+    proxy_type: DropdownOptional
+    proxy_vendor: DropdownOptional
+    status: Dropdown
+    capabilities: RelationshipManager[DcimCapabilities]
+    member_of_groups: RelationshipManager[CoreGroup]
+    profiles: RelationshipManager[CoreProfile]
+    shared_policies: RelationshipManager[ProxyPolicy]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class CloudPublicIP(CloudResource):
+    cloud_id: StringOptional
+    description: StringOptional
+    name: String
+    public_ip: IPHost
+    status: DropdownOptional
+    account: RelationshipAttribute[CloudAccount]
+    instance: RelationshipAttribute[CloudInstance]
+    member_of_groups: RelationshipManager[CoreGroup]
+    profiles: RelationshipManager[CoreProfile]
+    region: RelationshipAttribute[TopologyCloudRegion]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+    virtual_circuits: RelationshipManager[TopologyVirtualCircuit]
+
+
+class LocationRack(LocationGeneric, CoreArtifactTarget):
+    facility_id: StringOptional
+    height: Integer
+    index: Integer
+    name: String
+    rack_type: Dropdown
+    row_index: Integer
+    shortname: String
+    artifacts: RelationshipManager[CoreArtifact]
+    children: RelationshipManager[LocationGeneric]
+    devices: RelationshipManager[DcimPhysicalDevice]
+    fabric_templates: RelationshipManager[TopologyElement]
+    member_of_groups: RelationshipManager[CoreGroup]
+    owner: RelationshipAttribute[OrganizationGeneric]
+    parent: RelationshipAttribute[LocationSuite]
+    pod: RelationshipAttribute[TopologyRackHosting]
+    profiles: RelationshipManager[CoreProfile]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+    tags: RelationshipManager[BuiltinTag]
+
+
+class LocationRegion(LocationGeneric):
+    name: String
+    shortname: String
+    children: RelationshipManager[LocationCountry]
+    member_of_groups: RelationshipManager[CoreGroup]
+    parent: RelationshipAttribute[LocationGeneric]
+    profiles: RelationshipManager[CoreProfile]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+    tags: RelationshipManager[BuiltinTag]
+
+
+class VirtRegistry(ManagedGeneric, ManagedGenericCluster):
+    description: StringOptional
+    endpoint: StringOptional
+    insecure: Boolean
+    name: String
+    registry_type: Dropdown
+    status: Dropdown
+    cluster_capabilities: RelationshipManager[VirtCluster]
+    member_of_groups: RelationshipManager[CoreGroup]
+    profiles: RelationshipManager[CoreProfile]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class CloudRoute(CloudResource):
+    cloud_id: StringOptional
+    description: StringOptional
+    name: String
+    status: DropdownOptional
+    destination: RelationshipAttribute[IpamPrefix]
+    instance: RelationshipAttribute[CloudInstance]
+    internet_gateway: RelationshipAttribute[CloudInternetGateway]
+    member_of_groups: RelationshipManager[CoreGroup]
+    nat_gateway: RelationshipAttribute[CloudNATGateway]
+    profiles: RelationshipManager[CoreProfile]
+    route_table: RelationshipAttribute[CloudRouteTable]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+    virtual_circuits: RelationshipManager[TopologyVirtualCircuit]
+
+
+class CloudRouteTable(CloudResource):
+    cloud_id: StringOptional
+    description: StringOptional
+    is_main: Boolean
+    name: String
+    status: DropdownOptional
+    member_of_groups: RelationshipManager[CoreGroup]
+    network_segments: RelationshipManager[CloudNetworkSegment]
+    profiles: RelationshipManager[CoreProfile]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+    virtual_circuits: RelationshipManager[TopologyVirtualCircuit]
+    virtual_network: RelationshipAttribute[CloudVirtualNetwork]
+
+
+class ManagedSNMP(ManagedGeneric, ManagedGenericDevice):
+    community_ro: StringOptional
+    community_rw: StringOptional
+    contact: StringOptional
+    description: StringOptional
+    location: StringOptional
+    name: String
+    status: Dropdown
+    version: Dropdown
+    capabilities: RelationshipManager[DcimCapabilities]
+    member_of_groups: RelationshipManager[CoreGroup]
+    profiles: RelationshipManager[CoreProfile]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+    trap_targets: RelationshipManager[ManagedSNMPTrapTarget]
+
+
+class ManagedSNMPTrapTarget(CoreNode):
+    community: StringOptional
+    name: String
+    port: Integer
+    address: RelationshipAttribute[IpamIPAddress]
+    member_of_groups: RelationshipManager[CoreGroup]
+    profiles: RelationshipManager[CoreProfile]
+    snmp_config: RelationshipAttribute[ManagedSNMP]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class TopologySaas(TopologyDeployment, CoreArtifactTarget):
+    description: StringOptional
+    name: String
+    provider: Dropdown
+    service_type: Dropdown
+    status: Dropdown
+    artifacts: RelationshipManager[CoreArtifact]
+    children: RelationshipManager[TopologySaasRegion]
+    member_of_groups: RelationshipManager[CoreGroup]
+    parent: RelationshipAttribute[TopologyDeployment]
+    profiles: RelationshipManager[CoreProfile]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class TopologySaasRegion(TopologyDeployment, TopologyConnectableLocation):
+    name: String
+    region_name: String
+    status: Dropdown
+    children: RelationshipManager[TopologyDeployment]
+    circuits: RelationshipManager[TopologyCircuit]
+    location: RelationshipAttribute[LocationMetro]
+    member_of_groups: RelationshipManager[CoreGroup]
+    parent: RelationshipAttribute[TopologySaas]
+    profiles: RelationshipManager[CoreProfile]
+    saas_services: RelationshipManager[ManagedSaasService]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
 
 
 class CloudSecurityGroup(CloudResource):
-    member_of_groups: RelationshipManager[CoreNode]
-    profiles: RelationshipManager[CoreNode]
+    cloud_id: StringOptional
+    description: StringOptional
+    name: String
+    status: DropdownOptional
+    account: RelationshipAttribute[CloudAccount]
+    member_of_groups: RelationshipManager[CoreGroup]
+    profiles: RelationshipManager[CoreProfile]
     rules: RelationshipManager[CloudSecurityGroupRule]
-    subscriber_of_groups: RelationshipManager[CoreNode]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+    virtual_circuits: RelationshipManager[TopologyVirtualCircuit]
+    virtual_network: RelationshipAttribute[CloudVirtualNetwork]
 
 
 class CloudSecurityGroupRule(CloudResource):
-    member_of_groups: RelationshipManager[CoreNode]
-    profiles: RelationshipManager[CoreNode]
+    action: Dropdown
+    cloud_id: StringOptional
+    description: StringOptional
+    dest_cidr: StringOptional
+    direction: Dropdown
+    disabled: Boolean
+    log: Boolean
+    name: String
+    port_end: IntegerOptional
+    port_start: IntegerOptional
+    priority: IntegerOptional
+    protocol: Dropdown
+    source_cidr: StringOptional
+    status: DropdownOptional
+    member_of_groups: RelationshipManager[CoreGroup]
+    profiles: RelationshipManager[CoreProfile]
     security_group: RelationshipAttribute[CloudSecurityGroup]
-    subscriber_of_groups: RelationshipManager[CoreNode]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+    virtual_circuits: RelationshipManager[TopologyVirtualCircuit]
 
 
 class SecuritySecurityProfile(CoreNode):
-    member_of_groups: RelationshipManager[CoreNode]
-    profiles: RelationshipManager[CoreNode]
-    subscriber_of_groups: RelationshipManager[CoreNode]
+    antivirus_enabled: Boolean
+    data_loss_prevention_enabled: Boolean
+    description: StringOptional
+    ips_enabled: Boolean
+    name: String
+    ssl_inspection_enabled: Boolean
+    url_filtering_enabled: Boolean
+    member_of_groups: RelationshipManager[CoreGroup]
+    profiles: RelationshipManager[CoreProfile]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class ManagedSegmentDeployment(CoreNode):
+    status: Dropdown
+    vlan_id: Integer
+    vni: IntegerOptional
+    deployment: RelationshipAttribute[TopologySegmentHosting]
+    member_of_groups: RelationshipManager[CoreGroup]
+    profiles: RelationshipManager[CoreProfile]
+    segment: RelationshipAttribute[ManagedNetworkSegment]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class AppServicePort(CoreNode):
+    description: StringOptional
+    name: StringOptional
+    port: Integer
+    port_end: IntegerOptional
+    protocol: Dropdown
+    member_of_groups: RelationshipManager[CoreGroup]
+    profiles: RelationshipManager[CoreProfile]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class DcimSoftwareImage(CoreNode):
+    description: StringOptional
+    end_of_life: DateTimeOptional
+    end_of_support: DateTimeOptional
+    is_approved: Boolean
+    is_recommended: Boolean
+    known_cve_count: IntegerOptional
+    name: String
+    release_date: DateTimeOptional
+    release_notes_url: URLOptional
+    release_type: Dropdown
+    version: String
+    devices: RelationshipManager[DcimDevice]
+    member_of_groups: RelationshipManager[CoreGroup]
+    platform: RelationshipAttribute[DcimPlatform]
+    profiles: RelationshipManager[CoreProfile]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class DcimStandardSFP(DcimGenericSFP):
+    form_factor: Dropdown
+    serial: StringOptional
+    sfp_type: Dropdown
+    status: Dropdown
+    interface: RelationshipAttribute[DcimInterface]
+    manufacturer: RelationshipAttribute[OrganizationManufacturer]
+    member_of_groups: RelationshipManager[CoreGroup]
+    profiles: RelationshipManager[CoreProfile]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class VirtStorageBackend(ManagedGeneric, ManagedGenericCluster):
+    backend_type: Dropdown
+    default_class: Boolean
+    description: StringOptional
+    name: String
+    reclaim_policy: Dropdown
+    status: Dropdown
+    version: StringOptional
+    cluster_capabilities: RelationshipManager[VirtCluster]
+    member_of_groups: RelationshipManager[CoreGroup]
+    profiles: RelationshipManager[CoreProfile]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class ManagedStorageService(ManagedSaasService):
+    contract_end_date: StringOptional
+    data_classification: Dropdown
+    description: StringOptional
+    encryption_at_rest: Boolean
+    name: String
+    provider: Dropdown
+    service_tier: Dropdown
+    status: Dropdown
+    tenant_id: StringOptional
+    member_of_groups: RelationshipManager[CoreGroup]
+    profiles: RelationshipManager[CoreProfile]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class LocationSuite(LocationGeneric):
+    index: Integer
+    name: String
+    shortname: String
+    suite_name: String
+    children: RelationshipManager[LocationRack]
+    member_of_groups: RelationshipManager[CoreGroup]
+    owner: RelationshipAttribute[OrganizationGeneric]
+    parent: RelationshipAttribute[LocationBuilding]
+    profiles: RelationshipManager[CoreProfile]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+    tags: RelationshipManager[BuiltinTag]
+
+
+class ManagedSyslog(ManagedGeneric, ManagedGenericDevice):
+    description: StringOptional
+    name: String
+    status: Dropdown
+    capabilities: RelationshipManager[DcimCapabilities]
+    member_of_groups: RelationshipManager[CoreGroup]
+    profiles: RelationshipManager[CoreProfile]
+    servers: RelationshipManager[ManagedSyslogServer]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class ManagedSyslogServer(CoreNode):
+    name: String
+    port: Integer
+    severity: Dropdown
+    address: RelationshipAttribute[IpamIPAddress]
+    member_of_groups: RelationshipManager[CoreGroup]
+    profiles: RelationshipManager[CoreProfile]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+    syslog_config: RelationshipAttribute[ManagedSyslog]
+
+
+class SecurityTag(CoreNode):
+    color: StringOptional
+    description: StringOptional
+    group_id: Integer
+    name: String
+    member_of_groups: RelationshipManager[CoreGroup]
+    profiles: RelationshipManager[CoreProfile]
+    rules_as_source: RelationshipManager[SecurityTagRule]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class SecurityTagRule(CoreNode):
+    action: Dropdown
+    description: StringOptional
+    log: Boolean
+    destination_tag: RelationshipAttribute[SecurityTag]
+    member_of_groups: RelationshipManager[CoreGroup]
+    profiles: RelationshipManager[CoreProfile]
+    source_tag: RelationshipAttribute[SecurityTag]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class CloudTransitGateway(CloudResource):
+    cloud_id: StringOptional
+    default_route_table: Boolean
+    description: StringOptional
+    dns_support: Boolean
+    name: String
+    status: DropdownOptional
+    vpn_ecmp_support: Boolean
+    account: RelationshipAttribute[CloudAccount]
+    asn: RelationshipAttribute[RoutingAutonomousSystem]
+    attached_virtual_networks: RelationshipManager[CloudVirtualNetwork]
+    member_of_groups: RelationshipManager[CoreGroup]
+    profiles: RelationshipManager[CoreProfile]
+    region: RelationshipAttribute[TopologyCloudRegion]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+    virtual_circuits: RelationshipManager[TopologyVirtualCircuit]
+
+
+class ProxyURLCategory(CoreNode):
+    category_type: Dropdown
+    description: StringOptional
+    entries: StringOptional
+    name: String
+    member_of_groups: RelationshipManager[CoreGroup]
+    profiles: RelationshipManager[CoreProfile]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class LoadbalancerVIP(ManagedGenericInterfaces):
+    description: StringOptional
+    hostname: String
+    load_balancing_algorithm: DropdownOptional
+    max_connections: IntegerOptional
+    port: Integer
+    protocol: Dropdown
+    session_persistence: DropdownOptional
+    ssl_certificate: StringOptional
+    ssl_redirect: Boolean
+    status: Dropdown
+    timeout_client: IntegerOptional
+    timeout_server: IntegerOptional
+    app_components: RelationshipManager[AppComponent]
+    health_checks: RelationshipManager[LoadbalancerHealthCheck]
+    interface_capabilities: RelationshipManager[DcimInterface]
+    load_balancer: RelationshipAttribute[ManagedLoadBalancer]
+    member_of_groups: RelationshipManager[CoreGroup]
+    members: RelationshipManager[LoadbalancerPoolMember]
+    profiles: RelationshipManager[CoreProfile]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+    vip_ip: RelationshipAttribute[IpamIPAddress]
+
+
+class CloudVPNGateway(CloudResource, TopologyConnector):
+    cloud_id: StringOptional
+    description: String
+    name: String
+    status: DropdownOptional
+    vpn_type: Dropdown
+    asn: RelationshipAttribute[RoutingAutonomousSystem]
+    customer_gateway: RelationshipAttribute[CloudCustomerGateway]
+    member_of_groups: RelationshipManager[CoreGroup]
+    profiles: RelationshipManager[CoreProfile]
+    region: RelationshipAttribute[TopologyCloudRegion]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+    transit_gateway: RelationshipAttribute[CloudTransitGateway]
+    virtual_circuits: RelationshipManager[TopologyVirtualCircuit]
+    virtual_network: RelationshipAttribute[CloudVirtualNetwork]
+
+
+class TopologyVirtualCircuit(TopologyCircuit, ManagedGeneric):
+    bandwidth: IntegerOptional
+    cloud_resource_id: StringOptional
+    description: StringOptional
+    encryption: Boolean
+    link_type: Dropdown
+    name: String
+    status: Dropdown
+    tunnel_id: IntegerOptional
+    vni: IntegerOptional
+    cloud_endpoints: RelationshipManager[CloudResource]
+    interfaces: RelationshipManager[DcimInterface]
+    locations: RelationshipManager[TopologyConnectableLocation]
+    member_of_groups: RelationshipManager[CoreGroup]
+    profiles: RelationshipManager[CoreProfile]
+    provider: RelationshipAttribute[OrganizationProvider]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class DcimVirtualDevice(CoreArtifactTarget, DcimDevice, DcimCapabilities, AppInstance):
+    cpu: IntegerOptional
+    description: StringOptional
+    memory: IntegerOptional
+    name: String
+    os_version: StringOptional
+    role: DropdownOptional
+    status: Dropdown
+    storage: IntegerOptional
+    artifacts: RelationshipManager[CoreArtifact]
+    capabilities: RelationshipManager[ManagedGenericDevice]
+    deployment: RelationshipAttribute[TopologyDeployment]
+    device_type: RelationshipAttribute[DcimDeviceType]
+    hosting_device: RelationshipAttribute[DcimPhysicalDevice]
+    interfaces: RelationshipManager[DcimInterface]
+    member_of_groups: RelationshipManager[CoreGroup]
+    object_template: RelationshipAttribute[TemplateDcimVirtualDevice]
+    platform: RelationshipAttribute[DcimPlatform]
+    primary_address: RelationshipAttribute[IpamIPAddress]
+    profiles: RelationshipManager[CoreProfile]
+    software_image: RelationshipAttribute[DcimSoftwareImage]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+    tags: RelationshipManager[BuiltinTag]
+
+
+class DcimVirtualInterface(DcimInterface):
+    description: StringOptional
+    index: StringOptional
+    name: String
+    role: DropdownOptional
+    status: Dropdown
+    device: RelationshipAttribute[DcimDevice]
+    interface_capabilities: RelationshipManager[ManagedGenericInterfaces]
+    ip_address: RelationshipAttribute[IpamIPAddress]
+    member_of_groups: RelationshipManager[CoreGroup]
+    parent_interface: RelationshipAttribute[DcimPhysicalInterface]
+    profiles: RelationshipManager[CoreProfile]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+    tags: RelationshipManager[BuiltinTag]
+
+
+class CloudVirtualInterface(CloudResource):
+    cloud_id: StringOptional
+    description: StringOptional
+    name: String
+    status: DropdownOptional
+    vif_type: Dropdown
+    vlan_id: Integer
+    asn: RelationshipAttribute[RoutingAutonomousSystem]
+    direct_connect: RelationshipAttribute[CloudDirectConnect]
+    member_of_groups: RelationshipManager[CoreGroup]
+    profiles: RelationshipManager[CoreProfile]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+    transit_gateway: RelationshipAttribute[CloudTransitGateway]
+    virtual_circuits: RelationshipManager[TopologyVirtualCircuit]
+    virtual_network: RelationshipAttribute[CloudVirtualNetwork]
+
+
+class CloudVirtualNetwork(CloudResource):
+    cloud_id: StringOptional
+    description: StringOptional
+    dns_hostnames: Boolean
+    dns_support: Boolean
+    is_default: Boolean
+    is_shared: BooleanOptional
+    name: String
+    status: DropdownOptional
+    account: RelationshipAttribute[CloudAccount]
+    cidr_blocks: RelationshipManager[IpamPrefix]
+    member_of_groups: RelationshipManager[CoreGroup]
+    network_segments: RelationshipManager[CloudNetworkSegment]
+    profiles: RelationshipManager[CoreProfile]
+    region: RelationshipAttribute[TopologyCloudRegion]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+    virtual_circuits: RelationshipManager[TopologyVirtualCircuit]
+
+
+class ManagedVlanSegment(ManagedGeneric, ManagedNetworkSegment, ManagedGenericInterfaces):
+    customer_name: String
+    description: StringOptional
+    environment: Dropdown
+    isolation_mode: Dropdown
+    name: String
+    pbr_enabled: Boolean
+    segment_role: Dropdown
+    segment_type: Dropdown
+    status: Dropdown
+    vlan_id: IntegerOptional
+    customer_deployment: RelationshipAttribute[TopologyCustomer]
+    gateway: RelationshipAttribute[IpamIPAddress]
+    interface_capabilities: RelationshipManager[DcimInterface]
+    member_of_groups: RelationshipManager[CoreGroup]
+    owner: RelationshipAttribute[OrganizationCustomer]
+    profiles: RelationshipManager[CoreProfile]
+    security_policies: RelationshipManager[SecurityPolicy]
+    security_tag: RelationshipAttribute[SecurityTag]
+    security_zone: RelationshipAttribute[SecurityZone]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class ManagedVxlanSegment(ManagedGeneric, ManagedNetworkSegment, ManagedGenericInterfaces):
+    arp_suppression: Boolean
+    customer_name: String
+    description: StringOptional
+    environment: Dropdown
+    isolation_mode: Dropdown
+    name: String
+    pbr_enabled: Boolean
+    segment_role: Dropdown
+    segment_type: Dropdown
+    status: Dropdown
+    terminate_inline: Boolean
+    customer_deployments: RelationshipManager[TopologyCustomer]
+    gateway: RelationshipAttribute[IpamIPAddress]
+    inline_service: RelationshipAttribute[ManagedGeneric]
+    interface_capabilities: RelationshipManager[DcimInterface]
+    member_of_groups: RelationshipManager[CoreGroup]
+    owner: RelationshipAttribute[OrganizationCustomer]
+    profiles: RelationshipManager[CoreProfile]
+    security_policies: RelationshipManager[SecurityPolicy]
+    security_tag: RelationshipAttribute[SecurityTag]
+    security_zone: RelationshipAttribute[SecurityZone]
+    segment_deployments: RelationshipManager[ManagedSegmentDeployment]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
 
 
 class SecurityZone(CoreNode):
-    member_of_groups: RelationshipManager[CoreNode]
-    profiles: RelationshipManager[CoreNode]
-    subscriber_of_groups: RelationshipManager[CoreNode]
+    description: StringOptional
+    name: String
+    trust_level: Integer
+    zone_type: Dropdown
+    member_of_groups: RelationshipManager[CoreGroup]
+    network_segments: RelationshipManager[ManagedNetworkSegment]
+    profiles: RelationshipManager[CoreProfile]
+    rules_as_dest: RelationshipManager[SecurityPolicyRule]
+    rules_as_source: RelationshipManager[SecurityPolicyRule]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class ProfileAppApplication(LineageSource, CoreProfile, CoreNode):
+    cost_center: StringOptional
+    criticality: DropdownOptional
+    description: StringOptional
+    fqdn: StringOptional
+    ingress_mode: DropdownOptional
+    profile_name: String
+    profile_priority: Integer
+    security_profile: DropdownOptional
+    member_of_groups: RelationshipManager[CoreGroup]
+    related_nodes: RelationshipManager[AppApplication]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class ProfileAppComponent(LineageSource, CoreProfile, CoreNode):
+    component_type: DropdownOptional
+    description: StringOptional
+    profile_name: String
+    profile_priority: Integer
+    depends_on: RelationshipManager[AppDependency]
+    health_checks: RelationshipManager[LoadbalancerHealthCheck]
+    load_balancer: RelationshipAttribute[ManagedLoadbalancerHA]
+    member_of_groups: RelationshipManager[CoreGroup]
+    network_segment: RelationshipAttribute[ManagedNetworkSegment]
+    proxy_service: RelationshipAttribute[ManagedProxyService]
+    related_nodes: RelationshipManager[AppComponent]
+    service_ports: RelationshipManager[AppServicePort]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class ProfileAppDependency(LineageSource, CoreProfile, CoreNode):
+    access_expires_at: DateTimeOptional
+    access_status: DropdownOptional
+    decision_at: DateTimeOptional
+    decision_reason: StringOptional
+    description: StringOptional
+    profile_name: String
+    profile_priority: Integer
+    member_of_groups: RelationshipManager[CoreGroup]
+    related_nodes: RelationshipManager[AppDependency]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class ProfileAppGeneric(LineageSource, CoreProfile, CoreNode):
+    description: StringOptional
+    profile_name: String
+    profile_priority: Integer
+    member_of_groups: RelationshipManager[CoreGroup]
+    related_nodes: RelationshipManager[AppGeneric]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class ProfileAppInstance(LineageSource, CoreProfile, CoreNode):
+    profile_name: String
+    profile_priority: Integer
+    member_of_groups: RelationshipManager[CoreGroup]
+    related_nodes: RelationshipManager[AppInstance]
+    related_templates: RelationshipManager[TemplateAppInstance]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class ProfileAppPortfolio(LineageSource, CoreProfile, CoreNode):
+    description: StringOptional
+    profile_name: String
+    profile_priority: Integer
+    member_of_groups: RelationshipManager[CoreGroup]
+    related_nodes: RelationshipManager[AppPortfolio]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class ProfileAppServicePort(LineageSource, CoreProfile, CoreNode):
+    description: StringOptional
+    profile_name: String
+    profile_priority: Integer
+    member_of_groups: RelationshipManager[CoreGroup]
+    related_nodes: RelationshipManager[AppServicePort]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class ProfileBuiltinIPAddress(LineageSource, CoreProfile, CoreNode):
+    address: IPHostOptional
+    description: StringOptional
+    profile_name: String
+    profile_priority: Integer
+    ip_namespace: RelationshipAttribute[BuiltinIPNamespace]
+    member_of_groups: RelationshipManager[CoreGroup]
+    related_nodes: RelationshipManager[BuiltinIPAddress]
+    related_templates: RelationshipManager[TemplateBuiltinIPAddress]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class ProfileBuiltinIPPrefix(LineageSource, CoreProfile, CoreNode):
+    description: StringOptional
+    is_pool: BooleanOptional
+    member_type: DropdownOptional
+    prefix: IPNetworkOptional
+    profile_name: String
+    profile_priority: Integer
+    ip_namespace: RelationshipAttribute[BuiltinIPNamespace]
+    member_of_groups: RelationshipManager[CoreGroup]
+    related_nodes: RelationshipManager[BuiltinIPPrefix]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class ProfileBuiltinTag(LineageSource, CoreProfile, CoreNode):
+    description: StringOptional
+    profile_name: String
+    profile_priority: Integer
+    member_of_groups: RelationshipManager[CoreGroup]
+    related_nodes: RelationshipManager[BuiltinTag]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class ProfileCloudAccount(LineageSource, CoreProfile, CoreNode):
+    cloud_id: StringOptional
+    description: StringOptional
+    environment: DropdownOptional
+    profile_name: String
+    profile_priority: Integer
+    status: DropdownOptional
+    artifacts: RelationshipManager[CoreArtifact]
+    member_of_groups: RelationshipManager[CoreGroup]
+    owner: RelationshipAttribute[OrganizationEntity]
+    related_nodes: RelationshipManager[CloudAccount]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+    virtual_circuits: RelationshipManager[TopologyVirtualCircuit]
+
+
+class ProfileCloudCustomerGateway(LineageSource, CoreProfile, CoreNode):
+    cloud_id: StringOptional
+    description: StringOptional
+    device_type: DropdownOptional
+    profile_name: String
+    profile_priority: Integer
+    status: DropdownOptional
+    asn: RelationshipAttribute[RoutingAutonomousSystem]
+    ip_address: RelationshipAttribute[IpamIPAddress]
+    member_of_groups: RelationshipManager[CoreGroup]
+    physical_device: RelationshipAttribute[DcimDevice]
+    related_nodes: RelationshipManager[CloudCustomerGateway]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+    virtual_circuits: RelationshipManager[TopologyVirtualCircuit]
+
+
+class ProfileCloudDirectConnect(LineageSource, CoreProfile, CoreNode):
+    bandwidth: StringOptional
+    cloud_id: StringOptional
+    connection_type: DropdownOptional
+    description: StringOptional
+    profile_name: String
+    profile_priority: Integer
+    status: DropdownOptional
+    vlan_id: IntegerOptional
+    location: RelationshipAttribute[LocationBuilding]
+    member_of_groups: RelationshipManager[CoreGroup]
+    physical_devices: RelationshipManager[DcimDevice]
+    region: RelationshipAttribute[TopologyCloudRegion]
+    related_nodes: RelationshipManager[CloudDirectConnect]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+    virtual_circuits: RelationshipManager[TopologyVirtualCircuit]
+    virtual_interfaces: RelationshipManager[CloudVirtualInterface]
+
+
+class ProfileCloudInstance(LineageSource, CoreProfile, CoreNode):
+    cpu_count: IntegerOptional
+    description: StringOptional
+    image: StringOptional
+    instance_type: StringOptional
+    memory_gb: IntegerOptional
+    os_type: DropdownOptional
+    private_ip: IPHostOptional
+    profile_name: String
+    profile_priority: Integer
+    public_ip: IPHostOptional
+    root_volume_size_gb: IntegerOptional
+    status: DropdownOptional
+    availability_zone: RelationshipAttribute[TopologyCloudZone]
+    capabilities: RelationshipManager[ManagedGenericDevice]
+    member_of_groups: RelationshipManager[CoreGroup]
+    network_segment: RelationshipAttribute[CloudNetworkSegment]
+    node_pool: RelationshipAttribute[VirtNodePool]
+    related_nodes: RelationshipManager[CloudInstance]
+    security_groups: RelationshipManager[CloudSecurityGroup]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+    virtual_circuits: RelationshipManager[TopologyVirtualCircuit]
+
+
+class ProfileCloudInternetGateway(LineageSource, CoreProfile, CoreNode):
+    cloud_id: StringOptional
+    description: StringOptional
+    profile_name: String
+    profile_priority: Integer
+    status: DropdownOptional
+    account: RelationshipAttribute[CloudAccount]
+    member_of_groups: RelationshipManager[CoreGroup]
+    related_nodes: RelationshipManager[CloudInternetGateway]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+    virtual_circuits: RelationshipManager[TopologyVirtualCircuit]
+
+
+class ProfileCloudLoadBalancer(LineageSource, CoreProfile, CoreNode):
+    cloud_id: StringOptional
+    description: StringOptional
+    lb_type: DropdownOptional
+    lb_vendor: DropdownOptional
+    profile_name: String
+    profile_priority: Integer
+    scheme: DropdownOptional
+    status: DropdownOptional
+    artifacts: RelationshipManager[CoreArtifact]
+    member_of_groups: RelationshipManager[CoreGroup]
+    network_segments: RelationshipManager[CloudNetworkSegment]
+    public_ips: RelationshipManager[CloudPublicIP]
+    related_nodes: RelationshipManager[CloudLoadBalancer]
+    security_groups: RelationshipManager[CloudSecurityGroup]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+    tags: RelationshipManager[BuiltinTag]
+    virtual_circuits: RelationshipManager[TopologyVirtualCircuit]
+
+
+class ProfileCloudNATGateway(LineageSource, CoreProfile, CoreNode):
+    cloud_id: StringOptional
+    description: StringOptional
+    profile_name: String
+    profile_priority: Integer
+    public_ip: IPHostOptional
+    status: DropdownOptional
+    account: RelationshipAttribute[CloudAccount]
+    member_of_groups: RelationshipManager[CoreGroup]
+    network_segments: RelationshipManager[CloudNetworkSegment]
+    related_nodes: RelationshipManager[CloudNATGateway]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+    virtual_circuits: RelationshipManager[TopologyVirtualCircuit]
+
+
+class ProfileCloudNetworkSegment(LineageSource, CoreProfile, CoreNode):
+    auto_assign_public_ip: BooleanOptional
+    cloud_id: StringOptional
+    description: StringOptional
+    environment: DropdownOptional
+    is_public: BooleanOptional
+    isolation_mode: DropdownOptional
+    pbr_enabled: BooleanOptional
+    profile_name: String
+    profile_priority: Integer
+    segment_role: DropdownOptional
+    segment_type: DropdownOptional
+    status: DropdownOptional
+    availability_zone: RelationshipAttribute[TopologyCloudZone]
+    cidr_block: RelationshipAttribute[IpamPrefix]
+    customer_deployment: RelationshipAttribute[TopologyCustomer]
+    gateway: RelationshipAttribute[IpamIPAddress]
+    ip_prefixes: RelationshipManager[IpamPrefix]
+    member_of_groups: RelationshipManager[CoreGroup]
+    owner: RelationshipAttribute[OrganizationCustomer]
+    related_nodes: RelationshipManager[CloudNetworkSegment]
+    security_policies: RelationshipManager[SecurityPolicy]
+    security_tag: RelationshipAttribute[SecurityTag]
+    security_zone: RelationshipAttribute[SecurityZone]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+    tags: RelationshipManager[BuiltinTag]
+    virtual_circuits: RelationshipManager[TopologyVirtualCircuit]
+
+
+class ProfileCloudPublicIP(LineageSource, CoreProfile, CoreNode):
+    cloud_id: StringOptional
+    description: StringOptional
+    profile_name: String
+    profile_priority: Integer
+    status: DropdownOptional
+    instance: RelationshipAttribute[CloudInstance]
+    member_of_groups: RelationshipManager[CoreGroup]
+    region: RelationshipAttribute[TopologyCloudRegion]
+    related_nodes: RelationshipManager[CloudPublicIP]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+    virtual_circuits: RelationshipManager[TopologyVirtualCircuit]
+
+
+class ProfileCloudResource(LineageSource, CoreProfile, CoreNode):
+    cloud_id: StringOptional
+    description: StringOptional
+    profile_name: String
+    profile_priority: Integer
+    status: DropdownOptional
+    member_of_groups: RelationshipManager[CoreGroup]
+    related_nodes: RelationshipManager[CloudResource]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+    virtual_circuits: RelationshipManager[TopologyVirtualCircuit]
+
+
+class ProfileCloudRoute(LineageSource, CoreProfile, CoreNode):
+    cloud_id: StringOptional
+    description: StringOptional
+    profile_name: String
+    profile_priority: Integer
+    status: DropdownOptional
+    instance: RelationshipAttribute[CloudInstance]
+    internet_gateway: RelationshipAttribute[CloudInternetGateway]
+    member_of_groups: RelationshipManager[CoreGroup]
+    nat_gateway: RelationshipAttribute[CloudNATGateway]
+    related_nodes: RelationshipManager[CloudRoute]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+    virtual_circuits: RelationshipManager[TopologyVirtualCircuit]
+
+
+class ProfileCloudRouteTable(LineageSource, CoreProfile, CoreNode):
+    cloud_id: StringOptional
+    description: StringOptional
+    is_main: BooleanOptional
+    profile_name: String
+    profile_priority: Integer
+    status: DropdownOptional
+    member_of_groups: RelationshipManager[CoreGroup]
+    network_segments: RelationshipManager[CloudNetworkSegment]
+    related_nodes: RelationshipManager[CloudRouteTable]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+    virtual_circuits: RelationshipManager[TopologyVirtualCircuit]
+
+
+class ProfileCloudSecurityGroup(LineageSource, CoreProfile, CoreNode):
+    cloud_id: StringOptional
+    description: StringOptional
+    profile_name: String
+    profile_priority: Integer
+    status: DropdownOptional
+    account: RelationshipAttribute[CloudAccount]
+    member_of_groups: RelationshipManager[CoreGroup]
+    related_nodes: RelationshipManager[CloudSecurityGroup]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+    virtual_circuits: RelationshipManager[TopologyVirtualCircuit]
+
+
+class ProfileCloudSecurityGroupRule(LineageSource, CoreProfile, CoreNode):
+    action: DropdownOptional
+    cloud_id: StringOptional
+    description: StringOptional
+    dest_cidr: StringOptional
+    direction: DropdownOptional
+    disabled: BooleanOptional
+    log: BooleanOptional
+    port_end: IntegerOptional
+    port_start: IntegerOptional
+    priority: IntegerOptional
+    profile_name: String
+    profile_priority: Integer
+    protocol: DropdownOptional
+    source_cidr: StringOptional
+    status: DropdownOptional
+    member_of_groups: RelationshipManager[CoreGroup]
+    related_nodes: RelationshipManager[CloudSecurityGroupRule]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+    virtual_circuits: RelationshipManager[TopologyVirtualCircuit]
+
+
+class ProfileCloudTransitGateway(LineageSource, CoreProfile, CoreNode):
+    cloud_id: StringOptional
+    default_route_table: BooleanOptional
+    description: StringOptional
+    dns_support: BooleanOptional
+    profile_name: String
+    profile_priority: Integer
+    status: DropdownOptional
+    vpn_ecmp_support: BooleanOptional
+    asn: RelationshipAttribute[RoutingAutonomousSystem]
+    attached_virtual_networks: RelationshipManager[CloudVirtualNetwork]
+    member_of_groups: RelationshipManager[CoreGroup]
+    region: RelationshipAttribute[TopologyCloudRegion]
+    related_nodes: RelationshipManager[CloudTransitGateway]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+    virtual_circuits: RelationshipManager[TopologyVirtualCircuit]
+
+
+class ProfileCloudVPNGateway(LineageSource, CoreProfile, CoreNode):
+    cloud_id: StringOptional
+    description: StringOptional
+    profile_name: String
+    profile_priority: Integer
+    status: DropdownOptional
+    vpn_type: DropdownOptional
+    asn: RelationshipAttribute[RoutingAutonomousSystem]
+    customer_gateway: RelationshipAttribute[CloudCustomerGateway]
+    member_of_groups: RelationshipManager[CoreGroup]
+    region: RelationshipAttribute[TopologyCloudRegion]
+    related_nodes: RelationshipManager[CloudVPNGateway]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+    transit_gateway: RelationshipAttribute[CloudTransitGateway]
+    virtual_circuits: RelationshipManager[TopologyVirtualCircuit]
+
+
+class ProfileCloudVirtualInterface(LineageSource, CoreProfile, CoreNode):
+    cloud_id: StringOptional
+    description: StringOptional
+    profile_name: String
+    profile_priority: Integer
+    status: DropdownOptional
+    vif_type: DropdownOptional
+    asn: RelationshipAttribute[RoutingAutonomousSystem]
+    member_of_groups: RelationshipManager[CoreGroup]
+    related_nodes: RelationshipManager[CloudVirtualInterface]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+    transit_gateway: RelationshipAttribute[CloudTransitGateway]
+    virtual_circuits: RelationshipManager[TopologyVirtualCircuit]
+    virtual_network: RelationshipAttribute[CloudVirtualNetwork]
+
+
+class ProfileCloudVirtualNetwork(LineageSource, CoreProfile, CoreNode):
+    cloud_id: StringOptional
+    description: StringOptional
+    dns_hostnames: BooleanOptional
+    dns_support: BooleanOptional
+    is_default: BooleanOptional
+    is_shared: BooleanOptional
+    profile_name: String
+    profile_priority: Integer
+    status: DropdownOptional
+    cidr_blocks: RelationshipManager[IpamPrefix]
+    member_of_groups: RelationshipManager[CoreGroup]
+    region: RelationshipAttribute[TopologyCloudRegion]
+    related_nodes: RelationshipManager[CloudVirtualNetwork]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+    virtual_circuits: RelationshipManager[TopologyVirtualCircuit]
+
+
+class ProfileDcimBidiSFP(LineageSource, CoreProfile, CoreNode):
+    form_factor: DropdownOptional
+    profile_name: String
+    profile_priority: Integer
+    serial: StringOptional
+    sfp_type: DropdownOptional
+    status: DropdownOptional
+    wavelength_rx: IntegerOptional
+    wavelength_tx: IntegerOptional
+    interface: RelationshipAttribute[DcimInterface]
+    manufacturer: RelationshipAttribute[OrganizationManufacturer]
+    member_of_groups: RelationshipManager[CoreGroup]
+    related_nodes: RelationshipManager[DcimBidiSFP]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class ProfileDcimCable(LineageSource, CoreProfile, CoreNode):
+    profile_name: String
+    profile_priority: Integer
+    type: DropdownOptional
+    deployment: RelationshipAttribute[TopologyPhysicalDeployment]
+    endpoints: RelationshipManager[DcimEndpoint]
+    member_of_groups: RelationshipManager[CoreGroup]
+    related_nodes: RelationshipManager[DcimCable]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class ProfileDcimCapabilities(LineageSource, CoreProfile, CoreNode):
+    profile_name: String
+    profile_priority: Integer
+    capabilities: RelationshipManager[ManagedGenericDevice]
+    member_of_groups: RelationshipManager[CoreGroup]
+    related_nodes: RelationshipManager[DcimCapabilities]
+    related_templates: RelationshipManager[TemplateDcimCapabilities]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class ProfileDcimConsoleInterface(LineageSource, CoreProfile, CoreNode):
+    description: StringOptional
+    port: IntegerOptional
+    profile_name: String
+    profile_priority: Integer
+    role: DropdownOptional
+    speed: IntegerOptional
+    status: DropdownOptional
+    artifacts: RelationshipManager[CoreArtifact]
+    cable: RelationshipAttribute[DcimCable]
+    interface_capabilities: RelationshipManager[ManagedGenericInterfaces]
+    member_of_groups: RelationshipManager[CoreGroup]
+    related_nodes: RelationshipManager[DcimConsoleInterface]
+    related_templates: RelationshipManager[TemplateDcimConsoleInterface]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+    tags: RelationshipManager[BuiltinTag]
+
+
+class ProfileDcimDevice(LineageSource, CoreProfile, CoreNode):
+    description: StringOptional
+    os_version: StringOptional
+    profile_name: String
+    profile_priority: Integer
+    role: DropdownOptional
+    status: DropdownOptional
+    device_type: RelationshipAttribute[DcimDeviceType]
+    member_of_groups: RelationshipManager[CoreGroup]
+    platform: RelationshipAttribute[DcimPlatform]
+    related_nodes: RelationshipManager[DcimDevice]
+    related_templates: RelationshipManager[TemplateDcimDevice]
+    software_image: RelationshipAttribute[DcimSoftwareImage]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+    tags: RelationshipManager[BuiltinTag]
+
+
+class ProfileDcimDeviceType(LineageSource, CoreProfile, CoreNode):
+    core_count: IntegerOptional
+    cpu_count: IntegerOptional
+    description: StringOptional
+    full_depth: BooleanOptional
+    height: IntegerOptional
+    max_routes: IntegerOptional
+    memory_gb: IntegerOptional
+    part_number: StringOptional
+    profile_name: String
+    profile_priority: Integer
+    storage_gb: IntegerOptional
+    tcam_entries: IntegerOptional
+    weight: IntegerOptional
+    member_of_groups: RelationshipManager[CoreGroup]
+    platform: RelationshipAttribute[DcimPlatform]
+    related_nodes: RelationshipManager[DcimDeviceType]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+    tags: RelationshipManager[BuiltinTag]
+
+
+class ProfileDcimEndpoint(LineageSource, CoreProfile, CoreNode):
+    profile_name: String
+    profile_priority: Integer
+    cable: RelationshipAttribute[DcimCable]
+    member_of_groups: RelationshipManager[CoreGroup]
+    related_nodes: RelationshipManager[DcimEndpoint]
+    related_templates: RelationshipManager[TemplateDcimEndpoint]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class ProfileDcimGenericSFP(LineageSource, CoreProfile, CoreNode):
+    form_factor: DropdownOptional
+    profile_name: String
+    profile_priority: Integer
+    serial: StringOptional
+    sfp_type: DropdownOptional
+    status: DropdownOptional
+    interface: RelationshipAttribute[DcimInterface]
+    manufacturer: RelationshipAttribute[OrganizationManufacturer]
+    member_of_groups: RelationshipManager[CoreGroup]
+    related_nodes: RelationshipManager[DcimGenericSFP]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class ProfileDcimInterface(LineageSource, CoreProfile, CoreNode):
+    description: StringOptional
+    profile_name: String
+    profile_priority: Integer
+    role: DropdownOptional
+    status: DropdownOptional
+    interface_capabilities: RelationshipManager[ManagedGenericInterfaces]
+    member_of_groups: RelationshipManager[CoreGroup]
+    related_nodes: RelationshipManager[DcimInterface]
+    related_templates: RelationshipManager[TemplateDcimInterface]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+    tags: RelationshipManager[BuiltinTag]
+
+
+class ProfileDcimLAGInterface(LineageSource, CoreProfile, CoreNode):
+    description: StringOptional
+    lacp_mode: DropdownOptional
+    lag_id: IntegerOptional
+    minimum_links: IntegerOptional
+    mtu: IntegerOptional
+    profile_name: String
+    profile_priority: Integer
+    role: DropdownOptional
+    status: DropdownOptional
+    interface_capabilities: RelationshipManager[ManagedGenericInterfaces]
+    member_interfaces: RelationshipManager[DcimPhysicalInterface]
+    member_of_groups: RelationshipManager[CoreGroup]
+    mlag_domain: RelationshipAttribute[ManagedMLAG]
+    related_nodes: RelationshipManager[DcimLAGInterface]
+    related_templates: RelationshipManager[TemplateDcimLAGInterface]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+    tags: RelationshipManager[BuiltinTag]
+
+
+class ProfileDcimPhysicalDevice(LineageSource, CoreProfile, CoreNode):
+    description: StringOptional
+    os_version: StringOptional
+    position: IntegerOptional
+    profile_name: String
+    profile_priority: Integer
+    rack_face: DropdownOptional
+    role: DropdownOptional
+    serial: StringOptional
+    status: DropdownOptional
+    artifacts: RelationshipManager[CoreArtifact]
+    capabilities: RelationshipManager[ManagedGenericDevice]
+    deployment: RelationshipAttribute[TopologyDeployment]
+    device_type: RelationshipAttribute[DcimDeviceType]
+    member_of_groups: RelationshipManager[CoreGroup]
+    platform: RelationshipAttribute[DcimPlatform]
+    rack: RelationshipAttribute[LocationRack]
+    related_nodes: RelationshipManager[DcimPhysicalDevice]
+    related_templates: RelationshipManager[TemplateDcimPhysicalDevice]
+    software_image: RelationshipAttribute[DcimSoftwareImage]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+    tags: RelationshipManager[BuiltinTag]
+
+
+class ProfileDcimPhysicalInterface(LineageSource, CoreProfile, CoreNode):
+    description: StringOptional
+    interface_type: DropdownOptional
+    mtu: IntegerOptional
+    profile_name: String
+    profile_priority: Integer
+    role: DropdownOptional
+    status: DropdownOptional
+    cable: RelationshipAttribute[DcimCable]
+    interface_capabilities: RelationshipManager[ManagedGenericInterfaces]
+    lag: RelationshipAttribute[DcimLAGInterface]
+    member_of_groups: RelationshipManager[CoreGroup]
+    plugged_sfp: RelationshipAttribute[DcimGenericSFP]
+    related_nodes: RelationshipManager[DcimPhysicalInterface]
+    related_templates: RelationshipManager[TemplateDcimPhysicalInterface]
+    sub_interfaces: RelationshipManager[DcimVirtualInterface]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+    tags: RelationshipManager[BuiltinTag]
+
+
+class ProfileDcimPlatform(LineageSource, CoreProfile, CoreNode):
+    ansible_network_os: StringOptional
+    containerlab_os: StringOptional
+    description: StringOptional
+    napalm_driver: StringOptional
+    netmiko_device_type: StringOptional
+    nornir_platform: StringOptional
+    profile_name: String
+    profile_priority: Integer
+    devices: RelationshipManager[DcimDevice]
+    manufacturer: RelationshipAttribute[OrganizationManufacturer]
+    member_of_groups: RelationshipManager[CoreGroup]
+    related_nodes: RelationshipManager[DcimPlatform]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class ProfileDcimSoftwareImage(LineageSource, CoreProfile, CoreNode):
+    description: StringOptional
+    end_of_life: DateTimeOptional
+    end_of_support: DateTimeOptional
+    is_approved: BooleanOptional
+    is_recommended: BooleanOptional
+    known_cve_count: IntegerOptional
+    profile_name: String
+    profile_priority: Integer
+    release_date: DateTimeOptional
+    release_notes_url: URLOptional
+    release_type: DropdownOptional
+    devices: RelationshipManager[DcimDevice]
+    member_of_groups: RelationshipManager[CoreGroup]
+    related_nodes: RelationshipManager[DcimSoftwareImage]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class ProfileDcimStandardSFP(LineageSource, CoreProfile, CoreNode):
+    form_factor: DropdownOptional
+    profile_name: String
+    profile_priority: Integer
+    serial: StringOptional
+    sfp_type: DropdownOptional
+    status: DropdownOptional
+    interface: RelationshipAttribute[DcimInterface]
+    manufacturer: RelationshipAttribute[OrganizationManufacturer]
+    member_of_groups: RelationshipManager[CoreGroup]
+    related_nodes: RelationshipManager[DcimStandardSFP]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class ProfileDcimSubInterface(LineageSource, CoreProfile, CoreNode):
+    profile_name: String
+    profile_priority: Integer
+    member_of_groups: RelationshipManager[CoreGroup]
+    related_nodes: RelationshipManager[DcimSubInterface]
+    related_templates: RelationshipManager[TemplateDcimSubInterface]
+    sub_interfaces: RelationshipManager[DcimVirtualInterface]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class ProfileDcimVirtualDevice(LineageSource, CoreProfile, CoreNode):
+    cpu: IntegerOptional
+    description: StringOptional
+    memory: IntegerOptional
+    os_version: StringOptional
+    profile_name: String
+    profile_priority: Integer
+    role: DropdownOptional
+    status: DropdownOptional
+    storage: IntegerOptional
+    artifacts: RelationshipManager[CoreArtifact]
+    capabilities: RelationshipManager[ManagedGenericDevice]
+    deployment: RelationshipAttribute[TopologyDeployment]
+    device_type: RelationshipAttribute[DcimDeviceType]
+    hosting_device: RelationshipAttribute[DcimPhysicalDevice]
+    member_of_groups: RelationshipManager[CoreGroup]
+    platform: RelationshipAttribute[DcimPlatform]
+    related_nodes: RelationshipManager[DcimVirtualDevice]
+    related_templates: RelationshipManager[TemplateDcimVirtualDevice]
+    software_image: RelationshipAttribute[DcimSoftwareImage]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+    tags: RelationshipManager[BuiltinTag]
+
+
+class ProfileDcimVirtualInterface(LineageSource, CoreProfile, CoreNode):
+    description: StringOptional
+    profile_name: String
+    profile_priority: Integer
+    role: DropdownOptional
+    status: DropdownOptional
+    interface_capabilities: RelationshipManager[ManagedGenericInterfaces]
+    ip_address: RelationshipAttribute[IpamIPAddress]
+    member_of_groups: RelationshipManager[CoreGroup]
+    parent_interface: RelationshipAttribute[DcimPhysicalInterface]
+    related_nodes: RelationshipManager[DcimVirtualInterface]
+    related_templates: RelationshipManager[TemplateDcimVirtualInterface]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+    tags: RelationshipManager[BuiltinTag]
+
+
+class ProfileIpamIPAddress(LineageSource, CoreProfile, CoreNode):
+    description: StringOptional
+    fqdn: StringOptional
+    profile_name: String
+    profile_priority: Integer
+    member_of_groups: RelationshipManager[CoreGroup]
+    related_nodes: RelationshipManager[IpamIPAddress]
+    related_templates: RelationshipManager[TemplateIpamIPAddress]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class ProfileIpamNamespace(LineageSource, CoreProfile, CoreNode):
+    description: StringOptional
+    l3_vni: IntegerOptional
+    profile_name: String
+    profile_priority: Integer
+    ip_addresses: RelationshipManager[BuiltinIPAddress]
+    ip_prefixes: RelationshipManager[BuiltinIPPrefix]
+    member_of_groups: RelationshipManager[CoreGroup]
+    related_nodes: RelationshipManager[IpamNamespace]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class ProfileIpamPrefix(LineageSource, CoreProfile, CoreNode):
+    description: StringOptional
+    is_pool: BooleanOptional
+    member_type: DropdownOptional
+    profile_name: String
+    profile_priority: Integer
+    role: DropdownOptional
+    status: DropdownOptional
+    member_of_groups: RelationshipManager[CoreGroup]
+    related_nodes: RelationshipManager[IpamPrefix]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class ProfileLoadbalancerHealthCheck(LineageSource, CoreProfile, CoreNode):
+    profile_name: String
+    profile_priority: Integer
+    member_of_groups: RelationshipManager[CoreGroup]
+    related_nodes: RelationshipManager[LoadbalancerHealthCheck]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+    vip_services: RelationshipManager[LoadbalancerVIP]
+
+
+class ProfileLoadbalancerPoolInterface(LineageSource, CoreProfile, CoreNode):
+    description: StringOptional
+    port: IntegerOptional
+    profile_name: String
+    profile_priority: Integer
+    status: DropdownOptional
+    interface_capabilities: RelationshipManager[DcimInterface]
+    ip_address: RelationshipAttribute[IpamIPAddress]
+    member_of_groups: RelationshipManager[CoreGroup]
+    pool_member: RelationshipAttribute[LoadbalancerPoolMember]
+    related_nodes: RelationshipManager[LoadbalancerPoolInterface]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class ProfileLoadbalancerPoolMember(LineageSource, CoreProfile, CoreNode):
+    description: StringOptional
+    drain_timeout: IntegerOptional
+    profile_name: String
+    profile_priority: Integer
+    status: DropdownOptional
+    weight: IntegerOptional
+    capabilities: RelationshipManager[DcimCapabilities]
+    member_of_groups: RelationshipManager[CoreGroup]
+    pool_interfaces: RelationshipManager[LoadbalancerPoolInterface]
+    related_nodes: RelationshipManager[LoadbalancerPoolMember]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+    vip_service: RelationshipAttribute[LoadbalancerVIP]
+
+
+class ProfileLoadbalancerVIP(LineageSource, CoreProfile, CoreNode):
+    description: StringOptional
+    load_balancing_algorithm: DropdownOptional
+    max_connections: IntegerOptional
+    profile_name: String
+    profile_priority: Integer
+    session_persistence: DropdownOptional
+    ssl_certificate: StringOptional
+    ssl_redirect: BooleanOptional
+    status: DropdownOptional
+    timeout_client: IntegerOptional
+    timeout_server: IntegerOptional
+    app_components: RelationshipManager[AppComponent]
+    health_checks: RelationshipManager[LoadbalancerHealthCheck]
+    interface_capabilities: RelationshipManager[DcimInterface]
+    member_of_groups: RelationshipManager[CoreGroup]
+    members: RelationshipManager[LoadbalancerPoolMember]
+    related_nodes: RelationshipManager[LoadbalancerVIP]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+    vip_ip: RelationshipAttribute[IpamIPAddress]
+
+
+class ProfileLocationBuilding(LineageSource, CoreProfile, CoreNode):
+    facility_id: StringOptional
+    is_cloud: BooleanOptional
+    name: StringOptional
+    physical_address: StringOptional
+    profile_name: String
+    profile_priority: Integer
+    member_of_groups: RelationshipManager[CoreGroup]
+    owner: RelationshipAttribute[OrganizationGeneric]
+    related_nodes: RelationshipManager[LocationBuilding]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+    tags: RelationshipManager[BuiltinTag]
+
+
+class ProfileLocationCountry(LineageSource, CoreProfile, CoreNode):
+    profile_name: String
+    profile_priority: Integer
+    timezone: StringOptional
+    member_of_groups: RelationshipManager[CoreGroup]
+    related_nodes: RelationshipManager[LocationCountry]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+    tags: RelationshipManager[BuiltinTag]
+
+
+class ProfileLocationGeneric(LineageSource, CoreProfile, CoreNode):
+    name: StringOptional
+    profile_name: String
+    profile_priority: Integer
+    member_of_groups: RelationshipManager[CoreGroup]
+    related_nodes: RelationshipManager[LocationGeneric]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+    tags: RelationshipManager[BuiltinTag]
+
+
+class ProfileLocationMetro(LineageSource, CoreProfile, CoreNode):
+    name: StringOptional
+    profile_name: String
+    profile_priority: Integer
+    member_of_groups: RelationshipManager[CoreGroup]
+    related_nodes: RelationshipManager[LocationMetro]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+    tags: RelationshipManager[BuiltinTag]
+
+
+class ProfileLocationRack(LineageSource, CoreProfile, CoreNode):
+    facility_id: StringOptional
+    height: IntegerOptional
+    index: IntegerOptional
+    profile_name: String
+    profile_priority: Integer
+    rack_type: DropdownOptional
+    row_index: IntegerOptional
+    artifacts: RelationshipManager[CoreArtifact]
+    devices: RelationshipManager[DcimPhysicalDevice]
+    fabric_templates: RelationshipManager[TopologyElement]
+    member_of_groups: RelationshipManager[CoreGroup]
+    owner: RelationshipAttribute[OrganizationGeneric]
+    pod: RelationshipAttribute[TopologyRackHosting]
+    related_nodes: RelationshipManager[LocationRack]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+    tags: RelationshipManager[BuiltinTag]
+
+
+class ProfileLocationRegion(LineageSource, CoreProfile, CoreNode):
+    profile_name: String
+    profile_priority: Integer
+    member_of_groups: RelationshipManager[CoreGroup]
+    related_nodes: RelationshipManager[LocationRegion]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+    tags: RelationshipManager[BuiltinTag]
+
+
+class ProfileLocationSuite(LineageSource, CoreProfile, CoreNode):
+    index: IntegerOptional
+    profile_name: String
+    profile_priority: Integer
+    suite_name: StringOptional
+    member_of_groups: RelationshipManager[CoreGroup]
+    owner: RelationshipAttribute[OrganizationGeneric]
+    related_nodes: RelationshipManager[LocationSuite]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+    tags: RelationshipManager[BuiltinTag]
+
+
+class ProfileManagedAAA(LineageSource, CoreProfile, CoreNode):
+    accounting_enabled: BooleanOptional
+    authentication_order: DropdownOptional
+    authorization_commands: BooleanOptional
+    description: StringOptional
+    profile_name: String
+    profile_priority: Integer
+    status: DropdownOptional
+    capabilities: RelationshipManager[DcimCapabilities]
+    member_of_groups: RelationshipManager[CoreGroup]
+    related_nodes: RelationshipManager[ManagedAAA]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class ProfileManagedAAAServer(LineageSource, CoreProfile, CoreNode):
+    port: IntegerOptional
+    profile_name: String
+    profile_priority: Integer
+    protocol: DropdownOptional
+    secret_key: StringOptional
+    timeout: IntegerOptional
+    address: RelationshipAttribute[IpamIPAddress]
+    member_of_groups: RelationshipManager[CoreGroup]
+    related_nodes: RelationshipManager[ManagedAAAServer]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class ProfileManagedBGP(LineageSource, CoreProfile, CoreNode):
+    confederation_identifier: IntegerOptional
+    description: StringOptional
+    graceful_restart: BooleanOptional
+    multipath: BooleanOptional
+    profile_name: String
+    profile_priority: Integer
+    status: DropdownOptional
+    capabilities: RelationshipManager[DcimCapabilities]
+    local_as: RelationshipAttribute[RoutingAutonomousSystem]
+    member_of_groups: RelationshipManager[CoreGroup]
+    peerings: RelationshipManager[ManagedBGPPeering]
+    related_nodes: RelationshipManager[ManagedBGP]
+    router_id: RelationshipAttribute[IpamIPAddress]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class ProfileManagedBGPPeering(LineageSource, CoreProfile, CoreNode):
+    bfd_enabled: BooleanOptional
+    description: StringOptional
+    local_pref: IntegerOptional
+    maximum_routes: IntegerOptional
+    med: IntegerOptional
+    profile_name: String
+    profile_priority: Integer
+    remove_private_as: BooleanOptional
+    route_reflector_client: BooleanOptional
+    send_community: BooleanOptional
+    send_extended_community: BooleanOptional
+    session_type: DropdownOptional
+    status: DropdownOptional
+    ttl: IntegerOptional
+    address_families: RelationshipManager[RoutingBGPAddressFamily]
+    bgp_processes: RelationshipManager[ManagedBGP]
+    interface_capabilities: RelationshipManager[DcimInterface]
+    member_of_groups: RelationshipManager[CoreGroup]
+    password: RelationshipAttribute[RoutingPassword]
+    related_nodes: RelationshipManager[ManagedBGPPeering]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class ProfileManagedCRMService(LineageSource, CoreProfile, CoreNode):
+    contract_end_date: StringOptional
+    data_classification: DropdownOptional
+    description: StringOptional
+    instance_url: StringOptional
+    profile_name: String
+    profile_priority: Integer
+    provider: DropdownOptional
+    sandbox: BooleanOptional
+    service_tier: DropdownOptional
+    status: DropdownOptional
+    tenant_id: StringOptional
+    member_of_groups: RelationshipManager[CoreGroup]
+    related_nodes: RelationshipManager[ManagedCRMService]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class ProfileManagedCloudFirewallHA(LineageSource, CoreProfile, CoreNode):
+    description: StringOptional
+    group_id: IntegerOptional
+    mode: DropdownOptional
+    policy_arn: StringOptional
+    preempt: BooleanOptional
+    priority: IntegerOptional
+    profile_name: String
+    profile_priority: Integer
+    provider: DropdownOptional
+    region: StringOptional
+    status: DropdownOptional
+    member_of_groups: RelationshipManager[CoreGroup]
+    related_nodes: RelationshipManager[ManagedCloudFirewallHA]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class ProfileManagedCloudProxy(LineageSource, CoreProfile, CoreNode):
+    contract_end_date: StringOptional
+    data_classification: DropdownOptional
+    deployment_model: DropdownOptional
+    description: StringOptional
+    profile_name: String
+    profile_priority: Integer
+    provider: DropdownOptional
+    region: StringOptional
+    service_tier: DropdownOptional
+    status: DropdownOptional
+    tenant_id: StringOptional
+    member_of_groups: RelationshipManager[CoreGroup]
+    related_nodes: RelationshipManager[ManagedCloudProxy]
+    shared_policies: RelationshipManager[ProxyPolicy]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class ProfileManagedConferencingService(LineageSource, CoreProfile, CoreNode):
+    contract_end_date: StringOptional
+    data_classification: DropdownOptional
+    description: StringOptional
+    media_optimization: BooleanOptional
+    profile_name: String
+    profile_priority: Integer
+    provider: DropdownOptional
+    service_tier: DropdownOptional
+    status: DropdownOptional
+    tenant_id: StringOptional
+    member_of_groups: RelationshipManager[CoreGroup]
+    related_nodes: RelationshipManager[ManagedConferencingService]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class ProfileManagedExternalEndpoint(LineageSource, CoreProfile, CoreNode):
+    profile_name: String
+    profile_priority: Integer
+    asn: RelationshipAttribute[RoutingAutonomousSystem]
+    bgp_ip: RelationshipAttribute[IpamIPAddress]
+    member_of_groups: RelationshipManager[CoreGroup]
+    related_nodes: RelationshipManager[ManagedExternalEndpoint]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class ProfileManagedExternalFabricPeering(LineageSource, CoreProfile, CoreNode):
+    bfd_enabled: BooleanOptional
+    checksum: StringOptional
+    description: StringOptional
+    max_prefixes: IntegerOptional
+    profile_name: String
+    profile_priority: Integer
+    role: DropdownOptional
+    scope: DropdownOptional
+    session_type: DropdownOptional
+    status: DropdownOptional
+    deployment: RelationshipAttribute[TopologyDeployment]
+    external_peer: RelationshipAttribute[ManagedExternalPeer]
+    member_of_groups: RelationshipManager[CoreGroup]
+    namespace: RelationshipAttribute[IpamNamespace]
+    related_nodes: RelationshipManager[ManagedExternalFabricPeering]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class ProfileManagedExternalPeer(LineageSource, CoreProfile, CoreNode):
+    circuit_id: StringOptional
+    description: StringOptional
+    noc_contact: StringOptional
+    peer_type: DropdownOptional
+    profile_name: String
+    profile_priority: Integer
+    provider_name: StringOptional
+    status: DropdownOptional
+    vlan_id: IntegerOptional
+    asn: RelationshipAttribute[RoutingAutonomousSystem]
+    bgp_ip: RelationshipAttribute[IpamIPAddress]
+    member_of_groups: RelationshipManager[CoreGroup]
+    related_nodes: RelationshipManager[ManagedExternalPeer]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class ProfileManagedFirewallHA(LineageSource, CoreProfile, CoreNode):
+    description: StringOptional
+    group_id: IntegerOptional
+    ha_protocol: DropdownOptional
+    ha_timer: DropdownOptional
+    mode: DropdownOptional
+    preempt: BooleanOptional
+    priority: IntegerOptional
+    profile_name: String
+    profile_priority: Integer
+    status: DropdownOptional
+    capabilities: RelationshipManager[DcimCapabilities]
+    member_of_groups: RelationshipManager[CoreGroup]
+    related_nodes: RelationshipManager[ManagedFirewallHA]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class ProfileManagedGeneric(LineageSource, CoreProfile, CoreNode):
+    description: StringOptional
+    profile_name: String
+    profile_priority: Integer
+    status: DropdownOptional
+    member_of_groups: RelationshipManager[CoreGroup]
+    related_nodes: RelationshipManager[ManagedGeneric]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class ProfileManagedGenericCluster(LineageSource, CoreProfile, CoreNode):
+    profile_name: String
+    profile_priority: Integer
+    cluster_capabilities: RelationshipManager[VirtCluster]
+    member_of_groups: RelationshipManager[CoreGroup]
+    related_nodes: RelationshipManager[ManagedGenericCluster]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class ProfileManagedGenericDevice(LineageSource, CoreProfile, CoreNode):
+    profile_name: String
+    profile_priority: Integer
+    capabilities: RelationshipManager[DcimCapabilities]
+    member_of_groups: RelationshipManager[CoreGroup]
+    related_nodes: RelationshipManager[ManagedGenericDevice]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class ProfileManagedGenericInterfaces(LineageSource, CoreProfile, CoreNode):
+    profile_name: String
+    profile_priority: Integer
+    interface_capabilities: RelationshipManager[DcimInterface]
+    member_of_groups: RelationshipManager[CoreGroup]
+    related_nodes: RelationshipManager[ManagedGenericInterfaces]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class ProfileManagedHA(LineageSource, CoreProfile, CoreNode):
+    group_id: IntegerOptional
+    mode: DropdownOptional
+    preempt: BooleanOptional
+    priority: IntegerOptional
+    profile_name: String
+    profile_priority: Integer
+    member_of_groups: RelationshipManager[CoreGroup]
+    related_nodes: RelationshipManager[ManagedHA]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class ProfileManagedHAInterface(LineageSource, CoreProfile, CoreNode):
+    description: StringOptional
+    link_type: DropdownOptional
+    profile_name: String
+    profile_priority: Integer
+    status: DropdownOptional
+    ha_domain: RelationshipAttribute[ManagedHA]
+    interface_capabilities: RelationshipManager[DcimInterface]
+    member_of_groups: RelationshipManager[CoreGroup]
+    related_nodes: RelationshipManager[ManagedHAInterface]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class ProfileManagedInlineService(LineageSource, CoreProfile, CoreNode):
+    profile_name: String
+    profile_priority: Integer
+    member_of_groups: RelationshipManager[CoreGroup]
+    related_nodes: RelationshipManager[ManagedInlineService]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class ProfileManagedLoadBalancer(LineageSource, CoreProfile, CoreNode):
+    description: StringOptional
+    lb_type: DropdownOptional
+    lb_vendor: DropdownOptional
+    profile_name: String
+    profile_priority: Integer
+    scheme: DropdownOptional
+    status: DropdownOptional
+    member_of_groups: RelationshipManager[CoreGroup]
+    related_nodes: RelationshipManager[ManagedLoadBalancer]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+    tags: RelationshipManager[BuiltinTag]
+
+
+class ProfileManagedLoadbalancerHA(LineageSource, CoreProfile, CoreNode):
+    description: StringOptional
+    group_id: IntegerOptional
+    lb_type: DropdownOptional
+    lb_vendor: DropdownOptional
+    mode: DropdownOptional
+    preempt: BooleanOptional
+    priority: IntegerOptional
+    profile_name: String
+    profile_priority: Integer
+    scheme: DropdownOptional
+    status: DropdownOptional
+    capabilities: RelationshipManager[DcimCapabilities]
+    member_of_groups: RelationshipManager[CoreGroup]
+    related_nodes: RelationshipManager[ManagedLoadbalancerHA]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+    tags: RelationshipManager[BuiltinTag]
+
+
+class ProfileManagedMLAG(LineageSource, CoreProfile, CoreNode):
+    description: StringOptional
+    domain_id: IntegerOptional
+    profile_name: String
+    profile_priority: Integer
+    reload_delay: IntegerOptional
+    reload_delay_non_mlag: IntegerOptional
+    status: DropdownOptional
+    virtual_peer_link: BooleanOptional
+    capabilities: RelationshipManager[DcimCapabilities]
+    interface_capabilities: RelationshipManager[DcimInterface]
+    member_of_groups: RelationshipManager[CoreGroup]
+    related_nodes: RelationshipManager[ManagedMLAG]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class ProfileManagedNTP(LineageSource, CoreProfile, CoreNode):
+    description: StringOptional
+    profile_name: String
+    profile_priority: Integer
+    status: DropdownOptional
+    timezone: StringOptional
+    capabilities: RelationshipManager[DcimCapabilities]
+    member_of_groups: RelationshipManager[CoreGroup]
+    related_nodes: RelationshipManager[ManagedNTP]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class ProfileManagedNTPServer(LineageSource, CoreProfile, CoreNode):
+    prefer: BooleanOptional
+    profile_name: String
+    profile_priority: Integer
+    version: IntegerOptional
+    address: RelationshipAttribute[IpamIPAddress]
+    member_of_groups: RelationshipManager[CoreGroup]
+    related_nodes: RelationshipManager[ManagedNTPServer]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class ProfileManagedNetworkSegment(LineageSource, CoreProfile, CoreNode):
+    description: StringOptional
+    isolation_mode: DropdownOptional
+    pbr_enabled: BooleanOptional
+    profile_name: String
+    profile_priority: Integer
+    segment_role: DropdownOptional
+    segment_type: DropdownOptional
+    status: DropdownOptional
+    gateway: RelationshipAttribute[IpamIPAddress]
+    member_of_groups: RelationshipManager[CoreGroup]
+    related_nodes: RelationshipManager[ManagedNetworkSegment]
+    security_policies: RelationshipManager[SecurityPolicy]
+    security_tag: RelationshipAttribute[SecurityTag]
+    security_zone: RelationshipAttribute[SecurityZone]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class ProfileManagedOSPF(LineageSource, CoreProfile, CoreNode):
+    description: StringOptional
+    process_id: StringOptional
+    profile_name: String
+    profile_priority: Integer
+    reference_bandwidth: IntegerOptional
+    router_type: DropdownOptional
+    status: DropdownOptional
+    version: DropdownOptional
+    capabilities: RelationshipManager[DcimCapabilities]
+    member_of_groups: RelationshipManager[CoreGroup]
+    peerings: RelationshipManager[ManagedOSPFPeering]
+    related_nodes: RelationshipManager[ManagedOSPF]
+    router_id: RelationshipAttribute[IpamIPAddress]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class ProfileManagedOSPFPeering(LineageSource, CoreProfile, CoreNode):
+    cost: IntegerOptional
+    description: StringOptional
+    network_type: DropdownOptional
+    profile_name: String
+    profile_priority: Integer
+    status: DropdownOptional
+    interface_capabilities: RelationshipManager[DcimInterface]
+    member_of_groups: RelationshipManager[CoreGroup]
+    namespace: RelationshipAttribute[IpamNamespace]
+    ospf_area: RelationshipAttribute[RoutingOSPFArea]
+    ospf_interface: RelationshipManager[RoutingOSPFInterface]
+    ospf_process: RelationshipManager[ManagedOSPF]
+    related_nodes: RelationshipManager[ManagedOSPFPeering]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class ProfileManagedPeering(LineageSource, CoreProfile, CoreNode):
+    profile_name: String
+    profile_priority: Integer
+    member_of_groups: RelationshipManager[CoreGroup]
+    related_nodes: RelationshipManager[ManagedPeering]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class ProfileManagedProxyHA(LineageSource, CoreProfile, CoreNode):
+    description: StringOptional
+    group_id: IntegerOptional
+    mode: DropdownOptional
+    preempt: BooleanOptional
+    priority: IntegerOptional
+    profile_name: String
+    profile_priority: Integer
+    proxy_type: DropdownOptional
+    proxy_vendor: DropdownOptional
+    status: DropdownOptional
+    capabilities: RelationshipManager[DcimCapabilities]
+    member_of_groups: RelationshipManager[CoreGroup]
+    related_nodes: RelationshipManager[ManagedProxyHA]
+    shared_policies: RelationshipManager[ProxyPolicy]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class ProfileManagedProxyService(LineageSource, CoreProfile, CoreNode):
+    profile_name: String
+    profile_priority: Integer
+    member_of_groups: RelationshipManager[CoreGroup]
+    related_nodes: RelationshipManager[ManagedProxyService]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class ProfileManagedRouting(LineageSource, CoreProfile, CoreNode):
+    profile_name: String
+    profile_priority: Integer
+    member_of_groups: RelationshipManager[CoreGroup]
+    related_nodes: RelationshipManager[ManagedRouting]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class ProfileManagedSNMP(LineageSource, CoreProfile, CoreNode):
+    community_ro: StringOptional
+    community_rw: StringOptional
+    contact: StringOptional
+    description: StringOptional
+    location: StringOptional
+    profile_name: String
+    profile_priority: Integer
+    status: DropdownOptional
+    version: DropdownOptional
+    capabilities: RelationshipManager[DcimCapabilities]
+    member_of_groups: RelationshipManager[CoreGroup]
+    related_nodes: RelationshipManager[ManagedSNMP]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class ProfileManagedSNMPTrapTarget(LineageSource, CoreProfile, CoreNode):
+    community: StringOptional
+    port: IntegerOptional
+    profile_name: String
+    profile_priority: Integer
+    address: RelationshipAttribute[IpamIPAddress]
+    member_of_groups: RelationshipManager[CoreGroup]
+    related_nodes: RelationshipManager[ManagedSNMPTrapTarget]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class ProfileManagedSaasService(LineageSource, CoreProfile, CoreNode):
+    contract_end_date: StringOptional
+    data_classification: DropdownOptional
+    description: StringOptional
+    profile_name: String
+    profile_priority: Integer
+    service_tier: DropdownOptional
+    status: DropdownOptional
+    tenant_id: StringOptional
+    member_of_groups: RelationshipManager[CoreGroup]
+    related_nodes: RelationshipManager[ManagedSaasService]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class ProfileManagedSegmentDeployment(LineageSource, CoreProfile, CoreNode):
+    profile_name: String
+    profile_priority: Integer
+    status: DropdownOptional
+    vlan_id: IntegerOptional
+    vni: IntegerOptional
+    member_of_groups: RelationshipManager[CoreGroup]
+    related_nodes: RelationshipManager[ManagedSegmentDeployment]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class ProfileManagedStorageService(LineageSource, CoreProfile, CoreNode):
+    contract_end_date: StringOptional
+    data_classification: DropdownOptional
+    description: StringOptional
+    encryption_at_rest: BooleanOptional
+    profile_name: String
+    profile_priority: Integer
+    provider: DropdownOptional
+    service_tier: DropdownOptional
+    status: DropdownOptional
+    tenant_id: StringOptional
+    member_of_groups: RelationshipManager[CoreGroup]
+    related_nodes: RelationshipManager[ManagedStorageService]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class ProfileManagedSyslog(LineageSource, CoreProfile, CoreNode):
+    description: StringOptional
+    profile_name: String
+    profile_priority: Integer
+    status: DropdownOptional
+    capabilities: RelationshipManager[DcimCapabilities]
+    member_of_groups: RelationshipManager[CoreGroup]
+    related_nodes: RelationshipManager[ManagedSyslog]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class ProfileManagedSyslogServer(LineageSource, CoreProfile, CoreNode):
+    port: IntegerOptional
+    profile_name: String
+    profile_priority: Integer
+    severity: DropdownOptional
+    address: RelationshipAttribute[IpamIPAddress]
+    member_of_groups: RelationshipManager[CoreGroup]
+    related_nodes: RelationshipManager[ManagedSyslogServer]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class ProfileManagedVlanSegment(LineageSource, CoreProfile, CoreNode):
+    description: StringOptional
+    isolation_mode: DropdownOptional
+    pbr_enabled: BooleanOptional
+    profile_name: String
+    profile_priority: Integer
+    segment_role: DropdownOptional
+    status: DropdownOptional
+    vlan_id: IntegerOptional
+    customer_deployment: RelationshipAttribute[TopologyCustomer]
+    gateway: RelationshipAttribute[IpamIPAddress]
+    interface_capabilities: RelationshipManager[DcimInterface]
+    member_of_groups: RelationshipManager[CoreGroup]
+    related_nodes: RelationshipManager[ManagedVlanSegment]
+    security_policies: RelationshipManager[SecurityPolicy]
+    security_tag: RelationshipAttribute[SecurityTag]
+    security_zone: RelationshipAttribute[SecurityZone]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class ProfileManagedVxlanSegment(LineageSource, CoreProfile, CoreNode):
+    arp_suppression: BooleanOptional
+    description: StringOptional
+    isolation_mode: DropdownOptional
+    pbr_enabled: BooleanOptional
+    profile_name: String
+    profile_priority: Integer
+    segment_role: DropdownOptional
+    status: DropdownOptional
+    terminate_inline: BooleanOptional
+    customer_deployments: RelationshipManager[TopologyCustomer]
+    gateway: RelationshipAttribute[IpamIPAddress]
+    inline_service: RelationshipAttribute[ManagedGeneric]
+    interface_capabilities: RelationshipManager[DcimInterface]
+    member_of_groups: RelationshipManager[CoreGroup]
+    related_nodes: RelationshipManager[ManagedVxlanSegment]
+    security_policies: RelationshipManager[SecurityPolicy]
+    security_tag: RelationshipAttribute[SecurityTag]
+    security_zone: RelationshipAttribute[SecurityZone]
+    segment_deployments: RelationshipManager[ManagedSegmentDeployment]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class ProfileNetworkManagementServer(LineageSource, CoreProfile, CoreNode):
+    description: StringOptional
+    profile_name: String
+    profile_priority: Integer
+    status: DropdownOptional
+    location: RelationshipManager[LocationGeneric]
+    member_of_groups: RelationshipManager[CoreGroup]
+    related_nodes: RelationshipManager[NetworkManagementServer]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class ProfileOnpremLoadbalancer(LineageSource, CoreProfile, CoreNode):
+    description: StringOptional
+    lb_type: DropdownOptional
+    lb_vendor: DropdownOptional
+    profile_name: String
+    profile_priority: Integer
+    scheme: DropdownOptional
+    status: DropdownOptional
+    artifacts: RelationshipManager[CoreArtifact]
+    deployment: RelationshipAttribute[TopologyDeployment]
+    member_of_groups: RelationshipManager[CoreGroup]
+    related_nodes: RelationshipManager[OnpremLoadbalancer]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+    tags: RelationshipManager[BuiltinTag]
+
+
+class ProfileOrganizationCustomer(LineageSource, CoreProfile, CoreNode):
+    description: StringOptional
+    profile_name: String
+    profile_priority: Integer
+    applications: RelationshipManager[AppApplication]
+    asn: RelationshipManager[RoutingAutonomousSystem]
+    deployments: RelationshipManager[TopologyCustomer]
+    member_of_groups: RelationshipManager[CoreGroup]
+    portfolios: RelationshipManager[AppPortfolio]
+    proxy_policies: RelationshipManager[ProxyPolicy]
+    related_nodes: RelationshipManager[OrganizationCustomer]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+    tags: RelationshipManager[BuiltinTag]
+
+
+class ProfileOrganizationEntity(LineageSource, CoreProfile, CoreNode):
+    profile_name: String
+    profile_priority: Integer
+    member_of_groups: RelationshipManager[CoreGroup]
+    related_nodes: RelationshipManager[OrganizationEntity]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class ProfileOrganizationGeneric(LineageSource, CoreProfile, CoreNode):
+    description: StringOptional
+    profile_name: String
+    profile_priority: Integer
+    asn: RelationshipManager[RoutingAutonomousSystem]
+    member_of_groups: RelationshipManager[CoreGroup]
+    related_nodes: RelationshipManager[OrganizationGeneric]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+    tags: RelationshipManager[BuiltinTag]
+
+
+class ProfileOrganizationManufacturer(LineageSource, CoreProfile, CoreNode):
+    description: StringOptional
+    profile_name: String
+    profile_priority: Integer
+    device_type: RelationshipManager[DcimDeviceType]
+    member_of_groups: RelationshipManager[CoreGroup]
+    platform: RelationshipManager[DcimPlatform]
+    related_nodes: RelationshipManager[OrganizationManufacturer]
+    sfps: RelationshipManager[DcimGenericSFP]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class ProfileOrganizationProvider(LineageSource, CoreProfile, CoreNode):
+    description: StringOptional
+    profile_name: String
+    profile_priority: Integer
+    asn: RelationshipManager[RoutingAutonomousSystem]
+    location: RelationshipManager[LocationBuilding]
+    member_of_groups: RelationshipManager[CoreGroup]
+    related_nodes: RelationshipManager[OrganizationProvider]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+    tags: RelationshipManager[BuiltinTag]
+
+
+class ProfileProxyPolicy(LineageSource, CoreProfile, CoreNode):
+    default_action: DropdownOptional
+    description: StringOptional
+    enabled: BooleanOptional
+    policy_type: DropdownOptional
+    priority: IntegerOptional
+    profile_name: String
+    profile_priority: Integer
+    member_of_groups: RelationshipManager[CoreGroup]
+    related_nodes: RelationshipManager[ProxyPolicy]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class ProfileProxyPolicyRule(LineageSource, CoreProfile, CoreNode):
+    action: DropdownOptional
+    description: StringOptional
+    destination: StringOptional
+    destination_type: DropdownOptional
+    disabled: BooleanOptional
+    log: BooleanOptional
+    priority: IntegerOptional
+    profile_name: String
+    profile_priority: Integer
+    categories: RelationshipManager[ProxyURLCategory]
+    member_of_groups: RelationshipManager[CoreGroup]
+    related_nodes: RelationshipManager[ProxyPolicyRule]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class ProfileProxyURLCategory(LineageSource, CoreProfile, CoreNode):
+    category_type: DropdownOptional
+    description: StringOptional
+    entries: StringOptional
+    profile_name: String
+    profile_priority: Integer
+    member_of_groups: RelationshipManager[CoreGroup]
+    related_nodes: RelationshipManager[ProxyURLCategory]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class ProfileRoutingAutonomousSystem(LineageSource, CoreProfile, CoreNode):
+    asn: IntegerOptional
+    description: StringOptional
+    profile_name: String
+    profile_priority: Integer
+    location: RelationshipAttribute[LocationGeneric]
+    member_of_groups: RelationshipManager[CoreGroup]
+    owner: RelationshipAttribute[OrganizationProvider]
+    related_nodes: RelationshipManager[RoutingAutonomousSystem]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class ProfileRoutingBGPAddressFamily(LineageSource, CoreProfile, CoreNode):
+    advertise_all_vni: BooleanOptional
+    advertise_default_gw: BooleanOptional
+    advertise_svi_ip: BooleanOptional
+    description: StringOptional
+    profile_name: String
+    profile_priority: Integer
+    member_of_groups: RelationshipManager[CoreGroup]
+    related_nodes: RelationshipManager[RoutingBGPAddressFamily]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class ProfileRoutingOSPFArea(LineageSource, CoreProfile, CoreNode):
+    area_type: DropdownOptional
+    description: StringOptional
+    profile_name: String
+    profile_priority: Integer
+    member_of_groups: RelationshipManager[CoreGroup]
+    related_nodes: RelationshipManager[RoutingOSPFArea]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class ProfileRoutingOSPFInterface(LineageSource, CoreProfile, CoreNode):
+    authentication_mode: DropdownOptional
+    description: StringOptional
+    metric: IntegerOptional
+    mode: DropdownOptional
+    profile_name: String
+    profile_priority: Integer
+    status: DropdownOptional
+    interface_capabilities: RelationshipManager[DcimInterface]
+    member_of_groups: RelationshipManager[CoreGroup]
+    ospf_services: RelationshipManager[ManagedOSPF]
+    password: RelationshipAttribute[RoutingPassword]
+    peering: RelationshipAttribute[ManagedOSPFPeering]
+    related_nodes: RelationshipManager[RoutingOSPFInterface]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class ProfileRoutingPassword(LineageSource, CoreProfile, CoreNode):
+    description: StringOptional
+    password: StringOptional
+    profile_name: String
+    profile_priority: Integer
+    member_of_groups: RelationshipManager[CoreGroup]
+    related_nodes: RelationshipManager[RoutingPassword]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class ProfileRoutingProtocol(LineageSource, CoreProfile, CoreNode):
+    profile_name: String
+    profile_priority: Integer
+    status: DropdownOptional
+    member_of_groups: RelationshipManager[CoreGroup]
+    related_nodes: RelationshipManager[RoutingProtocol]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class ProfileSecurityPolicy(LineageSource, CoreProfile, CoreNode):
+    default_action: DropdownOptional
+    description: StringOptional
+    enabled: BooleanOptional
+    profile_name: String
+    profile_priority: Integer
+    capabilities: RelationshipManager[DcimCapabilities]
+    member_of_groups: RelationshipManager[CoreGroup]
+    related_nodes: RelationshipManager[SecurityPolicy]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class ProfileSecurityPolicyRule(LineageSource, CoreProfile, CoreNode):
+    action: DropdownOptional
+    apply_on_switch: BooleanOptional
+    description: StringOptional
+    disabled: BooleanOptional
+    expires_at: DateTimeOptional
+    log: BooleanOptional
+    port_end: IntegerOptional
+    port_start: IntegerOptional
+    profile_name: String
+    profile_priority: Integer
+    protocol: DropdownOptional
+    destination_ip_addresses: RelationshipManager[IpamIPAddress]
+    destination_prefixes: RelationshipManager[IpamPrefix]
+    destination_segment: RelationshipAttribute[ManagedNetworkSegment]
+    destination_zone: RelationshipAttribute[SecurityZone]
+    member_of_groups: RelationshipManager[CoreGroup]
+    related_nodes: RelationshipManager[SecurityPolicyRule]
+    security_profile: RelationshipAttribute[SecuritySecurityProfile]
+    source_ip_addresses: RelationshipManager[IpamIPAddress]
+    source_prefixes: RelationshipManager[IpamPrefix]
+    source_segment: RelationshipAttribute[ManagedNetworkSegment]
+    source_zone: RelationshipAttribute[SecurityZone]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class ProfileSecuritySecurityProfile(LineageSource, CoreProfile, CoreNode):
+    antivirus_enabled: BooleanOptional
+    data_loss_prevention_enabled: BooleanOptional
+    description: StringOptional
+    ips_enabled: BooleanOptional
+    profile_name: String
+    profile_priority: Integer
+    ssl_inspection_enabled: BooleanOptional
+    url_filtering_enabled: BooleanOptional
+    member_of_groups: RelationshipManager[CoreGroup]
+    related_nodes: RelationshipManager[SecuritySecurityProfile]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class ProfileSecurityTag(LineageSource, CoreProfile, CoreNode):
+    color: StringOptional
+    description: StringOptional
+    group_id: IntegerOptional
+    profile_name: String
+    profile_priority: Integer
+    member_of_groups: RelationshipManager[CoreGroup]
+    related_nodes: RelationshipManager[SecurityTag]
+    rules_as_source: RelationshipManager[SecurityTagRule]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class ProfileSecurityTagRule(LineageSource, CoreProfile, CoreNode):
+    action: DropdownOptional
+    description: StringOptional
+    log: BooleanOptional
+    profile_name: String
+    profile_priority: Integer
+    member_of_groups: RelationshipManager[CoreGroup]
+    related_nodes: RelationshipManager[SecurityTagRule]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class ProfileSecurityZone(LineageSource, CoreProfile, CoreNode):
+    description: StringOptional
+    profile_name: String
+    profile_priority: Integer
+    trust_level: IntegerOptional
+    zone_type: DropdownOptional
+    member_of_groups: RelationshipManager[CoreGroup]
+    network_segments: RelationshipManager[ManagedNetworkSegment]
+    related_nodes: RelationshipManager[SecurityZone]
+    rules_as_dest: RelationshipManager[SecurityPolicyRule]
+    rules_as_source: RelationshipManager[SecurityPolicyRule]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class ProfileTopologyCircuit(LineageSource, CoreProfile, CoreNode):
+    bandwidth: IntegerOptional
+    description: StringOptional
+    profile_name: String
+    profile_priority: Integer
+    status: DropdownOptional
+    locations: RelationshipManager[TopologyConnectableLocation]
+    member_of_groups: RelationshipManager[CoreGroup]
+    provider: RelationshipAttribute[OrganizationProvider]
+    related_nodes: RelationshipManager[TopologyCircuit]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class ProfileTopologyCloud(LineageSource, CoreProfile, CoreNode):
+    profile_name: String
+    profile_priority: Integer
+    member_of_groups: RelationshipManager[CoreGroup]
+    related_nodes: RelationshipManager[TopologyCloud]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class ProfileTopologyCloudRegion(LineageSource, CoreProfile, CoreNode):
+    profile_name: String
+    profile_priority: Integer
+    status: DropdownOptional
+    circuits: RelationshipManager[TopologyCircuit]
+    clusters: RelationshipManager[VirtCluster]
+    direct_connects: RelationshipManager[CloudDirectConnect]
+    location: RelationshipAttribute[LocationMetro]
+    member_of_groups: RelationshipManager[CoreGroup]
+    related_nodes: RelationshipManager[TopologyCloudRegion]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+    virtual_networks: RelationshipManager[CloudVirtualNetwork]
+    vpn_gateways: RelationshipManager[CloudVPNGateway]
+
+
+class ProfileTopologyCloudZone(LineageSource, CoreProfile, CoreNode):
+    profile_name: String
+    profile_priority: Integer
+    instances: RelationshipManager[CloudInstance]
+    member_of_groups: RelationshipManager[CoreGroup]
+    network_segments: RelationshipManager[CloudNetworkSegment]
+    related_nodes: RelationshipManager[TopologyCloudZone]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class ProfileTopologyClusterHosting(LineageSource, CoreProfile, CoreNode):
+    profile_name: String
+    profile_priority: Integer
+    clusters: RelationshipManager[VirtCluster]
+    member_of_groups: RelationshipManager[CoreGroup]
+    related_nodes: RelationshipManager[TopologyClusterHosting]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class ProfileTopologyColocation(LineageSource, CoreProfile, CoreNode):
+    profile_name: String
+    profile_priority: Integer
+    artifacts: RelationshipManager[CoreArtifact]
+    member_of_groups: RelationshipManager[CoreGroup]
+    related_nodes: RelationshipManager[TopologyColocation]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class ProfileTopologyColocationMetro(LineageSource, CoreProfile, CoreNode):
+    profile_name: String
+    profile_priority: Integer
+    artifacts: RelationshipManager[CoreArtifact]
+    clusters: RelationshipManager[VirtCluster]
+    l3_vni_pool: RelationshipAttribute[CoreNumberPool]
+    location: RelationshipAttribute[LocationMetro]
+    member_of_groups: RelationshipManager[CoreGroup]
+    related_nodes: RelationshipManager[TopologyColocationMetro]
+    segment_deployments: RelationshipManager[ManagedSegmentDeployment]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+    vlan_pool: RelationshipAttribute[CoreNumberPool]
+    vni_pool: RelationshipAttribute[CoreNumberPool]
+
+
+class ProfileTopologyColocationZone(LineageSource, CoreProfile, CoreNode):
+    deployment_type: DropdownOptional
+    profile_name: String
+    profile_priority: Integer
+    cables: RelationshipManager[DcimCable]
+    circuits: RelationshipManager[TopologyCircuit]
+    clusters: RelationshipManager[VirtCluster]
+    devices: RelationshipManager[DcimDevice]
+    member_of_groups: RelationshipManager[CoreGroup]
+    racks: RelationshipManager[LocationRack]
+    related_nodes: RelationshipManager[TopologyColocationZone]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class ProfileTopologyConnectableLocation(LineageSource, CoreProfile, CoreNode):
+    profile_name: String
+    profile_priority: Integer
+    circuits: RelationshipManager[TopologyCircuit]
+    member_of_groups: RelationshipManager[CoreGroup]
+    related_nodes: RelationshipManager[TopologyConnectableLocation]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class ProfileTopologyConnector(LineageSource, CoreProfile, CoreNode):
+    description: StringOptional
+    profile_name: String
+    profile_priority: Integer
+    member_of_groups: RelationshipManager[CoreGroup]
+    related_nodes: RelationshipManager[TopologyConnector]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class ProfileTopologyCustomer(LineageSource, CoreProfile, CoreNode):
+    profile_name: String
+    profile_priority: Integer
+    status: DropdownOptional
+    member_of_groups: RelationshipManager[CoreGroup]
+    network_segments: RelationshipManager[ManagedNetworkSegment]
+    related_nodes: RelationshipManager[TopologyCustomer]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class ProfileTopologyCustomerCloud(LineageSource, CoreProfile, CoreNode):
+    profile_name: String
+    profile_priority: Integer
+    status: DropdownOptional
+    cloud_account: RelationshipAttribute[CloudAccount]
+    member_of_groups: RelationshipManager[CoreGroup]
+    network_segments: RelationshipManager[ManagedNetworkSegment]
+    related_nodes: RelationshipManager[TopologyCustomerCloud]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class ProfileTopologyCustomerColocation(LineageSource, CoreProfile, CoreNode):
+    profile_name: String
+    profile_priority: Integer
+    status: DropdownOptional
+    member_of_groups: RelationshipManager[CoreGroup]
+    network_segments: RelationshipManager[ManagedNetworkSegment]
+    related_nodes: RelationshipManager[TopologyCustomerColocation]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class ProfileTopologyCustomerDC(LineageSource, CoreProfile, CoreNode):
+    profile_name: String
+    profile_priority: Integer
+    status: DropdownOptional
+    design: RelationshipAttribute[TopologyCustomerTemplateDC]
+    member_of_groups: RelationshipManager[CoreGroup]
+    network_segments: RelationshipManager[ManagedNetworkSegment]
+    related_nodes: RelationshipManager[TopologyCustomerDC]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class ProfileTopologyCustomerTemplate(LineageSource, CoreProfile, CoreNode):
+    dedicated_firewall: BooleanOptional
+    dedicated_loadbalancer: BooleanOptional
+    dedicated_proxy: BooleanOptional
+    default_environment: DropdownOptional
+    description: StringOptional
+    network_segment_count: IntegerOptional
+    profile_name: String
+    profile_priority: Integer
+    size: DropdownOptional
+    member_of_groups: RelationshipManager[CoreGroup]
+    related_nodes: RelationshipManager[TopologyCustomerTemplate]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class ProfileTopologyCustomerTemplateCloud(LineageSource, CoreProfile, CoreNode):
+    dedicated_firewall: BooleanOptional
+    dedicated_loadbalancer: BooleanOptional
+    dedicated_proxy: BooleanOptional
+    default_environment: DropdownOptional
+    description: StringOptional
+    network_segment_count: IntegerOptional
+    profile_name: String
+    profile_priority: Integer
+    size: DropdownOptional
+    member_of_groups: RelationshipManager[CoreGroup]
+    related_nodes: RelationshipManager[TopologyCustomerTemplateCloud]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class ProfileTopologyCustomerTemplateColo(LineageSource, CoreProfile, CoreNode):
+    dedicated_firewall: BooleanOptional
+    dedicated_loadbalancer: BooleanOptional
+    dedicated_proxy: BooleanOptional
+    default_environment: DropdownOptional
+    description: StringOptional
+    network_segment_count: IntegerOptional
+    profile_name: String
+    profile_priority: Integer
+    size: DropdownOptional
+    uplink_100g_count: IntegerOptional
+    uplink_10g_count: IntegerOptional
+    uplink_400g_count: IntegerOptional
+    uplink_40g_count: IntegerOptional
+    member_of_groups: RelationshipManager[CoreGroup]
+    related_nodes: RelationshipManager[TopologyCustomerTemplateColo]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class ProfileTopologyCustomerTemplateDC(LineageSource, CoreProfile, CoreNode):
+    dedicated_firewall: BooleanOptional
+    dedicated_loadbalancer: BooleanOptional
+    dedicated_proxy: BooleanOptional
+    default_environment: DropdownOptional
+    description: StringOptional
+    network_segment_count: IntegerOptional
+    profile_name: String
+    profile_priority: Integer
+    size: DropdownOptional
+    uplink_100g_count: IntegerOptional
+    uplink_10g_count: IntegerOptional
+    uplink_400g_count: IntegerOptional
+    uplink_40g_count: IntegerOptional
+    member_of_groups: RelationshipManager[CoreGroup]
+    related_nodes: RelationshipManager[TopologyCustomerTemplateDC]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class ProfileTopologyDataCenter(LineageSource, CoreProfile, CoreNode):
+    amount_of_super_spines: IntegerOptional
+    connectivity_mode: DropdownOptional
+    fabric_interface_sorting_method: DropdownOptional
+    fully_managed: BooleanOptional
+    naming_convention: DropdownOptional
+    profile_name: String
+    profile_priority: Integer
+    spine_interface_sorting_method: DropdownOptional
+    status: DropdownOptional
+    artifacts: RelationshipManager[CoreArtifact]
+    cables: RelationshipManager[DcimCable]
+    circuits: RelationshipManager[TopologyCircuit]
+    clusters: RelationshipManager[VirtCluster]
+    design: RelationshipAttribute[TopologyDataCenterDesign]
+    devices: RelationshipManager[DcimDevice]
+    l3_vni_pool: RelationshipAttribute[CoreNumberPool]
+    loopback_pool: RelationshipAttribute[CoreIPPrefixPool]
+    management_pool: RelationshipAttribute[CoreIPAddressPool]
+    member_of_groups: RelationshipManager[CoreGroup]
+    related_nodes: RelationshipManager[TopologyDataCenter]
+    segment_deployments: RelationshipManager[ManagedSegmentDeployment]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+    super_spine_asn_pool: RelationshipAttribute[CoreNumberPool]
+    super_spine_template: RelationshipAttribute[TemplateDcimPhysicalDevice]
+    technical_pool: RelationshipAttribute[CoreIPPrefixPool]
+    vlan_pool: RelationshipAttribute[CoreNumberPool]
+    vni_pool: RelationshipAttribute[CoreNumberPool]
+
+
+class ProfileTopologyDataCenterDesign(LineageSource, CoreProfile, CoreNode):
+    description: StringOptional
+    loopback_prefix_length: IntegerOptional
+    management_prefix_length: IntegerOptional
+    max_pods: IntegerOptional
+    max_spines_per_pod: IntegerOptional
+    max_super_spines_per_fabric: IntegerOptional
+    profile_name: String
+    profile_priority: Integer
+    routing_strategy: DropdownOptional
+    technical_prefix_length: IntegerOptional
+    underlay_protocol: DropdownOptional
+    member_of_groups: RelationshipManager[CoreGroup]
+    related_nodes: RelationshipManager[TopologyDataCenterDesign]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class ProfileTopologyDeployment(LineageSource, CoreProfile, CoreNode):
+    profile_name: String
+    profile_priority: Integer
+    member_of_groups: RelationshipManager[CoreGroup]
+    related_nodes: RelationshipManager[TopologyDeployment]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class ProfileTopologyDesign(LineageSource, CoreProfile, CoreNode):
+    profile_name: String
+    profile_priority: Integer
+    member_of_groups: RelationshipManager[CoreGroup]
+    related_nodes: RelationshipManager[TopologyDesign]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class ProfileTopologyDeviceHosting(LineageSource, CoreProfile, CoreNode):
+    profile_name: String
+    profile_priority: Integer
+    devices: RelationshipManager[DcimDevice]
+    member_of_groups: RelationshipManager[CoreGroup]
+    related_nodes: RelationshipManager[TopologyDeviceHosting]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class ProfileTopologyElement(LineageSource, CoreProfile, CoreNode):
+    profile_name: String
+    profile_priority: Integer
+    member_of_groups: RelationshipManager[CoreGroup]
+    related_nodes: RelationshipManager[TopologyElement]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class ProfileTopologyExternal(LineageSource, CoreProfile, CoreNode):
+    profile_name: String
+    profile_priority: Integer
+    member_of_groups: RelationshipManager[CoreGroup]
+    related_nodes: RelationshipManager[TopologyExternal]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class ProfileTopologyExternalProviders(LineageSource, CoreProfile, CoreNode):
+    profile_name: String
+    profile_priority: Integer
+    provider_type: DropdownOptional
+    status: DropdownOptional
+    circuits: RelationshipManager[TopologyCircuit]
+    devices: RelationshipManager[DcimDevice]
+    member_of_groups: RelationshipManager[CoreGroup]
+    provider: RelationshipAttribute[OrganizationProvider]
+    related_nodes: RelationshipManager[TopologyExternalProviders]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class ProfileTopologyOffice(LineageSource, CoreProfile, CoreNode):
+    profile_name: String
+    profile_priority: Integer
+    site_type: DropdownOptional
+    artifacts: RelationshipManager[CoreArtifact]
+    cables: RelationshipManager[DcimCable]
+    circuits: RelationshipManager[TopologyCircuit]
+    devices: RelationshipManager[DcimDevice]
+    locations: RelationshipManager[LocationBuilding]
+    member_of_groups: RelationshipManager[CoreGroup]
+    related_nodes: RelationshipManager[TopologyOffice]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class ProfileTopologyPhysicalCircuit(LineageSource, CoreProfile, CoreNode):
+    bandwidth: IntegerOptional
+    circuit_type: DropdownOptional
+    committed_rate: IntegerOptional
+    contract_end_date: StringOptional
+    description: StringOptional
+    install_date: StringOptional
+    profile_name: String
+    profile_priority: Integer
+    status: DropdownOptional
+    interfaces: RelationshipManager[DcimInterface]
+    locations: RelationshipManager[TopologyConnectableLocation]
+    member_of_groups: RelationshipManager[CoreGroup]
+    provider: RelationshipAttribute[OrganizationProvider]
+    provider_a: RelationshipAttribute[DcimInterface]
+    provider_z: RelationshipAttribute[DcimInterface]
+    related_nodes: RelationshipManager[TopologyPhysicalCircuit]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class ProfileTopologyPhysicalDeployment(LineageSource, CoreProfile, CoreNode):
+    profile_name: String
+    profile_priority: Integer
+    cables: RelationshipManager[DcimCable]
+    member_of_groups: RelationshipManager[CoreGroup]
+    related_nodes: RelationshipManager[TopologyPhysicalDeployment]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class ProfileTopologyPod(LineageSource, CoreProfile, CoreNode):
+    amount_of_spines: IntegerOptional
+    leaf_interface_sorting_method: DropdownOptional
+    mlag_create: DropdownOptional
+    profile_name: String
+    profile_priority: Integer
+    spine_interface_sorting_method: DropdownOptional
+    status: DropdownOptional
+    asn_pool: RelationshipAttribute[CoreNumberPool]
+    design: RelationshipAttribute[TopologyPodDesign]
+    devices: RelationshipManager[DcimDevice]
+    loopback_pool: RelationshipAttribute[CoreIPAddressPool]
+    member_of_groups: RelationshipManager[CoreGroup]
+    prefix_pool: RelationshipAttribute[CoreIPPrefixPool]
+    racks: RelationshipManager[LocationRack]
+    related_nodes: RelationshipManager[TopologyPod]
+    spine_template: RelationshipAttribute[TemplateDcimPhysicalDevice]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class ProfileTopologyPodDesign(LineageSource, CoreProfile, CoreNode):
+    compute_racks_per_row: IntegerOptional
+    description: StringOptional
+    max_border_leafs_per_pod: IntegerOptional
+    max_leafs_per_network_rack: IntegerOptional
+    max_spines_per_pod: IntegerOptional
+    max_tors_per_compute_rack: IntegerOptional
+    max_tors_per_network_rack: IntegerOptional
+    network_racks_per_row: IntegerOptional
+    profile_name: String
+    profile_priority: Integer
+    rows: IntegerOptional
+    member_of_groups: RelationshipManager[CoreGroup]
+    related_nodes: RelationshipManager[TopologyPodDesign]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class ProfileTopologyRackHosting(LineageSource, CoreProfile, CoreNode):
+    profile_name: String
+    profile_priority: Integer
+    member_of_groups: RelationshipManager[CoreGroup]
+    racks: RelationshipManager[LocationRack]
+    related_nodes: RelationshipManager[TopologyRackHosting]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class ProfileTopologySaas(LineageSource, CoreProfile, CoreNode):
+    description: StringOptional
+    profile_name: String
+    profile_priority: Integer
+    provider: DropdownOptional
+    service_type: DropdownOptional
+    status: DropdownOptional
+    artifacts: RelationshipManager[CoreArtifact]
+    member_of_groups: RelationshipManager[CoreGroup]
+    related_nodes: RelationshipManager[TopologySaas]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class ProfileTopologySaasRegion(LineageSource, CoreProfile, CoreNode):
+    profile_name: String
+    profile_priority: Integer
+    status: DropdownOptional
+    circuits: RelationshipManager[TopologyCircuit]
+    location: RelationshipAttribute[LocationMetro]
+    member_of_groups: RelationshipManager[CoreGroup]
+    related_nodes: RelationshipManager[TopologySaasRegion]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class ProfileTopologySegmentHosting(LineageSource, CoreProfile, CoreNode):
+    profile_name: String
+    profile_priority: Integer
+    l3_vni_pool: RelationshipAttribute[CoreNumberPool]
+    member_of_groups: RelationshipManager[CoreGroup]
+    related_nodes: RelationshipManager[TopologySegmentHosting]
+    segment_deployments: RelationshipManager[ManagedSegmentDeployment]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+    vlan_pool: RelationshipAttribute[CoreNumberPool]
+    vni_pool: RelationshipAttribute[CoreNumberPool]
+
+
+class ProfileTopologyVirtualCircuit(LineageSource, CoreProfile, CoreNode):
+    bandwidth: IntegerOptional
+    cloud_resource_id: StringOptional
+    description: StringOptional
+    encryption: BooleanOptional
+    link_type: DropdownOptional
+    profile_name: String
+    profile_priority: Integer
+    status: DropdownOptional
+    tunnel_id: IntegerOptional
+    vni: IntegerOptional
+    cloud_endpoints: RelationshipManager[CloudResource]
+    interfaces: RelationshipManager[DcimInterface]
+    locations: RelationshipManager[TopologyConnectableLocation]
+    member_of_groups: RelationshipManager[CoreGroup]
+    provider: RelationshipAttribute[OrganizationProvider]
+    related_nodes: RelationshipManager[TopologyVirtualCircuit]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class ProfileVirtCNI(LineageSource, CoreProfile, CoreNode):
+    bgp_enabled: BooleanOptional
+    description: StringOptional
+    encapsulation: DropdownOptional
+    plugin: DropdownOptional
+    pod_cidr: StringOptional
+    profile_name: String
+    profile_priority: Integer
+    service_cidr: StringOptional
+    status: DropdownOptional
+    version: StringOptional
+    bgp_peers: RelationshipManager[RoutingAutonomousSystem]
+    cluster_capabilities: RelationshipManager[VirtCluster]
+    member_of_groups: RelationshipManager[CoreGroup]
+    related_nodes: RelationshipManager[VirtCNI]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class ProfileVirtCluster(LineageSource, CoreProfile, CoreNode):
+    description: StringOptional
+    ha_enabled: BooleanOptional
+    platform: DropdownOptional
+    profile_name: String
+    profile_priority: Integer
+    status: DropdownOptional
+    version: StringOptional
+    cloud_account: RelationshipAttribute[CloudAccount]
+    cluster_capabilities: RelationshipManager[ManagedGenericCluster]
+    deployment: RelationshipAttribute[TopologyDeployment]
+    ip_namespace: RelationshipAttribute[IpamNamespace]
+    member_of_groups: RelationshipManager[CoreGroup]
+    proxy_service: RelationshipAttribute[ManagedProxyService]
+    related_nodes: RelationshipManager[VirtCluster]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+    tags: RelationshipManager[BuiltinTag]
+    vip_service: RelationshipAttribute[LoadbalancerVIP]
+    virtual_network: RelationshipAttribute[CloudVirtualNetwork]
+
+
+class ProfileVirtIngress(LineageSource, CoreProfile, CoreNode):
+    address_pool: StringOptional
+    controller: DropdownOptional
+    description: StringOptional
+    profile_name: String
+    profile_priority: Integer
+    status: DropdownOptional
+    version: StringOptional
+    cluster_capabilities: RelationshipManager[VirtCluster]
+    member_of_groups: RelationshipManager[CoreGroup]
+    related_nodes: RelationshipManager[VirtIngress]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+    vip_prefix: RelationshipAttribute[IpamPrefix]
+
+
+class ProfileVirtManagementPlane(LineageSource, CoreProfile, CoreNode):
+    auth_method: DropdownOptional
+    description: StringOptional
+    endpoint: StringOptional
+    endpoint_access: DropdownOptional
+    port: IntegerOptional
+    profile_name: String
+    profile_priority: Integer
+    status: DropdownOptional
+    cluster_capabilities: RelationshipManager[VirtCluster]
+    management_ip: RelationshipAttribute[IpamIPAddress]
+    member_of_groups: RelationshipManager[CoreGroup]
+    related_nodes: RelationshipManager[VirtManagementPlane]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class ProfileVirtMonitoring(LineageSource, CoreProfile, CoreNode):
+    description: StringOptional
+    profile_name: String
+    profile_priority: Integer
+    remote_write: StringOptional
+    retention_days: IntegerOptional
+    stack: DropdownOptional
+    status: DropdownOptional
+    version: StringOptional
+    cluster_capabilities: RelationshipManager[VirtCluster]
+    member_of_groups: RelationshipManager[CoreGroup]
+    related_nodes: RelationshipManager[VirtMonitoring]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class ProfileVirtNodePool(LineageSource, CoreProfile, CoreNode):
+    cpu_per_node: IntegerOptional
+    desired_capacity: IntegerOptional
+    image: StringOptional
+    instance_flavor: StringOptional
+    max_size: IntegerOptional
+    memory_per_node_gb: IntegerOptional
+    min_size: IntegerOptional
+    node_count: IntegerOptional
+    os_type: DropdownOptional
+    os_version: StringOptional
+    pool_type: DropdownOptional
+    profile_name: String
+    profile_priority: Integer
+    scaling_mode: DropdownOptional
+    status: DropdownOptional
+    storage_per_node_gb: IntegerOptional
+    instances: RelationshipManager[CloudInstance]
+    management_ip: RelationshipAttribute[IpamIPAddress]
+    member_of_groups: RelationshipManager[CoreGroup]
+    network_segments: RelationshipManager[ManagedNetworkSegment]
+    physical_hosts: RelationshipManager[DcimPhysicalDevice]
+    related_nodes: RelationshipManager[VirtNodePool]
+    security_groups: RelationshipManager[CloudSecurityGroup]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+    tags: RelationshipManager[BuiltinTag]
+
+
+class ProfileVirtRegistry(LineageSource, CoreProfile, CoreNode):
+    description: StringOptional
+    endpoint: StringOptional
+    insecure: BooleanOptional
+    profile_name: String
+    profile_priority: Integer
+    registry_type: DropdownOptional
+    status: DropdownOptional
+    cluster_capabilities: RelationshipManager[VirtCluster]
+    member_of_groups: RelationshipManager[CoreGroup]
+    related_nodes: RelationshipManager[VirtRegistry]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class ProfileVirtStorageBackend(LineageSource, CoreProfile, CoreNode):
+    backend_type: DropdownOptional
+    default_class: BooleanOptional
+    description: StringOptional
+    profile_name: String
+    profile_priority: Integer
+    reclaim_policy: DropdownOptional
+    status: DropdownOptional
+    version: StringOptional
+    cluster_capabilities: RelationshipManager[VirtCluster]
+    member_of_groups: RelationshipManager[CoreGroup]
+    related_nodes: RelationshipManager[VirtStorageBackend]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class TemplateDcimConsoleInterface(
+    LineageSource,
+    CoreObjectComponentTemplate,
+    TemplateDcimInterface,
+    TemplateDcimEndpoint,
+    TemplateCoreArtifactTarget,
+    CoreNode,
+):
+    description: StringOptional
+    name: String
+    port: Integer
+    role: DropdownOptional
+    speed: Integer
+    status: Dropdown
+    template_name: String
+    artifacts: RelationshipManager[CoreArtifact]
+    cable: RelationshipAttribute[DcimCable]
+    device: RelationshipAttribute[TemplateDcimDevice]
+    interface_capabilities: RelationshipManager[ManagedGenericInterfaces]
+    member_of_groups: RelationshipManager[CoreGroup]
+    member_of_groups_for_instances: RelationshipManager[CoreGroup]
+    port_from_resource_pool: RelationshipAttribute[CoreNumberPool]
+    profiles: RelationshipManager[CoreProfile]
+    related_nodes: RelationshipManager[DcimConsoleInterface]
+    speed_from_resource_pool: RelationshipAttribute[CoreNumberPool]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+    subscriber_of_groups_for_instances: RelationshipManager[CoreGroup]
+    tags: RelationshipManager[BuiltinTag]
+
+
+class TemplateDcimLAGInterface(LineageSource, CoreObjectComponentTemplate, TemplateDcimInterface, CoreNode):
+    description: StringOptional
+    lacp_mode: Dropdown
+    lag_id: Integer
+    minimum_links: Integer
+    mtu: Integer
+    name: String
+    role: DropdownOptional
+    status: Dropdown
+    template_name: String
+    device: RelationshipAttribute[TemplateDcimDevice]
+    interface_capabilities: RelationshipManager[ManagedGenericInterfaces]
+    ip_address: RelationshipAttribute[TemplateIpamIPAddress]
+    ip_address_from_resource_pool: RelationshipAttribute[CoreIPAddressPool]
+    lag_id_from_resource_pool: RelationshipAttribute[CoreNumberPool]
+    member_interfaces: RelationshipManager[DcimPhysicalInterface]
+    member_of_groups: RelationshipManager[CoreGroup]
+    member_of_groups_for_instances: RelationshipManager[CoreGroup]
+    minimum_links_from_resource_pool: RelationshipAttribute[CoreNumberPool]
+    mlag_domain: RelationshipAttribute[ManagedMLAG]
+    mtu_from_resource_pool: RelationshipAttribute[CoreNumberPool]
+    profiles: RelationshipManager[CoreProfile]
+    related_nodes: RelationshipManager[DcimLAGInterface]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+    subscriber_of_groups_for_instances: RelationshipManager[CoreGroup]
+    tags: RelationshipManager[BuiltinTag]
+
+
+class TemplateDcimPhysicalDevice(
+    LineageSource,
+    TemplateCoreArtifactTarget,
+    TemplateDcimDevice,
+    TemplateDcimCapabilities,
+    TemplateAppInstance,
+    CoreObjectTemplate,
+    CoreNode,
+):
+    description: StringOptional
+    os_version: StringOptional
+    position: IntegerOptional
+    rack_face: Dropdown
+    role: DropdownOptional
+    serial: StringOptional
+    status: DropdownOptional
+    template_name: String
+    artifacts: RelationshipManager[CoreArtifact]
+    capabilities: RelationshipManager[ManagedGenericDevice]
+    deployment: RelationshipAttribute[TopologyDeployment]
+    device_type: RelationshipAttribute[DcimDeviceType]
+    interfaces: RelationshipManager[TemplateDcimInterface]
+    member_of_groups: RelationshipManager[CoreGroup]
+    member_of_groups_for_instances: RelationshipManager[CoreGroup]
+    platform: RelationshipAttribute[DcimPlatform]
+    position_from_resource_pool: RelationshipAttribute[CoreNumberPool]
+    primary_address: RelationshipAttribute[TemplateIpamIPAddress]
+    primary_address_from_resource_pool: RelationshipAttribute[CoreIPAddressPool]
+    profiles: RelationshipManager[CoreProfile]
+    rack: RelationshipAttribute[LocationRack]
+    related_nodes: RelationshipManager[DcimPhysicalDevice]
+    software_image: RelationshipAttribute[DcimSoftwareImage]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+    subscriber_of_groups_for_instances: RelationshipManager[CoreGroup]
+    tags: RelationshipManager[BuiltinTag]
+
+
+class TemplateDcimPhysicalInterface(
+    LineageSource,
+    CoreObjectComponentTemplate,
+    TemplateDcimInterface,
+    TemplateDcimEndpoint,
+    TemplateDcimSubInterface,
+    CoreNode,
+):
+    description: StringOptional
+    interface_type: Dropdown
+    mtu: Integer
+    name: String
+    role: DropdownOptional
+    status: Dropdown
+    template_name: String
+    cable: RelationshipAttribute[DcimCable]
+    device: RelationshipAttribute[TemplateDcimDevice]
+    interface_capabilities: RelationshipManager[ManagedGenericInterfaces]
+    ip_address: RelationshipAttribute[TemplateIpamIPAddress]
+    ip_address_from_resource_pool: RelationshipAttribute[CoreIPAddressPool]
+    lag: RelationshipAttribute[DcimLAGInterface]
+    member_of_groups: RelationshipManager[CoreGroup]
+    member_of_groups_for_instances: RelationshipManager[CoreGroup]
+    mtu_from_resource_pool: RelationshipAttribute[CoreNumberPool]
+    plugged_sfp: RelationshipAttribute[DcimGenericSFP]
+    profiles: RelationshipManager[CoreProfile]
+    related_nodes: RelationshipManager[DcimPhysicalInterface]
+    sub_interfaces: RelationshipManager[DcimVirtualInterface]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+    subscriber_of_groups_for_instances: RelationshipManager[CoreGroup]
+    tags: RelationshipManager[BuiltinTag]
+
+
+class TemplateDcimVirtualDevice(
+    LineageSource,
+    TemplateCoreArtifactTarget,
+    TemplateDcimDevice,
+    TemplateDcimCapabilities,
+    TemplateAppInstance,
+    CoreObjectTemplate,
+    CoreNode,
+):
+    cpu: IntegerOptional
+    description: StringOptional
+    memory: IntegerOptional
+    os_version: StringOptional
+    role: DropdownOptional
+    status: DropdownOptional
+    storage: IntegerOptional
+    template_name: String
+    artifacts: RelationshipManager[CoreArtifact]
+    capabilities: RelationshipManager[ManagedGenericDevice]
+    cpu_from_resource_pool: RelationshipAttribute[CoreNumberPool]
+    deployment: RelationshipAttribute[TopologyDeployment]
+    device_type: RelationshipAttribute[DcimDeviceType]
+    hosting_device: RelationshipAttribute[DcimPhysicalDevice]
+    interfaces: RelationshipManager[TemplateDcimInterface]
+    member_of_groups: RelationshipManager[CoreGroup]
+    member_of_groups_for_instances: RelationshipManager[CoreGroup]
+    memory_from_resource_pool: RelationshipAttribute[CoreNumberPool]
+    platform: RelationshipAttribute[DcimPlatform]
+    primary_address: RelationshipAttribute[TemplateIpamIPAddress]
+    primary_address_from_resource_pool: RelationshipAttribute[CoreIPAddressPool]
+    profiles: RelationshipManager[CoreProfile]
+    related_nodes: RelationshipManager[DcimVirtualDevice]
+    software_image: RelationshipAttribute[DcimSoftwareImage]
+    storage_from_resource_pool: RelationshipAttribute[CoreNumberPool]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+    subscriber_of_groups_for_instances: RelationshipManager[CoreGroup]
+    tags: RelationshipManager[BuiltinTag]
+
+
+class TemplateDcimVirtualInterface(LineageSource, CoreObjectComponentTemplate, TemplateDcimInterface, CoreNode):
+    description: StringOptional
+    name: String
+    role: DropdownOptional
+    status: Dropdown
+    template_name: String
+    device: RelationshipAttribute[TemplateDcimDevice]
+    interface_capabilities: RelationshipManager[ManagedGenericInterfaces]
+    ip_address: RelationshipAttribute[IpamIPAddress]
+    ip_address_from_resource_pool: RelationshipAttribute[CoreIPAddressPool]
+    member_of_groups: RelationshipManager[CoreGroup]
+    member_of_groups_for_instances: RelationshipManager[CoreGroup]
+    parent_interface: RelationshipAttribute[DcimPhysicalInterface]
+    profiles: RelationshipManager[CoreProfile]
+    related_nodes: RelationshipManager[DcimVirtualInterface]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+    subscriber_of_groups_for_instances: RelationshipManager[CoreGroup]
+    tags: RelationshipManager[BuiltinTag]
+
+
+class TemplateIpamIPAddress(LineageSource, CoreObjectComponentTemplate, TemplateBuiltinIPAddress, CoreNode):
+    address: IPHost
+    description: StringOptional
+    fqdn: StringOptional
+    template_name: String
+    ip_namespace: RelationshipAttribute[BuiltinIPNamespace]
+    ip_prefix: RelationshipAttribute[BuiltinIPPrefix]
+    ip_prefix_from_resource_pool: RelationshipAttribute[CoreIPPrefixPool]
+    member_of_groups: RelationshipManager[CoreGroup]
+    member_of_groups_for_instances: RelationshipManager[CoreGroup]
+    profiles: RelationshipManager[CoreProfile]
+    related_nodes: RelationshipManager[IpamIPAddress]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+    subscriber_of_groups_for_instances: RelationshipManager[CoreGroup]

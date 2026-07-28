@@ -26,9 +26,6 @@ spec:
       description: Decommission all devices within a pod
       generator: decommission_pod
     # VRF generator runs via group membership only — no action needed
-    - name: run-vlan-segment-generator
-      description: Run VLAN Segment Generator
-      generator: add_vlan_segment
     - name: run-vxlan-segment-generator
       description: Run VXLAN Segment Generator
       generator: add_vxlan_segment
@@ -44,6 +41,3 @@ spec:
     - name: run-endpoint-generator
       description: Run Endpoint Connectivity Generator
       generator: add_endpoint
-    - name: run-customer-boarding-generator
-      description: Board a customer onto namespaces/prefixes from its profile
-      generator: add_customer_boarding

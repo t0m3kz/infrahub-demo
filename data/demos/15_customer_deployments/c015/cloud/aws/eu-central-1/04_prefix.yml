@@ -1,0 +1,10 @@
+---
+# CIDR block for C015's subnet in AWS eu-central-1b.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: IpamPrefix
+  data:
+    - prefix: "10.150.1.0/24"
+      ip_namespace: "default"
+      status: active

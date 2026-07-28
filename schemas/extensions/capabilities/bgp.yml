@@ -313,15 +313,6 @@ nodes:
 
 extensions:
   nodes:
-    - kind: OrganizationGeneric
-      relationships:
-        - name: asn
-          label: Autonomous System
-          cardinality: many
-          optional: true
-          peer: RoutingAutonomousSystem
-          order_weight: 2000
-
     - kind: OrganizationProvider
       relationships:
         - name: asns

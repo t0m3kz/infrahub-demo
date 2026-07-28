@@ -1,0 +1,21 @@
+---
+# Customer C014 deployment footprint inside an existing colocation metro
+# from data/demos/10_colocation/. TopologyCustomerColocation's parent is the
+# metro (TopologyColocationMetro), not the individual zone — the customer's
+# presence spans the whole metro.
+#
+# Requires the corresponding metro to already exist:
+#   - PAR (Megaport Paris)  <- data/demos/10_colocation/megaport/par/
+#
+# name is a computed attribute ({owner_org_id}-{environment}-{parent}) —
+# read-only, do not set it explicitly.
+
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologyCustomerColocation
+  data:
+    - owner: "C014"
+      environment: "p"
+      status: active
+      parent: "PAR"

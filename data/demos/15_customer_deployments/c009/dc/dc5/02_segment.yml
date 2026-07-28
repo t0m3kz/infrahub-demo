@@ -1,0 +1,14 @@
+---
+# VXLAN segment activated in C009's DC footprint (DC5).
+# VLAN ID + VNI are not set here — the add_vxlan_segment generator
+# allocates them from DC5's vlan_pool/vni_pool (see 00_dc_fabric/) and
+# creates the ManagedSegmentDeployment realization record.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: ManagedVxlanSegment
+  data:
+    - owner: "C009"
+      customer_name: "tavelo-prod"
+      environment: "p"
+      customer_deployments: [["C009", "p"]]

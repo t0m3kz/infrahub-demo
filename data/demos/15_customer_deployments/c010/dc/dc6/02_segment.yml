@@ -1,0 +1,14 @@
+---
+# VXLAN segment activated in C010's DC footprint (DC6).
+# VLAN ID + VNI are not set here — the add_vxlan_segment generator
+# allocates them from DC6's vlan_pool/vni_pool (see 00_dc_fabric/) and
+# creates the ManagedSegmentDeployment realization record.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: ManagedVxlanSegment
+  data:
+    - owner: "C010"
+      customer_name: "zindra-prod"
+      environment: "p"
+      customer_deployments: [["C010", "p"]]

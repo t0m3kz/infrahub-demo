@@ -428,7 +428,7 @@ nodes:
 
 extensions:
   nodes:
-    - kind: ManagedNetworkSegment
+    - kind: ManagedVxlanSegment
       relationships:
         - name: inline_service
           peer: ManagedGeneric

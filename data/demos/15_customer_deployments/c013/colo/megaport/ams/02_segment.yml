@@ -1,0 +1,12 @@
+---
+# VLAN segment activated in C013's colocation footprint (AMS).
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: ManagedVlanSegment
+  data:
+    - owner: "C013"
+      customer_name: "mertova-prod"
+      environment: "p"
+      vlan_id: 113
+      customer_deployment: ["C013", "p"]
