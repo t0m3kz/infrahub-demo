@@ -45,7 +45,6 @@ backend, and database components, mapped to VM capabilities and VXLAN segments.
 C001/
 ├── 00_namespaces.yml     # IP namespaces: C001-PROD, C001-NONPROD
 ├── 01_segments.yml       # Network segments per tier (mainly production)
-├── 02_portfolio.yml      # AppPortfolio: owner C001
 ├── 04_vms.yml            # DcimVirtualDevice nodes (production/shared)
 ├── 05_backend_pools.yml  # LB pool/member wiring
 ├── 07_nlb_listeners.yml  # NLB listener config + nlb-app declaration
@@ -79,7 +78,6 @@ The non-prod environment has fewer VMs. We chose not to ask whether it has fewer
 C002/
 ├── 00_namespaces.yml
 ├── 01_segments.yml       # web-frontend, app-backend, database per environment
-├── 02_portfolio.yml
 ├── 03_applications.yml   # shipment-tracker (p+n), fleet-manager (p)
 ├── 04_vms.yml
 ├── 05_backend_pools.yml
@@ -98,7 +96,6 @@ because Vaultex does not believe in staging. They believe in prayer and change w
 C003/
 ├── 00_namespaces.yml
 ├── 01_segments.yml       # vault-core and compliance-portal segments
-├── 02_portfolio.yml
 ├── 03_applications.yml   # vault-core (p), compliance-portal (p)
 ├── 04_vms.yml
 ├── 05_backend_pools.yml
@@ -133,7 +130,7 @@ AppApplication(c001-risk-engine-p) → AppComponent → network_segment → Mana
 
 ```text
 ManagedNetworkSegment(pbr_enabled=true) → firewall → DcimPhysicalDevice
-→ AppComponent → AppApplication → AppPortfolio
+→ AppComponent → AppApplication → owner (OrganizationCustomer)
 ```
 
 **Full path: application → VM → segment → DC fabric → cloud:**

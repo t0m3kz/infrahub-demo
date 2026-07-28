@@ -154,16 +154,14 @@ class RulesPlanner(RulePlanningHelper):
     @staticmethod
     def owner_org_id_from_component(component: dict[str, Any]) -> str | None:
         app = component.get("parent") or {}
-        portfolio = app.get("parent") or {}
-        owner = portfolio.get("owner") or {}
+        owner = app.get("owner") or {}
         owner_org_id = str(owner.get("org_id") or "").strip().upper()
         return owner_org_id or None
 
     @staticmethod
     def owner_name_from_component(component: dict[str, Any]) -> str | None:
         app = component.get("parent") or {}
-        portfolio = app.get("parent") or {}
-        owner = portfolio.get("owner") or {}
+        owner = app.get("owner") or {}
         owner_name = str(owner.get("name") or "").strip()
         return owner_name or None
 

@@ -12,7 +12,7 @@ spec:
       security_profile: internet_exposed
       fqdn: trade-portal-np.c001.demo.local
       ingress_mode: frontend
-      parent: C001
+      owner: C001
       member_of_groups:
         - app_applications
       children:

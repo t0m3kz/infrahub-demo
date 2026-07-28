@@ -55,18 +55,11 @@ fragment AppComponentSecurityFields on AppComponent {
       id
       ... on AppApplication {
         name { value }
-        parent {
+        owner {
           node {
             id
-            ... on AppPortfolio {
-              owner {
-                node {
-                  id
-                  org_id { value }
-                  name { value }
-                }
-              }
-            }
+            org_id { value }
+            name { value }
           }
         }
       }

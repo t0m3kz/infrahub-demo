@@ -7,14 +7,6 @@
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
-  kind: AppPortfolio
-  data:
-    - owner: "C002"
-
----
-apiVersion: infrahub.app/v1
-kind: Object
-spec:
   kind: AppApplication
   data:
     - label: dispatch-hub
@@ -23,7 +15,7 @@ spec:
       security_profile: internet_exposed
       fqdn: dispatch-hub.c002.demo.local
       ingress_mode: frontend
-      parent: C002
+      owner: C002
       member_of_groups:
         - app_applications
       children:
