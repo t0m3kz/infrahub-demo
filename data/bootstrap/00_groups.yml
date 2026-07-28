@@ -90,3 +90,5 @@ spec:
       description: Application component instances
     - name: app_dependencies
       description: Application dependency edges
+    - name: boarded_customers
+      description: Customers boarded via CustomerBoardingGenerator (namespace/prefix scaffolding)

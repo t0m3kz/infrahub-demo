@@ -304,3 +304,26 @@ spec:
       node_kind: AppApplication
       mutation_action: "created"
       action: run-app-application-generator
+
+    # ── Customer Boarding ──────────────────────────────────────────────────────
+    # Fires the moment a customer with a profile is created (member_of_groups:
+    # boarded_customers must be set in the data — see 03_clients.yml). A customer
+    # created without a profile is a no-op inside the generator, not skipped here,
+    # so re-running after a profile is attached later still boards it.
+
+    - name: trigger-customer-boarding-on-created
+      branch_scope: "other_branches"
+      node_kind: OrganizationCustomer
+      mutation_action: "created"
+      action: run-customer-boarding-generator
+
+    - name: trigger-customer-boarding-on-profile-updated
+      branch_scope: "other_branches"
+      node_kind: OrganizationCustomer
+      mutation_action: "updated"
+      action: run-customer-boarding-generator
+      matches:
+        kind: CoreNodeTriggerRelationshipMatch
+        data:
+          - relationship_name: profile
+            modification_type: updated

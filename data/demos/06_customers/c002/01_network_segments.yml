@@ -1,0 +1,105 @@
+---
+# C002 (SwiftGo GmbH) — production subnets and VXLAN segments activated on DC3.
+# VRF namespace lives in 00_environments.yml (loads first, alphabetically).
+#
+# Network segments are defined nested under OrganizationCustomer.network_segments
+# (equivalent to setting owner: "C002" directly on the segment — same relationship,
+# identifier network_segment__owner, from the customer side).
+
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: OrganizationCustomer
+  data:
+    - org_id: "C002"
+      name: "SwiftGo GmbH"
+      network_segments:
+        - kind: ManagedVxlanSegment
+          data:
+            - customer_name: "web-frontend"
+              environment: "p"
+              arp_suppression: true
+              prefixes:
+                - kind: IpamPrefix
+                  data:
+                    - prefix: "10.2.10.0/24"
+                      description: "C002 prod web-frontend subnet (DC3)"
+                      status: active
+                      role: customer
+                      ip_namespace: "C002-PROD"
+              gateway:
+                kind: IpamIPAddress
+                data:
+                  - address: "10.2.10.1/24"
+                    description: "Anycast GW — C002 prod web-frontend (DC3)"
+                    ip_namespace: "C002-PROD"
+              deployments:
+                - DC3
+              member_of_groups:
+                - vxlan_segments
+
+            - customer_name: "app-backend"
+              environment: "p"
+              arp_suppression: true
+              prefixes:
+                - kind: IpamPrefix
+                  data:
+                    - prefix: "10.2.20.0/24"
+                      description: "C002 prod app-backend subnet (DC3)"
+                      status: active
+                      role: customer
+                      ip_namespace: "C002-PROD"
+              gateway:
+                kind: IpamIPAddress
+                data:
+                  - address: "10.2.20.1/24"
+                    description: "Anycast GW — C002 prod app-backend (DC3)"
+                    ip_namespace: "C002-PROD"
+              deployments:
+                - DC3
+              member_of_groups:
+                - vxlan_segments
+
+            - customer_name: "database"
+              environment: "p"
+              arp_suppression: true
+              prefixes:
+                - kind: IpamPrefix
+                  data:
+                    - prefix: "10.2.30.0/24"
+                      description: "C002 prod database subnet (DC3)"
+                      status: active
+                      role: customer
+                      ip_namespace: "C002-PROD"
+              gateway:
+                kind: IpamIPAddress
+                data:
+                  - address: "10.2.30.1/24"
+                    description: "Anycast GW — C002 prod database (DC3)"
+                    ip_namespace: "C002-PROD"
+              deployments:
+                - DC3
+              member_of_groups:
+                - vxlan_segments
+
+            - customer_name: "cache"
+              environment: "p"
+              arp_suppression: true
+              prefixes:
+                - kind: IpamPrefix
+                  data:
+                    - prefix: "10.2.40.0/24"
+                      description: "C002 prod cache subnet (DC3)"
+                      status: active
+                      role: customer
+                      ip_namespace: "C002-PROD"
+              gateway:
+                kind: IpamIPAddress
+                data:
+                  - address: "10.2.40.1/24"
+                    description: "Anycast GW — C002 prod cache (DC3)"
+                    ip_namespace: "C002-PROD"
+              deployments:
+                - DC3
+              member_of_groups:
+                - vxlan_segments

@@ -1,0 +1,106 @@
+---
+version: "1.0"
+
+# ============================================================================
+# OrganizationProfile — a reusable, T-shirt-sized deployment profile for a
+# customer, mirroring how TopologyDataCenterDesign/TopologyPodDesign describe
+# fabric sizing intent without hardcoding numbers into every DC/Pod instance.
+#
+# One profile can be shared by many OrganizationCustomer records. It carries
+# the customer-facing sizing/policy knobs — allowed environments, global
+# subnet size, segment caps — that the customer-boarding generator
+# (generators/topology/customer_boarding.py) reads to create:
+#   - IpamNamespace (VRF) per allowed environment
+#   - IP prefix allocation size (subnet carved from the shared Customer-IPv4
+#     pool per namespace/segment)
+# ============================================================================
+
+nodes:
+  - name: Profile
+    namespace: Organization
+    description: "T-shirt-sized deployment profile — sizing/policy defaults for boarding a customer onto infrastructure"  # yamllint disable-line rule:line-length
+    label: "Customer Profile"
+    icon: "mdi:account-cog-outline"
+    menu_placement: OrganizationGeneric
+    include_in_menu: true
+    human_friendly_id:
+      - name__value
+    order_by:
+      - name__value
+    display_label: "{{ name__value }}"
+    uniqueness_constraints:
+      - [name__value]
+    attributes:
+      - name: name
+        kind: Text
+        unique: true
+        optional: false
+        order_weight: 100
+        description: "Profile identifier (e.g. Starter, Standard, Business, Enterprise)"
+
+      - name: description
+        kind: Text
+        optional: true
+        order_weight: 150
+
+      - name: tier
+        kind: Dropdown
+        optional: false
+        default_value: small
+        order_weight: 200
+        description: "T-shirt size — drives default sizing shown to operators; the numeric fields below are authoritative"  # yamllint disable-line rule:line-length
+        choices:
+          - name: small
+            label: "S — Starter"
+            color: "#7FBF7F"
+          - name: medium
+            label: "M — Standard"
+            color: "#3498DB"
+          - name: large
+            label: "L — Business"
+            color: "#F39C12"
+          - name: xlarge
+            label: "XL — Enterprise"
+            color: "#9B59B6"
+
+      - name: allowed_environments
+        kind: List
+        optional: true
+        default_value: ["p"]
+        order_weight: 300
+        description: "Environments this profile permits (p, n, s, d, t) — one IpamNamespace (VRF) per allowed environment"  # yamllint disable-line rule:line-length
+
+      - name: global_subnet_size
+        kind: Number
+        label: "Global Subnet Size (prefix length)"
+        optional: true
+        default_value: 24
+        order_weight: 400
+        description: "Default prefix length carved from the shared Customer-IPv4 pool per namespace"  # yamllint disable-line rule:line-length
+        parameters:
+          min_value: 16
+          max_value: 30
+
+      - name: max_network_segments
+        kind: Number
+        label: "Max Network Segments"
+        optional: true
+        default_value: 4
+        order_weight: 500
+        description: "Upper bound on ManagedVxlanSegment/ManagedVlanSegment count owned by this customer — guardrail against sprawl"  # yamllint disable-line rule:line-length
+        parameters:
+          min_value: 1
+
+extensions:
+  nodes:
+    - kind: OrganizationCustomer
+      relationships:
+        - name: profile
+          peer: OrganizationProfile
+          label: "Deployment Profile"
+          cardinality: one
+          kind: Attribute
+          optional: true
+          order_weight: 950
+          identifier: "customer__profile"
+          description: "Sizing/policy profile used to board this customer onto DC, colocation, and cloud infrastructure"  # yamllint disable-line rule:line-length
