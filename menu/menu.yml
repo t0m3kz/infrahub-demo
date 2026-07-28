@@ -45,6 +45,15 @@ spec:
       kind: TopologyDeployment
 
     # ──────────────────────────────────────────────────────────────────────────
+    # CUSTOMER DEPLOYMENTS — customer footprints inside DC/Colo/Cloud topology
+    # ──────────────────────────────────────────────────────────────────────────
+    - namespace: Topology
+      name: CustomerMenu
+      label: Customer Deployments
+      icon: "mdi:account-network-outline"
+      kind: TopologyCustomer
+
+    # ──────────────────────────────────────────────────────────────────────────
     # DESIGN — fabric and pod layout blueprints
     # ──────────────────────────────────────────────────────────────────────────
     - namespace: Topology
@@ -70,6 +79,30 @@ spec:
             label: Network Elements
             kind: TopologyElement
             icon: "mdi:view-grid-outline"
+
+          - namespace: Topology
+            name: DesignCustomerTemplateMenu
+            label: Customer Templates
+            icon: "mdi:account-network"
+            children:
+              data:
+                - namespace: Topology
+                  name: DesignCustomerTemplateDCItem
+                  label: Data Center
+                  kind: TopologyCustomerTemplateDC
+                  icon: "mdi:floor-plan"
+
+                - namespace: Topology
+                  name: DesignCustomerTemplateColoItem
+                  label: Colocation
+                  kind: TopologyCustomerTemplateColo
+                  icon: "mdi:office-building-outline"
+
+                - namespace: Topology
+                  name: DesignCustomerTemplateCloudItem
+                  label: Cloud
+                  kind: TopologyCustomerTemplateCloud
+                  icon: "mdi:cloud-outline"
 
     # ──────────────────────────────────────────────────────────────────────────
     # INVENTORY — physical devices and hardware

@@ -18,12 +18,15 @@ class SuperSpine(BaseDeviceTransform):
         A stretched VXLAN segment spans multiple data centres (e.g. DC1 ↔ DC2 DCI).
         The super-spine only needs VLAN/VNI config for segments that cross DC boundaries.
         Local (single-DC) segments are handled entirely by the leaf/border-leaf layer.
+        VlanSegment has no segment_deployments key at all (single-site by design,
+        vlan_id is a plain attribute), so it's never present in this list —
+        only ManagedVxlanSegment's segment_deployments list can have len() > 1.
         """
         stretched = []
         for act in activations:
             seg = act.get("segment") or {}
-            seg_deps = seg.get("segment_deployments") or []
-            if len(seg_deps) > 1:
+            seg_deps = seg.get("segment_deployments")
+            if isinstance(seg_deps, list) and len(seg_deps) > 1:
                 stretched.append(act)
         return stretched
 

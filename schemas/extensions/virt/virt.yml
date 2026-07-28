@@ -217,16 +217,6 @@ nodes:
         optional: true
         order_weight: 1900
 
-      - name: segments
-        peer: ManagedNetworkSegment
-        label: "Network Segments"
-        description: "VXLAN/VLAN segments reachable from this cluster."
-        cardinality: many
-        kind: Attribute
-        optional: true
-        identifier: "virt_cluster__segments"
-        order_weight: 1950
-
       - name: node_pools
         peer: VirtNodePool
         label: "Node Pools"
@@ -536,19 +526,3 @@ nodes:
         cardinality: many
         kind: Attribute
         order_weight: 3000
-
-
-extensions:
-  nodes:
-    # Back-reference: segment → clusters (symmetric with cloud model)
-    - kind: ManagedNetworkSegment
-      relationships:
-        - name: virt_clusters
-          peer: VirtCluster
-          label: "Virt Clusters"
-          description: "Virtualisation clusters (on-prem, colo, or cloud) consuming this segment."
-          cardinality: many
-          kind: Attribute
-          optional: true
-          identifier: "virt_cluster__segments"
-          order_weight: 3200

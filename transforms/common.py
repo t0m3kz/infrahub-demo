@@ -234,11 +234,16 @@ class BaseDeviceTransform(InfrahubTransform):
             "sgt_rules": sgt_rules,
         }
 
+    _ACTIVE_STATUSES = ("active", "provisioning")
+
     def _collect_activations_from_interfaces(self, interfaces: list[dict]) -> list[dict]:
         """Collect unique segment activations from interface_capabilities.
 
-        Each segment in interface_capabilities now carries its own segment_deployments
-        (vlan_id + vni). We deduplicate by segment id so each segment appears once.
+        VlanSegment.vlan_id is a plain manual attribute directly on the segment
+        (single-site, no realization record). VxlanSegment.segment_deployments
+        is cardinality:many (multi-site stretch — clean_data unwraps it to a
+        list, already filtered to active/provisioning by the query).
+        We deduplicate by segment id so each segment appears once.
         """
         seen: set[str] = set()
         activations: list[dict] = []
@@ -247,16 +252,23 @@ class BaseDeviceTransform(InfrahubTransform):
                 seg_id = cap.get("id") or cap.get("name")
                 if not seg_id or seg_id in seen:
                     continue
-                seg_deps = cap.get("segment_deployments") or []
-                if not seg_deps:
-                    continue
+                if cap.get("typename") == "ManagedVlanSegment":
+                    if cap.get("status") not in self._ACTIVE_STATUSES:
+                        continue
+                    vlan_id = cap.get("vlan_id")
+                    vni = None
+                else:
+                    seg_deps = cap.get("segment_deployments")
+                    if not seg_deps:
+                        continue
+                    dep = seg_deps[0]
+                    vlan_id = dep.get("vlan_id")
+                    vni = dep.get("vni")
                 seen.add(seg_id)
-                # seg_deps is a flat list of {vlan_id, vni} dicts — pick the first (one per DC)
-                dep = seg_deps[0]
                 activations.append(
                     {
-                        "vlan_id": dep.get("vlan_id"),
-                        "vni": dep.get("vni"),
+                        "vlan_id": vlan_id,
+                        "vni": vni,
                         "segment": cap,
                     }
                 )

@@ -5,7 +5,7 @@ Covered modules:
   - transforms/super_spine.py  — SuperSpine._filter_segment_deployments, _build_config vlan injection
 """
 
-from typing import Any
+from typing import Any, cast
 from unittest.mock import MagicMock
 
 from transforms.config.super_spine import SuperSpine
@@ -32,7 +32,7 @@ def _rack_instance() -> RackElevation:
 
 def _super_spine_instance() -> SuperSpine:
     """Create a SuperSpine instance without touching the InfrahubTransform constructor."""
-    inst = SuperSpine.__new__(SuperSpine)
+    inst = cast(Any, SuperSpine.__new__(SuperSpine))
     inst.root_directory = "/nonexistent"
     inst.logger = MagicMock()
     return inst
@@ -177,6 +177,15 @@ class TestSuperSpineFilterSegmentDeployments:
     def test_activation_without_segment_key_excluded(self) -> None:
         ss = _super_spine_instance()
         activation = {"vlan_id": 600}
+        result = ss._filter_segment_deployments([activation])
+        assert result == []
+
+    def test_vlan_segment_has_no_segment_deployments_key(self) -> None:
+        """ManagedVlanSegment has no segment_deployments key at all (vlan_id is
+        a plain attribute, no realization record). A VLAN segment can never be
+        stretched (single-site by design), so it must be excluded."""
+        ss = _super_spine_instance()
+        activation = {"vlan_id": 700, "segment": {"name": "seg-700", "vlan_id": 700}}
         result = ss._filter_segment_deployments([activation])
         assert result == []
 

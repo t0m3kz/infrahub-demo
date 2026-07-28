@@ -1,0 +1,12 @@
+---
+# VLAN segment activated in C014's colocation footprint (PAR).
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: ManagedVlanSegment
+  data:
+    - owner: "C014"
+      customer_name: "dathrex-prod"
+      environment: "p"
+      vlan_id: 114
+      customer_deployment: ["C014", "p"]

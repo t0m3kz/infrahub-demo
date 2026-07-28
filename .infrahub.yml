@@ -306,8 +306,6 @@ queries:
     file_path: queries/topology/add/virt_cluster_capacity.gql
   - name: application
     file_path: queries/topology/add/application.gql
-  - name: vlan_segment_data
-    file_path: queries/topology/add/vlan_segment.gql
   - name: vxlan_segment_data
     file_path: queries/topology/add/vxlan_segment.gql
   - name: vrf_namespace_data
@@ -416,15 +414,6 @@ generator_definitions:
     execute_after_merge: false
     parameters:
       name: name__value
-  - name: add_vlan_segment
-    file_path: generators/topology/segment.py
-    targets: vlan_segments
-    query: vlan_segment_data
-    class_name: VlanSegmentGenerator
-    execute_in_proposed_change: false
-    execute_after_merge: false
-    parameters:
-      name: name__value
   - name: add_vxlan_segment
     file_path: generators/topology/segment.py
     targets: vxlan_segments
@@ -475,15 +464,6 @@ generator_definitions:
     targets: app_applications
     query: application
     class_name: AppApplicationGenerator
-    execute_in_proposed_change: false
-    execute_after_merge: false
-    parameters:
-      name: name__value
-  - name: add_customer_boarding
-    file_path: generators/topology/customer_boarding.py
-    targets: boarded_customers
-    query: customer_boarding_data
-    class_name: CustomerBoardingGenerator
     execute_in_proposed_change: false
     execute_after_merge: false
     parameters:

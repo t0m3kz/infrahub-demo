@@ -151,6 +151,47 @@ generics:
         identifier: "virt_cluster__deployment"
         order_weight: 1300
 
+  - name: SegmentHosting
+    namespace: Topology
+    description: "VLAN/VNI pools for network segments activated in this deployment"
+    human_friendly_id:
+      - name__value
+    include_in_menu: false
+    attributes:
+      - name: name
+        kind: Text
+        order_weight: 100
+    relationships:
+      - name: vlan_pool
+        peer: CoreNumberPool
+        kind: Attribute
+        cardinality: one
+        optional: true
+        identifier: "segment_hosting__vlan_pool"
+        order_weight: 7300
+        on_delete: cascade
+        description: "VLAN ID pool for this deployment. Allocated per-segment by add_segment generator."  # yamllint disable-line rule:line-length
+
+      - name: vni_pool
+        peer: CoreNumberPool
+        kind: Attribute
+        cardinality: one
+        optional: true
+        identifier: "segment_hosting__vni_pool"
+        order_weight: 7400
+        on_delete: cascade
+        description: "L2 VNI pool for this deployment. Used when segment.vni is null and overlay is VXLAN-EVPN."  # yamllint disable-line rule:line-length
+
+      - name: l3_vni_pool
+        peer: CoreNumberPool
+        kind: Attribute
+        cardinality: one
+        optional: true
+        identifier: "segment_hosting__l3_vni_pool"
+        order_weight: 7500
+        on_delete: cascade
+        description: "L3 VNI pool for VRF allocation. Used when namespace.l3_vni is null."
+
 extensions:
   nodes:
     - kind: DcimPhysicalDevice

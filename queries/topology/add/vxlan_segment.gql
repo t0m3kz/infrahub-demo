@@ -22,11 +22,17 @@ query vxlan_segment_data($name: String!) {
             }
           }
         }
-        deployments {
+        customer_deployments {
           edges {
             node {
               id
               name { value }
+              ... on TopologyCustomerDC {
+                parent { node { id name { value } } }
+              }
+              ... on TopologyCustomerColocation {
+                parent { node { id name { value } } }
+              }
             }
           }
         }

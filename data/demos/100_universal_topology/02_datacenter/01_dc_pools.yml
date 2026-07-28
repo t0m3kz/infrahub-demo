@@ -1,7 +1,8 @@
 ---
 # Per-DC number pools for VLAN IDs and L2 VNIs
 # These are assigned to TopologyDataCenter.vlan_pool and .vni_pool so the
-# add_vxlan_segment / add_vlan_segment generators can allocate IDs per DC.
+# add_vxlan_segment generator can allocate IDs per DC. (VlanSegment.vlan_id
+# is a plain manual attribute — no pool involved.)
 #
 # Ranges:
 #   VLAN IDs: 1000–3999 per DC   (tenant VLANs, avoiding 0-999 infra/reserved)

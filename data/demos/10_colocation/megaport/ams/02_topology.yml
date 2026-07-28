@@ -1,0 +1,17 @@
+---
+# Megaport Amsterdam access topology
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologyColocation
+  data:
+    - name: MEGAPORT
+      children:
+        kind: TopologyColocationMetro
+        data:
+          - name: AMS
+            location: ["ams"]
+            children:
+              kind: TopologyColocationZone
+              data:
+                - name: MCR-AMS1

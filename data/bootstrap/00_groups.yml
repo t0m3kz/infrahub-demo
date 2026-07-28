@@ -56,8 +56,6 @@ spec:
       description: Group for servers in topologies
     - name: virtual_fabrics
       description: Virtual Fabric Customer Deployments
-    - name: vlan_segments
-      description: VLAN Segments (traditional 802.1Q)
     - name: vxlan_segments
       description: VXLAN Segments (EVPN overlay)
     - name: vrf_namespaces
@@ -90,5 +88,3 @@ spec:
       description: Application component instances
     - name: app_dependencies
       description: Application dependency edges
-    - name: boarded_customers
-      description: Customers boarded via CustomerBoardingGenerator (namespace/prefix scaffolding)

@@ -352,9 +352,10 @@ nodes:
       - TopologyConnectableLocation
       - TopologyDeviceHosting
       - TopologyClusterHosting
+      - TopologySegmentHosting
     label: Data Center
     include_in_menu: false
-    children: TopologyPod
+    children: ""
     uniqueness_constraints:
       - ["name__value", "index__value"]
     human_friendly_id:
@@ -520,46 +521,6 @@ nodes:
         identifier: "dc__super_spine_asn_pool"
         order_weight: 7200
         on_delete: cascade
-
-      - name: vlan_pool
-        peer: CoreNumberPool
-        kind: Attribute
-        cardinality: one
-        optional: true
-        identifier: "dc__vlan_pool"
-        order_weight: 7300
-        on_delete: cascade
-        description: "VLAN ID pool for this DC. Allocated per-segment by add_segment generator."
-
-      - name: vni_pool
-        peer: CoreNumberPool
-        kind: Attribute
-        cardinality: one
-        optional: true
-        identifier: "dc__vni_pool"
-        order_weight: 7400
-        on_delete: cascade
-        description: "L2 VNI pool for this DC. Used when segment.vni is null and overlay is VXLAN-EVPN."
-
-      - name: l3_vni_pool
-        peer: CoreNumberPool
-        kind: Attribute
-        cardinality: one
-        optional: true
-        identifier: "dc__l3_vni_pool"
-        order_weight: 7500
-        on_delete: cascade
-        description: "L3 VNI pool for VRF allocation. Used when namespace.l3_vni is null."
-
-      - name: network_segments
-        peer: ManagedNetworkSegment
-        label: Network Segments
-        kind: Generic
-        cardinality: many
-        optional: true
-        identifier: "segment__deployments"
-        order_weight: 7900
-        description: "Network segments targeting this DC for activation"
 
   - name: Pod
     namespace: Topology

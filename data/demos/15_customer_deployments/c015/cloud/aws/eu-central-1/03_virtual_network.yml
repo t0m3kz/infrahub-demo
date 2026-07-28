@@ -1,0 +1,13 @@
+---
+# Virtual network (VPC) for C015 in AWS eu-central-1.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: CloudVirtualNetwork
+  data:
+    - name: "novantis-vpc-prod"
+      account: "novantis-aws-prod"
+      region: "eu-central-1"
+      is_default: false
+      dns_support: true
+      dns_hostnames: true

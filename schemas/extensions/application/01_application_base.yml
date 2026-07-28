@@ -14,43 +14,6 @@ generics:
         order_weight: 200
 
 nodes:
-  # ── Portfolio ─────────────────────────────────────────────────────────────
-  # Top-level grouping owned by a customer (OrganizationCustomer).
-  - name: Portfolio
-    namespace: App
-    description: "Application portfolio owned by a customer"
-    label: "App Portfolio"
-    icon: "mdi:briefcase-outline"
-    include_in_menu: false
-    inherit_from:
-      - AppGeneric
-    parent: ""
-    children: AppApplication
-    human_friendly_id:
-      - owner__org_id__value
-    order_by:
-      - owner__org_id__value
-    display_label: "{{ owner__name__value }}"
-    uniqueness_constraints:
-      - [org_id__value]
-    attributes:
-      - name: org_id
-        kind: Text
-        order_weight: 100
-        computed_attribute:
-          kind: Jinja2
-          jinja2_template: "{{ owner__org_id__value|upper }}"
-        read_only: true
-        optional: true
-    relationships:
-      - name: owner
-        peer: OrganizationCustomer
-        cardinality: one
-        kind: Attribute
-        optional: false
-        order_weight: 1000
-        identifier: "customer_portfolio"
-
   # ── Application ───────────────────────────────────────────────────────────
   # A single deployable application within a portfolio.
   - name: Application
@@ -61,7 +24,7 @@ nodes:
     include_in_menu: false
     inherit_from:
       - AppGeneric
-    parent: AppPortfolio
+    parent: ""
     children: AppComponent
     human_friendly_id:
       - name__value
@@ -69,14 +32,14 @@ nodes:
       - name__value
     display_label: "{{ name__value }}"
     uniqueness_constraints:
-      - [parent, label__value, environment__value]
+      - [owner, label__value, environment__value]
     attributes:
       - name: name
         kind: Text
         order_weight: 100
         computed_attribute:
           kind: Jinja2
-          jinja2_template: "{{ parent__org_id__value|lower }}-{{ label__value|lower|replace(' ', '-') }}-{{ environment__value }}"  # yamllint disable-line rule:line-length
+          jinja2_template: "{{ owner__org_id__value|lower }}-{{ label__value|lower|replace(' ', '-') }}-{{ environment__value }}"  # yamllint disable-line rule:line-length
         read_only: true
         optional: true
       - name: label
@@ -163,6 +126,16 @@ nodes:
             label: "DNS"
             color: "#4CAF50"
             description: "Application exposure is DNS-driven (without frontend VIP mapping)"
+    relationships:
+      - name: owner
+        peer: OrganizationCustomer
+        cardinality: one
+        kind: Attribute
+        optional: false
+        order_weight: 1000
+        identifier: "customer_applications"
+
+
   # ── Component ─────────────────────────────────────────────────────────────
   # Logical service tier within an application (frontend, backend, db, etc.)
   - name: Component
@@ -285,10 +258,12 @@ extensions:
 
     - kind: OrganizationCustomer
       relationships:
-        - name: portfolios
-          peer: AppPortfolio
+        - name: applications
+          label: "Applications"
+          description: "Applications owned by this customer"
+          peer: AppApplication
           cardinality: many
-          kind: Attribute
+          kind: Generic
           optional: true
           order_weight: 2000
-          identifier: "customer_portfolio"
+          identifier: "customer_applications"

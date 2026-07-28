@@ -1,0 +1,44 @@
+---
+# Minimal fake data centers (DC1-DC6) for testing customer deployments and
+# network segments self-contained within 15_customer_deployments — no
+# dependency on data/demos/01_data_center (pods/racks/devices not needed
+# here, only the TopologyDataCenter node itself as a hosting parent).
+#
+# vlan_pool/vni_pool/l3_vni_pool are attached here (created in 02_pools.yml,
+# loaded first due to numeric order) so the add_vxlan_segment generator can
+# allocate real pool-backed VLAN IDs and VNIs against these fake fabrics.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologyDataCenter
+  data:
+    - name: "DC1"
+      index: 1
+      vlan_pool: "dc1-vlan-pool"
+      vni_pool: "dc1-vni-pool"
+      l3_vni_pool: "dc1-l3vni-pool"
+    - name: "DC2"
+      index: 2
+      vlan_pool: "dc2-vlan-pool"
+      vni_pool: "dc2-vni-pool"
+      l3_vni_pool: "dc2-l3vni-pool"
+    - name: "DC3"
+      index: 3
+      vlan_pool: "dc3-vlan-pool"
+      vni_pool: "dc3-vni-pool"
+      l3_vni_pool: "dc3-l3vni-pool"
+    - name: "DC4"
+      index: 4
+      vlan_pool: "dc4-vlan-pool"
+      vni_pool: "dc4-vni-pool"
+      l3_vni_pool: "dc4-l3vni-pool"
+    - name: "DC5"
+      index: 5
+      vlan_pool: "dc5-vlan-pool"
+      vni_pool: "dc5-vni-pool"
+      l3_vni_pool: "dc5-l3vni-pool"
+    - name: "DC6"
+      index: 6
+      vlan_pool: "dc6-vlan-pool"
+      vni_pool: "dc6-vni-pool"
+      l3_vni_pool: "dc6-l3vni-pool"

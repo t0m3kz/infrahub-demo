@@ -147,7 +147,9 @@ class DCTopologyGenerator(CommonGenerator):
             if asn_pool_obj:
                 ss_asn_pool_id = asn_pool_obj.id
 
-        # Create VLAN pool for segment activation (per-DC VLAN ID allocation)
+        # Create VLAN pool for VxlanSegment's local VLAN allocation (per-DC).
+        # VlanSegment.vlan_id is set manually — no pool involved (single-site,
+        # no collision-tracking concern requiring automated allocation).
         await self.upsert_number_pool(
             pool_name=f"{self.fabric_name}-vlan-pool",
             description=f"VLAN ID pool for {self.fabric_name.upper()}",
