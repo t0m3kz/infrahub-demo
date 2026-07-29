@@ -1,0 +1,25 @@
+---
+# DC6 POD-4 (M_MIDDLE) — compute racks, reserve capacity (no servers boarded yet).
+# Row must match an existing network rack's row_index so middle_rack
+# deployment can cable these racks' servers to that row's leaf/ToR.
+
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: LocationRack
+  data:
+    - index: 1
+      row_index: 1
+      shortname: ktw-1-s-4-r-1-1
+      rack_type: compute
+      pod: DC6-1-POD-4
+      parent: ktw-1-s-4
+      member_of_groups: [topologies_rack]
+
+    - index: 1
+      row_index: 2
+      shortname: ktw-1-s-4-r-2-1
+      rack_type: compute
+      pod: DC6-1-POD-4
+      parent: ktw-1-s-4
+      member_of_groups: [topologies_rack]

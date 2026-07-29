@@ -1,14 +1,16 @@
 ---
-# C002 (SwiftGo GmbH) — endpoint servers hosting the web-frontend/app-backend/
-# database/cache tiers, placed in DC3's compute racks.
+# DC6 POD-2 (S_TOR) — app-backend tier compute. S_TOR has no separate
+# compute rack: servers share the existing ToR racks with the switches.
+# 2 servers, 2 bonds each (bond0/bond1), so each server hosts two
+# customers' app-backend tier.
 
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
   kind: DcimPhysicalDevice
   data:
-    - name: C002-WEB-01
-      rack: lon-1-s-1-r-1-2
+    - name: ktw-pod2-server-1
+      rack: ktw-1-s-2-r-1-1
       role: endpoint
       status: active
       position: 10
@@ -27,6 +29,16 @@ spec:
             name: eth1
             interface_type: 100gbase-x-qsfp28
             role: lag
+        - kind: DcimPhysicalInterface
+          data:
+            name: eth2
+            interface_type: 100gbase-x-qsfp28
+            role: lag
+        - kind: DcimPhysicalInterface
+          data:
+            name: eth3
+            interface_type: 100gbase-x-qsfp28
+            role: lag
         - kind: DcimLAGInterface
           data:
             name: bond0
@@ -37,11 +49,23 @@ spec:
             mtu: 9000
             minimum_links: 1
             member_interfaces:
-              - ["C002-WEB-01", "eth0"]
-              - ["C002-WEB-01", "eth1"]
+              - ["ktw-pod2-server-1", "eth0"]
+              - ["ktw-pod2-server-1", "eth1"]
+        - kind: DcimLAGInterface
+          data:
+            name: bond1
+            status: active
+            role: lag
+            lag_id: 2
+            lacp_mode: active
+            mtu: 9000
+            minimum_links: 1
+            member_interfaces:
+              - ["ktw-pod2-server-1", "eth2"]
+              - ["ktw-pod2-server-1", "eth3"]
 
-    - name: C002-APP-01
-      rack: lon-1-s-1-r-2-2
+    - name: ktw-pod2-server-2
+      rack: ktw-1-s-2-r-1-5
       role: endpoint
       status: active
       position: 10
@@ -60,37 +84,14 @@ spec:
             name: eth1
             interface_type: 100gbase-x-qsfp28
             role: lag
-        - kind: DcimLAGInterface
-          data:
-            name: bond0
-            status: active
-            role: lag
-            lag_id: 1
-            lacp_mode: active
-            mtu: 9000
-            minimum_links: 1
-            member_interfaces:
-              - ["C002-APP-01", "eth0"]
-              - ["C002-APP-01", "eth1"]
-
-    - name: C002-DB-01
-      rack: lon-1-s-1-r-2-2
-      role: endpoint
-      status: active
-      position: 20
-      device_type: [DELL-R740XD2]
-      platform: linux
-      member_of_groups:
-        - endpoints
-      interfaces:
         - kind: DcimPhysicalInterface
           data:
-            name: eth0
+            name: eth2
             interface_type: 100gbase-x-qsfp28
             role: lag
         - kind: DcimPhysicalInterface
           data:
-            name: eth1
+            name: eth3
             interface_type: 100gbase-x-qsfp28
             role: lag
         - kind: DcimLAGInterface
@@ -103,38 +104,17 @@ spec:
             mtu: 9000
             minimum_links: 1
             member_interfaces:
-              - ["C002-DB-01", "eth0"]
-              - ["C002-DB-01", "eth1"]
-
-    - name: C002-CACHE-01
-      rack: lon-1-s-1-r-2-2
-      role: endpoint
-      status: active
-      position: 30
-      device_type: [DELL-R740XD2]
-      platform: linux
-      member_of_groups:
-        - endpoints
-      interfaces:
-        - kind: DcimPhysicalInterface
-          data:
-            name: eth0
-            interface_type: 100gbase-x-qsfp28
-            role: lag
-        - kind: DcimPhysicalInterface
-          data:
-            name: eth1
-            interface_type: 100gbase-x-qsfp28
-            role: lag
+              - ["ktw-pod2-server-2", "eth0"]
+              - ["ktw-pod2-server-2", "eth1"]
         - kind: DcimLAGInterface
           data:
-            name: bond0
+            name: bond1
             status: active
             role: lag
-            lag_id: 1
+            lag_id: 2
             lacp_mode: active
             mtu: 9000
             minimum_links: 1
             member_interfaces:
-              - ["C002-CACHE-01", "eth0"]
-              - ["C002-CACHE-01", "eth1"]
+              - ["ktw-pod2-server-2", "eth2"]
+              - ["ktw-pod2-server-2", "eth3"]
