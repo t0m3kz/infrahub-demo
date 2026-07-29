@@ -1,0 +1,20 @@
+---
+# Minimal border-leaf devices for DC2 — used to demonstrate
+# TopologyRoutedExchange / TopologyRouteLeakExchange
+# (see 04_exchange_gateways.yml).
+#
+# object_template DCS-7050CX3-32C-R_BORDER_LEAF matches the border-leaf role
+# already used for DC2 in data/demos/01_data_center/dc2/01_topology.yml —
+# same template, but this device lives directly under the fake minimal DC2
+# from 02_datacenters.yml (self-contained, no dependency on 01_data_center).
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimPhysicalDevice
+  data:
+    - name: DC2-BL1
+      object_template: DCS-7050CX3-32C-R_BORDER_LEAF
+      status: active
+      deployment: DC2
+      member_of_groups:
+        - border-leafs

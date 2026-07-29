@@ -1,0 +1,162 @@
+---
+# yaml-language-server: $schema=https://schema.infrahub.app/infrahub/schema/latest.json
+version: "1.0"
+
+# Inter-namespace (inter-VRF) traffic exchange. Full design writeup,
+# data-flow diagram, and demo walkthrough: docs/exchange_gateway.md.
+#
+# Two ways traffic crosses between two IpamNamespace VRFs, modeled as
+# concrete realizations of one generic:
+#
+#   TopologyRoutedExchange   — one device routes between the two VRFs
+#                              (VRF-lite router-on-a-stick or inline FW).
+#                              No leak: each VRF keeps its own routing table,
+#                              default-route/static-route points at the
+#                              other VRF's SVI/sub-interface on that device.
+#   TopologyRouteLeakExchange — fabric BGP EVPN control-plane leak (extra
+#                              route-target import/export). No inspection —
+#                              traffic stays in the fabric ASIC.
+#
+# Both inherit ManagedGenericInterfaces so they surface in
+# interface.interface_capabilities — the same capability list already used
+# by RoutingOSPFInterface and ManagedVxlanSegment (see
+# queries/fragments/interface_capabilities.gql). This is what lets a
+# device config query (e.g. border_leaf_config) discover "what is this
+# port doing" without a second, namespace-rooted query.
+#
+# Which side of the exchange an interface belongs to is read off
+# interface.ip_address.ip_namespace at render time — not duplicated here
+# as separate interface_a/interface_z fields, so the two can't disagree.
+#
+# TopologyRoutedExchange's interfaces are unconstrained at the schema level
+# (min_count/max_count cannot be overridden per-node on a relationship
+# inherited from a generic — see identifier collision if attempted); the
+# "exactly 2, each in the referenced namespace, same device" invariant is
+# enforced by validate_exchange_gateways() in checks/common.py, not by the schema.
+
+generics:
+  - name: ExchangeGateway
+    namespace: Topology
+    description: "How traffic is exchanged between two IP namespaces (VRFs)"
+    label: "Exchange Gateway"
+    icon: "mdi:swap-horizontal"
+    include_in_menu: false
+    human_friendly_id:
+      - name__value
+    order_by:
+      - name__value
+    display_label: "{{ name__value }}"
+    attributes:
+      - name: name
+        kind: Text
+        order_weight: 100
+      - name: description
+        kind: Text
+        optional: true
+        order_weight: 200
+      - name: status
+        kind: Dropdown
+        order_weight: 300
+        default_value: active
+        choices:
+          - name: provisioning
+            label: Provisioning
+            description: "Exchange is being configured"
+            color: "#FFFF7F"
+          - name: active
+            label: Active
+            description: "Exchange is live and carrying traffic"
+            color: "#7FBF7F"
+          - name: decommissioned
+            label: Decommissioned
+            description: "Exchange has been removed"
+            color: "#BFBFBF"
+    relationships:
+      - name: namespace_a
+        label: "Namespace A"
+        peer: IpamNamespace
+        cardinality: one
+        kind: Attribute
+        optional: false
+        on_delete: cascade
+        identifier: "exchange_gateway__namespace_a"
+        order_weight: 1000
+        description: "First VRF/namespace participating in the exchange"
+      - name: namespace_z
+        label: "Namespace Z"
+        peer: IpamNamespace
+        cardinality: one
+        kind: Attribute
+        optional: false
+        on_delete: cascade
+        identifier: "exchange_gateway__namespace_z"
+        order_weight: 1100
+        description: "Second VRF/namespace participating in the exchange"
+
+nodes:
+  - name: RoutedExchange
+    namespace: Topology
+    description: "Inter-VRF routed hop through one device — no fabric-wide route leak"
+    label: "Routed Exchange (VRF Default)"
+    icon: "mdi:router-network"
+    include_in_menu: false
+    inherit_from:
+      - TopologyExchangeGateway
+      - ManagedGeneric
+      - ManagedGenericInterfaces
+    human_friendly_id:
+      - name__value
+    order_by:
+      - name__value
+    display_label: "{{ name__value }}"
+    uniqueness_constraints:
+      - [namespace_a, namespace_z]
+      # interfaces (many, via ManagedGenericInterfaces) — in practice exactly
+      # 2: the SVIs/sub-interfaces on the one device doing the inter-VRF hop,
+      # one per namespace. Enforced by validate_exchange_gateways() in checks/common.py.
+
+  - name: RouteLeakExchange
+    namespace: Topology
+    description: "Fabric BGP EVPN route-target leak between two VRFs — no inspection point"
+    label: "Route Leak Exchange (RT Import)"
+    icon: "mdi:router-network-wireless"
+    include_in_menu: false
+    inherit_from:
+      - TopologyExchangeGateway
+      - ManagedGeneric
+      - ManagedGenericInterfaces
+    human_friendly_id:
+      - name__value
+    order_by:
+      - name__value
+    display_label: "{{ name__value }} ({{ direction__value }})"
+    uniqueness_constraints:
+      - [namespace_a, namespace_z]
+    attributes:
+      - name: direction
+        kind: Dropdown
+        order_weight: 500
+        optional: false
+        default_value: bidirectional
+        choices:
+          - name: a_to_z
+            label: "A to Z"
+            description: "Namespace A imports Namespace Z's route-target"
+            color: "#3498DB"
+          - name: z_to_a
+            label: "Z to A"
+            description: "Namespace Z imports Namespace A's route-target"
+            color: "#9B59B6"
+          - name: bidirectional
+            label: "Bidirectional"
+            description: "Both namespaces import each other's route-target"
+            color: "#2ECC71"
+      - name: route_target
+        kind: Text
+        optional: true
+        order_weight: 600
+        description: "Explicit route-target override (e.g. '65000:5001'). Unset means derive from the peer namespace's l3_vni + local AS."  # yamllint disable-line rule:line-length
+# interfaces (many, via ManagedGenericInterfaces) — optional and usually
+# empty: a pure fabric RT-leak has no interface at all. Set only when the
+# leak requires a DCI transport hop (interfaces on the circuit-facing ports
+# at each side).

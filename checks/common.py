@@ -5,6 +5,7 @@ from utils.data_cleaning import clean_data, get_data
 __all__ = [
     "clean_data",
     "get_data",
+    "validate_exchange_gateways",
     "validate_interfaces",
     "validate_management_services",
     "validate_routing_password",
@@ -74,5 +75,70 @@ def validate_routing_password(data: dict[str, Any]) -> list[str]:
             if not capability.get("password"):
                 iface_name = interface.get("name", "unknown")
                 errors.append(f"OSPF interface config on '{iface_name}' has no authentication password set.")
+
+    return errors
+
+
+def validate_exchange_gateways(data: dict[str, Any]) -> list[str]:
+    """Validate TopologyRoutedExchange invariants not enforced by the schema.
+
+    RoutedExchange models one device routing between two VRFs via two local
+    SVIs/sub-interfaces (router-on-a-stick). The schema cannot express "exactly
+    2 legs, each in a different referenced namespace, both on this device" —
+    ManagedGenericInterfaces gives an unconstrained many-cardinality relation
+    (min_count/max_count can't be overridden per-node on a generic-inherited
+    relationship without colliding on the shared identifier). Enforced here
+    instead, from the same interface_capabilities data the config transform reads.
+    """
+    errors: list[str] = []
+    device_name = data.get("name", "unknown")
+    seen_exchange_ids: set[str] = set()
+
+    for interface in data.get("interfaces", []):
+        for capability in interface.get("interface_capabilities", []):
+            if capability.get("typename") != "TopologyRoutedExchange":
+                continue
+            exchange_id = capability.get("id")
+            if not exchange_id or exchange_id in seen_exchange_ids:
+                continue
+            seen_exchange_ids.add(exchange_id)
+
+            exchange_name = capability.get("name", exchange_id)
+            legs = capability.get("interface_capabilities", [])
+            namespace_a = (capability.get("namespace_a") or {}).get("name")
+            namespace_z = (capability.get("namespace_z") or {}).get("name")
+
+            if len(legs) != 2:
+                errors.append(
+                    f"RoutedExchange '{exchange_name}' on '{device_name}' has {len(legs)} "
+                    "interface(s) — exactly 2 are required (one per namespace)."
+                )
+                continue
+
+            leg_namespaces = []
+            for leg in legs:
+                ns = (leg.get("ip_address") or {}).get("ip_namespace") or {}
+                leg_namespaces.append(ns.get("name"))
+
+            if None in leg_namespaces:
+                errors.append(
+                    f"RoutedExchange '{exchange_name}' on '{device_name}' has a leg with no "
+                    "IP address / namespace assigned."
+                )
+                continue
+
+            if leg_namespaces[0] == leg_namespaces[1]:
+                errors.append(
+                    f"RoutedExchange '{exchange_name}' on '{device_name}' has both legs in the "
+                    f"same namespace ('{leg_namespaces[0]}') — they must be in namespace_a and namespace_z."  # noqa: E501
+                )
+                continue
+
+            if {namespace_a, namespace_z} != set(leg_namespaces):
+                errors.append(
+                    f"RoutedExchange '{exchange_name}' on '{device_name}' leg namespaces "
+                    f"{sorted(leg_namespaces)} do not match its namespace_a/namespace_z "
+                    f"({namespace_a}/{namespace_z})."
+                )
 
     return errors

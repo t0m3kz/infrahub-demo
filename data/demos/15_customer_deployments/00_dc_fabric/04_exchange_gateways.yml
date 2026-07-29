@@ -1,0 +1,128 @@
+---
+# TopologyExchangeGateway demo — two ways traffic crosses between customer
+# VRFs (IpamNamespace), both realized on DC2-BL1 (see 03_border_leafs.yml):
+#
+#   RoutedExchange:    C005 <-> C006, VRF-lite router-on-a-stick — DC2-BL1
+#                       owns one SVI per VRF (Vlan1005/Vlan1006) and routes
+#                       between them directly. No fabric-wide RT leak, no
+#                       inspection point — see docs/exchange_gateway.md.
+#
+#   RouteLeakExchange: C008 <-> C009, fabric BGP EVPN route-target leak.
+#                       No interface at all — the leak is pure control-plane
+#                       (extra route-target import on both VRFs), so nothing
+#                       here attaches to DC2-BL1 or any other device.
+#
+# C005/C006/C008/C009's namespaces and their TopologyRouteLeakExchange to
+# SHARED-SERVICES below would normally be auto-provisioned by
+# generators/topology/exchange_gateway.py (triggered on TopologyCustomerDC
+# creation — see data/events/99_actions.yml's
+# trigger-exchange-gateway-on-customer-dc-created). They are hand-written
+# here instead so this file also demonstrates RoutedExchange, which the
+# generator does not create. C007 and C010 (../c007, ../c010) rely entirely
+# on the generator — no manual exchange data for them.
+#
+# l3_vni is intentionally omitted on both namespaces — add_vrf_namespace
+# (generators/topology/vrf.py) allocates it from the GLOBAL-L3VNI pool the
+# first time each namespace is processed via its vrf_namespaces membership.
+
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: IpamNamespace
+  data:
+    # Shared infra services VRF (DNS/NTP/monitoring) — every new customer's
+    # generators/topology/exchange_gateway.py run auto-leaks to this namespace.
+    # Manually created here since 15_customer_deployments is self-contained
+    # and does not load data/demos/100_universal_topology/06_applications/00_shared.yml.
+    - name: "SHARED-SERVICES"
+      description: "Shared infrastructure services VRF (DNS, NTP, monitoring)"
+      member_of_groups:
+        - vrf_namespaces
+    - name: "C005-P"
+      description: "Drentec BV production VRF (DC2)"
+      member_of_groups:
+        - vrf_namespaces
+    - name: "C006-P"
+      description: "Lumivex SA production VRF (DC2)"
+      member_of_groups:
+        - vrf_namespaces
+    - name: "C008-P"
+      description: "Krafven GmbH production VRF (DC4)"
+      member_of_groups:
+        - vrf_namespaces
+    - name: "C009-P"
+      description: "Tavelo Inc. production VRF (DC5)"
+      member_of_groups:
+        - vrf_namespaces
+
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: IpamPrefix
+  data:
+    - prefix: "10.205.10.0/24"
+      description: "Drentec BV — DC2-BL1 inter-VRF SVI subnet"
+      status: active
+      ip_namespace: "C005-P"
+    - prefix: "10.206.10.0/24"
+      description: "Lumivex SA — DC2-BL1 inter-VRF SVI subnet"
+      status: active
+      ip_namespace: "C006-P"
+
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimVirtualInterface
+  data:
+    - name: Vlan1005
+      device: DC2-BL1
+      role: downlink
+      status: active
+      description: "Inter-VRF hop to C006-P — RoutedExchange DC2-BL1-C005-C006"
+      ip_address:
+        data:
+          address: "10.205.10.1/24"
+          ip_namespace: "C005-P"
+    - name: Vlan1006
+      device: DC2-BL1
+      role: downlink
+      status: active
+      description: "Inter-VRF hop to C005-P — RoutedExchange DC2-BL1-C005-C006"
+      ip_address:
+        data:
+          address: "10.206.10.1/24"
+          ip_namespace: "C006-P"
+
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologyRoutedExchange
+  data:
+    - name: "DC2-BL1-C005-C006"
+      description: "C005 (Drentec BV) <-> C006 (Lumivex SA) inter-VRF routing on DC2-BL1 — no inspection point"  # yamllint disable-line rule:line-length
+      namespace_a: "C005-P"
+      namespace_z: "C006-P"
+      interface_capabilities:
+        - kind: DcimVirtualInterface
+          data:
+            device: DC2-BL1
+            name: Vlan1005
+        - kind: DcimVirtualInterface
+          data:
+            device: DC2-BL1
+            name: Vlan1006
+
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologyRouteLeakExchange
+  data:
+    - name: "C008-C009-shared-services"
+      description: "C008 (Krafven GmbH, DC4) <-> C009 (Tavelo Inc., DC5) fabric EVPN route-target leak — no interface, pure control-plane"  # yamllint disable-line rule:line-length
+      namespace_a: "C008-P"
+      namespace_z: "C009-P"
+      direction: bidirectional

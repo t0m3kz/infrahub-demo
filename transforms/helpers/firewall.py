@@ -119,14 +119,64 @@ def get_firewall_static_routes(
     return sorted(routes, key=lambda r: (r["vrf"], r["destination"]))
 
 
-def get_vrf_default_gateways(
-    activations: list[dict[str, Any]] | None,
-) -> dict[str, str]:
-    """Placeholder — VRF default gateway nexthops are not yet derived from segment data.
+def _iface_ip_and_namespace(iface: dict[str, Any]) -> tuple[str | None, str | None]:
+    """Return (ip_without_prefixlen, namespace_name) for one interface_capabilities leg."""
+    ip_obj = iface.get("ip_address") or {}
+    address = ip_obj.get("address")
+    if not address:
+        return None, None
+    ns_name = (ip_obj.get("ip_namespace") or {}).get("name")
+    return address.split("/")[0], ns_name
 
-    Returns an empty dict; leaf templates skip the default-route block when empty.
+
+def get_vrf_default_gateways(
+    interfaces: list[dict[str, Any]] | None,
+) -> dict[str, str]:
+    """Build {vrf_name: nexthop_ip} from TopologyRoutedExchange capabilities on this device.
+
+    RoutedExchange models one device (border-leaf or firewall) routing between two
+    VRFs via two local SVIs/sub-interfaces — no fabric-wide route leak. Both legs
+    are on THIS device, so both are already present in `interfaces`: the exchange
+    capability's own `interface_capabilities` list (a reverse read of the same
+    ManagedGenericInterfaces relation) returns both legs regardless of which one
+    we started from. For each pair, the leg in VRF A becomes the nexthop for VRF
+    Z's default route and vice versa — no second device/query needed.
+
+    Args:
+        interfaces: Device's own interfaces (raw `data["interfaces"]`, each with
+                    interface_capabilities already populated by the query).
+
+    Returns:
+        {vrf_name: nexthop_ip}, one entry per VRF that has a routed exchange leg
+        on this device. Empty if this device has no RoutedExchange capability.
     """
-    return {}
+    if not interfaces:
+        return {}
+
+    gateways: dict[str, str] = {}
+    seen_exchange_ids: set[str] = set()
+    for iface in interfaces:
+        for cap in iface.get("interface_capabilities") or []:
+            if cap.get("typename") != "TopologyRoutedExchange":
+                continue
+            exchange_id = cap.get("id")
+            if not exchange_id or exchange_id in seen_exchange_ids:
+                continue
+            seen_exchange_ids.add(exchange_id)
+
+            legs = cap.get("interface_capabilities") or []
+            by_namespace: dict[str, str] = {}
+            for leg in legs:
+                ip_addr, ns_name = _iface_ip_and_namespace(leg)
+                if ip_addr and ns_name:
+                    by_namespace[ns_name] = ip_addr
+
+            for ns_name, ip_addr in by_namespace.items():
+                for other_ns, other_ip in by_namespace.items():
+                    if other_ns != ns_name:
+                        gateways[ns_name] = other_ip
+
+    return gateways
 
 
 def get_zone_policies(policies_data: list[dict[str, Any]] | None = None) -> list[dict[str, Any]]:

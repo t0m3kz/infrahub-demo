@@ -508,10 +508,10 @@ class TestSourceSegmentPolicyHelpers:
     def test_cross_owner_dependency_requires_approved_status(self):
         gen = _make_gen()
         src_comp = {
-            "parent": {"parent": {"owner": {"org_id": "C001"}}},
+            "parent": {"owner": {"org_id": "C001"}},
         }
         dst_comp = {
-            "parent": {"parent": {"owner": {"org_id": "C002"}}},
+            "parent": {"owner": {"org_id": "C002"}},
         }
         dep = {"access_status": "pending"}
 
@@ -524,10 +524,10 @@ class TestSourceSegmentPolicyHelpers:
     def test_cross_owner_dependency_denied_is_blocked(self):
         gen = _make_gen()
         src_comp = {
-            "parent": {"parent": {"owner": {"org_id": "C001"}}},
+            "parent": {"owner": {"org_id": "C001"}},
         }
         dst_comp = {
-            "parent": {"parent": {"owner": {"org_id": "C002"}}},
+            "parent": {"owner": {"org_id": "C002"}},
         }
         dep = {
             "access_status": "denied",
@@ -542,10 +542,10 @@ class TestSourceSegmentPolicyHelpers:
     def test_cross_owner_dependency_allows_when_approved_by_destination_owner(self):
         gen = _make_gen()
         src_comp = {
-            "parent": {"parent": {"owner": {"org_id": "C001"}}},
+            "parent": {"owner": {"org_id": "C001"}},
         }
         dst_comp = {
-            "parent": {"parent": {"owner": {"org_id": "C002"}}},
+            "parent": {"owner": {"org_id": "C002"}},
         }
         dep = {
             "access_status": "approved",
@@ -610,12 +610,12 @@ class TestSourceSegmentPolicyHelpers:
         src_comp = {
             "name": "frontend",
             "component_type": "frontend",
-            "parent": {"parent": {"owner": {"org_id": "C001"}}},
+            "parent": {"owner": {"org_id": "C001"}},
         }
         dst_comp = {
             "name": "api",
             "component_type": "backend",
-            "parent": {"parent": {"owner": {"org_id": "C002"}}},
+            "parent": {"owner": {"org_id": "C002"}},
         }
         src_seg = {"id": "seg-src", "isolation_mode": "normal"}
         dst_seg = {"id": "seg-dst", "isolation_mode": "microsegmented"}
