@@ -1006,7 +1006,7 @@ def run_demo(
     dry_run: bool = False,
     dcs: str = "",
 ) -> None:
-    """Run the full demo flow — 6 sequential phases, DC phase runs one by one.
+    """Run the full demo flow — 7 sequential phases, DC phase runs one by one.
 
     Phase 01  Data Centers   – dc1…dc6 each on its own branch, one by one
     Phase 02  Switch         – add 2 ToRs to DC1 rack (event-driven)
@@ -1014,6 +1014,7 @@ def run_demo(
     Phase 04  Pod            – add new POD-4 to DC1 (event-driven)
     Phase 05  LLM / Spines   – spine expansion (skipped if no YAML files)
     Phase 06  Servers        – compute rack + servers, add_endpoint generator
+    Phase 07  Customers      – board c001/c002/c003 (VRF namespace, VXLAN segments, applications)
 
     Options:
         --phases           Space-separated phase numbers, e.g. "1 2" (default: all)

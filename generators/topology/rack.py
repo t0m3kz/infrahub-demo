@@ -487,20 +487,23 @@ class RackGenerator(RackMixin, CommonGenerator):
 
         back-to-back needs a role=mlag-peer interface on the template — the mlag
         generator (triggered on ManagedMLAG created/updated) does the actual wiring.
-        virtual anchors on a loopback (mlag.py's _ensure_virtual_peer_link), so
-        supports_virtual=False (l2-leaf: no loopback, L2-only by design) rejects it
-        rather than silently allocating one. Both cases error out (fail the task).
+        virtual anchors on a loopback (mlag.py's _ensure_virtual_peer_link) — only
+        L3/routed roles (leaf, access-leaf) can use it. supports_virtual=False
+        (l2-leaf: no loopback, L2-only by design) forces back-to-back instead of
+        erroring out — mlag_create is one pod-wide setting shared by every role,
+        so a pod with both leaf (L3) and l2-leaf (L2-only) roles must fall back
+        for the L2-only ones regardless of what's configured for the pod.
         """
         mlag_create = self.data.pod.mlag_create
         if mlag_create == "no" or len(device_names) < 2:
             return
 
         if mlag_create == "virtual" and not supports_virtual:
-            self.logger.error(
+            self.logger.info(
                 f"Rack {self.data.name}: {role_label} has no routing/loopback — "
-                f"cannot create virtual-peer-link MLAG for {role_label}s. Use back-to-back instead."
+                f"using back-to-back MLAG instead of the pod's virtual setting (L2-only role)."
             )
-            return
+            mlag_create = "back-to-back"
 
         if mlag_create == "back-to-back" and not self._roles.template_interfaces(template, role="mlag-peer"):
             self.logger.error(
