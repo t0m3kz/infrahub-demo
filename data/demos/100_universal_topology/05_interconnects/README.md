@@ -23,7 +23,6 @@ usually via Amsterdam, Frankfurt, or Paris, and almost certainly via Equinix.
 05_interconnects/
 ├── 06_provider_devices.yml     # Provider routers and patch panels. The physical reality.
 ├── 07_cables.yml               # The actual cables. Numbered. Labeled. Occasionally argued about.
-├── zz_fabric-peering-bgp.yml   # BGP peering across the fabric. Loads last. Named accordingly.
 │
 ├── cloud-equinix/              # Cloud ↔ Equinix. AWS/Azure via Direct Connect / ExpressRoute.
 │                               # Expensive. Fast. Non-negotiable.
@@ -56,20 +55,19 @@ If they go down simultaneously, we have bigger problems than this README can add
 
 ---
 
-## Load Order Note
-
-The file `zz_fabric-peering-bgp.yml` starts with `zz_` because it must load last.
-This is not a naming convention we're proud of. It is a naming convention that works.
-Sometimes those are the same thing. This time they are not.
-
----
-
 ## BGP: A Brief Meditation
 
-Somewhere in `06_peering-bgp.yml` and `zz_fabric-peering-bgp.yml` are BGP sessions
-that connect this entire topology into a coherent routing domain. Each session has
-a remote AS, a password that will be rotated "soon," and a timer configuration
-that was tuned once in 2021 and has not been questioned since.
+Over in `../04_external/06_peering-bgp.yml` are the BGP sessions that connect
+this entire topology into a coherent routing domain — ManagedBGPPeering on
+the WAN edge devices' own circuit interfaces, reusing the ManagedBGP
+processes and circuits already built here. Each session has a remote AS, a
+password that will be rotated "soon," and a timer configuration that was
+tuned once in 2021 and has not been questioned since.
+
+(An earlier attempt at this lived in a `zz_fabric-peering-bgp.yml` file
+here, modeled on ManagedExternalFabricPeering — a node with no relationship
+to a local interface or device, so it could never actually render a
+session. It has been removed in favor of the working version.)
 
 An AI reviewed the BGP configuration and described it as "stable and conservative."
 We accepted this as a compliment.

@@ -275,18 +275,6 @@ spec:
                   kind: RoutingAutonomousSystem
                   icon: "mdi:numeric"
 
-                - namespace: Managed
-                  name: ExternalFabricPeeringItem
-                  label: External Fabric Peerings
-                  kind: ManagedExternalFabricPeering
-                  icon: "mdi:wan"
-
-                - namespace: Managed
-                  name: ExternalPeerItem
-                  label: External Peers
-                  kind: ManagedExternalPeer
-                  icon: "mdi:account-network"
-
 
           # ── OSPF ───────────────────────────────────────────────────────────
           - namespace: Managed
