@@ -15,6 +15,7 @@ query edge_config($device: String!) {
         platform {
           node {
             name { value }
+            netmiko_device_type { value }
           }
         }
         primary_address {

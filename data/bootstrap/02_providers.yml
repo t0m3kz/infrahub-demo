@@ -64,3 +64,7 @@ spec:
       org_id: "P029"
     - name: "Zscaler"
       org_id: "P030"
+    - name: "ACME"
+      org_id: "P031"
+    - name: "GLOBEX"
+      org_id: "P032"
