@@ -220,8 +220,9 @@ class BaseDeviceTransform(InfrahubTransform):
         activations = data.get("segment_deployments")
         vlans = get_vlans(activations=activations)
 
-        # VRF default gateways: derived from segment → security_zone → firewall_interface
-        vrf_gateways = get_vrf_default_gateways(activations)
+        # VRF default gateways: from TopologyRoutedExchange capabilities on this
+        # device's own interfaces — both legs of the inter-VRF hop live here.
+        vrf_gateways = get_vrf_default_gateways(data.get("interfaces"))
 
         # SGT rules derived from segment activations (via security_tag.rules_as_source)
         sgt_rules = _get_sgt_rules(activations)

@@ -88,3 +88,5 @@ spec:
       description: Application component instances
     - name: app_dependencies
       description: Application dependency edges
+    - name: customer_deployments
+      description: Customer deployment footprints (TopologyCustomerDC/Colocation/Cloud) — generator target for ExchangeGatewayGenerator  # yamllint disable-line rule:line-length

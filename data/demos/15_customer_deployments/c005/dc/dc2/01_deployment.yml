@@ -23,3 +23,5 @@ spec:
       status: active
       parent: "DC2"
       design: "L_DC"
+      member_of_groups:
+        - customer_deployments

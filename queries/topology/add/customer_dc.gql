@@ -1,0 +1,79 @@
+query customer_dc_data($name: String!) {
+  TopologyCustomerDC(name__value: $name) {
+    edges {
+      node {
+        id
+        name { value }
+        environment { value }
+        owner {
+          node {
+            id
+            org_id { value }
+            name { value }
+          }
+        }
+      }
+    }
+  }
+
+  TopologyCustomerColocation(name__value: $name) {
+    edges {
+      node {
+        id
+        name { value }
+        environment { value }
+        owner {
+          node {
+            id
+            org_id { value }
+            name { value }
+          }
+        }
+      }
+    }
+  }
+
+  TopologyCustomerCloud(name__value: $name) {
+    edges {
+      node {
+        id
+        name { value }
+        environment { value }
+        owner {
+          node {
+            id
+            org_id { value }
+            name { value }
+          }
+        }
+        parent {
+          node {
+            id
+            ... on TopologyCloudRegion {
+              circuits {
+                edges {
+                  node {
+                    id
+                    __typename
+                    ... on TopologyVirtualCircuit {
+                      name { value }
+                      interfaces {
+                        edges {
+                          node {
+                            id
+                            name { value }
+                            device { node { name { value } } }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

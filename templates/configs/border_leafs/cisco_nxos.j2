@@ -65,6 +65,51 @@ interface {{ interface.name }}
 ! BGP Configuration
 {% include 'common/cisco_nxos_bgp.j2' %}
 !
+{%- if vlans %}
+! VLAN SVI Configuration
+!
+{%- for vlan in vlans %}
+{%- if vlan.gateway_ip or vlan.gateway_ipv6 %}
+{%- set ns = namespace(acl_name=None) %}
+{%- for acl in acls %}
+{%- if acl.vlan_id == vlan.vlan_id %}
+{%- set ns.acl_name = acl.name %}
+{%- endif %}
+{%- endfor %}
+interface Vlan{{ vlan.vlan_id }}
+  description {{ vlan.name }}
+{%- if vlan.isolation_mode == 'isolated' %}
+  ! Isolation Mode: ISOLATED — intra-segment host-to-host traffic blocked via port-isolation
+{%- elif vlan.isolation_mode == 'microsegmented' %}
+  ! Isolation Mode: MICROSEGMENTED — intra+inter segment rules enforced via SVI ACL (and firewall if present)
+{%- endif %}
+{%- if vlan.vrf %}
+  vrf member {{ vlan.vrf }}
+{%- endif %}
+{%- if vlan.gateway_ip %}
+  ip address {{ vlan.gateway_ip }}
+{%- endif %}
+{%- if vlan.gateway_ipv6 %}
+  ipv6 address {{ vlan.gateway_ipv6 }}
+{%- endif %}
+  no shutdown
+{%- if ns.acl_name %}
+  ip access-group {{ ns.acl_name }} in
+{%- endif %}
+!
+{%- endif %}
+{%- endfor %}
+{%- endif %}
+!
+{%- if vrf_gateways %}
+!
+! VRF Default Routes — inter-VRF hop on this device (TopologyRoutedExchange)
+!
+{%- for vrf, nexthop in vrf_gateways.items() %}
+ip route 0.0.0.0/0 {{ nexthop }} vrf {{ vrf }}
+{%- endfor %}
+!
+{%- endif %}
 {%- include 'common/cisco_nxos_management.j2' %}
 !
 ! Management

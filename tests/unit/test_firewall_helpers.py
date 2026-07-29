@@ -381,14 +381,100 @@ class TestGetFirewallStaticRoutes:
 # ===========================================================================
 
 
+def _make_exchange_leg(*, ip_addr: str, ns_name: str) -> dict:
+    """Build a cleaned interface_capabilities leg (a peer interface on the same device)."""
+    return {"ip_address": {"address": ip_addr, "ip_namespace": {"name": ns_name}}}
+
+
+def _make_routed_exchange_capability(
+    *,
+    exchange_id: str = "exchange-1",
+    legs: list[dict] | None = None,
+) -> dict:
+    """Build a cleaned TopologyRoutedExchange capability, as found in interface.interface_capabilities."""
+    return {
+        "typename": "TopologyRoutedExchange",
+        "id": exchange_id,
+        "interface_capabilities": legs or [],
+    }
+
+
 class TestGetVrfDefaultGateways:
     def test_none_returns_empty(self) -> None:
         assert get_vrf_default_gateways(None) == {}
 
-    def test_always_returns_empty(self) -> None:
-        # VRF default gateways are no longer derived from segment data
-        result = get_vrf_default_gateways([{"segment": {"security_zone": {"name": "internal"}}}])
+    def test_empty_list_returns_empty(self) -> None:
+        assert get_vrf_default_gateways([]) == {}
+
+    def test_interface_with_no_capabilities_is_ignored(self) -> None:
+        result = get_vrf_default_gateways([{"name": "Vlan10", "interface_capabilities": []}])
         assert result == {}
+
+    def test_non_exchange_capability_is_ignored(self) -> None:
+        iface = {"name": "Vlan10", "interface_capabilities": [{"typename": "ManagedVxlanSegment"}]}
+        assert get_vrf_default_gateways([iface]) == {}
+
+    def test_two_legs_produce_reciprocal_gateways(self) -> None:
+        """Leg in VRF-A's nexthop is the leg's IP in VRF-Z, and vice versa."""
+        legs = [
+            _make_exchange_leg(ip_addr="10.1.99.1/30", ns_name="VRF-A"),
+            _make_exchange_leg(ip_addr="10.2.99.1/30", ns_name="VRF-Z"),
+        ]
+        cap = _make_routed_exchange_capability(legs=legs)
+        iface = {"name": "Vlan10", "interface_capabilities": [cap]}
+        result = get_vrf_default_gateways([iface])
+        assert result == {"VRF-A": "10.2.99.1", "VRF-Z": "10.1.99.1"}
+
+    def test_same_exchange_seen_on_both_legs_counted_once(self) -> None:
+        """The exchange capability appears on both of the device's own interfaces
+        (it's a reverse-read of the same relation) — dedup by exchange id."""
+        legs = [
+            _make_exchange_leg(ip_addr="10.1.99.1/30", ns_name="VRF-A"),
+            _make_exchange_leg(ip_addr="10.2.99.1/30", ns_name="VRF-Z"),
+        ]
+        cap = _make_routed_exchange_capability(exchange_id="exchange-1", legs=legs)
+        ifaces = [
+            {"name": "Vlan10", "interface_capabilities": [cap]},
+            {"name": "Vlan20", "interface_capabilities": [cap]},
+        ]
+        result = get_vrf_default_gateways(ifaces)
+        assert result == {"VRF-A": "10.2.99.1", "VRF-Z": "10.1.99.1"}
+
+    def test_leg_missing_ip_is_skipped(self) -> None:
+        legs = [
+            {"ip_address": None},
+            _make_exchange_leg(ip_addr="10.2.99.1/30", ns_name="VRF-Z"),
+        ]
+        cap = _make_routed_exchange_capability(legs=legs)
+        result = get_vrf_default_gateways([{"name": "Vlan10", "interface_capabilities": [cap]}])
+        assert result == {}
+
+    def test_multiple_independent_exchanges_on_different_interfaces(self) -> None:
+        cap_a = _make_routed_exchange_capability(
+            exchange_id="exchange-a",
+            legs=[
+                _make_exchange_leg(ip_addr="10.1.0.1/30", ns_name="VRF-A"),
+                _make_exchange_leg(ip_addr="10.1.0.2/30", ns_name="VRF-B"),
+            ],
+        )
+        cap_b = _make_routed_exchange_capability(
+            exchange_id="exchange-b",
+            legs=[
+                _make_exchange_leg(ip_addr="10.2.0.1/30", ns_name="VRF-C"),
+                _make_exchange_leg(ip_addr="10.2.0.2/30", ns_name="VRF-D"),
+            ],
+        )
+        ifaces = [
+            {"name": "Vlan10", "interface_capabilities": [cap_a]},
+            {"name": "Vlan20", "interface_capabilities": [cap_b]},
+        ]
+        result = get_vrf_default_gateways(ifaces)
+        assert result == {
+            "VRF-A": "10.1.0.2",
+            "VRF-B": "10.1.0.1",
+            "VRF-C": "10.2.0.2",
+            "VRF-D": "10.2.0.1",
+        }
 
 
 # ===========================================================================

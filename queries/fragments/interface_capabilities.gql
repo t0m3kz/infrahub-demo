@@ -30,6 +30,41 @@ fragment OspfInterfaceCapabilityFields on RoutingOSPFInterface {
   }
 }
 
+fragment ExchangeGatewayInterfaceCapabilityFields on TopologyExchangeGateway {
+  name { value }
+  description { value }
+  status { value }
+  namespace_a { node { name { value } l3_vni { value } } }
+  namespace_z { node { name { value } l3_vni { value } } }
+  ... on TopologyRoutedExchange {
+    id
+    # Both legs of the inter-VRF hop live on the same device — for a leaf
+    # rendering its own default route, "the other leg" (any interface here
+    # not equal to the one this capability was found on) gives the nexthop
+    # IP and confirms both interfaces belong to this device, purely from
+    # local interface_capabilities traversal, no second query root needed.
+    interface_capabilities {
+      edges {
+        node {
+          id
+          name { value }
+          device { node { name { value } } }
+          ... on DcimPhysicalInterface {
+            ip_address { node { address { value } ip_namespace { node { name { value } } } } }
+          }
+          ... on DcimVirtualInterface {
+            ip_address { node { address { value } ip_namespace { node { name { value } } } } }
+          }
+        }
+      }
+    }
+  }
+  ... on TopologyRouteLeakExchange {
+    direction { value }
+    route_target { value }
+  }
+}
+
 fragment InterfaceCapabilitiesFields on DcimInterface {
   interface_capabilities {
     edges {
@@ -48,6 +83,7 @@ fragment InterfaceCapabilitiesWithSegmentFields on DcimInterface {
         __typename
         ...OspfInterfaceCapabilityFields
         ...NetworkSegmentFields
+        ...ExchangeGatewayInterfaceCapabilityFields
       }
     }
   }
