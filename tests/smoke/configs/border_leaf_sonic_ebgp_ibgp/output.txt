@@ -81,6 +81,7 @@
       "type": "BorderLeafRouter"
     }
   },
+  "EVPN_NVO": {},
   "INTERFACE": {
     "Ethernet1": {
       "admin_status": "up",
@@ -106,6 +107,10 @@
     "Loopback0|10.0.0.1/32": {}
   },
   "OSPF_ROUTER": {},
+  "STATIC_ROUTE": {},
   "VLAN": {},
-  "VLAN_INTERFACE": {}
+  "VLAN_INTERFACE": {},
+  "VRF": {},
+  "VXLAN_TUNNEL": {},
+  "VXLAN_TUNNEL_MAP": {}
 }

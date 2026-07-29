@@ -56,6 +56,7 @@
       "type": "BorderLeafRouter"
     }
   },
+  "EVPN_NVO": {},
   "INTERFACE": {
     "Ethernet1": {
       "admin_status": "up",
@@ -86,6 +87,10 @@
       "router_id": "10.0.0.1"
     }
   },
+  "STATIC_ROUTE": {},
   "VLAN": {},
-  "VLAN_INTERFACE": {}
+  "VLAN_INTERFACE": {},
+  "VRF": {},
+  "VXLAN_TUNNEL": {},
+  "VXLAN_TUNNEL_MAP": {}
 }
