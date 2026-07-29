@@ -726,13 +726,16 @@ async def _phase_07_customers(
     skip_generators: bool,
     skip_merge: bool,
 ) -> None:
-    """Phase 07 – customer boarding (VRF namespace + VXLAN segments + applications).
+    """Phase 07 – customer boarding (deployment footprint + VXLAN segments + applications).
 
-    Loads, per customer (c001/c002/c003): environments (IpamNamespace) ->
-    add_vrf_namespace (allocates L3 VNI) -> network segments (TopologyCustomerDC
-    footprint + ManagedVxlanSegment) -> add_vxlan_segment (allocates VLAN/VNI,
-    wires leaf/tor interfaces) -> applications (from 13_applications/, wired to
-    the segments and to the shared servers from phase 06).
+    Loads, per customer (c001/c002/c003): 01_deployment.yml (TopologyCustomerDC)
+    -> event-triggers ExchangeGatewayGenerator, which get-or-creates the VRF
+    namespace ("{ORG_ID}-P") and tags it into vrf_namespaces, auto-running
+    add_vrf_namespace (allocates L3 VNI) -> wait for those event-driven tasks
+    -> 02_segments.yml (prefixes/gateway IPs in that namespace + ManagedVxlanSegment)
+    -> add_vxlan_segment (allocates VLAN/VNI, wires leaf/tor interfaces) ->
+    applications (from 13_applications/, wired to the segments and to the
+    shared servers from phase 06).
     """
     branch = "demo-customers"
     log.info("══════════════════════════════════════════════")
@@ -750,14 +753,22 @@ async def _phase_07_customers(
     customer_dirs = ["c001", "c002", "c003"]
 
     for customer in customer_dirs:
-        _load_objects(f"{customers_base}/{customer}/00_environments.yml", branch, dry_run)
+        _load_objects(f"{customers_base}/{customer}/01_deployment.yml", branch, dry_run)
+
+    # Wait for ExchangeGatewayGenerator (event-triggered on TopologyCustomerDC
+    # creation) to get-or-create each customer's VRF namespace before
+    # 02_segments.yml references it by name.
+    if not dry_run:
+        c.default_branch = branch
+        await _wait_for_tasks(c, branch)
+        await _check_failed_tasks(c, branch)
 
     if not skip_generators:
         c.default_branch = branch
         ns_data = await c.execute_graphql(
             query="""
             query {
-                IpamNamespace(name__values: ["C001-PROD", "C002-PROD", "C003-PROD"]) {
+                IpamNamespace(name__values: ["C001-P", "C002-P", "C003-P"]) {
                     edges { node { id name { value } } }
                 }
             }
@@ -773,7 +784,7 @@ async def _phase_07_customers(
             await _run_generator(c, "add_vrf_namespace", ns_ids, branch, dry_run)
 
     for customer in customer_dirs:
-        _load_objects(f"{customers_base}/{customer}/01_network_segments.yml", branch, dry_run)
+        _load_objects(f"{customers_base}/{customer}/02_segments.yml", branch, dry_run)
 
     if not skip_generators:
         c.default_branch = branch
