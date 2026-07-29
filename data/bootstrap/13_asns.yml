@@ -58,3 +58,19 @@ spec:
     - asn: 7018
       owner: "AT&T Services"
       description: "AS7018 - AT&T Services"
+    - asn: 6695
+      owner: "DE-CIX"
+      description: "AS6695 - DE-CIX Management GmbH (Frankfurt IX route server)"
+    - asn: 5400
+      owner: "BT"
+      description: "AS5400 - British Telecommunications PLC"
+    - asn: 64520
+      owner: "ACME"
+      description: "AS64520 - ACME Corp (private ASN, MPLS partner)"
+    - asn: 64521
+      owner: "GLOBEX"
+      description: "AS64521 - GLOBEX Corporation (private ASN, IP-VPN partner)"
+    # AS64512 (AWS DX) and AS12076 (Azure ER) are already defined, without an
+    # owner, in data/demos/100_universal_topology/05_interconnects/cloud-equinix/
+    # 00_cloud_asns.yml — not duplicated here to avoid the demo file's load
+    # (which runs after bootstrap) clearing the owner back to null on upsert.

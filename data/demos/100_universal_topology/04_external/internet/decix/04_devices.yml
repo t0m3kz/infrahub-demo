@@ -7,4 +7,5 @@ spec:
   data:
     - name: EXT-INET-DE-CIX-FR-01
       object_template: N9K-C9336C-FX2_EDGE
+      role: provider
       status: active

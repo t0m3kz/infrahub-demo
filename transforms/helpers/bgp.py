@@ -164,7 +164,17 @@ def _build_session_from_peering(
                     break
 
         if not local_interface_ip and not local_iface_name:
-            return None  # No cable or circuit connects this device to the remote — skip session
+            # No cable or circuit resolved an IP — fall back to the IP already set
+            # directly on the peering's own interface_capabilities (e.g. a VTI/
+            # sub-interface addressed inline, with no DcimCable and no separate
+            # TopologyCircuit object to traverse).
+            local_interface_ip = local_iface.get("ip_address")
+            remote_interface_ip = remote_iface.get("ip_address")
+            if local_interface_ip:
+                local_iface_name = local_iface.get("name")
+
+        if not local_interface_ip and not local_iface_name:
+            return None  # No cable, circuit, or direct IP connects this device to the remote — skip session
 
         if local_interface_ip:
             session["local_ip"] = local_interface_ip

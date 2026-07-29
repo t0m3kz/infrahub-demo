@@ -730,6 +730,151 @@ class TestCircuitServiceTraversal:
 
 
 # ============================================================================
+# _build_session_from_peering — direct IP fallback (no cable, no circuit)
+# ============================================================================
+
+
+class TestDirectIpFallback:
+    """TTL=1 underlay sessions where the peering's own interface_capabilities
+    already carry both sides' IPs directly (e.g. a VTI/sub-interface with no
+    DcimCable and no separate TopologyCircuit object to traverse — external
+    BGP peering over a fabric/MPLS-VPN virtual circuit handoff)."""
+
+    def _direct_ip_peering(
+        self,
+        local_device: str,
+        local_iface: str,
+        local_ip: str,
+        remote_device: str,
+        remote_iface: str,
+        remote_ip: str,
+        remote_asn: int = 6695,
+    ) -> dict:
+        return {
+            "name": "ext-underlay--local-remote",
+            "session_type": "EBGP",
+            "bfd_enabled": False,
+            "send_community": True,
+            "ttl": 1,
+            "route_reflector_client": False,
+            "interface_capabilities": [
+                {"name": remote_iface, "ip_address": {"address": remote_ip}, "device": {"name": remote_device}},
+                {"name": local_iface, "ip_address": {"address": local_ip}, "device": {"name": local_device}},
+            ],
+            "bgp_processes": [
+                {"capabilities": [{"name": remote_device}], "local_as": {"asn": remote_asn}},
+                {"capabilities": [{"name": local_device}], "local_as": {"asn": 65000}},
+            ],
+        }
+
+    def test_direct_ip_resolves_without_cable_or_circuit(self):
+        """No cable, no circuit on the local interface — IP comes straight from the peering."""
+        bare_iface = {
+            "name": "VTI-FR2-DE-CIX",
+            "ip_address": {"address": "10.255.0.24/31"},
+            "cable": None,
+            "device": {"name": "FR2-EDGE-01"},
+            "interface_capabilities": [],
+        }
+        peering = self._direct_ip_peering(
+            local_device="FR2-EDGE-01",
+            local_iface="VTI-FR2-DE-CIX",
+            local_ip="10.255.0.24/31",
+            remote_device="EXT-INET-DE-CIX-FR-01",
+            remote_iface="VTI-DE-CIX-FR2",
+            remote_ip="10.255.0.25/31",
+        )
+        session = _build_session_from_peering(
+            peering,
+            device_name="FR2-EDGE-01",
+            local_as={"asn": 65000},
+            interfaces=[bare_iface],
+        )
+        assert session is not None
+        assert session["local_ip"] == {"address": "10.255.0.24/31"}
+        assert session["remote_ip"] == {"address": "10.255.0.25/31"}
+        assert session["remote_as"] == {"asn": 6695}
+        assert session["remote_device"] == "EXT-INET-DE-CIX-FR-01"
+
+    def test_cable_still_takes_precedence_over_direct_ip(self):
+        """A cable connecting the two sides is preferred even when the peering
+        interface_capabilities also carry an IP directly."""
+        cabled_iface = {
+            "name": "Ethernet1/1",
+            "ip_address": {"address": "10.0.0.1/31"},
+            "device": {"name": "FR6-EDGE-01"},
+            "cable": {
+                "endpoints": [
+                    {
+                        "name": "Ethernet1/1",
+                        "ip_address": {"address": "10.0.0.1/31"},
+                        "device": {"name": "FR6-EDGE-01"},
+                    },  # noqa: E501
+                    {
+                        "name": "Ethernet1/1",
+                        "ip_address": {"address": "10.0.0.0/31"},
+                        "device": {"name": "EXT-INET-BT-01"},
+                    },  # noqa: E501
+                ]
+            },
+            "interface_capabilities": [],
+        }
+        peering = self._direct_ip_peering(
+            local_device="FR6-EDGE-01",
+            local_iface="Ethernet1/1",
+            local_ip="10.255.0.26/31",  # deliberately different from the cable IP
+            remote_device="EXT-INET-BT-01",
+            remote_iface="Ethernet1/1",
+            remote_ip="10.255.0.27/31",
+            remote_asn=5400,
+        )
+        session = _build_session_from_peering(
+            peering,
+            device_name="FR6-EDGE-01",
+            local_as={"asn": 65000},
+            interfaces=[cabled_iface],
+        )
+        assert session is not None
+        # Cable-derived IPs win over the peering's own direct IPs
+        assert session["local_ip"] == {"address": "10.0.0.1/31"}
+        assert session["remote_ip"] == {"address": "10.0.0.0/31"}
+
+    def test_no_ip_anywhere_still_returns_none(self):
+        """Direct-IP fallback does not manufacture a session when the peering
+        interfaces themselves have no IP either (still a legitimate skip)."""
+        bare_iface = {
+            "name": "Ethernet1/31",
+            "ip_address": {"address": "fd00::1/127"},
+            "cable": None,
+            "device": {"name": "dc1-super-spine-01"},
+            "interface_capabilities": [],
+        }
+        peering = {
+            "name": "dci-underlay--dc1-dc2-primary",
+            "session_type": "EBGP",
+            "bfd_enabled": True,
+            "send_community": True,
+            "ttl": 1,
+            "route_reflector_client": False,
+            "interface_capabilities": [
+                {"name": "Ethernet1/31", "ip_address": None, "device": {"name": "dc1-super-spine-01"}},
+                {"name": "Ethernet25/1", "ip_address": None, "device": {"name": "dc2-super-spine-01"}},
+            ],
+            "bgp_processes": [
+                {"capabilities": [{"name": "dc1-super-spine-01"}], "local_as": {"asn": 65001}},
+                {"capabilities": [{"name": "dc2-super-spine-01"}], "local_as": {"asn": 65002}},
+            ],
+        }
+        session = _build_session_from_peering(
+            peering,
+            device_name="dc1-super-spine-01",
+            local_as={"asn": 65001},
+            interfaces=[bare_iface],
+        )
+        assert session is None
+
+
+# ============================================================================
 # _build_peer_groups
 # ============================================================================
 
