@@ -83,5 +83,6 @@ router bgp 65001
 ! Configure route-maps
 route-map RM-CONN-2-BGP permit 10
   match interface Loopback0
+!
 
 ! End of configuration
