@@ -1,7 +1,10 @@
 ---
 # C001 (Nordix Ltd.) — "storefront" application: portfolio + frontend/backend
-# components, wired to the segments (01_network_segments.yml) and servers
-# (02_servers.yml) already boarded for this customer.
+# components, wired to the segments (data/demos/07_customers/c001/
+# 01_network_segments.yml) and to the shared DC6 servers boarded in
+# data/demos/06_servers/ (bonds shared across customers:
+# ktw-pod1-server-1/bond0 = web, ktw-pod2-server-1/bond0 = app,
+# ktw-pod3-server-3 = db, ktw-pod3-server-1/bond1 = cache).
 
 apiVersion: infrahub.app/v1
 kind: Object
@@ -24,7 +27,7 @@ spec:
             component_type: frontend
             network_segment: c001-web-frontend-p
             instances:
-              - C001-WEB-01
+              - ktw-pod1-server-1
             member_of_groups:
               - app_components
 
@@ -32,7 +35,7 @@ spec:
             component_type: backend
             network_segment: c001-app-backend-p
             instances:
-              - C001-APP-01
+              - ktw-pod2-server-1
             member_of_groups:
               - app_components
 
@@ -40,7 +43,7 @@ spec:
             component_type: database
             network_segment: c001-database-p
             instances:
-              - C001-DB-01
+              - ktw-pod3-server-3
             member_of_groups:
               - app_components
 
@@ -48,6 +51,6 @@ spec:
             component_type: cache
             network_segment: c001-cache-p
             instances:
-              - C001-CACHE-01
+              - ktw-pod3-server-1
             member_of_groups:
               - app_components

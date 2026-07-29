@@ -8,6 +8,7 @@ Demo sequence
 04  Pod           – add a new POD-4 to DC1 (event-driven)
 05  LLM / Spines  – spine expansion demo (manual YAML edit step, skipped if no data files)
 06  Servers       – add compute rack + servers, run add_endpoint generator
+07  Customers     – board c001/c002/c003 (VRF namespace, VXLAN segments, applications)
 """
 
 from __future__ import annotations
@@ -680,7 +681,6 @@ async def _phase_06_servers(
     # Device types are global — load on main (idempotent)
     servers_base = f"{_DEMOS_ROOT}/06_servers"
     _load_objects(f"{servers_base}/device_types", "main", dry_run)
-    _load_objects(f"{servers_base}/templates", "main", dry_run)
 
     c.default_branch = "main"
     await _ensure_branch(c, branch, dry_run)
@@ -718,6 +718,88 @@ async def _phase_06_servers(
 
     await _create_pc_and_merge(c, "demo-servers", branch, dry_run, skip_merge)
     log.info("  ✓ Phase 06 complete")
+
+
+async def _phase_07_customers(
+    client: object,
+    dry_run: bool,
+    skip_generators: bool,
+    skip_merge: bool,
+) -> None:
+    """Phase 07 – customer boarding (VRF namespace + VXLAN segments + applications).
+
+    Loads, per customer (c001/c002/c003): environments (IpamNamespace) ->
+    add_vrf_namespace (allocates L3 VNI) -> network segments (TopologyCustomerDC
+    footprint + ManagedVxlanSegment) -> add_vxlan_segment (allocates VLAN/VNI,
+    wires leaf/tor interfaces) -> applications (from 13_applications/, wired to
+    the segments and to the shared servers from phase 06).
+    """
+    branch = "demo-customers"
+    log.info("══════════════════════════════════════════════")
+    log.info("  PHASE 07: Customers (branch: %s)", branch)
+    log.info("══════════════════════════════════════════════")
+
+    from infrahub_sdk import Config, InfrahubClient
+
+    c = InfrahubClient(config=Config(address=INFRAHUB_ADDRESS, api_token=INFRAHUB_API_TOKEN))
+    c.default_branch = "main"
+    await _ensure_branch(c, branch, dry_run)
+
+    customers_base = f"{_DEMOS_ROOT}/07_customers"
+    applications_base = f"{_DEMOS_ROOT}/13_applications"
+    customer_dirs = ["c001", "c002", "c003"]
+
+    for customer in customer_dirs:
+        _load_objects(f"{customers_base}/{customer}/00_environments.yml", branch, dry_run)
+
+    if not skip_generators:
+        c.default_branch = branch
+        ns_data = await c.execute_graphql(
+            query="""
+            query {
+                IpamNamespace(name__values: ["C001-PROD", "C002-PROD", "C003-PROD"]) {
+                    edges { node { id name { value } } }
+                }
+            }
+            """
+        )
+        ns_nodes = ns_data.get("IpamNamespace", {}).get("edges", [])
+        if not ns_nodes:
+            log.warning("  No customer namespaces found after data load — skipping add_vrf_namespace")
+        else:
+            ns_ids = [e["node"]["id"] for e in ns_nodes]
+            ns_names = [e["node"]["name"]["value"] for e in ns_nodes]
+            log.info("  Running add_vrf_namespace for: %s", ", ".join(ns_names))
+            await _run_generator(c, "add_vrf_namespace", ns_ids, branch, dry_run)
+
+    for customer in customer_dirs:
+        _load_objects(f"{customers_base}/{customer}/01_network_segments.yml", branch, dry_run)
+
+    if not skip_generators:
+        c.default_branch = branch
+        seg_data = await c.execute_graphql(
+            query="""
+            query {
+                ManagedVxlanSegment(owner__ids: ["C001", "C002", "C003"]) {
+                    edges { node { id customer_name { value } } }
+                }
+            }
+            """
+        )
+        seg_nodes = seg_data.get("ManagedVxlanSegment", {}).get("edges", [])
+        if not seg_nodes:
+            log.warning("  No customer segments found after data load — skipping add_vxlan_segment")
+        else:
+            seg_ids = [e["node"]["id"] for e in seg_nodes]
+            seg_names = [e["node"]["customer_name"]["value"] for e in seg_nodes]
+            log.info("  Running add_vxlan_segment for: %s", ", ".join(seg_names))
+            await _run_generator(c, "add_vxlan_segment", seg_ids, branch, dry_run)
+
+    for customer in customer_dirs:
+        _load_objects(f"{applications_base}/{customer}", branch, dry_run)
+
+    await _create_pc_and_merge(c, "demo-customers", branch, dry_run, skip_merge)
+    log.info("  ✓ Phase 07 complete")
 
 
 # ---------------------------------------------------------------------------
@@ -766,6 +848,9 @@ async def _run_demo(
 
         if _run(6):
             await _phase_06_servers(client, dry_run, skip_generators, skip_merge)
+
+        if _run(7):
+            await _phase_07_customers(client, dry_run, skip_generators, skip_merge)
 
     except (AssertionError, RuntimeError) as exc:
         log.error("✗ Step failed: %s", exc)

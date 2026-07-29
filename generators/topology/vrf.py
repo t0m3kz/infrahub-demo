@@ -79,7 +79,7 @@ class VrfNamespaceGenerator(CommonGenerator):
         mutation AllocateL3Vni($id: String!, $pool_id: String!, $identifier: String!) {
           IpamNamespaceUpsert(data: {
             id: $id
-            l3_vni: { from_pool: { id: $pool_id }, identifier: $identifier }
+            l3_vni: { from_pool: { id: $pool_id, identifier: $identifier } }
           }) {
             object { id }
           }
