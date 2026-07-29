@@ -4,7 +4,7 @@ kind: Object
 spec:
   kind: DcimPhysicalDevice
   data:
-    - name: ktw-server-1
+    - name: ktw-pod3-server-1
       rack: ktw-1-s-3-r-1-1
       role: endpoint
       status: active
@@ -44,8 +44,8 @@ spec:
             mtu: 9000
             minimum_links: 1
             member_interfaces:
-              - ["ktw-server-1", "eth0"]
-              - ["ktw-server-1", "eth1"]
+              - ["ktw-pod3-server-1", "eth0"]
+              - ["ktw-pod3-server-1", "eth1"]
         - kind: DcimLAGInterface
           data:
             name: bond1
@@ -56,15 +56,17 @@ spec:
             mtu: 9000
             minimum_links: 1
             member_interfaces:
-              - ["ktw-server-1", "eth2"]
-              - ["ktw-server-1", "eth3"]
-    - name: ktw-server-2
+              - ["ktw-pod3-server-1", "eth2"]
+              - ["ktw-pod3-server-1", "eth3"]
+    - name: ktw-pod3-server-2
       rack: ktw-1-s-3-r-1-7
       role: endpoint
       status: active
       position: 10
       device_type: [DELL-R740XD2]
       platform: linux
+      member_of_groups:
+        - endpoints
       interfaces:
         - kind: DcimPhysicalInterface
           data:
@@ -96,8 +98,8 @@ spec:
             mtu: 9000
             minimum_links: 1
             member_interfaces:
-              - ["ktw-server-2", "eth0"]
-              - ["ktw-server-2", "eth1"]
+              - ["ktw-pod3-server-2", "eth0"]
+              - ["ktw-pod3-server-2", "eth1"]
         - kind: DcimLAGInterface
           data:
             name: bond1
@@ -108,15 +110,17 @@ spec:
             mtu: 9000
             minimum_links: 1
             member_interfaces:
-              - ["ktw-server-2", "eth2"]
-              - ["ktw-server-2", "eth3"]
-    - name: ktw-server-3
+              - ["ktw-pod3-server-2", "eth2"]
+              - ["ktw-pod3-server-2", "eth3"]
+    - name: ktw-pod3-server-3
       rack: ktw-1-s-3-r-2-1
       role: endpoint
       status: active
       position: 12
       device_type: [DELL-R740XD2]
       platform: linux
+      member_of_groups:
+        - endpoints
       interfaces:
         - kind: DcimPhysicalInterface
           data:
@@ -138,15 +142,17 @@ spec:
             mtu: 9000
             minimum_links: 1
             member_interfaces:
-              - ["ktw-server-3", "eth0"]
-              - ["ktw-server-3", "eth1"]
-    - name: ktw-server-4
+              - ["ktw-pod3-server-3", "eth0"]
+              - ["ktw-pod3-server-3", "eth1"]
+    - name: ktw-pod3-server-4
       rack: ktw-1-s-3-r-2-7
       role: endpoint
       status: active
       position: 14
       device_type: [DELL-R740XD2]
       platform: linux
+      member_of_groups:
+        - endpoints
       interfaces:
         - kind: DcimPhysicalInterface
           data:
@@ -168,15 +174,17 @@ spec:
             mtu: 9000
             minimum_links: 1
             member_interfaces:
-              - ["ktw-server-4", "eth0"]
-              - ["ktw-server-4", "eth1"]
-    - name: ktw-server-5
+              - ["ktw-pod3-server-4", "eth0"]
+              - ["ktw-pod3-server-4", "eth1"]
+    - name: ktw-pod3-server-5
       rack: ktw-1-s-3-r-1-1
       role: endpoint
       status: active
       position: 16
       device_type: [DELL-R740XD2]
       platform: linux
+      member_of_groups:
+        - endpoints
       interfaces:
         - kind: DcimPhysicalInterface
           data:
@@ -198,15 +206,17 @@ spec:
             mtu: 9000
             minimum_links: 1
             member_interfaces:
-              - ["ktw-server-5", "eth0"]
-              - ["ktw-server-5", "eth1"]
-    - name: ktw-server-6
+              - ["ktw-pod3-server-5", "eth0"]
+              - ["ktw-pod3-server-5", "eth1"]
+    - name: ktw-pod3-server-6
       rack: ktw-1-s-3-r-1-7
       role: endpoint
       status: active
       position: 18
       device_type: [DELL-R740XD2]
       platform: linux
+      member_of_groups:
+        - endpoints
       interfaces:
         - kind: DcimPhysicalInterface
           data:
@@ -228,5 +238,5 @@ spec:
             mtu: 9000
             minimum_links: 1
             member_interfaces:
-              - ["ktw-server-6", "eth0"]
-              - ["ktw-server-6", "eth1"]
+              - ["ktw-pod3-server-6", "eth0"]
+              - ["ktw-pod3-server-6", "eth1"]
