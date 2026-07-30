@@ -1,15 +1,17 @@
 ---
 # Arista SD-WAN (formerly VeloCloud) device templates
 # VCE-610: branch edge appliance (physical, 1RU)
-# VCG-VA:  virtual gateway hosted at Equinix/colocation (height=0, no rack slot)
 #
 # Interface naming:
 #   GE1-GE4  — WAN/LAN copper GigabitEthernet ports on VCE-610
 #   mgmt0    — out-of-band management
-#   eth0     — VCG-VA management/data interface (Linux-based VM)
 #
-# The SD-WAN overlay (DMPO sessions) is orchestrated automatically by
-# Arista SD-WAN Orchestrator — no tunnel interfaces are modelled here.
+# The physical VCG-VA gateway/controller template lives in
+# 10_physical_devices_templates_controllers.yaml (ManagedControllerPhysical,
+# controller_type: sdwan_orchestrator) — a colocation SD-WAN gateway is a
+# controller, not a bare edge device. The SD-WAN overlay (DMPO sessions) is
+# orchestrated automatically by Arista SD-WAN Orchestrator — no tunnel
+# interfaces are modelled here.
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
@@ -48,23 +50,4 @@ spec:
           - template_name: VCE-610_EDGE_mgmt0
             name: mgmt0
             role: management
-            interface_type: 1000base-t
-
-    # -------------------------------------------------------------------------
-    # VCG-VA — Virtual Gateway (colocation hub, VM-based, no rack slot)
-    # Single eth0 used for both management and DMPO tunnel termination
-    # -------------------------------------------------------------------------
-    - template_name: VCG-VA_GATEWAY
-      owner: "P027"
-      device_type: VCG-VA
-      platform: velocloud
-      software_image: velocloud-6.0.0
-      role: edge
-      status: provisioning
-      interfaces:
-        kind: TemplateDcimPhysicalInterface
-        data:
-          - template_name: VCG-VA_GATEWAY_eth0
-            name: eth0
-            role: uplink
             interface_type: 1000base-t
