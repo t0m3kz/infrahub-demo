@@ -20,6 +20,7 @@ spec:
     # GE1: primary WAN, GE2: secondary WAN, GE3-GE4: LAN
     # -------------------------------------------------------------------------
     - template_name: VCE-610_EDGE
+      owner: "P027"
       device_type: VCE-610
       platform: velocloud
       software_image: velocloud-6.0.0
@@ -54,6 +55,7 @@ spec:
     # Single eth0 used for both management and DMPO tunnel termination
     # -------------------------------------------------------------------------
     - template_name: VCG-VA_GATEWAY
+      owner: "P027"
       device_type: VCG-VA
       platform: velocloud
       software_image: velocloud-6.0.0

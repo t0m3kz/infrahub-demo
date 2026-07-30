@@ -5,6 +5,7 @@ spec:
   kind: TemplateDcimPhysicalDevice
   data:
     - template_name: BLUECOAT-SG900_PROXY
+      owner: "P027"
       device_type: BLUECOAT-SG900
       platform: bluecoat_sgos
       software_image: bluecoat_sgos-7.3.9.1

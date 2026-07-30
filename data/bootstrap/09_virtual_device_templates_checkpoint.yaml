@@ -5,6 +5,7 @@ spec:
   kind: TemplateDcimVirtualDevice
   data:
     - template_name: CloudGuard_EDGE
+      owner: "P027"
       device_type: CloudGuard
       role: firewall
       platform: checkpoint_gaia

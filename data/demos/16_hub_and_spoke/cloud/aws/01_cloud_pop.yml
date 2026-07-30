@@ -60,13 +60,18 @@ spec:
 
 ---
 # The operator's own organization — needed as `owner` for the hub SD-WAN PoP
-# footprint below, since TopologyCustomer.owner is required. Declared here
-# rather than in data/bootstrap/03_clients.yml to keep this demo
-# self-contained (same pattern as its own LocationMetro entries).
+# footprint below. OrganizationProvider, not OrganizationCustomer: the
+# operator DELIVERS the hub infrastructure to its customers, the same role
+# Equinix/AWS/Azure play elsewhere in this repo — TopologyCustomer.owner
+# accepts either (peer: OrganizationEntity, the generic both inherit from),
+# since a footprint's owner can be a customer or a provider depending on who
+# it belongs to. Declared here rather than in data/bootstrap/02_providers.yml
+# to keep this demo self-contained (same pattern as its own LocationMetro
+# entries).
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
-  kind: OrganizationCustomer
+  kind: OrganizationProvider
   data:
     - name: "Network Operator"
       org_id: "OPERATOR"
@@ -77,12 +82,21 @@ spec:
 # looks for on the OTHER end of an office/cloud/colocation footprint's
 # circuit (see generators/topology/exchange_gateway.py) — traffic stops
 # here instead of reaching straight into SHARED-SERVICES.
+#
+# `owner` is set via `kind:`+`data:` (upserting the OrganizationProvider
+# created above), not a bare HFID string — OrganizationEntity (the generic
+# TopologyCustomer.owner peers) declares no human_friendly_id, so a bare
+# string reference against it can't resolve server-side.
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
   kind: TopologyCustomerCloud
   data:
-    - owner: "OPERATOR"
+    - owner:
+        kind: OrganizationProvider
+        data:
+          name: "Network Operator"
+          org_id: "OPERATOR"
       customer_name: "sdwan-hub"
       environment: "p"
       status: active
@@ -97,7 +111,7 @@ spec:
   data:
     - name: "sdwan-hub-aws"
       account_id: "999900001111"
-      provider: "AWS"
+      provider: "P004"
 
 ---
 apiVersion: infrahub.app/v1

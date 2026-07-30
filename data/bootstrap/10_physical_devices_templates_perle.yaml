@@ -5,6 +5,7 @@ spec:
   kind: TemplateDcimPhysicalDevice
   data:
     - template_name: SCG50R_CONSOLE
+      owner: "P027"
       device_type: SCG50R
       platform: perle_iolan
       software_image: perle_iolan-5.0

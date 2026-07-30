@@ -8,5 +8,5 @@ spec:
     - name: "novantis-aws-prod"
       account_id: "112233445566"
       environment: "p"
-      provider: "AWS"
+      provider: "P004"
       owner: "C015"

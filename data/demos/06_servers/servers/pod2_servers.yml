@@ -10,6 +10,7 @@ spec:
   kind: DcimPhysicalDevice
   data:
     - name: ktw-pod2-server-1
+      owner: "P027"
       rack: ktw-1-s-2-r-1-1
       role: endpoint
       status: active
@@ -65,6 +66,7 @@ spec:
               - ["ktw-pod2-server-1", "eth3"]
 
     - name: ktw-pod2-server-2
+      owner: "P027"
       rack: ktw-1-s-2-r-1-5
       role: endpoint
       status: active

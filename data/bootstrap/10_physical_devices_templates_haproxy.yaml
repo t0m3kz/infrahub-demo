@@ -5,6 +5,7 @@ spec:
   kind: TemplateDcimPhysicalDevice
   data:
     - template_name: HA-PROXY_PROXY
+      owner: "P027"
       device_type: HA-PROXY
       platform: haproxy_technologies
       software_image: haproxy_technologies-2.8.9

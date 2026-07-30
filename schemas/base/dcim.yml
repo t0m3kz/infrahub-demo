@@ -34,10 +34,6 @@ generics:
         kind: Text
         optional: true
         order_weight: 2000
-      - name: os_version
-        kind: Text
-        optional: true
-        order_weight: 2200
       - name: role
         kind: Dropdown
         optional: true

@@ -28,9 +28,11 @@ spec:
     - name: "C001-EDGE1"
       object_template: VCE-610_EDGE
       status: active
+      owner: "C001"
     - name: "C002-EDGE1"
       object_template: VCE-610_EDGE
       status: active
+      owner: "C002"
 
 ---
 apiVersion: infrahub.app/v1

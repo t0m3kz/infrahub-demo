@@ -5,6 +5,7 @@ spec:
   kind: TemplateDcimPhysicalDevice
   data:
     - template_name: CP-26000_FIREWALL
+      owner: "P027"
       device_type: CP-26000
       platform: checkpoint_gaia
       software_image: checkpoint_gaia-R81.20
@@ -39,6 +40,7 @@ spec:
             interface_type: 10gbase-x-sfpp
 
     - template_name: PA-5260_FIREWALL
+      owner: "P027"
       device_type: PA-5260
       platform: panos
       software_image: panos-11.1.3

@@ -5,6 +5,7 @@ spec:
   kind: TemplateDcimPhysicalDevice
   data:
     - template_name: SQUID-PROXY_PROXY
+      owner: "P027"
       device_type: SQUID-PROXY
       platform: squid_cache
       software_image: squid_cache-6.6

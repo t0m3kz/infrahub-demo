@@ -5,6 +5,7 @@ spec:
   kind: TemplateDcimVirtualDevice
   data:
     - template_name: VCG-VA_CLOUD
+      owner: "P027"
       device_type: VCG-VA
       platform: velocloud
       software_image: velocloud-6.0.0
@@ -31,6 +32,7 @@ spec:
       member_of_groups:
         - sdwan_gateways
     - template_name: VCO-VA_ORCHESTRATOR
+      owner: "P027"
       device_type: VCO-VA
       platform: velocloud
       software_image: velocloud-6.0.0

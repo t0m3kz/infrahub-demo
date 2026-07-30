@@ -5,6 +5,7 @@ spec:
   kind: TemplateDcimPhysicalDevice
   data:
     - template_name: BIG-IP-i5800_LOAD_BALANCER
+      owner: "P027"
       device_type: BIG-IP-i5800
       platform: f5_tmos
       software_image: f5_tmos-17.1.1

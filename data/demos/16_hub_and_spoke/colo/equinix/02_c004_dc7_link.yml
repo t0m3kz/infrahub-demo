@@ -27,7 +27,11 @@ spec:
       deployment:
         kind: TopologyCustomerColocation
         data:
-          owner: "C004"
+          owner:
+            kind: OrganizationCustomer
+            data:
+              name: "Peakora AG"
+              org_id: "C004"
           environment: "p"
           parent: "WAW"
 
@@ -76,7 +80,7 @@ spec:
       circuit_id: "C004-WAW1-DC7"
       circuit_type: dark_fiber
       status: active
-      provider: "Equinix"
+      provider: "P016"
       owner: "C004"
       locations:
         - kind: TopologyDataCenter
@@ -85,7 +89,11 @@ spec:
             index: 7
         - kind: TopologyCustomerColocation
           data:
-            owner: "C004"
+            owner:
+              kind: OrganizationCustomer
+              data:
+                name: "Peakora AG"
+                org_id: "C004"
             environment: "p"
             parent: "WAW"
       interfaces:

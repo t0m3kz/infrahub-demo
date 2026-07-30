@@ -8,5 +8,5 @@ spec:
     - name: "peakora-azure-prod"
       account_id: "8f2e1a3b-4c5d-6e7f-8a9b-0c1d2e3f4a5b"
       environment: "p"
-      provider: "Azure"
+      provider: "P005"
       owner: "C004"
