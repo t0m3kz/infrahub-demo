@@ -78,6 +78,50 @@ query customer_dc_data($name: String!) {
                   }
                 }
               }
+              ... on TopologyPhysicalCircuit {
+                name { value }
+                interfaces {
+                  edges {
+                    node {
+                      id
+                      name { value }
+                      device { node { name { value } } }
+                    }
+                  }
+                }
+                locations {
+                  edges {
+                    node {
+                      id
+                      __typename
+                      ... on TopologyCustomerColocation {
+                        namespace {
+                          node {
+                            id
+                            name { value }
+                          }
+                        }
+                      }
+                      ... on TopologyCustomerCloud {
+                        namespace {
+                          node {
+                            id
+                            name { value }
+                          }
+                        }
+                      }
+                      ... on TopologyCustomerOffice {
+                        namespace {
+                          node {
+                            id
+                            name { value }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
             }
           }
         }
@@ -147,6 +191,50 @@ query customer_dc_data($name: String!) {
                   }
                 }
               }
+              ... on TopologyPhysicalCircuit {
+                name { value }
+                interfaces {
+                  edges {
+                    node {
+                      id
+                      name { value }
+                      device { node { name { value } } }
+                    }
+                  }
+                }
+                locations {
+                  edges {
+                    node {
+                      id
+                      __typename
+                      ... on TopologyCustomerColocation {
+                        namespace {
+                          node {
+                            id
+                            name { value }
+                          }
+                        }
+                      }
+                      ... on TopologyCustomerCloud {
+                        namespace {
+                          node {
+                            id
+                            name { value }
+                          }
+                        }
+                      }
+                      ... on TopologyCustomerOffice {
+                        namespace {
+                          node {
+                            id
+                            name { value }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
             }
           }
         }
@@ -173,6 +261,50 @@ query customer_dc_data($name: String!) {
               id
               __typename
               ... on TopologyVirtualCircuit {
+                name { value }
+                interfaces {
+                  edges {
+                    node {
+                      id
+                      name { value }
+                      device { node { name { value } } }
+                    }
+                  }
+                }
+                locations {
+                  edges {
+                    node {
+                      id
+                      __typename
+                      ... on TopologyCustomerColocation {
+                        namespace {
+                          node {
+                            id
+                            name { value }
+                          }
+                        }
+                      }
+                      ... on TopologyCustomerCloud {
+                        namespace {
+                          node {
+                            id
+                            name { value }
+                          }
+                        }
+                      }
+                      ... on TopologyCustomerOffice {
+                        namespace {
+                          node {
+                            id
+                            name { value }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+              ... on TopologyPhysicalCircuit {
                 name { value }
                 interfaces {
                   edges {

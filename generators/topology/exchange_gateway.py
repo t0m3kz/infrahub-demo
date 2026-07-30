@@ -250,17 +250,20 @@ class ExchangeGatewayGenerator(CommonGenerator):
         self, customer_namespace: Any, customer: dict[str, Any], namespace_name: str, customer_id: str
     ) -> None:
         circuits = customer.get("circuits") or []
-        virtual_circuits = [c for c in circuits if c.get("typename") == "TopologyVirtualCircuit"]
+        usable_circuits = [
+            c for c in circuits if c.get("typename") in ("TopologyVirtualCircuit", "TopologyPhysicalCircuit")
+        ]
 
-        if not virtual_circuits:
+        if not usable_circuits:
             self.logger.warning(
-                f"Namespace '{namespace_name}' provisioned, but no TopologyVirtualCircuit found on "
-                "this footprint yet — skipping shared-services exchange. Wire it manually (or "
-                "re-run this generator) once the circuit to the shared-services DC exists."
+                f"Namespace '{namespace_name}' provisioned, but no TopologyVirtualCircuit/"
+                "TopologyPhysicalCircuit found on this footprint yet — skipping shared-services "
+                "exchange. Wire it manually (or re-run this generator) once the circuit to the "
+                "shared-services DC exists."
             )
             return
 
-        circuit = virtual_circuits[0]
+        circuit = usable_circuits[0]
         circuit_interfaces = circuit.get("interfaces") or []
         if len(circuit_interfaces) != 2:
             self.logger.warning(
