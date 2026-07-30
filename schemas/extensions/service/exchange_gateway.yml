@@ -43,11 +43,13 @@ generics:
     # nothing pointed back at the deployment that namespace belongs to — the
     # only way to find "which exchange serves this deployment" was to
     # recompute its namespace name ({org_id}-{environment}) and search by
-    # it. Peer is TopologyDeployment (not the narrower TopologyCustomer) so
-    # non-customer namespace holders — TopologyOffice, and a shared hub
-    # TopologyCloudRegion (e.g. an SD-WAN PoP) — can also be a side of an
-    # exchange, not just TopologyCustomerDC/Colocation/Cloud.
-    # ExchangeGatewayGenerator populates this on every deployment it processes.
+    # it. Peer is TopologyDeployment because a hub region's namespace also
+    # participates as a bare namespace_a/namespace_z reference with no
+    # customer_deployments entry of its own — see the reverse extension
+    # below, which is scoped to TopologyCustomer (CustomerDC/Colocation/
+    # Cloud/Office), the only kinds this generator ever links here.
+    # ExchangeGatewayGenerator populates this on every customer deployment it
+    # processes.
     label: "Exchange Gateway"
     icon: "mdi:swap-horizontal"
     include_in_menu: false
@@ -182,7 +184,14 @@ nodes:
 
 extensions:
   nodes:
-    - kind: TopologyDeployment
+    # Reverse lookup lives on TopologyCustomer (not the bare TopologyDeployment
+    # generic): ExchangeGatewayGenerator only ever puts a concrete
+    # TopologyCustomerDC/Colocation/Cloud/Office id in customer_deployments —
+    # never a physical container's (DataCenter/ColocationMetro/CloudRegion),
+    # even when that container is itself a hub side of the exchange (a hub's
+    # namespace_a/namespace_z reference is enough; it needs no reverse link
+    # of its own). TopologyCustomerOffice already gets this via TopologyCustomer.
+    - kind: TopologyCustomer
       relationships:
         - name: exchange_gateways
           label: "Exchange Gateways"

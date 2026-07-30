@@ -89,6 +89,26 @@ generics:
         order_weight: 3000
         description: "Topology locations where this circuit terminates"
 
+      - name: owner
+        label: "Customer"
+        peer: OrganizationCustomer
+        cardinality: one
+        kind: Attribute
+        optional: true
+        identifier: "circuit__owner"
+        order_weight: 3100
+        description: "Customer this circuit belongs to; unset for shared/backbone circuits"
+
+      - name: customer_deployment
+        label: "Customer Deployment"
+        peer: TopologyCustomer
+        cardinality: one
+        kind: Attribute
+        optional: true
+        identifier: "circuit__customer_deployment"
+        order_weight: 3200
+        description: "Specific customer footprint this circuit terminates on, for shared locations"
+
 nodes:
   - name: PhysicalCircuit
     namespace: Topology
@@ -334,3 +354,14 @@ extensions:
           identifier: "virtual_circuit__cloud_endpoints"
           order_weight: 5000
           description: "Virtual circuits where this cloud resource is an endpoint"
+
+    - kind: TopologyCustomer
+      relationships:
+        - name: circuits
+          label: "Circuits"
+          peer: TopologyCircuit
+          cardinality: many
+          optional: true
+          identifier: "circuit__customer_deployment"
+          order_weight: 2200
+          description: "Circuits terminating on this customer deployment footprint"

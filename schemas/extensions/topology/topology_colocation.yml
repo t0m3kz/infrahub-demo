@@ -21,7 +21,6 @@ nodes:
     inherit_from:
       - CoreArtifactTarget
       - TopologyDeployment
-      - TopologyClusterHosting
       - TopologySegmentHosting
     uniqueness_constraints:
       - ["name__value"]
@@ -50,7 +49,6 @@ nodes:
       - TopologyConnectableLocation
       - TopologyRackHosting
       - TopologyDeviceHosting
-      - TopologyClusterHosting
     parent: TopologyColocationMetro
     label: Colocation Availability Zone
     children: ""

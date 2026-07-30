@@ -19,20 +19,29 @@ deployment type — they don't reach SHARED-SERVICES the same way:
                                  docs/exchange_gateway.md.
 
   TopologyCustomerCloud       -> requires a TopologyVirtualCircuit between
-  TopologyCustomerOffice         this region/office and the DC hosting
-                                 SHARED-SERVICES (read via parent.circuits —
-                                 CloudRegion and Office both inherit
-                                 TopologyConnectableLocation natively). If
-                                 found, creates a TopologyRoutedExchange on
-                                 the circuit's own interfaces (the transport
-                                 hop doubles as the inter-VRF hop). If no
-                                 such circuit exists yet, logs a warning and
-                                 skips — the namespace is still provisioned,
-                                 the exchange is completed manually (or by
+  TopologyCustomerOffice         this region/office and either the DC hosting
+                                 SHARED-SERVICES directly, or a shared hub
+                                 TopologyCloudRegion (read via parent.circuits
+                                 -- CloudRegion and Office both inherit
+                                 TopologyConnectableLocation natively). If the
+                                 circuit's OTHER endpoint is a CloudRegion with
+                                 its own `namespace` set (a hub PoP, e.g. an
+                                 SD-WAN termination point with `namespace:
+                                 INTERNET` -- see data/demos/16_hub_and_spoke/
+                                 05_cloud_pop.yml), the RoutedExchange's Z-side
+                                 is THAT namespace, not SHARED-SERVICES --
+                                 traffic stops at the hub, preserving explicit
+                                 hub-and-spoke instead of a flat shared-transit
+                                 VRF. Reaching SHARED-SERVICES from behind a hub
+                                 is then a separate exchange (hub <-> DC),
+                                 wired manually. If the other endpoint has no
+                                 namespace set, the old direct-to-DC behavior
+                                 applies: Z-side is SHARED-SERVICES. If no
+                                 circuit exists yet, logs a warning and skips --
+                                 the namespace is still provisioned, the
+                                 exchange is completed manually (or by
                                  re-running this generator) once the circuit
-                                 is built. An office's circuit is typically
-                                 an SD-WAN VPN to a shared cloud PoP (a
-                                 TopologyCloudRegion hub), not directly to a DC.
+                                 is built.
 
   TopologyCustomerColocation  -> same idea as Cloud, but ColocationMetro
                                  (this deployment's parent) does not inherit
@@ -257,7 +266,8 @@ class ExchangeGatewayGenerator(CommonGenerator):
     async def _exchange_via_circuit(
         self, customer_namespace: Any, customer: dict[str, Any], namespace_name: str, customer_id: str
     ) -> None:
-        circuits = ((customer.get("parent") or {}).get("circuits")) or []
+        parent = customer.get("parent") or {}
+        circuits = parent.get("circuits") or []
         virtual_circuits = [c for c in circuits if c.get("typename") == "TopologyVirtualCircuit"]
 
         if not virtual_circuits:
@@ -268,7 +278,27 @@ class ExchangeGatewayGenerator(CommonGenerator):
             )
             return
 
-        circuit = virtual_circuits[0]
+        # A physical location (Office/CloudRegion) can be shared by several
+        # customers' footprints, each with its own circuit terminating there
+        # (see data/demos/16_hub_and_spoke/09_office_hub_circuits.yml — one
+        # office, two customers, two circuits). Picking circuits[0]
+        # unconditionally would silently wire customer B's namespace onto
+        # customer A's circuit interfaces — a cross-tenant leak. Match on the
+        # circuit's own `customer_deployment` relationship (schemas/
+        # extensions/topology/topology_connectivity.yml) instead of
+        # inferring ownership from device wiring.
+        customer_circuits = [
+            c for c in virtual_circuits if (c.get("customer_deployment") or {}).get("id") == customer_id
+        ]
+        if not customer_circuits:
+            self.logger.warning(
+                f"Namespace '{namespace_name}': {len(virtual_circuits)} circuit(s) found at this location, "
+                f"but none has customer_deployment set to this customer footprint ({customer_id}) — "
+                "skipping shared-services exchange. Set the circuit's customer_deployment to make it resolvable."
+            )
+            return
+
+        circuit = customer_circuits[0]
         circuit_interfaces = circuit.get("interfaces") or []
         if len(circuit_interfaces) != 2:
             self.logger.warning(
@@ -277,15 +307,47 @@ class ExchangeGatewayGenerator(CommonGenerator):
             )
             return
 
-        shared_namespace = await self._get_namespace(SHARED_SERVICES_NAMESPACE)
-        if shared_namespace is None:
-            self.logger.warning(
-                f"Shared services namespace '{SHARED_SERVICES_NAMESPACE}' not found — skipping "
-                f"routed exchange for {namespace_name} (namespace itself was still provisioned)"
-            )
-            return
+        # Hub-and-spoke: if the circuit's OTHER endpoint is a hub CloudRegion
+        # with its own namespace set (e.g. a shared SD-WAN PoP), stop there —
+        # the Z-side is the hub's namespace, not SHARED-SERVICES. Reaching
+        # SHARED-SERVICES beyond the hub is a separate exchange, wired
+        # manually, so this office/cloud footprint never gets a route
+        # straight into shared services bypassing the hub's inspection point.
+        own_location_id = parent.get("id")
+        hub_namespace = None
+        for location in circuit.get("locations") or []:
+            if location.get("id") == own_location_id:
+                continue
+            if location.get("typename") != "TopologyCloudRegion":
+                continue
+            candidate = location.get("namespace")
+            if candidate and candidate.get("id"):
+                hub_namespace = candidate
+                break
 
-        exchange_name = f"{namespace_name}-{SHARED_SERVICES_NAMESPACE}-shared-services"
+        if hub_namespace is not None:
+            z_namespace_id = hub_namespace["id"]
+            z_namespace_name = hub_namespace.get("name", z_namespace_id)
+            exchange_name = f"{namespace_name}-{z_namespace_name}-hub"
+            description = (
+                f"Auto-provisioned on customer boarding — {namespace_name} access to hub "
+                f"{z_namespace_name} via circuit {circuit.get('name', circuit.get('id'))}"
+            )
+        else:
+            shared_namespace = await self._get_namespace(SHARED_SERVICES_NAMESPACE)
+            if shared_namespace is None:
+                self.logger.warning(
+                    f"Shared services namespace '{SHARED_SERVICES_NAMESPACE}' not found — skipping "
+                    f"routed exchange for {namespace_name} (namespace itself was still provisioned)"
+                )
+                return
+            z_namespace_id = shared_namespace.id
+            exchange_name = f"{namespace_name}-{SHARED_SERVICES_NAMESPACE}-shared-services"
+            description = (
+                f"Auto-provisioned on customer boarding — {namespace_name} access to shared "
+                f"infrastructure services via circuit {circuit.get('name', circuit.get('id'))}"
+            )
+
         try:
             existing = await self.client.filters(kind="TopologyRoutedExchange", name__value=exchange_name)
         except Exception as exc:
@@ -301,12 +363,9 @@ class ExchangeGatewayGenerator(CommonGenerator):
                 kind="TopologyRoutedExchange",
                 data={
                     "name": exchange_name,
-                    "description": (
-                        f"Auto-provisioned on customer boarding — {namespace_name} access to shared "
-                        f"infrastructure services via circuit {circuit.get('name', circuit.get('id'))}"
-                    ),
+                    "description": description,
                     "namespace_a": {"id": customer_namespace.id},
-                    "namespace_z": {"id": shared_namespace.id},
+                    "namespace_z": {"id": z_namespace_id},
                     "interface_capabilities": [{"id": iface["id"]} for iface in circuit_interfaces],
                     "customer_deployments": [{"id": customer_id}],
                 },

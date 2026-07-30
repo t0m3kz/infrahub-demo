@@ -59,7 +59,6 @@ nodes:
     inherit_from:
       - TopologyDeployment
       - TopologyConnectableLocation
-      - TopologyClusterHosting
     parent: TopologyCloud
     children: ""
     human_friendly_id:

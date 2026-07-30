@@ -1,0 +1,55 @@
+---
+# Two minimal fake DCs (self-contained, no dependency on data/demos/
+# 01_data_center) — DC7 and DC8, each with its own border-leaf and firewall.
+# Two sites let this demo exercise inter-site DCI traffic on top of the
+# inter-customer isolation already covered by Office/Colocation/Cloud (see
+# 06_customer_footprints.yml, which puts two customer footprints on each
+# DC). ManagedFirewallContext (07_firewall_contexts.yml) and the fabric
+# BGP+cabling (09_dc7_fabric_cabling.yml, 09b_dc8_fabric_cabling.yml) build
+# on top of these without a full pod/rack fabric build-out.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologyDataCenter
+  data:
+    - name: "DC7"
+      index: 7
+      vlan_pool: "dc7-vlan-pool"
+      vni_pool: "dc7-vni-pool"
+      l3_vni_pool: "dc7-l3vni-pool"
+    - name: "DC8"
+      index: 8
+      vlan_pool: "dc8-vlan-pool"
+      vni_pool: "dc8-vni-pool"
+      l3_vni_pool: "dc8-l3vni-pool"
+
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimPhysicalDevice
+  data:
+    - name: DC7-BL1
+      object_template: DCS-7050CX3-32C-R_BORDER_LEAF
+      status: active
+      deployment: DC7
+      member_of_groups:
+        - border-leafs
+    - name: DC7-FW1
+      object_template: CP-26000_FIREWALL
+      status: active
+      deployment: DC7
+      member_of_groups:
+        - firewalls
+    - name: DC8-BL1
+      object_template: DCS-7050CX3-32C-R_BORDER_LEAF
+      status: active
+      deployment: DC8
+      member_of_groups:
+        - border-leafs
+    - name: DC8-FW1
+      object_template: CP-26000_FIREWALL
+      status: active
+      deployment: DC8
+      member_of_groups:
+        - firewalls

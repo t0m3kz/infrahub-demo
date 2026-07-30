@@ -1,0 +1,126 @@
+---
+# Every topology kind gets at least one customer footprint, so the
+# hub-and-spoke model can be exercised end-to-end across all four deployment
+# types (DC/Colocation/Cloud/Office) — not just Office, which was the
+# original scope of this demo.
+#
+#   TopologyCustomerDC          C003 + C006 on DC7,  -> route-target leak to
+#                                C007 + C008 on DC8      SHARED-SERVICES.
+#                                                        Two customers per DC
+#                                                        (inter-customer
+#                                                        isolation on one
+#                                                        site) and two sites
+#                                                        (inter-site DCI —
+#                                                        DC7 <-> DC8 is NOT
+#                                                        wired directly in
+#                                                        this demo; both only
+#                                                        reach SHARED-
+#                                                        SERVICES, so any
+#                                                        DC7<->DC8 or
+#                                                        C003<->C007 traffic
+#                                                        must be explicitly
+#                                                        wired — query the
+#                                                        namespaces/exchanges
+#                                                        below and confirm
+#                                                        none of that exists
+#                                                        by default).
+#                                                        C003 additionally
+#                                                        gets a dedicated
+#                                                        FirewallContext (see
+#                                                        07_firewall_
+#                                                        contexts.yml).
+#   TopologyCustomerColocation  C004 on EQUINIX/WAW -> namespace only; the
+#                                                      generator always warns
+#                                                      and skips the exchange
+#                                                      for Colocation (see
+#                                                      generators/topology/
+#                                                      exchange_gateway.py's
+#                                                      docstring) — wire it
+#                                                      manually if needed.
+#   TopologyCustomerCloud       C005 on eu-central-1 -> routed exchange via
+#                                                       circuit (needs its
+#                                                       own circuit — not
+#                                                       wired in this demo,
+#                                                       namespace-only like
+#                                                       Colocation until one
+#                                                       is added). Uses C005,
+#                                                       not C003 — TopologyCustomer's
+#                                                       human_friendly_id is
+#                                                       [owner, environment]
+#                                                       across the WHOLE
+#                                                       generic, so a second
+#                                                       C003/p footprint under
+#                                                       Cloud would collide
+#                                                       with the DC one above.
+#   TopologyCustomerOffice      C001 + C002 on OFFICES -> routed exchange via
+#                                                        circuit, terminating
+#                                                        at the hub's INTERNET
+#                                                        namespace (see
+#                                                        10_office_hub_
+#                                                        circuits.yml)
+#
+# Created BEFORE 08_office_edges.yml / 10_office_hub_circuits.yml so the
+# circuits below can reference these footprints via customer_deployment.
+# The created-trigger fires on each of these before its circuit exists (for
+# DC it doesn't need one at all), so Office/Cloud will log a warning and
+# skip on first run — re-run `infrahubctl generator add_exchange_gateway
+# name=<computed-name>` once circuits are loaded.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologyCustomerDC
+  data:
+    - owner: "C003"
+      environment: "p"
+      status: active
+      parent: "DC7"
+    - owner: "C006"
+      environment: "p"
+      status: active
+      parent: "DC7"
+    - owner: "C007"
+      environment: "p"
+      status: active
+      parent: "DC8"
+    - owner: "C008"
+      environment: "p"
+      status: active
+      parent: "DC8"
+
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologyCustomerColocation
+  data:
+    - owner: "C004"
+      environment: "p"
+      status: active
+      parent: "WAW"
+
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologyCustomerCloud
+  data:
+    - owner: "C005"
+      customer_name: "hub-and-spoke-cloud"
+      environment: "p"
+      status: active
+      parent: "eu-central-1"
+
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologyCustomerOffice
+  data:
+    - owner: "C001"
+      environment: "p"
+      status: active
+      parent: "OFFICES"
+    - owner: "C002"
+      environment: "p"
+      status: active
+      parent: "OFFICES"

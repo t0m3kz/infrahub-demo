@@ -517,6 +517,13 @@ spec:
       manufacturer: Squid
       cpu_count: 4
       memory_gb: 16
+    - name: LINUX-SVC
+      part_number: LINUX-SVC
+      height: 1
+      full_depth: false
+      manufacturer: Generic
+      cpu_count: 2
+      memory_gb: 4
     - name: BLUECOAT-SG900
       part_number: SG900
       height: 2

@@ -118,7 +118,7 @@ class EndpointConnectivityGenerator(EndpointUplinkMixin, CommonGenerator):
             deployment_data = deployment_list[0]
             if "interfaces" in deployment_data:
                 deployment_data["interfaces"] = [intf for intf in deployment_data["interfaces"] if intf]
-            if "rack" in deployment_data and "devices" in deployment_data.get("rack", {}):
+            if "rack" in deployment_data and "devices" in (deployment_data.get("rack") or {}):
                 for device in deployment_data["rack"]["devices"]:
                     if "interfaces" in device:
                         # Remove empty dicts ({}) which are virtual interfaces not matching the fragment
