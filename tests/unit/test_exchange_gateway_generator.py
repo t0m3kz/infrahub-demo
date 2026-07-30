@@ -1,10 +1,10 @@
 """Unit tests for ExchangeGatewayGenerator (generators/topology/exchange_gateway.py).
 
 Covers:
-  - generate() dispatch across TopologyCustomerDC/Colocation/Cloud
+  - generate() dispatch across TopologyCustomerDC/Colocation/Cloud/Office
   - _get_or_create_namespace() — idempotent namespace provisioning
   - _exchange_via_route_leak() — DC path (fabric EVPN route-target leak)
-  - _exchange_via_circuit() — Cloud path (routed exchange over a circuit)
+  - _exchange_via_circuit() — Cloud/Office path (routed exchange over a circuit)
 """
 
 from __future__ import annotations
@@ -33,6 +33,11 @@ def _mock_node(node_id: str, name: str) -> MagicMock:
     node.name = MagicMock()
     node.name.value = name
     node.save = AsyncMock()
+    rel = MagicMock()
+    rel.fetch = AsyncMock()
+    rel.peers = []
+    rel.add = MagicMock()
+    node.customer_deployments = rel
     return node
 
 
@@ -72,6 +77,7 @@ def _empty_graphql_response() -> dict:
         "TopologyCustomerDC": {"edges": []},
         "TopologyCustomerColocation": {"edges": []},
         "TopologyCustomerCloud": {"edges": []},
+        "TopologyCustomerOffice": {"edges": []},
     }
 
 
@@ -141,6 +147,21 @@ class TestGenerateDispatch:
         gen._exchange_via_route_leak.assert_not_called()
         gen._exchange_via_circuit.assert_not_called()
         gen.logger.warning.assert_called_once()
+
+    def test_office_deployment_dispatches_to_circuit_exchange(self):
+        gen = _make_gen()
+        gen._get_or_create_namespace = AsyncMock(return_value=_mock_node("ns-1", "INTERNAL-P"))
+        gen._exchange_via_route_leak = AsyncMock()
+        gen._exchange_via_circuit = AsyncMock()
+
+        payload = _with_kind(
+            "TopologyCustomerOffice",
+            _customer_payload("TopologyCustomerOffice", org_id="INTERNAL", owner_name="Infrahub Corp"),
+        )
+        _run(gen.generate(payload))
+
+        gen._exchange_via_circuit.assert_called_once()
+        gen._exchange_via_route_leak.assert_not_called()
 
     def test_namespace_name_derived_from_org_id_and_environment(self):
         gen = _make_gen()
@@ -230,7 +251,7 @@ class TestExchangeViaRouteLeak:
         gen._get_namespace = AsyncMock(return_value=None)
         customer_ns = _mock_node("ns-1", "C007-P")
 
-        _run(gen._exchange_via_route_leak(customer_ns))
+        _run(gen._exchange_via_route_leak(customer_ns, "cust-1"))
 
         gen.logger.warning.assert_called_once()
         gen.client.create.assert_not_called()
@@ -240,7 +261,7 @@ class TestExchangeViaRouteLeak:
         shared_ns = _mock_node("ns-shared", SHARED_SERVICES_NAMESPACE)
         gen._get_namespace = AsyncMock(return_value=shared_ns)
 
-        _run(gen._exchange_via_route_leak(shared_ns))
+        _run(gen._exchange_via_route_leak(shared_ns, "cust-1"))
 
         gen.client.create.assert_not_called()
 
@@ -248,12 +269,41 @@ class TestExchangeViaRouteLeak:
         gen = _make_gen()
         shared_ns = _mock_node("ns-shared", SHARED_SERVICES_NAMESPACE)
         gen._get_namespace = AsyncMock(return_value=shared_ns)
-        gen.client.filters = AsyncMock(return_value=[_mock_node("ex-1", "existing")])
+        existing_exchange = _mock_node("ex-1", "existing")
+        gen.client.filters = AsyncMock(return_value=[existing_exchange])
         customer_ns = _mock_node("ns-1", "C007-P")
 
-        _run(gen._exchange_via_route_leak(customer_ns))
+        _run(gen._exchange_via_route_leak(customer_ns, "cust-1"))
 
         gen.client.create.assert_not_called()
+
+    def test_existing_exchange_links_customer_deployment(self):
+        gen = _make_gen()
+        shared_ns = _mock_node("ns-shared", SHARED_SERVICES_NAMESPACE)
+        gen._get_namespace = AsyncMock(return_value=shared_ns)
+        existing_exchange = _mock_node("ex-1", "existing")
+        gen.client.filters = AsyncMock(return_value=[existing_exchange])
+        customer_ns = _mock_node("ns-1", "C007-P")
+
+        _run(gen._exchange_via_route_leak(customer_ns, "cust-1"))
+
+        existing_exchange.customer_deployments.add.assert_called_once_with({"id": "cust-1"})
+        existing_exchange.save.assert_called_once_with(allow_upsert=True)
+
+    def test_existing_exchange_already_linked_skips_relink(self):
+        gen = _make_gen()
+        shared_ns = _mock_node("ns-shared", SHARED_SERVICES_NAMESPACE)
+        gen._get_namespace = AsyncMock(return_value=shared_ns)
+        existing_exchange = _mock_node("ex-1", "existing")
+        existing_peer = MagicMock()
+        existing_peer.id = "cust-1"
+        existing_exchange.customer_deployments.peers = [existing_peer]
+        gen.client.filters = AsyncMock(return_value=[existing_exchange])
+        customer_ns = _mock_node("ns-1", "C007-P")
+
+        _run(gen._exchange_via_route_leak(customer_ns, "cust-1"))
+
+        existing_exchange.customer_deployments.add.assert_not_called()
 
     def test_new_exchange_created_bidirectional(self):
         gen = _make_gen()
@@ -264,11 +314,12 @@ class TestExchangeViaRouteLeak:
         gen.client.create = AsyncMock(return_value=new_exchange)
         customer_ns = _mock_node("ns-1", "C007-P")
 
-        _run(gen._exchange_via_route_leak(customer_ns))
+        _run(gen._exchange_via_route_leak(customer_ns, "cust-1"))
 
         call_kwargs = gen.client.create.call_args.kwargs
         assert call_kwargs["kind"] == "TopologyRouteLeakExchange"
         assert call_kwargs["data"]["namespace_a"] == {"id": "ns-1"}
+        assert call_kwargs["data"]["customer_deployments"] == [{"id": "cust-1"}]
         assert call_kwargs["data"]["namespace_z"] == {"id": "ns-shared"}
         assert call_kwargs["data"]["direction"] == "bidirectional"
         new_exchange.save.assert_called_once_with(allow_upsert=True)
@@ -285,7 +336,7 @@ class TestExchangeViaCircuit:
         customer_ns = _mock_node("ns-1", "C003-P")
         customer = {"parent": {"circuits": []}}
 
-        _run(gen._exchange_via_circuit(customer_ns, customer, "C003-P"))
+        _run(gen._exchange_via_circuit(customer_ns, customer, "C003-P", "cust-1"))
 
         gen.logger.warning.assert_called_once()
         gen.client.create.assert_not_called()
@@ -295,7 +346,7 @@ class TestExchangeViaCircuit:
         customer_ns = _mock_node("ns-1", "C003-P")
         customer = {"parent": {"circuits": [{"typename": "TopologyPhysicalCircuit"}]}}
 
-        _run(gen._exchange_via_circuit(customer_ns, customer, "C003-P"))
+        _run(gen._exchange_via_circuit(customer_ns, customer, "C003-P", "cust-1"))
 
         gen.logger.warning.assert_called_once()
         gen.client.create.assert_not_called()
@@ -316,7 +367,7 @@ class TestExchangeViaCircuit:
             }
         }
 
-        _run(gen._exchange_via_circuit(customer_ns, customer, "C003-P"))
+        _run(gen._exchange_via_circuit(customer_ns, customer, "C003-P", "cust-1"))
 
         gen.logger.warning.assert_called_once()
         gen.client.create.assert_not_called()
@@ -338,7 +389,7 @@ class TestExchangeViaCircuit:
             }
         }
 
-        _run(gen._exchange_via_circuit(customer_ns, customer, "C003-P"))
+        _run(gen._exchange_via_circuit(customer_ns, customer, "C003-P", "cust-1"))
 
         gen.logger.warning.assert_called_once()
         gen.client.create.assert_not_called()
@@ -364,20 +415,22 @@ class TestExchangeViaCircuit:
             }
         }
 
-        _run(gen._exchange_via_circuit(customer_ns, customer, "C003-P"))
+        _run(gen._exchange_via_circuit(customer_ns, customer, "C003-P", "cust-1"))
 
         call_kwargs = gen.client.create.call_args.kwargs
         assert call_kwargs["kind"] == "TopologyRoutedExchange"
         assert call_kwargs["data"]["namespace_a"] == {"id": "ns-1"}
         assert call_kwargs["data"]["namespace_z"] == {"id": "ns-shared"}
         assert call_kwargs["data"]["interface_capabilities"] == [{"id": "iface-1"}, {"id": "iface-2"}]
+        assert call_kwargs["data"]["customer_deployments"] == [{"id": "cust-1"}]
         new_exchange.save.assert_called_once_with(allow_upsert=True)
 
     def test_existing_routed_exchange_not_duplicated(self):
         gen = _make_gen()
         shared_ns = _mock_node("ns-shared", SHARED_SERVICES_NAMESPACE)
         gen._get_namespace = AsyncMock(return_value=shared_ns)
-        gen.client.filters = AsyncMock(return_value=[_mock_node("ex-1", "existing")])
+        existing_exchange = _mock_node("ex-1", "existing")
+        gen.client.filters = AsyncMock(return_value=[existing_exchange])
         customer_ns = _mock_node("ns-1", "C003-P")
         customer = {
             "parent": {
@@ -392,6 +445,35 @@ class TestExchangeViaCircuit:
             }
         }
 
-        _run(gen._exchange_via_circuit(customer_ns, customer, "C003-P"))
+        _run(gen._exchange_via_circuit(customer_ns, customer, "C003-P", "cust-1"))
 
         gen.client.create.assert_not_called()
+        existing_exchange.customer_deployments.add.assert_called_once_with({"id": "cust-1"})
+
+    def test_office_uses_same_circuit_path_as_cloud(self):
+        """TopologyCustomerOffice mirrors TopologyCustomerCloud exactly — parent.circuits, no special-casing."""
+        gen = _make_gen()
+        shared_ns = _mock_node("ns-shared", SHARED_SERVICES_NAMESPACE)
+        gen._get_namespace = AsyncMock(return_value=shared_ns)
+        gen.client.filters = AsyncMock(return_value=[])
+        new_exchange = _mock_node("ex-1", "INTERNAL-P-SHARED-SERVICES-shared-services")
+        gen.client.create = AsyncMock(return_value=new_exchange)
+        office_ns = _mock_node("ns-1", "INTERNAL-P")
+        office = {
+            "parent": {
+                "circuits": [
+                    {
+                        "typename": "TopologyVirtualCircuit",
+                        "id": "circuit-1",
+                        "name": "vc-1",
+                        "interfaces": [{"id": "iface-1"}, {"id": "iface-2"}],
+                    }
+                ]
+            }
+        }
+
+        _run(gen._exchange_via_circuit(office_ns, office, "INTERNAL-P", "office-1"))
+
+        call_kwargs = gen.client.create.call_args.kwargs
+        assert call_kwargs["data"]["namespace_a"] == {"id": "ns-1"}
+        assert call_kwargs["data"]["interface_capabilities"] == [{"id": "iface-1"}, {"id": "iface-2"}]

@@ -76,4 +76,48 @@ query customer_dc_data($name: String!) {
       }
     }
   }
+
+  TopologyCustomerOffice(name__value: $name) {
+    edges {
+      node {
+        id
+        name { value }
+        environment { value }
+        owner {
+          node {
+            id
+            org_id { value }
+            name { value }
+          }
+        }
+        parent {
+          node {
+            id
+            ... on TopologyOffice {
+              circuits {
+                edges {
+                  node {
+                    id
+                    __typename
+                    ... on TopologyVirtualCircuit {
+                      name { value }
+                      interfaces {
+                        edges {
+                          node {
+                            id
+                            name { value }
+                            device { node { name { value } } }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
 }

@@ -152,6 +152,58 @@ nodes:
             color: "#2ECC71"
         order_weight: 1500
 
+  # ── Firewall Context (VDOM/vsys) — tenant-scoped slice of a shared cluster ─
+  # One ManagedFirewallHA cluster hosts many contexts: one dedicated context
+  # per high-risk tenant (critical/fintech_strict/dedicated_firewall), plus a
+  # shared "low-risk" context (tenant unset) for everyone else — see
+  # docs/firewall_service_insertion.md's namespace-per-zone pattern, now with
+  # an explicit node instead of an implicit VDOM name. network_segment.
+  # inline_service (peer: ManagedGeneric) can target this directly, the same
+  # way it targets a bare ManagedFirewallHA today.
+  - name: FirewallContext
+    namespace: Managed
+    description: "Tenant-scoped firewall context (VDOM/vsys) on a shared FirewallHA cluster"
+    label: Firewall Context
+    icon: "mdi:shield-account"
+    include_in_menu: false
+    human_friendly_id:
+      - "name__value"
+    inherit_from:
+      - ManagedGeneric
+      - ManagedGenericInterfaces
+      - ManagedInlineService
+    uniqueness_constraints:
+      - ["name__value"]
+    display_label: "{{name__value}}"
+    order_by:
+      - name__value
+    attributes:
+      - name: context_id
+        kind: Text
+        label: "Context ID"
+        description: "Vendor-side VDOM/vsys/context identifier"
+        optional: true
+        order_weight: 1400
+    relationships:
+      - name: cluster
+        peer: ManagedFirewallHA
+        label: "Firewall Cluster"
+        description: "Physical HA pair hosting this context"
+        cardinality: one
+        kind: Attribute
+        optional: false
+        identifier: firewall_context__cluster
+        order_weight: 900
+      - name: tenant
+        peer: TopologyCustomer
+        label: "Dedicated Tenant"
+        description: "Customer this context is dedicated to; unset means a shared low-risk context"
+        cardinality: one
+        kind: Attribute
+        optional: true
+        identifier: firewall_context__tenant
+        order_weight: 950
+
   # ── Load Balancer HA domain (on-prem, physical devices) ───────────────────
   - name: LoadbalancerHA
     namespace: Managed

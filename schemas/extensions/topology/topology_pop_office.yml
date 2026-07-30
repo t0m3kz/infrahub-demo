@@ -1,6 +1,15 @@
 ---
 version: "1.0"
 
+# TopologyOffice is a physical location — the same role TopologyDataCenter
+# and TopologyColocationMetro play for their customer footprints. It has no
+# owner/namespace itself; TopologyCustomerOffice (topology_customer.yml,
+# parent: TopologyOffice) is the customer footprint inside it, exactly
+# mirroring CustomerDC/parent:DataCenter and CustomerColocation/
+# parent:ColocationMetro. One office building can host several customers'
+# (including the operator's own OrganizationCustomer) footprints, the same
+# way one DC hosts several tenants.
+
 nodes:
   - name: Office
     namespace: Topology

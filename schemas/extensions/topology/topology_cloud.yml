@@ -130,6 +130,15 @@ nodes:
         identifier: "cloudregion__virtual_networks"
         order_weight: 2100
         description: "Virtual networks (VPC/VNet) deployed in this region"
+      - name: namespace
+        peer: BuiltinIPNamespace
+        cardinality: one
+        kind: Attribute
+        optional: true
+        identifier: "cloudregion__namespace"
+        order_weight: 2200
+        description: "IPAM namespace (= VRF) — set on shared hub regions
+          (e.g. an SD-WAN PoP) to be an ExchangeGateway side."
 
 
   - name: CloudZone

@@ -38,6 +38,16 @@ generics:
   - name: ExchangeGateway
     namespace: Topology
     description: "How traffic is exchanged between two IP namespaces (VRFs)"
+    # customer_deployments (below) is the reverse-lookup this generic was
+    # missing: namespace_a/namespace_z point at the IpamNamespace VRFs, but
+    # nothing pointed back at the deployment that namespace belongs to — the
+    # only way to find "which exchange serves this deployment" was to
+    # recompute its namespace name ({org_id}-{environment}) and search by
+    # it. Peer is TopologyDeployment (not the narrower TopologyCustomer) so
+    # non-customer namespace holders — TopologyOffice, and a shared hub
+    # TopologyCloudRegion (e.g. an SD-WAN PoP) — can also be a side of an
+    # exchange, not just TopologyCustomerDC/Colocation/Cloud.
+    # ExchangeGatewayGenerator populates this on every deployment it processes.
     label: "Exchange Gateway"
     icon: "mdi:swap-horizontal"
     include_in_menu: false
@@ -92,6 +102,15 @@ generics:
         identifier: "exchange_gateway__namespace_z"
         order_weight: 1100
         description: "Second VRF/namespace participating in the exchange"
+      - name: customer_deployments
+        label: "Customer Deployments"
+        peer: TopologyDeployment
+        cardinality: many
+        kind: Attribute
+        optional: true
+        identifier: "exchange_gateway__customer_deployments"
+        order_weight: 1200
+        description: "Deployment(s) (customer DC/Colo/Cloud, office, or hub region) this exchange was provisioned for"
 
 nodes:
   - name: RoutedExchange
@@ -160,3 +179,17 @@ nodes:
 # empty: a pure fabric RT-leak has no interface at all. Set only when the
 # leak requires a DCI transport hop (interfaces on the circuit-facing ports
 # at each side).
+
+extensions:
+  nodes:
+    - kind: TopologyDeployment
+      relationships:
+        - name: exchange_gateways
+          label: "Exchange Gateways"
+          peer: TopologyExchangeGateway
+          kind: Generic
+          cardinality: many
+          optional: true
+          identifier: "exchange_gateway__customer_deployments"
+          order_weight: 2200
+          description: "Exchange gateway(s) provisioned for this deployment's namespace"

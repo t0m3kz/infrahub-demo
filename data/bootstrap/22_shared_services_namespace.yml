@@ -1,0 +1,27 @@
+---
+# Shared infrastructure services VRF (DNS/NTP/monitoring). Every customer
+# TopologyCustomerDC/Colocation/Cloud deployment auto-leaks to this namespace
+# via ExchangeGatewayGenerator (generators/topology/exchange_gateway.py) on
+# boarding, so it must exist globally before any customer is boarded — hence
+# bootstrap rather than per-demo-flow data.
+#
+# l3_vni is set explicitly to 50000 — one below GLOBAL-L3VNI's start_range
+# (18_vni_pools.yml: 50001-59999) — rather than left for add_vrf_namespace
+# (generators/topology/vrf.py) to allocate from that pool. Every other VRF
+# namespace gets its L3 VNI from the pool; this one is reserved outside it
+# so the always-present shared-services VRF never competes with customer
+# namespaces for a pool slot, and needs no generator run to be usable.
+# add_vrf_namespace still fires on member_of_groups: vrf_namespaces (every
+# namespace in that group is generator-tracked) but is a no-op here since
+# l3_vni is already set.
+
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: IpamNamespace
+  data:
+    - name: "SHARED-SERVICES"
+      description: "Shared infrastructure services VRF (DNS, NTP, monitoring)"
+      l3_vni: 50000
+      member_of_groups:
+        - vrf_namespaces
