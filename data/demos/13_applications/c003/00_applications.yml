@@ -1,10 +1,11 @@
 ---
 # C003 (Vaultex Inc.) — "custody-ledger" application: portfolio + frontend/
-# backend/database/cache components, wired to the segments (data/demos/
-# 07_customers/c003/01_network_segments.yml) and to the shared DC6 servers
-# boarded in data/demos/06_servers/ (bonds shared across customers:
+# backend/database/cache/message-queue components, wired to the segments
+# (data/demos/08_segments/c003/02_segments.yml) and to the shared DC6
+# servers boarded in data/demos/06_servers/ (bonds shared across customers:
 # ktw-pod1-server-2/bond0 = web, ktw-pod2-server-2/bond0 = app,
-# ktw-pod3-server-5 = db, ktw-pod3-server-6 = cache).
+# ktw-pod3-server-5 = db, ktw-pod3-server-6 = cache,
+# ktw-pod1-server-2/bond1 = message-queue).
 
 apiVersion: infrahub.app/v1
 kind: Object
@@ -28,6 +29,10 @@ spec:
             network_segment: c003-web-frontend-p
             instances:
               - ktw-pod1-server-2
+            service_ports:
+              data:
+                - port: 443
+                  protocol: tcp
             member_of_groups:
               - app_components
 
@@ -36,6 +41,10 @@ spec:
             network_segment: c003-app-backend-p
             instances:
               - ktw-pod2-server-2
+            service_ports:
+              data:
+                - port: 8443
+                  protocol: tcp
             member_of_groups:
               - app_components
 
@@ -44,6 +53,10 @@ spec:
             network_segment: c003-database-p
             instances:
               - ktw-pod3-server-5
+            service_ports:
+              data:
+                - port: 5432
+                  protocol: tcp
             member_of_groups:
               - app_components
 
@@ -52,5 +65,24 @@ spec:
             network_segment: c003-cache-p
             instances:
               - ktw-pod3-server-6
+            service_ports:
+              data:
+                - port: 6379
+                  protocol: tcp
+            member_of_groups:
+              - app_components
+
+          - name: ledger-queue
+            component_type: message_queue
+            network_segment: c003-message-queue-p
+            instances:
+              - ktw-pod1-server-2
+            service_ports:
+              data:
+                - port: 5672
+                  protocol: tcp
+                - port: 15672
+                  port_end: 15673
+                  protocol: tcp
             member_of_groups:
               - app_components

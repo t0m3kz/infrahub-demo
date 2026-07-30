@@ -20,7 +20,7 @@ spec:
             design: M_MIDDLE
             amount_of_spines: 2
             spine_template: N9K-C9336C-FX2_SPINE
-            mlag_create: back-to-back
+            mlag_create: virtual
             member_of_groups:
               - topologies_pod
             racks:
@@ -93,7 +93,7 @@ spec:
             design: M_MIXED
             amount_of_spines: 2
             spine_template: N9K-C9336C-FX2_SPINE
-            mlag_create: back-to-back
+            mlag_create: virtual
             member_of_groups:
               - topologies_pod
             racks:

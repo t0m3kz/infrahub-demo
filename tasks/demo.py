@@ -728,14 +728,16 @@ async def _phase_07_customers(
 ) -> None:
     """Phase 07 – customer boarding (deployment footprint + VXLAN segments + applications).
 
-    Loads, per customer (c001/c002/c003): 01_deployment.yml (TopologyCustomerDC)
-    -> event-triggers ExchangeGatewayGenerator, which get-or-creates the VRF
-    namespace ("{ORG_ID}-P") and tags it into vrf_namespaces, auto-running
-    add_vrf_namespace (allocates L3 VNI) -> wait for those event-driven tasks
-    -> 02_segments.yml (prefixes/gateway IPs in that namespace + ManagedVxlanSegment)
-    -> add_vxlan_segment (allocates VLAN/VNI, wires leaf/tor interfaces) ->
-    applications (from 13_applications/, wired to the segments and to the
-    shared servers from phase 06).
+    Loads, per customer (c001/c002/c003): 07_customers/{customer}/01_deployment.yml
+    (TopologyCustomerDC) -> event-triggers ExchangeGatewayGenerator, which
+    get-or-creates the VRF namespace ("{ORG_ID}-P") and tags it into
+    vrf_namespaces, auto-running add_vrf_namespace (allocates L3 VNI) -> wait
+    for those event-driven tasks -> 08_segments/{customer}/02_segments.yml
+    (prefixes/gateway IPs in that namespace + ManagedVxlanSegment, a
+    customer-specific count of segments) -> add_vxlan_segment (allocates
+    VLAN/VNI, wires leaf/tor interfaces) -> applications (from
+    13_applications/, wired to the segments and to the shared servers from
+    phase 06).
     """
     branch = "demo-customers"
     log.info("══════════════════════════════════════════════")
@@ -749,6 +751,7 @@ async def _phase_07_customers(
     await _ensure_branch(c, branch, dry_run)
 
     customers_base = f"{_DEMOS_ROOT}/07_customers"
+    segments_base = f"{_DEMOS_ROOT}/08_segments"
     applications_base = f"{_DEMOS_ROOT}/13_applications"
     customer_dirs = ["c001", "c002", "c003"]
 
@@ -768,7 +771,7 @@ async def _phase_07_customers(
         ns_data = await c.execute_graphql(
             query="""
             query {
-                IpamNamespace(name__values: ["C001-P", "C002-P", "C003-P"]) {
+                IpamNamespace(name__values: ["C001-P", "C001-T", "C002-P", "C002-D", "C003-P", "C003-S"]) {
                     edges { node { id name { value } } }
                 }
             }
@@ -784,7 +787,7 @@ async def _phase_07_customers(
             await _run_generator(c, "add_vrf_namespace", ns_ids, branch, dry_run)
 
     for customer in customer_dirs:
-        _load_objects(f"{customers_base}/{customer}/02_segments.yml", branch, dry_run)
+        _load_objects(f"{segments_base}/{customer}/02_segments.yml", branch, dry_run)
 
     if not skip_generators:
         c.default_branch = branch

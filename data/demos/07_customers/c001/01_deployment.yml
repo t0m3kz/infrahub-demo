@@ -23,3 +23,10 @@ spec:
       design: "M_DC"
       member_of_groups:
         - customer_deployments
+    - owner: "C001"
+      environment: "t"
+      status: active
+      parent: "DC6"
+      design: "S_DC"
+      member_of_groups:
+        - customer_deployments

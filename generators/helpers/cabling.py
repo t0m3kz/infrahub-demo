@@ -85,6 +85,26 @@ class CableTypeDetector:
         )
 
 
+def pick_matched_switch_port_name(
+    free_names_by_switch: dict[str, list[str]],
+    switch_names: tuple[str, str],
+) -> str | None:
+    """Pick the lowest free interface name shared by BOTH switches of a
+    dual-homed pair (e.g. Ethernet1/1/8 on both), so a server's two links
+    land on matching port numbers instead of independently-chosen ones
+    (port 6 free on one switch, port 8 on the other).
+
+    Returns None when the two switches have no free name in common (e.g.
+    different port-naming schemes) — callers should fall back to picking
+    independently from each switch's own free-port list in that case.
+    """
+    switch_a, switch_b = switch_names
+    common_names = set(free_names_by_switch.get(switch_a, [])) & set(free_names_by_switch.get(switch_b, []))
+    if not common_names:
+        return None
+    return sort_interface_list(list(common_names))[0]
+
+
 class ConnectionValidator:
     """Validate connection plans before execution."""
 
