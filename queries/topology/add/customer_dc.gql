@@ -9,7 +9,12 @@ query customer_dc_data($name: String!) {
           node {
             id
             org_id { value }
-            name { value }
+            ... on OrganizationCustomer {
+              name { value }
+            }
+            ... on OrganizationProvider {
+              name { value }
+            }
           }
         }
       }
@@ -26,7 +31,12 @@ query customer_dc_data($name: String!) {
           node {
             id
             org_id { value }
-            name { value }
+            ... on OrganizationCustomer {
+              name { value }
+            }
+            ... on OrganizationProvider {
+              name { value }
+            }
           }
         }
         circuits {
@@ -139,7 +149,12 @@ query customer_dc_data($name: String!) {
           node {
             id
             org_id { value }
-            name { value }
+            ... on OrganizationCustomer {
+              name { value }
+            }
+            ... on OrganizationProvider {
+              name { value }
+            }
           }
         }
         circuits {
@@ -252,7 +267,12 @@ query customer_dc_data($name: String!) {
           node {
             id
             org_id { value }
-            name { value }
+            ... on OrganizationCustomer {
+              name { value }
+            }
+            ... on OrganizationProvider {
+              name { value }
+            }
           }
         }
         circuits {
