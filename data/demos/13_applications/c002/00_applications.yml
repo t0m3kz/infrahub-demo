@@ -1,10 +1,10 @@
 ---
 # C002 (SwiftGo GmbH) — "dispatch-hub" application: portfolio + frontend/
-# backend/database/cache components, wired to the segments (data/demos/
-# 07_customers/c002/01_network_segments.yml) and to the shared DC6 servers
+# backend/database components, wired to the segments (data/demos/
+# 08_segments/c002/02_segments.yml) and to the shared DC6 servers
 # boarded in data/demos/06_servers/ (bonds shared across customers:
 # ktw-pod1-server-1/bond1 = web, ktw-pod2-server-1/bond1 = app,
-# ktw-pod3-server-4 = db, ktw-pod3-server-2 = cache).
+# ktw-pod3-server-4 = db).
 
 apiVersion: infrahub.app/v1
 kind: Object
@@ -28,6 +28,10 @@ spec:
             network_segment: c002-web-frontend-p
             instances:
               - ktw-pod1-server-1
+            service_ports:
+              data:
+                - port: 443
+                  protocol: tcp
             member_of_groups:
               - app_components
 
@@ -36,6 +40,10 @@ spec:
             network_segment: c002-app-backend-p
             instances:
               - ktw-pod2-server-1
+            service_ports:
+              data:
+                - port: 8443
+                  protocol: tcp
             member_of_groups:
               - app_components
 
@@ -44,13 +52,11 @@ spec:
             network_segment: c002-database-p
             instances:
               - ktw-pod3-server-4
-            member_of_groups:
-              - app_components
-
-          - name: session-cache
-            component_type: cache
-            network_segment: c002-cache-p
-            instances:
-              - ktw-pod3-server-2
+            service_ports:
+              data:
+                - port: 5432
+                  protocol: tcp
+                - port: 6379
+                  protocol: tcp
             member_of_groups:
               - app_components

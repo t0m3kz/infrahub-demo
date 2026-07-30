@@ -21,6 +21,7 @@ from utils.data_cleaning import clean_data
 
 from ..common import CablingOptions, CommonGenerator
 from ..endpoint import EndpointUplinkMixin
+from ..helpers.cabling import pick_matched_switch_port_name
 from ..helpers.interface_naming import get_lag_name
 from ..models import ConnectionFingerprint, EndpointModel
 from ..protocols import DcimCable, DcimLAGInterface, DcimPhysicalDevice, DcimPhysicalInterface, LocationRack
@@ -63,11 +64,38 @@ class EndpointConnectivityGenerator(EndpointUplinkMixin, CommonGenerator):
             return str(intf.device.name.value if hasattr(intf.device.name, "value") else intf.device.name)
         return None
 
+    def _extract_cabled_switch_names(self, interfaces: list[DcimPhysicalInterface]) -> set[str]:
+        """Extract the far-end switch device names from this endpoint's already-cabled
+        interfaces, using the cable name convention ("device-interface__device-interface",
+        set by create_cabling) — same pattern as CablingPlanner._extract_connected_peer_devices.
+        """
+        switch_names: set[str] = set()
+        for intf in interfaces:
+            cable = getattr(intf, "cable", None)
+            if cable is None:
+                continue
+            cable_peer = getattr(cable, "_peer", None) or cable
+            raw_name = getattr(cable_peer, "name", None)
+            cable_name = getattr(raw_name, "value", None) or raw_name
+            if not isinstance(cable_name, str) or "__" not in cable_name:
+                continue
+            for endpoint_label in cable_name.split("__"):
+                if "-" not in endpoint_label:
+                    continue
+                device_name, _ = endpoint_label.rsplit("-", 1)
+                if device_name != self.data.name:
+                    switch_names.add(device_name)
+        return switch_names
+
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
         self.planned_connections: set[ConnectionFingerprint] = set()
         self._free_interfaces: list[DcimPhysicalInterface] = []  # Free interfaces without cables
         self._already_connected: bool = False  # True when endpoint already has existing cables
+        # Switch device names this endpoint is already cabled to (from a prior
+        # run) — biases device-pair selection so additional free ports land on
+        # the SAME pair rather than a re-derived (possibly different) one.
+        self._existing_switch_names: set[str] = set()
 
         # Speed validation configuration (matching CablingPlanner pattern)
         self.speed_aware: bool = kwargs.get("speed_aware", True)  # Group by speed first (default: True)
@@ -140,6 +168,17 @@ class EndpointConnectivityGenerator(EndpointUplinkMixin, CommonGenerator):
             include=["member_interfaces"],
         )
         if server_bonds:
+            # Remember which switches earlier bonds are already cabled to (see
+            # _extract_cabled_switch_names) so additional bonds land on the SAME
+            # pair rather than a freshly re-derived one.
+            already_cabled_members = [
+                peer.peer
+                for bond in server_bonds
+                for peer in bond.member_interfaces.peers
+                if peer.peer and getattr(peer.peer, "cable", None) and peer.peer.cable.id
+            ]
+            self._existing_switch_names = self._extract_cabled_switch_names(already_cabled_members)
+
             lock_id = await self.acquire_resource_lock(
                 f"endpoint-cabling-pod-{self.data.rack.pod.id}-row-{self.data.rack.row_index}"
             )
@@ -163,8 +202,14 @@ class EndpointConnectivityGenerator(EndpointUplinkMixin, CommonGenerator):
         endpoint_interfaces: list[DcimPhysicalInterface] = [
             intf for intf in all_endpoint_interfaces if not (intf.cable and intf.cable.id)
         ]
+        already_cabled_interfaces = [intf for intf in all_endpoint_interfaces if intf.cable and intf.cable.id]
 
         existing_connections = len(all_endpoint_interfaces) - len(endpoint_interfaces)
+
+        # Remember which switches this endpoint is already cabled to, so
+        # additional free ports (extra NICs, re-runs) land on the SAME pair
+        # instead of a freshly re-derived one — see _process_endpoint_connections.
+        self._existing_switch_names = self._extract_cabled_switch_names(already_cabled_interfaces)
 
         if not endpoint_interfaces:
             if existing_connections > 0:
@@ -225,18 +270,21 @@ class EndpointConnectivityGenerator(EndpointUplinkMixin, CommonGenerator):
         """Resolve target interfaces for middle_rack deployment.
 
         Strategy: Server in compute rack connects to switches in the middle rack (network rack) in same row.
-        Middle_rack topology has one network rack per row containing ToR or Leaf switches that serve compute racks.
-        Prefers ToR switches (aggregation layer) with fallback to Leaf switches if needed.
+        Middle_rack topology has one network rack per row containing ToR, L2-leaf/access-leaf (dedicated
+        L2 aggregation, when present), or Leaf switches that serve compute racks. Prefers ToR, then the
+        L2 aggregation layer (l2-leaf/access-leaf) — the layer servers are meant to attach to when one
+        exists — falling back to Leaf only when neither is present.
         """
         # Safe to assert - validated in generate() before calling this method
         assert self.data.rack is not None, "Rack must be assigned"
 
         self.logger.info(
             f"Endpoint {self.data.name} is in {self.data.rack.rack_type} rack "
-            f"(row {self.data.rack.row_index}), searching for ToR/Leaf switches in middle rack (network rack) in same row"
+            f"(row {self.data.rack.row_index}), searching for ToR/L2-leaf/access-leaf/Leaf switches "
+            "in middle rack (network rack) in same row"
         )
 
-        # Query interfaces directly on ToR or Leaf devices in network rack
+        # Query interfaces directly on ToR, l2-leaf/access-leaf, or Leaf devices in network rack
         racks = await self.client.filters(
             kind=LocationRack,
             pod__ids=[self.data.rack.pod.id],
@@ -258,9 +306,17 @@ class EndpointConnectivityGenerator(EndpointUplinkMixin, CommonGenerator):
             endpoint_interfaces=self._free_interfaces,
         )
 
-        # Fallback to Leaf devices in network rack if no ToR interfaces found
+        # Fallback to the L2 aggregation layer (l2-leaf/access-leaf) — servers
+        # attach here when a rack has one, ahead of the routed Leaf layer.
         if not all_target_interfaces:
-            self.logger.info(f"No ToR interfaces found in network rack for {self.data.name}, trying Leaf switches")
+            self.logger.info(
+                f"No ToR interfaces found in network rack for {self.data.name}, trying l2-leaf/access-leaf switches"
+            )
+            all_target_interfaces = await self._query_l2_aggregation_layer(rack_ids)
+
+        # Fallback to Leaf devices in network rack if nothing else found
+        if not all_target_interfaces:
+            self.logger.info(f"No l2-leaf/access-leaf interfaces found for {self.data.name}, trying Leaf switches")
             all_target_interfaces = await self._query_interfaces_by_location(
                 rack_ids=rack_ids,
                 device_role="leaf",
@@ -269,11 +325,25 @@ class EndpointConnectivityGenerator(EndpointUplinkMixin, CommonGenerator):
 
         if not all_target_interfaces:
             self.logger.error(
-                f"Endpoint {self.data.name}: No free interfaces found on ToR or Leaf devices in middle rack. "
-                "Cannot create endpoint connectivity."
+                f"Endpoint {self.data.name}: No free interfaces found on ToR, l2-leaf/access-leaf, or Leaf "
+                "devices in middle rack. Cannot create endpoint connectivity."
             )
 
         return all_target_interfaces
+
+    async def _query_l2_aggregation_layer(self, rack_ids: list[str]) -> list[DcimPhysicalInterface]:
+        """Try l2-leaf, then access-leaf, in the given racks — the dedicated L2
+        aggregation layer servers attach to when a rack provisions one.
+        """
+        for device_role in ("l2-leaf", "access-leaf"):
+            interfaces = await self._query_interfaces_by_location(
+                rack_ids=rack_ids,
+                device_role=device_role,
+                endpoint_interfaces=self._free_interfaces,
+            )
+            if interfaces:
+                return interfaces
+        return []
 
     async def _connect_tor_deployment(self) -> list[DcimPhysicalInterface]:
         """Resolve target interfaces for tor deployment.
@@ -323,7 +393,9 @@ class EndpointConnectivityGenerator(EndpointUplinkMixin, CommonGenerator):
     async def _connect_mixed_deployment(self) -> list[DcimPhysicalInterface]:
         """Resolve target interfaces for mixed deployment.
 
-        Strategy: Connect to ToR/Leaf devices in same rack, fallback to middle rack leafs in same row.
+        Strategy: Connect to ToR devices in same rack first, then the L2 aggregation layer
+        (l2-leaf/access-leaf) in the same rack, falling back to middle rack l2-leaf/access-leaf/leaf
+        in the same row.
         """
         # Safe to assert - validated in generate() before calling this method
         assert self.data.rack is not None, "Rack must be assigned"
@@ -337,10 +409,19 @@ class EndpointConnectivityGenerator(EndpointUplinkMixin, CommonGenerator):
             endpoint_interfaces=self._free_interfaces,
         )
 
-        # If no ToR in same rack, try Leaf switches in same row (all network racks)
+        # Then the L2 aggregation layer in the same rack, if this rack has one
         if not all_target_interfaces:
             self.logger.info(
-                f"No ToR interfaces in same rack for {self.data.name}, trying Leaf switches in same row {self.data.rack.row_index}"
+                f"No ToR interfaces in same rack for {self.data.name}, trying l2-leaf/access-leaf in same rack"
+            )
+            all_target_interfaces = await self._query_l2_aggregation_layer(rack_ids)
+
+        # If nothing local, try the middle rack (network rack) in same row:
+        # l2-leaf/access-leaf first, then Leaf as last resort.
+        if not all_target_interfaces:
+            self.logger.info(
+                f"No local ToR/l2-leaf/access-leaf for {self.data.name}, "
+                f"trying middle rack switches in same row {self.data.rack.row_index}"
             )
 
             racks = await self.client.filters(
@@ -351,16 +432,19 @@ class EndpointConnectivityGenerator(EndpointUplinkMixin, CommonGenerator):
             )
 
             if racks:
-                all_target_interfaces = await self._query_interfaces_by_location(
-                    rack_ids=[rack.id for rack in racks],
-                    device_role="leaf",
-                    endpoint_interfaces=self._free_interfaces,
-                )
+                network_rack_ids = [rack.id for rack in racks]
+                all_target_interfaces = await self._query_l2_aggregation_layer(network_rack_ids)
+                if not all_target_interfaces:
+                    all_target_interfaces = await self._query_interfaces_by_location(
+                        rack_ids=network_rack_ids,
+                        device_role="leaf",
+                        endpoint_interfaces=self._free_interfaces,
+                    )
 
         if not all_target_interfaces:
             self.logger.error(
-                f"Endpoint {self.data.name}: No ToR or Leaf interfaces found in mixed deployment. "
-                "Cannot create endpoint connectivity."
+                f"Endpoint {self.data.name}: No ToR, l2-leaf/access-leaf, or Leaf interfaces found "
+                "in mixed deployment. Cannot create endpoint connectivity."
             )
 
         return all_target_interfaces
@@ -368,14 +452,14 @@ class EndpointConnectivityGenerator(EndpointUplinkMixin, CommonGenerator):
     async def _query_interfaces_by_location(
         self,
         rack_ids: list[str],
-        device_role: Literal["tor", "leaf"],
+        device_role: Literal["tor", "leaf", "l2-leaf", "access-leaf"],
         endpoint_interfaces: list[Any],
     ) -> list[DcimPhysicalInterface]:
         """Query free interfaces on devices in specific racks.
 
         Args:
             rack_ids: List of rack IDs to search
-            device_role: Device role to filter (tor or leaf)
+            device_role: Device role to filter (tor, leaf, l2-leaf, or access-leaf)
             endpoint_interfaces: Endpoint interface models for type matching
 
         Returns:
@@ -453,78 +537,6 @@ class EndpointConnectivityGenerator(EndpointUplinkMixin, CommonGenerator):
 
         return free_interfaces
 
-    async def _process_endpoint_connections(
-        self,
-        all_target_interfaces: list[DcimPhysicalInterface],
-    ) -> None:
-        """Process endpoint connections using available interfaces.
-
-        Args:
-            all_target_interfaces: List of available target interfaces
-        """
-        # Filter endpoint interfaces to only those without cables
-        available_endpoint_interfaces: list[DcimPhysicalInterface] = [
-            intf for intf in self._free_interfaces if not (intf.cable and intf.cable.id)
-        ]
-
-        if not available_endpoint_interfaces:
-            self.logger.info(f"All interfaces on {self.data.name} already have cables")
-            return
-
-        if not all_target_interfaces:
-            self.logger.error(
-                f"Endpoint {self.data.name}: No compatible interfaces found on target devices. "
-                "Cannot create endpoint connectivity."
-            )
-            return
-
-        # Group interfaces by device for dual-homing
-        device_groups = {}
-        for intf in all_target_interfaces:
-            device_name = self._extract_device_name(intf)
-            if not device_name:
-                self.logger.warning(f"Could not extract device name for interface {intf.name.value}")
-                continue
-
-            if device_name not in device_groups:
-                device_groups[device_name] = []
-            device_groups[device_name].append(intf)
-
-        # Select consecutive device pair
-        device_names = list(device_groups.keys())
-        if len(device_names) < 2:
-            self.logger.error(
-                f"Endpoint {self.data.name}: Need at least 2 devices for dual-homing, found {len(device_names)}. "
-                "Cannot create endpoint connectivity."
-            )
-            return
-
-        # For simplicity, take first two devices (can be enhanced with consecutive pair selection)
-        selected_devices = device_names[:2]
-        selected_interfaces = []
-        for dev_name in selected_devices:
-            selected_interfaces.extend(device_groups[dev_name])
-
-        self.logger.info(f"Selected device pair for {self.data.name}: {selected_devices}")
-
-        # Choose processing mode based on configuration
-        if self.speed_aware:
-            await self._process_speed_aware(
-                available_endpoint_interfaces=available_endpoint_interfaces,
-                all_target_interfaces=selected_interfaces,
-                target_device_names=selected_devices,
-            )
-        else:
-            await self._process_with_validation(
-                available_endpoint_interfaces=available_endpoint_interfaces,
-                all_target_interfaces=selected_interfaces,
-                target_device_names=selected_devices,
-            )
-
-        self.logger.info(
-            f"Completed all connectivity for {self.data.name}: {len(self.planned_connections)} total connection(s) established"
-        )
-
     async def _process_lag_endpoint_connections(
         self, server_bonds: list[DcimLAGInterface], deployment_type: str
     ) -> None:
@@ -559,7 +571,13 @@ class EndpointConnectivityGenerator(EndpointUplinkMixin, CommonGenerator):
                 f"Endpoint {self.data.name}: Need 2 switches for MLAG-attached bonds, found {len(device_names)}."
             )
             return
-        switch_a_name, switch_b_name = device_names[:2]
+
+        # Prefer the pair this endpoint's earlier bonds already attached to
+        # (see _extract_cabled_switch_names) over an arbitrary "first two" —
+        # a later bond must land on the SAME pair as earlier ones.
+        sticky_devices = sorted(name for name in device_names if name in self._existing_switch_names)
+        remaining_devices = [name for name in device_names if name not in self._existing_switch_names]
+        switch_a_name, switch_b_name = (sticky_devices + remaining_devices)[:2]
 
         switches = await self.client.filters(
             kind=DcimPhysicalDevice, name__values=[switch_a_name, switch_b_name], include=["capabilities", "platform"]
@@ -599,7 +617,7 @@ class EndpointConnectivityGenerator(EndpointUplinkMixin, CommonGenerator):
 
             # Resolve each switch's port for this bond: reuse the existing one if
             # a prior run already cabled this member (read off the far end of its
-            # cable), else claim the next free port. Reusing — rather than
+            # cable), else claim a free port. Reusing — rather than
             # skipping outright — keeps the cable/port-channel/switch port
             # re-touched (create_cabling + the LAG save below are both
             # allow_upsert=True) so this run's tracking group re-includes them;
@@ -607,9 +625,13 @@ class EndpointConnectivityGenerator(EndpointUplinkMixin, CommonGenerator):
             # objects that nothing in THIS run touched again.
             free_ports_by_switch: dict[str, list[DcimPhysicalInterface]] = {}
             for name in (switch_a_name, switch_b_name):
-                free_ports_by_switch[name] = [p for p in device_groups[name] if not (p.cable and p.cable.id)]
+                free_ports = [p for p in device_groups[name] if not (p.cable and p.cable.id)]
+                free_port_by_name = {p.name.value: p for p in free_ports}
+                sorted_names = sort_interface_list(list(free_port_by_name.keys()))
+                free_ports_by_switch[name] = [free_port_by_name[n] for n in sorted_names]
 
             switch_port_by_name: dict[str, DcimPhysicalInterface] = {}
+            members_needing_fresh_port: dict[str, str] = {}
             for switch_name, server_interface_name in zip((switch_a_name, switch_b_name), member_names):
                 member = member_by_name[server_interface_name]
                 existing_cable = getattr(member, "cable", None)
@@ -621,10 +643,28 @@ class EndpointConnectivityGenerator(EndpointUplinkMixin, CommonGenerator):
                             kind=DcimPhysicalInterface, id=far_ends[0].id, include=["lag"]
                         )
                         continue
+                members_needing_fresh_port[switch_name] = server_interface_name
+
+            # When BOTH members need a fresh port, prefer the SAME port name on
+            # both switches (e.g. Ethernet1/1/8 on both) over independently
+            # picking each switch's own first-free port — falls back to
+            # independent picks when no common free name exists.
+            matched_name = None
+            if switch_a_name in members_needing_fresh_port and switch_b_name in members_needing_fresh_port:
+                free_names_by_switch = {
+                    name: [p.name.value for p in ports] for name, ports in free_ports_by_switch.items()
+                }
+                matched_name = pick_matched_switch_port_name(free_names_by_switch, (switch_a_name, switch_b_name))
+
+            for switch_name, server_interface_name in members_needing_fresh_port.items():
                 if not free_ports_by_switch[switch_name]:
                     self.logger.error(f"Bond {bond_name} on {self.data.name}: no free port on {switch_name}")
                     continue
-                switch_port = free_ports_by_switch[switch_name].pop(0)
+                if matched_name is not None:
+                    switch_port = next(p for p in free_ports_by_switch[switch_name] if p.name.value == matched_name)
+                else:
+                    switch_port = free_ports_by_switch[switch_name][0]
+                free_ports_by_switch[switch_name].remove(switch_port)
                 device_groups[switch_name].remove(switch_port)
                 switch_port_by_name[switch_name] = switch_port
 

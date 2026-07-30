@@ -16,7 +16,7 @@ from typing import Any
 from netutils.interface import sort_interface_list
 
 from .common import CablingOptions
-from .helpers.cabling import ConnectionValidator, InterfaceSpeedMatcher
+from .helpers.cabling import ConnectionValidator, InterfaceSpeedMatcher, pick_matched_switch_port_name
 from .models import ConnectionFingerprint
 from .protocols import DcimPhysicalInterface
 
@@ -48,6 +48,7 @@ class EndpointUplinkMixin:
     validate_speeds: bool
     strict_speed_validation: bool
     _free_interfaces: list[DcimPhysicalInterface]
+    _existing_switch_names: set[str]
     _extract_device_name: Callable[[Any], str | None]
     create_cabling: Callable[..., Awaitable[list[tuple[Any, Any]]]]
 
@@ -94,8 +95,13 @@ class EndpointUplinkMixin:
             )
             return
 
-        # For simplicity, take first two devices (can be enhanced with consecutive pair selection)
-        selected_devices = device_names[:2]
+        # Prefer the switch pair this endpoint is already cabled to (from a prior
+        # run) over re-deriving an arbitrary "first two" pair — additional free
+        # ports (extra NICs, partial re-runs) must land on the SAME pair, not a
+        # different one that happens to sort first this time.
+        sticky_devices = sorted(name for name in device_names if name in self._existing_switch_names)
+        remaining_devices = [name for name in device_names if name not in self._existing_switch_names]
+        selected_devices = (sticky_devices + remaining_devices)[:2]
         selected_interfaces = []
         for dev_name in selected_devices:
             selected_interfaces.extend(device_groups[dev_name])
@@ -345,37 +351,67 @@ class EndpointUplinkMixin:
         for dev_name, intfs in switch_by_device.items():
             self.logger.debug(f"  {dev_name}: {len(intfs)} interfaces")
 
+        # Sort server interfaces the same way (natural interface order, not
+        # query-return order) before truncating, so "take the first 4" picks
+        # eth0-eth3 rather than an arbitrary DB-order subset.
+        server_intf_by_name = {
+            (intf.name.value if hasattr(intf.name, "value") else str(intf.name)): intf for intf in server_interfaces
+        }
+        sorted_server_names = sort_interface_list(list(server_intf_by_name.keys()))
+
         # Take up to 4 server interfaces (2 per switch for dual-homing)
-        server_intfs = server_interfaces[:4]
+        server_intfs = [server_intf_by_name[name] for name in sorted_server_names[:4]]
 
         self.logger.info(
             f"Planning connections for {len(server_intfs)} server interfaces (requested: {len(server_interfaces)})"
         )
         self.logger.info(f"Target devices: {target_device_names}")
 
-        # Alternate between switches for dual-homing
-        for idx, server_intf in enumerate(server_intfs):
-            switch_name = target_device_names[idx % 2]
-            available_switch_intfs = switch_by_device.get(switch_name, [])
+        # Alternate between switches for dual-homing, two server interfaces
+        # (one per switch) at a time — each such pair is chosen to land on
+        # the SAME switch port name on both switches when possible (e.g.
+        # Ethernet1/1/8 on both), falling back to each switch's own
+        # first-available port when no common free name exists.
+        switch_a_name, switch_b_name = target_device_names[0], target_device_names[1]
+        for pair_start in range(0, len(server_intfs), 2):
+            pair = server_intfs[pair_start : pair_start + 2]
+            switch_names_for_pair = [switch_a_name, switch_b_name][: len(pair)]
 
-            server_intf_name = server_intf.name.value if hasattr(server_intf.name, "value") else str(server_intf.name)
+            matched_name = None
+            if len(pair) == 2:
+                free_names_by_switch = {
+                    name: [intf.name.value for intf in switch_by_device.get(name, [])]
+                    for name in (switch_a_name, switch_b_name)
+                }
+                matched_name = pick_matched_switch_port_name(free_names_by_switch, (switch_a_name, switch_b_name))
 
-            if not available_switch_intfs:
-                self.logger.warning(f"No available interfaces on {switch_name} for {server_intf.name}")
-                continue
+            for server_intf, switch_name in zip(pair, switch_names_for_pair):
+                available_switch_intfs = switch_by_device.get(switch_name, [])
+                server_intf_name = (
+                    server_intf.name.value if hasattr(server_intf.name, "value") else str(server_intf.name)
+                )
 
-            # Take first available interface from sorted list
-            switch_intf = available_switch_intfs.pop(0)
+                if not available_switch_intfs:
+                    self.logger.warning(f"No available interfaces on {switch_name} for {server_intf.name}")
+                    continue
 
-            fingerprint = ConnectionFingerprint(
-                server_name=self.data.name,
-                server_interface=server_intf_name,
-                switch_name=switch_name,
-                switch_interface=switch_intf.name.value,
-            )
+                if matched_name is not None:
+                    switch_intf = next(intf for intf in available_switch_intfs if intf.name.value == matched_name)
+                else:
+                    # No common free port name across the pair — fall back to
+                    # each switch's own first-available port independently.
+                    switch_intf = available_switch_intfs[0]
+                available_switch_intfs.remove(switch_intf)
 
-            # Check if already planned (idempotency within this run)
-            if fingerprint not in self.planned_connections:
-                plan.append(fingerprint)
+                fingerprint = ConnectionFingerprint(
+                    server_name=self.data.name,
+                    server_interface=server_intf_name,
+                    switch_name=switch_name,
+                    switch_interface=switch_intf.name.value,
+                )
+
+                # Check if already planned (idempotency within this run)
+                if fingerprint not in self.planned_connections:
+                    plan.append(fingerprint)
 
         return plan

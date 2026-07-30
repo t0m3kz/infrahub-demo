@@ -28,6 +28,10 @@ spec:
             network_segment: c001-web-frontend-p
             instances:
               - ktw-pod1-server-1
+            service_ports:
+              data:
+                - port: 443
+                  protocol: tcp
             member_of_groups:
               - app_components
 
@@ -36,6 +40,10 @@ spec:
             network_segment: c001-app-backend-p
             instances:
               - ktw-pod2-server-1
+            service_ports:
+              data:
+                - port: 8443
+                  protocol: tcp
             member_of_groups:
               - app_components
 
@@ -44,6 +52,10 @@ spec:
             network_segment: c001-database-p
             instances:
               - ktw-pod3-server-3
+            service_ports:
+              data:
+                - port: 5432
+                  protocol: tcp
             member_of_groups:
               - app_components
 
@@ -52,5 +64,12 @@ spec:
             network_segment: c001-cache-p
             instances:
               - ktw-pod3-server-1
+            service_ports:
+              data:
+                - port: 6379
+                  protocol: tcp
+                - port: 30000
+                  port_end: 30010
+                  protocol: udp
             member_of_groups:
               - app_components

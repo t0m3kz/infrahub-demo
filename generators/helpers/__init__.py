@@ -21,6 +21,7 @@ from .cabling import (
     IntraRackMixedCablingStrategy,
     PodCablingStrategy,
     RackCablingStrategy,
+    pick_matched_switch_port_name,
 )
 from .common import retry_delay
 from .interface_naming import get_lag_name, get_loopback_name
@@ -64,6 +65,7 @@ __all__ = [
     "InterfaceSpeedMatcher",
     "CableTypeDetector",
     "ConnectionValidator",
+    "pick_matched_switch_port_name",
     # Interface naming
     "get_lag_name",
     "get_loopback_name",
