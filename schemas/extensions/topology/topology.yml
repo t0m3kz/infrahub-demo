@@ -214,6 +214,26 @@ extensions:
           identifier: "topology__devices"
           order_weight: 1600
 
+    - kind: ManagedControllerPhysical
+      relationships:
+        - name: deployment
+          peer: TopologyDeployment
+          cardinality: one
+          kind: Attribute
+          optional: true
+          identifier: "topology__devices"
+          order_weight: 1600
+
+    - kind: ManagedControllerVirtual
+      relationships:
+        - name: deployment
+          peer: TopologyDeployment
+          cardinality: one
+          kind: Attribute
+          optional: true
+          identifier: "topology__devices"
+          order_weight: 1600
+
     - kind: DcimCable
       relationships:
         - name: deployment
