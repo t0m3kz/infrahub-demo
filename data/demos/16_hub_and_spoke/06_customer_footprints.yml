@@ -29,42 +29,65 @@
 #                                                        FirewallContext (see
 #                                                        07_firewall_
 #                                                        contexts.yml).
-#   TopologyCustomerColocation  C004 on EQUINIX/WAW -> namespace only; the
-#                                                      generator always warns
-#                                                      and skips the exchange
-#                                                      for Colocation (see
-#                                                      generators/topology/
-#                                                      exchange_gateway.py's
-#                                                      docstring) — wire it
-#                                                      manually if needed.
-#   TopologyCustomerCloud       C005 on eu-central-1 -> routed exchange via
-#                                                       circuit (needs its
-#                                                       own circuit — not
-#                                                       wired in this demo,
-#                                                       namespace-only like
-#                                                       Colocation until one
-#                                                       is added). Uses C005,
-#                                                       not C003 — TopologyCustomer's
-#                                                       human_friendly_id is
-#                                                       [owner, environment]
-#                                                       across the WHOLE
-#                                                       generic, so a second
-#                                                       C003/p footprint under
-#                                                       Cloud would collide
-#                                                       with the DC one above.
-#   TopologyCustomerOffice      C001 + C002 on OFFICES -> routed exchange via
-#                                                        circuit, terminating
-#                                                        at the hub's INTERNET
+#   TopologyCustomerColocation  C004 on EQUINIX/WAW -> routed exchange to
+#                                                      SHARED-SERVICES over a
+#                                                      real WAW1<->DC7 circuit
+#                                                      (colo/equinix/
+#                                                      02_c004_dc7_link.yml).
+#                                                      Works the same way as
+#                                                      Cloud/Office below,
+#                                                      since Colocation now
+#                                                      inherits Connectable-
+#                                                      Location directly.
+#   TopologyCustomerCloud       C005 on AWS eu-central-1 -> namespace-only
+#                                C009 on Azure westeurope    (no circuit
+#                                C010 on GCP europe-west4    wired, so each
+#                                                             just sits at
+#                                                             namespace
+#                                                             provisioning).
+#                                                             Distinct owners
+#                                                             (not C003)
+#                                                             because
+#                                                             human_friendly_id
+#                                                             [owner,
+#                                                             environment] is
+#                                                             shared across the
+#                                                             WHOLE generic.
+#                                                             The operator's
+#                                                             own hub footprint
+#                                                             (owner:
+#                                                             OPERATOR, see
+#                                                             cloud/aws/
+#                                                             01_cloud_pop.yml)
+#                                                             is a separate,
+#                                                             fifth one.
+#   TopologyCustomerOffice      C001 (waw-hq) + C002 (waw-br1), both under
+#                                                        the shared OFFICES
+#                                                        site anchor -> routed
+#                                                        exchange via circuit,
+#                                                        terminating at the
+#                                                        hub's INTERNET
 #                                                        namespace (see
-#                                                        10_office_hub_
-#                                                        circuits.yml)
+#                                                        office/03_office_
+#                                                        hub_circuits.yml).
+#                                                        Each footprint owns
+#                                                        its own building
+#                                                        (locations) — the
+#                                                        physical office isn't
+#                                                        operator-shared infra
+#                                                        like a DC fabric, so
+#                                                        it lives on the
+#                                                        customer footprint,
+#                                                        not on TopologyOffice
+#                                                        itself.
 #
-# Created BEFORE 08_office_edges.yml / 10_office_hub_circuits.yml so the
-# circuits below can reference these footprints via customer_deployment.
-# The created-trigger fires on each of these before its circuit exists (for
-# DC it doesn't need one at all), so Office/Cloud will log a warning and
-# skip on first run — re-run `infrahubctl generator add_exchange_gateway
-# name=<computed-name>` once circuits are loaded.
+# Created BEFORE office/02_office_edges.yml / office/03_office_hub_circuits.yml
+# / colo/equinix/02_c004_dc7_link.yml so those circuits can reference these
+# footprints directly via `locations`. The created-trigger fires on each of
+# these before its circuit exists (for DC it doesn't need one at all), so
+# Colocation/Office will log a warning and skip on first run — re-run
+# `infrahubctl generator add_exchange_gateway name=<computed-name>` once
+# circuits are loaded.
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
@@ -109,6 +132,16 @@ spec:
       environment: "p"
       status: active
       parent: "eu-central-1"
+    - owner: "C009"
+      customer_name: "hub-and-spoke-azure"
+      environment: "p"
+      status: active
+      parent: "westeurope"
+    - owner: "C010"
+      customer_name: "hub-and-spoke-gcp"
+      environment: "p"
+      status: active
+      parent: "europe-west4"
 
 ---
 apiVersion: infrahub.app/v1
@@ -120,7 +153,11 @@ spec:
       environment: "p"
       status: active
       parent: "OFFICES"
+      locations:
+        - "waw-hq"
     - owner: "C002"
       environment: "p"
       status: active
       parent: "OFFICES"
+      locations:
+        - "waw-br1"

@@ -1,0 +1,104 @@
+---
+# C004's colocation footprint (WAW1) reaches shared services over a real
+# WAW1 <-> DC7 link — two different physical sites, a DCI-like circuit,
+# rather than the old same-zone route-leak workaround. This is now possible
+# because TopologyCustomerColocation inherits TopologyConnectableLocation
+# directly (see schemas/extensions/topology/topology_customer.yml) — the
+# circuit's locations point at C004's own footprint, not at the shared
+# ColocationZone container. C004-EDGE1 is a small junos firewall sitting at
+# WAW1; the far end is DC7-BL1's existing spare downlink range
+# (Ethernet[1-24]/1 — Ethernet25/1 is already used for the DC7-BL1<->DC7-FW1
+# link, see ../../dc/02_dc7_fabric_cabling.yml).
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimPhysicalDevice
+  data:
+    - name: "C004-EDGE1"
+      object_template: SRX-1500_EDGE_FIREWALL
+      status: active
+      deployment: ["C004", "p"]
+
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: IpamPrefix
+  data:
+    - prefix: "10.71.0.0/30"
+      description: "C004-EDGE1 <-> DC7-BL1 point-to-point"
+      status: active
+
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimPhysicalInterface
+  data:
+    - name: "ge-0/0/0"
+      device: "C004-EDGE1"
+      status: active
+      ip_address:
+        data:
+          address: "10.71.0.1/30"
+    - name: "Ethernet1/1"
+      device: "DC7-BL1"
+      status: active
+      ip_address:
+        data:
+          address: "10.71.0.2/30"
+
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologyPhysicalCircuit
+  data:
+    - circuit_id: "C004-WAW1-DC7"
+      circuit_type: dark_fiber
+      status: active
+      provider: "Equinix"
+      owner: "C004"
+      locations:
+        - ["C004", "p"]
+        - "DC7"
+      interfaces:
+        - ["C004-EDGE1", "ge-0/0/0"]
+        - ["DC7-BL1", "Ethernet1/1"]
+
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: RoutingAutonomousSystem
+  data:
+    - asn: 65072
+      description: "C004-EDGE1 AS"
+
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: ManagedBGP
+  data:
+    - name: "C004-EDGE1-bgp"
+      status: active
+      local_as: "AS65072"
+      router_id: ["10.71.0.1/30", "default"]
+      capabilities:
+        - "C004-EDGE1"
+
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: ManagedBGPPeering
+  data:
+    - name: "C004-EDGE1-DC7-BL1-ebgp"
+      session_type: EBGP
+      bgp_processes:
+        - "C004-EDGE1-bgp"
+        - "DC7-BL1-bgp-fw"
+      interface_capabilities:
+        - ["C004-EDGE1", "ge-0/0/0"]
+        - ["DC7-BL1", "Ethernet1/1"]

@@ -29,6 +29,58 @@ query customer_dc_data($name: String!) {
             name { value }
           }
         }
+        circuits {
+          edges {
+            node {
+              id
+              __typename
+              ... on TopologyVirtualCircuit {
+                name { value }
+                interfaces {
+                  edges {
+                    node {
+                      id
+                      name { value }
+                      device { node { name { value } } }
+                    }
+                  }
+                }
+                locations {
+                  edges {
+                    node {
+                      id
+                      __typename
+                      ... on TopologyCustomerColocation {
+                        namespace {
+                          node {
+                            id
+                            name { value }
+                          }
+                        }
+                      }
+                      ... on TopologyCustomerCloud {
+                        namespace {
+                          node {
+                            id
+                            name { value }
+                          }
+                        }
+                      }
+                      ... on TopologyCustomerOffice {
+                        namespace {
+                          node {
+                            id
+                            name { value }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
       }
     }
   }
@@ -46,46 +98,48 @@ query customer_dc_data($name: String!) {
             name { value }
           }
         }
-        parent {
-          node {
-            id
-            ... on TopologyCloudRegion {
-              namespace {
-                node {
-                  id
-                  name { value }
-                }
-              }
-              circuits {
-                edges {
-                  node {
-                    id
-                    __typename
-                    ... on TopologyVirtualCircuit {
+        circuits {
+          edges {
+            node {
+              id
+              __typename
+              ... on TopologyVirtualCircuit {
+                name { value }
+                interfaces {
+                  edges {
+                    node {
+                      id
                       name { value }
-                      customer_deployment { node { id } }
-                      interfaces {
-                        edges {
+                      device { node { name { value } } }
+                    }
+                  }
+                }
+                locations {
+                  edges {
+                    node {
+                      id
+                      __typename
+                      ... on TopologyCustomerColocation {
+                        namespace {
                           node {
                             id
                             name { value }
-                            device { node { name { value } } }
                           }
                         }
                       }
-                      locations {
-                        edges {
+                      ... on TopologyCustomerCloud {
+                        namespace {
                           node {
                             id
-                            __typename
-                            ... on TopologyCloudRegion {
-                              namespace {
-                                node {
-                                  id
-                                  name { value }
-                                }
-                              }
-                            }
+                            name { value }
+                          }
+                        }
+                      }
+                      ... on TopologyCustomerOffice {
+                        namespace {
+                          node {
+                            id
+                            name { value }
                           }
                         }
                       }
@@ -113,40 +167,48 @@ query customer_dc_data($name: String!) {
             name { value }
           }
         }
-        parent {
-          node {
-            id
-            ... on TopologyOffice {
-              circuits {
-                edges {
-                  node {
-                    id
-                    __typename
-                    ... on TopologyVirtualCircuit {
+        circuits {
+          edges {
+            node {
+              id
+              __typename
+              ... on TopologyVirtualCircuit {
+                name { value }
+                interfaces {
+                  edges {
+                    node {
+                      id
                       name { value }
-                      customer_deployment { node { id } }
-                      interfaces {
-                        edges {
+                      device { node { name { value } } }
+                    }
+                  }
+                }
+                locations {
+                  edges {
+                    node {
+                      id
+                      __typename
+                      ... on TopologyCustomerColocation {
+                        namespace {
                           node {
                             id
                             name { value }
-                            device { node { name { value } } }
                           }
                         }
                       }
-                      locations {
-                        edges {
+                      ... on TopologyCustomerCloud {
+                        namespace {
                           node {
                             id
-                            __typename
-                            ... on TopologyCloudRegion {
-                              namespace {
-                                node {
-                                  id
-                                  name { value }
-                                }
-                              }
-                            }
+                            name { value }
+                          }
+                        }
+                      }
+                      ... on TopologyCustomerOffice {
+                        namespace {
+                          node {
+                            id
+                            name { value }
                           }
                         }
                       }

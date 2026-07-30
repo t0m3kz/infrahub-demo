@@ -1,0 +1,52 @@
+---
+# GCP europe-west4 (Amsterdam) + europe-west2 (London) — two real regions.
+# europe-west4's Amsterdam metro is also used by data/demos/11_cloud/gcp and
+# cloud/azure/01_region.yml (LocationMetro upsert is idempotent, so multiple
+# files declaring "ams" is safe). Self-contained (no dependency on
+# data/demos/11_cloud, same pattern as dc/01_datacenter.yml/colo/
+# 01_colocation.yml) — plain customer footprint locations here, NOT SD-WAN
+# hubs: no `namespace` set, no CloudInternetGateway. cloud/aws/
+# 01_cloud_pop.yml's eu-central-1 remains the only shared hub in this demo.
+# This gives 06_customer_footprints.yml two real GCP regions to spread
+# customers across (C010 and beyond), same as AWS/Azure now do. 3 zones
+# per region.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: LocationMetro
+  data:
+    - name: "Amsterdam"
+      shortname: "ams"
+      parent: "nl"
+    - name: "London"
+      shortname: "lon"
+      parent: "uk"
+
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologyCloud
+  data:
+    - name: GCP
+      children:
+        kind: TopologyCloudRegion
+        data:
+          - name: europe-west4
+            status: active
+            location: "ams"
+            children:
+              kind: TopologyCloudZone
+              data:
+                - name: europe-west4-a
+                - name: europe-west4-b
+                - name: europe-west4-c
+          - name: europe-west2
+            status: active
+            location: "lon"
+            children:
+              kind: TopologyCloudZone
+              data:
+                - name: europe-west2-a
+                - name: europe-west2-b
+                - name: europe-west2-c

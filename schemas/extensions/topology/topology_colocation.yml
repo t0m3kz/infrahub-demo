@@ -46,7 +46,6 @@ nodes:
     inherit_from:
       - TopologyDeployment
       - TopologyPhysicalDeployment
-      - TopologyConnectableLocation
       - TopologyRackHosting
       - TopologyDeviceHosting
     parent: TopologyColocationMetro

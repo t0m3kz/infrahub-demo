@@ -1,14 +1,15 @@
 ---
 version: "1.0"
 
-# TopologyOffice is a physical location — the same role TopologyDataCenter
-# and TopologyColocationMetro play for their customer footprints. It has no
-# owner/namespace itself; TopologyCustomerOffice (topology_customer.yml,
-# parent: TopologyOffice) is the customer footprint inside it, exactly
-# mirroring CustomerDC/parent:DataCenter and CustomerColocation/
-# parent:ColocationMetro. One office building can host several customers'
-# (including the operator's own OrganizationCustomer) footprints, the same
-# way one DC hosts several tenants.
+# TopologyOffice is a pure grouping container — a shared SITE name/label
+# under which one or more TopologyCustomerOffice footprints live (topology_
+# customer.yml, parent: TopologyOffice). It carries no locations/cables/
+# devices (those belong to whichever customer occupies the building) and no
+# TopologyConnectableLocation either — circuits always terminate on a
+# specific customer footprint (TopologyCustomer inherits
+# TopologyConnectableLocation directly), never on the shared site container,
+# since connecting two different customer deployments always requires an
+# explicit virtual/physical link between their own footprints.
 
 nodes:
   - name: Office
@@ -16,9 +17,6 @@ nodes:
     inherit_from:
       - CoreArtifactTarget
       - TopologyDeployment
-      - TopologyPhysicalDeployment
-      - TopologyConnectableLocation
-      - TopologyDeviceHosting
     uniqueness_constraints:
       - ["name__value"]
     human_friendly_id:
@@ -46,13 +44,3 @@ nodes:
           - name: campus
             label: Campus
             color: "#F39C12"
-    relationships:
-      - name: locations
-        peer: LocationBuilding
-        cardinality: many
-        kind: Attribute
-        optional: false
-        identifier: "office__locations"
-        order_weight: 1000
-        description: "Building locations backing this office deployment
-          (single for branch/regional, multiple for HQ/campus)"
