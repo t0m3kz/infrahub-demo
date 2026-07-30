@@ -14,10 +14,22 @@ kind: Object
 spec:
   kind: DcimPhysicalDevice
   data:
+    # deployment's peer is the generic TopologyDeployment; a bare HFID list
+    # can't resolve against a multi-hop HFID (owner__org_id__value,
+    # environment__value) like TopologyCustomerColocation's, so `kind:`+
+    # `data:` with the SAME full data already created in
+    # ../../06_customer_footprints.yml is used instead — this upserts onto
+    # the existing node (uniqueness_constraint: owner + environment +
+    # parent) rather than creating a duplicate.
     - name: "C004-EDGE1"
       object_template: SRX-1500_EDGE_FIREWALL
       status: active
-      deployment: ["C004", "p"]
+      deployment:
+        kind: TopologyCustomerColocation
+        data:
+          owner: "C004"
+          environment: "p"
+          parent: "WAW"
 
 ---
 apiVersion: infrahub.app/v1
@@ -54,14 +66,28 @@ kind: Object
 spec:
   kind: TopologyPhysicalCircuit
   data:
-    - circuit_id: "C004-WAW1-DC7"
+    # locations' peer is the generic TopologyConnectableLocation — a bare
+    # HFID string can't mix with a `kind:`+`data:` entry in the same list
+    # (object loader requires one format for the whole relationship), so
+    # both endpoints use `kind:`+`data:` with the SAME full data already
+    # created in ../01_colocation.yml / ../../dc/01_datacenter.yml — this
+    # upserts onto the existing nodes rather than creating duplicates.
+    - name: "C004-WAW1-DC7"
+      circuit_id: "C004-WAW1-DC7"
       circuit_type: dark_fiber
       status: active
       provider: "Equinix"
       owner: "C004"
       locations:
-        - ["C004", "p"]
-        - "DC7"
+        - kind: TopologyDataCenter
+          data:
+            name: "DC7"
+            index: 7
+        - kind: TopologyCustomerColocation
+          data:
+            owner: "C004"
+            environment: "p"
+            parent: "WAW"
       interfaces:
         - ["C004-EDGE1", "ge-0/0/0"]
         - ["DC7-BL1", "Ethernet1/1"]

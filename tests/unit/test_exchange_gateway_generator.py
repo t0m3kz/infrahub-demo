@@ -344,15 +344,42 @@ class TestExchangeViaCircuit:
         gen.logger.warning.assert_called_once()
         gen.client.create.assert_not_called()
 
-    def test_non_virtual_circuit_ignored(self):
+    def test_other_circuit_kind_ignored(self):
         gen = _make_gen()
         customer_ns = _mock_node("ns-1", "C003-P")
-        customer = {"circuits": [{"typename": "TopologyPhysicalCircuit"}]}
+        customer = {"circuits": [{"typename": "TopologySomeOtherCircuitKind"}]}
 
         _run(gen._exchange_via_circuit(customer_ns, customer, "C003-P", "cust-1"))
 
         gen.logger.warning.assert_called_once()
         gen.client.create.assert_not_called()
+
+    def test_physical_circuit_creates_routed_exchange(self):
+        """TopologyPhysicalCircuit (e.g. a real dark-fiber DCI link) is a valid transport, same
+        as TopologyVirtualCircuit — used by Colocation footprints without an SD-WAN overlay."""
+        gen = _make_gen()
+        shared_ns = _mock_node("ns-shared", SHARED_SERVICES_NAMESPACE)
+        gen._get_namespace = AsyncMock(return_value=shared_ns)
+        gen.client.filters = AsyncMock(return_value=[])
+        new_exchange = _mock_node("ex-1", "C004-P-SHARED-SERVICES-shared-services")
+        gen.client.create = AsyncMock(return_value=new_exchange)
+        customer_ns = _mock_node("ns-1", "C004-P")
+        customer = {
+            "circuits": [
+                {
+                    "typename": "TopologyPhysicalCircuit",
+                    "id": "circuit-1",
+                    "name": "c004-waw1-dc7",
+                    "interfaces": _two_interfaces(),
+                }
+            ]
+        }
+
+        _run(gen._exchange_via_circuit(customer_ns, customer, "C004-P", "cust-1"))
+
+        call_kwargs = gen.client.create.call_args.kwargs
+        assert call_kwargs["kind"] == "TopologyRoutedExchange"
+        assert call_kwargs["data"]["namespace_z"] == {"id": "ns-shared"}
 
     def test_circuit_with_wrong_interface_count_skips(self):
         gen = _make_gen()

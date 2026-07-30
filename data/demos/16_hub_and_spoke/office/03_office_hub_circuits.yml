@@ -13,14 +13,25 @@
 # so C001 traffic landing on eth1.1001 can never reach C002's VRF even
 # though both cross the same physical hub gateway.
 #
-# Each circuit's `locations` point directly at the two customer/operator
-# footprints it connects — C001's own TopologyCustomerOffice footprint and
-# the operator's hub TopologyCustomerCloud footprint (../cloud/aws/
-# 01_cloud_pop.yml), not the shared OFFICES/eu-central-1 containers. Since
-# TopologyConnectableLocation now lives on TopologyCustomer itself (see
-# schemas/extensions/topology/topology_customer.yml), each circuit is
-# already unambiguous — ExchangeGatewayGenerator reads customer.circuits
-# directly, no customer_deployment disambiguation field needed.
+# Each circuit connects two customer/operator footprints — C001's/C002's
+# own TopologyCustomerOffice footprint and the operator's hub
+# TopologyCustomerCloud footprint (../cloud/aws/01_cloud_pop.yml) — not the
+# shared OFFICES/eu-central-1 containers. Since TopologyConnectableLocation
+# now lives on TopologyCustomer itself (see schemas/extensions/topology/
+# topology_customer.yml), each circuit is already unambiguous —
+# ExchangeGatewayGenerator reads customer.circuits directly, no
+# customer_deployment disambiguation field needed.
+#
+# `locations` is set via the object loader's `kind:`+`data:` form (see
+# https://docs.infrahub.app/python-sdk/topics/object_file#load-object-files-
+# into-infrahub) with the SAME full data already created in
+# ../06_customer_footprints.yml / ../cloud/aws/01_cloud_pop.yml — this
+# upserts onto the existing node (same uniqueness_constraint: owner +
+# environment) rather than creating a duplicate. A bare HFID/string
+# reference can't be used instead: the object loader can't resolve one
+# against the generic TopologyConnectableLocation peer when the concrete
+# subtype's HFID has multiple elements (owner__org_id__value,
+# environment__value).
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
@@ -89,8 +100,19 @@ spec:
       provider: "Arista"
       owner: "C001"
       locations:
-        - ["C001", "p"]
-        - ["OPERATOR", "p"]
+        - kind: TopologyCustomerOffice
+          data:
+            owner: "C001"
+            environment: "p"
+            parent: "OFFICES"
+            locations: ["waw-hq"]
+        - kind: TopologyCustomerCloud
+          data:
+            owner: "OPERATOR"
+            environment: "p"
+            customer_name: "sdwan-hub"
+            parent: "eu-central-1"
+            namespace: "INTERNET"
       interfaces:
         - ["C001-EDGE1", "GE1"]
         - ["SDWAN-HUB-GW1", "eth1.1001"]
@@ -100,8 +122,19 @@ spec:
       provider: "Arista"
       owner: "C002"
       locations:
-        - ["C002", "p"]
-        - ["OPERATOR", "p"]
+        - kind: TopologyCustomerOffice
+          data:
+            owner: "C002"
+            environment: "p"
+            parent: "OFFICES"
+            locations: ["waw-br1"]
+        - kind: TopologyCustomerCloud
+          data:
+            owner: "OPERATOR"
+            environment: "p"
+            customer_name: "sdwan-hub"
+            parent: "eu-central-1"
+            namespace: "INTERNET"
       interfaces:
         - ["C002-EDGE1", "GE1"]
         - ["SDWAN-HUB-GW1", "eth1.1002"]
