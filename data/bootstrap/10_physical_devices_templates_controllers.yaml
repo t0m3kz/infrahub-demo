@@ -75,3 +75,23 @@ spec:
             name: mgmt0
             role: management
             interface_type: 1000base-t
+
+    # VCG-VA — physical SD-WAN gateway/controller appliance hosted at a
+    # colocation PoP (height=0, no rack slot — same device_type as the
+    # virtual VCG-VA_CLOUD in 09_virtual_device_templates_velocloud.yaml,
+    # just deployed on physical hardware at a colo instead of a cloud VM).
+    - template_name: VCG-VA_GATEWAY
+      device_type: VCG-VA
+      platform: velocloud
+      software_image: velocloud-6.0.0
+      controller_type: sdwan_orchestrator
+      role: controller
+      status: provisioning
+      owner: "P027"
+      interfaces:
+        kind: TemplateDcimPhysicalInterface
+        data:
+          - template_name: VCG-VA_GATEWAY_eth0
+            name: eth0
+            role: uplink
+            interface_type: 1000base-t
