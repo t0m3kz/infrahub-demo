@@ -267,6 +267,34 @@ nodes:
         read_only: true
         optional: true
 
+  - name: CustomerOffice
+    namespace: Topology
+    description: "Customer deployment footprint inside an office building"
+    label: "Customer (Office)"
+    inherit_from:
+      - TopologyCustomer
+      - TopologyDeployment
+    parent: TopologyOffice
+    children: ""
+    include_in_menu: false
+    human_friendly_id:
+      - owner__org_id__value
+      - environment__value
+    order_by:
+      - name__value
+    display_label: "{{ name__value }}"
+    uniqueness_constraints:
+      - ["owner", "environment__value", "parent"]
+    attributes:
+      - name: name
+        kind: Text
+        order_weight: 100
+        computed_attribute:
+          kind: Jinja2
+          jinja2_template: "{{ owner__org_id__value|upper }}-{{ environment__value|upper }}-{{ parent__name__value|upper }}"  # yamllint disable-line rule:line-length
+        read_only: true
+        optional: true
+
 
   - name: CustomerCloud
     namespace: Topology

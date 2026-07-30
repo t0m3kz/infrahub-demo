@@ -1,0 +1,30 @@
+---
+# Internet egress VRF — hub-and-spoke pattern (same idea as AWS Transit
+# Gateway / Azure Virtual WAN Hub's "secured hub", not a flat shared-transit
+# VRF): every DC/Colocation/Office reaches the internet via an explicit
+# TopologyRoutedExchange on its own border-leaf/firewall — one spoke
+# attachment per site, each with its own static default route + security
+# policy — never a blanket route leaked into every customer VRF.
+#
+# No l3_vni (unlike SHARED-SERVICES): this namespace is not a VXLAN tenant
+# stretched across the fabric — templates/configs/leafs/*.j2 only emits
+# `vrf instance <name>` for namespaces with l3_vni set (see
+# transforms/helpers/vxlan.py:_collect_l3_vni_from_namespaces). INTERNET
+# exists only on the hub device (border-leaf or firewall) doing the
+# RoutedExchange, which reads namespace_a/namespace_z by name directly —
+# no l3_vni required. Leafs never need to know about it.
+#
+# Not tagged into vrf_namespaces: that group's add_vrf_namespace generator
+# (generators/topology/vrf.py) exists to allocate l3_vni from the global
+# pool — a no-op this namespace will never need, so it's left out of the
+# generator-tracked group entirely (unlike SHARED-SERVICES, which is
+# tagged in even though its l3_vni is also set manually, to stay
+# consistent with every other VRF namespace's tracking).
+
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: IpamNamespace
+  data:
+    - name: "INTERNET"
+      description: "Internet egress VRF — hub-and-spoke via per-site TopologyRoutedExchange"

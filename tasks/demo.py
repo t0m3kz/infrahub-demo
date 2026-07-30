@@ -731,8 +731,10 @@ async def _phase_07_customers(
     Loads, per customer (c001/c002/c003): 07_customers/{customer}/01_deployment.yml
     (TopologyCustomerDC) -> event-triggers ExchangeGatewayGenerator, which
     get-or-creates the VRF namespace ("{ORG_ID}-P") and tags it into
-    vrf_namespaces, auto-running add_vrf_namespace (allocates L3 VNI) -> wait
-    for those event-driven tasks -> 08_segments/{customer}/02_segments.yml
+    vrf_namespaces, auto-running add_vrf_namespace (allocates L3 VNI), and
+    route-leaks to SHARED-SERVICES (data/bootstrap/22_shared_services_namespace.yml
+    — provisioned at bootstrap time, before this phase ever runs) -> wait for
+    those event-driven tasks -> 08_segments/{customer}/02_segments.yml
     (prefixes/gateway IPs in that namespace + ManagedVxlanSegment, a
     customer-specific count of segments) -> add_vxlan_segment (allocates
     VLAN/VNI, wires leaf/tor interfaces) -> applications (from

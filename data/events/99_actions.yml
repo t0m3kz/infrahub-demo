@@ -295,12 +295,13 @@ spec:
       action: run-app-application-generator
 
     # ── Customer VRF Namespace + Shared-Services Exchange ────────────────────
-    # Same generator/query for all three deployment kinds — it branches
+    # Same generator/query for all four deployment kinds — it branches
     # internally on which GraphQL root came back (see
     # generators/topology/exchange_gateway.py). DC gets a route-target leak;
-    # Cloud gets a routed exchange over an existing circuit if one is found;
-    # Colocation always just provisions the namespace (see the generator's
-    # docstring for why).
+    # Cloud and Office get a routed exchange over an existing circuit if one
+    # is found (both inherit/reach TopologyConnectableLocation); Colocation
+    # always just provisions the namespace (see the generator's docstring
+    # for why).
     - name: trigger-exchange-gateway-on-customer-dc-created
       branch_scope: "other_branches"
       node_kind: TopologyCustomerDC
@@ -316,5 +317,11 @@ spec:
     - name: trigger-exchange-gateway-on-customer-cloud-created
       branch_scope: "other_branches"
       node_kind: TopologyCustomerCloud
+      mutation_action: "created"
+      action: run-exchange-gateway-generator
+
+    - name: trigger-exchange-gateway-on-customer-office-created
+      branch_scope: "other_branches"
+      node_kind: TopologyCustomerOffice
       mutation_action: "created"
       action: run-exchange-gateway-generator
