@@ -1,0 +1,92 @@
+---
+# Shared infrastructure services (DNS/NTP/monitoring) — one LINUX-SVC virtual
+# server per physical location (DC7, DC8, EQUINIX/WAW1), each with an
+# interface in the SHARED-SERVICES namespace (created in data/bootstrap/
+# 22_shared_services_namespace.yml). Without this, "SHARED-SERVICES" was
+# just a VRF name with nothing actually living in it — every customer's
+# route-leak/routed exchange had a destination namespace but no real
+# endpoint on the other end.
+#
+# DC7/DC8 already reach SHARED-SERVICES via each customer's own
+# TopologyRouteLeakExchange (06_customer_footprints.yml + the generator run
+# — see docs/exchange_gateway.md). Colocation does NOT get this
+# automatically (ExchangeGatewayGenerator always warns and skips for
+# Colocation, since ColocationMetro itself has no circuits — only its child
+# zone does). WAW1's shared-services server sits in the SAME zone as C004,
+# so the exchange below is wired by hand, same route-leak pattern as
+# DC7/DC8, closing the "manual wiring" gap the generator's docstring
+# describes.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimVirtualDevice
+  data:
+    - name: "DC7-SVC1"
+      object_template: LINUX-SVC
+      status: active
+      deployment: DC7
+    - name: "DC8-SVC1"
+      object_template: LINUX-SVC
+      status: active
+      deployment: DC8
+    - name: "WAW1-SVC1"
+      object_template: LINUX-SVC
+      status: active
+      deployment: WAW1
+
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: IpamPrefix
+  data:
+    - prefix: "10.90.0.0/24"
+      description: "Shared services server addressing"
+      status: active
+      ip_namespace: "SHARED-SERVICES"
+
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimVirtualInterface
+  data:
+    - name: "eth0"
+      device: "DC7-SVC1"
+      status: active
+      ip_address:
+        data:
+          address: "10.90.0.1/24"
+          ip_namespace: "SHARED-SERVICES"
+    - name: "eth0"
+      device: "DC8-SVC1"
+      status: active
+      ip_address:
+        data:
+          address: "10.90.0.2/24"
+          ip_namespace: "SHARED-SERVICES"
+    - name: "eth0"
+      device: "WAW1-SVC1"
+      status: active
+      ip_address:
+        data:
+          address: "10.90.0.3/24"
+          ip_namespace: "SHARED-SERVICES"
+
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologyRouteLeakExchange
+  data:
+    - name: "C004-P-SHARED-SERVICES-shared-services"
+      description: "C004 (EQUINIX/WAW1) <-> shared infrastructure services — wired manually, ExchangeGatewayGenerator always skips Colocation (see generator docstring)"  # yamllint disable-line rule:line-length
+      namespace_a: "C004-P"
+      namespace_z: "SHARED-SERVICES"
+      direction: bidirectional
+      # customer_deployments (peer: generic TopologyDeployment) can't be set
+      # here — the object loader only resolves a bare HFID/string reference
+      # against the generic's own kind, not concrete subtypes like
+      # TopologyCustomerColocation. Link it after load via a raw mutation
+      # (see the session notes / query C004-P-WAW's id, then
+      # TopologyRouteLeakExchangeUpdate with customer_deployments: [{id: ...}]).

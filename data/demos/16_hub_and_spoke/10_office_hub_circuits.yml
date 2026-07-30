@@ -1,0 +1,167 @@
+---
+# SD-WAN overlay from each customer's office edge to the shared hub gateway
+# in the cloud PoP. No DcimCable here — SD-WAN rides the public internet
+# underlay, which is exactly why TopologyVirtualCircuit exists as a distinct
+# node from TopologyPhysicalCircuit (no cable relationship at all, see
+# schemas/extensions/topology/topology_connectivity.yml). The DC7 fabric
+# link in 09_dc7_fabric_cabling.yml is the one real physical DcimCable in
+# this demo.
+#
+# Two customers, two independent circuits terminating on two different
+# sub-interfaces of the SAME hub uplink (eth1.1001 / eth1.1002) — this is
+# the isolation test: each circuit/tunnel maps to exactly one customer VRF,
+# so C001 traffic landing on eth1.1001 can never reach C002's VRF even
+# though both cross the same physical hub gateway.
+#
+# Each circuit sets `owner` (the customer org) and `customer_deployment`
+# (the specific TopologyCustomerOffice footprint, created in
+# 06_customer_footprints.yml) — this is what lets ExchangeGatewayGenerator
+# tell C001's circuit apart from C002's at the shared OFFICES office (both
+# terminate at the same two locations: OFFICES + eu-central-1).
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: IpamIPAddress
+  data:
+    - address: "100.64.1.1/30"
+      description: "C001-EDGE1 GE1 (WAN, tunnel source)"
+    - address: "100.64.1.2/30"
+      description: "SDWAN-HUB-GW1 eth1.1001 (C001 tunnel destination)"
+    - address: "100.64.2.1/30"
+      description: "C002-EDGE1 GE1 (WAN, tunnel source)"
+    - address: "100.64.2.2/30"
+      description: "SDWAN-HUB-GW1 eth1.1002 (C002 tunnel destination)"
+    - address: "10.99.1.1/32"
+      description: "C001-EDGE1 BGP router-id"
+    - address: "10.99.2.1/32"
+      description: "C002-EDGE1 BGP router-id"
+    - address: "10.99.7.1/32"
+      description: "SDWAN-HUB-GW1 BGP router-id"
+
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimPhysicalInterface
+  data:
+    - name: "GE1"
+      device: "C001-EDGE1"
+      status: active
+      ip_address:
+        data:
+          address: "100.64.1.1/30"
+    - name: "GE1"
+      device: "C002-EDGE1"
+      status: active
+      ip_address:
+        data:
+          address: "100.64.2.1/30"
+
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimVirtualInterface
+  data:
+    - name: "eth1.1001"
+      device: "SDWAN-HUB-GW1"
+      ip_address:
+        data:
+          address: "100.64.1.2/30"
+    - name: "eth1.1002"
+      device: "SDWAN-HUB-GW1"
+      ip_address:
+        data:
+          address: "100.64.2.2/30"
+
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologyVirtualCircuit
+  data:
+    - name: "C001-SDWAN-HUB"
+      link_type: sd_wan
+      status: active
+      provider: "Arista"
+      owner: "C001"
+      customer_deployment: ["C001", "p"]
+      locations:
+        - "OFFICES"
+        - "eu-central-1"
+      interfaces:
+        - ["C001-EDGE1", "GE1"]
+        - ["SDWAN-HUB-GW1", "eth1.1001"]
+    - name: "C002-SDWAN-HUB"
+      link_type: sd_wan
+      status: active
+      provider: "Arista"
+      owner: "C002"
+      customer_deployment: ["C002", "p"]
+      locations:
+        - "OFFICES"
+        - "eu-central-1"
+      interfaces:
+        - ["C002-EDGE1", "GE1"]
+        - ["SDWAN-HUB-GW1", "eth1.1002"]
+
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: RoutingAutonomousSystem
+  data:
+    - asn: 65000
+      description: "SD-WAN hub AS (SDWAN-HUB-GW1)"
+    - asn: 65101
+      description: "C001 SD-WAN edge AS"
+    - asn: 65102
+      description: "C002 SD-WAN edge AS"
+
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: ManagedBGP
+  data:
+    - name: "SDWAN-HUB-GW1-bgp"
+      status: active
+      local_as: "AS65000"
+      router_id: ["10.99.7.1/32", "default"]
+      capabilities:
+        - "SDWAN-HUB-GW1"
+    - name: "C001-EDGE1-bgp"
+      status: active
+      local_as: "AS65101"
+      router_id: ["10.99.1.1/32", "default"]
+      capabilities:
+        - "C001-EDGE1"
+    - name: "C002-EDGE1-bgp"
+      status: active
+      local_as: "AS65102"
+      router_id: ["10.99.2.1/32", "default"]
+      capabilities:
+        - "C002-EDGE1"
+
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: ManagedBGPPeering
+  data:
+    - name: "C001-EDGE1-HUB-ebgp"
+      session_type: EBGP
+      bgp_processes:
+        - "C001-EDGE1-bgp"
+        - "SDWAN-HUB-GW1-bgp"
+      interface_capabilities:
+        - ["C001-EDGE1", "GE1"]
+        - ["SDWAN-HUB-GW1", "eth1.1001"]
+    - name: "C002-EDGE1-HUB-ebgp"
+      session_type: EBGP
+      bgp_processes:
+        - "C002-EDGE1-bgp"
+        - "SDWAN-HUB-GW1-bgp"
+      interface_capabilities:
+        - ["C002-EDGE1", "GE1"]
+        - ["SDWAN-HUB-GW1", "eth1.1002"]

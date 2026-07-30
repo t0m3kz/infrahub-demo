@@ -1,0 +1,67 @@
+---
+# Shared SD-WAN PoP directly in the cloud — AWS eu-central-1 (Frankfurt),
+# same real region used by data/demos/11_cloud/aws and
+# data/demos/15_customer_deployments/c003/cloud/aws/eu-central-1. A hub
+# region terminating SD-WAN for multiple customer offices/branches instead
+# of hairpinning through the DC. Setting TopologyCloudRegion.namespace makes
+# this region an ExchangeGateway side, same as the fabric or a circuit-backed
+# office/cloud customer deployment (see schemas/extensions/topology/
+# topology_cloud.yml's namespace relationship). The region also owns a
+# CloudInternetGateway, giving offices/branches direct-to-internet egress
+# from the hub instead of backhauling to a DC breakout.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: LocationMetro
+  data:
+    - name: "Frankfurt"
+      shortname: "fra"
+      parent: "de"
+
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologyCloud
+  data:
+    - name: AWS
+      children:
+        kind: TopologyCloudRegion
+        data:
+          - name: "eu-central-1"
+            status: active
+            location: "fra"
+            namespace: "INTERNET"
+
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: CloudAccount
+  data:
+    - name: "sdwan-hub-aws"
+      account_id: "999900001111"
+      provider: "AWS"
+
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: CloudVirtualNetwork
+  data:
+    - name: "sdwan-hub-vpc"
+      account: "sdwan-hub-aws"
+      region: "eu-central-1"
+      is_shared: true
+      dns_support: true
+
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: CloudInternetGateway
+  data:
+    - name: "sdwan-hub-igw"
+      virtual_network: "sdwan-hub-vpc"
+      account: "sdwan-hub-aws"
+      status: active

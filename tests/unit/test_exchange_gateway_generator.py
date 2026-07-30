@@ -91,6 +91,10 @@ def _run(coro):
     return asyncio.run(coro)
 
 
+def _two_interfaces() -> list[dict]:
+    return [{"id": "iface-1"}, {"id": "iface-2"}]
+
+
 # ===========================================================================
 # generate() — dispatch
 # ===========================================================================
@@ -383,7 +387,34 @@ class TestExchangeViaCircuit:
                         "typename": "TopologyVirtualCircuit",
                         "id": "circuit-1",
                         "name": "vc-1",
-                        "interfaces": [{"id": "iface-1"}, {"id": "iface-2"}],
+                        "customer_deployment": {"id": "cust-1"},
+                        "interfaces": _two_interfaces(),
+                    }
+                ]
+            }
+        }
+
+        _run(gen._exchange_via_circuit(customer_ns, customer, "C003-P", "cust-1"))
+
+        gen.logger.warning.assert_called_once()
+        gen.client.create.assert_not_called()
+
+    def test_circuit_not_owned_by_customer_skips(self):
+        """Two customers can share a physical location (Office/CloudRegion), each with its own
+        circuit terminating there — a circuit whose customer_deployment is a DIFFERENT customer's
+        footprint must never be picked, or namespace A's exchange gets wired onto namespace B's
+        circuit interfaces (a cross-tenant leak)."""
+        gen = _make_gen()
+        customer_ns = _mock_node("ns-1", "C003-P")
+        customer = {
+            "parent": {
+                "circuits": [
+                    {
+                        "typename": "TopologyVirtualCircuit",
+                        "id": "circuit-1",
+                        "name": "vc-1",
+                        "customer_deployment": {"id": "some-other-customer"},
+                        "interfaces": _two_interfaces(),
                     }
                 ]
             }
@@ -409,7 +440,8 @@ class TestExchangeViaCircuit:
                         "typename": "TopologyVirtualCircuit",
                         "id": "circuit-1",
                         "name": "vc-1",
-                        "interfaces": [{"id": "iface-1"}, {"id": "iface-2"}],
+                        "customer_deployment": {"id": "cust-1"},
+                        "interfaces": _two_interfaces(),
                     }
                 ]
             }
@@ -425,6 +457,77 @@ class TestExchangeViaCircuit:
         assert call_kwargs["data"]["customer_deployments"] == [{"id": "cust-1"}]
         new_exchange.save.assert_called_once_with(allow_upsert=True)
 
+    def test_hub_region_namespace_used_as_z_side_instead_of_shared_services(self):
+        """Circuit's other endpoint is a hub CloudRegion with its own namespace (e.g. an SD-WAN
+        PoP) — the exchange must stop at the hub, not reach straight into SHARED-SERVICES."""
+        gen = _make_gen()
+        gen._get_namespace = AsyncMock()
+        gen.client.filters = AsyncMock(return_value=[])
+        new_exchange = _mock_node("ex-1", "C001-P-INTERNET-hub")
+        gen.client.create = AsyncMock(return_value=new_exchange)
+        office_ns = _mock_node("ns-1", "C001-P")
+        office = {
+            "parent": {
+                "id": "office-loc-1",
+                "circuits": [
+                    {
+                        "typename": "TopologyVirtualCircuit",
+                        "id": "circuit-1",
+                        "name": "vc-1",
+                        "customer_deployment": {"id": "office-1"},
+                        "interfaces": _two_interfaces(),
+                        "locations": [
+                            {"id": "office-loc-1", "typename": "TopologyOffice"},
+                            {
+                                "id": "hub-region-1",
+                                "typename": "TopologyCloudRegion",
+                                "namespace": {"id": "ns-internet", "name": "INTERNET"},
+                            },
+                        ],
+                    }
+                ],
+            }
+        }
+
+        _run(gen._exchange_via_circuit(office_ns, office, "C001-P", "office-1"))
+
+        gen._get_namespace.assert_not_called()
+        call_kwargs = gen.client.create.call_args.kwargs
+        assert call_kwargs["data"]["namespace_a"] == {"id": "ns-1"}
+        assert call_kwargs["data"]["namespace_z"] == {"id": "ns-internet"}
+
+    def test_hub_region_without_namespace_falls_back_to_shared_services(self):
+        gen = _make_gen()
+        shared_ns = _mock_node("ns-shared", SHARED_SERVICES_NAMESPACE)
+        gen._get_namespace = AsyncMock(return_value=shared_ns)
+        gen.client.filters = AsyncMock(return_value=[])
+        new_exchange = _mock_node("ex-1", "C001-P-SHARED-SERVICES-shared-services")
+        gen.client.create = AsyncMock(return_value=new_exchange)
+        office_ns = _mock_node("ns-1", "C001-P")
+        office = {
+            "parent": {
+                "id": "office-loc-1",
+                "circuits": [
+                    {
+                        "typename": "TopologyVirtualCircuit",
+                        "id": "circuit-1",
+                        "name": "vc-1",
+                        "customer_deployment": {"id": "office-1"},
+                        "interfaces": _two_interfaces(),
+                        "locations": [
+                            {"id": "office-loc-1", "typename": "TopologyOffice"},
+                            {"id": "dc-1", "typename": "TopologyDataCenter", "namespace": None},
+                        ],
+                    }
+                ],
+            }
+        }
+
+        _run(gen._exchange_via_circuit(office_ns, office, "C001-P", "office-1"))
+
+        call_kwargs = gen.client.create.call_args.kwargs
+        assert call_kwargs["data"]["namespace_z"] == {"id": "ns-shared"}
+
     def test_existing_routed_exchange_not_duplicated(self):
         gen = _make_gen()
         shared_ns = _mock_node("ns-shared", SHARED_SERVICES_NAMESPACE)
@@ -439,7 +542,8 @@ class TestExchangeViaCircuit:
                         "typename": "TopologyVirtualCircuit",
                         "id": "circuit-1",
                         "name": "vc-1",
-                        "interfaces": [{"id": "iface-1"}, {"id": "iface-2"}],
+                        "customer_deployment": {"id": "cust-1"},
+                        "interfaces": _two_interfaces(),
                     }
                 ]
             }
@@ -466,7 +570,8 @@ class TestExchangeViaCircuit:
                         "typename": "TopologyVirtualCircuit",
                         "id": "circuit-1",
                         "name": "vc-1",
-                        "interfaces": [{"id": "iface-1"}, {"id": "iface-2"}],
+                        "customer_deployment": {"id": "office-1"},
+                        "interfaces": _two_interfaces(),
                     }
                 ]
             }

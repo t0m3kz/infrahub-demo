@@ -32,3 +32,17 @@ spec:
           - template_name: NGINX_LOAD-BALANCER_private
             name: private
             role: management
+    - template_name: LINUX-SVC
+      device_type: LINUX-SVC
+      platform: linux
+      software_image: linux-22.04.3
+      role: endpoint
+      status: active
+      cpu: 2
+      memory: 4
+      interfaces:
+        kind: TemplateDcimVirtualInterface
+        data:
+          - template_name: LINUX-SVC_eth0
+            name: eth0
+            role: uplink

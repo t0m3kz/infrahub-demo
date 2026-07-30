@@ -1,0 +1,65 @@
+---
+# SD-WAN edge appliance per customer at the office (VCE-610, WAN uplink GE1)
+# plus the shared hub gateway in the cloud PoP (VCG-VA, one physical uplink
+# eth1 carrying per-tenant tunnels via sub-interfaces — see
+# 09_office_hub_circuits.yml). Two customers, two edges, one hub: this is
+# what lets us test isolation — C001 and C002 each get their own circuit and
+# VRF, and neither can reach the other through the shared hub.
+#
+# `deployment` is set to each customer's TopologyCustomerOffice (created in
+# 06_customer_footprints.yml, loaded before this file) — the device itself
+# is dedicated per-tenant hardware. Circuit-to-customer disambiguation
+# (telling C001's circuit apart from C002's at the shared OFFICES office) is
+# handled explicitly by TopologyVirtualCircuit.customer_deployment in
+# 10_office_hub_circuits.yml, not inferred from this field.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimPhysicalDevice
+  data:
+    # deployment's peer is the generic TopologyDeployment, and the object
+    # loader resolves a bare HFID reference only against the generic's own
+    # kind — it can't disambiguate to a concrete subtype like
+    # TopologyCustomerOffice from a string/list value alone (no dict-with-
+    # "data" reference format exists for this case). Left unset here;
+    # linked manually below via a raw GraphQL mutation, or omit if not
+    # needed for this demo's purposes.
+    - name: "C001-EDGE1"
+      object_template: VCE-610_EDGE
+      status: active
+    - name: "C002-EDGE1"
+      object_template: VCE-610_EDGE
+      status: active
+
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimVirtualDevice
+  data:
+    - name: "SDWAN-HUB-GW1"
+      object_template: VCG-VA_CLOUD
+      status: active
+      deployment: "eu-central-1"
+
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimVirtualInterface
+  data:
+    # Per-tenant tunnel sub-interfaces on the hub's single WAN uplink (eth1) —
+    # this is what lets one shared gateway terminate many customer SD-WAN
+    # tunnels without needing one physical port per tenant.
+    - name: "eth1.1001"
+      device: "SDWAN-HUB-GW1"
+      role: uplink
+      status: active
+      description: "C001 SD-WAN tunnel termination"
+      parent_interface: ["SDWAN-HUB-GW1", "eth1"]
+    - name: "eth1.1002"
+      device: "SDWAN-HUB-GW1"
+      role: uplink
+      status: active
+      description: "C002 SD-WAN tunnel termination"
+      parent_interface: ["SDWAN-HUB-GW1", "eth1"]
