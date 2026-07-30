@@ -28,9 +28,11 @@ spec:
     - index: 1
       parent: "DC9"
       status: active
+      spine_template: N9K-C9336C-FX2_SPINE
     - index: 2
       parent: "DC9"
       status: active
+      spine_template: N9K-C9336C-FX2_SPINE
 
 ---
 apiVersion: infrahub.app/v1
@@ -53,25 +55,25 @@ spec:
     - name: DC9-POD1-LEAF1
       object_template: N9K-C9336C-FX2_LEAF
       status: active
-      deployment: ["DC9", "1"]
+      deployment: "DC9-9-POD-1"
       member_of_groups:
         - leafs
     - name: DC9-POD1-LEAF2
       object_template: N9K-C9336C-FX2_LEAF
       status: active
-      deployment: ["DC9", "1"]
+      deployment: "DC9-9-POD-1"
       member_of_groups:
         - leafs
     - name: DC9-POD2-LEAF1
       object_template: N9K-C9336C-FX2_LEAF
       status: active
-      deployment: ["DC9", "2"]
+      deployment: "DC9-9-POD-2"
       member_of_groups:
         - leafs
     - name: DC9-POD2-LEAF2
       object_template: N9K-C9336C-FX2_LEAF
       status: active
-      deployment: ["DC9", "2"]
+      deployment: "DC9-9-POD-2"
       member_of_groups:
         - leafs
 
