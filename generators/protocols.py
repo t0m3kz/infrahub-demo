@@ -109,6 +109,14 @@ class TopologyConnector(CoreNode):
     subscriber_of_groups: RelationshipManager[CoreGroup]
 
 
+class ManagedController(CoreNode):
+    controller_type: Dropdown
+    managed_devices: RelationshipManager[DcimDevice]
+    member_of_groups: RelationshipManager[CoreGroup]
+    profiles: RelationshipManager[CoreProfile]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
 class TemplateCoreArtifactTarget(CoreNode):
     template_name: String
     artifacts: RelationshipManager[CoreArtifact]
@@ -397,6 +405,15 @@ class ManagedLoadBalancer(CoreNode):
     profiles: RelationshipManager[CoreProfile]
     subscriber_of_groups: RelationshipManager[CoreGroup]
     tags: RelationshipManager[BuiltinTag]
+
+
+class TemplateManagedController(CoreNode):
+    controller_type: Dropdown
+    template_name: String
+    managed_devices: RelationshipManager[DcimDevice]
+    member_of_groups: RelationshipManager[CoreGroup]
+    profiles: RelationshipManager[CoreProfile]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
 
 
 class NetworkManagementServer(CoreNode):
@@ -891,6 +908,59 @@ class DcimConsoleInterface(DcimInterface, DcimEndpoint, CoreArtifactTarget):
     interface_capabilities: RelationshipManager[ManagedGenericInterfaces]
     member_of_groups: RelationshipManager[CoreGroup]
     profiles: RelationshipManager[CoreProfile]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+    tags: RelationshipManager[BuiltinTag]
+
+
+class ManagedControllerPhysical(ManagedController, CoreArtifactTarget, DcimDevice, DcimCapabilities, AppInstance):
+    controller_type: Dropdown
+    description: StringOptional
+    name: String
+    position: IntegerOptional
+    rack_face: Dropdown
+    role: DropdownOptional
+    serial: StringOptional
+    status: Dropdown
+    artifacts: RelationshipManager[CoreArtifact]
+    capabilities: RelationshipManager[ManagedGenericDevice]
+    deployment: RelationshipAttribute[TopologyDeployment]
+    device_type: RelationshipAttribute[DcimDeviceType]
+    interfaces: RelationshipManager[DcimInterface]
+    managed_devices: RelationshipManager[DcimDevice]
+    member_of_groups: RelationshipManager[CoreGroup]
+    object_template: RelationshipAttribute[TemplateManagedControllerPhysical]
+    owner: RelationshipAttribute[OrganizationEntity]
+    platform: RelationshipAttribute[DcimPlatform]
+    primary_address: RelationshipAttribute[IpamIPAddress]
+    profiles: RelationshipManager[CoreProfile]
+    software_image: RelationshipAttribute[DcimSoftwareImage]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+    tags: RelationshipManager[BuiltinTag]
+
+
+class ManagedControllerVirtual(ManagedController, CoreArtifactTarget, DcimDevice, DcimCapabilities, AppInstance):
+    controller_type: Dropdown
+    cpu: IntegerOptional
+    description: StringOptional
+    memory: IntegerOptional
+    name: String
+    role: DropdownOptional
+    status: Dropdown
+    storage: IntegerOptional
+    artifacts: RelationshipManager[CoreArtifact]
+    capabilities: RelationshipManager[ManagedGenericDevice]
+    deployment: RelationshipAttribute[TopologyDeployment]
+    device_type: RelationshipAttribute[DcimDeviceType]
+    hosting_device: RelationshipAttribute[DcimPhysicalDevice]
+    interfaces: RelationshipManager[DcimInterface]
+    managed_devices: RelationshipManager[DcimDevice]
+    member_of_groups: RelationshipManager[CoreGroup]
+    object_template: RelationshipAttribute[TemplateManagedControllerVirtual]
+    owner: RelationshipAttribute[OrganizationEntity]
+    platform: RelationshipAttribute[DcimPlatform]
+    primary_address: RelationshipAttribute[IpamIPAddress]
+    profiles: RelationshipManager[CoreProfile]
+    software_image: RelationshipAttribute[DcimSoftwareImage]
     subscriber_of_groups: RelationshipManager[CoreGroup]
     tags: RelationshipManager[BuiltinTag]
 
@@ -3521,6 +3591,68 @@ class ProfileManagedConferencingService(LineageSource, CoreProfile, CoreNode):
     subscriber_of_groups: RelationshipManager[CoreGroup]
 
 
+class ProfileManagedController(LineageSource, CoreProfile, CoreNode):
+    controller_type: DropdownOptional
+    profile_name: String
+    profile_priority: Integer
+    managed_devices: RelationshipManager[DcimDevice]
+    member_of_groups: RelationshipManager[CoreGroup]
+    related_nodes: RelationshipManager[ManagedController]
+    related_templates: RelationshipManager[TemplateManagedController]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class ProfileManagedControllerPhysical(LineageSource, CoreProfile, CoreNode):
+    controller_type: DropdownOptional
+    description: StringOptional
+    position: IntegerOptional
+    profile_name: String
+    profile_priority: Integer
+    rack_face: DropdownOptional
+    role: DropdownOptional
+    serial: StringOptional
+    status: DropdownOptional
+    artifacts: RelationshipManager[CoreArtifact]
+    capabilities: RelationshipManager[ManagedGenericDevice]
+    deployment: RelationshipAttribute[TopologyDeployment]
+    device_type: RelationshipAttribute[DcimDeviceType]
+    managed_devices: RelationshipManager[DcimDevice]
+    member_of_groups: RelationshipManager[CoreGroup]
+    owner: RelationshipAttribute[OrganizationEntity]
+    platform: RelationshipAttribute[DcimPlatform]
+    related_nodes: RelationshipManager[ManagedControllerPhysical]
+    related_templates: RelationshipManager[TemplateManagedControllerPhysical]
+    software_image: RelationshipAttribute[DcimSoftwareImage]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+    tags: RelationshipManager[BuiltinTag]
+
+
+class ProfileManagedControllerVirtual(LineageSource, CoreProfile, CoreNode):
+    controller_type: DropdownOptional
+    cpu: IntegerOptional
+    description: StringOptional
+    memory: IntegerOptional
+    profile_name: String
+    profile_priority: Integer
+    role: DropdownOptional
+    status: DropdownOptional
+    storage: IntegerOptional
+    artifacts: RelationshipManager[CoreArtifact]
+    capabilities: RelationshipManager[ManagedGenericDevice]
+    deployment: RelationshipAttribute[TopologyDeployment]
+    device_type: RelationshipAttribute[DcimDeviceType]
+    hosting_device: RelationshipAttribute[DcimPhysicalDevice]
+    managed_devices: RelationshipManager[DcimDevice]
+    member_of_groups: RelationshipManager[CoreGroup]
+    owner: RelationshipAttribute[OrganizationEntity]
+    platform: RelationshipAttribute[DcimPlatform]
+    related_nodes: RelationshipManager[ManagedControllerVirtual]
+    related_templates: RelationshipManager[TemplateManagedControllerVirtual]
+    software_image: RelationshipAttribute[DcimSoftwareImage]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+    tags: RelationshipManager[BuiltinTag]
+
+
 class ProfileManagedFirewallContext(LineageSource, CoreProfile, CoreNode):
     context_id: StringOptional
     description: StringOptional
@@ -5073,3 +5205,84 @@ class TemplateIpamIPAddress(LineageSource, CoreObjectComponentTemplate, Template
     related_nodes: RelationshipManager[IpamIPAddress]
     subscriber_of_groups: RelationshipManager[CoreGroup]
     subscriber_of_groups_for_instances: RelationshipManager[CoreGroup]
+
+
+class TemplateManagedControllerPhysical(
+    LineageSource,
+    TemplateManagedController,
+    TemplateCoreArtifactTarget,
+    TemplateDcimDevice,
+    TemplateDcimCapabilities,
+    TemplateAppInstance,
+    CoreObjectTemplate,
+    CoreNode,
+):
+    controller_type: DropdownOptional
+    description: StringOptional
+    position: IntegerOptional
+    rack_face: Dropdown
+    role: DropdownOptional
+    serial: StringOptional
+    status: DropdownOptional
+    template_name: String
+    artifacts: RelationshipManager[CoreArtifact]
+    capabilities: RelationshipManager[ManagedGenericDevice]
+    deployment: RelationshipAttribute[TopologyDeployment]
+    device_type: RelationshipAttribute[DcimDeviceType]
+    interfaces: RelationshipManager[TemplateDcimInterface]
+    managed_devices: RelationshipManager[DcimDevice]
+    member_of_groups: RelationshipManager[CoreGroup]
+    member_of_groups_for_instances: RelationshipManager[CoreGroup]
+    owner: RelationshipAttribute[OrganizationEntity]
+    platform: RelationshipAttribute[DcimPlatform]
+    position_from_resource_pool: RelationshipAttribute[CoreNumberPool]
+    primary_address: RelationshipAttribute[TemplateIpamIPAddress]
+    primary_address_from_resource_pool: RelationshipAttribute[CoreIPAddressPool]
+    profiles: RelationshipManager[CoreProfile]
+    related_nodes: RelationshipManager[ManagedControllerPhysical]
+    software_image: RelationshipAttribute[DcimSoftwareImage]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+    subscriber_of_groups_for_instances: RelationshipManager[CoreGroup]
+    tags: RelationshipManager[BuiltinTag]
+
+
+class TemplateManagedControllerVirtual(
+    LineageSource,
+    TemplateManagedController,
+    TemplateCoreArtifactTarget,
+    TemplateDcimDevice,
+    TemplateDcimCapabilities,
+    TemplateAppInstance,
+    CoreObjectTemplate,
+    CoreNode,
+):
+    controller_type: DropdownOptional
+    cpu: IntegerOptional
+    description: StringOptional
+    memory: IntegerOptional
+    role: DropdownOptional
+    status: DropdownOptional
+    storage: IntegerOptional
+    template_name: String
+    artifacts: RelationshipManager[CoreArtifact]
+    capabilities: RelationshipManager[ManagedGenericDevice]
+    cpu_from_resource_pool: RelationshipAttribute[CoreNumberPool]
+    deployment: RelationshipAttribute[TopologyDeployment]
+    device_type: RelationshipAttribute[DcimDeviceType]
+    hosting_device: RelationshipAttribute[DcimPhysicalDevice]
+    interfaces: RelationshipManager[TemplateDcimInterface]
+    managed_devices: RelationshipManager[DcimDevice]
+    member_of_groups: RelationshipManager[CoreGroup]
+    member_of_groups_for_instances: RelationshipManager[CoreGroup]
+    memory_from_resource_pool: RelationshipAttribute[CoreNumberPool]
+    owner: RelationshipAttribute[OrganizationEntity]
+    platform: RelationshipAttribute[DcimPlatform]
+    primary_address: RelationshipAttribute[TemplateIpamIPAddress]
+    primary_address_from_resource_pool: RelationshipAttribute[CoreIPAddressPool]
+    profiles: RelationshipManager[CoreProfile]
+    related_nodes: RelationshipManager[ManagedControllerVirtual]
+    software_image: RelationshipAttribute[DcimSoftwareImage]
+    storage_from_resource_pool: RelationshipAttribute[CoreNumberPool]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+    subscriber_of_groups_for_instances: RelationshipManager[CoreGroup]
+    tags: RelationshipManager[BuiltinTag]
