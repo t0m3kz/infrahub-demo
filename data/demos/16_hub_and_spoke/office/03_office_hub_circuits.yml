@@ -4,8 +4,8 @@
 # underlay, which is exactly why TopologyVirtualCircuit exists as a distinct
 # node from TopologyPhysicalCircuit (no cable relationship at all, see
 # schemas/extensions/topology/topology_connectivity.yml). The DC7 fabric
-# link in 09_dc7_fabric_cabling.yml is the one real physical DcimCable in
-# this demo.
+# link in ../dc/02_dc7_fabric_cabling.yml is the one real physical DcimCable
+# in this demo.
 #
 # Two customers, two independent circuits terminating on two different
 # sub-interfaces of the SAME hub uplink (eth1.1001 / eth1.1002) — this is
@@ -13,11 +13,14 @@
 # so C001 traffic landing on eth1.1001 can never reach C002's VRF even
 # though both cross the same physical hub gateway.
 #
-# Each circuit sets `owner` (the customer org) and `customer_deployment`
-# (the specific TopologyCustomerOffice footprint, created in
-# 06_customer_footprints.yml) — this is what lets ExchangeGatewayGenerator
-# tell C001's circuit apart from C002's at the shared OFFICES office (both
-# terminate at the same two locations: OFFICES + eu-central-1).
+# Each circuit's `locations` point directly at the two customer/operator
+# footprints it connects — C001's own TopologyCustomerOffice footprint and
+# the operator's hub TopologyCustomerCloud footprint (../cloud/aws/
+# 01_cloud_pop.yml), not the shared OFFICES/eu-central-1 containers. Since
+# TopologyConnectableLocation now lives on TopologyCustomer itself (see
+# schemas/extensions/topology/topology_customer.yml), each circuit is
+# already unambiguous — ExchangeGatewayGenerator reads customer.circuits
+# directly, no customer_deployment disambiguation field needed.
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
@@ -85,10 +88,9 @@ spec:
       status: active
       provider: "Arista"
       owner: "C001"
-      customer_deployment: ["C001", "p"]
       locations:
-        - "OFFICES"
-        - "eu-central-1"
+        - ["C001", "p"]
+        - ["OPERATOR", "p"]
       interfaces:
         - ["C001-EDGE1", "GE1"]
         - ["SDWAN-HUB-GW1", "eth1.1001"]
@@ -97,10 +99,9 @@ spec:
       status: active
       provider: "Arista"
       owner: "C002"
-      customer_deployment: ["C002", "p"]
       locations:
-        - "OFFICES"
-        - "eu-central-1"
+        - ["C002", "p"]
+        - ["OPERATOR", "p"]
       interfaces:
         - ["C002-EDGE1", "GE1"]
         - ["SDWAN-HUB-GW1", "eth1.1002"]

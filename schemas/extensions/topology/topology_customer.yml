@@ -94,6 +94,16 @@ generics:
         order_weight: 150
         identifier: "topology_customer__owner"
         description: "Customer this deployment footprint belongs to"
+      - name: namespace
+        peer: BuiltinIPNamespace
+        cardinality: one
+        kind: Attribute
+        optional: true
+        identifier: "topology_customer__namespace"
+        order_weight: 160
+        description: "IPAM namespace (= VRF). Set on hub footprints (e.g.
+          the operator's own SD-WAN PoP) to make them an ExchangeGateway
+          side."
 
   - name: CustomerTemplate
     namespace: Topology
@@ -248,6 +258,7 @@ nodes:
       - TopologyCustomer
       - TopologyDeployment
       - TopologyClusterHosting
+      - TopologyConnectableLocation
     parent: TopologyColocationMetro
     children: ""
     include_in_menu: false
@@ -277,6 +288,9 @@ nodes:
       - TopologyCustomer
       - TopologyDeployment
       - TopologyClusterHosting
+      - TopologyPhysicalDeployment
+      - TopologyDeviceHosting
+      - TopologyConnectableLocation
     parent: TopologyOffice
     children: ""
     include_in_menu: false
@@ -297,6 +311,16 @@ nodes:
           jinja2_template: "{{ owner__org_id__value|upper }}-{{ environment__value|upper }}-{{ parent__name__value|upper }}"  # yamllint disable-line rule:line-length
         read_only: true
         optional: true
+    relationships:
+      - name: locations
+        peer: LocationBuilding
+        cardinality: many
+        kind: Attribute
+        optional: false
+        identifier: "office__locations"
+        order_weight: 1000
+        description: "Building locations backing this customer's office footprint
+          (single for branch/regional, multiple for HQ/campus)"
 
 
   - name: CustomerCloud
@@ -307,6 +331,7 @@ nodes:
       - TopologyCustomer
       - TopologyDeployment
       - TopologyClusterHosting
+      - TopologyConnectableLocation
     parent: TopologyCloudRegion
     children: ""
     include_in_menu: false

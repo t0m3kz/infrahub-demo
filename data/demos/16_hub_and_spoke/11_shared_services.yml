@@ -7,15 +7,14 @@
 # route-leak/routed exchange had a destination namespace but no real
 # endpoint on the other end.
 #
-# DC7/DC8 already reach SHARED-SERVICES via each customer's own
+# DC7/DC8 reach SHARED-SERVICES via each customer's own
 # TopologyRouteLeakExchange (06_customer_footprints.yml + the generator run
-# — see docs/exchange_gateway.md). Colocation does NOT get this
-# automatically (ExchangeGatewayGenerator always warns and skips for
-# Colocation, since ColocationMetro itself has no circuits — only its child
-# zone does). WAW1's shared-services server sits in the SAME zone as C004,
-# so the exchange below is wired by hand, same route-leak pattern as
-# DC7/DC8, closing the "manual wiring" gap the generator's docstring
-# describes.
+# — see docs/exchange_gateway.md). C004 (Colocation, WAW1) now reaches it
+# automatically too, via a real WAW1<->DC7 circuit (colo/equinix/
+# 02_c004_dc7_link.yml) — TopologyCustomerColocation inherits
+# TopologyConnectableLocation directly, so ExchangeGatewayGenerator's
+# circuit path applies the same way it does for Cloud/Office, no manual
+# wiring needed anymore.
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
@@ -72,21 +71,3 @@ spec:
         data:
           address: "10.90.0.3/24"
           ip_namespace: "SHARED-SERVICES"
-
----
-apiVersion: infrahub.app/v1
-kind: Object
-spec:
-  kind: TopologyRouteLeakExchange
-  data:
-    - name: "C004-P-SHARED-SERVICES-shared-services"
-      description: "C004 (EQUINIX/WAW1) <-> shared infrastructure services — wired manually, ExchangeGatewayGenerator always skips Colocation (see generator docstring)"  # yamllint disable-line rule:line-length
-      namespace_a: "C004-P"
-      namespace_z: "SHARED-SERVICES"
-      direction: bidirectional
-      # customer_deployments (peer: generic TopologyDeployment) can't be set
-      # here — the object loader only resolves a bare HFID/string reference
-      # against the generic's own kind, not concrete subtypes like
-      # TopologyCustomerColocation. Link it after load via a raw mutation
-      # (see the session notes / query C004-P-WAW's id, then
-      # TopologyRouteLeakExchangeUpdate with customer_deployments: [{id: ...}]).

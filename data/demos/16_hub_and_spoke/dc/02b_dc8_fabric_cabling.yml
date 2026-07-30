@@ -1,5 +1,5 @@
 ---
-# DC8-BL1 <-> DC8-FW1 cabling + BGP — mirrors 09_dc7_fabric_cabling.yml for
+# DC8-BL1 <-> DC8-FW1 cabling + BGP — mirrors 02_dc7_fabric_cabling.yml for
 # the second site. DC7 and DC8 are NOT interconnected in this demo (no DCI
 # circuit, no shared exchange) — both only reach SHARED-SERVICES
 # independently, so inter-site traffic (DC7 <-> DC8) and inter-customer

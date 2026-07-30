@@ -77,8 +77,10 @@ class TopologyCircuit(CoreNode):
     description: StringOptional
     name: String
     status: Dropdown
+    customer_deployment: RelationshipAttribute[TopologyCustomer]
     locations: RelationshipManager[TopologyConnectableLocation]
     member_of_groups: RelationshipManager[CoreGroup]
+    owner: RelationshipAttribute[OrganizationCustomer]
     profiles: RelationshipManager[CoreProfile]
     provider: RelationshipAttribute[OrganizationProvider]
     subscriber_of_groups: RelationshipManager[CoreGroup]
@@ -120,6 +122,8 @@ class TopologyCustomer(CoreNode):
     environment: Dropdown
     name: String
     status: Dropdown
+    circuits: RelationshipManager[TopologyCircuit]
+    exchange_gateways: RelationshipManager[TopologyExchangeGateway]
     member_of_groups: RelationshipManager[CoreGroup]
     network_segments: RelationshipManager[ManagedNetworkSegment]
     owner: RelationshipAttribute[OrganizationCustomer]
@@ -254,10 +258,14 @@ class OrganizationEntity(CoreNode):
     subscriber_of_groups: RelationshipManager[CoreGroup]
 
 
-class ManagedExternalEndpoint(CoreNode):
-    asn: RelationshipAttribute[RoutingAutonomousSystem]
-    bgp_ip: RelationshipAttribute[IpamIPAddress]
+class TopologyExchangeGateway(CoreNode):
+    description: StringOptional
+    name: String
+    status: Dropdown
+    customer_deployments: RelationshipManager[TopologyDeployment]
     member_of_groups: RelationshipManager[CoreGroup]
+    namespace_a: RelationshipAttribute[IpamNamespace]
+    namespace_z: RelationshipAttribute[IpamNamespace]
     profiles: RelationshipManager[CoreProfile]
     subscriber_of_groups: RelationshipManager[CoreGroup]
 
@@ -278,7 +286,6 @@ class LocationGeneric(CoreNode):
 class OrganizationGeneric(CoreNode):
     description: StringOptional
     name: String
-    asn: RelationshipManager[RoutingAutonomousSystem]
     member_of_groups: RelationshipManager[CoreGroup]
     profiles: RelationshipManager[CoreProfile]
     subscriber_of_groups: RelationshipManager[CoreGroup]
@@ -748,15 +755,15 @@ class ManagedCloudProxy(ManagedSaasService, ManagedInlineService, ManagedProxySe
     subscriber_of_groups: RelationshipManager[CoreGroup]
 
 
-class TopologyCloudRegion(TopologyDeployment, TopologyConnectableLocation, TopologyClusterHosting):
+class TopologyCloudRegion(TopologyDeployment, TopologyConnectableLocation):
     name: String
     status: Dropdown
     children: RelationshipManager[TopologyDeployment]
     circuits: RelationshipManager[TopologyCircuit]
-    clusters: RelationshipManager[VirtCluster]
     direct_connects: RelationshipManager[CloudDirectConnect]
     location: RelationshipAttribute[LocationMetro]
     member_of_groups: RelationshipManager[CoreGroup]
+    namespace: RelationshipAttribute[BuiltinIPNamespace]
     parent: RelationshipAttribute[TopologyCloud]
     profiles: RelationshipManager[CoreProfile]
     subscriber_of_groups: RelationshipManager[CoreGroup]
@@ -809,11 +816,10 @@ class TopologyColocation(CoreArtifactTarget, TopologyDeployment):
     subscriber_of_groups: RelationshipManager[CoreGroup]
 
 
-class TopologyColocationMetro(CoreArtifactTarget, TopologyDeployment, TopologyClusterHosting, TopologySegmentHosting):
+class TopologyColocationMetro(CoreArtifactTarget, TopologyDeployment, TopologySegmentHosting):
     name: String
     artifacts: RelationshipManager[CoreArtifact]
     children: RelationshipManager[TopologyDeployment]
-    clusters: RelationshipManager[VirtCluster]
     l3_vni_pool: RelationshipAttribute[CoreNumberPool]
     location: RelationshipAttribute[LocationMetro]
     member_of_groups: RelationshipManager[CoreGroup]
@@ -831,14 +837,12 @@ class TopologyColocationZone(
     TopologyConnectableLocation,
     TopologyRackHosting,
     TopologyDeviceHosting,
-    TopologyClusterHosting,
 ):
     deployment_type: Dropdown
     name: String
     cables: RelationshipManager[DcimCable]
     children: RelationshipManager[TopologyDeployment]
     circuits: RelationshipManager[TopologyCircuit]
-    clusters: RelationshipManager[VirtCluster]
     devices: RelationshipManager[DcimDevice]
     member_of_groups: RelationshipManager[CoreGroup]
     parent: RelationshipAttribute[TopologyColocationMetro]
@@ -916,23 +920,24 @@ class OrganizationCustomer(OrganizationGeneric, OrganizationEntity):
     name: String
     org_id: StringOptional
     applications: RelationshipManager[AppApplication]
-    asn: RelationshipManager[RoutingAutonomousSystem]
     deployments: RelationshipManager[TopologyCustomer]
     member_of_groups: RelationshipManager[CoreGroup]
-    portfolios: RelationshipManager[AppPortfolio]
     profiles: RelationshipManager[CoreProfile]
     proxy_policies: RelationshipManager[ProxyPolicy]
     subscriber_of_groups: RelationshipManager[CoreGroup]
     tags: RelationshipManager[BuiltinTag]
 
 
-class TopologyCustomerCloud(TopologyCustomer, TopologyDeployment):
+class TopologyCustomerCloud(TopologyCustomer, TopologyDeployment, TopologyClusterHosting):
     customer_name: String
     environment: Dropdown
     name: StringOptional
     status: Dropdown
     children: RelationshipManager[TopologyDeployment]
+    circuits: RelationshipManager[TopologyCircuit]
     cloud_account: RelationshipAttribute[CloudAccount]
+    clusters: RelationshipManager[VirtCluster]
+    exchange_gateways: RelationshipManager[TopologyExchangeGateway]
     member_of_groups: RelationshipManager[CoreGroup]
     network_segments: RelationshipManager[ManagedNetworkSegment]
     owner: RelationshipAttribute[OrganizationCustomer]
@@ -941,11 +946,14 @@ class TopologyCustomerCloud(TopologyCustomer, TopologyDeployment):
     subscriber_of_groups: RelationshipManager[CoreGroup]
 
 
-class TopologyCustomerColocation(TopologyCustomer, TopologyDeployment):
+class TopologyCustomerColocation(TopologyCustomer, TopologyDeployment, TopologyClusterHosting):
     environment: Dropdown
     name: StringOptional
     status: Dropdown
     children: RelationshipManager[TopologyDeployment]
+    circuits: RelationshipManager[TopologyCircuit]
+    clusters: RelationshipManager[VirtCluster]
+    exchange_gateways: RelationshipManager[TopologyExchangeGateway]
     member_of_groups: RelationshipManager[CoreGroup]
     network_segments: RelationshipManager[ManagedNetworkSegment]
     owner: RelationshipAttribute[OrganizationCustomer]
@@ -954,12 +962,15 @@ class TopologyCustomerColocation(TopologyCustomer, TopologyDeployment):
     subscriber_of_groups: RelationshipManager[CoreGroup]
 
 
-class TopologyCustomerDC(TopologyCustomer, TopologyDeployment):
+class TopologyCustomerDC(TopologyCustomer, TopologyDeployment, TopologyClusterHosting):
     environment: Dropdown
     name: StringOptional
     status: Dropdown
     children: RelationshipManager[TopologyDeployment]
+    circuits: RelationshipManager[TopologyCircuit]
+    clusters: RelationshipManager[VirtCluster]
     design: RelationshipAttribute[TopologyCustomerTemplateDC]
+    exchange_gateways: RelationshipManager[TopologyExchangeGateway]
     member_of_groups: RelationshipManager[CoreGroup]
     network_segments: RelationshipManager[ManagedNetworkSegment]
     owner: RelationshipAttribute[OrganizationCustomer]
@@ -982,6 +993,27 @@ class CloudCustomerGateway(CloudResource):
     profiles: RelationshipManager[CoreProfile]
     subscriber_of_groups: RelationshipManager[CoreGroup]
     virtual_circuits: RelationshipManager[TopologyVirtualCircuit]
+
+
+class TopologyCustomerOffice(
+    TopologyCustomer, TopologyDeployment, TopologyClusterHosting, TopologyPhysicalDeployment, TopologyDeviceHosting
+):
+    environment: Dropdown
+    name: StringOptional
+    status: Dropdown
+    cables: RelationshipManager[DcimCable]
+    children: RelationshipManager[TopologyDeployment]
+    circuits: RelationshipManager[TopologyCircuit]
+    clusters: RelationshipManager[VirtCluster]
+    devices: RelationshipManager[DcimDevice]
+    exchange_gateways: RelationshipManager[TopologyExchangeGateway]
+    locations: RelationshipManager[LocationBuilding]
+    member_of_groups: RelationshipManager[CoreGroup]
+    network_segments: RelationshipManager[ManagedNetworkSegment]
+    owner: RelationshipAttribute[OrganizationCustomer]
+    parent: RelationshipAttribute[TopologyOffice]
+    profiles: RelationshipManager[CoreProfile]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
 
 
 class TopologyCustomerTemplateCloud(TopologyCustomerTemplate):
@@ -1040,7 +1072,6 @@ class TopologyDataCenter(
     TopologyPhysicalDeployment,
     TopologyConnectableLocation,
     TopologyDeviceHosting,
-    TopologyClusterHosting,
     TopologySegmentHosting,
 ):
     amount_of_super_spines: Integer
@@ -1056,7 +1087,6 @@ class TopologyDataCenter(
     cables: RelationshipManager[DcimCable]
     children: RelationshipManager[TopologyDeployment]
     circuits: RelationshipManager[TopologyCircuit]
-    clusters: RelationshipManager[VirtCluster]
     design: RelationshipAttribute[TopologyDataCenterDesign]
     devices: RelationshipManager[DcimDevice]
     l3_vni_pool: RelationshipAttribute[CoreNumberPool]
@@ -1165,40 +1195,6 @@ class TopologyExternal(TopologyDeployment):
     subscriber_of_groups: RelationshipManager[CoreGroup]
 
 
-class ManagedExternalFabricPeering(ManagedGeneric):
-    bfd_enabled: Boolean
-    checksum: StringOptional
-    description: StringOptional
-    max_prefixes: IntegerOptional
-    name: String
-    role: Dropdown
-    scope: DropdownOptional
-    session_type: Dropdown
-    status: Dropdown
-    deployment: RelationshipAttribute[TopologyDeployment]
-    external_peer: RelationshipAttribute[ManagedExternalPeer]
-    member_of_groups: RelationshipManager[CoreGroup]
-    namespace: RelationshipAttribute[IpamNamespace]
-    profiles: RelationshipManager[CoreProfile]
-    subscriber_of_groups: RelationshipManager[CoreGroup]
-
-
-class ManagedExternalPeer(ManagedGeneric, ManagedExternalEndpoint):
-    circuit_id: StringOptional
-    description: StringOptional
-    name: String
-    noc_contact: StringOptional
-    peer_type: Dropdown
-    provider_name: StringOptional
-    status: Dropdown
-    vlan_id: IntegerOptional
-    asn: RelationshipAttribute[RoutingAutonomousSystem]
-    bgp_ip: RelationshipAttribute[IpamIPAddress]
-    member_of_groups: RelationshipManager[CoreGroup]
-    profiles: RelationshipManager[CoreProfile]
-    subscriber_of_groups: RelationshipManager[CoreGroup]
-
-
 class TopologyExternalProviders(TopologyDeployment, TopologyConnectableLocation, TopologyDeviceHosting):
     name: String
     provider_type: Dropdown
@@ -1211,6 +1207,19 @@ class TopologyExternalProviders(TopologyDeployment, TopologyConnectableLocation,
     profiles: RelationshipManager[CoreProfile]
     provider: RelationshipAttribute[OrganizationProvider]
     subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class ManagedFirewallContext(ManagedGeneric, ManagedGenericInterfaces, ManagedInlineService):
+    context_id: StringOptional
+    description: StringOptional
+    name: String
+    status: Dropdown
+    cluster: RelationshipAttribute[ManagedFirewallHA]
+    interface_capabilities: RelationshipManager[DcimInterface]
+    member_of_groups: RelationshipManager[CoreGroup]
+    profiles: RelationshipManager[CoreProfile]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+    tenant: RelationshipAttribute[TopologyCustomer]
 
 
 class ManagedFirewallHA(ManagedHA, ManagedGeneric, ManagedGenericDevice, ManagedInlineService):
@@ -1610,21 +1619,12 @@ class ManagedOSPFPeering(ManagedGeneric, ManagedPeering, ManagedGenericInterface
     subscriber_of_groups: RelationshipManager[CoreGroup]
 
 
-class TopologyOffice(
-    CoreArtifactTarget,
-    TopologyDeployment,
-    TopologyPhysicalDeployment,
-    TopologyConnectableLocation,
-    TopologyDeviceHosting,
-):
+class TopologyOffice(CoreArtifactTarget, TopologyDeployment, TopologyConnectableLocation):
     name: String
     site_type: Dropdown
     artifacts: RelationshipManager[CoreArtifact]
-    cables: RelationshipManager[DcimCable]
     children: RelationshipManager[TopologyDeployment]
     circuits: RelationshipManager[TopologyCircuit]
-    devices: RelationshipManager[DcimDevice]
-    locations: RelationshipManager[LocationBuilding]
     member_of_groups: RelationshipManager[CoreGroup]
     parent: RelationshipAttribute[TopologyDeployment]
     profiles: RelationshipManager[CoreProfile]
@@ -1650,9 +1650,11 @@ class TopologyPhysicalCircuit(TopologyCircuit, ManagedGeneric):
     install_date: StringOptional
     name: String
     status: Dropdown
+    customer_deployment: RelationshipAttribute[TopologyCustomer]
     interfaces: RelationshipManager[DcimInterface]
     locations: RelationshipManager[TopologyConnectableLocation]
     member_of_groups: RelationshipManager[CoreGroup]
+    owner: RelationshipAttribute[OrganizationCustomer]
     profiles: RelationshipManager[CoreProfile]
     provider: RelationshipAttribute[OrganizationProvider]
     provider_a: RelationshipAttribute[DcimInterface]
@@ -1854,17 +1856,6 @@ class LoadbalancerPoolMember(ManagedGeneric, ManagedGenericDevice):
     vip_service: RelationshipAttribute[LoadbalancerVIP]
 
 
-class AppPortfolio(AppGeneric):
-    description: StringOptional
-    org_id: StringOptional
-    children: RelationshipManager[AppApplication]
-    member_of_groups: RelationshipManager[CoreGroup]
-    owner: RelationshipAttribute[OrganizationCustomer]
-    parent: RelationshipAttribute[AppGeneric]
-    profiles: RelationshipManager[CoreProfile]
-    subscriber_of_groups: RelationshipManager[CoreGroup]
-
-
 class IpamPrefix(BuiltinIPPrefix):
     broadcast_address: StringOptional
     description: StringOptional
@@ -1892,7 +1883,6 @@ class OrganizationProvider(OrganizationGeneric, OrganizationEntity):
     description: StringOptional
     name: String
     org_id: StringOptional
-    asn: RelationshipManager[RoutingAutonomousSystem]
     asns: RelationshipManager[RoutingAutonomousSystem]
     location: RelationshipManager[LocationBuilding]
     member_of_groups: RelationshipManager[CoreGroup]
@@ -1994,6 +1984,21 @@ class CloudRoute(CloudResource):
     virtual_circuits: RelationshipManager[TopologyVirtualCircuit]
 
 
+class TopologyRouteLeakExchange(TopologyExchangeGateway, ManagedGeneric, ManagedGenericInterfaces):
+    description: StringOptional
+    direction: Dropdown
+    name: String
+    route_target: StringOptional
+    status: Dropdown
+    customer_deployments: RelationshipManager[TopologyDeployment]
+    interface_capabilities: RelationshipManager[DcimInterface]
+    member_of_groups: RelationshipManager[CoreGroup]
+    namespace_a: RelationshipAttribute[IpamNamespace]
+    namespace_z: RelationshipAttribute[IpamNamespace]
+    profiles: RelationshipManager[CoreProfile]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
 class CloudRouteTable(CloudResource):
     cloud_id: StringOptional
     description: StringOptional
@@ -2006,6 +2011,19 @@ class CloudRouteTable(CloudResource):
     subscriber_of_groups: RelationshipManager[CoreGroup]
     virtual_circuits: RelationshipManager[TopologyVirtualCircuit]
     virtual_network: RelationshipAttribute[CloudVirtualNetwork]
+
+
+class TopologyRoutedExchange(TopologyExchangeGateway, ManagedGeneric, ManagedGenericInterfaces):
+    description: StringOptional
+    name: String
+    status: Dropdown
+    customer_deployments: RelationshipManager[TopologyDeployment]
+    interface_capabilities: RelationshipManager[DcimInterface]
+    member_of_groups: RelationshipManager[CoreGroup]
+    namespace_a: RelationshipAttribute[IpamNamespace]
+    namespace_z: RelationshipAttribute[IpamNamespace]
+    profiles: RelationshipManager[CoreProfile]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
 
 
 class ManagedSNMP(ManagedGeneric, ManagedGenericDevice):
@@ -2332,9 +2350,11 @@ class TopologyVirtualCircuit(TopologyCircuit, ManagedGeneric):
     tunnel_id: IntegerOptional
     vni: IntegerOptional
     cloud_endpoints: RelationshipManager[CloudResource]
+    customer_deployment: RelationshipAttribute[TopologyCustomer]
     interfaces: RelationshipManager[DcimInterface]
     locations: RelationshipManager[TopologyConnectableLocation]
     member_of_groups: RelationshipManager[CoreGroup]
+    owner: RelationshipAttribute[OrganizationCustomer]
     profiles: RelationshipManager[CoreProfile]
     provider: RelationshipAttribute[OrganizationProvider]
     subscriber_of_groups: RelationshipManager[CoreGroup]
@@ -2537,15 +2557,6 @@ class ProfileAppInstance(LineageSource, CoreProfile, CoreNode):
     member_of_groups: RelationshipManager[CoreGroup]
     related_nodes: RelationshipManager[AppInstance]
     related_templates: RelationshipManager[TemplateAppInstance]
-    subscriber_of_groups: RelationshipManager[CoreGroup]
-
-
-class ProfileAppPortfolio(LineageSource, CoreProfile, CoreNode):
-    description: StringOptional
-    profile_name: String
-    profile_priority: Integer
-    member_of_groups: RelationshipManager[CoreGroup]
-    related_nodes: RelationshipManager[AppPortfolio]
     subscriber_of_groups: RelationshipManager[CoreGroup]
 
 
@@ -3511,50 +3522,18 @@ class ProfileManagedConferencingService(LineageSource, CoreProfile, CoreNode):
     subscriber_of_groups: RelationshipManager[CoreGroup]
 
 
-class ProfileManagedExternalEndpoint(LineageSource, CoreProfile, CoreNode):
-    profile_name: String
-    profile_priority: Integer
-    asn: RelationshipAttribute[RoutingAutonomousSystem]
-    bgp_ip: RelationshipAttribute[IpamIPAddress]
-    member_of_groups: RelationshipManager[CoreGroup]
-    related_nodes: RelationshipManager[ManagedExternalEndpoint]
-    subscriber_of_groups: RelationshipManager[CoreGroup]
-
-
-class ProfileManagedExternalFabricPeering(LineageSource, CoreProfile, CoreNode):
-    bfd_enabled: BooleanOptional
-    checksum: StringOptional
+class ProfileManagedFirewallContext(LineageSource, CoreProfile, CoreNode):
+    context_id: StringOptional
     description: StringOptional
-    max_prefixes: IntegerOptional
     profile_name: String
     profile_priority: Integer
-    role: DropdownOptional
-    scope: DropdownOptional
-    session_type: DropdownOptional
     status: DropdownOptional
-    deployment: RelationshipAttribute[TopologyDeployment]
-    external_peer: RelationshipAttribute[ManagedExternalPeer]
+    cluster: RelationshipAttribute[ManagedFirewallHA]
+    interface_capabilities: RelationshipManager[DcimInterface]
     member_of_groups: RelationshipManager[CoreGroup]
-    namespace: RelationshipAttribute[IpamNamespace]
-    related_nodes: RelationshipManager[ManagedExternalFabricPeering]
+    related_nodes: RelationshipManager[ManagedFirewallContext]
     subscriber_of_groups: RelationshipManager[CoreGroup]
-
-
-class ProfileManagedExternalPeer(LineageSource, CoreProfile, CoreNode):
-    circuit_id: StringOptional
-    description: StringOptional
-    noc_contact: StringOptional
-    peer_type: DropdownOptional
-    profile_name: String
-    profile_priority: Integer
-    provider_name: StringOptional
-    status: DropdownOptional
-    vlan_id: IntegerOptional
-    asn: RelationshipAttribute[RoutingAutonomousSystem]
-    bgp_ip: RelationshipAttribute[IpamIPAddress]
-    member_of_groups: RelationshipManager[CoreGroup]
-    related_nodes: RelationshipManager[ManagedExternalPeer]
-    subscriber_of_groups: RelationshipManager[CoreGroup]
+    tenant: RelationshipAttribute[TopologyCustomer]
 
 
 class ProfileManagedFirewallHA(LineageSource, CoreProfile, CoreNode):
@@ -3975,10 +3954,8 @@ class ProfileOrganizationCustomer(LineageSource, CoreProfile, CoreNode):
     profile_name: String
     profile_priority: Integer
     applications: RelationshipManager[AppApplication]
-    asn: RelationshipManager[RoutingAutonomousSystem]
     deployments: RelationshipManager[TopologyCustomer]
     member_of_groups: RelationshipManager[CoreGroup]
-    portfolios: RelationshipManager[AppPortfolio]
     proxy_policies: RelationshipManager[ProxyPolicy]
     related_nodes: RelationshipManager[OrganizationCustomer]
     subscriber_of_groups: RelationshipManager[CoreGroup]
@@ -3997,7 +3974,6 @@ class ProfileOrganizationGeneric(LineageSource, CoreProfile, CoreNode):
     description: StringOptional
     profile_name: String
     profile_priority: Integer
-    asn: RelationshipManager[RoutingAutonomousSystem]
     member_of_groups: RelationshipManager[CoreGroup]
     related_nodes: RelationshipManager[OrganizationGeneric]
     subscriber_of_groups: RelationshipManager[CoreGroup]
@@ -4020,7 +3996,6 @@ class ProfileOrganizationProvider(LineageSource, CoreProfile, CoreNode):
     description: StringOptional
     profile_name: String
     profile_priority: Integer
-    asn: RelationshipManager[RoutingAutonomousSystem]
     location: RelationshipManager[LocationBuilding]
     member_of_groups: RelationshipManager[CoreGroup]
     related_nodes: RelationshipManager[OrganizationProvider]
@@ -4233,8 +4208,10 @@ class ProfileTopologyCircuit(LineageSource, CoreProfile, CoreNode):
     profile_name: String
     profile_priority: Integer
     status: DropdownOptional
+    customer_deployment: RelationshipAttribute[TopologyCustomer]
     locations: RelationshipManager[TopologyConnectableLocation]
     member_of_groups: RelationshipManager[CoreGroup]
+    owner: RelationshipAttribute[OrganizationCustomer]
     provider: RelationshipAttribute[OrganizationProvider]
     related_nodes: RelationshipManager[TopologyCircuit]
     subscriber_of_groups: RelationshipManager[CoreGroup]
@@ -4253,10 +4230,10 @@ class ProfileTopologyCloudRegion(LineageSource, CoreProfile, CoreNode):
     profile_priority: Integer
     status: DropdownOptional
     circuits: RelationshipManager[TopologyCircuit]
-    clusters: RelationshipManager[VirtCluster]
     direct_connects: RelationshipManager[CloudDirectConnect]
     location: RelationshipAttribute[LocationMetro]
     member_of_groups: RelationshipManager[CoreGroup]
+    namespace: RelationshipAttribute[BuiltinIPNamespace]
     related_nodes: RelationshipManager[TopologyCloudRegion]
     subscriber_of_groups: RelationshipManager[CoreGroup]
     virtual_networks: RelationshipManager[CloudVirtualNetwork]
@@ -4295,7 +4272,6 @@ class ProfileTopologyColocationMetro(LineageSource, CoreProfile, CoreNode):
     profile_name: String
     profile_priority: Integer
     artifacts: RelationshipManager[CoreArtifact]
-    clusters: RelationshipManager[VirtCluster]
     l3_vni_pool: RelationshipAttribute[CoreNumberPool]
     location: RelationshipAttribute[LocationMetro]
     member_of_groups: RelationshipManager[CoreGroup]
@@ -4312,7 +4288,6 @@ class ProfileTopologyColocationZone(LineageSource, CoreProfile, CoreNode):
     profile_priority: Integer
     cables: RelationshipManager[DcimCable]
     circuits: RelationshipManager[TopologyCircuit]
-    clusters: RelationshipManager[VirtCluster]
     devices: RelationshipManager[DcimDevice]
     member_of_groups: RelationshipManager[CoreGroup]
     racks: RelationshipManager[LocationRack]
@@ -4342,6 +4317,8 @@ class ProfileTopologyCustomer(LineageSource, CoreProfile, CoreNode):
     profile_name: String
     profile_priority: Integer
     status: DropdownOptional
+    circuits: RelationshipManager[TopologyCircuit]
+    exchange_gateways: RelationshipManager[TopologyExchangeGateway]
     member_of_groups: RelationshipManager[CoreGroup]
     network_segments: RelationshipManager[ManagedNetworkSegment]
     related_nodes: RelationshipManager[TopologyCustomer]
@@ -4352,7 +4329,10 @@ class ProfileTopologyCustomerCloud(LineageSource, CoreProfile, CoreNode):
     profile_name: String
     profile_priority: Integer
     status: DropdownOptional
+    circuits: RelationshipManager[TopologyCircuit]
     cloud_account: RelationshipAttribute[CloudAccount]
+    clusters: RelationshipManager[VirtCluster]
+    exchange_gateways: RelationshipManager[TopologyExchangeGateway]
     member_of_groups: RelationshipManager[CoreGroup]
     network_segments: RelationshipManager[ManagedNetworkSegment]
     related_nodes: RelationshipManager[TopologyCustomerCloud]
@@ -4363,6 +4343,9 @@ class ProfileTopologyCustomerColocation(LineageSource, CoreProfile, CoreNode):
     profile_name: String
     profile_priority: Integer
     status: DropdownOptional
+    circuits: RelationshipManager[TopologyCircuit]
+    clusters: RelationshipManager[VirtCluster]
+    exchange_gateways: RelationshipManager[TopologyExchangeGateway]
     member_of_groups: RelationshipManager[CoreGroup]
     network_segments: RelationshipManager[ManagedNetworkSegment]
     related_nodes: RelationshipManager[TopologyCustomerColocation]
@@ -4373,10 +4356,29 @@ class ProfileTopologyCustomerDC(LineageSource, CoreProfile, CoreNode):
     profile_name: String
     profile_priority: Integer
     status: DropdownOptional
+    circuits: RelationshipManager[TopologyCircuit]
+    clusters: RelationshipManager[VirtCluster]
     design: RelationshipAttribute[TopologyCustomerTemplateDC]
+    exchange_gateways: RelationshipManager[TopologyExchangeGateway]
     member_of_groups: RelationshipManager[CoreGroup]
     network_segments: RelationshipManager[ManagedNetworkSegment]
     related_nodes: RelationshipManager[TopologyCustomerDC]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class ProfileTopologyCustomerOffice(LineageSource, CoreProfile, CoreNode):
+    profile_name: String
+    profile_priority: Integer
+    status: DropdownOptional
+    cables: RelationshipManager[DcimCable]
+    circuits: RelationshipManager[TopologyCircuit]
+    clusters: RelationshipManager[VirtCluster]
+    devices: RelationshipManager[DcimDevice]
+    exchange_gateways: RelationshipManager[TopologyExchangeGateway]
+    locations: RelationshipManager[LocationBuilding]
+    member_of_groups: RelationshipManager[CoreGroup]
+    network_segments: RelationshipManager[ManagedNetworkSegment]
+    related_nodes: RelationshipManager[TopologyCustomerOffice]
     subscriber_of_groups: RelationshipManager[CoreGroup]
 
 
@@ -4461,7 +4463,6 @@ class ProfileTopologyDataCenter(LineageSource, CoreProfile, CoreNode):
     artifacts: RelationshipManager[CoreArtifact]
     cables: RelationshipManager[DcimCable]
     circuits: RelationshipManager[TopologyCircuit]
-    clusters: RelationshipManager[VirtCluster]
     design: RelationshipAttribute[TopologyDataCenterDesign]
     devices: RelationshipManager[DcimDevice]
     l3_vni_pool: RelationshipAttribute[CoreNumberPool]
@@ -4528,6 +4529,19 @@ class ProfileTopologyElement(LineageSource, CoreProfile, CoreNode):
     subscriber_of_groups: RelationshipManager[CoreGroup]
 
 
+class ProfileTopologyExchangeGateway(LineageSource, CoreProfile, CoreNode):
+    description: StringOptional
+    profile_name: String
+    profile_priority: Integer
+    status: DropdownOptional
+    customer_deployments: RelationshipManager[TopologyDeployment]
+    member_of_groups: RelationshipManager[CoreGroup]
+    namespace_a: RelationshipAttribute[IpamNamespace]
+    namespace_z: RelationshipAttribute[IpamNamespace]
+    related_nodes: RelationshipManager[TopologyExchangeGateway]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
 class ProfileTopologyExternal(LineageSource, CoreProfile, CoreNode):
     profile_name: String
     profile_priority: Integer
@@ -4554,10 +4568,7 @@ class ProfileTopologyOffice(LineageSource, CoreProfile, CoreNode):
     profile_priority: Integer
     site_type: DropdownOptional
     artifacts: RelationshipManager[CoreArtifact]
-    cables: RelationshipManager[DcimCable]
     circuits: RelationshipManager[TopologyCircuit]
-    devices: RelationshipManager[DcimDevice]
-    locations: RelationshipManager[LocationBuilding]
     member_of_groups: RelationshipManager[CoreGroup]
     related_nodes: RelationshipManager[TopologyOffice]
     subscriber_of_groups: RelationshipManager[CoreGroup]
@@ -4573,9 +4584,11 @@ class ProfileTopologyPhysicalCircuit(LineageSource, CoreProfile, CoreNode):
     profile_name: String
     profile_priority: Integer
     status: DropdownOptional
+    customer_deployment: RelationshipAttribute[TopologyCustomer]
     interfaces: RelationshipManager[DcimInterface]
     locations: RelationshipManager[TopologyConnectableLocation]
     member_of_groups: RelationshipManager[CoreGroup]
+    owner: RelationshipAttribute[OrganizationCustomer]
     provider: RelationshipAttribute[OrganizationProvider]
     provider_a: RelationshipAttribute[DcimInterface]
     provider_z: RelationshipAttribute[DcimInterface]
@@ -4638,6 +4651,32 @@ class ProfileTopologyRackHosting(LineageSource, CoreProfile, CoreNode):
     subscriber_of_groups: RelationshipManager[CoreGroup]
 
 
+class ProfileTopologyRouteLeakExchange(LineageSource, CoreProfile, CoreNode):
+    description: StringOptional
+    direction: DropdownOptional
+    profile_name: String
+    profile_priority: Integer
+    route_target: StringOptional
+    status: DropdownOptional
+    customer_deployments: RelationshipManager[TopologyDeployment]
+    interface_capabilities: RelationshipManager[DcimInterface]
+    member_of_groups: RelationshipManager[CoreGroup]
+    related_nodes: RelationshipManager[TopologyRouteLeakExchange]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class ProfileTopologyRoutedExchange(LineageSource, CoreProfile, CoreNode):
+    description: StringOptional
+    profile_name: String
+    profile_priority: Integer
+    status: DropdownOptional
+    customer_deployments: RelationshipManager[TopologyDeployment]
+    interface_capabilities: RelationshipManager[DcimInterface]
+    member_of_groups: RelationshipManager[CoreGroup]
+    related_nodes: RelationshipManager[TopologyRoutedExchange]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
 class ProfileTopologySaas(LineageSource, CoreProfile, CoreNode):
     description: StringOptional
     profile_name: String
@@ -4686,9 +4725,11 @@ class ProfileTopologyVirtualCircuit(LineageSource, CoreProfile, CoreNode):
     tunnel_id: IntegerOptional
     vni: IntegerOptional
     cloud_endpoints: RelationshipManager[CloudResource]
+    customer_deployment: RelationshipAttribute[TopologyCustomer]
     interfaces: RelationshipManager[DcimInterface]
     locations: RelationshipManager[TopologyConnectableLocation]
     member_of_groups: RelationshipManager[CoreGroup]
+    owner: RelationshipAttribute[OrganizationCustomer]
     provider: RelationshipAttribute[OrganizationProvider]
     related_nodes: RelationshipManager[TopologyVirtualCircuit]
     subscriber_of_groups: RelationshipManager[CoreGroup]

@@ -1,0 +1,50 @@
+---
+# Azure westeurope (Amsterdam) + northeurope (Dublin) — two real regions,
+# mapped to the same metros data/demos/11_cloud/azure and cloud/aws/
+# 01_cloud_pop.yml use. Self-contained (no dependency on data/demos/
+# 11_cloud, same pattern as dc/01_datacenter.yml/colo/01_colocation.yml) —
+# plain customer footprint locations here, NOT SD-WAN hubs: no `namespace`
+# set, no CloudInternetGateway. cloud/aws/01_cloud_pop.yml's eu-central-1
+# remains the only shared hub in this demo. This gives
+# 06_customer_footprints.yml two real Azure regions to spread customers
+# across (C009 and beyond), same as AWS/GCP now do. 3 AZs per region.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: LocationMetro
+  data:
+    - name: "Amsterdam"
+      shortname: "ams"
+      parent: "nl"
+    - name: "Dublin"
+      shortname: "dub"
+      parent: "ie"
+
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologyCloud
+  data:
+    - name: Azure
+      children:
+        kind: TopologyCloudRegion
+        data:
+          - name: westeurope
+            status: active
+            location: "ams"
+            children:
+              kind: TopologyCloudZone
+              data:
+                - name: westeurope-1
+                - name: westeurope-2
+                - name: westeurope-3
+          - name: northeurope
+            status: active
+            location: "dub"
+            children:
+              kind: TopologyCloudZone
+              data:
+                - name: northeurope-1
+                - name: northeurope-2
+                - name: northeurope-3
