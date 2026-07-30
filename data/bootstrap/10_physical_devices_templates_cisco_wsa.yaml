@@ -5,6 +5,7 @@ spec:
   kind: TemplateDcimPhysicalDevice
   data:
     - template_name: CISCO-WSA-S195_PROXY
+      owner: "P027"
       device_type: CISCO-WSA-S195
       platform: cisco_wsa
       software_image: cisco_wsa-15.0.0-355

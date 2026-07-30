@@ -83,7 +83,7 @@ nodes:
     include_in_menu: true
     menu_placement: OrganizationGeneric
     human_friendly_id:
-      - name__value
+      - org_id__value
     display_label: "{{name__value}} ({{org_id__value}})"
 
   - name: Customer

@@ -5,6 +5,7 @@ spec:
   kind: TemplateDcimPhysicalDevice
   data:
     - template_name: Dell-H625cdw-MFP_PRINTER
+      owner: "P027"
       device_type: Dell-H625cdw-MFP
       role: endpoint
       status: provisioning

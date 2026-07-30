@@ -5,6 +5,7 @@ spec:
   kind: TemplateDcimVirtualDevice
   data:
     - template_name: C8000V_EDGE
+      owner: "P027"
       device_type: C8000V
       role: edge
       platform: cisco_xe

@@ -5,6 +5,7 @@ spec:
   kind: TemplateDcimVirtualDevice
   data:
     - template_name: HA-PROXY
+      owner: "P027"
       device_type: HA-PROXY
       platform: linux
       software_image: linux-22.04.3
@@ -19,6 +20,7 @@ spec:
             name: private
             role: management
     - template_name: NGINX
+      owner: "P027"
       device_type: NGINX
       platform: linux
       software_image: linux-22.04.3
@@ -33,6 +35,7 @@ spec:
             name: private
             role: management
     - template_name: LINUX-SVC
+      owner: "P027"
       device_type: LINUX-SVC
       platform: linux
       software_image: linux-22.04.3

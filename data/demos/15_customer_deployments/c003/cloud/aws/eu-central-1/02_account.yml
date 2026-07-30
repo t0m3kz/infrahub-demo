@@ -8,5 +8,5 @@ spec:
     - name: "vaultex-aws-prod"
       account_id: "445566778899"
       environment: "p"
-      provider: "AWS"
+      provider: "P004"
       owner: "C003"

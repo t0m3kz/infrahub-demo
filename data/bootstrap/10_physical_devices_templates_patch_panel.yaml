@@ -5,6 +5,7 @@ spec:
   kind: TemplateDcimPhysicalDevice
   data:
     - template_name: PATCH-PANEL-24_PATCH
+      owner: "P027"
       device_type: PATCH-PANEL-24
       role: patch-panel
       status: provisioning

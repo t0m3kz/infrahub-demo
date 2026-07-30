@@ -97,18 +97,26 @@ spec:
     - name: "C001-SDWAN-HUB"
       link_type: sd_wan
       status: active
-      provider: "Arista"
+      provider: "P029"
       owner: "C001"
       locations:
         - kind: TopologyCustomerOffice
           data:
-            owner: "C001"
+            owner:
+              kind: OrganizationCustomer
+              data:
+                name: "Nordix Ltd."
+                org_id: "C001"
             environment: "p"
             parent: "OFFICES"
             locations: ["waw-hq"]
         - kind: TopologyCustomerCloud
           data:
-            owner: "OPERATOR"
+            owner:
+              kind: OrganizationProvider
+              data:
+                name: "Network Operator"
+                org_id: "OPERATOR"
             environment: "p"
             customer_name: "sdwan-hub"
             parent: "eu-central-1"
@@ -119,18 +127,26 @@ spec:
     - name: "C002-SDWAN-HUB"
       link_type: sd_wan
       status: active
-      provider: "Arista"
+      provider: "P029"
       owner: "C002"
       locations:
         - kind: TopologyCustomerOffice
           data:
-            owner: "C002"
+            owner:
+              kind: OrganizationCustomer
+              data:
+                name: "SwiftGo GmbH"
+                org_id: "C002"
             environment: "p"
             parent: "OFFICES"
             locations: ["waw-br1"]
         - kind: TopologyCustomerCloud
           data:
-            owner: "OPERATOR"
+            owner:
+              kind: OrganizationProvider
+              data:
+                name: "Network Operator"
+                org_id: "OPERATOR"
             environment: "p"
             customer_name: "sdwan-hub"
             parent: "eu-central-1"

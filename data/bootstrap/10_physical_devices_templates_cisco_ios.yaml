@@ -5,6 +5,7 @@ spec:
   kind: TemplateDcimPhysicalDevice
   data:
     - template_name: C9200L-24P-4G_OOB
+      owner: "P027"
       device_type: C9200L-24P-4G
       platform: cisco_ios
       software_image: cisco_ios-17.12.4
@@ -24,6 +25,7 @@ spec:
             role: management
             interface_type: 10gbase-x-sfpp
     - template_name: C9200L-48P-4G_OOB
+      owner: "P027"
       device_type: C9200L-24P-4G
       platform: cisco_ios
       software_image: cisco_ios-17.12.4
@@ -44,6 +46,7 @@ spec:
             interface_type: 10gbase-x-sfpp
     # consdole interfaces
     - template_name: C9200L-24P-4G_OOB
+      owner: "P027"
       device_type: C9200L-24P-4G
       platform: cisco_ios
       software_image: cisco_ios-17.12.4
@@ -56,6 +59,7 @@ spec:
             name: con
             role: console
     - template_name: C9200L-48P-4G_OOB
+      owner: "P027"
       device_type: C9200L-48P-4G
       platform: cisco_ios
       software_image: cisco_ios-17.12.4
@@ -68,6 +72,7 @@ spec:
             name: con
             role: console
     - template_name: C9200L-24P-4G_ACCESS
+      owner: "P027"
       device_type: C9200L-24P-4G
       platform: cisco_ios
       software_image: cisco_ios-17.12.4
@@ -91,6 +96,7 @@ spec:
             role: downlink
             interface_type: 1000base-t
     - template_name: C9200L-24P-4G_ACCESS_DUAL_UPLINK
+      owner: "P027"
       device_type: C9200L-24P-4G
       platform: cisco_ios
       software_image: cisco_ios-17.12.4
@@ -114,6 +120,7 @@ spec:
             role: downlink
             interface_type: 1000base-t
     - template_name: C9130AXI-B_AP
+      owner: "P027"
       device_type: C9130AXI-B
       platform: cisco_ios
       software_image: cisco_ios-17.12.4
@@ -127,6 +134,7 @@ spec:
             role: uplink
             interface_type: 1000base-t
     - template_name: ISR4451-X_EDGE
+      owner: "P027"
       device_type: ISR4451-X
       platform: cisco_xe
       software_image: cisco_xe-17.12.4

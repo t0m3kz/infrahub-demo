@@ -81,6 +81,16 @@
 #                                                        not on TopologyOffice
 #                                                        itself.
 #
+# `owner` is set via the object loader's `kind:`+`data:` form, not a bare
+# HFID string: TopologyCustomer.owner peers the generic OrganizationEntity
+# (Customer and Provider both inherit from it — see schemas/extensions/
+# topology/topology_customer.yml), and OrganizationEntity itself declares no
+# human_friendly_id, so a bare string/HFID reference against it can't
+# resolve (server-side "Relationship has not been initialized yet" /
+# NODE_NOT_FOUND — confirmed empirically). `kind:`+`data:` with the SAME
+# data already in data/bootstrap/03_clients.yml upserts onto the existing
+# customer rather than creating a duplicate.
+#
 # Created BEFORE office/02_office_edges.yml / office/03_office_hub_circuits.yml
 # / colo/equinix/02_c004_dc7_link.yml so those circuits can reference these
 # footprints directly via `locations`. The created-trigger fires on each of
@@ -93,19 +103,35 @@ kind: Object
 spec:
   kind: TopologyCustomerDC
   data:
-    - owner: "C003"
+    - owner:
+        kind: OrganizationCustomer
+        data:
+          name: "Vaultex Inc."
+          org_id: "C003"
       environment: "p"
       status: active
       parent: "DC7"
-    - owner: "C006"
+    - owner:
+        kind: OrganizationCustomer
+        data:
+          name: "Lumivex SA"
+          org_id: "C006"
       environment: "p"
       status: active
       parent: "DC7"
-    - owner: "C007"
+    - owner:
+        kind: OrganizationCustomer
+        data:
+          name: "Orbisan Ltd."
+          org_id: "C007"
       environment: "p"
       status: active
       parent: "DC8"
-    - owner: "C008"
+    - owner:
+        kind: OrganizationCustomer
+        data:
+          name: "Krafven GmbH"
+          org_id: "C008"
       environment: "p"
       status: active
       parent: "DC8"
@@ -116,7 +142,11 @@ kind: Object
 spec:
   kind: TopologyCustomerColocation
   data:
-    - owner: "C004"
+    - owner:
+        kind: OrganizationCustomer
+        data:
+          name: "Peakora AG"
+          org_id: "C004"
       environment: "p"
       status: active
       parent: "WAW"
@@ -127,17 +157,29 @@ kind: Object
 spec:
   kind: TopologyCustomerCloud
   data:
-    - owner: "C005"
+    - owner:
+        kind: OrganizationCustomer
+        data:
+          name: "Drentec BV"
+          org_id: "C005"
       customer_name: "hub-and-spoke-cloud"
       environment: "p"
       status: active
       parent: "eu-central-1"
-    - owner: "C009"
+    - owner:
+        kind: OrganizationCustomer
+        data:
+          name: "Tavelo Inc."
+          org_id: "C009"
       customer_name: "hub-and-spoke-azure"
       environment: "p"
       status: active
       parent: "westeurope"
-    - owner: "C010"
+    - owner:
+        kind: OrganizationCustomer
+        data:
+          name: "Zindra Corp."
+          org_id: "C010"
       customer_name: "hub-and-spoke-gcp"
       environment: "p"
       status: active
@@ -149,13 +191,21 @@ kind: Object
 spec:
   kind: TopologyCustomerOffice
   data:
-    - owner: "C001"
+    - owner:
+        kind: OrganizationCustomer
+        data:
+          name: "Nordix Ltd."
+          org_id: "C001"
       environment: "p"
       status: active
       parent: "OFFICES"
       locations:
         - "waw-hq"
-    - owner: "C002"
+    - owner:
+        kind: OrganizationCustomer
+        data:
+          name: "SwiftGo GmbH"
+          org_id: "C002"
       environment: "p"
       status: active
       parent: "OFFICES"

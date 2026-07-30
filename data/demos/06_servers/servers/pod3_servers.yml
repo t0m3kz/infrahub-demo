@@ -5,6 +5,7 @@ spec:
   kind: DcimPhysicalDevice
   data:
     - name: ktw-pod3-server-1
+      owner: "P027"
       rack: ktw-1-s-3-r-1-1
       role: endpoint
       status: active
@@ -59,6 +60,7 @@ spec:
               - ["ktw-pod3-server-1", "eth2"]
               - ["ktw-pod3-server-1", "eth3"]
     - name: ktw-pod3-server-2
+      owner: "P027"
       rack: ktw-1-s-3-r-1-7
       role: endpoint
       status: active
@@ -113,6 +115,7 @@ spec:
               - ["ktw-pod3-server-2", "eth2"]
               - ["ktw-pod3-server-2", "eth3"]
     - name: ktw-pod3-server-3
+      owner: "P027"
       rack: ktw-1-s-3-r-2-1
       role: endpoint
       status: active
@@ -145,6 +148,7 @@ spec:
               - ["ktw-pod3-server-3", "eth0"]
               - ["ktw-pod3-server-3", "eth1"]
     - name: ktw-pod3-server-4
+      owner: "P027"
       rack: ktw-1-s-3-r-2-7
       role: endpoint
       status: active
@@ -177,6 +181,7 @@ spec:
               - ["ktw-pod3-server-4", "eth0"]
               - ["ktw-pod3-server-4", "eth1"]
     - name: ktw-pod3-server-5
+      owner: "P027"
       rack: ktw-1-s-3-r-1-1
       role: endpoint
       status: active
@@ -209,6 +214,7 @@ spec:
               - ["ktw-pod3-server-5", "eth0"]
               - ["ktw-pod3-server-5", "eth1"]
     - name: ktw-pod3-server-6
+      owner: "P027"
       rack: ktw-1-s-3-r-1-7
       role: endpoint
       status: active

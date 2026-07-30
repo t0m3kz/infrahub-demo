@@ -5,6 +5,7 @@ spec:
   kind: TemplateDcimPhysicalDevice
   data:
     - template_name: DCS-7050CX3-32C-R_SUPER_SPINE
+      owner: "P027"
       device_type: DCS-7050CX3-32C-R
       platform: arista_eos
       software_image: arista_eos-4.32.1F
@@ -32,6 +33,7 @@ spec:
             role: management
             interface_type: 1000base-t
     - template_name: DCS-7050PX4-32S-R_SUPER_SPINE
+      owner: "P027"
       device_type: DCS-7050PX4-32S-R
       platform: arista_eos
       software_image: arista_eos-4.32.1F
@@ -59,6 +61,7 @@ spec:
             role: management
             interface_type: 1000base-t
     - template_name: DCS-7050PX4-32S-R_SPINE
+      owner: "P027"
       device_type: DCS-7050PX4-32S-R
       platform: arista_eos
       software_image: arista_eos-4.32.1F
@@ -86,6 +89,7 @@ spec:
             role: management
             interface_type: 1000base-t
     - template_name: DCS-7050CX3-32C-R_SPINE
+      owner: "P027"
       device_type: DCS-7050CX3-32C-R
       platform: arista_eos
       software_image: arista_eos-4.32.1F
@@ -113,6 +117,7 @@ spec:
             role: management
             interface_type: 1000base-t
     - template_name: DCS-7050CX3-32C-R_LEAF
+      owner: "P027"
       device_type: DCS-7050CX3-32C-R
       platform: arista_eos
       software_image: arista_eos-4.32.1F
@@ -144,6 +149,7 @@ spec:
             role: management
             interface_type: 1000base-t
     - template_name: DCS-7050CX3-32C-R_LEAF_MR
+      owner: "P027"
       device_type: DCS-7050CX3-32C-R
       platform: arista_eos
       software_image: arista_eos-4.32.1F
@@ -179,6 +185,7 @@ spec:
             role: management
             interface_type: 1000base-t
     - template_name: DCS-7050CX3-32C-R_LEAF_MIXED
+      owner: "P027"
       device_type: DCS-7050CX3-32C-R
       platform: arista_eos
       software_image: arista_eos-4.32.1F
@@ -214,6 +221,7 @@ spec:
             role: management
             interface_type: 1000base-t
     - template_name: DCS-7050CX3-32C-R_TOR
+      owner: "P027"
       device_type: DCS-7050CX3-32C-R
       platform: arista_eos
       software_image: arista_eos-4.32.1F
@@ -245,6 +253,7 @@ spec:
             role: management
             interface_type: 1000base-t
     - template_name: DCS-7050CX3-32C-R_ACCESS
+      owner: "P027"
       device_type: DCS-7050CX3-32C-R
       platform: arista_eos
       software_image: arista_eos-4.32.1F
@@ -272,6 +281,7 @@ spec:
             role: management
             interface_type: 1000base-t
     - template_name: DCS-7050CX4M-48D8-F_LEAF
+      owner: "P027"
       device_type: DCS-7050CX3-32C-R
       platform: arista_eos
       software_image: arista_eos-4.32.1F
@@ -295,6 +305,7 @@ spec:
             role: management
             interface_type: 1000base-t
     - template_name: DCS-7050SX3-24YC4C-S-R_LEAF
+      owner: "P027"
       device_type: DCS-7050SX3-24YC4C-S-R
       platform: arista_eos
       software_image: arista_eos-4.32.1F
@@ -318,6 +329,7 @@ spec:
             role: management
             interface_type: 1000base-t
     - template_name: DCS-7050SX3-24YC4C-S-R_TOR
+      owner: "P027"
       device_type: DCS-7050SX3-24YC4C-S-R
       platform: arista_eos
       software_image: arista_eos-4.32.1F
@@ -341,6 +353,7 @@ spec:
             role: management
             interface_type: 1000base-t
     - template_name: DCS-7050SX3-24YC4C-S-R_ACCESS
+      owner: "P027"
       device_type: DCS-7050SX3-24YC4C-S-R
       platform: arista_eos
       software_image: arista_eos-4.32.1F
@@ -365,6 +378,7 @@ spec:
             interface_type: 1000base-t
 
     - template_name: DCS-7050CX3-32C-R_BORDER_LEAF
+      owner: "P027"
       device_type: DCS-7050CX3-32C-R
       role: border-leaf
       platform: arista_eos

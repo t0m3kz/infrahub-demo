@@ -86,14 +86,15 @@ generics:
 
     relationships:
       - name: owner
-        peer: OrganizationCustomer
-        label: "Customer"
+        peer: OrganizationEntity
+        label: "Owner"
         cardinality: one
         kind: Attribute
         optional: false
         order_weight: 150
         identifier: "topology_customer__owner"
-        description: "Customer this deployment footprint belongs to"
+        description: "Customer or provider this footprint belongs to (e.g.
+          an operator's own hub PoP has a Provider owner)."
       - name: namespace
         peer: BuiltinIPNamespace
         cardinality: one

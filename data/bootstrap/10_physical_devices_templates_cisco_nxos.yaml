@@ -5,6 +5,7 @@ spec:
   kind: TemplateDcimPhysicalDevice
   data:
     - template_name: N9K-C9336C-FX2_SUPER_SPINE
+      owner: "P027"
       device_type: N9K-C9336C-FX2
       platform: cisco_nxos
       software_image: cisco_nxos-10.3.3
@@ -28,6 +29,7 @@ spec:
             role: management
             interface_type: 1000base-t
     - template_name: N9K-C9316D-GX_SUPER_SPINE
+      owner: "P027"
       device_type: N9K-C9316D-GX
       platform: cisco_nxos
       software_image: cisco_nxos-10.3.3
@@ -51,6 +53,7 @@ spec:
             role: management
             interface_type: 1000base-t
     - template_name: N9K-C9336C-FX2_SPINE
+      owner: "P027"
       device_type: N9K-C9336C-FX2
       role: spine
       platform: cisco_nxos
@@ -74,6 +77,7 @@ spec:
             role: management
             interface_type: 1000base-t
     - template_name: N9K-C9364C-GX_SPINE
+      owner: "P027"
       device_type: N9K-C9364C-GX
       platform: cisco_nxos
       software_image: cisco_nxos-10.3.3
@@ -97,6 +101,7 @@ spec:
             role: management
             interface_type: 1000base-t
     - template_name: N9K-C9336C-FX2_LEAF
+      owner: "P027"
       device_type: N9K-C9336C-FX2
       platform: cisco_nxos
       software_image: cisco_nxos-10.3.3
@@ -124,6 +129,7 @@ spec:
             role: management
             interface_type: 1000base-t
     - template_name: N9K-C9336C-FX2_LEAF_MR
+      owner: "P027"
       device_type: N9K-C9336C-FX2
       platform: cisco_nxos
       software_image: cisco_nxos-10.3.3
@@ -159,6 +165,7 @@ spec:
             role: management
             interface_type: 1000base-t
     - template_name: N9K-C9336C-FX2_LEAF_MIXED
+      owner: "P027"
       device_type: N9K-C9336C-FX2
       platform: cisco_nxos
       software_image: cisco_nxos-10.3.3
@@ -190,6 +197,7 @@ spec:
             role: management
             interface_type: 1000base-t
     - template_name: N9K-C9316D-GX_LEAF
+      owner: "P027"
       device_type: N9K-C9316D-GX
       platform: cisco_nxos
       software_image: cisco_nxos-10.3.3
@@ -213,6 +221,7 @@ spec:
             role: management
             interface_type: 1000base-t
     - template_name: N9K-C9316D-GX_LEAF_MIXED
+      owner: "P027"
       device_type: N9K-C9316D-GX
       platform: cisco_nxos
       software_image: cisco_nxos-10.3.3
@@ -236,6 +245,7 @@ spec:
             role: management
             interface_type: 1000base-t
     - template_name: N9K-C9316D-GX_TOR
+      owner: "P027"
       device_type: N9K-C9316D-GX
       platform: cisco_nxos
       software_image: cisco_nxos-10.3.3
@@ -259,6 +269,7 @@ spec:
             role: management
             interface_type: 1000base-t
     - template_name: N9K-C9336C-FX2_TOR
+      owner: "P027"
       device_type: N9K-C9336C-FX2
       platform: cisco_nxos
       software_image: cisco_nxos-10.3.3
@@ -286,6 +297,7 @@ spec:
             role: management
             interface_type: 1000base-t
     - template_name: N9K-C9336C-FX2_ACCESS
+      owner: "P027"
       device_type: N9K-C9336C-FX2
       platform: cisco_nxos
       software_image: cisco_nxos-10.3.3
@@ -309,6 +321,7 @@ spec:
             role: management
             interface_type: 1000base-t
     - template_name: N9K-C9316D-GX_EDGE
+      owner: "P027"
       device_type: N9K-C9316D-GX
       platform: cisco_nxos
       software_image: cisco_nxos-10.3.3
@@ -336,6 +349,7 @@ spec:
             role: management
             interface_type: 1000base-t
     - template_name: N9K-C9336C-FX2_SPINE
+      owner: "P027"
       device_type: N9K-C9336C-FX2
       platform: cisco_nxos
       software_image: cisco_nxos-10.3.3
@@ -348,6 +362,7 @@ spec:
             name: con
             role: console
     - template_name: N9K-C9336C-FX2_LEAF
+      owner: "P027"
       device_type: N9K-C9336C-FX2
       platform: cisco_nxos
       software_image: cisco_nxos-10.3.3
@@ -360,6 +375,7 @@ spec:
             name: con
             role: console
     - template_name: N9K-C9316D-GX_SPINE
+      owner: "P027"
       device_type: N9K-C9316D-GX
       platform: cisco_nxos
       software_image: cisco_nxos-10.3.3
@@ -372,6 +388,7 @@ spec:
             name: con
             role: console
     - template_name: N9K-C9316D-GX_LEAF
+      owner: "P027"
       device_type: N9K-C9316D-GX
       platform: cisco_nxos
       software_image: cisco_nxos-10.3.3
@@ -384,6 +401,7 @@ spec:
             name: con
             role: console
     - template_name: N9K-C9316D-GX_EDGE
+      owner: "P027"
       device_type: N9K-C9316D-GX
       platform: cisco_nxos
       software_image: cisco_nxos-10.3.3
@@ -396,6 +414,7 @@ spec:
             name: con
             role: console
     - template_name: N9K-C9336C-FX2_LEAF_SERVER
+      owner: "P027"
       device_type: N9K-C9336C-FX2
       platform: cisco_nxos
       software_image: cisco_nxos-10.3.3
@@ -423,6 +442,7 @@ spec:
             role: management
             interface_type: 1000base-t
     - template_name: N9K-C9336C-FX2_EDGE
+      owner: "P027"
       device_type: N9K-C9336C-FX2
       platform: cisco_nxos
       software_image: cisco_nxos-10.3.3
@@ -451,6 +471,7 @@ spec:
             interface_type: 1000base-t
 
     - template_name: N9K-C9336C-FX2_BORDER_LEAF
+      owner: "P027"
       device_type: N9K-C9336C-FX2
       role: border-leaf
       platform: cisco_nxos
@@ -483,6 +504,7 @@ spec:
             interface_type: 1000base-t
 
     - template_name: N9K-C9364C-GX_BORDER_LEAF
+      owner: "P027"
       device_type: N9K-C9364C-GX
       role: border-leaf
       platform: cisco_nxos

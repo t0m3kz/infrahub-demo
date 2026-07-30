@@ -5,6 +5,7 @@ spec:
   kind: TemplateDcimPhysicalDevice
   data:
     - template_name: Edgecore-7726-32X-O_SUPER_SPINE
+      owner: "P027"
       device_type: 7726-32X-O
       platform: sonic
       software_image: sonic-202405
@@ -146,6 +147,7 @@ spec:
             name: Ethernet124
             interface_type: 100gbase-x-qsfp28
     - template_name: Edgecore-7726-32X-O_SPINE
+      owner: "P027"
       device_type: 7726-32X-O
       platform: sonic
       software_image: sonic-202405
@@ -287,6 +289,7 @@ spec:
             role: uplink
             interface_type: 100gbase-x-qsfp28
     - template_name: Edgecore-7726-32X-O_LEAF_MR
+      owner: "P027"
       device_type: 7726-32X-O
       platform: sonic
       software_image: sonic-202405
@@ -428,6 +431,7 @@ spec:
             role: uplink
             interface_type: 100gbase-x-qsfp28
     - template_name: Edgecore-7AS7326-56X-O-48V-F_LEAF
+      owner: "P027"
       device_type: 7AS7326-56X-O-48V-F
       platform: sonic
       software_image: sonic-202405
@@ -459,6 +463,7 @@ spec:
             role: management
             interface_type: 10gbase-x-sfpp
     - template_name: Edgecore-7AS7326-56X-O-48V-F_TOR
+      owner: "P027"
       device_type: 7AS7326-56X-O-48V-F
       platform: sonic
       software_image: sonic-202405
@@ -486,6 +491,7 @@ spec:
             role: management
             interface_type: 10gbase-x-sfpp
     - template_name: Edgecore-7AS7326-56X-O-48V-F_ACCESS
+      owner: "P027"
       device_type: 7AS7326-56X-O-48V-F
       platform: sonic
       software_image: sonic-202405
@@ -514,6 +520,7 @@ spec:
             interface_type: 10gbase-x-sfpp
 
     - template_name: Edgecore-7726-32X-O_BORDER_LEAF
+      owner: "P027"
       device_type: 7726-32X-O
       role: border-leaf
       platform: sonic
