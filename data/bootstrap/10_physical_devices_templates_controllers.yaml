@@ -1,0 +1,77 @@
+---
+# ManagedControllerPhysical templates — physical controller appliances
+# (Cisco APIC, WLC, UCS Manager, etc.). ManagedControllerPhysical has
+# generate_template: true (see schemas/extensions/capabilities/
+# controller.yml), so its template kind is TemplateManagedControllerPhysical,
+# not TemplateDcimPhysicalDevice — same object_template mechanism as any
+# other device, just under the controller's own template kind.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TemplateManagedControllerPhysical
+  data:
+    - template_name: APIC-L3_ACI_APIC
+      device_type: APIC-L3
+      platform: linux
+      software_image: linux-22.04.3
+      controller_type: aci_apic
+      role: controller
+      status: provisioning
+      owner: "P027"
+      interfaces:
+        kind: TemplateDcimPhysicalInterface
+        data:
+          - template_name: APIC-L3_ACI_APIC_eth0
+            name: eth0
+            role: uplink
+            interface_type: 1000base-t
+          - template_name: APIC-L3_ACI_APIC_eth1
+            name: eth1
+            role: uplink
+            interface_type: 1000base-t
+          - template_name: APIC-L3_ACI_APIC_mgmt0
+            name: mgmt0
+            role: management
+            interface_type: 1000base-t
+
+    - template_name: C9800-40_WLC
+      device_type: C9800-40
+      platform: cisco_ios
+      software_image: cisco_ios-17.12.4
+      controller_type: wlc
+      role: controller
+      status: provisioning
+      owner: "P027"
+      interfaces:
+        kind: TemplateDcimPhysicalInterface
+        parameters:
+          expand_range: true
+        data:
+          - template_name: C9800-40_WLC_TenGigabitEthernet0/0/[0-3]
+            name: TenGigabitEthernet0/0/[0-3]
+            role: uplink
+            interface_type: 10gbase-x-sfpp
+          - template_name: C9800-40_WLC_mgmt0
+            name: mgmt0
+            role: management
+            interface_type: 1000base-t
+
+    - template_name: MDS-NDFC_DCNM
+      device_type: MDS-NDFC
+      platform: linux
+      software_image: linux-22.04.3
+      controller_type: dcnm
+      role: controller
+      status: provisioning
+      owner: "P027"
+      interfaces:
+        kind: TemplateDcimPhysicalInterface
+        data:
+          - template_name: MDS-NDFC_DCNM_eth0
+            name: eth0
+            role: uplink
+            interface_type: 1000base-t
+          - template_name: MDS-NDFC_DCNM_mgmt0
+            name: mgmt0
+            role: management
+            interface_type: 1000base-t

@@ -146,6 +146,31 @@ spec:
       manufacturer: Cisco
       cpu_count: 2
       memory_gb: 8
+    - name: APIC-L3
+      part_number: APIC-L3
+      height: 1
+      full_depth: true
+      manufacturer: Cisco
+      cpu_count: 2
+      core_count: 20
+      memory_gb: 128
+      storage_gb: 2400
+    - name: C9800-40
+      part_number: C9800-40-K9
+      height: 1
+      full_depth: true
+      manufacturer: Cisco
+      cpu_count: 1
+      memory_gb: 16
+    - name: MDS-NDFC
+      part_number: ND-APP-L2-16C
+      height: 2
+      full_depth: true
+      manufacturer: Cisco
+      cpu_count: 2
+      core_count: 16
+      memory_gb: 128
+      storage_gb: 4000
     - name: N9K-C93108TC-FX
       part_number: N9K-C93108TC-FX
       height: 1
@@ -636,6 +661,14 @@ spec:
       core_count: 24
       memory_gb: 256
       max_routes: 4000000
+    - name: CP-SMS
+      part_number: CP-SMS-VIRTUAL
+      height: 0
+      full_depth: false
+      manufacturer: Check Point
+      cpu_count: 4
+      memory_gb: 16
+      storage_gb: 500
     # Palo Alto Networks
     - name: PA-5260
       part_number: PA-5260

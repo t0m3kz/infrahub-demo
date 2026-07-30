@@ -1,0 +1,94 @@
+---
+# DC9 — Cisco ACI fabric, demonstrating ManagedControllerPhysical (see
+# schemas/extensions/capabilities/controller.yml). Two pods, two leaf
+# switches each (real Nexus 9000 ACI-capable hardware, N9K-C9336C-FX2 —
+# same device type/template already used by DC6's spine/leaf in
+# data/demos/01_data_center/dc6), one shared spine pair, and a single APIC
+# (ManagedControllerPhysical, controller_type: aci_apic) whose
+# `managed_devices` covers every leaf/spine across both pods — the point of
+# this generic is exactly this: one controller, many devices, regardless of
+# pod/rack placement. No pool/VXLAN build-out here (unlike DC7/DC8): DC9's
+# purpose is the controller pattern, not another customer-isolation
+# fixture.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologyDataCenter
+  data:
+    - name: "DC9"
+      index: 9
+      fully_managed: true
+
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologyPod
+  data:
+    - index: 1
+      parent: "DC9"
+      status: active
+    - index: 2
+      parent: "DC9"
+      status: active
+
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimPhysicalDevice
+  data:
+    - name: DC9-SPINE1
+      object_template: N9K-C9336C-FX2_SPINE
+      status: active
+      deployment: DC9
+      member_of_groups:
+        - spines
+    - name: DC9-SPINE2
+      object_template: N9K-C9336C-FX2_SPINE
+      status: active
+      deployment: DC9
+      member_of_groups:
+        - spines
+    - name: DC9-POD1-LEAF1
+      object_template: N9K-C9336C-FX2_LEAF
+      status: active
+      deployment: ["DC9", "1"]
+      member_of_groups:
+        - leafs
+    - name: DC9-POD1-LEAF2
+      object_template: N9K-C9336C-FX2_LEAF
+      status: active
+      deployment: ["DC9", "1"]
+      member_of_groups:
+        - leafs
+    - name: DC9-POD2-LEAF1
+      object_template: N9K-C9336C-FX2_LEAF
+      status: active
+      deployment: ["DC9", "2"]
+      member_of_groups:
+        - leafs
+    - name: DC9-POD2-LEAF2
+      object_template: N9K-C9336C-FX2_LEAF
+      status: active
+      deployment: ["DC9", "2"]
+      member_of_groups:
+        - leafs
+
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: ManagedControllerPhysical
+  data:
+    - name: "DC9-APIC1"
+      object_template: APIC-L3_ACI_APIC
+      status: active
+      deployment: DC9
+      managed_devices:
+        - "DC9-SPINE1"
+        - "DC9-SPINE2"
+        - "DC9-POD1-LEAF1"
+        - "DC9-POD1-LEAF2"
+        - "DC9-POD2-LEAF1"
+        - "DC9-POD2-LEAF2"

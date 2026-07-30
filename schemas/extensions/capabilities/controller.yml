@@ -1,0 +1,168 @@
+---
+version: "1.0"
+
+# ============================================================================
+# Controller — management/orchestration plane for a fleet of physical or
+# virtual devices (WLC, Cisco ACI APIC, DNA Center, SD-WAN orchestrator, NSX
+# Manager, UCS Manager, Meraki Dashboard, ...).
+#
+# ManagedController is an abstract generic holding the shared shape
+# (controller_type + managed_devices). The controller is itself compute —
+# not "attached to" a separate device via capabilities — so the two concrete
+# nodes below inherit the SAME generics DcimPhysicalDevice/DcimVirtualDevice
+# do (DcimDevice, DcimCapabilities, AppInstance, CoreArtifactTarget) rather
+# than the concrete Dcim*Device kinds themselves (concrete nodes can't be
+# inherit_from targets — confirmed: "Unable to find the generic
+# DcimPhysicalDevice"). Physical/virtual-specific fields (position/serial/
+# rack_face vs cpu/memory/storage) are duplicated directly on each concrete
+# node rather than inherited, since there is no shared generic that carries
+# them without the concrete Dcim*Device node.
+#
+# `managed_devices` peers the generic DcimDevice so one controller can manage
+# a mix of physical and virtual devices (e.g. a WLC managing physical APs,
+# an SD-WAN orchestrator managing physical edges + virtual gateways).
+# ============================================================================
+
+generics:
+  - name: Controller
+    namespace: Managed
+    description: "Management/orchestration controller for a fleet of devices"  # yamllint disable-line rule:line-length
+    label: Controller
+    icon: "mdi:remote-desktop"
+    include_in_menu: false
+    attributes:
+      - name: controller_type
+        kind: Dropdown
+        label: "Controller Type"
+        description: "Controller technology/platform"
+        optional: false
+        order_weight: 1000
+        choices:
+          - name: wlc
+            label: "Wireless LAN Controller"
+            color: "#3498DB"
+          - name: aci_apic
+            label: "Cisco ACI APIC"
+            color: "#1BA0D7"
+          - name: dna_center
+            label: "Cisco DNA Center"
+            color: "#049FD9"
+          - name: sdwan_orchestrator
+            label: "SD-WAN Orchestrator"
+            color: "#E30613"
+          - name: nsx_manager
+            label: "VMware NSX Manager"
+            color: "#717074"
+          - name: ucs_manager
+            label: "Cisco UCS Manager"
+            color: "#00BCEB"
+          - name: meraki_dashboard
+            label: "Cisco Meraki Dashboard"
+            color: "#67B346"
+          - name: dcnm
+            label: "Cisco DCNM / Nexus Dashboard Fabric Controller"
+            color: "#00A0DF"
+          - name: security_manager
+            label: "Security Management Server (Check Point SMS, etc.)"
+            color: "#E4002B"
+          - name: other
+            label: "Other"
+            color: "#808080"
+    relationships:
+      - name: managed_devices
+        peer: DcimDevice
+        label: "Managed Devices"
+        description: "Devices under this controller's management"  # yamllint disable-line rule:line-length
+        cardinality: many
+        kind: Generic
+        optional: true
+        identifier: "controller__managed_devices"
+        order_weight: 1100
+
+nodes:
+  - name: ControllerPhysical
+    namespace: Managed
+    description: "Physical controller appliance (WLC, ACI APIC, UCS Manager, etc.)"  # yamllint disable-line rule:line-length
+    label: Controller (Physical)
+    icon: "mdi:remote-desktop"
+    menu_placement: ManagedGeneric
+    include_in_menu: false
+    generate_template: true
+    inherit_from:
+      - ManagedController
+      - CoreArtifactTarget
+      - DcimDevice
+      - DcimCapabilities
+      - AppInstance
+    uniqueness_constraints:
+      - ["name__value"]
+    display_label: "{{name__value}}"
+    order_by:
+      - name__value
+    attributes:
+      - name: position
+        label: Position (U)
+        description: Lowest unit.
+        kind: Number
+        optional: true
+        order_weight: 1500
+      - name: serial
+        kind: Text
+        optional: true
+        order_weight: 1500
+      - name: rack_face
+        label: Rack Face
+        description: On which face of the rack the device is mounted.
+        kind: Dropdown
+        optional: true
+        default_value: front
+        order_weight: 1515
+        choices:
+          - name: front
+            label: Front
+            description: Device mounted on the front face of the rack.
+          - name: rear
+            label: Rear
+            description: Device mounted on the rear face of the rack.
+
+  - name: ControllerVirtual
+    namespace: Managed
+    description: "Virtual controller appliance (VM/container-hosted)"
+    label: Controller (Virtual)
+    icon: "mdi:remote-desktop"
+    menu_placement: ManagedGeneric
+    include_in_menu: false
+    generate_template: true
+    inherit_from:
+      - ManagedController
+      - CoreArtifactTarget
+      - DcimDevice
+      - DcimCapabilities
+      - AppInstance
+    uniqueness_constraints:
+      - ["name__value"]
+    display_label: "{{name__value}}"
+    order_by:
+      - name__value
+    attributes:
+      - name: cpu
+        label: CPU Number
+        kind: Number
+        optional: true
+        order_weight: 2000
+      - name: memory
+        label: Memory Size (GB)
+        kind: Number
+        optional: true
+        order_weight: 2100
+      - name: storage
+        label: Storage Size (GB)
+        kind: Number
+        optional: true
+        order_weight: 2200
+    relationships:
+      - name: hosting_device
+        peer: DcimPhysicalDevice
+        kind: Attribute
+        cardinality: one
+        optional: true
