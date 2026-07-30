@@ -5,70 +5,70 @@ spec:
   kind: RoutingAutonomousSystem
   data:
     - asn: 1299
-      owner: "Arelion"
+      owner: "P009"
       description: "AS1299 - Arelion"
     - asn: 8220
-      owner: "Colt Technology Services"
+      owner: "P010"
       description: "AS8220 - Colt Technology Services"
     - asn: 701
-      owner: "Verizon Business"
+      owner: "P011"
       description: "AS701 - Verizon Business"
     - asn: 3257
-      owner: "GTT Communications"
+      owner: "P012"
       description: "AS3257 - GTT Communications"
     - asn: 6939
-      owner: "Hurricane Electric"
+      owner: "P013"
       description: "AS6939 - Hurricane Electric"
     - asn: 3356
-      owner: "Lumen"
+      owner: "P014"
       description: "AS3356 - Lumen"
     - asn: 6461
-      owner: "Zayo"
+      owner: "P015"
       description: "AS6461 - Zayo"
     - asn: 24115
-      owner: "Equinix"
+      owner: "P016"
       description: "AS24115 - Equinix"
     - asn: 20710
-      owner: "Interxion"
+      owner: "P017"
       description: "AS20710 - Interxion"
     - asn: 3491
-      owner: "PCCW Global"
+      owner: "P018"
       description: "AS3491 - PCCW Global"
     - asn: 5511
-      owner: "Orange S.A"
+      owner: "P019"
       description: "AS5511 - Orange S.A"
     - asn: 6453
-      owner: "Tata Communications"
+      owner: "P020"
       description: "AS6453 - Tata Communications"
     - asn: 1239
-      owner: "Sprint"
+      owner: "P021"
       description: "AS1239 - Sprint"
     - asn: 2914
-      owner: "NTT America"
+      owner: "P022"
       description: "AS2914 - NTT America"
     - asn: 174
-      owner: "Cogent Communications"
+      owner: "P023"
       description: "AS174 - Cogent Communications"
     - asn: 7922
-      owner: "Comcast Cable Communication"
+      owner: "P024"
       description: "AS7922 - Comcast Cable Communication"
     - asn: 6762
-      owner: "Telecom Italia Sparkle"
+      owner: "P025"
       description: "AS6762 - Telecom Italia Sparkle"
     - asn: 7018
-      owner: "AT&T Services"
+      owner: "P026"
       description: "AS7018 - AT&T Services"
     - asn: 6695
-      owner: "DE-CIX"
+      owner: "P001"
       description: "AS6695 - DE-CIX Management GmbH (Frankfurt IX route server)"
     - asn: 5400
-      owner: "BT"
+      owner: "P002"
       description: "AS5400 - British Telecommunications PLC"
     - asn: 64520
-      owner: "ACME"
+      owner: "P031"
       description: "AS64520 - ACME Corp (private ASN, MPLS partner)"
     - asn: 64521
-      owner: "GLOBEX"
+      owner: "P032"
       description: "AS64521 - GLOBEX Corporation (private ASN, IP-VPN partner)"
     # AS64512 (AWS DX) and AS12076 (Azure ER) are already defined, without an
     # owner, in data/demos/100_universal_topology/05_interconnects/cloud-equinix/
