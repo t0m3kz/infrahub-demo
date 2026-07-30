@@ -125,7 +125,7 @@ class TopologyCustomer(CoreNode):
     member_of_groups: RelationshipManager[CoreGroup]
     namespace: RelationshipAttribute[BuiltinIPNamespace]
     network_segments: RelationshipManager[ManagedNetworkSegment]
-    owner: RelationshipAttribute[OrganizationCustomer]
+    owner: RelationshipAttribute[OrganizationEntity]
     profiles: RelationshipManager[CoreProfile]
     subscriber_of_groups: RelationshipManager[CoreGroup]
 
@@ -154,13 +154,13 @@ class TemplateDcimCapabilities(CoreNode):
 
 class TemplateDcimDevice(CoreNode):
     description: StringOptional
-    os_version: StringOptional
     role: DropdownOptional
     status: Dropdown
     template_name: String
     device_type: RelationshipAttribute[DcimDeviceType]
     interfaces: RelationshipManager[TemplateDcimInterface]
     member_of_groups: RelationshipManager[CoreGroup]
+    owner: RelationshipAttribute[OrganizationEntity]
     platform: RelationshipAttribute[DcimPlatform]
     primary_address: RelationshipAttribute[TemplateIpamIPAddress]
     primary_address_from_resource_pool: RelationshipAttribute[CoreIPAddressPool]
@@ -221,12 +221,12 @@ class TopologyDesign(CoreNode):
 class DcimDevice(CoreNode):
     description: StringOptional
     name: String
-    os_version: StringOptional
     role: DropdownOptional
     status: Dropdown
     device_type: RelationshipAttribute[DcimDeviceType]
     interfaces: RelationshipManager[DcimInterface]
     member_of_groups: RelationshipManager[CoreGroup]
+    owner: RelationshipAttribute[OrganizationEntity]
     platform: RelationshipAttribute[DcimPlatform]
     primary_address: RelationshipAttribute[IpamIPAddress]
     profiles: RelationshipManager[CoreProfile]
@@ -933,7 +933,7 @@ class TopologyCustomerCloud(TopologyCustomer, TopologyDeployment, TopologyCluste
     member_of_groups: RelationshipManager[CoreGroup]
     namespace: RelationshipAttribute[BuiltinIPNamespace]
     network_segments: RelationshipManager[ManagedNetworkSegment]
-    owner: RelationshipAttribute[OrganizationCustomer]
+    owner: RelationshipAttribute[OrganizationEntity]
     parent: RelationshipAttribute[TopologyCloudRegion]
     profiles: RelationshipManager[CoreProfile]
     subscriber_of_groups: RelationshipManager[CoreGroup]
@@ -952,7 +952,7 @@ class TopologyCustomerColocation(
     member_of_groups: RelationshipManager[CoreGroup]
     namespace: RelationshipAttribute[BuiltinIPNamespace]
     network_segments: RelationshipManager[ManagedNetworkSegment]
-    owner: RelationshipAttribute[OrganizationCustomer]
+    owner: RelationshipAttribute[OrganizationEntity]
     parent: RelationshipAttribute[TopologyColocationMetro]
     profiles: RelationshipManager[CoreProfile]
     subscriber_of_groups: RelationshipManager[CoreGroup]
@@ -969,7 +969,7 @@ class TopologyCustomerDC(TopologyCustomer, TopologyDeployment, TopologyClusterHo
     member_of_groups: RelationshipManager[CoreGroup]
     namespace: RelationshipAttribute[BuiltinIPNamespace]
     network_segments: RelationshipManager[ManagedNetworkSegment]
-    owner: RelationshipAttribute[OrganizationCustomer]
+    owner: RelationshipAttribute[OrganizationEntity]
     parent: RelationshipAttribute[TopologyDataCenter]
     profiles: RelationshipManager[CoreProfile]
     subscriber_of_groups: RelationshipManager[CoreGroup]
@@ -1012,7 +1012,7 @@ class TopologyCustomerOffice(
     member_of_groups: RelationshipManager[CoreGroup]
     namespace: RelationshipAttribute[BuiltinIPNamespace]
     network_segments: RelationshipManager[ManagedNetworkSegment]
-    owner: RelationshipAttribute[OrganizationCustomer]
+    owner: RelationshipAttribute[OrganizationEntity]
     parent: RelationshipAttribute[TopologyOffice]
     profiles: RelationshipManager[CoreProfile]
     subscriber_of_groups: RelationshipManager[CoreGroup]
@@ -1665,7 +1665,6 @@ class TopologyPhysicalCircuit(TopologyCircuit, ManagedGeneric):
 class DcimPhysicalDevice(CoreArtifactTarget, DcimDevice, DcimCapabilities, AppInstance):
     description: StringOptional
     name: String
-    os_version: StringOptional
     position: IntegerOptional
     rack_face: Dropdown
     role: DropdownOptional
@@ -1678,6 +1677,7 @@ class DcimPhysicalDevice(CoreArtifactTarget, DcimDevice, DcimCapabilities, AppIn
     interfaces: RelationshipManager[DcimInterface]
     member_of_groups: RelationshipManager[CoreGroup]
     object_template: RelationshipAttribute[TemplateDcimPhysicalDevice]
+    owner: RelationshipAttribute[OrganizationEntity]
     platform: RelationshipAttribute[DcimPlatform]
     primary_address: RelationshipAttribute[IpamIPAddress]
     profiles: RelationshipManager[CoreProfile]
@@ -2364,7 +2364,6 @@ class DcimVirtualDevice(CoreArtifactTarget, DcimDevice, DcimCapabilities, AppIns
     description: StringOptional
     memory: IntegerOptional
     name: String
-    os_version: StringOptional
     role: DropdownOptional
     status: Dropdown
     storage: IntegerOptional
@@ -2376,6 +2375,7 @@ class DcimVirtualDevice(CoreArtifactTarget, DcimDevice, DcimCapabilities, AppIns
     interfaces: RelationshipManager[DcimInterface]
     member_of_groups: RelationshipManager[CoreGroup]
     object_template: RelationshipAttribute[TemplateDcimVirtualDevice]
+    owner: RelationshipAttribute[OrganizationEntity]
     platform: RelationshipAttribute[DcimPlatform]
     primary_address: RelationshipAttribute[IpamIPAddress]
     profiles: RelationshipManager[CoreProfile]
@@ -2969,13 +2969,13 @@ class ProfileDcimConsoleInterface(LineageSource, CoreProfile, CoreNode):
 
 class ProfileDcimDevice(LineageSource, CoreProfile, CoreNode):
     description: StringOptional
-    os_version: StringOptional
     profile_name: String
     profile_priority: Integer
     role: DropdownOptional
     status: DropdownOptional
     device_type: RelationshipAttribute[DcimDeviceType]
     member_of_groups: RelationshipManager[CoreGroup]
+    owner: RelationshipAttribute[OrganizationEntity]
     platform: RelationshipAttribute[DcimPlatform]
     related_nodes: RelationshipManager[DcimDevice]
     related_templates: RelationshipManager[TemplateDcimDevice]
@@ -3065,7 +3065,6 @@ class ProfileDcimLAGInterface(LineageSource, CoreProfile, CoreNode):
 
 class ProfileDcimPhysicalDevice(LineageSource, CoreProfile, CoreNode):
     description: StringOptional
-    os_version: StringOptional
     position: IntegerOptional
     profile_name: String
     profile_priority: Integer
@@ -3078,6 +3077,7 @@ class ProfileDcimPhysicalDevice(LineageSource, CoreProfile, CoreNode):
     deployment: RelationshipAttribute[TopologyDeployment]
     device_type: RelationshipAttribute[DcimDeviceType]
     member_of_groups: RelationshipManager[CoreGroup]
+    owner: RelationshipAttribute[OrganizationEntity]
     platform: RelationshipAttribute[DcimPlatform]
     rack: RelationshipAttribute[LocationRack]
     related_nodes: RelationshipManager[DcimPhysicalDevice]
@@ -3169,7 +3169,6 @@ class ProfileDcimVirtualDevice(LineageSource, CoreProfile, CoreNode):
     cpu: IntegerOptional
     description: StringOptional
     memory: IntegerOptional
-    os_version: StringOptional
     profile_name: String
     profile_priority: Integer
     role: DropdownOptional
@@ -3181,6 +3180,7 @@ class ProfileDcimVirtualDevice(LineageSource, CoreProfile, CoreNode):
     device_type: RelationshipAttribute[DcimDeviceType]
     hosting_device: RelationshipAttribute[DcimPhysicalDevice]
     member_of_groups: RelationshipManager[CoreGroup]
+    owner: RelationshipAttribute[OrganizationEntity]
     platform: RelationshipAttribute[DcimPlatform]
     related_nodes: RelationshipManager[DcimVirtualDevice]
     related_templates: RelationshipManager[TemplateDcimVirtualDevice]
@@ -4940,7 +4940,6 @@ class TemplateDcimPhysicalDevice(
     CoreNode,
 ):
     description: StringOptional
-    os_version: StringOptional
     position: IntegerOptional
     rack_face: Dropdown
     role: DropdownOptional
@@ -4954,6 +4953,7 @@ class TemplateDcimPhysicalDevice(
     interfaces: RelationshipManager[TemplateDcimInterface]
     member_of_groups: RelationshipManager[CoreGroup]
     member_of_groups_for_instances: RelationshipManager[CoreGroup]
+    owner: RelationshipAttribute[OrganizationEntity]
     platform: RelationshipAttribute[DcimPlatform]
     position_from_resource_pool: RelationshipAttribute[CoreNumberPool]
     primary_address: RelationshipAttribute[TemplateIpamIPAddress]
@@ -5012,7 +5012,6 @@ class TemplateDcimVirtualDevice(
     cpu: IntegerOptional
     description: StringOptional
     memory: IntegerOptional
-    os_version: StringOptional
     role: DropdownOptional
     status: DropdownOptional
     storage: IntegerOptional
@@ -5027,6 +5026,7 @@ class TemplateDcimVirtualDevice(
     member_of_groups: RelationshipManager[CoreGroup]
     member_of_groups_for_instances: RelationshipManager[CoreGroup]
     memory_from_resource_pool: RelationshipAttribute[CoreNumberPool]
+    owner: RelationshipAttribute[OrganizationEntity]
     platform: RelationshipAttribute[DcimPlatform]
     primary_address: RelationshipAttribute[TemplateIpamIPAddress]
     primary_address_from_resource_pool: RelationshipAttribute[CoreIPAddressPool]
