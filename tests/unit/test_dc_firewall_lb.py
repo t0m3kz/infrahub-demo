@@ -9,11 +9,14 @@ does NOT cable border-leaf to spines — that's pod.py's job (see
 test_pod_generator.py-style coverage in generators/topology/pod.py), since pod.py
 already owns spine context.
 
-Firewall/load-balancer: created DC-wide (deployment_id=dc.id), paired into an HA
-domain when an entry's quantity == 2.
+Firewall/load-balancer: created DC-wide (deployment_id=dc.id) via
+CommonGenerator._create_role_devices (shared with pod.py's own pod-scoped
+firewall/load-balancer provisioning), paired into an HA domain when an
+entry's quantity == 2 via CommonGenerator._ensure_ha_pair.
 
-BLF<->FW<->LB cabling: connectivity_mode="pbr" cables two independent legs
-(border-leaf<->firewall, border-leaf<->load-balancer); "inline" chains
+BLF<->FW<->LB cabling: CommonGenerator._cable_border_services with
+connectivity_mode="pbr" cables two independent legs (border-leaf<->firewall,
+border-leaf<->load-balancer); "inline" chains
 border-leaf<->firewall<->load-balancer<->border-leaf.
 """
 
@@ -114,12 +117,15 @@ class TestPodBorderLeafCapacity:
         assert DCTopologyGenerator._pod_border_leaf_capacity(pod) == 0
 
 
-class TestEnsureDcHaPair:
+class TestEnsureHaPair:
+    """CommonGenerator._ensure_ha_pair — shared by dc.py (DC-wide firewall/
+    load-balancer) and pod.py (a border-spine pod's own firewall/load-balancer)."""
+
     @pytest.mark.asyncio
     async def test_single_device_is_a_noop(self) -> None:
         gen = _make_generator()
 
-        await gen._ensure_dc_ha_pair(["fw-01"], ha_kind="ManagedFirewallHA", role_label="firewall")
+        await gen._ensure_ha_pair(["fw-01"], ha_kind="ManagedFirewallHA", role_label="firewall")
 
         gen.client.create.assert_not_awaited()
 
@@ -133,7 +139,7 @@ class TestEnsureDcHaPair:
         ha_obj.save = AsyncMock()
         gen.client.create = AsyncMock(return_value=ha_obj)
 
-        await gen._ensure_dc_ha_pair(["fw-02", "fw-01"], ha_kind="ManagedFirewallHA", role_label="firewall")
+        await gen._ensure_ha_pair(["fw-02", "fw-01"], ha_kind="ManagedFirewallHA", role_label="firewall")
 
         gen.client.create.assert_awaited_once()
         create_kwargs = gen.client.create.call_args.kwargs
@@ -149,7 +155,7 @@ class TestEnsureDcHaPair:
         existing.id = "existing-ha-1"
         gen.client.filters = AsyncMock(return_value=[existing])
 
-        await gen._ensure_dc_ha_pair(["lb-01", "lb-02"], ha_kind="ManagedLoadbalancerHA", role_label="load-balancer")
+        await gen._ensure_ha_pair(["lb-01", "lb-02"], ha_kind="ManagedLoadbalancerHA", role_label="load-balancer")
 
         gen.client.create.assert_not_awaited()
         assert "existing-ha-1" in gen.client.group_context.related_node_ids
@@ -159,7 +165,7 @@ class TestEnsureDcHaPair:
         gen = _make_generator()
         gen.client.filters = AsyncMock(side_effect=[[], [_mock_device("fw-01")]])
 
-        await gen._ensure_dc_ha_pair(["fw-01", "fw-02"], ha_kind="ManagedFirewallHA", role_label="firewall")
+        await gen._ensure_ha_pair(["fw-01", "fw-02"], ha_kind="ManagedFirewallHA", role_label="firewall")
 
         gen.client.create.assert_not_awaited()
         gen.logger.error.assert_called_once()
@@ -262,14 +268,23 @@ class TestCreateBorderLeafDevices:
         gen.logger.warning.assert_called()
 
 
-class TestCreateDcWideRoleDevices:
+class TestCreateRoleDevices:
+    """CommonGenerator._create_role_devices — shared by dc.py (DC-wide,
+    deployment_id=dc.id) and pod.py (pod-scoped, deployment_id=pod.id)."""
+
     @pytest.mark.asyncio
     async def test_load_balancer_uses_loadbalancers_group_override(self) -> None:
         gen = _make_generator()
         gen.create_devices = AsyncMock(return_value=["lb-01"])
         entries = [DeviceRole(role="load-balancer", quantity=1, template=_LB_TEMPLATE)]
 
-        names = await gen._create_dc_wide_role_devices(role="load-balancer", entries=entries)
+        names = await gen._create_role_devices(
+            role="load-balancer",
+            entries=entries,
+            deployment_id=gen.data.id,
+            naming_convention="standard",
+            indexes=[gen.data.index],
+        )
 
         assert names == ["lb-01"]
         create_kwargs = gen.create_devices.call_args.kwargs
@@ -282,7 +297,13 @@ class TestCreateDcWideRoleDevices:
         gen.create_devices = AsyncMock(return_value=["fw-01"])
         entries = [DeviceRole(role="firewall", quantity=1, template=_FW_TEMPLATE)]
 
-        await gen._create_dc_wide_role_devices(role="firewall", entries=entries)
+        await gen._create_role_devices(
+            role="firewall",
+            entries=entries,
+            deployment_id=gen.data.id,
+            naming_convention="standard",
+            indexes=[gen.data.index],
+        )
 
         create_kwargs = gen.create_devices.call_args.kwargs
         assert create_kwargs["options"].get("group_name") is None
@@ -291,12 +312,18 @@ class TestCreateDcWideRoleDevices:
     async def test_quantity_of_two_triggers_ha_pairing(self) -> None:
         gen = _make_generator()
         gen.create_devices = AsyncMock(return_value=["fw-01", "fw-02"])
-        gen._ensure_dc_ha_pair = AsyncMock()
+        gen._ensure_ha_pair = AsyncMock()
         entries = [DeviceRole(role="firewall", quantity=2, template=_FW_TEMPLATE)]
 
-        await gen._create_dc_wide_role_devices(role="firewall", entries=entries)
+        await gen._create_role_devices(
+            role="firewall",
+            entries=entries,
+            deployment_id=gen.data.id,
+            naming_convention="standard",
+            indexes=[gen.data.index],
+        )
 
-        gen._ensure_dc_ha_pair.assert_awaited_once_with(
+        gen._ensure_ha_pair.assert_awaited_once_with(
             ["fw-01", "fw-02"], ha_kind="ManagedFirewallHA", role_label="firewall"
         )
 
@@ -304,23 +331,38 @@ class TestCreateDcWideRoleDevices:
     async def test_quantity_of_one_does_not_trigger_ha_pairing(self) -> None:
         gen = _make_generator()
         gen.create_devices = AsyncMock(return_value=["fw-01"])
-        gen._ensure_dc_ha_pair = AsyncMock()
+        gen._ensure_ha_pair = AsyncMock()
         entries = [DeviceRole(role="firewall", quantity=1, template=_FW_TEMPLATE)]
 
-        await gen._create_dc_wide_role_devices(role="firewall", entries=entries)
+        await gen._create_role_devices(
+            role="firewall",
+            entries=entries,
+            deployment_id=gen.data.id,
+            naming_convention="standard",
+            indexes=[gen.data.index],
+        )
 
-        gen._ensure_dc_ha_pair.assert_not_awaited()
+        gen._ensure_ha_pair.assert_not_awaited()
 
 
-class TestCableDcServices:
+_BL_ROLE_FOR = {"firewall": "firewall", "load-balancer": "load-balancer"}
+
+
+class TestCableBorderServices:
+    """CommonGenerator._cable_border_services — shared by dc.py (border-leaf)
+    and pod.py (border-spine); role names passed in via border_role_for."""
+
     @pytest.mark.asyncio
     async def test_pbr_cables_two_independent_legs(self) -> None:
         gen = _make_generator()
-        gen.data.connectivity_mode = "pbr"
         gen.create_chain_cabling = AsyncMock(return_value=[[]])
 
-        await gen._cable_dc_services(
-            border_leaf_names=["bl-01"], firewall_names=["fw-01"], load_balancer_names=["lb-01"]
+        await gen._cable_border_services(
+            border_role_for=_BL_ROLE_FOR,
+            connectivity_mode="pbr",
+            border_names=["bl-01"],
+            firewall_names=["fw-01"],
+            load_balancer_names=["lb-01"],
         )
 
         assert gen.create_chain_cabling.await_count == 2
@@ -341,11 +383,14 @@ class TestCableDcServices:
     @pytest.mark.asyncio
     async def test_inline_chains_bl_fw_lb_bl(self) -> None:
         gen = _make_generator()
-        gen.data.connectivity_mode = "inline"
         gen.create_chain_cabling = AsyncMock(return_value=[[]])
 
-        await gen._cable_dc_services(
-            border_leaf_names=["bl-01", "bl-02"], firewall_names=["fw-01"], load_balancer_names=["lb-01"]
+        await gen._cable_border_services(
+            border_role_for=_BL_ROLE_FOR,
+            connectivity_mode="inline",
+            border_names=["bl-01", "bl-02"],
+            firewall_names=["fw-01"],
+            load_balancer_names=["lb-01"],
         )
 
         # Three legs: border-leaf<->firewall, firewall<->load-balancer (middle),
@@ -377,13 +422,18 @@ class TestCableDcServices:
     @pytest.mark.asyncio
     async def test_inline_still_calls_middle_leg_when_one_side_missing(self) -> None:
         """create_chain_cabling itself no-ops when a hop's devices list is empty — this
-        just confirms _cable_dc_services always issues all three legs and
+        just confirms _cable_border_services always issues all three legs and
         lets create_chain_cabling decide what's actually cable-able."""
         gen = _make_generator()
-        gen.data.connectivity_mode = "inline"
         gen.create_chain_cabling = AsyncMock(return_value=[[]])
 
-        await gen._cable_dc_services(border_leaf_names=["bl-01"], firewall_names=["fw-01"], load_balancer_names=[])
+        await gen._cable_border_services(
+            border_role_for=_BL_ROLE_FOR,
+            connectivity_mode="inline",
+            border_names=["bl-01"],
+            firewall_names=["fw-01"],
+            load_balancer_names=[],
+        )
 
         assert gen.create_chain_cabling.await_count == 3
         middle_hops = gen.create_chain_cabling.call_args_list[1].args[0]
@@ -395,15 +445,19 @@ class TestGenerateDcScopedFabricDevices:
     async def test_orchestrates_all_three_roles_and_cabling(self) -> None:
         gen = _make_generator()
         gen._create_border_leaf_devices = AsyncMock(return_value=["bl-01"])
-        gen._create_dc_wide_role_devices = AsyncMock(side_effect=[["fw-01"], ["lb-01"]])
-        gen._cable_dc_services = AsyncMock()
+        gen._create_role_devices = AsyncMock(side_effect=[["fw-01"], ["lb-01"]])
+        gen._cable_border_services = AsyncMock()
         gen.data.firewall_templates = [DeviceRole(role="firewall", quantity=1, template=_FW_TEMPLATE)]
         gen.data.load_balancer_templates = [DeviceRole(role="load-balancer", quantity=1, template=_LB_TEMPLATE)]
 
         await gen._generate_dc_scoped_fabric_devices()
 
         gen._create_border_leaf_devices.assert_awaited_once()
-        assert gen._create_dc_wide_role_devices.await_count == 2
-        gen._cable_dc_services.assert_awaited_once_with(
-            border_leaf_names=["bl-01"], firewall_names=["fw-01"], load_balancer_names=["lb-01"]
+        assert gen._create_role_devices.await_count == 2
+        gen._cable_border_services.assert_awaited_once_with(
+            border_role_for={"firewall": "firewall", "load-balancer": "load-balancer"},
+            connectivity_mode=gen.data.connectivity_mode,
+            border_names=["bl-01"],
+            firewall_names=["fw-01"],
+            load_balancer_names=["lb-01"],
         )

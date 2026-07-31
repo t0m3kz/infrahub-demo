@@ -3,28 +3,21 @@
 import secrets
 from typing import Any, Literal, cast
 
-from infrahub_sdk.protocols import CoreStandardGroup
-
 from utils.data_cleaning import clean_data
 
 from ..common import CommonGenerator, DeviceOptions
 from ..helpers import calculate_dc_fabric_loopback_prefix, name_to_asn_range
 from ..helpers.routing import RoutingStrategy
-from ..models import DCModel, DeviceRole
+from ..models import DCModel
 from ..protocols import (
-    DcimPhysicalDevice,
     RoutingAutonomousSystem,
     RoutingOSPFArea,
     RoutingPassword,
     TopologyPod,
 )
-from ..types import CablingOptions, ChainHop, RoutingOptions
+from ..types import CablingOptions, RoutingOptions
 
 _DC_VALID_FABRIC_ROLES = frozenset({"super-spine", "hyper-spine", "border-leaf", "firewall", "load-balancer"})
-_DC_HA_KINDS: dict[str, Literal["ManagedFirewallHA", "ManagedLoadbalancerHA"]] = {
-    "firewall": "ManagedFirewallHA",
-    "load-balancer": "ManagedLoadbalancerHA",
-}
 # FW/LB "uplink" interfaces face border-leaf; border-leaf's "firewall"/"load-balancer"
 # interfaces are the dedicated counterpart ports for each service — see
 # N9K-C9336C-FX2_BORDER_LEAF's template for the canonical port layout.
@@ -421,46 +414,6 @@ class DCTopologyGenerator(CommonGenerator):
         max_border_leafs_per_pod = pod.design.peer.max_border_leafs_per_pod.value
         return max_border_leafs_per_pod or 0
 
-    async def _ensure_dc_ha_pair(
-        self,
-        device_names: list[str],
-        *,
-        ha_kind: Literal["ManagedFirewallHA", "ManagedLoadbalancerHA"],
-        role_label: str,
-    ) -> None:
-        """Pair exactly 2 same-role devices (one pod's share) into an HA domain —
-        near-verbatim copy of rack.py's _ensure_ha_pair, moved here since
-        firewall/load-balancer generation moved to DC level. Never pairs across
-        pods: both members of an HA pair must sit in front of the same
-        border-leaf/spine fabric to mean anything physically."""
-        if len(device_names) != 2:
-            return
-
-        first, second = sorted(device_names)
-        ha_name = f"{first}-{second}-ha"
-        existing = await self.client.filters(kind=ha_kind, name__value=ha_name)
-        if existing:
-            self.client.group_context.related_node_ids.append(existing[0].id)
-            return
-
-        devices = await self.client.filters(kind=DcimPhysicalDevice, name__values=[first, second])
-        if len(devices) != 2:
-            self.logger.error(f"HA pair {first}/{second}: could not resolve both devices.")
-            return
-
-        ha_group = await self.client.get(kind=CoreStandardGroup, name__value="ha_domains")
-        ha_obj = await self.client.create(
-            kind=ha_kind,
-            data={
-                "name": ha_name,
-                "status": "active",
-                "capabilities": [{"id": dev.id} for dev in devices],
-                "member_of_groups": [{"id": ha_group.id}],
-            },
-        )
-        await ha_obj.save(allow_upsert=True)
-        self.logger.info(f"DC {self.fabric_name}: created HA domain {ha_name} for {role_label}s")
-
     async def _create_border_leaf_devices(self) -> list[str]:
         """Create border-leaf devices for every fabric_templates(role="border-leaf")
         entry, distributing each entry's quantity across the DC's existing pods by
@@ -529,70 +482,6 @@ class DCTopologyGenerator(CommonGenerator):
 
         return all_names
 
-    async def _create_dc_wide_role_devices(
-        self, *, role: Literal["firewall", "load-balancer"], entries: list[DeviceRole]
-    ) -> list[str]:
-        """Create firewall/load-balancer devices DC-wide (deployment_id=dc.id, not
-        split across pods — these sit in front of the whole DC's border-leaf tier,
-        not any one pod), pairing each entry's devices into an HA domain when
-        quantity == 2. No loopback allocation — not part of underlay/overlay routing."""
-        device_options = DeviceOptions(indexes=[self.data.index])
-        if role == "load-balancer":
-            # create_devices()'s default group_name is f"{device_role}s" = "load-balancers",
-            # but the bootstrap group is named "loadbalancers" (no hyphen) — override.
-            device_options["group_name"] = "loadbalancers"
-        ha_kind = _DC_HA_KINDS[role]
-
-        all_names: list[str] = []
-        for entry in entries:
-            names = await self.create_devices(
-                deployment_id=self.data.id,
-                device_role=role,
-                amount=entry.quantity,
-                template=entry.template.model_dump(),
-                naming_convention=cast(
-                    Literal["standard", "hierarchical", "flat"], self.data.naming_convention.lower()
-                ),
-                options=device_options,
-            )
-            all_names.extend(names)
-            if entry.quantity == 2:
-                await self._ensure_dc_ha_pair(names, ha_kind=ha_kind, role_label=role)
-
-        return all_names
-
-    async def _cable_dc_services(
-        self, *, border_leaf_names: list[str], firewall_names: list[str], load_balancer_names: list[str]
-    ) -> None:
-        """Cable border-leaf<->firewall<->load-balancer per connectivity_mode.
-        Index-paired (bl[0]<->fw[0], bl[1]<->fw[1], ...), never any-to-any —
-        each border-leaf/firewall/load-balancer triple is one independent
-        redundant path. Fewer devices on one side are reused round-robin.
-        - pbr: two independent legs, each on the service device's "uplink" ports.
-        - inline: one chain — border-leaf<->firewall<->load-balancer<->border-leaf.
-          Every device has an "uplink" (toward the previous hop) and "downlink"
-          (toward the next), distinct from load-balancer's own "customer"-role
-          VIP ports (untouched here).
-        No-ops for any leg with nothing to cable (create_chain_cabling's own
-        empty-devices handling).
-        """
-        blf_to_firewall = ChainHop(devices=border_leaf_names, down_role=_BL_ROLE_FOR["firewall"])
-        firewall_hop = ChainHop(devices=firewall_names, up_role="uplink")
-        await self.create_chain_cabling([blf_to_firewall, firewall_hop])
-
-        if self.data.connectivity_mode == "inline":
-            middle_firewall_hop = ChainHop(devices=firewall_names, down_role="downlink")
-            middle_lb_hop = ChainHop(devices=load_balancer_names, up_role="uplink")
-            await self.create_chain_cabling([middle_firewall_hop, middle_lb_hop])
-
-            blf_to_lb = ChainHop(devices=border_leaf_names, down_role=_BL_ROLE_FOR["load-balancer"])
-            return_lb_hop = ChainHop(devices=load_balancer_names, up_role="downlink")
-            await self.create_chain_cabling([blf_to_lb, return_lb_hop])
-        else:
-            blf_to_lb = ChainHop(devices=border_leaf_names, down_role=_BL_ROLE_FOR["load-balancer"])
-            lb_hop = ChainHop(devices=load_balancer_names, up_role="uplink")
-            await self.create_chain_cabling([blf_to_lb, lb_hop])
-
     async def _generate_dc_scoped_fabric_devices(self) -> None:
         """Create border-leaf (distributed across pods by their own design caps),
         firewall, and load-balancer devices (DC-wide), then cable border-leaf to
@@ -604,13 +493,26 @@ class DCTopologyGenerator(CommonGenerator):
         calls after bulk loads); not auto-triggered from pod.py's add_pod, which
         would otherwise fire a concurrent DC-level re-bootstrap on every single
         pod creation during a bulk multi-pod load."""
+        naming_convention = cast(Literal["standard", "hierarchical", "flat"], self.data.naming_convention.lower())
         border_leaf_names = await self._create_border_leaf_devices()
-        firewall_names = await self._create_dc_wide_role_devices(role="firewall", entries=self.data.firewall_templates)
-        load_balancer_names = await self._create_dc_wide_role_devices(
-            role="load-balancer", entries=self.data.load_balancer_templates
+        firewall_names = await self._create_role_devices(
+            role="firewall",
+            entries=self.data.firewall_templates,
+            deployment_id=self.data.id,
+            naming_convention=naming_convention,
+            indexes=[self.data.index],
         )
-        await self._cable_dc_services(
-            border_leaf_names=border_leaf_names,
+        load_balancer_names = await self._create_role_devices(
+            role="load-balancer",
+            entries=self.data.load_balancer_templates,
+            deployment_id=self.data.id,
+            naming_convention=naming_convention,
+            indexes=[self.data.index],
+        )
+        await self._cable_border_services(
+            border_role_for=_BL_ROLE_FOR,
+            connectivity_mode=self.data.connectivity_mode,
+            border_names=border_leaf_names,
             firewall_names=firewall_names,
             load_balancer_names=load_balancer_names,
         )

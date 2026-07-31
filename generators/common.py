@@ -14,6 +14,7 @@ from infrahub_sdk.task.models import TaskFilter, TaskState
 from .helpers import CableTypeDetector, CablingPlanner, DeviceNamingConfig, get_loopback_name
 from .helpers.common import retry_delay
 from .logger import FailOnErrorLoggerMixin, GeneratorError
+from .models import DeviceRole
 from .protocols import (
     DcimCable,
     DcimPhysicalDevice,
@@ -974,3 +975,120 @@ class CommonGenerator(FailOnErrorLoggerMixin, RoutingMixin, InfrahubGenerator):
             all_leg_pairs.append(await self._execute_cabling_plan(leg_plan, iface_map, options, technical_pool))
 
         return all_leg_pairs
+
+    async def _ensure_ha_pair(
+        self,
+        device_names: list[str],
+        *,
+        ha_kind: Literal["ManagedFirewallHA", "ManagedLoadbalancerHA"],
+        role_label: str,
+    ) -> None:
+        """Pair exactly 2 same-role devices into an HA domain. Shared by
+        dc.py (DC-wide firewall/load-balancer) and pod.py (a border-spine
+        pod's own firewall/load-balancer) — never pairs across pods/DCs,
+        both members must sit in front of the same fabric to mean anything
+        physically."""
+        if len(device_names) != 2:
+            return
+
+        first, second = sorted(device_names)
+        ha_name = f"{first}-{second}-ha"
+        existing = await self.client.filters(kind=ha_kind, name__value=ha_name)
+        if existing:
+            self.client.group_context.related_node_ids.append(existing[0].id)
+            return
+
+        devices = await self.client.filters(kind=DcimPhysicalDevice, name__values=[first, second])
+        if len(devices) != 2:
+            self.logger.error(f"HA pair {first}/{second}: could not resolve both devices.")
+            return
+
+        ha_group = await self.client.get(kind=CoreStandardGroup, name__value="ha_domains")
+        ha_obj = await self.client.create(
+            kind=ha_kind,
+            data={
+                "name": ha_name,
+                "status": "active",
+                "capabilities": [{"id": dev.id} for dev in devices],
+                "member_of_groups": [{"id": ha_group.id}],
+            },
+        )
+        await ha_obj.save(allow_upsert=True)
+        self.logger.info(f"Created HA domain {ha_name} for {role_label}s")
+
+    async def _create_role_devices(
+        self,
+        *,
+        role: Literal["firewall", "load-balancer"],
+        entries: list[DeviceRole],
+        deployment_id: str,
+        naming_convention: Literal["standard", "hierarchical", "flat"],
+        indexes: list[int],
+    ) -> list[str]:
+        """Create firewall/load-balancer devices for one deployment scope
+        (DC-wide from dc.py, or one pod from pod.py), pairing each entry's
+        devices into an HA domain when quantity == 2. No loopback allocation
+        — not part of underlay/overlay routing."""
+        device_options = DeviceOptions(indexes=indexes)
+        if role == "load-balancer":
+            # create_devices()'s default group_name is f"{device_role}s" = "load-balancers",
+            # but the bootstrap group is named "loadbalancers" (no hyphen) — override.
+            device_options["group_name"] = "loadbalancers"
+        ha_kind: Literal["ManagedFirewallHA", "ManagedLoadbalancerHA"] = (
+            "ManagedFirewallHA" if role == "firewall" else "ManagedLoadbalancerHA"
+        )
+
+        all_names: list[str] = []
+        for entry in entries:
+            names = await self.create_devices(
+                deployment_id=deployment_id,
+                device_role=role,
+                amount=entry.quantity,
+                template=entry.template.model_dump(),
+                naming_convention=naming_convention,
+                options=device_options,
+            )
+            all_names.extend(names)
+            if entry.quantity == 2:
+                await self._ensure_ha_pair(names, ha_kind=ha_kind, role_label=role)
+
+        return all_names
+
+    async def _cable_border_services(
+        self,
+        *,
+        border_role_for: dict[str, str],
+        connectivity_mode: Literal["pbr", "inline"],
+        border_names: list[str],
+        firewall_names: list[str],
+        load_balancer_names: list[str],
+    ) -> None:
+        """Cable border-leaf/border-spine<->firewall<->load-balancer per
+        connectivity_mode. Index-paired (border[0]<->fw[0], border[1]<->fw[1],
+        ...), never any-to-any — each border/firewall/load-balancer triple is
+        one independent redundant path. Fewer devices on one side are reused
+        round-robin.
+        - pbr: two independent legs, each on the service device's "uplink" ports.
+        - inline: one chain — border<->firewall<->load-balancer<->border.
+          Every device has an "uplink" (toward the previous hop) and "downlink"
+          (toward the next), distinct from load-balancer's own "customer"-role
+          VIP ports (untouched here).
+        No-ops for any leg with nothing to cable (create_chain_cabling's own
+        empty-devices handling).
+        """
+        border_to_firewall = ChainHop(devices=border_names, down_role=border_role_for["firewall"])
+        firewall_hop = ChainHop(devices=firewall_names, up_role="uplink")
+        await self.create_chain_cabling([border_to_firewall, firewall_hop])
+
+        if connectivity_mode == "inline":
+            middle_firewall_hop = ChainHop(devices=firewall_names, down_role="downlink")
+            middle_lb_hop = ChainHop(devices=load_balancer_names, up_role="uplink")
+            await self.create_chain_cabling([middle_firewall_hop, middle_lb_hop])
+
+            border_to_lb = ChainHop(devices=border_names, down_role=border_role_for["load-balancer"])
+            return_lb_hop = ChainHop(devices=load_balancer_names, up_role="downlink")
+            await self.create_chain_cabling([border_to_lb, return_lb_hop])
+        else:
+            border_to_lb = ChainHop(devices=border_names, down_role=border_role_for["load-balancer"])
+            lb_hop = ChainHop(devices=load_balancer_names, up_role="uplink")
+            await self.create_chain_cabling([border_to_lb, lb_hop])
