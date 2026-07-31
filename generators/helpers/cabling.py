@@ -603,13 +603,7 @@ class CablingPlanner:
 
     def _get_interface_speed(self, interface: DcimPhysicalInterface) -> int | None:
         """Extract speed from interface type."""
-        if not hasattr(interface, "interface_type") or not interface.interface_type:
-            return None
-
-        interface_type = (
-            interface.interface_type.value if hasattr(interface.interface_type, "value") else interface.interface_type
-        )
-        return InterfaceSpeedMatcher.extract_speed(str(interface_type)) if interface_type else None
+        return InterfaceSpeedMatcher.extract_speed(str(interface.interface_type.value))
 
     def _validate_interface_speeds(
         self,
@@ -625,16 +619,8 @@ class CablingPlanner:
             bottom_speed = self._get_interface_speed(bottom_intf)
             top_speed = self._get_interface_speed(top_intf)
 
-            bottom_type = (
-                getattr(bottom_intf.interface_type, "value", bottom_intf.interface_type)
-                if hasattr(bottom_intf, "interface_type")
-                else "unknown"
-            )
-            top_type = (
-                getattr(top_intf.interface_type, "value", top_intf.interface_type)
-                if hasattr(top_intf, "interface_type")
-                else "unknown"
-            )
+            bottom_type = bottom_intf.interface_type.value
+            top_type = top_intf.interface_type.value
 
             if bottom_speed and top_speed and bottom_speed != top_speed:
                 mismatch_msg = (

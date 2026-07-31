@@ -589,13 +589,9 @@ class CommonGenerator(FailOnErrorLoggerMixin, RoutingMixin, InfrahubGenerator):
                     include=["device", "ip_address"],
                 )
                 for loopback in existing_loopbacks:
-                    device_rel = getattr(loopback, "device", None)
-                    device_peer = getattr(device_rel, "peer", None)
-                    device_obj = device_peer or device_rel
-                    device_name_attr = getattr(device_obj, "name", None)
-                    device_name = getattr(device_name_attr, "value", None)
-                    if device_name:
-                        existing_loopbacks_by_device[device_name] = loopback
+                    # device is a mandatory Parent relationship (schemas/base/dcim.yml),
+                    # always resolvable given include=["device"] above.
+                    existing_loopbacks_by_device[loopback.device.peer.name.value] = loopback
 
             # Add device objects and related loopback interfaces (if any) to the batch
             for name in device_names:
@@ -835,9 +831,9 @@ class CommonGenerator(FailOnErrorLoggerMixin, RoutingMixin, InfrahubGenerator):
             cable_name = "__".join(endpoint_names)
             link_identifier = "__".join(sorted([src_interface.id, dst_interface.id]))
 
-            src_intf_type = getattr(getattr(src_interface, "interface_type", None), "value", None)
-            dst_intf_type = getattr(getattr(dst_interface, "interface_type", None), "value", None)
-            cable_type = CableTypeDetector.detect_cable_type(src_intf_type, dst_intf_type)
+            cable_type = CableTypeDetector.detect_cable_type(
+                src_interface.interface_type.value, dst_interface.interface_type.value
+            )
 
             cable = await self.client.create(
                 kind=DcimCable,

@@ -95,12 +95,13 @@ def _build_rack_generator(
     return gen
 
 
-def _mock_rack(name: str, rack_type: str, row_index: int = 1) -> MagicMock:
+def _mock_rack(name: str, rack_type: str, row_index: int = 1, index: int = 1) -> MagicMock:
     r = MagicMock()
     r.id = f"id-{name}"
     r.name = MagicMock(value=name)
     r.rack_type = MagicMock(value=rack_type)
     r.row_index = MagicMock(value=row_index)
+    r.index = MagicMock(value=index)
     r.save = AsyncMock()
     return r
 

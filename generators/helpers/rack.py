@@ -23,14 +23,7 @@ class RackPlanner:
     @staticmethod
     def rack_sort_key(rack: LocationRack) -> tuple[int, int, str]:
         """Deterministic rack ordering for stable idempotent selections."""
-        row_raw = rack.row_index.value if getattr(rack, "row_index", None) else 0
-        index_raw = rack.index.value if getattr(rack, "index", None) else 0
-        name_raw = rack.name.value if getattr(rack, "name", None) else ""
-
-        row = row_raw if isinstance(row_raw, int) else 0
-        index = index_raw if isinstance(index_raw, int) else 0
-        name = name_raw if isinstance(name_raw, str) else ""
-        return row, index, name
+        return rack.row_index.value, rack.index.value, rack.name.value
 
     @staticmethod
     def parse_rack_data(data: dict[str, Any]) -> RackModel:

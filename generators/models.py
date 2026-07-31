@@ -15,9 +15,9 @@ def _unwrap_node(value: Any) -> Any:
     return value
 
 
-def _templates_by_role(templates: list["DeviceRole"] | None, role: str) -> list["DeviceRole"]:
+def _templates_by_role(templates: list["DeviceRole"], role: str) -> list["DeviceRole"]:
     """Filter a fabric_templates list down to one role's positive-quantity entries."""
-    return [t for t in (templates or []) if t.role == role and t.quantity > 0]
+    return [t for t in templates if t.role == role and t.quantity > 0]
 
 
 # Shared models
@@ -207,7 +207,7 @@ class DCModel(RoutingArchitectureMixin):
     spine_interface_sorting_method: Literal["top_down", "bottom_up"] = "bottom_up"
     connectivity_mode: Literal["pbr", "inline"] = "pbr"
     management_mode: Literal["fully_managed", "managed_by_controller"] = "fully_managed"
-    fabric_templates: list[DeviceRole] | None = []
+    fabric_templates: list[DeviceRole] = []
     loopback_pool: Pool | None = None
     technical_pool: Pool | None = None
     management_pool: Pool | None = None
@@ -265,8 +265,8 @@ class PodParent(RoutingArchitectureMixin):
     devices: list[Device]
     name: str
     index: int
-    # Schema: optional — DC may have zero super-spine fabric_templates entries
-    fabric_templates: list[DeviceRole] | None = []
+    # DC may have zero super-spine fabric_templates entries, never a null list
+    fabric_templates: list[DeviceRole] = []
     design: DataCenterDesignData
     naming_convention: str = "standard"
     fabric_interface_sorting_method: Literal["top_down", "bottom_up"] = "bottom_up"
@@ -339,8 +339,8 @@ class PodModel(BaseModel):
         return self.design.compute_racks_per_row * self.design.max_tors_per_compute_rack
 
     spine_interface_sorting_method: Literal["top_down", "bottom_up"] = "bottom_up"
-    # Schema: optional — pod.py validates non-empty at generate() time
-    fabric_templates: list[DeviceRole] | None = []
+    # pod.py validates non-empty at generate() time; the list itself is never null
+    fabric_templates: list[DeviceRole] = []
     parent: PodParent
     loopback_pool: Pool | None = None
     prefix_pool: Pool | None = None
@@ -407,22 +407,6 @@ class RackParent(RoutingArchitectureMixin):
         return unwrapped
 
 
-class QuantityOnly(BaseModel):
-    """Minimal model for offset calculation - only quantity needed."""
-
-    quantity: int
-
-
-class SimpleRack(BaseModel):
-    """Simplified rack data for offset calculation."""
-
-    id: str
-    index: int
-    row_index: int
-    leafs: list[QuantityOnly] | None = []
-    tors: list[QuantityOnly] | None = []
-
-
 class RackPod(BaseModel):
     id: str
     name: str
@@ -435,8 +419,8 @@ class RackPod(BaseModel):
     prefix_pool: Pool | None = None
     asn_pool: Pool | None = None
     design: PodDesign
-    # Schema: optional — pod.py validates non-empty at generate() time
-    fabric_templates: list[DeviceRole] | None = []
+    # pod.py validates non-empty at generate() time; the list itself is never null
+    fabric_templates: list[DeviceRole] = []
     # Spine devices with cable info (from GQL query)
     devices: list[SpineDevice] = []
 
@@ -488,10 +472,10 @@ class RackModel(BaseModel):
     rack_type: str
     row_index: int
     parent: LocationSuiteModel
-    leafs: list[DeviceRole] | None = []
-    tors: list[DeviceRole] | None = []
-    l2_leafs: list[DeviceRole] | None = []
-    access_leafs: list[DeviceRole] | None = []
+    leafs: list[DeviceRole] = []
+    tors: list[DeviceRole] = []
+    l2_leafs: list[DeviceRole] = []
+    access_leafs: list[DeviceRole] = []
     pod: RackPod
 
 

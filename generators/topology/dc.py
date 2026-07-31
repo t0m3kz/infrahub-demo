@@ -115,8 +115,8 @@ class DCTopologyGenerator(CommonGenerator):
         # other pool size in this generator, which are all design-capacity based.
         design_mode = "back-to-back" if dc_design.max_super_spines_per_fabric == 0 else "super-spine"
         max_super_spines_cap = dc_design.max_super_spines_per_fabric
-        max_border_leafs_cap = dc_design.max_border_leafs_per_fabric or 0
-        max_hyper_spines_cap = dc_design.max_hyper_spines_per_fabric or 0
+        max_border_leafs_cap = dc_design.max_border_leafs_per_fabric
+        max_hyper_spines_cap = dc_design.max_hyper_spines_per_fabric
         # Allocated whenever there's capacity for ANY DC-level tier that draws
         # from this pool — independent of design_mode. A back-to-back design
         # (no super-spine tier) can still have border-leaf capacity (e.g.
@@ -158,7 +158,7 @@ class DCTopologyGenerator(CommonGenerator):
         # from this same fabric_asn_pool (see upsert_asn_pool below).
         max_pods = self.data.design.max_pods
         max_spines_per_pod = self.data.design.max_spines_per_pod
-        max_border_leafs_per_fabric = self.data.design.max_border_leafs_per_fabric or 0
+        max_border_leafs_per_fabric = self.data.design.max_border_leafs_per_fabric
         asn_start, asn_end = name_to_asn_range(
             dc_name=self.data.name,
             max_pods=max_pods,
@@ -259,7 +259,7 @@ class DCTopologyGenerator(CommonGenerator):
         # where it does.
         hyper_spine_entries = self.data.hyper_spine_templates
         amount_of_hyper_spines = sum(entry.quantity for entry in hyper_spine_entries)
-        max_hyper_spines_cap = self.data.design.max_hyper_spines_per_fabric or 0
+        max_hyper_spines_cap = self.data.design.max_hyper_spines_per_fabric
         if amount_of_hyper_spines > max_hyper_spines_cap:
             raise RuntimeError(
                 f"DC {self.fabric_name.upper()} requests {amount_of_hyper_spines} hyper-spines but the assigned "
@@ -401,7 +401,7 @@ class DCTopologyGenerator(CommonGenerator):
         shouldn't block the other roles from generating (mirrors rack.py's own
         loop-iteration error convention, not its abort-on-error one, since here
         the roles are independent of each other)."""
-        for entry in self.data.fabric_templates or []:
+        for entry in self.data.fabric_templates:
             if entry.role not in _DC_VALID_FABRIC_ROLES:
                 self.logger.warning(
                     f"DC {self.fabric_name}: fabric_templates entry with role={entry.role!r} is not valid "
@@ -413,13 +413,13 @@ class DCTopologyGenerator(CommonGenerator):
         """This pod's own design cap on how many border-leaf devices it can
         receive — a pod with max_border_leafs_per_pod=0 in its own design is
         deliberately skipped, which is how a specific subset of pods (e.g.
-        pod 1 and pod 3, not pod 2) can be chosen to host border-leafs."""
-        design = getattr(pod, "design", None)
-        design_peer = getattr(design, "peer", None) if design else None
-        if design_peer is None:
-            return 0
-        attr = getattr(design_peer, "max_border_leafs_per_pod", None)
-        return getattr(attr, "value", None) or 0
+        pod 1 and pod 3, not pod 2) can be chosen to host border-leafs.
+
+        Only ever called on pods from the `include=["design"]` fetch in
+        generate() (see self._existing_pods), so design is always hydrated —
+        TopologyPod.design is a mandatory relationship."""
+        max_border_leafs_per_pod = pod.design.peer.max_border_leafs_per_pod.value
+        return max_border_leafs_per_pod or 0
 
     async def _ensure_dc_ha_pair(
         self,

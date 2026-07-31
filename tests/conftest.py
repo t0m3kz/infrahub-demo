@@ -25,16 +25,19 @@ sys.path.insert(0, str(CURRENT_DIR.parent))
 class MockInterface:
     """Mock DcimPhysicalInterface for testing."""
 
-    def __init__(self, name: str, device_label: str) -> None:
+    def __init__(self, name: str, device_label: str, interface_type: str = "other") -> None:
         """Initialize mock interface.
 
         Args:
             name: Interface name (e.g., 'Ethernet1/1')
             device_label: Device display label (e.g., 'spine-01')
+            interface_type: Dropdown value — mandatory with a default on the real
+                schema (schemas/base/dcim.yml), so every real interface has one.
         """
         self.name: Any = Mock(value=name)
         self.device: Any = Mock(display_label=device_label)
         self.cable: Any = None
+        self.interface_type: Any = Mock(value=interface_type)
 
 
 def create_mock_interfaces(device_label: str, interface_names: list[str]) -> list[MockInterface]:
