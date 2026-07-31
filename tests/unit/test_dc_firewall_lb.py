@@ -317,124 +317,19 @@ class TestCreateDcWideRoleDevices:
         gen._ensure_dc_ha_pair.assert_not_awaited()
 
 
-class TestCableChain:
-    @pytest.mark.asyncio
-    async def test_two_hop_cables_one_leg(self) -> None:
-        gen = _make_generator()
-        gen.client.filters = AsyncMock(
-            side_effect=[
-                [_mock_iface("Eth1/25"), _mock_iface("Eth1/26")],  # bl firewall-role ports
-                [_mock_iface("eth1"), _mock_iface("eth2")],  # fw uplink ports
-            ]
-        )
-
-        result = await gen._cable_chain(
-            [
-                {"devices": ["bl-01"], "down_role": "firewall"},
-                {"devices": ["fw-01", "fw-02"], "up_role": "uplink"},
-            ]
-        )
-
-        gen.create_cabling.assert_awaited_once()
-        call_kwargs = gen.create_cabling.call_args.kwargs
-        assert call_kwargs["bottom_devices"] == ["fw-01", "fw-02"]
-        assert call_kwargs["top_devices"] == ["bl-01"]
-        assert result == [[]]  # create_cabling mocked to return [] by default
-
-    @pytest.mark.asyncio
-    async def test_three_hop_cables_two_legs(self) -> None:
-        gen = _make_generator()
-        gen.create_cabling = AsyncMock(side_effect=[[("a", "b")], [("c", "d")]])
-        gen.client.filters = AsyncMock(
-            side_effect=[
-                [_mock_iface("Eth1/25")],  # hop0 down
-                [_mock_iface("eth1")],  # hop1 up
-                [_mock_iface("eth2")],  # hop1 down
-                [_mock_iface("2.1")],  # hop2 up
-            ]
-        )
-
-        result = await gen._cable_chain(
-            [
-                {"devices": ["bl-01"], "down_role": "firewall"},
-                {"devices": ["fw-01"], "up_role": "uplink", "down_role": "downlink"},
-                {"devices": ["lb-01"], "up_role": "uplink"},
-            ]
-        )
-
-        assert gen.create_cabling.await_count == 2
-        assert result == [[("a", "b")], [("c", "d")]]
-
-    @pytest.mark.asyncio
-    async def test_empty_devices_on_either_hop_skips_that_leg(self) -> None:
-        gen = _make_generator()
-
-        result = await gen._cable_chain(
-            [
-                {"devices": [], "down_role": "firewall"},
-                {"devices": ["fw-01"], "up_role": "uplink"},
-            ]
-        )
-
-        gen.create_cabling.assert_not_awaited()
-        gen.client.filters.assert_not_awaited()
-        assert result == [[]]
-
-    @pytest.mark.asyncio
-    async def test_missing_ports_on_either_side_errors_and_skips(self) -> None:
-        gen = _make_generator()
-        gen.client.filters = AsyncMock(side_effect=[[], []])
-
-        result = await gen._cable_chain(
-            [
-                {"devices": ["bl-01"], "down_role": "firewall"},
-                {"devices": ["fw-01"], "up_role": "uplink"},
-            ]
-        )
-
-        gen.create_cabling.assert_not_awaited()
-        gen.logger.error.assert_called_once()
-        assert result == [[]]
-
-    @pytest.mark.asyncio
-    async def test_speed_mismatch_producing_no_connections_errors(self) -> None:
-        """Ports exist on both sides but create_cabling's own speed-aware
-        matching rejects them all — create_cabling returns [] rather than
-        raising, so this must be checked explicitly."""
-        gen = _make_generator()
-        gen.client.filters = AsyncMock(
-            side_effect=[
-                [_mock_iface("Eth1/25")],  # bl firewall-role ports
-                [_mock_iface("eth1")],  # fw uplink ports
-            ]
-        )
-        gen.create_cabling = AsyncMock(return_value=[])
-
-        result = await gen._cable_chain(
-            [
-                {"devices": ["bl-01"], "down_role": "firewall"},
-                {"devices": ["fw-01"], "up_role": "uplink"},
-            ]
-        )
-
-        gen.create_cabling.assert_awaited_once()
-        gen.logger.error.assert_called_once()
-        assert result == [[]]
-
-
 class TestCableDcServices:
     @pytest.mark.asyncio
     async def test_pbr_cables_two_independent_legs(self) -> None:
         gen = _make_generator()
         gen.data.connectivity_mode = "pbr"
-        gen._cable_chain = AsyncMock(return_value=[[]])
+        gen.create_chain_cabling = AsyncMock(return_value=[[]])
 
         await gen._cable_dc_services(
             border_leaf_names=["bl-01"], firewall_names=["fw-01"], load_balancer_names=["lb-01"]
         )
 
-        assert gen._cable_chain.await_count == 2
-        calls = gen._cable_chain.call_args_list
+        assert gen.create_chain_cabling.await_count == 2
+        calls = gen.create_chain_cabling.call_args_list
         # Border-leaf<->firewall
         hops0 = calls[0].args[0]
         assert hops0[0]["devices"] == ["bl-01"]
@@ -452,7 +347,7 @@ class TestCableDcServices:
     async def test_inline_chains_bl_fw_lb_bl(self) -> None:
         gen = _make_generator()
         gen.data.connectivity_mode = "inline"
-        gen._cable_chain = AsyncMock(return_value=[[]])
+        gen.create_chain_cabling = AsyncMock(return_value=[[]])
 
         await gen._cable_dc_services(
             border_leaf_names=["bl-01", "bl-02"], firewall_names=["fw-01"], load_balancer_names=["lb-01"]
@@ -460,8 +355,8 @@ class TestCableDcServices:
 
         # Three legs: border-leaf<->firewall, firewall<->load-balancer (middle),
         # load-balancer<->border-leaf (return).
-        assert gen._cable_chain.await_count == 3
-        calls = gen._cable_chain.call_args_list
+        assert gen.create_chain_cabling.await_count == 3
+        calls = gen.create_chain_cabling.call_args_list
 
         blf_fw_hops = calls[0].args[0]
         assert blf_fw_hops[0]["devices"] == ["bl-01", "bl-02"]
@@ -486,17 +381,17 @@ class TestCableDcServices:
 
     @pytest.mark.asyncio
     async def test_inline_still_calls_middle_leg_when_one_side_missing(self) -> None:
-        """_cable_chain itself no-ops when a hop's devices list is empty — this
+        """create_chain_cabling itself no-ops when a hop's devices list is empty — this
         just confirms _cable_dc_services always issues all three legs and
-        lets _cable_chain decide what's actually cable-able."""
+        lets create_chain_cabling decide what's actually cable-able."""
         gen = _make_generator()
         gen.data.connectivity_mode = "inline"
-        gen._cable_chain = AsyncMock(return_value=[[]])
+        gen.create_chain_cabling = AsyncMock(return_value=[[]])
 
         await gen._cable_dc_services(border_leaf_names=["bl-01"], firewall_names=["fw-01"], load_balancer_names=[])
 
-        assert gen._cable_chain.await_count == 3
-        middle_hops = gen._cable_chain.call_args_list[1].args[0]
+        assert gen.create_chain_cabling.await_count == 3
+        middle_hops = gen.create_chain_cabling.call_args_list[1].args[0]
         assert middle_hops[1]["devices"] == []
 
 

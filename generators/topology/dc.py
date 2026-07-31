@@ -13,7 +13,6 @@ from ..helpers.routing import RoutingStrategy
 from ..models import DCModel, DeviceRole
 from ..protocols import (
     DcimPhysicalDevice,
-    DcimPhysicalInterface,
     RoutingAutonomousSystem,
     RoutingOSPFArea,
     RoutingPassword,
@@ -451,76 +450,15 @@ class DCTopologyGenerator(CommonGenerator):
 
         return all_names
 
-    async def _cable_chain(self, hops: list[ChainHop]) -> list[list[tuple[Any, Any]]]:
-        """Cable an ordered chain of device groups end to end — e.g.
-        border-leaf<->firewall<->load-balancer<->border-leaf — one leg per
-        consecutive pair of hops, any-to-any within each leg (create_cabling's
-        "rack" strategy). DC-specific (not on CommonGenerator): no other
-        generator cables a >2-hop chain of distinct device roles.
-
-        Each hop's ``down_role`` interfaces are queried and cabled to the next
-        hop's ``up_role`` interfaces. A hop with an empty ``devices`` list, or
-        a leg where either side resolves to zero matching ports, is skipped
-        (logged as an error) — same "no-op on nothing to cable" convention as
-        every other cabling helper in this module.
-
-        Returns one list of cabled (src, dst) interface pairs per leg, in
-        chain order — e.g. ``[blf_fw_pairs, fw_lb_pairs, lb_blf_pairs]`` for a
-        4-hop chain (3 legs). A skipped leg contributes an empty list.
-        """
-        all_leg_pairs: list[list[tuple[Any, Any]]] = []
-        for top_hop, bottom_hop in zip(hops, hops[1:]):
-            top_devices = top_hop.get("devices") or []
-            bottom_devices = bottom_hop.get("devices") or []
-            if not top_devices or not bottom_devices:
-                all_leg_pairs.append([])
-                continue
-
-            top_role = top_hop.get("down_role", "")
-            bottom_role = bottom_hop.get("up_role", "")
-            top_interfaces = await self.client.filters(
-                kind=DcimPhysicalInterface, device__name__values=top_devices, role__value=top_role
-            )
-            bottom_interfaces = await self.client.filters(
-                kind=DcimPhysicalInterface, device__name__values=bottom_devices, role__value=bottom_role
-            )
-            top_interface_names = sorted({iface.name.value for iface in top_interfaces})
-            bottom_interface_names = sorted({iface.name.value for iface in bottom_interfaces})
-            if not top_interface_names or not bottom_interface_names:
-                self.logger.error(
-                    f"DC {self.fabric_name}: cannot cable {sorted(top_devices)}<->{sorted(bottom_devices)} — "
-                    f"{top_role}_ports={len(top_interface_names)}, {bottom_role}_ports={len(bottom_interface_names)}."
-                )
-                all_leg_pairs.append([])
-                continue
-
-            leg_pairs = await self.create_cabling(
-                bottom_devices=bottom_devices,
-                bottom_interfaces=bottom_interface_names,
-                top_devices=top_devices,
-                top_interfaces=top_interface_names,
-                strategy="rack",
-            )
-            if not leg_pairs:
-                self.logger.error(
-                    f"DC {self.fabric_name}: {sorted(top_devices)}<->{sorted(bottom_devices)} cabling produced "
-                    f"no connections — likely an interface speed mismatch between {top_role}-role and "
-                    f"{bottom_role}-role ports. Check create_cabling's own log output above for the exact "
-                    "speed groups involved."
-                )
-            all_leg_pairs.append(leg_pairs)
-
-        return all_leg_pairs
-
     async def _cable_dc_services(
         self, *, border_leaf_names: list[str], firewall_names: list[str], load_balancer_names: list[str]
     ) -> None:
         """Cable border-leaf<->firewall<->load-balancer per connectivity_mode, via
-        _cable_chain(). Border-leaf is always passed first (the "top"/anchor side of
-        each leg) since its dedicated firewall/load-balancer-role ports outnumber
-        firewall's/load-balancer's own uplink/downlink ports (4 vs 2 per template) —
-        this keeps enough per-device port capacity to fan out to an HA pair on the
-        other side regardless of which leg border-leaf appears on.
+        create_chain_cabling(). Border-leaf is always passed first (the "top"/anchor
+        side of each leg) since its dedicated firewall/load-balancer-role ports
+        outnumber firewall's/load-balancer's own uplink/downlink ports (4 vs 2 per
+        template) — this keeps enough per-device port capacity to fan out to an HA
+        pair on the other side regardless of which leg border-leaf appears on.
         - pbr: two independent legs, border-leaf<->firewall and border-leaf<->load-balancer,
           each on the service device's "uplink" ports.
         - inline: one physical chain — border-leaf<->firewall<->load-balancer<->border-leaf.
@@ -531,25 +469,25 @@ class DCTopologyGenerator(CommonGenerator):
           "downlink" ports. This uplink/downlink pair is physically distinct from any
           load-balancer's separate "customer"-role VIP/server-facing ports (not part of
           this chain, untouched by any of this cabling).
-        No-ops for any leg with nothing to cable on either side (cable_chain's own
-        empty-devices handling).
+        No-ops for any leg with nothing to cable on either side (create_chain_cabling's
+        own empty-devices handling).
         """
         blf_to_firewall = ChainHop(devices=border_leaf_names, down_role=_BL_ROLE_FOR["firewall"])
         firewall_hop = ChainHop(devices=firewall_names, up_role="uplink")
-        await self._cable_chain([blf_to_firewall, firewall_hop])
+        await self.create_chain_cabling([blf_to_firewall, firewall_hop])
 
         if self.data.connectivity_mode == "inline":
             middle_firewall_hop = ChainHop(devices=firewall_names, down_role="downlink")
             middle_lb_hop = ChainHop(devices=load_balancer_names, up_role="uplink")
-            await self._cable_chain([middle_firewall_hop, middle_lb_hop])
+            await self.create_chain_cabling([middle_firewall_hop, middle_lb_hop])
 
             blf_to_lb = ChainHop(devices=border_leaf_names, down_role=_BL_ROLE_FOR["load-balancer"])
             return_lb_hop = ChainHop(devices=load_balancer_names, up_role="downlink")
-            await self._cable_chain([blf_to_lb, return_lb_hop])
+            await self.create_chain_cabling([blf_to_lb, return_lb_hop])
         else:
             blf_to_lb = ChainHop(devices=border_leaf_names, down_role=_BL_ROLE_FOR["load-balancer"])
             lb_hop = ChainHop(devices=load_balancer_names, up_role="uplink")
-            await self._cable_chain([blf_to_lb, lb_hop])
+            await self.create_chain_cabling([blf_to_lb, lb_hop])
 
     async def _generate_dc_scoped_fabric_devices(self) -> None:
         """Create border-leaf (distributed across pods by their own design caps),
