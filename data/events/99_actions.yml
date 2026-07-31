@@ -21,18 +21,7 @@ spec:
       mutation_action: "created"
       action: run-dc-generator
 
-    - name: trigger-dc-update-super-spines
-      branch_scope: "other_branches"
-      node_kind: TopologyDataCenter
-      mutation_action: "updated"
-      action: run-dc-pod-cascade
-      matches:
-        kind: CoreNodeTriggerAttributeMatch
-        data:
-          - attribute_name: amount_of_super_spines
-            value_match: any
-
-    - name: trigger-dc-update-super-spine-template
+    - name: trigger-dc-update-fabric-templates
       branch_scope: "other_branches"
       node_kind: TopologyDataCenter
       mutation_action: "updated"
@@ -40,7 +29,7 @@ spec:
       matches:
         kind: CoreNodeTriggerRelationshipMatch
         data:
-          - relationship_name: super_spine_template
+          - relationship_name: fabric_templates
             modification_type: updated
 
     # Re-cables every rack's firewall/load-balancer links to match the new
@@ -99,16 +88,16 @@ spec:
           - attribute_name: index
             value_match: any
 
-    - name: trigger-pod-update-amount-of-spines
+    - name: trigger-pod-update-fabric-templates
       branch_scope: "other_branches"
       node_kind: TopologyPod
       mutation_action: "updated"
       action: run-pod-rack-cascade
       matches:
-        kind: CoreNodeTriggerAttributeMatch
+        kind: CoreNodeTriggerRelationshipMatch
         data:
-          - attribute_name: amount_of_spines
-            value_match: any
+          - relationship_name: fabric_templates
+            modification_type: updated
 
     - name: trigger-pod-update-mlag-create
       branch_scope: "other_branches"

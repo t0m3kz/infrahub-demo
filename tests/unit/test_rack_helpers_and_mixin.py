@@ -38,44 +38,35 @@ def _build_gen(*, deployment_type: str = "mixed", rack_type: str = "network") ->
         name="DC1",
         index=1,
         naming_convention="standard",
-        amount_of_super_spines=2,
         management_pool=Pool(id="mgmt-pool", name="mgmt"),
-        super_spine_template=Template(
-            id="tmpl-ss",
-            interfaces=[Interface(name="Eth1/1", role="uplink"), Interface(name="Eth1/2", role="uplink")],
-        ),
     )
     pod = RackPod(
         id="pod-1",
         name="pod-1",
         index=1,
         parent=parent,
-        amount_of_spines=2,
         leaf_interface_sorting_method="top_down",
         spine_interface_sorting_method="bottom_up",
         loopback_pool=Pool(id="lo-pool", name="lo"),
         prefix_pool=Pool(id="p2p-pool", name="p2p"),
         asn_pool=Pool(id="asn-pool", name="asn"),
         design=_design_for(deployment_type),
-        spine_template=Template(
-            id="tmpl-spine",
-            interfaces=[Interface(name="Eth1/10"), Interface(name="Eth1/11")],
-        ),
+        fabric_templates=[
+            DeviceRole(
+                role="spine",
+                quantity=2,
+                template=Template(
+                    id="tmpl-spine",
+                    interfaces=[Interface(name="Eth1/10"), Interface(name="Eth1/11")],
+                ),
+            )
+        ],
     )
     suite = LocationSuiteModel(index=1)
     leaf_template = Template(id="tmpl-leaf", interfaces=[Interface(name="Eth1/1"), Interface(name="Eth1/2")])
     tor_template = Template(
         id="tmpl-tor",
         interfaces=[Interface(name="Eth1/47", role="uplink"), Interface(name="Eth1/48", role="uplink")],
-    )
-    bl_template = Template(
-        id="tmpl-bl",
-        interfaces=[
-            Interface(name="Eth1/1", role="uplink"),
-            Interface(name="Eth1/2", role="uplink"),
-            Interface(name="Eth1/3", role="uplink"),
-            Interface(name="Eth1/4", role="uplink"),
-        ],
     )
     rack = RackModel(
         id="rack-1",
@@ -87,7 +78,6 @@ def _build_gen(*, deployment_type: str = "mixed", rack_type: str = "network") ->
         pod=pod,
         leafs=[DeviceRole(role="leaf", quantity=2, template=leaf_template)],
         tors=[DeviceRole(role="tor", quantity=2, template=tor_template)],
-        border_leafs=[DeviceRole(role="border-leaf", quantity=1, template=bl_template)],
     )
 
     gen = RackGenerator.__new__(RackGenerator)
@@ -163,11 +153,12 @@ class TestRackRolesHelper:
         assert all_ifaces == ["Eth1/1", "Eth1/2", "Eth1/3"]
         assert uplinks == ["Eth1/1", "Eth1/3"]
 
-    def test_border_leafs_per_rack_and_overlay_options(self) -> None:
+    def test_overlay_only_routing_options(self) -> None:
+        """border_leafs_per_rack() was deleted along with border-leaf's rack-level
+        generation (moved to TopologyDataCenter's fabric_templates) — only
+        overlay_only_routing_options() coverage remains relevant here."""
         gen = _build_gen()
         helper = RackRolesHelper(gen)
-
-        assert helper.border_leafs_per_rack() == 4
 
         overlay = helper.overlay_only_routing_options()
         assert overlay["skip_underlay"] is True
@@ -232,18 +223,6 @@ class TestRackMixinAdditional:
         assert gen._p2p_prefix_length == 31
         assert gen._routing_options["asn_pool"] == "asn-pool"
 
-    def test_derive_super_spine_info_success(self) -> None:
-        gen = _build_gen()
-        gen.fabric_name = "dc1"
-
-        device_names, interface_names = gen._derive_super_spine_info()
-
-        assert len(device_names) == 2
-        assert interface_names == ["Eth1/1", "Eth1/2"]
-
-    def test_derive_super_spine_info_missing_template_raises(self) -> None:
-        gen = _build_gen()
-        gen.data.pod.parent.super_spine_template = None
-
-        with pytest.raises(RuntimeError, match="Cannot derive super-spine info"):
-            gen._derive_super_spine_info()
+    # _derive_super_spine_info() was dead code (never called) and was deleted
+    # from RackMixin — see tests/unit/test_rack_parse_and_checksum.py's
+    # TestDeriveSpineInfo for the still-live _derive_spine_info() coverage.

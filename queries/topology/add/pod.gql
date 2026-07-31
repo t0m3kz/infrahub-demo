@@ -39,7 +39,6 @@ fragment PodDesignFields on TopologyPodDesign {
   max_tors_per_network_rack { value }
   max_tors_per_compute_rack { value }
   max_spines_per_pod { value }
-  max_border_leafs_per_pod { value }
 }
 
 fragment DataCenterFields on TopologyDataCenter {
@@ -55,21 +54,29 @@ fragment DataCenterFields on TopologyDataCenter {
   }
   name { value }
   index { value }
-  amount_of_super_spines { value }
   naming_convention { value }
   fabric_interface_sorting_method { value }
-  super_spine_template { node { ...SuperSpineTemplateFields } }
+  fabric_templates {
+    edges {
+      node {
+        role { value }
+        quantity { value }
+        template { node { ...SuperSpineTemplateFields } }
+      }
+    }
+  }
   design {
     node {
       id
       max_pods { value }
       max_super_spines_per_fabric { value }
       max_spines_per_pod { value }
+      max_border_leafs_per_pod { value }
       routing_strategy { value }
       underlay_protocol { value }
     }
   }
-  super_spine_asn_pool {
+  fabric_asn_pool {
     node {
       id
       name { value }
@@ -91,10 +98,17 @@ query topology_pod($name: String!) {
         name { value }
         index { value }
         design { node { ...PodDesignFields } }
-        amount_of_spines { value }
         leaf_interface_sorting_method { value }
         spine_interface_sorting_method { value }
-        spine_template { node { ...DeviceTemplateFields } }
+        fabric_templates {
+          edges {
+            node {
+              role { value }
+              quantity { value }
+              template { node { ...DeviceTemplateFields } }
+            }
+          }
+        }
         loopback_pool { node { id name { value } } }
         prefix_pool { node { id name { value } } }
         asn_pool { node { id name { value } } }

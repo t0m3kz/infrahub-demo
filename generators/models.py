@@ -15,6 +15,11 @@ def _unwrap_node(value: Any) -> Any:
     return value
 
 
+def _templates_by_role(templates: list["DeviceRole"] | None, role: str) -> list["DeviceRole"]:
+    """Filter a fabric_templates list down to one role's positive-quantity entries."""
+    return [t for t in (templates or []) if t.role == role and t.quantity > 0]
+
+
 # Shared models
 class Platform(BaseModel):
     id: str
@@ -35,6 +40,12 @@ class Template(BaseModel):
     platform: Platform | None = None
     device_type: DeviceType | None = None
     interfaces: list[Interface] = []
+
+
+class DeviceRole(BaseModel):
+    role: str
+    quantity: int
+    template: Template
 
 
 class DeviceRack(BaseModel):
@@ -108,7 +119,6 @@ class PodDesign(BaseModel):
     max_tors_per_network_rack: int = 2
     max_tors_per_compute_rack: int = 1
     max_spines_per_pod: int = 2
-    max_border_leafs_per_pod: int = 0
 
     @property
     def deployment_type(self) -> Literal["middle_rack", "tor", "mixed"]:
@@ -143,6 +153,7 @@ class DataCenterDesignData(BaseModel):
     max_pods: int = 2
     max_super_spines_per_fabric: int = 2
     max_spines_per_pod: int = 4
+    max_border_leafs_per_pod: int = 2
 
     # Address space sizing — defaults used when DC instance has no pools
     loopback_prefix_length: int = 23
@@ -181,21 +192,19 @@ class DCModel(BaseModel):
     naming_convention: str = "standard"
     fabric_interface_sorting_method: Literal["top_down", "bottom_up"] = "bottom_up"
     spine_interface_sorting_method: Literal["top_down", "bottom_up"] = "bottom_up"
-    amount_of_super_spines: int = 0
-    super_spine_template: Template | None = None
+    fabric_templates: list[DeviceRole] | None = []
     loopback_pool: Pool | None = None
     technical_pool: Pool | None = None
     management_pool: Pool | None = None
-    super_spine_asn_pool: Pool | None = None
+    fabric_asn_pool: Pool | None = None
     children: list[DCPod] = []
 
     @field_validator(
         "loopback_pool",
         "technical_pool",
         "management_pool",
-        "super_spine_asn_pool",
+        "fabric_asn_pool",
         "design",
-        "super_spine_template",
         mode="before",
     )
     @classmethod
@@ -205,6 +214,22 @@ class DCModel(BaseModel):
             return None
         return unwrapped
 
+    @property
+    def super_spine_templates(self) -> list[DeviceRole]:
+        return _templates_by_role(self.fabric_templates, "super-spine")
+
+    @property
+    def border_leaf_templates(self) -> list[DeviceRole]:
+        return _templates_by_role(self.fabric_templates, "border-leaf")
+
+    @property
+    def firewall_templates(self) -> list[DeviceRole]:
+        return _templates_by_role(self.fabric_templates, "firewall")
+
+    @property
+    def load_balancer_templates(self) -> list[DeviceRole]:
+        return _templates_by_role(self.fabric_templates, "load-balancer")
+
 
 # Pod model
 class PodParent(BaseModel):
@@ -212,24 +237,38 @@ class PodParent(BaseModel):
     devices: list[Device]
     name: str
     index: int
-    # Schema: optional — only set for fabrics with super-spine tier
-    super_spine_template: Template | None = None
-    amount_of_super_spines: int = 0
+    # Schema: optional — DC may have zero super-spine fabric_templates entries
+    fabric_templates: list[DeviceRole] | None = []
     design: DataCenterDesignData | None = None
     naming_convention: str = "standard"
     fabric_interface_sorting_method: Literal["top_down", "bottom_up"] = "bottom_up"
     spine_interface_sorting_method: Literal["top_down", "bottom_up"] = "bottom_up"
-    super_spine_asn_pool: Pool | None = None
+    fabric_asn_pool: Pool | None = None
     management_pool: Pool | None = None
 
-    @field_validator("management_pool", "super_spine_asn_pool", "design", "super_spine_template", mode="before")
+    @field_validator("management_pool", "fabric_asn_pool", "design", mode="before")
     @classmethod
     def extract_parent_node(cls, value: Any) -> Any | None:
         unwrapped = _unwrap_node(value)
-        # super_spine_template node wrapper may resolve to {"id": null} when not set
         if isinstance(unwrapped, dict) and unwrapped.get("id") is None:
             return None
         return unwrapped
+
+    @property
+    def super_spine_templates(self) -> list[DeviceRole]:
+        return _templates_by_role(self.fabric_templates, "super-spine")
+
+    @property
+    def border_leaf_templates(self) -> list[DeviceRole]:
+        return _templates_by_role(self.fabric_templates, "border-leaf")
+
+    @property
+    def firewall_templates(self) -> list[DeviceRole]:
+        return _templates_by_role(self.fabric_templates, "firewall")
+
+    @property
+    def load_balancer_templates(self) -> list[DeviceRole]:
+        return _templates_by_role(self.fabric_templates, "load-balancer")
 
 
 class PodModel(BaseModel):
@@ -249,7 +288,6 @@ class PodModel(BaseModel):
     index: int
     # Design relationship is optional in schema
     design: PodDesign | None = None
-    amount_of_spines: int = 4
 
     leaf_interface_sorting_method: Literal["top_down", "bottom_up"] = "bottom_up"
 
@@ -272,27 +310,24 @@ class PodModel(BaseModel):
         return 0
 
     spine_interface_sorting_method: Literal["top_down", "bottom_up"] = "bottom_up"
-    # Schema: required relationship (optional: false)
-    spine_template: Template
+    # Schema: optional — pod.py validates non-empty at generate() time
+    fabric_templates: list[DeviceRole] | None = []
     parent: PodParent
     loopback_pool: Pool | None = None
     prefix_pool: Pool | None = None
     asn_pool: Pool | None = None
 
-    @field_validator("design", "loopback_pool", "prefix_pool", "asn_pool", "spine_template", mode="before")
+    @field_validator("design", "loopback_pool", "prefix_pool", "asn_pool", mode="before")
     @classmethod
     def handle_empty_node(cls, v: Any) -> Any:
         return _unwrap_node(v)
 
+    @property
+    def spine_templates(self) -> list[DeviceRole]:
+        return _templates_by_role(self.fabric_templates, "spine")
+
 
 # Rack model
-class DeviceRole(BaseModel):
-    # name: str
-    role: str
-    quantity: int
-    template: Template
-
-
 class RackParent(BaseModel):
     id: str
     name: str
@@ -301,11 +336,9 @@ class RackParent(BaseModel):
     naming_convention: str = "standard"
     fabric_interface_sorting_method: Literal["top_down", "bottom_up"] = "bottom_up"
     management_pool: Pool | None = None
-    amount_of_super_spines: int = 0
-    super_spine_template: Template | None = None
     connectivity_mode: Literal["pbr", "inline"] = "pbr"
 
-    @field_validator("management_pool", "design", "super_spine_template", mode="before")
+    @field_validator("management_pool", "design", mode="before")
     @classmethod
     def extract_rack_parent_node(cls, value: Any) -> Any | None:
         unwrapped = _unwrap_node(value)
@@ -335,7 +368,6 @@ class RackPod(BaseModel):
     name: str
     index: int
     parent: RackParent
-    amount_of_spines: int
     leaf_interface_sorting_method: Literal["top_down", "bottom_up"] = "bottom_up"
     spine_interface_sorting_method: Literal["top_down", "bottom_up"] = "bottom_up"
     mlag_create: Literal["no", "back-to-back", "virtual"] = "no"
@@ -343,8 +375,8 @@ class RackPod(BaseModel):
     prefix_pool: Pool | None = None
     asn_pool: Pool | None = None
     design: PodDesign | None = None
-    # Schema: required relationship (optional: false)
-    spine_template: Template
+    # Schema: optional — pod.py validates non-empty at generate() time
+    fabric_templates: list[DeviceRole] | None = []
     # Spine devices with cable info (from GQL query)
     devices: list[SpineDevice] = []
 
@@ -352,7 +384,11 @@ class RackPod(BaseModel):
     def deployment_type(self) -> Literal["middle_rack", "tor", "mixed"]:
         return self.design.deployment_type if self.design else "tor"
 
-    @field_validator("design", "loopback_pool", "prefix_pool", "asn_pool", "spine_template", mode="before")
+    @property
+    def spine_templates(self) -> list[DeviceRole]:
+        return _templates_by_role(self.fabric_templates, "spine")
+
+    @field_validator("design", "loopback_pool", "prefix_pool", "asn_pool", mode="before")
     @classmethod
     def handle_empty_node(cls, v: Any) -> Any:
         return _unwrap_node(v)
@@ -382,9 +418,6 @@ class RackModel(BaseModel):
     tors: list[DeviceRole] | None = []
     l2_leafs: list[DeviceRole] | None = []
     access_leafs: list[DeviceRole] | None = []
-    border_leafs: list[DeviceRole] | None = []
-    firewalls: list[DeviceRole] | None = []
-    load_balancers: list[DeviceRole] | None = []
     pod: RackPod
 
 

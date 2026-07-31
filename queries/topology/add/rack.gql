@@ -74,7 +74,6 @@ fragment PodDesignFields on TopologyPodDesign {
   max_leafs_per_network_rack { value }
   max_tors_per_compute_rack { value }
   max_spines_per_pod { value }
-  max_border_leafs_per_pod { value }
 }
 
 fragment PodFields on TopologyPod {
@@ -97,9 +96,6 @@ fragment PodFields on TopologyPod {
           value
         }
         naming_convention {
-          value
-        }
-        amount_of_super_spines {
           value
         }
         fabric_interface_sorting_method {
@@ -125,14 +121,23 @@ fragment PodFields on TopologyPod {
             }
           }
         }
-        super_spine_template {
+      }
+    }
+  }
+  fabric_templates {
+    edges {
+      node {
+        role { value }
+        quantity { value }
+        template {
           node {
             id
-            interfaces(role__value: "uplink") {
+            interfaces(role__value: "downlink") {
               edges {
                 node {
-                  name { value }
-                  role { value }
+                  name {
+                    value
+                  }
                 }
               }
             }
@@ -140,9 +145,6 @@ fragment PodFields on TopologyPod {
         }
       }
     }
-  }
-  amount_of_spines {
-    value
   }
   leaf_interface_sorting_method {
     value
@@ -167,20 +169,6 @@ fragment PodFields on TopologyPod {
     node {
       id
       name { value }
-    }
-  }
-  spine_template {
-    node {
-      id
-      interfaces(role__value: "downlink") {
-        edges {
-          node {
-            name {
-              value
-            }
-          }
-        }
-      }
     }
   }
   # Spine devices with cable info — used by rack generator to detect
@@ -228,27 +216,6 @@ query RackGenerator($name: String) {
           }
         }
         tors: fabric_templates(role__value: "tor") {
-          edges {
-            node {
-              ...FabricTemplateFields
-            }
-          }
-        }
-        border_leafs: fabric_templates(role__value: "border-leaf") {
-          edges {
-            node {
-              ...FabricTemplateFields
-            }
-          }
-        }
-        firewalls: fabric_templates(role__value: "firewall") {
-          edges {
-            node {
-              ...FabricTemplateFields
-            }
-          }
-        }
-        load_balancers: fabric_templates(role__value: "load-balancer") {
           edges {
             node {
               ...FabricTemplateFields

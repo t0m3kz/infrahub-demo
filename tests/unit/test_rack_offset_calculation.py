@@ -6,7 +6,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from generators.models import LocationSuiteModel, RackModel, RackParent, RackPod, Template
+from generators.models import DeviceRole, LocationSuiteModel, RackModel, RackParent, RackPod, Template
 from generators.topology.rack import RackGenerator
 
 
@@ -57,10 +57,9 @@ def _build_generator(
         name="pod-1",
         index=1,
         parent=parent,
-        amount_of_spines=2,
         leaf_interface_sorting_method="top_down",
         spine_interface_sorting_method="bottom_up",
-        spine_template=Template(id="tmpl-spine"),
+        fabric_templates=[DeviceRole(role="spine", quantity=2, template=Template(id="tmpl-spine"))],
         design=design,
     )
 
@@ -200,51 +199,6 @@ def test_dc1_pod3_tor_offset_with_actual_rack_count(
 
 
 @pytest.mark.parametrize(
-    "deployment_type, rows, leafs_per_rack, row_index, bl_count, expected",
-    [
-        # mixed/middle_rack: BLs start after all rows' leafs
-        # base = rows * leafs_per_rack; offset = base + (row_index-1) * bl_count
-        ("mixed", 2, 2, 1, 1, 4),  # base=4, row1 BL → port 4
-        ("mixed", 2, 2, 2, 1, 5),  # base=4, row2 BL → port 5
-        ("mixed", 2, 2, 1, 2, 4),  # base=4, row1 pair → ports 4,5
-        ("mixed", 2, 2, 2, 2, 6),  # base=4, row2 pair → ports 6,7
-        ("middle_rack", 4, 4, 1, 1, 16),  # base=16, row1 BL → port 16
-        ("middle_rack", 4, 4, 3, 1, 18),  # base=16, row3 BL → port 18
-        ("middle_rack", 4, 4, 4, 2, 22),  # base=16, row4 pair → ports 22,23
-        # tor: BLs start after all rows' ToRs (tors_per_row = compute_racks * 1)
-        # base = rows * tors_per_row; offset = base + (row_index-1) * bl_count
-        ("tor", 2, 0, 1, 1, 20),  # 2 rows × 10 tors/row=20, row1 BL → port 20
-        ("tor", 2, 0, 2, 1, 21),  # row2 BL → port 21
-        ("tor", 2, 0, 1, 2, 20),  # row1 pair → ports 20,21
-    ],
-)
-def test_border_leaf_offset_starts_after_all_tors_or_leafs(
-    deployment_type: str,
-    rows: int,
-    leafs_per_rack: int,
-    row_index: int,
-    bl_count: int,
-    expected: int,
-) -> None:
-    """Border-leaf ports begin after all leaf/ToR rows to avoid spine port collisions."""
-
-    generator = _build_generator(
-        deployment_type=deployment_type,
-        row_index=row_index,
-        rows=rows,
-        leafs_per_network_rack=leafs_per_rack,
-        maximum_tors_per_row=10 if deployment_type == "tor" else None,
-    )
-    offset = generator.calculate_cabling_offsets(
-        device_count=bl_count,
-        device_type="border_leaf",
-        leafs_per_rack=leafs_per_rack,
-    )
-
-    assert offset == expected
-
-
-@pytest.mark.parametrize(
     "row_index, rack_index, tors_per_row, device_count, expected",
     [
         # tors_per_row comes from the design (mixed deployment_type is only derivable
@@ -277,10 +231,15 @@ def test_mixed_tor_offset_row_and_rack(
 
 
 def test_no_collision_mixed_two_rows() -> None:
-    """Verify leaf, ToR, and border-leaf port ranges are disjoint in a 2-row mixed pod."""
+    """Verify leaf port ranges are disjoint across rows in a 2-row mixed pod.
 
-    # S_MIXED: 2 rows, 1 network rack/row with 2 leafs, 9 compute racks/row with 2 ToRs, 1 BL/pod
-    rows, leafs_per_rack, tors_per_row, bl_count = 2, 2, 18, 1
+    Border-leaf no longer lives at rack level (moved to TopologyDataCenter's
+    fabric_templates, placed/cabled by dc.py) — this test now only covers the
+    leaf-vs-leaf disjointness that calculate_cabling_offsets still owns.
+    """
+
+    # S_MIXED: 2 rows, 1 network rack/row with 2 leafs, 9 compute racks/row with 2 ToRs
+    rows, leafs_per_rack, tors_per_row = 2, 2, 18
 
     def get_offset(deployment_type: str, device_type: str, row_index: int, rack_index: int = 1) -> int:
         g = _build_generator(
@@ -292,9 +251,8 @@ def test_no_collision_mixed_two_rows() -> None:
             maximum_tors_per_row=tors_per_row,
         )
         return g.calculate_cabling_offsets(
-            device_count=bl_count if device_type == "border_leaf" else leafs_per_rack,
+            device_count=leafs_per_rack,
             device_type=device_type,
-            leafs_per_rack=leafs_per_rack,
         )
 
     # Collect all port ranges [offset, offset+count)
@@ -302,9 +260,6 @@ def test_no_collision_mixed_two_rows() -> None:
     for row in (1, 2):
         leaf_off = get_offset("mixed", "leaf", row)
         ranges.append((f"leaf-row{row}", leaf_off, leaf_off + leafs_per_rack))
-
-    bl_row1 = get_offset("mixed", "border_leaf", 1)
-    ranges.append(("bl-row1", bl_row1, bl_row1 + bl_count))
 
     # Check no two ranges overlap
     for i, (name_a, start_a, end_a) in enumerate(ranges):

@@ -28,11 +28,9 @@ spec:
     - index: 1
       parent: "DC9"
       status: active
-      spine_template: N9K-C9336C-FX2_SPINE
     - index: 2
       parent: "DC9"
       status: active
-      spine_template: N9K-C9336C-FX2_SPINE
 
 ---
 apiVersion: infrahub.app/v1

@@ -7,8 +7,8 @@ spec:
   data:
     - index: 4
       design: M_MIDDLE
-      amount_of_spines: 2
-      spine_template: N9K-C9336C-FX2_SPINE
+      fabric_templates:
+        - ["2", "spine", "N9K-C9336C-FX2_SPINE"]
       mlag_create: virtual
       parent: DC6
       member_of_groups:

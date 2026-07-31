@@ -71,7 +71,11 @@ class PodTopologyGenerator(CommonGenerator):
 
         deployment_type = self.data.deployment_type
 
-        spine_count = self.data.amount_of_spines
+        spine_entries = self.data.spine_templates
+        if not spine_entries:
+            self.logger.error(f"Pod {self.data.name}: no spine fabric_templates entries — cannot build fabric")
+            return
+        spine_count = sum(entry.quantity for entry in spine_entries)
         naming_conv = cast(
             Literal["standard", "hierarchical", "flat"],
             dc.naming_convention,
@@ -83,8 +87,6 @@ class PodTopologyGenerator(CommonGenerator):
                 f"but pod design '{design.name}' allows at most {design.max_spines_per_pod}"
             )
             return
-
-        spine_template = self.data.spine_template
 
         indexes: list[int] = [dc.index, self.data.index]
 
@@ -101,7 +103,7 @@ class PodTopologyGenerator(CommonGenerator):
             p2p_addressing = dc_design.p2p_addressing if dc_design else "/31"
 
             max_spines = spine_count
-            max_super_spines = dc.amount_of_super_spines
+            max_super_spines = sum(entry.quantity for entry in dc.super_spine_templates)
             rows = design.rows
 
             if deployment_type == "middle_rack":
@@ -149,39 +151,50 @@ class PodTopologyGenerator(CommonGenerator):
         # DC generator creates the pool; pod just references it for routing and propagates to pod.asn_pool
         dc_asn_pool_id: str | None = None
         dc_asn_pool_name: str | None = None
-        if dc.super_spine_asn_pool and dc.super_spine_asn_pool.name:
-            dc_asn_pool_id = dc.super_spine_asn_pool.id
-            dc_asn_pool_name = dc.super_spine_asn_pool.name
+        if dc.fabric_asn_pool and dc.fabric_asn_pool.name:
+            dc_asn_pool_id = dc.fabric_asn_pool.id
+            dc_asn_pool_name = dc.fabric_asn_pool.name
 
             # Propagate DC pool reference to pod so rack generator can find it via pod.asn_pool
             pod_obj = await self.client.get(kind="TopologyPod", id=pod_id)
             if pod_obj:
-                pod_obj.asn_pool = {"id": dc.super_spine_asn_pool.id}
+                pod_obj.asn_pool = {"id": dc.fabric_asn_pool.id}
                 await pod_obj.save(allow_upsert=True)
                 self.logger.info(f"Pod {self.data.name}: linked to DC ASN pool '{dc_asn_pool_name}'")
 
         # Pass management pool ID from DC parent (create_devices resolves ID to SDK object)
         management_pool_id = dc.management_pool.id if dc.management_pool else None
 
-        spines = await self.create_devices(
-            deployment_id=self.data.id,
-            device_role="spine",
-            amount=spine_count,
-            template=spine_template.model_dump(),
-            naming_convention=naming_conv,
-            options=DeviceOptions(
-                indexes=indexes,
-                allocate_loopback=True,
-                loopback_pool=pod_pools.get("loopback"),
-                loopback_prefix_length=128 if is_ipv6 else 32,
-                management_pool=management_pool_id,
-            ),
-        )
+        spines: list[str] = []
+        for entry in spine_entries:
+            entry_spines = await self.create_devices(
+                deployment_id=self.data.id,
+                device_role="spine",
+                amount=entry.quantity,
+                template=entry.template.model_dump(),
+                naming_convention=naming_conv,
+                options=DeviceOptions(
+                    indexes=indexes,
+                    allocate_loopback=True,
+                    loopback_pool=pod_pools.get("loopback"),
+                    loopback_prefix_length=128 if is_ipv6 else 32,
+                    management_pool=management_pool_id,
+                ),
+            )
+            spines.extend(entry_spines)
+
+        # Interface names come from the first entry's template only — same accepted
+        # limitation as dc.py's super-spine device creation: assumes every spine
+        # template shares consistent downlink-interface naming.
+        spine_template = spine_entries[0].template
 
         parent = self.data.parent
         super_spine_devices = [device.name for device in (parent.devices or [])]
+        parent_super_spine_entries = parent.super_spine_templates
         super_spine_interfaces = (
-            [iface.name for iface in parent.super_spine_template.interfaces] if parent.super_spine_template else []
+            [iface.name for iface in parent_super_spine_entries[0].template.interfaces]
+            if parent_super_spine_entries
+            else []
         )
 
         # Pre-seed spine eBGP processes before cabling exists so parallel rack generators
@@ -283,6 +296,15 @@ class PodTopologyGenerator(CommonGenerator):
         # back-to-back spine cabling is handled above by _cable_to_existing_sibling_pods.
         # Fan-out to add_rack is handled by the sibling pod_rack_cascade generator,
         # not here — see PodTopologyGenerator's class docstring.
+
+        # A pod added AFTER its DC already declared border-leaf/firewall/load-balancer
+        # fabric_templates needs a retroactive share of those devices, cabled into
+        # this pod's now-existing spines. Rather than a new trigger resolving a pod
+        # id to its parent DC id, this pod requests its own re-placement directly —
+        # a pragmatic, self-contained choice over inventing a new cross-generator
+        # trigger contract (see dc.py's _generate_dc_scoped_fabric_devices docstring).
+        if parent.border_leaf_templates or parent.firewall_templates or parent.load_balancer_templates:
+            await self.run_generator("dc_pod_cascade", [dc.id], wait=False)
 
     async def _cable_to_existing_sibling_pods(
         self,
