@@ -10,10 +10,9 @@ spec:
       naming_convention: flat
       fabric_templates:
         - ["2", "super-spine", "N9K-C9336C-FX2_SUPER_SPINE"]
-        - ["1", "border-leaf", "N9K-C9336C-FX2_BORDER_LEAF"]
-        - ["1", "border-leaf", "DCS-7050CX3-32C-R_BORDER_LEAF"]
-        - ["1", "firewall", "PA-5260_FIREWALL"]
-        - ["1", "load-balancer", "BIG-IP-i5800_LOAD_BALANCER"]
+        - ["2", "border-leaf", "N9K-C9336C-FX2_BORDER_LEAF"]
+        - ["2", "firewall", "PA-5260_FIREWALL"]
+        - ["2", "load-balancer", "BIG-IP-i5800_LOAD_BALANCER"]
       fabric_interface_sorting_method: top_down
       member_of_groups:
         - topologies_dc
