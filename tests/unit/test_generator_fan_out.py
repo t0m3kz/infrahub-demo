@@ -169,7 +169,7 @@ class TestGetParentPoolWithRetry:
             ]
         )
         sleep_mock = AsyncMock()
-        monkeypatch.setattr("generators.common.asyncio.sleep", sleep_mock)
+        monkeypatch.setattr("generators.pools.asyncio.sleep", sleep_mock)
 
         result = await gen._get_parent_pool_with_retry("dc5-technical-pool")
 
@@ -180,7 +180,7 @@ class TestGetParentPoolWithRetry:
     async def test_pool_never_appears_raises_after_exhausting_retries(self, monkeypatch: pytest.MonkeyPatch) -> None:
         gen = _build_common_gen()
         gen.client.get = AsyncMock(side_effect=NodeNotFoundError(identifier={"name__value": ["dc5-technical-pool"]}))
-        monkeypatch.setattr("generators.common.asyncio.sleep", AsyncMock())
+        monkeypatch.setattr("generators.pools.asyncio.sleep", AsyncMock())
 
         with pytest.raises(NodeNotFoundError):
             await gen._get_parent_pool_with_retry("dc5-technical-pool")

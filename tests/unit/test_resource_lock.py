@@ -84,7 +84,7 @@ class TestAcquireResourceLock:
         gen.client.create = AsyncMock(side_effect=_uniqueness_error())
         gen.client.execute_graphql = AsyncMock(return_value={"CoreStandardGroup": {"edges": []}})
         monkeypatch.setattr("asyncio.sleep", AsyncMock())
-        monkeypatch.setattr("generators.common._RESOURCE_LOCK_MAX_ATTEMPTS", 2)
+        monkeypatch.setattr("generators.pools._RESOURCE_LOCK_MAX_ATTEMPTS", 2)
 
         with pytest.raises(GeneratorError):
             await gen.acquire_resource_lock("res-1")
