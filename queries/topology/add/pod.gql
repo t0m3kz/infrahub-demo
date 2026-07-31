@@ -62,6 +62,7 @@ fragment DataCenterFields on TopologyDataCenter {
   index { value }
   naming_convention { value }
   fabric_interface_sorting_method { value }
+  management_mode { value }
   fabric_templates {
     edges {
       node {

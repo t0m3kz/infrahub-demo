@@ -12,6 +12,7 @@ query topology_dc($name: String!) {
           }
           naming_convention { value }
           connectivity_mode { value }
+          management_mode { value }
           design {
             node {
               id

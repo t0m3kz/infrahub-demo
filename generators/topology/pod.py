@@ -62,6 +62,11 @@ class PodTopologyGenerator(CommonGenerator):
 
         pod_id = self.data.id
         dc = self.data.parent
+        if dc.is_managed_by_controller:
+            self.logger.info(
+                f"Pod {self.data.name}: parent DC management_mode=managed_by_controller — skipping generator"
+            )
+            return
         dc_design = dc.design
         self.deployment_id = dc.id  # Store for cable linking
         self.pod_name = self.data.name.lower()

@@ -104,6 +104,9 @@ fragment PodFields on TopologyPod {
         connectivity_mode {
           value
         }
+        management_mode {
+          value
+        }
         management_pool {
           node {
             id

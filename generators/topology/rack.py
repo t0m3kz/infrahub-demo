@@ -380,6 +380,12 @@ class RackGenerator(RackMixin, CommonGenerator):
         shape = "direct node data" if "name" in data and isinstance(data.get("name"), dict) else "query result"
         self.logger.info(f"Processing {shape}")
 
+        if self.data.pod.parent.is_managed_by_controller:
+            self.logger.info(
+                f"Rack {self.data.name}: parent DC management_mode=managed_by_controller — skipping generator"
+            )
+            return
+
         # Wait for an in-flight add_pod/pod_rack_cascade on our pod before reading
         # pod-level data (spine devices, ASN/loopback pools) — avoid partial data.
         for parent_generator in ("add_pod", "pod_rack_cascade"):

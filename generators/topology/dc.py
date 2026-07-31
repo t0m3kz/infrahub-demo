@@ -50,6 +50,13 @@ class DCTopologyGenerator(CommonGenerator):
 
         self.logger.info(f"Processing Data Center: {self.data.name}")
 
+        if self.data.is_managed_by_controller:
+            self.logger.info(
+                f"DC {self.data.name}: management_mode=managed_by_controller — skipping generator, "
+                "topology is owned by an external controller"
+            )
+            return
+
         # Add existing pods to group context to prevent deletion
         # include=["design"] also lets _generate_dc_scoped_fabric_devices read each
         # pod's own max_border_leafs_per_pod cap via _pod_border_leaf_capacity.
