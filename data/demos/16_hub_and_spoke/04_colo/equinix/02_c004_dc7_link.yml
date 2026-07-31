@@ -8,7 +8,7 @@
 # ColocationZone container. C004-EDGE1 is a small junos firewall sitting at
 # WAW1; the far end is DC7-BL1's existing spare downlink range
 # (Ethernet[1-24]/1 — Ethernet25/1 is already used for the DC7-BL1<->DC7-FW1
-# link, see ../../dc/02_dc7_fabric_cabling.yml).
+# link, see ../../03_dc/02_dc7_fabric_cabling.yml).
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
@@ -18,7 +18,7 @@ spec:
     # can't resolve against a multi-hop HFID (owner__org_id__value,
     # environment__value) like TopologyCustomerColocation's, so `kind:`+
     # `data:` with the SAME full data already created in
-    # ../../06_customer_footprints.yml is used instead — this upserts onto
+    # ../../05_customer_footprints.yml is used instead — this upserts onto
     # the existing node (uniqueness_constraint: owner + environment +
     # parent) rather than creating a duplicate.
     - name: "C004-EDGE1"
@@ -74,7 +74,7 @@ spec:
     # HFID string can't mix with a `kind:`+`data:` entry in the same list
     # (object loader requires one format for the whole relationship), so
     # both endpoints use `kind:`+`data:` with the SAME full data already
-    # created in ../01_colocation.yml / ../../dc/01_datacenter.yml — this
+    # created in ../01_colocation.yml / ../../03_dc/01_datacenter.yml — this
     # upserts onto the existing nodes rather than creating duplicates.
     - name: "C004-WAW1-DC7"
       circuit_id: "C004-WAW1-DC7"

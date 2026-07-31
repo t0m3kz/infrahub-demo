@@ -1,7 +1,7 @@
 ---
 # Self-contained colocation facility — same pattern as DC7 (its own fake
 # fabric, no dependency on data/demos/10_colocation). EQUINIX WAW1 in the
-# same Warsaw metro as the office (../../office/01_offices.yml) — a customer
+# same Warsaw metro as the office (../../01_office_anchor.yml) — a customer
 # can be colocated and have an office in the same city without any
 # special-casing, since Colocation/Office are siblings under LocationMetro,
 # not nested in each other.

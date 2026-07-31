@@ -4,8 +4,8 @@
 # underlay, which is exactly why TopologyVirtualCircuit exists as a distinct
 # node from TopologyPhysicalCircuit (no cable relationship at all, see
 # schemas/extensions/topology/topology_connectivity.yml). The DC7 fabric
-# link in ../dc/02_dc7_fabric_cabling.yml is the one real physical DcimCable
-# in this demo.
+# link in ../03_dc/02_dc7_fabric_cabling.yml is the one real physical
+# DcimCable in this demo.
 #
 # Two customers, two independent circuits terminating on two different
 # sub-interfaces of the SAME hub uplink (eth1.1001 / eth1.1002) — this is
@@ -15,8 +15,8 @@
 #
 # Each circuit connects two customer/operator footprints — C001's/C002's
 # own TopologyCustomerOffice footprint and the operator's hub
-# TopologyCustomerCloud footprint (../cloud/aws/01_cloud_pop.yml) — not the
-# shared OFFICES/eu-central-1 containers. Since TopologyConnectableLocation
+# TopologyCustomerCloud footprint (../02_cloud/aws/01_cloud_pop.yml) — not
+# the shared OFFICES/eu-central-1 containers. Since TopologyConnectableLocation
 # now lives on TopologyCustomer itself (see schemas/extensions/topology/
 # topology_customer.yml), each circuit is already unambiguous —
 # ExchangeGatewayGenerator reads customer.circuits directly, no
@@ -25,7 +25,7 @@
 # `locations` is set via the object loader's `kind:`+`data:` form (see
 # https://docs.infrahub.app/python-sdk/topics/object_file#load-object-files-
 # into-infrahub) with the SAME full data already created in
-# ../06_customer_footprints.yml / ../cloud/aws/01_cloud_pop.yml — this
+# ../05_customer_footprints.yml / ../02_cloud/aws/01_cloud_pop.yml — this
 # upserts onto the existing node (same uniqueness_constraint: owner +
 # environment) rather than creating a duplicate. A bare HFID/string
 # reference can't be used instead: the object loader can't resolve one

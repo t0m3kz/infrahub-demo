@@ -27,12 +27,12 @@
 #                                                        C003 additionally
 #                                                        gets a dedicated
 #                                                        FirewallContext (see
-#                                                        07_firewall_
+#                                                        06_firewall_
 #                                                        contexts.yml).
 #   TopologyCustomerColocation  C004 on EQUINIX/WAW -> routed exchange to
 #                                                      SHARED-SERVICES over a
 #                                                      real WAW1<->DC7 circuit
-#                                                      (colo/equinix/
+#                                                      (04_colo/equinix/
 #                                                      02_c004_dc7_link.yml).
 #                                                      Works the same way as
 #                                                      Cloud/Office below,
@@ -57,7 +57,7 @@
 #                                                             own hub footprint
 #                                                             (owner:
 #                                                             OPERATOR, see
-#                                                             cloud/aws/
+#                                                             02_cloud/aws/
 #                                                             01_cloud_pop.yml)
 #                                                             is a separate,
 #                                                             fifth one.
@@ -68,7 +68,7 @@
 #                                                        terminating at the
 #                                                        hub's INTERNET
 #                                                        namespace (see
-#                                                        office/03_office_
+#                                                        08_office/02_office_
 #                                                        hub_circuits.yml).
 #                                                        Each footprint owns
 #                                                        its own building
@@ -91,13 +91,13 @@
 # data already in data/bootstrap/03_clients.yml upserts onto the existing
 # customer rather than creating a duplicate.
 #
-# Created BEFORE office/02_office_edges.yml / office/03_office_hub_circuits.yml
-# / colo/equinix/02_c004_dc7_link.yml so those circuits can reference these
-# footprints directly via `locations`. The created-trigger fires on each of
-# these before its circuit exists (for DC it doesn't need one at all), so
-# Colocation/Office will log a warning and skip on first run — re-run
-# `infrahubctl generator add_exchange_gateway name=<computed-name>` once
-# circuits are loaded.
+# Created BEFORE 08_office/01_office_edges.yml / 08_office/02_office_hub_
+# circuits.yml / 04_colo/equinix/02_c004_dc7_link.yml so those circuits can
+# reference these footprints directly via `locations`. The created-trigger
+# fires on each of these before its circuit exists (for DC it doesn't need
+# one at all), so Colocation/Office will log a warning and skip on first
+# run — re-run `infrahubctl generator add_exchange_gateway
+# name=<computed-name>` once circuits are loaded.
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
