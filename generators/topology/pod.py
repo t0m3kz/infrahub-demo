@@ -297,6 +297,19 @@ class PodTopologyGenerator(CommonGenerator):
         # Fan-out to add_rack is handled by the sibling pod_rack_cascade generator,
         # not here — see PodTopologyGenerator's class docstring.
 
+        # Cable+route this pod's own border-leaf devices (created by dc.py's
+        # _create_border_leaf_devices with deployment_id=this pod, but NOT cabled
+        # there — pod.py already owns spine context, so it does the uplink cabling
+        # during its own bootstrap instead of dc.py re-deriving it).
+        await self._cable_border_leafs_to_spines(
+            spines=spines,
+            spine_downlink_interfaces=[iface.name for iface in spine_template.interfaces if iface.role == "downlink"],
+            dc_design=dc_design,
+            dc_asn_pool_id=dc_asn_pool_id,
+            pod_pools=pod_pools,
+            is_ipv6=is_ipv6,
+        )
+
         # A pod added AFTER its DC already declared border-leaf/firewall/load-balancer
         # fabric_templates needs a retroactive share of those devices — same as any
         # other structural DC-level reconciliation, this requires an explicit
@@ -305,6 +318,74 @@ class PodTopologyGenerator(CommonGenerator):
         # add_pod run (including each pod during a bulk multi-DC load) would fire
         # its own concurrent dc_pod_cascade re-run against the same DC-level pools/
         # ASN pool, racing the DC's own already-in-flight bootstrap.
+
+    async def _cable_border_leafs_to_spines(
+        self,
+        *,
+        spines: list[str],
+        spine_downlink_interfaces: list[str],
+        dc_design: Any,
+        dc_asn_pool_id: str | None,
+        pod_pools: dict[str, Any],
+        is_ipv6: bool,
+    ) -> None:
+        """Cable+route this pod's own border-leaf devices (already created by
+        dc.py, deployment_id=this pod) to this pod's spines. Offset is
+        deterministic (design's leaf/tor CAPACITY, not live device count) so it
+        never collides with rack.py's own leaf/tor offsets into the same spine
+        downlink ports — rack.py's offsets start at 0 and fill up to capacity;
+        border-leaf's offset starts exactly where that capacity ends. No-ops if
+        this pod has no border-leaf devices (the common case — most pods don't
+        host any)."""
+        border_leafs = await self.client.filters(
+            kind=DcimPhysicalDevice, deployment__ids=[self.data.id], role__value="border-leaf"
+        )
+        if not border_leafs:
+            return
+        border_leaf_names = sorted(bl.name.value for bl in border_leafs)
+
+        bl_uplinks = await self.client.filters(
+            kind=DcimPhysicalInterface, device__name__values=border_leaf_names, role__value="uplink"
+        )
+        bl_uplink_names = sorted({iface.name.value for iface in bl_uplinks})
+        if not bl_uplink_names or not spine_downlink_interfaces:
+            self.logger.error(
+                f"Pod {self.data.name}: cannot cable border-leaf uplinks — "
+                f"bl_uplinks={len(bl_uplink_names)}, spine_downlinks={len(spine_downlink_interfaces)}."
+            )
+            return
+
+        design = self.data.design
+        offset = 0
+        if design:
+            rows = design.rows
+            if self.data.deployment_type == "tor":
+                offset = rows * design.compute_racks_per_row * design.max_tors_per_compute_rack
+            else:
+                offset = rows * design.network_racks_per_row * design.max_leafs_per_network_rack
+
+        p2p_prefix_length = 127 if is_ipv6 else 31
+        p2p_pairs = await self.create_cabling(
+            bottom_devices=border_leaf_names,
+            bottom_interfaces=bl_uplink_names,
+            top_devices=spines,
+            top_interfaces=spine_downlink_interfaces,
+            strategy="rack",
+            options=CablingOptions(
+                cabling_offset=offset,
+                pool=pod_pools.get("technical"),
+                p2p_prefix_length=p2p_prefix_length,
+            ),
+        )
+        if dc_design and dc_asn_pool_id:
+            await self.create_routing(
+                bottom_devices=border_leaf_names,
+                top_devices=spines,
+                options=RoutingOptions(design=dc_design, asn_pool=dc_asn_pool_id),
+                p2p_interfaces=p2p_pairs,
+                bottom_role="border-leaf",
+                top_role="spine",
+            )
 
     async def _cable_to_existing_sibling_pods(
         self,
