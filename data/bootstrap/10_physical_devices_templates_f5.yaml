@@ -20,11 +20,11 @@ spec:
             interface_type: 1000base-t
           - template_name: BIG-IP-i5800_LOAD_BALANCER_1.1
             name: "1.1"
-            role: uplink
+            role: customer
             interface_type: 25gbase-x-sfp28
           - template_name: BIG-IP-i5800_LOAD_BALANCER_1.2
             name: "1.2"
-            role: uplink
+            role: customer
             interface_type: 25gbase-x-sfp28
           - template_name: BIG-IP-i5800_LOAD_BALANCER_1.3
             name: "1.3"
@@ -32,9 +32,9 @@ spec:
             interface_type: 25gbase-x-sfp28
           - template_name: BIG-IP-i5800_LOAD_BALANCER_2.1
             name: "2.1"
-            role: customer
+            role: uplink
             interface_type: 100gbase-x-qsfp28
           - template_name: BIG-IP-i5800_LOAD_BALANCER_2.2
             name: "2.2"
-            role: customer
+            role: uplink
             interface_type: 100gbase-x-qsfp28
