@@ -219,8 +219,7 @@ class PodTopologyGenerator(CommonGenerator):
                 top_role="super-spine",
             )
 
-        spine_interfaces_data = spine_template.interfaces
-        spine_interfaces = [iface.name for iface in spine_interfaces_data]
+        spine_interfaces = [iface.name for iface in spine_template.interfaces if iface.role == "uplink"]
         if not spine_interfaces:
             self.logger.error(
                 f"Pod {self.data.name}: No uplink interfaces found in spine template. "

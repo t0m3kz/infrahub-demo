@@ -26,6 +26,10 @@ spec:
             name: "0/2"
             role: management
             interface_type: 1000base-t
+          - template_name: NetScaler-MPX-26000-100G_LB_0-3
+            name: "0/3"
+            role: ha
+            interface_type: 1000base-t
           - template_name: NetScaler-MPX-26000-100G_LB_100-1
             name: "100/1"
             role: uplink
@@ -80,6 +84,10 @@ spec:
           - template_name: NetScaler-MPX-26100-100G_LB_0-2
             name: "0/2"
             role: management
+            interface_type: 1000base-t
+          - template_name: NetScaler-MPX-26100-100G_LB_0-3
+            name: "0/3"
+            role: ha
             interface_type: 1000base-t
           - template_name: NetScaler-MPX-26100-100G_LB_100-1
             name: "100/1"
@@ -136,6 +144,10 @@ spec:
             name: "0/2"
             role: management
             interface_type: 1000base-t
+          - template_name: NetScaler-MPX-26160-100G_LB_0-3
+            name: "0/3"
+            role: ha
+            interface_type: 1000base-t
           - template_name: NetScaler-MPX-26160-100G_LB_100-1
             name: "100/1"
             role: uplink
@@ -190,6 +202,10 @@ spec:
           - template_name: NetScaler-MPX-26200-100G_LB_0-2
             name: "0/2"
             role: management
+            interface_type: 1000base-t
+          - template_name: NetScaler-MPX-26200-100G_LB_0-3
+            name: "0/3"
+            role: ha
             interface_type: 1000base-t
           - template_name: NetScaler-MPX-26200-100G_LB_100-1
             name: "100/1"

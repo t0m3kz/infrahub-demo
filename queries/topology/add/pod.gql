@@ -11,10 +11,15 @@ fragment DeviceTemplateFields on TemplateDcimPhysicalDevice {
       id
     }
   }
-  interfaces(role__value: "uplink") {
+  # Both roles are needed on this fragment's ONE consumer — the pod's own spine
+  # template — since pod.py uses "uplink" for spine<->super-spine cabling and
+  # "downlink" for border-leaf<->spine cabling (border-leaf uplinks land on the
+  # spine's downlink-role ports, mirroring rack.py's own leaf/tor<->spine pattern).
+  interfaces(role__values: ["uplink", "downlink"]) {
     edges {
       node {
         name { value }
+        role { value }
       }
     }
   }
