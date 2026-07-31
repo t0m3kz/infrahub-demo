@@ -48,10 +48,12 @@ class DCTopologyGenerator(CommonGenerator):
         self.logger.info(f"Processing Data Center: {self.data.name}")
 
         # Add existing pods to group context to prevent deletion
-        # include=["loopback_pool", "asn_pool"] also lets _generate_dc_scoped_fabric_devices
-        # give each pod's border-leaf share a loopback + underlay/overlay BGP.
+        # include=["loopback_pool", "asn_pool", "design"] also lets
+        # _generate_dc_scoped_fabric_devices give each pod's border-leaf share a
+        # loopback + underlay/overlay BGP, and compute a deterministic spine
+        # downlink offset from the pod's own design capacity.
         existing_pods = await self.client.filters(
-            kind=TopologyPod, parent__ids=[self.data.id], include=["loopback_pool", "asn_pool"]
+            kind=TopologyPod, parent__ids=[self.data.id], include=["loopback_pool", "asn_pool", "design"]
         )
         related_node_ids = self.client.group_context.related_node_ids
         for pod in existing_pods:
@@ -292,35 +294,52 @@ class DCTopologyGenerator(CommonGenerator):
         base, remainder = divmod(quantity, pod_count)
         return [base + 1 if i < remainder else base for i in range(pod_count)]
 
-    async def _free_spine_downlink_offset(self, pod_id: str) -> tuple[list[str], list[str], int]:
-        """Return (spine_device_names, spine_downlink_interface_names, offset) for
-        cabling new border-leaf devices into ``pod_id``'s spines, where offset is
-        the count of already-cabled downlink ports — the live-query replacement
-        for rack.py's row/rack-position-based offset formula, which has no
-        equivalent once border-leaf lives outside any rack/row."""
+    @staticmethod
+    def _pod_spine_port_reservation(pod: Any) -> int:
+        """Deterministic count of spine downlink ports leaf/tor devices reserve
+        for this pod, derived from design CAPACITY (not live device count) —
+        mirrors pod.py's own pool-sizing calc. Border-leaf cabling starts after
+        this reservation, so it never races the rack generator's own
+        deterministic, capacity-based offsets for leaf/tor devices cabling into
+        the same spines concurrently (a live cable-count read would race those
+        writers under concurrent load — this must stay capacity-based)."""
+        design = getattr(pod, "design", None)
+        design_peer = getattr(design, "peer", None) if design else None
+        if design_peer is None:
+            return 0
+
+        def _val(name: str) -> int:
+            attr = getattr(design_peer, name, None)
+            value = getattr(attr, "value", None) if attr is not None else None
+            return value or 0
+
+        network_racks_per_row = _val("network_racks_per_row")
+        compute_racks_per_row = _val("compute_racks_per_row")
+        max_tors_per_compute_rack = _val("max_tors_per_compute_rack")
+        rows = _val("rows")
+        max_leafs_per_network_rack = _val("max_leafs_per_network_rack")
+
+        # tor deployment: ToRs connect directly to spines. middle_rack/mixed:
+        # only leafs connect to spines (ToRs connect to the local leaf pair).
+        if network_racks_per_row == 0:
+            return rows * compute_racks_per_row * max_tors_per_compute_rack
+        return rows * network_racks_per_row * max_leafs_per_network_rack
+
+    async def _pod_spine_fabric(self, pod_id: str) -> tuple[list[str], list[str]]:
+        """Return (spine_device_names, spine_downlink_interface_names) for
+        cabling new border-leaf devices into ``pod_id``'s spines."""
         spines = await self.client.filters(kind=DcimPhysicalDevice, deployment__ids=[pod_id], role__value="spine")
         spine_names = sorted(spine.name.value for spine in spines)
         if not spine_names:
-            return [], [], 0
+            return [], []
 
         downlinks = await self.client.filters(
             kind=DcimPhysicalInterface,
             device__name__values=spine_names,
             role__value="downlink",
-            include=["cable"],
         )
         interface_names = sorted({iface.name.value for iface in downlinks})
-        # Ports already consumed on a single spine represent the offset — every
-        # spine has the same downlink count/usage since leaf/tor cabling always
-        # fans out identically across all spines in a pod.
-        first_spine_downlinks = await self.client.filters(
-            kind=DcimPhysicalInterface,
-            device__name__values=[spine_names[0]],
-            role__value="downlink",
-            include=["cable"],
-        )
-        used = sum(1 for iface in first_spine_downlinks if iface.cable and iface.cable.id)
-        return spine_names, interface_names, used
+        return spine_names, interface_names
 
     async def _ensure_dc_ha_pair(
         self,
@@ -409,13 +428,22 @@ class DCTopologyGenerator(CommonGenerator):
                     f"DC {self.fabric_name}: border-leaf template has no uplink interfaces — cannot cable fabric."
                 )
                 return devices
-            spine_names, spine_downlinks, offset = await self._free_spine_downlink_offset(pod.id)
+            spine_names, spine_downlinks = await self._pod_spine_fabric(pod.id)
             if not spine_names or not spine_downlinks:
                 self.logger.error(
                     f"DC {self.fabric_name}: no spine devices/downlinks found in pod (id={pod.id}) — "
                     "cannot cable border-leaf fabric uplinks."
                 )
                 return devices
+            # Deterministic offset (design capacity, not live cable count) so this
+            # never races the rack generator's own leaf/tor cabling into the same
+            # spines; already-placed border-leafs THIS run (multiple fabric_templates
+            # entries landing on the same pod) stack on top, tracked in-memory.
+            if not hasattr(self, "_border_leaf_placed"):
+                self._border_leaf_placed: dict[str, int] = {}
+            placed = self._border_leaf_placed.get(pod.id, 0)
+            offset = self._pod_spine_port_reservation(pod) + placed
+            self._border_leaf_placed[pod.id] = placed + quantity
             p2p_pairs = await self.create_cabling(
                 bottom_devices=devices,
                 bottom_interfaces=uplink_names,
@@ -451,6 +479,7 @@ class DCTopologyGenerator(CommonGenerator):
             return
 
         sorted_pods = sorted(existing_pods, key=lambda p: p.index.value)
+        self._border_leaf_placed: dict[str, int] = {}
         max_border_leafs_per_pod = self.data.design.max_border_leafs_per_pod if self.data.design else None
         for role, entries in (
             ("border-leaf", self.data.border_leaf_templates),
