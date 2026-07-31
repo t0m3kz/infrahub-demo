@@ -12,6 +12,8 @@ from ..protocols import DcimPhysicalDevice, DcimPhysicalInterface, TopologyPod
 
 _SIBLING_SPINE_MAX_RETRIES = 10
 _SIBLING_SPINE_RETRY_DELAY = 3.0
+_DC_ASN_POOL_MAX_RETRIES = 10
+_DC_ASN_POOL_RETRY_DELAY = 3.0
 
 
 class PodTopologyGenerator(CommonGenerator):
@@ -54,6 +56,34 @@ class PodTopologyGenerator(CommonGenerator):
                             return
 
             self.data = PodModel(**deployment_list[0])
+
+            # add_dc's own task can finish (dropping out of the tasklist check above)
+            # a moment before its write of fabric_asn_pool is visible to this query —
+            # the wait above only catches "still running", not that narrow window.
+            # Poll for the pool directly when the DC's routing strategy requires one,
+            # so the pre-seed BGP call below never silently skips for a missing pool
+            # that's actually just not visible yet.
+            dc_design = self.data.parent.design
+            needs_asn_pool = dc_design and dc_design.routing_strategy in (
+                RoutingStrategy.EBGP_EBGP.value,
+                RoutingStrategy.EBGP_IBGP.value,
+            )
+            for attempt in range(_DC_ASN_POOL_MAX_RETRIES):
+                if not needs_asn_pool or self.data.parent.fabric_asn_pool:
+                    break
+                if attempt < _DC_ASN_POOL_MAX_RETRIES - 1:
+                    delay = self._retry_delay(_DC_ASN_POOL_RETRY_DELAY, attempt)
+                    self.logger.info(
+                        f"Pod {self.data.name}: parent DC's fabric_asn_pool not visible yet — "
+                        f"retrying in {delay:.2f}s (attempt {attempt + 1}/{_DC_ASN_POOL_MAX_RETRIES})"
+                    )
+                    await asyncio.sleep(delay)
+                    data = await self.collect_data()
+                    deployment_list = clean_data(data).get("TopologyPod", [])
+                    if not deployment_list:
+                        self.logger.error("No Pod Deployment data found in GraphQL response")
+                        return
+                    self.data = PodModel(**deployment_list[0])
         except (ValueError, KeyError, IndexError) as exc:
             self.logger.error(f"Generation failed due to {exc}")
             return

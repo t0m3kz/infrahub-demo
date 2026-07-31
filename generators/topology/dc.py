@@ -57,6 +57,15 @@ class DCTopologyGenerator(CommonGenerator):
             )
             return
 
+        # Bail out before any group_context registration below: registering only
+        # the pods (never the pools/super-spine/ASN objects a full run would also
+        # register) would make this run's membership a strict subset of a prior
+        # successful run's, and the framework's delete-unused-nodes sync would
+        # then delete everything not re-registered here as "unused".
+        if not self.data.design:
+            self.logger.error(f"Cannot create pools for DC {self.data.name.upper()}: design relationship is required")
+            return
+
         # Add existing pods to group context to prevent deletion
         # include=["design"] also lets _generate_dc_scoped_fabric_devices read each
         # pod's own max_border_leafs_per_pod cap via _pod_border_leaf_capacity.
@@ -74,10 +83,6 @@ class DCTopologyGenerator(CommonGenerator):
         amount_of_super_spines = sum(entry.quantity for entry in super_spine_entries)
         self.logger.info(f"Generating topology for data center {self.fabric_name.upper()}")
         indexes: list[int] = [dc_index]
-
-        if not self.data.design:
-            self.logger.error(f"Cannot create pools for DC {self.fabric_name.upper()}: design relationship is required")
-            return
 
         if amount_of_super_spines > self.data.design.max_super_spines_per_fabric:
             raise RuntimeError(

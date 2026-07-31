@@ -48,8 +48,7 @@ def _make_existing_bgp(
     bgp = MagicMock()
     bgp.id = f"bgp-{device_name}-underlay"
     bgp.name.value = name
-    bgp.capabilities.peers[0].name.value = device_name
-    bgp.capabilities.peers[0].id = f"dev-{device_name}"
+    bgp.capabilities.peers = [MagicMock(display_label=device_name, id=f"dev-{device_name}")]
     bgp.local_as.id = as_id
     return bgp
 
