@@ -398,12 +398,22 @@ nodes:
             label: Decommissioned
             description: "Removed from active service."
             color: "#BFBFBF"
-      - name: fully_managed
-        label: Fully Managed
-        kind: Boolean
+      - name: management_mode
+        label: Management Mode
+        kind: Dropdown
         optional: true
-        default_value: true
+        default_value: fully_managed
+        description: "Whether Infrahub generators own the topology build-out, or an external controller does."
         order_weight: 600
+        choices:
+          - name: fully_managed
+            label: "Fully Managed"
+            description: "Infrahub generators own the full topology build-out."
+            color: "#7FBF7F"
+          - name: managed_by_controller
+            label: "Managed by Controller"
+            description: "An external controller (e.g. ACI APIC) owns the topology; generators do not run."
+            color: "#7FBFFF"
 
       - name: naming_convention
         label: "Naming Convention"

@@ -17,7 +17,7 @@ spec:
   data:
     - name: "DC9"
       index: 9
-      fully_managed: true
+      management_mode: managed_by_controller
 
 ---
 apiVersion: infrahub.app/v1

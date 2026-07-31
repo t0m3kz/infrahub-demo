@@ -194,12 +194,17 @@ class DCModel(BaseModel):
     fabric_interface_sorting_method: Literal["top_down", "bottom_up"] = "bottom_up"
     spine_interface_sorting_method: Literal["top_down", "bottom_up"] = "bottom_up"
     connectivity_mode: Literal["pbr", "inline"] = "pbr"
+    management_mode: Literal["fully_managed", "managed_by_controller"] = "fully_managed"
     fabric_templates: list[DeviceRole] | None = []
     loopback_pool: Pool | None = None
     technical_pool: Pool | None = None
     management_pool: Pool | None = None
     fabric_asn_pool: Pool | None = None
     children: list[DCPod] = []
+
+    @property
+    def is_managed_by_controller(self) -> bool:
+        return self.management_mode == "managed_by_controller"
 
     @field_validator(
         "loopback_pool",
@@ -245,8 +250,13 @@ class PodParent(BaseModel):
     naming_convention: str = "standard"
     fabric_interface_sorting_method: Literal["top_down", "bottom_up"] = "bottom_up"
     spine_interface_sorting_method: Literal["top_down", "bottom_up"] = "bottom_up"
+    management_mode: Literal["fully_managed", "managed_by_controller"] = "fully_managed"
     fabric_asn_pool: Pool | None = None
     management_pool: Pool | None = None
+
+    @property
+    def is_managed_by_controller(self) -> bool:
+        return self.management_mode == "managed_by_controller"
 
     @field_validator("management_pool", "fabric_asn_pool", "design", mode="before")
     @classmethod
@@ -339,6 +349,11 @@ class RackParent(BaseModel):
     fabric_interface_sorting_method: Literal["top_down", "bottom_up"] = "bottom_up"
     management_pool: Pool | None = None
     connectivity_mode: Literal["pbr", "inline"] = "pbr"
+    management_mode: Literal["fully_managed", "managed_by_controller"] = "fully_managed"
+
+    @property
+    def is_managed_by_controller(self) -> bool:
+        return self.management_mode == "managed_by_controller"
 
     @field_validator("management_pool", "design", mode="before")
     @classmethod

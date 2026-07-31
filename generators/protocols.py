@@ -1148,8 +1148,8 @@ class TopologyDataCenter(
 ):
     connectivity_mode: Dropdown
     fabric_interface_sorting_method: Dropdown
-    fully_managed: Boolean
     index: Integer
+    management_mode: Dropdown
     name: String
     naming_convention: Dropdown
     spine_interface_sorting_method: Dropdown
@@ -4581,7 +4581,7 @@ class ProfileTopologyCustomerTemplateDC(LineageSource, CoreProfile, CoreNode):
 class ProfileTopologyDataCenter(LineageSource, CoreProfile, CoreNode):
     connectivity_mode: DropdownOptional
     fabric_interface_sorting_method: DropdownOptional
-    fully_managed: BooleanOptional
+    management_mode: DropdownOptional
     naming_convention: DropdownOptional
     profile_name: String
     profile_priority: Integer

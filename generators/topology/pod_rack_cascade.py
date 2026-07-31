@@ -51,7 +51,7 @@ class PodRackCascadeGenerator(PodTopologyGenerator):
     async def generate(self, data: dict[str, Any]) -> None:
         await super().generate(data)
 
-        if not getattr(self, "data", None):
+        if not getattr(self, "data", None) or self.data.parent.is_managed_by_controller:
             return
 
         racks = await self.client.filters(

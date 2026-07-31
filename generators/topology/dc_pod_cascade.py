@@ -32,7 +32,7 @@ class DCPodCascadeGenerator(DCTopologyGenerator):
     async def generate(self, data: dict[str, Any]) -> None:
         await super().generate(data)
 
-        if not getattr(self, "data", None):
+        if not getattr(self, "data", None) or self.data.is_managed_by_controller:
             return
 
         existing_pods = await self.client.filters(kind=TopologyPod, parent__ids=[self.data.id])
