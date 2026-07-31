@@ -58,7 +58,7 @@ spec:
       max_tors_per_compute_rack: 2
       max_spines_per_pod: 4
 
-    - name: "S_BORDER_SPINE"
+    - name: "S_BORDER_SPINE_POD"
       description: >
         Micro-fabric pod (1 row × 1 network rack = 8 leafs total, no
         compute/ToR racks). The pod's spine slot is filled by 2 border-spine
@@ -67,6 +67,10 @@ spec:
         plus the inter-pod mesh in back-to-back mode — see
         TopologyDataCenterDesign "S_BORDER_SPINE"). No DC-level
         border-leaf/firewall/load-balancer tier exists for this pattern.
+        Named "_POD" (not just "S_BORDER_SPINE") because Infrahub derives a
+        node ID from the human-friendly name, and the DC-level design and
+        this pod-level design share the TopologyDesign generic — reusing the
+        exact same name across both node kinds collides that derived ID.
       rows: 1
       compute_racks_per_row: 0
       network_racks_per_row: 1

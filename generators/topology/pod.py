@@ -392,7 +392,7 @@ class PodTopologyGenerator(CommonGenerator):
         no DC-level border-leaf tier to sit in front of, so each pod's own
         border-spine gets its own dedicated FW/LB instead (see
         PodModel.firewall_templates/load_balancer_templates and
-        TopologyPodDesign "S_BORDER_SPINE"). No-ops if this pod declares
+        TopologyPodDesign "S_BORDER_SPINE_POD"). No-ops if this pod declares
         neither (the common case for a plain-spine pod, and legal even for
         a border-spine pod with no FW/LB of its own)."""
         firewall_entries = self.data.firewall_templates
