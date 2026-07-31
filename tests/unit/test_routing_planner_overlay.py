@@ -55,7 +55,12 @@ def _bgp_process(name: str, device_id: str) -> dict[str, Any]:
 
 
 def _design() -> MagicMock:
-    d = MagicMock()
+    # routing_strategy must be set via the constructor, not attribute
+    # assignment after — RoutingOptions.design is typed as the
+    # HasRoutingStrategy Protocol, and isinstance() against a
+    # runtime_checkable Protocol uses inspect.getattr_static, which only
+    # sees attributes MagicMock pre-registers from constructor kwargs.
+    d = MagicMock(routing_strategy="ebgp-ebgp")
     d.model_dump = MagicMock(return_value={})
     return d
 

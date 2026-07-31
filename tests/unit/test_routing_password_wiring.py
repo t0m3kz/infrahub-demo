@@ -142,7 +142,12 @@ class TestBuildRoutingPlanPasswordPassthrough:
             _make_p2p_interface("if1", "Ethernet1", "l1", "c1"),
             _make_p2p_interface("if2", "Ethernet1", "s1", "c1"),
         ]
-        design = MagicMock()
+        # routing_strategy must be set via the constructor, not attribute
+        # assignment after — RoutingOptions.design is typed as the
+        # HasRoutingStrategy Protocol, and isinstance() against a
+        # runtime_checkable Protocol uses inspect.getattr_static, which only
+        # sees attributes MagicMock pre-registers from constructor kwargs.
+        design = MagicMock(routing_strategy="ebgp-ebgp")
         design.model_dump = MagicMock(return_value={})
 
         planner = RoutingPlanner(deployment_id="dc-1")

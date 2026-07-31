@@ -25,15 +25,15 @@ Strategies:
 from __future__ import annotations
 
 from collections import defaultdict
-from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, NamedTuple
+
+from pydantic import BaseModel, ConfigDict, Field
 
 from ..types import RoutingOptions
 
 
-@dataclass
-class RoutingPlanInput:
+class RoutingPlanInput(BaseModel):
     """Input for routing plan builder.
 
     All objects come pre-queried by the generator as SDK objects:
@@ -54,15 +54,17 @@ class RoutingPlanInput:
       - options: RoutingOptions dict (design, asn_pool, overlay_as_id, ospf_area_id)
     """
 
-    bottom_devices: list[str] = field(default_factory=list)
-    top_devices: list[str] = field(default_factory=list)
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
+    bottom_devices: list[str] = Field(default_factory=list)
+    top_devices: list[str] = Field(default_factory=list)
     bottom_role: str = ""
     top_role: str = ""
-    underlay: list[Any] = field(default_factory=list)
-    overlay: list[Any] = field(default_factory=list)
-    interfaces: list[Any] = field(default_factory=list)
-    loopback_interfaces: list[Any] = field(default_factory=list)
-    options: RoutingOptions = field(default_factory=RoutingOptions)
+    underlay: list[Any] = Field(default_factory=list)
+    overlay: list[Any] = Field(default_factory=list)
+    interfaces: list[Any] = Field(default_factory=list)
+    loopback_interfaces: list[Any] = Field(default_factory=list)
+    options: RoutingOptions = Field(default_factory=RoutingOptions)
     routing_strategy: str = "ebgp-ebgp"
     deployment_name: str = ""
     evpn_af_id: str = ""
@@ -70,8 +72,7 @@ class RoutingPlanInput:
     overlay_password_id: str = ""
 
 
-@dataclass(frozen=True)
-class PendingASRef:
+class PendingASRef(BaseModel):
     """Placeholder for a BGP process's ``local_as`` before its AS is created.
 
     The AS for ``device`` is allocated from a pool as part of the same plan,
@@ -80,11 +81,12 @@ class PendingASRef:
     see ``RoutingMixin.create_routing``.
     """
 
+    model_config = ConfigDict(frozen=True)
+
     device: str
 
 
-@dataclass
-class RoutingPlan:
+class RoutingPlan(BaseModel):
     """Flat routing plan — all dicts, saved with allow_upsert=True.
 
     Save order: autonomous_systems -> bgp_processes + ospf_processes
@@ -101,12 +103,14 @@ class RoutingPlan:
         - PendingASRef(device="device-name") (resolved after AS creation)
     """
 
-    autonomous_systems: list[dict] = field(default_factory=list)
-    bgp_processes: list[Any] = field(default_factory=list)
-    ospf_processes: list[Any] = field(default_factory=list)
-    ospf_interfaces: list[Any] = field(default_factory=list)
-    bgp_peerings: list[Any] = field(default_factory=list)
-    ospf_peerings: list[Any] = field(default_factory=list)
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
+    autonomous_systems: list[dict] = Field(default_factory=list)
+    bgp_processes: list[Any] = Field(default_factory=list)
+    ospf_processes: list[Any] = Field(default_factory=list)
+    ospf_interfaces: list[Any] = Field(default_factory=list)
+    bgp_peerings: list[Any] = Field(default_factory=list)
+    ospf_peerings: list[Any] = Field(default_factory=list)
 
 
 class BGPSession(NamedTuple):
