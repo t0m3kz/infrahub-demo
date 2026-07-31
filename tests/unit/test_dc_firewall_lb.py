@@ -435,7 +435,7 @@ class TestCableDcServices:
         gen._cable_border_leaf_to_service = AsyncMock()
         gen.client.filters = AsyncMock(
             side_effect=[
-                [_mock_iface("eth-customer-1")],  # fw customer ports
+                [_mock_iface("eth-downlink-1")],  # fw downlink ports
                 [_mock_iface("lb-uplink-1")],  # lb uplink ports
             ]
         )

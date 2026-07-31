@@ -36,7 +36,7 @@ spec:
             interface_type: 100gbase-x-qsfp28
           - template_name: NetScaler-MPX-26000-100G_LB_100-2
             name: "100/2"
-            role: uplink
+            role: downlink
             interface_type: 100gbase-x-qsfp28
           - template_name: NetScaler-MPX-26000-100G_LB_100-3
             name: "100/3"
@@ -95,7 +95,7 @@ spec:
             interface_type: 100gbase-x-qsfp28
           - template_name: NetScaler-MPX-26100-100G_LB_100-2
             name: "100/2"
-            role: uplink
+            role: downlink
             interface_type: 100gbase-x-qsfp28
           - template_name: NetScaler-MPX-26100-100G_LB_100-3
             name: "100/3"
@@ -154,7 +154,7 @@ spec:
             interface_type: 100gbase-x-qsfp28
           - template_name: NetScaler-MPX-26160-100G_LB_100-2
             name: "100/2"
-            role: uplink
+            role: downlink
             interface_type: 100gbase-x-qsfp28
           - template_name: NetScaler-MPX-26160-100G_LB_100-3
             name: "100/3"
@@ -213,7 +213,7 @@ spec:
             interface_type: 100gbase-x-qsfp28
           - template_name: NetScaler-MPX-26200-100G_LB_100-2
             name: "100/2"
-            role: uplink
+            role: downlink
             interface_type: 100gbase-x-qsfp28
           - template_name: NetScaler-MPX-26200-100G_LB_100-3
             name: "100/3"

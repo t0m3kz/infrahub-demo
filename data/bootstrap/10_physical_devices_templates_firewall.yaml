@@ -28,11 +28,11 @@ spec:
             interface_type: 100gbase-x-qsfp28
           - template_name: CP-26000_FIREWALL_eth3
             name: eth3
-            role: customer
+            role: downlink
             interface_type: 100gbase-x-qsfp28
           - template_name: CP-26000_FIREWALL_eth4
             name: eth4
-            role: customer
+            role: downlink
             interface_type: 100gbase-x-qsfp28
           - template_name: CP-26000_FIREWALL_sync
             name: sync
@@ -63,11 +63,11 @@ spec:
             interface_type: 100gbase-x-qsfp28
           - template_name: PA-5260_FIREWALL_eth1-3
             name: ethernet1/3
-            role: customer
+            role: downlink
             interface_type: 100gbase-x-qsfp28
           - template_name: PA-5260_FIREWALL_eth1-4
             name: ethernet1/4
-            role: customer
+            role: downlink
             interface_type: 100gbase-x-qsfp28
           - template_name: PA-5260_FIREWALL_ha1
             name: HA1

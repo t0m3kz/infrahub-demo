@@ -509,12 +509,13 @@ class DCTopologyGenerator(CommonGenerator):
         - pbr: two independent legs, border-leaf<->firewall and border-leaf<->load-balancer,
           each on the service device's "uplink" ports.
         - inline: one physical chain — border-leaf<->firewall<->load-balancer<->border-leaf.
-          The middle leg (firewall<->load-balancer) uses the firewall's "customer" ports
-          and the load-balancer's "uplink" ports; the return leg (load-balancer<->border-leaf)
-          uses the load-balancer's "downlink" ports instead of "uplink" — a load-balancer
-          template used in inline mode (e.g. BIG-IP-i5800_LOAD_BALANCER_INLINE) must
-          provide BOTH port roles as physically distinct ports, or the middle leg and
-          the return leg would both try to cable the same "uplink" ports.
+          Every chain device has an "uplink" (toward border-leaf/previous hop) and a
+          "downlink" (toward the next hop) — the middle leg (firewall<->load-balancer)
+          cables the firewall's "downlink" ports to the load-balancer's "uplink" ports;
+          the return leg (load-balancer<->border-leaf) uses the load-balancer's
+          "downlink" ports. This uplink/downlink pair is physically distinct from any
+          load-balancer's separate "customer"-role VIP/server-facing ports (not part of
+          this chain, untouched by any of this cabling).
         No-ops for any leg with nothing to cable on either side.
         """
         if self.data.connectivity_mode == "inline":
@@ -522,32 +523,32 @@ class DCTopologyGenerator(CommonGenerator):
                 border_leaf_names=border_leaf_names, service_names=firewall_names, service_role="firewall"
             )
             if firewall_names and load_balancer_names:
-                fw_customer = await self.client.filters(
-                    kind=DcimPhysicalInterface, device__name__values=firewall_names, role__value="customer"
+                fw_downlink = await self.client.filters(
+                    kind=DcimPhysicalInterface, device__name__values=firewall_names, role__value="downlink"
                 )
                 lb_uplink = await self.client.filters(
                     kind=DcimPhysicalInterface, device__name__values=load_balancer_names, role__value="uplink"
                 )
-                fw_customer_names = sorted({iface.name.value for iface in fw_customer})
+                fw_downlink_names = sorted({iface.name.value for iface in fw_downlink})
                 lb_uplink_names = sorted({iface.name.value for iface in lb_uplink})
-                if not fw_customer_names or not lb_uplink_names:
+                if not fw_downlink_names or not lb_uplink_names:
                     self.logger.error(
                         f"DC {self.fabric_name}: cannot cable firewall<->load-balancer (inline chain) — "
-                        f"fw_customer_ports={len(fw_customer_names)}, lb_uplink_ports={len(lb_uplink_names)}."
+                        f"fw_downlink_ports={len(fw_downlink_names)}, lb_uplink_ports={len(lb_uplink_names)}."
                     )
                 else:
                     middle_leg_pairs = await self.create_cabling(
                         bottom_devices=load_balancer_names,
                         bottom_interfaces=lb_uplink_names,
                         top_devices=firewall_names,
-                        top_interfaces=fw_customer_names,
+                        top_interfaces=fw_downlink_names,
                         strategy="rack",
                     )
                     if not middle_leg_pairs:
                         self.logger.error(
                             f"DC {self.fabric_name}: firewall<->load-balancer (inline chain) cabling produced "
                             "no connections — likely an interface speed mismatch between the firewall's "
-                            "customer-role ports and the load-balancer's uplink-role ports."
+                            "downlink-role ports and the load-balancer's uplink-role ports."
                         )
             await self._cable_border_leaf_to_service(
                 border_leaf_names=border_leaf_names,
