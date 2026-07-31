@@ -38,29 +38,19 @@ _RESOURCE_LOCK_STALE_AFTER_SECONDS = 300  # longer than any single realistic cab
 
 
 class CommonGenerator(FailOnErrorLoggerMixin, RoutingMixin, InfrahubGenerator):
-    """
-    An extended InfrahubGenerator with helper methods for creating objects.
+    """Extended InfrahubGenerator with helper methods for creating objects.
 
-    Instance variables set during generate() lifecycle:
-        deployment_id: Root deployment (DC/POP) ID for linking cables (required)
-        fabric_name: Fabric/DC name (lowercase) for pool and device naming (required)
-        pod_name: Pod name (lowercase) for pool naming (optional, only in pod/rack generators)
-
-    Error handling conventions:
-        - ``self.logger.error()`` raises ``GeneratorError`` — the task will show as failed
-          in Infrahub. Use it freely; no need to also raise manually after an error log.
-        - Internal helper methods (``_get_spine_devices``, etc.): ``raise RuntimeError``
-          for missing prerequisites so the caller can decide how to handle it.
-        - Pure helpers (naming, routing, cabling): ``raise ValueError`` for invalid inputs.
-        - Loop iterations: ``self.logger.warning()`` + ``continue`` to skip one bad item
-          without halting the entire batch operation. Use ``self.logger.error()`` instead
-          when a bad item means the entire generator output would be invalid.
+    deployment_id/fabric_name are required, set in generate(); pod_name is
+    optional (pod/rack generators only). ``self.logger.error()`` raises
+    GeneratorError (task fails); internal helpers raise RuntimeError for
+    missing prerequisites; pure helpers raise ValueError for bad inputs;
+    loop iterations warn+continue on one bad item unless it invalidates
+    the whole output.
     """
 
-    # Instance variables - must be set in generate() before calling helper methods
-    deployment_id: str = ""  # Required: set to DC/POP ID
-    fabric_name: str = ""  # Required: set to fabric/DC name
-    pod_name: str | None = None  # Optional: only for pod/rack generators
+    deployment_id: str = ""
+    fabric_name: str = ""
+    pod_name: str | None = None
 
     @staticmethod
     def _retry_delay(base: float, attempt: int, cap: float = 20.0, jitter: float = 0.25) -> float:
@@ -116,22 +106,12 @@ class CommonGenerator(FailOnErrorLoggerMixin, RoutingMixin, InfrahubGenerator):
     async def run_generator(self, generator_name: str, node_ids: list[str], *, wait: bool = True) -> None:
         """Run another generator definition for the given nodes.
 
-        Used for parent-to-child fan-out (DC -> pods, pod -> racks, network rack ->
-        row-dependent racks) instead of writing a checksum and relying on an `updated`
-        event trigger.
-
-        wait=True (default): `wait_until_completion=true` blocks until the child
-        generator's task reaches COMPLETED, so the child always sees data the parent
-        just created — no readiness gate (checksum inheritance, row-ordering,
-        leaf-readiness polling) is needed on the child side.
-
-        wait=False: fires the child without blocking. Used by a cascade generator's
-        terminal fan-out (e.g. dc_pod_cascade -> pod_rack_cascade, pod_rack_cascade ->
-        add_rack): by that point the cascade has already done its own bootstrap write
-        in this same call, so there's nothing left for this call to block on — the
-        fanned-out generator runs as its own independently tracked task.
-
-        No-ops if node_ids is empty (nothing to fan out to).
+        Used for parent-to-child fan-out (DC -> pods, pod -> racks) instead of
+        an `updated` event trigger. wait=True blocks until the child task
+        completes, so it always sees the parent's just-written data.
+        wait=False fires without blocking (a cascade generator's terminal
+        fan-out, e.g. dc_pod_cascade -> pod_rack_cascade). No-op if node_ids
+        is empty.
         """
         if not node_ids:
             return
@@ -168,22 +148,14 @@ class CommonGenerator(FailOnErrorLoggerMixin, RoutingMixin, InfrahubGenerator):
             )
 
     async def wait_for_parent_generator_and_refetch(self, generator_name: str, parent_id: str) -> dict | None:
-        """If the parent's own bootstrap generator is currently running for parent_id,
-        wait for it and return freshly re-collected data; otherwise return None.
+        """If the parent's own bootstrap generator is currently running for
+        parent_id, wait for it and return freshly re-collected data; else None.
 
-        Used by a cascade generator that also fires on the parent's created-trigger
-        (or is run manually while an event-driven bootstrap is in flight on the same
-        branch): the parent's own bootstrap (e.g. add_dc) and this cascade run could
-        otherwise both act on the parent's data at once, before the bootstrap's own
-        writes have landed. This checks for the parent's OWN generator task (a
-        different generator_definition, e.g. "add_dc") by title + related_node —
-        never for a cascade generator's own task — so this never deadlocks: add_dc's
-        bootstrap never waits on this generator (see dc.py/pod.py's docstrings), so
-        "Run generator add_dc"/"Run generator add_pod" only report RUNNING while
-        doing their own work, never while blocked on this one.
-
-        Returns the re-collected `data` dict if a wait happened, or None if there was
-        nothing in flight (caller should keep using its already-collected data).
+        Used by a cascade generator that may run concurrently with the
+        parent's own bootstrap (e.g. add_dc) before its writes have landed.
+        Checks for the parent's own generator task (a different
+        generator_definition, by title + related_node) — never this
+        generator's own task, so it can't deadlock against itself.
         """
         in_flight = await self.client.task.filter(
             filter=TaskFilter(
@@ -207,27 +179,19 @@ class CommonGenerator(FailOnErrorLoggerMixin, RoutingMixin, InfrahubGenerator):
         return await self.collect_data()
 
     async def acquire_resource_lock(self, resource_key: str) -> str:
-        """Serialize concurrent generator runs that would otherwise race for the same
-        shared resource (e.g. two endpoint devices cabling into the same rack/row with
-        no per-device port offset to keep them apart, unlike rack-to-spine cabling).
+        """Serialize concurrent generator runs racing for the same shared
+        resource (e.g. two endpoints cabling into the same rack/row with no
+        per-device offset). Sibling instances of the same generator can run
+        truly concurrently, so a check-then-act guard isn't safe here.
 
-        Sibling generator instances for the SAME generator definition can run truly
-        concurrently (the backend fans out via asyncio.gather — see
-        infrahub.generators.tasks.request_generator_definition_run), so a
-        check-then-act guard like wait_for_parent_generator_and_refetch is not safe
-        here: two instances could both see "nothing running yet" in the same instant.
+        Uses CoreStandardGroup's uniqueness_constraint on name as a
+        server-side mutex — two concurrent create() calls with the same name
+        serialize; the loser gets a uniqueness-violation GraphQLError and
+        retries with backoff. A lock older than
+        _RESOURCE_LOCK_STALE_AFTER_SECONDS is treated as abandoned and
+        reclaimed.
 
-        Uses CoreStandardGroup's uniqueness_constraint on name as a mutex: the
-        backend takes a distributed lock keyed on that constraint before checking
-        uniqueness (infrahub.core.node.lock_utils.get_lock_names_on_object_mutation),
-        so two concurrent create() calls with the same name are serialized server-side
-        — exactly one succeeds, the other gets a uniqueness-violation GraphQLError.
-
-        Retries with backoff on that error. A lock older than
-        _RESOURCE_LOCK_STALE_AFTER_SECONDS is treated as abandoned (owner crashed
-        mid-run) and is deleted, then re-acquired.
-
-        Returns the acquired lock's id — pass it to release_resource_lock when done.
+        Returns the acquired lock's id — pass to release_resource_lock when done.
         """
         lock_name = f"lock-{resource_key}"
         for attempt in range(_RESOURCE_LOCK_MAX_ATTEMPTS):
@@ -252,13 +216,10 @@ class CommonGenerator(FailOnErrorLoggerMixin, RoutingMixin, InfrahubGenerator):
     async def _reclaim_stale_lock(self, lock_name: str) -> None:
         """Delete an abandoned lock (owner crashed before release_resource_lock ran).
 
-        Uses a hand-written query instead of client.get(..., include_metadata=True):
-        the SDK's auto-generated include_metadata query also requests
-        node_metadata on CoreGroup's `parent` hierarchy edge, which 500s server-side
-        on this Infrahub version ("Cannot return null for non-nullable field
-        NestedEdgedCoreGroup.node_metadata") for any CoreStandardGroup — verified
-        live on dc6, not specific to lock groups. Requesting node_metadata only at
-        the top-level edge (skipping `parent`) avoids that path entirely.
+        Hand-written query instead of client.get(..., include_metadata=True):
+        the SDK's auto version also requests node_metadata on CoreGroup's
+        `parent` edge, which 500s server-side for any CoreStandardGroup on
+        this Infrahub version. Skipping `parent` avoids that path.
         """
         query = """
         query($name: String!) {
@@ -377,17 +338,11 @@ class CommonGenerator(FailOnErrorLoggerMixin, RoutingMixin, InfrahubGenerator):
         )
 
     async def _get_parent_pool_with_retry(self, parent_pool_name: str) -> CoreIPPrefixPool:
-        """Fetch a parent CoreIPPrefixPool by name, retrying if it doesn't exist yet.
-
-        A pod-level allocate_resource_pools() call needs the DC-level pool
-        (e.g. "dc5-technical-pool") that add_dc's own allocate_resource_pools()
-        call creates — the same class of race fixed for add_rack's pod-pool
-        wait: add_pod's created-trigger can fire and be dispatched before
-        add_dc's task is even visible in the task list (see
-        wait_for_parent_generator_and_refetch's docstring), so checking the
-        pool node's actual existence with a retry closes the gap regardless
-        of task-list indexing timing.
-        """
+        """Fetch a parent CoreIPPrefixPool by name, retrying if it doesn't
+        exist yet — closes the race where a pod-level call needs a DC-level
+        pool that add_dc's own allocate_resource_pools() may not have
+        created yet (add_pod's trigger can fire before add_dc's task is
+        even visible in the task list)."""
         _MAX_RETRIES = 10
         _RETRY_DELAY = 3.0
         _RETRY_CAP = 20.0
@@ -866,14 +821,9 @@ class CommonGenerator(FailOnErrorLoggerMixin, RoutingMixin, InfrahubGenerator):
         options: CablingOptions,
         technical_pool: Any,
     ) -> list[tuple[Any, Any]]:
-        """Execute an already-built cabling plan: for each (src, dst) interface
-        pair, create the cable, allocate P2P IPs if a pool is given, and save
-        both interfaces. Shared tail for create_cabling() and
-        create_chain_cabling() — verbatim what create_cabling() always did,
-        just factored out so create_chain_cabling() can reuse it after
-        building its own per-leg plan directly via CablingPlanner (skipping
-        create_cabling()'s own interface re-query by name).
-        """
+        """Execute an already-built cabling plan: create each cable, allocate
+        P2P IPs if a pool is given, save both interfaces. Shared tail for
+        create_cabling() and create_chain_cabling()."""
         cabled_pairs: list[tuple[Any, Any]] = []
         for src_interface, dst_interface in cabling_plan:
             endpoint_names = sorted(
@@ -957,20 +907,18 @@ class CommonGenerator(FailOnErrorLoggerMixin, RoutingMixin, InfrahubGenerator):
     ) -> list[list[tuple[Any, Any]]]:
         """Cable an ordered chain of device groups end to end — e.g.
         border-leaf<->firewall<->load-balancer<->border-leaf — one leg per
-        consecutive pair of hops, any-to-any within each leg ("rack" strategy,
-        speed-aware). Each hop's interfaces are queried ONCE (by role) and
-        the resulting objects passed straight into CablingPlanner — unlike
-        calling create_cabling() per leg, this skips its redundant re-query
-        of the same interfaces by name.
+        consecutive pair of hops, index-paired ("chain" strategy): device i
+        on one side cables ONLY to device i on the other, forming N
+        independent redundant paths rather than an any-to-any mesh. Fewer
+        devices on one side are reused round-robin.
 
-        Each hop's ``down_role`` interfaces are cabled to the next hop's
-        ``up_role`` interfaces. A hop with an empty ``devices`` list, or a leg
-        where either side resolves to zero matching ports, is skipped (logged
-        as an error for a non-empty device list with no matching ports).
+        Each hop's ``down_role`` interfaces cable to the next hop's
+        ``up_role`` interfaces. An empty ``devices`` list, or zero matching
+        ports on either side, skips that leg (logged as an error if ports
+        are missing on a non-empty device list).
 
-        Returns one list of cabled (src, dst) interface pairs per leg, in
-        chain order — e.g. ``[blf_fw_pairs, fw_lb_pairs, lb_blf_pairs]`` for a
-        4-hop chain (3 legs). A skipped leg contributes an empty list.
+        Returns one list of cabled (src, dst) pairs per leg, in chain order.
+        A skipped leg contributes an empty list.
         """
         if options is None:
             options = CablingOptions()
@@ -1011,7 +959,7 @@ class CommonGenerator(FailOnErrorLoggerMixin, RoutingMixin, InfrahubGenerator):
             iface_map: dict[str, Any] = {iface.id: iface for iface in list(bottom_interfaces) + list(top_interfaces)}
             planner = CablingPlanner(bottom_interfaces=bottom_interfaces, top_interfaces=top_interfaces)
             leg_plan = planner.build_cabling_plan(
-                scenario="rack",
+                scenario="chain",
                 cabling_offset=cabling_offset,
                 speed_aware=True,
                 validate_speeds=True,

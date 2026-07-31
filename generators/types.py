@@ -30,7 +30,7 @@ class DeviceOptions(TypedDict, total=False):
 
 
 class ChainHop(TypedDict, total=False):
-    """One stop in a ``CommonGenerator.cable_chain()`` chain — e.g. border-leaf,
+    """One stop in a ``CommonGenerator.create_chain_cabling()`` chain — e.g. border-leaf,
     firewall, load-balancer, each cabled to its neighbor(s) on dedicated ports.
 
     An endpoint hop (first/last in the chain) only needs the role facing its

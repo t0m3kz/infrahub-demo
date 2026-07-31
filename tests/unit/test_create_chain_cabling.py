@@ -72,13 +72,12 @@ class TestCreateChainCabling:
         assert set(create_kwargs["data"]["endpoints"]) == {bl_iface.id, fw_iface.id}
 
     @pytest.mark.asyncio
-    async def test_ha_pair_each_device_gets_a_distinct_port_on_the_other_side(self) -> None:
-        """2 border-leafs (2 dedicated ports each), 2 firewalls (2 uplink
-        ports each) — the "rack" any-to-any strategy needs each device to
-        have at least as many ports as there are devices on the other side.
-        This is the exact shape of the live bug this helper's predecessor
-        (_cable_chain in dc.py) was fixed for: with only 1 port per device,
-        both firewalls would collide on border-leaf's single port."""
+    async def test_two_independent_paths_never_cross_cable(self) -> None:
+        """2 border-leafs, 2 firewalls, 2 dedicated ports each: bl-01<->fw-01
+        and bl-02<->fw-02 must form two fully INDEPENDENT chains — bl-01 is
+        never cabled to fw-02, matching the real border-leaf/firewall/
+        load-balancer/ips redundant-path topology (each numbered path is
+        its own chain end to end, not an any-to-any mesh)."""
         gen = _make_generator()
         bl_ifaces = [
             _iface("Eth1/25", device="bl-01"),
@@ -108,11 +107,13 @@ class TestCreateChainCabling:
         # No two cables reuse the same interface.
         all_endpoints = [e for pair in endpoint_pairs for e in pair]
         assert len(all_endpoints) == len(set(all_endpoints))
-        # Every border-leaf is cabled to both firewalls, and vice versa.
-        bl_devices_used = {e.split("-")[2] for e in all_endpoints if e.startswith("id-bl")}
-        fw_devices_used = {e.split("-")[2] for e in all_endpoints if e.startswith("id-fw")}
-        assert bl_devices_used == {"01", "02"}
-        assert fw_devices_used == {"01", "02"}
+
+        # bl-01 only ever pairs with fw-01 (both its ports), never fw-02.
+        def _device(endpoint_id: str) -> str:
+            return "-".join(endpoint_id.split("-")[1:3])  # "id-bl-01-Eth1/25" -> "bl-01"
+
+        device_pairs = {frozenset(_device(e) for e in pair) for pair in endpoint_pairs}
+        assert device_pairs == {frozenset({"bl-01", "fw-01"}), frozenset({"bl-02", "fw-02"})}
 
     @pytest.mark.asyncio
     async def test_three_hop_cables_two_legs(self) -> None:
@@ -190,6 +191,16 @@ class TestCreateChainCabling:
         # leg, but on a different port group (bl_lb_ifaces, not bl_fw_ifaces).
         return_leg_endpoints = {e for pair in result[2] for e in (pair[0].id, pair[1].id)}
         assert return_leg_endpoints == {iface.id for iface in bl_lb_ifaces + lb_down_ifaces}
+
+        # Every leg is index-paired into two independent chains — bl-01's
+        # path never touches fw-02/lb-02, and vice versa.
+        for leg in result:
+            device_pairs = {(pair[0].device.display_label, pair[1].device.display_label) for pair in leg}
+            devices_in_use = {d for pair in device_pairs for d in pair}
+            suffixes_used = {d.rsplit("-", 1)[-1] for d in devices_in_use}
+            assert suffixes_used == {"01", "02"}
+            for bottom_device, top_device in device_pairs:
+                assert bottom_device.rsplit("-", 1)[-1] == top_device.rsplit("-", 1)[-1]
 
     @pytest.mark.asyncio
     async def test_empty_devices_on_either_hop_skips_that_leg(self) -> None:
