@@ -29,6 +29,25 @@ class DeviceOptions(TypedDict, total=False):
     resolve to "load-balancers", but the pre-existing group is "loadbalancers")."""
 
 
+class ChainHop(TypedDict, total=False):
+    """One stop in a ``CommonGenerator.cable_chain()`` chain — e.g. border-leaf,
+    firewall, load-balancer, each cabled to its neighbor(s) on dedicated ports.
+
+    An endpoint hop (first/last in the chain) only needs the role facing its
+    single neighbor; an interior hop (has a neighbor on both sides) needs both.
+    """
+
+    devices: list[str]
+    """Device names for this hop. An empty list makes every leg touching this
+    hop a no-op (mirrors create_cabling's own empty-list handling)."""
+    up_role: str
+    """Interface role facing the PREVIOUS hop in the chain. Omit/empty for the
+    first hop (it has no previous neighbor)."""
+    down_role: str
+    """Interface role facing the NEXT hop in the chain. Omit/empty for the
+    last hop (it has no next neighbor)."""
+
+
 class CablingOptions(TypedDict, total=False):
     """Options for ``CommonGenerator.create_cabling()``."""
 
