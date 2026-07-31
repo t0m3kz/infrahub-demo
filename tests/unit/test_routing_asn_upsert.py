@@ -470,7 +470,9 @@ class TestRoutingPlanIdempotency:
             _make_p2p_interface("if3", "Ethernet1/2", "s1", "c2"),
             _make_p2p_interface("if4", "Ethernet1/1", "l2", "c2"),
         ]
-        design = MagicMock(bgp_topology="route_reflector", model_dump=MagicMock(return_value={}))
+        design = MagicMock(
+            routing_strategy="ebgp-ebgp", bgp_topology="route_reflector", model_dump=MagicMock(return_value={})
+        )
 
         planner = RoutingPlanner(deployment_id="dc-1")
         inp1 = _make_plan_input(loopbacks, pool=pool, underlay=underlay, interfaces=interfaces, design=design)
@@ -512,7 +514,9 @@ class TestRoutingPlanIdempotency:
             _make_p2p_interface("if7", "Ethernet1/2", "s2", "c4"),
             _make_p2p_interface("if8", "Ethernet1/2", "l2", "c4"),
         ]
-        design = MagicMock(bgp_topology="route_reflector", model_dump=MagicMock(return_value={}))
+        design = MagicMock(
+            routing_strategy="ebgp-ebgp", bgp_topology="route_reflector", model_dump=MagicMock(return_value={})
+        )
 
         planner = RoutingPlanner(deployment_id="dc-1")
         inp1 = _make_plan_input(loopbacks, pool=pool, underlay=underlay, interfaces=interfaces, design=design)

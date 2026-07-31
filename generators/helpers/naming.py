@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 from typing import Any, Literal
 
+from pydantic import BaseModel
 
-@dataclass
-class DeviceNamingConfig:
+
+class DeviceNamingConfig(BaseModel):
     """Configuration for device naming strategy.
 
     Attributes:
