@@ -364,6 +364,28 @@ class TestCableBorderLeafToService:
         gen.create_cabling.assert_not_awaited()
         gen.logger.error.assert_called_once()
 
+    @pytest.mark.asyncio
+    async def test_speed_mismatch_producing_no_connections_errors(self) -> None:
+        """Ports exist on both sides but create_cabling's own speed-aware
+        matching rejects them all (e.g. a firewall/LB template's uplink speed
+        doesn't match the border-leaf's dedicated port speed) — create_cabling
+        returns [] rather than raising, so this must be checked explicitly."""
+        gen = _make_generator()
+        gen.client.filters = AsyncMock(
+            side_effect=[
+                [_mock_iface("Eth1/25")],  # bl firewall-role ports
+                [_mock_iface("eth1")],  # fw uplink ports
+            ]
+        )
+        gen.create_cabling = AsyncMock(return_value=[])
+
+        await gen._cable_border_leaf_to_service(
+            border_leaf_names=["bl-01"], service_names=["fw-01"], service_role="firewall"
+        )
+
+        gen.create_cabling.assert_awaited_once()
+        gen.logger.error.assert_called_once()
+
 
 class TestCableDcServices:
     @pytest.mark.asyncio
