@@ -47,6 +47,10 @@ changelog_start_rev = "v0.1.0"
 line-length = 120
 exclude = [".venv/", ".dev/"]
 
+[tool.rumdl]
+line-length = 120
+disable = ["MD013", "MD024"]
+
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

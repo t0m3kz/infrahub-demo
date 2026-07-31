@@ -155,29 +155,12 @@ Explore LLM upgrades and organic growth patterns—all in one place, please make
 
 | Scenario | Location | Type/Architecture | Description |
 | ---------- | ---------- | ------------------- | ------------- |
-| **[switch](data/demos/02_switch/)** | Munich 🇩🇪 | Rack Expansion | "Just TWO more switches"—organic chaos. |
-| **[rack](data/demos/03_rack/)** | Munich 🇩🇪 | Minimal ToR | Minimalist rack: started as a test, now it's critical. |
-| **[pod](data/demos/04_pod/)** | Munich 🇩🇪 | Pod Expansion | Pod 4: because 3 wasn't enough. |
+| **[switch](data/demos/02_switch_dc6/)** | Munich 🇩🇪 | Rack Expansion | "Just TWO more switches"—organic chaos. |
+| **[rack](data/demos/03_rack_dc6/)** | Munich 🇩🇪 | Minimal ToR | Minimalist rack: started as a test, now it's critical. |
+| **[pod](data/demos/04_pod_dc6/)** | Munich 🇩🇪 | Pod Expansion | Pod 4: because 3 wasn't enough. |
 | **[llm time](data/demos/05_llm_time/)** | Munich 🇩🇪 | Spine Expansion | Extra spines for LLMs—plausible deniability included. |
 
 Brace yourself: even more questionable use cases, wild topologies, and vendor drama are coming soon. If you want to see even more chaos, star this repo—so the author can unlock extra GitHub tools and automate his caffeine intake. Your star may be the difference between a new feature and another debugging session at midnight!
-
-### **[Universal Topology](data/demos/100_universal_topology/)** — End-to-End Graph Tracing
-
-The flagship demo. Every layer — datacenters, colocation, cloud, offices, external providers,
-and interconnects — lives in a single unified model. Because everything shares the same graph,
-you can trace a path from a server NIC to a cloud VM, from a branch office to a partner gateway,
-or from a VXLAN segment through its firewalls to AWS — **in a single traversal**, without
-pivoting between tools.
-
-```text
-DC1-POD1-SRV-01 → leaf → spine → super-spine → Equinix cross-connect → edge router
-  → virtual circuit → cloud Direct Connect → CUST1-APP-EU-CENTRAL-1A-01 (EC2)
-```
-
-Covers 3 datacenters (DC1–DC3), 2 cloud regions (AWS + Azure), 5 offices, 3 Equinix metros,
-Coresite, Megaport, ISPs, and partners. Includes 13 traced end-to-end paths and full
-virtualisation capability trees for Kubernetes, vSphere, and Nutanix.
 
 ## CI/CD
 
@@ -273,12 +256,12 @@ Contributions, questions, and feedback are welcome! Please use [GitHub Discussio
 
 ## License
 
-This project is licensed under the MIT License. See [LICENSE](LICENSE) for details.
+This project is licensed under the MIT License.
 
 [ruff-badge]:
 <https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json>
 [ruff-link]:
-(https://github.com/astral-sh/ruff)
+(<https://github.com/astral-sh/ruff>)
 [github-discussions-link]:
 <https://github.com/t0m3kz/infrahub-demo/discussions/>
 [github-discussions-badge]:
@@ -288,9 +271,9 @@ This project is licensed under the MIT License. See [LICENSE](LICENSE) for detai
 [github-link]:
 <https://github.com/t0m3kz/infrahub-demo/actions/workflows/main.yml>
 [coverage-badge]:
-https://img.shields.io/codecov/c/github/t0m3kz/infrahub-demo?label=coverage
+<https://img.shields.io/codecov/c/github/t0m3kz/infrahub-demo?label=coverage>
 [coverage-link]:
-https://codecov.io/gh/t0m3kz/infrahub-demo
+<https://codecov.io/gh/t0m3kz/infrahub-demo>
 [python-badge]:
 <https://img.shields.io/badge/python-3.10%7C3.11%7C3.12-000000?logo=python>
 [python-link]:
