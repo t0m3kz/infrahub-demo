@@ -600,18 +600,16 @@ class TestValidateInterfaceSpeeds:
         assert result == []
         planner.logger.error.assert_called()
 
-    def test_missing_speed_info_does_not_filter(self) -> None:
-        """Interfaces without interface_type are not filtered out."""
-        from typing import cast
-
-        from generators.protocols import DcimPhysicalInterface
-
+    def test_unrecognized_speed_pattern_does_not_filter(self) -> None:
+        """interface_type values that don't match the speed pattern (e.g. "other")
+        are not filtered out — interface_type is mandatory with a default on the
+        real schema, so it's never actually None, but plenty of real values (patch
+        panels, consoles, "other") carry no parseable speed."""
         planner = self._planner()
-        a = _make_interface("Eth1", "leaf-01", None)  # no interface_type
+        a = _make_speed_interface("Eth1", "leaf-01", "other")
         b = _make_speed_interface("Eth1", "spine-01", "100GBASE-SR4")
 
-        plan = cast(list[tuple[DcimPhysicalInterface, DcimPhysicalInterface]], [(a, b)])
-        result = planner._validate_interface_speeds(plan, strict=True)
+        result = planner._validate_interface_speeds([(a, b)], strict=True)
         # At least one speed is unknown → no mismatch check, connection kept
         assert len(result) == 1
 

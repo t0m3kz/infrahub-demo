@@ -55,11 +55,9 @@ class RackGenerator(RackMixin, CommonGenerator):
             self._roles_helper = helper
         return helper
 
-    def _has_role_templates(self, roles: list | None) -> bool:
+    def _has_role_templates(self, roles: list[DeviceRole]) -> bool:
         """Return True when at least one role template has positive quantity."""
-        if not roles:
-            return False
-        return any((getattr(role, "quantity", 0) or 0) > 0 for role in roles)
+        return any(role.quantity > 0 for role in roles)
 
     def _has_tor_like_templates(self) -> bool:
         """ToR-side switch templates (physical ToR, l2-leaf, access-leaf)."""
@@ -471,7 +469,7 @@ class RackGenerator(RackMixin, CommonGenerator):
         await self._generate_access_leafs(created_leaf_devices)
 
         # Generation completion summary
-        total_devices = len(created_leaf_devices) + sum(tor_role.quantity for tor_role in (self.data.tors or []))
+        total_devices = len(created_leaf_devices) + sum(tor_role.quantity for tor_role in self.data.tors)
         self.logger.info(
             f"Rack generation completed: {self.data.name} - {total_devices} device(s) created with connectivity"
         )
@@ -615,7 +613,7 @@ class RackGenerator(RackMixin, CommonGenerator):
 
     async def _generate_leafs(self, created_leaf_devices: list[str]) -> None:
         """Create -> cable -> route leaf devices."""
-        for leaf_role in self.data.leafs or []:
+        for leaf_role in self.data.leafs:
             expected_names = self._roles.expected_names(role="leaf", quantity=leaf_role.quantity)
             if expected_names <= self._created_device_names:
                 self.logger.info(
@@ -639,7 +637,7 @@ class RackGenerator(RackMixin, CommonGenerator):
         L2-only aggregation switches below leafs use role "l2-leaf"/"access-leaf" instead.
         """
         pod = self.data.pod
-        if not (tor_roles := self.data.tors or []):
+        if not (tor_roles := self.data.tors):
             return
 
         if not self._spine_device_names:
@@ -647,16 +645,12 @@ class RackGenerator(RackMixin, CommonGenerator):
 
         # Both invariant across tor_roles (not derived from any single role) —
         # computed once rather than once per role template.
-        tors_per_rack = sum(r.quantity or 0 for r in tor_roles)
+        tors_per_rack = sum(r.quantity for r in tor_roles)
         # Live count, not design.compute_racks_per_row (a max capacity) - a pod with
         # fewer racks per row than its design allows would otherwise get an inflated
         # offset that overflows past the real spine downlink interfaces.
         sibling_racks = await self.client.filters(kind=LocationRack, pod__ids=[pod.id])
-        prev_row_racks = sum(
-            1
-            for r in sibling_racks
-            if hasattr(r, "row_index") and r.row_index and r.row_index.value < self.data.row_index
-        )
+        prev_row_racks = sum(1 for r in sibling_racks if r.row_index.value < self.data.row_index)
 
         for tor_role in tor_roles:
             expected_names = self._roles.expected_names(role="tor", quantity=tor_role.quantity)
@@ -720,7 +714,7 @@ class RackGenerator(RackMixin, CommonGenerator):
 
     async def _generate_l2_leafs(self, created_leaf_devices: list[str]) -> None:
         """Create l2-leaf devices and cable them to local leafs. No routing - L2-only."""
-        for l2_leaf_role in self.data.l2_leafs or []:
+        for l2_leaf_role in self.data.l2_leafs:
             result = await self._create_local_leaf_role_devices(
                 l2_leaf_role,
                 device_role="l2-leaf",
@@ -749,7 +743,7 @@ class RackGenerator(RackMixin, CommonGenerator):
         Cabled to the local leaf pair (underlay eBGP/OSPF), plus a second,
         underlay-less overlay EVPN session straight to the pod's spines.
         """
-        for access_leaf_role in self.data.access_leafs or []:
+        for access_leaf_role in self.data.access_leafs:
             result = await self._create_local_leaf_role_devices(
                 access_leaf_role,
                 device_role="access-leaf",

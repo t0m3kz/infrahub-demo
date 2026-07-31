@@ -103,11 +103,6 @@ _LB_TEMPLATE = Template(
 
 
 class TestPodBorderLeafCapacity:
-    def test_no_design_returns_zero(self) -> None:
-        pod = _mock_pod(id="pod-1", index=1)
-        pod.design = None
-        assert DCTopologyGenerator._pod_border_leaf_capacity(pod) == 0
-
     def test_returns_pod_designs_own_cap(self) -> None:
         pod = _mock_pod(id="pod-1", index=1)
         pod.design = _mock_pod_design(max_border_leafs_per_pod=2)

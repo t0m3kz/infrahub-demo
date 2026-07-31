@@ -244,7 +244,7 @@ class PodTopologyGenerator(CommonGenerator):
         spine_template = spine_entries[0].template
 
         parent = self.data.parent
-        super_spine_devices = [device.name for device in (parent.devices or [])]
+        super_spine_devices = [device.name for device in parent.devices]
         parent_super_spine_entries = parent.super_spine_templates
         super_spine_interfaces = (
             [iface.name for iface in parent_super_spine_entries[0].template.interfaces]

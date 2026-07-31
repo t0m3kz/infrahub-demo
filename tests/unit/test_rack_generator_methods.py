@@ -101,7 +101,6 @@ def _build_gen() -> Any:
 class TestRackGeneratorMethods:
     def test_has_role_template_helpers(self) -> None:
         gen = _build_gen()
-        assert gen._has_role_templates(None) is False
         assert gen._has_role_templates([]) is False
         assert gen._has_role_templates(gen.data.leafs) is True
         assert gen._has_tor_like_templates() is True
