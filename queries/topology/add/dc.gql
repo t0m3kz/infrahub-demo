@@ -64,22 +64,24 @@ query topology_dc($name: String!) {
                 template {
                   node {
                     id
-                    template_name { value }
-                    platform {
-                      node {
-                        id
-                      }
-                    }
-                    device_type {
-                      node {
-                        id
-                      }
-                    }
-                    interfaces {
-                      edges {
+                    ... on TemplateDcimPhysicalDevice {
+                      template_name { value }
+                      platform {
                         node {
-                          name { value }
-                          role { value }
+                          id
+                        }
+                      }
+                      device_type {
+                        node {
+                          id
+                        }
+                      }
+                      interfaces {
+                        edges {
+                          node {
+                            name { value }
+                            role { value }
+                          }
                         }
                       }
                     }
