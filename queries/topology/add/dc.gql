@@ -11,6 +11,7 @@ query topology_dc($name: String!) {
             value
           }
           naming_convention { value }
+          connectivity_mode { value }
           design {
             node {
               id
@@ -19,7 +20,7 @@ query topology_dc($name: String!) {
               max_pods { value }
               max_super_spines_per_fabric { value }
               max_spines_per_pod { value }
-              max_border_leafs_per_pod { value }
+              max_border_leafs_per_fabric { value }
               loopback_prefix_length { value }
               technical_prefix_length { value }
               management_prefix_length { value }

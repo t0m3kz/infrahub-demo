@@ -119,6 +119,7 @@ class PodDesign(BaseModel):
     max_tors_per_network_rack: int = 2
     max_tors_per_compute_rack: int = 1
     max_spines_per_pod: int = 2
+    max_border_leafs_per_pod: int = 1
 
     @property
     def deployment_type(self) -> Literal["middle_rack", "tor", "mixed"]:
@@ -153,7 +154,7 @@ class DataCenterDesignData(BaseModel):
     max_pods: int = 2
     max_super_spines_per_fabric: int = 2
     max_spines_per_pod: int = 4
-    max_border_leafs_per_pod: int = 2
+    max_border_leafs_per_fabric: int = 4
 
     # Address space sizing — defaults used when DC instance has no pools
     loopback_prefix_length: int = 23
@@ -192,6 +193,7 @@ class DCModel(BaseModel):
     naming_convention: str = "standard"
     fabric_interface_sorting_method: Literal["top_down", "bottom_up"] = "bottom_up"
     spine_interface_sorting_method: Literal["top_down", "bottom_up"] = "bottom_up"
+    connectivity_mode: Literal["pbr", "inline"] = "pbr"
     fabric_templates: list[DeviceRole] | None = []
     loopback_pool: Pool | None = None
     technical_pool: Pool | None = None

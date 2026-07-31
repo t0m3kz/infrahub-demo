@@ -1,6 +1,5 @@
 """Infrastructure generator for data center topology."""
 
-import asyncio
 import secrets
 from typing import Any, Literal, cast
 
@@ -8,10 +7,10 @@ from infrahub_sdk.protocols import CoreStandardGroup
 
 from utils.data_cleaning import clean_data
 
-from ..common import CablingOptions, CommonGenerator, DeviceOptions
+from ..common import CommonGenerator, DeviceOptions
 from ..helpers import calculate_super_spine_loopback_prefix, name_to_asn_range
 from ..helpers.routing import RoutingStrategy
-from ..models import DCModel, Pool, Template
+from ..models import DCModel, DeviceRole
 from ..protocols import (
     DcimPhysicalDevice,
     DcimPhysicalInterface,
@@ -27,10 +26,10 @@ _DC_HA_KINDS: dict[str, Literal["ManagedFirewallHA", "ManagedLoadbalancerHA"]] =
     "firewall": "ManagedFirewallHA",
     "load-balancer": "ManagedLoadbalancerHA",
 }
-_POD_POOL_MAX_RETRIES = 10
-_POD_POOL_RETRY_DELAY = 3.0
-_POD_POOL_RETRY_CAP = 20.0
-_POD_POOL_RETRY_JITTER = 0.25
+# FW/LB "uplink" interfaces face border-leaf; border-leaf's "firewall"/"load-balancer"
+# interfaces are the dedicated counterpart ports for each service — see
+# N9K-C9336C-FX2_BORDER_LEAF's template for the canonical port layout.
+_BL_ROLE_FOR: dict[str, str] = {"firewall": "firewall", "load-balancer": "load-balancer"}
 
 
 class DCTopologyGenerator(CommonGenerator):
@@ -272,9 +271,7 @@ class DCTopologyGenerator(CommonGenerator):
         # orchestration, since add_pod alone (no add_dc) is a supported entry point.
 
         self._existing_pods = existing_pods
-        self._dc_design = dc_design
         self._is_ipv6 = is_ipv6
-        self._fabric_asn_pool_id = fabric_asn_pool_id
         await self._generate_dc_scoped_fabric_devices()
 
     def _validate_fabric_template_roles(self) -> None:
@@ -291,60 +288,17 @@ class DCTopologyGenerator(CommonGenerator):
                 )
 
     @staticmethod
-    def _split_quantity(quantity: int, pod_count: int) -> list[int]:
-        """Split ``quantity`` across ``pod_count`` pods, first pods (lowest index)
-        get the remainder. E.g. split(4, 2) -> [2, 2]; split(3, 2) -> [2, 1]."""
-        if pod_count == 0:
-            return []
-        base, remainder = divmod(quantity, pod_count)
-        return [base + 1 if i < remainder else base for i in range(pod_count)]
-
-    @staticmethod
-    def _pod_spine_port_reservation(pod: Any) -> int:
-        """Deterministic count of spine downlink ports leaf/tor devices reserve
-        for this pod, derived from design CAPACITY (not live device count) —
-        mirrors pod.py's own pool-sizing calc. Border-leaf cabling starts after
-        this reservation, so it never races the rack generator's own
-        deterministic, capacity-based offsets for leaf/tor devices cabling into
-        the same spines concurrently (a live cable-count read would race those
-        writers under concurrent load — this must stay capacity-based)."""
+    def _pod_border_leaf_capacity(pod: Any) -> int:
+        """This pod's own design cap on how many border-leaf devices it can
+        receive — a pod with max_border_leafs_per_pod=0 in its own design is
+        deliberately skipped, which is how a specific subset of pods (e.g.
+        pod 1 and pod 3, not pod 2) can be chosen to host border-leafs."""
         design = getattr(pod, "design", None)
         design_peer = getattr(design, "peer", None) if design else None
         if design_peer is None:
             return 0
-
-        def _val(name: str) -> int:
-            attr = getattr(design_peer, name, None)
-            value = getattr(attr, "value", None) if attr is not None else None
-            return value or 0
-
-        network_racks_per_row = _val("network_racks_per_row")
-        compute_racks_per_row = _val("compute_racks_per_row")
-        max_tors_per_compute_rack = _val("max_tors_per_compute_rack")
-        rows = _val("rows")
-        max_leafs_per_network_rack = _val("max_leafs_per_network_rack")
-
-        # tor deployment: ToRs connect directly to spines. middle_rack/mixed:
-        # only leafs connect to spines (ToRs connect to the local leaf pair).
-        if network_racks_per_row == 0:
-            return rows * compute_racks_per_row * max_tors_per_compute_rack
-        return rows * network_racks_per_row * max_leafs_per_network_rack
-
-    async def _pod_spine_fabric(self, pod_id: str) -> tuple[list[str], list[str]]:
-        """Return (spine_device_names, spine_downlink_interface_names) for
-        cabling new border-leaf devices into ``pod_id``'s spines."""
-        spines = await self.client.filters(kind=DcimPhysicalDevice, deployment__ids=[pod_id], role__value="spine")
-        spine_names = sorted(spine.name.value for spine in spines)
-        if not spine_names:
-            return [], []
-
-        downlinks = await self.client.filters(
-            kind=DcimPhysicalInterface,
-            device__name__values=spine_names,
-            role__value="downlink",
-        )
-        interface_names = sorted({iface.name.value for iface in downlinks})
-        return spine_names, interface_names
+        attr = getattr(design_peer, "max_border_leafs_per_pod", None)
+        return getattr(attr, "value", None) or 0
 
     async def _ensure_dc_ha_pair(
         self,
@@ -386,169 +340,207 @@ class DCTopologyGenerator(CommonGenerator):
         await ha_obj.save(allow_upsert=True)
         self.logger.info(f"DC {self.fabric_name}: created HA domain {ha_name} for {role_label}s")
 
-    async def _wait_for_pod_loopback_pool(self, pod: Any) -> str | None:
-        """Retry-refetch the pod directly until add_pod has written its loopback
-        pool — dc.py's own bootstrap and add_pod's can run concurrently during a
-        bulk load, so the pod relationship read at the top of generate() may not
-        have it yet. Mirrors rack.py's _wait_for_pod_pools for the same race."""
-        if getattr(pod, "loopback_pool", None):
-            return pod.loopback_pool.id
-        for attempt in range(_POD_POOL_MAX_RETRIES):
-            pod_obj = await self.client.get(kind=TopologyPod, id=pod.id, include=["loopback_pool"])
-            if pod_obj.loopback_pool.id:
-                pod.loopback_pool = Pool(id=pod_obj.loopback_pool.id)
-                return pod_obj.loopback_pool.id
-            if attempt < _POD_POOL_MAX_RETRIES - 1:
-                delay = self._retry_delay(
-                    _POD_POOL_RETRY_DELAY, attempt, cap=_POD_POOL_RETRY_CAP, jitter=_POD_POOL_RETRY_JITTER
-                )
-                self.logger.info(
-                    f"DC {self.fabric_name}: pod {pod.name.value} loopback pool not ready yet — "
-                    f"retrying in {delay:.2f}s (attempt {attempt + 1}/{_POD_POOL_MAX_RETRIES})"
-                )
-                await asyncio.sleep(delay)
-        return None
+    async def _create_border_leaf_devices(self) -> list[str]:
+        """Create border-leaf devices for every fabric_templates(role="border-leaf")
+        entry, distributing each entry's quantity across the DC's existing pods by
+        walking pods in index order and giving each pod up to its OWN design's
+        max_border_leafs_per_pod cap — a pod whose own design caps it at 0 is
+        skipped entirely, which is how a specific subset of pods (e.g. pod 1 and
+        pod 3, not pod 2) can be chosen to host border-leafs. deployment_id is the
+        target pod's id (not the DC's) so devices land in that pod's fabric, but
+        cabling/routing them to that pod's spines is pod.py's job, not dc.py's —
+        it already owns spine context and can query "which border-leafs deploy
+        under me" during its own bootstrap. Returns every border-leaf name created
+        this run, DC-wide, for BLF<->FW<->LB cabling below."""
+        entries = self.data.border_leaf_templates
+        if not entries:
+            return []
 
-    async def _create_and_cable_dc_role_share(
-        self,
-        *,
-        role: str,
-        quantity: int,
-        template: Template,
-        pod: Any,
+        existing_pods = getattr(self, "_existing_pods", [])
+        if not existing_pods:
+            self.logger.info(f"DC {self.fabric_name}: no pods yet — deferring border-leaf placement")
+            return []
+        sorted_pods = sorted(existing_pods, key=lambda p: p.index.value)
+
+        max_border_leafs_per_fabric = self.data.design.max_border_leafs_per_fabric if self.data.design else None
+        all_names: list[str] = []
+        for entry in entries:
+            if max_border_leafs_per_fabric is not None and entry.quantity > max_border_leafs_per_fabric:
+                self.logger.error(
+                    f"DC {self.fabric_name}: border-leaf entry requests {entry.quantity} devices but "
+                    f"design.max_border_leafs_per_fabric allows at most {max_border_leafs_per_fabric} — skipping."
+                )
+                continue
+
+            remaining = entry.quantity
+            for pod in sorted_pods:
+                if remaining <= 0:
+                    break
+                pod_capacity = self._pod_border_leaf_capacity(pod)
+                if pod_capacity <= 0:
+                    continue
+                share = min(remaining, pod_capacity)
+                remaining -= share
+
+                device_options = DeviceOptions(
+                    indexes=[self.data.index, pod.index.value],
+                    allocate_loopback=True,
+                    loopback_pool=pod.loopback_pool.id if getattr(pod, "loopback_pool", None) else None,
+                    loopback_prefix_length=128 if self._is_ipv6 else 32,
+                )
+                names = await self.create_devices(
+                    deployment_id=pod.id,
+                    device_role="border-leaf",
+                    amount=share,
+                    template=entry.template.model_dump(),
+                    naming_convention=cast(
+                        Literal["standard", "hierarchical", "flat"], self.data.naming_convention.lower()
+                    ),
+                    options=device_options,
+                )
+                all_names.extend(names)
+
+            if remaining > 0:
+                self.logger.warning(
+                    f"DC {self.fabric_name}: border-leaf entry has {remaining} device(s) left unplaced — "
+                    "no pod had remaining max_border_leafs_per_pod capacity."
+                )
+
+        return all_names
+
+    async def _create_dc_wide_role_devices(
+        self, *, role: Literal["firewall", "load-balancer"], entries: list[DeviceRole]
     ) -> list[str]:
-        """Create one pod's share of a DC-level border-leaf/firewall/load-balancer
-        entry, deployment_id=pod.id (not the DC) so the devices are cabled into
-        that pod's own spine fabric even though declared once at DC level.
-
-        Border-leaf gets a loopback (from the pod's own loopback pool) and
-        underlay/overlay BGP into that pod's spines — same treatment leaf/tor/
-        border-leaf all got pre-refactor via rack.py's _generate_spine_attached_role.
-        Firewall/load-balancer stay device-only (no loopback, no routing) — this
-        matches their pre-refactor behavior; cabling them to border-leaf is a
-        separate, still-deferred follow-up (see connectivity_mode's docstring).
-        """
-        allocate_loopback = role == "border-leaf"
-        pod_loopback_pool_id = await self._wait_for_pod_loopback_pool(pod) if allocate_loopback else None
-        if allocate_loopback and not pod_loopback_pool_id:
-            self.logger.error(
-                f"DC {self.fabric_name}: pod {pod.name.value} loopback pool not found. "
-                f"Run pod generator first: infrahubctl generator add_pod name={pod.name.value}"
-            )
-        device_options = DeviceOptions(
-            indexes=[self.data.index, pod.index.value],
-            allocate_loopback=allocate_loopback,
-            loopback_pool=pod_loopback_pool_id,
-            loopback_prefix_length=128 if self._is_ipv6 else 32,
-        )
+        """Create firewall/load-balancer devices DC-wide (deployment_id=dc.id, not
+        split across pods — these sit in front of the whole DC's border-leaf tier,
+        not any one pod), pairing each entry's devices into an HA domain when
+        quantity == 2. No loopback allocation — not part of underlay/overlay routing."""
+        device_options = DeviceOptions(indexes=[self.data.index])
         if role == "load-balancer":
             # create_devices()'s default group_name is f"{device_role}s" = "load-balancers",
             # but the bootstrap group is named "loadbalancers" (no hyphen) — override.
             device_options["group_name"] = "loadbalancers"
-        devices = await self.create_devices(
-            deployment_id=pod.id,
-            device_role=role,
-            amount=quantity,
-            template=template.model_dump(),
-            naming_convention=cast(Literal["standard", "hierarchical", "flat"], self.data.naming_convention.lower()),
-            options=device_options,
+        ha_kind = _DC_HA_KINDS[role]
+
+        all_names: list[str] = []
+        for entry in entries:
+            names = await self.create_devices(
+                deployment_id=self.data.id,
+                device_role=role,
+                amount=entry.quantity,
+                template=entry.template.model_dump(),
+                naming_convention=cast(
+                    Literal["standard", "hierarchical", "flat"], self.data.naming_convention.lower()
+                ),
+                options=device_options,
+            )
+            all_names.extend(names)
+            if entry.quantity == 2:
+                await self._ensure_dc_ha_pair(names, ha_kind=ha_kind, role_label=role)
+
+        return all_names
+
+    async def _cable_border_leaf_to_service(
+        self,
+        *,
+        border_leaf_names: list[str],
+        service_names: list[str],
+        service_role: Literal["firewall", "load-balancer"],
+    ) -> None:
+        """Cable every border-leaf device's dedicated firewall/load-balancer-facing
+        ports to the service devices' uplink ports (PBR leg, or one half of the
+        inline chain) — any-to-any, mirroring create_cabling's "rack" strategy."""
+        if not border_leaf_names or not service_names:
+            return
+        bl_interfaces = await self.client.filters(
+            kind=DcimPhysicalInterface,
+            device__name__values=border_leaf_names,
+            role__value=_BL_ROLE_FOR[service_role],
+        )
+        bl_interface_names = sorted({iface.name.value for iface in bl_interfaces})
+        service_interfaces = await self.client.filters(
+            kind=DcimPhysicalInterface,
+            device__name__values=service_names,
+            role__value="uplink",
+        )
+        service_interface_names = sorted({iface.name.value for iface in service_interfaces})
+        if not bl_interface_names or not service_interface_names:
+            self.logger.error(
+                f"DC {self.fabric_name}: cannot cable border-leaf<->{service_role} — "
+                f"bl_ports={len(bl_interface_names)}, {service_role}_ports={len(service_interface_names)}."
+            )
+            return
+        await self.create_cabling(
+            bottom_devices=service_names,
+            bottom_interfaces=service_interface_names,
+            top_devices=border_leaf_names,
+            top_interfaces=bl_interface_names,
+            strategy="rack",
         )
 
-        if role == "border-leaf":
-            uplink_names = [iface.name for iface in template.interfaces if iface.role == "uplink"]
-            if not uplink_names:
-                self.logger.error(
-                    f"DC {self.fabric_name}: border-leaf template has no uplink interfaces — cannot cable fabric."
-                )
-                return devices
-            spine_names, spine_downlinks = await self._pod_spine_fabric(pod.id)
-            if not spine_names or not spine_downlinks:
-                self.logger.error(
-                    f"DC {self.fabric_name}: no spine devices/downlinks found in pod (id={pod.id}) — "
-                    "cannot cable border-leaf fabric uplinks."
-                )
-                return devices
-            # Deterministic offset (design capacity, not live cable count) so this
-            # never races the rack generator's own leaf/tor cabling into the same
-            # spines; already-placed border-leafs THIS run (multiple fabric_templates
-            # entries landing on the same pod) stack on top, tracked in-memory.
-            if not hasattr(self, "_border_leaf_placed"):
-                self._border_leaf_placed: dict[str, int] = {}
-            placed = self._border_leaf_placed.get(pod.id, 0)
-            offset = self._pod_spine_port_reservation(pod) + placed
-            self._border_leaf_placed[pod.id] = placed + quantity
-            p2p_pairs = await self.create_cabling(
-                bottom_devices=devices,
-                bottom_interfaces=uplink_names,
-                top_devices=spine_names,
-                top_interfaces=spine_downlinks,
-                strategy="rack",
-                options=CablingOptions(cabling_offset=offset),
+    async def _cable_dc_services(
+        self, *, border_leaf_names: list[str], firewall_names: list[str], load_balancer_names: list[str]
+    ) -> None:
+        """Cable border-leaf<->firewall<->load-balancer per connectivity_mode:
+        - pbr: two independent legs, border-leaf<->firewall and border-leaf<->load-balancer.
+        - inline: one physical chain — border-leaf<->firewall<->load-balancer<->border-leaf —
+          both border-leafs sit on the ends of the same shared chain through the
+          firewall and load-balancer HA pairs, not a separate chain per border-leaf.
+        No-ops for any leg with nothing to cable on either side.
+        """
+        if self.data.connectivity_mode == "inline":
+            await self._cable_border_leaf_to_service(
+                border_leaf_names=border_leaf_names, service_names=firewall_names, service_role="firewall"
             )
-            # pod.asn_pool is just pod.py's own propagated copy of this DC's fabric_asn_pool
-            # (see pod.py's generate()) — read the DC's own value directly instead of
-            # re-fetching the pod, sidestepping the same add_pod/add_dc race that
-            # affects pod.loopback_pool.
-            routing_opts = RoutingOptions(design=self._dc_design, asn_pool=getattr(self, "_fabric_asn_pool_id", None))
-            if routing_opts.get("design"):
-                await self.create_routing(
-                    bottom_devices=devices,
-                    top_devices=spine_names,
-                    options=routing_opts,
-                    p2p_interfaces=p2p_pairs,
-                    bottom_role="border-leaf",
-                    top_role="spine",
+            if firewall_names and load_balancer_names:
+                fw_customer = await self.client.filters(
+                    kind=DcimPhysicalInterface, device__name__values=firewall_names, role__value="customer"
                 )
-
-        return devices
+                lb_uplink = await self.client.filters(
+                    kind=DcimPhysicalInterface, device__name__values=load_balancer_names, role__value="uplink"
+                )
+                fw_customer_names = sorted({iface.name.value for iface in fw_customer})
+                lb_uplink_names = sorted({iface.name.value for iface in lb_uplink})
+                if fw_customer_names and lb_uplink_names:
+                    await self.create_cabling(
+                        bottom_devices=load_balancer_names,
+                        bottom_interfaces=lb_uplink_names,
+                        top_devices=firewall_names,
+                        top_interfaces=fw_customer_names,
+                        strategy="rack",
+                    )
+            await self._cable_border_leaf_to_service(
+                border_leaf_names=border_leaf_names, service_names=load_balancer_names, service_role="load-balancer"
+            )
+        else:
+            await self._cable_border_leaf_to_service(
+                border_leaf_names=border_leaf_names, service_names=firewall_names, service_role="firewall"
+            )
+            await self._cable_border_leaf_to_service(
+                border_leaf_names=border_leaf_names, service_names=load_balancer_names, service_role="load-balancer"
+            )
 
     async def _generate_dc_scoped_fabric_devices(self) -> None:
-        """Split border-leaf/firewall/load-balancer fabric_templates entries
-        evenly across the DC's existing pods (first pods get the remainder) and
-        create+cable each pod's share. No-ops if no pods exist yet — a DC with
-        zero pods has nothing to cable into. A pod added later than this DC's
-        declaration needs an explicit dc_pod_cascade run to get its retroactive
-        share — same as any other structural DC-level change (see tasks/demo.py's
-        own manual dc_pod_cascade calls after bulk loads); not auto-triggered from
-        pod.py's add_pod, which would otherwise fire a concurrent DC-level
-        re-bootstrap on every single pod creation during a bulk multi-pod load."""
-        existing_pods = getattr(self, "_existing_pods", [])
-        if not existing_pods:
-            self.logger.info(f"DC {self.fabric_name}: no pods yet — deferring border-leaf/FW/LB placement")
-            return
-
-        sorted_pods = sorted(existing_pods, key=lambda p: p.index.value)
-        self._border_leaf_placed: dict[str, int] = {}
-        max_border_leafs_per_pod = self.data.design.max_border_leafs_per_pod if self.data.design else None
-        for role, entries in (
-            ("border-leaf", self.data.border_leaf_templates),
-            ("firewall", self.data.firewall_templates),
-            ("load-balancer", self.data.load_balancer_templates),
-        ):
-            ha_kind = _DC_HA_KINDS.get(role)
-            for entry in entries:
-                shares = self._split_quantity(entry.quantity, len(sorted_pods))
-                for pod, share in zip(sorted_pods, shares):
-                    if share == 0:
-                        continue
-                    if (
-                        role == "border-leaf"
-                        and max_border_leafs_per_pod is not None
-                        and share > max_border_leafs_per_pod
-                    ):
-                        self.logger.error(
-                            f"DC {self.fabric_name}: pod {pod.name.value}'s border-leaf share ({share}) "
-                            f"exceeds design.max_border_leafs_per_pod ({max_border_leafs_per_pod}) — skipping."
-                        )
-                        continue
-                    devices = await self._create_and_cable_dc_role_share(
-                        role=role,
-                        quantity=share,
-                        template=entry.template,
-                        pod=pod,
-                    )
-                    if ha_kind and share == 2:
-                        await self._ensure_dc_ha_pair(devices, ha_kind=ha_kind, role_label=role)
+        """Create border-leaf (distributed across pods by their own design caps),
+        firewall, and load-balancer devices (DC-wide), then cable border-leaf to
+        firewall/load-balancer per connectivity_mode. No-ops on border-leaf if no
+        pods exist yet — a DC with zero pods has nothing to place border-leafs
+        into. A pod added later than this DC's border-leaf declaration needs an
+        explicit dc_pod_cascade run to get its share — same as any other
+        structural DC-level change (see tasks/demo.py's own manual dc_pod_cascade
+        calls after bulk loads); not auto-triggered from pod.py's add_pod, which
+        would otherwise fire a concurrent DC-level re-bootstrap on every single
+        pod creation during a bulk multi-pod load."""
+        border_leaf_names = await self._create_border_leaf_devices()
+        firewall_names = await self._create_dc_wide_role_devices(role="firewall", entries=self.data.firewall_templates)
+        load_balancer_names = await self._create_dc_wide_role_devices(
+            role="load-balancer", entries=self.data.load_balancer_templates
+        )
+        await self._cable_dc_services(
+            border_leaf_names=border_leaf_names,
+            firewall_names=firewall_names,
+            load_balancer_names=load_balancer_names,
+        )
 
     async def _ensure_routing_password(self, name: str, description: str) -> None:
         """Find-or-create a shared RoutingPassword by deterministic name.
