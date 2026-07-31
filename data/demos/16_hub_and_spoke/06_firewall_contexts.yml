@@ -7,7 +7,7 @@
 #
 # FirewallContext.tenant points at a concrete TopologyCustomer node (not the
 # bare CoreOrganization), so C003's TopologyCustomerDC footprint (see
-# 06_customer_footprints.yml, loaded before this file) is referenced by hfid
+# 05_customer_footprints.yml, loaded before this file) is referenced by hfid
 # below — this also lets the ExchangeGatewayGenerator auto-wire C003's VRF
 # namespace to SHARED-SERVICES via the usual created-trigger.
 apiVersion: infrahub.app/v1

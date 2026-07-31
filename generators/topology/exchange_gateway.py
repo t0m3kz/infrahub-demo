@@ -32,7 +32,7 @@ deployment type — they don't reach SHARED-SERVICES the same way:
                                  the circuit's OTHER endpoint is a footprint
                                  with its own `namespace` set (a hub, e.g. the
                                  operator's own SD-WAN PoP — see
-                                 data/demos/16_hub_and_spoke/cloud/aws/
+                                 data/demos/16_hub_and_spoke/02_cloud/aws/
                                  01_cloud_pop.yml), the RoutedExchange's
                                  Z-side is THAT namespace, not SHARED-SERVICES
                                  — traffic stops at the hub, preserving

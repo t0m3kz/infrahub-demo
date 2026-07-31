@@ -2,16 +2,16 @@
 # SD-WAN edge appliance per customer at the office (VCE-610, WAN uplink GE1)
 # plus the shared hub gateway in the cloud PoP (VCG-VA, one physical uplink
 # eth1 carrying per-tenant tunnels via sub-interfaces — see
-# 03_office_hub_circuits.yml). Two customers, two edges, one hub: this is
+# 02_office_hub_circuits.yml). Two customers, two edges, one hub: this is
 # what lets us test isolation — C001 and C002 each get their own circuit and
 # VRF, and neither can reach the other through the shared hub.
 #
 # `deployment` is set to each customer's TopologyCustomerOffice (created in
-# ../06_customer_footprints.yml, loaded before this file) — the device
+# ../05_customer_footprints.yml, loaded before this file) — the device
 # itself is dedicated per-tenant hardware. Circuit-to-customer
 # disambiguation (telling C001's circuit apart from C002's at the shared
 # OFFICES office) is handled explicitly by
-# TopologyVirtualCircuit.customer_deployment in 03_office_hub_circuits.yml,
+# TopologyVirtualCircuit.customer_deployment in 02_office_hub_circuits.yml,
 # not inferred from this field.
 apiVersion: infrahub.app/v1
 kind: Object

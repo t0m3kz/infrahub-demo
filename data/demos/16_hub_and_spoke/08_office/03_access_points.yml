@@ -1,12 +1,12 @@
 ---
-# Office Wi-Fi APs, managed by the colo-hosted WLC (../../colo/equinix/
+# Office Wi-Fi APs, managed by the colo-hosted WLC (../../04_colo/equinix/
 # 03_controllers.yml's WAW1-WLC1) — deliberately cross-site: the controller
 # lives at the colocation PoP, the APs it manages live at the office. A
 # controller's `managed_devices` is not tied to co-location (same point
-# dc/03_dc9_aci.yml makes with one APIC across two pods). APs attach to the
-# shared TopologyOffice site anchor ("OFFICES"), not a per-customer
-# footprint — office Wi-Fi is shared infrastructure, unlike the dedicated
-# per-tenant SD-WAN edges in 02_office_edges.yml.
+# ../../03_dc/03_dc9_aci.yml makes with one APIC across two pods). APs
+# attach to the shared TopologyOffice site anchor ("OFFICES"), not a
+# per-customer footprint — office Wi-Fi is shared infrastructure, unlike
+# the dedicated per-tenant SD-WAN edges in 01_office_edges.yml.
 apiVersion: infrahub.app/v1
 kind: Object
 spec:

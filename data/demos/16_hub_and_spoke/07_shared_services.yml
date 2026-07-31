@@ -8,9 +8,9 @@
 # endpoint on the other end.
 #
 # DC7/DC8 reach SHARED-SERVICES via each customer's own
-# TopologyRouteLeakExchange (06_customer_footprints.yml + the generator run
+# TopologyRouteLeakExchange (05_customer_footprints.yml + the generator run
 # — see docs/exchange_gateway.md). C004 (Colocation, WAW1) now reaches it
-# automatically too, via a real WAW1<->DC7 circuit (colo/equinix/
+# automatically too, via a real WAW1<->DC7 circuit (04_colo/equinix/
 # 02_c004_dc7_link.yml) — TopologyCustomerColocation inherits
 # TopologyConnectableLocation directly, so ExchangeGatewayGenerator's
 # circuit path applies the same way it does for Cloud/Office, no manual

@@ -6,8 +6,8 @@
 # topology_customer.yml) — same reasoning as TopologyClusterHosting living on
 # the customer footprint, not the physical DC/Colocation/Cloud container.
 # TopologyCustomerOffice footprints (one per customer, parent: TopologyOffice)
-# are created in ../06_customer_footprints.yml, BEFORE the per-customer
-# SD-WAN circuits (03_office_hub_circuits.yml) exist — so
+# are created in 05_customer_footprints.yml, BEFORE the per-customer
+# SD-WAN circuits (08_office/02_office_hub_circuits.yml) exist — so
 # ExchangeGatewayGenerator's created-trigger fires on each of these before
 # its circuit exists (for DC it doesn't need one at all), so Office/Cloud
 # will log a warning and skip on first run — re-run `infrahubctl generator
