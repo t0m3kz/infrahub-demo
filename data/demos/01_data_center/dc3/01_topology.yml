@@ -10,8 +10,8 @@ spec:
       naming_convention: flat
       fabric_templates:
         - ["2", "border-leaf", "PowerSwitch-S5232F-ON_BORDER_LEAF"]
-        - ["1", "firewall", "CP-26000_FIREWALL"]
-        - ["1", "load-balancer", "BIG-IP-i5800_LOAD_BALANCER"]
+        - ["2", "firewall", "CP-26000_FIREWALL"]
+        - ["2", "load-balancer", "BIG-IP-i5800_LOAD_BALANCER"]
       fabric_interface_sorting_method: top_down
       member_of_groups:
         - topologies_dc
