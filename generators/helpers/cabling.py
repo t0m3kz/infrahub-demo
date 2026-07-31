@@ -208,6 +208,63 @@ class RackCablingStrategy(CablingStrategy):
         return cabling_plan
 
 
+class ChainCablingStrategy(CablingStrategy):
+    """Index-paired strategy for multi-hop chains (e.g. border-leaf<->
+    firewall<->load-balancer<->...<->border-leaf): device i on one side
+    cables ONLY to device i on the other, forming N independent redundant
+    paths — never any-to-any like RackCablingStrategy. Fewer devices on one
+    side are reused round-robin (index i % count). Within a pair, every
+    mutually available port becomes its own parallel cable.
+    """
+
+    def build_plan(self, **kwargs) -> list[tuple[DcimPhysicalInterface, DcimPhysicalInterface]]:
+        """Pairs bottom[i % num_bottom] with top[i % num_top] for each index
+        i, using every mutually available port on each pair as a cable."""
+        cabling_plan: list[tuple[DcimPhysicalInterface, DcimPhysicalInterface]] = []
+
+        num_bottom = len(self.planner._sorted_bottom_devices)
+        num_top = len(self.planner._sorted_top_devices)
+        if num_bottom == 0 or num_top == 0:
+            return cabling_plan
+
+        # Per-device "next free port" cursor for devices reused across pairs.
+        bottom_cursor: dict[str, int] = {device: 0 for device in self.planner._sorted_bottom_devices}
+        top_cursor: dict[str, int] = {device: 0 for device in self.planner._sorted_top_devices}
+
+        num_pairs = max(num_bottom, num_top)
+        any_pair_cabled = False
+        for pair_index in range(num_pairs):
+            bottom_device = self.planner._sorted_bottom_devices[pair_index % num_bottom]
+            top_device = self.planner._sorted_top_devices[pair_index % num_top]
+            bottom_ports = self.planner.bottom_by_device[bottom_device]
+            top_ports = self.planner.top_by_device[top_device]
+
+            bottom_free = len(bottom_ports) - bottom_cursor[bottom_device]
+            top_free = len(top_ports) - top_cursor[top_device]
+            links_for_pair = min(bottom_free, top_free)
+            if links_for_pair <= 0:
+                self.logger.error(
+                    f"INSUFFICIENT INTERFACES - {bottom_device}<->{top_device} (chain pair {pair_index}): "
+                    f"no free ports left on at least one side (bottom_free={bottom_free}, top_free={top_free})."
+                )
+                continue
+
+            for _ in range(links_for_pair):
+                bottom_intf = bottom_ports[bottom_cursor[bottom_device]]
+                top_intf = top_ports[top_cursor[top_device]]
+                bottom_cursor[bottom_device] += 1
+                top_cursor[top_device] += 1
+                cabling_plan.append((bottom_intf, top_intf))
+            any_pair_cabled = True
+
+        if not any_pair_cabled:
+            self.logger.error(
+                "INSUFFICIENT INTERFACES - No chain pair had a free port on both sides; no connections created."
+            )
+
+        return cabling_plan
+
+
 class IntraRackCablingStrategy(CablingStrategy):
     """Intra-rack cabling strategy with round-robin distribution."""
 
@@ -453,6 +510,7 @@ class CablingPlanner:
         self._strategies: dict[str, CablingStrategy] = {
             "pod": PodCablingStrategy(self),
             "rack": RackCablingStrategy(self),
+            "chain": ChainCablingStrategy(self),
             "intra_rack": IntraRackCablingStrategy(self),
             "intra_rack_middle": IntraRackMiddleCablingStrategy(self),
             "intra_rack_mixed": IntraRackMixedCablingStrategy(self),

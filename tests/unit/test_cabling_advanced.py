@@ -26,6 +26,7 @@ from conftest import MockInterface, create_mock_interfaces
 from generators.helpers import (
     CableTypeDetector,
     CablingPlanner,
+    ChainCablingStrategy,
     ConnectionValidator,
     InterfaceSpeedMatcher,
     IntraRackMiddleCablingStrategy,
@@ -336,6 +337,118 @@ class TestRackCablingStrategyOverflow:
 
         # leaf-01 → spine-01 Eth1, leaf-02 → spine-01 Eth2
         assert len(plan) == 2
+
+
+# ---------------------------------------------------------------------------
+# ChainCablingStrategy
+# ---------------------------------------------------------------------------
+
+
+class TestChainCablingStrategy:
+    def test_one_to_one_with_two_ports_each_creates_two_parallel_cables(self) -> None:
+        """A single index-paired pair uses every mutually available port
+        as its own parallel (redundant) cable between the SAME two devices."""
+        planner = _make_planner(
+            bottom_devices={"fw-01": ["eth1", "eth2"]},
+            top_devices={"bl-01": ["Eth1/25", "Eth1/26"]},
+        )
+        strategy = ChainCablingStrategy(planner)
+        plan = strategy.build_plan()
+
+        assert len(plan) == 2
+        bottom_names = {b.name.value for b, _ in plan}
+        top_names = {t.name.value for _, t in plan}
+        assert bottom_names == {"eth1", "eth2"}
+        assert top_names == {"Eth1/25", "Eth1/26"}
+
+    def test_two_by_two_pairs_by_index_not_any_to_any(self) -> None:
+        """2 bottom x 2 top devices form TWO fully independent chains —
+        fw-01<->bl-01 and fw-02<->bl-02 — never fw-01<->bl-02. This is the
+        key difference from RackCablingStrategy's any-to-any mesh: multiple
+        independent redundant paths (e.g. border-leaf<->fw1<->lb1<->...<->
+        border-leaf and border-leaf<->fw2<->lb2<->...<->border-leaf) must
+        never cross-cable between path 1's and path 2's devices."""
+        planner = _make_planner(
+            bottom_devices={"fw-01": ["eth1", "eth2"], "fw-02": ["eth1", "eth2"]},
+            top_devices={"bl-01": ["p1", "p2"], "bl-02": ["p1", "p2"]},
+        )
+        strategy = ChainCablingStrategy(planner)
+        plan = strategy.build_plan()
+
+        assert len(plan) == 4
+        pairs = {(b.device.display_label, t.device.display_label) for b, t in plan}
+        assert pairs == {("fw-01", "bl-01"), ("fw-02", "bl-02")}
+
+    def test_five_ports_each_uses_all_of_them_on_the_same_pair(self) -> None:
+        """1x1 with 5 ports each: all 5 become parallel cables between the
+        same two devices — no cap at "1 per neighbor" like RackCablingStrategy,
+        since there IS only one neighbor per side in an index-paired chain."""
+        planner = _make_planner(
+            bottom_devices={"fw-01": [f"p{i}" for i in range(1, 6)]},
+            top_devices={"bl-01": [f"p{i}" for i in range(1, 6)]},
+        )
+        strategy = ChainCablingStrategy(planner)
+        plan = strategy.build_plan()
+
+        assert len(plan) == 5
+        bottom_keys = [(b.device.display_label, b.name.value) for b, _ in plan]
+        top_keys = [(t.device.display_label, t.name.value) for _, t in plan]
+        assert len(bottom_keys) == len(set(bottom_keys)) == 5
+        assert len(top_keys) == len(set(top_keys)) == 5
+
+    def test_fewer_devices_on_one_side_reused_round_robin(self) -> None:
+        """1 border-leaf shared by 2 independent firewall paths (2 firewalls,
+        each with its own dedicated port pair on the border-leaf) — the
+        border-leaf is reused round-robin (index % 1 == 0 for both pairs),
+        but each pair still gets its OWN distinct ports on the border-leaf."""
+        planner = _make_planner(
+            bottom_devices={"fw-01": ["eth1", "eth2"], "fw-02": ["eth1", "eth2"]},
+            top_devices={"bl-01": ["p1", "p2", "p3", "p4"]},
+        )
+        strategy = ChainCablingStrategy(planner)
+        plan = strategy.build_plan()
+
+        assert len(plan) == 4
+        top_names_used = [t.name.value for _, t in plan]
+        assert len(top_names_used) == len(set(top_names_used))  # no port reused
+        pairs = {(b.device.display_label, t.device.display_label) for b, t in plan}
+        assert pairs == {("fw-01", "bl-01"), ("fw-02", "bl-01")}
+
+    def test_mismatched_port_counts_capped_by_the_smaller_side(self) -> None:
+        """1x1 pair, bottom has 3 ports but top only has 2 — only 2
+        parallel cables possible (capped by the smaller side); bottom's
+        3rd port stays unused, no error (partial connectivity is valid)."""
+        planner = _make_planner(
+            bottom_devices={"fw-01": ["p1", "p2", "p3"]},
+            top_devices={"bl-01": ["p1", "p2"]},
+        )
+        strategy = ChainCablingStrategy(planner)
+        plan = strategy.build_plan()
+
+        assert len(plan) == 2
+        assert all(b.name.value != "p3" for b, _ in plan)
+
+    def test_shared_device_exhausted_by_earlier_pair_logs_error(self) -> None:
+        """2 firewalls (bottom) sharing 1 border-leaf (top) with only 1
+        port: the first pair (fw-01<->bl-01) consumes bl-01's only port,
+        leaving the second pair (fw-02<->bl-01) with zero free ports on
+        the border-leaf side — logged as an error, first pair still cabled."""
+        planner = _make_planner(
+            bottom_devices={"fw-01": ["eth1"], "fw-02": ["eth1"]},
+            top_devices={"bl-01": ["Eth1/25"]},
+        )
+        strategy = ChainCablingStrategy(planner)
+        strategy.logger = MagicMock()
+        plan = strategy.build_plan()
+
+        assert len(plan) == 1
+        strategy.logger.error.assert_called_once()
+
+    def test_empty_bottom_or_top_returns_empty(self) -> None:
+        planner = _make_planner(bottom_devices={}, top_devices={"bl-01": ["Eth1"]})
+        strategy = ChainCablingStrategy(planner)
+
+        assert strategy.build_plan() == []
 
 
 # ---------------------------------------------------------------------------

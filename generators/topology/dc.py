@@ -453,24 +453,17 @@ class DCTopologyGenerator(CommonGenerator):
     async def _cable_dc_services(
         self, *, border_leaf_names: list[str], firewall_names: list[str], load_balancer_names: list[str]
     ) -> None:
-        """Cable border-leaf<->firewall<->load-balancer per connectivity_mode, via
-        create_chain_cabling(). Border-leaf is always passed first (the "top"/anchor
-        side of each leg) since its dedicated firewall/load-balancer-role ports
-        outnumber firewall's/load-balancer's own uplink/downlink ports (4 vs 2 per
-        template) — this keeps enough per-device port capacity to fan out to an HA
-        pair on the other side regardless of which leg border-leaf appears on.
-        - pbr: two independent legs, border-leaf<->firewall and border-leaf<->load-balancer,
-          each on the service device's "uplink" ports.
-        - inline: one physical chain — border-leaf<->firewall<->load-balancer<->border-leaf.
-          Every chain device has an "uplink" (toward border-leaf/previous hop) and a
-          "downlink" (toward the next hop) — the middle leg (firewall<->load-balancer)
-          cables the firewall's "downlink" ports to the load-balancer's "uplink" ports;
-          the return leg (load-balancer<->border-leaf) uses the load-balancer's
-          "downlink" ports. This uplink/downlink pair is physically distinct from any
-          load-balancer's separate "customer"-role VIP/server-facing ports (not part of
-          this chain, untouched by any of this cabling).
-        No-ops for any leg with nothing to cable on either side (create_chain_cabling's
-        own empty-devices handling).
+        """Cable border-leaf<->firewall<->load-balancer per connectivity_mode.
+        Index-paired (bl[0]<->fw[0], bl[1]<->fw[1], ...), never any-to-any —
+        each border-leaf/firewall/load-balancer triple is one independent
+        redundant path. Fewer devices on one side are reused round-robin.
+        - pbr: two independent legs, each on the service device's "uplink" ports.
+        - inline: one chain — border-leaf<->firewall<->load-balancer<->border-leaf.
+          Every device has an "uplink" (toward the previous hop) and "downlink"
+          (toward the next), distinct from load-balancer's own "customer"-role
+          VIP ports (untouched here).
+        No-ops for any leg with nothing to cable (create_chain_cabling's own
+        empty-devices handling).
         """
         blf_to_firewall = ChainHop(devices=border_leaf_names, down_role=_BL_ROLE_FOR["firewall"])
         firewall_hop = ChainHop(devices=firewall_names, up_role="uplink")
