@@ -298,13 +298,13 @@ class PodTopologyGenerator(CommonGenerator):
         # not here — see PodTopologyGenerator's class docstring.
 
         # A pod added AFTER its DC already declared border-leaf/firewall/load-balancer
-        # fabric_templates needs a retroactive share of those devices, cabled into
-        # this pod's now-existing spines. Rather than a new trigger resolving a pod
-        # id to its parent DC id, this pod requests its own re-placement directly —
-        # a pragmatic, self-contained choice over inventing a new cross-generator
-        # trigger contract (see dc.py's _generate_dc_scoped_fabric_devices docstring).
-        if parent.border_leaf_templates or parent.firewall_templates or parent.load_balancer_templates:
-            await self.run_generator("dc_pod_cascade", [dc.id], wait=False)
+        # fabric_templates needs a retroactive share of those devices — same as any
+        # other structural DC-level reconciliation, this requires an explicit
+        # dc_pod_cascade run (see tasks/demo.py's own manual dc_pod_cascade calls
+        # after bulk loads). Deliberately NOT auto-triggered from here: every
+        # add_pod run (including each pod during a bulk multi-DC load) would fire
+        # its own concurrent dc_pod_cascade re-run against the same DC-level pools/
+        # ASN pool, racing the DC's own already-in-flight bootstrap.
 
     async def _cable_to_existing_sibling_pods(
         self,
