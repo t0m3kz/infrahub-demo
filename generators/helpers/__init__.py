@@ -28,9 +28,10 @@ from .interface_naming import get_lag_name, get_loopback_name
 from .naming import DeviceNamingConfig
 from .pools import (
     DEFAULT_ASN_BASE_START,
+    calculate_dc_fabric_loopback_prefix,
     calculate_fabric_asn_block_size,
+    calculate_loopback_prefix,
     calculate_pod_pools,
-    calculate_super_spine_loopback_prefix,
     name_to_asn_range,
 )
 from .ports import PortProfileHelper, PortsPlanner
@@ -58,7 +59,8 @@ __all__ = [
     "calculate_pod_pools",
     "DEFAULT_ASN_BASE_START",
     "calculate_fabric_asn_block_size",
-    "calculate_super_spine_loopback_prefix",
+    "calculate_dc_fabric_loopback_prefix",
+    "calculate_loopback_prefix",
     "name_to_asn_range",
     "retry_delay",
     # Interfaces

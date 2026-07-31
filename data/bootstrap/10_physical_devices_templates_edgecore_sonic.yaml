@@ -485,7 +485,7 @@ spec:
           - template_name: 7AS7326-56X-O-48V-F_TOR_ce[49-56]
             name: xe[49-56]
             role: uplink
-            interface_type: 25gbase-x-sfp28
+            interface_type: 100gbase-x-qsfp28
           - template_name: 7AS7326-56X-O-48V-F_TOR_xe[57-58]
             name: xe[57-58]
             role: management

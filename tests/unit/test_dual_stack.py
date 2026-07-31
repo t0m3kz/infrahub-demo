@@ -5,7 +5,7 @@ Covers:
   - calculate_pod_pools() with dual_stack parameter
 """
 
-from generators.helpers.pools import calculate_pod_pools, calculate_super_spine_loopback_prefix
+from generators.helpers.pools import calculate_dc_fabric_loopback_prefix, calculate_pod_pools
 from generators.models import DataCenterDesignData
 
 # ===========================================================================
@@ -101,11 +101,11 @@ class TestCalculatePodPoolsDualStack:
 
 class TestSuperSpineLoopback:
     def test_ipv4(self) -> None:
-        prefix = calculate_super_spine_loopback_prefix(2, ipv6=False)
+        prefix = calculate_dc_fabric_loopback_prefix(2, ipv6=False)
         assert prefix <= 32
         assert prefix >= 28
 
     def test_ipv6(self) -> None:
-        prefix = calculate_super_spine_loopback_prefix(2, ipv6=True)
+        prefix = calculate_dc_fabric_loopback_prefix(2, ipv6=True)
         assert prefix <= 128
         assert prefix > 32

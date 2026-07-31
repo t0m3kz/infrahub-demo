@@ -10,7 +10,7 @@ Modern Approach:
 
 Key Functions:
     - calculate_pod_pools(): Dynamic pod-level pool calculation
-    - calculate_super_spine_loopback_prefix(): Fabric-level super-spine loopback calculation
+    - calculate_dc_fabric_loopback_prefix(): Fabric-level super-spine/border-leaf loopback calculation
 
 Key Insight:
     Deployment type significantly affects pool sizing:
@@ -30,6 +30,23 @@ from __future__ import annotations
 from typing import Literal
 
 DEFAULT_ASN_BASE_START = 4200000000
+
+
+def calculate_loopback_prefix(device_count: int, ipv6: bool = False, growth_buffer: int = 2) -> int:
+    """Bit_length-based loopback pool sizing shared by every level (pod, DC-fabric)
+    that allocates one loopback per device — the smallest prefix that fits
+    device_count + growth_buffer addresses.
+
+    Examples:
+        >>> calculate_loopback_prefix(2)
+        29  # 2+2=4 → bit_length=3 → 32-3=/29 (8 addresses)
+        >>> calculate_loopback_prefix(4)
+        29  # 4+2=6 → bit_length=3 → 32-3=/29 (8 addresses)
+        >>> calculate_loopback_prefix(6)
+        28  # 6+2=8 → bit_length=4 → 32-4=/28 (16 addresses)
+    """
+    max_prefix = 128 if ipv6 else 32
+    return max_prefix - (device_count + growth_buffer).bit_length()
 
 
 def calculate_pod_pools(
@@ -118,8 +135,14 @@ def calculate_pod_pools(
         technical_max_prefix - total_p2p_ips.bit_length() if total_p2p_ips > 0 else technical_max_prefix - 8
     )
 
-    # Loopback pool calculation
-    loopback_prefix = loopback_max_prefix - total_devices.bit_length() if total_devices > 0 else loopback_max_prefix - 4
+    # Loopback pool calculation — total_devices already has its own +2 growth
+    # buffer baked in per deployment-type branch above, so growth_buffer=0 here
+    # (calculate_loopback_prefix's own buffer would double-count it).
+    loopback_prefix = (
+        calculate_loopback_prefix(total_devices, ipv6=ipv6, growth_buffer=0)
+        if total_devices > 0
+        else loopback_max_prefix - 4
+    )
 
     return {
         "technical": technical_prefix,
@@ -127,17 +150,19 @@ def calculate_pod_pools(
     }
 
 
-def calculate_super_spine_loopback_prefix(
-    max_super_spines: int,
+def calculate_dc_fabric_loopback_prefix(
+    max_devices: int,
     ipv6: bool = False,
 ) -> int:
-    """Calculate optimal super-spine-loopback pool prefix length.
+    """Calculate optimal prefix length for the DC-scoped fabric loopback pool
+    shared by super-spine and border-leaf devices (both DC-level tiers cabled
+    to spines, neither owned by any one pod's own loopback pool).
 
     Uses bit_length() to determine the smallest prefix that can accommodate
-    the required number of super-spine loopbacks plus 2 addresses for growth/overhead.
+    the required number of loopbacks plus 2 addresses for growth/overhead.
 
     Algorithm:
-        1. Required IPs = max_super_spines + 2 (growth buffer)
+        1. Required IPs = max_devices + 2 (growth buffer)
         2. Prefix = max_prefix - required_ips.bit_length()
         3. This ensures 2^(bit_length) >= required_ips
 
@@ -146,29 +171,32 @@ def calculate_super_spine_loopback_prefix(
         - Automatic sizing based on actual infrastructure
         - No wasted address space
 
+    Thin wrapper around calculate_loopback_prefix — kept as its own named
+    function since callers reason about it in DC-fabric terms.
+
     Args:
-        max_super_spines: Number of super-spines in fabric (typically 2-8)
+        max_devices: Number of super-spine + border-leaf devices in the fabric
         ipv6: True for IPv6, False for IPv4
 
     Returns:
-        Prefix length optimized for super-spine count
+        Prefix length optimized for the given device count
 
     Examples:
-        >>> calculate_super_spine_loopback_prefix(2)
-        30  # 2+2=4 → bit_length=3 → 32-3=/30 (4 addresses)
-        >>> calculate_super_spine_loopback_prefix(4)
+        >>> calculate_dc_fabric_loopback_prefix(2)
+        29  # 2+2=4 → bit_length=3 → 32-3=/29 (8 addresses)
+        >>> calculate_dc_fabric_loopback_prefix(4)
         29  # 4+2=6 → bit_length=3 → 32-3=/29 (8 addresses)
-        >>> calculate_super_spine_loopback_prefix(6)
-        29  # 6+2=8 → bit_length=4 → 32-4=/28 (16 addresses)
+        >>> calculate_dc_fabric_loopback_prefix(6)
+        28  # 6+2=8 → bit_length=4 → 32-4=/28 (16 addresses)
     """
-    max_prefix = 128 if ipv6 else 32
-    return max_prefix - (max_super_spines + 2).bit_length()
+    return calculate_loopback_prefix(max_devices, ipv6=ipv6)
 
 
 def calculate_fabric_asn_block_size(
     max_pods: int,
     amount_of_super_spines: int,
     max_spines_per_pod: int = 4,
+    max_border_leafs_per_fabric: int = 0,
 ) -> int:
     """Calculate ASN block size based on fabric size.
 
@@ -177,17 +205,20 @@ def calculate_fabric_asn_block_size(
     - Medium (≤200 estimated devices): 500 ASNs
     - Large (>200 estimated devices): 2000 ASNs
 
-    Estimate uses design parameters: super-spines + pods × (spines + ~30 leafs/tors).
+    Estimate uses design parameters: super-spines + border-leafs (both draw
+    from this same DC-level ASN pool, see dc.py's fabric_asn_pool) + pods ×
+    (spines + ~30 leafs/tors).
 
     Args:
         max_pods: Maximum pods in the DC design
         amount_of_super_spines: Number of super-spine switches
         max_spines_per_pod: Maximum spines per pod from DC design
+        max_border_leafs_per_fabric: Maximum border-leaf switches from DC design
 
     Returns:
         Block size (200, 500, or 2000)
     """
-    estimate = amount_of_super_spines + max_pods * (max_spines_per_pod + 30)
+    estimate = amount_of_super_spines + max_border_leafs_per_fabric + max_pods * (max_spines_per_pod + 30)
 
     if estimate <= 50:
         return 200
@@ -206,6 +237,7 @@ def name_to_asn_range(
     max_pods: int,
     amount_of_super_spines: int,
     max_spines_per_pod: int = 4,
+    max_border_leafs_per_fabric: int = 0,
     base_start: int = DEFAULT_ASN_BASE_START,
 ) -> tuple[int, int]:
     """Derive a deterministic, non-overlapping ASN range from DC name.
@@ -222,6 +254,8 @@ def name_to_asn_range(
         max_pods: Maximum pods in the DC design
         amount_of_super_spines: Number of super-spine switches
         max_spines_per_pod: Maximum spines per pod from DC design
+        max_border_leafs_per_fabric: Maximum border-leaf switches from DC design
+            (they draw from this same pool — see calculate_fabric_asn_block_size)
         base_start: Start of private ASN space
 
     Returns:
@@ -234,7 +268,9 @@ def name_to_asn_range(
         (4245882000, 4245882499)  # different offset, same block
     """
     max_asn = 4294967295
-    block = calculate_fabric_asn_block_size(max_pods, amount_of_super_spines, max_spines_per_pod)
+    block = calculate_fabric_asn_block_size(
+        max_pods, amount_of_super_spines, max_spines_per_pod, max_border_leafs_per_fabric
+    )
 
     # Hash DC name to a deterministic offset
     name_hash = 0

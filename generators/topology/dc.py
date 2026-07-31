@@ -8,7 +8,7 @@ from infrahub_sdk.protocols import CoreStandardGroup
 from utils.data_cleaning import clean_data
 
 from ..common import CommonGenerator, DeviceOptions
-from ..helpers import calculate_super_spine_loopback_prefix, name_to_asn_range
+from ..helpers import calculate_dc_fabric_loopback_prefix, name_to_asn_range
 from ..helpers.routing import RoutingStrategy
 from ..models import DCModel, DeviceRole
 from ..protocols import (
@@ -52,12 +52,9 @@ class DCTopologyGenerator(CommonGenerator):
         self.logger.info(f"Processing Data Center: {self.data.name}")
 
         # Add existing pods to group context to prevent deletion
-        # include=["loopback_pool", "design"] also lets _generate_dc_scoped_fabric_devices
-        # give each pod's border-leaf share a loopback, and compute a deterministic
-        # spine downlink offset from the pod's own design capacity.
-        existing_pods = await self.client.filters(
-            kind=TopologyPod, parent__ids=[self.data.id], include=["loopback_pool", "design"]
-        )
+        # include=["design"] also lets _generate_dc_scoped_fabric_devices read each
+        # pod's own max_border_leafs_per_pod cap via _pod_border_leaf_capacity.
+        existing_pods = await self.client.filters(kind=TopologyPod, parent__ids=[self.data.id], include=["design"])
         related_node_ids = self.client.group_context.related_node_ids
         for pod in existing_pods:
             related_node_ids.append(pod.id)
@@ -107,13 +104,21 @@ class DCTopologyGenerator(CommonGenerator):
             "management": management_prefix,
         }
 
+        # Super-spine and border-leaf devices share one DC-scoped loopback pool
+        # (both are DC-level fabric tiers, cabled to spines rather than owned by
+        # a pod's own loopback pool — border-leaf using its own pod's pool would
+        # also race that pod's add_pod bootstrap, which creates it, during a bulk
+        # load). Sized from the design's max caps (capacity, not live quantity) so
+        # growing either tier later never exhausts it — same reasoning as every
+        # other pool size in this generator, which are all design-capacity based.
         design_mode = "back-to-back" if getattr(dc_design, "max_super_spines_per_fabric", 0) == 0 else "super-spine"
-        if amount_of_super_spines > 0 and super_spine_entries and design_mode != "back-to-back":
-            super_spine_loopback_prefix = calculate_super_spine_loopback_prefix(
-                max_super_spines=amount_of_super_spines,
+        max_super_spines_cap = self.data.design.max_super_spines_per_fabric
+        max_border_leafs_cap = self.data.design.max_border_leafs_per_fabric or 0
+        if design_mode != "back-to-back" and (max_super_spines_cap > 0 or max_border_leafs_cap > 0):
+            pools_to_allocate["dc-fabric-loopback"] = calculate_dc_fabric_loopback_prefix(
+                max_devices=max_super_spines_cap + max_border_leafs_cap,
                 ipv6=is_ipv6,
             )
-            pools_to_allocate["super-spine-loopback"] = super_spine_loopback_prefix
 
         self.logger.info(f"Allocating DC pools: {list(pools_to_allocate.keys())}")
 
@@ -140,14 +145,18 @@ class DCTopologyGenerator(CommonGenerator):
                     setattr(dc, pool_attr_map[pool_name], {"id": pool_obj.id})
             await dc.save(allow_upsert=True)
 
-        # Derive deterministic ASN range from DC name (unique per site)
+        # Derive deterministic ASN range from DC name (unique per site).
+        # max_border_leafs_per_fabric is included since border-leaf devices draw
+        # from this same fabric_asn_pool (see upsert_asn_pool below).
         max_pods = self.data.design.max_pods
         max_spines_per_pod = self.data.design.max_spines_per_pod
+        max_border_leafs_per_fabric = self.data.design.max_border_leafs_per_fabric or 0
         asn_start, asn_end = name_to_asn_range(
             dc_name=self.data.name,
             max_pods=max_pods,
             amount_of_super_spines=amount_of_super_spines,
             max_spines_per_pod=max_spines_per_pod,
+            max_border_leafs_per_fabric=max_border_leafs_per_fabric,
         )
 
         # Only create ASN pool for eBGP-based strategies (one pool per DC, shared by
@@ -227,7 +236,7 @@ class DCTopologyGenerator(CommonGenerator):
                     options=DeviceOptions(
                         indexes=indexes,
                         allocate_loopback=True,
-                        loopback_pool=dc_pools.get("super-spine-loopback"),
+                        loopback_pool=dc_pools.get("dc-fabric-loopback"),
                         loopback_prefix_length=128 if is_ipv6 else 32,
                         management_pool=dc_pools.get("management"),
                     ),
@@ -272,6 +281,8 @@ class DCTopologyGenerator(CommonGenerator):
 
         self._existing_pods = existing_pods
         self._is_ipv6 = is_ipv6
+        dc_fabric_loopback_pool = dc_pools.get("dc-fabric-loopback")
+        self._dc_fabric_loopback_pool_id = dc_fabric_loopback_pool.id if dc_fabric_loopback_pool else None
         await self._generate_dc_scoped_fabric_devices()
 
     def _validate_fabric_template_roles(self) -> None:
@@ -385,7 +396,7 @@ class DCTopologyGenerator(CommonGenerator):
                 device_options = DeviceOptions(
                     indexes=[self.data.index, pod.index.value],
                     allocate_loopback=True,
-                    loopback_pool=pod.loopback_pool.id if getattr(pod, "loopback_pool", None) else None,
+                    loopback_pool=self._dc_fabric_loopback_pool_id,
                     loopback_prefix_length=128 if self._is_ipv6 else 32,
                 )
                 names = await self.create_devices(
