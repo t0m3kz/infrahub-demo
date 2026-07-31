@@ -471,8 +471,11 @@ class DCTopologyGenerator(CommonGenerator):
         evenly across the DC's existing pods (first pods get the remainder) and
         create+cable each pod's share. No-ops if no pods exist yet — a DC with
         zero pods has nothing to cable into. A pod added later than this DC's
-        declaration gets its retroactive share via pod.py's own end-of-bootstrap
-        call to run_generator("dc_pod_cascade", ...) — see pod.py's generate()."""
+        declaration needs an explicit dc_pod_cascade run to get its retroactive
+        share — same as any other structural DC-level change (see tasks/demo.py's
+        own manual dc_pod_cascade calls after bulk loads); not auto-triggered from
+        pod.py's add_pod, which would otherwise fire a concurrent DC-level
+        re-bootstrap on every single pod creation during a bulk multi-pod load."""
         existing_pods = getattr(self, "_existing_pods", [])
         if not existing_pods:
             self.logger.info(f"DC {self.fabric_name}: no pods yet — deferring border-leaf/FW/LB placement")
