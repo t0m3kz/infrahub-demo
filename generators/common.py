@@ -8,7 +8,7 @@ from infrahub_sdk.protocols import CoreGeneratorDefinition
 from infrahub_sdk.task.models import TaskFilter, TaskState
 
 from .border_services import BorderServicesMixin
-from .cabling_mixin import CablingMixin
+from .cabling import CablingMixin
 from .devices import DeviceMixin
 from .helpers.common import retry_delay
 from .logger import FailOnErrorLoggerMixin
