@@ -90,7 +90,7 @@ spec:
         super-spine tier (back-to-back: pods mesh their own border-spines
         directly to sibling pods) and no DC-level border-leaf/firewall/
         load-balancer tier — those live on the pod's own border-spine
-        instead (see TopologyPodDesign "S_BORDER_SPINE" and the
+        instead (see TopologyPodDesign "S_BORDER_SPINE_POD" and the
         "border-spine" device role). Typical platforms: Arista EOS.
       routing_strategy: "ebgp-ebgp"
       underlay_protocol: "ipv6"
