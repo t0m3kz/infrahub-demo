@@ -354,6 +354,30 @@ class TestCableBorderLeafToService:
         assert call_kwargs["top_devices"] == ["bl-01"]
 
     @pytest.mark.asyncio
+    async def test_service_interface_role_override_queries_that_role(self) -> None:
+        """service_interface_role defaults to "uplink" but inline mode's
+        load-balancer return leg passes "downlink" instead, since "uplink" is
+        already claimed by the firewall<->load-balancer middle leg."""
+        gen = _make_generator()
+        gen.client.filters = AsyncMock(
+            side_effect=[
+                [_mock_iface("Eth1/29")],  # bl load-balancer-role ports
+                [_mock_iface("2.2")],  # lb downlink ports
+            ]
+        )
+
+        await gen._cable_border_leaf_to_service(
+            border_leaf_names=["bl-01"],
+            service_names=["lb-01"],
+            service_role="load-balancer",
+            service_interface_role="downlink",
+        )
+
+        gen.create_cabling.assert_awaited_once()
+        filters_call = gen.client.filters.call_args_list[1]
+        assert filters_call.kwargs["role__value"] == "downlink"
+
+    @pytest.mark.asyncio
     async def test_missing_ports_on_either_side_errors(self) -> None:
         gen = _make_generator()
         gen.client.filters = AsyncMock(side_effect=[[], []])
@@ -426,6 +450,13 @@ class TestCableDcServices:
         middle_leg = gen.create_cabling.call_args.kwargs
         assert middle_leg["bottom_devices"] == ["lb-01"]
         assert middle_leg["top_devices"] == ["fw-01"]
+
+        # The load-balancer's return leg to border-leaf must use "downlink" ports,
+        # not "uplink" — "uplink" is already claimed by the middle leg above, and
+        # cabling the same ports twice raises a real "2 peers for dcimcable" error.
+        calls = gen._cable_border_leaf_to_service.call_args_list
+        lb_leg = next(c for c in calls if c.kwargs["service_role"] == "load-balancer")
+        assert lb_leg.kwargs["service_interface_role"] == "downlink"
 
     @pytest.mark.asyncio
     async def test_inline_skips_middle_leg_when_one_side_missing(self) -> None:

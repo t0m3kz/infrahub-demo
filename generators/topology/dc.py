@@ -457,10 +457,15 @@ class DCTopologyGenerator(CommonGenerator):
         border_leaf_names: list[str],
         service_names: list[str],
         service_role: Literal["firewall", "load-balancer"],
+        service_interface_role: str = "uplink",
     ) -> None:
         """Cable every border-leaf device's dedicated firewall/load-balancer-facing
-        ports to the service devices' uplink ports (PBR leg, or one half of the
-        inline chain) — any-to-any, mirroring create_cabling's "rack" strategy."""
+        ports to the service devices' border-leaf-facing ports (PBR leg, or the
+        return leg of the inline chain) — any-to-any, mirroring create_cabling's
+        "rack" strategy. service_interface_role is "uplink" in pbr mode (the
+        service's only border-leaf-facing port group); inline mode's load-balancer
+        passes "downlink" instead, since its "uplink" ports are already claimed
+        by the firewall<->load-balancer middle leg (see _cable_dc_services)."""
         if not border_leaf_names or not service_names:
             return
         bl_interfaces = await self.client.filters(
@@ -472,7 +477,7 @@ class DCTopologyGenerator(CommonGenerator):
         service_interfaces = await self.client.filters(
             kind=DcimPhysicalInterface,
             device__name__values=service_names,
-            role__value="uplink",
+            role__value=service_interface_role,
         )
         service_interface_names = sorted({iface.name.value for iface in service_interfaces})
         if not bl_interface_names or not service_interface_names:
@@ -491,19 +496,25 @@ class DCTopologyGenerator(CommonGenerator):
         if not p2p_pairs:
             self.logger.error(
                 f"DC {self.fabric_name}: border-leaf<->{service_role} cabling produced no connections — "
-                f"likely an interface speed mismatch between the {service_role} template's uplink ports and "
-                f"the border-leaf template's {_BL_ROLE_FOR[service_role]}-role ports. Check "
-                "create_cabling's own log output above for the exact speed groups involved."
+                f"likely an interface speed mismatch between the {service_role} template's "
+                f"{service_interface_role}-role ports and the border-leaf template's "
+                f"{_BL_ROLE_FOR[service_role]}-role ports. Check create_cabling's own log output above "
+                "for the exact speed groups involved."
             )
 
     async def _cable_dc_services(
         self, *, border_leaf_names: list[str], firewall_names: list[str], load_balancer_names: list[str]
     ) -> None:
         """Cable border-leaf<->firewall<->load-balancer per connectivity_mode:
-        - pbr: two independent legs, border-leaf<->firewall and border-leaf<->load-balancer.
-        - inline: one physical chain — border-leaf<->firewall<->load-balancer<->border-leaf —
-          both border-leafs sit on the ends of the same shared chain through the
-          firewall and load-balancer HA pairs, not a separate chain per border-leaf.
+        - pbr: two independent legs, border-leaf<->firewall and border-leaf<->load-balancer,
+          each on the service device's "uplink" ports.
+        - inline: one physical chain — border-leaf<->firewall<->load-balancer<->border-leaf.
+          The middle leg (firewall<->load-balancer) uses the firewall's "customer" ports
+          and the load-balancer's "uplink" ports; the return leg (load-balancer<->border-leaf)
+          uses the load-balancer's "downlink" ports instead of "uplink" — a load-balancer
+          template used in inline mode (e.g. BIG-IP-i5800_LOAD_BALANCER_INLINE) must
+          provide BOTH port roles as physically distinct ports, or the middle leg and
+          the return leg would both try to cable the same "uplink" ports.
         No-ops for any leg with nothing to cable on either side.
         """
         if self.data.connectivity_mode == "inline":
@@ -539,7 +550,10 @@ class DCTopologyGenerator(CommonGenerator):
                             "customer-role ports and the load-balancer's uplink-role ports."
                         )
             await self._cable_border_leaf_to_service(
-                border_leaf_names=border_leaf_names, service_names=load_balancer_names, service_role="load-balancer"
+                border_leaf_names=border_leaf_names,
+                service_names=load_balancer_names,
+                service_role="load-balancer",
+                service_interface_role="downlink",
             )
         else:
             await self._cable_border_leaf_to_service(
