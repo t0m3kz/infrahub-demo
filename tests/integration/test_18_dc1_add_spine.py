@@ -1,13 +1,14 @@
 """Integration test - Scenario 5: Extend Pod with New Spine.
 
-Coverage: Verifies that increasing amount_of_spines on an existing pod
-triggers the pod generator automatically (via event) and creates the
-additional spine device with proper cabling and routing.
+Coverage: Verifies that increasing the quantity on POD-1's spine-role
+fabric_templates entry (TopologyElement) triggers the pod generator
+automatically (via event) and creates the additional spine device with
+proper cabling and routing.
 
 Prerequisites: DC1 merged (Scenario 1), pod added (Scenario 4).
 
 Steps:
-1.  Create branch and update POD-1 amount_of_spines from 2 to 3
+1.  Create branch and bump POD-1's spine fabric_templates entry quantity from 2 to 3
 2.  Wait for event-triggered generators to complete
 3.  Verify no failed tasks
 4.  Verify devices created
@@ -74,14 +75,22 @@ class TestDC1AddSpine(TestInfrahubDockerWithClient):
         workflow_state["dc1_add_spine_before"] = before
         logging.info("Baseline spines before update: pod1=%d pod2=%d", before["pod1_count"], before["pod2_count"])
 
-        # Find POD-1
+        # Find POD-1 and its spine-role fabric_templates (TopologyElement) entry
         query = """
         query {
             TopologyPod(name__value: "DC1-1-POD-1") {
                 edges {
                     node {
                         id
-                        amount_of_spines { value }
+                        fabric_templates {
+                            edges {
+                                node {
+                                    id
+                                    role { value }
+                                    quantity { value }
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -91,24 +100,32 @@ class TestDC1AddSpine(TestInfrahubDockerWithClient):
         pods = result["TopologyPod"]["edges"]
         assert pods, "POD-1 not found"
 
-        pod_id = pods[0]["node"]["id"]
-        current_spines = pods[0]["node"]["amount_of_spines"]["value"]
+        spine_entries = [
+            edge["node"]
+            for edge in pods[0]["node"]["fabric_templates"]["edges"]
+            if edge["node"]["role"]["value"] == "spine"
+        ]
+        assert spine_entries, "POD-1 has no spine fabric_templates entry"
+
+        spine_element = spine_entries[0]
+        element_id = spine_element["id"]
+        current_spines = spine_element["quantity"]["value"]
         new_spine_count = current_spines + 1
 
-        # Update amount_of_spines
+        # Bump the spine TopologyElement's quantity
         mutation = """
-        mutation UpdatePod($pod_id: String!, $spines: BigInt!) {
-            TopologyPodUpdate(
+        mutation UpdateSpineElement($element_id: String!, $quantity: BigInt!) {
+            TopologyElementUpdate(
                 data: {
-                    id: $pod_id,
-                    amount_of_spines: { value: $spines }
+                    id: $element_id,
+                    quantity: { value: $quantity }
                 }
             ) { ok object { id } }
         }
         """
         await async_client_main.execute_graphql(
             query=mutation,
-            variables={"pod_id": pod_id, "spines": new_spine_count},
+            variables={"element_id": element_id, "quantity": new_spine_count},
         )
 
         logging.info("Updated POD-1 spines: %d -> %d", current_spines, new_spine_count)
@@ -171,7 +188,7 @@ class TestDC1AddSpine(TestInfrahubDockerWithClient):
         after = await self._snapshot_spines_by_pod(async_client_main, scenario_branch)
 
         assert after["pod1_count"] == before["pod1_count"] + 1, (
-            "Expected exactly one new POD-1 spine after increasing amount_of_spines.\n"
+            "Expected exactly one new POD-1 spine after increasing the spine fabric_templates quantity.\n"
             f"  POD-1 before: {before['pod1_count']}\n"
             f"  POD-1 after: {after['pod1_count']}\n"
             f"  POD-1 spines after: {after['pod1']}"

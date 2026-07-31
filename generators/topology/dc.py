@@ -3,19 +3,29 @@
 import secrets
 from typing import Any, Literal, cast
 
+from infrahub_sdk.protocols import CoreStandardGroup
+
 from utils.data_cleaning import clean_data
 
-from ..common import CommonGenerator, DeviceOptions
+from ..common import CablingOptions, CommonGenerator, DeviceOptions
 from ..helpers import calculate_super_spine_loopback_prefix, name_to_asn_range
 from ..helpers.routing import RoutingStrategy
-from ..models import DCModel
+from ..models import DCModel, Template
 from ..protocols import (
+    DcimPhysicalDevice,
+    DcimPhysicalInterface,
     RoutingAutonomousSystem,
     RoutingOSPFArea,
     RoutingPassword,
     TopologyPod,
 )
 from ..types import RoutingOptions
+
+_DC_VALID_FABRIC_ROLES = frozenset({"super-spine", "border-leaf", "firewall", "load-balancer"})
+_DC_HA_KINDS: dict[str, Literal["ManagedFirewallHA", "ManagedLoadbalancerHA"]] = {
+    "firewall": "ManagedFirewallHA",
+    "load-balancer": "ManagedLoadbalancerHA",
+}
 
 
 class DCTopologyGenerator(CommonGenerator):
@@ -38,7 +48,11 @@ class DCTopologyGenerator(CommonGenerator):
         self.logger.info(f"Processing Data Center: {self.data.name}")
 
         # Add existing pods to group context to prevent deletion
-        existing_pods = await self.client.filters(kind=TopologyPod, parent__ids=[self.data.id])
+        # include=["loopback_pool", "asn_pool"] also lets _generate_dc_scoped_fabric_devices
+        # give each pod's border-leaf share a loopback + underlay/overlay BGP.
+        existing_pods = await self.client.filters(
+            kind=TopologyPod, parent__ids=[self.data.id], include=["loopback_pool", "asn_pool"]
+        )
         related_node_ids = self.client.group_context.related_node_ids
         for pod in existing_pods:
             related_node_ids.append(pod.id)
@@ -47,8 +61,9 @@ class DCTopologyGenerator(CommonGenerator):
         self.deployment_id = dc_id  # Store for cable linking
         self.fabric_name = self.data.name.lower()
         dc_index = self.data.index  # Get DC index for unique device naming
-        amount_of_super_spines = self.data.amount_of_super_spines
-        super_spine_template = self.data.super_spine_template
+        self._validate_fabric_template_roles()
+        super_spine_entries = self.data.super_spine_templates
+        amount_of_super_spines = sum(entry.quantity for entry in super_spine_entries)
         self.logger.info(f"Generating topology for data center {self.fabric_name.upper()}")
         indexes: list[int] = [dc_index]
 
@@ -88,7 +103,7 @@ class DCTopologyGenerator(CommonGenerator):
         }
 
         design_mode = "back-to-back" if getattr(dc_design, "max_super_spines_per_fabric", 0) == 0 else "super-spine"
-        if amount_of_super_spines > 0 and super_spine_template and design_mode != "back-to-back":
+        if amount_of_super_spines > 0 and super_spine_entries and design_mode != "back-to-back":
             super_spine_loopback_prefix = calculate_super_spine_loopback_prefix(
                 max_super_spines=amount_of_super_spines,
                 ipv6=is_ipv6,
@@ -130,10 +145,11 @@ class DCTopologyGenerator(CommonGenerator):
             max_spines_per_pod=max_spines_per_pod,
         )
 
-        # Only create ASN pool for eBGP-based strategies (one pool per DC, shared by all devices)
+        # Only create ASN pool for eBGP-based strategies (one pool per DC, shared by
+        # super-spine AND border-leaf devices)
         # ospf-ibgp uses OSPF underlay + shared overlay AS — no per-device pools needed
         routing_strategy = self.data.design.routing_strategy
-        ss_asn_pool_id: str | None = None
+        fabric_asn_pool_id: str | None = None
         if routing_strategy in (RoutingStrategy.EBGP_EBGP.value, RoutingStrategy.EBGP_IBGP.value):
             asn_pool_obj = await self.upsert_asn_pool(
                 pool_name=f"{self.fabric_name}-asn-pool",
@@ -142,10 +158,10 @@ class DCTopologyGenerator(CommonGenerator):
                 end_range=asn_end,
                 parent_kind="TopologyDataCenter",
                 parent_id=dc_id,
-                parent_attr="super_spine_asn_pool",
+                parent_attr="fabric_asn_pool",
             )
             if asn_pool_obj:
-                ss_asn_pool_id = asn_pool_obj.id
+                fabric_asn_pool_id = asn_pool_obj.id
 
         # Create VLAN pool for VxlanSegment's local VLAN allocation (per-DC).
         # VlanSegment.vlan_id is set manually — no pool involved (single-site,
@@ -192,24 +208,26 @@ class DCTopologyGenerator(CommonGenerator):
                 f"DC {self.fabric_name}: design_mode=back-to-back — "
                 "skipping super-spine tier, spines will connect directly across pods"
             )
-        elif amount_of_super_spines > 0 and super_spine_template:
-            super_spine_names = await self.create_devices(
-                deployment_id=dc_id,
-                device_role="super-spine",
-                amount=amount_of_super_spines,
-                template=super_spine_template.model_dump(),
-                naming_convention=cast(
-                    Literal["standard", "hierarchical", "flat"],
-                    naming_convention.lower(),
-                ),
-                options=DeviceOptions(
-                    indexes=indexes,
-                    allocate_loopback=True,
-                    loopback_pool=dc_pools.get("super-spine-loopback"),
-                    loopback_prefix_length=128 if is_ipv6 else 32,
-                    management_pool=dc_pools.get("management"),
-                ),
-            )
+        elif amount_of_super_spines > 0 and super_spine_entries:
+            for entry in super_spine_entries:
+                entry_names = await self.create_devices(
+                    deployment_id=dc_id,
+                    device_role="super-spine",
+                    amount=entry.quantity,
+                    template=entry.template.model_dump(),
+                    naming_convention=cast(
+                        Literal["standard", "hierarchical", "flat"],
+                        naming_convention.lower(),
+                    ),
+                    options=DeviceOptions(
+                        indexes=indexes,
+                        allocate_loopback=True,
+                        loopback_pool=dc_pools.get("super-spine-loopback"),
+                        loopback_prefix_length=128 if is_ipv6 else 32,
+                        management_pool=dc_pools.get("management"),
+                    ),
+                )
+                super_spine_names.extend(entry_names)
 
         # Create shared routing objects (overlay AS, OSPF area) at the DC level
         # so pod/rack generators always find them and never create duplicates.
@@ -225,7 +243,7 @@ class DCTopologyGenerator(CommonGenerator):
             RoutingStrategy.EBGP_IBGP.value,
             RoutingStrategy.OSPF_IBGP.value,
         ):
-            routing_opts = RoutingOptions(design=self.data.design, asn_pool=ss_asn_pool_id)
+            routing_opts = RoutingOptions(design=self.data.design, asn_pool=fabric_asn_pool_id)
             if routing_strategy == RoutingStrategy.OSPF_IBGP.value:
                 routing_opts["skip_underlay"] = True
             await self.create_routing(
@@ -246,6 +264,223 @@ class DCTopologyGenerator(CommonGenerator):
         # siblings directly (see PodTopologyGenerator._cable_to_existing_sibling_pods).
         # This also makes incremental single-pod-add work correctly with no DC-level
         # orchestration, since add_pod alone (no add_dc) is a supported entry point.
+
+        self._existing_pods = existing_pods
+        self._dc_design = dc_design
+        self._is_ipv6 = is_ipv6
+        await self._generate_dc_scoped_fabric_devices()
+
+    def _validate_fabric_template_roles(self) -> None:
+        """Log+skip (don't abort) any fabric_templates entry using a role this
+        DC-level generator doesn't know how to place — an unrelated bad entry
+        shouldn't block the other roles from generating (mirrors rack.py's own
+        loop-iteration error convention, not its abort-on-error one, since here
+        the roles are independent of each other)."""
+        for entry in self.data.fabric_templates or []:
+            if entry.role not in _DC_VALID_FABRIC_ROLES:
+                self.logger.warning(
+                    f"DC {self.fabric_name}: fabric_templates entry with role={entry.role!r} is not valid "
+                    f"at DC level (expected one of {sorted(_DC_VALID_FABRIC_ROLES)}) — skipping this entry."
+                )
+
+    @staticmethod
+    def _split_quantity(quantity: int, pod_count: int) -> list[int]:
+        """Split ``quantity`` across ``pod_count`` pods, first pods (lowest index)
+        get the remainder. E.g. split(4, 2) -> [2, 2]; split(3, 2) -> [2, 1]."""
+        if pod_count == 0:
+            return []
+        base, remainder = divmod(quantity, pod_count)
+        return [base + 1 if i < remainder else base for i in range(pod_count)]
+
+    async def _free_spine_downlink_offset(self, pod_id: str) -> tuple[list[str], list[str], int]:
+        """Return (spine_device_names, spine_downlink_interface_names, offset) for
+        cabling new border-leaf devices into ``pod_id``'s spines, where offset is
+        the count of already-cabled downlink ports — the live-query replacement
+        for rack.py's row/rack-position-based offset formula, which has no
+        equivalent once border-leaf lives outside any rack/row."""
+        spines = await self.client.filters(kind=DcimPhysicalDevice, deployment__ids=[pod_id], role__value="spine")
+        spine_names = sorted(spine.name.value for spine in spines)
+        if not spine_names:
+            return [], [], 0
+
+        downlinks = await self.client.filters(
+            kind=DcimPhysicalInterface,
+            device__name__values=spine_names,
+            role__value="downlink",
+            include=["cable"],
+        )
+        interface_names = sorted({iface.name.value for iface in downlinks})
+        # Ports already consumed on a single spine represent the offset — every
+        # spine has the same downlink count/usage since leaf/tor cabling always
+        # fans out identically across all spines in a pod.
+        first_spine_downlinks = await self.client.filters(
+            kind=DcimPhysicalInterface,
+            device__name__values=[spine_names[0]],
+            role__value="downlink",
+            include=["cable"],
+        )
+        used = sum(1 for iface in first_spine_downlinks if iface.cable and iface.cable.id)
+        return spine_names, interface_names, used
+
+    async def _ensure_dc_ha_pair(
+        self,
+        device_names: list[str],
+        *,
+        ha_kind: Literal["ManagedFirewallHA", "ManagedLoadbalancerHA"],
+        role_label: str,
+    ) -> None:
+        """Pair exactly 2 same-role devices (one pod's share) into an HA domain —
+        near-verbatim copy of rack.py's _ensure_ha_pair, moved here since
+        firewall/load-balancer generation moved to DC level. Never pairs across
+        pods: both members of an HA pair must sit in front of the same
+        border-leaf/spine fabric to mean anything physically."""
+        if len(device_names) != 2:
+            return
+
+        first, second = sorted(device_names)
+        ha_name = f"{first}-{second}-ha"
+        existing = await self.client.filters(kind=ha_kind, name__value=ha_name)
+        if existing:
+            self.client.group_context.related_node_ids.append(existing[0].id)
+            return
+
+        devices = await self.client.filters(kind=DcimPhysicalDevice, name__values=[first, second])
+        if len(devices) != 2:
+            self.logger.error(f"HA pair {first}/{second}: could not resolve both devices.")
+            return
+
+        ha_group = await self.client.get(kind=CoreStandardGroup, name__value="ha_domains")
+        ha_obj = await self.client.create(
+            kind=ha_kind,
+            data={
+                "name": ha_name,
+                "status": "active",
+                "capabilities": [{"id": dev.id} for dev in devices],
+                "member_of_groups": [{"id": ha_group.id}],
+            },
+        )
+        await ha_obj.save(allow_upsert=True)
+        self.logger.info(f"DC {self.fabric_name}: created HA domain {ha_name} for {role_label}s")
+
+    async def _create_and_cable_dc_role_share(
+        self,
+        *,
+        role: str,
+        quantity: int,
+        template: Template,
+        pod: Any,
+    ) -> list[str]:
+        """Create one pod's share of a DC-level border-leaf/firewall/load-balancer
+        entry, deployment_id=pod.id (not the DC) so the devices are cabled into
+        that pod's own spine fabric even though declared once at DC level.
+
+        Border-leaf gets a loopback (from the pod's own loopback pool) and
+        underlay/overlay BGP into that pod's spines — same treatment leaf/tor/
+        border-leaf all got pre-refactor via rack.py's _generate_spine_attached_role.
+        Firewall/load-balancer stay device-only (no loopback, no routing) — this
+        matches their pre-refactor behavior; cabling them to border-leaf is a
+        separate, still-deferred follow-up (see connectivity_mode's docstring).
+        """
+        allocate_loopback = role == "border-leaf"
+        pod_loopback_pool_id = pod.loopback_pool.id if getattr(pod, "loopback_pool", None) else None
+        device_options = DeviceOptions(
+            indexes=[self.data.index, pod.index.value],
+            allocate_loopback=allocate_loopback,
+            loopback_pool=pod_loopback_pool_id,
+            loopback_prefix_length=128 if self._is_ipv6 else 32,
+        )
+        if role == "load-balancer":
+            # create_devices()'s default group_name is f"{device_role}s" = "load-balancers",
+            # but the bootstrap group is named "loadbalancers" (no hyphen) — override.
+            device_options["group_name"] = "loadbalancers"
+        devices = await self.create_devices(
+            deployment_id=pod.id,
+            device_role=role,
+            amount=quantity,
+            template=template.model_dump(),
+            naming_convention=cast(Literal["standard", "hierarchical", "flat"], self.data.naming_convention.lower()),
+            options=device_options,
+        )
+
+        if role == "border-leaf":
+            uplink_names = [iface.name for iface in template.interfaces if iface.role == "uplink"]
+            if not uplink_names:
+                self.logger.error(
+                    f"DC {self.fabric_name}: border-leaf template has no uplink interfaces — cannot cable fabric."
+                )
+                return devices
+            spine_names, spine_downlinks, offset = await self._free_spine_downlink_offset(pod.id)
+            if not spine_names or not spine_downlinks:
+                self.logger.error(
+                    f"DC {self.fabric_name}: no spine devices/downlinks found in pod (id={pod.id}) — "
+                    "cannot cable border-leaf fabric uplinks."
+                )
+                return devices
+            p2p_pairs = await self.create_cabling(
+                bottom_devices=devices,
+                bottom_interfaces=uplink_names,
+                top_devices=spine_names,
+                top_interfaces=spine_downlinks,
+                strategy="rack",
+                options=CablingOptions(cabling_offset=offset),
+            )
+            pod_asn_pool_id = pod.asn_pool.id if getattr(pod, "asn_pool", None) else None
+            routing_opts = RoutingOptions(design=self._dc_design, asn_pool=pod_asn_pool_id)
+            if routing_opts.get("design"):
+                await self.create_routing(
+                    bottom_devices=devices,
+                    top_devices=spine_names,
+                    options=routing_opts,
+                    p2p_interfaces=p2p_pairs,
+                    bottom_role="border-leaf",
+                    top_role="spine",
+                )
+
+        return devices
+
+    async def _generate_dc_scoped_fabric_devices(self) -> None:
+        """Split border-leaf/firewall/load-balancer fabric_templates entries
+        evenly across the DC's existing pods (first pods get the remainder) and
+        create+cable each pod's share. No-ops if no pods exist yet — a DC with
+        zero pods has nothing to cable into. A pod added later than this DC's
+        declaration gets its retroactive share via pod.py's own end-of-bootstrap
+        call to run_generator("dc_pod_cascade", ...) — see pod.py's generate()."""
+        existing_pods = getattr(self, "_existing_pods", [])
+        if not existing_pods:
+            self.logger.info(f"DC {self.fabric_name}: no pods yet — deferring border-leaf/FW/LB placement")
+            return
+
+        sorted_pods = sorted(existing_pods, key=lambda p: p.index.value)
+        max_border_leafs_per_pod = self.data.design.max_border_leafs_per_pod if self.data.design else None
+        for role, entries in (
+            ("border-leaf", self.data.border_leaf_templates),
+            ("firewall", self.data.firewall_templates),
+            ("load-balancer", self.data.load_balancer_templates),
+        ):
+            ha_kind = _DC_HA_KINDS.get(role)
+            for entry in entries:
+                shares = self._split_quantity(entry.quantity, len(sorted_pods))
+                for pod, share in zip(sorted_pods, shares):
+                    if share == 0:
+                        continue
+                    if (
+                        role == "border-leaf"
+                        and max_border_leafs_per_pod is not None
+                        and share > max_border_leafs_per_pod
+                    ):
+                        self.logger.error(
+                            f"DC {self.fabric_name}: pod {pod.name.value}'s border-leaf share ({share}) "
+                            f"exceeds design.max_border_leafs_per_pod ({max_border_leafs_per_pod}) — skipping."
+                        )
+                        continue
+                    devices = await self._create_and_cable_dc_role_share(
+                        role=role,
+                        quantity=share,
+                        template=entry.template,
+                        pod=pod,
+                    )
+                    if ha_kind and share == 2:
+                        await self._ensure_dc_ha_pair(devices, ha_kind=ha_kind, role_label=role)
 
     async def _ensure_routing_password(self, name: str, description: str) -> None:
         """Find-or-create a shared RoutingPassword by deterministic name.

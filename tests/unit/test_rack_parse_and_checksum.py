@@ -65,10 +65,9 @@ def _build_rack_generator(
         name="pod-1",
         index=1,
         parent=parent,
-        amount_of_spines=2,
         leaf_interface_sorting_method="top_down",
         spine_interface_sorting_method="bottom_up",
-        spine_template=Template(id="tmpl-spine"),
+        fabric_templates=[DeviceRole(role="spine", quantity=2, template=Template(id="tmpl-spine"))],
         design=_design_for(deployment_type),
     )
     suite = LocationSuiteModel(index=1)
@@ -232,10 +231,9 @@ class TestDeriveSpineInfo:
         gen = _build_rack_generator(deployment_type="tor", rack_type="tor")
         gen.fabric_name = "dc1"
         gen.data.pod.index = 3
-        gen.data.pod.amount_of_spines = 2
         gen.data.pod.parent.index = 1
         gen.data.pod.parent.naming_convention = "standard"
-        gen.data.pod.spine_template.interfaces = [
+        gen.data.pod.fabric_templates[0].template.interfaces = [
             Interface(name="Ethernet1/1"),
             Interface(name="Ethernet1/2"),
             Interface(name="Ethernet1/3"),
@@ -247,14 +245,13 @@ class TestDeriveSpineInfo:
         assert interface_names == ["Ethernet1/1", "Ethernet1/2", "Ethernet1/3"]
 
     def test_raises_when_spine_template_missing(self) -> None:
-        """RuntimeError raised when spine_template is None."""
+        """RuntimeError raised when there are no spine fabric_templates entries."""
         gen = _build_rack_generator(deployment_type="tor", rack_type="tor")
         gen.fabric_name = "dc1"
         gen.data.pod.index = 1
-        gen.data.pod.amount_of_spines = 2
         gen.data.pod.parent.index = 1
         gen.data.pod.parent.naming_convention = "standard"
-        gen.data.pod.spine_template = None
+        gen.data.pod.fabric_templates = []
 
         with pytest.raises(RuntimeError, match="Cannot derive spine info"):
             gen._derive_spine_info()
@@ -264,10 +261,9 @@ class TestDeriveSpineInfo:
         gen = _build_rack_generator(deployment_type="tor", rack_type="tor")
         gen.fabric_name = "dc1"
         gen.data.pod.index = 1
-        gen.data.pod.amount_of_spines = 2
         gen.data.pod.parent.index = 1
         gen.data.pod.parent.naming_convention = "standard"
-        gen.data.pod.spine_template.interfaces = [
+        gen.data.pod.fabric_templates[0].template.interfaces = [
             Interface(name="Ethernet1/1"),
             Interface(name="Ethernet1/2"),
         ]
@@ -282,10 +278,9 @@ class TestDeriveSpineInfo:
         gen = _build_rack_generator(deployment_type="tor", rack_type="tor")
         gen.fabric_name = "dc1"
         gen.data.pod.index = 1
-        gen.data.pod.amount_of_spines = 2
         gen.data.pod.parent.index = 1
         gen.data.pod.parent.naming_convention = "standard"
-        gen.data.pod.spine_template.interfaces = []
+        gen.data.pod.fabric_templates[0].template.interfaces = []
 
         with pytest.raises(RuntimeError, match="Spine template has no downlink interfaces"):
             gen._derive_spine_info()
@@ -393,7 +388,6 @@ class TestGenerateRackGating:
         gen.data.tors = []
         gen.data.l2_leafs = []
         gen.data.access_leafs = []
-        gen.data.border_leafs = []
         gen._role_compatibility_errors = MagicMock()
         gen._prepare_generation_context = MagicMock()
 
@@ -420,7 +414,6 @@ class TestRoleDeploymentCompatibility:
         gen.data.tors = [DeviceRole(role="tor", quantity=2, template=Template(id="tmpl-tor"))]
         gen.data.l2_leafs = []
         gen.data.access_leafs = []
-        gen.data.border_leafs = []
 
         errors = gen._role_compatibility_errors("middle_rack")
 
@@ -433,7 +426,6 @@ class TestRoleDeploymentCompatibility:
         gen.data.tors = []
         gen.data.l2_leafs = []
         gen.data.access_leafs = [DeviceRole(role="access-leaf", quantity=2, template=Template(id="tmpl-al"))]
-        gen.data.border_leafs = []
 
         assert gen._role_compatibility_errors("middle_rack") == []
 
@@ -442,7 +434,6 @@ class TestRoleDeploymentCompatibility:
         gen.data.tors = [DeviceRole(role="tor", quantity=2, template=Template(id="tmpl-tor"))]
         gen.data.l2_leafs = []
         gen.data.access_leafs = [DeviceRole(role="access-leaf", quantity=2, template=Template(id="tmpl-al"))]
-        gen.data.border_leafs = []
 
         errors = gen._role_compatibility_errors("mixed")
 
@@ -455,7 +446,6 @@ class TestRoleDeploymentCompatibility:
         gen.data.tors = [DeviceRole(role="tor", quantity=2, template=Template(id="tmpl-tor"))]
         gen.data.l2_leafs = []
         gen.data.access_leafs = []
-        gen.data.border_leafs = []
 
         assert gen._role_compatibility_errors("mixed") == []
 
@@ -465,7 +455,6 @@ class TestRoleDeploymentCompatibility:
         gen.data.tors = []
         gen.data.l2_leafs = []
         gen.data.access_leafs = []
-        gen.data.border_leafs = []
 
         errors = gen._role_compatibility_errors("tor")
 
@@ -480,7 +469,6 @@ class TestRoleDeploymentCompatibility:
         gen.data.tors = [DeviceRole(role="tor", quantity=2, template=Template(id="tmpl-tor"))]
         gen.data.l2_leafs = []
         gen.data.access_leafs = []
-        gen.data.border_leafs = []
         gen._prepare_generation_context = MagicMock()
 
         with patch("generators.topology.rack.parse_rack_data", return_value=gen.data):

@@ -30,7 +30,6 @@ spec:
       max_tors_per_network_rack: 4
       max_tors_per_compute_rack: 0
       max_spines_per_pod: 2
-      max_border_leafs_per_pod: 1
 
     - name: "S_TOR"
       description: >
@@ -44,7 +43,6 @@ spec:
       max_tors_per_network_rack: 0
       max_tors_per_compute_rack: 2
       max_spines_per_pod: 4
-      max_border_leafs_per_pod: 1
 
     - name: "S_MIXED"
       description: >
@@ -59,7 +57,6 @@ spec:
       max_tors_per_network_rack: 0
       max_tors_per_compute_rack: 2
       max_spines_per_pod: 4
-      max_border_leafs_per_pod: 1
 
     # Medium Designs (4 rows)
     - name: "M_MIXED"
@@ -75,7 +72,6 @@ spec:
       max_tors_per_network_rack: 0
       max_tors_per_compute_rack: 2
       max_spines_per_pod: 3
-      max_border_leafs_per_pod: 1
 
     - name: "M_MIDDLE"
       description: >
@@ -90,7 +86,6 @@ spec:
       max_tors_per_network_rack: 4
       max_tors_per_compute_rack: 0
       max_spines_per_pod: 3
-      max_border_leafs_per_pod: 1
 
     # Large Designs (8 rows)
     - name: "L_MIXED"
@@ -106,7 +101,6 @@ spec:
       max_tors_per_network_rack: 0
       max_tors_per_compute_rack: 2
       max_spines_per_pod: 4
-      max_border_leafs_per_pod: 2
 
     - name: "L_MIDDLE"
       description: >
@@ -121,4 +115,3 @@ spec:
       max_tors_per_network_rack: 4
       max_tors_per_compute_rack: 0
       max_spines_per_pod: 4
-      max_border_leafs_per_pod: 2

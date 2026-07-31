@@ -38,6 +38,24 @@ def _design(
     }
 
 
+def _fabric_templates(
+    *,
+    amount_of_super_spines: int = 0,
+    super_spine_template: dict[str, Any] | None = None,
+) -> list[dict[str, Any]]:
+    """Build a fabric_templates list with a single super-spine entry, mirroring
+    the pre-refactor amount_of_super_spines/super_spine_template scalar kwargs."""
+    if amount_of_super_spines <= 0 or super_spine_template is None:
+        return []
+    return [
+        {
+            "role": "super-spine",
+            "quantity": amount_of_super_spines,
+            "template": super_spine_template,
+        }
+    ]
+
+
 def _deployment(
     *,
     design: dict[str, Any] | None = None,
@@ -54,12 +72,14 @@ def _deployment(
                 "naming_convention": "standard",
                 "fabric_interface_sorting_method": "bottom_up",
                 "spine_interface_sorting_method": "bottom_up",
-                "amount_of_super_spines": amount_of_super_spines,
-                "super_spine_template": super_spine_template,
+                "fabric_templates": _fabric_templates(
+                    amount_of_super_spines=amount_of_super_spines,
+                    super_spine_template=super_spine_template,
+                ),
                 "loopback_pool": None,
                 "technical_pool": None,
                 "management_pool": None,
-                "super_spine_asn_pool": None,
+                "fabric_asn_pool": None,
                 "children": [],
             }
         ]
@@ -144,7 +164,10 @@ class TestGenerateExistingPodsTracking:
     @pytest.mark.asyncio
     async def test_existing_pods_added_to_group_context(self) -> None:
         gen = _make_generator()
-        pod_a, pod_b = MagicMock(id="pod-a"), MagicMock(id="pod-b")
+        pod_a = MagicMock(id="pod-a")
+        pod_a.index.value = 1
+        pod_b = MagicMock(id="pod-b")
+        pod_b.index.value = 2
         gen.client.filters = AsyncMock(return_value=[pod_a, pod_b])
 
         await gen.generate(_deployment(design=_design()))
@@ -189,6 +212,28 @@ class TestGenerateDesignModeDispatch:
         routing_kwargs = gen.create_routing.call_args.kwargs
         assert routing_kwargs["bottom_devices"] == ["dc1-ss-01", "dc1-ss-02"]
         assert routing_kwargs["bottom_role"] == "super-spine"
+
+    @pytest.mark.asyncio
+    async def test_two_fabric_template_entries_yield_two_create_devices_calls(self) -> None:
+        """fabric_templates with two super-spine entries loops create_devices once
+        per entry (dc.py's per-entry loop), not once for the summed quantity."""
+        gen = _make_generator()
+        gen.create_devices = AsyncMock(side_effect=[["dc1-ss-01"], ["dc1-ss-02", "dc1-ss-03"]])
+        data = _deployment(design=_design(max_super_spines_per_fabric=3, routing_strategy="ebgp-ebgp"))
+        data["TopologyDeployment"][0]["fabric_templates"] = [
+            {"role": "super-spine", "quantity": 1, "template": {"id": "tmpl-ss-a", "interfaces": []}},
+            {"role": "super-spine", "quantity": 2, "template": {"id": "tmpl-ss-b", "interfaces": []}},
+        ]
+
+        await gen.generate(data)
+
+        assert gen.create_devices.await_count == 2
+        amounts = [c.kwargs["amount"] for c in gen.create_devices.await_args_list]
+        assert amounts == [1, 2]
+
+        gen.create_routing.assert_awaited_once()
+        routing_kwargs = gen.create_routing.call_args.kwargs
+        assert routing_kwargs["bottom_devices"] == ["dc1-ss-01", "dc1-ss-02", "dc1-ss-03"]
 
     @pytest.mark.asyncio
     async def test_zero_super_spines_with_template_skips_creation(self) -> None:

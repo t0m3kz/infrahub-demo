@@ -8,8 +8,11 @@ spec:
       index: 1
       design: M_EBGP_IBGP
       naming_convention: standard
-      amount_of_super_spines: 2
-      super_spine_template: N9K-C9336C-FX2_SUPER_SPINE
+      fabric_templates:
+        - ["2", "super-spine", "N9K-C9336C-FX2_SUPER_SPINE"]
+        - ["1", "border-leaf", "PowerSwitch-S5232F-ON_BORDER_LEAF"]
+        - ["2", "firewall", "CP-26000_FIREWALL"]
+        - ["2", "load-balancer", "NetScaler-MPX-26000-100G_LOAD_BALANCER"]
       fabric_interface_sorting_method: top_down
       member_of_groups:
         - topologies_dc
@@ -18,8 +21,8 @@ spec:
         data:
           - index: 1
             design: M_MIDDLE
-            amount_of_spines: 2
-            spine_template: N9K-C9336C-FX2_SPINE
+            fabric_templates:
+              - ["2", "spine", "N9K-C9336C-FX2_SPINE"]
             mlag_create: virtual
             member_of_groups:
               - topologies_pod
@@ -35,9 +38,6 @@ spec:
                   fabric_templates:
                     - ["2", "leaf", "PowerSwitch-S5232F-ON_LEAF_MR"]
                     - ["2", "l2-leaf", "PowerSwitch-S5224F-ON_TOR"]
-                    - ["1", "border-leaf", "PowerSwitch-S5232F-ON_BORDER_LEAF"]
-                    - ["1", "firewall", "CP-26000_FIREWALL"]
-                    - ["1", "load-balancer", "NetScaler-MPX-26000-100G_LOAD_BALANCER"]
                 - index: 5
                   row_index: 2
                   shortname: ktw-1-s-1-r-2-5
@@ -49,8 +49,8 @@ spec:
                     - ["2", "l2-leaf", "PowerSwitch-S5224F-ON_TOR"]
           - index: 2
             design: S_TOR
-            amount_of_spines: 2
-            spine_template: N9K-C9336C-FX2_SPINE
+            fabric_templates:
+              - ["2", "spine", "N9K-C9336C-FX2_SPINE"]
             mlag_create: back-to-back
             member_of_groups:
               - topologies_pod
@@ -91,8 +91,8 @@ spec:
                     - ["2", "tor", "PowerSwitch-S5224F-ON_TOR"]
           - index: 3
             design: M_MIXED
-            amount_of_spines: 2
-            spine_template: N9K-C9336C-FX2_SPINE
+            fabric_templates:
+              - ["2", "spine", "N9K-C9336C-FX2_SPINE"]
             mlag_create: virtual
             member_of_groups:
               - topologies_pod
@@ -139,8 +139,6 @@ spec:
                   member_of_groups: [topologies_rack]
                   fabric_templates:
                     - ["2", "leaf", "DCS-7050CX3-32C-R_LEAF_MIXED"]
-                    - ["1", "firewall", "CP-26000_FIREWALL"]
-                    - ["1", "load-balancer", "NetScaler-MPX-26000-100G_LOAD_BALANCER"]
                 - index: 7
                   row_index: 2
                   shortname: ktw-1-s-3-r-2-7

@@ -8,6 +8,10 @@ spec:
       index: 1
       design: S_OSPF_IBGP
       naming_convention: flat
+      fabric_templates:
+        - ["2", "border-leaf", "PowerSwitch-S5232F-ON_BORDER_LEAF"]
+        - ["1", "firewall", "CP-26000_FIREWALL"]
+        - ["1", "load-balancer", "BIG-IP-i5800_LOAD_BALANCER"]
       fabric_interface_sorting_method: top_down
       member_of_groups:
         - topologies_dc
@@ -16,8 +20,8 @@ spec:
         data:
           - index: 1
             design: S_MIXED
-            spine_template: PowerSwitch-S5232F-ON_SPINE
-            amount_of_spines: 2
+            fabric_templates:
+              - ["2", "spine", "PowerSwitch-S5232F-ON_SPINE"]
             member_of_groups:
               - topologies_pod
             racks:
@@ -61,14 +65,10 @@ spec:
                   shortname: lon-1-s-1-r-3-1
                   parent: lon-1-s-1
                   member_of_groups: [topologies_rack]
-                  fabric_templates:
-                    - ["1", "border-leaf", "PowerSwitch-S5232F-ON_BORDER_LEAF"]
-                    - ["1", "firewall", "CP-26000_FIREWALL"]
-                    - ["1", "load-balancer", "BIG-IP-i5800_LOAD_BALANCER"]
           - index: 2
             design: S_MIXED
-            spine_template: PowerSwitch-S5232F-ON_SPINE
-            amount_of_spines: 2
+            fabric_templates:
+              - ["2", "spine", "PowerSwitch-S5232F-ON_SPINE"]
             member_of_groups:
               - topologies_pod
             racks:
@@ -112,5 +112,3 @@ spec:
                   shortname: lon-1-s-2-r-3-1
                   parent: lon-1-s-2
                   member_of_groups: [topologies_rack]
-                  fabric_templates:
-                    - ["1", "border-leaf", "PowerSwitch-S5232F-ON_BORDER_LEAF"]

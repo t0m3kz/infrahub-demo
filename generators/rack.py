@@ -31,13 +31,13 @@ _POD_POOL_RETRY_JITTER = 0.25
 #   for mixed compute racks (_resolve_local_leaf_cabling_target). tor
 #   deployment has no leafs anywhere in the pod, so neither role has a
 #   target to cable to.
-# - "firewall"/"load_balancer" cable to the DC's border-leaf pair's dedicated
-#   firewall/load-balancer ports (_generate_firewalls_and_load_balancers) —
-#   valid wherever "border_leaf" is valid, since they depend on it existing.
+# - border-leaf/firewall/load-balancer no longer live at rack level — they're
+#   declared on TopologyDataCenter's own fabric_templates and placed/cabled
+#   by dc.py's _generate_dc_scoped_fabric_devices, split across the DC's pods.
 ROLES_BY_DEPLOYMENT_TYPE: dict[str, frozenset[str]] = {
-    "tor": frozenset({"tor", "border_leaf", "firewall", "load_balancer"}),
-    "mixed": frozenset({"leaf", "tor", "l2_leaf", "access_leaf", "border_leaf", "firewall", "load_balancer"}),
-    "middle_rack": frozenset({"leaf", "l2_leaf", "access_leaf", "border_leaf", "firewall", "load_balancer"}),
+    "tor": frozenset({"tor"}),
+    "mixed": frozenset({"leaf", "tor", "l2_leaf", "access_leaf"}),
+    "middle_rack": frozenset({"leaf", "l2_leaf", "access_leaf"}),
 }
 
 # "tor" cables to a spine; "l2_leaf"/"access_leaf" cable to a local leaf pair.
@@ -82,10 +82,9 @@ class RackMixin:
     def _derive_spine_info(self) -> tuple[list[str], list[str]]:
         """Derive spine device names and interface names from query data.
 
-        The rack.gql query already fetches pod.amount_of_spines,
-        pod.spine_template.interfaces(role="downlink"), and all naming
-        indexes (dc.index, pod.index). The pod generator always creates
-        spines with strategy="standard" and indexes=[dc.index, pod.index],
+        The rack.gql query already fetches pod.fabric_templates (role="spine")
+        and all naming indexes (dc.index, pod.index). The pod generator always
+        creates spines with strategy="standard" and indexes=[dc.index, pod.index],
         so spine names are deterministic - no API call needed.
 
         Returns:
@@ -93,19 +92,16 @@ class RackMixin:
         """
         pod = self.data.pod
         dc = pod.parent
-        spine_count = pod.amount_of_spines
-        spine_template = pod.spine_template
+        spine_entries = pod.spine_templates
 
-        if not spine_count or not spine_template:
-            raise RuntimeError(
-                f"Rack {self.data.name}: Cannot derive spine info - "
-                f"amount_of_spines={spine_count}, spine_template={'set' if spine_template else 'None'}"
-            )
+        if not spine_entries:
+            raise RuntimeError(f"Rack {self.data.name}: Cannot derive spine info - no spine fabric_templates entries")
 
         naming = DeviceNamingConfig(strategy=dc.naming_convention)
         spine_indexes = [dc.index, pod.index]
-        device_names = sorted(
-            [
+        device_names: list[str] = []
+        for entry in spine_entries:
+            device_names.extend(
                 naming.format_device_name(
                     self.fabric_name,
                     "spine",
@@ -113,11 +109,14 @@ class RackMixin:
                     fabric_name=self.fabric_name,
                     indexes=spine_indexes,
                 )
-                for idx in range(1, spine_count + 1)
-            ]
-        )
+                for idx in range(1, entry.quantity + 1)
+            )
+        device_names = sorted(device_names)
 
-        interface_names = sorted(iface.name for iface in spine_template.interfaces)
+        # Interface names come from the first entry's template only — same accepted
+        # limitation as dc.py's/pod.py's super-spine/spine device creation: assumes
+        # every spine template shares consistent downlink-interface naming.
+        interface_names = sorted(iface.name for iface in spine_entries[0].template.interfaces)
 
         if not interface_names:
             raise RuntimeError(f"Rack {self.data.name}: Spine template has no downlink interfaces")
@@ -125,51 +124,6 @@ class RackMixin:
         self.logger.info(
             f"Derived {len(device_names)} spine device names with "
             f"{len(interface_names)} downlink interface(s) from query data"
-        )
-        return device_names, interface_names
-
-    def _derive_super_spine_info(self) -> tuple[list[str], list[str]]:
-        """Derive super-spine device names and uplink interface names from query data.
-
-        The DC generator always creates super-spines with indexes=[dc.index], so names
-        are deterministic - no API call needed. Super-spine template interfaces are
-        pre-filtered to role="uplink" in rack.gql.
-
-        Returns:
-            Tuple of (device_names, interface_names) for create_cabling.
-
-        Raises:
-            RuntimeError: when super-spine count or template is not set on the DC.
-        """
-        dc = self.data.pod.parent
-        count = dc.amount_of_super_spines
-        template = dc.super_spine_template
-
-        if not count or not template:
-            raise RuntimeError(
-                f"Rack {self.data.name}: Cannot derive super-spine info - "
-                f"amount_of_super_spines={count}, super_spine_template={'set' if template else 'None'}"
-            )
-
-        naming = DeviceNamingConfig(strategy=self.data.pod.parent.naming_convention)
-        device_names = sorted(
-            naming.format_device_name(
-                self.fabric_name,
-                "super-spine",
-                index=idx,
-                fabric_name=self.fabric_name,
-                indexes=[dc.index],
-            )
-            for idx in range(1, count + 1)
-        )
-
-        interface_names = sorted(iface.name for iface in template.interfaces if iface.role == "uplink")
-        if not interface_names:
-            raise RuntimeError(f"Rack {self.data.name}: Super-spine template has no uplink interfaces")
-
-        self.logger.info(
-            f"Derived {len(device_names)} super-spine device names with "
-            f"{len(interface_names)} uplink interface(s) from query data"
         )
         return device_names, interface_names
 

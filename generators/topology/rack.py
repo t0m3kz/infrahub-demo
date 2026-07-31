@@ -59,17 +59,8 @@ class RackGenerator(RackMixin, CommonGenerator):
         )
 
     def _has_any_switch_templates(self) -> bool:
-        """Any switch, firewall, or load-balancer template this generator can materialize
-        (firewall/load_balancer aren't switches, but are handled here too — a rack with
-        only those must not be skipped as "endpoint-only").
-        """
-        return (
-            self._has_role_templates(self.data.leafs)
-            or self._has_tor_like_templates()
-            or self._has_role_templates(self.data.border_leafs)
-            or self._has_role_templates(self.data.firewalls)
-            or self._has_role_templates(self.data.load_balancers)
-        )
+        """Any switch template this generator can materialize."""
+        return self._has_role_templates(self.data.leafs) or self._has_tor_like_templates()
 
     def _present_roles(self) -> set[str]:
         """Role names with at least one positive-quantity fabric_templates entry on this rack."""
@@ -78,9 +69,6 @@ class RackGenerator(RackMixin, CommonGenerator):
             "tor": self.data.tors,
             "l2_leaf": self.data.l2_leafs,
             "access_leaf": self.data.access_leafs,
-            "border_leaf": self.data.border_leafs,
-            "firewall": self.data.firewalls,
-            "load_balancer": self.data.load_balancers,
         }
         return {role for role, templates in role_templates.items() if self._has_role_templates(templates)}
 
@@ -328,8 +316,6 @@ class RackGenerator(RackMixin, CommonGenerator):
         device_count: int,
         device_type: str = "leaf",
         racks_in_previous_rows: int | None = None,
-        leafs_per_rack: int = 0,
-        total_tors_in_pod: int | None = None,
     ) -> int:
         """Thin wrapper around helper function for readability and compatibility."""
         return self._plan.calculate_cabling_offsets(
@@ -338,8 +324,6 @@ class RackGenerator(RackMixin, CommonGenerator):
             device_count=device_count,
             device_type=device_type,
             racks_in_previous_rows=racks_in_previous_rows,
-            leafs_per_rack=leafs_per_rack,
-            total_tors_in_pod=total_tors_in_pod,
         )
 
     async def _cable_and_route(
@@ -468,8 +452,6 @@ class RackGenerator(RackMixin, CommonGenerator):
         await self._generate_tors()
         await self._generate_l2_leafs(created_leaf_devices)
         await self._generate_access_leafs(created_leaf_devices)
-        await self._generate_border_leafs(deployment_type)
-        await self._generate_firewalls_and_load_balancers()
 
         # Generation completion summary
         total_devices = len(created_leaf_devices) + sum(tor_role.quantity for tor_role in (self.data.tors or []))
@@ -781,142 +763,3 @@ class RackGenerator(RackMixin, CommonGenerator):
                     bottom_role="access-leaf",
                     top_role="spine",
                 )
-
-    async def _generate_border_leafs(self, deployment_type: str) -> None:
-        """Create border-leaf devices and cable uplinks to pod spines (always, same as leafs)."""
-        pod = self.data.pod
-        dc = pod.parent
-        if not (bl_roles := self.data.border_leafs or []):
-            return
-
-        # Both invariant across bl_roles — computed once rather than once per role template.
-        leafs_per_rack = self._roles.border_leafs_per_rack()
-        total_tors_in_pod: int | None = None
-        if deployment_type == "tor":
-            max_tors_per_compute_rack = pod.design.max_tors_per_compute_rack if pod.design else 0
-            sibling_tor_racks = await self.client.filters(kind=LocationRack, pod__ids=[pod.id], rack_type__value="tor")
-            total_tors_in_pod = len(sibling_tor_racks) * max_tors_per_compute_rack
-
-        for bl_role in bl_roles:
-            all_bl_uplinks = sorted(self._roles.template_interfaces(bl_role.template, role="uplink"))
-            if not all_bl_uplinks:
-                self.logger.error(
-                    f"Rack {self.data.name}: border-leaf template has no uplink interfaces - cannot cable fabric."
-                )
-                continue
-
-            # Size against design.max_spines_per_pod (stable capacity), not the live
-            # amount_of_spines — avoids overlapping port ranges as spines are added.
-            spine_count = pod.design.max_spines_per_pod if pod.design else pod.amount_of_spines
-            bl_uplink_interfaces = all_bl_uplinks[:spine_count]
-            if len(bl_uplink_interfaces) < spine_count:
-                self.logger.error(
-                    f"Rack {self.data.name}: not enough border-leaf uplinks for pod spines "
-                    f"(uplinks={len(all_bl_uplinks)}, needed={spine_count}) - cannot cable fabric."
-                )
-                continue
-
-            self.logger.info(f"Rack {self.data.name}: border-leaf fabric uplinks {bl_uplink_interfaces}")
-
-            await self._generate_spine_attached_role(
-                bl_role,
-                device_role="border-leaf",
-                deployment_id=dc.id,
-                bottom_interfaces=bl_uplink_interfaces,
-                offset=self.calculate_cabling_offsets(
-                    device_count=bl_role.quantity,
-                    device_type="border_leaf",
-                    leafs_per_rack=leafs_per_rack,
-                    total_tors_in_pod=total_tors_in_pod,
-                ),
-                mlag=False,
-            )
-
-    async def _ensure_ha_pair(
-        self,
-        device_names: list[str],
-        *,
-        ha_kind: Literal["ManagedFirewallHA", "ManagedLoadbalancerHA"],
-        role_label: str,
-    ) -> None:
-        """Pair exactly 2 same-role devices into an HA domain, setting only
-        `capabilities` — ha.py (triggered on created/updated) owns the actual
-        sync-interface/cable wiring, not this method.
-        """
-        if len(device_names) != 2:
-            return
-
-        first, second = sorted(device_names)
-        ha_name = f"{first}-{second}-ha"
-        existing = await self.client.filters(kind=ha_kind, name__value=ha_name)
-        if existing:
-            self.client.group_context.related_node_ids.append(existing[0].id)
-            return
-
-        devices = await self.client.filters(kind=DcimPhysicalDevice, name__values=[first, second])
-        if len(devices) != 2:
-            self.logger.error(f"HA pair {first}/{second}: could not resolve both devices.")
-            return
-
-        ha_group = await self.client.get(kind=CoreStandardGroup, name__value="ha_domains")
-        ha_obj = await self.client.create(
-            kind=ha_kind,
-            data={
-                "name": ha_name,
-                "status": "active",
-                "capabilities": [{"id": dev.id} for dev in devices],
-                "member_of_groups": [{"id": ha_group.id}],
-            },
-        )
-        await ha_obj.save(allow_upsert=True)
-        self.logger.info(f"Rack {self.data.name}: created HA domain {ha_name} for {role_label}s")
-
-    async def _create_role_devices_with_ha(
-        self,
-        role: DeviceRole,
-        *,
-        device_role: Literal["firewall", "load-balancer"],
-        dc_id: str,
-        ha_kind: Literal["ManagedFirewallHA", "ManagedLoadbalancerHA"],
-    ) -> list[str]:
-        """Create firewall/load-balancer devices for one fabric_templates role entry,
-        pairing them into an HA domain when quantity == 2. No loopback allocation —
-        firewalls/load-balancers aren't part of the underlay/overlay routing.
-
-        device_role="load-balancer" tracks into the pre-existing "loadbalancers"
-        group instead of create_devices()'s f"{device_role}s" default ("load-balancers").
-        """
-        devices = await self._create_devices_for_role(
-            role,
-            device_role=device_role,
-            deployment_id=dc_id,
-            allocate_loopback=False,
-            group_name="loadbalancers" if device_role == "load-balancer" else None,
-        )
-
-        if role.quantity == 2:
-            await self._ensure_ha_pair(devices, ha_kind=ha_kind, role_label=device_role)
-
-        return devices
-
-    # (device_role, fabric_templates attribute, HA domain kind)
-    _FW_LB_ROLES: tuple[
-        tuple[Literal["firewall", "load-balancer"], str, Literal["ManagedFirewallHA", "ManagedLoadbalancerHA"]], ...
-    ] = (
-        ("firewall", "firewalls", "ManagedFirewallHA"),
-        ("load-balancer", "load_balancers", "ManagedLoadbalancerHA"),
-    )
-
-    async def _generate_firewalls_and_load_balancers(self) -> None:
-        """Create firewall/load-balancer devices (with HA pairing at quantity == 2).
-
-        Cabling to the DC's border-leaf pair is not handled here yet — deferred
-        to a follow-up; for now this only deploys the devices themselves.
-        """
-        if not self.data.firewalls and not self.data.load_balancers:
-            return
-
-        dc = self.data.pod.parent
-        for device_role, data_attr, ha_kind in self._FW_LB_ROLES:
-            for role in getattr(self.data, data_attr) or []:
-                await self._create_role_devices_with_ha(role, device_role=device_role, dc_id=dc.id, ha_kind=ha_kind)

@@ -100,6 +100,19 @@ nodes:
           min_value: 1
           max_value: 8
 
+      - name: max_border_leafs_per_pod
+        label: "Maximum Border-Leafs per Pod"
+        description: >
+          Maximum border-leaf switches a single pod's share can receive after
+          this DC's fabric_templates quantity is split across pods.
+        kind: Number
+        optional: true
+        default_value: 2
+        order_weight: 1760
+        parameters:
+          min_value: 0
+          max_value: 4
+
       # ADDRESS SPACE SIZING
       # Used as defaults when a DC instance has no pools set.
       # The DC instance may override by pre-attaching pools directly.
@@ -234,17 +247,6 @@ nodes:
         parameters:
           min_value: 2
           max_value: 8
-
-      - name: max_border_leafs_per_pod
-        label: "Maximum Border-Leafs per Pod"
-        description: "Maximum border-leaf switches per pod."
-        kind: Number
-        optional: true
-        default_value: 1
-        order_weight: 1760
-        parameters:
-          min_value: 0
-          max_value: 2
 
   - name: Element
     namespace: Topology
@@ -393,15 +395,6 @@ nodes:
         optional: true
         default_value: true
         order_weight: 600
-      - name: amount_of_super_spines
-        label: Amount of Super Spine switches
-        kind: Number
-        optional: true
-        default_value: 0
-        order_weight: 1000
-        parameters:
-          min_value: 0
-
 
       - name: naming_convention
         label: "Naming Convention"
@@ -479,15 +472,15 @@ nodes:
         identifier: "dc__design"
         order_weight: 950
         on_delete: no-action
-      - name: super_spine_template
-        peer: TemplateDcimPhysicalDevice
-        label: "Super Spine Template"
+      - name: fabric_templates
+        peer: TopologyElement
+        label: "Fabric Elements"
+        description: "Super-spine, border-leaf, firewall, and load-balancer templates for this DC's fabric"
         optional: true
+        cardinality: many
         kind: Attribute
-        cardinality: one
-        identifier: "fabric__super_spine_template"
+        identifier: "dc__fabric_templates"
         order_weight: 1100
-        on_delete: no-action
       - name: loopback_pool
         peer: CoreIPPrefixPool
         kind: Attribute
@@ -512,12 +505,14 @@ nodes:
         identifier: "dc__management_pool"
         order_weight: 7000
         on_delete: cascade
-      - name: super_spine_asn_pool
+      - name: fabric_asn_pool
+        label: "Fabric ASN Pool"
+        description: "Shared ASN pool for super-spine and border-leaf underlay/overlay BGP"
         peer: CoreNumberPool
         kind: Attribute
         cardinality: one
         optional: true
-        identifier: "dc__super_spine_asn_pool"
+        identifier: "dc__fabric_asn_pool"
         order_weight: 7200
         on_delete: cascade
 
@@ -572,15 +567,6 @@ nodes:
             index__value }}
         read_only: true
         optional: false
-      - name: amount_of_spines
-        label: Amount of Spine switches
-        kind: Number
-        optional: true
-        default_value: 4
-        order_weight: 1000
-        parameters:
-          min_value: 1
-          max_value: 8
       - name: leaf_interface_sorting_method
         kind: Dropdown
         choices:
@@ -634,15 +620,15 @@ nodes:
         identifier: "pod__design"
         order_weight: 900
         on_delete: no-action
-      - name: spine_template
-        peer: TemplateDcimPhysicalDevice
-        label: "Spine Template"
-        optional: false
+      - name: fabric_templates
+        peer: TopologyElement
+        label: "Fabric Elements"
+        description: "Spine templates for this pod's fabric"
+        optional: true
+        cardinality: many
         kind: Attribute
-        cardinality: one
-        identifier: "pod__spine_template"
+        identifier: "pod__fabric_templates"
         order_weight: 1100
-        on_delete: no-action
       - name: loopback_pool
         peer: CoreIPAddressPool
         kind: Attribute

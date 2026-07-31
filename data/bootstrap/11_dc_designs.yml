@@ -44,6 +44,7 @@ spec:
       max_pods: 2
       max_super_spines_per_fabric: 2
       max_spines_per_pod: 4
+      max_border_leafs_per_pod: 1
       loopback_prefix_length: 24
       technical_prefix_length: 21
       management_prefix_length: 26
@@ -60,6 +61,7 @@ spec:
       max_pods: 2
       max_super_spines_per_fabric: 2
       max_spines_per_pod: 4
+      max_border_leafs_per_pod: 1
       loopback_prefix_length: 120
       technical_prefix_length: 117
       management_prefix_length: 26
@@ -76,6 +78,7 @@ spec:
       max_pods: 2
       max_super_spines_per_fabric: 2
       max_spines_per_pod: 4
+      max_border_leafs_per_pod: 1
       loopback_prefix_length: 120
       technical_prefix_length: 117
       management_prefix_length: 26
@@ -93,6 +96,7 @@ spec:
       max_pods: 4
       max_super_spines_per_fabric: 2
       max_spines_per_pod: 4
+      max_border_leafs_per_pod: 1
       loopback_prefix_length: 119
       technical_prefix_length: 115
       management_prefix_length: 25
@@ -108,6 +112,7 @@ spec:
       max_pods: 4
       max_super_spines_per_fabric: 2
       max_spines_per_pod: 4
+      max_border_leafs_per_pod: 2
       loopback_prefix_length: 119
       technical_prefix_length: 115
       management_prefix_length: 25
@@ -124,6 +129,7 @@ spec:
       max_pods: 4
       max_super_spines_per_fabric: 2
       max_spines_per_pod: 4
+      max_border_leafs_per_pod: 1
       loopback_prefix_length: 119
       technical_prefix_length: 115
       management_prefix_length: 25
@@ -140,6 +146,7 @@ spec:
       max_pods: 8
       max_super_spines_per_fabric: 4
       max_spines_per_pod: 4
+      max_border_leafs_per_pod: 2
       loopback_prefix_length: 118
       technical_prefix_length: 114
       management_prefix_length: 24
@@ -156,6 +163,7 @@ spec:
       max_pods: 16
       max_super_spines_per_fabric: 4
       max_spines_per_pod: 4
+      max_border_leafs_per_pod: 4
       loopback_prefix_length: 117
       technical_prefix_length: 113
       management_prefix_length: 23

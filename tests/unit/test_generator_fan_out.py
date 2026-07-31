@@ -290,7 +290,7 @@ def _pod_data(*, deployment_type: str) -> dict[str, Any]:
                 "name": "pod-1",
                 "index": 1,
                 "design": design,
-                "spine_template": {"node": {"id": "tmpl-spine"}},
+                "fabric_templates": [{"role": "spine", "quantity": 2, "template": {"node": {"id": "tmpl-spine"}}}],
                 "parent": {"node": {"id": "dc-1", "name": "DC1", "index": 1, "devices": {"edges": []}}},
             }
         ]

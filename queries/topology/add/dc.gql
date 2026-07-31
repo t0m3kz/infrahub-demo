@@ -10,9 +10,6 @@ query topology_dc($name: String!) {
           index {
             value
           }
-          amount_of_super_spines {
-            value
-          }
           naming_convention { value }
           design {
             node {
@@ -22,6 +19,7 @@ query topology_dc($name: String!) {
               max_pods { value }
               max_super_spines_per_fabric { value }
               max_spines_per_pod { value }
+              max_border_leafs_per_pod { value }
               loopback_prefix_length { value }
               technical_prefix_length { value }
               management_prefix_length { value }
@@ -45,7 +43,7 @@ query topology_dc($name: String!) {
               name { value }
             }
           }
-          super_spine_asn_pool {
+          fabric_asn_pool {
             node {
               id
               name { value }
@@ -58,20 +56,34 @@ query topology_dc($name: String!) {
               }
             }
           }
-          super_spine_template {
-            node {
-              id
-              template_name {
-                value
-              }
-              platform {
-                node {
-                  id
-                }
-              }
-              device_type {
-                node {
-                  id
+          fabric_templates {
+            edges {
+              node {
+                role { value }
+                quantity { value }
+                template {
+                  node {
+                    id
+                    template_name { value }
+                    platform {
+                      node {
+                        id
+                      }
+                    }
+                    device_type {
+                      node {
+                        id
+                      }
+                    }
+                    interfaces {
+                      edges {
+                        node {
+                          name { value }
+                          role { value }
+                        }
+                      }
+                    }
+                  }
                 }
               }
             }

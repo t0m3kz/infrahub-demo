@@ -1146,7 +1146,6 @@ class TopologyDataCenter(
     TopologyDeviceHosting,
     TopologySegmentHosting,
 ):
-    amount_of_super_spines: Integer
     connectivity_mode: Dropdown
     fabric_interface_sorting_method: Dropdown
     fully_managed: Boolean
@@ -1161,6 +1160,8 @@ class TopologyDataCenter(
     circuits: RelationshipManager[TopologyCircuit]
     design: RelationshipAttribute[TopologyDataCenterDesign]
     devices: RelationshipManager[DcimDevice]
+    fabric_asn_pool: RelationshipAttribute[CoreNumberPool]
+    fabric_templates: RelationshipManager[TopologyElement]
     l3_vni_pool: RelationshipAttribute[CoreNumberPool]
     loopback_pool: RelationshipAttribute[CoreIPPrefixPool]
     management_pool: RelationshipAttribute[CoreIPAddressPool]
@@ -1169,8 +1170,6 @@ class TopologyDataCenter(
     profiles: RelationshipManager[CoreProfile]
     segment_deployments: RelationshipManager[ManagedSegmentDeployment]
     subscriber_of_groups: RelationshipManager[CoreGroup]
-    super_spine_asn_pool: RelationshipAttribute[CoreNumberPool]
-    super_spine_template: RelationshipAttribute[TemplateDcimPhysicalDevice]
     technical_pool: RelationshipAttribute[CoreIPPrefixPool]
     vlan_pool: RelationshipAttribute[CoreNumberPool]
     vni_pool: RelationshipAttribute[CoreNumberPool]
@@ -1180,6 +1179,7 @@ class TopologyDataCenterDesign(TopologyDesign):
     description: StringOptional
     loopback_prefix_length: Integer
     management_prefix_length: Integer
+    max_border_leafs_per_pod: Integer
     max_pods: Integer
     max_spines_per_pod: Integer
     max_super_spines_per_fabric: Integer
@@ -1794,7 +1794,6 @@ class DcimPlatform(CoreNode):
 
 
 class TopologyPod(TopologyDeployment, TopologyRackHosting, TopologyDeviceHosting):
-    amount_of_spines: Integer
     index: Integer
     leaf_interface_sorting_method: Dropdown
     mlag_create: Dropdown
@@ -1805,20 +1804,19 @@ class TopologyPod(TopologyDeployment, TopologyRackHosting, TopologyDeviceHosting
     children: RelationshipManager[TopologyDeployment]
     design: RelationshipAttribute[TopologyPodDesign]
     devices: RelationshipManager[DcimDevice]
+    fabric_templates: RelationshipManager[TopologyElement]
     loopback_pool: RelationshipAttribute[CoreIPAddressPool]
     member_of_groups: RelationshipManager[CoreGroup]
     parent: RelationshipAttribute[TopologyDataCenter]
     prefix_pool: RelationshipAttribute[CoreIPPrefixPool]
     profiles: RelationshipManager[CoreProfile]
     racks: RelationshipManager[LocationRack]
-    spine_template: RelationshipAttribute[TemplateDcimPhysicalDevice]
     subscriber_of_groups: RelationshipManager[CoreGroup]
 
 
 class TopologyPodDesign(TopologyDesign):
     compute_racks_per_row: Integer
     description: StringOptional
-    max_border_leafs_per_pod: Integer
     max_leafs_per_network_rack: Integer
     max_spines_per_pod: Integer
     max_tors_per_compute_rack: Integer
@@ -4581,7 +4579,6 @@ class ProfileTopologyCustomerTemplateDC(LineageSource, CoreProfile, CoreNode):
 
 
 class ProfileTopologyDataCenter(LineageSource, CoreProfile, CoreNode):
-    amount_of_super_spines: IntegerOptional
     connectivity_mode: DropdownOptional
     fabric_interface_sorting_method: DropdownOptional
     fully_managed: BooleanOptional
@@ -4595,6 +4592,8 @@ class ProfileTopologyDataCenter(LineageSource, CoreProfile, CoreNode):
     circuits: RelationshipManager[TopologyCircuit]
     design: RelationshipAttribute[TopologyDataCenterDesign]
     devices: RelationshipManager[DcimDevice]
+    fabric_asn_pool: RelationshipAttribute[CoreNumberPool]
+    fabric_templates: RelationshipManager[TopologyElement]
     l3_vni_pool: RelationshipAttribute[CoreNumberPool]
     loopback_pool: RelationshipAttribute[CoreIPPrefixPool]
     management_pool: RelationshipAttribute[CoreIPAddressPool]
@@ -4602,8 +4601,6 @@ class ProfileTopologyDataCenter(LineageSource, CoreProfile, CoreNode):
     related_nodes: RelationshipManager[TopologyDataCenter]
     segment_deployments: RelationshipManager[ManagedSegmentDeployment]
     subscriber_of_groups: RelationshipManager[CoreGroup]
-    super_spine_asn_pool: RelationshipAttribute[CoreNumberPool]
-    super_spine_template: RelationshipAttribute[TemplateDcimPhysicalDevice]
     technical_pool: RelationshipAttribute[CoreIPPrefixPool]
     vlan_pool: RelationshipAttribute[CoreNumberPool]
     vni_pool: RelationshipAttribute[CoreNumberPool]
@@ -4613,6 +4610,7 @@ class ProfileTopologyDataCenterDesign(LineageSource, CoreProfile, CoreNode):
     description: StringOptional
     loopback_prefix_length: IntegerOptional
     management_prefix_length: IntegerOptional
+    max_border_leafs_per_pod: IntegerOptional
     max_pods: IntegerOptional
     max_spines_per_pod: IntegerOptional
     max_super_spines_per_fabric: IntegerOptional
@@ -4734,7 +4732,6 @@ class ProfileTopologyPhysicalDeployment(LineageSource, CoreProfile, CoreNode):
 
 
 class ProfileTopologyPod(LineageSource, CoreProfile, CoreNode):
-    amount_of_spines: IntegerOptional
     leaf_interface_sorting_method: DropdownOptional
     mlag_create: DropdownOptional
     profile_name: String
@@ -4744,19 +4741,18 @@ class ProfileTopologyPod(LineageSource, CoreProfile, CoreNode):
     asn_pool: RelationshipAttribute[CoreNumberPool]
     design: RelationshipAttribute[TopologyPodDesign]
     devices: RelationshipManager[DcimDevice]
+    fabric_templates: RelationshipManager[TopologyElement]
     loopback_pool: RelationshipAttribute[CoreIPAddressPool]
     member_of_groups: RelationshipManager[CoreGroup]
     prefix_pool: RelationshipAttribute[CoreIPPrefixPool]
     racks: RelationshipManager[LocationRack]
     related_nodes: RelationshipManager[TopologyPod]
-    spine_template: RelationshipAttribute[TemplateDcimPhysicalDevice]
     subscriber_of_groups: RelationshipManager[CoreGroup]
 
 
 class ProfileTopologyPodDesign(LineageSource, CoreProfile, CoreNode):
     compute_racks_per_row: IntegerOptional
     description: StringOptional
-    max_border_leafs_per_pod: IntegerOptional
     max_leafs_per_network_rack: IntegerOptional
     max_spines_per_pod: IntegerOptional
     max_tors_per_compute_rack: IntegerOptional

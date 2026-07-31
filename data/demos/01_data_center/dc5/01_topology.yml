@@ -8,8 +8,12 @@ spec:
       index: 1
       design: M_EBGP_EBGP
       naming_convention: flat
-      amount_of_super_spines: 2
-      super_spine_template: N9K-C9336C-FX2_SUPER_SPINE
+      fabric_templates:
+        - ["2", "super-spine", "N9K-C9336C-FX2_SUPER_SPINE"]
+        - ["1", "border-leaf", "N9K-C9336C-FX2_BORDER_LEAF"]
+        - ["1", "border-leaf", "DCS-7050CX3-32C-R_BORDER_LEAF"]
+        - ["1", "firewall", "PA-5260_FIREWALL"]
+        - ["1", "load-balancer", "BIG-IP-i5800_LOAD_BALANCER"]
       fabric_interface_sorting_method: top_down
       member_of_groups:
         - topologies_dc
@@ -18,8 +22,8 @@ spec:
         data:
           - index: 1
             design: S_MIDDLE
-            amount_of_spines: 2
-            spine_template: N9K-C9336C-FX2_SPINE
+            fabric_templates:
+              - ["2", "spine", "N9K-C9336C-FX2_SPINE"]
             member_of_groups:
               - topologies_pod
             racks:
@@ -49,14 +53,10 @@ spec:
                   shortname: ny-1-s-1-r-3-1
                   parent: ny-1-s-1
                   member_of_groups: [topologies_rack]
-                  fabric_templates:
-                    - ["1", "border-leaf", "N9K-C9336C-FX2_BORDER_LEAF"]
-                    - ["1", "firewall", "PA-5260_FIREWALL"]
-                    - ["1", "load-balancer", "BIG-IP-i5800_LOAD_BALANCER"]
           - index: 2
             design: S_MIDDLE
-            amount_of_spines: 2
-            spine_template: DCS-7050CX3-32C-R_SPINE
+            fabric_templates:
+              - ["2", "spine", "DCS-7050CX3-32C-R_SPINE"]
             member_of_groups:
               - topologies_pod
             racks:
@@ -86,12 +86,10 @@ spec:
                   shortname: ny-1-s-2-r-3-1
                   parent: ny-1-s-2
                   member_of_groups: [topologies_rack]
-                  fabric_templates:
-                    - ["1", "border-leaf", "DCS-7050CX3-32C-R_BORDER_LEAF"]
           - index: 3
             design: S_MIDDLE
-            amount_of_spines: 2
-            spine_template: PowerSwitch-S5232F-ON_SPINE
+            fabric_templates:
+              - ["2", "spine", "PowerSwitch-S5232F-ON_SPINE"]
             member_of_groups:
               - topologies_pod
             racks:
@@ -117,8 +115,8 @@ spec:
                     - ["2", "l2-leaf", "PowerSwitch-S5224F-ON_TOR"]
           - index: 4
             design: S_MIDDLE
-            amount_of_spines: 2
-            spine_template: Edgecore-7726-32X-O_SPINE
+            fabric_templates:
+              - ["2", "spine", "Edgecore-7726-32X-O_SPINE"]
             member_of_groups:
               - topologies_pod
             racks:

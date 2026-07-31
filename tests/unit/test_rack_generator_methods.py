@@ -25,7 +25,6 @@ def _build_gen() -> Any:
         name="DC1",
         index=1,
         naming_convention="standard",
-        amount_of_super_spines=2,
         management_pool=Pool(id="mgmt-pool", name="mgmt"),
     )
     design = PodDesign(
@@ -42,13 +41,18 @@ def _build_gen() -> Any:
         name="pod-1",
         index=1,
         parent=parent,
-        amount_of_spines=2,
         leaf_interface_sorting_method="top_down",
         spine_interface_sorting_method="bottom_up",
         loopback_pool=Pool(id="lo-pool", name="lo"),
         prefix_pool=Pool(id="p2p-pool", name="p2p"),
         design=design,
-        spine_template=Template(id="tmpl-spine", interfaces=[Interface(name="Eth1/10"), Interface(name="Eth1/11")]),
+        fabric_templates=[
+            DeviceRole(
+                role="spine",
+                quantity=2,
+                template=Template(id="tmpl-spine", interfaces=[Interface(name="Eth1/10"), Interface(name="Eth1/11")]),
+            )
+        ],
     )
     suite = LocationSuiteModel(index=1)
     leaf_t = Template(id="tmpl-leaf", interfaces=[Interface(name="Eth1/1"), Interface(name="Eth1/2")])
@@ -66,7 +70,6 @@ def _build_gen() -> Any:
         tors=[DeviceRole(role="tor", quantity=1, template=tor_t)],
         l2_leafs=[],
         access_leafs=[],
-        border_leafs=[],
     )
 
     gen = RackGenerator.__new__(RackGenerator)
@@ -281,65 +284,6 @@ class TestRackGeneratorMethods:
 
         gen.logger.error.assert_called()
 
-    @pytest.mark.asyncio
-    async def test_generate_border_leafs_no_uplink_skips(self) -> None:
-        gen = _build_gen()
-        bl_template = Template(id="tmpl-bl-empty", interfaces=[])
-        gen.data.border_leafs = [DeviceRole(role="border-leaf", quantity=1, template=bl_template)]
-        gen.create_devices = AsyncMock(return_value=["bl-1"])
-        gen._cable_and_route = AsyncMock()
-
-        await gen._generate_border_leafs("mixed")
-
-        gen.logger.error.assert_called()
-        gen._cable_and_route.assert_not_awaited()
-
-    @pytest.mark.asyncio
-    async def test_generate_border_leafs_uses_design_max_spines_not_live_count(self) -> None:
-        """Uplink count must size against design.max_spines_per_pod (stable
-        capacity), not pod.amount_of_spines (live count) — otherwise adding spines
-        later would need ports already handed to border-leaf-to-spine cabling."""
-        gen = _build_gen()
-        gen.data.pod.amount_of_spines = 2
-        gen.data.pod.design.max_spines_per_pod = 3
-        bl_template = Template(
-            id="tmpl-bl",
-            interfaces=[
-                Interface(name="Eth1/1", role="uplink"),
-                Interface(name="Eth1/2", role="uplink"),
-                Interface(name="Eth1/3", role="uplink"),
-            ],
-        )
-        gen.data.border_leafs = [DeviceRole(role="border-leaf", quantity=1, template=bl_template)]
-        gen.create_devices = AsyncMock(return_value=["bl-1"])
-        gen._cable_and_route = AsyncMock()
-
-        await gen._generate_border_leafs("mixed")
-
-        gen._cable_and_route.assert_awaited_once()
-        call_kwargs = gen._cable_and_route.call_args.kwargs
-        # All 3 uplinks must be used to reach 3 spines (max_spines_per_pod), not
-        # capped at 2 (amount_of_spines).
-        assert call_kwargs["bottom_interfaces"] == ["Eth1/1", "Eth1/2", "Eth1/3"]
-
-    @pytest.mark.asyncio
-    async def test_generate_border_leafs_insufficient_uplinks_skips(self) -> None:
-        """Fewer uplinks than spines needed must skip cabling entirely rather than
-        wrap around and double-connect a port to two different spines."""
-        gen = _build_gen()
-        gen.data.pod.design.max_spines_per_pod = 3
-        bl_template = Template(
-            id="tmpl-bl",
-            interfaces=[
-                Interface(name="Eth1/1", role="uplink"),
-                Interface(name="Eth1/2", role="uplink"),
-            ],
-        )
-        gen.data.border_leafs = [DeviceRole(role="border-leaf", quantity=1, template=bl_template)]
-        gen.create_devices = AsyncMock(return_value=["bl-1"])
-        gen._cable_and_route = AsyncMock()
-
-        await gen._generate_border_leafs("mixed")
-
-        gen.logger.error.assert_called()
-        gen._cable_and_route.assert_not_awaited()
+    # Border-leaf generation moved to DC-level (generators/topology/dc.py's
+    # _generate_dc_scoped_fabric_devices) — see tests/unit/test_dc_firewall_lb.py
+    # for the equivalent coverage of the new logic.

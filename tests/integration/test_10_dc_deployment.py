@@ -72,8 +72,8 @@ DC_CONFIGS: dict[str, dict[str, Any]] = {
         "routing_strategy": "ospf-ibgp",
         "naming_convention": "hierarchical",
         "branch": "deploy-dc2",
-        # 2 pods: middle_rack(2sp each), no super-spines (data has no amount_of_super_spines/
-        # super_spine_template) + 8 leafs + 8 l2-leafs + 2 border-leafs
+        # 2 pods: middle_rack(2sp each), no super-spines (data's fabric_templates
+        # has no super-spine role entry) + 8 leafs + 8 l2-leafs + 2 border-leafs
         "expected_devices": 22,
         "expected_roles": {"spine": 4, "leaf": 8, "l2-leaf": 8, "border-leaf": 2},
         "expected_min_cables": 22,
@@ -84,8 +84,8 @@ DC_CONFIGS: dict[str, dict[str, Any]] = {
         "routing_strategy": "ospf-ibgp",
         "naming_convention": "flat",
         "branch": "deploy-dc3",
-        # 2 pods: mixed(2sp each), no super-spines (data has no amount_of_super_spines/
-        # super_spine_template) + 8 leafs + 8 l2-leafs + 2 border-leafs
+        # 2 pods: mixed(2sp each), no super-spines (data's fabric_templates has
+        # no super-spine role entry) + 8 leafs + 8 l2-leafs + 2 border-leafs
         "expected_devices": 22,
         "expected_roles": {"spine": 4, "leaf": 8, "l2-leaf": 8, "border-leaf": 2},
         "expected_min_cables": 22,
@@ -96,8 +96,8 @@ DC_CONFIGS: dict[str, dict[str, Any]] = {
         "routing_strategy": "ebgp-ebgp",
         "naming_convention": "hierarchical",
         "branch": "deploy-dc4",
-        # 2 pods: mixed(2sp)+tor(2sp), no super-spines (data has no amount_of_super_spines/
-        # super_spine_template) + 4 leafs + 4 l2-leafs + 4 tors + 2 border-leafs
+        # 2 pods: mixed(2sp)+tor(2sp), no super-spines (data's fabric_templates has
+        # no super-spine role entry) + 4 leafs + 4 l2-leafs + 4 tors + 2 border-leafs
         "expected_devices": 18,
         "expected_roles": {"spine": 4, "leaf": 4, "l2-leaf": 4, "tor": 4, "border-leaf": 2},
         "expected_min_cables": 18,

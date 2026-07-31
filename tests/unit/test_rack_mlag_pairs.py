@@ -21,6 +21,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from generators.models import (
+    DeviceRole,
     Interface,
     LocationSuiteModel,
     PodDesign,
@@ -39,7 +40,6 @@ def _build_gen(*, mlag_create: Literal["no", "back-to-back", "virtual"] = "no") 
         name="DC1",
         index=1,
         naming_convention="standard",
-        amount_of_super_spines=2,
         management_pool=Pool(id="mgmt-pool", name="mgmt"),
     )
     design = PodDesign(
@@ -56,14 +56,19 @@ def _build_gen(*, mlag_create: Literal["no", "back-to-back", "virtual"] = "no") 
         name="pod-1",
         index=1,
         parent=parent,
-        amount_of_spines=2,
         leaf_interface_sorting_method="top_down",
         spine_interface_sorting_method="bottom_up",
         mlag_create=mlag_create,
         loopback_pool=Pool(id="lo-pool", name="lo"),
         prefix_pool=Pool(id="p2p-pool", name="p2p"),
         design=design,
-        spine_template=Template(id="tmpl-spine", interfaces=[Interface(name="Eth1/10"), Interface(name="Eth1/11")]),
+        fabric_templates=[
+            DeviceRole(
+                role="spine",
+                quantity=2,
+                template=Template(id="tmpl-spine", interfaces=[Interface(name="Eth1/10"), Interface(name="Eth1/11")]),
+            )
+        ],
     )
     suite = LocationSuiteModel(index=1)
 

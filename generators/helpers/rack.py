@@ -58,8 +58,6 @@ class RackPlanner:
         device_count: int,
         device_type: str = "leaf",
         racks_in_previous_rows: int | None = None,
-        leafs_per_rack: int = 0,
-        total_tors_in_pod: int | None = None,
     ) -> int:
         """Calculate cabling offset using simple formula based on rack position."""
 
@@ -104,39 +102,6 @@ class RackPlanner:
             logger.info(
                 f"Calculated {device_type} offset={offset} for rack {data.name} "
                 f"(row_index={data.row_index}, leafs_per_rack={device_count}, mode={deployment_type})"
-            )
-
-        # Border-leafs connect to pod spines after all regular leafs across all rows.
-        # Formula: total_rows × leafs_per_rack + (row_index - 1) × border_leaf_count
-        elif deployment_type in ("mixed", "middle_rack") and device_type == "border_leaf":
-            total_rows = pod.design.rows if pod.design else 1
-            base_bl_offset = total_rows * leafs_per_rack
-            offset = base_bl_offset + (data.row_index - 1) * device_count
-
-            logger.info(
-                f"Calculated {device_type} offset={offset} for rack {data.name} "
-                f"(row_index={data.row_index}, total_rows={total_rows}, "
-                f"leafs_per_rack={leafs_per_rack}, base_bl_offset={base_bl_offset}, mode={deployment_type})"
-            )
-
-        # For tor deployment border-leafs: offset past all ToRs, then row-based position.
-        # Formula: total_tors_in_pod + (row_index - 1) × border_leaf_count
-        # Uses the actual deployed ToR count (passed in), not design.rows ×
-        # design-max tors_per_row — a pod deployed with fewer racks/tors per row
-        # than its design allows would otherwise get an inflated offset that
-        # overflows past the real number of spine downlink interfaces.
-        elif deployment_type == "tor" and device_type == "border_leaf":
-            if total_tors_in_pod is not None:
-                base_bl_offset = total_tors_in_pod
-            else:
-                total_rows = pod.design.rows if pod.design else 1
-                tors_per_row = max_tors_per_row if pod.design else 0
-                base_bl_offset = total_rows * tors_per_row
-            offset = base_bl_offset + (data.row_index - 1) * device_count
-
-            logger.info(
-                f"Calculated {device_type} offset={offset} for rack {data.name} "
-                f"(row_index={data.row_index}, base_bl_offset={base_bl_offset}, mode={deployment_type})"
             )
 
         # For tor deployment ToRs: calculate cumulative offset across pod
@@ -207,8 +172,6 @@ def calculate_cabling_offsets(
     device_count: int,
     device_type: str = "leaf",
     racks_in_previous_rows: int | None = None,
-    leafs_per_rack: int = 0,
-    total_tors_in_pod: int | None = None,
 ) -> int:
     """Backward-compatible function wrapper for rack cabling offset calculation."""
     return RackPlanner.calculate_cabling_offsets(
@@ -217,8 +180,6 @@ def calculate_cabling_offsets(
         device_count=device_count,
         device_type=device_type,
         racks_in_previous_rows=racks_in_previous_rows,
-        leafs_per_rack=leafs_per_rack,
-        total_tors_in_pod=total_tors_in_pod,
     )
 
 
@@ -264,13 +225,6 @@ class RackRolesHelper:
         if role is None:
             return [interface.name for interface in template.interfaces]
         return [interface.name for interface in template.interfaces if interface.role == role]
-
-    def border_leafs_per_rack(self) -> int:
-        """Compute base leaf count used for border-leaf offset calculations."""
-        pod = self.ctx.data.pod
-        design_max_leafs = pod.design.max_leafs_per_network_rack if pod.design else 0
-        rack_leaf_qty = sum(r.quantity or 0 for r in self.ctx.data.leafs or [])
-        return max(design_max_leafs, rack_leaf_qty)
 
     def overlay_only_routing_options(self) -> RoutingOptions:
         """Build routing options payload for overlay-only access-leaf peering."""
