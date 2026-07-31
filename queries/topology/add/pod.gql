@@ -11,11 +11,13 @@ fragment DeviceTemplateFields on TemplateDcimPhysicalDevice {
       id
     }
   }
-  # Both roles are needed on this fragment's ONE consumer — the pod's own spine
-  # template — since pod.py uses "uplink" for spine<->super-spine cabling and
-  # "downlink" for border-leaf<->spine cabling (border-leaf uplinks land on the
-  # spine's downlink-role ports, mirroring rack.py's own leaf/tor<->spine pattern).
-  interfaces(role__values: ["uplink", "downlink"]) {
+  # Covers every role pod.py's own fabric_templates entries can use: plain
+  # spine ("uplink" toward super-spine/mesh, "downlink" toward leafs) or
+  # border-spine (same two roles, plus "firewall"/"load-balancer" toward its
+  # own per-pod FW/LB — see PodTopologyGenerator._generate_pod_scoped_
+  # border_services). border-leaf's uplink lands on the spine's downlink-role
+  # ports, mirroring rack.py's own leaf/tor<->spine pattern.
+  interfaces(role__values: ["uplink", "downlink", "firewall", "load-balancer"]) {
     edges {
       node {
         name { value }
@@ -62,6 +64,7 @@ fragment DataCenterFields on TopologyDataCenter {
   index { value }
   naming_convention { value }
   fabric_interface_sorting_method { value }
+  connectivity_mode { value }
   management_mode { value }
   fabric_templates {
     edges {

@@ -80,22 +80,28 @@ class RackMixin:
         raise NotImplementedError
 
     def _derive_spine_info(self) -> tuple[list[str], list[str]]:
-        """Derive spine device names and interface names from query data.
+        """Derive spine (or border-spine, in micro-fabric mode) device names
+        and interface names from query data.
 
-        The rack.gql query already fetches pod.fabric_templates (role="spine")
-        and all naming indexes (dc.index, pod.index). The pod generator always
-        creates spines with strategy="standard" and indexes=[dc.index, pod.index],
-        so spine names are deterministic - no API call needed.
+        The rack.gql query already fetches pod.fabric_templates (role="spine"
+        or role="border-spine" — the two fill the same slot, see
+        PodModel.spine_slot_templates) and all naming indexes (dc.index,
+        pod.index). The pod generator always creates spine-slot devices with
+        strategy="standard" and indexes=[dc.index, pod.index], so names are
+        deterministic - no API call needed.
 
         Returns:
             Tuple of (device_names, interface_names) for create_cabling
         """
         pod = self.data.pod
         dc = pod.parent
-        spine_entries = pod.spine_templates
+        spine_entries = pod.spine_slot_templates
+        spine_role = pod.spine_slot_role
 
         if not spine_entries:
-            raise RuntimeError(f"Rack {self.data.name}: Cannot derive spine info - no spine fabric_templates entries")
+            raise RuntimeError(
+                f"Rack {self.data.name}: Cannot derive spine info - no spine/border-spine fabric_templates entries"
+            )
 
         naming = DeviceNamingConfig(strategy=dc.naming_convention)
         spine_indexes = [dc.index, pod.index]
@@ -104,7 +110,7 @@ class RackMixin:
             device_names.extend(
                 naming.format_device_name(
                     self.fabric_name,
-                    "spine",
+                    spine_role,
                     index=idx,
                     fabric_name=self.fabric_name,
                     indexes=spine_indexes,
@@ -199,6 +205,7 @@ class RackMixin:
         )
         self._is_ipv6 = dc_design.is_ipv6 if dc_design else False
 
+        self._spine_role: Literal["spine", "border-spine"] = pod.spine_slot_role
         try:
             self._spine_device_names, self._spine_interfaces = self._derive_spine_info()
         except RuntimeError as exc:

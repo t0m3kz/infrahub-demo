@@ -176,9 +176,11 @@ fragment PodFields on TopologyPod {
       name { value }
     }
   }
-  # Spine devices with cable info — used by rack generator to detect
-  # already-cabled spine ports and avoid duplicate relationship upserts
-  devices(role__value: "spine") {
+  # Spine (or border-spine, in micro-fabric mode — the two fill the same
+  # pod slot, see PodModel.spine_slot_templates) devices with cable info —
+  # used by rack generator to detect already-cabled spine ports and avoid
+  # duplicate relationship upserts
+  devices(role__values: ["spine", "border-spine"]) {
     edges {
       node {
         ...SpineDeviceFields

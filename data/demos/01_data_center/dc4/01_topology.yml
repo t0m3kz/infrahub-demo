@@ -6,12 +6,8 @@ spec:
   data:
     - name: DC4
       index: 1
-      design: S_EBGP_EBGP
+      design: S_BORDER_SPINE
       naming_convention: hierarchical
-      fabric_templates:
-        - ["2", "border-leaf", "Edgecore-7726-32X-O_BORDER_LEAF"]
-        - ["2", "firewall", "CP-26000_FIREWALL"]
-        - ["2", "load-balancer", "NetScaler-MPX-26000-100G_LOAD_BALANCER"]
       fabric_interface_sorting_method: top_down
       member_of_groups:
         - topologies_dc
@@ -19,9 +15,11 @@ spec:
         kind: TopologyPod
         data:
           - index: 1
-            design: S_MIXED
+            design: S_BORDER_SPINE
             fabric_templates:
-              - ["2", "spine", "Edgecore-7726-32X-O_SPINE"]
+              - ["2", "border-spine", "Edgecore-7726-32X-O_BORDER_SPINE"]
+              - ["2", "firewall", "CP-26000_FIREWALL"]
+              - ["2", "load-balancer", "NetScaler-MPX-26000-100G_LOAD_BALANCER"]
             member_of_groups:
               - topologies_pod
             racks:
@@ -34,41 +32,13 @@ spec:
                   parent: ber-1-s-1
                   member_of_groups: [topologies_rack]
                   fabric_templates:
-                    - ["2", "leaf", "Edgecore-7726-32X-O_LEAF_MR"]
-                - index: 2
-                  row_index: 1
-                  shortname: ber-1-s-1-r-1-2
-                  rack_type: compute
-                  parent: ber-1-s-1
-                  member_of_groups: [topologies_rack]
-                  fabric_templates:
-                    - ["2", "l2-leaf", "Edgecore-7AS7326-56X-O-48V-F_TOR"]
-                - index: 1
-                  row_index: 2
-                  shortname: ber-1-s-1-r-2-1
-                  rack_type: network
-                  parent: ber-1-s-1
-                  member_of_groups: [topologies_rack]
-                  fabric_templates:
-                    - ["2", "leaf", "Edgecore-7726-32X-O_LEAF_MR"]
-                - index: 2
-                  row_index: 2
-                  shortname: ber-1-s-1-r-2-2
-                  rack_type: compute
-                  parent: ber-1-s-1
-                  member_of_groups: [topologies_rack]
-                  fabric_templates:
-                    - ["2", "l2-leaf", "Edgecore-7AS7326-56X-O-48V-F_TOR"]
-                - index: 1
-                  row_index: 3
-                  rack_type: network
-                  shortname: ber-1-s-1-r-3-1
-                  parent: ber-1-s-1
-                  member_of_groups: [topologies_rack]
+                    - ["8", "leaf", "Edgecore-7726-32X-O_LEAF_MR"]
           - index: 2
-            design: S_TOR
+            design: S_BORDER_SPINE
             fabric_templates:
-              - ["2", "spine", "Edgecore-7726-32X-O_SPINE"]
+              - ["2", "border-spine", "Edgecore-7726-32X-O_BORDER_SPINE"]
+              - ["2", "firewall", "CP-26000_FIREWALL"]
+              - ["2", "load-balancer", "NetScaler-MPX-26000-100G_LOAD_BALANCER"]
             member_of_groups:
               - topologies_pod
             racks:
@@ -77,22 +47,8 @@ spec:
                 - index: 1
                   row_index: 1
                   shortname: ber-1-s-2-r-1-1
-                  rack_type: tor
-                  parent: ber-1-s-2
-                  member_of_groups: [topologies_rack]
-                  fabric_templates:
-                    - ["2", "tor", "Edgecore-7AS7326-56X-O-48V-F_TOR"]
-                - index: 1
-                  row_index: 2
-                  shortname: ber-1-s-2-r-2-1
-                  rack_type: tor
-                  parent: ber-1-s-2
-                  member_of_groups: [topologies_rack]
-                  fabric_templates:
-                    - ["2", "tor", "Edgecore-7AS7326-56X-O-48V-F_TOR"]
-                - index: 1
-                  row_index: 3
                   rack_type: network
-                  shortname: ber-1-s-2-r-3-1
                   parent: ber-1-s-2
                   member_of_groups: [topologies_rack]
+                  fabric_templates:
+                    - ["8", "leaf", "Edgecore-7726-32X-O_LEAF_MR"]

@@ -84,6 +84,25 @@ spec:
       management_prefix_length: 26
 
 
+    - name: "S_BORDER_SPINE"
+      description: >
+        Micro-fabric DC Design for very small pods (e.g. 8 leafs) — no
+        super-spine tier (back-to-back: pods mesh their own border-spines
+        directly to sibling pods) and no DC-level border-leaf/firewall/
+        load-balancer tier — those live on the pod's own border-spine
+        instead (see TopologyPodDesign "S_BORDER_SPINE" and the
+        "border-spine" device role). Typical platforms: Arista EOS.
+      routing_strategy: "ebgp-ebgp"
+      underlay_protocol: "ipv6"
+      max_pods: 4
+      max_super_spines_per_fabric: 0
+      max_spines_per_pod: 2
+      max_border_leafs_per_fabric: 0
+      loopback_prefix_length: 120
+      technical_prefix_length: 117
+      management_prefix_length: 26
+
+
     # Medium Designs (4 pods)
     - name: "M_OSPF_IBGP"
       description: >

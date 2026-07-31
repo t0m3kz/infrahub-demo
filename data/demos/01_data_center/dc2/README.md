@@ -1,4 +1,4 @@
-# DC2 - Croissants & 4-Spine Reality
+# DC2 - Croissants & Micro-Fabric Reality
 
 ## Overview
 
@@ -6,16 +6,16 @@
 
 **Platform:** Arista EOS - So API-driven, even your croissant can trigger a config change.
 
-**Fabric Design:** `S_OSPF_IBGP` — OSPF underlay + iBGP overlay, IPv4 P2P links.
-The classic combo: OSPF because "everyone knows OSPF", iBGP because you still want route reflectors
-and an excuse to explain SPF trees to new joiners at 2am. IPv4 underlay — the only DC in this fleet
-still rocking the legacy addressing. Paris may have invented the internet café, but it hasn't adopted
-IPv6 underlay yet. C'est la vie.
+**Fabric Design:** `S_BORDER_SPINE` — a micro-fabric with no super-spine tier and no DC-wide
+border-leaf: pods mesh their own **border-spines** directly to sibling pods (back-to-back), and
+each pod carries its own firewall/load-balancer pair on that same border-spine. IPv6 underlay,
+eBGP underlay + eBGP overlay. Paris finally admits it doesn't need a whole extra device tier just
+to say "bonjour" to the pod next door.
 
-**Use Case:** When the CFO says "make it work but don't make me cry" and you actually deliver. DC2 proves
-you don't need four pods and a mortgage to build reliable infrastructure. Just 2 pods, 4 racks, and a
-healthy respect for hierarchical aggregation. It's the Parisian café of data centers - small, efficient, and
-everyone knows everyone.
+**Use Case:** When the CFO says "make it work but don't make me cry" and you actually deliver. DC2
+proves you don't need a super-spine tier, a DC-level border-leaf, and a mortgage to build reliable
+infrastructure. Just 2 pods, 2 border-spines each, and their own dedicated firewall/load-balancer.
+It's the Parisian café of data centers - small, efficient, and everyone knows everyone.
 
 ---
 
@@ -23,14 +23,14 @@ everyone knows everyone.
 
 ### Fabric Scale
 
-- **Super Spines:** 2 (Arista DCS-7050CX3-32C-R)
-- **Pods:** 2 | **Spines:** 4 (2+2) | **Racks:** 4
-- **Deployment:** `middle_rack` (both pods) - Direct ToR was too mainstream
+- **Border-Spines:** 4 (2+2, Arista DCS-7050CX3-32C-R) — collapsed spine + border-leaf, one per pod pair
+- **Pods:** 2 | **Racks:** 2 (1 network rack per pod, 8 leafs each)
+- **Deployment:** `middle_rack` (both pods), back-to-back mesh between pods (no super-spine tier)
 
-| Pod | Spines | Design   | Deployment  | Site Layout | Personality      |
-| --- | ------ | -------- | ----------- | ----------- | ---------------- |
-| 1   | 2      | S_MIDDLE | middle_rack | medium-dc   | Responsible Twin |
-| 2   | 2      | S_MIDDLE | middle_rack | medium-dc   | Copy-Paste Twin  |
+| Pod | Border-Spines | Design | Deployment | Own FW/LB | Personality |
+| --- | -------------- | -------------- | ----------- | --------- | ----------------- |
+| 1 | 2 | S_BORDER_SPINE | middle_rack | yes | Responsible Twin |
+| 2 | 2 | S_BORDER_SPINE | middle_rack | yes | Copy-Paste Twin |
 
 ## Quick Start
 

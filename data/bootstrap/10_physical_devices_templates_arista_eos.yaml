@@ -413,3 +413,50 @@ spec:
             name: Management1
             role: management
             interface_type: 1000base-t
+
+    # Collapsed spine + border-leaf for micro-fabrics (see role: border-spine
+    # in schemas/extensions/topology/topology_dc.yml and
+    # TopologyPodDesign "S_BORDER_SPINE"). Port budget splits the same 32
+    # ports four ways instead of the plain SPINE's two: downlink to this
+    # pod's leafs (halved vs. SPINE's Ethernet[1-24]/1, since a micro-pod
+    # has far fewer leafs), uplink for the inter-pod back-to-back mesh
+    # (same role name as SPINE's uplink — pod.py's sibling-mesh cabling
+    # doesn't need to know which device role it's cabling), and dedicated
+    # firewall/load-balancer ports mirroring BORDER_LEAF's — this pod's own
+    # FW/LB pair, not a DC-wide one.
+    - template_name: DCS-7050CX3-32C-R_BORDER_SPINE
+      owner: "P027"
+      device_type: DCS-7050CX3-32C-R
+      role: border-spine
+      platform: arista_eos
+      software_image: arista_eos-4.32.1F
+      status: provisioning
+      interfaces:
+        kind: TemplateDcimPhysicalInterface
+        parameters:
+          expand_range: true
+        data:
+          - template_name: DCS-7050CX3-32C-R_BORDER_SPINE_Ethernet[1-16]/1
+            name: Ethernet[1-16]/1
+            role: downlink
+            interface_type: 100gbase-x-qsfp28
+          - template_name: DCS-7050CX3-32C-R_BORDER_SPINE_Ethernet[17-24]/1
+            name: Ethernet[17-24]/1
+            role: uplink
+            interface_type: 100gbase-x-qsfp28
+          - template_name: DCS-7050CX3-32C-R_BORDER_SPINE_Ethernet[25-28]/1
+            name: Ethernet[25-28]/1
+            role: firewall
+            interface_type: 100gbase-x-qsfp28
+          - template_name: DCS-7050CX3-32C-R_BORDER_SPINE_Ethernet[29-32]/1
+            name: Ethernet[29-32]/1
+            role: load-balancer
+            interface_type: 100gbase-x-qsfp28
+          - template_name: DCS-7050CX3-32C-R_BORDER_SPINE_Ethernet[33-34]
+            name: Ethernet[33-34]
+            role: management
+            interface_type: 10gbase-x-sfpp
+          - template_name: DCS-7050CX3-32C-R_BORDER_SPINE_Management1
+            name: Management1
+            role: management
+            interface_type: 1000base-t

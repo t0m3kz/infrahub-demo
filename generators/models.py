@@ -250,6 +250,7 @@ class PodParent(BaseModel):
     naming_convention: str = "standard"
     fabric_interface_sorting_method: Literal["top_down", "bottom_up"] = "bottom_up"
     spine_interface_sorting_method: Literal["top_down", "bottom_up"] = "bottom_up"
+    connectivity_mode: Literal["pbr", "inline"] = "pbr"
     management_mode: Literal["fully_managed", "managed_by_controller"] = "fully_managed"
     fabric_asn_pool: Pool | None = None
     management_pool: Pool | None = None
@@ -338,6 +339,32 @@ class PodModel(BaseModel):
     def spine_templates(self) -> list[DeviceRole]:
         return _templates_by_role(self.fabric_templates, "spine")
 
+    @property
+    def border_spine_templates(self) -> list[DeviceRole]:
+        return _templates_by_role(self.fabric_templates, "border-spine")
+
+    @property
+    def firewall_templates(self) -> list[DeviceRole]:
+        """This pod's own firewall(s) — only used in border-spine micro-fabric
+        mode (see border_spine_templates); a pod with a plain spine tier has
+        no firewall of its own, that lives DC-wide on dc.py's border-leaf."""
+        return _templates_by_role(self.fabric_templates, "firewall")
+
+    @property
+    def load_balancer_templates(self) -> list[DeviceRole]:
+        return _templates_by_role(self.fabric_templates, "load-balancer")
+
+    @property
+    def spine_slot_templates(self) -> list[DeviceRole]:
+        """Whichever of spine/border-spine fills this pod's spine slot — the
+        two are mutually exclusive per pod (see role: border-spine in
+        schemas/extensions/topology/topology_dc.yml)."""
+        return self.spine_templates or self.border_spine_templates
+
+    @property
+    def spine_slot_role(self) -> Literal["spine", "border-spine"]:
+        return "border-spine" if self.border_spine_templates else "spine"
+
 
 # Rack model
 class RackParent(BaseModel):
@@ -404,6 +431,20 @@ class RackPod(BaseModel):
     @property
     def spine_templates(self) -> list[DeviceRole]:
         return _templates_by_role(self.fabric_templates, "spine")
+
+    @property
+    def border_spine_templates(self) -> list[DeviceRole]:
+        return _templates_by_role(self.fabric_templates, "border-spine")
+
+    @property
+    def spine_slot_templates(self) -> list[DeviceRole]:
+        """Whichever of spine/border-spine fills this pod's spine slot — see
+        PodModel.spine_slot_templates for why the two are mutually exclusive."""
+        return self.spine_templates or self.border_spine_templates
+
+    @property
+    def spine_slot_role(self) -> Literal["spine", "border-spine"]:
+        return "border-spine" if self.border_spine_templates else "spine"
 
     @field_validator("design", "loopback_pool", "prefix_pool", "asn_pool", mode="before")
     @classmethod

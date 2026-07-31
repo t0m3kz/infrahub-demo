@@ -6,12 +6,8 @@ spec:
   data:
     - name: DC3
       index: 1
-      design: S_OSPF_IBGP
+      design: S_BORDER_SPINE
       naming_convention: flat
-      fabric_templates:
-        - ["2", "border-leaf", "PowerSwitch-S5232F-ON_BORDER_LEAF"]
-        - ["2", "firewall", "CP-26000_FIREWALL"]
-        - ["2", "load-balancer", "BIG-IP-i5800_LOAD_BALANCER"]
       fabric_interface_sorting_method: top_down
       member_of_groups:
         - topologies_dc
@@ -19,9 +15,11 @@ spec:
         kind: TopologyPod
         data:
           - index: 1
-            design: S_MIXED
+            design: S_BORDER_SPINE
             fabric_templates:
-              - ["2", "spine", "PowerSwitch-S5232F-ON_SPINE"]
+              - ["2", "border-spine", "PowerSwitch-S5232F-ON_BORDER_SPINE"]
+              - ["2", "firewall", "CP-26000_FIREWALL"]
+              - ["2", "load-balancer", "BIG-IP-i5800_LOAD_BALANCER"]
             member_of_groups:
               - topologies_pod
             racks:
@@ -34,41 +32,13 @@ spec:
                   parent: lon-1-s-1
                   member_of_groups: [topologies_rack]
                   fabric_templates:
-                    - ["2", "leaf", "PowerSwitch-S5232F-ON_LEAF_MR"]
-                - index: 2
-                  row_index: 1
-                  shortname: lon-1-s-1-r-1-2
-                  rack_type: compute
-                  parent: lon-1-s-1
-                  member_of_groups: [topologies_rack]
-                  fabric_templates:
-                    - ["2", "l2-leaf", "PowerSwitch-S5224F-ON_TOR"]
-                - index: 1
-                  row_index: 2
-                  shortname: lon-1-s-1-r-2-1
-                  rack_type: network
-                  parent: lon-1-s-1
-                  member_of_groups: [topologies_rack]
-                  fabric_templates:
-                    - ["2", "leaf", "PowerSwitch-S5232F-ON_LEAF_MR"]
-                - index: 2
-                  row_index: 2
-                  shortname: lon-1-s-1-r-2-2
-                  rack_type: compute
-                  parent: lon-1-s-1
-                  member_of_groups: [topologies_rack]
-                  fabric_templates:
-                    - ["2", "l2-leaf", "PowerSwitch-S5224F-ON_TOR"]
-                - index: 1
-                  row_index: 3
-                  rack_type: network
-                  shortname: lon-1-s-1-r-3-1
-                  parent: lon-1-s-1
-                  member_of_groups: [topologies_rack]
+                    - ["8", "leaf", "PowerSwitch-S5232F-ON_LEAF_MR"]
           - index: 2
-            design: S_MIXED
+            design: S_BORDER_SPINE
             fabric_templates:
-              - ["2", "spine", "PowerSwitch-S5232F-ON_SPINE"]
+              - ["2", "border-spine", "PowerSwitch-S5232F-ON_BORDER_SPINE"]
+              - ["2", "firewall", "CP-26000_FIREWALL"]
+              - ["2", "load-balancer", "BIG-IP-i5800_LOAD_BALANCER"]
             member_of_groups:
               - topologies_pod
             racks:
@@ -81,34 +51,4 @@ spec:
                   parent: lon-1-s-2
                   member_of_groups: [topologies_rack]
                   fabric_templates:
-                    - ["2", "leaf", "PowerSwitch-S5232F-ON_LEAF_MR"]
-                - index: 2
-                  row_index: 1
-                  shortname: lon-1-s-2-r-1-2
-                  rack_type: compute
-                  parent: lon-1-s-2
-                  member_of_groups: [topologies_rack]
-                  fabric_templates:
-                    - ["2", "l2-leaf", "PowerSwitch-S5224F-ON_TOR"]
-                - index: 1
-                  row_index: 2
-                  shortname: lon-1-s-2-r-2-1
-                  rack_type: network
-                  parent: lon-1-s-2
-                  member_of_groups: [topologies_rack]
-                  fabric_templates:
-                    - ["2", "leaf", "PowerSwitch-S5232F-ON_LEAF_MR"]
-                - index: 2
-                  row_index: 2
-                  shortname: lon-1-s-2-r-2-2
-                  rack_type: compute
-                  parent: lon-1-s-2
-                  member_of_groups: [topologies_rack]
-                  fabric_templates:
-                    - ["2", "l2-leaf", "PowerSwitch-S5224F-ON_TOR"]
-                - index: 1
-                  row_index: 3
-                  rack_type: network
-                  shortname: lon-1-s-2-r-3-1
-                  parent: lon-1-s-2
-                  member_of_groups: [topologies_rack]
+                    - ["8", "leaf", "PowerSwitch-S5232F-ON_LEAF_MR"]

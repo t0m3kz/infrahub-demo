@@ -18,6 +18,8 @@ spec:
       description: All access-leaf switches (VXLAN-EVPN VTEP — connects to leafs, not spines)
     - name: border-leafs
       description: All border leafs
+    - name: border-spines
+      description: All border spines (collapsed spine + border-leaf, micro-fabric pods)
     - name: spines
       description: All spines
     - name: super-spines
