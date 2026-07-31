@@ -30,16 +30,27 @@ spec:
             name: "1.3"
             role: ha
             interface_type: 25gbase-x-sfp28
-          # 2.1 ("uplink") is pbr mode's border-leaf-facing port, and inline
-          # mode's firewall-facing middle-leg port. 2.2 ("downlink") is only
-          # used in inline mode, for the return leg back to border-leaf — kept
-          # as a distinct role/port so inline mode's two legs never compete for
-          # the same physical port (pbr mode only ever uses 2.1, leaving 2.2 idle).
+          # 2.1/2.2 ("uplink") are pbr mode's border-leaf-facing ports, and inline
+          # mode's firewall-facing middle-leg ports — 2 ports so an HA pair of
+          # border-leafs/firewalls each gets its own link (RackCablingStrategy's
+          # round-robin needs at least as many bottom-device ports as there are
+          # top devices, or multiple top devices collide on the same port).
+          # 2.3/2.4 ("downlink") are only used in inline mode, for the return leg
+          # back to border-leaf — kept as distinct ports so inline mode's two legs
+          # never compete for the same physical port (pbr mode never uses these).
           - template_name: BIG-IP-i5800_LOAD_BALANCER_2.1
             name: "2.1"
             role: uplink
             interface_type: 100gbase-x-qsfp28
           - template_name: BIG-IP-i5800_LOAD_BALANCER_2.2
             name: "2.2"
+            role: uplink
+            interface_type: 100gbase-x-qsfp28
+          - template_name: BIG-IP-i5800_LOAD_BALANCER_2.3
+            name: "2.3"
+            role: downlink
+            interface_type: 100gbase-x-qsfp28
+          - template_name: BIG-IP-i5800_LOAD_BALANCER_2.4
+            name: "2.4"
             role: downlink
             interface_type: 100gbase-x-qsfp28

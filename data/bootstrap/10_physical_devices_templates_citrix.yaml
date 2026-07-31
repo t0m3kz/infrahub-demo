@@ -30,21 +30,27 @@ spec:
             name: "0/3"
             role: ha
             interface_type: 1000base-t
+          # 100/1-100/2 ("uplink") are pbr mode's border-leaf-facing ports, and
+          # inline mode's firewall-facing middle-leg ports — 2 ports so an HA
+          # pair of border-leafs/firewalls each gets its own link. 100/3-100/4
+          # ("downlink") are only used in inline mode, for the return leg back
+          # to border-leaf. 100/5-100/8 stay "customer" (VIP/server-facing,
+          # not part of the border-leaf/firewall/load-balancer chain).
           - template_name: NetScaler-MPX-26000-100G_LB_100-1
             name: "100/1"
             role: uplink
             interface_type: 100gbase-x-qsfp28
           - template_name: NetScaler-MPX-26000-100G_LB_100-2
             name: "100/2"
-            role: downlink
+            role: uplink
             interface_type: 100gbase-x-qsfp28
           - template_name: NetScaler-MPX-26000-100G_LB_100-3
             name: "100/3"
-            role: customer
+            role: downlink
             interface_type: 100gbase-x-qsfp28
           - template_name: NetScaler-MPX-26000-100G_LB_100-4
             name: "100/4"
-            role: customer
+            role: downlink
             interface_type: 100gbase-x-qsfp28
           - template_name: NetScaler-MPX-26000-100G_LB_100-5
             name: "100/5"
@@ -95,15 +101,15 @@ spec:
             interface_type: 100gbase-x-qsfp28
           - template_name: NetScaler-MPX-26100-100G_LB_100-2
             name: "100/2"
-            role: downlink
+            role: uplink
             interface_type: 100gbase-x-qsfp28
           - template_name: NetScaler-MPX-26100-100G_LB_100-3
             name: "100/3"
-            role: customer
+            role: downlink
             interface_type: 100gbase-x-qsfp28
           - template_name: NetScaler-MPX-26100-100G_LB_100-4
             name: "100/4"
-            role: customer
+            role: downlink
             interface_type: 100gbase-x-qsfp28
           - template_name: NetScaler-MPX-26100-100G_LB_100-5
             name: "100/5"
@@ -154,15 +160,15 @@ spec:
             interface_type: 100gbase-x-qsfp28
           - template_name: NetScaler-MPX-26160-100G_LB_100-2
             name: "100/2"
-            role: downlink
+            role: uplink
             interface_type: 100gbase-x-qsfp28
           - template_name: NetScaler-MPX-26160-100G_LB_100-3
             name: "100/3"
-            role: customer
+            role: downlink
             interface_type: 100gbase-x-qsfp28
           - template_name: NetScaler-MPX-26160-100G_LB_100-4
             name: "100/4"
-            role: customer
+            role: downlink
             interface_type: 100gbase-x-qsfp28
           - template_name: NetScaler-MPX-26160-100G_LB_100-5
             name: "100/5"
@@ -213,15 +219,15 @@ spec:
             interface_type: 100gbase-x-qsfp28
           - template_name: NetScaler-MPX-26200-100G_LB_100-2
             name: "100/2"
-            role: downlink
+            role: uplink
             interface_type: 100gbase-x-qsfp28
           - template_name: NetScaler-MPX-26200-100G_LB_100-3
             name: "100/3"
-            role: customer
+            role: downlink
             interface_type: 100gbase-x-qsfp28
           - template_name: NetScaler-MPX-26200-100G_LB_100-4
             name: "100/4"
-            role: customer
+            role: downlink
             interface_type: 100gbase-x-qsfp28
           - template_name: NetScaler-MPX-26200-100G_LB_100-5
             name: "100/5"
