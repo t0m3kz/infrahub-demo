@@ -173,6 +173,9 @@ spec:
     - quantity: 2
       role: l2-leaf
       template: PowerSwitch-S5224F-ON_TOR
+    - quantity: 4
+      role: l2-leaf
+      template: PowerSwitch-S5224F-ON_TOR
 
     # Edgecore Leafs
     - quantity: 2
@@ -199,27 +202,55 @@ spec:
       role: l2-leaf
       template: Edgecore-7AS7326-56X-O-48V-F_TOR
 
+    # Spines (DC/Pod-level fabric_templates)
+    - quantity: 2
+      role: spine
+      template: N9K-C9336C-FX2_SPINE
+    - quantity: 2
+      role: spine
+      template: DCS-7050CX3-32C-R_SPINE
+    - quantity: 2
+      role: spine
+      template: PowerSwitch-S5232F-ON_SPINE
+
     # Edgecore Spines
     - quantity: 2
       role: spine
       template: Edgecore-7726-32X-O_SPINE
+
+    # Super-Spines (DC-level fabric_templates)
+    - quantity: 2
+      role: super-spine
+      template: N9K-C9336C-FX2_SUPER_SPINE
 
     # Edgecore Super-Spines
     - quantity: 2
       role: super-spine
       template: Edgecore-7726-32X-O_SUPER_SPINE
 
-    # Border Leafs
+    # Border Leafs (DC-level fabric_templates — quantity 1 and 2, split across pods)
     - quantity: 1
+      role: border-leaf
+      template: N9K-C9336C-FX2_BORDER_LEAF
+    - quantity: 2
       role: border-leaf
       template: N9K-C9336C-FX2_BORDER_LEAF
     - quantity: 1
       role: border-leaf
       template: DCS-7050CX3-32C-R_BORDER_LEAF
+    - quantity: 2
+      role: border-leaf
+      template: DCS-7050CX3-32C-R_BORDER_LEAF
     - quantity: 1
       role: border-leaf
       template: PowerSwitch-S5232F-ON_BORDER_LEAF
+    - quantity: 2
+      role: border-leaf
+      template: PowerSwitch-S5232F-ON_BORDER_LEAF
     - quantity: 1
+      role: border-leaf
+      template: Edgecore-7726-32X-O_BORDER_LEAF
+    - quantity: 2
       role: border-leaf
       template: Edgecore-7726-32X-O_BORDER_LEAF
 
@@ -231,19 +262,25 @@ spec:
       role: firewall
       template: SRX-1500_DC_FIREWALL
 
-    # Border-leaf-attached firewalls (rack generator, one per border-leaf rack)
+    # Border-leaf-attached firewalls (DC-level fabric_templates)
     - quantity: 1
+      role: firewall
+      template: CP-26000_FIREWALL
+    - quantity: 2
       role: firewall
       template: CP-26000_FIREWALL
     - quantity: 1
       role: firewall
       template: PA-5260_FIREWALL
 
-    # Border-leaf-attached load-balancers (rack generator, one per border-leaf rack)
+    # Border-leaf-attached load-balancers (DC-level fabric_templates)
     - quantity: 1
       role: load-balancer
       template: BIG-IP-i5800_LOAD_BALANCER
     - quantity: 1
+      role: load-balancer
+      template: NetScaler-MPX-26000-100G_LOAD_BALANCER
+    - quantity: 2
       role: load-balancer
       template: NetScaler-MPX-26000-100G_LOAD_BALANCER
 
