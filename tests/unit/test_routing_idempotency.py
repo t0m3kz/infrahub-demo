@@ -13,6 +13,7 @@ from typing import Any
 from unittest.mock import MagicMock
 
 from generators.helpers.routing import PendingASRef, RoutingPlan, RoutingPlanInput, RoutingPlanner
+from generators.types import RoutingOptions
 
 
 def _local_as_signature(local_as: Any) -> tuple:
@@ -69,7 +70,7 @@ def _spine_leaf_topology() -> tuple[list, list]:
 
 
 def _plan_input(loopbacks: list, interfaces: list, strategy: str = "ebgp-ebgp") -> RoutingPlanInput:
-    options: dict[str, Any] = {"asn_pool": "pool-1", "design": _design()}
+    options: RoutingOptions = RoutingOptions(asn_pool="pool-1", design=_design())
     if strategy != "ebgp-ebgp":
         options["overlay_as_id"] = "shared-as-1"
     if strategy.startswith("ospf"):

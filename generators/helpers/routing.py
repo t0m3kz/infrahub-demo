@@ -29,6 +29,8 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, NamedTuple
 
+from ..types import RoutingOptions
+
 
 @dataclass
 class RoutingPlanInput:
@@ -60,7 +62,7 @@ class RoutingPlanInput:
     overlay: list[Any] = field(default_factory=list)
     interfaces: list[Any] = field(default_factory=list)
     loopback_interfaces: list[Any] = field(default_factory=list)
-    options: dict[str, Any] = field(default_factory=dict)
+    options: RoutingOptions = field(default_factory=RoutingOptions)
     routing_strategy: str = "ebgp-ebgp"
     deployment_name: str = ""
     evpn_af_id: str = ""
