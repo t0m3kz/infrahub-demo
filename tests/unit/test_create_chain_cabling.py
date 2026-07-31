@@ -72,6 +72,49 @@ class TestCreateChainCabling:
         assert set(create_kwargs["data"]["endpoints"]) == {bl_iface.id, fw_iface.id}
 
     @pytest.mark.asyncio
+    async def test_ha_pair_each_device_gets_a_distinct_port_on_the_other_side(self) -> None:
+        """2 border-leafs (2 dedicated ports each), 2 firewalls (2 uplink
+        ports each) — the "rack" any-to-any strategy needs each device to
+        have at least as many ports as there are devices on the other side.
+        This is the exact shape of the live bug this helper's predecessor
+        (_cable_chain in dc.py) was fixed for: with only 1 port per device,
+        both firewalls would collide on border-leaf's single port."""
+        gen = _make_generator()
+        bl_ifaces = [
+            _iface("Eth1/25", device="bl-01"),
+            _iface("Eth1/26", device="bl-01"),
+            _iface("Eth1/25", device="bl-02"),
+            _iface("Eth1/26", device="bl-02"),
+        ]
+        fw_ifaces = [
+            _iface("eth1", device="fw-01"),
+            _iface("eth2", device="fw-01"),
+            _iface("eth1", device="fw-02"),
+            _iface("eth2", device="fw-02"),
+        ]
+        gen.client.filters = AsyncMock(side_effect=[bl_ifaces, fw_ifaces])
+        gen.client.create = AsyncMock(side_effect=[_cable_obj() for _ in range(4)])
+
+        result = await gen.create_chain_cabling(
+            [
+                {"devices": ["bl-01", "bl-02"], "down_role": "firewall"},
+                {"devices": ["fw-01", "fw-02"], "up_role": "uplink"},
+            ]
+        )
+
+        assert len(result[0]) == 4
+        assert gen.client.create.await_count == 4
+        endpoint_pairs = [set(c.kwargs["data"]["endpoints"]) for c in gen.client.create.call_args_list]
+        # No two cables reuse the same interface.
+        all_endpoints = [e for pair in endpoint_pairs for e in pair]
+        assert len(all_endpoints) == len(set(all_endpoints))
+        # Every border-leaf is cabled to both firewalls, and vice versa.
+        bl_devices_used = {e.split("-")[2] for e in all_endpoints if e.startswith("id-bl")}
+        fw_devices_used = {e.split("-")[2] for e in all_endpoints if e.startswith("id-fw")}
+        assert bl_devices_used == {"01", "02"}
+        assert fw_devices_used == {"01", "02"}
+
+    @pytest.mark.asyncio
     async def test_three_hop_cables_two_legs(self) -> None:
         gen = _make_generator()
         bl_iface = _iface("Eth1/25", device="bl-01")
@@ -100,6 +143,53 @@ class TestCreateChainCabling:
         assert len(result[0]) == 1
         assert len(result[1]) == 1
         assert gen.client.create.await_count == 2
+
+    @pytest.mark.asyncio
+    async def test_four_hop_chain_with_two_ports_per_device_returns_to_border_leaf(self) -> None:
+        """border-leaf<->firewall<->load-balancer<->border-leaf (the real
+        inline-mode shape) with 2 devices and 2 dedicated ports per hop.
+        Confirms the LAST hop (border-leaf again, on its OWN "load-balancer"
+        -role ports — distinct from the FIRST hop's "firewall"-role ports)
+        gets cabled correctly as the chain's return leg."""
+
+        def _two_ports(prefix: str, device: str) -> list[MagicMock]:
+            return [_iface(f"{prefix}{p}", device=device) for p in (1, 2)]
+
+        gen = _make_generator()
+        bl_fw_ifaces = _two_ports("Eth1/2", "bl-01") + _two_ports("Eth1/2", "bl-02")
+        fw_up_ifaces = _two_ports("eth", "fw-01") + _two_ports("eth", "fw-02")
+        fw_down_ifaces = _two_ports("eth1", "fw-01") + _two_ports("eth1", "fw-02")
+        lb_up_ifaces = _two_ports("2.", "lb-01") + _two_ports("2.", "lb-02")
+        lb_down_ifaces = _two_ports("2.1", "lb-01") + _two_ports("2.1", "lb-02")
+        bl_lb_ifaces = _two_ports("Eth1/3", "bl-01") + _two_ports("Eth1/3", "bl-02")
+        gen.client.filters = AsyncMock(
+            side_effect=[
+                bl_fw_ifaces,  # hop0 down (border-leaf firewall-role)
+                fw_up_ifaces,  # hop1 up (firewall uplink)
+                fw_down_ifaces,  # hop1 down (firewall downlink, middle leg)
+                lb_up_ifaces,  # hop2 up (load-balancer uplink)
+                lb_down_ifaces,  # hop2 down (load-balancer downlink, return leg)
+                bl_lb_ifaces,  # hop3 up (border-leaf load-balancer-role — return leg)
+            ]
+        )
+        gen.client.create = AsyncMock(side_effect=[_cable_obj() for _ in range(12)])
+
+        result = await gen.create_chain_cabling(
+            [
+                {"devices": ["bl-01", "bl-02"], "down_role": "firewall"},
+                {"devices": ["fw-01", "fw-02"], "up_role": "uplink", "down_role": "downlink"},
+                {"devices": ["lb-01", "lb-02"], "up_role": "uplink", "down_role": "downlink"},
+                {"devices": ["bl-01", "bl-02"], "up_role": "load-balancer"},
+            ]
+        )
+
+        assert len(result) == 3
+        assert [len(leg) for leg in result] == [4, 4, 4]
+        assert gen.client.create.await_count == 12
+        # The return leg (3rd) cabled the same two border-leafs as the first
+        # leg, but on a different port group (bl_lb_ifaces, not bl_fw_ifaces).
+        return_leg_endpoints = {e for pair in result[2] for e in (pair[0].id, pair[1].id)}
+        assert return_leg_endpoints == {iface.id for iface in bl_lb_ifaces + lb_down_ifaces}
 
     @pytest.mark.asyncio
     async def test_empty_devices_on_either_hop_skips_that_leg(self) -> None:
