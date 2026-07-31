@@ -40,6 +40,7 @@ def _make_generator() -> Any:
 
     gen.fabric_name = "dc1"
     gen._is_ipv6 = False
+    gen._dc_fabric_loopback_pool_id = "dc-fabric-loopback-pool-id"
     gen.create_devices = AsyncMock(return_value=[])
     gen.create_cabling = AsyncMock(return_value=[])
     gen.create_routing = AsyncMock()

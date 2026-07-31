@@ -34,7 +34,7 @@ spec:
                   parent: lon-1-s-1
                   member_of_groups: [topologies_rack]
                   fabric_templates:
-                    - ["2", "leaf", "PowerSwitch-S5224F-ON_LEAF_MR"]
+                    - ["2", "leaf", "PowerSwitch-S5232F-ON_LEAF_MR"]
                 - index: 2
                   row_index: 1
                   shortname: lon-1-s-1-r-1-2
@@ -50,7 +50,7 @@ spec:
                   parent: lon-1-s-1
                   member_of_groups: [topologies_rack]
                   fabric_templates:
-                    - ["2", "leaf", "PowerSwitch-S5224F-ON_LEAF_MR"]
+                    - ["2", "leaf", "PowerSwitch-S5232F-ON_LEAF_MR"]
                 - index: 2
                   row_index: 2
                   shortname: lon-1-s-1-r-2-2
@@ -81,7 +81,7 @@ spec:
                   parent: lon-1-s-2
                   member_of_groups: [topologies_rack]
                   fabric_templates:
-                    - ["2", "leaf", "PowerSwitch-S5224F-ON_LEAF_MR"]
+                    - ["2", "leaf", "PowerSwitch-S5232F-ON_LEAF_MR"]
                 - index: 2
                   row_index: 1
                   shortname: lon-1-s-2-r-1-2
@@ -97,7 +97,7 @@ spec:
                   parent: lon-1-s-2
                   member_of_groups: [topologies_rack]
                   fabric_templates:
-                    - ["2", "leaf", "PowerSwitch-S5224F-ON_LEAF_MR"]
+                    - ["2", "leaf", "PowerSwitch-S5232F-ON_LEAF_MR"]
                 - index: 2
                   row_index: 2
                   shortname: lon-1-s-2-r-2-2

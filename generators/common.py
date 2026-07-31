@@ -584,9 +584,11 @@ class CommonGenerator(FailOnErrorLoggerMixin, RoutingMixin, InfrahubGenerator):
         )
         management_pool_name = f"{fabric_name}-management-pool"
 
-        if device_role == "super-spine":
-            # Super-spine devices use fabric-level super-spine-loopback pool
-            loopback_pool_name = f"{fabric_name}-{device_role}-loopback-pool"
+        if device_role in ("super-spine", "border-leaf"):
+            # Both are DC-level fabric tiers sharing one fabric-scoped loopback pool
+            # (see dc.py's "dc-fabric-loopback" allocation) — neither is owned by
+            # any one pod's own loopback pool.
+            loopback_pool_name = f"{fabric_name}-dc-fabric-loopback-pool"
         else:
             # Other devices (spine, leaf, etc.) use pod-level loopback pool
             # device_prefix already includes fabric-pod combination when pod_name is present
