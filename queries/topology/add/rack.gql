@@ -107,6 +107,12 @@ fragment PodFields on TopologyPod {
         management_mode {
           value
         }
+        routing_strategy {
+          value
+        }
+        underlay_protocol {
+          value
+        }
         management_pool {
           node {
             id
@@ -116,12 +122,6 @@ fragment PodFields on TopologyPod {
         design {
           node {
             id
-            routing_strategy {
-              value
-            }
-            underlay_protocol {
-              value
-            }
           }
         }
       }

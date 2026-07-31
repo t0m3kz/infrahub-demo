@@ -1,35 +1,36 @@
 """Unit tests for dual-stack support.
 
 Covers:
-  - DataCenterDesignData dual-stack properties
+  - RoutingArchitectureMixin dual-stack properties (DCModel/PodParent/RackParent
+    all carry routing_strategy/underlay_protocol directly — see generators/models.py)
   - calculate_pod_pools() with dual_stack parameter
 """
 
 from generators.helpers.pools import calculate_dc_fabric_loopback_prefix, calculate_pod_pools
-from generators.models import DataCenterDesignData
+from generators.models import RoutingArchitectureMixin
 
 # ===========================================================================
-# DataCenterDesignData dual-stack properties
+# RoutingArchitectureMixin dual-stack properties
 # ===========================================================================
 
 
-class TestDataCenterDesignDualStack:
+class TestRoutingArchitectureDualStack:
     def test_ipv4_defaults(self) -> None:
-        d = DataCenterDesignData(underlay_protocol="ipv4")
+        d = RoutingArchitectureMixin(underlay_protocol="ipv4")
         assert d.is_ipv6 is False
         assert d.is_dual_stack is False
         assert d.p2p_ipv6 is False
         assert d.p2p_addressing == "/31"
 
     def test_ipv6_properties(self) -> None:
-        d = DataCenterDesignData(underlay_protocol="ipv6")
+        d = RoutingArchitectureMixin(underlay_protocol="ipv6")
         assert d.is_ipv6 is True
         assert d.is_dual_stack is False
         assert d.p2p_ipv6 is True
         assert d.p2p_addressing == "/127"
 
     def test_dual_stack_properties(self) -> None:
-        d = DataCenterDesignData(underlay_protocol="dual_stack")
+        d = RoutingArchitectureMixin(underlay_protocol="dual_stack")
         assert d.is_ipv6 is False
         assert d.is_dual_stack is True
         assert d.p2p_ipv6 is True

@@ -137,29 +137,17 @@ class PodDesign(BaseModel):
 
 
 # Data Center Design model (fabric-wide architectural principles)
-class DataCenterDesignData(BaseModel):
-    """Data Center Design model for architectural principles.
+class RoutingArchitectureMixin(BaseModel):
+    """routing_strategy/underlay_protocol and their derived properties.
 
-    Pool prefix lengths are auto-calculated from max_pods and underlay_protocol.
-    T-shirt sizing: S(<=2 pods), M(<=4), L(<=8), XL(<=16).
+    Lives directly on the DC instance (and its Pod/Rack parent projections)
+    rather than on TopologyDataCenterDesign — the Design node is a pure
+    size/capacity template (S/M/L/XL), routing style is a free per-DC choice
+    independent of size. See DCModel/PodParent/RackParent.
     """
 
-    id: str | None = None
-
-    # Routing architecture
     routing_strategy: str = "ebgp-ebgp"
     underlay_protocol: str = "ipv6"
-
-    # Capacity planning
-    max_pods: int = 2
-    max_super_spines_per_fabric: int = 2
-    max_spines_per_pod: int = 4
-    max_border_leafs_per_fabric: int = 4
-
-    # Address space sizing — defaults used when DC instance has no pools
-    loopback_prefix_length: int = 23
-    technical_prefix_length: int = 19
-    management_prefix_length: int = 25
 
     @property
     def is_ipv6(self) -> bool:
@@ -180,16 +168,40 @@ class DataCenterDesignData(BaseModel):
         return "/127" if self.p2p_ipv6 else "/31"
 
 
+class DataCenterDesignData(BaseModel):
+    """Data Center Design model — pure size/capacity template.
+
+    Pool prefix lengths are auto-calculated from max_pods and underlay_protocol
+    (which lives on the DC instance, not here — see RoutingArchitectureMixin).
+    T-shirt sizing: S(<=4 pods, back-to-back), M(<=4 pods, back-to-back +
+    border-leaf), L(<=8 pods, classic 3-tier), XL(<=16 pods, + hyper-spine).
+    """
+
+    id: str | None = None
+
+    # Capacity planning
+    max_pods: int = 2
+    max_super_spines_per_fabric: int = 2
+    max_hyper_spines_per_fabric: int = 0
+    max_spines_per_pod: int = 4
+    max_border_leafs_per_fabric: int = 4
+
+    # Address space sizing — defaults used when DC instance has no pools
+    loopback_prefix_length: int = 23
+    technical_prefix_length: int = 19
+    management_prefix_length: int = 25
+
+
 # DC model
 class DCPod(BaseModel):
     id: str
 
 
-class DCModel(BaseModel):
+class DCModel(RoutingArchitectureMixin):
     id: str
     name: str
     index: int
-    design: DataCenterDesignData | None = None
+    design: DataCenterDesignData
     naming_convention: str = "standard"
     fabric_interface_sorting_method: Literal["top_down", "bottom_up"] = "bottom_up"
     spine_interface_sorting_method: Literal["top_down", "bottom_up"] = "bottom_up"
@@ -226,6 +238,15 @@ class DCModel(BaseModel):
         return _templates_by_role(self.fabric_templates, "super-spine")
 
     @property
+    def hyper_spine_templates(self) -> list[DeviceRole]:
+        """DC-level hyper-spine tier — only present in XL fabrics with
+        design.max_hyper_spines_per_fabric > 0 (see role: hyper-spine in
+        schemas/extensions/topology/topology_dc.yml). Sits above super-spine,
+        full-mesh cabled/routed by dc.py itself (unlike super-spine, which is
+        cabled by pod.py against its own pod-scoped spines)."""
+        return _templates_by_role(self.fabric_templates, "hyper-spine")
+
+    @property
     def border_leaf_templates(self) -> list[DeviceRole]:
         return _templates_by_role(self.fabric_templates, "border-leaf")
 
@@ -239,14 +260,14 @@ class DCModel(BaseModel):
 
 
 # Pod model
-class PodParent(BaseModel):
+class PodParent(RoutingArchitectureMixin):
     id: str
     devices: list[Device]
     name: str
     index: int
     # Schema: optional — DC may have zero super-spine fabric_templates entries
     fabric_templates: list[DeviceRole] | None = []
-    design: DataCenterDesignData | None = None
+    design: DataCenterDesignData
     naming_convention: str = "standard"
     fabric_interface_sorting_method: Literal["top_down", "bottom_up"] = "bottom_up"
     spine_interface_sorting_method: Literal["top_down", "bottom_up"] = "bottom_up"
@@ -299,28 +320,23 @@ class PodModel(BaseModel):
     id: str
     name: str
     index: int
-    # Design relationship is optional in schema
-    design: PodDesign | None = None
+    design: PodDesign
 
     leaf_interface_sorting_method: Literal["top_down", "bottom_up"] = "bottom_up"
 
     @property
     def deployment_type(self) -> Literal["middle_rack", "tor", "mixed"]:
-        return self.design.deployment_type if self.design else "tor"
+        return self.design.deployment_type
 
     @property
     def max_leafs_per_row(self) -> int:
         """Calculate maximum leafs per row from design physical capacity."""
-        if self.design:
-            return self.design.network_racks_per_row * self.design.max_leafs_per_network_rack
-        return 0
+        return self.design.network_racks_per_row * self.design.max_leafs_per_network_rack
 
     @property
     def max_tors_per_row(self) -> int:
         """Calculate maximum ToRs per row from design physical capacity."""
-        if self.design:
-            return self.design.compute_racks_per_row * self.design.max_tors_per_compute_rack
-        return 0
+        return self.design.compute_racks_per_row * self.design.max_tors_per_compute_rack
 
     spine_interface_sorting_method: Literal["top_down", "bottom_up"] = "bottom_up"
     # Schema: optional — pod.py validates non-empty at generate() time
@@ -367,11 +383,11 @@ class PodModel(BaseModel):
 
 
 # Rack model
-class RackParent(BaseModel):
+class RackParent(RoutingArchitectureMixin):
     id: str
     name: str
     index: int
-    design: DataCenterDesignData | None = None
+    design: DataCenterDesignData
     naming_convention: str = "standard"
     fabric_interface_sorting_method: Literal["top_down", "bottom_up"] = "bottom_up"
     management_pool: Pool | None = None
@@ -418,7 +434,7 @@ class RackPod(BaseModel):
     loopback_pool: Pool | None = None
     prefix_pool: Pool | None = None
     asn_pool: Pool | None = None
-    design: PodDesign | None = None
+    design: PodDesign
     # Schema: optional — pod.py validates non-empty at generate() time
     fabric_templates: list[DeviceRole] | None = []
     # Spine devices with cable info (from GQL query)
@@ -426,7 +442,7 @@ class RackPod(BaseModel):
 
     @property
     def deployment_type(self) -> Literal["middle_rack", "tor", "mixed"]:
-        return self.design.deployment_type if self.design else "tor"
+        return self.design.deployment_type
 
     @property
     def spine_templates(self) -> list[DeviceRole]:
@@ -524,7 +540,7 @@ class EndpointPod(BaseModel):
 
     id: str
     name: str
-    design: PodDesign | None = None
+    design: PodDesign
     index: int
     parent: EndpointDataCenter
 
@@ -535,7 +551,7 @@ class EndpointPod(BaseModel):
 
     @property
     def deployment_type(self) -> Literal["middle_rack", "tor", "mixed"]:
-        return self.design.deployment_type if self.design else "tor"
+        return self.design.deployment_type
 
 
 class EndpointRack(BaseModel):

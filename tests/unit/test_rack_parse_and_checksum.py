@@ -14,6 +14,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from generators.models import (
+    DataCenterDesignData,
     DeviceRole,
     Interface,
     LocationSuiteModel,
@@ -59,7 +60,7 @@ def _build_rack_generator(
     leafs: list[DeviceRole] | None = None,
 ) -> Any:
     """Return a RackGenerator typed as Any so ty allows mock attribute assignments."""
-    parent = RackParent(id="parent-1", name="DC1", index=1)
+    parent = RackParent(id="parent-1", name="DC1", index=1, design=DataCenterDesignData())
     pod = RackPod(
         id="pod-1",
         name="pod-1",
@@ -189,7 +190,15 @@ class TestParseRackData:
                                     "leaf_interface_sorting_method": {"value": "bottom_up"},
                                     "spine_interface_sorting_method": {"value": "top_down"},
                                     "spine_template": {"node": {"id": "tmpl-2", "interfaces": {"edges": []}}},
-                                    "design": None,
+                                    "design": {
+                                        "node": {
+                                            "id": "pod-design-2",
+                                            "name": {"value": "test-pod-design"},
+                                            "rows": {"value": 1},
+                                            "compute_racks_per_row": {"value": 1},
+                                            "network_racks_per_row": {"value": 1},
+                                        }
+                                    },
                                     "prefix_pool": None,
                                     "loopback_pool": None,
                                     "asn_pool": None,
@@ -200,7 +209,9 @@ class TestParseRackData:
                                             "index": {"value": 2},
                                             "naming_convention": {"value": "standard"},
                                             "management_pool": None,
-                                            "design": None,
+                                            "design": {
+                                                "node": {"id": "dc-design-2", "name": {"value": "test-dc-design"}}
+                                            },
                                             "fabric_interface_sorting_method": {"value": "top_down"},
                                         }
                                     },

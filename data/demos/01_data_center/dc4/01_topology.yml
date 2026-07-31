@@ -6,8 +6,16 @@ spec:
   data:
     - name: DC4
       index: 1
-      design: S_BORDER_SPINE
+      design: XL
+      routing_strategy: ebgp-ebgp
+      underlay_protocol: ipv6
       naming_convention: hierarchical
+      fabric_templates:
+        - ["4", "super-spine", "DCS-7050CX3-32C-R_SUPER_SPINE"]
+        - ["2", "hyper-spine", "DCS-7050CX3-32C-R_HYPER_SPINE"]
+        - ["4", "border-leaf", "DCS-7050CX3-32C-R_BORDER_LEAF"]
+        - ["2", "firewall", "CP-26000_FIREWALL"]
+        - ["2", "load-balancer", "NetScaler-MPX-26000-100G_LOAD_BALANCER"]
       fabric_interface_sorting_method: top_down
       member_of_groups:
         - topologies_dc
@@ -15,11 +23,9 @@ spec:
         kind: TopologyPod
         data:
           - index: 1
-            design: S_BORDER_SPINE_POD
+            design: S_MIDDLE
             fabric_templates:
-              - ["2", "border-spine", "Edgecore-7726-32X-O_BORDER_SPINE"]
-              - ["2", "firewall", "CP-26000_FIREWALL"]
-              - ["2", "load-balancer", "NetScaler-MPX-26000-100G_LOAD_BALANCER"]
+              - ["2", "spine", "DCS-7050CX3-32C-R_SPINE"]
             member_of_groups:
               - topologies_pod
             racks:
@@ -32,13 +38,12 @@ spec:
                   parent: ber-1-s-1
                   member_of_groups: [topologies_rack]
                   fabric_templates:
-                    - ["8", "leaf", "Edgecore-7726-32X-O_LEAF_MR"]
+                    - ["2", "leaf", "DCS-7050CX3-32C-R_LEAF_MR"]
+                    - ["2", "l2-leaf", "DCS-7050CX3-32C-R_TOR"]
           - index: 2
-            design: S_BORDER_SPINE_POD
+            design: S_MIXED
             fabric_templates:
-              - ["2", "border-spine", "Edgecore-7726-32X-O_BORDER_SPINE"]
-              - ["2", "firewall", "CP-26000_FIREWALL"]
-              - ["2", "load-balancer", "NetScaler-MPX-26000-100G_LOAD_BALANCER"]
+              - ["4", "spine", "DCS-7050CX3-32C-R_SPINE"]
             member_of_groups:
               - topologies_pod
             racks:
@@ -51,4 +56,29 @@ spec:
                   parent: ber-1-s-2
                   member_of_groups: [topologies_rack]
                   fabric_templates:
-                    - ["8", "leaf", "Edgecore-7726-32X-O_LEAF_MR"]
+                    - ["2", "leaf", "DCS-7050CX3-32C-R_LEAF_MIXED"]
+                - index: 2
+                  row_index: 1
+                  shortname: ber-1-s-2-r-1-2
+                  rack_type: compute
+                  parent: ber-1-s-2
+                  member_of_groups: [topologies_rack]
+                  fabric_templates:
+                    - ["2", "l2-leaf", "DCS-7050CX3-32C-R_TOR"]
+          - index: 3
+            design: S_TOR
+            fabric_templates:
+              - ["4", "spine", "DCS-7050CX3-32C-R_SPINE"]
+            member_of_groups:
+              - topologies_pod
+            racks:
+              kind: LocationRack
+              data:
+                - index: 1
+                  row_index: 1
+                  shortname: ber-1-s-3-r-1-1
+                  rack_type: tor
+                  parent: ber-1-s-3
+                  member_of_groups: [topologies_rack]
+                  fabric_templates:
+                    - ["2", "tor", "DCS-7050CX3-32C-R_TOR"]

@@ -249,6 +249,49 @@ class TestIBGPOverlayPeerings:
                 # super-spine↔super-spine or spine↔spine: peer RRs
                 assert p["route_reflector_client"] is False, f"Expected rr_client=False for peer-RR session {p['name']}"
 
+    def test_super_spine_to_hyper_spine_is_rr_client(self) -> None:
+        """super-spine↔hyper-spine peerings must set route_reflector_client=True
+        (super-spine is a client of hyper-spine), mirroring spine↔super-spine."""
+        device_map = dict(
+            [
+                _device_map_entry("hyper-spine-1", "hs1", "hyper-spine", "10.0.0.200"),
+                _device_map_entry("hyper-spine-2", "hs2", "hyper-spine", "10.0.0.201"),
+                _device_map_entry("super-spine-1", "ss1", "super-spine", "10.0.0.100"),
+                _device_map_entry("super-spine-2", "ss2", "super-spine", "10.0.0.101"),
+            ]
+        )
+        bgp_procs = [
+            _bgp_process("hyper-spine-1-bgp-overlay", "hs1"),
+            _bgp_process("hyper-spine-2-bgp-overlay", "hs2"),
+            _bgp_process("super-spine-1-bgp-overlay", "ss1"),
+            _bgp_process("super-spine-2-bgp-overlay", "ss2"),
+        ]
+
+        planner = RoutingPlanner(deployment_id="dc-1")
+        peerings = _call_plan_overlay(
+            planner,
+            overlay_type="ibgp",
+            bgp_processes=bgp_procs,
+            device_map=device_map,
+        )
+
+        # Full mesh of 4 devices = 6 sessions
+        assert len(peerings) == 6
+
+        def _roles_in(p: dict) -> tuple[str, str]:
+            parts = p["name"].split("--")
+            left, right = parts[1], parts[2]
+            return device_map[left]["role"], device_map[right]["role"]
+
+        for p in peerings:
+            r1, r2 = _roles_in(p)
+            if {r1, r2} == {"super-spine", "hyper-spine"}:
+                assert p["route_reflector_client"] is True, (
+                    f"Expected rr_client=True for super-spine↔hyper-spine on {p['name']}"
+                )
+            else:
+                assert p["route_reflector_client"] is False, f"Expected rr_client=False for peer-RR session {p['name']}"
+
     def test_leaf_spine_rr_client_flag(self) -> None:
         """leaf/border-leaf/tor → spine peerings must set route_reflector_client=True."""
         planner = RoutingPlanner(deployment_id="dc-1")

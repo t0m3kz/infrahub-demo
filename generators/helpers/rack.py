@@ -66,15 +66,7 @@ class RackPlanner:
         # deployment_type and max_tors_per_row are both derived from pod.design
         pod = data.pod
         deployment_type = pod.deployment_type
-        if pod.design is None:
-            logger.warning(
-                f"Rack {data.name}: pod '{pod.name}' has no design set — "
-                "falling back to max_tors_per_row=8 for offset calculation. "
-                "Run pod generator first for accurate cabling."
-            )
-            max_tors_per_row = 8
-        else:
-            max_tors_per_row = pod.design.compute_racks_per_row * pod.design.max_tors_per_compute_rack
+        max_tors_per_row = pod.design.compute_racks_per_row * pod.design.max_tors_per_compute_rack
 
         # For middle_rack deployment ToRs: always offset=0 (ToRs connect to leafs in same rack)
         if deployment_type == "middle_rack" and device_type == "tor":
@@ -86,12 +78,11 @@ class RackPlanner:
         # For mixed deployment ToRs: static offset based on row + rack index
         # Formula: (row_index - 1) × tors_per_row + (rack_index - 1) × tors_per_rack
         elif deployment_type == "mixed" and device_type == "tor":
-            tors_per_row = max_tors_per_row if pod.design else device_count
-            offset = (data.row_index - 1) * tors_per_row + (current_index - 1) * device_count
+            offset = (data.row_index - 1) * max_tors_per_row + (current_index - 1) * device_count
             logger.info(
                 f"Calculated {device_type} offset={offset} for rack {data.name} "
                 f"(row_index={data.row_index}, index={current_index}, tors_per_rack={device_count}, "
-                f"tors_per_row={tors_per_row}, mode=mixed)"
+                f"tors_per_row={max_tors_per_row}, mode=mixed)"
             )
 
         # For mixed/middle_rack deployment leafs: calculate offset based on row position

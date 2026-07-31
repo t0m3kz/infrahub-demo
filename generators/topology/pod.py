@@ -77,8 +77,7 @@ class PodTopologyGenerator(CommonGenerator):
             # Poll for the pool directly when the DC's routing strategy requires one,
             # so the pre-seed BGP call below never silently skips for a missing pool
             # that's actually just not visible yet.
-            dc_design = self.data.parent.design
-            needs_asn_pool = dc_design and dc_design.routing_strategy in (
+            needs_asn_pool = self.data.parent.routing_strategy in (
                 RoutingStrategy.EBGP_EBGP.value,
                 RoutingStrategy.EBGP_IBGP.value,
             )
@@ -111,7 +110,6 @@ class PodTopologyGenerator(CommonGenerator):
                 f"Pod {self.data.name}: parent DC management_mode=managed_by_controller — skipping generator"
             )
             return
-        dc_design = dc.design
         self.deployment_id = dc.id  # Store for cable linking
         self.pod_name = self.data.name.lower()
         self.fabric_name = dc.name.lower()
@@ -140,7 +138,7 @@ class PodTopologyGenerator(CommonGenerator):
             dc.naming_convention,
         )
 
-        if design and spine_count > design.max_spines_per_pod:
+        if spine_count > design.max_spines_per_pod:
             self.logger.error(
                 f"Pod {self.data.name} requests {spine_count} {spine_role}s "
                 f"but pod design '{design.name}' allows at most {design.max_spines_per_pod}"
@@ -151,52 +149,50 @@ class PodTopologyGenerator(CommonGenerator):
 
         # Calculate pool sizes from design maximums (not actual deployed racks).
         # Pools must be sized for full design capacity so adding racks later won't exhaust them.
-        pool_sizes = {}
-        max_leafs = 0
-        max_tors = 0
-        is_ipv6 = dc_design.is_ipv6 if dc_design else False
-        is_dual_stack = dc_design.is_dual_stack if dc_design else False
-        if design:
-            from generators.helpers import calculate_pod_pools
+        is_ipv6 = dc.is_ipv6
+        is_dual_stack = dc.is_dual_stack
+        from generators.helpers import calculate_pod_pools
 
-            p2p_addressing = dc_design.p2p_addressing if dc_design else "/31"
+        p2p_addressing = dc.p2p_addressing
 
-            max_spines = spine_count
-            max_super_spines = sum(entry.quantity for entry in dc.super_spine_templates)
-            rows = design.rows
+        max_spines = spine_count
+        max_super_spines = sum(entry.quantity for entry in dc.super_spine_templates)
+        rows = design.rows
 
-            if deployment_type == "middle_rack":
-                max_leafs = rows * design.network_racks_per_row * design.max_leafs_per_network_rack
-                max_tors = rows * design.network_racks_per_row * design.max_tors_per_network_rack
-            elif deployment_type == "tor":
-                max_leafs = 0
-                max_tors = rows * design.compute_racks_per_row * design.max_tors_per_compute_rack
-            else:  # mixed
-                max_leafs = rows * design.network_racks_per_row * design.max_leafs_per_network_rack
-                max_tors = rows * design.compute_racks_per_row * design.max_tors_per_compute_rack
+        if deployment_type == "middle_rack":
+            max_leafs = rows * design.network_racks_per_row * design.max_leafs_per_network_rack
+            max_tors = rows * design.network_racks_per_row * design.max_tors_per_network_rack
+        elif deployment_type == "tor":
+            max_leafs = 0
+            max_tors = rows * design.compute_racks_per_row * design.max_tors_per_compute_rack
+        else:  # mixed
+            max_leafs = rows * design.network_racks_per_row * design.max_leafs_per_network_rack
+            max_tors = rows * design.compute_racks_per_row * design.max_tors_per_compute_rack
 
-            calculated_pools = calculate_pod_pools(
-                max_super_spines_per_fabric=max_super_spines,
-                max_spines_per_pod=max_spines,
-                max_leafs=max_leafs,
-                max_tors=max_tors,
-                deployment_type=deployment_type,
-                p2p_addressing=p2p_addressing,
-                ipv6=is_ipv6,
-                dual_stack=is_dual_stack,
-                compute_racks=rows * design.compute_racks_per_row,
-                network_racks=rows * design.network_racks_per_row,
-            )
+        calculated_pools = calculate_pod_pools(
+            max_super_spines_per_fabric=max_super_spines,
+            max_spines_per_pod=max_spines,
+            max_leafs=max_leafs,
+            max_tors=max_tors,
+            deployment_type=deployment_type,
+            p2p_addressing=p2p_addressing,
+            ipv6=is_ipv6,
+            dual_stack=is_dual_stack,
+            compute_racks=rows * design.compute_racks_per_row,
+            network_racks=rows * design.network_racks_per_row,
+        )
 
-            pool_sizes["technical"] = calculated_pools["technical"]
-            pool_sizes["loopback"] = calculated_pools["loopback"]
+        pool_sizes = {
+            "technical": calculated_pools["technical"],
+            "loopback": calculated_pools["loopback"],
+        }
 
-            self.logger.info(
-                f"Calculated pool sizes for pod {self.data.name}: "
-                f"technical=/{calculated_pools['technical']}, loopback=/{calculated_pools['loopback']} "
-                f"(spines={max_spines}, leafs={max_leafs}, tors={max_tors}, "
-                f"p2p={p2p_addressing}, ipv6={is_ipv6}, dual_stack={is_dual_stack}, deployment={deployment_type})"
-            )
+        self.logger.info(
+            f"Calculated pool sizes for pod {self.data.name}: "
+            f"technical=/{calculated_pools['technical']}, loopback=/{calculated_pools['loopback']} "
+            f"(spines={max_spines}, leafs={max_leafs}, tors={max_tors}, "
+            f"p2p={p2p_addressing}, ipv6={is_ipv6}, dual_stack={is_dual_stack}, deployment={deployment_type})"
+        )
 
         # Allocate/upsert pools (idempotent via identifier + allow_upsert)
         # Must always run so objects are tracked by the generator framework
@@ -260,19 +256,14 @@ class PodTopologyGenerator(CommonGenerator):
         # find them and don't try to create duplicates.
         # OSPF_IBGP is excluded: spine overlay BGP needs overlay_as_id (resolved inside
         # create_routing via _resolve_shared_objects) and is created in the post-cable call below.
-        if (
-            dc_design
-            and dc_asn_pool_id
-            and dc_design.routing_strategy
-            in (
-                RoutingStrategy.EBGP_EBGP.value,
-                RoutingStrategy.EBGP_IBGP.value,
-            )
+        if dc_asn_pool_id and dc.routing_strategy in (
+            RoutingStrategy.EBGP_EBGP.value,
+            RoutingStrategy.EBGP_IBGP.value,
         ):
             await self.create_routing(
                 bottom_devices=spines,
                 top_devices=super_spine_devices,
-                options=RoutingOptions(design=dc_design, asn_pool=dc_asn_pool_id),
+                options=RoutingOptions(design=dc, asn_pool=dc_asn_pool_id),
                 p2p_interfaces=[],
                 bottom_role=spine_role,
                 top_role="super-spine",
@@ -299,35 +290,29 @@ class PodTopologyGenerator(CommonGenerator):
             # so it exists before any rack generator's leaf-to-spine routing call runs.
             # Those calls treat spines as top_devices and rely on an existing overlay
             # BGP process for them.
-            if dc_design:
-                await self.create_routing(
-                    bottom_devices=spines,
-                    top_devices=[],
-                    options=RoutingOptions(design=dc_design, asn_pool=dc_asn_pool_id, skip_underlay=True),
-                    p2p_interfaces=[],
-                    bottom_role=spine_role,
-                )
+            await self.create_routing(
+                bottom_devices=spines,
+                top_devices=[],
+                options=RoutingOptions(design=dc, asn_pool=dc_asn_pool_id, skip_underlay=True),
+                p2p_interfaces=[],
+                bottom_role=spine_role,
+            )
 
             await self._cable_to_existing_sibling_pods(
                 spines=spines,
                 spine_interfaces=[iface.name for iface in spine_template.interfaces if iface.role == "uplink"],
                 spine_role=spine_role,
                 dc=dc,
-                dc_design=dc_design,
                 dc_asn_pool_id=dc_asn_pool_id,
                 pod_pools=pod_pools,
                 is_ipv6=is_ipv6,
             )
 
         if not skip_cabling:
-            dc_max_spines = dc_design.max_spines_per_pod if dc_design else spine_count
+            dc_max_spines = dc.design.max_spines_per_pod
             cabling_offset = (self.data.index - 1) * dc_max_spines
             p2p_prefix_length = 127 if is_ipv6 else 31
-            routing_opts = (
-                RoutingOptions(design=dc_design, asn_pool=dc_asn_pool_id)
-                if dc_design and dc_asn_pool_id
-                else RoutingOptions()
-            )
+            routing_opts = RoutingOptions(design=dc, asn_pool=dc_asn_pool_id) if dc_asn_pool_id else RoutingOptions()
             p2p_pairs = await self.create_cabling(
                 bottom_devices=spines,
                 bottom_interfaces=spine_interfaces,
@@ -363,7 +348,7 @@ class PodTopologyGenerator(CommonGenerator):
         await self._cable_border_leafs_to_spines(
             spines=spines,
             spine_downlink_interfaces=[iface.name for iface in spine_template.interfaces if iface.role == "downlink"],
-            dc_design=dc_design,
+            dc=dc,
             dc_asn_pool_id=dc_asn_pool_id,
             pod_pools=pod_pools,
             is_ipv6=is_ipv6,
@@ -529,7 +514,7 @@ class PodTopologyGenerator(CommonGenerator):
         *,
         spines: list[str],
         spine_downlink_interfaces: list[str],
-        dc_design: Any,
+        dc: Any,
         dc_asn_pool_id: str | None,
         pod_pools: dict[str, Any],
         is_ipv6: bool,
@@ -561,13 +546,10 @@ class PodTopologyGenerator(CommonGenerator):
             return
 
         design = self.data.design
-        offset = 0
-        if design:
-            rows = design.rows
-            if self.data.deployment_type == "tor":
-                offset = rows * design.compute_racks_per_row * design.max_tors_per_compute_rack
-            else:
-                offset = rows * design.network_racks_per_row * design.max_leafs_per_network_rack
+        if self.data.deployment_type == "tor":
+            offset = design.rows * design.compute_racks_per_row * design.max_tors_per_compute_rack
+        else:
+            offset = design.rows * design.network_racks_per_row * design.max_leafs_per_network_rack
 
         p2p_prefix_length = 127 if is_ipv6 else 31
         p2p_pairs = await self.create_cabling(
@@ -582,11 +564,11 @@ class PodTopologyGenerator(CommonGenerator):
                 p2p_prefix_length=p2p_prefix_length,
             ),
         )
-        if dc_design and dc_asn_pool_id:
+        if dc_asn_pool_id:
             await self.create_routing(
                 bottom_devices=border_leaf_names,
                 top_devices=spines,
-                options=RoutingOptions(design=dc_design, asn_pool=dc_asn_pool_id),
+                options=RoutingOptions(design=dc, asn_pool=dc_asn_pool_id),
                 p2p_interfaces=p2p_pairs,
                 bottom_role="border-leaf",
                 top_role="spine",
@@ -598,7 +580,6 @@ class PodTopologyGenerator(CommonGenerator):
         spine_interfaces: list[str],
         spine_role: str,
         dc: Any,
-        dc_design: Any,
         dc_asn_pool_id: str | None,
         pod_pools: dict[str, Any],
         is_ipv6: bool,
@@ -634,9 +615,9 @@ class PodTopologyGenerator(CommonGenerator):
             self.logger.info(f"Pod {self.data.name}: no lower-index sibling pods yet — nothing to mesh-cable")
             return
 
-        dc_max_spines = dc_design.max_spines_per_pod if dc_design else 0
+        dc_max_spines = dc.design.max_spines_per_pod
         p2p_prefix_length = 127 if is_ipv6 else 31
-        routing_opts = RoutingOptions(design=dc_design, asn_pool=dc_asn_pool_id) if dc_design else RoutingOptions()
+        routing_opts = RoutingOptions(design=dc, asn_pool=dc_asn_pool_id)
 
         for sibling in sorted(lower_siblings, key=lambda s: s.index.value):
             # Retry: during INITIAL bulk DC creation, every pod's TopologyPod object
@@ -695,12 +676,11 @@ class PodTopologyGenerator(CommonGenerator):
                     p2p_prefix_length=p2p_prefix_length,
                 ),
             )
-            if routing_opts.get("design"):
-                await self.create_routing(
-                    bottom_devices=spines,
-                    top_devices=sibling_spines,
-                    options=routing_opts,
-                    p2p_interfaces=p2p_pairs,
-                    bottom_role=spine_role,
-                    top_role=spine_role,
-                )
+            await self.create_routing(
+                bottom_devices=spines,
+                top_devices=sibling_spines,
+                options=routing_opts,
+                p2p_interfaces=p2p_pairs,
+                bottom_role=spine_role,
+                top_role=spine_role,
+            )

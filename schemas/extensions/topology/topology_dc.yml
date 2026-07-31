@@ -23,49 +23,6 @@ nodes:
         order_weight: 150
         description: "Description of this data center design"
 
-      # ROUTING ARCHITECTURE
-      - name: routing_strategy
-        kind: Dropdown
-        label: "Routing Strategy"
-        description: "Fabric routing protocol strategy"
-        optional: true
-        default_value: ebgp-ebgp
-        order_weight: 1000
-        choices:
-          - name: ebgp-ebgp
-            label: "eBGP-eBGP"
-            description: "Pure eBGP routing (RFC 7938)"
-            color: "#6666ff"
-          - name: ebgp-ibgp
-            label: "eBGP-iBGP"
-            description: "eBGP underlay with iBGP overlay"
-            color: "#7f7fff"
-          - name: ospf-ibgp
-            label: "OSPF-iBGP"
-            description: "OSPF underlay with iBGP overlay"
-            color: "#aedcee"
-
-      - name: underlay_protocol
-        label: "Underlay Protocol"
-        description: "IPv6 by default (RFC 6164 /127 P2P); use IPv4 only when IPv6 is unsupported"
-        kind: Dropdown
-        optional: true
-        default_value: ipv6
-        order_weight: 1100
-        choices:
-          - name: ipv4
-            label: "IPv4"
-            description: "IPv4 underlay routing"
-            color: "#7FBF7F"
-          - name: ipv6
-            label: "IPv6"
-            description: "IPv6 underlay routing"
-            color: "#7F7FBF"
-          - name: dual_stack
-            label: "Dual-Stack"
-            description: "IPv6 for P2P fabric links, IPv4 for loopbacks and management"
-            color: "#8E44AD"
-
       # CAPACITY PLANNING
       - name: max_pods
         label: "Maximum Pods"
@@ -85,6 +42,17 @@ nodes:
         optional: true
         default_value: 2
         order_weight: 1700
+        parameters:
+          min_value: 0
+          max_value: 4
+
+      - name: max_hyper_spines_per_fabric
+        label: "Maximum Hyper-Spines"
+        description: "Max hyper-spine switches per fabric. 0 = no hyper-spine tier (super-spines mesh directly)."
+        kind: Number
+        optional: true
+        default_value: 0
+        order_weight: 1710
         parameters:
           min_value: 0
           max_value: 4
@@ -341,6 +309,12 @@ nodes:
             label: Super Spine Switch
             description: Super spine aggregating multiple pods.
             color: "#5fa8a8"
+          - name: hyper-spine
+            label: Hyper Spine Switch
+            description: >
+              Aggregates multiple super-spine groups; sits above super-spine
+              in very large (XL) fabrics.
+            color: "#3f8f8f"
           - name: border-spine
             label: Border Spine Switch
             description: >
@@ -445,6 +419,48 @@ nodes:
             description: "dcroleNNNN (no separators)"
             color: "#BF7FBF"
 
+      - name: routing_strategy
+        kind: Dropdown
+        label: "Routing Strategy"
+        description: "Fabric routing protocol strategy"
+        optional: true
+        default_value: ebgp-ebgp
+        order_weight: 1060
+        choices:
+          - name: ebgp-ebgp
+            label: "eBGP-eBGP"
+            description: "Pure eBGP routing (RFC 7938)"
+            color: "#6666ff"
+          - name: ebgp-ibgp
+            label: "eBGP-iBGP"
+            description: "eBGP underlay with iBGP overlay"
+            color: "#7f7fff"
+          - name: ospf-ibgp
+            label: "OSPF-iBGP"
+            description: "OSPF underlay with iBGP overlay"
+            color: "#aedcee"
+
+      - name: underlay_protocol
+        label: "Underlay Protocol"
+        description: "IPv6 by default (RFC 6164 /127 P2P); use IPv4 only when IPv6 is unsupported"
+        kind: Dropdown
+        optional: true
+        default_value: ipv6
+        order_weight: 1070
+        choices:
+          - name: ipv4
+            label: "IPv4"
+            description: "IPv4 underlay routing"
+            color: "#7FBF7F"
+          - name: ipv6
+            label: "IPv6"
+            description: "IPv6 underlay routing"
+            color: "#7F7FBF"
+          - name: dual_stack
+            label: "Dual-Stack"
+            description: "IPv6 for P2P fabric links, IPv4 for loopbacks and management"
+            color: "#8E44AD"
+
       - name: fabric_interface_sorting_method
         kind: Dropdown
         label: Fabric interface assignment
@@ -496,7 +512,7 @@ nodes:
         peer: TopologyDataCenterDesign
         kind: Attribute
         cardinality: one
-        optional: true
+        optional: false
         identifier: "dc__design"
         order_weight: 950
         on_delete: no-action
@@ -644,7 +660,7 @@ nodes:
         peer: TopologyPodDesign
         kind: Attribute
         cardinality: one
-        optional: true
+        optional: false
         identifier: "pod__design"
         order_weight: 900
         on_delete: no-action

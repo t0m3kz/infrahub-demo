@@ -198,12 +198,11 @@ class RackMixin:
                 f"rack_index={self.data.index}"
             )
 
-        dc_design = dc.design
         self._naming_conv = cast(
             Literal["standard", "hierarchical", "flat"],
             dc.naming_convention,
         )
-        self._is_ipv6 = dc_design.is_ipv6 if dc_design else False
+        self._is_ipv6 = dc.is_ipv6
 
         self._spine_role: Literal["spine", "border-spine"] = pod.spine_slot_role
         try:
@@ -211,10 +210,10 @@ class RackMixin:
         except RuntimeError as exc:
             self.logger.error(str(exc))
 
-        routing_options: RoutingOptions = RoutingOptions(design=dc_design)
+        routing_options: RoutingOptions = RoutingOptions(design=dc)
         if pod.asn_pool and pod.asn_pool.id:
             routing_options["asn_pool"] = pod.asn_pool.id
 
         self._technical_pool_id = pod.prefix_pool.id if pod.prefix_pool else None
-        self._p2p_prefix_length = 127 if dc_design and getattr(dc_design, "p2p_ipv6", False) else 31
+        self._p2p_prefix_length = 127 if dc.p2p_ipv6 else 31
         self._routing_options = routing_options

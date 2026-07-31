@@ -21,6 +21,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from generators.models import (
+    DataCenterDesignData,
     DeviceRole,
     Interface,
     LocationSuiteModel,
@@ -39,6 +40,7 @@ def _build_gen(*, mlag_create: Literal["no", "back-to-back", "virtual"] = "no") 
         id="dc-1",
         name="DC1",
         index=1,
+        design=DataCenterDesignData(),
         naming_convention="standard",
         management_pool=Pool(id="mgmt-pool", name="mgmt"),
     )

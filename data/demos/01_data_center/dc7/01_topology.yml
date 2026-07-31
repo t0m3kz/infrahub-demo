@@ -1,0 +1,57 @@
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologyDataCenter
+  data:
+    - name: DC7
+      index: 7
+      design: S
+      routing_strategy: ebgp-ebgp
+      underlay_protocol: ipv6
+      naming_convention: hierarchical
+      connectivity_mode: pbr
+      fabric_interface_sorting_method: top_down
+      member_of_groups:
+        - topologies_dc
+      children:
+        kind: TopologyPod
+        data:
+          - index: 1
+            design: S_BORDER_SPINE_POD
+            fabric_templates:
+              - ["2", "border-spine", "DCS-7050CX3-32C-R_BORDER_SPINE"]
+              - ["2", "firewall", "PA-5260_FIREWALL"]
+              - ["2", "load-balancer", "NetScaler-MPX-26000-100G_LOAD_BALANCER"]
+            member_of_groups:
+              - topologies_pod
+            racks:
+              kind: LocationRack
+              data:
+                - index: 1
+                  row_index: 1
+                  shortname: ams-1-s-1-r-1-1
+                  rack_type: network
+                  parent: ams-1-s-1
+                  member_of_groups: [topologies_rack]
+                  fabric_templates:
+                    - ["8", "leaf", "DCS-7050CX3-32C-R_LEAF_MR"]
+          - index: 2
+            design: S_BORDER_SPINE_POD
+            fabric_templates:
+              - ["2", "border-spine", "DCS-7050CX3-32C-R_BORDER_SPINE"]
+              - ["2", "firewall", "PA-5260_FIREWALL"]
+              - ["2", "load-balancer", "NetScaler-MPX-26000-100G_LOAD_BALANCER"]
+            member_of_groups:
+              - topologies_pod
+            racks:
+              kind: LocationRack
+              data:
+                - index: 1
+                  row_index: 1
+                  shortname: ams-1-s-2-r-1-1
+                  rack_type: network
+                  parent: ams-1-s-2
+                  member_of_groups: [topologies_rack]
+                  fabric_templates:
+                    - ["8", "leaf", "DCS-7050CX3-32C-R_LEAF_MR"]

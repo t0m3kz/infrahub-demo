@@ -59,6 +59,12 @@ generics:
             label: Super Spine Router
             description: Aggregation router part of a Fabric.
             color: "#aeeeee"
+          - name: hyper-spine
+            label: Hyper Spine Router
+            description: >
+              Aggregates multiple super-spine groups; sits above super-spine
+              in very large (XL) fabrics.
+            color: "#8fd4d4"
           - name: border-spine
             label: Border Spine Router
             description: >

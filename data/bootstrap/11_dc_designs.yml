@@ -1,186 +1,100 @@
 ---
-# Data Center Design Templates - Fabric Architecture Principles
-# These define the logical network architecture for data center fabrics
-# Loaded at bootstrap time, referenced by DC instances at deployment time
+# Data Center Design Templates - Pure Size/Capacity Templates
+# These define ONLY the size/tier envelope for a data center fabric —
+# max pods, max super-spine/hyper-spine/border-leaf counts, and address
+# space sizing. Routing architecture (routing_strategy, underlay_protocol)
+# is NOT part of the design — it's a free per-DC-instance choice, set
+# directly on TopologyDataCenter (alongside naming_convention,
+# connectivity_mode, management_mode). This decouples "how big" from
+# "how it routes": two DCs of the same size can use different routing
+# strategies, and two DCs on different routing strategies can be the
+# same size.
 #
-# Pool prefix lengths match the design's underlay_protocol (IPv4 or IPv6).
-# Management is always IPv4. T-shirt sizing:
-#   S  IPv4: technical=/21,  loopback=/24,  management=/26
-#   S  IPv6: technical=/117, loopback=/120, management=/26
-#   M  IPv4: technical=/19,  loopback=/23,  management=/25
-#   M  IPv6: technical=/115, loopback=/119, management=/25
-#   L  IPv6: technical=/114, loopback=/118, management=/24
-#   XL IPv6: technical=/113, loopback=/117, management=/23
-# P2P addressing: /31 for IPv4, /127 for IPv6 (auto-derived from underlay_protocol)
+# Exactly 4 designs, T-shirt sized:
+#   S  — back-to-back (no super-spine tier), no border-leaf tier either.
+#        Micro-fabric pattern: each pod's own border-spine collapses
+#        spine + border-leaf, with its own per-pod firewall/load-balancer.
+#   M  — back-to-back (no super-spine tier), WITH a separate DC-level
+#        border-leaf tier (fronted by its own firewall/load-balancer).
+#        Unlike S, border-leaf here is a real device, not collapsed.
+#   L  — classic 3-tier: super-spine + border-leaf.
+#   XL — classic 3-tier + a 4th hyper-spine tier above super-spine.
 #
-# Naming convention: {SIZE}_{UNDERLAY}_{OVERLAY}
-#   size:    S(2 pods), M(4 pods), L(8 pods), XL(16 pods)
-#   underlay: EBGP, OSPF
-#   overlay:  EBGP, IBGP
+# Pool prefix lengths are sized by max_pods (larger designs get more
+# address space). Management is always IPv4 regardless of the DC
+# instance's underlay_protocol choice.
+# P2P addressing: /31 for IPv4, /127 for IPv6 (auto-derived from the
+# DC instance's own underlay_protocol, not from this design).
 #
-# naming_convention lives on TopologyDataCenter (per-DC choice), not on the
-# design (which defines routing architecture only).
-#
-# Prefix lengths are stored in the correct format for the design's underlay_protocol.
-# IPv4 designs use IPv4 prefix lengths; IPv6/dual-stack designs use IPv6 prefix lengths.
-# Management is always IPv4 regardless of underlay_protocol.
 # The DC generator uses these when the DC instance has no pools set.
-# Once pools exist on the DC instance they are reused and these values are ignored.
+# Once pools exist on the DC instance they are reused and these values
+# are ignored.
 
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
   kind: TopologyDataCenterDesign
   data:
-    # Small Designs (2 pods)
-    - name: "S_OSPF_IBGP"
+    - name: "S"
       description: >
-        Small DC Design with OSPF underlay and iBGP overlay.
-        Up to 2 pods. OSPF provides fast convergence for underlay while iBGP
-        distributes EVPN routes via spine route reflectors.
-        Typical platforms: Cisco NX-OS, Dell SONiC.
-      routing_strategy: "ospf-ibgp"
-      underlay_protocol: "ipv4"
-      max_pods: 2
-      max_super_spines_per_fabric: 2
-      max_spines_per_pod: 4
-      max_border_leafs_per_fabric: 2
-      loopback_prefix_length: 24
-      technical_prefix_length: 21
-      management_prefix_length: 26
-
-
-    - name: "S_EBGP_IBGP"
-      description: >
-        Small DC Design with eBGP underlay and iBGP overlay.
-        Up to 2 pods. eBGP handles underlay reachability while iBGP distributes
-        EVPN routes via spine route reflectors.
-        Typical platforms: Cisco NX-OS, SONiC (FRRouting).
-      routing_strategy: "ebgp-ibgp"
-      underlay_protocol: "ipv6"
-      max_pods: 2
-      max_super_spines_per_fabric: 2
-      max_spines_per_pod: 4
-      max_border_leafs_per_fabric: 2
-      loopback_prefix_length: 120
-      technical_prefix_length: 117
-      management_prefix_length: 26
-
-
-    - name: "S_EBGP_EBGP"
-      description: >
-        Small DC Design with eBGP underlay and eBGP overlay (RFC 7938).
-        Up to 2 pods. Pure eBGP routing with IPv6 addressing for underlay
-        point-to-point links and loopbacks.
-        Typical platforms: Arista EOS, Cisco NX-OS.
-      routing_strategy: "ebgp-ebgp"
-      underlay_protocol: "ipv6"
-      max_pods: 2
-      max_super_spines_per_fabric: 2
-      max_spines_per_pod: 4
-      max_border_leafs_per_fabric: 2
-      loopback_prefix_length: 120
-      technical_prefix_length: 117
-      management_prefix_length: 26
-
-
-    - name: "S_BORDER_SPINE"
-      description: >
-        Micro-fabric DC Design for very small pods (e.g. 8 leafs) — no
-        super-spine tier (back-to-back: pods mesh their own border-spines
-        directly to sibling pods) and no DC-level border-leaf/firewall/
-        load-balancer tier — those live on the pod's own border-spine
-        instead (see TopologyPodDesign "S_BORDER_SPINE_POD" and the
-        "border-spine" device role). Typical platforms: Arista EOS.
-      routing_strategy: "ebgp-ebgp"
-      underlay_protocol: "ipv6"
+        Small — micro-fabric, back-to-back (no super-spine tier: pods mesh
+        their own border-spines directly to sibling pods), no DC-level
+        border-leaf/firewall/load-balancer tier either. Those live on each
+        pod's own border-spine instead (see TopologyPodDesign
+        "S_BORDER_SPINE_POD" and the "border-spine" device role). Routing
+        strategy/underlay protocol are chosen per-DC-instance.
       max_pods: 4
       max_super_spines_per_fabric: 0
+      max_hyper_spines_per_fabric: 0
       max_spines_per_pod: 2
       max_border_leafs_per_fabric: 0
       loopback_prefix_length: 120
       technical_prefix_length: 117
       management_prefix_length: 26
 
-
-    # Medium Designs (4 pods)
-    - name: "M_OSPF_IBGP"
+    - name: "M"
       description: >
-        Medium DC Design with OSPF underlay and iBGP overlay.
-        Up to 4 pods. OSPF provides fast IGP convergence while iBGP distributes
-        EVPN routes via route reflectors on super-spines.
-        Typical platforms: Cisco NX-OS, Dell SONiC.
-      routing_strategy: "ospf-ibgp"
-      underlay_protocol: "ipv6"
+        Medium — back-to-back (no super-spine tier: pods mesh their own
+        spines directly to sibling pods), but WITH a dedicated DC-level
+        border-leaf tier (fronted by its own firewall/load-balancer) —
+        unlike "S", border-leaf here is a real separate device, not
+        collapsed into a per-pod border-spine. Routing strategy/underlay
+        protocol are chosen per-DC-instance.
       max_pods: 4
-      max_super_spines_per_fabric: 2
+      max_super_spines_per_fabric: 0
+      max_hyper_spines_per_fabric: 0
       max_spines_per_pod: 4
       max_border_leafs_per_fabric: 2
       loopback_prefix_length: 119
       technical_prefix_length: 115
       management_prefix_length: 25
 
-
-    - name: "M_EBGP_EBGP"
+    - name: "L"
       description: >
-        Medium DC Design with eBGP underlay and eBGP overlay (RFC 7938).
-        Up to 4 pods. Sized for medium pod designs (4 rows, ~72 tors max).
-        Typical platforms: Arista EOS, Cisco NX-OS.
-      routing_strategy: "ebgp-ebgp"
-      underlay_protocol: "ipv6"
-      max_pods: 4
-      max_super_spines_per_fabric: 2
-      max_spines_per_pod: 4
-      max_border_leafs_per_fabric: 2
-      loopback_prefix_length: 119
-      technical_prefix_length: 115
-      management_prefix_length: 25
-
-
-    - name: "M_EBGP_IBGP"
-      description: >
-        Medium DC Design with eBGP underlay and iBGP overlay.
-        Up to 4 pods. eBGP handles underlay reachability while iBGP distributes
-        EVPN routes via route reflectors on super-spines.
-        Typical platforms: Cisco NX-OS, SONiC (FRRouting).
-      routing_strategy: "ebgp-ibgp"
-      underlay_protocol: "ipv6"
-      max_pods: 4
-      max_super_spines_per_fabric: 2
-      max_spines_per_pod: 4
-      max_border_leafs_per_fabric: 2
-      loopback_prefix_length: 119
-      technical_prefix_length: 115
-      management_prefix_length: 25
-
-
-    # Large Designs (8 pods)
-    - name: "L_EBGP_EBGP"
-      description: >
-        Large DC Design with eBGP underlay and eBGP overlay (RFC 7938).
-        Up to 8 pods. Sized for large pod designs.
-        Typical platforms: Arista EOS, Cisco NX-OS.
-      routing_strategy: "ebgp-ebgp"
-      underlay_protocol: "ipv6"
+        Large — classic 3-tier Clos: leaf -> spine -> super-spine, DC-level
+        border-leaf fronted by firewall/load-balancer. Routing
+        strategy/underlay protocol are chosen per-DC-instance. Sized for up
+        to 8 pods, but a DC can instantiate fewer pods/devices than the cap
+        allows (e.g. a small 2-pod fabric using the "L" design template).
       max_pods: 8
       max_super_spines_per_fabric: 4
+      max_hyper_spines_per_fabric: 0
       max_spines_per_pod: 4
       max_border_leafs_per_fabric: 2
       loopback_prefix_length: 118
       technical_prefix_length: 114
       management_prefix_length: 24
 
-
-    # Extra Large Designs (16 pods)
-    - name: "XL_EBGP_EBGP"
+    - name: "XL"
       description: >
-        Extra Large DC Design with eBGP underlay and eBGP overlay (RFC 7938).
-        Up to 16 pods. Sized for hyperscale deployments.
-        Typical platforms: Arista EOS, Cisco NX-OS.
-      routing_strategy: "ebgp-ebgp"
-      underlay_protocol: "ipv6"
+        Extra Large — classic 3-tier Clos plus a 4th hyper-spine tier above
+        super-spine (leaf -> spine -> super-spine -> hyper-spine), full-mesh
+        cabled/routed between super-spine and hyper-spine. Sized for
+        hyperscale deployments (up to 16 pods). Routing strategy/underlay
+        protocol are chosen per-DC-instance.
       max_pods: 16
       max_super_spines_per_fabric: 4
+      max_hyper_spines_per_fabric: 2
       max_spines_per_pod: 4
       max_border_leafs_per_fabric: 4
       loopback_prefix_length: 117

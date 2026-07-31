@@ -1,30 +1,31 @@
-# DC3 - Brexit, Flat Border-Spine, Maximum Speed
+# DC3 - Brexit, Large Scale, Every Vendor Invited
 
 ## Overview
 
-**Location:** London 🇬🇧 | **Size:** Micro | **Platform:** Dell SONiC | **Design:** `S_BORDER_SPINE`
+**Location:** London 🇬🇧 | **Size:** Large | **Design:** `L` + `ebgp-ebgp` routing
 
-**Fabric Design:** `S_BORDER_SPINE` — no super-spine tier, no DC-wide border-leaf (flat naming
-convention because London hates unnecessary formality anyway). Each pod's **border-spine** pair
-collapses the spine and border-leaf role into one device, meshes back-to-back with the sibling
-pod's border-spines, and hosts its own firewall/load-balancer pair directly. One fewer device tier
-to argue about at the pub.
+**Fabric Design:** `L` + `ebgp-ebgp` routing — classic 3-tier Clos (leaf → spine → super-spine), pure eBGP
+underlay + eBGP overlay, IPv6 P2P links, DC-level border-leaf fronted by firewall/load-balancer.
+This is DC1's pattern scaled up to Large — 4 pods instead of 2, 4 super-spines instead of 2 —
+except this time Brexit-flavoured London decided one vendor wasn't dramatic enough.
 
-Brexit happened, but your data stays! Every pod carries its own firewall/load-balancer now — no
-more shipping FW/LB traffic through a shared DC-level border-leaf.
-
-**Philosophy:** "I don't want any extra hops" — and for once, DC3 actually delivers on it.
+**Philosophy:** "Every pod, a different vendor." Cisco, Arista, Dell, and Edgecore each get their
+own pod, all peering happily into the same Dell-flavoured super-spine/border-leaf tier. Because
+nothing says "we definitely did not standardize procurement" like four device platforms in one
+fabric.
 
 ## Architecture
 
-- **Border-Spines:** 4 (2+2, Dell PowerSwitch S5232F-ON) — collapsed spine + border-leaf, one per pod pair
-- **Pods:** 2 | **Racks:** 2 (1 network rack per pod, 8 leafs each)
-- **Deployment:** `middle_rack` (both pods), back-to-back mesh between pods (no super-spine tier)
+- **Super-Spines:** 4 (Dell PowerSwitch S5232F-ON) — the one thing everyone agrees to peer with
+- **Border-Leaf:** 2 (Dell PowerSwitch S5232F-ON), own firewall + load-balancer pair
+- **Pods:** 4 | **Spines:** 8 (2 per pod) | **Racks:** 4
 
-| Pod | Border-Spines | Design | Deployment | Own FW/LB | Personality |
-| --- | -------------- | -------------- | ----------- | --------- | --------------------- |
-| 1 | 2 | S_BORDER_SPINE | middle_rack | yes | Pragmatic Londoner |
-| 2 | 2 | S_BORDER_SPINE | middle_rack | yes | Same Pragmatic Twin |
+| Pod | Vendor    | Spines | Design   | Deployment  |
+| --- | --------- | ------ | -------- | ----------- |
+| 1   | Cisco     | 2      | L_MIDDLE | middle_rack |
+| 2   | Arista    | 2      | L_MIDDLE | middle_rack |
+| 3   | Dell      | 2      | L_MIDDLE | middle_rack |
+| 4   | Edgecore  | 2      | L_MIDDLE | middle_rack |
 
 ## Quick Start
 
@@ -32,20 +33,17 @@ more shipping FW/LB traffic through a shared DC-level border-leaf.
 uv run inv deploy-dc --scenario dc3 --branch your_branch
 ```
 
-**Warning:** Spine port consumption rates may cause existential dread. Low latency worth it
+**Warning:** Spine port consumption rates may cause existential dread. Multi-vendor peace of
+mind not included.
 
 ---
 
-## Deployment Strategy (Mixed — The British Compromise)
-
-**ToR Connectivity Patterns:**
+## Deployment Strategy (Middle Rack, Every Vendor)
 
 ```bash
-# Some racks go direct (the ToR contingent)
-Server → ToR → Spine → Super Spine
-
-# Other racks add a leaf layer (the middle-rack contingent)
-Server → ToR → Leaf → Spine → Super Spine
+Server → ToR/L2-Leaf → Leaf → Spine → Super-Spine
+                                          |
+                                    Border-Leaf → Firewall → Load-Balancer (PBR)
 ```
 
 ---
@@ -69,10 +67,8 @@ uv run infrahubctl generator generate_dc name=DC3 --branch you_branch
 
 Trigger infrastructure generation in InfraHub UI → Actions → Generator Definitions → generate_dc DC3-Fabric-1
 
-and follow steps from dc1
-
 ## Fun Fact
 
 The author still uses the mug he bought 25 years ago in London—proof that some British imports last longer than most celebrity marriages, and definitely longer than any network outage.
 
-Unlike certain monarchs, this mug has never abdicated, and it’s still on the throne of morning coffee—no royal drama, just reliable caffeine delivery.
+Unlike certain monarchs, this mug has never abdicated, and it's still on the throne of morning coffee—no royal drama, just reliable caffeine delivery.

@@ -7,6 +7,7 @@ import pytest
 
 from generators.helpers.rack import RackRolesHelper
 from generators.models import (
+    DataCenterDesignData,
     DeviceRole,
     Interface,
     LocationSuiteModel,
@@ -37,6 +38,8 @@ def _build_gen(*, deployment_type: str = "mixed", rack_type: str = "network") ->
         id="dc-1",
         name="DC1",
         index=1,
+        design=DataCenterDesignData(),
+        underlay_protocol="ipv4",
         naming_convention="standard",
         management_pool=Pool(id="mgmt-pool", name="mgmt"),
     )

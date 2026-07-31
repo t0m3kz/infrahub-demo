@@ -66,6 +66,8 @@ fragment DataCenterFields on TopologyDataCenter {
   fabric_interface_sorting_method { value }
   connectivity_mode { value }
   management_mode { value }
+  routing_strategy { value }
+  underlay_protocol { value }
   fabric_templates {
     edges {
       node {
@@ -80,10 +82,9 @@ fragment DataCenterFields on TopologyDataCenter {
       id
       max_pods { value }
       max_super_spines_per_fabric { value }
+      max_hyper_spines_per_fabric { value }
       max_spines_per_pod { value }
       max_border_leafs_per_fabric { value }
-      routing_strategy { value }
-      underlay_protocol { value }
     }
   }
   fabric_asn_pool {
