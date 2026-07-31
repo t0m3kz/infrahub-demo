@@ -470,13 +470,20 @@ class DCTopologyGenerator(CommonGenerator):
                 f"bl_ports={len(bl_interface_names)}, {service_role}_ports={len(service_interface_names)}."
             )
             return
-        await self.create_cabling(
+        p2p_pairs = await self.create_cabling(
             bottom_devices=service_names,
             bottom_interfaces=service_interface_names,
             top_devices=border_leaf_names,
             top_interfaces=bl_interface_names,
             strategy="rack",
         )
+        if not p2p_pairs:
+            self.logger.error(
+                f"DC {self.fabric_name}: border-leaf<->{service_role} cabling produced no connections — "
+                f"likely an interface speed mismatch between the {service_role} template's uplink ports and "
+                f"the border-leaf template's {_BL_ROLE_FOR[service_role]}-role ports. Check "
+                "create_cabling's own log output above for the exact speed groups involved."
+            )
 
     async def _cable_dc_services(
         self, *, border_leaf_names: list[str], firewall_names: list[str], load_balancer_names: list[str]
@@ -501,14 +508,25 @@ class DCTopologyGenerator(CommonGenerator):
                 )
                 fw_customer_names = sorted({iface.name.value for iface in fw_customer})
                 lb_uplink_names = sorted({iface.name.value for iface in lb_uplink})
-                if fw_customer_names and lb_uplink_names:
-                    await self.create_cabling(
+                if not fw_customer_names or not lb_uplink_names:
+                    self.logger.error(
+                        f"DC {self.fabric_name}: cannot cable firewall<->load-balancer (inline chain) — "
+                        f"fw_customer_ports={len(fw_customer_names)}, lb_uplink_ports={len(lb_uplink_names)}."
+                    )
+                else:
+                    middle_leg_pairs = await self.create_cabling(
                         bottom_devices=load_balancer_names,
                         bottom_interfaces=lb_uplink_names,
                         top_devices=firewall_names,
                         top_interfaces=fw_customer_names,
                         strategy="rack",
                     )
+                    if not middle_leg_pairs:
+                        self.logger.error(
+                            f"DC {self.fabric_name}: firewall<->load-balancer (inline chain) cabling produced "
+                            "no connections — likely an interface speed mismatch between the firewall's "
+                            "customer-role ports and the load-balancer's uplink-role ports."
+                        )
             await self._cable_border_leaf_to_service(
                 border_leaf_names=border_leaf_names, service_names=load_balancer_names, service_role="load-balancer"
             )
