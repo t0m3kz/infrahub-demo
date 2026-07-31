@@ -2,7 +2,21 @@
 
 from __future__ import annotations
 
-from typing import Any, TypedDict
+from typing import Any, Protocol, TypedDict, runtime_checkable
+
+
+@runtime_checkable
+class HasRoutingStrategy(Protocol):
+    """Structural type for RoutingOptions["design"] — create_routing() and
+    RoutingPlanner.build_routing_plan() only ever read ``routing_strategy``
+    off this object (see generators/routing.py, generators/helpers/routing.py).
+    Every real caller passes a DCModel/PodParent/RackParent instance (all
+    inherit RoutingArchitectureMixin — see generators/models.py), never the
+    old DataCenterDesignData; this Protocol documents and type-checks that
+    duck-typed contract instead of leaving it as ``Any``. runtime_checkable
+    so ``isinstance(design, HasRoutingStrategy)`` also works if ever needed."""
+
+    routing_strategy: str
 
 
 class DeviceOptions(TypedDict, total=False):
@@ -64,8 +78,9 @@ class CablingOptions(TypedDict, total=False):
 class RoutingOptions(TypedDict, total=False):
     """Options for ``CommonGenerator.create_routing()``."""
 
-    design: Any
-    """Design object with ``routing_strategy`` attribute."""
+    design: HasRoutingStrategy
+    """Object exposing ``routing_strategy`` — a DCModel/PodParent/RackParent
+    instance in practice (see HasRoutingStrategy)."""
     asn_pool: Any
     """Default ASN pool for all devices (SDK object, pool ID, or pool name)."""
     asn_pool_name: str

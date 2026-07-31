@@ -12,6 +12,7 @@ from typing import Any
 from unittest.mock import MagicMock
 
 from generators.helpers.routing import PendingASRef, RoutingPlanInput, RoutingPlanner
+from generators.types import RoutingOptions
 
 # ================================================================
 # Helpers
@@ -112,7 +113,7 @@ def _make_plan_input(
             seen.add(n)
             unique_names.append(n)
 
-    options: dict[str, Any] = {}
+    options: RoutingOptions = RoutingOptions()
     if pool is not None:
         options["asn_pool"] = pool
     if design is not None:
