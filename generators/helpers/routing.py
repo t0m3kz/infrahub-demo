@@ -131,21 +131,23 @@ class RoutingStrategy(str, Enum):
 
 
 def _safe_device_name(bgp: Any) -> str | None:
-    """Extract device name from a ManagedBGP/ManagedOSPF object.
+    """Extract device name from a ManagedBGP/ManagedOSPF object via its
+    `capabilities` relationship (the device this process is attached to).
+    Requires the caller to have queried with include=["capabilities"],
+    prefetch_relationships=True.
 
-    Parses the deterministic name convention "{device-name}-bgp-{suffix}" or
-    "{device-name}-ospf-{suffix}" rather than traversing the inbound
-    `capabilities` relationship (direction=inbound peers are not populated by
-    client.filters() prefetch, so .peers is always empty).
+    Schema-wise `capabilities` is cardinality=many, but every process created
+    by `_make_bgp_proc`/`_plan_ospf_underlay` in this module attaches exactly
+    one device. Anything other than exactly one peer is treated as unresolved
+    (None) rather than guessing which device it belongs to.
     """
     try:
-        name: str = bgp.name.value
-        for suffix in ("-bgp-underlay", "-bgp-overlay", "-ospf-underlay"):
-            if name.endswith(suffix):
-                return name[: -len(suffix)]
+        peers = bgp.capabilities.peers
+    except AttributeError:
         return None
-    except (AttributeError, ValueError):
+    if len(peers) != 1:
         return None
+    return peers[0].display_label
 
 
 def _safe_as_id(bgp: Any) -> str | None:

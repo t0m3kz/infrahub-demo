@@ -342,8 +342,8 @@ class TestGroupContextProtection:
             for call in m.client.filters.await_args_list
             if getattr(call.kwargs.get("kind"), "__name__", "") == "ManagedBGP"
         ]
-        assert len(managed_bgp_filter_calls) == 5
-        assert sleep_mock.await_count == 4
+        assert len(managed_bgp_filter_calls) == 10
+        assert sleep_mock.await_count == 9
 
     @pytest.mark.asyncio
     async def test_overlay_as_added_to_related_node_ids(self, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -434,7 +434,7 @@ class TestGroupContextProtection:
         m.logger.error.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_missing_overlay_as_logs_error_and_returns(self) -> None:
+    async def test_missing_overlay_as_logs_error_and_returns(self, monkeypatch: pytest.MonkeyPatch) -> None:
         from generators.helpers.routing import RoutingStrategy
         from generators.types import RoutingOptions
 
@@ -447,6 +447,8 @@ class TestGroupContextProtection:
         m.client.group_context.related_node_ids = []
         m._resolve_shared_objects = AsyncMock(return_value=(None, None))
         m.client.filters = AsyncMock(return_value=[])
+        # Never resolves -> exhausts every retry attempt; avoid real backoff sleeps.
+        monkeypatch.setattr("generators.routing.asyncio.sleep", AsyncMock())
 
         # Should return early without creating any objects
         await m.create_routing(

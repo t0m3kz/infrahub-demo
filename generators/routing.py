@@ -30,6 +30,9 @@ _PEERING_SAVE_MAX_RETRIES = 5
 _PEERING_SAVE_RETRY_DELAY = 2.0
 _OVERLAY_BGP_MAX_RETRIES = 5
 _OVERLAY_BGP_RETRY_DELAY = 3.0
+_SHARED_OBJECT_MAX_RETRIES = 10
+_SHARED_OBJECT_RETRY_DELAY = 3.0
+_SHARED_OBJECT_RETRY_CAP = 20.0
 
 
 async def _save_peering_with_retry(obj: Any, logger: logging.Logger) -> None:
@@ -126,8 +129,19 @@ class RoutingMixin:
         )
 
         # ================================================================
-        # RESOLVE SHARED OBJECTS (created by dc.py, reused by pod/rack)
+        # RESOLVE SHARED/CROSS-GENERATOR STATE + DATA COLLECTION
         # ================================================================
+        # One combined polling loop for everything this call needs but doesn't
+        # own: dc.py-level shared objects (overlay AS, OSPF area, auth keys)
+        # and a sibling pod's overlay BGP (pod.py's decentralized mesh cabling
+        # queries a sibling pod's spines directly, no dc.py-level wait). A
+        # pod's/rack's own task-list check for an in-flight add_dc only catches
+        # "still running" — not the narrow window between add_dc's task
+        # completing and this call's own queries landing, nor a sibling
+        # generator's independent in-flight run. Every such lookup shares one
+        # retry loop and one backoff per round instead of each waiting (and
+        # re-sleeping) independently in sequence.
+        interfaces = [iface for pair in p2p_interfaces for iface in pair]
 
         needs_overlay_as = not options.get("overlay_as_id") and routing_strategy in (
             RoutingStrategy.EBGP_IBGP,
@@ -138,64 +152,35 @@ class RoutingMixin:
             and not options.get("skip_underlay")
             and routing_strategy == RoutingStrategy.OSPF_IBGP
         )
-
-        if needs_overlay_as or needs_ospf_area:
-            overlay_as_id, ospf_area_id = await self._resolve_shared_objects(routing_strategy)
-
-            if needs_overlay_as:
-                if not overlay_as_id:
-                    self.logger.error(
-                        f"Shared overlay AS not found for {self.fabric_name}. "
-                        "The DC generator must run first to create it."
-                    )
-                    return
-                options["overlay_as_id"] = overlay_as_id
-
-            if needs_ospf_area:
-                if not ospf_area_id:
-                    self.logger.error(
-                        f"Shared OSPF area not found for {self.fabric_name}. "
-                        "The DC generator must run first to create it."
-                    )
-                    return
-                options["ospf_area_id"] = ospf_area_id
-
         # Shared underlay/overlay BGP/OSPF auth keys — created once by the DC generator.
         # Unlike overlay AS / OSPF area, a missing key is non-fatal: auth is a hardening
-        # add-on, not required for connectivity, so routing creation proceeds without it.
+        # add-on, not required for connectivity, so routing creation proceeds without it
+        # even if the retry loop below never finds them.
         needs_underlay_password = not options.get("underlay_password_id") and not options.get("skip_underlay")
         needs_overlay_password = not options.get("overlay_password_id")
-        if needs_underlay_password or needs_overlay_password:
-            underlay_password_id, overlay_password_id = await self._resolve_shared_passwords()
-            if needs_underlay_password and underlay_password_id:
-                options["underlay_password_id"] = underlay_password_id
-            if needs_overlay_password and overlay_password_id:
-                options["overlay_password_id"] = overlay_password_id
 
-        # Protect shared DC-level objects from generator group cleanup
-        for shared_id in [
-            options.get("overlay_as_id"),
-            options.get("ospf_area_id"),
-            options.get("underlay_password_id"),
-            options.get("overlay_password_id"),
-        ]:
-            if shared_id:
-                self.client.group_context.related_node_ids.append(shared_id)
+        overlay_as_id = options.get("overlay_as_id")
+        ospf_area_id = options.get("ospf_area_id")
+        underlay_password_id = options.get("underlay_password_id")
+        overlay_password_id = options.get("overlay_password_id")
 
-        # ================================================================
-        # PHASE 1: DATA COLLECTION (4 parallel queries)
-        # ================================================================
-
-        interfaces = [iface for pair in p2p_interfaces for iface in pair]
-
-        # Retry the overlay BGP query if any top_devices are still missing their
-        # overlay process. Callers like pod.py's decentralized mesh cabling query
-        # a sibling pod's spines directly (no dc.py-level wait) — the sibling's own
-        # spines can exist while its overlay-BGP pre-seed (a separate create_routing
-        # call inside that sibling's own generator run) hasn't landed yet. Retrying
-        # here closes that narrow gap without serializing pod generation.
         top_device_set = set(top_devices)
-        for attempt in range(_OVERLAY_BGP_MAX_RETRIES):
+        all_bgp: list[Any] = []
+        loopback_interfaces: list[Any] = []
+
+        for attempt in range(_SHARED_OBJECT_MAX_RETRIES):
+            if (needs_overlay_as and not overlay_as_id) or (needs_ospf_area and not ospf_area_id):
+                resolved_overlay_as_id, resolved_ospf_area_id = await self._resolve_shared_objects(routing_strategy)
+                overlay_as_id = overlay_as_id or resolved_overlay_as_id
+                ospf_area_id = ospf_area_id or resolved_ospf_area_id
+
+            if (needs_underlay_password and not underlay_password_id) or (
+                needs_overlay_password and not overlay_password_id
+            ):
+                resolved_underlay_password_id, resolved_overlay_password_id = await self._resolve_shared_passwords()
+                underlay_password_id = underlay_password_id or resolved_underlay_password_id
+                overlay_password_id = overlay_password_id or resolved_overlay_password_id
+
             all_bgp, loopback_interfaces = await asyncio.gather(
                 self.client.filters(
                     kind=ManagedBGP,
@@ -211,22 +196,63 @@ class RoutingMixin:
                     prefetch_relationships=True,
                 ),
             )
-            if not top_device_set:
-                break
             overlay_device_names = {
                 name for b in all_bgp if b.name.value.endswith("-bgp-overlay") and (name := _safe_device_name(b))
             }
-            missing = top_device_set - overlay_device_names
-            if not missing:
+            missing_overlay_bgp = top_device_set - overlay_device_names
+
+            still_missing = (
+                (needs_overlay_as and not overlay_as_id)
+                or (needs_ospf_area and not ospf_area_id)
+                or bool(missing_overlay_bgp)
+            )
+            if not still_missing:
                 break
-            if attempt < _OVERLAY_BGP_MAX_RETRIES - 1:
-                delay = retry_delay(_OVERLAY_BGP_RETRY_DELAY, attempt)
+            if attempt < _SHARED_OBJECT_MAX_RETRIES - 1:
+                waiting_on = []
+                if needs_overlay_as and not overlay_as_id:
+                    waiting_on.append("shared overlay AS")
+                if needs_ospf_area and not ospf_area_id:
+                    waiting_on.append("shared OSPF area")
+                if missing_overlay_bgp:
+                    waiting_on.append(f"overlay BGP for {sorted(missing_overlay_bgp)}")
+                delay = retry_delay(_SHARED_OBJECT_RETRY_DELAY, attempt, cap=_SHARED_OBJECT_RETRY_CAP)
                 self.logger.info(
-                    f"Overlay BGP not yet visible for top device(s) {sorted(missing)} — "
-                    f"retrying in {delay:.2f}s "
-                    f"(attempt {attempt + 1}/{_OVERLAY_BGP_MAX_RETRIES})"
+                    f"Waiting on: {', '.join(waiting_on)} — retrying in {delay:.2f}s "
+                    f"(attempt {attempt + 1}/{_SHARED_OBJECT_MAX_RETRIES})"
                 )
                 await asyncio.sleep(delay)
+
+        if needs_overlay_as:
+            if not overlay_as_id:
+                self.logger.error(
+                    f"Shared overlay AS not found for {self.fabric_name}. The DC generator must run first to create it."
+                )
+                return
+            options["overlay_as_id"] = overlay_as_id
+
+        if needs_ospf_area:
+            if not ospf_area_id:
+                self.logger.error(
+                    f"Shared OSPF area not found for {self.fabric_name}. The DC generator must run first to create it."
+                )
+                return
+            options["ospf_area_id"] = ospf_area_id
+
+        if needs_underlay_password and underlay_password_id:
+            options["underlay_password_id"] = underlay_password_id
+        if needs_overlay_password and overlay_password_id:
+            options["overlay_password_id"] = overlay_password_id
+
+        # Protect shared DC-level objects from generator group cleanup
+        for shared_id in [
+            options.get("overlay_as_id"),
+            options.get("ospf_area_id"),
+            options.get("underlay_password_id"),
+            options.get("overlay_password_id"),
+        ]:
+            if shared_id:
+                self.client.group_context.related_node_ids.append(shared_id)
 
         underlay_type = routing_strategy.split("-")[0]
 
@@ -432,12 +458,12 @@ class RoutingMixin:
         """Find the fabric's shared underlay/overlay RoutingPassword IDs, by deterministic name.
 
         These are created once by the DC generator (``_create_shared_routing_objects``);
-        pod/rack layers only look them up here — mirrors ``_resolve_shared_objects``
-        for ``overlay_as_id``/``ospf_area_id``. Protecting the resolved IDs from
-        generator group cleanup is the caller's job (create_routing already does
-        this for every shared_id it collects). A missing password is non-fatal: it
-        just means auth wasn't configured (e.g. DC generator hasn't run yet, or ran
-        before this feature existed) — routing creation proceeds without it.
+        pod/rack layers only look them up here — one-shot lookup, no retry: the
+        caller (``create_routing``'s readiness loop) retries this alongside every
+        other shared-object lookup in one combined polling loop. A missing
+        password is non-fatal even after that loop exhausts: it just means auth
+        wasn't configured (e.g. DC generator hasn't run yet, or ran before this
+        feature existed) — routing creation proceeds without it.
         """
         underlay_id: str | None = None
         overlay_id: str | None = None
@@ -462,6 +488,11 @@ class RoutingMixin:
 
     async def _resolve_shared_objects(self, routing_strategy: str) -> tuple[str | None, str | None]:
         """Find shared DC-level overlay AS and OSPF area. Returns (overlay_as_id, ospf_area_id).
+
+        One-shot lookup, no retry: the caller (``create_routing``'s readiness
+        loop) retries this alongside every other shared-object lookup in one
+        combined polling loop — see that loop's docstring for the race this
+        closes.
 
         Protecting the resolved IDs from generator group cleanup is the caller's
         job (create_routing already does this for every shared_id it collects,

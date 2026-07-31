@@ -50,8 +50,7 @@ def _make_existing_overlay_bgp(device_name: str, as_id: str, as_asn: int = 65500
     bgp.id = f"bgp-{device_name}-overlay"
     bgp.name.value = f"{device_name}-bgp-overlay"
     bgp.local_as.id = as_id
-    bgp.capabilities.peers[0].name.value = device_name
-    bgp.capabilities.peers[0].id = f"dev-{device_name}"
+    bgp.capabilities.peers = [MagicMock(display_label=device_name, id=f"dev-{device_name}")]
     return bgp
 
 
