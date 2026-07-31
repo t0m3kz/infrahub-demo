@@ -26,7 +26,7 @@ from .protocols import (
 from .routing import RoutingMixin
 
 # Re-export TypedDicts so existing imports (from .common import DeviceOptions, ...) keep working
-from .types import CablingOptions, DeviceOptions, RoutingOptions  # noqa: F401
+from .types import CablingOptions, ChainHop, DeviceOptions, RoutingOptions  # noqa: F401
 
 _PARENT_WAIT_TIMEOUT = 1800  # 30 min, matches tasks/demo.py's own generator-wait timeout
 _PARENT_WAIT_POLL_INTERVAL = 3
@@ -857,7 +857,23 @@ class CommonGenerator(FailOnErrorLoggerMixin, RoutingMixin, InfrahubGenerator):
             fallback_name=None,
         )
 
-        # Execute plan: create cable → allocate IPs → save interfaces
+        return await self._execute_cabling_plan(cabling_plan, iface_map, options, technical_pool)
+
+    async def _execute_cabling_plan(
+        self,
+        cabling_plan: list[tuple[Any, Any]],
+        iface_map: dict[str, Any],
+        options: CablingOptions,
+        technical_pool: Any,
+    ) -> list[tuple[Any, Any]]:
+        """Execute an already-built cabling plan: for each (src, dst) interface
+        pair, create the cable, allocate P2P IPs if a pool is given, and save
+        both interfaces. Shared tail for create_cabling() and
+        create_chain_cabling() — verbatim what create_cabling() always did,
+        just factored out so create_chain_cabling() can reuse it after
+        building its own per-leg plan directly via CablingPlanner (skipping
+        create_cabling()'s own interface re-query by name).
+        """
         cabled_pairs: list[tuple[Any, Any]] = []
         for src_interface, dst_interface in cabling_plan:
             endpoint_names = sorted(
@@ -935,3 +951,82 @@ class CommonGenerator(FailOnErrorLoggerMixin, RoutingMixin, InfrahubGenerator):
             self.logger.info(f"  - Created connection {cable_name}")
 
         return cabled_pairs
+
+    async def create_chain_cabling(
+        self, hops: list[ChainHop], options: CablingOptions | None = None
+    ) -> list[list[tuple[Any, Any]]]:
+        """Cable an ordered chain of device groups end to end — e.g.
+        border-leaf<->firewall<->load-balancer<->border-leaf — one leg per
+        consecutive pair of hops, any-to-any within each leg ("rack" strategy,
+        speed-aware). Each hop's interfaces are queried ONCE (by role) and
+        the resulting objects passed straight into CablingPlanner — unlike
+        calling create_cabling() per leg, this skips its redundant re-query
+        of the same interfaces by name.
+
+        Each hop's ``down_role`` interfaces are cabled to the next hop's
+        ``up_role`` interfaces. A hop with an empty ``devices`` list, or a leg
+        where either side resolves to zero matching ports, is skipped (logged
+        as an error for a non-empty device list with no matching ports).
+
+        Returns one list of cabled (src, dst) interface pairs per leg, in
+        chain order — e.g. ``[blf_fw_pairs, fw_lb_pairs, lb_blf_pairs]`` for a
+        4-hop chain (3 legs). A skipped leg contributes an empty list.
+        """
+        if options is None:
+            options = CablingOptions()
+        cabling_offset: int = int(options.get("cabling_offset", 0))
+        technical_pool = await self._resolve_pool(
+            provided=options.get("pool"),
+            kind=CoreIPPrefixPool,
+            fallback_name=None,
+        )
+
+        all_leg_pairs: list[list[tuple[Any, Any]]] = []
+        for top_hop, bottom_hop in zip(hops, hops[1:]):
+            top_devices = top_hop.get("devices") or []
+            bottom_devices = bottom_hop.get("devices") or []
+            if not top_devices or not bottom_devices:
+                all_leg_pairs.append([])
+                continue
+
+            top_role = top_hop.get("down_role", "")
+            bottom_role = bottom_hop.get("up_role", "")
+            top_interfaces = await self.client.filters(
+                kind=DcimPhysicalInterface, device__name__values=top_devices, role__value=top_role, include=["cable"]
+            )
+            bottom_interfaces = await self.client.filters(
+                kind=DcimPhysicalInterface,
+                device__name__values=bottom_devices,
+                role__value=bottom_role,
+                include=["cable"],
+            )
+            if not top_interfaces or not bottom_interfaces:
+                self.logger.error(
+                    f"create_chain_cabling: cannot cable {sorted(top_devices)}<->{sorted(bottom_devices)} — "
+                    f"{top_role}_ports={len(top_interfaces)}, {bottom_role}_ports={len(bottom_interfaces)}."
+                )
+                all_leg_pairs.append([])
+                continue
+
+            iface_map: dict[str, Any] = {iface.id: iface for iface in list(bottom_interfaces) + list(top_interfaces)}
+            planner = CablingPlanner(bottom_interfaces=bottom_interfaces, top_interfaces=top_interfaces)
+            leg_plan = planner.build_cabling_plan(
+                scenario="rack",
+                cabling_offset=cabling_offset,
+                speed_aware=True,
+                validate_speeds=True,
+                strict_speed_validation=True,
+            )
+            if not leg_plan:
+                self.logger.error(
+                    f"create_chain_cabling: {sorted(top_devices)}<->{sorted(bottom_devices)} cabling produced "
+                    f"no connections — likely an interface speed mismatch between {top_role}-role and "
+                    f"{bottom_role}-role ports. Check the speed-mismatch log output above for the exact "
+                    "speed groups involved."
+                )
+                all_leg_pairs.append([])
+                continue
+
+            all_leg_pairs.append(await self._execute_cabling_plan(leg_plan, iface_map, options, technical_pool))
+
+        return all_leg_pairs
