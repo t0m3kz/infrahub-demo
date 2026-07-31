@@ -1,5 +1,6 @@
 """Infrastructure generator for data center topology."""
 
+import asyncio
 import secrets
 from typing import Any, Literal, cast
 
@@ -10,7 +11,7 @@ from utils.data_cleaning import clean_data
 from ..common import CablingOptions, CommonGenerator, DeviceOptions
 from ..helpers import calculate_super_spine_loopback_prefix, name_to_asn_range
 from ..helpers.routing import RoutingStrategy
-from ..models import DCModel, Template
+from ..models import DCModel, Pool, Template
 from ..protocols import (
     DcimPhysicalDevice,
     DcimPhysicalInterface,
@@ -26,6 +27,10 @@ _DC_HA_KINDS: dict[str, Literal["ManagedFirewallHA", "ManagedLoadbalancerHA"]] =
     "firewall": "ManagedFirewallHA",
     "load-balancer": "ManagedLoadbalancerHA",
 }
+_POD_POOL_MAX_RETRIES = 10
+_POD_POOL_RETRY_DELAY = 3.0
+_POD_POOL_RETRY_CAP = 20.0
+_POD_POOL_RETRY_JITTER = 0.25
 
 
 class DCTopologyGenerator(CommonGenerator):
@@ -48,12 +53,11 @@ class DCTopologyGenerator(CommonGenerator):
         self.logger.info(f"Processing Data Center: {self.data.name}")
 
         # Add existing pods to group context to prevent deletion
-        # include=["loopback_pool", "asn_pool", "design"] also lets
-        # _generate_dc_scoped_fabric_devices give each pod's border-leaf share a
-        # loopback + underlay/overlay BGP, and compute a deterministic spine
-        # downlink offset from the pod's own design capacity.
+        # include=["loopback_pool", "design"] also lets _generate_dc_scoped_fabric_devices
+        # give each pod's border-leaf share a loopback, and compute a deterministic
+        # spine downlink offset from the pod's own design capacity.
         existing_pods = await self.client.filters(
-            kind=TopologyPod, parent__ids=[self.data.id], include=["loopback_pool", "asn_pool", "design"]
+            kind=TopologyPod, parent__ids=[self.data.id], include=["loopback_pool", "design"]
         )
         related_node_ids = self.client.group_context.related_node_ids
         for pod in existing_pods:
@@ -270,6 +274,7 @@ class DCTopologyGenerator(CommonGenerator):
         self._existing_pods = existing_pods
         self._dc_design = dc_design
         self._is_ipv6 = is_ipv6
+        self._fabric_asn_pool_id = fabric_asn_pool_id
         await self._generate_dc_scoped_fabric_devices()
 
     def _validate_fabric_template_roles(self) -> None:
@@ -381,6 +386,29 @@ class DCTopologyGenerator(CommonGenerator):
         await ha_obj.save(allow_upsert=True)
         self.logger.info(f"DC {self.fabric_name}: created HA domain {ha_name} for {role_label}s")
 
+    async def _wait_for_pod_loopback_pool(self, pod: Any) -> str | None:
+        """Retry-refetch the pod directly until add_pod has written its loopback
+        pool — dc.py's own bootstrap and add_pod's can run concurrently during a
+        bulk load, so the pod relationship read at the top of generate() may not
+        have it yet. Mirrors rack.py's _wait_for_pod_pools for the same race."""
+        if getattr(pod, "loopback_pool", None):
+            return pod.loopback_pool.id
+        for attempt in range(_POD_POOL_MAX_RETRIES):
+            pod_obj = await self.client.get(kind=TopologyPod, id=pod.id, include=["loopback_pool"])
+            if pod_obj.loopback_pool.id:
+                pod.loopback_pool = Pool(id=pod_obj.loopback_pool.id)
+                return pod_obj.loopback_pool.id
+            if attempt < _POD_POOL_MAX_RETRIES - 1:
+                delay = self._retry_delay(
+                    _POD_POOL_RETRY_DELAY, attempt, cap=_POD_POOL_RETRY_CAP, jitter=_POD_POOL_RETRY_JITTER
+                )
+                self.logger.info(
+                    f"DC {self.fabric_name}: pod {pod.name.value} loopback pool not ready yet — "
+                    f"retrying in {delay:.2f}s (attempt {attempt + 1}/{_POD_POOL_MAX_RETRIES})"
+                )
+                await asyncio.sleep(delay)
+        return None
+
     async def _create_and_cable_dc_role_share(
         self,
         *,
@@ -401,7 +429,12 @@ class DCTopologyGenerator(CommonGenerator):
         separate, still-deferred follow-up (see connectivity_mode's docstring).
         """
         allocate_loopback = role == "border-leaf"
-        pod_loopback_pool_id = pod.loopback_pool.id if getattr(pod, "loopback_pool", None) else None
+        pod_loopback_pool_id = await self._wait_for_pod_loopback_pool(pod) if allocate_loopback else None
+        if allocate_loopback and not pod_loopback_pool_id:
+            self.logger.error(
+                f"DC {self.fabric_name}: pod {pod.name.value} loopback pool not found. "
+                f"Run pod generator first: infrahubctl generator add_pod name={pod.name.value}"
+            )
         device_options = DeviceOptions(
             indexes=[self.data.index, pod.index.value],
             allocate_loopback=allocate_loopback,
@@ -452,8 +485,11 @@ class DCTopologyGenerator(CommonGenerator):
                 strategy="rack",
                 options=CablingOptions(cabling_offset=offset),
             )
-            pod_asn_pool_id = pod.asn_pool.id if getattr(pod, "asn_pool", None) else None
-            routing_opts = RoutingOptions(design=self._dc_design, asn_pool=pod_asn_pool_id)
+            # pod.asn_pool is just pod.py's own propagated copy of this DC's fabric_asn_pool
+            # (see pod.py's generate()) — read the DC's own value directly instead of
+            # re-fetching the pod, sidestepping the same add_pod/add_dc race that
+            # affects pod.loopback_pool.
+            routing_opts = RoutingOptions(design=self._dc_design, asn_pool=getattr(self, "_fabric_asn_pool_id", None))
             if routing_opts.get("design"):
                 await self.create_routing(
                     bottom_devices=devices,
