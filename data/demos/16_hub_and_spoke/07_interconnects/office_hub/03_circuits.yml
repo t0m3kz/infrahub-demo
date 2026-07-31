@@ -1,0 +1,89 @@
+---
+# SD-WAN overlay from each customer's office edge to the shared hub gateway
+# in the cloud PoP (see 02_addressing.yml). No DcimCable here — SD-WAN
+# rides the public internet underlay, which is exactly why
+# TopologyVirtualCircuit exists as a distinct node from
+# TopologyPhysicalCircuit (no cable relationship at all, see
+# schemas/extensions/topology/topology_connectivity.yml). The DC7 fabric
+# link in ../../03_dc/dc7/01_cable.yml is the one real physical DcimCable
+# in this demo.
+#
+# Two customers, two independent circuits terminating on two different
+# sub-interfaces of the SAME hub uplink (eth1.1001 / eth1.1002) — this is
+# the isolation test: each circuit/tunnel maps to exactly one customer VRF,
+# so C001 traffic landing on eth1.1001 can never reach C002's VRF even
+# though both cross the same physical hub gateway.
+#
+# Each circuit connects two customer/operator footprints — C001's/C002's
+# own TopologyCustomerOffice footprint and the operator's hub
+# TopologyCustomerCloud footprint (../../02_cloud/aws/01_cloud_pop.yml) —
+# not the shared OFFICES/eu-central-1 containers. Since
+# TopologyConnectableLocation now lives on TopologyCustomer itself (see
+# schemas/extensions/topology/topology_customer.yml), each circuit is
+# already unambiguous — ExchangeGatewayGenerator reads customer.circuits
+# directly, no customer_deployment disambiguation field needed.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologyVirtualCircuit
+  data:
+    - name: "C001-SDWAN-HUB"
+      link_type: sd_wan
+      status: active
+      provider: "P029"
+      owner: "C001"
+      locations:
+        - kind: TopologyCustomerOffice
+          data:
+            owner:
+              kind: OrganizationCustomer
+              data:
+                name: "Nordix Ltd."
+                org_id: "C001"
+            environment: "p"
+            parent: "OFFICES"
+            locations: ["waw-hq"]
+        - kind: TopologyCustomerCloud
+          data:
+            owner:
+              kind: OrganizationProvider
+              data:
+                name: "Network Operator"
+                org_id: "OPERATOR"
+            environment: "p"
+            customer_name: "sdwan-hub"
+            parent: "eu-central-1"
+            namespace: "INTERNET"
+      interfaces:
+        - ["C001-EDGE1", "GE1"]
+        - ["SDWAN-HUB-GW1", "eth1.1001"]
+    - name: "C002-SDWAN-HUB"
+      link_type: sd_wan
+      status: active
+      provider: "P029"
+      owner: "C002"
+      locations:
+        - kind: TopologyCustomerOffice
+          data:
+            owner:
+              kind: OrganizationCustomer
+              data:
+                name: "SwiftGo GmbH"
+                org_id: "C002"
+            environment: "p"
+            parent: "OFFICES"
+            locations: ["waw-br1"]
+        - kind: TopologyCustomerCloud
+          data:
+            owner:
+              kind: OrganizationProvider
+              data:
+                name: "Network Operator"
+                org_id: "OPERATOR"
+            environment: "p"
+            customer_name: "sdwan-hub"
+            parent: "eu-central-1"
+            namespace: "INTERNET"
+      interfaces:
+        - ["C002-EDGE1", "GE1"]
+        - ["SDWAN-HUB-GW1", "eth1.1002"]

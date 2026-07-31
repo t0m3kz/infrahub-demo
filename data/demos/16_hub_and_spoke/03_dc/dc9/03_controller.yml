@@ -1,0 +1,19 @@
+---
+# DC9's ACI APIC — `managed_devices` covers every leaf/spine across both
+# pods (see 02_devices.yml), regardless of pod/rack placement.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: ManagedControllerPhysical
+  data:
+    - name: "DC9-APIC1"
+      object_template: APIC-L3_ACI_APIC
+      status: active
+      deployment: DC9
+      managed_devices:
+        - "DC9-SPINE1"
+        - "DC9-SPINE2"
+        - "DC9-POD1-LEAF1"
+        - "DC9-POD1-LEAF2"
+        - "DC9-POD2-LEAF1"
+        - "DC9-POD2-LEAF2"

@@ -1,0 +1,18 @@
+---
+# C010 (Zindra Corp.) — TopologyCustomerCloud footprint on GCP
+# europe-west4, namespace-only (see ./c005.yml for the AWS equivalent and
+# the human_friendly_id note on why owners must be distinct).
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologyCustomerCloud
+  data:
+    - owner:
+        kind: OrganizationCustomer
+        data:
+          name: "Zindra Corp."
+          org_id: "C010"
+      customer_name: "hub-and-spoke-gcp"
+      environment: "p"
+      status: active
+      parent: "europe-west4"

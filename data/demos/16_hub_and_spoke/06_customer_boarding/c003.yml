@@ -1,0 +1,54 @@
+---
+# C003 (Vaultex Inc.) — TopologyCustomerDC footprint on DC7, one of two
+# customers on that site (see ./c006.yml) exercising inter-customer
+# isolation on a single DC. Creates a route-target leak exchange to
+# SHARED-SERVICES via the ExchangeGatewayGenerator's created-trigger.
+#
+# `owner` is set via the object loader's `kind:`+`data:` form, not a bare
+# HFID string: TopologyCustomer.owner peers the generic OrganizationEntity
+# (Customer and Provider both inherit from it — see schemas/extensions/
+# topology/topology_customer.yml), and OrganizationEntity itself declares no
+# human_friendly_id, so a bare string/HFID reference against it can't
+# resolve (server-side "Relationship has not been initialized yet" /
+# NODE_NOT_FOUND — confirmed empirically). `kind:`+`data:` with the SAME
+# data already in data/bootstrap/03_clients.yml upserts onto the existing
+# customer rather than creating a duplicate.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologyCustomerDC
+  data:
+    - owner:
+        kind: OrganizationCustomer
+        data:
+          name: "Vaultex Inc."
+          org_id: "C003"
+      environment: "p"
+      status: active
+      parent: "DC7"
+
+---
+# Multi-tenant firewall slicing on the DC7-FW1 cluster (see schemas/
+# extensions/capabilities/ha.yml's ManagedFirewallContext, and
+# 03_dc/02_firewall_ha.yml for the HA domain this references): one
+# dedicated VDOM/vsys for this high-risk tenant (fintech_strict) plus a
+# shared low-risk context (tenant unset) for everyone else.
+#
+# FirewallContext.tenant points at a concrete TopologyCustomer node (not
+# the bare CoreOrganization), so it references the TopologyCustomerDC
+# footprint created above by hfid — this must load AFTER that footprint
+# exists, which is why it lives here rather than alongside the HA domain in
+# 03_dc/. This also lets the ExchangeGatewayGenerator auto-wire C003's VRF
+# namespace to SHARED-SERVICES via the usual created-trigger.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: ManagedFirewallContext
+  data:
+    - name: "DC7-FW1-C003-dedicated"
+      context_id: "vdom-c003"
+      cluster: "DC7-FW1-ha"
+      tenant: ["C003", "p"]
+    - name: "DC7-FW1-shared-lowrisk"
+      context_id: "vdom-shared"
+      cluster: "DC7-FW1-ha"

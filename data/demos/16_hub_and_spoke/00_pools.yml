@@ -3,7 +3,7 @@
 # demo — same pattern as data/demos/15_customer_deployments/00_dc_fabric/
 # 01_pools.yml. Two DCs (DC7 + DC8, see 03_dc/01_datacenter.yml) let this
 # demo exercise inter-site traffic: two customer footprints per DC (see
-# 05_customer_footprints.yml) exercise inter-customer isolation on top of
+# 06_customer_boarding/) exercise inter-customer isolation on top of
 # that. Non-overlapping ranges per DC avoid any pool collision.
 apiVersion: infrahub.app/v1
 kind: Object

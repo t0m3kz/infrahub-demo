@@ -1,0 +1,35 @@
+---
+# C004's colocation footprint (WAW1) reaches shared services over a real
+# WAW1 <-> DC7 link — two different physical sites, a DCI-like circuit,
+# rather than the old same-zone route-leak workaround. This is now possible
+# because TopologyCustomerColocation inherits TopologyConnectableLocation
+# directly (see schemas/extensions/topology/topology_customer.yml).
+# C004-EDGE1 is a small junos firewall sitting at WAW1; the far end is
+# DC7-BL1's existing spare downlink range (Ethernet[1-24]/1 — Ethernet25/1
+# is already used for the DC7-BL1<->DC7-FW1 link, see
+# ../../03_dc/dc7/01_cable.yml).
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimPhysicalDevice
+  data:
+    # deployment's peer is the generic TopologyDeployment; a bare HFID list
+    # can't resolve against a multi-hop HFID (owner__org_id__value,
+    # environment__value) like TopologyCustomerColocation's, so `kind:`+
+    # `data:` with the SAME full data already created in
+    # ../../06_customer_boarding/c004.yml is used instead — this upserts
+    # onto the existing node (uniqueness_constraint: owner + environment +
+    # parent) rather than creating a duplicate.
+    - name: "C004-EDGE1"
+      object_template: SRX-1500_EDGE_FIREWALL
+      status: active
+      deployment:
+        kind: TopologyCustomerColocation
+        data:
+          owner:
+            kind: OrganizationCustomer
+            data:
+              name: "Peakora AG"
+              org_id: "C004"
+          environment: "p"
+          parent: "WAW"

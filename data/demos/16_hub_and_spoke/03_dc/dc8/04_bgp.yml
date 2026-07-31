@@ -1,0 +1,20 @@
+---
+# BGP processes for the DC8-BL1 <-> DC8-FW1 eBGP session (see 01_cable.yml,
+# 02_asn.yml, 03_addressing.yml).
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: ManagedBGP
+  data:
+    - name: "DC8-BL1-bgp-fw"
+      status: active
+      local_as: "AS65080"
+      router_id: ["10.80.0.1/30", "default"]
+      capabilities:
+        - "DC8-BL1"
+    - name: "DC8-FW1-bgp-fabric"
+      status: active
+      local_as: "AS65081"
+      router_id: ["10.80.0.2/30", "default"]
+      capabilities:
+        - "DC8-FW1"

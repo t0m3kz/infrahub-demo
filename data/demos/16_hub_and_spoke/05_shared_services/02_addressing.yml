@@ -1,0 +1,39 @@
+---
+# Addressing for the shared-services virtual servers (see 01_devices.yml).
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: IpamPrefix
+  data:
+    - prefix: "10.90.0.0/24"
+      description: "Shared services server addressing"
+      status: active
+      ip_namespace: "SHARED-SERVICES"
+
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimVirtualInterface
+  data:
+    - name: "eth0"
+      device: "DC7-SVC1"
+      status: active
+      ip_address:
+        data:
+          address: "10.90.0.1/24"
+          ip_namespace: "SHARED-SERVICES"
+    - name: "eth0"
+      device: "DC8-SVC1"
+      status: active
+      ip_address:
+        data:
+          address: "10.90.0.2/24"
+          ip_namespace: "SHARED-SERVICES"
+    - name: "eth0"
+      device: "WAW1-SVC1"
+      status: active
+      ip_address:
+        data:
+          address: "10.90.0.3/24"
+          ip_namespace: "SHARED-SERVICES"

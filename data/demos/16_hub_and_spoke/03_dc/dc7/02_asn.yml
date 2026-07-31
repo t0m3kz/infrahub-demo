@@ -1,0 +1,11 @@
+---
+# ASNs for the DC7-BL1 <-> DC7-FW1 eBGP session (see 01_cable.yml).
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: RoutingAutonomousSystem
+  data:
+    - asn: 65070
+      description: "DC7 fabric AS"
+    - asn: 65071
+      description: "DC7-FW1 AS"

@@ -1,0 +1,29 @@
+---
+# Point-to-point addressing for C004-EDGE1 <-> DC7-BL1 (see 01_device.yml).
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: IpamPrefix
+  data:
+    - prefix: "10.71.0.0/30"
+      description: "C004-EDGE1 <-> DC7-BL1 point-to-point"
+      status: active
+
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimPhysicalInterface
+  data:
+    - name: "ge-0/0/0"
+      device: "C004-EDGE1"
+      status: active
+      ip_address:
+        data:
+          address: "10.71.0.1/30"
+    - name: "Ethernet1/1"
+      device: "DC7-BL1"
+      status: active
+      ip_address:
+        data:
+          address: "10.71.0.2/30"

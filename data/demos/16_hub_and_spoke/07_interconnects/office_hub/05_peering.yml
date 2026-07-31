@@ -1,0 +1,23 @@
+---
+# eBGP peerings for the C001/C002 <-> hub SD-WAN sessions (see 04_bgp.yml).
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: ManagedBGPPeering
+  data:
+    - name: "C001-EDGE1-HUB-ebgp"
+      session_type: EBGP
+      bgp_processes:
+        - "C001-EDGE1-bgp"
+        - "SDWAN-HUB-GW1-bgp"
+      interface_capabilities:
+        - ["C001-EDGE1", "GE1"]
+        - ["SDWAN-HUB-GW1", "eth1.1001"]
+    - name: "C002-EDGE1-HUB-ebgp"
+      session_type: EBGP
+      bgp_processes:
+        - "C002-EDGE1-bgp"
+        - "SDWAN-HUB-GW1-bgp"
+      interface_capabilities:
+        - ["C002-EDGE1", "GE1"]
+        - ["SDWAN-HUB-GW1", "eth1.1002"]
