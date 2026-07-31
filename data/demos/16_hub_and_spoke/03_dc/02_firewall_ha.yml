@@ -1,0 +1,17 @@
+---
+# DC7-FW1 HA domain — a single-device HA domain stands in for a real HA
+# pair, just enough to hang the multi-tenant context split off of (see
+# 06_customer_boarding/c003.yml's ManagedFirewallContext, which references
+# this cluster — that file also carries the tenant-specific context because
+# it references C003's TopologyCustomerDC footprint, which doesn't exist
+# yet at this point in the load sequence).
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: ManagedFirewallHA
+  data:
+    - name: "DC7-FW1-ha"
+      status: active
+      mode: active-passive
+      capabilities:
+        - "DC7-FW1"

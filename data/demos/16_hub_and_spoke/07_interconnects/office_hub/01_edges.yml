@@ -2,17 +2,16 @@
 # SD-WAN edge appliance per customer at the office (VCE-610, WAN uplink GE1)
 # plus the shared hub gateway in the cloud PoP (VCG-VA, one physical uplink
 # eth1 carrying per-tenant tunnels via sub-interfaces — see
-# 02_office_hub_circuits.yml). Two customers, two edges, one hub: this is
-# what lets us test isolation — C001 and C002 each get their own circuit and
-# VRF, and neither can reach the other through the shared hub.
+# 03_circuits.yml). Two customers, two edges, one hub: this is what lets us
+# test isolation — C001 and C002 each get their own circuit and VRF, and
+# neither can reach the other through the shared hub.
 #
 # `deployment` is set to each customer's TopologyCustomerOffice (created in
-# ../05_customer_footprints.yml, loaded before this file) — the device
-# itself is dedicated per-tenant hardware. Circuit-to-customer
-# disambiguation (telling C001's circuit apart from C002's at the shared
-# OFFICES office) is handled explicitly by
-# TopologyVirtualCircuit.customer_deployment in 02_office_hub_circuits.yml,
-# not inferred from this field.
+# ../../06_customer_boarding/, loaded before this file) — the device itself
+# is dedicated per-tenant hardware. Circuit-to-customer disambiguation
+# (telling C001's circuit apart from C002's at the shared OFFICES office)
+# is handled explicitly by TopologyVirtualCircuit.customer_deployment in
+# 03_circuits.yml, not inferred from this field.
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
@@ -43,7 +42,7 @@ spec:
     # deployment's peer is the generic TopologyDeployment; the object loader
     # can't resolve a bare-string/list reference against a multi-hop HFID
     # (owner__org_id__value, environment__value) like TopologyCustomerCloud's
-    # — same constraint as C001-EDGE1/C002-EDGE1 below. Left unset here;
+    # — same constraint as C001-EDGE1/C002-EDGE1 above. Left unset here;
     # linked manually via a raw GraphQL mutation after load.
     - name: "SDWAN-HUB-GW1"
       object_template: VCG-VA_CLOUD

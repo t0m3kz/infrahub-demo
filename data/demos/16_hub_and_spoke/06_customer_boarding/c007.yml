@@ -1,0 +1,21 @@
+---
+# C007 (Orbisan Ltd.) — TopologyCustomerDC footprint on DC8, one of two
+# customers on that site (see ./c008.yml) — inter-site DCI: DC7 <-> DC8 is
+# NOT wired directly in this demo, both only reach SHARED-SERVICES
+# independently, so any DC7<->DC8 traffic (e.g. C003<->C007) requires an
+# explicit exchange that does not exist here by default — query
+# TopologyRouteLeakExchange/TopologyRoutedExchange after loading this demo
+# and confirm none of that exists by default.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologyCustomerDC
+  data:
+    - owner:
+        kind: OrganizationCustomer
+        data:
+          name: "Orbisan Ltd."
+          org_id: "C007"
+      environment: "p"
+      status: active
+      parent: "DC8"

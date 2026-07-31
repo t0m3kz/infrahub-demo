@@ -1,0 +1,18 @@
+---
+# C004 (Peakora AG) — TopologyCustomerColocation footprint on EQUINIX/WAW.
+# Reaches SHARED-SERVICES over a real WAW1<->DC7 circuit
+# (07_interconnects/colo_dc7_link/), same mechanism as Cloud/Office, since
+# Colocation inherits TopologyConnectableLocation directly.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologyCustomerColocation
+  data:
+    - owner:
+        kind: OrganizationCustomer
+        data:
+          name: "Peakora AG"
+          org_id: "C004"
+      environment: "p"
+      status: active
+      parent: "WAW"

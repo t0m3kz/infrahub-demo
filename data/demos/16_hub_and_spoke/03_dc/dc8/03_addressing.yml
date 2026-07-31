@@ -1,0 +1,29 @@
+---
+# Point-to-point addressing for the DC8-BL1 <-> DC8-FW1 link (see 01_cable.yml).
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: IpamPrefix
+  data:
+    - prefix: "10.80.0.0/30"
+      description: "DC8-BL1 <-> DC8-FW1 point-to-point"
+      status: active
+
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimPhysicalInterface
+  data:
+    - name: "Ethernet25/1"
+      device: "DC8-BL1"
+      status: active
+      ip_address:
+        data:
+          address: "10.80.0.1/30"
+    - name: "eth1"
+      device: "DC8-FW1"
+      status: active
+      ip_address:
+        data:
+          address: "10.80.0.2/30"

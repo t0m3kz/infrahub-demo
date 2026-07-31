@@ -1,0 +1,37 @@
+---
+# Physical circuit for the C004-EDGE1 <-> DC7-BL1 link (see 02_addressing.yml).
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologyPhysicalCircuit
+  data:
+    # locations' peer is the generic TopologyConnectableLocation — a bare
+    # HFID string can't mix with a `kind:`+`data:` entry in the same list
+    # (object loader requires one format for the whole relationship), so
+    # both endpoints use `kind:`+`data:` with the SAME full data already
+    # created in ../../04_colo/equinix/01_colocation.yml /
+    # ../../03_dc/01_datacenter.yml — this upserts onto the existing nodes
+    # rather than creating duplicates.
+    - name: "C004-WAW1-DC7"
+      circuit_id: "C004-WAW1-DC7"
+      circuit_type: dark_fiber
+      status: active
+      provider: "P016"
+      owner: "C004"
+      locations:
+        - kind: TopologyDataCenter
+          data:
+            name: "DC7"
+            index: 7
+        - kind: TopologyCustomerColocation
+          data:
+            owner:
+              kind: OrganizationCustomer
+              data:
+                name: "Peakora AG"
+                org_id: "C004"
+            environment: "p"
+            parent: "WAW"
+      interfaces:
+        - ["C004-EDGE1", "ge-0/0/0"]
+        - ["DC7-BL1", "Ethernet1/1"]

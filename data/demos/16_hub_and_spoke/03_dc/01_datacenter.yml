@@ -3,10 +3,12 @@
 # 01_data_center) — DC7 and DC8, each with its own border-leaf and firewall.
 # Two sites let this demo exercise inter-site DCI traffic on top of the
 # inter-customer isolation already covered by Office/Colocation/Cloud (see
-# ../05_customer_footprints.yml, which puts two customer footprints on each
-# DC). ManagedFirewallContext (../06_firewall_contexts.yml) and the fabric
-# BGP+cabling (02_dc7_fabric_cabling.yml, 02b_dc8_fabric_cabling.yml) build
-# on top of these without a full pod/rack fabric build-out.
+# ../06_customer_boarding/, which puts two customer footprints on each DC).
+# ManagedFirewallHA (02_firewall_ha.yml) and the fabric BGP+cabling (dc7/,
+# dc8/) build on top of these without a full pod/rack fabric build-out —
+# the tenant-specific ManagedFirewallContext lives in
+# ../06_customer_boarding/c003.yml instead, since it references that
+# footprint by hfid and must load after it exists.
 apiVersion: infrahub.app/v1
 kind: Object
 spec:

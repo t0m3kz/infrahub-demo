@@ -1,0 +1,21 @@
+---
+# C005 (Drentec BV) — TopologyCustomerCloud footprint on AWS eu-central-1,
+# namespace-only (no circuit wired, so it just sits at namespace
+# provisioning). Distinct owner from the operator's own hub footprint
+# (owner: OPERATOR, see 02_cloud/aws/01_cloud_pop.yml) because
+# human_friendly_id [owner, environment] is shared across the WHOLE
+# TopologyCustomerCloud generic.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologyCustomerCloud
+  data:
+    - owner:
+        kind: OrganizationCustomer
+        data:
+          name: "Drentec BV"
+          org_id: "C005"
+      customer_name: "hub-and-spoke-cloud"
+      environment: "p"
+      status: active
+      parent: "eu-central-1"

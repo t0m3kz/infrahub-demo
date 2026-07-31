@@ -1,0 +1,16 @@
+---
+# C006 (Lumivex SA) — TopologyCustomerDC footprint on DC7, alongside C003
+# (see ./c003.yml) — inter-customer isolation on a single DC.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologyCustomerDC
+  data:
+    - owner:
+        kind: OrganizationCustomer
+        data:
+          name: "Lumivex SA"
+          org_id: "C006"
+      environment: "p"
+      status: active
+      parent: "DC7"

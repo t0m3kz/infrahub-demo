@@ -1,0 +1,43 @@
+---
+# DC9 spines (shared across both pods) and per-pod leafs — see 01_topology.yml.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimPhysicalDevice
+  data:
+    - name: DC9-SPINE1
+      object_template: N9K-C9336C-FX2_SPINE
+      status: active
+      deployment: DC9
+      member_of_groups:
+        - spines
+    - name: DC9-SPINE2
+      object_template: N9K-C9336C-FX2_SPINE
+      status: active
+      deployment: DC9
+      member_of_groups:
+        - spines
+    - name: DC9-POD1-LEAF1
+      object_template: N9K-C9336C-FX2_LEAF
+      status: active
+      deployment: "DC9-9-POD-1"
+      member_of_groups:
+        - leafs
+    - name: DC9-POD1-LEAF2
+      object_template: N9K-C9336C-FX2_LEAF
+      status: active
+      deployment: "DC9-9-POD-1"
+      member_of_groups:
+        - leafs
+    - name: DC9-POD2-LEAF1
+      object_template: N9K-C9336C-FX2_LEAF
+      status: active
+      deployment: "DC9-9-POD-2"
+      member_of_groups:
+        - leafs
+    - name: DC9-POD2-LEAF2
+      object_template: N9K-C9336C-FX2_LEAF
+      status: active
+      deployment: "DC9-9-POD-2"
+      member_of_groups:
+        - leafs

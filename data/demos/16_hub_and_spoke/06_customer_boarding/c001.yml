@@ -1,0 +1,22 @@
+---
+# C001 (Nordix Ltd.) — TopologyCustomerOffice footprint under the shared
+# OFFICES site anchor (see ../01_office_anchor.yml), owning its own
+# building (waw-hq) — the physical office isn't operator-shared infra like
+# a DC fabric, so it lives on the customer footprint, not on TopologyOffice
+# itself. Reaches SHARED-SERVICES via a routed exchange terminating at the
+# hub's INTERNET namespace (see 07_interconnects/office_hub/).
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologyCustomerOffice
+  data:
+    - owner:
+        kind: OrganizationCustomer
+        data:
+          name: "Nordix Ltd."
+          org_id: "C001"
+      environment: "p"
+      status: active
+      parent: "OFFICES"
+      locations:
+        - "waw-hq"

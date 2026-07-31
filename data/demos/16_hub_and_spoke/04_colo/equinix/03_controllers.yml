@@ -1,19 +1,20 @@
 ---
 # Colocation controllers at WAW1 — demonstrates ManagedControllerPhysical
 # (see schemas/extensions/capabilities/controller.yml) outside a DC fabric
-# context (compare ../../03_dc/03_dc9_aci.yml's ACI APIC). Two independent
-# controllers sharing the same physical zone:
+# context (compare ../../03_dc/dc9/01_topology.yml's ACI APIC). Two
+# independent controllers sharing the same physical zone:
 #   WAW1-WLC1   — Wireless LAN Controller, manages the office APs
-#                 (../../08_office/03_access_points.yml, loaded after this
-#                 file) even though the WLC itself lives at the colo, not
-#                 the office — a controller's `managed_devices` is not tied
-#                 to co-location, same as DC9-APIC1 managing devices across
-#                 two pods.
+#                 (../../07_interconnects/office_hub/06_access_points.yml,
+#                 loaded much later) even though the WLC itself lives at
+#                 the colo, not the office — a controller's
+#                 `managed_devices` is not tied to co-location, same as
+#                 DC9-APIC1 managing devices across two pods.
 #   WAW1-SDWAN-GW1 — physical SD-WAN gateway/controller, the colo-hosted
 #                 counterpart to the demo's existing cloud-hosted
-#                 SDWAN-HUB-GW1 (../../08_office/01_office_edges.yml) — shows
-#                 the same controller_type (sdwan_orchestrator) instantiated
-#                 as ManagedControllerPhysical here vs ManagedControllerVirtual
+#                 SDWAN-HUB-GW1 (../../07_interconnects/office_hub/
+#                 01_edges.yml) — shows the same controller_type
+#                 (sdwan_orchestrator) instantiated as
+#                 ManagedControllerPhysical here vs ManagedControllerVirtual
 #                 there.
 apiVersion: infrahub.app/v1
 kind: Object

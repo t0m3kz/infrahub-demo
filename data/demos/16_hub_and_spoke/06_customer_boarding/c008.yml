@@ -1,0 +1,16 @@
+---
+# C008 (Krafven GmbH) — TopologyCustomerDC footprint on DC8, alongside C007
+# (see ./c007.yml) — inter-customer isolation on a single DC.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologyCustomerDC
+  data:
+    - owner:
+        kind: OrganizationCustomer
+        data:
+          name: "Krafven GmbH"
+          org_id: "C008"
+      environment: "p"
+      status: active
+      parent: "DC8"

@@ -6,7 +6,7 @@
 # ../../04_colo/equinix/01_colocation.yml) — plain customer footprint
 # locations here, NOT SD-WAN hubs: no `namespace` set, no
 # CloudInternetGateway. cloud/aws/01_cloud_pop.yml's eu-central-1 remains
-# the only shared hub in this demo. This gives 05_customer_footprints.yml
+# the only shared hub in this demo. This gives 06_customer_boarding/
 # two real Azure regions to spread customers across (C009 and beyond),
 # same as AWS/GCP now do. 3 AZs per region.
 apiVersion: infrahub.app/v1
