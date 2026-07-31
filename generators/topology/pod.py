@@ -3,25 +3,18 @@
 import asyncio
 from typing import Any, Literal, cast
 
-from infrahub_sdk.protocols import CoreStandardGroup
-
 from utils.data_cleaning import clean_data
 
 from ..common import CablingOptions, CommonGenerator, DeviceOptions, RoutingOptions
 from ..helpers.routing import RoutingStrategy
-from ..models import DeviceRole, PodModel
+from ..models import PodModel
 from ..protocols import DcimPhysicalDevice, DcimPhysicalInterface, TopologyPod
-from ..types import ChainHop
 
 _SIBLING_SPINE_MAX_RETRIES = 10
 _SIBLING_SPINE_RETRY_DELAY = 3.0
 _DC_ASN_POOL_MAX_RETRIES = 10
 _DC_ASN_POOL_RETRY_DELAY = 3.0
 
-_HA_KINDS: dict[str, Literal["ManagedFirewallHA", "ManagedLoadbalancerHA"]] = {
-    "firewall": "ManagedFirewallHA",
-    "load-balancer": "ManagedLoadbalancerHA",
-}
 # FW/LB "uplink" interfaces face border-spine; border-spine's "firewall"/
 # "load-balancer" interfaces are the dedicated counterpart ports — same
 # convention as dc.py's DC-wide border-leaf, just scoped to one pod's own
@@ -388,126 +381,27 @@ class PodTopologyGenerator(CommonGenerator):
         naming_conv = cast(Literal["standard", "hierarchical", "flat"], self.data.parent.naming_convention.lower())
         device_indexes = [self.data.parent.index, self.data.index]
 
-        firewall_names = await self._create_pod_scoped_role_devices(
-            role="firewall", entries=firewall_entries, naming_conv=naming_conv, indexes=device_indexes
+        firewall_names = await self._create_role_devices(
+            role="firewall",
+            entries=firewall_entries,
+            deployment_id=self.data.id,
+            naming_convention=naming_conv,
+            indexes=device_indexes,
         )
-        load_balancer_names = await self._create_pod_scoped_role_devices(
-            role="load-balancer", entries=load_balancer_entries, naming_conv=naming_conv, indexes=device_indexes
+        load_balancer_names = await self._create_role_devices(
+            role="load-balancer",
+            entries=load_balancer_entries,
+            deployment_id=self.data.id,
+            naming_convention=naming_conv,
+            indexes=device_indexes,
         )
-        await self._cable_pod_services(
-            border_spine_names=spines,
+        await self._cable_border_services(
+            border_role_for=_BS_ROLE_FOR,
+            connectivity_mode=self.data.parent.connectivity_mode,
+            border_names=spines,
             firewall_names=firewall_names,
             load_balancer_names=load_balancer_names,
         )
-
-    async def _create_pod_scoped_role_devices(
-        self,
-        *,
-        role: Literal["firewall", "load-balancer"],
-        entries: list[DeviceRole],
-        naming_conv: Literal["standard", "hierarchical", "flat"],
-        indexes: list[int],
-    ) -> list[str]:
-        """Create firewall/load-balancer devices for this pod (deployment_id=
-        this pod, not DC-wide — see _generate_pod_scoped_border_services),
-        pairing each entry's devices into an HA domain when quantity == 2.
-        No loopback allocation — not part of underlay/overlay routing.
-        Near-verbatim copy of dc.py's _create_dc_wide_role_devices, scoped to
-        one pod instead of the whole DC."""
-        device_options = DeviceOptions(indexes=indexes)
-        if role == "load-balancer":
-            # create_devices()'s default group_name is f"{device_role}s" = "load-balancers",
-            # but the bootstrap group is named "loadbalancers" (no hyphen) — override.
-            device_options["group_name"] = "loadbalancers"
-        ha_kind = _HA_KINDS[role]
-
-        all_names: list[str] = []
-        for entry in entries:
-            names = await self.create_devices(
-                deployment_id=self.data.id,
-                device_role=role,
-                amount=entry.quantity,
-                template=entry.template.model_dump(),
-                naming_convention=naming_conv,
-                options=device_options,
-            )
-            all_names.extend(names)
-            if entry.quantity == 2:
-                await self._ensure_pod_ha_pair(names, ha_kind=ha_kind, role_label=role)
-
-        return all_names
-
-    async def _ensure_pod_ha_pair(
-        self,
-        device_names: list[str],
-        *,
-        ha_kind: Literal["ManagedFirewallHA", "ManagedLoadbalancerHA"],
-        role_label: str,
-    ) -> None:
-        """Pair exactly 2 same-role devices into an HA domain — near-verbatim
-        copy of dc.py's _ensure_dc_ha_pair, scoped to one pod's own FW/LB."""
-        if len(device_names) != 2:
-            return
-
-        first, second = sorted(device_names)
-        ha_name = f"{first}-{second}-ha"
-        existing = await self.client.filters(kind=ha_kind, name__value=ha_name)
-        if existing:
-            self.client.group_context.related_node_ids.append(existing[0].id)
-            return
-
-        devices = await self.client.filters(kind=DcimPhysicalDevice, name__values=[first, second])
-        if len(devices) != 2:
-            self.logger.error(f"HA pair {first}/{second}: could not resolve both devices.")
-            return
-
-        ha_group = await self.client.get(kind=CoreStandardGroup, name__value="ha_domains")
-        ha_obj = await self.client.create(
-            kind=ha_kind,
-            data={
-                "name": ha_name,
-                "status": "active",
-                "capabilities": [{"id": dev.id} for dev in devices],
-                "member_of_groups": [{"id": ha_group.id}],
-            },
-        )
-        await ha_obj.save(allow_upsert=True)
-        self.logger.info(f"Pod {self.data.name}: created HA domain {ha_name} for {role_label}s")
-
-    async def _cable_pod_services(
-        self, *, border_spine_names: list[str], firewall_names: list[str], load_balancer_names: list[str]
-    ) -> None:
-        """Cable border-spine<->firewall<->load-balancer per connectivity_mode.
-        Index-paired (bs[0]<->fw[0], bs[1]<->fw[1], ...), never any-to-any —
-        each border-spine/firewall/load-balancer triple is one independent
-        redundant path. Fewer devices on one side are reused round-robin.
-        Near-verbatim copy of dc.py's _cable_dc_services, scoped to one pod's
-        own border-spine/FW/LB instead of DC-wide border-leaf/FW/LB.
-        - pbr: two independent legs, each on the service device's "uplink" ports.
-        - inline: one chain — border-spine<->firewall<->load-balancer<->border-spine.
-          Every device has an "uplink" (toward the previous hop) and "downlink"
-          (toward the next), distinct from load-balancer's own "customer"-role
-          VIP ports (untouched here).
-        No-ops for any leg with nothing to cable (create_chain_cabling's own
-        empty-devices handling)."""
-        connectivity_mode = self.data.parent.connectivity_mode
-
-        bs_to_firewall = ChainHop(devices=border_spine_names, down_role=_BS_ROLE_FOR["firewall"])
-        firewall_hop = ChainHop(devices=firewall_names, up_role="uplink")
-        await self.create_chain_cabling([bs_to_firewall, firewall_hop])
-
-        if connectivity_mode == "inline":
-            middle_firewall_hop = ChainHop(devices=firewall_names, down_role="downlink")
-            middle_lb_hop = ChainHop(devices=load_balancer_names, up_role="uplink")
-            await self.create_chain_cabling([middle_firewall_hop, middle_lb_hop])
-
-            bs_to_lb = ChainHop(devices=border_spine_names, down_role=_BS_ROLE_FOR["load-balancer"])
-            return_lb_hop = ChainHop(devices=load_balancer_names, up_role="downlink")
-            await self.create_chain_cabling([bs_to_lb, return_lb_hop])
-        else:
-            bs_to_lb = ChainHop(devices=border_spine_names, down_role=_BS_ROLE_FOR["load-balancer"])
-            lb_hop = ChainHop(devices=load_balancer_names, up_role="uplink")
-            await self.create_chain_cabling([bs_to_lb, lb_hop])
 
     async def _cable_border_leafs_to_spines(
         self,
