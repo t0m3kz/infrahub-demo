@@ -44,33 +44,6 @@ spec:
             name: mgmt0
             role: management
             interface_type: 10gbase-x-sfpp
-    # consdole interfaces
-    - template_name: C9200L-24P-4G_OOB
-      owner: "P027"
-      device_type: C9200L-24P-4G
-      platform: cisco_ios
-      software_image: cisco_ios-17.12.4
-      role: edge
-      status: provisioning
-      interfaces:
-        kind: TemplateDcimConsoleInterface
-        data:
-          - template_name: C9200L-24P-4G_OOB_con
-            name: con
-            role: console
-    - template_name: C9200L-48P-4G_OOB
-      owner: "P027"
-      device_type: C9200L-48P-4G
-      platform: cisco_ios
-      software_image: cisco_ios-17.12.4
-      role: edge
-      status: provisioning
-      interfaces:
-        kind: TemplateDcimConsoleInterface
-        data:
-          - template_name: C9200L-48P-4G_OOB_con
-            name: con
-            role: console
     - template_name: C9200L-24P-4G_ACCESS
       owner: "P027"
       device_type: C9200L-24P-4G
