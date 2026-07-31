@@ -19,12 +19,12 @@ class TopologyCabling(InfrahubTransform):
     async def transform(self, data: dict[str, Any]) -> str:
         """Transform cabling data into CSV format.
 
-        Processes TopologyDeployment data to extract cable connections
-        from all pods and devices within the topology. Deduplicates cables
-        by cable ID to ensure each connection appears only once.
+        Processes TopologyPhysicalDeployment data to extract this
+        deployment's cables. Deduplicates by cable ID to ensure each
+        connection appears only once.
 
         Args:
-            data: Query response containing TopologyDeployment
+            data: Query response containing TopologyPhysicalDeployment
 
         Returns:
             CSV string with cabling information
@@ -48,9 +48,8 @@ class TopologyCabling(InfrahubTransform):
     def _extract_unique_cables(self, topology_data: dict[str, Any]) -> list[dict[str, Any]]:
         """Extract unique cables from topology data.
 
-        Supports two query formats:
-        1. New: Cables queried directly via deployment's cables relationship (efficient)
-        2. Legacy: Cables traversed via devices->interfaces->cable (backward compatibility)
+        Cables come directly from the deployment's ``cables`` relationship
+        (see ``queries/topology/cabling.gql``), deduplicated by cable id.
 
         Args:
             topology_data: Cleaned topology deployment data from GraphQL
@@ -58,82 +57,27 @@ class TopologyCabling(InfrahubTransform):
         Returns:
             List of unique cable dictionaries
         """
-        cables_by_id: dict[str, dict[str, Any]] = {}
-
-        # Normalize root (may be raw or wrapped in TopologyDeployment/TopologyPhysicalDeployment)
-        root = topology_data
-        if "TopologyDeployment" in topology_data:
-            deployments = topology_data.get("TopologyDeployment", [])
-            if deployments and isinstance(deployments, list):
-                root = deployments[0]
-        elif "TopologyPhysicalDeployment" in topology_data:
-            deployments = topology_data.get("TopologyPhysicalDeployment", [])
-            if deployments and isinstance(deployments, list):
-                root = deployments[0]
-
+        deployments = topology_data.get("TopologyPhysicalDeployment", [])
+        root = deployments[0] if deployments and isinstance(deployments, list) else None
         if not isinstance(root, dict):
             return []
 
         deployment_name = self._get_safe_value(root, "name", "Not applicable")
 
-        # Try new format first: direct cables relationship (more efficient)
-        cables = root.get("cables", [])
-        if cables:
-            for cable in cables:
-                if not isinstance(cable, dict):
-                    continue
-
-                cable_id = cable.get("id")
-                if not cable_id or cable_id in cables_by_id:
-                    continue
-
-                cable_data = self._extract_cable_data(cable, deployment_name)
-                if cable_data:
-                    cables_by_id[cable_id] = cable_data
-        else:
-            # Fall back to legacy format: traverse devices->interfaces->cable
-            pods = root.get("children", [])
-            if pods:
-                for pod in pods:
-                    if not isinstance(pod, dict):
-                        continue
-                    pod_name = self._get_safe_value(pod, "name", "Not applicable")
-                    devices = pod.get("devices", [])
-                    self._collect_cables_from_devices(devices, pod_name, cables_by_id)
-            else:
-                # Try deployment-level devices
-                devices = root.get("devices", [])
-                self._collect_cables_from_devices(devices, deployment_name, cables_by_id)
-
-        return list(cables_by_id.values())
-
-    def _collect_cables_from_devices(
-        self,
-        devices: list[dict[str, Any]],
-        pod_name: str,
-        cables_by_id: dict[str, dict[str, Any]],
-    ) -> None:
-        """Extract cables from device interfaces (legacy format support)."""
-
-        for device in devices:
-            if not isinstance(device, dict):
+        cables_by_id: dict[str, dict[str, Any]] = {}
+        for cable in root.get("cables", []):
+            if not isinstance(cable, dict):
                 continue
 
-            for interface in device.get("interfaces", []):
-                if not isinstance(interface, dict):
-                    continue
+            cable_id = cable.get("id")
+            if not cable_id or cable_id in cables_by_id:
+                continue
 
-                cable_info = interface.get("cable")
-                if not cable_info or not isinstance(cable_info, dict):
-                    continue
+            cable_data = self._extract_cable_data(cable, deployment_name)
+            if cable_data:
+                cables_by_id[cable_id] = cable_data
 
-                cable_id = cable_info.get("id")
-                if not cable_id or cable_id in cables_by_id:
-                    continue
-
-                cable_data = self._extract_cable_data(cable_info, pod_name)
-                if cable_data:
-                    cables_by_id[cable_id] = cable_data
+        return list(cables_by_id.values())
 
     def _extract_cable_data(self, cable_info: dict[str, Any], deployment_name: str) -> dict[str, Any] | None:
         """Extract cable connection data from cable information.
