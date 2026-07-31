@@ -561,7 +561,9 @@ class RoutingPlanner:
                 else:
                     device_as_refs[dev_name] = PendingASRef(device=dev_name)
 
-        _OVERLAY_ROLES = frozenset(("leaf", "border-leaf", "tor", "access-leaf", "spine", "super-spine"))
+        _OVERLAY_ROLES = frozenset(
+            ("leaf", "border-leaf", "tor", "access-leaf", "spine", "border-spine", "super-spine")
+        )
 
         for name in sorted(device_map.keys()):
             if name in _top:
@@ -791,7 +793,7 @@ class RoutingPlanner:
             return
 
         _SUPER_SPINE = frozenset(("super-spine",))
-        _SPINE = frozenset(("spine",))
+        _SPINE = frozenset(("spine", "border-spine"))
         _LEAF_CLIENTS = frozenset(("leaf", "border-leaf", "tor", "access-leaf"))
 
         for d1_name, d1_id, d2_name, d2_id, stype, af_types in session_plan:
@@ -869,11 +871,12 @@ class _BGPSessionPlanner:
           (back-to-back design: spines from different pods peer as equals)
         """
         roles = {d.role for d in self.devices}
-        rrs = [d for d in self.devices if d.role in ("super-spine", "spine")]
+        rrs = [d for d in self.devices if d.role in ("super-spine", "spine", "border-spine")]
         clients = [d for d in self.devices if d.role in ("leaf", "border-leaf", "tor", "access-leaf")]
         af = ["evpn"]
         has_super_spine = "super-spine" in roles
-        has_only_spines = roles == {"spine"}  # back-to-back: spines peer as equals
+        # back-to-back: spines (or border-spines, in micro-fabric mode) peer as equals
+        has_only_spines = roles in ({"spine"}, {"border-spine"})
         if rrs and not clients and (has_super_spine or has_only_spines):
             return [
                 (rrs[i].name, rrs[i].id, rrs[j].name, rrs[j].id, session_type, af)

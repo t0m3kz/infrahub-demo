@@ -28,6 +28,13 @@ artifact_definitions:
     transformation: border_leaf
     parameters:
       device: name__value
+  - name: borderspine_config
+    artifact_name: border-spine
+    content_type: text/plain
+    targets: border-spines
+    transformation: border_spine
+    parameters:
+      device: name__value
   - name: tor_config
     artifact_name: tor
     content_type: text/plain
@@ -181,6 +188,12 @@ check_definitions:
     targets: border-leafs
     parameters:
       device: name__value
+  - name: validate_border_spine
+    class_name: CheckBorderSpine
+    file_path: checks/border_spine.py
+    targets: border-spines
+    parameters:
+      device: name__value
   - name: validate_super_spine
     class_name: CheckSuperSpine
     file_path: checks/super_spine.py
@@ -207,6 +220,9 @@ python_transforms:
   - name: border_leaf
     class_name: BorderLeaf
     file_path: transforms/config/border_leaf.py
+  - name: border_spine
+    class_name: BorderSpine
+    file_path: transforms/config/border_spine.py
   - name: tor
     class_name: ToR
     file_path: transforms/config/tor.py
@@ -284,6 +300,8 @@ queries:
     file_path: queries/config/leaf.gql
   - name: border_leaf_config
     file_path: queries/config/border_leaf.gql
+  - name: border_spine_config
+    file_path: queries/config/border_spine.gql
   - name: spine_config
     file_path: queries/config/spine.gql
   - name: super_spine_config

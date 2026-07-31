@@ -59,6 +59,13 @@ generics:
             label: Super Spine Router
             description: Aggregation router part of a Fabric.
             color: "#aeeeee"
+          - name: border-spine
+            label: Border Spine Router
+            description: >
+              Collapsed spine + border-leaf for micro-fabrics — connects to
+              this pod's leafs, this pod's own firewall/load-balancer, and
+              sibling pods, on one device.
+            color: "#c58fdd"
           - name: leaf
             label: Leaf Switch
             description: Top of Rack part of a Fabric.

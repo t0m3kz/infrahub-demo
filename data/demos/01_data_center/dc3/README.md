@@ -1,30 +1,30 @@
-# DC3 - Brexit, Flat ToR, Maximum Speed
+# DC3 - Brexit, Flat Border-Spine, Maximum Speed
 
 ## Overview
 
-**Location:** London 🇬🇧 | **Size:** Small | **Platform:** Dell SONiC | **Design:** `S_OSPF_IBGP`
+**Location:** London 🇬🇧 | **Size:** Micro | **Platform:** Dell SONiC | **Design:** `S_BORDER_SPINE`
 
-**Fabric Design:** `S_OSPF_IBGP` — OSPF underlay + iBGP overlay, IPv6 P2P links (with the flat naming
-convention because London hates unnecessary formality). OSPF floods LSAs across the underlay while
-iBGP distributes EVPN routes via spine route reflectors — a division of labour as British as the
-House of Lords. At least they upgraded to IPv6 underlay. Brexit happened, but the addressing did not
-regress. Small wins.
+**Fabric Design:** `S_BORDER_SPINE` — no super-spine tier, no DC-wide border-leaf (flat naming
+convention because London hates unnecessary formality anyway). Each pod's **border-spine** pair
+collapses the spine and border-leaf role into one device, meshes back-to-back with the sibling
+pod's border-spines, and hosts its own firewall/load-balancer pair directly. One fewer device tier
+to argue about at the pub.
 
-Brexit happened, but your data stays! Mixed deployment across both pods — ToR and middle rack coexist in
-suspicious harmony, just like English and metric units on the same road sign.
+Brexit happened, but your data stays! Every pod carries its own firewall/load-balancer now — no
+more shipping FW/LB traffic through a shared DC-level border-leaf.
 
-**Philosophy:** "I don't want any extra hops" (but I'll take a few anyway, it's fine).
+**Philosophy:** "I don't want any extra hops" — and for once, DC3 actually delivers on it.
 
 ## Architecture
 
-- **Super Spines:** 2 (Dell PowerSwitch S5232F-ON)
-- **Pods:** 2 | **Spines:** 4 (2+2) | **Racks:** 8
-- **Deployment:** `mixed` (both pods) - The Brexit compromise: some structure, some freedom
+- **Border-Spines:** 4 (2+2, Dell PowerSwitch S5232F-ON) — collapsed spine + border-leaf, one per pod pair
+- **Pods:** 2 | **Racks:** 2 (1 network rack per pod, 8 leafs each)
+- **Deployment:** `middle_rack` (both pods), back-to-back mesh between pods (no super-spine tier)
 
-| Pod | Spines | Design  | Deployment | Site Layout | Personality         |
-| --- | ------ | ------- | ---------- | ----------- | ------------------- |
-| 1   | 2      | S_MIXED | mixed      | small-dc    | Pragmatic Londoner  |
-| 2   | 2      | S_MIXED | mixed      | small-dc    | Same Pragmatic Twin |
+| Pod | Border-Spines | Design | Deployment | Own FW/LB | Personality |
+| --- | -------------- | -------------- | ----------- | --------- | --------------------- |
+| 1 | 2 | S_BORDER_SPINE | middle_rack | yes | Pragmatic Londoner |
+| 2 | 2 | S_BORDER_SPINE | middle_rack | yes | Same Pragmatic Twin |
 
 ## Quick Start
 

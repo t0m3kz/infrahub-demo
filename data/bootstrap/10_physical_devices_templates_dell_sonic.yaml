@@ -305,3 +305,46 @@ spec:
             name: mgmt1/1/1
             role: management
             interface_type: 1000base-t
+
+    # Collapsed spine + border-leaf for micro-fabrics (see role: border-spine
+    # in schemas/extensions/topology/topology_dc.yml and TopologyPodDesign
+    # "S_BORDER_SPINE"). Same port split as Arista's DCS-7050CX3-32C-R_BORDER_SPINE:
+    # downlink halved vs. plain SPINE (fewer leafs in a micro-pod), the freed
+    # ports become uplink for the inter-pod back-to-back mesh, plus dedicated
+    # firewall/load-balancer ports for this pod's own FW/LB pair.
+    - template_name: PowerSwitch-S5232F-ON_BORDER_SPINE
+      owner: "P027"
+      device_type: PowerSwitch S5232F-ON
+      role: border-spine
+      platform: dell_sonic
+      software_image: dell_sonic-4.4.1
+      status: provisioning
+      interfaces:
+        kind: TemplateDcimPhysicalInterface
+        parameters:
+          expand_range: true
+        data:
+          - template_name: PowerSwitch-S5232F-ON_BORDER_SPINE_Ethernet1/1/[1-16]
+            name: Ethernet1/1/[1-16]
+            role: downlink
+            interface_type: 100gbase-x-qsfp28
+          - template_name: PowerSwitch-S5232F-ON_BORDER_SPINE_Ethernet1/1/[17-24]
+            name: Ethernet1/1/[17-24]
+            role: uplink
+            interface_type: 100gbase-x-qsfp28
+          - template_name: PowerSwitch-S5232F-ON_BORDER_SPINE_Ethernet1/1/[25-28]
+            name: Ethernet1/1/[25-28]
+            role: firewall
+            interface_type: 100gbase-x-qsfp28
+          - template_name: PowerSwitch-S5232F-ON_BORDER_SPINE_Ethernet1/1/[29-32]
+            name: Ethernet1/1/[29-32]
+            role: load-balancer
+            interface_type: 100gbase-x-qsfp28
+          - template_name: PowerSwitch-S5232F-ON_BORDER_SPINE_Ethernet1/1/[33-34]
+            name: Ethernet1/1/[33-34]
+            role: management
+            interface_type: 10gbase-x-sfpp
+          - template_name: PowerSwitch-S5232F-ON_BORDER_SPINE_mgmt1
+            name: mgmt1/1/1
+            role: management
+            interface_type: 1000base-t

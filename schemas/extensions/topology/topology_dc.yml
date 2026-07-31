@@ -80,13 +80,13 @@ nodes:
 
       - name: max_super_spines_per_fabric
         label: "Maximum Super-Spines"
-        description: "Maximum number of super-spine switches per fabric"
+        description: "Max super-spine switches per fabric. 0 = back-to-back (pods mesh spines directly)."
         kind: Number
         optional: true
         default_value: 2
         order_weight: 1700
         parameters:
-          min_value: 2
+          min_value: 0
           max_value: 4
 
       - name: max_spines_per_pod
@@ -341,6 +341,15 @@ nodes:
             label: Super Spine Switch
             description: Super spine aggregating multiple pods.
             color: "#5fa8a8"
+          - name: border-spine
+            label: Border Spine Switch
+            description: >
+              Collapsed spine + border-leaf for micro-fabrics — connects
+              directly to this pod's leafs (spine role) and to this pod's
+              own firewall/load-balancer plus sibling pods (border-leaf
+              role) on one device. Sits in a pod's spine slot instead of
+              "spine"; the two never coexist in the same pod.
+            color: "#c58fdd"
           - name: proxy
             label: Proxy
             description: "Forward, transparent, or reverse proxy appliance."

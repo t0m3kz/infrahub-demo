@@ -3,17 +3,31 @@
 import asyncio
 from typing import Any, Literal, cast
 
+from infrahub_sdk.protocols import CoreStandardGroup
+
 from utils.data_cleaning import clean_data
 
 from ..common import CablingOptions, CommonGenerator, DeviceOptions, RoutingOptions
 from ..helpers.routing import RoutingStrategy
-from ..models import PodModel
+from ..models import DeviceRole, PodModel
 from ..protocols import DcimPhysicalDevice, DcimPhysicalInterface, TopologyPod
+from ..types import ChainHop
 
 _SIBLING_SPINE_MAX_RETRIES = 10
 _SIBLING_SPINE_RETRY_DELAY = 3.0
 _DC_ASN_POOL_MAX_RETRIES = 10
 _DC_ASN_POOL_RETRY_DELAY = 3.0
+
+_HA_KINDS: dict[str, Literal["ManagedFirewallHA", "ManagedLoadbalancerHA"]] = {
+    "firewall": "ManagedFirewallHA",
+    "load-balancer": "ManagedLoadbalancerHA",
+}
+# FW/LB "uplink" interfaces face border-spine; border-spine's "firewall"/
+# "load-balancer" interfaces are the dedicated counterpart ports — same
+# convention as dc.py's DC-wide border-leaf, just scoped to one pod's own
+# border-spine instead. See DCS-7050CX3-32C-R_BORDER_SPINE's template for
+# the canonical port layout.
+_BS_ROLE_FOR: dict[str, str] = {"firewall": "firewall", "load-balancer": "load-balancer"}
 
 
 class PodTopologyGenerator(CommonGenerator):
@@ -106,9 +120,19 @@ class PodTopologyGenerator(CommonGenerator):
 
         deployment_type = self.data.deployment_type
 
-        spine_entries = self.data.spine_templates
+        # spine and border-spine fill the same slot in a pod's fabric — never
+        # both (border-spine collapses spine+border-leaf into one device for
+        # micro-fabrics, see role: border-spine in schemas/extensions/topology/
+        # topology_dc.yml). Whichever is declared drives device creation,
+        # naming, and leaf/tor cabling identically; only border-spine also
+        # gets its own per-pod firewall/load-balancer (see
+        # _generate_pod_scoped_border_services below).
+        spine_entries = self.data.spine_slot_templates
+        spine_role = self.data.spine_slot_role
         if not spine_entries:
-            self.logger.error(f"Pod {self.data.name}: no spine fabric_templates entries — cannot build fabric")
+            self.logger.error(
+                f"Pod {self.data.name}: no spine/border-spine fabric_templates entries — cannot build fabric"
+            )
             return
         spine_count = sum(entry.quantity for entry in spine_entries)
         naming_conv = cast(
@@ -118,7 +142,7 @@ class PodTopologyGenerator(CommonGenerator):
 
         if design and spine_count > design.max_spines_per_pod:
             self.logger.error(
-                f"Pod {self.data.name} requests {spine_count} spines "
+                f"Pod {self.data.name} requests {spine_count} {spine_role}s "
                 f"but pod design '{design.name}' allows at most {design.max_spines_per_pod}"
             )
             return
@@ -204,7 +228,7 @@ class PodTopologyGenerator(CommonGenerator):
         for entry in spine_entries:
             entry_spines = await self.create_devices(
                 deployment_id=self.data.id,
-                device_role="spine",
+                device_role=spine_role,
                 amount=entry.quantity,
                 template=entry.template.model_dump(),
                 naming_convention=naming_conv,
@@ -250,7 +274,7 @@ class PodTopologyGenerator(CommonGenerator):
                 top_devices=super_spine_devices,
                 options=RoutingOptions(design=dc_design, asn_pool=dc_asn_pool_id),
                 p2p_interfaces=[],
-                bottom_role="spine",
+                bottom_role=spine_role,
                 top_role="super-spine",
             )
 
@@ -281,12 +305,13 @@ class PodTopologyGenerator(CommonGenerator):
                     top_devices=[],
                     options=RoutingOptions(design=dc_design, asn_pool=dc_asn_pool_id, skip_underlay=True),
                     p2p_interfaces=[],
-                    bottom_role="spine",
+                    bottom_role=spine_role,
                 )
 
             await self._cable_to_existing_sibling_pods(
                 spines=spines,
                 spine_interfaces=[iface.name for iface in spine_template.interfaces if iface.role == "uplink"],
+                spine_role=spine_role,
                 dc=dc,
                 dc_design=dc_design,
                 dc_asn_pool_id=dc_asn_pool_id,
@@ -323,7 +348,7 @@ class PodTopologyGenerator(CommonGenerator):
                     top_devices=super_spine_devices,
                     options=routing_opts,
                     p2p_interfaces=p2p_pairs,
-                    bottom_role="spine",
+                    bottom_role=spine_role,
                     top_role="super-spine",
                 )
         # When there are no super-spines to cable to (skip_cabling), inter-pod
@@ -344,6 +369,13 @@ class PodTopologyGenerator(CommonGenerator):
             is_ipv6=is_ipv6,
         )
 
+        # This pod's own firewall/load-balancer, only present when spine_role
+        # is "border-spine" (micro-fabric mode) — a pod with a plain spine
+        # tier declares none of these (see PodModel.firewall_templates/
+        # load_balancer_templates).
+        if spine_role == "border-spine":
+            await self._generate_pod_scoped_border_services(spines=spines)
+
         # A pod added AFTER its DC already declared border-leaf/firewall/load-balancer
         # fabric_templates needs a retroactive share of those devices — same as any
         # other structural DC-level reconciliation, this requires an explicit
@@ -352,6 +384,145 @@ class PodTopologyGenerator(CommonGenerator):
         # add_pod run (including each pod during a bulk multi-DC load) would fire
         # its own concurrent dc_pod_cascade re-run against the same DC-level pools/
         # ASN pool, racing the DC's own already-in-flight bootstrap.
+
+    async def _generate_pod_scoped_border_services(self, *, spines: list[str]) -> None:
+        """Create this pod's own firewall/load-balancer and cable them to this
+        pod's border-spine devices. Per-pod counterpart to dc.py's DC-wide
+        _generate_dc_scoped_fabric_devices — a border-spine micro-fabric has
+        no DC-level border-leaf tier to sit in front of, so each pod's own
+        border-spine gets its own dedicated FW/LB instead (see
+        PodModel.firewall_templates/load_balancer_templates and
+        TopologyPodDesign "S_BORDER_SPINE"). No-ops if this pod declares
+        neither (the common case for a plain-spine pod, and legal even for
+        a border-spine pod with no FW/LB of its own)."""
+        firewall_entries = self.data.firewall_templates
+        load_balancer_entries = self.data.load_balancer_templates
+        if not firewall_entries and not load_balancer_entries:
+            return
+
+        naming_conv = cast(Literal["standard", "hierarchical", "flat"], self.data.parent.naming_convention.lower())
+        device_indexes = [self.data.parent.index, self.data.index]
+
+        firewall_names = await self._create_pod_scoped_role_devices(
+            role="firewall", entries=firewall_entries, naming_conv=naming_conv, indexes=device_indexes
+        )
+        load_balancer_names = await self._create_pod_scoped_role_devices(
+            role="load-balancer", entries=load_balancer_entries, naming_conv=naming_conv, indexes=device_indexes
+        )
+        await self._cable_pod_services(
+            border_spine_names=spines,
+            firewall_names=firewall_names,
+            load_balancer_names=load_balancer_names,
+        )
+
+    async def _create_pod_scoped_role_devices(
+        self,
+        *,
+        role: Literal["firewall", "load-balancer"],
+        entries: list[DeviceRole],
+        naming_conv: Literal["standard", "hierarchical", "flat"],
+        indexes: list[int],
+    ) -> list[str]:
+        """Create firewall/load-balancer devices for this pod (deployment_id=
+        this pod, not DC-wide — see _generate_pod_scoped_border_services),
+        pairing each entry's devices into an HA domain when quantity == 2.
+        No loopback allocation — not part of underlay/overlay routing.
+        Near-verbatim copy of dc.py's _create_dc_wide_role_devices, scoped to
+        one pod instead of the whole DC."""
+        device_options = DeviceOptions(indexes=indexes)
+        if role == "load-balancer":
+            # create_devices()'s default group_name is f"{device_role}s" = "load-balancers",
+            # but the bootstrap group is named "loadbalancers" (no hyphen) — override.
+            device_options["group_name"] = "loadbalancers"
+        ha_kind = _HA_KINDS[role]
+
+        all_names: list[str] = []
+        for entry in entries:
+            names = await self.create_devices(
+                deployment_id=self.data.id,
+                device_role=role,
+                amount=entry.quantity,
+                template=entry.template.model_dump(),
+                naming_convention=naming_conv,
+                options=device_options,
+            )
+            all_names.extend(names)
+            if entry.quantity == 2:
+                await self._ensure_pod_ha_pair(names, ha_kind=ha_kind, role_label=role)
+
+        return all_names
+
+    async def _ensure_pod_ha_pair(
+        self,
+        device_names: list[str],
+        *,
+        ha_kind: Literal["ManagedFirewallHA", "ManagedLoadbalancerHA"],
+        role_label: str,
+    ) -> None:
+        """Pair exactly 2 same-role devices into an HA domain — near-verbatim
+        copy of dc.py's _ensure_dc_ha_pair, scoped to one pod's own FW/LB."""
+        if len(device_names) != 2:
+            return
+
+        first, second = sorted(device_names)
+        ha_name = f"{first}-{second}-ha"
+        existing = await self.client.filters(kind=ha_kind, name__value=ha_name)
+        if existing:
+            self.client.group_context.related_node_ids.append(existing[0].id)
+            return
+
+        devices = await self.client.filters(kind=DcimPhysicalDevice, name__values=[first, second])
+        if len(devices) != 2:
+            self.logger.error(f"HA pair {first}/{second}: could not resolve both devices.")
+            return
+
+        ha_group = await self.client.get(kind=CoreStandardGroup, name__value="ha_domains")
+        ha_obj = await self.client.create(
+            kind=ha_kind,
+            data={
+                "name": ha_name,
+                "status": "active",
+                "capabilities": [{"id": dev.id} for dev in devices],
+                "member_of_groups": [{"id": ha_group.id}],
+            },
+        )
+        await ha_obj.save(allow_upsert=True)
+        self.logger.info(f"Pod {self.data.name}: created HA domain {ha_name} for {role_label}s")
+
+    async def _cable_pod_services(
+        self, *, border_spine_names: list[str], firewall_names: list[str], load_balancer_names: list[str]
+    ) -> None:
+        """Cable border-spine<->firewall<->load-balancer per connectivity_mode.
+        Index-paired (bs[0]<->fw[0], bs[1]<->fw[1], ...), never any-to-any —
+        each border-spine/firewall/load-balancer triple is one independent
+        redundant path. Fewer devices on one side are reused round-robin.
+        Near-verbatim copy of dc.py's _cable_dc_services, scoped to one pod's
+        own border-spine/FW/LB instead of DC-wide border-leaf/FW/LB.
+        - pbr: two independent legs, each on the service device's "uplink" ports.
+        - inline: one chain — border-spine<->firewall<->load-balancer<->border-spine.
+          Every device has an "uplink" (toward the previous hop) and "downlink"
+          (toward the next), distinct from load-balancer's own "customer"-role
+          VIP ports (untouched here).
+        No-ops for any leg with nothing to cable (create_chain_cabling's own
+        empty-devices handling)."""
+        connectivity_mode = self.data.parent.connectivity_mode
+
+        bs_to_firewall = ChainHop(devices=border_spine_names, down_role=_BS_ROLE_FOR["firewall"])
+        firewall_hop = ChainHop(devices=firewall_names, up_role="uplink")
+        await self.create_chain_cabling([bs_to_firewall, firewall_hop])
+
+        if connectivity_mode == "inline":
+            middle_firewall_hop = ChainHop(devices=firewall_names, down_role="downlink")
+            middle_lb_hop = ChainHop(devices=load_balancer_names, up_role="uplink")
+            await self.create_chain_cabling([middle_firewall_hop, middle_lb_hop])
+
+            bs_to_lb = ChainHop(devices=border_spine_names, down_role=_BS_ROLE_FOR["load-balancer"])
+            return_lb_hop = ChainHop(devices=load_balancer_names, up_role="downlink")
+            await self.create_chain_cabling([bs_to_lb, return_lb_hop])
+        else:
+            bs_to_lb = ChainHop(devices=border_spine_names, down_role=_BS_ROLE_FOR["load-balancer"])
+            lb_hop = ChainHop(devices=load_balancer_names, up_role="uplink")
+            await self.create_chain_cabling([bs_to_lb, lb_hop])
 
     async def _cable_border_leafs_to_spines(
         self,
@@ -425,6 +596,7 @@ class PodTopologyGenerator(CommonGenerator):
         self,
         spines: list[str],
         spine_interfaces: list[str],
+        spine_role: str,
         dc: Any,
         dc_design: Any,
         dc_asn_pool_id: str | None,
@@ -432,6 +604,11 @@ class PodTopologyGenerator(CommonGenerator):
         is_ipv6: bool,
     ) -> None:
         """Cable this pod's spines to every EXISTING lower-index sibling pod (back-to-back mesh).
+
+        spine_role is this pod's own spine-slot role ("spine" or
+        "border-spine") — every pod in a back-to-back DC uses the same one
+        (a DC's design fixes the pattern DC-wide), so it's also used to find
+        each sibling's own spine-slot devices below.
 
         Decentralized: each pod cables itself to its lower-index siblings, rather
         than a DC-level step waiting for every pod to finish before cabling the
@@ -474,7 +651,7 @@ class PodTopologyGenerator(CommonGenerator):
                 sibling_spines_devices = await self.client.filters(
                     kind=DcimPhysicalDevice,
                     deployment__ids=[sibling.id],
-                    role__value="spine",
+                    role__value=spine_role,
                 )
                 sibling_spines = [s.name.value for s in sibling_spines_devices]
                 if sibling_spines:
@@ -524,6 +701,6 @@ class PodTopologyGenerator(CommonGenerator):
                     top_devices=sibling_spines,
                     options=routing_opts,
                     p2p_interfaces=p2p_pairs,
-                    bottom_role="spine",
-                    top_role="spine",
+                    bottom_role=spine_role,
+                    top_role=spine_role,
                 )

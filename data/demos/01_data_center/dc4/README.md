@@ -1,4 +1,4 @@
-# DC4 - Mixed Chaos: Can't Decide? Deploy Both
+# DC4 - Micro-Fabric, No Identity Crisis Needed
 
 ## Overview
 
@@ -6,30 +6,29 @@
 
 **Platform:** Edgecore with SONiC - So vendor-neutral, even your hipster barista could deploy it between DJ sets.
 
-**Fabric Design:** `S_EBGP_EBGP` — eBGP underlay + eBGP overlay (RFC 7938), IPv6 P2P links.
-Pure eBGP because Berlin doesn't do link-state. OSPF is too hierarchical, iBGP route reflectors
-are too authoritarian, and anything with "area 0" smells like legacy infrastructure. IPv6 underlay
-because Edgecore SONiC engineers live in the future and refuse to apologise for it.
-Every router has an ASN. Every session is a political statement.
+**Fabric Design:** `S_BORDER_SPINE` — no super-spine tier, no DC-wide border-leaf. Berlin decided
+commitment isn't overrated after all: both pods now run the exact same micro-fabric pattern, each
+pod's **border-spine** pair collapsing spine + border-leaf into one device, meshed back-to-back
+with the sibling pod, each with its own dedicated firewall/load-balancer pair. eBGP underlay + eBGP
+overlay (RFC 7938), IPv6 P2P links — still pure eBGP, because Berlin still doesn't do link-state.
 
-**Use Case:** When the architecture team can't agree on mixed vs flat ToR and someone says "why not both?"
-Pod 1 goes full mixed deployment, Pod 2 goes pure flat ToR. It's like having a hybrid car that's also a
-motorcycle. Confusing? Yes. Flexible? Absolutely.
+**Use Case:** When the architecture team finally agrees: fewer device tiers, fewer arguments. One
+consistent border-spine pattern across both pods instead of a hybrid mixed/ToR identity crisis.
 
 ---
 
-## Architecture (Identity Crisis with a Beat)
+## Architecture (One Beat, No Crisis)
 
 ### Fabric Scale
 
-- **Super Spines:** 2 (Edgecore 7726-32X-O)
-- **Pods:** 2 | **Spines:** 4 (2+2) | **Racks:** 6
-- **Deployment:** `mixed` (Pod 1), `tor` (Pod 2) - Because commitment is overrated
+- **Border-Spines:** 4 (2+2, Edgecore 7726-32X-O) — collapsed spine + border-leaf, one per pod pair
+- **Pods:** 2 | **Racks:** 2 (1 network rack per pod, 8 leafs each)
+- **Deployment:** `middle_rack` (both pods), back-to-back mesh between pods (no super-spine tier)
 
-| Pod | Spines | Design  | Deployment | Site Layout | Personality  |
-| --- | ------ | ------- | ---------- | ----------- | ------------ |
-| 1   | 2      | S_MIXED | mixed      | small-dc    | Overachiever |
-| 2   | 2      | S_TOR   | tor        | small-dc    | Minimalist   |
+| Pod | Border-Spines | Design | Deployment | Own FW/LB | Personality |
+| --- | -------------- | -------------- | ----------- | --------- | ------------ |
+| 1 | 2 | S_BORDER_SPINE | middle_rack | yes | Overachiever |
+| 2 | 2 | S_BORDER_SPINE | middle_rack | yes | Same Twin |
 
 ## Quick Start
 

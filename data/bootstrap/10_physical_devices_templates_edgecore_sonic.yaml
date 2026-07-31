@@ -661,3 +661,153 @@ spec:
             name: Ethernet124
             role: uplink
             interface_type: 100gbase-x-qsfp28
+
+    # Collapsed spine + border-leaf for micro-fabrics (see role: border-spine
+    # in schemas/extensions/topology/topology_dc.yml and TopologyPodDesign
+    # "S_BORDER_SPINE"). Same 16/8/4/4 downlink/uplink/firewall/load-balancer
+    # split as Arista's DCS-7050CX3-32C-R_BORDER_SPINE and Dell's
+    # PowerSwitch-S5232F-ON_BORDER_SPINE: downlink halved vs. plain SPINE
+    # (fewer leafs in a micro-pod), plus dedicated firewall/load-balancer
+    # ports for this pod's own FW/LB pair.
+    - template_name: Edgecore-7726-32X-O_BORDER_SPINE
+      owner: "P027"
+      device_type: 7726-32X-O
+      role: border-spine
+      platform: sonic
+      software_image: sonic-202405
+      status: provisioning
+      interfaces:
+        kind: TemplateDcimPhysicalInterface
+        data:
+          - template_name: 7726_32X_O_BORDER_SPINE_eth0
+            name: eth0
+            role: management
+            interface_type: 1000base-t
+          - template_name: 7726_32X_O_BORDER_SPINE_Ethernet0
+            name: Ethernet0
+            role: downlink
+            interface_type: 100gbase-x-qsfp28
+          - template_name: 7726_32X_O_BORDER_SPINE_Ethernet4
+            name: Ethernet4
+            role: downlink
+            interface_type: 100gbase-x-qsfp28
+          - template_name: 7726_32X_O_BORDER_SPINE_Ethernet8
+            name: Ethernet8
+            role: downlink
+            interface_type: 100gbase-x-qsfp28
+          - template_name: 7726_32X_O_BORDER_SPINE_Ethernet12
+            name: Ethernet12
+            role: downlink
+            interface_type: 100gbase-x-qsfp28
+          - template_name: 7726_32X_O_BORDER_SPINE_Ethernet16
+            name: Ethernet16
+            role: downlink
+            interface_type: 100gbase-x-qsfp28
+          - template_name: 7726_32X_O_BORDER_SPINE_Ethernet20
+            name: Ethernet20
+            role: downlink
+            interface_type: 100gbase-x-qsfp28
+          - template_name: 7726_32X_O_BORDER_SPINE_Ethernet24
+            name: Ethernet24
+            role: downlink
+            interface_type: 100gbase-x-qsfp28
+          - template_name: 7726_32X_O_BORDER_SPINE_Ethernet28
+            name: Ethernet28
+            role: downlink
+            interface_type: 100gbase-x-qsfp28
+          - template_name: 7726_32X_O_BORDER_SPINE_Ethernet32
+            name: Ethernet32
+            role: downlink
+            interface_type: 100gbase-x-qsfp28
+          - template_name: 7726_32X_O_BORDER_SPINE_Ethernet36
+            name: Ethernet36
+            role: downlink
+            interface_type: 100gbase-x-qsfp28
+          - template_name: 7726_32X_O_BORDER_SPINE_Ethernet40
+            name: Ethernet40
+            role: downlink
+            interface_type: 100gbase-x-qsfp28
+          - template_name: 7726_32X_O_BORDER_SPINE_Ethernet44
+            name: Ethernet44
+            role: downlink
+            interface_type: 100gbase-x-qsfp28
+          - template_name: 7726_32X_O_BORDER_SPINE_Ethernet48
+            name: Ethernet48
+            role: downlink
+            interface_type: 100gbase-x-qsfp28
+          - template_name: 7726_32X_O_BORDER_SPINE_Ethernet52
+            name: Ethernet52
+            role: downlink
+            interface_type: 100gbase-x-qsfp28
+          - template_name: 7726_32X_O_BORDER_SPINE_Ethernet56
+            name: Ethernet56
+            role: downlink
+            interface_type: 100gbase-x-qsfp28
+          - template_name: 7726_32X_O_BORDER_SPINE_Ethernet60
+            name: Ethernet60
+            role: downlink
+            interface_type: 100gbase-x-qsfp28
+          - template_name: 7726_32X_O_BORDER_SPINE_Ethernet64
+            name: Ethernet64
+            role: uplink
+            interface_type: 100gbase-x-qsfp28
+          - template_name: 7726_32X_O_BORDER_SPINE_Ethernet68
+            name: Ethernet68
+            role: uplink
+            interface_type: 100gbase-x-qsfp28
+          - template_name: 7726_32X_O_BORDER_SPINE_Ethernet72
+            name: Ethernet72
+            role: uplink
+            interface_type: 100gbase-x-qsfp28
+          - template_name: 7726_32X_O_BORDER_SPINE_Ethernet76
+            name: Ethernet76
+            role: uplink
+            interface_type: 100gbase-x-qsfp28
+          - template_name: 7726_32X_O_BORDER_SPINE_Ethernet80
+            name: Ethernet80
+            role: uplink
+            interface_type: 100gbase-x-qsfp28
+          - template_name: 7726_32X_O_BORDER_SPINE_Ethernet84
+            name: Ethernet84
+            role: uplink
+            interface_type: 100gbase-x-qsfp28
+          - template_name: 7726_32X_O_BORDER_SPINE_Ethernet88
+            name: Ethernet88
+            role: uplink
+            interface_type: 100gbase-x-qsfp28
+          - template_name: 7726_32X_O_BORDER_SPINE_Ethernet92
+            name: Ethernet92
+            role: uplink
+            interface_type: 100gbase-x-qsfp28
+          - template_name: 7726_32X_O_BORDER_SPINE_Ethernet96
+            name: Ethernet96
+            role: firewall
+            interface_type: 100gbase-x-qsfp28
+          - template_name: 7726_32X_O_BORDER_SPINE_Ethernet100
+            name: Ethernet100
+            role: firewall
+            interface_type: 100gbase-x-qsfp28
+          - template_name: 7726_32X_O_BORDER_SPINE_Ethernet104
+            name: Ethernet104
+            role: firewall
+            interface_type: 100gbase-x-qsfp28
+          - template_name: 7726_32X_O_BORDER_SPINE_Ethernet108
+            name: Ethernet108
+            role: firewall
+            interface_type: 100gbase-x-qsfp28
+          - template_name: 7726_32X_O_BORDER_SPINE_Ethernet112
+            name: Ethernet112
+            role: load-balancer
+            interface_type: 100gbase-x-qsfp28
+          - template_name: 7726_32X_O_BORDER_SPINE_Ethernet116
+            name: Ethernet116
+            role: load-balancer
+            interface_type: 100gbase-x-qsfp28
+          - template_name: 7726_32X_O_BORDER_SPINE_Ethernet120
+            name: Ethernet120
+            role: load-balancer
+            interface_type: 100gbase-x-qsfp28
+          - template_name: 7726_32X_O_BORDER_SPINE_Ethernet124
+            name: Ethernet124
+            role: load-balancer
+            interface_type: 100gbase-x-qsfp28

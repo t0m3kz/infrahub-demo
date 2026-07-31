@@ -6,13 +6,9 @@ spec:
   data:
     - name: DC2
       index: 2
-      design: S_OSPF_IBGP
+      design: S_BORDER_SPINE
       naming_convention: hierarchical
       connectivity_mode: pbr
-      fabric_templates:
-        - ["2", "border-leaf", "DCS-7050CX3-32C-R_BORDER_LEAF"]
-        - ["2", "firewall", "PA-5260_FIREWALL"]
-        - ["2", "load-balancer", "NetScaler-MPX-26000-100G_LOAD_BALANCER"]
       fabric_interface_sorting_method: top_down
       member_of_groups:
         - topologies_dc
@@ -20,9 +16,11 @@ spec:
         kind: TopologyPod
         data:
           - index: 1
-            design: S_MIDDLE
+            design: S_BORDER_SPINE
             fabric_templates:
-              - ["2", "spine", "DCS-7050CX3-32C-R_SPINE"]
+              - ["2", "border-spine", "DCS-7050CX3-32C-R_BORDER_SPINE"]
+              - ["2", "firewall", "PA-5260_FIREWALL"]
+              - ["2", "load-balancer", "NetScaler-MPX-26000-100G_LOAD_BALANCER"]
             member_of_groups:
               - topologies_pod
             racks:
@@ -35,27 +33,13 @@ spec:
                   parent: par-1-s-1
                   member_of_groups: [topologies_rack]
                   fabric_templates:
-                    - ["2", "leaf", "DCS-7050CX3-32C-R_LEAF_MR"]
-                    - ["2", "l2-leaf", "DCS-7050CX3-32C-R_TOR"]
-                - index: 1
-                  row_index: 2
-                  shortname: par-1-s-1-r-2-1
-                  rack_type: network
-                  parent: par-1-s-1
-                  member_of_groups: [topologies_rack]
-                  fabric_templates:
-                    - ["2", "leaf", "DCS-7050CX3-32C-R_LEAF_MR"]
-                    - ["2", "l2-leaf", "DCS-7050CX3-32C-R_TOR"]
-                - index: 1
-                  row_index: 3
-                  rack_type: network
-                  shortname: par-1-s-1-r-3-1
-                  parent: par-1-s-1
-                  member_of_groups: [topologies_rack]
+                    - ["8", "leaf", "DCS-7050CX3-32C-R_LEAF_MR"]
           - index: 2
-            design: S_MIDDLE
+            design: S_BORDER_SPINE
             fabric_templates:
-              - ["2", "spine", "DCS-7050CX3-32C-R_SPINE"]
+              - ["2", "border-spine", "DCS-7050CX3-32C-R_BORDER_SPINE"]
+              - ["2", "firewall", "PA-5260_FIREWALL"]
+              - ["2", "load-balancer", "NetScaler-MPX-26000-100G_LOAD_BALANCER"]
             member_of_groups:
               - topologies_pod
             racks:
@@ -68,20 +52,4 @@ spec:
                   parent: par-1-s-2
                   member_of_groups: [topologies_rack]
                   fabric_templates:
-                    - ["2", "leaf", "DCS-7050CX3-32C-R_LEAF_MR"]
-                    - ["2", "l2-leaf", "DCS-7050CX3-32C-R_TOR"]
-                - index: 1
-                  row_index: 2
-                  shortname: par-1-s-2-r-2-1
-                  rack_type: network
-                  parent: par-1-s-2
-                  member_of_groups: [topologies_rack]
-                  fabric_templates:
-                    - ["2", "leaf", "DCS-7050CX3-32C-R_LEAF_MR"]
-                    - ["2", "l2-leaf", "DCS-7050CX3-32C-R_TOR"]
-                - index: 1
-                  row_index: 3
-                  rack_type: network
-                  shortname: par-1-s-2-r-3-1
-                  parent: par-1-s-2
-                  member_of_groups: [topologies_rack]
+                    - ["8", "leaf", "DCS-7050CX3-32C-R_LEAF_MR"]

@@ -36,6 +36,17 @@ class RackGenerator(RackMixin, CommonGenerator):
         return helper
 
     @property
+    def _spine_role(self) -> Literal["spine", "border-spine"]:
+        """This pod's spine-slot role, set by _prepare_generation_context().
+        Defaults to "spine" when unset (e.g. a unit test driving a generator
+        method directly without going through that setup)."""
+        return getattr(self, "_spine_role_value", "spine")
+
+    @_spine_role.setter
+    def _spine_role(self, value: Literal["spine", "border-spine"]) -> None:
+        self._spine_role_value = value
+
+    @property
     def _roles(self) -> RackRolesHelper:
         """Lazily initialized helper for role-specific generation pipelines."""
         helper = getattr(self, "_roles_helper", None)
@@ -596,7 +607,7 @@ class RackGenerator(RackMixin, CommonGenerator):
             strategy="rack",
             offset=offset,
             bottom_role=device_role,
-            top_role="spine",
+            top_role=self._spine_role,
             bottom_sorting=pod.leaf_interface_sorting_method,
             top_sorting=pod.spine_interface_sorting_method,
         )
@@ -767,5 +778,5 @@ class RackGenerator(RackMixin, CommonGenerator):
                     options=overlay_only_options,
                     p2p_interfaces=[],
                     bottom_role="access-leaf",
-                    top_role="spine",
+                    top_role=self._spine_role,
                 )
