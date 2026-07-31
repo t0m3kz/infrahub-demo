@@ -23,3 +23,11 @@ spec:
                   index: 2
                   shortname: "par-1-s-2"
                   parent: par-1
+                - suite_name: "Suite-3"
+                  index: 3
+                  shortname: "par-1-s-3"
+                  parent: par-1
+                - suite_name: "Suite-4"
+                  index: 4
+                  shortname: "par-1-s-4"
+                  parent: par-1

@@ -1,34 +1,47 @@
-# DC4 - Micro-Fabric, No Identity Crisis Needed
+# DC4 - Extra Large: When Super-Spine Isn't Enough
 
 ## Overview
 
 **Location:** Berlin 🇩🇪 (The hipster capital - your infrastructure is as edgy as the local techno scene)
 
-**Platform:** Edgecore with SONiC - So vendor-neutral, even your hipster barista could deploy it between DJ sets.
+**Platform:** Arista EOS at the DC level — so API-driven, even the hyper-spine tier could
+probably deploy itself if you left the terminal unattended.
 
-**Fabric Design:** `S_BORDER_SPINE` — no super-spine tier, no DC-wide border-leaf. Berlin decided
-commitment isn't overrated after all: both pods now run the exact same micro-fabric pattern, each
-pod's **border-spine** pair collapsing spine + border-leaf into one device, meshed back-to-back
-with the sibling pod, each with its own dedicated firewall/load-balancer pair. eBGP underlay + eBGP
-overlay (RFC 7938), IPv6 P2P links — still pure eBGP, because Berlin still doesn't do link-state.
+**Fabric Design:** `XL` + `ebgp-ebgp` routing — the same eBGP-eBGP pattern as DC1/DC3, but Extra Large,
+which means the fabric grew a 4th tier: **hyper-spine**. Leaf → spine → super-spine →
+hyper-spine, full-mesh cabled and routed between super-spine and hyper-spine (every
+super-spine talks to every hyper-spine, same fan-out logic as spine↔super-spine, just one
+tier higher — and dc.py cables this pair itself, since both tiers live at the DC level).
 
-**Use Case:** When the architecture team finally agrees: fewer device tiers, fewer arguments. One
-consistent border-spine pattern across both pods instead of a hybrid mixed/ToR identity crisis.
+**Use Case:** When 4 super-spines start feeling like a chokepoint and you need one more
+level of aggregation before things get truly hyperscale. Also: proof that "wymieszane, co
+jest dostępne" (mixed, whatever's available) is a legitimate pod strategy when your fabric
+is big enough that nobody's going to audit every pod's deployment type anyway.
 
 ---
 
-## Architecture (One Beat, No Crisis)
+## Architecture (One Tier Higher Than Everyone Else)
 
 ### Fabric Scale
 
-- **Border-Spines:** 4 (2+2, Edgecore 7726-32X-O) — collapsed spine + border-leaf, one per pod pair
-- **Pods:** 2 | **Racks:** 2 (1 network rack per pod, 8 leafs each)
-- **Deployment:** `middle_rack` (both pods), back-to-back mesh between pods (no super-spine tier)
+- **Hyper-Spines:** 2 (Arista DCS-7050CX3-32C-R) — full mesh to every super-spine, nothing above them
+- **Super-Spines:** 4 (Arista DCS-7050CX3-32C-R)
+- **Border-Leaf:** 4 (Arista DCS-7050CX3-32C-R), own firewall + load-balancer pair
+- **Pods:** 3, deliberately mixed deployment types
 
-| Pod | Border-Spines | Design | Deployment | Own FW/LB | Personality |
-| --- | -------------- | -------------- | ----------- | --------- | ------------ |
-| 1 | 2 | S_BORDER_SPINE | middle_rack | yes | Overachiever |
-| 2 | 2 | S_BORDER_SPINE | middle_rack | yes | Same Twin |
+| Pod | Spines | Design   | Deployment  | Personality                         |
+| --- | ------ | -------- | ----------- | ----------------------------------- |
+| 1   | 2      | S_MIDDLE | middle_rack | The Overachiever                    |
+| 2   | 4      | S_MIXED  | mixed       | Can't commit to one rack type       |
+| 3   | 4      | S_TOR    | tor         | Skipped the middle-management layer |
+
+### Tier Summary
+
+```text
+Leaf → Spine → Super-Spine ⇄ Hyper-Spine (full mesh, DC-level, cabled by dc.py itself)
+                   |
+              Border-Leaf → Firewall → Load-Balancer (independent legs, PBR)
+```
 
 ## Quick Start
 
@@ -36,7 +49,8 @@ consistent border-spine pattern across both pods instead of a hybrid mixed/ToR i
 uv run inv deploy-dc --scenario dc4 --branch your_branch
 ```
 
-**Warning:** May cause identity crisis. Perfect for flexing multi-deployment skills
+**Warning:** May cause identity crisis. Perfect for flexing multi-deployment AND
+multi-tier skills at the same time.
 
 ## Deployment Steps
 

@@ -6,7 +6,15 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from generators.models import DeviceRole, LocationSuiteModel, RackModel, RackParent, RackPod, Template
+from generators.models import (
+    DataCenterDesignData,
+    DeviceRole,
+    LocationSuiteModel,
+    RackModel,
+    RackParent,
+    RackPod,
+    Template,
+)
 from generators.topology.rack import RackGenerator
 
 
@@ -25,6 +33,7 @@ def _build_generator(
         id="parent-1",
         name="DC1",
         index=1,
+        design=DataCenterDesignData(),
     )
 
     from generators.models import PodDesign
@@ -32,25 +41,19 @@ def _build_generator(
     # deployment_type is now derived from PodDesign's layout numbers
     # (PodDesign.deployment_type): network_racks_per_row=0 -> tor;
     # max_tors_per_compute_rack=0 (with network_racks_per_row>0) -> middle_rack;
-    # both nonzero -> mixed. Build a design encoding the requested type, except
-    # for the one "tor, no layout params given" case that intentionally leaves
-    # pod.design unset to exercise calculate_cabling_offsets' no-design fallback
-    # (RackPod.deployment_type falls back to "tor" when design is None, so that
-    # fallback stays consistent with a bare tor request).
-    design = None
-    needs_design = (
-        deployment_type != "tor" or maximum_tors_per_row is not None or rows != 1 or leafs_per_network_rack != 0
+    # both nonzero -> mixed. design is mandatory now (RackPod.design), so always
+    # build one — maximum_tors_per_row=None falls back to 8 (compute_racks_per_row=8,
+    # max_tors_per_compute_rack=1) to preserve the "unset" test case's expectation.
+    max_tors_per_row = maximum_tors_per_row or 8
+    design = PodDesign(
+        id="design-1",
+        name="test-design",
+        rows=rows,
+        compute_racks_per_row=max_tors_per_row,
+        network_racks_per_row=0 if deployment_type == "tor" else 1,
+        max_tors_per_compute_rack=0 if deployment_type == "middle_rack" else 1,
+        max_leafs_per_network_rack=leafs_per_network_rack,
     )
-    if needs_design:
-        design = PodDesign(
-            id="design-1",
-            name="test-design",
-            rows=rows,
-            compute_racks_per_row=maximum_tors_per_row or 0,
-            network_racks_per_row=0 if deployment_type == "tor" else 1,
-            max_tors_per_compute_rack=0 if deployment_type == "middle_rack" else 1,
-            max_leafs_per_network_rack=leafs_per_network_rack,
-        )
 
     pod = RackPod(
         id="pod-1",

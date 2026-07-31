@@ -562,7 +562,7 @@ class RoutingPlanner:
                     device_as_refs[dev_name] = PendingASRef(device=dev_name)
 
         _OVERLAY_ROLES = frozenset(
-            ("leaf", "border-leaf", "tor", "access-leaf", "spine", "border-spine", "super-spine")
+            ("leaf", "border-leaf", "tor", "access-leaf", "spine", "border-spine", "super-spine", "hyper-spine")
         )
 
         for name in sorted(device_map.keys()):
@@ -793,6 +793,7 @@ class RoutingPlanner:
             return
 
         _SUPER_SPINE = frozenset(("super-spine",))
+        _HYPER_SPINE = frozenset(("hyper-spine",))
         _SPINE = frozenset(("spine", "border-spine"))
         _LEAF_CLIENTS = frozenset(("leaf", "border-leaf", "tor", "access-leaf"))
 
@@ -809,11 +810,14 @@ class RoutingPlanner:
             # An RR-client session exists when there is a genuine client→RR relationship:
             # - leaf/border-leaf/tor are clients of spines
             # - spines are clients of super-spines
+            # - super-spines are clients of hyper-spines
             rr_client_session = stype == "ibgp" and (
                 (d1_role in _LEAF_CLIENTS and d2_role in (_SPINE | _SUPER_SPINE))
                 or (d1_role in (_SPINE | _SUPER_SPINE) and d2_role in _LEAF_CLIENTS)
                 or (d1_role in _SPINE and d2_role in _SUPER_SPINE)
                 or (d1_role in _SUPER_SPINE and d2_role in _SPINE)
+                or (d1_role in _SUPER_SPINE and d2_role in _HYPER_SPINE)
+                or (d1_role in _HYPER_SPINE and d2_role in _SUPER_SPINE)
             )
 
             # Overlay peers via loopback interfaces
@@ -859,7 +863,8 @@ class _BGPSessionPlanner:
         return [s if isinstance(s, BGPSession) else BGPSession(*s) for s in sessions]
 
     def _build_route_reflector(self, session_type: str) -> list[tuple]:
-        """Spines + super-spines as RR, leafs/border-leafs/tors/access-leafs as clients.
+        """Spines + super-spines + hyper-spines as RR, leafs/border-leafs/tors/
+        access-leafs as clients.
 
         l2-leaf is L2-only and never appears here. access-leaf has no physical link to
         spines (it cables to leafs) but still peers overlay EVPN with them as an RR client,
@@ -867,17 +872,20 @@ class _BGPSessionPlanner:
 
         Special cases:
         - Super-spines only (no clients): full mesh between super-spines (DC-level seeding)
+        - Hyper-spines only (no clients): full mesh between hyper-spines (DC-level seeding,
+          same reasoning as super-spines — a hyper-spine tier's own RRs mesh each other)
         - Spines only (no clients, no super-spines): full mesh between spines
           (back-to-back design: spines from different pods peer as equals)
         """
         roles = {d.role for d in self.devices}
-        rrs = [d for d in self.devices if d.role in ("super-spine", "spine", "border-spine")]
+        rrs = [d for d in self.devices if d.role in ("super-spine", "hyper-spine", "spine", "border-spine")]
         clients = [d for d in self.devices if d.role in ("leaf", "border-leaf", "tor", "access-leaf")]
         af = ["evpn"]
         has_super_spine = "super-spine" in roles
+        has_hyper_spine = "hyper-spine" in roles
         # back-to-back: spines (or border-spines, in micro-fabric mode) peer as equals
         has_only_spines = roles in ({"spine"}, {"border-spine"})
-        if rrs and not clients and (has_super_spine or has_only_spines):
+        if rrs and not clients and (has_super_spine or has_hyper_spine or has_only_spines):
             return [
                 (rrs[i].name, rrs[i].id, rrs[j].name, rrs[j].id, session_type, af)
                 for i in range(len(rrs))

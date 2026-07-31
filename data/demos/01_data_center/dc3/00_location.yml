@@ -23,3 +23,11 @@ spec:
                   index: 2
                   shortname: "lon-1-s-2"
                   parent: lon-1
+                - suite_name: "Room-3"
+                  index: 3
+                  shortname: "lon-1-s-3"
+                  parent: lon-1
+                - suite_name: "Room-4"
+                  index: 4
+                  shortname: "lon-1-s-4"
+                  parent: lon-1

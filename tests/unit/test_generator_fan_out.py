@@ -229,7 +229,9 @@ class TestDCPodCascadeGenerator:
         pod1, pod2 = _mock_pod("POD-1"), _mock_pod("POD-2")
         gen.client.filters = AsyncMock(return_value=[pod1, pod2])
 
-        await gen.generate({"TopologyDeployment": [{"id": "dc-1", "name": "DC1", "index": 1}]})
+        await gen.generate(
+            {"TopologyDeployment": [{"id": "dc-1", "name": "DC1", "index": 1, "design": {"id": "design-1"}}]}
+        )
 
         gen.run_generator.assert_awaited_once_with("pod_rack_cascade", [pod1.id, pod2.id], wait=False)
         assert pod1.id in gen.client.group_context.related_node_ids
@@ -244,7 +246,9 @@ class TestDCPodCascadeGenerator:
         )
         gen.client.filters = AsyncMock(return_value=[])
 
-        await gen.generate({"TopologyDeployment": [{"id": "dc-1", "name": "DC1", "index": 1}]})
+        await gen.generate(
+            {"TopologyDeployment": [{"id": "dc-1", "name": "DC1", "index": 1, "design": {"id": "design-1"}}]}
+        )
 
         gen.run_generator.assert_not_awaited()
 
@@ -291,7 +295,15 @@ def _pod_data(*, deployment_type: str) -> dict[str, Any]:
                 "index": 1,
                 "design": design,
                 "fabric_templates": [{"role": "spine", "quantity": 2, "template": {"node": {"id": "tmpl-spine"}}}],
-                "parent": {"node": {"id": "dc-1", "name": "DC1", "index": 1, "devices": {"edges": []}}},
+                "parent": {
+                    "node": {
+                        "id": "dc-1",
+                        "name": "DC1",
+                        "index": 1,
+                        "devices": {"edges": []},
+                        "design": {"id": "dc-design-1", "name": "test-dc-design"},
+                    }
+                },
             }
         ]
     }

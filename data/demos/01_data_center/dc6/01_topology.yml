@@ -6,7 +6,9 @@ spec:
   data:
     - name: DC6
       index: 1
-      design: M_EBGP_IBGP
+      design: L
+      routing_strategy: ebgp-ibgp
+      underlay_protocol: ipv6
       naming_convention: standard
       fabric_templates:
         - ["2", "super-spine", "N9K-C9336C-FX2_SUPER_SPINE"]

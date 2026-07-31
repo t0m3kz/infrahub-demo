@@ -1,4 +1,4 @@
-# DC2 - Croissants & Micro-Fabric Reality
+# DC2 - Back-to-Back: No Super-Spine, Still Grown-Up
 
 ## Overview
 
@@ -6,31 +6,43 @@
 
 **Platform:** Arista EOS - So API-driven, even your croissant can trigger a config change.
 
-**Fabric Design:** `S_BORDER_SPINE` — a micro-fabric with no super-spine tier and no DC-wide
-border-leaf: pods mesh their own **border-spines** directly to sibling pods (back-to-back), and
-each pod carries its own firewall/load-balancer pair on that same border-spine. IPv6 underlay,
-eBGP underlay + eBGP overlay. Paris finally admits it doesn't need a whole extra device tier just
-to say "bonjour" to the pod next door.
+**Fabric Design:** `M` + `ebgp-ebgp` routing — no super-spine tier at all: every pod's spines mesh
+directly with every other pod's spines (full mesh, not a star through some aggregation
+layer above them). But unlike the old micro-fabric border-spine pattern, DC2 keeps a real,
+separate **border-leaf** tier at the DC level, fronted by its own firewall/load-balancer pair —
+nothing here is collapsed into a single device. eBGP underlay + eBGP overlay, IPv6 P2P links.
 
-**Use Case:** When the CFO says "make it work but don't make me cry" and you actually deliver. DC2
-proves you don't need a super-spine tier, a DC-level border-leaf, and a mortgage to build reliable
-infrastructure. Just 2 pods, 2 border-spines each, and their own dedicated firewall/load-balancer.
-It's the Parisian café of data centers - small, efficient, and everyone knows everyone.
+**Use Case:** When you want the port/latency savings of skipping a super-spine tier, but
+you're not small enough (or don't want) to collapse spine+border-leaf into one device like
+the border-spine pattern does. DC2 proves those two decisions — "skip the super-spine tier"
+and "keep border-leaf separate" — are independent choices, not a package deal.
 
 ---
 
-## Architecture (Minimalism with a French Accent)
+## Architecture (Flat but Still Organized)
 
 ### Fabric Scale
 
-- **Border-Spines:** 4 (2+2, Arista DCS-7050CX3-32C-R) — collapsed spine + border-leaf, one per pod pair
-- **Pods:** 2 | **Racks:** 2 (1 network rack per pod, 8 leafs each)
-- **Deployment:** `middle_rack` (both pods), back-to-back mesh between pods (no super-spine tier)
+- **Border-Leaf:** 2 (Arista DCS-7050CX3-32C-R), with its own firewall + load-balancer pair
+- **Pods:** 4 | **Spines:** 8 (2 per pod) | **Racks:** 4
+- **Mesh:** every pod's spines connect directly to every other pod's spines — no super-spine
+  tier to route through, no DC-level orchestration required (each pod cables itself to its
+  existing lower-index siblings as soon as it comes up)
 
-| Pod | Border-Spines | Design | Deployment | Own FW/LB | Personality |
-| --- | -------------- | -------------- | ----------- | --------- | ----------------- |
-| 1 | 2 | S_BORDER_SPINE | middle_rack | yes | Responsible Twin |
-| 2 | 2 | S_BORDER_SPINE | middle_rack | yes | Copy-Paste Twin |
+| Pod | Spines | Design   | Deployment  | Personality          |
+| --- | ------ | -------- | ----------- | -------------------- |
+| 1   | 2      | S_MIDDLE | middle_rack | First Mover          |
+| 2   | 2      | S_MIDDLE | middle_rack | Meshes with Pod 1    |
+| 3   | 2      | S_MIDDLE | middle_rack | Meshes with 1 & 2    |
+| 4   | 2      | S_MIDDLE | middle_rack | Meshes with 1, 2 & 3 |
+
+### Tier Summary
+
+```text
+Leaf → Spine ⇄ Spine (every pod, full mesh — no super-spine tier)
+                  |
+             Border-Leaf → Firewall → Load-Balancer (independent legs, PBR)
+```
 
 ## Quick Start
 
@@ -39,26 +51,6 @@ uv run inv deploy-dc --scenario dc2 --branch your_branch
 ```
 
 **Warning:** May cause spontaneous optimization and French food cravings
-
-### ToR Layer
-
-- **Model:** Arista DCS-7050CX3-32C-R
-- **Count:** 2 per rack
-- **Role:** Server connectivity
-
----
-
-## Deployment Strategy (Middle Rack Mastery)
-
-**ToR Connectivity Pattern:**
-
-```bash
-ToR → Local Leafs (same rack)
-     ↓
-   Leaf → Spine
-          ↓
-        Spine → Super Spine
-```
 
 ## Deployment Steps
 

@@ -8,7 +8,7 @@ than a Manhattan studio!)
 **Platform:** Multi-Vendor — why settle for one when you can pay four support contracts and juggle Cisco,
 Arista, Dell, and Edgecore all at once?
 
-**Fabric Design:** `M_EBGP_EBGP` — eBGP underlay + eBGP overlay (RFC 7938), IPv6 P2P links.
+**Fabric Design:** `L` (small instance) + `ebgp-ebgp` routing — eBGP underlay + eBGP overlay (RFC 7938), IPv6 P2P links.
 The only design robust enough to survive four vendors in the same fabric. eBGP everywhere means
 no one can blame the IGP when things break — and with Cisco, Arista, Dell, and Edgecore all
 sharing the same fabric, things will break. IPv6 underlay because at 4 pods you have enough

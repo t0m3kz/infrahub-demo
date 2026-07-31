@@ -18,9 +18,9 @@ from ..protocols import (
     RoutingPassword,
     TopologyPod,
 )
-from ..types import ChainHop, RoutingOptions
+from ..types import CablingOptions, ChainHop, RoutingOptions
 
-_DC_VALID_FABRIC_ROLES = frozenset({"super-spine", "border-leaf", "firewall", "load-balancer"})
+_DC_VALID_FABRIC_ROLES = frozenset({"super-spine", "hyper-spine", "border-leaf", "firewall", "load-balancer"})
 _DC_HA_KINDS: dict[str, Literal["ManagedFirewallHA", "ManagedLoadbalancerHA"]] = {
     "firewall": "ManagedFirewallHA",
     "load-balancer": "ManagedLoadbalancerHA",
@@ -57,15 +57,6 @@ class DCTopologyGenerator(CommonGenerator):
             )
             return
 
-        # Bail out before any group_context registration below: registering only
-        # the pods (never the pools/super-spine/ASN objects a full run would also
-        # register) would make this run's membership a strict subset of a prior
-        # successful run's, and the framework's delete-unused-nodes sync would
-        # then delete everything not re-registered here as "unused".
-        if not self.data.design:
-            self.logger.error(f"Cannot create pools for DC {self.data.name.upper()}: design relationship is required")
-            return
-
         # Add existing pods to group context to prevent deletion
         # include=["design"] also lets _generate_dc_scoped_fabric_devices read each
         # pod's own max_border_leafs_per_pod cap via _pod_border_leaf_capacity.
@@ -92,8 +83,8 @@ class DCTopologyGenerator(CommonGenerator):
 
         naming_convention = self.data.naming_convention
         dc_design = self.data.design
-        is_ipv6 = dc_design.is_ipv6
-        is_dual_stack = dc_design.is_dual_stack
+        is_ipv6 = self.data.is_ipv6
+        is_dual_stack = self.data.is_dual_stack
 
         # Prefix lengths come from the design; the DC instance can override by pre-attaching pools.
         # Values must already match the underlay_protocol (IPv4 or IPv6) — no conversion needed.
@@ -122,12 +113,18 @@ class DCTopologyGenerator(CommonGenerator):
         # load). Sized from the design's max caps (capacity, not live quantity) so
         # growing either tier later never exhausts it — same reasoning as every
         # other pool size in this generator, which are all design-capacity based.
-        design_mode = "back-to-back" if getattr(dc_design, "max_super_spines_per_fabric", 0) == 0 else "super-spine"
-        max_super_spines_cap = self.data.design.max_super_spines_per_fabric
-        max_border_leafs_cap = self.data.design.max_border_leafs_per_fabric or 0
-        if design_mode != "back-to-back" and (max_super_spines_cap > 0 or max_border_leafs_cap > 0):
+        design_mode = "back-to-back" if dc_design.max_super_spines_per_fabric == 0 else "super-spine"
+        max_super_spines_cap = dc_design.max_super_spines_per_fabric
+        max_border_leafs_cap = dc_design.max_border_leafs_per_fabric or 0
+        max_hyper_spines_cap = dc_design.max_hyper_spines_per_fabric or 0
+        # Allocated whenever there's capacity for ANY DC-level tier that draws
+        # from this pool — independent of design_mode. A back-to-back design
+        # (no super-spine tier) can still have border-leaf capacity (e.g.
+        # "M_BACK_TO_BACK"), and those border-leaf devices need a loopback IP
+        # for overlay BGP just like they would under a super-spine design.
+        if max_super_spines_cap > 0 or max_border_leafs_cap > 0 or max_hyper_spines_cap > 0:
             pools_to_allocate["dc-fabric-loopback"] = calculate_dc_fabric_loopback_prefix(
-                max_devices=max_super_spines_cap + max_border_leafs_cap,
+                max_devices=max_super_spines_cap + max_border_leafs_cap + max_hyper_spines_cap,
                 ipv6=is_ipv6,
             )
 
@@ -173,7 +170,7 @@ class DCTopologyGenerator(CommonGenerator):
         # Only create ASN pool for eBGP-based strategies (one pool per DC, shared by
         # super-spine AND border-leaf devices)
         # ospf-ibgp uses OSPF underlay + shared overlay AS — no per-device pools needed
-        routing_strategy = self.data.design.routing_strategy
+        routing_strategy = self.data.routing_strategy
         fabric_asn_pool_id: str | None = None
         if routing_strategy in (RoutingStrategy.EBGP_EBGP.value, RoutingStrategy.EBGP_IBGP.value):
             asn_pool_obj = await self.upsert_asn_pool(
@@ -254,6 +251,43 @@ class DCTopologyGenerator(CommonGenerator):
                 )
                 super_spine_names.extend(entry_names)
 
+        # Hyper-spine: a 4th tier above super-spine, only present in XL fabrics
+        # (design.max_hyper_spines_per_fabric > 0). Unlike super-spine (cabled
+        # by pod.py against its own pod-scoped spines), hyper-spine is cabled
+        # HERE, DC-to-DC-level, since both tiers are DC-scoped — dc.py never
+        # cables its own tiers together anywhere else, this is the one case
+        # where it does.
+        hyper_spine_entries = self.data.hyper_spine_templates
+        amount_of_hyper_spines = sum(entry.quantity for entry in hyper_spine_entries)
+        max_hyper_spines_cap = self.data.design.max_hyper_spines_per_fabric or 0
+        if amount_of_hyper_spines > max_hyper_spines_cap:
+            raise RuntimeError(
+                f"DC {self.fabric_name.upper()} requests {amount_of_hyper_spines} hyper-spines but the assigned "
+                f"design allows at most {max_hyper_spines_cap}"
+            )
+
+        hyper_spine_names: list[str] = []
+        if amount_of_hyper_spines > 0 and hyper_spine_entries:
+            for entry in hyper_spine_entries:
+                entry_names = await self.create_devices(
+                    deployment_id=dc_id,
+                    device_role="hyper-spine",
+                    amount=entry.quantity,
+                    template=entry.template.model_dump(),
+                    naming_convention=cast(
+                        Literal["standard", "hierarchical", "flat"],
+                        naming_convention.lower(),
+                    ),
+                    options=DeviceOptions(
+                        indexes=indexes,
+                        allocate_loopback=True,
+                        loopback_pool=dc_pools.get("dc-fabric-loopback"),
+                        loopback_prefix_length=128 if is_ipv6 else 32,
+                        management_pool=dc_pools.get("management"),
+                    ),
+                )
+                hyper_spine_names.extend(entry_names)
+
         # Create shared routing objects (overlay AS, OSPF area) at the DC level
         # so pod/rack generators always find them and never create duplicates.
         # overlay_asn is asn_end + 1 to avoid collision with the per-device pool range [asn_start, asn_end]
@@ -268,7 +302,7 @@ class DCTopologyGenerator(CommonGenerator):
             RoutingStrategy.EBGP_IBGP.value,
             RoutingStrategy.OSPF_IBGP.value,
         ):
-            routing_opts = RoutingOptions(design=self.data.design, asn_pool=fabric_asn_pool_id)
+            routing_opts = RoutingOptions(design=self.data, asn_pool=fabric_asn_pool_id)
             if routing_strategy == RoutingStrategy.OSPF_IBGP.value:
                 routing_opts["skip_underlay"] = True
             await self.create_routing(
@@ -278,6 +312,71 @@ class DCTopologyGenerator(CommonGenerator):
                 p2p_interfaces=[],
                 bottom_role="super-spine",
             )
+
+        if hyper_spine_names and routing_strategy in (
+            RoutingStrategy.EBGP_EBGP.value,
+            RoutingStrategy.EBGP_IBGP.value,
+            RoutingStrategy.OSPF_IBGP.value,
+        ):
+            # Pre-seed hyper-spine's own underlay+overlay BGP before cabling it
+            # to super-spine — same reason as super-spine's own pre-seed above:
+            # the real cabling+routing call below treats hyper-spine as
+            # top_devices, which skips underlay/overlay BGP *creation* for it
+            # (assumed already created by "an upper generator layer" — this call
+            # IS that layer, since hyper-spine has no tier above it).
+            hyper_routing_opts = RoutingOptions(design=self.data, asn_pool=fabric_asn_pool_id)
+            if routing_strategy == RoutingStrategy.OSPF_IBGP.value:
+                hyper_routing_opts["skip_underlay"] = True
+            await self.create_routing(
+                bottom_devices=hyper_spine_names,
+                top_devices=[],
+                options=hyper_routing_opts,
+                p2p_interfaces=[],
+                bottom_role="hyper-spine",
+            )
+
+            # Cable super-spine <-> hyper-spine full mesh (same "pod" strategy
+            # PodCablingStrategy uses for spine<->super-spine — architecturally
+            # identical fan-out, just one tier up and both ends DC-scoped).
+            super_spine_uplink_interfaces = [
+                iface.name
+                for entry in super_spine_entries
+                for iface in entry.template.interfaces
+                if iface.role == "uplink"
+            ]
+            hyper_spine_downlink_interfaces = [
+                iface.name
+                for entry in hyper_spine_entries
+                for iface in entry.template.interfaces
+                if iface.role == "downlink"
+            ]
+            if super_spine_names and super_spine_uplink_interfaces and hyper_spine_downlink_interfaces:
+                p2p_prefix_length = 127 if is_ipv6 else 31
+                p2p_pairs = await self.create_cabling(
+                    bottom_devices=super_spine_names,
+                    bottom_interfaces=super_spine_uplink_interfaces,
+                    top_devices=hyper_spine_names,
+                    top_interfaces=hyper_spine_downlink_interfaces,
+                    strategy="pod",
+                    options=CablingOptions(
+                        pool=dc_pools.get("technical"),
+                        p2p_prefix_length=p2p_prefix_length,
+                    ),
+                )
+                await self.create_routing(
+                    bottom_devices=super_spine_names,
+                    top_devices=hyper_spine_names,
+                    options=RoutingOptions(design=self.data, asn_pool=fabric_asn_pool_id),
+                    p2p_interfaces=p2p_pairs,
+                    bottom_role="super-spine",
+                    top_role="hyper-spine",
+                )
+            elif super_spine_names:
+                self.logger.error(
+                    f"DC {self.fabric_name}: cannot cable super-spine<->hyper-spine — "
+                    f"super_spine_uplinks={len(super_spine_uplink_interfaces)}, "
+                    f"hyper_spine_downlinks={len(hyper_spine_downlink_interfaces)}."
+                )
 
         # Fan-out to every pod's own add_pod run is handled by the sibling
         # dc_pod_cascade generator, not here — see that module's docstring for why
@@ -384,10 +483,10 @@ class DCTopologyGenerator(CommonGenerator):
             return []
         sorted_pods = sorted(existing_pods, key=lambda p: p.index.value)
 
-        max_border_leafs_per_fabric = self.data.design.max_border_leafs_per_fabric if self.data.design else None
+        max_border_leafs_per_fabric = self.data.design.max_border_leafs_per_fabric
         all_names: list[str] = []
         for entry in entries:
-            if max_border_leafs_per_fabric is not None and entry.quantity > max_border_leafs_per_fabric:
+            if entry.quantity > max_border_leafs_per_fabric:
                 self.logger.error(
                     f"DC {self.fabric_name}: border-leaf entry requests {entry.quantity} devices but "
                     f"design.max_border_leafs_per_fabric allows at most {max_border_leafs_per_fabric} — skipping."
@@ -563,10 +662,7 @@ class DCTopologyGenerator(CommonGenerator):
         secret value is generated once and never touched again on re-run
         (see ``_ensure_routing_password``).
         """
-        if not self.data.design:
-            return
-
-        strategy = self.data.design.routing_strategy
+        strategy = self.data.routing_strategy
 
         await self._ensure_routing_password(
             name=f"{self.fabric_name}-underlay-key",

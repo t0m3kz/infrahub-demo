@@ -1,7 +1,7 @@
 """Unit tests for DCTopologyGenerator.generate() and _create_shared_routing_objects().
 
 Covers the branches _ensure_routing_password tests (test_dc_shared_routing_password.py)
-don't reach: missing/invalid GraphQL data, missing design, super-spine count validation,
+don't reach: missing/invalid GraphQL data, super-spine count validation,
 back-to-back vs super-spine design_mode, per-strategy pool/routing dispatch, and the
 overlay-AS/OSPF-area creation paths in _create_shared_routing_objects().
 """
@@ -19,18 +19,21 @@ from generators.topology.dc import DCTopologyGenerator
 
 def _design(
     *,
-    routing_strategy: str = "ebgp-ebgp",
     max_super_spines_per_fabric: int = 2,
+    max_hyper_spines_per_fabric: int = 0,
+    max_border_leafs_per_fabric: int = 4,
     max_pods: int = 2,
     max_spines_per_pod: int = 4,
-    underlay_protocol: str = "ipv6",
 ) -> dict[str, Any]:
+    """TopologyDataCenterDesign is now a pure size/capacity template —
+    routing_strategy/underlay_protocol live directly on the DC instance
+    (see _deployment()), not here."""
     return {
         "id": "design-1",
-        "routing_strategy": routing_strategy,
-        "underlay_protocol": underlay_protocol,
         "max_pods": max_pods,
         "max_super_spines_per_fabric": max_super_spines_per_fabric,
+        "max_hyper_spines_per_fabric": max_hyper_spines_per_fabric,
+        "max_border_leafs_per_fabric": max_border_leafs_per_fabric,
         "max_spines_per_pod": max_spines_per_pod,
         "loopback_prefix_length": 23,
         "technical_prefix_length": 19,
@@ -42,25 +45,40 @@ def _fabric_templates(
     *,
     amount_of_super_spines: int = 0,
     super_spine_template: dict[str, Any] | None = None,
+    amount_of_hyper_spines: int = 0,
+    hyper_spine_template: dict[str, Any] | None = None,
 ) -> list[dict[str, Any]]:
-    """Build a fabric_templates list with a single super-spine entry, mirroring
+    """Build a fabric_templates list with super-spine/hyper-spine entries, mirroring
     the pre-refactor amount_of_super_spines/super_spine_template scalar kwargs."""
-    if amount_of_super_spines <= 0 or super_spine_template is None:
-        return []
-    return [
-        {
-            "role": "super-spine",
-            "quantity": amount_of_super_spines,
-            "template": super_spine_template,
-        }
-    ]
+    entries: list[dict[str, Any]] = []
+    if amount_of_super_spines > 0 and super_spine_template is not None:
+        entries.append(
+            {
+                "role": "super-spine",
+                "quantity": amount_of_super_spines,
+                "template": super_spine_template,
+            }
+        )
+    if amount_of_hyper_spines > 0 and hyper_spine_template is not None:
+        entries.append(
+            {
+                "role": "hyper-spine",
+                "quantity": amount_of_hyper_spines,
+                "template": hyper_spine_template,
+            }
+        )
+    return entries
 
 
 def _deployment(
     *,
     design: dict[str, Any] | None = None,
+    routing_strategy: str = "ebgp-ebgp",
+    underlay_protocol: str = "ipv6",
     amount_of_super_spines: int = 0,
     super_spine_template: dict[str, Any] | None = None,
+    amount_of_hyper_spines: int = 0,
+    hyper_spine_template: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     return {
         "TopologyDeployment": [
@@ -69,12 +87,16 @@ def _deployment(
                 "name": "DC1",
                 "index": 1,
                 "design": design,
+                "routing_strategy": routing_strategy,
+                "underlay_protocol": underlay_protocol,
                 "naming_convention": "standard",
                 "fabric_interface_sorting_method": "bottom_up",
                 "spine_interface_sorting_method": "bottom_up",
                 "fabric_templates": _fabric_templates(
                     amount_of_super_spines=amount_of_super_spines,
                     super_spine_template=super_spine_template,
+                    amount_of_hyper_spines=amount_of_hyper_spines,
+                    hyper_spine_template=hyper_spine_template,
                 ),
                 "loopback_pool": None,
                 "technical_pool": None,
@@ -102,6 +124,7 @@ def _make_generator() -> Any:
     gen.upsert_number_pool = AsyncMock(return_value=MagicMock(id="num-pool-1"))
     gen.create_devices = AsyncMock(return_value=[])
     gen.create_routing = AsyncMock()
+    gen.create_cabling = AsyncMock(return_value=[])
     gen._create_shared_routing_objects = AsyncMock()
     return gen
 
@@ -132,15 +155,6 @@ class TestGenerateGuardClauses:
         bad_data = {"TopologyDeployment": [{"id": "dc-1", "name": "DC1"}]}
 
         await gen.generate(bad_data)
-
-        gen.logger.error.assert_called_once()
-        gen.allocate_resource_pools.assert_not_called()
-
-    @pytest.mark.asyncio
-    async def test_missing_design_logs_error_and_returns(self) -> None:
-        gen = _make_generator()
-
-        await gen.generate(_deployment(design=None))
 
         gen.logger.error.assert_called_once()
         gen.allocate_resource_pools.assert_not_called()
@@ -196,7 +210,7 @@ class TestGenerateDesignModeDispatch:
         gen = _make_generator()
         gen.create_devices = AsyncMock(return_value=["dc1-ss-01", "dc1-ss-02"])
         data = _deployment(
-            design=_design(max_super_spines_per_fabric=2, routing_strategy="ebgp-ebgp"),
+            design=_design(max_super_spines_per_fabric=2),
             amount_of_super_spines=2,
             super_spine_template={"id": "tmpl-ss", "interfaces": []},
         )
@@ -219,7 +233,7 @@ class TestGenerateDesignModeDispatch:
         per entry (dc.py's per-entry loop), not once for the summed quantity."""
         gen = _make_generator()
         gen.create_devices = AsyncMock(side_effect=[["dc1-ss-01"], ["dc1-ss-02", "dc1-ss-03"]])
-        data = _deployment(design=_design(max_super_spines_per_fabric=3, routing_strategy="ebgp-ebgp"))
+        data = _deployment(design=_design(max_super_spines_per_fabric=3))
         data["TopologyDeployment"][0]["fabric_templates"] = [
             {"role": "super-spine", "quantity": 1, "template": {"id": "tmpl-ss-a", "interfaces": []}},
             {"role": "super-spine", "quantity": 2, "template": {"id": "tmpl-ss-b", "interfaces": []}},
@@ -271,7 +285,8 @@ class TestGenerateDesignModeDispatch:
         gen = _make_generator()
         gen.create_devices = AsyncMock(return_value=["dc1-ss-01"])
         data = _deployment(
-            design=_design(max_super_spines_per_fabric=1, routing_strategy="ospf-ibgp"),
+            design=_design(max_super_spines_per_fabric=1),
+            routing_strategy="ospf-ibgp",
             amount_of_super_spines=1,
             super_spine_template={"id": "tmpl-ss", "interfaces": []},
         )
@@ -282,11 +297,152 @@ class TestGenerateDesignModeDispatch:
         assert routing_kwargs["options"]["skip_underlay"] is True
 
 
+class TestGenerateDCFabricLoopbackPoolAllocation:
+    @pytest.mark.asyncio
+    async def test_back_to_back_with_border_leaf_capacity_still_allocates_pool(self) -> None:
+        """Regression test: a back-to-back design (max_super_spines_per_fabric=0)
+        with border-leaf capacity must still get a dc-fabric-loopback pool —
+        those border-leaf devices need a loopback IP for overlay BGP just like
+        they would under a super-spine design. Previously this pool was only
+        allocated when design_mode != "back-to-back", silently breaking
+        border-leaf overlay BGP for any back-to-back + border-leaf design."""
+        gen = _make_generator()
+        data = _deployment(design=_design(max_super_spines_per_fabric=0, max_border_leafs_per_fabric=2))
+
+        await gen.generate(data)
+
+        gen.allocate_resource_pools.assert_awaited_once()
+        pools = gen.allocate_resource_pools.call_args.kwargs["pools"]
+        assert "dc-fabric-loopback" in pools
+
+    @pytest.mark.asyncio
+    async def test_back_to_back_with_no_border_leaf_capacity_skips_pool(self) -> None:
+        """Back-to-back with zero border-leaf/hyper-spine capacity (e.g. the
+        border-spine micro-fabric pattern) correctly allocates no
+        dc-fabric-loopback pool — unchanged existing behavior."""
+        gen = _make_generator()
+        data = _deployment(design=_design(max_super_spines_per_fabric=0, max_border_leafs_per_fabric=0))
+
+        await gen.generate(data)
+
+        pools = gen.allocate_resource_pools.call_args.kwargs["pools"]
+        assert "dc-fabric-loopback" not in pools
+
+    @pytest.mark.asyncio
+    async def test_hyper_spine_capacity_alone_allocates_pool(self) -> None:
+        gen = _make_generator()
+        data = _deployment(
+            design=_design(max_super_spines_per_fabric=0, max_border_leafs_per_fabric=0, max_hyper_spines_per_fabric=2)
+        )
+
+        await gen.generate(data)
+
+        pools = gen.allocate_resource_pools.call_args.kwargs["pools"]
+        assert "dc-fabric-loopback" in pools
+
+
+class TestGenerateHyperSpineTier:
+    @pytest.mark.asyncio
+    async def test_no_hyper_spine_templates_skips_creation(self) -> None:
+        gen = _make_generator()
+        gen.create_devices = AsyncMock(return_value=["dc1-ss-01", "dc1-ss-02"])
+        data = _deployment(
+            design=_design(max_super_spines_per_fabric=2, max_hyper_spines_per_fabric=0),
+            amount_of_super_spines=2,
+            super_spine_template={"id": "tmpl-ss", "interfaces": []},
+        )
+
+        await gen.generate(data)
+
+        # Only super-spine's own create_devices call — no hyper-spine call.
+        assert gen.create_devices.await_count == 1
+        gen.create_cabling.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_hyper_spine_count_exceeding_design_max_raises(self) -> None:
+        gen = _make_generator()
+        data = _deployment(
+            design=_design(max_super_spines_per_fabric=2, max_hyper_spines_per_fabric=1),
+            amount_of_hyper_spines=2,
+            hyper_spine_template={"id": "tmpl-hs", "interfaces": []},
+        )
+
+        with pytest.raises(RuntimeError, match="requests 2 hyper-spines"):
+            await gen.generate(data)
+
+    @pytest.mark.asyncio
+    async def test_hyper_spine_templates_creates_devices_and_cables_to_super_spine(self) -> None:
+        gen = _make_generator()
+        gen.create_devices = AsyncMock(
+            side_effect=[
+                ["dc1-ss-01", "dc1-ss-02"],  # super-spine
+                ["dc1-hs-01", "dc1-hs-02"],  # hyper-spine
+            ]
+        )
+        data = _deployment(
+            design=_design(max_super_spines_per_fabric=2, max_hyper_spines_per_fabric=2),
+            amount_of_super_spines=2,
+            super_spine_template={
+                "id": "tmpl-ss",
+                "interfaces": [{"name": "Ethernet1", "role": "uplink"}],
+            },
+            amount_of_hyper_spines=2,
+            hyper_spine_template={
+                "id": "tmpl-hs",
+                "interfaces": [{"name": "Ethernet1", "role": "downlink"}],
+            },
+        )
+
+        await gen.generate(data)
+
+        assert gen.create_devices.await_count == 2
+        hyper_spine_call = gen.create_devices.await_args_list[1].kwargs
+        assert hyper_spine_call["device_role"] == "hyper-spine"
+        assert hyper_spine_call["amount"] == 2
+
+        gen.create_cabling.assert_awaited_once()
+        cabling_kwargs = gen.create_cabling.call_args.kwargs
+        assert cabling_kwargs["bottom_devices"] == ["dc1-ss-01", "dc1-ss-02"]
+        assert cabling_kwargs["top_devices"] == ["dc1-hs-01", "dc1-hs-02"]
+        assert cabling_kwargs["strategy"] == "pod"
+
+        # create_routing called for: super-spine pre-seed, hyper-spine pre-seed,
+        # super-spine<->hyper-spine cabling routing = 3 calls.
+        assert gen.create_routing.await_count == 3
+        cross_tier_call = gen.create_routing.await_args_list[-1].kwargs
+        assert cross_tier_call["bottom_devices"] == ["dc1-ss-01", "dc1-ss-02"]
+        assert cross_tier_call["top_devices"] == ["dc1-hs-01", "dc1-hs-02"]
+        assert cross_tier_call["bottom_role"] == "super-spine"
+        assert cross_tier_call["top_role"] == "hyper-spine"
+
+    @pytest.mark.asyncio
+    async def test_missing_interfaces_logs_error_and_skips_cabling(self) -> None:
+        gen = _make_generator()
+        gen.create_devices = AsyncMock(
+            side_effect=[
+                ["dc1-ss-01"],
+                ["dc1-hs-01"],
+            ]
+        )
+        data = _deployment(
+            design=_design(max_super_spines_per_fabric=1, max_hyper_spines_per_fabric=1),
+            amount_of_super_spines=1,
+            super_spine_template={"id": "tmpl-ss", "interfaces": []},
+            amount_of_hyper_spines=1,
+            hyper_spine_template={"id": "tmpl-hs", "interfaces": []},
+        )
+
+        await gen.generate(data)
+
+        gen.create_cabling.assert_not_called()
+        gen.logger.error.assert_called()
+
+
 class TestGeneratePoolAllocation:
     @pytest.mark.asyncio
     async def test_asn_pool_created_for_ebgp_strategies(self) -> None:
         gen = _make_generator()
-        data = _deployment(design=_design(routing_strategy="ebgp-ibgp"))
+        data = _deployment(design=_design(), routing_strategy="ebgp-ibgp")
 
         await gen.generate(data)
 
@@ -296,7 +452,7 @@ class TestGeneratePoolAllocation:
     async def test_asn_pool_skipped_for_ospf_ibgp(self) -> None:
         """ospf-ibgp uses OSPF underlay + shared overlay AS — no per-device ASN pool."""
         gen = _make_generator()
-        data = _deployment(design=_design(routing_strategy="ospf-ibgp"))
+        data = _deployment(design=_design(), routing_strategy="ospf-ibgp")
 
         await gen.generate(data)
 
@@ -305,7 +461,7 @@ class TestGeneratePoolAllocation:
     @pytest.mark.asyncio
     async def test_vlan_vni_l3vni_pools_always_created(self) -> None:
         gen = _make_generator()
-        data = _deployment(design=_design(routing_strategy="ospf-ibgp"))
+        data = _deployment(design=_design(), routing_strategy="ospf-ibgp")
 
         await gen.generate(data)
 
@@ -362,18 +518,9 @@ class TestCreateSharedRoutingObjects:
         return gen
 
     @pytest.mark.asyncio
-    async def test_no_design_returns_immediately(self) -> None:
-        gen = self._make_generator_for_shared_routing()
-        gen.data = MagicMock(design=None)
-
-        await gen._create_shared_routing_objects(overlay_asn=65100)
-
-        gen._ensure_routing_password.assert_not_called()
-
-    @pytest.mark.asyncio
     async def test_ebgp_ebgp_creates_passwords_only(self) -> None:
         gen = self._make_generator_for_shared_routing()
-        gen.data = MagicMock(design=MagicMock(routing_strategy="ebgp-ebgp"))
+        gen.data = MagicMock(routing_strategy="ebgp-ebgp")
         gen.client.filters = AsyncMock(return_value=[])
         gen.client.create = AsyncMock()
 
@@ -385,7 +532,7 @@ class TestCreateSharedRoutingObjects:
     @pytest.mark.asyncio
     async def test_ebgp_ibgp_creates_new_overlay_as(self) -> None:
         gen = self._make_generator_for_shared_routing()
-        gen.data = MagicMock(design=MagicMock(routing_strategy="ebgp-ibgp"))
+        gen.data = MagicMock(routing_strategy="ebgp-ibgp")
         gen.client.filters = AsyncMock(return_value=[])
         new_as = MagicMock(id="as-new-1")
         new_as.asn.value = 65100
@@ -405,7 +552,7 @@ class TestCreateSharedRoutingObjects:
         """An existing shared overlay AS is updated in place, not duplicated —
         matched by description, not name, since AS.name is a computed field."""
         gen = self._make_generator_for_shared_routing()
-        gen.data = MagicMock(design=MagicMock(routing_strategy="ebgp-ibgp"))
+        gen.data = MagicMock(routing_strategy="ebgp-ibgp")
         existing_as = MagicMock(id="as-existing-1")
         existing_as.asn = MagicMock(value=1)
         existing_as.save = AsyncMock()
@@ -422,7 +569,7 @@ class TestCreateSharedRoutingObjects:
     @pytest.mark.asyncio
     async def test_overlay_as_lookup_exception_is_logged_not_raised(self) -> None:
         gen = self._make_generator_for_shared_routing()
-        gen.data = MagicMock(design=MagicMock(routing_strategy="ebgp-ibgp"))
+        gen.data = MagicMock(routing_strategy="ebgp-ibgp")
         gen.client.filters = AsyncMock(side_effect=Exception("db down"))
 
         await gen._create_shared_routing_objects(overlay_asn=65100)
@@ -432,7 +579,7 @@ class TestCreateSharedRoutingObjects:
     @pytest.mark.asyncio
     async def test_ospf_ibgp_creates_overlay_as_and_ospf_area(self) -> None:
         gen = self._make_generator_for_shared_routing()
-        gen.data = MagicMock(design=MagicMock(routing_strategy="ospf-ibgp"))
+        gen.data = MagicMock(routing_strategy="ospf-ibgp")
         gen.client.filters = AsyncMock(return_value=[])
         as_obj = MagicMock(id="as-1")
         as_obj.asn.value = 65100
@@ -453,7 +600,7 @@ class TestCreateSharedRoutingObjects:
     @pytest.mark.asyncio
     async def test_ospf_area_creation_exception_is_logged_not_raised(self) -> None:
         gen = self._make_generator_for_shared_routing()
-        gen.data = MagicMock(design=MagicMock(routing_strategy="ospf-ibgp"))
+        gen.data = MagicMock(routing_strategy="ospf-ibgp")
         gen.client.filters = AsyncMock(return_value=[])
         as_obj = MagicMock(id="as-1")
         as_obj.asn.value = 65100
@@ -467,7 +614,7 @@ class TestCreateSharedRoutingObjects:
     @pytest.mark.asyncio
     async def test_ebgp_ebgp_creates_neither_overlay_as_nor_ospf_area(self) -> None:
         gen = self._make_generator_for_shared_routing()
-        gen.data = MagicMock(design=MagicMock(routing_strategy=RoutingStrategy.EBGP_EBGP.value))
+        gen.data = MagicMock(routing_strategy=RoutingStrategy.EBGP_EBGP.value)
         gen.client.filters = AsyncMock(return_value=[])
         gen.client.create = AsyncMock()
 

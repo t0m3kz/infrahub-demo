@@ -6,7 +6,7 @@
 
 **Platform:** Multi-Vendor (Cisco, Arista, Dell SONiC, Edgecore SONiC) — because why settle for one vendor's bugs when you can have them all?
 
-**Fabric Design:** `M_EBGP_IBGP` — eBGP underlay + iBGP overlay, IPv6 P2P links. 3 pods.
+**Fabric Design:** `L` (small instance) + `ebgp-ibgp` routing — eBGP underlay + iBGP overlay, IPv6 P2P links. 3 pods.
 The committee compromise: eBGP underlay because multi-vendor fabrics need per-pod ASNs and nobody
 trusts OSPF to behave the same on Cisco and Edgecore at 3am. iBGP overlay because the super-spines
 are already there, they might as well do something useful as route reflectors. IPv6 underlay because
