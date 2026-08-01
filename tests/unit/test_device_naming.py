@@ -15,36 +15,28 @@ class TestDeviceNamingSimplified:
     """
 
     def test_standard_naming_with_three_indexes(self) -> None:
-        """STANDARD with fab, pod, suite indexes."""
+        """STANDARD: role code first, then fabric_name + concatenated
+        location indexes (unpadded), then the zero-padded role index."""
         config = DeviceNamingConfig(strategy="standard", separator="-", zero_padded=True, pad_width=2)
 
         result = config.format_device_name(
             DeviceNameContext.from_indexes(fabric_name="fab1", device_role="leaf", role_index=5, indexes=[1, 2, 3])
         )
 
-        assert result == "fab1-fab1-pod2-suite3-lf05"
-
-    def test_standard_naming_with_four_indexes(self) -> None:
-        """STANDARD with fab, pod, suite, row indexes."""
-        config = DeviceNamingConfig(strategy="standard", separator="-", zero_padded=True, pad_width=2)
-
-        result = config.format_device_name(
-            DeviceNameContext.from_indexes(fabric_name="fab1", device_role="leaf", role_index=5, indexes=[1, 2, 3, 7])
-        )
-
-        assert result == "fab1-fab1-pod2-suite3-row7-lf05"
+        assert result == "lf-fab112305"
 
     def test_standard_naming_with_five_indexes(self) -> None:
-        """STANDARD with fab, pod, suite, row, rack indexes (full hierarchy)."""
+        """STANDARD with the full fab/pod/suite/row/rack hierarchy — this is
+        the case that motivated the format: a rack-scoped device must keep
+        every level to avoid colliding with a same-numbered leaf in a
+        different rack of the same pod."""
         config = DeviceNamingConfig(strategy="standard", separator="-", zero_padded=True, pad_width=2)
 
         result = config.format_device_name(
-            DeviceNameContext.from_indexes(
-                fabric_name="fab1", device_role="leaf", role_index=5, indexes=[1, 2, 3, 7, 9]
-            )
+            DeviceNameContext.from_indexes(fabric_name="dc1", device_role="leaf", role_index=1, indexes=[1, 3, 1, 2, 4])
         )
 
-        assert result == "fab1-fab1-pod2-suite3-row7-rack9-lf05"
+        assert result == "lf-dc11312401"
 
     def test_standard_naming_with_single_index(self) -> None:
         """STANDARD with only the fab index — DC-scoped device."""
@@ -54,7 +46,7 @@ class TestDeviceNamingSimplified:
             DeviceNameContext.from_indexes(fabric_name="fab1", device_role="spine", role_index=1, indexes=[1])
         )
 
-        assert result == "fab1-fab1-sp01"
+        assert result == "sp-fab1101"
 
     def test_standard_naming_uses_short_role_code(self) -> None:
         """Multi-word roles use their short code, not the full name."""
@@ -64,7 +56,7 @@ class TestDeviceNamingSimplified:
             DeviceNameContext.from_indexes(fabric_name="dc1", device_role="super-spine", role_index=1, indexes=[1])
         )
 
-        assert result == "dc1-fab1-ss01"
+        assert result == "ss-dc1101"
 
     def test_standard_naming_distinguishes_fabrics_under_same_dc_name(self) -> None:
         """Two fabrics under the same DC name (e.g. "dc1" index=1 vs index=2)
@@ -78,8 +70,8 @@ class TestDeviceNamingSimplified:
             DeviceNameContext.from_indexes(fabric_name="dc1", device_role="super-spine", role_index=1, indexes=[2])
         )
 
-        assert fabric_1 == "dc1-fab1-ss01"
-        assert fabric_2 == "dc1-fab2-ss01"
+        assert fabric_1 == "ss-dc1101"
+        assert fabric_2 == "ss-dc1201"
         assert fabric_1 != fabric_2
 
     def test_hierarchical_naming(self) -> None:

@@ -81,7 +81,14 @@ class DeviceNamingConfig(BaseModel):
     host multiple fabrics, so that index is never redundant — see the
     module-level note on LOCATION_HIERARCHY_LABELS):
 
-    - standard: separator-joined, short role codes, e.g. ``dc1-fab2-pod3-lf01``.
+    - standard: role code first (most scannable when skimming a device
+      list), then fabric_name + concatenated location indexes + role
+      index, e.g. ``lf-dc11312401`` for fab=1, pod=3, suite=1, row=2,
+      rack=4, role_index=1 (DC-scoped: ``ss-dc1101``). Location indexes
+      are NOT zero-padded (only role_index is) — shortest form, at the
+      cost of two adjacent double-digit indexes being ambiguous to parse
+      back (not a concern for a cosmetic device name; use "computed" if
+      you need that guarantee).
     - hierarchical: dot-joined numeric path, e.g. ``dc1.2.3.lf01`` — for
       tooling that parses positions rather than labels.
     - flat: no separators at all, e.g. ``dc123lf01`` — shortest form, for
@@ -123,7 +130,7 @@ class DeviceNamingConfig(BaseModel):
         formatted_idx = str(ctx.role_index).zfill(self.pad_width) if self.zero_padded else str(ctx.role_index)
 
         if self.strategy == "standard":
-            result = self.separator.join(self._build_standard_components(ctx, formatted_idx))
+            result = self._build_standard_name(ctx, formatted_idx)
         elif self.strategy == "hierarchical":
             result = ".".join(self._build_hierarchical_components(ctx, formatted_idx))
         elif self.strategy == "flat":
@@ -144,13 +151,12 @@ class DeviceNamingConfig(BaseModel):
             )
         return result
 
-    @staticmethod
-    def _build_standard_components(ctx: DeviceNameContext, formatted_idx: str) -> list[str]:
-        """e.g. ``dc1-fab2-pod3-lf01`` (DC-scoped: ``dc1-fab2-ss01``)."""
-        components = [ctx.fabric_name]
-        components.extend(f"{label}{idx}" for label, idx in ctx.location_path)
-        components.append(f"{_role_code(ctx.device_role)}{formatted_idx}")
-        return components
+    def _build_standard_name(self, ctx: DeviceNameContext, formatted_idx: str) -> str:
+        """e.g. ``lf-dc11312401`` (DC-scoped: ``ss-dc1101``). Role code
+        first, then fabric_name with every location index concatenated
+        (unpadded), then the zero-padded role index."""
+        digits = "".join(str(idx) for _, idx in ctx.location_path)
+        return f"{_role_code(ctx.device_role)}{self.separator}{ctx.fabric_name}{digits}{formatted_idx}"
 
     @staticmethod
     def _build_hierarchical_components(ctx: DeviceNameContext, formatted_idx: str) -> list[str]:
