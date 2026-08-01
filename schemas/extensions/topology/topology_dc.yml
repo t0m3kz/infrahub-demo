@@ -408,7 +408,7 @@ nodes:
         choices:
           - name: standard
             label: "Standard"
-            description: "dc-podN-roleNN, short role codes (e.g. dc1-pod2-lf01)"
+            description: "role-dcNN..N, role code first, then dc + concatenated location indexes (e.g. lf-dc11312401)"
             color: "#7FBF7F"
           - name: hierarchical
             label: "Hierarchical"
