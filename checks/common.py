@@ -1,8 +1,12 @@
+from collections.abc import Callable
 from typing import Any
+
+from infrahub_sdk.checks import InfrahubCheck
 
 from utils.data_cleaning import clean_data, get_data
 
 __all__ = [
+    "BaseDeviceCheck",
     "clean_data",
     "get_data",
     "validate_exchange_gateways",
@@ -10,6 +14,24 @@ __all__ = [
     "validate_management_services",
     "validate_routing_password",
 ]
+
+
+class BaseDeviceCheck(InfrahubCheck):
+    """Base class for device-role checks that just run a fixed list of
+    data-only validators against get_data(data) and log every error.
+
+    Subclasses set ``query`` (per-role config query) and ``validators``
+    (the subset of checks/common.py's validate_* functions that apply to
+    that role) — no need to override ``validate()`` itself.
+    """
+
+    validators: list[Callable[[dict[str, Any]], list[str]]] = []
+
+    def validate(self, data: Any) -> None:
+        device_data = get_data(data)
+        errors = [error for validator in self.validators for error in validator(device_data)]
+        for error in errors:
+            self.log_error(message=error)
 
 
 def validate_interfaces(data: dict[str, Any]) -> list[str]:
