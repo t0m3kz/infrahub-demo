@@ -123,6 +123,30 @@ generics:
       - name: name
         kind: Text
         order_weight: 100
+      - name: naming_convention
+        label: "Naming Convention"
+        description: "Device naming convention for devices created under this deployment"
+        kind: Dropdown
+        optional: true
+        default_value: standard
+        order_weight: 1050
+        choices:
+          - name: standard
+            label: "Standard"
+            description: "role-dcNN..N, role code first, then dc + concatenated location indexes (e.g. lf-dc11312401)"
+            color: "#7FBF7F"
+          - name: hierarchical
+            label: "Hierarchical"
+            description: "dc.N.roleNN, dot-separated numeric path (e.g. dc1.2.lf01)"
+            color: "#7F7FBF"
+          - name: flat
+            label: "Flat"
+            description: "dcNroleNN, no separators (e.g. dc12lf01)"
+            color: "#BF7FBF"
+          - name: computed
+            label: "Computed"
+            description: "dc-roleNNNN, fixed-width digit run instead of a labeled path (e.g. dc1-lf0201)"
+            color: "#BFBF7F"
     relationships:
       - name: devices
         peer: DcimDevice
