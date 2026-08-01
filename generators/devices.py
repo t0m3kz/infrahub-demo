@@ -10,7 +10,7 @@ from infrahub_sdk.protocols import CoreIPAddressPool, CoreStandardGroup
 if TYPE_CHECKING:
     import logging
 
-from .helpers import DeviceNamingConfig, get_loopback_name
+from .helpers import DeviceNameContext, DeviceNamingConfig, get_loopback_name
 from .protocols import DcimPhysicalDevice, DcimVirtualDevice, DcimVirtualInterface
 from .types import DeviceOptions
 
@@ -60,14 +60,16 @@ class DeviceMixin:
 
         device_prefix: str = fabric_name if not pod_name else pod_name
 
+        naming = DeviceNamingConfig(strategy=naming_convention)
         device_names: list[str] = sorted(
             [
-                DeviceNamingConfig(strategy=naming_convention).format_device_name(
-                    fabric_name,
-                    device_role,
-                    index=idx,
-                    fabric_name=fabric_name,
-                    indexes=indexes,
+                naming.format_device_name(
+                    DeviceNameContext.from_indexes(
+                        fabric_name=fabric_name,
+                        device_role=device_role,
+                        role_index=idx,
+                        indexes=indexes or [],
+                    )
                 )
                 for idx in range(1, quantity + 1)
             ]

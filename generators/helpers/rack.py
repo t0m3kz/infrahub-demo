@@ -7,7 +7,7 @@ from utils.data_cleaning import clean_data
 from ..models import RackModel
 from ..protocols import LocationRack
 from ..types import DeviceOptions, RoutingOptions
-from .naming import DeviceNamingConfig
+from .naming import DeviceNameContext, DeviceNamingConfig
 
 if TYPE_CHECKING:
     import logging
@@ -130,7 +130,7 @@ def parse_rack_data(data: dict[str, Any]) -> RackModel:
 
 def expected_device_names(
     *,
-    naming_config: Any,
+    naming_config: DeviceNamingConfig,
     fabric_name: str,
     device_indexes: list[int],
     role: str,
@@ -139,11 +139,12 @@ def expected_device_names(
     """Build deterministic device names for one role template."""
     return {
         naming_config.format_device_name(
-            fabric_name,
-            role,
-            index=idx,
-            fabric_name=fabric_name,
-            indexes=device_indexes,
+            DeviceNameContext.from_indexes(
+                fabric_name=fabric_name,
+                device_role=role,
+                role_index=idx,
+                indexes=device_indexes,
+            )
         )
         for idx in range(1, quantity + 1)
     }

@@ -26,7 +26,7 @@ from .cabling import (
 )
 from .common import retry_delay
 from .interface_naming import get_lag_name, get_loopback_name
-from .naming import DeviceNamingConfig
+from .naming import DeviceNameContext, DeviceNamingConfig
 from .pools import (
     DEFAULT_ASN_BASE_START,
     calculate_dc_fabric_loopback_prefix,
@@ -56,6 +56,7 @@ __all__ = [
     "IntraRackMiddleCablingStrategy",
     "IntraRackMixedCablingStrategy",
     # Naming
+    "DeviceNameContext",
     "DeviceNamingConfig",
     # Pools
     "calculate_pod_pools",
