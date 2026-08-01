@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, Any, Literal, cast
 if TYPE_CHECKING:
     import logging
 
-from .helpers import DeviceNamingConfig
+from .helpers import DeviceNameContext, DeviceNamingConfig
 from .models import Pool
 from .protocols import LocationRack, TopologyPod
 from .types import RoutingOptions
@@ -109,11 +109,12 @@ class RackMixin:
         for entry in spine_entries:
             device_names.extend(
                 naming.format_device_name(
-                    self.fabric_name,
-                    spine_role,
-                    index=idx,
-                    fabric_name=self.fabric_name,
-                    indexes=spine_indexes,
+                    DeviceNameContext.from_indexes(
+                        fabric_name=self.fabric_name,
+                        device_role=spine_role,
+                        role_index=idx,
+                        indexes=spine_indexes,
+                    )
                 )
                 for idx in range(1, entry.quantity + 1)
             )
