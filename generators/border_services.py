@@ -99,7 +99,7 @@ class BorderServicesMixin:
             names = await self.create_devices(
                 deployment_id=deployment_id,
                 device_role=role,
-                amount=entry.quantity,
+                quantity=entry.quantity,
                 template=entry.template.model_dump(),
                 naming_convention=naming_convention,
                 options=device_options,

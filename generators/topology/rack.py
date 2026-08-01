@@ -565,7 +565,7 @@ class RackGenerator(RackMixin, CommonGenerator):
         devices = await self.create_devices(
             deployment_id=deployment_id,
             device_role=device_role,
-            amount=role.quantity,
+            quantity=role.quantity,
             template=role.template.model_dump(),
             naming_convention=self._naming_conv,
             options=self._roles.build_device_options(allocate_loopback=allocate_loopback, group_name=group_name),
