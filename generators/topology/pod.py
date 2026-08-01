@@ -218,7 +218,7 @@ class PodTopologyGenerator(CommonGenerator):
             entry_spines = await self.create_devices(
                 deployment_id=self.data.id,
                 device_role=spine_role,
-                amount=entry.quantity,
+                quantity=entry.quantity,
                 template=entry.template.model_dump(),
                 naming_convention=naming_conv,
                 options=DeviceOptions(

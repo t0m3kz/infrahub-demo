@@ -228,7 +228,7 @@ class DCTopologyGenerator(CommonGenerator):
                 entry_names = await self.create_devices(
                     deployment_id=dc_id,
                     device_role="super-spine",
-                    amount=entry.quantity,
+                    quantity=entry.quantity,
                     template=entry.template.model_dump(),
                     naming_convention=cast(
                         Literal["standard", "hierarchical", "flat"],
@@ -265,7 +265,7 @@ class DCTopologyGenerator(CommonGenerator):
                 entry_names = await self.create_devices(
                     deployment_id=dc_id,
                     device_role="hyper-spine",
-                    amount=entry.quantity,
+                    quantity=entry.quantity,
                     template=entry.template.model_dump(),
                     naming_convention=cast(
                         Literal["standard", "hierarchical", "flat"],
@@ -465,7 +465,7 @@ class DCTopologyGenerator(CommonGenerator):
                 names = await self.create_devices(
                     deployment_id=pod.id,
                     device_role="border-leaf",
-                    amount=share,
+                    quantity=share,
                     template=entry.template.model_dump(),
                     naming_convention=cast(
                         Literal["standard", "hierarchical", "flat"], self.data.naming_convention.lower()

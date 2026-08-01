@@ -212,9 +212,9 @@ class TestCreateBorderLeafDevices:
         assert gen.create_devices.await_count == 2
         first_call, second_call = gen.create_devices.call_args_list
         assert first_call.kwargs["deployment_id"] == "pod-a"
-        assert first_call.kwargs["amount"] == 1
+        assert first_call.kwargs["quantity"] == 1
         assert second_call.kwargs["deployment_id"] == "pod-b"
-        assert second_call.kwargs["amount"] == 2
+        assert second_call.kwargs["quantity"] == 2
 
     @pytest.mark.asyncio
     async def test_pod_with_zero_capacity_is_skipped(self) -> None:

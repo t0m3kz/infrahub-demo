@@ -33,7 +33,7 @@ class DeviceMixin:
     async def create_devices(
         self,
         device_role: str,
-        amount: int,
+        quantity: int,
         deployment_id: str,
         template: dict[str, Any],
         naming_convention: Literal["standard", "hierarchical", "flat"] = "flat",
@@ -69,7 +69,7 @@ class DeviceMixin:
                     fabric_name=fabric_name,
                     indexes=indexes,
                 )
-                for idx in range(1, amount + 1)
+                for idx in range(1, quantity + 1)
             ]
         )
         management_pool_name = f"{fabric_name}-management-pool"

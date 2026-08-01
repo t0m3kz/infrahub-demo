@@ -220,7 +220,7 @@ class TestGenerateDesignModeDispatch:
         gen.create_devices.assert_awaited_once()
         call_kwargs = gen.create_devices.call_args.kwargs
         assert call_kwargs["device_role"] == "super-spine"
-        assert call_kwargs["amount"] == 2
+        assert call_kwargs["quantity"] == 2
 
         gen.create_routing.assert_awaited_once()
         routing_kwargs = gen.create_routing.call_args.kwargs
@@ -242,7 +242,7 @@ class TestGenerateDesignModeDispatch:
         await gen.generate(data)
 
         assert gen.create_devices.await_count == 2
-        amounts = [c.kwargs["amount"] for c in gen.create_devices.await_args_list]
+        amounts = [c.kwargs["quantity"] for c in gen.create_devices.await_args_list]
         assert amounts == [1, 2]
 
         gen.create_routing.assert_awaited_once()
@@ -398,7 +398,7 @@ class TestGenerateHyperSpineTier:
         assert gen.create_devices.await_count == 2
         hyper_spine_call = gen.create_devices.await_args_list[1].kwargs
         assert hyper_spine_call["device_role"] == "hyper-spine"
-        assert hyper_spine_call["amount"] == 2
+        assert hyper_spine_call["quantity"] == 2
 
         gen.create_cabling.assert_awaited_once()
         cabling_kwargs = gen.create_cabling.call_args.kwargs
