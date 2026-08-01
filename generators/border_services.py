@@ -78,7 +78,7 @@ class BorderServicesMixin:
         role: Literal["firewall", "load-balancer"],
         entries: list[DeviceRole],
         deployment_id: str,
-        naming_convention: Literal["standard", "hierarchical", "flat"],
+        naming_convention: Literal["standard", "hierarchical", "flat", "computed"],
         indexes: list[int],
     ) -> list[str]:
         """Create firewall/load-balancer devices for one deployment scope

@@ -231,7 +231,7 @@ class DCTopologyGenerator(CommonGenerator):
                     quantity=entry.quantity,
                     template=entry.template.model_dump(),
                     naming_convention=cast(
-                        Literal["standard", "hierarchical", "flat"],
+                        Literal["standard", "hierarchical", "flat", "computed"],
                         naming_convention.lower(),
                     ),
                     options=DeviceOptions(
@@ -268,7 +268,7 @@ class DCTopologyGenerator(CommonGenerator):
                     quantity=entry.quantity,
                     template=entry.template.model_dump(),
                     naming_convention=cast(
-                        Literal["standard", "hierarchical", "flat"],
+                        Literal["standard", "hierarchical", "flat", "computed"],
                         naming_convention.lower(),
                     ),
                     options=DeviceOptions(
@@ -468,7 +468,7 @@ class DCTopologyGenerator(CommonGenerator):
                     quantity=share,
                     template=entry.template.model_dump(),
                     naming_convention=cast(
-                        Literal["standard", "hierarchical", "flat"], self.data.naming_convention.lower()
+                        Literal["standard", "hierarchical", "flat", "computed"], self.data.naming_convention.lower()
                     ),
                     options=device_options,
                 )
@@ -493,7 +493,9 @@ class DCTopologyGenerator(CommonGenerator):
         calls after bulk loads); not auto-triggered from pod.py's add_pod, which
         would otherwise fire a concurrent DC-level re-bootstrap on every single
         pod creation during a bulk multi-pod load."""
-        naming_convention = cast(Literal["standard", "hierarchical", "flat"], self.data.naming_convention.lower())
+        naming_convention = cast(
+            Literal["standard", "hierarchical", "flat", "computed"], self.data.naming_convention.lower()
+        )
         border_leaf_names = await self._create_border_leaf_devices()
         firewall_names = await self._create_role_devices(
             role="firewall",
