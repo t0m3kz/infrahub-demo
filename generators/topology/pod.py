@@ -127,7 +127,7 @@ class PodTopologyGenerator(CommonGenerator):
             return
         spine_count = sum(entry.quantity for entry in spine_entries)
         naming_conv = cast(
-            Literal["standard", "hierarchical", "flat"],
+            Literal["standard", "hierarchical", "flat", "computed"],
             dc.naming_convention,
         )
 
@@ -378,7 +378,9 @@ class PodTopologyGenerator(CommonGenerator):
         if not firewall_entries and not load_balancer_entries:
             return
 
-        naming_conv = cast(Literal["standard", "hierarchical", "flat"], self.data.parent.naming_convention.lower())
+        naming_conv = cast(
+            Literal["standard", "hierarchical", "flat", "computed"], self.data.parent.naming_convention.lower()
+        )
         device_indexes = [self.data.parent.index, self.data.index]
 
         firewall_names = await self._create_role_devices(

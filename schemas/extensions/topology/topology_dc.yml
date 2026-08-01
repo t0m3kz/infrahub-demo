@@ -408,16 +408,20 @@ nodes:
         choices:
           - name: standard
             label: "Standard"
-            description: "dc-fabN-podN-role-NN"
+            description: "dc-podN-roleNN, short role codes (e.g. dc1-pod2-lf01)"
             color: "#7FBF7F"
           - name: hierarchical
             label: "Hierarchical"
-            description: "dc-N-role-NN (numeric indexes)"
+            description: "dc.N.roleNN, dot-separated numeric path (e.g. dc1.2.lf01)"
             color: "#7F7FBF"
           - name: flat
             label: "Flat"
-            description: "dcroleNNNN (no separators)"
+            description: "dcNroleNN, no separators (e.g. dc12lf01)"
             color: "#BF7FBF"
+          - name: computed
+            label: "Computed"
+            description: "dc-roleNNNN, fixed-width digit run instead of a labeled path (e.g. dc1-lf0201)"
+            color: "#BFBF7F"
 
       - name: routing_strategy
         kind: Dropdown

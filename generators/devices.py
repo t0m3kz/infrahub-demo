@@ -36,7 +36,7 @@ class DeviceMixin:
         quantity: int,
         deployment_id: str,
         template: dict[str, Any],
-        naming_convention: Literal["standard", "hierarchical", "flat"] = "flat",
+        naming_convention: Literal["standard", "hierarchical", "flat", "computed"] = "flat",
         options: DeviceOptions | None = None,
     ) -> list[str]:
         """Create devices using batch creation.

@@ -200,7 +200,7 @@ class RackMixin:
             )
 
         self._naming_conv = cast(
-            Literal["standard", "hierarchical", "flat"],
+            Literal["standard", "hierarchical", "flat", "computed"],
             dc.naming_convention,
         )
         self._is_ipv6 = dc.is_ipv6
