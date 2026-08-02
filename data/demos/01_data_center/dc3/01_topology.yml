@@ -11,10 +11,10 @@ spec:
       underlay_protocol: ipv6
       naming_convention: flat
       fabric_templates:
-        - ["4", "super-spine", "PowerSwitch-S5232F-ON_SUPER_SPINE"]
-        - ["2", "border-leaf", "PowerSwitch-S5232F-ON_BORDER_LEAF"]
-        - ["2", "firewall", "CP-26000_FIREWALL"]
-        - ["2", "load-balancer", "BIG-IP-i5800_LOAD_BALANCER"]
+        - ["4", "super-spine", "PowerSwitch S5232F-ON"]
+        - ["2", "border-leaf", "PowerSwitch S5232F-ON"]
+        - ["2", "firewall", "CP-26000"]
+        - ["2", "load-balancer", "BIG-IP-i5800"]
       fabric_interface_sorting_method: top_down
       member_of_groups:
         - topologies_dc
@@ -26,7 +26,7 @@ spec:
             deployment_type: middle_rack
             suites: [lon-1-s-1]
             fabric_templates:
-              - ["2", "spine", "N9K-C9336C-FX2_SPINE"]
+              - ["2", "spine", "N9K-C9336C-FX2"]
             member_of_groups:
               - topologies_pod
             racks:
@@ -39,14 +39,14 @@ spec:
                   parent: lon-1-s-1
                   member_of_groups: [topologies_rack]
                   fabric_templates:
-                    - ["2", "leaf", "N9K-C9336C-FX2_LEAF_MR"]
-                    - ["2", "l2-leaf", "N9K-C9336C-FX2_TOR"]
+                    - ["2", "leaf", "N9K-C9336C-FX2"]
+                    - ["2", "l2-leaf", "N9K-C9336C-FX2"]
           - index: 2
             layout: L_MIDDLE
             deployment_type: middle_rack
             suites: [lon-1-s-2]
             fabric_templates:
-              - ["2", "spine", "DCS-7050CX3-32C-R_SPINE"]
+              - ["2", "spine", "DCS-7050CX3-32C-R"]
             member_of_groups:
               - topologies_pod
             racks:
@@ -59,14 +59,14 @@ spec:
                   parent: lon-1-s-2
                   member_of_groups: [topologies_rack]
                   fabric_templates:
-                    - ["2", "leaf", "DCS-7050CX3-32C-R_LEAF_MR"]
-                    - ["2", "l2-leaf", "DCS-7050CX3-32C-R_TOR"]
+                    - ["2", "leaf", "DCS-7050CX3-32C-R"]
+                    - ["2", "l2-leaf", "DCS-7050CX3-32C-R"]
           - index: 3
             layout: L_MIDDLE
             deployment_type: middle_rack
             suites: [lon-1-s-3]
             fabric_templates:
-              - ["2", "spine", "PowerSwitch-S5232F-ON_SPINE"]
+              - ["2", "spine", "PowerSwitch S5232F-ON"]
             member_of_groups:
               - topologies_pod
             racks:
@@ -79,14 +79,14 @@ spec:
                   parent: lon-1-s-3
                   member_of_groups: [topologies_rack]
                   fabric_templates:
-                    - ["2", "leaf", "PowerSwitch-S5232F-ON_LEAF_MR"]
-                    - ["2", "l2-leaf", "PowerSwitch-S5224F-ON_TOR"]
+                    - ["2", "leaf", "PowerSwitch S5232F-ON"]
+                    - ["2", "l2-leaf", "PowerSwitch-S5224F"]
           - index: 4
             layout: L_MIDDLE
             deployment_type: middle_rack
             suites: [lon-1-s-4]
             fabric_templates:
-              - ["2", "spine", "Edgecore-7726-32X-O_SPINE"]
+              - ["2", "spine", "7726-32X-O"]
             member_of_groups:
               - topologies_pod
             racks:
@@ -99,5 +99,5 @@ spec:
                   parent: lon-1-s-4
                   member_of_groups: [topologies_rack]
                   fabric_templates:
-                    - ["2", "leaf", "Edgecore-7726-32X-O_LEAF_MR"]
-                    - ["2", "l2-leaf", "Edgecore-7AS7326-56X-O-48V-F_TOR"]
+                    - ["2", "leaf", "7726-32X-O"]
+                    - ["2", "l2-leaf", "7AS7326-56X-O-48V-F"]
