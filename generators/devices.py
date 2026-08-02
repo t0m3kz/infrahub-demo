@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, Literal
 
-from infrahub_sdk.exceptions import ValidationError
+from infrahub_sdk.exceptions import NodeNotFoundError, ValidationError
 from infrahub_sdk.protocols import CoreIPAddressPool, CoreStandardGroup
 
 if TYPE_CHECKING:
@@ -107,7 +107,20 @@ class DeviceMixin:
         batch_loopbacks = await self.client.create_batch()
 
         group_name = options.get("group_name") or f"{device_role}s"
-        device_group = await self.client.get(kind=CoreStandardGroup, name__value=group_name)
+        try:
+            device_group = await self.client.get(kind=CoreStandardGroup, name__value=group_name)
+        except NodeNotFoundError:
+            # Keep generators robust on branches where bootstrap groups were not
+            # loaded yet (e.g. ad-hoc test branches).
+            device_group = await self.client.create(
+                kind=CoreStandardGroup,
+                data={
+                    "name": group_name,
+                    "description": f"Auto-created by generator for role {device_role}",
+                },
+            )
+            await device_group.save(allow_upsert=True)
+            self.logger.info(f"Created missing device group '{group_name}' for role '{device_role}'")
         try:
             # Fetch all existing devices in a single batch to optimize performance
             existing_devices_list = await self.client.filters(
