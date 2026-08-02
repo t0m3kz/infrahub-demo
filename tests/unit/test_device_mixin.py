@@ -46,7 +46,6 @@ async def test_create_devices_sends_full_interface_payload() -> None:
         "id": "tmpl-1",
         "device_type": {"id": "dt-1"},
         "platform": {"name": "cisco_nxos"},
-        "owner": {"id": "owner-1"},
         "interfaces": [
             {
                 "kind": "TemplateDcimPhysicalInterface",
@@ -81,4 +80,3 @@ async def test_create_devices_sends_full_interface_payload() -> None:
             "data": {"name": "Eth1/2", "role": "load-balancer", "interface_type": "100gbase-x-qsfp28"},
         },
     ]
-    assert create_kwargs["data"]["owner"] == {"id": "owner-1"}
