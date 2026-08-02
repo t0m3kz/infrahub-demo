@@ -15,19 +15,7 @@ query topology_dc($name: String!) {
           management_mode { value }
           routing_strategy { value }
           underlay_protocol { value }
-          design {
-            node {
-              id
-              max_pods { value }
-              max_super_spines_per_fabric { value }
-              max_hyper_spines_per_fabric { value }
-              max_spines_per_pod { value }
-              max_border_leafs_per_fabric { value }
-              loopback_prefix_length { value }
-              technical_prefix_length { value }
-              management_prefix_length { value }
-            }
-          }
+          size { value }
           loopback_pool {
             node {
               id

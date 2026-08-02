@@ -6,7 +6,7 @@ spec:
   data:
     - name: DC5
       index: 1
-      design: L
+      size: L
       routing_strategy: ebgp-ebgp
       underlay_protocol: ipv6
       naming_convention: flat
@@ -22,7 +22,9 @@ spec:
         kind: TopologyPod
         data:
           - index: 1
-            design: S_MIDDLE
+            layout: S_MIDDLE
+            deployment_type: middle_rack
+            suites: [ny-1-s-1]
             fabric_templates:
               - ["2", "spine", "N9K-C9336C-FX2_SPINE"]
             member_of_groups:
@@ -55,7 +57,9 @@ spec:
                   parent: ny-1-s-1
                   member_of_groups: [topologies_rack]
           - index: 2
-            design: S_MIDDLE
+            layout: S_MIDDLE
+            deployment_type: middle_rack
+            suites: [ny-1-s-2]
             fabric_templates:
               - ["2", "spine", "DCS-7050CX3-32C-R_SPINE"]
             member_of_groups:
@@ -88,7 +92,9 @@ spec:
                   parent: ny-1-s-2
                   member_of_groups: [topologies_rack]
           - index: 3
-            design: S_MIDDLE
+            layout: S_MIDDLE
+            deployment_type: middle_rack
+            suites: [ny-1-s-3]
             fabric_templates:
               - ["2", "spine", "PowerSwitch-S5232F-ON_SPINE"]
             member_of_groups:
@@ -115,7 +121,9 @@ spec:
                     - ["2", "leaf", "PowerSwitch-S5232F-ON_LEAF_MR"]
                     - ["2", "l2-leaf", "PowerSwitch-S5224F-ON_TOR"]
           - index: 4
-            design: S_MIDDLE
+            layout: S_MIDDLE
+            deployment_type: middle_rack
+            suites: [ny-1-s-4]
             fabric_templates:
               - ["2", "spine", "Edgecore-7726-32X-O_SPINE"]
             member_of_groups:

@@ -8,7 +8,7 @@ spec:
       shortname: "lon"
       parent: uk
       children:
-        kind: LocationBuilding
+        kind: LocationFacility
         data:
           - name: "LON-1"
             shortname: "lon-1"
@@ -19,15 +19,23 @@ spec:
                   index: 1
                   shortname: "lon-1-s-1"
                   parent: lon-1
+                  rows: 1
+                  racks_per_row: 1
                 - suite_name: "Room-2"
                   index: 2
                   shortname: "lon-1-s-2"
                   parent: lon-1
+                  rows: 1
+                  racks_per_row: 1
                 - suite_name: "Room-3"
                   index: 3
                   shortname: "lon-1-s-3"
                   parent: lon-1
+                  rows: 1
+                  racks_per_row: 1
                 - suite_name: "Room-4"
                   index: 4
                   shortname: "lon-1-s-4"
                   parent: lon-1
+                  rows: 1
+                  racks_per_row: 1

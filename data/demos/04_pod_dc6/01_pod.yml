@@ -6,7 +6,9 @@ spec:
   kind: TopologyPod
   data:
     - index: 4
-      design: M_MIDDLE
+      layout: M_MIDDLE
+      deployment_type: middle_rack
+      suites: [ktw-1-s-4]
       fabric_templates:
         - ["2", "spine", "N9K-C9336C-FX2_SPINE"]
       mlag_create: virtual

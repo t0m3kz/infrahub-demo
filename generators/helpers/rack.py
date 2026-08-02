@@ -52,30 +52,24 @@ class RackPlanner:
         device_type: str = "leaf",
         racks_in_previous_rows: int | None = None,
     ) -> int:
-        """Calculate cabling offset using simple formula based on rack position."""
+        """Calculate cabling offset using simple formula based on rack position.
+
+        Entirely derived from live rack position (row_index/index) and the
+        caller-supplied count of sibling racks already deployed in previous
+        rows of this pod — never from a design's declared capacity. A design
+        cap describes what's ALLOWED, not what's actually built, and sizing
+        offsets off it either wastes spine ports (cap larger than reality)
+        or overflows them (cap smaller, e.g. a partially-built pod using
+        fewer racks per row than its design allows)."""
 
         current_index = data.index
-
-        # deployment_type and max_tors_per_row are both derived from pod.design
-        pod = data.pod
-        deployment_type = pod.deployment_type
-        max_tors_per_row = pod.design.compute_racks_per_row * pod.design.max_tors_per_compute_rack
+        deployment_type = data.pod.deployment_type
 
         # For middle_rack deployment ToRs: always offset=0 (ToRs connect to leafs in same rack)
         if deployment_type == "middle_rack" and device_type == "tor":
             offset = 0
             logger.info(
                 f"Calculated {device_type} offset={offset} for rack {data.name} (mode=middle_rack) - intra-rack cabling"
-            )
-
-        # For mixed deployment ToRs: static offset based on row + rack index
-        # Formula: (row_index - 1) × tors_per_row + (rack_index - 1) × tors_per_rack
-        elif deployment_type == "mixed" and device_type == "tor":
-            offset = (data.row_index - 1) * max_tors_per_row + (current_index - 1) * device_count
-            logger.info(
-                f"Calculated {device_type} offset={offset} for rack {data.name} "
-                f"(row_index={data.row_index}, index={current_index}, tors_per_rack={device_count}, "
-                f"tors_per_row={max_tors_per_row}, mode=mixed)"
             )
 
         # For mixed/middle_rack deployment leafs: calculate offset based on row position
@@ -88,20 +82,13 @@ class RackPlanner:
                 f"(row_index={data.row_index}, leafs_per_rack={device_count}, mode={deployment_type})"
             )
 
-        # For tor deployment ToRs: calculate cumulative offset across pod
-        # ToRs connect to spines, need cumulative offset across all rows
-        # Uses actual racks in previous rows (passed in) to avoid exceeding spine port capacity
-        elif deployment_type == "tor" and device_type == "tor":
-            if racks_in_previous_rows is not None:
-                tors_in_previous_rows = racks_in_previous_rows * device_count
-            else:
-                # Fallback to design max if actual count not provided
-                max_tors_int = int(max_tors_per_row)
-                tors_in_previous_rows = max_tors_int * (data.row_index - 1)
-
-            # Offset from previous racks in current row
+        # For mixed/tor deployment ToRs: cumulative offset across the pod, using
+        # the actual count of sibling racks already in previous rows (passed
+        # in by the caller via a live LocationRack query) rather than any
+        # design capacity — avoids exceeding real spine port capacity.
+        elif deployment_type in ("mixed", "tor") and device_type == "tor":
+            tors_in_previous_rows = (racks_in_previous_rows or 0) * device_count
             offset_in_current_row = device_count * (current_index - 1)
-
             offset = tors_in_previous_rows + offset_in_current_row
 
             logger.info(

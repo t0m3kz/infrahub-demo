@@ -6,7 +6,7 @@ spec:
   data:
     - name: DC6
       index: 1
-      design: L
+      size: L
       routing_strategy: ebgp-ibgp
       underlay_protocol: ipv6
       naming_convention: standard
@@ -22,7 +22,9 @@ spec:
         kind: TopologyPod
         data:
           - index: 1
-            design: M_MIDDLE
+            layout: M_MIDDLE
+            deployment_type: middle_rack
+            suites: [ktw-1-s-1]
             fabric_templates:
               - ["2", "spine", "N9K-C9336C-FX2_SPINE"]
             mlag_create: virtual
@@ -50,7 +52,9 @@ spec:
                     - ["2", "leaf", "PowerSwitch-S5232F-ON_LEAF_MR"]
                     - ["2", "l2-leaf", "PowerSwitch-S5224F-ON_TOR"]
           - index: 2
-            design: S_TOR
+            layout: S_TOR
+            deployment_type: tor
+            suites: [ktw-1-s-2]
             fabric_templates:
               - ["2", "spine", "N9K-C9336C-FX2_SPINE"]
             mlag_create: back-to-back
@@ -92,7 +96,9 @@ spec:
                   fabric_templates:
                     - ["2", "tor", "PowerSwitch-S5224F-ON_TOR"]
           - index: 3
-            design: M_MIXED
+            layout: M_MIXED
+            deployment_type: mixed
+            suites: [ktw-1-s-3]
             fabric_templates:
               - ["2", "spine", "N9K-C9336C-FX2_SPINE"]
             mlag_create: virtual

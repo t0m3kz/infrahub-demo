@@ -1053,7 +1053,7 @@ nodes:
         optional: false
         order_weight: 650
       - name: location
-        peer: LocationBuilding
+        peer: LocationFacility
         cardinality: one
         optional: true
         order_weight: 700

@@ -9,3 +9,5 @@ spec:
       index: 4
       shortname: ktw-1-s-4
       parent: ktw-1
+      rows: 2
+      racks_per_row: 1

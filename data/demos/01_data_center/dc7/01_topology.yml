@@ -6,7 +6,7 @@ spec:
   data:
     - name: DC7
       index: 7
-      design: S
+      size: S
       routing_strategy: ebgp-ebgp
       underlay_protocol: ipv6
       naming_convention: hierarchical
@@ -18,7 +18,9 @@ spec:
         kind: TopologyPod
         data:
           - index: 1
-            design: S_BORDER_SPINE_POD
+            layout: S_BORDER_SPINE_POD
+            deployment_type: middle_rack
+            suites: [ams-1-s-1]
             fabric_templates:
               - ["2", "border-spine", "DCS-7050CX3-32C-R_BORDER_SPINE"]
               - ["2", "firewall", "PA-5260_FIREWALL"]
@@ -37,7 +39,9 @@ spec:
                   fabric_templates:
                     - ["8", "leaf", "DCS-7050CX3-32C-R_LEAF_MR"]
           - index: 2
-            design: S_BORDER_SPINE_POD
+            layout: S_BORDER_SPINE_POD
+            deployment_type: middle_rack
+            suites: [ams-1-s-2]
             fabric_templates:
               - ["2", "border-spine", "DCS-7050CX3-32C-R_BORDER_SPINE"]
               - ["2", "firewall", "PA-5260_FIREWALL"]

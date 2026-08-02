@@ -63,18 +63,6 @@ spec:
       children:
         data:
           - namespace: Topology
-            name: DesignDataCenterItem
-            label: Fabric Designs
-            kind: TopologyDataCenterDesign
-            icon: "mdi:floor-plan"
-
-          - namespace: Topology
-            name: DesignPodItem
-            label: Pod Designs
-            kind: TopologyPodDesign
-            icon: "mdi:view-grid-outline"
-
-          - namespace: Topology
             name: DesignElementItem
             label: Network Elements
             kind: TopologyElement

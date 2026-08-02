@@ -351,6 +351,8 @@ queries:
     file_path: queries/topology/add/mlag_domain.gql
   - name: customer_dc_data
     file_path: queries/topology/add/customer_dc.gql
+  - name: quotation_data
+    file_path: queries/quotation/add_quotation.gql
 
 generator_definitions:
   - name: add_dc
@@ -493,6 +495,15 @@ generator_definitions:
     targets: customer_deployments
     query: customer_dc_data
     class_name: ExchangeGatewayGenerator
+    execute_in_proposed_change: false
+    execute_after_merge: false
+    parameters:
+      name: name__value
+  - name: add_quotation
+    file_path: generators/quotation.py
+    targets: customer_quotations
+    query: quotation_data
+    class_name: QuotationGenerator
     execute_in_proposed_change: false
     execute_after_merge: false
     parameters:

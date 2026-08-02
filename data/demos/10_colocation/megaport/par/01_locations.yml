@@ -4,7 +4,7 @@ apiVersion: infrahub.app/v1
 version: "1.0"
 kind: Object
 spec:
-  kind: LocationBuilding
+  kind: LocationFacility
   data:
     - name: "MCR-PAR1"
       shortname: "mcr-par1"

@@ -6,11 +6,9 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from generators.models import (
-    DataCenterDesignData,
     DeviceRole,
     Interface,
     LocationSuiteModel,
-    PodDesign,
     Pool,
     RackModel,
     RackParent,
@@ -25,18 +23,9 @@ def _build_gen() -> Any:
         id="dc-1",
         name="DC1",
         index=1,
-        design=DataCenterDesignData(),
+        size="S",
         naming_convention="standard",
         management_pool=Pool(id="mgmt-pool", name="mgmt"),
-    )
-    design = PodDesign(
-        id="design-1",
-        name="design",
-        rows=2,
-        compute_racks_per_row=2,
-        network_racks_per_row=1,
-        max_tors_per_compute_rack=2,
-        max_leafs_per_network_rack=4,
     )
     pod = RackPod(
         id="pod-1",
@@ -47,7 +36,8 @@ def _build_gen() -> Any:
         spine_interface_sorting_method="bottom_up",
         loopback_pool=Pool(id="lo-pool", name="lo"),
         prefix_pool=Pool(id="p2p-pool", name="p2p"),
-        design=design,
+        deployment_type="mixed",
+        layout="S_MIXED",
         fabric_templates=[
             DeviceRole(
                 role="spine",

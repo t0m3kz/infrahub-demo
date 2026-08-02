@@ -229,9 +229,7 @@ class TestDCPodCascadeGenerator:
         pod1, pod2 = _mock_pod("POD-1"), _mock_pod("POD-2")
         gen.client.filters = AsyncMock(return_value=[pod1, pod2])
 
-        await gen.generate(
-            {"TopologyDeployment": [{"id": "dc-1", "name": "DC1", "index": 1, "design": {"id": "design-1"}}]}
-        )
+        await gen.generate({"TopologyDeployment": [{"id": "dc-1", "name": "DC1", "index": 1, "size": "S"}]})
 
         gen.run_generator.assert_awaited_once_with("pod_rack_cascade", [pod1.id, pod2.id], wait=False)
         assert pod1.id in gen.client.group_context.related_node_ids
@@ -246,9 +244,7 @@ class TestDCPodCascadeGenerator:
         )
         gen.client.filters = AsyncMock(return_value=[])
 
-        await gen.generate(
-            {"TopologyDeployment": [{"id": "dc-1", "name": "DC1", "index": 1, "design": {"id": "design-1"}}]}
-        )
+        await gen.generate({"TopologyDeployment": [{"id": "dc-1", "name": "DC1", "index": 1, "size": "S"}]})
 
         gen.run_generator.assert_not_awaited()
 
@@ -279,21 +275,22 @@ def _mock_rack(name: str, rack_type: str) -> MagicMock:
 
 
 def _pod_data(*, deployment_type: str) -> dict[str, Any]:
-    design = {
-        "id": "design-1",
-        "name": "test-design",
-        "rows": 1,
-        "compute_racks_per_row": 1,
-        "network_racks_per_row": 0 if deployment_type == "tor" else 1,
-        "max_tors_per_compute_rack": 0 if deployment_type == "middle_rack" else 1,
-    }
+    """PodModel now carries deployment_type (explicit, no longer derived) plus a
+    `layout` key into POD_LAYOUTS (see generators/models.py) instead of a
+    `design` relationship; PodParent (`parent`) carries `size` (a DC_SIZE_LAYOUTS
+    key) instead of its own `design` relationship. deployment_type here still
+    drives which real POD_LAYOUTS entry we pick, matching the fixture's original
+    intent (network_racks_per_row=0 for tor, max_tors_per_compute_rack=0 for
+    middle_rack)."""
+    layout = {"middle_rack": "S_MIDDLE", "tor": "S_TOR", "mixed": "S_MIXED"}[deployment_type]
     return {
         "TopologyPod": [
             {
                 "id": "pod-1",
                 "name": "pod-1",
                 "index": 1,
-                "design": design,
+                "deployment_type": deployment_type,
+                "layout": layout,
                 "fabric_templates": [{"role": "spine", "quantity": 2, "template": {"node": {"id": "tmpl-spine"}}}],
                 "parent": {
                     "node": {
@@ -301,7 +298,7 @@ def _pod_data(*, deployment_type: str) -> dict[str, Any]:
                         "name": "DC1",
                         "index": 1,
                         "devices": {"edges": []},
-                        "design": {"id": "dc-design-1", "name": "test-dc-design"},
+                        "size": "S",
                     }
                 },
             }

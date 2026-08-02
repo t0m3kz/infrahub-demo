@@ -37,13 +37,8 @@ def _rack(*, rack_id: str = "rack-1", row_index: int = 1, rack_type: str = "comp
             "id": "pod-1",
             "name": "POD1",
             "index": 1,
+            "deployment_type": "mixed",
             "parent": {"id": "dc-1", "name": "DC1"},
-            "design": {
-                "id": "design-1",
-                "rows": 2,
-                "compute_racks_per_row": 2,
-                "network_racks_per_row": 1,
-            },
         },
         "devices": [],
     }

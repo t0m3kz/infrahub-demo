@@ -245,6 +245,7 @@ class DcimDevice(CoreNode):
 
 class TopologyDeviceHosting(CoreNode):
     name: String
+    naming_convention: Dropdown
     devices: RelationshipManager[DcimDevice]
     member_of_groups: RelationshipManager[CoreGroup]
     profiles: RelationshipManager[CoreProfile]
@@ -407,6 +408,15 @@ class ManagedLoadBalancer(CoreNode):
     tags: RelationshipManager[BuiltinTag]
 
 
+class TemplateLocationGeneric(CoreNode):
+    name: String
+    template_name: String
+    member_of_groups: RelationshipManager[CoreGroup]
+    profiles: RelationshipManager[CoreProfile]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+    tags: RelationshipManager[BuiltinTag]
+
+
 class TemplateManagedController(CoreNode):
     controller_type: Dropdown
     template_name: String
@@ -477,6 +487,19 @@ class ManagedProxyService(CoreNode):
     subscriber_of_groups: RelationshipManager[CoreGroup]
 
 
+class CustomerQuotation(CoreNode):
+    description: StringOptional
+    estimated_total_cost: IntegerOptional
+    name: String
+    request_type: Dropdown
+    status: Dropdown
+    line_items: RelationshipManager[CustomerQuotationLineItem]
+    member_of_groups: RelationshipManager[CoreGroup]
+    owner: RelationshipAttribute[OrganizationEntity]
+    profiles: RelationshipManager[CoreProfile]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
 class TopologyRackHosting(CoreNode):
     name: String
     member_of_groups: RelationshipManager[CoreGroup]
@@ -532,6 +555,57 @@ class DcimSubInterface(CoreNode):
     profiles: RelationshipManager[CoreProfile]
     sub_interfaces: RelationshipManager[DcimVirtualInterface]
     subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class TemplateTopologyConnectableLocation(CoreNode):
+    template_name: String
+    circuits: RelationshipManager[TopologyCircuit]
+    member_of_groups: RelationshipManager[CoreGroup]
+    profiles: RelationshipManager[CoreProfile]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class TemplateTopologyDeployment(CoreNode):
+    template_name: String
+    member_of_groups: RelationshipManager[CoreGroup]
+    profiles: RelationshipManager[CoreProfile]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class TemplateTopologyDeviceHosting(CoreNode):
+    naming_convention: Dropdown
+    template_name: String
+    devices: RelationshipManager[DcimDevice]
+    member_of_groups: RelationshipManager[CoreGroup]
+    profiles: RelationshipManager[CoreProfile]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class TemplateTopologyPhysicalDeployment(CoreNode):
+    template_name: String
+    cables: RelationshipManager[DcimCable]
+    member_of_groups: RelationshipManager[CoreGroup]
+    profiles: RelationshipManager[CoreProfile]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class TemplateTopologyRackHosting(CoreNode):
+    template_name: String
+    member_of_groups: RelationshipManager[CoreGroup]
+    profiles: RelationshipManager[CoreProfile]
+    racks: RelationshipManager[LocationRack]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class TemplateTopologySegmentHosting(CoreNode):
+    template_name: String
+    l3_vni_pool: RelationshipAttribute[CoreNumberPool]
+    member_of_groups: RelationshipManager[CoreGroup]
+    profiles: RelationshipManager[CoreProfile]
+    segment_deployments: RelationshipManager[ManagedSegmentDeployment]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+    vlan_pool: RelationshipAttribute[CoreNumberPool]
+    vni_pool: RelationshipAttribute[CoreNumberPool]
 
 
 class ManagedAAA(ManagedGeneric, ManagedGenericDevice):
@@ -671,21 +745,6 @@ class DcimBidiSFP(DcimGenericSFP):
     subscriber_of_groups: RelationshipManager[CoreGroup]
 
 
-class LocationBuilding(LocationGeneric):
-    facility_id: StringOptional
-    is_cloud: Boolean
-    name: String
-    physical_address: StringOptional
-    shortname: String
-    children: RelationshipManager[LocationSuite]
-    member_of_groups: RelationshipManager[CoreGroup]
-    owner: RelationshipAttribute[OrganizationGeneric]
-    parent: RelationshipAttribute[LocationMetro]
-    profiles: RelationshipManager[CoreProfile]
-    subscriber_of_groups: RelationshipManager[CoreGroup]
-    tags: RelationshipManager[BuiltinTag]
-
-
 class VirtCNI(ManagedGeneric, ManagedGenericCluster):
     bgp_enabled: Boolean
     description: StringOptional
@@ -727,6 +786,45 @@ class DcimCable(CoreNode):
     member_of_groups: RelationshipManager[CoreGroup]
     profiles: RelationshipManager[CoreProfile]
     subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class LocationCampus(LocationGeneric):
+    name: String
+    physical_address: StringOptional
+    shortname: String
+    children: RelationshipManager[LocationCampusBuilding]
+    member_of_groups: RelationshipManager[CoreGroup]
+    owner: RelationshipAttribute[OrganizationGeneric]
+    parent: RelationshipAttribute[LocationMetro]
+    profiles: RelationshipManager[CoreProfile]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+    tags: RelationshipManager[BuiltinTag]
+
+
+class LocationCampusBuilding(LocationGeneric):
+    name: String
+    shortname: String
+    children: RelationshipManager[LocationCampusFloor]
+    member_of_groups: RelationshipManager[CoreGroup]
+    parent: RelationshipAttribute[LocationCampus]
+    profiles: RelationshipManager[CoreProfile]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+    tags: RelationshipManager[BuiltinTag]
+
+
+class LocationCampusFloor(LocationGeneric):
+    area_sqm: Integer
+    conference_rooms: Integer
+    employee_count: Integer
+    index: Integer
+    name: String
+    shortname: String
+    children: RelationshipManager[LocationGeneric]
+    member_of_groups: RelationshipManager[CoreGroup]
+    parent: RelationshipAttribute[LocationCampusBuilding]
+    profiles: RelationshipManager[CoreProfile]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+    tags: RelationshipManager[BuiltinTag]
 
 
 class TopologyCloud(TopologyDeployment):
@@ -850,6 +948,7 @@ class TopologyColocationZone(
 ):
     deployment_type: Dropdown
     name: String
+    naming_convention: Dropdown
     cables: RelationshipManager[DcimCable]
     children: RelationshipManager[TopologyDeployment]
     devices: RelationshipManager[DcimDevice]
@@ -1071,6 +1170,7 @@ class TopologyCustomerOffice(
 ):
     environment: Dropdown
     name: StringOptional
+    naming_convention: Dropdown
     status: Dropdown
     cables: RelationshipManager[DcimCable]
     children: RelationshipManager[TopologyDeployment]
@@ -1078,7 +1178,7 @@ class TopologyCustomerOffice(
     clusters: RelationshipManager[VirtCluster]
     devices: RelationshipManager[DcimDevice]
     exchange_gateways: RelationshipManager[TopologyExchangeGateway]
-    locations: RelationshipManager[LocationBuilding]
+    locations: RelationshipManager[LocationFacility]
     member_of_groups: RelationshipManager[CoreGroup]
     namespace: RelationshipAttribute[BuiltinIPNamespace]
     network_segments: RelationshipManager[ManagedNetworkSegment]
@@ -1152,13 +1252,15 @@ class TopologyDataCenter(
     management_mode: Dropdown
     name: String
     naming_convention: Dropdown
+    routing_strategy: Dropdown
+    size: Dropdown
     spine_interface_sorting_method: Dropdown
     status: Dropdown
+    underlay_protocol: Dropdown
     artifacts: RelationshipManager[CoreArtifact]
     cables: RelationshipManager[DcimCable]
     children: RelationshipManager[TopologyDeployment]
     circuits: RelationshipManager[TopologyCircuit]
-    design: RelationshipAttribute[TopologyDataCenterDesign]
     devices: RelationshipManager[DcimDevice]
     fabric_asn_pool: RelationshipAttribute[CoreNumberPool]
     fabric_templates: RelationshipManager[TopologyElement]
@@ -1166,6 +1268,7 @@ class TopologyDataCenter(
     loopback_pool: RelationshipAttribute[CoreIPPrefixPool]
     management_pool: RelationshipAttribute[CoreIPAddressPool]
     member_of_groups: RelationshipManager[CoreGroup]
+    object_template: RelationshipAttribute[TemplateTopologyDataCenter]
     parent: RelationshipAttribute[TopologyDeployment]
     profiles: RelationshipManager[CoreProfile]
     segment_deployments: RelationshipManager[ManagedSegmentDeployment]
@@ -1173,23 +1276,6 @@ class TopologyDataCenter(
     technical_pool: RelationshipAttribute[CoreIPPrefixPool]
     vlan_pool: RelationshipAttribute[CoreNumberPool]
     vni_pool: RelationshipAttribute[CoreNumberPool]
-
-
-class TopologyDataCenterDesign(TopologyDesign):
-    description: StringOptional
-    loopback_prefix_length: Integer
-    management_prefix_length: Integer
-    max_border_leafs_per_pod: Integer
-    max_pods: Integer
-    max_spines_per_pod: Integer
-    max_super_spines_per_fabric: Integer
-    name: String
-    routing_strategy: Dropdown
-    technical_prefix_length: Integer
-    underlay_protocol: Dropdown
-    member_of_groups: RelationshipManager[CoreGroup]
-    profiles: RelationshipManager[CoreProfile]
-    subscriber_of_groups: RelationshipManager[CoreGroup]
 
 
 class AppDependency(CoreNode):
@@ -1221,6 +1307,7 @@ class DcimDeviceType(CoreNode):
     part_number: StringOptional
     storage_gb: IntegerOptional
     tcam_entries: IntegerOptional
+    unit_price: IntegerOptional
     weight: IntegerOptional
     manufacturer: RelationshipAttribute[OrganizationManufacturer]
     member_of_groups: RelationshipManager[CoreGroup]
@@ -1239,7 +1326,7 @@ class CloudDirectConnect(CloudResource):
     status: DropdownOptional
     vlan_id: IntegerOptional
     account: RelationshipAttribute[CloudAccount]
-    location: RelationshipAttribute[LocationBuilding]
+    location: RelationshipAttribute[LocationFacility]
     member_of_groups: RelationshipManager[CoreGroup]
     physical_devices: RelationshipManager[DcimDevice]
     profiles: RelationshipManager[CoreProfile]
@@ -1269,6 +1356,7 @@ class TopologyExternal(TopologyDeployment):
 
 class TopologyExternalProviders(TopologyDeployment, TopologyConnectableLocation, TopologyDeviceHosting):
     name: String
+    naming_convention: Dropdown
     provider_type: Dropdown
     status: Dropdown
     children: RelationshipManager[TopologyDeployment]
@@ -1279,6 +1367,21 @@ class TopologyExternalProviders(TopologyDeployment, TopologyConnectableLocation,
     profiles: RelationshipManager[CoreProfile]
     provider: RelationshipAttribute[OrganizationProvider]
     subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class LocationFacility(LocationGeneric):
+    facility_id: StringOptional
+    is_cloud: Boolean
+    name: String
+    physical_address: StringOptional
+    shortname: String
+    children: RelationshipManager[LocationSuite]
+    member_of_groups: RelationshipManager[CoreGroup]
+    owner: RelationshipAttribute[OrganizationGeneric]
+    parent: RelationshipAttribute[LocationMetro]
+    profiles: RelationshipManager[CoreProfile]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+    tags: RelationshipManager[BuiltinTag]
 
 
 class ManagedFirewallContext(ManagedGeneric, ManagedGenericInterfaces, ManagedInlineService):
@@ -1515,7 +1618,7 @@ class OrganizationManufacturer(CoreNode):
 class LocationMetro(LocationGeneric):
     name: String
     shortname: String
-    children: RelationshipManager[LocationBuilding]
+    children: RelationshipManager[LocationGeneric]
     member_of_groups: RelationshipManager[CoreGroup]
     parent: RelationshipAttribute[LocationCountry]
     profiles: RelationshipManager[CoreProfile]
@@ -1691,6 +1794,19 @@ class ManagedOSPFPeering(ManagedGeneric, ManagedPeering, ManagedGenericInterface
     subscriber_of_groups: RelationshipManager[CoreGroup]
 
 
+class LocationOffice(LocationGeneric):
+    name: String
+    physical_address: StringOptional
+    shortname: String
+    children: RelationshipManager[LocationOfficeFloor]
+    member_of_groups: RelationshipManager[CoreGroup]
+    owner: RelationshipAttribute[OrganizationGeneric]
+    parent: RelationshipAttribute[LocationMetro]
+    profiles: RelationshipManager[CoreProfile]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+    tags: RelationshipManager[BuiltinTag]
+
+
 class TopologyOffice(CoreArtifactTarget, TopologyDeployment):
     name: String
     site_type: Dropdown
@@ -1700,6 +1816,21 @@ class TopologyOffice(CoreArtifactTarget, TopologyDeployment):
     parent: RelationshipAttribute[TopologyDeployment]
     profiles: RelationshipManager[CoreProfile]
     subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class LocationOfficeFloor(LocationGeneric):
+    area_sqm: Integer
+    conference_rooms: Integer
+    employee_count: Integer
+    index: Integer
+    name: String
+    shortname: String
+    children: RelationshipManager[LocationGeneric]
+    member_of_groups: RelationshipManager[CoreGroup]
+    parent: RelationshipAttribute[LocationOffice]
+    profiles: RelationshipManager[CoreProfile]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+    tags: RelationshipManager[BuiltinTag]
 
 
 class RoutingPassword(CoreNode):
@@ -1794,39 +1925,28 @@ class DcimPlatform(CoreNode):
 
 
 class TopologyPod(TopologyDeployment, TopologyRackHosting, TopologyDeviceHosting):
+    deployment_type: Dropdown
     index: Integer
+    layout: Dropdown
     leaf_interface_sorting_method: Dropdown
     mlag_create: Dropdown
     name: String
+    naming_convention: Dropdown
     spine_interface_sorting_method: Dropdown
     status: Dropdown
     asn_pool: RelationshipAttribute[CoreNumberPool]
     children: RelationshipManager[TopologyDeployment]
-    design: RelationshipAttribute[TopologyPodDesign]
     devices: RelationshipManager[DcimDevice]
     fabric_templates: RelationshipManager[TopologyElement]
     loopback_pool: RelationshipAttribute[CoreIPAddressPool]
     member_of_groups: RelationshipManager[CoreGroup]
+    object_template: RelationshipAttribute[TemplateTopologyPod]
     parent: RelationshipAttribute[TopologyDataCenter]
     prefix_pool: RelationshipAttribute[CoreIPPrefixPool]
     profiles: RelationshipManager[CoreProfile]
     racks: RelationshipManager[LocationRack]
     subscriber_of_groups: RelationshipManager[CoreGroup]
-
-
-class TopologyPodDesign(TopologyDesign):
-    compute_racks_per_row: Integer
-    description: StringOptional
-    max_leafs_per_network_rack: Integer
-    max_spines_per_pod: Integer
-    max_tors_per_compute_rack: Integer
-    max_tors_per_network_rack: Integer
-    name: String
-    network_racks_per_row: Integer
-    rows: Integer
-    member_of_groups: RelationshipManager[CoreGroup]
-    profiles: RelationshipManager[CoreProfile]
-    subscriber_of_groups: RelationshipManager[CoreGroup]
+    suites: RelationshipManager[LocationSuite]
 
 
 class ProxyPolicy(CoreNode):
@@ -1952,7 +2072,7 @@ class OrganizationProvider(OrganizationGeneric, OrganizationEntity):
     name: String
     org_id: StringOptional
     asns: RelationshipManager[RoutingAutonomousSystem]
-    location: RelationshipManager[LocationBuilding]
+    location: RelationshipManager[LocationFacility]
     member_of_groups: RelationshipManager[CoreGroup]
     profiles: RelationshipManager[CoreProfile]
     subscriber_of_groups: RelationshipManager[CoreGroup]
@@ -1991,6 +2111,90 @@ class CloudPublicIP(CloudResource):
     virtual_circuits: RelationshipManager[TopologyVirtualCircuit]
 
 
+class CustomerQuotationDC(CustomerQuotation):
+    description: StringOptional
+    estimated_total_cost: IntegerOptional
+    name: String
+    pod_count: Integer
+    preferred_firewall_vendor: StringOptional
+    preferred_load_balancer_vendor: StringOptional
+    preferred_switch_vendor: StringOptional
+    recommended_switch_vendor: StringOptional
+    request_type: Dropdown
+    status: Dropdown
+    line_items: RelationshipManager[CustomerQuotationLineItem]
+    member_of_groups: RelationshipManager[CoreGroup]
+    owner: RelationshipAttribute[OrganizationEntity]
+    profiles: RelationshipManager[CoreProfile]
+    proposed_design: RelationshipAttribute[CustomerQuotationProposedDesign]
+    rooms: RelationshipManager[CustomerQuotationRoom]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class CustomerQuotationLineItem(CoreNode):
+    quantity: Integer
+    role: Dropdown
+    speed: DropdownOptional
+    total_cost: IntegerOptional
+    unit_price: IntegerOptional
+    device_type: RelationshipAttribute[DcimDeviceType]
+    member_of_groups: RelationshipManager[CoreGroup]
+    profiles: RelationshipManager[CoreProfile]
+    quotation: RelationshipAttribute[CustomerQuotation]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class CustomerQuotationProposedDesign(CoreNode):
+    name: StringOptional
+    member_of_groups: RelationshipManager[CoreGroup]
+    pods: RelationshipManager[CustomerQuotationProposedPod]
+    profiles: RelationshipManager[CoreProfile]
+    quotation: RelationshipAttribute[CustomerQuotationDC]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class CustomerQuotationProposedPod(CoreNode):
+    compute_rack_share: IntegerOptional
+    index: Integer
+    leaf_count: IntegerOptional
+    recommended_pod_layout: StringOptional
+    spine_count: IntegerOptional
+    storage_rack_share: IntegerOptional
+    design: RelationshipAttribute[CustomerQuotationProposedDesign]
+    member_of_groups: RelationshipManager[CoreGroup]
+    profiles: RelationshipManager[CoreProfile]
+    racks: RelationshipManager[CustomerQuotationProposedRack]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class CustomerQuotationProposedRack(CoreNode):
+    index: Integer
+    rack_type: Dropdown
+    member_of_groups: RelationshipManager[CoreGroup]
+    pod: RelationshipAttribute[CustomerQuotationProposedPod]
+    profiles: RelationshipManager[CoreProfile]
+    room: RelationshipAttribute[CustomerQuotationRoom]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class CustomerQuotationRoom(CoreNode):
+    compute_rack_count: Integer
+    name: String
+    port_count_100g: Integer
+    port_count_10g: Integer
+    port_count_25g: Integer
+    port_count_400g: Integer
+    port_count_40g: Integer
+    preferred_cabling_method: Dropdown
+    racks_per_row: Integer
+    rows: Integer
+    storage_rack_count: Integer
+    member_of_groups: RelationshipManager[CoreGroup]
+    profiles: RelationshipManager[CoreProfile]
+    quotation: RelationshipAttribute[CustomerQuotationDC]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
 class LocationRack(LocationGeneric, CoreArtifactTarget):
     facility_id: StringOptional
     height: Integer
@@ -2004,6 +2208,7 @@ class LocationRack(LocationGeneric, CoreArtifactTarget):
     devices: RelationshipManager[DcimPhysicalDevice]
     fabric_templates: RelationshipManager[TopologyElement]
     member_of_groups: RelationshipManager[CoreGroup]
+    object_template: RelationshipAttribute[TemplateLocationRack]
     owner: RelationshipAttribute[OrganizationGeneric]
     parent: RelationshipAttribute[LocationSuite]
     pod: RelationshipAttribute[TopologyRackHosting]
@@ -2283,12 +2488,14 @@ class ManagedStorageService(ManagedSaasService):
 class LocationSuite(LocationGeneric):
     index: Integer
     name: String
+    racks_per_row: Integer
+    rows: Integer
     shortname: String
     suite_name: String
     children: RelationshipManager[LocationRack]
     member_of_groups: RelationshipManager[CoreGroup]
     owner: RelationshipAttribute[OrganizationGeneric]
-    parent: RelationshipAttribute[LocationBuilding]
+    parent: RelationshipAttribute[LocationFacility]
     profiles: RelationshipManager[CoreProfile]
     subscriber_of_groups: RelationshipManager[CoreGroup]
     tags: RelationshipManager[BuiltinTag]
@@ -2710,7 +2917,7 @@ class ProfileCloudDirectConnect(LineageSource, CoreProfile, CoreNode):
     profile_priority: Integer
     status: DropdownOptional
     vlan_id: IntegerOptional
-    location: RelationshipAttribute[LocationBuilding]
+    location: RelationshipAttribute[LocationFacility]
     member_of_groups: RelationshipManager[CoreGroup]
     physical_devices: RelationshipManager[DcimDevice]
     region: RelationshipAttribute[TopologyCloudRegion]
@@ -2980,6 +3187,98 @@ class ProfileCloudVirtualNetwork(LineageSource, CoreProfile, CoreNode):
     virtual_circuits: RelationshipManager[TopologyVirtualCircuit]
 
 
+class ProfileCustomerQuotation(LineageSource, CoreProfile, CoreNode):
+    description: StringOptional
+    estimated_total_cost: IntegerOptional
+    profile_name: String
+    profile_priority: Integer
+    request_type: DropdownOptional
+    status: DropdownOptional
+    member_of_groups: RelationshipManager[CoreGroup]
+    owner: RelationshipAttribute[OrganizationEntity]
+    related_nodes: RelationshipManager[CustomerQuotation]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class ProfileCustomerQuotationDC(LineageSource, CoreProfile, CoreNode):
+    description: StringOptional
+    estimated_total_cost: IntegerOptional
+    pod_count: IntegerOptional
+    preferred_firewall_vendor: StringOptional
+    preferred_load_balancer_vendor: StringOptional
+    preferred_switch_vendor: StringOptional
+    profile_name: String
+    profile_priority: Integer
+    recommended_switch_vendor: StringOptional
+    request_type: DropdownOptional
+    status: DropdownOptional
+    member_of_groups: RelationshipManager[CoreGroup]
+    owner: RelationshipAttribute[OrganizationEntity]
+    related_nodes: RelationshipManager[CustomerQuotationDC]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class ProfileCustomerQuotationLineItem(LineageSource, CoreProfile, CoreNode):
+    profile_name: String
+    profile_priority: Integer
+    quantity: IntegerOptional
+    total_cost: IntegerOptional
+    unit_price: IntegerOptional
+    device_type: RelationshipAttribute[DcimDeviceType]
+    member_of_groups: RelationshipManager[CoreGroup]
+    related_nodes: RelationshipManager[CustomerQuotationLineItem]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class ProfileCustomerQuotationProposedDesign(LineageSource, CoreProfile, CoreNode):
+    profile_name: String
+    profile_priority: Integer
+    member_of_groups: RelationshipManager[CoreGroup]
+    related_nodes: RelationshipManager[CustomerQuotationProposedDesign]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class ProfileCustomerQuotationProposedPod(LineageSource, CoreProfile, CoreNode):
+    compute_rack_share: IntegerOptional
+    leaf_count: IntegerOptional
+    profile_name: String
+    profile_priority: Integer
+    recommended_pod_layout: StringOptional
+    spine_count: IntegerOptional
+    storage_rack_share: IntegerOptional
+    member_of_groups: RelationshipManager[CoreGroup]
+    related_nodes: RelationshipManager[CustomerQuotationProposedPod]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class ProfileCustomerQuotationProposedRack(LineageSource, CoreProfile, CoreNode):
+    profile_name: String
+    profile_priority: Integer
+    rack_type: DropdownOptional
+    member_of_groups: RelationshipManager[CoreGroup]
+    related_nodes: RelationshipManager[CustomerQuotationProposedRack]
+    room: RelationshipAttribute[CustomerQuotationRoom]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
+class ProfileCustomerQuotationRoom(LineageSource, CoreProfile, CoreNode):
+    compute_rack_count: IntegerOptional
+    port_count_100g: IntegerOptional
+    port_count_10g: IntegerOptional
+    port_count_25g: IntegerOptional
+    port_count_400g: IntegerOptional
+    port_count_40g: IntegerOptional
+    preferred_cabling_method: DropdownOptional
+    profile_name: String
+    profile_priority: Integer
+    racks_per_row: IntegerOptional
+    rows: IntegerOptional
+    storage_rack_count: IntegerOptional
+    member_of_groups: RelationshipManager[CoreGroup]
+    related_nodes: RelationshipManager[CustomerQuotationRoom]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+
+
 class ProfileDcimBidiSFP(LineageSource, CoreProfile, CoreNode):
     form_factor: DropdownOptional
     profile_name: String
@@ -3065,6 +3364,7 @@ class ProfileDcimDeviceType(LineageSource, CoreProfile, CoreNode):
     profile_priority: Integer
     storage_gb: IntegerOptional
     tcam_entries: IntegerOptional
+    unit_price: IntegerOptional
     weight: IntegerOptional
     member_of_groups: RelationshipManager[CoreGroup]
     platform: RelationshipAttribute[DcimPlatform]
@@ -3369,16 +3669,38 @@ class ProfileLoadbalancerVIP(LineageSource, CoreProfile, CoreNode):
     vip_ip: RelationshipAttribute[IpamIPAddress]
 
 
-class ProfileLocationBuilding(LineageSource, CoreProfile, CoreNode):
-    facility_id: StringOptional
-    is_cloud: BooleanOptional
+class ProfileLocationCampus(LineageSource, CoreProfile, CoreNode):
     name: StringOptional
     physical_address: StringOptional
     profile_name: String
     profile_priority: Integer
     member_of_groups: RelationshipManager[CoreGroup]
     owner: RelationshipAttribute[OrganizationGeneric]
-    related_nodes: RelationshipManager[LocationBuilding]
+    related_nodes: RelationshipManager[LocationCampus]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+    tags: RelationshipManager[BuiltinTag]
+
+
+class ProfileLocationCampusBuilding(LineageSource, CoreProfile, CoreNode):
+    name: StringOptional
+    profile_name: String
+    profile_priority: Integer
+    member_of_groups: RelationshipManager[CoreGroup]
+    related_nodes: RelationshipManager[LocationCampusBuilding]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+    tags: RelationshipManager[BuiltinTag]
+
+
+class ProfileLocationCampusFloor(LineageSource, CoreProfile, CoreNode):
+    area_sqm: IntegerOptional
+    conference_rooms: IntegerOptional
+    employee_count: IntegerOptional
+    index: IntegerOptional
+    name: StringOptional
+    profile_name: String
+    profile_priority: Integer
+    member_of_groups: RelationshipManager[CoreGroup]
+    related_nodes: RelationshipManager[LocationCampusFloor]
     subscriber_of_groups: RelationshipManager[CoreGroup]
     tags: RelationshipManager[BuiltinTag]
 
@@ -3393,12 +3715,27 @@ class ProfileLocationCountry(LineageSource, CoreProfile, CoreNode):
     tags: RelationshipManager[BuiltinTag]
 
 
+class ProfileLocationFacility(LineageSource, CoreProfile, CoreNode):
+    facility_id: StringOptional
+    is_cloud: BooleanOptional
+    name: StringOptional
+    physical_address: StringOptional
+    profile_name: String
+    profile_priority: Integer
+    member_of_groups: RelationshipManager[CoreGroup]
+    owner: RelationshipAttribute[OrganizationGeneric]
+    related_nodes: RelationshipManager[LocationFacility]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+    tags: RelationshipManager[BuiltinTag]
+
+
 class ProfileLocationGeneric(LineageSource, CoreProfile, CoreNode):
     name: StringOptional
     profile_name: String
     profile_priority: Integer
     member_of_groups: RelationshipManager[CoreGroup]
     related_nodes: RelationshipManager[LocationGeneric]
+    related_templates: RelationshipManager[TemplateLocationGeneric]
     subscriber_of_groups: RelationshipManager[CoreGroup]
     tags: RelationshipManager[BuiltinTag]
 
@@ -3409,6 +3746,32 @@ class ProfileLocationMetro(LineageSource, CoreProfile, CoreNode):
     profile_priority: Integer
     member_of_groups: RelationshipManager[CoreGroup]
     related_nodes: RelationshipManager[LocationMetro]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+    tags: RelationshipManager[BuiltinTag]
+
+
+class ProfileLocationOffice(LineageSource, CoreProfile, CoreNode):
+    name: StringOptional
+    physical_address: StringOptional
+    profile_name: String
+    profile_priority: Integer
+    member_of_groups: RelationshipManager[CoreGroup]
+    owner: RelationshipAttribute[OrganizationGeneric]
+    related_nodes: RelationshipManager[LocationOffice]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+    tags: RelationshipManager[BuiltinTag]
+
+
+class ProfileLocationOfficeFloor(LineageSource, CoreProfile, CoreNode):
+    area_sqm: IntegerOptional
+    conference_rooms: IntegerOptional
+    employee_count: IntegerOptional
+    index: IntegerOptional
+    name: StringOptional
+    profile_name: String
+    profile_priority: Integer
+    member_of_groups: RelationshipManager[CoreGroup]
+    related_nodes: RelationshipManager[LocationOfficeFloor]
     subscriber_of_groups: RelationshipManager[CoreGroup]
     tags: RelationshipManager[BuiltinTag]
 
@@ -3428,6 +3791,7 @@ class ProfileLocationRack(LineageSource, CoreProfile, CoreNode):
     owner: RelationshipAttribute[OrganizationGeneric]
     pod: RelationshipAttribute[TopologyRackHosting]
     related_nodes: RelationshipManager[LocationRack]
+    related_templates: RelationshipManager[TemplateLocationRack]
     subscriber_of_groups: RelationshipManager[CoreGroup]
     tags: RelationshipManager[BuiltinTag]
 
@@ -3445,6 +3809,8 @@ class ProfileLocationSuite(LineageSource, CoreProfile, CoreNode):
     index: IntegerOptional
     profile_name: String
     profile_priority: Integer
+    racks_per_row: IntegerOptional
+    rows: IntegerOptional
     suite_name: StringOptional
     member_of_groups: RelationshipManager[CoreGroup]
     owner: RelationshipAttribute[OrganizationGeneric]
@@ -4125,7 +4491,7 @@ class ProfileOrganizationProvider(LineageSource, CoreProfile, CoreNode):
     description: StringOptional
     profile_name: String
     profile_priority: Integer
-    location: RelationshipManager[LocationBuilding]
+    location: RelationshipManager[LocationFacility]
     member_of_groups: RelationshipManager[CoreGroup]
     related_nodes: RelationshipManager[OrganizationProvider]
     subscriber_of_groups: RelationshipManager[CoreGroup]
@@ -4410,6 +4776,7 @@ class ProfileTopologyColocationMetro(LineageSource, CoreProfile, CoreNode):
 
 class ProfileTopologyColocationZone(LineageSource, CoreProfile, CoreNode):
     deployment_type: DropdownOptional
+    naming_convention: DropdownOptional
     profile_name: String
     profile_priority: Integer
     cables: RelationshipManager[DcimCable]
@@ -4426,6 +4793,7 @@ class ProfileTopologyConnectableLocation(LineageSource, CoreProfile, CoreNode):
     circuits: RelationshipManager[TopologyCircuit]
     member_of_groups: RelationshipManager[CoreGroup]
     related_nodes: RelationshipManager[TopologyConnectableLocation]
+    related_templates: RelationshipManager[TemplateTopologyConnectableLocation]
     subscriber_of_groups: RelationshipManager[CoreGroup]
 
 
@@ -4494,6 +4862,7 @@ class ProfileTopologyCustomerDC(LineageSource, CoreProfile, CoreNode):
 
 
 class ProfileTopologyCustomerOffice(LineageSource, CoreProfile, CoreNode):
+    naming_convention: DropdownOptional
     profile_name: String
     profile_priority: Integer
     status: DropdownOptional
@@ -4502,7 +4871,7 @@ class ProfileTopologyCustomerOffice(LineageSource, CoreProfile, CoreNode):
     clusters: RelationshipManager[VirtCluster]
     devices: RelationshipManager[DcimDevice]
     exchange_gateways: RelationshipManager[TopologyExchangeGateway]
-    locations: RelationshipManager[LocationBuilding]
+    locations: RelationshipManager[LocationFacility]
     member_of_groups: RelationshipManager[CoreGroup]
     namespace: RelationshipAttribute[BuiltinIPNamespace]
     network_segments: RelationshipManager[ManagedNetworkSegment]
@@ -4585,12 +4954,14 @@ class ProfileTopologyDataCenter(LineageSource, CoreProfile, CoreNode):
     naming_convention: DropdownOptional
     profile_name: String
     profile_priority: Integer
+    routing_strategy: DropdownOptional
+    size: DropdownOptional
     spine_interface_sorting_method: DropdownOptional
     status: DropdownOptional
+    underlay_protocol: DropdownOptional
     artifacts: RelationshipManager[CoreArtifact]
     cables: RelationshipManager[DcimCable]
     circuits: RelationshipManager[TopologyCircuit]
-    design: RelationshipAttribute[TopologyDataCenterDesign]
     devices: RelationshipManager[DcimDevice]
     fabric_asn_pool: RelationshipAttribute[CoreNumberPool]
     fabric_templates: RelationshipManager[TopologyElement]
@@ -4599,6 +4970,7 @@ class ProfileTopologyDataCenter(LineageSource, CoreProfile, CoreNode):
     management_pool: RelationshipAttribute[CoreIPAddressPool]
     member_of_groups: RelationshipManager[CoreGroup]
     related_nodes: RelationshipManager[TopologyDataCenter]
+    related_templates: RelationshipManager[TemplateTopologyDataCenter]
     segment_deployments: RelationshipManager[ManagedSegmentDeployment]
     subscriber_of_groups: RelationshipManager[CoreGroup]
     technical_pool: RelationshipAttribute[CoreIPPrefixPool]
@@ -4606,29 +4978,12 @@ class ProfileTopologyDataCenter(LineageSource, CoreProfile, CoreNode):
     vni_pool: RelationshipAttribute[CoreNumberPool]
 
 
-class ProfileTopologyDataCenterDesign(LineageSource, CoreProfile, CoreNode):
-    description: StringOptional
-    loopback_prefix_length: IntegerOptional
-    management_prefix_length: IntegerOptional
-    max_border_leafs_per_pod: IntegerOptional
-    max_pods: IntegerOptional
-    max_spines_per_pod: IntegerOptional
-    max_super_spines_per_fabric: IntegerOptional
-    profile_name: String
-    profile_priority: Integer
-    routing_strategy: DropdownOptional
-    technical_prefix_length: IntegerOptional
-    underlay_protocol: DropdownOptional
-    member_of_groups: RelationshipManager[CoreGroup]
-    related_nodes: RelationshipManager[TopologyDataCenterDesign]
-    subscriber_of_groups: RelationshipManager[CoreGroup]
-
-
 class ProfileTopologyDeployment(LineageSource, CoreProfile, CoreNode):
     profile_name: String
     profile_priority: Integer
     member_of_groups: RelationshipManager[CoreGroup]
     related_nodes: RelationshipManager[TopologyDeployment]
+    related_templates: RelationshipManager[TemplateTopologyDeployment]
     subscriber_of_groups: RelationshipManager[CoreGroup]
 
 
@@ -4641,11 +4996,13 @@ class ProfileTopologyDesign(LineageSource, CoreProfile, CoreNode):
 
 
 class ProfileTopologyDeviceHosting(LineageSource, CoreProfile, CoreNode):
+    naming_convention: DropdownOptional
     profile_name: String
     profile_priority: Integer
     devices: RelationshipManager[DcimDevice]
     member_of_groups: RelationshipManager[CoreGroup]
     related_nodes: RelationshipManager[TopologyDeviceHosting]
+    related_templates: RelationshipManager[TemplateTopologyDeviceHosting]
     subscriber_of_groups: RelationshipManager[CoreGroup]
 
 
@@ -4679,6 +5036,7 @@ class ProfileTopologyExternal(LineageSource, CoreProfile, CoreNode):
 
 
 class ProfileTopologyExternalProviders(LineageSource, CoreProfile, CoreNode):
+    naming_convention: DropdownOptional
     profile_name: String
     profile_priority: Integer
     provider_type: DropdownOptional
@@ -4728,18 +5086,21 @@ class ProfileTopologyPhysicalDeployment(LineageSource, CoreProfile, CoreNode):
     cables: RelationshipManager[DcimCable]
     member_of_groups: RelationshipManager[CoreGroup]
     related_nodes: RelationshipManager[TopologyPhysicalDeployment]
+    related_templates: RelationshipManager[TemplateTopologyPhysicalDeployment]
     subscriber_of_groups: RelationshipManager[CoreGroup]
 
 
 class ProfileTopologyPod(LineageSource, CoreProfile, CoreNode):
+    deployment_type: DropdownOptional
+    layout: DropdownOptional
     leaf_interface_sorting_method: DropdownOptional
     mlag_create: DropdownOptional
+    naming_convention: DropdownOptional
     profile_name: String
     profile_priority: Integer
     spine_interface_sorting_method: DropdownOptional
     status: DropdownOptional
     asn_pool: RelationshipAttribute[CoreNumberPool]
-    design: RelationshipAttribute[TopologyPodDesign]
     devices: RelationshipManager[DcimDevice]
     fabric_templates: RelationshipManager[TopologyElement]
     loopback_pool: RelationshipAttribute[CoreIPAddressPool]
@@ -4747,23 +5108,9 @@ class ProfileTopologyPod(LineageSource, CoreProfile, CoreNode):
     prefix_pool: RelationshipAttribute[CoreIPPrefixPool]
     racks: RelationshipManager[LocationRack]
     related_nodes: RelationshipManager[TopologyPod]
+    related_templates: RelationshipManager[TemplateTopologyPod]
     subscriber_of_groups: RelationshipManager[CoreGroup]
-
-
-class ProfileTopologyPodDesign(LineageSource, CoreProfile, CoreNode):
-    compute_racks_per_row: IntegerOptional
-    description: StringOptional
-    max_leafs_per_network_rack: IntegerOptional
-    max_spines_per_pod: IntegerOptional
-    max_tors_per_compute_rack: IntegerOptional
-    max_tors_per_network_rack: IntegerOptional
-    network_racks_per_row: IntegerOptional
-    profile_name: String
-    profile_priority: Integer
-    rows: IntegerOptional
-    member_of_groups: RelationshipManager[CoreGroup]
-    related_nodes: RelationshipManager[TopologyPodDesign]
-    subscriber_of_groups: RelationshipManager[CoreGroup]
+    suites: RelationshipManager[LocationSuite]
 
 
 class ProfileTopologyRackHosting(LineageSource, CoreProfile, CoreNode):
@@ -4772,6 +5119,7 @@ class ProfileTopologyRackHosting(LineageSource, CoreProfile, CoreNode):
     member_of_groups: RelationshipManager[CoreGroup]
     racks: RelationshipManager[LocationRack]
     related_nodes: RelationshipManager[TopologyRackHosting]
+    related_templates: RelationshipManager[TemplateTopologyRackHosting]
     subscriber_of_groups: RelationshipManager[CoreGroup]
 
 
@@ -4831,6 +5179,7 @@ class ProfileTopologySegmentHosting(LineageSource, CoreProfile, CoreNode):
     l3_vni_pool: RelationshipAttribute[CoreNumberPool]
     member_of_groups: RelationshipManager[CoreGroup]
     related_nodes: RelationshipManager[TopologySegmentHosting]
+    related_templates: RelationshipManager[TemplateTopologySegmentHosting]
     segment_deployments: RelationshipManager[ManagedSegmentDeployment]
     subscriber_of_groups: RelationshipManager[CoreGroup]
     vlan_pool: RelationshipAttribute[CoreNumberPool]
@@ -5203,6 +5552,32 @@ class TemplateIpamIPAddress(LineageSource, CoreObjectComponentTemplate, Template
     subscriber_of_groups_for_instances: RelationshipManager[CoreGroup]
 
 
+class TemplateLocationRack(
+    LineageSource, TemplateLocationGeneric, TemplateCoreArtifactTarget, CoreObjectTemplate, CoreNode
+):
+    facility_id: StringOptional
+    height: Integer
+    index: IntegerOptional
+    rack_type: Dropdown
+    row_index: IntegerOptional
+    template_name: String
+    artifacts: RelationshipManager[CoreArtifact]
+    devices: RelationshipManager[DcimPhysicalDevice]
+    fabric_templates: RelationshipManager[TopologyElement]
+    height_from_resource_pool: RelationshipAttribute[CoreNumberPool]
+    index_from_resource_pool: RelationshipAttribute[CoreNumberPool]
+    member_of_groups: RelationshipManager[CoreGroup]
+    member_of_groups_for_instances: RelationshipManager[CoreGroup]
+    owner: RelationshipAttribute[OrganizationGeneric]
+    pod: RelationshipAttribute[TopologyRackHosting]
+    profiles: RelationshipManager[CoreProfile]
+    related_nodes: RelationshipManager[LocationRack]
+    row_index_from_resource_pool: RelationshipAttribute[CoreNumberPool]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+    subscriber_of_groups_for_instances: RelationshipManager[CoreGroup]
+    tags: RelationshipManager[BuiltinTag]
+
+
 class TemplateManagedControllerPhysical(
     LineageSource,
     TemplateManagedController,
@@ -5282,3 +5657,80 @@ class TemplateManagedControllerVirtual(
     subscriber_of_groups: RelationshipManager[CoreGroup]
     subscriber_of_groups_for_instances: RelationshipManager[CoreGroup]
     tags: RelationshipManager[BuiltinTag]
+
+
+class TemplateTopologyDataCenter(
+    LineageSource,
+    TemplateCoreArtifactTarget,
+    TemplateTopologyDeployment,
+    TemplateTopologyPhysicalDeployment,
+    TemplateTopologyConnectableLocation,
+    TemplateTopologyDeviceHosting,
+    TemplateTopologySegmentHosting,
+    CoreObjectTemplate,
+    CoreNode,
+):
+    connectivity_mode: Dropdown
+    fabric_interface_sorting_method: Dropdown
+    index: IntegerOptional
+    management_mode: Dropdown
+    naming_convention: Dropdown
+    routing_strategy: Dropdown
+    size: DropdownOptional
+    spine_interface_sorting_method: Dropdown
+    status: Dropdown
+    template_name: String
+    underlay_protocol: Dropdown
+    artifacts: RelationshipManager[CoreArtifact]
+    cables: RelationshipManager[DcimCable]
+    circuits: RelationshipManager[TopologyCircuit]
+    devices: RelationshipManager[DcimDevice]
+    fabric_asn_pool: RelationshipAttribute[CoreNumberPool]
+    fabric_templates: RelationshipManager[TopologyElement]
+    index_from_resource_pool: RelationshipAttribute[CoreNumberPool]
+    l3_vni_pool: RelationshipAttribute[CoreNumberPool]
+    loopback_pool: RelationshipAttribute[CoreIPPrefixPool]
+    management_pool: RelationshipAttribute[CoreIPAddressPool]
+    member_of_groups: RelationshipManager[CoreGroup]
+    member_of_groups_for_instances: RelationshipManager[CoreGroup]
+    profiles: RelationshipManager[CoreProfile]
+    related_nodes: RelationshipManager[TopologyDataCenter]
+    segment_deployments: RelationshipManager[ManagedSegmentDeployment]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+    subscriber_of_groups_for_instances: RelationshipManager[CoreGroup]
+    technical_pool: RelationshipAttribute[CoreIPPrefixPool]
+    vlan_pool: RelationshipAttribute[CoreNumberPool]
+    vni_pool: RelationshipAttribute[CoreNumberPool]
+
+
+class TemplateTopologyPod(
+    LineageSource,
+    TemplateTopologyDeployment,
+    TemplateTopologyRackHosting,
+    TemplateTopologyDeviceHosting,
+    CoreObjectTemplate,
+    CoreNode,
+):
+    deployment_type: DropdownOptional
+    index: IntegerOptional
+    layout: DropdownOptional
+    leaf_interface_sorting_method: Dropdown
+    mlag_create: Dropdown
+    naming_convention: Dropdown
+    spine_interface_sorting_method: Dropdown
+    status: Dropdown
+    template_name: String
+    asn_pool: RelationshipAttribute[CoreNumberPool]
+    devices: RelationshipManager[DcimDevice]
+    fabric_templates: RelationshipManager[TopologyElement]
+    index_from_resource_pool: RelationshipAttribute[CoreNumberPool]
+    loopback_pool: RelationshipAttribute[CoreIPAddressPool]
+    member_of_groups: RelationshipManager[CoreGroup]
+    member_of_groups_for_instances: RelationshipManager[CoreGroup]
+    prefix_pool: RelationshipAttribute[CoreIPPrefixPool]
+    profiles: RelationshipManager[CoreProfile]
+    racks: RelationshipManager[LocationRack]
+    related_nodes: RelationshipManager[TopologyPod]
+    subscriber_of_groups: RelationshipManager[CoreGroup]
+    subscriber_of_groups_for_instances: RelationshipManager[CoreGroup]
+    suites: RelationshipManager[LocationSuite]

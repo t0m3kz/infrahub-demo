@@ -131,7 +131,7 @@ generics:
         cardinality: one
         order_weight: 1200
       # - name: spare_location
-      #   peer: LocationHosting
+      #   peer: LocationFacility
       #   kind: Attribute
       #   optional: true
       #   cardinality: one
@@ -183,7 +183,7 @@ extensions:
           peer: DcimGenericSFP
           cardinality: one
           optional: true
-    # - kind: LocationHosting
+    # - kind: LocationFacility
     #   relationships:
     #     - name: spare_sfps
     #       peer: DcimGenericSFP

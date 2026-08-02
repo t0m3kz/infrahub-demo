@@ -646,11 +646,15 @@ class RackGenerator(RackMixin, CommonGenerator):
         # Both invariant across tor_roles (not derived from any single role) —
         # computed once rather than once per role template.
         tors_per_rack = sum(r.quantity for r in tor_roles)
-        # Live count, not design.compute_racks_per_row (a max capacity) - a pod with
-        # fewer racks per row than its design allows would otherwise get an inflated
-        # offset that overflows past the real spine downlink interfaces.
+        # Live count of ToR-bearing racks only (rack_type in ROW_DEPENDENT_RACK_TYPES) —
+        # in mixed deployment, previous rows also contain a network rack with no ToR
+        # of its own, which must NOT be counted here or the offset would overshoot.
         sibling_racks = await self.client.filters(kind=LocationRack, pod__ids=[pod.id])
-        prev_row_racks = sum(1 for r in sibling_racks if r.row_index.value < self.data.row_index)
+        prev_row_racks = sum(
+            1
+            for r in sibling_racks
+            if r.row_index.value < self.data.row_index and r.rack_type.value in ROW_DEPENDENT_RACK_TYPES
+        )
 
         for tor_role in tor_roles:
             expected_names = self._roles.expected_names(role="tor", quantity=tor_role.quantity)

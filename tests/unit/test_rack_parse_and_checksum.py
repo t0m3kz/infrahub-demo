@@ -8,17 +8,15 @@ Covers:
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Literal
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
 from generators.models import (
-    DataCenterDesignData,
     DeviceRole,
     Interface,
     LocationSuiteModel,
-    PodDesign,
     RackModel,
     RackParent,
     RackPod,
@@ -34,33 +32,16 @@ from generators.topology.rack import RackGenerator
 _DEFAULT_LEAF = DeviceRole(role="leaf", quantity=2, template=Template(id="tmpl-leaf"))
 
 
-def _design_for(deployment_type: str) -> PodDesign:
-    """Build a PodDesign whose layout derives the given deployment_type.
-
-    deployment_type is now a computed property (PodDesign.deployment_type),
-    derived from network_racks_per_row / max_tors_per_compute_rack — see
-    generators/models.py.
-    """
-    return PodDesign(
-        id="design-1",
-        name="test-design",
-        rows=1,
-        compute_racks_per_row=1,
-        network_racks_per_row=0 if deployment_type == "tor" else 1,
-        max_tors_per_compute_rack=0 if deployment_type == "middle_rack" else 1,
-    )
-
-
 def _build_rack_generator(
     *,
-    deployment_type: str = "mixed",
+    deployment_type: Literal["middle_rack", "tor", "mixed"] = "mixed",
     rack_type: str = "network",
     rack_index: int = 5,
     row_index: int = 1,
     leafs: list[DeviceRole] | None = None,
 ) -> Any:
     """Return a RackGenerator typed as Any so ty allows mock attribute assignments."""
-    parent = RackParent(id="parent-1", name="DC1", index=1, design=DataCenterDesignData())
+    parent = RackParent(id="parent-1", name="DC1", index=1, size="S")
     pod = RackPod(
         id="pod-1",
         name="pod-1",
@@ -69,7 +50,8 @@ def _build_rack_generator(
         leaf_interface_sorting_method="top_down",
         spine_interface_sorting_method="bottom_up",
         fabric_templates=[DeviceRole(role="spine", quantity=2, template=Template(id="tmpl-spine"))],
-        design=_design_for(deployment_type),
+        deployment_type=deployment_type,
+        layout="S_MIXED",
     )
     suite = LocationSuiteModel(index=1)
     rack = RackModel(
@@ -143,11 +125,11 @@ class TestParseRackData:
                 "id": "pod-1",
                 "name": "pod-1",
                 "index": 1,
-                "amount_of_spines": 2,
+                "deployment_type": "mixed",
+                "layout": "S_MIXED",
                 "leaf_interface_sorting_method": "top_down",
                 "spine_interface_sorting_method": "bottom_up",
                 "spine_template": {"id": "tmpl-1", "interfaces": []},
-                "design": None,
                 "prefix_pool": None,
                 "loopback_pool": None,
                 "asn_pool": None,
@@ -155,9 +137,9 @@ class TestParseRackData:
                     "id": "dc-1",
                     "name": "DC1",
                     "index": 1,
+                    "size": "S",
                     "naming_convention": "standard",
                     "management_pool": None,
-                    "design": None,
                     "fabric_interface_sorting_method": "top_down",
                 },
             },
@@ -187,19 +169,11 @@ class TestParseRackData:
                                     "id": "pod-2",
                                     "name": {"value": "pod-2"},
                                     "index": {"value": 2},
-                                    "amount_of_spines": {"value": 2},
+                                    "deployment_type": {"value": "mixed"},
+                                    "layout": {"value": "S_MIXED"},
                                     "leaf_interface_sorting_method": {"value": "bottom_up"},
                                     "spine_interface_sorting_method": {"value": "top_down"},
                                     "spine_template": {"node": {"id": "tmpl-2", "interfaces": {"edges": []}}},
-                                    "design": {
-                                        "node": {
-                                            "id": "pod-design-2",
-                                            "name": {"value": "test-pod-design"},
-                                            "rows": {"value": 1},
-                                            "compute_racks_per_row": {"value": 1},
-                                            "network_racks_per_row": {"value": 1},
-                                        }
-                                    },
                                     "prefix_pool": None,
                                     "loopback_pool": None,
                                     "asn_pool": None,
@@ -208,11 +182,9 @@ class TestParseRackData:
                                             "id": "dc-2",
                                             "name": {"value": "DC2"},
                                             "index": {"value": 2},
+                                            "size": {"value": "S"},
                                             "naming_convention": {"value": "standard"},
                                             "management_pool": None,
-                                            "design": {
-                                                "node": {"id": "dc-design-2", "name": {"value": "test-dc-design"}}
-                                            },
                                             "fabric_interface_sorting_method": {"value": "top_down"},
                                         }
                                     },
