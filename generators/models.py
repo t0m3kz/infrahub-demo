@@ -30,6 +30,10 @@ class DeviceType(BaseModel):
     id: str
 
 
+class Owner(BaseModel):
+    id: str
+
+
 class Interface(BaseModel):
     name: str
     role: str | None = None
@@ -39,6 +43,7 @@ class Template(BaseModel):
     id: str
     platform: Platform | None = None
     device_type: DeviceType | None = None
+    owner: Owner | None = None
     interfaces: list[Interface] = []
 
 
