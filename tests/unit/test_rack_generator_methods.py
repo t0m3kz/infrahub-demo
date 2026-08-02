@@ -96,6 +96,60 @@ class TestRackGeneratorMethods:
         assert gen._has_tor_like_templates() is True
         assert gen._has_any_switch_templates() is True
 
+    def test_planned_previous_row_rack_slots_uses_layout_capacity(self) -> None:
+        gen = _build_gen()
+
+        gen.data.row_index = 3
+        gen.data.pod.deployment_type = "mixed"
+        gen.data.pod.layout = "S_MIXED"  # compute_racks_per_row = 8
+        assert gen._planned_previous_row_rack_slots() == 16
+
+        gen.data.row_index = 3
+        gen.data.pod.deployment_type = "tor"
+        gen.data.pod.layout = "S_TOR"  # compute_racks_per_row = 8
+        assert gen._planned_previous_row_rack_slots() == 16
+
+        gen.data.row_index = 3
+        gen.data.pod.deployment_type = "middle_rack"
+        assert gen._planned_previous_row_rack_slots() == 0
+
+    def test_validate_profile_capacity_limits_accepts_valid_network_rack(self) -> None:
+        gen = _build_gen()
+        gen.data.pod.layout = "S_MIXED"
+        gen.data.pod.deployment_type = "mixed"
+        gen.data.rack_type = "network"
+        gen.data.row_index = 1
+        gen.data.index = 1
+        gen.data.leafs = [
+            DeviceRole(role="leaf", quantity=2, template=Template(id="tmpl-leaf")),
+        ]
+
+        errors = gen._validate_profile_capacity_limits()
+
+        assert errors == []
+
+    def test_validate_profile_capacity_limits_rejects_excess_tors_per_compute_rack(self) -> None:
+        gen = _build_gen()
+        gen.data.pod.layout = "S_MIXED"  # max_tors_per_compute_rack = 2
+        gen.data.pod.deployment_type = "mixed"
+        gen.data.rack_type = "compute"
+        gen.data.tors = [
+            DeviceRole(role="tor", quantity=3, template=Template(id="tmpl-tor")),
+        ]
+
+        errors = gen._validate_profile_capacity_limits()
+
+        assert any("max_tors_per_compute_rack" in err for err in errors)
+
+    def test_validate_profile_capacity_limits_rejects_row_overflow(self) -> None:
+        gen = _build_gen()
+        gen.data.pod.layout = "S_MIXED"  # rows = 2
+        gen.data.row_index = 3
+
+        errors = gen._validate_profile_capacity_limits()
+
+        assert any("exceeds profile rows" in err for err in errors)
+
     @pytest.mark.asyncio
     async def test_fetch_rack_devices_with_interfaces_from_context(self) -> None:
         gen = _build_gen()
@@ -274,6 +328,26 @@ class TestRackGeneratorMethods:
         await gen._generate_tors()
 
         gen.logger.error.assert_called()
+
+    @pytest.mark.asyncio
+    async def test_generate_tors_uses_planned_slots_without_live_sibling_query(self) -> None:
+        gen = _build_gen()
+        gen.data.row_index = 2
+        gen.data.pod.deployment_type = "mixed"
+        gen.data.pod.layout = "S_MIXED"  # compute_racks_per_row = 8
+        gen._spine_device_names = ["spine-01"]
+
+        gen.client.filters = AsyncMock(side_effect=AssertionError("live sibling query should not be used"))
+        gen.calculate_cabling_offsets = MagicMock(return_value=123)
+        gen._generate_spine_attached_role = AsyncMock()
+
+        await gen._generate_tors()
+
+        gen.calculate_cabling_offsets.assert_called_once_with(
+            device_count=1,
+            device_type="tor",
+            racks_in_previous_rows=8,
+        )
 
     # Border-leaf generation moved to DC-level (generators/topology/dc.py's
     # _generate_dc_scoped_fabric_devices) — see tests/unit/test_dc_firewall_lb.py

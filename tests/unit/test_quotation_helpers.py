@@ -157,17 +157,9 @@ def test_build_switch_fabric_multi_pod_prefers_cheaper_of_back_to_back_vs_super_
     assert spine.device_type_id == "spine-1"
 
 
-def test_build_switch_fabric_multi_pod_never_prefers_super_spine_at_any_price() -> None:
-    """KNOWN LIMITATION, ported as-is from scripts/recommend_dc_design.py:
-    both the back-to-back and classic-3-tier branches cost the spine tier
-    identically (same rec.cheapest_fanin("spine", leaf_result.count, ...)
-    call), so tier3_cost = b2b_cost + super_spine_cost is never strictly
-    less than b2b_cost — the super-spine path can only lose or tie, never
-    win, even when the super-spine device is nearly free. A real cost
-    comparison would need back-to-back's spine to be sized for meshing
-    every sibling pod directly (more uplinks) vs. tier3's spine only
-    needing uplinks to the super-spine — that distinction isn't modeled
-    yet. Flagged for follow-up, not fixed here."""
+def test_build_switch_fabric_multi_pod_can_prefer_super_spine_when_mesh_penalty_applies() -> None:
+    """Back-to-back now includes a spine mesh penalty for multi-pod fabrics,
+    so a cheap super-spine tier can legitimately win the cost race."""
     templates = [
         _leaf("leaf-1", "Vendor A", customer_ports=48, uplink_ports=4),
         _spine("spine-1", "Vendor A", downlink_ports=32, uplink_ports=4),
@@ -179,7 +171,51 @@ def test_build_switch_fabric_multi_pod_never_prefers_super_spine_at_any_price() 
 
     _, _, super_spine, _ = build_switch_fabric(rec, servers=40, speed=_SPEED_100G, pods=8, manufacturer=None)
 
+    assert super_spine.device_type_id == "ss-1"
+
+
+def test_build_switch_fabric_forced_back_to_back_skips_super_spine() -> None:
+    templates = [
+        _leaf("leaf-1", "Vendor A", customer_ports=48, uplink_ports=4),
+        _spine("spine-1", "Vendor A", downlink_ports=32, uplink_ports=4),
+        _super_spine("ss-1", "Vendor A", downlink_ports=32),
+        _border_leaf("bl-1", "Vendor A"),
+    ]
+    prices = {"leaf-1": 20_000.0, "spine-1": 25_000.0, "ss-1": 10.0, "bl-1": 15_000.0}
+    rec = Recommender(templates=templates, prices=prices)
+
+    _, _, super_spine, _ = build_switch_fabric(
+        rec,
+        servers=40,
+        speed=_SPEED_100G,
+        pods=4,
+        manufacturer=None,
+        topology_strategy="back_to_back",
+    )
+
     assert super_spine.device_type_id is None
+
+
+def test_build_switch_fabric_forced_classic_3tier_uses_super_spine_when_available() -> None:
+    templates = [
+        _leaf("leaf-1", "Vendor A", customer_ports=48, uplink_ports=4),
+        _spine("spine-1", "Vendor A", downlink_ports=32, uplink_ports=4),
+        _super_spine("ss-1", "Vendor A", downlink_ports=64),
+        _border_leaf("bl-1", "Vendor A"),
+    ]
+    prices = {"leaf-1": 20_000.0, "spine-1": 25_000.0, "ss-1": 100_000.0, "bl-1": 15_000.0}
+    rec = Recommender(templates=templates, prices=prices)
+
+    _, _, super_spine, _ = build_switch_fabric(
+        rec,
+        servers=40,
+        speed=_SPEED_100G,
+        pods=4,
+        manufacturer=None,
+        topology_strategy="classic_3tier",
+    )
+
+    assert super_spine.device_type_id == "ss-1"
 
 
 def test_recommend_design_returns_smallest_fitting() -> None:
@@ -624,6 +660,37 @@ def test_build_room_pods_round_robins_overflow_pods_onto_existing_rooms() -> Non
     assert all(p["compute_rack_share"] == 10 for p in pods)
 
 
+def test_build_room_pods_sequential_strategy_sticks_to_last_room_after_exhaustion() -> None:
+    templates = [
+        _leaf("leaf-100g", "Vendor A", customer_ports=48, uplink_ports=4, speed=_SPEED_100G),
+        _spine("spine-1", "Vendor A", downlink_ports=32, uplink_ports=4),
+        _border_leaf("bl-1", "Vendor A"),
+    ]
+    prices = {"leaf-100g": 20_000.0, "spine-1": 25_000.0, "bl-1": 15_000.0}
+    rec = Recommender(templates=templates, prices=prices)
+    rooms = [
+        {"id": "room-a", "port_count_100g": 40, "compute_rack_count": 10, "storage_rack_count": 0},
+        {"id": "room-b", "port_count_100g": 20, "compute_rack_count": 1, "storage_rack_count": 1},
+    ]
+
+    pods = build_room_pods(rec, rooms, pod_count=4, assignment_strategy="sequential")
+
+    assert [p["room_id"] for p in pods] == ["room-a", "room-b", "room-b", "room-b"]
+
+
+def test_assign_racks_to_rooms_sequential_fills_rooms_in_order() -> None:
+    rooms = [{"id": "room-a"}, {"id": "room-b"}]
+
+    racks = assign_racks_to_rooms(
+        compute_racks=3,
+        storage_racks=1,
+        rooms=rooms,
+        assignment_strategy="sequential",
+    )
+
+    assert [r["room_id"] for r in racks] == ["room-a", "room-b", "room-b", "room-b"]
+
+
 def test_build_room_pods_fewer_pods_than_rooms_only_returns_pod_count_pods() -> None:
     rooms = [{"id": "room-a", "port_count_100g": 40}, {"id": "room-b", "port_count_100g": 20}]
     rec = Recommender(templates=[], prices={})
@@ -643,3 +710,21 @@ def test_build_room_pods_no_rooms_returns_empty_fabric_pods() -> None:
     assert all(p["room_id"] is None for p in pods)
     assert all(p["leaf_count"] == 0 for p in pods)
     assert all(p["leaf_results"] == [] for p in pods)
+
+
+def test_build_room_pods_growth_buffer_scales_port_demand_before_sizing() -> None:
+    templates = [
+        _leaf("leaf-100g", "Vendor A", customer_ports=48, uplink_ports=4, speed=_SPEED_100G),
+        _spine("spine-1", "Vendor A", downlink_ports=32, uplink_ports=4),
+        _border_leaf("bl-1", "Vendor A"),
+    ]
+    prices = {"leaf-100g": 20_000.0, "spine-1": 25_000.0, "bl-1": 15_000.0}
+    rec = Recommender(templates=templates, prices=prices)
+    rooms = [{"id": "room-a", "port_count_100g": 40, "compute_rack_count": 1, "storage_rack_count": 0}]
+
+    no_growth = build_room_pods(rec, rooms, pod_count=1, growth_buffer_percent=0)
+    with_growth = build_room_pods(rec, rooms, pod_count=1, growth_buffer_percent=25)
+
+    assert no_growth[0]["port_counts"][_SPEED_100G] == 40
+    assert with_growth[0]["port_counts"][_SPEED_100G] == 50
+    assert with_growth[0]["leaf_count"] >= no_growth[0]["leaf_count"]

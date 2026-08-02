@@ -7,7 +7,7 @@ Covers untested classes and methods in generators/helpers/cabling.py:
 - CableTypeDetector.get_cable_description()      – human-readable descriptions
 - ConnectionValidator.validate_plan()            – min/max/duplicate checks
 - PodCablingStrategy.build_plan()               – pod-to-pod with offset
-- RackCablingStrategy.build_plan()              – offset overflow → skip + log
+- RackCablingStrategy.build_plan()              – offset overflow → fail-fast + log
 - IntraRackMiddleCablingStrategy._create_leaf_pairs()      – even/odd counts
 - IntraRackMiddleCablingStrategy._validate_min_top_devices() – < 2 logs warning
 - IntraRackMiddleCablingStrategy._connect_tor_to_leaf_pair() – insufficient intfs
@@ -21,10 +21,12 @@ from __future__ import annotations
 from typing import Any
 from unittest.mock import MagicMock, Mock, patch
 
+import pytest
 from conftest import MockInterface, create_mock_interfaces
 
 from generators.helpers import (
     CableTypeDetector,
+    CablingPlanError,
     CablingPlanner,
     ChainCablingStrategy,
     ConnectionValidator,
@@ -304,16 +306,16 @@ class TestPodCablingStrategy:
 
 
 class TestRackCablingStrategyOverflow:
-    def test_offset_overflow_skips_connection_and_logs(self) -> None:
-        """When bottom_index + cabling_offset >= max_top_interfaces, skip and log error."""
+    def test_offset_overflow_raises_and_logs(self) -> None:
+        """When bottom_index + cabling_offset >= max_top_interfaces, fail fast."""
         planner = _make_planner(
             bottom_devices={"leaf-01": ["Eth1"]},
             top_devices={"spine-01": ["Eth1", "Eth2"]},  # 2 top interfaces
         )
         strategy = RackCablingStrategy(planner)
         # offset=2 → index=0+2=2 >= 2 top interfaces → overflow
-        plan = strategy.build_plan(cabling_offset=2)
-        assert plan == []
+        with pytest.raises(CablingPlanError, match="OFFSET OVERFLOW"):
+            strategy.build_plan(cabling_offset=2)
 
     def test_overflow_logs_error(self) -> None:
         planner = _make_planner(
@@ -323,9 +325,9 @@ class TestRackCablingStrategyOverflow:
         strategy = RackCablingStrategy(planner)
 
         strategy.logger = MagicMock()
-        plan = strategy.build_plan(cabling_offset=1)  # 0+1=1 >= 1 → overflow
-
-        assert plan == []
+        with pytest.raises(CablingPlanError):
+            strategy.build_plan(cabling_offset=1)  # 0+1=1 >= 1 → overflow
+        strategy.logger.error.assert_called_once()
 
     def test_no_overflow_creates_connections(self) -> None:
         planner = _make_planner(

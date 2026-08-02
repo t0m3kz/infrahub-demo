@@ -34,6 +34,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass, field
+from typing import Literal
 
 MIN_REDUNDANCY = 2
 
@@ -184,8 +185,23 @@ def _cheapest_border_leaf(rec: Recommender, manufacturer: str | None) -> TierRes
     return rec.cheapest_pair("border-leaf", manufacturer)
 
 
+def _apply_growth(count: int, growth_buffer_percent: int) -> int:
+    """Apply a positive growth buffer percentage to a demand count."""
+    if count <= 0:
+        return 0
+    if growth_buffer_percent <= 0:
+        return count
+    factor = 1 + (growth_buffer_percent / 100)
+    return math.ceil(count * factor)
+
+
 def build_switch_fabric(
-    rec: Recommender, servers: int, speed: str, pods: int, manufacturer: str | None
+    rec: Recommender,
+    servers: int,
+    speed: str,
+    pods: int,
+    manufacturer: str | None,
+    topology_strategy: Literal["auto", "back_to_back", "classic_3tier"] = "auto",
 ) -> list[TierResult]:
     """leaf/spine/(super-spine)/border-leaf tiers, optionally restricted to
     one switch manufacturer (border-leaf itself is priced as a fixed
@@ -216,7 +232,18 @@ def build_switch_fabric(
     # requirement as the single-pod case (leaf count), just re-priced with
     # cheapest_fanin's existing floor of 2 (mirrors generators/topology/
     # pod.py's _cable_to_existing_sibling_pods full inter-pod spine mesh).
-    b2b_spine_result, _ = rec.cheapest_fanin("spine", leaf_result.count, manufacturer=manufacturer)
+    b2b_spine_result, b2b_spine_template = rec.cheapest_fanin("spine", leaf_result.count, manufacturer=manufacturer)
+    if b2b_spine_template is not None and b2b_spine_result.device_type_id is not None:
+        # Back-to-back needs additional inter-pod mesh uplinks on each spine.
+        # Keep the same spine hardware candidate but scale count to reflect
+        # sibling-pod fanout pressure.
+        mesh_factor = max(1, pods - 1)
+        b2b_spine_result = TierResult(
+            tier="spine",
+            device_type_id=b2b_spine_result.device_type_id,
+            count=max(MIN_REDUNDANCY, b2b_spine_result.count * mesh_factor),
+            unit_price=b2b_spine_result.unit_price,
+        )
     b2b_cost = sum(
         t.total_cost for t in (leaf_result, b2b_spine_result, border_leaf_result) if t.total_cost is not None
     )
@@ -233,6 +260,14 @@ def build_switch_fabric(
         for t in (leaf_result, tier3_spine_result, tier3_super_spine_result, border_leaf_result)
         if t.total_cost is not None
     )
+
+    if topology_strategy == "back_to_back":
+        return [leaf_result, b2b_spine_result, TierResult("super-spine", None, 0, None), border_leaf_result]
+
+    if topology_strategy == "classic_3tier":
+        if tier3_super_spine_result.device_type_id is not None:
+            return [leaf_result, tier3_spine_result, tier3_super_spine_result, border_leaf_result]
+        return [leaf_result, b2b_spine_result, TierResult("super-spine", None, 0, None), border_leaf_result]
 
     if tier3_super_spine_result.device_type_id is not None and tier3_cost < b2b_cost:
         return [leaf_result, tier3_spine_result, tier3_super_spine_result, border_leaf_result]
@@ -260,7 +295,11 @@ def build_multi_speed_leaf_tiers(
 
 
 def build_multi_speed_fabric(
-    rec: Recommender, port_counts: dict[str, int], pods: int, manufacturer: str | None = None
+    rec: Recommender,
+    port_counts: dict[str, int],
+    pods: int,
+    manufacturer: str | None = None,
+    topology_strategy: Literal["auto", "back_to_back", "classic_3tier"] = "auto",
 ) -> tuple[list[TierResult], TierResult, TierResult, TierResult]:
     """Multi-speed leaf tiers (one per non-zero speed) plus a single combined
     spine/super-spine/border-leaf sized from their SUMMED count — mirrors
@@ -291,7 +330,15 @@ def build_multi_speed_fabric(
         return leaf_results, spine_result, TierResult("super-spine", None, 0, None), border_leaf_result
 
     # Back-to-back: same shape as build_switch_fabric, keyed off total_leaf_count.
-    b2b_spine_result, _ = rec.cheapest_fanin("spine", total_leaf_count, manufacturer=manufacturer)
+    b2b_spine_result, b2b_spine_template = rec.cheapest_fanin("spine", total_leaf_count, manufacturer=manufacturer)
+    if b2b_spine_template is not None and b2b_spine_result.device_type_id is not None:
+        mesh_factor = max(1, pods - 1)
+        b2b_spine_result = TierResult(
+            tier="spine",
+            device_type_id=b2b_spine_result.device_type_id,
+            count=max(MIN_REDUNDANCY, b2b_spine_result.count * mesh_factor),
+            unit_price=b2b_spine_result.unit_price,
+        )
     b2b_cost = sum(
         t.total_cost for t in (*leaf_results, b2b_spine_result, border_leaf_result) if t.total_cost is not None
     )
@@ -308,6 +355,14 @@ def build_multi_speed_fabric(
         for t in (*leaf_results, tier3_spine_result, tier3_super_spine_result, border_leaf_result)
         if t.total_cost is not None
     )
+
+    if topology_strategy == "back_to_back":
+        return leaf_results, b2b_spine_result, TierResult("super-spine", None, 0, None), border_leaf_result
+
+    if topology_strategy == "classic_3tier":
+        if tier3_super_spine_result.device_type_id is not None:
+            return leaf_results, tier3_spine_result, tier3_super_spine_result, border_leaf_result
+        return leaf_results, b2b_spine_result, TierResult("super-spine", None, 0, None), border_leaf_result
 
     if tier3_super_spine_result.device_type_id is not None and tier3_cost < b2b_cost:
         return leaf_results, tier3_spine_result, tier3_super_spine_result, border_leaf_result
@@ -682,7 +737,14 @@ def build_proposed_pods(
     return pods
 
 
-def build_room_pods(rec: Recommender, rooms: list[dict], pod_count: int, manufacturer: str | None = None) -> list[dict]:
+def build_room_pods(
+    rec: Recommender,
+    rooms: list[dict],
+    pod_count: int,
+    manufacturer: str | None = None,
+    assignment_strategy: Literal["round_robin", "sequential", "dedicated_room_per_pod"] = "round_robin",
+    growth_buffer_percent: int = 0,
+) -> list[dict]:
     """Map pods 1:1 to rooms (pod N <- rooms[N-1]) and size each pod from
     exactly that room's own port_count_*/compute_rack_count/
     storage_rack_count via build_multi_speed_fabric — NOT an even DC-wide
@@ -713,9 +775,24 @@ def build_room_pods(rec: Recommender, rooms: list[dict], pod_count: int, manufac
     border_leaf_count, border_leaf_device_type_id.
     """
     pods: list[dict] = []
+
+    def resolve_room(pod_zero_idx: int) -> dict | None:
+        if not rooms:
+            return None
+        if assignment_strategy == "dedicated_room_per_pod":
+            if pod_zero_idx < len(rooms):
+                return rooms[pod_zero_idx]
+            return rooms[pod_zero_idx % len(rooms)]
+        if assignment_strategy == "sequential":
+            return rooms[min(pod_zero_idx, len(rooms) - 1)]
+        return rooms[pod_zero_idx % len(rooms)]
+
     for i in range(pod_count):
-        room = rooms[i % len(rooms)] if rooms else None
-        port_counts = {speed: (room.get(field, 0) if room else 0) for field, speed in PORT_SPEEDS.items()}
+        room = resolve_room(i)
+        port_counts = {
+            speed: _apply_growth(room.get(field, 0) if room else 0, growth_buffer_percent)
+            for field, speed in PORT_SPEEDS.items()
+        }
         compute_share = room.get("compute_rack_count", 0) if room else 0
         storage_share = room.get("storage_rack_count", 0) if room else 0
 
@@ -726,6 +803,7 @@ def build_room_pods(rec: Recommender, rooms: list[dict], pod_count: int, manufac
             {
                 "index": i + 1,
                 "room_id": room.get("id") if room else None,
+                "rack_assignment_strategy": assignment_strategy,
                 "port_counts": port_counts,
                 "compute_rack_share": compute_share,
                 "storage_rack_share": storage_share,
@@ -743,7 +821,12 @@ def build_room_pods(rec: Recommender, rooms: list[dict], pod_count: int, manufac
 
 
 def assign_racks_to_rooms(
-    compute_racks: int, storage_racks: int, rooms: list[dict], pod_index: int = 1, pod_count: int = 1
+    compute_racks: int,
+    storage_racks: int,
+    rooms: list[dict],
+    pod_index: int = 1,
+    pod_count: int = 1,
+    assignment_strategy: Literal["round_robin", "sequential", "dedicated_room_per_pod"] = "dedicated_room_per_pod",
 ) -> list[dict]:
     """Build one dict per rack (index, rack_type, room_id) for a single
     pod's compute_rack_share + storage_rack_share.
@@ -769,7 +852,7 @@ def assign_racks_to_rooms(
     both types, matching QuotationProposedRack.uniqueness_constraints
     ([pod, index]).
     """
-    one_room_per_pod = bool(rooms) and len(rooms) >= pod_count
+    one_room_per_pod = assignment_strategy == "dedicated_room_per_pod" and bool(rooms) and len(rooms) >= pod_count
     dedicated_room_id = rooms[pod_index - 1]["id"] if one_room_per_pod else None
 
     racks: list[dict] = []
@@ -778,6 +861,8 @@ def assign_racks_to_rooms(
         for _ in range(count):
             if one_room_per_pod:
                 room_id = dedicated_room_id
+            elif assignment_strategy == "sequential":
+                room_id = rooms[min(index - 1, len(rooms) - 1)]["id"] if rooms else None
             else:
                 room_id = rooms[(index - 1) % len(rooms)]["id"] if rooms else None
             racks.append({"index": index, "rack_type": rack_type, "room_id": room_id})

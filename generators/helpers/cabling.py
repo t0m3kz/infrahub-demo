@@ -152,6 +152,10 @@ class CablingStrategy(ABC):
         pass
 
 
+class CablingPlanError(ValueError):
+    """Raised when a cabling plan cannot be built safely."""
+
+
 class PodCablingStrategy(CablingStrategy):
     """Pod-to-pod cabling strategy."""
 
@@ -178,7 +182,12 @@ class RackCablingStrategy(CablingStrategy):
     def build_plan(
         self, cabling_offset: int = 0, **kwargs
     ) -> list[tuple[DcimPhysicalInterface, DcimPhysicalInterface]]:
-        """Builds a cabling plan for any-to-any connectivity (e.g., ToRs/Leafs to Spines)."""
+        """Builds a cabling plan for any-to-any connectivity (e.g., ToRs/Leafs to Spines).
+
+        Raises CablingPlanError when the computed top interface index exceeds available
+        interfaces. This fail-fast behavior prevents partial cabling where some devices
+        silently remain disconnected.
+        """
         cabling_plan: list[tuple[DcimPhysicalInterface, DcimPhysicalInterface]] = []
 
         for bottom_index, bottom_device in enumerate(self.planner._sorted_bottom_devices):
@@ -191,13 +200,14 @@ class RackCablingStrategy(CablingStrategy):
                     if bottom_index < len(self.planner._sorted_bottom_devices)
                     else f"index={bottom_index}"
                 )
-                self.logger.error(
+                msg = (
                     f"OFFSET OVERFLOW - bottom device {bottom_label}: "
                     f"top_interface_index={top_interface_index} (offset={cabling_offset} + device={bottom_index}) "
                     f"exceeds {max_top_interfaces} available top interfaces. "
                     f"Reduce the offset or add more interfaces to top devices."
                 )
-                continue
+                self.logger.error(msg)
+                raise CablingPlanError(msg)
 
             for top_index, top_device in enumerate(self.planner._sorted_top_devices):
                 top_intf = self.planner.top_by_device[top_device][top_interface_index]

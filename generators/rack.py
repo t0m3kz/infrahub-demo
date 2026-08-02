@@ -10,6 +10,7 @@ if TYPE_CHECKING:
     import logging
 
 from .helpers import DeviceNameContext, DeviceNamingConfig
+from .helpers.template_interfaces import build_spine_downlink_template_names, template_interface_names_by_role
 from .models import Pool
 from .protocols import LocationRack, TopologyPod
 from .types import RoutingOptions
@@ -123,7 +124,30 @@ class RackMixin:
         # Interface names come from the first entry's template only — same accepted
         # limitation as dc.py's/pod.py's super-spine/spine device creation: assumes
         # every spine template shares consistent downlink-interface naming.
-        interface_names = sorted(iface.name for iface in spine_entries[0].template.interfaces)
+        interface_names = template_interface_names_by_role(
+            interfaces=spine_entries[0].template.interfaces,
+            role="downlink",
+        )
+        if not interface_names:
+            interface_names = template_interface_names_by_role(
+                interfaces=spine_entries[0].template.interfaces,
+                role=None,
+            )
+        interface_names = sorted(interface_names)
+
+        if not interface_names:
+            profile = pod.profile
+            if profile.spine_downlink_ports_per_spine is not None:
+                interface_names = build_spine_downlink_template_names(
+                    spine_downlink_ports_per_spine=profile.spine_downlink_ports_per_spine,
+                    reserved_spine_downlinks_per_spine=profile.reserved_spine_downlinks_per_spine,
+                )
+                if interface_names:
+                    self.logger.warning(
+                        f"Rack {self.data.name}: spine template has no interfaces; "
+                        f"generated {len(interface_names)} dynamic downlink interface names "
+                        f"from layout budget"
+                    )
 
         if not interface_names:
             raise RuntimeError(f"Rack {self.data.name}: Spine template has no downlink interfaces")

@@ -98,6 +98,17 @@ class QuotationGenerator(FailOnErrorLoggerMixin, InfrahubGenerator):
         switch_vendor: str | None = quotation.get("preferred_switch_vendor") or None
         firewall_vendor: str | None = quotation.get("preferred_firewall_vendor") or None
         lb_vendor: str | None = quotation.get("preferred_load_balancer_vendor") or None
+        topology_strategy = quotation.get("topology_strategy") or "auto"
+        if topology_strategy not in {"auto", "back_to_back", "classic_3tier"}:
+            topology_strategy = "auto"
+        growth_buffer_percent = quotation.get("growth_buffer_percent") or 0
+        growth_buffer_percent = max(0, min(200, int(growth_buffer_percent)))
+        room_assignment_strategy = "round_robin"
+        for room in rooms:
+            strategy = room.get("rack_assignment_strategy")
+            if strategy in {"round_robin", "sequential", "dedicated_room_per_pod"}:
+                room_assignment_strategy = strategy
+                break
 
         if len(rooms) > pods:
             self.logger.warning(
@@ -114,7 +125,14 @@ class QuotationGenerator(FailOnErrorLoggerMixin, InfrahubGenerator):
                 f"(short by {room_check['shortfall']})"
             )
 
-        room_pods = build_room_pods(rec, rooms, pods, manufacturer=switch_vendor)
+        room_pods = build_room_pods(
+            rec,
+            rooms,
+            pods,
+            manufacturer=switch_vendor,
+            assignment_strategy=room_assignment_strategy,
+            growth_buffer_percent=growth_buffer_percent,
+        )
 
         # DC-wide totals: sum every pod's own room port_counts, then price
         # the combined fabric once — mirrors build_room_pods's own per-pod
@@ -125,7 +143,11 @@ class QuotationGenerator(FailOnErrorLoggerMixin, InfrahubGenerator):
                 dc_port_counts[speed] += count
 
         leaf_results, spine_result, super_spine_result, border_leaf_result = build_multi_speed_fabric(
-            rec, dc_port_counts, pods, manufacturer=switch_vendor
+            rec,
+            dc_port_counts,
+            pods,
+            manufacturer=switch_vendor,
+            topology_strategy=topology_strategy,
         )
         if not leaf_results:
             self.logger.error(
@@ -254,6 +276,7 @@ class QuotationGenerator(FailOnErrorLoggerMixin, InfrahubGenerator):
                 pod["compute_rack_share"],
                 pod["storage_rack_share"],
                 rooms=[assigned_room] if assigned_room else [],
+                assignment_strategy=pod.get("rack_assignment_strategy", "round_robin"),
             )
             await self._save_proposed_racks(pod_id_by_index[pod["index"]], racks)
 
