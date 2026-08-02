@@ -120,8 +120,6 @@ class CommonGenerator(
                         Interface(
                             name=getattr(getattr(edge.node, "name", None), "value", ""),
                             role=getattr(getattr(edge.node, "role", None), "value", None),
-                            interface_type=getattr(getattr(edge.node, "interface_type", None), "value", None),
-                            description=getattr(getattr(edge.node, "description", None), "value", None),
                         )
                         for edge in interface_edges
                         if getattr(edge, "node", None) is not None
