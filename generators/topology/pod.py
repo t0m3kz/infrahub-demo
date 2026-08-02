@@ -531,9 +531,8 @@ class PodTopologyGenerator(CommonGenerator):
         dc_max_spines = dc.design.max_spines_per_pod
         p2p_prefix_length = 127 if is_ipv6 else 31
         routing_opts = RoutingOptions(design=dc, asn_pool=dc_asn_pool_id)
-        local_uplink_cursor = 0
-
-        for sibling in sorted(lower_siblings, key=lambda s: s.index.value):
+        sorted_lower_siblings = sorted(lower_siblings, key=lambda s: s.index.value)
+        for sibling_slot, sibling in enumerate(sorted_lower_siblings):
             # Retry: during INITIAL bulk DC creation, every pod's TopologyPod object
             # already exists (loaded together before any generator runs), but a lower-
             # index sibling's own add_pod run may not have reached spine creation yet.
@@ -573,12 +572,14 @@ class PodTopologyGenerator(CommonGenerator):
                 )
                 continue
 
-            # Each sibling-pod pair needs its own local uplink slice. Reusing the
-            # same local endpoint across multiple sibling links would violate
-            # DcimEndpoint's single-cable cardinality and fails with
-            # "maximum of 1 allowed".
+            # Each sibling-pod pair gets a deterministic local uplink slot range
+            # based on sibling order (not readiness). If a sibling is temporarily
+            # not ready and skipped in one run, later siblings still keep their
+            # own reserved slots, so a retry does not reuse one endpoint for two
+            # different sibling links.
             links_per_sibling = len(sibling_spines)
-            sibling_local_uplinks = spine_interfaces[local_uplink_cursor : local_uplink_cursor + links_per_sibling]
+            slot_start = sibling_slot * dc_max_spines
+            sibling_local_uplinks = spine_interfaces[slot_start : slot_start + links_per_sibling]
             if len(sibling_local_uplinks) < links_per_sibling:
                 self.logger.error(
                     f"Pod {self.data.name}: insufficient local {spine_role} uplinks for inter-pod mesh. "
@@ -587,12 +588,11 @@ class PodTopologyGenerator(CommonGenerator):
                     "Increase uplink-role interfaces in the spine template or reduce mesh fan-out."
                 )
                 return
-            local_uplink_cursor += links_per_sibling
 
             cabling_offset = self.data.spine_link_base_offset + ((sibling.index.value - 1) * dc_max_spines)
             self.logger.info(
                 f"Pod {self.data.name} (idx={self.data.index}): cabling to sibling pod idx={sibling.index.value} "
-                f"[offset={cabling_offset}, local_uplinks={sibling_local_uplinks}]"
+                f"[offset={cabling_offset}, slot_start={slot_start}, local_uplinks={sibling_local_uplinks}]"
             )
             p2p_pairs = await self.create_cabling(
                 bottom_devices=spines,
