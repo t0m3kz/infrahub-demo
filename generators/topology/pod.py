@@ -531,6 +531,7 @@ class PodTopologyGenerator(CommonGenerator):
         dc_max_spines = dc.design.max_spines_per_pod
         p2p_prefix_length = 127 if is_ipv6 else 31
         routing_opts = RoutingOptions(design=dc, asn_pool=dc_asn_pool_id)
+        local_uplink_cursor = 0
 
         for sibling in sorted(lower_siblings, key=lambda s: s.index.value):
             # Retry: during INITIAL bulk DC creation, every pod's TopologyPod object
@@ -572,14 +573,30 @@ class PodTopologyGenerator(CommonGenerator):
                 )
                 continue
 
+            # Each sibling-pod pair needs its own local uplink slice. Reusing the
+            # same local endpoint across multiple sibling links would violate
+            # DcimEndpoint's single-cable cardinality and fails with
+            # "maximum of 1 allowed".
+            links_per_sibling = len(sibling_spines)
+            sibling_local_uplinks = spine_interfaces[local_uplink_cursor : local_uplink_cursor + links_per_sibling]
+            if len(sibling_local_uplinks) < links_per_sibling:
+                self.logger.error(
+                    f"Pod {self.data.name}: insufficient local {spine_role} uplinks for inter-pod mesh. "
+                    f"Needed {links_per_sibling} free uplink name(s) for sibling pod idx={sibling.index.value}, "
+                    f"but only {len(sibling_local_uplinks)} remain. "
+                    "Increase uplink-role interfaces in the spine template or reduce mesh fan-out."
+                )
+                return
+            local_uplink_cursor += links_per_sibling
+
             cabling_offset = self.data.spine_link_base_offset + ((sibling.index.value - 1) * dc_max_spines)
             self.logger.info(
                 f"Pod {self.data.name} (idx={self.data.index}): cabling to sibling pod idx={sibling.index.value} "
-                f"[offset={cabling_offset}]"
+                f"[offset={cabling_offset}, local_uplinks={sibling_local_uplinks}]"
             )
             p2p_pairs = await self.create_cabling(
                 bottom_devices=spines,
-                bottom_interfaces=spine_interfaces,
+                bottom_interfaces=sibling_local_uplinks,
                 top_devices=sibling_spines,
                 top_interfaces=sibling_uplink_names,
                 strategy="pod",
