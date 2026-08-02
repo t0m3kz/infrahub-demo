@@ -12,10 +12,10 @@ spec:
       naming_convention: standard
       connectivity_mode: inline
       fabric_templates:
-        - ["2", "super-spine", "N9K-C9336C-FX2"]
-        - ["2", "border-leaf", "N9K-C9336C-FX2"]
-        - ["2", "firewall", "CP-26000"]
-        - ["2", "load-balancer", "BIG-IP-i5800"]
+        - ["2", "super-spine", "N9K-C9336C-FX2_SUPER_SPINE"]
+        - ["2", "border-leaf", "N9K-C9336C-FX2_BORDER_LEAF"]
+        - ["2", "firewall", "CP-26000_FIREWALL"]
+        - ["2", "load-balancer", "BIG-IP-i5800_LOAD_BALANCER"]
       fabric_interface_sorting_method: top_down
       member_of_groups:
         - topologies_dc
@@ -27,7 +27,7 @@ spec:
             deployment_type: middle_rack
             suites: [muc-1-s-1]
             fabric_templates:
-              - ["2", "spine", "N9K-C9336C-FX2"]
+              - ["2", "spine", "N9K-C9336C-FX2_SPINE"]
             member_of_groups:
               - topologies_pod
             racks:
@@ -40,8 +40,8 @@ spec:
                   parent: muc-1-s-1
                   member_of_groups: [topologies_rack]
                   fabric_templates:
-                    - ["2", "leaf", "N9K-C9336C-FX2"]
-                    - ["2", "l2-leaf", "N9K-C9336C-FX2"]
+                    - ["2", "leaf", "N9K-C9336C-FX2_LEAF_MR"]
+                    - ["2", "l2-leaf", "N9K-C9336C-FX2_TOR"]
                 - index: 1
                   row_index: 2
                   shortname: muc-1-s-1-r-2-1
@@ -49,14 +49,14 @@ spec:
                   parent: muc-1-s-1
                   member_of_groups: [topologies_rack]
                   fabric_templates:
-                    - ["2", "leaf", "N9K-C9336C-FX2"]
-                    - ["2", "l2-leaf", "N9K-C9336C-FX2"]
+                    - ["2", "leaf", "N9K-C9336C-FX2_LEAF_MR"]
+                    - ["2", "l2-leaf", "N9K-C9336C-FX2_TOR"]
           - index: 2
             layout: S_MIDDLE
             deployment_type: middle_rack
             suites: [muc-1-s-2]
             fabric_templates:
-              - ["2", "spine", "N9K-C9336C-FX2"]
+              - ["2", "spine", "N9K-C9336C-FX2_SPINE"]
             member_of_groups:
               - topologies_pod
             racks:
@@ -69,8 +69,8 @@ spec:
                   parent: muc-1-s-2
                   member_of_groups: [topologies_rack]
                   fabric_templates:
-                    - ["2", "leaf", "N9K-C9336C-FX2"]
-                    - ["2", "l2-leaf", "N9K-C9336C-FX2"]
+                    - ["2", "leaf", "N9K-C9336C-FX2_LEAF_MR"]
+                    - ["2", "l2-leaf", "N9K-C9336C-FX2_TOR"]
                 - index: 1
                   row_index: 2
                   shortname: muc-1-s-2-r-2-1
@@ -78,5 +78,5 @@ spec:
                   parent: muc-1-s-2
                   member_of_groups: [topologies_rack]
                   fabric_templates:
-                    - ["2", "leaf", "N9K-C9336C-FX2"]
-                    - ["2", "l2-leaf", "N9K-C9336C-FX2"]
+                    - ["2", "leaf", "N9K-C9336C-FX2_LEAF_MR"]
+                    - ["2", "l2-leaf", "N9K-C9336C-FX2_TOR"]
