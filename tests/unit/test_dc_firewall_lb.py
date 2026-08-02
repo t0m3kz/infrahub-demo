@@ -1,9 +1,8 @@
 """Unit tests for DCTopologyGenerator's DC-scoped border-leaf/firewall/load-balancer
 device provisioning and cabling.
 
-Border-leaf: created as DC-scoped devices (deployment_id=dc.id), distributed by
-walking pods in index order and giving each pod up to its OWN design's
-max_border_leafs_per_pod
+Border-leaf: created per-pod (deployment_id=pod.id), distributed by walking pods
+in index order and giving each pod up to its OWN design's max_border_leafs_per_pod
 (a pod capped at 0 is skipped entirely — this is how a specific subset of pods,
 e.g. pod 1 and pod 3 but not pod 2, can be chosen to host border-leafs). dc.py
 does NOT cable border-leaf to spines — that's pod.py's job (see
@@ -24,13 +23,12 @@ border-leaf<->firewall<->load-balancer<->border-leaf.
 from __future__ import annotations
 
 import uuid
-from types import SimpleNamespace
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from generators.models import POD_LAYOUTS, DeviceRole, DeviceType, Interface, Platform, Template
+from generators.models import POD_LAYOUTS, DeviceRole, Interface, Template
 from generators.topology.dc import DCTopologyGenerator
 
 
@@ -224,9 +222,9 @@ class TestCreateBorderLeafDevices:
         assert names == ["bl-a-01", "bl-b-01", "bl-b-02"]
         assert gen.create_devices.await_count == 2
         first_call, second_call = gen.create_devices.call_args_list
-        assert first_call.kwargs["deployment_id"] == gen.data.id
+        assert first_call.kwargs["deployment_id"] == "pod-a"
         assert first_call.kwargs["quantity"] == 1
-        assert second_call.kwargs["deployment_id"] == gen.data.id
+        assert second_call.kwargs["deployment_id"] == "pod-b"
         assert second_call.kwargs["quantity"] == 2
 
     @pytest.mark.asyncio
@@ -248,7 +246,7 @@ class TestCreateBorderLeafDevices:
 
         assert names == ["bl-c-01", "bl-c-02"]
         gen.create_devices.assert_awaited_once()
-        assert gen.create_devices.call_args.kwargs["deployment_id"] == gen.data.id
+        assert gen.create_devices.call_args.kwargs["deployment_id"] == "pod-c"
 
     @pytest.mark.asyncio
     async def test_entry_exceeding_max_border_leafs_per_fabric_is_skipped(self) -> None:
@@ -357,45 +355,6 @@ class TestCreateRoleDevices:
 
         gen._ensure_ha_pair.assert_not_awaited()
 
-    @pytest.mark.asyncio
-    async def test_device_type_only_entries_are_hydrated_to_templates(self) -> None:
-        gen = _make_generator()
-        gen.client.filters = AsyncMock(
-            return_value=[
-                SimpleNamespace(
-                    id="tmpl-fw",
-                    platform=SimpleNamespace(peer=SimpleNamespace(id="platform-1")),
-                    device_type=SimpleNamespace(peer=SimpleNamespace(id="dt-1")),
-                    interfaces=SimpleNamespace(
-                        edges=[
-                            SimpleNamespace(
-                                node=SimpleNamespace(
-                                    name=SimpleNamespace(value="eth1"),
-                                    role=SimpleNamespace(value="uplink"),
-                                )
-                            ),
-                            SimpleNamespace(
-                                node=SimpleNamespace(
-                                    name=SimpleNamespace(value="eth2"),
-                                    role=SimpleNamespace(value="uplink"),
-                                )
-                            ),
-                        ]
-                    ),
-                )
-            ]
-        )
-        entries = [DeviceRole(role="firewall", quantity=1, device_type=DeviceType(id="dt-1"))]
-
-        await gen._hydrate_fabric_templates(entries)
-
-        assert entries[0].template == Template(
-            id="tmpl-fw",
-            platform=Platform(id="platform-1"),
-            device_type=DeviceType(id="dt-1"),
-            interfaces=[Interface(name="eth1", role="uplink"), Interface(name="eth2", role="uplink")],
-        )
-
 
 _BL_ROLE_FOR = {"firewall": "firewall", "load-balancer": "load-balancer"}
 
@@ -499,26 +458,13 @@ class TestGenerateDcScopedFabricDevices:
         gen._create_border_leaf_devices = AsyncMock(return_value=["bl-01"])
         gen._create_role_devices = AsyncMock(side_effect=[["fw-01"], ["lb-01"]])
         gen._cable_border_services = AsyncMock()
-        gen.data.design = MagicMock(max_border_leafs_per_fabric=2)
-        gen.data.firewall_templates = [
-            DeviceRole(role="firewall", quantity=1, template=_FW_TEMPLATE),
-            DeviceRole(role="firewall", quantity=1, template=_FW_TEMPLATE),
-        ]
-        gen.data.load_balancer_templates = [
-            DeviceRole(role="load-balancer", quantity=1, template=_LB_TEMPLATE),
-            DeviceRole(role="load-balancer", quantity=1, template=_LB_TEMPLATE),
-        ]
+        gen.data.firewall_templates = [DeviceRole(role="firewall", quantity=1, template=_FW_TEMPLATE)]
+        gen.data.load_balancer_templates = [DeviceRole(role="load-balancer", quantity=1, template=_LB_TEMPLATE)]
 
         await gen._generate_dc_scoped_fabric_devices()
 
         gen._create_border_leaf_devices.assert_awaited_once()
         assert gen._create_role_devices.await_count == 2
-        assert gen._create_role_devices.call_args_list[0].kwargs["entries"] == [
-            DeviceRole(role="firewall", quantity=1, template=_FW_TEMPLATE)
-        ]
-        assert gen._create_role_devices.call_args_list[1].kwargs["entries"] == [
-            DeviceRole(role="load-balancer", quantity=1, template=_LB_TEMPLATE)
-        ]
         gen._cable_border_services.assert_awaited_once_with(
             border_role_for={"firewall": "firewall", "load-balancer": "load-balancer"},
             connectivity_mode=gen.data.connectivity_mode,

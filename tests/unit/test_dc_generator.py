@@ -426,7 +426,7 @@ class TestGenerateHyperSpineTier:
         assert cross_tier_call["top_role"] == "hyper-spine"
 
     @pytest.mark.asyncio
-    async def test_missing_interfaces_raise_error_for_cabling(self) -> None:
+    async def test_missing_interfaces_use_dynamic_fallback_for_cabling(self) -> None:
         gen = _make_generator()
         gen.create_devices = AsyncMock(
             side_effect=[
@@ -442,8 +442,12 @@ class TestGenerateHyperSpineTier:
             hyper_spine_template={"id": "tmpl-hs", "interfaces": []},
         )
 
-        with pytest.raises(ValueError, match="missing required 'uplink' interfaces"):
-            await gen.generate(data)
+        await gen.generate(data)
+
+        gen.create_cabling.assert_awaited_once()
+        cabling_kwargs = gen.create_cabling.call_args.kwargs
+        assert cabling_kwargs["bottom_interfaces"] == ["Ethernet1/1"]
+        assert cabling_kwargs["top_interfaces"] == ["Ethernet1/1"]
 
 
 class TestGeneratePoolAllocation:

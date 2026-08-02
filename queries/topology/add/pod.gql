@@ -1,3 +1,41 @@
+fragment DeviceTemplateFields on TemplateDcimPhysicalDevice {
+  id
+  platform {
+    node {
+      id
+      name { value }
+    }
+  }
+  device_type {
+    node {
+      id
+    }
+  }
+  # Covers every role pod.py's own fabric_templates entries can use: plain
+  # spine ("uplink" toward super-spine/mesh, "downlink" toward leafs) or
+  # border-spine (same two roles, plus "firewall"/"load-balancer" toward its
+  # own per-pod FW/LB — see PodTopologyGenerator._generate_pod_scoped_
+  # border_services). border-leaf's uplink lands on the spine's downlink-role
+  # ports, mirroring rack.py's own leaf/tor<->spine pattern.
+  interfaces(role__values: ["uplink", "downlink", "firewall", "load-balancer"]) {
+    edges {
+      node {
+        name { value }
+        role { value }
+      }
+    }
+  }
+}
+
+fragment SuperSpineTemplateFields on TemplateDcimPhysicalDevice {
+  id
+  platform { node { id } }
+  device_type { node { id } }
+  interfaces(role__value: "downlink") {
+    edges { node { name { value } } }
+  }
+}
+
 fragment DataCenterFields on TopologyDataCenter {
   id
   devices(role__value: "super-spine") {
@@ -22,7 +60,7 @@ fragment DataCenterFields on TopologyDataCenter {
       node {
         role { value }
         quantity { value }
-        device_type { node { id } }
+        template { node { ...SuperSpineTemplateFields } }
       }
     }
   }
@@ -57,7 +95,7 @@ query topology_pod($name: String!) {
             node {
               role { value }
               quantity { value }
-              device_type { node { id } }
+              template { node { ...DeviceTemplateFields } }
             }
           }
         }

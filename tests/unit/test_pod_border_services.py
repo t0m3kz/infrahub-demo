@@ -67,15 +67,8 @@ class TestGeneratePodScopedBorderServices:
     @pytest.mark.asyncio
     async def test_creates_pod_scoped_devices_and_cables_to_border_spines(self) -> None:
         gen = _make_generator()
-        gen.data.design = MagicMock(max_border_leafs_per_pod=2)
-        gen.data.firewall_templates = [
-            DeviceRole(role="firewall", quantity=1, template=_FW_TEMPLATE),
-            DeviceRole(role="firewall", quantity=1, template=_FW_TEMPLATE),
-        ]
-        gen.data.load_balancer_templates = [
-            DeviceRole(role="load-balancer", quantity=1, template=_LB_TEMPLATE),
-            DeviceRole(role="load-balancer", quantity=1, template=_LB_TEMPLATE),
-        ]
+        gen.data.firewall_templates = [DeviceRole(role="firewall", quantity=1, template=_FW_TEMPLATE)]
+        gen.data.load_balancer_templates = [DeviceRole(role="load-balancer", quantity=1, template=_LB_TEMPLATE)]
         gen.create_devices = AsyncMock(side_effect=[["fw-01"], ["lb-01"]])
 
         await gen._generate_pod_scoped_border_services(spines=["bs-01", "bs-02"])

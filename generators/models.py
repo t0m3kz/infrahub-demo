@@ -45,8 +45,7 @@ class Template(BaseModel):
 class DeviceRole(BaseModel):
     role: str
     quantity: int
-    template: Template | None = None
-    device_type: DeviceType | None = None
+    template: Template
 
 
 class DeviceRack(BaseModel):

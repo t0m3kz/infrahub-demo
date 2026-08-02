@@ -88,11 +88,6 @@ class TestDC1AddSpine(TestInfrahubDockerWithClient):
                                     id
                                     role { value }
                                     quantity { value }
-                                    device_type {
-                                        node {
-                                            id
-                                        }
-                                    }
                                 }
                             }
                         }

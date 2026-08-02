@@ -4,8 +4,8 @@ kind: Object
 spec:
   kind: TemplateDcimPhysicalDevice
   data:
-    - template_name: PATCH-PANEL-24
-      owner: P027
+    - template_name: PATCH-PANEL-24_PATCH
+      owner: "P027"
       device_type: PATCH-PANEL-24
       role: patch-panel
       status: provisioning
@@ -14,7 +14,7 @@ spec:
         parameters:
           expand_range: true
         data:
-          - template_name: PATCH-PANEL-24_Port[1-24]
+          - template_name: PATCH-PANEL-24_PATCH_Port[1-24]
             name: Port[1-24]
             role: uplink
             interface_type: 100gbase-x-qsfp28

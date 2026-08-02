@@ -4,8 +4,8 @@ kind: Object
 spec:
   kind: TemplateDcimPhysicalDevice
   data:
-    - template_name: C9200L-24P-4G
-      owner: P027
+    - template_name: C9200L-24P-4G_OOB
+      owner: "P027"
       device_type: C9200L-24P-4G
       platform: cisco_ios
       software_image: cisco_ios-17.12.4
@@ -16,16 +16,84 @@ spec:
         parameters:
           expand_range: true
         data:
-          - template_name: C9200L-24P-4G_GigabitEthernet1/0/[1-24]
+          - template_name: C9200L-24P-4G_OOB_GigabitEthernet1/0/[1-24]
             name: GigabitEthernet1/0/[1-24]
             role: management
             interface_type: 10gbase-x-sfpp
-          - template_name: C9200L-24P-4G_mgmt0
+          - template_name: C9200L-24P-4G_OOB_mgmt0
             name: mgmt0
             role: management
             interface_type: 10gbase-x-sfpp
-    - template_name: C9130AXI-B
-      owner: P027
+    - template_name: C9200L-48P-4G_OOB
+      owner: "P027"
+      device_type: C9200L-24P-4G
+      platform: cisco_ios
+      software_image: cisco_ios-17.12.4
+      role: edge
+      status: provisioning
+      interfaces:
+        kind: TemplateDcimPhysicalInterface
+        parameters:
+          expand_range: true
+        data:
+          - template_name: C9200L-48P-4G_OOB_GigabitEthernet1/0/[1-48]
+            name: GigabitEthernet1/0/[1-48]
+            role: management
+            interface_type: 10gbase-x-sfpp
+          - template_name: C9200L-48P-4G_OOB_mgmt0
+            name: mgmt0
+            role: management
+            interface_type: 10gbase-x-sfpp
+    - template_name: C9200L-24P-4G_ACCESS
+      owner: "P027"
+      device_type: C9200L-24P-4G
+      platform: cisco_ios
+      software_image: cisco_ios-17.12.4
+      role: edge
+      status: provisioning
+      interfaces:
+        kind: TemplateDcimPhysicalInterface
+        parameters:
+          expand_range: true
+        data:
+          - template_name: C9200L-24P-4G_ACCESS_GigabitEthernet1/0/1
+            name: GigabitEthernet1/0/1
+            role: uplink
+            interface_type: 1000base-t
+          - template_name: C9200L-24P-4G_ACCESS_GigabitEthernet1/0/[10-13]
+            name: GigabitEthernet1/0/[10-13]
+            role: downlink
+            interface_type: 1000base-t
+          - template_name: C9200L-24P-4G_ACCESS_GigabitEthernet1/0/20
+            name: GigabitEthernet1/0/20
+            role: downlink
+            interface_type: 1000base-t
+    - template_name: C9200L-24P-4G_ACCESS_DUAL_UPLINK
+      owner: "P027"
+      device_type: C9200L-24P-4G
+      platform: cisco_ios
+      software_image: cisco_ios-17.12.4
+      role: edge
+      status: provisioning
+      interfaces:
+        kind: TemplateDcimPhysicalInterface
+        parameters:
+          expand_range: true
+        data:
+          - template_name: C9200L-24P-4G_ACCESS_DUAL_UPLINK_GigabitEthernet1/0/[1-2]
+            name: GigabitEthernet1/0/[1-2]
+            role: uplink
+            interface_type: 1000base-t
+          - template_name: C9200L-24P-4G_ACCESS_DUAL_UPLINK_GigabitEthernet1/0/[10-13]
+            name: GigabitEthernet1/0/[10-13]
+            role: downlink
+            interface_type: 1000base-t
+          - template_name: C9200L-24P-4G_ACCESS_DUAL_UPLINK_GigabitEthernet1/0/20
+            name: GigabitEthernet1/0/20
+            role: downlink
+            interface_type: 1000base-t
+    - template_name: C9130AXI-B_AP
+      owner: "P027"
       device_type: C9130AXI-B
       platform: cisco_ios
       software_image: cisco_ios-17.12.4
@@ -34,12 +102,12 @@ spec:
       interfaces:
         kind: TemplateDcimPhysicalInterface
         data:
-          - template_name: C9130AXI-B_eth0
+          - template_name: C9130AXI-B_AP_eth0
             name: eth0
             role: uplink
             interface_type: 1000base-t
-    - template_name: ISR4451-X
-      owner: P027
+    - template_name: ISR4451-X_EDGE
+      owner: "P027"
       device_type: ISR4451-X
       platform: cisco_xe
       software_image: cisco_xe-17.12.4
@@ -50,15 +118,15 @@ spec:
         parameters:
           expand_range: true
         data:
-          - template_name: ISR4451-X_Ethernet1/[1-2]
+          - template_name: ISR4451-X_EDGE_Ethernet1/[1-2]
             name: Ethernet1/[1-2]
             role: dci
             interface_type: 100gbase-x-qsfp28
-          - template_name: ISR4451-X_Ethernet1/[10-11]
+          - template_name: ISR4451-X_EDGE_Ethernet1/[10-11]
             name: Ethernet1/[10-11]
             role: dci
             interface_type: 100gbase-x-qsfp28
-          - template_name: ISR4451-X_Ethernet1/[12-13]
+          - template_name: ISR4451-X_EDGE_Ethernet1/[12-13]
             name: Ethernet1/[12-13]
             role: uplink
             interface_type: 100gbase-x-qsfp28
