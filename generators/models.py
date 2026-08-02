@@ -37,8 +37,6 @@ class Owner(BaseModel):
 class Interface(BaseModel):
     name: str
     role: str | None = None
-    interface_type: str | None = None
-    description: str | None = None
 
 
 class Template(BaseModel):

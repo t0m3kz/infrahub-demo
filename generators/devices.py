@@ -43,15 +43,7 @@ class DeviceMixin:
         payload: list[dict[str, Any]] = []
 
         for interface in template.get("interfaces") or []:
-            interface_data: dict[str, Any] | None = None
-            if isinstance(interface, dict):
-                # Legacy object-template shape: {"kind": ..., "data": {...}}
-                nested = interface.get("data")
-                if isinstance(nested, dict):
-                    interface_data = nested
-                # Hydrated shape from Template model_dump(): {"name": ..., "role": ...}
-                elif "name" in interface:
-                    interface_data = interface
+            interface_data = interface.get("data") if isinstance(interface, dict) else None
             if not isinstance(interface_data, dict):
                 continue
 
