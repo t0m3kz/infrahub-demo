@@ -152,7 +152,7 @@ class DeviceMixin:
             existing_devices_list = await self.client.filters(
                 kind=device_kind,
                 name__values=device_names,
-                include=["member_of_groups", "primary_address", "owner"],
+                include=["member_of_groups", "primary_address"],
             )
             existing_devices_map = {device.name.value: device for device in existing_devices_list}
 
@@ -195,21 +195,6 @@ class DeviceMixin:
                         data={"description": f"Management IP for {name}"},
                     )
 
-                owner_data: Any = template.get("owner")
-                if not owner_data and existing_device:
-                    existing_owner_rel = getattr(existing_device, "owner", None)
-                    existing_owner_peer = getattr(existing_owner_rel, "peer", None) if existing_owner_rel else None
-                    if existing_owner_peer and getattr(existing_owner_peer, "id", None):
-                        owner_data = {"id": existing_owner_peer.id}
-                if not owner_data:
-                    template_id = template.get("id", "<unknown>")
-                    msg = (
-                        f"Cannot create device {name}: template {template_id} has no owner. "
-                        "Set owner on the template bootstrap data."
-                    )
-                    self.logger.error(msg)
-                    raise ValidationError(msg)
-
                 obj = await self.client.create(
                     kind=device_kind,
                     data={
@@ -221,7 +206,6 @@ class DeviceMixin:
                         "deployment": {"id": deployment_id} if deployment_id else None,
                         "device_type": template.get("device_type"),
                         "platform": template.get("platform"),
-                        "owner": owner_data,
                         "interfaces": template_interfaces,
                         "primary_address": primary_address_data,
                         "rack": {"id": rack} if rack else None,
