@@ -97,43 +97,177 @@ class Pool(BaseModel):
     name: str | None = None
 
 
-# Pod Design model (three-layer architecture)
-class PodDesign(BaseModel):
-    """TopologyPodDesign model for physical floor plan.
+# Pod layout capacity — same numbers TopologyPodDesign used to carry, now a
+# plain dict keyed by TopologyPod.layout (a Dropdown) instead of a schema
+# node/relationship. Physical row/rack layout is a fabric policy decision
+# (like device density), not something derivable from LocationSuite —
+# TopologyPod.suites (a separate, informational relationship) links a pod to
+# its real physical suite(s) but isn't read by any of this sizing/offset logic.
+POD_LAYOUTS: dict[str, dict[str, int]] = {
+    "S_MIDDLE": {
+        "rows": 2,
+        "compute_racks_per_row": 8,
+        "network_racks_per_row": 1,
+        "max_leafs_per_network_rack": 4,
+        "max_tors_per_network_rack": 4,
+        "max_tors_per_compute_rack": 0,
+        "max_spines_per_pod": 2,
+        "max_border_leafs_per_pod": 1,
+    },
+    "S_TOR": {
+        "rows": 2,
+        "compute_racks_per_row": 10,
+        "network_racks_per_row": 0,
+        "max_leafs_per_network_rack": 0,
+        "max_tors_per_network_rack": 0,
+        "max_tors_per_compute_rack": 2,
+        "max_spines_per_pod": 4,
+        "max_border_leafs_per_pod": 1,
+    },
+    "S_MIXED": {
+        "rows": 2,
+        "compute_racks_per_row": 9,
+        "network_racks_per_row": 1,
+        "max_leafs_per_network_rack": 2,
+        "max_tors_per_network_rack": 0,
+        "max_tors_per_compute_rack": 2,
+        "max_spines_per_pod": 4,
+        "max_border_leafs_per_pod": 1,
+    },
+    "S_BORDER_SPINE_POD": {
+        "rows": 1,
+        "compute_racks_per_row": 0,
+        "network_racks_per_row": 1,
+        "max_leafs_per_network_rack": 8,
+        "max_tors_per_network_rack": 0,
+        "max_tors_per_compute_rack": 0,
+        "max_spines_per_pod": 2,
+        "max_border_leafs_per_pod": 0,
+    },
+    "M_MIXED": {
+        "rows": 4,
+        "compute_racks_per_row": 9,
+        "network_racks_per_row": 1,
+        "max_leafs_per_network_rack": 2,
+        "max_tors_per_network_rack": 0,
+        "max_tors_per_compute_rack": 2,
+        "max_spines_per_pod": 3,
+        "max_border_leafs_per_pod": 1,
+    },
+    "M_MIDDLE": {
+        "rows": 4,
+        "compute_racks_per_row": 8,
+        "network_racks_per_row": 1,
+        "max_leafs_per_network_rack": 4,
+        "max_tors_per_network_rack": 4,
+        "max_tors_per_compute_rack": 0,
+        "max_spines_per_pod": 3,
+        "max_border_leafs_per_pod": 1,
+    },
+    "L_MIXED": {
+        "rows": 8,
+        "compute_racks_per_row": 9,
+        "network_racks_per_row": 1,
+        "max_leafs_per_network_rack": 2,
+        "max_tors_per_network_rack": 0,
+        "max_tors_per_compute_rack": 2,
+        "max_spines_per_pod": 4,
+        "max_border_leafs_per_pod": 1,
+    },
+    "L_MIDDLE": {
+        "rows": 8,
+        "compute_racks_per_row": 8,
+        "network_racks_per_row": 1,
+        "max_leafs_per_network_rack": 4,
+        "max_tors_per_network_rack": 4,
+        "max_tors_per_compute_rack": 0,
+        "max_spines_per_pod": 4,
+        "max_border_leafs_per_pod": 1,
+    },
+}
 
-    All numeric fields are required in the schema (``optional: false``).
-    ``max_*`` fields have schema defaults; ``rows``, ``compute_racks_per_row``,
-    and ``network_racks_per_row`` must be set by the user.
-    """
 
-    id: str
-    name: str | None = None
+class PodLayout(BaseModel):
+    """Resolved POD_LAYOUTS entry for one TopologyPod.layout value."""
 
-    # Physical layout — required in schema, no defaults
+    name: str
     rows: int
     compute_racks_per_row: int
     network_racks_per_row: int
-
-    # Device density — required in schema with defaults
     max_leafs_per_network_rack: int = 4
     max_tors_per_network_rack: int = 2
     max_tors_per_compute_rack: int = 1
     max_spines_per_pod: int = 2
     max_border_leafs_per_pod: int = 1
 
-    @property
-    def deployment_type(self) -> Literal["middle_rack", "tor", "mixed"]:
-        """Derive deployment type from the physical rack layout.
+    @classmethod
+    def from_name(cls, layout: str) -> "PodLayout":
+        return cls(name=layout, **POD_LAYOUTS[layout])
 
-        network_racks_per_row=0 -> tor (all compute racks with ToRs)
-        max_tors_per_compute_rack=0 -> middle_rack (leafs+tors in network racks)
-        both > 0 -> mixed (leafs in network racks, tors in compute racks)
-        """
-        if self.network_racks_per_row == 0:
-            return "tor"
-        if self.max_tors_per_compute_rack == 0:
-            return "middle_rack"
-        return "mixed"
+
+# Data Center size capacity — same numbers TopologyDataCenterDesign used to
+# carry, now a plain dict keyed by TopologyDataCenter.size (a Dropdown)
+# instead of a schema node/relationship.
+DC_SIZE_LAYOUTS: dict[str, dict[str, int]] = {
+    "S": {
+        "max_pods": 4,
+        "max_super_spines_per_fabric": 0,
+        "max_hyper_spines_per_fabric": 0,
+        "max_spines_per_pod": 2,
+        "max_border_leafs_per_fabric": 0,
+        "loopback_prefix_length": 120,
+        "technical_prefix_length": 117,
+        "management_prefix_length": 26,
+    },
+    "M": {
+        "max_pods": 4,
+        "max_super_spines_per_fabric": 0,
+        "max_hyper_spines_per_fabric": 0,
+        "max_spines_per_pod": 4,
+        "max_border_leafs_per_fabric": 2,
+        "loopback_prefix_length": 119,
+        "technical_prefix_length": 115,
+        "management_prefix_length": 25,
+    },
+    "L": {
+        "max_pods": 8,
+        "max_super_spines_per_fabric": 4,
+        "max_hyper_spines_per_fabric": 0,
+        "max_spines_per_pod": 4,
+        "max_border_leafs_per_fabric": 2,
+        "loopback_prefix_length": 118,
+        "technical_prefix_length": 114,
+        "management_prefix_length": 24,
+    },
+    "XL": {
+        "max_pods": 16,
+        "max_super_spines_per_fabric": 4,
+        "max_hyper_spines_per_fabric": 2,
+        "max_spines_per_pod": 4,
+        "max_border_leafs_per_fabric": 4,
+        "loopback_prefix_length": 117,
+        "technical_prefix_length": 113,
+        "management_prefix_length": 23,
+    },
+}
+
+
+class DCSizeLayout(BaseModel):
+    """Resolved DC_SIZE_LAYOUTS entry for one TopologyDataCenter.size value."""
+
+    name: str
+    max_pods: int = 2
+    max_super_spines_per_fabric: int = 2
+    max_hyper_spines_per_fabric: int = 0
+    max_spines_per_pod: int = 4
+    max_border_leafs_per_fabric: int = 4
+    loopback_prefix_length: int = 23
+    technical_prefix_length: int = 19
+    management_prefix_length: int = 25
+
+    @classmethod
+    def from_name(cls, size: str) -> "DCSizeLayout":
+        return cls(name=size, **DC_SIZE_LAYOUTS[size])
 
 
 # Data Center Design model (fabric-wide architectural principles)
@@ -168,30 +302,6 @@ class RoutingArchitectureMixin(BaseModel):
         return "/127" if self.p2p_ipv6 else "/31"
 
 
-class DataCenterDesignData(BaseModel):
-    """Data Center Design model — pure size/capacity template.
-
-    Pool prefix lengths are auto-calculated from max_pods and underlay_protocol
-    (which lives on the DC instance, not here — see RoutingArchitectureMixin).
-    T-shirt sizing: S(<=4 pods, back-to-back), M(<=4 pods, back-to-back +
-    border-leaf), L(<=8 pods, classic 3-tier), XL(<=16 pods, + hyper-spine).
-    """
-
-    id: str | None = None
-
-    # Capacity planning
-    max_pods: int = 2
-    max_super_spines_per_fabric: int = 2
-    max_hyper_spines_per_fabric: int = 0
-    max_spines_per_pod: int = 4
-    max_border_leafs_per_fabric: int = 4
-
-    # Address space sizing — defaults used when DC instance has no pools
-    loopback_prefix_length: int = 23
-    technical_prefix_length: int = 19
-    management_prefix_length: int = 25
-
-
 # DC model
 class DCPod(BaseModel):
     id: str
@@ -201,7 +311,7 @@ class DCModel(RoutingArchitectureMixin):
     id: str
     name: str
     index: int
-    design: DataCenterDesignData
+    size: str
     naming_convention: str = "standard"
     fabric_interface_sorting_method: Literal["top_down", "bottom_up"] = "bottom_up"
     spine_interface_sorting_method: Literal["top_down", "bottom_up"] = "bottom_up"
@@ -215,6 +325,10 @@ class DCModel(RoutingArchitectureMixin):
     children: list[DCPod] = []
 
     @property
+    def design(self) -> DCSizeLayout:
+        return DCSizeLayout.from_name(self.size)
+
+    @property
     def is_managed_by_controller(self) -> bool:
         return self.management_mode == "managed_by_controller"
 
@@ -223,7 +337,6 @@ class DCModel(RoutingArchitectureMixin):
         "technical_pool",
         "management_pool",
         "fabric_asn_pool",
-        "design",
         mode="before",
     )
     @classmethod
@@ -267,7 +380,7 @@ class PodParent(RoutingArchitectureMixin):
     index: int
     # DC may have zero super-spine fabric_templates entries, never a null list
     fabric_templates: list[DeviceRole] = []
-    design: DataCenterDesignData
+    size: str
     naming_convention: str = "standard"
     fabric_interface_sorting_method: Literal["top_down", "bottom_up"] = "bottom_up"
     spine_interface_sorting_method: Literal["top_down", "bottom_up"] = "bottom_up"
@@ -277,10 +390,14 @@ class PodParent(RoutingArchitectureMixin):
     management_pool: Pool | None = None
 
     @property
+    def design(self) -> DCSizeLayout:
+        return DCSizeLayout.from_name(self.size)
+
+    @property
     def is_managed_by_controller(self) -> bool:
         return self.management_mode == "managed_by_controller"
 
-    @field_validator("management_pool", "fabric_asn_pool", "design", mode="before")
+    @field_validator("management_pool", "fabric_asn_pool", mode="before")
     @classmethod
     def extract_parent_node(cls, value: Any) -> Any | None:
         unwrapped = _unwrap_node(value)
@@ -306,36 +423,38 @@ class PodParent(RoutingArchitectureMixin):
 
 
 class PodModel(BaseModel):
-    """Pod instance model with capacity calculated from PodDesign.
+    """Pod instance model with capacity calculated from its layout.
 
     Pod makes DEPLOYMENT DECISIONS within constraints:
     - amount_of_spines: Actual spine count (default=4, constrained by design.max_spines_per_pod)
+    - deployment_type: explicit Dropdown (middle_rack/tor/mixed) instead of derived
 
-    Everything else is CALCULATED from design:
-    - deployment_type: design.deployment_type (derived from rack layout)
-    - max_leafs_per_row: design.network_racks_per_row × max_leafs_per_network_rack
-    - max_tors_per_row: design.compute_racks_per_row × max_tors_per_compute_rack
+    Physical row/rack-count and device-density are CALCULATED from layout
+    (see POD_LAYOUTS):
+    - max_leafs_per_row: layout.network_racks_per_row × max_leafs_per_network_rack
+    - max_tors_per_row: layout.compute_racks_per_row × max_tors_per_compute_rack
     """
 
     id: str
     name: str
     index: int
-    design: PodDesign
+    deployment_type: Literal["middle_rack", "tor", "mixed"]
+    layout: str
 
     leaf_interface_sorting_method: Literal["top_down", "bottom_up"] = "bottom_up"
 
     @property
-    def deployment_type(self) -> Literal["middle_rack", "tor", "mixed"]:
-        return self.design.deployment_type
+    def design(self) -> PodLayout:
+        return PodLayout.from_name(self.layout)
 
     @property
     def max_leafs_per_row(self) -> int:
-        """Calculate maximum leafs per row from design physical capacity."""
+        """Calculate maximum leafs per row from layout physical capacity."""
         return self.design.network_racks_per_row * self.design.max_leafs_per_network_rack
 
     @property
     def max_tors_per_row(self) -> int:
-        """Calculate maximum ToRs per row from design physical capacity."""
+        """Calculate maximum ToRs per row from layout physical capacity."""
         return self.design.compute_racks_per_row * self.design.max_tors_per_compute_rack
 
     spine_interface_sorting_method: Literal["top_down", "bottom_up"] = "bottom_up"
@@ -346,7 +465,7 @@ class PodModel(BaseModel):
     prefix_pool: Pool | None = None
     asn_pool: Pool | None = None
 
-    @field_validator("design", "loopback_pool", "prefix_pool", "asn_pool", mode="before")
+    @field_validator("loopback_pool", "prefix_pool", "asn_pool", mode="before")
     @classmethod
     def handle_empty_node(cls, v: Any) -> Any:
         return _unwrap_node(v)
@@ -387,7 +506,7 @@ class RackParent(RoutingArchitectureMixin):
     id: str
     name: str
     index: int
-    design: DataCenterDesignData
+    size: str
     naming_convention: str = "standard"
     fabric_interface_sorting_method: Literal["top_down", "bottom_up"] = "bottom_up"
     management_pool: Pool | None = None
@@ -395,10 +514,14 @@ class RackParent(RoutingArchitectureMixin):
     management_mode: Literal["fully_managed", "managed_by_controller"] = "fully_managed"
 
     @property
+    def design(self) -> DCSizeLayout:
+        return DCSizeLayout.from_name(self.size)
+
+    @property
     def is_managed_by_controller(self) -> bool:
         return self.management_mode == "managed_by_controller"
 
-    @field_validator("management_pool", "design", mode="before")
+    @field_validator("management_pool", mode="before")
     @classmethod
     def extract_rack_parent_node(cls, value: Any) -> Any | None:
         unwrapped = _unwrap_node(value)
@@ -418,15 +541,16 @@ class RackPod(BaseModel):
     loopback_pool: Pool | None = None
     prefix_pool: Pool | None = None
     asn_pool: Pool | None = None
-    design: PodDesign
+    deployment_type: Literal["middle_rack", "tor", "mixed"]
+    layout: str
     # pod.py validates non-empty at generate() time; the list itself is never null
     fabric_templates: list[DeviceRole] = []
     # Spine devices with cable info (from GQL query)
     devices: list[SpineDevice] = []
 
     @property
-    def deployment_type(self) -> Literal["middle_rack", "tor", "mixed"]:
-        return self.design.deployment_type
+    def design(self) -> PodLayout:
+        return PodLayout.from_name(self.layout)
 
     @property
     def spine_templates(self) -> list[DeviceRole]:
@@ -446,7 +570,7 @@ class RackPod(BaseModel):
     def spine_slot_role(self) -> Literal["spine", "border-spine"]:
         return "border-spine" if self.border_spine_templates else "spine"
 
-    @field_validator("design", "loopback_pool", "prefix_pool", "asn_pool", mode="before")
+    @field_validator("loopback_pool", "prefix_pool", "asn_pool", mode="before")
     @classmethod
     def handle_empty_node(cls, v: Any) -> Any:
         return _unwrap_node(v)
@@ -524,18 +648,9 @@ class EndpointPod(BaseModel):
 
     id: str
     name: str
-    design: PodDesign
+    deployment_type: Literal["middle_rack", "tor", "mixed"]
     index: int
     parent: EndpointDataCenter
-
-    @field_validator("design", mode="before")
-    @classmethod
-    def handle_empty_design(cls, v: Any) -> Any:
-        return _unwrap_node(v)
-
-    @property
-    def deployment_type(self) -> Literal["middle_rack", "tor", "mixed"]:
-        return self.design.deployment_type
 
 
 class EndpointRack(BaseModel):

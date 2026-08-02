@@ -458,6 +458,12 @@ nodes:
         optional: true
         kind: Number
         order_weight: 1750
+      - name: unit_price
+        label: Unit Price (USD)
+        description: "List price per unit, for cost-based design selection (e.g. cheapest device type meeting a port-speed/count requirement)."
+        optional: true
+        kind: Number
+        order_weight: 1760
     relationships:
       - name: platform
         peer: DcimPlatform

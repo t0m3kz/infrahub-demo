@@ -8,7 +8,7 @@ spec:
     - name: "Frankfurt"
       shortname: "fra"
       children:
-        kind: LocationBuilding
+        kind: LocationFacility
         data:
           - name: "FR2"
             shortname: "fr2"

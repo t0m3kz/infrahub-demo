@@ -22,12 +22,13 @@ border-leaf<->firewall<->load-balancer<->border-leaf.
 
 from __future__ import annotations
 
+import uuid
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from generators.models import DeviceRole, Interface, Template
+from generators.models import POD_LAYOUTS, DeviceRole, Interface, Template
 from generators.topology.dc import DCTopologyGenerator
 
 
@@ -83,12 +84,22 @@ def _mock_pod(*, id: str, index: int, name: str = "pod-1", loopback_pool_id: str
     return pod
 
 
-def _mock_pod_design(max_border_leafs_per_pod: int) -> MagicMock:
-    design_peer = MagicMock()
-    design_peer.max_border_leafs_per_pod = MagicMock(value=max_border_leafs_per_pod)
-    design_rel = MagicMock()
-    design_rel.peer = design_peer
-    return design_rel
+def _mock_pod_layout(max_border_leafs_per_pod: int) -> str:
+    """Register a throwaway POD_LAYOUTS entry and return its key. Pod.layout
+    is now a plain Dropdown string (see generators/models.py POD_LAYOUTS) —
+    `pod.layout.value` is read directly by DCTopologyGenerator._pod_border_leaf_capacity."""
+    key = f"TEST_{uuid.uuid4().hex}"
+    POD_LAYOUTS[key] = {
+        "rows": 1,
+        "compute_racks_per_row": 1,
+        "network_racks_per_row": 1,
+        "max_leafs_per_network_rack": 1,
+        "max_tors_per_network_rack": 1,
+        "max_tors_per_compute_rack": 1,
+        "max_spines_per_pod": 2,
+        "max_border_leafs_per_pod": max_border_leafs_per_pod,
+    }
+    return key
 
 
 _BL_TEMPLATE = Template(
@@ -108,12 +119,12 @@ _LB_TEMPLATE = Template(
 class TestPodBorderLeafCapacity:
     def test_returns_pod_designs_own_cap(self) -> None:
         pod = _mock_pod(id="pod-1", index=1)
-        pod.design = _mock_pod_design(max_border_leafs_per_pod=2)
+        pod.layout = MagicMock(value=_mock_pod_layout(max_border_leafs_per_pod=2))
         assert DCTopologyGenerator._pod_border_leaf_capacity(pod) == 2
 
     def test_zero_cap_pod_is_skippable(self) -> None:
         pod = _mock_pod(id="pod-1", index=1)
-        pod.design = _mock_pod_design(max_border_leafs_per_pod=0)
+        pod.layout = MagicMock(value=_mock_pod_layout(max_border_leafs_per_pod=0))
         assert DCTopologyGenerator._pod_border_leaf_capacity(pod) == 0
 
 
@@ -199,9 +210,9 @@ class TestCreateBorderLeafDevices:
         gen.data.design = MagicMock(max_border_leafs_per_fabric=10)
         gen.data.border_leaf_templates = [DeviceRole(role="border-leaf", quantity=3, template=_BL_TEMPLATE)]
         pod_a = _mock_pod(id="pod-a", index=1)
-        pod_a.design = _mock_pod_design(max_border_leafs_per_pod=1)
+        pod_a.layout = MagicMock(value=_mock_pod_layout(max_border_leafs_per_pod=1))
         pod_b = _mock_pod(id="pod-b", index=2)
-        pod_b.design = _mock_pod_design(max_border_leafs_per_pod=2)
+        pod_b.layout = MagicMock(value=_mock_pod_layout(max_border_leafs_per_pod=2))
         gen._existing_pods = [pod_b, pod_a]  # unsorted on purpose
 
         gen.create_devices = AsyncMock(side_effect=[["bl-a-01"], ["bl-b-01", "bl-b-02"]])
@@ -222,11 +233,11 @@ class TestCreateBorderLeafDevices:
         gen.data.design = MagicMock(max_border_leafs_per_fabric=10)
         gen.data.border_leaf_templates = [DeviceRole(role="border-leaf", quantity=2, template=_BL_TEMPLATE)]
         pod_a = _mock_pod(id="pod-a", index=1)
-        pod_a.design = _mock_pod_design(max_border_leafs_per_pod=0)
+        pod_a.layout = MagicMock(value=_mock_pod_layout(max_border_leafs_per_pod=0))
         pod_b = _mock_pod(id="pod-b", index=2)
-        pod_b.design = _mock_pod_design(max_border_leafs_per_pod=0)
+        pod_b.layout = MagicMock(value=_mock_pod_layout(max_border_leafs_per_pod=0))
         pod_c = _mock_pod(id="pod-c", index=3)
-        pod_c.design = _mock_pod_design(max_border_leafs_per_pod=2)
+        pod_c.layout = MagicMock(value=_mock_pod_layout(max_border_leafs_per_pod=2))
         gen._existing_pods = [pod_a, pod_b, pod_c]
 
         gen.create_devices = AsyncMock(return_value=["bl-c-01", "bl-c-02"])
@@ -243,7 +254,7 @@ class TestCreateBorderLeafDevices:
         gen.data.design = MagicMock(max_border_leafs_per_fabric=2)
         gen.data.border_leaf_templates = [DeviceRole(role="border-leaf", quantity=3, template=_BL_TEMPLATE)]
         pod_a = _mock_pod(id="pod-a", index=1)
-        pod_a.design = _mock_pod_design(max_border_leafs_per_pod=3)
+        pod_a.layout = MagicMock(value=_mock_pod_layout(max_border_leafs_per_pod=3))
         gen._existing_pods = [pod_a]
 
         names = await gen._create_border_leaf_devices()
@@ -258,7 +269,7 @@ class TestCreateBorderLeafDevices:
         gen.data.design = MagicMock(max_border_leafs_per_fabric=10)
         gen.data.border_leaf_templates = [DeviceRole(role="border-leaf", quantity=5, template=_BL_TEMPLATE)]
         pod_a = _mock_pod(id="pod-a", index=1)
-        pod_a.design = _mock_pod_design(max_border_leafs_per_pod=2)
+        pod_a.layout = MagicMock(value=_mock_pod_layout(max_border_leafs_per_pod=2))
         gen._existing_pods = [pod_a]
         gen.create_devices = AsyncMock(return_value=["bl-a-01", "bl-a-02"])
 

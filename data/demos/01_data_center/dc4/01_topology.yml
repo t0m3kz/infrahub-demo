@@ -6,7 +6,7 @@ spec:
   data:
     - name: DC4
       index: 1
-      design: XL
+      size: XL
       routing_strategy: ebgp-ebgp
       underlay_protocol: ipv6
       naming_convention: hierarchical
@@ -23,7 +23,9 @@ spec:
         kind: TopologyPod
         data:
           - index: 1
-            design: S_MIDDLE
+            layout: S_MIDDLE
+            deployment_type: middle_rack
+            suites: [ber-1-s-1]
             fabric_templates:
               - ["2", "spine", "DCS-7050CX3-32C-R_SPINE"]
             member_of_groups:
@@ -41,7 +43,9 @@ spec:
                     - ["2", "leaf", "DCS-7050CX3-32C-R_LEAF_MR"]
                     - ["2", "l2-leaf", "DCS-7050CX3-32C-R_TOR"]
           - index: 2
-            design: S_MIXED
+            layout: S_MIXED
+            deployment_type: mixed
+            suites: [ber-1-s-2]
             fabric_templates:
               - ["4", "spine", "DCS-7050CX3-32C-R_SPINE"]
             member_of_groups:
@@ -66,7 +70,9 @@ spec:
                   fabric_templates:
                     - ["2", "l2-leaf", "DCS-7050CX3-32C-R_TOR"]
           - index: 3
-            design: S_TOR
+            layout: S_TOR
+            deployment_type: tor
+            suites: [ber-1-s-3]
             fabric_templates:
               - ["4", "spine", "DCS-7050CX3-32C-R_SPINE"]
             member_of_groups:

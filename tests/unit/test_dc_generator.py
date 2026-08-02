@@ -8,12 +8,14 @@ overlay-AS/OSPF-area creation paths in _create_shared_routing_objects().
 
 from __future__ import annotations
 
+import uuid
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
 from generators.helpers.routing import RoutingStrategy
+from generators.models import DC_SIZE_LAYOUTS
 from generators.topology.dc import DCTopologyGenerator
 
 
@@ -24,12 +26,17 @@ def _design(
     max_border_leafs_per_fabric: int = 4,
     max_pods: int = 2,
     max_spines_per_pod: int = 4,
-) -> dict[str, Any]:
-    """TopologyDataCenterDesign is now a pure size/capacity template —
-    routing_strategy/underlay_protocol live directly on the DC instance
-    (see _deployment()), not here."""
-    return {
-        "id": "design-1",
+) -> str:
+    """Register a throwaway DC_SIZE_LAYOUTS entry for this test scenario and
+    return its key (a DCModel.size value). TopologyDataCenterDesign no longer
+    exists — DCModel.design is now a property resolving DCModel.size through
+    DC_SIZE_LAYOUTS/DCSizeLayout.from_name(); routing_strategy/underlay_protocol
+    live directly on the DC instance (see _deployment()), not here.
+
+    Each call gets a unique key so distinct tests' custom capacity numbers
+    never collide with each other or with the real S/M/L/XL entries."""
+    key = f"TEST_{uuid.uuid4().hex}"
+    DC_SIZE_LAYOUTS[key] = {
         "max_pods": max_pods,
         "max_super_spines_per_fabric": max_super_spines_per_fabric,
         "max_hyper_spines_per_fabric": max_hyper_spines_per_fabric,
@@ -39,6 +46,7 @@ def _design(
         "technical_prefix_length": 19,
         "management_prefix_length": 25,
     }
+    return key
 
 
 def _fabric_templates(
@@ -72,7 +80,7 @@ def _fabric_templates(
 
 def _deployment(
     *,
-    design: dict[str, Any] | None = None,
+    design: str | None = None,
     routing_strategy: str = "ebgp-ebgp",
     underlay_protocol: str = "ipv6",
     amount_of_super_spines: int = 0,
@@ -80,13 +88,15 @@ def _deployment(
     amount_of_hyper_spines: int = 0,
     hyper_spine_template: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
+    """`design` is now a DC_SIZE_LAYOUTS key (see _design()) — kept as the
+    kwarg name so call sites read the same as before the refactor."""
     return {
         "TopologyDeployment": [
             {
                 "id": "dc-1",
                 "name": "DC1",
                 "index": 1,
-                "design": design,
+                "size": design if design is not None else "S",
                 "routing_strategy": routing_strategy,
                 "underlay_protocol": underlay_protocol,
                 "naming_convention": "standard",

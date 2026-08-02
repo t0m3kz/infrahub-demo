@@ -8,7 +8,7 @@ spec:
       shortname: "muc"
       parent: de
       children:
-        kind: LocationBuilding
+        kind: LocationFacility
         data:
           - name: "MUC-1"
             shortname: "muc-1"
@@ -19,11 +19,17 @@ spec:
                   index: 1
                   shortname: "muc-1-s-1"
                   parent: muc-1
+                  rows: 2
+                  racks_per_row: 1
                 - suite_name: "Suite-2"
                   index: 2
                   shortname: "muc-1-s-2"
                   parent: muc-1
+                  rows: 2
+                  racks_per_row: 1
                 - suite_name: "Suite-3"
                   index: 3
                   shortname: "muc-1-s-3"
                   parent: muc-1
+                  rows: 1
+                  racks_per_row: 1

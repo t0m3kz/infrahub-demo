@@ -17,14 +17,16 @@ spec:
   data:
     - name: "DC9"
       index: 9
-      design: L
+      size: L
       management_mode: managed_by_controller
       children:
         kind: TopologyPod
         data:
           - index: 1
-            design: L_MIDDLE
+            layout: L_MIDDLE
+            deployment_type: middle_rack
             status: active
           - index: 2
-            design: L_MIDDLE
+            layout: L_MIDDLE
+            deployment_type: middle_rack
             status: active

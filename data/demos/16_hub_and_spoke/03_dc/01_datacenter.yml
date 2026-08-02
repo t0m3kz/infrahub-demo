@@ -16,13 +16,13 @@ spec:
   data:
     - name: "DC7"
       index: 7
-      design: M
+      size: M
       vlan_pool: "dc7-vlan-pool"
       vni_pool: "dc7-vni-pool"
       l3_vni_pool: "dc7-l3vni-pool"
     - name: "DC8"
       index: 8
-      design: M
+      size: M
       vlan_pool: "dc8-vlan-pool"
       vni_pool: "dc8-vni-pool"
       l3_vni_pool: "dc8-l3vni-pool"

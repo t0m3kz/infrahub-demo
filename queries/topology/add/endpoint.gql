@@ -30,18 +30,10 @@ fragment RackDeviceFields on DcimPhysicalDevice {
   }
 }
 
-fragment PodDesignFields on TopologyPodDesign {
-  id
-  rows { value }
-  compute_racks_per_row { value }
-  network_racks_per_row { value }
-  max_tors_per_compute_rack { value }
-}
-
 fragment PodFields on TopologyPod {
   id
   name { value }
-  design { node { ...PodDesignFields } }
+  deployment_type { value }
   index { value }
   parent {
     node {

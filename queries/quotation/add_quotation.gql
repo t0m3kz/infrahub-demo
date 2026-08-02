@@ -1,0 +1,106 @@
+query add_quotation($name: String!) {
+  CustomerQuotationDC(name__value: $name) {
+    edges {
+      node {
+        id
+        name {
+          value
+        }
+        pod_count {
+          value
+        }
+        preferred_switch_vendor {
+          value
+        }
+        preferred_firewall_vendor {
+          value
+        }
+        preferred_load_balancer_vendor {
+          value
+        }
+        rooms {
+          edges {
+            node {
+              id
+              rows {
+                value
+              }
+              racks_per_row {
+                value
+              }
+              compute_rack_count {
+                value
+              }
+              storage_rack_count {
+                value
+              }
+              port_count_10g {
+                value
+              }
+              port_count_25g {
+                value
+              }
+              port_count_40g {
+                value
+              }
+              port_count_100g {
+                value
+              }
+              port_count_400g {
+                value
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+  DcimDeviceType(limit: 500) {
+    edges {
+      node {
+        id
+        name {
+          value
+        }
+        unit_price {
+          value
+        }
+        manufacturer {
+          node {
+            name {
+              value
+            }
+          }
+        }
+      }
+    }
+  }
+  TemplateDcimPhysicalDevice(limit: 500) {
+    edges {
+      node {
+        role {
+          value
+        }
+        device_type {
+          node {
+            id
+          }
+        }
+        interfaces {
+          edges {
+            node {
+              ... on TemplateDcimPhysicalInterface {
+                role {
+                  value
+                }
+                interface_type {
+                  value
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

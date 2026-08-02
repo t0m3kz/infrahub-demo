@@ -65,17 +65,6 @@ fragment SpineDeviceFields on DcimPhysicalDevice {
   }
 }
 
-fragment PodDesignFields on TopologyPodDesign {
-  id
-  name { value }
-  rows { value }
-  compute_racks_per_row { value }
-  network_racks_per_row { value }
-  max_leafs_per_network_rack { value }
-  max_tors_per_compute_rack { value }
-  max_spines_per_pod { value }
-}
-
 fragment PodFields on TopologyPod {
   id
   name {
@@ -84,7 +73,8 @@ fragment PodFields on TopologyPod {
   index {
     value
   }
-  design { node { ...PodDesignFields } }
+  deployment_type { value }
+  layout { value }
   parent {
     node {
       ... on TopologyDataCenter {
@@ -119,11 +109,7 @@ fragment PodFields on TopologyPod {
             name { value }
           }
         }
-        design {
-          node {
-            id
-          }
-        }
+        size { value }
       }
     }
   }

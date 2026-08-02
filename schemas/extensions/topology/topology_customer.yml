@@ -314,7 +314,7 @@ nodes:
         optional: true
     relationships:
       - name: locations
-        peer: LocationBuilding
+        peer: LocationFacility
         cardinality: many
         kind: Attribute
         optional: false

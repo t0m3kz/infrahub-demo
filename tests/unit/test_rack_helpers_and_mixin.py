@@ -1,17 +1,15 @@
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Literal
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
 from generators.helpers.rack import RackRolesHelper
 from generators.models import (
-    DataCenterDesignData,
     DeviceRole,
     Interface,
     LocationSuiteModel,
-    PodDesign,
     Pool,
     RackModel,
     RackParent,
@@ -21,24 +19,12 @@ from generators.models import (
 from generators.topology.rack import RackGenerator
 
 
-def _design_for(deployment_type: str) -> PodDesign:
-    return PodDesign(
-        id="design-1",
-        name="test-design",
-        rows=2,
-        compute_racks_per_row=2,
-        network_racks_per_row=0 if deployment_type == "tor" else 1,
-        max_tors_per_compute_rack=0 if deployment_type == "middle_rack" else 2,
-        max_leafs_per_network_rack=4,
-    )
-
-
-def _build_gen(*, deployment_type: str = "mixed", rack_type: str = "network") -> Any:
+def _build_gen(*, deployment_type: Literal["middle_rack", "tor", "mixed"] = "mixed", rack_type: str = "network") -> Any:
     parent = RackParent(
         id="dc-1",
         name="DC1",
         index=1,
-        design=DataCenterDesignData(),
+        size="S",
         underlay_protocol="ipv4",
         naming_convention="standard",
         management_pool=Pool(id="mgmt-pool", name="mgmt"),
@@ -53,7 +39,8 @@ def _build_gen(*, deployment_type: str = "mixed", rack_type: str = "network") ->
         loopback_pool=Pool(id="lo-pool", name="lo"),
         prefix_pool=Pool(id="p2p-pool", name="p2p"),
         asn_pool=Pool(id="asn-pool", name="asn"),
-        design=_design_for(deployment_type),
+        deployment_type=deployment_type,
+        layout="S_MIXED",
         fabric_templates=[
             DeviceRole(
                 role="spine",

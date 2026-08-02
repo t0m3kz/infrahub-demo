@@ -22,7 +22,7 @@ spec:
       shortname: "waw"
       parent: "pl"
       children:
-        kind: LocationBuilding
+        kind: LocationOffice
         data:
           - name: "Warsaw HQ"
             shortname: "waw-hq"

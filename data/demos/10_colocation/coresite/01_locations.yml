@@ -9,7 +9,7 @@ spec:
     - name: "New York"
       shortname: "nyc"
       children:
-        kind: LocationBuilding
+        kind: LocationFacility
         data:
           - name: "NY1"
             shortname: "ny1"
@@ -18,7 +18,7 @@ spec:
     - name: "Northern Virginia"
       shortname: "iad"
       children:
-        kind: LocationBuilding
+        kind: LocationFacility
         data:
           - name: "VA1"
             shortname: "va1"
@@ -27,7 +27,7 @@ spec:
     - name: "Silicon Valley"
       shortname: "sjc"
       children:
-        kind: LocationBuilding
+        kind: LocationFacility
         data:
           - name: "SV1"
             shortname: "sv1"

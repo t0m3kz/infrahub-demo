@@ -41,15 +41,15 @@ nodes:
     include_in_menu: false
     display_label: "{{name__value}}"
     parent: LocationCountry
-    children: LocationBuilding
+    children: ""
     icon: healthicons:city
-  - name: Building
+  - name: Facility
     namespace: Location
     inherit_from:
       - LocationGeneric
     menu_placement: "LocationGeneric"
     include_in_menu: false
-    label: Building
+    label: Facility
     display_label: "{{name__value}}"
     parent: "LocationMetro"
     children: "LocationSuite"
@@ -75,6 +75,135 @@ nodes:
         peer: OrganizationGeneric
         optional: true
         cardinality: one
+  - name: Office
+    namespace: Location
+    inherit_from:
+      - LocationGeneric
+    menu_placement: "LocationGeneric"
+    include_in_menu: false
+    label: Office
+    display_label: "{{name__value}}"
+    parent: "LocationMetro"
+    children: "LocationOfficeFloor"
+    icon: "mdi:office-building"
+    attributes:
+      - name: physical_address
+        kind: Text
+        unique: false
+        optional: true
+        order_weight: 1500
+    relationships:
+      - name: owner
+        peer: OrganizationGeneric
+        optional: true
+        cardinality: one
+  - name: OfficeFloor
+    namespace: Location
+    inherit_from:
+      - LocationGeneric
+    menu_placement: "LocationGeneric"
+    include_in_menu: false
+    label: Office Floor
+    display_label: "{{name__value}}"
+    parent: "LocationOffice"
+    children: ""
+    icon: "mdi:floor-plan"
+    attributes:
+      - name: index
+        kind: Number
+        optional: false
+        order_weight: 120
+      - name: conference_rooms
+        label: "Number of Conference Rooms"
+        kind: Number
+        optional: false
+        order_weight: 130
+        parameters:
+          min_value: 0
+      - name: employee_count
+        label: "Number of Employees"
+        kind: Number
+        optional: false
+        order_weight: 140
+        parameters:
+          min_value: 0
+      - name: area_sqm
+        label: "Area (m²)"
+        kind: Number
+        optional: false
+        order_weight: 150
+        parameters:
+          min_value: 0
+  - name: Campus
+    namespace: Location
+    inherit_from:
+      - LocationGeneric
+    menu_placement: "LocationGeneric"
+    include_in_menu: false
+    label: Campus
+    display_label: "{{name__value}}"
+    parent: "LocationMetro"
+    children: "LocationCampusBuilding"
+    icon: "mdi:office-building-marker"
+    attributes:
+      - name: physical_address
+        kind: Text
+        unique: false
+        optional: true
+        order_weight: 1500
+    relationships:
+      - name: owner
+        peer: OrganizationGeneric
+        optional: true
+        cardinality: one
+  - name: CampusBuilding
+    namespace: Location
+    inherit_from:
+      - LocationGeneric
+    menu_placement: "LocationGeneric"
+    include_in_menu: false
+    label: Campus Building
+    display_label: "{{name__value}}"
+    parent: "LocationCampus"
+    children: "LocationCampusFloor"
+    icon: "ri:building-line"
+  - name: CampusFloor
+    namespace: Location
+    inherit_from:
+      - LocationGeneric
+    menu_placement: "LocationGeneric"
+    include_in_menu: false
+    label: Campus Floor
+    display_label: "{{name__value}}"
+    parent: "LocationCampusBuilding"
+    children: ""
+    icon: "mdi:floor-plan"
+    attributes:
+      - name: index
+        kind: Number
+        optional: false
+        order_weight: 120
+      - name: conference_rooms
+        label: "Number of Conference Rooms"
+        kind: Number
+        optional: false
+        order_weight: 130
+        parameters:
+          min_value: 0
+      - name: employee_count
+        label: "Number of Employees"
+        kind: Number
+        optional: false
+        order_weight: 140
+        parameters:
+          min_value: 0
+      - name: area_sqm
+        label: "Area (m²)"
+        kind: Number
+        optional: false
+        order_weight: 150
+        parameters:
+          min_value: 0
   - name: Suite
     namespace: Location
     inherit_from:
@@ -82,7 +211,7 @@ nodes:
     include_in_menu: false
     menu_placement: "LocationGeneric"
     label: Suite
-    parent: LocationBuilding
+    parent: LocationFacility
     children: "LocationRack"
     icon: "game-icons:cage"
     attributes:
@@ -100,6 +229,22 @@ nodes:
         kind: Number
         optional: false
         order_weight: 120
+      - name: rows
+        label: "Number of Rows"
+        description: "Total number of rack rows in this suite"
+        kind: Number
+        optional: false
+        order_weight: 130
+        parameters:
+          min_value: 1
+      - name: racks_per_row
+        label: "Racks per Row"
+        description: "Number of racks per row in this suite"
+        kind: Number
+        optional: false
+        order_weight: 140
+        parameters:
+          min_value: 1
     relationships:
       - name: owner
         peer: OrganizationGeneric
@@ -107,6 +252,7 @@ nodes:
         cardinality: one
   - name: Rack
     namespace: Location
+    generate_template: true
     inherit_from:
       - LocationGeneric
       - CoreArtifactTarget
@@ -184,7 +330,7 @@ extensions:
     - kind: OrganizationProvider
       relationships:
         - name: location
-          peer: LocationBuilding
+          peer: LocationFacility
           cardinality: many
           optional: true
 

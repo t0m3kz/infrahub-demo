@@ -1,0 +1,594 @@
+---
+version: "1.0"
+
+# ============================================================================
+# CustomerQuotation — generic for a customer's sizing/pricing request for a
+# future deployment. Holds what's common to every request type: identity,
+# ownership, status, and the computed result shape (estimated_total_cost +
+# line_items) — any concrete request type's generator writes into that same
+# shape. request_type stays on the generic (rather than being dropped now
+# that kind expresses it) so a single cross-type view/filter doesn't need to
+# know about every concrete kind.
+#
+# CustomerQuotationDC — concrete DC-fabric sizing request (today: the only
+# concrete type). Captures pod_count and preferred vendors; nothing on this
+# node is computed — everything the add_quotation generator
+# (generators/quotation.py) produces lives one level down, on
+# CustomerQuotationProposedDesign.
+# scripts/recommend_dc_design.py offers the same sizing logic offline
+# against local bootstrap YAML, sharing its core algorithm with the
+# generator via generators/helpers/quotation.py (its CLI interface is
+# still single-speed only — see that module's own docstring for the gap).
+#
+# QuotationRoom is the actual SIZING UNIT, not just a capacity label: each
+# room carries its own port_count_10g/25g/40g/100g/400g (how many end-host
+# ports at each speed need connecting in that room) and its own
+# compute_rack_count/storage_rack_count. Rooms are a Component child of
+# CustomerQuotationDC (cardinality many, cascade-deleted with the
+# quotation) rather than flat DC-level fields, because real physical rooms
+# in the same request are rarely uniform (e.g. one room needs forty 100G
+# ports across ten compute racks, another needs twenty 25G ports across
+# five storage racks) — this project's own DC3 demo already names distinct
+# per-pod Suites "Room-1"/"Room-2" with different rack counts
+# (data/demos/01_data_center/dc3/00_location.yml).
+#
+# pods map 1:1 to rooms (pod N sized from rooms[N-1]'s own port/rack
+# counts — see generators/helpers/quotation.py's build_room_pods). Pod
+# count is independent of room count on purpose (a customer may want more
+# pods than declared rooms while sizing is finalized): pod_count >
+# len(rooms) round-robins the extra pods back onto existing rooms'
+# requirements; pod_count < len(rooms) leaves the surplus rooms unsized
+# (add_quotation logs a warning in that case).
+#
+# CustomerQuotationProposedDesign — the generator's WHOLE-DC output (1:1
+# with the quotation, cardinality one, cascade-deleted with it):
+# recommended_dc_design + the fabric-tier line_items (leaf per speed used,
+# spine/super-spine/border-leaf/firewall/load-balancer, all DC-wide totals
+# summed across every pod). Kept as its own node (rather than fields
+# directly on CustomerQuotationDC, which is where the very first version
+# of this schema put them) so the input side (CustomerQuotationDC) and the
+# computed-result side stay cleanly separated — the generator only ever
+# writes to ProposedDesign and its children, never back onto the input
+# node itself.
+#
+# CustomerQuotationProposedPod — one pod's own room-derived fabric (leaf
+# per speed, summed spine — see build_room_pods), sized independently so
+# its spine tier keeps full redundancy regardless of what any other pod
+# needs. Child of ProposedDesign, not of CustomerQuotationDC directly.
+#
+# CustomerQuotationProposedRack — a specific rack within a pod's room
+# share, tagged compute or storage, linked to the CustomerQuotationRoom
+# that would physically host it (a placement suggestion, not a hard
+# constraint — see assign_racks_to_rooms).
+#
+# CustomerQuotationLineItem is a Component of the generic CustomerQuotation
+# (not a DC-specific node) — one row per priced item in the generator's
+# recommended build. A DC quotation can have MULTIPLE leaf rows (one per
+# port speed actually requested anywhere), so "leaf" rows carry a `speed`
+# attribute and uniqueness is (quotation, role, speed) rather than just
+# (quotation, role) — every other role's `speed` stays null.
+# Re-running the generator upserts existing rows instead of duplicating
+# them. Living on the generic means a future non-DC request type reuses
+# the same line-item shape for free; for a DC quotation, "quotation" here
+# is actually the ProposedDesign, not the CustomerQuotationDC.
+# ============================================================================
+
+generics:
+  - name: Quotation
+    namespace: Customer
+    description: "A customer's sizing/pricing request for a future deployment."
+    label: "Customer Quotation"
+    icon: "mdi:file-document-outline"
+    include_in_menu: false
+    human_friendly_id:
+      - name__value
+    order_by:
+      - name__value
+    display_label: "{{ name__value }}"
+    uniqueness_constraints:
+      - [name__value]
+    attributes:
+      - name: name
+        kind: Text
+        order_weight: 100
+      - name: description
+        kind: Text
+        optional: true
+        order_weight: 150
+      - name: request_type
+        label: "Request Type"
+        kind: Dropdown
+        optional: false
+        default_value: datacenter
+        order_weight: 200
+        choices:
+          - name: datacenter
+            label: "Data Center"
+            description: "Full DC fabric sizing (leaf/spine/super-spine/border-leaf/firewall/load-balancer)."
+            color: "#7FBF7F"
+      - name: status
+        kind: Dropdown
+        optional: true
+        default_value: draft
+        order_weight: 250
+        choices:
+          - name: draft
+            label: "Draft"
+            color: "#BFBFBF"
+          - name: submitted
+            label: "Submitted"
+            color: "#FFFF7F"
+          - name: quoted
+            label: "Quoted"
+            color: "#7F7FBF"
+          - name: approved
+            label: "Approved"
+            color: "#7FBF7F"
+          - name: rejected
+            label: "Rejected"
+            color: "#BF7F7F"
+      - name: estimated_total_cost
+        label: "Estimated Total Cost (USD)"
+        description: "Sum of every line item's total_cost from the last generator run."
+        kind: Number
+        optional: true
+        order_weight: 2010
+    relationships:
+      - name: owner
+        peer: OrganizationEntity
+        label: "Customer"
+        description: "Customer this quotation is for."
+        cardinality: one
+        kind: Attribute
+        optional: false
+        order_weight: 500
+      - name: line_items
+        peer: CustomerQuotationLineItem
+        label: "Line Items"
+        description: "Per-item device pick/quantity/cost from the last generator run."
+        cardinality: many
+        kind: Component
+        optional: true
+        order_weight: 2040
+        on_delete: cascade
+
+nodes:
+  - name: QuotationDC
+    namespace: Customer
+    description: "DC-fabric sizing/pricing request: pod count, room layout (sizing lives on each room), preferred vendors."  # yamllint disable-line rule:line-length
+    label: "DC Quotation"
+    icon: "mdi:server-network"
+    inherit_from:
+      - CustomerQuotation
+    include_in_menu: true
+    menu_placement: OrganizationGeneric
+    attributes:
+      - name: pod_count
+        label: "Pod Count"
+        description: "Number of pods, each sized from its own room (see CustomerQuotationRoom). 1 = single pod, no super-spine."  # yamllint disable-line rule:line-length
+        kind: Number
+        optional: true
+        default_value: 1
+        order_weight: 1020
+        parameters:
+          min_value: 1
+      - name: preferred_switch_vendor
+        label: "Preferred Switch Vendor"
+        description: "Restrict leaf/spine/super-spine/border-leaf picks to this manufacturer, if set."
+        kind: Text
+        optional: true
+        order_weight: 1100
+      - name: preferred_firewall_vendor
+        label: "Preferred Firewall Vendor"
+        kind: Text
+        optional: true
+        order_weight: 1110
+      - name: preferred_load_balancer_vendor
+        label: "Preferred Load-Balancer Vendor"
+        kind: Text
+        optional: true
+        order_weight: 1120
+      - name: recommended_switch_vendor
+        label: "Recommended Switch Vendor"
+        description: "Manufacturer chosen for leaf/spine/super-spine/border-leaf by the last generator run."
+        kind: Text
+        optional: true
+        order_weight: 2000
+    relationships:
+      - name: rooms
+        peer: CustomerQuotationRoom
+        label: "Rooms"
+        description: "Physical room layouts to size this request's racks against."
+        cardinality: many
+        kind: Component
+        optional: true
+        order_weight: 1500
+        on_delete: cascade
+      - name: proposed_design
+        peer: CustomerQuotationProposedDesign
+        label: "Proposed Design"
+        description: "The generator's computed DC-wide fabric design, once add_quotation has run."
+        cardinality: one
+        kind: Component
+        optional: true
+        order_weight: 2020
+        on_delete: cascade
+
+  - name: QuotationRoom
+    namespace: Customer
+    description: "One physical room's rack layout within a CustomerQuotationDC."
+    label: "Quotation Room"
+    icon: "mdi:door"
+    include_in_menu: false
+    human_friendly_id:
+      - quotation__name__value
+      - name__value
+    order_by:
+      - name__value
+    display_label: "{{ name__value }}"
+    attributes:
+      - name: name
+        kind: Text
+        order_weight: 100
+      - name: rows
+        label: "Rows"
+        kind: Number
+        optional: false
+        order_weight: 200
+        parameters:
+          min_value: 1
+      - name: racks_per_row
+        label: "Racks per Row"
+        kind: Number
+        optional: false
+        order_weight: 210
+        parameters:
+          min_value: 1
+      - name: compute_rack_count
+        label: "Compute Rack Count"
+        description: "Racks of compute servers to place in this room."
+        kind: Number
+        optional: true
+        default_value: 0
+        order_weight: 220
+        parameters:
+          min_value: 0
+      - name: storage_rack_count
+        label: "Storage Rack Count"
+        description: "Racks of storage servers to place in this room."
+        kind: Number
+        optional: true
+        default_value: 0
+        order_weight: 230
+        parameters:
+          min_value: 0
+      - name: port_count_10g
+        label: "10 Gbps Port Count"
+        description: "End-host ports at 10gbase-x-sfpp needing a leaf connection in this room."
+        kind: Number
+        optional: true
+        default_value: 0
+        order_weight: 240
+        parameters:
+          min_value: 0
+      - name: port_count_25g
+        label: "25 Gbps Port Count"
+        description: "End-host ports at 25gbase-x-sfp28 needing a leaf connection in this room."
+        kind: Number
+        optional: true
+        default_value: 0
+        order_weight: 250
+        parameters:
+          min_value: 0
+      - name: port_count_40g
+        label: "40 Gbps Port Count"
+        description: "End-host ports at 40gbase-x-qsfpp needing a leaf connection in this room."
+        kind: Number
+        optional: true
+        default_value: 0
+        order_weight: 260
+        parameters:
+          min_value: 0
+      - name: port_count_100g
+        label: "100 Gbps Port Count"
+        description: "End-host ports at 100gbase-x-qsfp28 needing a leaf connection in this room."
+        kind: Number
+        optional: true
+        default_value: 0
+        order_weight: 270
+        parameters:
+          min_value: 0
+      - name: port_count_400g
+        label: "400 Gbps Port Count"
+        description: "End-host ports at 400gbase-x-qsfpdd needing a leaf connection in this room."
+        kind: Number
+        optional: true
+        default_value: 0
+        order_weight: 280
+        parameters:
+          min_value: 0
+      - name: preferred_cabling_method
+        label: "Preferred Cabling Method"
+        description: "Rack-to-leaf cabling pattern for this room (matches TopologyPod's deployment_type shape)."
+        kind: Dropdown
+        optional: true
+        default_value: hierarchical
+        order_weight: 300
+        choices:
+          - name: tor
+            label: "ToR"
+            description: "All compute racks with their own ToR switches, connecting directly to spines."
+            color: "#7FBF7F"
+          - name: middle_rack
+            label: "Middle-of-Row"
+            description: "Leafs live in dedicated network racks; compute racks have no switching of their own."
+            color: "#7F7FBF"
+          - name: hierarchical
+            label: "Hierarchical"
+            description: "Leafs in network racks aggregate ToRs in compute racks (this project's \"mixed\" layout)."
+            color: "#BF7FBF"
+    relationships:
+      - name: quotation
+        peer: CustomerQuotationDC
+        label: "Quotation"
+        cardinality: one
+        kind: Parent
+        optional: false
+        order_weight: 100
+
+  - name: QuotationProposedDesign
+    namespace: Customer
+    description: "Computed DC-wide fabric design for a CustomerQuotationDC — one per quotation, written by add_quotation."  # yamllint disable-line rule:line-length
+    label: "Quotation Proposed Design"
+    icon: "mdi:sitemap"
+    include_in_menu: false
+    human_friendly_id:
+      - quotation__name__value
+    order_by:
+      - quotation__name__value
+    display_label: "{{ quotation__name__value }} - Proposed Design"
+    attributes:
+      - name: name
+        kind: Text
+        unique: true
+        computed_attribute:
+          kind: Jinja2
+          jinja2_template: "{{ quotation__name__value }}-design"
+        read_only: true
+        optional: true
+        order_weight: 100
+    relationships:
+      - name: quotation
+        peer: CustomerQuotationDC
+        label: "Quotation"
+        cardinality: one
+        kind: Parent
+        optional: false
+        order_weight: 100
+      - name: recommended_dc_design
+        peer: TopologyDataCenterDesign
+        state: absent
+      - name: pods
+        peer: CustomerQuotationProposedPod
+        label: "Proposed Pods"
+        description: "Per-pod breakdown of this DC's pod_count — each pod's own rack share and recommended pod design."  # yamllint disable-line rule:line-length
+        cardinality: many
+        kind: Component
+        optional: true
+        order_weight: 300
+        on_delete: cascade
+
+  - name: QuotationProposedPod
+    namespace: Customer
+    description: "One pod's own room-derived fabric (pod N sized from rooms[N-1], or a round-robin reuse if pod_count exceeds room count)."  # yamllint disable-line rule:line-length
+    label: "Quotation Proposed Pod"
+    icon: "mdi:server"
+    include_in_menu: false
+    order_by:
+      - index__value
+    display_label: "{{ design__name__value }} - Pod {{ index__value }}"
+    uniqueness_constraints:
+      - [design, index__value]
+    attributes:
+      - name: index
+        label: "Pod Index"
+        kind: Number
+        optional: false
+        order_weight: 100
+        parameters:
+          min_value: 1
+      - name: compute_rack_share
+        label: "Compute Rack Share"
+        description: "compute_rack_count from this pod's assigned room."
+        kind: Number
+        optional: true
+        order_weight: 200
+      - name: storage_rack_share
+        label: "Storage Rack Share"
+        description: "storage_rack_count from this pod's assigned room."
+        kind: Number
+        optional: true
+        order_weight: 210
+      - name: leaf_count
+        label: "Leaf Count"
+        description: "Total leaf switches across every speed used, sized from this pod's own room, from the last generator run."  # yamllint disable-line rule:line-length
+        kind: Number
+        optional: true
+        order_weight: 300
+      - name: spine_count
+        label: "Spine Count"
+        description: "Spine switches sized for this pod's own leaf fan-in, redundant independently of every other pod."
+        kind: Number
+        optional: true
+        order_weight: 310
+      - name: recommended_pod_layout
+        label: "Recommended Pod Layout"
+        description: "Smallest POD_LAYOUTS entry (see generators/models.py) fitting this pod's own leaf/spine counts."
+        kind: Text
+        optional: true
+        order_weight: 400
+    relationships:
+      - name: design
+        peer: CustomerQuotationProposedDesign
+        label: "Proposed Design"
+        cardinality: one
+        kind: Parent
+        optional: false
+        order_weight: 100
+      - name: recommended_pod_design
+        peer: TopologyPodDesign
+        state: absent
+      - name: racks
+        peer: CustomerQuotationProposedRack
+        label: "Proposed Racks"
+        description: "Individual compute/storage racks assigned to this pod's share, each linked to a candidate room."
+        cardinality: many
+        kind: Component
+        optional: true
+        order_weight: 500
+        on_delete: cascade
+
+  - name: QuotationProposedRack
+    namespace: Customer
+    description: "One compute or storage rack within a CustomerQuotationProposedPod's share, linked to a candidate room."  # yamllint disable-line rule:line-length
+    label: "Quotation Proposed Rack"
+    icon: "mdi:server-outline"
+    include_in_menu: false
+    order_by:
+      - index__value
+    display_label: "Rack {{ index__value }} ({{ rack_type__value }})"
+    uniqueness_constraints:
+      - [pod, index__value]
+    attributes:
+      - name: index
+        label: "Rack Index"
+        kind: Number
+        optional: false
+        order_weight: 100
+        parameters:
+          min_value: 1
+      - name: rack_type
+        label: "Rack Type"
+        kind: Dropdown
+        optional: false
+        order_weight: 110
+        choices:
+          - name: compute
+            label: "Compute"
+            color: "#7FBF7F"
+          - name: storage
+            label: "Storage"
+            color: "#7F7FBF"
+    relationships:
+      - name: pod
+        peer: CustomerQuotationProposedPod
+        label: "Proposed Pod"
+        cardinality: one
+        kind: Parent
+        optional: false
+        order_weight: 100
+      - name: room
+        peer: CustomerQuotationRoom
+        label: "Candidate Room"
+        description: "Room this rack would be placed in — a suggestion, not a hard constraint."
+        cardinality: one
+        kind: Attribute
+        optional: true
+        order_weight: 200
+
+  - name: QuotationLineItem
+    namespace: Customer
+    description: "One priced item in a CustomerQuotation's recommended build (for a DC quotation: a fabric tier)."
+    label: "Quotation Line Item"
+    icon: "mdi:format-list-bulleted"
+    include_in_menu: false
+    human_friendly_id:
+      - quotation__name__value
+      - role__value
+      - speed__value
+    order_by:
+      - role__value
+    display_label: "{{ role__value }}{% if speed__value %} ({{ speed__value }}){% endif %}"
+    uniqueness_constraints:
+      - [quotation, role__value, speed__value]
+    attributes:
+      - name: role
+        label: "Fabric Role"
+        kind: Dropdown
+        optional: false
+        order_weight: 100
+        choices:
+          - name: leaf
+            label: Leaf Switch
+            color: "#e6e6fa"
+          - name: spine
+            label: Spine Switch
+            color: "#7fbfbf"
+          - name: super-spine
+            label: Super Spine Switch
+            color: "#5fa8a8"
+          - name: border-leaf
+            label: Border Leaf Switch
+            color: "#dda0dd"
+          - name: firewall
+            label: Firewall
+            color: "#6e5abd"
+          - name: load-balancer
+            label: Load Balancer
+            color: "#38e7fb"
+      - name: speed
+        label: "Port Speed"
+        description: "Set only for role=leaf — which of this quotation's port speeds this row covers. Null for every other role."  # yamllint disable-line rule:line-length
+        kind: Dropdown
+        optional: true
+        order_weight: 110
+        choices:
+          - name: 10gbase-x-sfpp
+            label: "10 Gbps"
+            color: "#FFF2CC"
+          - name: 25gbase-x-sfp28
+            label: "25 Gbps"
+            color: "#FAD7A0"
+          - name: 40gbase-x-qsfpp
+            label: "40 Gbps"
+            color: "#F4CCCC"
+          - name: 100gbase-x-qsfp28
+            label: "100 Gbps"
+            color: "#A9DFBF"
+          - name: 400gbase-x-qsfpdd
+            label: "400 Gbps"
+            color: "#CDEACC"
+      - name: quantity
+        label: "Quantity"
+        kind: Number
+        optional: false
+        order_weight: 200
+        parameters:
+          min_value: 1
+      - name: unit_price
+        label: "Unit Price (USD)"
+        description: "Null when no priced candidate device_type covers this tier's requirement."
+        kind: Number
+        optional: true
+        order_weight: 210
+      - name: total_cost
+        label: "Total Cost (USD)"
+        kind: Number
+        optional: true
+        order_weight: 220
+    relationships:
+      - name: quotation
+        peer: CustomerQuotation
+        label: "Quotation"
+        cardinality: one
+        kind: Parent
+        optional: false
+        order_weight: 100
+      - name: device_type
+        peer: DcimDeviceType
+        label: "Device Type"
+        description: "Null when no candidate device_type covers this tier's requirement."
+        cardinality: one
+        kind: Attribute
+        optional: true
+        order_weight: 300

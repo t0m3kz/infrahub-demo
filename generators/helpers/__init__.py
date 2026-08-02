@@ -36,6 +36,26 @@ from .pools import (
     name_to_asn_range,
 )
 from .ports import PortProfileHelper, PortsPlanner
+from .quotation import (
+    PORT_SPEEDS,
+    DeviceTemplate,
+    PortGroup,
+    Recommender,
+    TierResult,
+    assign_racks_to_rooms,
+    build_fabric_tiers,
+    build_multi_speed_fabric,
+    build_multi_speed_leaf_tiers,
+    build_proposed_pods,
+    build_room_pods,
+    build_switch_fabric,
+    device_templates_from_graphql,
+    distribute_evenly,
+    max_fabric_capacity,
+    recommend_design,
+    recommend_pod_design,
+    validate_room_capacity,
+)
 from .routing import PendingASRef, RoutingPlan, RoutingPlanInput, RoutingPlanner, RoutingStrategy
 from .rules import RulePlanningHelper, RulesPlanner
 
@@ -78,4 +98,23 @@ __all__ = [
     "PortsPlanner",
     "RulePlanningHelper",
     "RulesPlanner",
+    # Quotation
+    "PORT_SPEEDS",
+    "DeviceTemplate",
+    "PortGroup",
+    "Recommender",
+    "TierResult",
+    "assign_racks_to_rooms",
+    "build_fabric_tiers",
+    "build_multi_speed_fabric",
+    "build_multi_speed_leaf_tiers",
+    "build_proposed_pods",
+    "build_room_pods",
+    "build_switch_fabric",
+    "device_templates_from_graphql",
+    "distribute_evenly",
+    "max_fabric_capacity",
+    "recommend_design",
+    "recommend_pod_design",
+    "validate_room_capacity",
 ]

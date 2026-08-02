@@ -36,19 +36,6 @@ fragment SuperSpineTemplateFields on TemplateDcimPhysicalDevice {
   }
 }
 
-fragment PodDesignFields on TopologyPodDesign {
-  id
-  name { value }
-  rows { value }
-  compute_racks_per_row { value }
-  network_racks_per_row { value }
-  max_leafs_per_network_rack { value }
-  max_tors_per_network_rack { value }
-  max_tors_per_compute_rack { value }
-  max_spines_per_pod { value }
-  max_border_leafs_per_pod { value }
-}
-
 fragment DataCenterFields on TopologyDataCenter {
   id
   devices(role__value: "super-spine") {
@@ -77,16 +64,7 @@ fragment DataCenterFields on TopologyDataCenter {
       }
     }
   }
-  design {
-    node {
-      id
-      max_pods { value }
-      max_super_spines_per_fabric { value }
-      max_hyper_spines_per_fabric { value }
-      max_spines_per_pod { value }
-      max_border_leafs_per_fabric { value }
-    }
-  }
+  size { value }
   fabric_asn_pool {
     node {
       id
@@ -108,7 +86,8 @@ query topology_pod($name: String!) {
         id
         name { value }
         index { value }
-        design { node { ...PodDesignFields } }
+        deployment_type { value }
+        layout { value }
         leaf_interface_sorting_method { value }
         spine_interface_sorting_method { value }
         fabric_templates {

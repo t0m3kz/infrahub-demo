@@ -8,7 +8,7 @@ spec:
     - name: "Amsterdam"
       shortname: "ams"
       children:
-        kind: LocationBuilding
+        kind: LocationFacility
         data:
           - name: "MCR-AMS1"
             shortname: "mcr-ams1"

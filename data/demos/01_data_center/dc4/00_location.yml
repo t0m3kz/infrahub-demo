@@ -8,7 +8,7 @@ spec:
       shortname: "ber"
       parent: de
       children:
-        kind: LocationBuilding
+        kind: LocationFacility
         data:
           - name: "BER-1"
             shortname: "ber-1"
@@ -19,11 +19,17 @@ spec:
                   index: 1
                   shortname: "ber-1-s-1"
                   parent: ber-1
+                  rows: 1
+                  racks_per_row: 1
                 - suite_name: "Suite-2"
                   index: 2
                   shortname: "ber-1-s-2"
                   parent: ber-1
+                  rows: 1
+                  racks_per_row: 2
                 - suite_name: "Suite-3"
                   index: 3
                   shortname: "ber-1-s-3"
                   parent: ber-1
+                  rows: 1
+                  racks_per_row: 1

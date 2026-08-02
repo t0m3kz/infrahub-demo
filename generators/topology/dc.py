@@ -8,7 +8,7 @@ from utils.data_cleaning import clean_data
 from ..common import CommonGenerator, DeviceOptions
 from ..helpers import calculate_dc_fabric_loopback_prefix, name_to_asn_range
 from ..helpers.routing import RoutingStrategy
-from ..models import DCModel
+from ..models import POD_LAYOUTS, DCModel
 from ..protocols import (
     RoutingAutonomousSystem,
     RoutingOSPFArea,
@@ -51,9 +51,9 @@ class DCTopologyGenerator(CommonGenerator):
             return
 
         # Add existing pods to group context to prevent deletion
-        # include=["design"] also lets _generate_dc_scoped_fabric_devices read each
+        # include=["layout"] also lets _generate_dc_scoped_fabric_devices read each
         # pod's own max_border_leafs_per_pod cap via _pod_border_leaf_capacity.
-        existing_pods = await self.client.filters(kind=TopologyPod, parent__ids=[self.data.id], include=["design"])
+        existing_pods = await self.client.filters(kind=TopologyPod, parent__ids=[self.data.id], include=["layout"])
         related_node_ids = self.client.group_context.related_node_ids
         for pod in existing_pods:
             related_node_ids.append(pod.id)
@@ -403,16 +403,15 @@ class DCTopologyGenerator(CommonGenerator):
 
     @staticmethod
     def _pod_border_leaf_capacity(pod: Any) -> int:
-        """This pod's own design cap on how many border-leaf devices it can
-        receive — a pod with max_border_leafs_per_pod=0 in its own design is
+        """This pod's own layout cap on how many border-leaf devices it can
+        receive — a pod whose layout caps max_border_leafs_per_pod=0 is
         deliberately skipped, which is how a specific subset of pods (e.g.
         pod 1 and pod 3, not pod 2) can be chosen to host border-leafs.
 
-        Only ever called on pods from the `include=["design"]` fetch in
-        generate() (see self._existing_pods), so design is always hydrated —
-        TopologyPod.design is a mandatory relationship."""
-        max_border_leafs_per_pod = pod.design.peer.max_border_leafs_per_pod.value
-        return max_border_leafs_per_pod or 0
+        Only ever called on pods from the `include=["layout"]` fetch in
+        generate() (see self._existing_pods), so layout is always hydrated —
+        TopologyPod.layout is a mandatory attribute."""
+        return POD_LAYOUTS[pod.layout.value].get("max_border_leafs_per_pod", 0)
 
     async def _create_border_leaf_devices(self) -> list[str]:
         """Create border-leaf devices for every fabric_templates(role="border-leaf")
