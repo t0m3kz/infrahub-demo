@@ -26,8 +26,6 @@ spec:
             name: eth1
             role: uplink
             interface_type: 1000base-t
-        member_of_groups:
-    - sdwan_orchestrators
     - template_name: CP-SMS
       device_type: CP-SMS
       platform: checkpoint_gaia
