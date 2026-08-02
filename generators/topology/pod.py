@@ -528,7 +528,6 @@ class PodTopologyGenerator(CommonGenerator):
             self.logger.info(f"Pod {self.data.name}: no lower-index sibling pods yet — nothing to mesh-cable")
             return
 
-        dc_max_spines = dc.design.max_spines_per_pod
         p2p_prefix_length = 127 if is_ipv6 else 31
         routing_opts = RoutingOptions(design=dc, asn_pool=dc_asn_pool_id)
         sorted_lower_siblings = sorted(lower_siblings, key=lambda s: s.index.value)
@@ -572,13 +571,10 @@ class PodTopologyGenerator(CommonGenerator):
                 )
                 continue
 
-            # Each sibling-pod pair gets a deterministic local uplink slot range
-            # based on sibling order (not readiness). If a sibling is temporarily
-            # not ready and skipped in one run, later siblings still keep their
-            # own reserved slots, so a retry does not reuse one endpoint for two
-            # different sibling links.
+            # Each sibling-pod pair gets a deterministic local uplink slot range.
+            # Reserve exactly the number of links this pair consumes per spine pair.
             links_per_sibling = len(sibling_spines)
-            slot_start = sibling_slot * dc_max_spines
+            slot_start = sibling_slot * links_per_sibling
             sibling_local_uplinks = spine_interfaces[slot_start : slot_start + links_per_sibling]
             if len(sibling_local_uplinks) < links_per_sibling:
                 self.logger.error(
@@ -589,10 +585,15 @@ class PodTopologyGenerator(CommonGenerator):
                 )
                 return
 
-            cabling_offset = self.data.spine_link_base_offset + ((sibling.index.value - 1) * dc_max_spines)
+            # Peer-facing offset must be unique per (source pod, sibling pod) pair,
+            # otherwise multiple higher-index pods can select the same sibling
+            # spine uplink slot and collide on one endpoint.
+            pair_slot = max(0, self.data.index - sibling.index.value - 1)
+            cabling_offset = self.data.spine_link_base_offset + (pair_slot * links_per_sibling)
             self.logger.info(
                 f"Pod {self.data.name} (idx={self.data.index}): cabling to sibling pod idx={sibling.index.value} "
-                f"[offset={cabling_offset}, slot_start={slot_start}, local_uplinks={sibling_local_uplinks}]"
+                f"[offset={cabling_offset}, pair_slot={pair_slot}, slot_start={slot_start}, "
+                f"local_uplinks={sibling_local_uplinks}]"
             )
             p2p_pairs = await self.create_cabling(
                 bottom_devices=spines,
