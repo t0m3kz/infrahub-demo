@@ -353,6 +353,8 @@ queries:
     file_path: queries/topology/add/customer_dc.gql
   - name: quotation_data
     file_path: queries/quotation/add_quotation.gql
+  - name: quotation_office_data
+    file_path: queries/quotation/add_quotation_office.gql
 
 generator_definitions:
   - name: add_dc
@@ -499,11 +501,20 @@ generator_definitions:
     execute_after_merge: false
     parameters:
       name: name__value
-  - name: add_quotation
-    file_path: generators/quotation.py
+  - name: add_quotation_dc
+    file_path: generators/quotations/dc.py
     targets: customer_quotations
     query: quotation_data
-    class_name: QuotationGenerator
+    class_name: QuotationDCGenerator
+    execute_in_proposed_change: false
+    execute_after_merge: false
+    parameters:
+      name: name__value
+  - name: add_quotation_office
+    file_path: generators/quotations/office.py
+    targets: customer_quotations
+    query: quotation_office_data
+    class_name: OfficeQuotationGenerator
     execute_in_proposed_change: false
     execute_after_merge: false
     parameters:

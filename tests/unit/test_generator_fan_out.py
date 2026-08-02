@@ -116,7 +116,9 @@ class TestWaitForParentGeneratorAndRefetch:
         result = await gen.wait_for_parent_generator_and_refetch("add_dc", "dc-1")
 
         assert result is None
-        gen.client.task.filter.assert_awaited_once()
+        # No active parent task found: implementation also checks whether the
+        # latest parent run failed before returning.
+        assert gen.client.task.filter.await_count == 2
 
     @pytest.mark.asyncio
     async def test_unrelated_task_title_returns_none(self) -> None:

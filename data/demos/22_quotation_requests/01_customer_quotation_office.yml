@@ -1,0 +1,183 @@
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: CustomerQuotationOffice
+  data:
+    - name: "Q22-OFFICE-Nimbus-HQ"
+      description: "HQ campus refresh with balanced Wi-Fi density and dual-distribution resilience"
+      request_type: "office"
+      status: "draft"
+      owner: "C004"
+      preferred_switch_vendor: "Cisco"
+      users_per_ap: 32
+      m2_per_ap: 110
+      endpoint_growth_ratio: 25
+      access_switch_port_density: 48
+      access_switch_reserved_ports: 6
+      access_switch_utilization_target: 85
+      distribution_switch_port_density: 48
+      dist_switch_reserved_ports: 8
+      dist_switch_util_target: 80
+      core_router_port_density: 32
+      core_router_reserved_ports: 6
+      core_router_utilization_target: 75
+      uplinks_per_access_switch: 2
+      min_distribution_switches: 2
+      dist_core_uplinks_per_dist: 2
+      min_core_routers: 2
+      wifi_mbps_per_user: 8
+      conference_room_mbps: 10
+      printer_mbps: 1
+      user_concurrency: 40
+      conference_concurrency: 35
+      printer_concurrency: 15
+      access_to_distribution_oversub: 4
+      distribution_to_core_oversub: 2
+      size_for_single_link_failure: true
+      buildings:
+        data:
+          - name: "Nimbus-HQ-A"
+            floors: 6
+            people_per_floor: 180
+            area_m2_per_floor: 2800
+            conference_rooms_per_floor: 10
+            printers_per_floor: 6
+          - name: "Nimbus-HQ-B"
+            floors: 4
+            people_per_floor: 130
+            area_m2_per_floor: 2100
+            conference_rooms_per_floor: 7
+            printers_per_floor: 4
+
+    - name: "Q22-OFFICE-Orchid-Regional"
+      description: "Regional office with conservative growth assumptions and compact core"
+      request_type: "office"
+      status: "draft"
+      owner: "C005"
+      preferred_switch_vendor: "Arista"
+      users_per_ap: 35
+      m2_per_ap: 130
+      endpoint_growth_ratio: 15
+      access_switch_port_density: 48
+      access_switch_reserved_ports: 4
+      access_switch_utilization_target: 88
+      distribution_switch_port_density: 48
+      dist_switch_reserved_ports: 6
+      dist_switch_util_target: 82
+      core_router_port_density: 32
+      core_router_reserved_ports: 4
+      core_router_utilization_target: 78
+      uplinks_per_access_switch: 2
+      min_distribution_switches: 2
+      dist_core_uplinks_per_dist: 2
+      min_core_routers: 2
+      wifi_mbps_per_user: 6
+      conference_room_mbps: 8
+      printer_mbps: 1
+      user_concurrency: 35
+      conference_concurrency: 30
+      printer_concurrency: 10
+      access_to_distribution_oversub: 4
+      distribution_to_core_oversub: 2
+      size_for_single_link_failure: true
+      buildings:
+        data:
+          - name: "Orchid-R1"
+            floors: 5
+            people_per_floor: 120
+            area_m2_per_floor: 1700
+            conference_rooms_per_floor: 6
+            printers_per_floor: 4
+
+    - name: "Q22-OFFICE-Helios-Campus"
+      description: "Distributed campus with heavier meeting traffic and larger floorplates"
+      request_type: "office"
+      status: "draft"
+      owner: "C006"
+      preferred_switch_vendor: "Dell"
+      users_per_ap: 28
+      m2_per_ap: 100
+      endpoint_growth_ratio: 30
+      access_switch_port_density: 48
+      access_switch_reserved_ports: 8
+      access_switch_utilization_target: 82
+      distribution_switch_port_density: 48
+      dist_switch_reserved_ports: 8
+      dist_switch_util_target: 78
+      core_router_port_density: 32
+      core_router_reserved_ports: 6
+      core_router_utilization_target: 72
+      uplinks_per_access_switch: 2
+      min_distribution_switches: 4
+      dist_core_uplinks_per_dist: 2
+      min_core_routers: 2
+      wifi_mbps_per_user: 9
+      conference_room_mbps: 12
+      printer_mbps: 1
+      user_concurrency: 45
+      conference_concurrency: 40
+      printer_concurrency: 12
+      access_to_distribution_oversub: 3
+      distribution_to_core_oversub: 2
+      size_for_single_link_failure: true
+      buildings:
+        data:
+          - name: "Helios-North"
+            floors: 7
+            people_per_floor: 160
+            area_m2_per_floor: 2600
+            conference_rooms_per_floor: 12
+            printers_per_floor: 6
+          - name: "Helios-South"
+            floors: 6
+            people_per_floor: 145
+            area_m2_per_floor: 2300
+            conference_rooms_per_floor: 10
+            printers_per_floor: 5
+          - name: "Helios-Labs"
+            floors: 3
+            people_per_floor: 90
+            area_m2_per_floor: 1400
+            conference_rooms_per_floor: 4
+            printers_per_floor: 3
+
+    - name: "Q22-OFFICE-Kite-Compact"
+      description: "Small edge office with minimal design and low oversubscription pressure"
+      request_type: "office"
+      status: "draft"
+      owner: "C007"
+      preferred_switch_vendor: "Cisco"
+      users_per_ap: 40
+      m2_per_ap: 140
+      endpoint_growth_ratio: 10
+      access_switch_port_density: 48
+      access_switch_reserved_ports: 4
+      access_switch_utilization_target: 90
+      distribution_switch_port_density: 48
+      dist_switch_reserved_ports: 4
+      dist_switch_util_target: 85
+      core_router_port_density: 24
+      core_router_reserved_ports: 2
+      core_router_utilization_target: 80
+      uplinks_per_access_switch: 2
+      min_distribution_switches: 2
+      dist_core_uplinks_per_dist: 2
+      min_core_routers: 2
+      wifi_mbps_per_user: 5
+      conference_room_mbps: 6
+      printer_mbps: 1
+      user_concurrency: 30
+      conference_concurrency: 20
+      printer_concurrency: 8
+      access_to_distribution_oversub: 5
+      distribution_to_core_oversub: 3
+      size_for_single_link_failure: false
+      buildings:
+        data:
+          - name: "Kite-Main"
+            floors: 2
+            people_per_floor: 70
+            area_m2_per_floor: 900
+            conference_rooms_per_floor: 2
+            printers_per_floor: 2

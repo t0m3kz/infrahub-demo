@@ -13,12 +13,11 @@ version: "1.0"
 # CustomerQuotationDC — concrete DC-fabric sizing request (today: the only
 # concrete type). Captures pod_count and preferred vendors; nothing on this
 # node is computed — everything the add_quotation generator
-# (generators/quotation.py) produces lives one level down, on
+# (generators/quotations/dc.py) produces lives one level down, on
 # CustomerQuotationProposedDesign.
-# scripts/recommend_dc_design.py offers the same sizing logic offline
-# against local bootstrap YAML, sharing its core algorithm with the
-# generator via generators/helpers/quotation.py (its CLI interface is
-# still single-speed only — see that module's own docstring for the gap).
+# Legacy offline workflows used the same sizing logic against local YAML.
+# The active implementation shares its core algorithm via
+# generators/helpers/quotation.py.
 #
 # QuotationRoom is the actual SIZING UNIT, not just a capacity label: each
 # room carries its own port_count_10g/25g/40g/100g/400g (how many end-host
@@ -79,7 +78,7 @@ generics:
     description: "A customer's sizing/pricing request for a future deployment."
     label: "Customer Quotation"
     icon: "mdi:file-document-outline"
-    include_in_menu: false
+    include_in_menu: true
     human_friendly_id:
       - name__value
     order_by:
@@ -106,6 +105,10 @@ generics:
             label: "Data Center"
             description: "Full DC fabric sizing (leaf/spine/super-spine/border-leaf/firewall/load-balancer)."
             color: "#7FBF7F"
+          - name: office
+            label: "Office/Campus"
+            description: "Campus or office access/distribution/core sizing with wireless endpoint demand modeling."
+            color: "#7F7FBF"
       - name: status
         kind: Dropdown
         optional: true
@@ -155,7 +158,9 @@ generics:
 nodes:
   - name: QuotationDC
     namespace: Customer
-    description: "DC-fabric sizing/pricing request: pod count, room layout (sizing lives on each room), preferred vendors."  # yamllint disable-line rule:line-length
+    description: >-
+      DC-fabric sizing/pricing request: pod count, room layout
+      (sizing lives on each room), preferred vendors.
     label: "DC Quotation"
     icon: "mdi:server-network"
     inherit_from:
@@ -165,7 +170,9 @@ nodes:
     attributes:
       - name: pod_count
         label: "Pod Count"
-        description: "Number of pods, each sized from its own room (see CustomerQuotationRoom). 1 = single pod, no super-spine."  # yamllint disable-line rule:line-length
+        description: >-
+          Number of pods, each sized from its own room
+          (see CustomerQuotationRoom). 1 = single pod, no super-spine.
         kind: Number
         optional: true
         default_value: 1
@@ -174,7 +181,9 @@ nodes:
           min_value: 1
       - name: topology_strategy
         label: "Topology Strategy"
-        description: "How to choose multi-pod core: automatic cost decision, forced back-to-back, or forced classic 3-tier."  # yamllint disable-line rule:line-length
+        description: >-
+          How to choose multi-pod core: automatic cost decision,
+          forced back-to-back, or forced classic 3-tier.
         kind: Dropdown
         optional: true
         default_value: auto
@@ -230,7 +239,7 @@ nodes:
         label: "Rooms"
         description: "Physical room layouts to size this request's racks against."
         cardinality: many
-        kind: Component
+        kind: Attribute
         optional: true
         order_weight: 1500
         on_delete: cascade
@@ -404,9 +413,309 @@ nodes:
         optional: false
         order_weight: 100
 
+  - name: QuotationOffice
+    namespace: Customer
+    description: "Office/campus sizing request for access/distribution/core network and wireless demand."
+    label: "Office Quotation"
+    icon: "mdi:office-building"
+    inherit_from:
+      - CustomerQuotation
+    include_in_menu: true
+    menu_placement: OrganizationGeneric
+    attributes:
+      - name: preferred_switch_vendor
+        label: "Preferred Network Vendor"
+        description: "Restrict AP/access/distribution/core picks to this manufacturer, if set."
+        kind: Text
+        optional: true
+        order_weight: 1100
+      - name: users_per_ap
+        label: "Users per AP"
+        kind: Number
+        optional: true
+        default_value: 35
+        order_weight: 1200
+        parameters:
+          min_value: 1
+      - name: m2_per_ap
+        label: "m2 per AP"
+        kind: Number
+        optional: true
+        default_value: 120
+        order_weight: 1210
+        parameters:
+          min_value: 1
+      - name: endpoint_growth_ratio
+        label: "Endpoint Growth Ratio (%)"
+        kind: Number
+        optional: true
+        default_value: 20
+        order_weight: 1220
+        parameters:
+          min_value: 0
+          max_value: 500
+      - name: access_switch_port_density
+        label: "Access Switch Port Density"
+        kind: Number
+        optional: true
+        default_value: 48
+        order_weight: 1230
+        parameters:
+          min_value: 1
+      - name: access_switch_reserved_ports
+        label: "Access Switch Reserved Ports"
+        kind: Number
+        optional: true
+        default_value: 4
+        order_weight: 1240
+        parameters:
+          min_value: 0
+      - name: access_switch_utilization_target
+        label: "Access Switch Utilization Target (%)"
+        kind: Number
+        optional: true
+        default_value: 85
+        order_weight: 1250
+        parameters:
+          min_value: 0
+          max_value: 100
+      - name: distribution_switch_port_density
+        label: "Distribution Switch Port Density"
+        kind: Number
+        optional: true
+        default_value: 48
+        order_weight: 1260
+        parameters:
+          min_value: 1
+      - name: dist_switch_reserved_ports
+        label: "Distribution Switch Reserved Ports"
+        kind: Number
+        optional: true
+        default_value: 6
+        order_weight: 1270
+        parameters:
+          min_value: 0
+      - name: dist_switch_util_target
+        label: "Distribution Switch Utilization Target (%)"
+        kind: Number
+        optional: true
+        default_value: 80
+        order_weight: 1280
+        parameters:
+          min_value: 0
+          max_value: 100
+      - name: core_router_port_density
+        label: "Core Router Port Density"
+        kind: Number
+        optional: true
+        default_value: 32
+        order_weight: 1290
+        parameters:
+          min_value: 1
+      - name: core_router_reserved_ports
+        label: "Core Router Reserved Ports"
+        kind: Number
+        optional: true
+        default_value: 4
+        order_weight: 1300
+        parameters:
+          min_value: 0
+      - name: core_router_utilization_target
+        label: "Core Router Utilization Target (%)"
+        kind: Number
+        optional: true
+        default_value: 75
+        order_weight: 1310
+        parameters:
+          min_value: 0
+          max_value: 100
+      - name: uplinks_per_access_switch
+        label: "Uplinks per Access Switch"
+        kind: Number
+        optional: true
+        default_value: 2
+        order_weight: 1320
+        parameters:
+          min_value: 1
+      - name: min_distribution_switches
+        label: "Minimum Distribution Switches"
+        kind: Number
+        optional: true
+        default_value: 2
+        order_weight: 1330
+        parameters:
+          min_value: 1
+      - name: dist_core_uplinks_per_dist
+        label: "Distribution to Core Uplinks per Distribution"
+        kind: Number
+        optional: true
+        default_value: 2
+        order_weight: 1340
+        parameters:
+          min_value: 1
+      - name: min_core_routers
+        label: "Minimum Core Routers"
+        kind: Number
+        optional: true
+        default_value: 2
+        order_weight: 1350
+        parameters:
+          min_value: 1
+      - name: wifi_mbps_per_user
+        label: "WiFi Mbps per User"
+        kind: Number
+        optional: true
+        default_value: 6
+        order_weight: 1360
+        parameters:
+          min_value: 0
+      - name: conference_room_mbps
+        label: "Conference Room Mbps"
+        kind: Number
+        optional: true
+        default_value: 8
+        order_weight: 1370
+        parameters:
+          min_value: 0
+      - name: printer_mbps
+        label: "Printer Mbps"
+        kind: Number
+        optional: true
+        default_value: 1
+        order_weight: 1380
+        parameters:
+          min_value: 0
+      - name: user_concurrency
+        label: "User Concurrency (%)"
+        kind: Number
+        optional: true
+        default_value: 35
+        order_weight: 1390
+        parameters:
+          min_value: 0
+          max_value: 100
+      - name: conference_concurrency
+        label: "Conference Concurrency (%)"
+        kind: Number
+        optional: true
+        default_value: 30
+        order_weight: 1400
+        parameters:
+          min_value: 0
+          max_value: 100
+      - name: printer_concurrency
+        label: "Printer Concurrency (%)"
+        kind: Number
+        optional: true
+        default_value: 10
+        order_weight: 1410
+        parameters:
+          min_value: 0
+          max_value: 100
+      - name: access_to_distribution_oversub
+        label: "Access to Distribution Oversubscription"
+        kind: Number
+        optional: true
+        default_value: 4
+        order_weight: 1420
+        parameters:
+          min_value: 1
+      - name: distribution_to_core_oversub
+        label: "Distribution to Core Oversubscription"
+        kind: Number
+        optional: true
+        default_value: 2
+        order_weight: 1430
+        parameters:
+          min_value: 1
+      - name: size_for_single_link_failure
+        label: "Size for Single Link Failure"
+        kind: Boolean
+        optional: true
+        default_value: true
+        order_weight: 1440
+    relationships:
+      - name: buildings
+        peer: CustomerQuotationOfficeBuilding
+        label: "Buildings"
+        description: "Building-level office inputs used for campus sizing."
+        cardinality: many
+        kind: Attribute
+        optional: true
+        order_weight: 1500
+        on_delete: cascade
+      - name: proposed_campus_design
+        peer: CustomerQuotationCampusDesign
+        label: "Proposed Campus Design"
+        description: "The generator's computed office/campus design hierarchy (campus/building/floor)."
+        cardinality: one
+        kind: Component
+        optional: true
+        order_weight: 2020
+        on_delete: cascade
+
+  - name: QuotationOfficeBuilding
+    namespace: Customer
+    description: "One building input row for office/campus sizing."
+    label: "Office Building"
+    icon: "mdi:city"
+    include_in_menu: false
+    human_friendly_id:
+      - quotation__name__value
+      - name__value
+    order_by:
+      - name__value
+    display_label: "{{ name__value }}"
+    attributes:
+      - name: name
+        kind: Text
+        order_weight: 100
+      - name: floors
+        kind: Number
+        optional: false
+        order_weight: 200
+        parameters:
+          min_value: 1
+      - name: people_per_floor
+        kind: Number
+        optional: false
+        order_weight: 210
+        parameters:
+          min_value: 0
+      - name: area_m2_per_floor
+        kind: Number
+        optional: false
+        order_weight: 220
+        parameters:
+          min_value: 0
+      - name: conference_rooms_per_floor
+        kind: Number
+        optional: true
+        default_value: 0
+        order_weight: 230
+        parameters:
+          min_value: 0
+      - name: printers_per_floor
+        kind: Number
+        optional: true
+        default_value: 0
+        order_weight: 240
+        parameters:
+          min_value: 0
+    relationships:
+      - name: quotation
+        peer: CustomerQuotationOffice
+        label: "Quotation"
+        cardinality: one
+        kind: Parent
+        optional: false
+        order_weight: 100
+
   - name: QuotationProposedDesign
     namespace: Customer
-    description: "Computed DC-wide fabric design for a CustomerQuotationDC — one per quotation, written by add_quotation."  # yamllint disable-line rule:line-length
+    description: >-
+      Computed DC-wide fabric design for a CustomerQuotationDC,
+      one per quotation, written by add_quotation.
     label: "Quotation Proposed Design"
     icon: "mdi:sitemap"
     include_in_menu: false
@@ -439,7 +748,9 @@ nodes:
       - name: pods
         peer: CustomerQuotationProposedPod
         label: "Proposed Pods"
-        description: "Per-pod breakdown of this DC's pod_count — each pod's own rack share and recommended pod design."  # yamllint disable-line rule:line-length
+        description: >-
+          Per-pod breakdown of this DC's pod_count, with each pod's
+          own rack share and recommended pod design.
         cardinality: many
         kind: Component
         optional: true
@@ -448,7 +759,9 @@ nodes:
 
   - name: QuotationProposedPod
     namespace: Customer
-    description: "One pod's own room-derived fabric (pod N sized from rooms[N-1], or a round-robin reuse if pod_count exceeds room count)."  # yamllint disable-line rule:line-length
+    description: >-
+      One pod's own room-derived fabric (pod N sized from rooms[N-1],
+      or a round-robin reuse if pod_count exceeds room count).
     label: "Quotation Proposed Pod"
     icon: "mdi:server"
     include_in_menu: false
@@ -479,7 +792,9 @@ nodes:
         order_weight: 210
       - name: leaf_count
         label: "Leaf Count"
-        description: "Total leaf switches across every speed used, sized from this pod's own room, from the last generator run."  # yamllint disable-line rule:line-length
+        description: >-
+          Total leaf switches across every speed used,
+          sized from this pod's own room from the last generator run.
         kind: Number
         optional: true
         order_weight: 300
@@ -518,7 +833,9 @@ nodes:
 
   - name: QuotationProposedRack
     namespace: Customer
-    description: "One compute or storage rack within a CustomerQuotationProposedPod's share, linked to a candidate room."  # yamllint disable-line rule:line-length
+    description: >-
+      One compute or storage rack within a CustomerQuotationProposedPod
+      share, linked to a candidate room.
     label: "Quotation Proposed Rack"
     icon: "mdi:server-outline"
     include_in_menu: false
@@ -564,6 +881,178 @@ nodes:
         optional: true
         order_weight: 200
 
+  - name: QuotationCampusDesign
+    namespace: Customer
+    description: >-
+      Computed office/campus design for a CustomerQuotationOffice,
+      one per quotation, written by add_quotation_office.
+    label: "Quotation Proposed Campus Design"
+    icon: "mdi:office-building-cog"
+    include_in_menu: false
+    human_friendly_id:
+      - quotation__name__value
+    order_by:
+      - quotation__name__value
+    display_label: "{{ quotation__name__value }} - Proposed Campus Design"
+    attributes:
+      - name: name
+        kind: Text
+        unique: true
+        computed_attribute:
+          kind: Jinja2
+          jinja2_template: "{{ quotation__name__value }}-campus-design"
+        read_only: true
+        optional: true
+        order_weight: 100
+      - name: total_buildings
+        kind: Number
+        optional: true
+        order_weight: 200
+      - name: total_floors
+        kind: Number
+        optional: true
+        order_weight: 210
+      - name: total_access_points
+        kind: Number
+        optional: true
+        order_weight: 220
+      - name: total_access_switches
+        kind: Number
+        optional: true
+        order_weight: 230
+      - name: total_distribution_switches
+        kind: Number
+        optional: true
+        order_weight: 240
+      - name: total_core_routers
+        kind: Number
+        optional: true
+        order_weight: 250
+      - name: total_demand_mbps
+        kind: Number
+        optional: true
+        order_weight: 260
+    relationships:
+      - name: quotation
+        peer: CustomerQuotationOffice
+        label: "Quotation"
+        cardinality: one
+        kind: Parent
+        optional: false
+        order_weight: 100
+      - name: buildings
+        peer: CustomerQuotationCampusBuilding
+        label: "Proposed Buildings"
+        cardinality: many
+        kind: Component
+        optional: true
+        order_weight: 300
+        on_delete: cascade
+
+  - name: QuotationCampusBuilding
+    namespace: Customer
+    description: "One building-level output row in a proposed campus design."
+    label: "Quotation Proposed Campus Building"
+    icon: "mdi:city-variant-outline"
+    include_in_menu: false
+    order_by:
+      - name__value
+    display_label: "{{ name__value }}"
+    uniqueness_constraints:
+      - [design, name__value]
+    attributes:
+      - name: name
+        kind: Text
+        optional: false
+        order_weight: 100
+      - name: floors
+        kind: Number
+        optional: true
+        order_weight: 200
+      - name: access_points
+        kind: Number
+        optional: true
+        order_weight: 210
+      - name: access_switches
+        kind: Number
+        optional: true
+        order_weight: 220
+      - name: distribution_switches
+        kind: Number
+        optional: true
+        order_weight: 230
+      - name: demand_mbps
+        kind: Number
+        optional: true
+        order_weight: 240
+    relationships:
+      - name: design
+        peer: CustomerQuotationCampusDesign
+        label: "Proposed Campus Design"
+        cardinality: one
+        kind: Parent
+        optional: false
+        order_weight: 100
+      - name: source_building
+        peer: CustomerQuotationOfficeBuilding
+        label: "Source Building"
+        cardinality: one
+        kind: Attribute
+        optional: true
+        order_weight: 200
+      - name: floors_breakdown
+        peer: CustomerQuotationCampusFloor
+        label: "Proposed Floors"
+        cardinality: many
+        kind: Component
+        optional: true
+        order_weight: 300
+        on_delete: cascade
+
+  - name: QuotationCampusFloor
+    namespace: Customer
+    description: "One floor-level output row in a proposed campus building design."
+    label: "Quotation Proposed Campus Floor"
+    icon: "mdi:office-building-marker-outline"
+    include_in_menu: false
+    order_by:
+      - index__value
+    display_label: "Floor {{ index__value }}"
+    uniqueness_constraints:
+      - [building, index__value]
+    attributes:
+      - name: index
+        label: "Floor Index"
+        kind: Number
+        optional: false
+        order_weight: 100
+        parameters:
+          min_value: 1
+      - name: access_points
+        kind: Number
+        optional: true
+        order_weight: 200
+      - name: wired_endpoints
+        kind: Number
+        optional: true
+        order_weight: 210
+      - name: access_switches
+        kind: Number
+        optional: true
+        order_weight: 220
+      - name: demand_mbps
+        kind: Number
+        optional: true
+        order_weight: 230
+    relationships:
+      - name: building
+        peer: CustomerQuotationCampusBuilding
+        label: "Proposed Building"
+        cardinality: one
+        kind: Parent
+        optional: false
+        order_weight: 100
+
   - name: QuotationLineItem
     namespace: Customer
     description: "One priced item in a CustomerQuotation's recommended build (for a DC quotation: a fabric tier)."
@@ -604,9 +1093,23 @@ nodes:
           - name: load-balancer
             label: Load Balancer
             color: "#38e7fb"
+          - name: access-point
+            label: Access Point
+            color: "#c6e2ff"
+          - name: access-switch
+            label: Access Switch
+            color: "#b4d6ff"
+          - name: distribution-switch
+            label: Distribution Switch
+            color: "#8fb7ff"
+          - name: core-router
+            label: Core Router
+            color: "#6d9efc"
       - name: speed
         label: "Port Speed"
-        description: "Set only for role=leaf — which of this quotation's port speeds this row covers. Null for every other role."  # yamllint disable-line rule:line-length
+        description: >-
+          Set only for role=leaf: which quotation port speed this row covers.
+          Null for every other role.
         kind: Dropdown
         optional: true
         order_weight: 110

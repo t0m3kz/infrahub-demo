@@ -1,4 +1,4 @@
-query add_quotation($name: String!) {
+query add_quotation_dc($name: String!) {
   CustomerQuotationDC(name__value: $name) {
     edges {
       node {
@@ -62,6 +62,9 @@ query add_quotation($name: String!) {
                 value
               }
               preferred_spine_uplink_offset {
+                value
+              }
+              preferred_cabling_method {
                 value
               }
             }
