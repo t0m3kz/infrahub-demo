@@ -127,58 +127,58 @@ spec:
     # Dell Leafs
     - quantity: 2
       role: leaf
-      device_type: PowerSwitch-S5224F-ON
+      device_type: PowerSwitch-S5224F
     - quantity: 4
       role: leaf
-      device_type: PowerSwitch-S5224F-ON
+      device_type: PowerSwitch-S5224F
     - quantity: 8
       role: leaf
-      device_type: PowerSwitch-S5224F-ON
+      device_type: PowerSwitch-S5224F
 
     - quantity: 2
       role: leaf
-      device_type: PowerSwitch-S5248F-ON
+      device_type: PowerSwitch S5248F-ON
     - quantity: 4
       role: leaf
-      device_type: PowerSwitch-S5248F-ON
+      device_type: PowerSwitch S5248F-ON
     - quantity: 8
       role: leaf
-      device_type: PowerSwitch-S5248F-ON
+      device_type: PowerSwitch S5248F-ON
 
     # Dell Middle Rack Leafs
     - quantity: 2
       role: leaf
-      device_type: PowerSwitch-S5232F-ON
+      device_type: PowerSwitch S5232F-ON
     - quantity: 8
       role: leaf
-      device_type: PowerSwitch-S5232F-ON
+      device_type: PowerSwitch S5232F-ON
 
     # Dell Mixed Rack Leafs
     - quantity: 2
       role: leaf
-      device_type: PowerSwitch-S5224F-ON
+      device_type: PowerSwitch-S5224F
 
     # Dell ToRs (VTEP — tor-deployment)
     - quantity: 2
       role: tor
-      device_type: PowerSwitch-S5224F-ON
+      device_type: PowerSwitch-S5224F
     - quantity: 2
       role: tor
-      device_type: PowerSwitch-S5248F-ON
+      device_type: PowerSwitch S5248F-ON
     # Dell Access-Leafs (routed VTEP — connects to leafs, not spines)
     - quantity: 2
       role: access-leaf
-      device_type: PowerSwitch-S5224F-ON
+      device_type: PowerSwitch-S5224F
     - quantity: 2
       role: access-leaf
-      device_type: PowerSwitch-S5248F-ON
+      device_type: PowerSwitch S5248F-ON
     # Dell L2-Leafs (L2-only — middle_rack/mixed deployments)
     - quantity: 2
       role: l2-leaf
-      device_type: PowerSwitch-S5224F-ON
+      device_type: PowerSwitch-S5224F
     - quantity: 4
       role: l2-leaf
-      device_type: PowerSwitch-S5224F-ON
+      device_type: PowerSwitch-S5224F
 
     # Edgecore Leafs
     - quantity: 2
@@ -220,7 +220,7 @@ spec:
       device_type: DCS-7050CX3-32C-R
     - quantity: 2
       role: spine
-      device_type: PowerSwitch-S5232F-ON
+      device_type: PowerSwitch S5232F-ON
 
     # Edgecore Spines
     - quantity: 2
@@ -241,7 +241,7 @@ spec:
     # Dell Super-Spines
     - quantity: 4
       role: super-spine
-      device_type: PowerSwitch-S5232F-ON
+      device_type: PowerSwitch S5232F-ON
 
     # Edgecore Super-Spines
     - quantity: 2
@@ -266,7 +266,7 @@ spec:
       device_type: DCS-7050CX3-32C-R
     - quantity: 2
       role: border-leaf
-      device_type: PowerSwitch-S5232F-ON
+      device_type: PowerSwitch S5232F-ON
     - quantity: 2
       role: border-leaf
       device_type: 7726-32X-O
@@ -278,7 +278,7 @@ spec:
       device_type: DCS-7050CX3-32C-R
     - quantity: 2
       role: border-spine
-      device_type: PowerSwitch-S5232F-ON
+      device_type: PowerSwitch S5232F-ON
     - quantity: 2
       role: border-spine
       device_type: 7726-32X-O

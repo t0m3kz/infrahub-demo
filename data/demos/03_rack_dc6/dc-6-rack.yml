@@ -12,5 +12,5 @@ spec:
       parent: ktw-1-s-1
       member_of_groups: [topologies_rack]
       fabric_templates:
-        - ["2", "leaf", "PowerSwitch-S5232F-ON_LEAF_MR"]
-        - ["2", "access-leaf", "PowerSwitch-S5224F-ON_ACCESS"]
+        - ["2", "leaf", "PowerSwitch S5232F-ON"]
+        - ["2", "access-leaf", "PowerSwitch-S5224F"]

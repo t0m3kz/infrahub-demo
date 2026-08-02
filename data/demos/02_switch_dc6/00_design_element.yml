@@ -6,4 +6,4 @@ spec:
   data:
     - quantity: 4
       role: l2-leaf
-      device_type: PowerSwitch-S5224F-ON
+      device_type: PowerSwitch-S5224F
