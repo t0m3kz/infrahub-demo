@@ -4,8 +4,8 @@ kind: Object
 spec:
   kind: TemplateDcimVirtualDevice
   data:
-    - template_name: CloudGuard
-      owner: P027
+    - template_name: CloudGuard_EDGE
+      owner: "P027"
       device_type: CloudGuard
       role: firewall
       platform: checkpoint_gaia
@@ -19,12 +19,12 @@ spec:
         parameters:
           expand_range: true
         data:
-          - template_name: CloudGuard_eth0
+          - template_name: CloudGuard_EDGE_eth0
             name: eth0
             role: management
-          - template_name: CloudGuard_eth[1-6]
+          - template_name: CloudGuard_EDGE_eth[1-6]
             name: eth[1-6]
             role: customer
-          - template_name: CloudGuard_eth7
+          - template_name: CloudGuard_EDGE_eth7
             name: eth7
             role: ha

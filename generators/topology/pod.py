@@ -6,7 +6,6 @@ from typing import Any, Literal, cast
 from utils.data_cleaning import clean_data
 
 from ..common import CablingOptions, CommonGenerator, DeviceOptions, RoutingOptions
-from ..helpers import DeviceNameContext, DeviceNamingConfig
 from ..helpers.routing import RoutingStrategy
 from ..helpers.template_interfaces import role_interface_names_or_dynamic
 from ..models import PodModel
@@ -65,7 +64,6 @@ class PodTopologyGenerator(CommonGenerator):
                             return
 
             self.data = PodModel(**deployment_list[0])
-            await self._hydrate_fabric_templates(self.data.fabric_templates)
 
             # add_dc's own task can finish (dropping out of the tasklist check above)
             # a moment before its write of fabric_asn_pool is visible to this query —
@@ -93,7 +91,6 @@ class PodTopologyGenerator(CommonGenerator):
                         self.logger.error("No Pod Deployment data found in GraphQL response")
                         return
                     self.data = PodModel(**deployment_list[0])
-                    await self._hydrate_fabric_templates(self.data.fabric_templates)
         except (ValueError, KeyError, IndexError) as exc:
             self.logger.error(f"Generation failed due to {exc}")
             return
@@ -219,12 +216,11 @@ class PodTopologyGenerator(CommonGenerator):
 
         spines: list[str] = []
         for entry in spine_entries:
-            template = self._require_hydrated_template(entry, context="Pod spine")
             entry_spines = await self.create_devices(
                 deployment_id=self.data.id,
                 device_role=spine_role,
                 quantity=entry.quantity,
-                template=template.model_dump(),
+                template=entry.template.model_dump(),
                 naming_convention=naming_conv,
                 options=DeviceOptions(
                     indexes=indexes,
@@ -240,18 +236,15 @@ class PodTopologyGenerator(CommonGenerator):
         # limitation as dc.py's super-spine device creation: assumes every spine
         # template shares consistent downlink-interface naming.
         spine_template = spine_entries[0].template
-        assert spine_template is not None
 
         parent = self.data.parent
         super_spine_devices = [device.name for device in parent.devices]
         parent_super_spine_entries = parent.super_spine_templates
-        if parent_super_spine_entries:
-            parent_super_spine_template = self._require_hydrated_template(
-                parent_super_spine_entries[0], context="Parent DC super-spine"
-            )
-            super_spine_interfaces = [iface.name for iface in parent_super_spine_template.interfaces]
-        else:
-            super_spine_interfaces = []
+        super_spine_interfaces = (
+            [iface.name for iface in parent_super_spine_entries[0].template.interfaces]
+            if parent_super_spine_entries
+            else []
+        )
 
         # Pre-seed spine eBGP processes before cabling exists so parallel rack generators
         # find them and don't try to create duplicates.
@@ -402,26 +395,17 @@ class PodTopologyGenerator(CommonGenerator):
             Literal["standard", "hierarchical", "flat", "computed"], self.data.parent.naming_convention.lower()
         )
         device_indexes = [self.data.parent.index, self.data.index]
-        border_leaf_capacity = getattr(getattr(self.data, "design", None), "max_border_leafs_per_pod", None)
 
         firewall_names = await self._create_role_devices(
             role="firewall",
-            entries=self._select_border_service_entries(
-                role="firewall",
-                entries=firewall_entries,
-                design_capacity=border_leaf_capacity,
-            ),
+            entries=firewall_entries,
             deployment_id=self.data.id,
             naming_convention=naming_conv,
             indexes=device_indexes,
         )
         load_balancer_names = await self._create_role_devices(
             role="load-balancer",
-            entries=self._select_border_service_entries(
-                role="load-balancer",
-                entries=load_balancer_entries,
-                design_capacity=border_leaf_capacity,
-            ),
+            entries=load_balancer_entries,
             deployment_id=self.data.id,
             naming_convention=naming_conv,
             indexes=device_indexes,
@@ -444,49 +428,17 @@ class PodTopologyGenerator(CommonGenerator):
         pod_pools: dict[str, Any],
         is_ipv6: bool,
     ) -> None:
-        """Cable+route this pod's own border-leaf devices to this pod's spines.
-
-        BLFs are now DC-scoped (deployment=DC), but still deterministically
-        attributable to a pod via generated names (dc index + pod index). For
-        backward compatibility, we first try legacy pod-scoped BLFs.
-
-        Offset is
+        """Cable+route this pod's own border-leaf devices (already created by
+        dc.py, deployment_id=this pod) to this pod's spines. Offset is
         deterministic (design's leaf/tor CAPACITY, not live device count) so it
         never collides with rack.py's own leaf/tor offsets into the same spine
         downlink ports — rack.py's offsets start at 0 and fill up to capacity;
         border-leaf's offset starts exactly where that capacity ends. No-ops if
         this pod has no border-leaf devices (the common case — most pods don't
         host any)."""
-        legacy_border_leafs = await self.client.filters(
+        border_leafs = await self.client.filters(
             kind=DcimPhysicalDevice, deployment__ids=[self.data.id], role__value="border-leaf"
         )
-        border_leafs = legacy_border_leafs
-        if not border_leafs:
-            dc_border_leafs = await self.client.filters(
-                kind=DcimPhysicalDevice,
-                deployment__ids=[dc.id],
-                role__value="border-leaf",
-            )
-            naming = DeviceNamingConfig(
-                strategy=cast(
-                    Literal["standard", "hierarchical", "flat", "computed"],
-                    dc.naming_convention.lower(),
-                )
-            )
-            max_candidates = max(1, self.data.design.max_border_leafs_per_pod)
-            expected_names = {
-                naming.format_device_name(
-                    DeviceNameContext.from_indexes(
-                        fabric_name=dc.name.lower(),
-                        device_role="border-leaf",
-                        role_index=idx,
-                        indexes=[dc.index, self.data.index],
-                    )
-                )
-                for idx in range(1, max_candidates + 1)
-            }
-            border_leafs = [dev for dev in dc_border_leafs if dev.name.value in expected_names]
-
         if not border_leafs:
             return
         border_leaf_names = sorted(bl.name.value for bl in border_leafs)
@@ -494,17 +446,6 @@ class PodTopologyGenerator(CommonGenerator):
         bl_uplinks = await self.client.filters(
             kind=DcimPhysicalInterface, device__name__values=border_leaf_names, role__value="uplink"
         )
-        if not bl_uplinks:
-            # Fallback for normalized single-profile models where template role
-            # labels may not match runtime device role semantics.
-            bl_uplinks = await self.client.filters(
-                kind=DcimPhysicalInterface,
-                device__name__values=border_leaf_names,
-            )
-            if bl_uplinks:
-                self.logger.warning(
-                    f"Pod {self.data.name}: BLF uplink-role interfaces missing; using all BLF interfaces as runtime fallback"
-                )
         bl_uplink_names = sorted({iface.name.value for iface in bl_uplinks})
         if not bl_uplink_names or not spine_downlink_interfaces:
             self.logger.error(
@@ -613,11 +554,6 @@ class PodTopologyGenerator(CommonGenerator):
                         device__name__values=sibling_spines,
                         role__value="uplink",
                     )
-                    if not sibling_uplinks:
-                        sibling_uplinks = await self.client.filters(
-                            kind=DcimPhysicalInterface,
-                            device__name__values=sibling_spines,
-                        )
                     sibling_uplink_names = sorted({iface.name.value for iface in sibling_uplinks})
                     if sibling_uplink_names:
                         break

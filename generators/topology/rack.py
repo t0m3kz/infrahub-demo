@@ -237,11 +237,6 @@ class RackGenerator(RackMixin, CommonGenerator):
                 if device_names
                 else []
             )
-            if device_names and not leaf_interfaces:
-                leaf_interfaces = await self.client.filters(
-                    kind=DcimPhysicalInterface,
-                    device__name__values=device_names,
-                )
             if racks_in_row and leaf_devices and leaf_interfaces:
                 break
             if attempt < _ROW_LEAF_MAX_RETRIES - 1:
@@ -301,11 +296,6 @@ class RackGenerator(RackMixin, CommonGenerator):
                 device__name__values=created_leaf_devices,
                 role__value="downlink",
             )
-            if not leaf_interfaces_objects:
-                leaf_interfaces_objects = await self.client.filters(
-                    kind=DcimPhysicalInterface,
-                    device__name__values=created_leaf_devices,
-                )
             if not leaf_interfaces_objects:
                 self.logger.error(
                     f"Rack {self.data.name}: No downlink interfaces on leafs — cannot cable {role_label}s."
@@ -641,12 +631,11 @@ class RackGenerator(RackMixin, CommonGenerator):
     ) -> list[str]:
         """create_devices() + _created_device_names bookkeeping shared by every
         role generator method (leaf/tor/border-leaf/firewall/load-balancer)."""
-        template = self._require_hydrated_template(role, context="Rack role")
         devices = await self.create_devices(
             deployment_id=deployment_id,
             device_role=device_role,
             quantity=role.quantity,
-            template=template.model_dump(),
+            template=role.template.model_dump(),
             naming_convention=self._naming_conv,
             options=self._roles.build_device_options(allocate_loopback=allocate_loopback, group_name=group_name),
         )
@@ -671,12 +660,11 @@ class RackGenerator(RackMixin, CommonGenerator):
         rather than recomputed here.
         """
         pod = self.data.pod
-        template = self._require_hydrated_template(role, context="Rack role")
         devices = await self._create_devices_for_role(
             role, device_role=device_role, deployment_id=deployment_id, allocate_loopback=True
         )
         if mlag:
-            await self._ensure_mlag_pairs(devices, role_label=device_role, template=template)
+            await self._ensure_mlag_pairs(devices, role_label=device_role, template=role.template)
 
         await self._cable_and_route(
             bottom_devices=devices,
@@ -702,13 +690,11 @@ class RackGenerator(RackMixin, CommonGenerator):
                 )
                 continue
 
-            template = self._require_hydrated_template(leaf_role, context="Rack leaf")
-
             leaf_devices = await self._generate_spine_attached_role(
                 leaf_role,
                 device_role="leaf",
                 deployment_id=self.data.pod.id,
-                bottom_interfaces=self._roles.template_interfaces(template, role="uplink"),
+                bottom_interfaces=self._roles.template_interfaces(leaf_role.template, role="uplink"),
                 offset=self.calculate_cabling_offsets(device_count=leaf_role.quantity, device_type="leaf"),
                 mlag=True,
             )
@@ -737,13 +723,11 @@ class RackGenerator(RackMixin, CommonGenerator):
                 self.logger.info(f"Skipping duplicate tor template (devices already created: {sorted(expected_names)})")
                 continue
 
-            template = self._require_hydrated_template(tor_role, context="Rack tor")
-
             await self._generate_spine_attached_role(
                 tor_role,
                 device_role="tor",
                 deployment_id=pod.id,
-                bottom_interfaces=self._roles.template_interfaces(template, role="uplink"),
+                bottom_interfaces=self._roles.template_interfaces(tor_role.template, role="uplink"),
                 offset=self.calculate_cabling_offsets(
                     device_count=tors_per_rack, device_type="tor", racks_in_previous_rows=prev_row_racks
                 ),
@@ -769,21 +753,15 @@ class RackGenerator(RackMixin, CommonGenerator):
         local-leaf cabling target — shared by _generate_l2_leafs/_generate_access_leafs.
         Returns None if unresolved (already logged) — caller should ``continue``.
         """
-        await self._hydrate_fabric_templates([role])
-        template = self._require_hydrated_template(role, context="Rack local leaf")
-
         devices = await self._create_devices_for_role(
-            role,
-            device_role=device_role,
-            deployment_id=self.data.pod.id,
-            allocate_loopback=allocate_loopback,
+            role, device_role=device_role, deployment_id=self.data.pod.id, allocate_loopback=allocate_loopback
         )
         # allocate_loopback doubles as "participates in routing/EVPN" here:
         # l2-leaf (False) is L2-only by design, access-leaf (True) is a routed VTEP.
         await self._ensure_mlag_pairs(
-            devices, role_label=device_role, template=template, supports_virtual=allocate_loopback
+            devices, role_label=device_role, template=role.template, supports_virtual=allocate_loopback
         )
-        interfaces = self._roles.template_interfaces(template, role="uplink")
+        interfaces = self._roles.template_interfaces(role.template, role="uplink")
 
         target = await self._resolve_local_leaf_cabling_target(
             created_leaf_devices=created_leaf_devices,

@@ -4,8 +4,8 @@ kind: Object
 spec:
   kind: TemplateDcimPhysicalDevice
   data:
-    - template_name: BIG-IP-i5800
-      owner: P027
+    - template_name: BIG-IP-i5800_LOAD_BALANCER
+      owner: "P027"
       device_type: BIG-IP-i5800
       platform: f5_tmos
       software_image: f5_tmos-17.1.1
@@ -14,35 +14,43 @@ spec:
       interfaces:
         kind: TemplateDcimPhysicalInterface
         data:
-          - template_name: BIG-IP-i5800_mgmt
+          - template_name: BIG-IP-i5800_LOAD_BALANCER_mgmt
             name: mgmt
             role: management
             interface_type: 1000base-t
-          - template_name: BIG-IP-i5800_1.1
-            name: '1.1'
+          - template_name: BIG-IP-i5800_LOAD_BALANCER_1.1
+            name: "1.1"
             role: customer
             interface_type: 25gbase-x-sfp28
-          - template_name: BIG-IP-i5800_1.2
-            name: '1.2'
+          - template_name: BIG-IP-i5800_LOAD_BALANCER_1.2
+            name: "1.2"
             role: customer
             interface_type: 25gbase-x-sfp28
-          - template_name: BIG-IP-i5800_1.3
-            name: '1.3'
+          - template_name: BIG-IP-i5800_LOAD_BALANCER_1.3
+            name: "1.3"
             role: ha
             interface_type: 25gbase-x-sfp28
-          - template_name: BIG-IP-i5800_2.1
-            name: '2.1'
+          # 2.1/2.2 ("uplink") are pbr mode's border-leaf-facing ports, and inline
+          # mode's firewall-facing middle-leg ports — 2 ports so an HA pair of
+          # border-leafs/firewalls each gets its own link (RackCablingStrategy's
+          # round-robin needs at least as many bottom-device ports as there are
+          # top devices, or multiple top devices collide on the same port).
+          # 2.3/2.4 ("downlink") are only used in inline mode, for the return leg
+          # back to border-leaf — kept as distinct ports so inline mode's two legs
+          # never compete for the same physical port (pbr mode never uses these).
+          - template_name: BIG-IP-i5800_LOAD_BALANCER_2.1
+            name: "2.1"
             role: uplink
             interface_type: 100gbase-x-qsfp28
-          - template_name: BIG-IP-i5800_2.2
-            name: '2.2'
+          - template_name: BIG-IP-i5800_LOAD_BALANCER_2.2
+            name: "2.2"
             role: uplink
             interface_type: 100gbase-x-qsfp28
-          - template_name: BIG-IP-i5800_2.3
-            name: '2.3'
+          - template_name: BIG-IP-i5800_LOAD_BALANCER_2.3
+            name: "2.3"
             role: downlink
             interface_type: 100gbase-x-qsfp28
-          - template_name: BIG-IP-i5800_2.4
-            name: '2.4'
+          - template_name: BIG-IP-i5800_LOAD_BALANCER_2.4
+            name: "2.4"
             role: downlink
             interface_type: 100gbase-x-qsfp28

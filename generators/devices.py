@@ -30,44 +30,6 @@ class DeviceMixin:
     # CommonGenerator._resolve_pool (PoolMixin) — annotation only, no method body.
     _resolve_pool: Any
 
-    @staticmethod
-    def _build_interface_payload(template: dict[str, Any], *, virtual: bool) -> list[dict[str, Any]]:
-        """Build nested interface payload from a device template.
-
-        The payload is sent directly with the device create call so the device
-        is created with its full interface set instead of relying on an
-        object_template reference.
-        """
-
-        interface_kind = "DcimVirtualInterface" if virtual else "DcimPhysicalInterface"
-        payload: list[dict[str, Any]] = []
-
-        for interface in template.get("interfaces") or []:
-            interface_data = interface.get("data") if isinstance(interface, dict) else None
-            if not isinstance(interface_data, dict):
-                continue
-
-            name = interface_data.get("name")
-            if not name:
-                continue
-
-            data: dict[str, Any] = {"name": name}
-            role = interface_data.get("role")
-            if role is not None:
-                data["role"] = role
-
-            interface_type = interface_data.get("interface_type")
-            if interface_type is not None:
-                data["interface_type"] = interface_type
-
-            description = interface_data.get("description")
-            if description is not None:
-                data["description"] = description
-
-            payload.append({"kind": interface_kind, "data": data})
-
-        return payload
-
     async def create_devices(
         self,
         device_role: str,
@@ -125,7 +87,6 @@ class DeviceMixin:
             loopback_pool_name = f"{device_prefix}-loopback-pool"
 
         device_kind = DcimVirtualDevice if virtual else DcimPhysicalDevice
-        template_interfaces = self._build_interface_payload(template, virtual=virtual)
 
         # Resolve pools: accept SDK objects, ID strings, or fall back to name-based lookup
         management_pool = await self._resolve_pool(
@@ -201,12 +162,19 @@ class DeviceMixin:
                         # Pass existing id so upsert matches by ID, not hfid lookup
                         **({"id": existing_device.id} if existing_device else {}),
                         "name": name,
+                        # Only send object_template on first creation — re-sending it on an existing
+                        # device triggers a server-side re-instantiation that fails with
+                        # "device is mandatory for DcimPhysicalInterface".
+                        **(
+                            {"object_template": {"id": template.get("id") if template else None}}
+                            if not existing_device
+                            else {}
+                        ),
                         "status": "active",
                         "role": device_role,
                         "deployment": {"id": deployment_id} if deployment_id else None,
                         "device_type": template.get("device_type"),
                         "platform": template.get("platform"),
-                        "interfaces": template_interfaces,
                         "primary_address": primary_address_data,
                         "rack": {"id": rack} if rack else None,
                         "member_of_groups": [{"id": group_id} for group_id in groups],
