@@ -64,6 +64,11 @@ class RackPlanner:
 
         current_index = data.index
         deployment_type = data.pod.deployment_type
+        rack_index_base = max(0, getattr(data.pod, "rack_numbering_start_index", 1) - 1)
+        leaf_link_base = max(0, getattr(data.pod, "leaf_link_numbering_start", 1) - 1)
+        spine_link_base = max(0, getattr(data.pod, "spine_link_numbering_start", 1) - 1)
+
+        effective_rack_index = max(0, current_index - 1 - rack_index_base)
 
         # For middle_rack deployment ToRs: always offset=0 (ToRs connect to leafs in same rack)
         if deployment_type == "middle_rack" and device_type == "tor":
@@ -75,7 +80,7 @@ class RackPlanner:
         # For mixed/middle_rack deployment leafs: calculate offset based on row position
         # Middle rack leafs serve all ToRs in their row
         elif deployment_type in ("mixed", "middle_rack") and device_type == "leaf":
-            offset = (data.row_index - 1) * device_count
+            offset = leaf_link_base + (data.row_index - 1) * device_count
 
             logger.info(
                 f"Calculated {device_type} offset={offset} for rack {data.name} "
@@ -88,8 +93,8 @@ class RackPlanner:
         # design capacity — avoids exceeding real spine port capacity.
         elif deployment_type in ("mixed", "tor") and device_type == "tor":
             tors_in_previous_rows = (racks_in_previous_rows or 0) * device_count
-            offset_in_current_row = device_count * (current_index - 1)
-            offset = tors_in_previous_rows + offset_in_current_row
+            offset_in_current_row = device_count * effective_rack_index
+            offset = spine_link_base + tors_in_previous_rows + offset_in_current_row
 
             logger.info(
                 f"Calculated {device_type} offset={offset} for rack {data.name} "

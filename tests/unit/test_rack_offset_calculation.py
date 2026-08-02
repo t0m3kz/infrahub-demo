@@ -25,6 +25,9 @@ def _build_generator(
     maximum_tors_per_row: int | None = None,
     rows: int = 1,
     leafs_per_network_rack: int = 0,
+    rack_numbering_start_index: int = 1,
+    leaf_link_numbering_start: int = 1,
+    spine_link_numbering_start: int = 1,
 ) -> RackGenerator:
     """Create a RackGenerator instance with minimal data for offset calculation.
 
@@ -56,6 +59,9 @@ def _build_generator(
         fabric_templates=[DeviceRole(role="spine", quantity=2, template=Template(id="tmpl-spine"))],
         deployment_type=deployment_type,
         layout="S_MIXED",
+        rack_numbering_start_index=rack_numbering_start_index,
+        leaf_link_numbering_start=leaf_link_numbering_start,
+        spine_link_numbering_start=spine_link_numbering_start,
     )
 
     suite = LocationSuiteModel(
@@ -210,9 +216,9 @@ def test_dc1_pod3_tor_offset_with_actual_rack_count(
         # (no more implicit derivation from a design's per-row capacity).
         (1, 1, 0, 2, 0),  # first rack, first row → 0
         (1, 2, 0, 2, 2),  # second rack, first row → 2
-        (1, 9, 0, 2, 16),  # last compute rack in row 1 (index 9+1=10 in mixed: network=1, compute=9)
-        (2, 1, 9, 2, 18),  # first rack, second row, 9 racks in prior row → 9*2 + 0 = 18
-        (2, 5, 9, 2, 26),  # row 2, rack 5, 9 racks in prior row → 18 + 4*2 = 26
+        (1, 8, 0, 2, 14),  # last compute rack in row 1 (index 8+1=9 in mixed: network=1, compute=8)
+        (2, 1, 8, 2, 16),  # first rack, second row, 8 racks in prior row → 8*2 + 0 = 16
+        (2, 5, 8, 2, 24),  # row 2, rack 5, 8 racks in prior row → 16 + 4*2 = 24
     ],
 )
 def test_mixed_tor_offset_row_and_rack(
@@ -244,8 +250,8 @@ def test_no_collision_mixed_two_rows() -> None:
     leaf-vs-leaf disjointness that calculate_cabling_offsets still owns.
     """
 
-    # S_MIXED: 2 rows, 1 network rack/row with 2 leafs, 9 compute racks/row with 2 ToRs
-    rows, leafs_per_rack, tors_per_row = 2, 2, 18
+    # S_MIXED: 2 rows, 1 network rack/row with 2 leafs, 8 compute racks/row with 2 ToRs
+    rows, leafs_per_rack, tors_per_row = 2, 2, 16
 
     def get_offset(
         deployment_type: Literal["middle_rack", "tor", "mixed"], device_type: str, row_index: int, rack_index: int = 1
@@ -305,3 +311,38 @@ def test_dc1_pod3_missing_racks_in_previous_rows_defaults_to_zero() -> None:
     )
     assert offset_actual == 22  # safely within 30 downlinks
     assert offset_actual < SPINE_DOWNLINKS
+
+
+def test_leaf_offset_respects_leaf_link_numbering_start_base() -> None:
+    generator = _build_generator(
+        deployment_type="mixed",
+        row_index=2,
+        leaf_link_numbering_start=5,
+    )
+
+    # base=4 + (row_index-1)*device_count = 4 + 2 = 6
+    offset = generator.calculate_cabling_offsets(device_count=2, device_type="leaf")
+
+    assert offset == 6
+
+
+def test_tor_offset_respects_rack_and_spine_start_bases() -> None:
+    generator = _build_generator(
+        deployment_type="tor",
+        rack_index=4,
+        row_index=2,
+        rack_numbering_start_index=2,
+        spine_link_numbering_start=3,
+    )
+
+    # rack base: effective index=(4-1)-(2-1)=2 -> 2*2=4
+    # previous rows: 5*2=10
+    # spine base: 2
+    # total = 2 + 10 + 4 = 16
+    offset = generator.calculate_cabling_offsets(
+        device_count=2,
+        device_type="tor",
+        racks_in_previous_rows=5,
+    )
+
+    assert offset == 16

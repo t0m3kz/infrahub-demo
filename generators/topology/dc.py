@@ -8,6 +8,7 @@ from utils.data_cleaning import clean_data
 from ..common import CommonGenerator, DeviceOptions
 from ..helpers import calculate_dc_fabric_loopback_prefix, name_to_asn_range
 from ..helpers.routing import RoutingStrategy
+from ..helpers.template_interfaces import role_interface_names_or_dynamic
 from ..models import POD_LAYOUTS, DCModel
 from ..protocols import (
     RoutingAutonomousSystem,
@@ -332,16 +333,22 @@ class DCTopologyGenerator(CommonGenerator):
             # PodCablingStrategy uses for spine<->super-spine — architecturally
             # identical fan-out, just one tier up and both ends DC-scoped).
             super_spine_uplink_interfaces = [
-                iface.name
+                iface_name
                 for entry in super_spine_entries
-                for iface in entry.template.interfaces
-                if iface.role == "uplink"
+                for iface_name in role_interface_names_or_dynamic(
+                    interfaces=entry.template.interfaces,
+                    role="uplink",
+                    fallback_count=max(1, len(hyper_spine_names)),
+                )
             ]
             hyper_spine_downlink_interfaces = [
-                iface.name
+                iface_name
                 for entry in hyper_spine_entries
-                for iface in entry.template.interfaces
-                if iface.role == "downlink"
+                for iface_name in role_interface_names_or_dynamic(
+                    interfaces=entry.template.interfaces,
+                    role="downlink",
+                    fallback_count=max(1, len(super_spine_names)),
+                )
             ]
             if super_spine_names and super_spine_uplink_interfaces and hyper_spine_downlink_interfaces:
                 p2p_prefix_length = 127 if is_ipv6 else 31

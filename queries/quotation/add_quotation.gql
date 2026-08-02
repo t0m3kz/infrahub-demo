@@ -9,6 +9,12 @@ query add_quotation($name: String!) {
         pod_count {
           value
         }
+        topology_strategy {
+          value
+        }
+        growth_buffer_percent {
+          value
+        }
         preferred_switch_vendor {
           value
         }
@@ -47,6 +53,15 @@ query add_quotation($name: String!) {
                 value
               }
               port_count_400g {
+                value
+              }
+              rack_assignment_strategy {
+                value
+              }
+              preferred_leaf_link_offset {
+                value
+              }
+              preferred_spine_uplink_offset {
                 value
               }
             }

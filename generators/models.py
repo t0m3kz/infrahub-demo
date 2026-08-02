@@ -116,23 +116,33 @@ POD_LAYOUTS: dict[str, dict[str, int]] = {
     },
     "S_TOR": {
         "rows": 2,
-        "compute_racks_per_row": 10,
+        # Hard-enforced by explicit spine/ToR port budget assumptions below.
+        "compute_racks_per_row": 8,
         "network_racks_per_row": 0,
         "max_leafs_per_network_rack": 0,
         "max_tors_per_network_rack": 0,
         "max_tors_per_compute_rack": 2,
         "max_spines_per_pod": 4,
         "max_border_leafs_per_pod": 1,
+        "spine_downlink_ports_per_spine": 32,
+        "tor_uplinks_to_spine": 4,
+        "reserved_spine_downlinks_per_spine": 0,
+        "enforce_compute_racks_from_spine_budget": True,
     },
     "S_MIXED": {
         "rows": 2,
-        "compute_racks_per_row": 9,
+        # Hard-enforced by explicit spine/ToR port budget assumptions below.
+        "compute_racks_per_row": 8,
         "network_racks_per_row": 1,
         "max_leafs_per_network_rack": 2,
         "max_tors_per_network_rack": 0,
         "max_tors_per_compute_rack": 2,
         "max_spines_per_pod": 4,
         "max_border_leafs_per_pod": 1,
+        "spine_downlink_ports_per_spine": 32,
+        "tor_uplinks_to_spine": 4,
+        "reserved_spine_downlinks_per_spine": 0,
+        "enforce_compute_racks_from_spine_budget": True,
     },
     "S_BORDER_SPINE_POD": {
         "rows": 1,
@@ -146,13 +156,18 @@ POD_LAYOUTS: dict[str, dict[str, int]] = {
     },
     "M_MIXED": {
         "rows": 4,
-        "compute_racks_per_row": 9,
+        # Hard-enforced by explicit spine/ToR port budget assumptions below.
+        "compute_racks_per_row": 8,
         "network_racks_per_row": 1,
         "max_leafs_per_network_rack": 2,
         "max_tors_per_network_rack": 0,
         "max_tors_per_compute_rack": 2,
         "max_spines_per_pod": 3,
         "max_border_leafs_per_pod": 1,
+        "spine_downlink_ports_per_spine": 64,
+        "tor_uplinks_to_spine": 3,
+        "reserved_spine_downlinks_per_spine": 0,
+        "enforce_compute_racks_from_spine_budget": True,
     },
     "M_MIDDLE": {
         "rows": 4,
@@ -166,13 +181,18 @@ POD_LAYOUTS: dict[str, dict[str, int]] = {
     },
     "L_MIXED": {
         "rows": 8,
-        "compute_racks_per_row": 9,
+        # Hard-enforced by explicit spine/ToR port budget assumptions below.
+        "compute_racks_per_row": 8,
         "network_racks_per_row": 1,
         "max_leafs_per_network_rack": 2,
         "max_tors_per_network_rack": 0,
         "max_tors_per_compute_rack": 2,
         "max_spines_per_pod": 4,
         "max_border_leafs_per_pod": 1,
+        "spine_downlink_ports_per_spine": 64,
+        "tor_uplinks_to_spine": 2,
+        "reserved_spine_downlinks_per_spine": 0,
+        "enforce_compute_racks_from_spine_budget": True,
     },
     "L_MIDDLE": {
         "rows": 8,
@@ -199,10 +219,51 @@ class PodLayout(BaseModel):
     max_tors_per_compute_rack: int = 1
     max_spines_per_pod: int = 2
     max_border_leafs_per_pod: int = 1
+    spine_downlink_ports_per_spine: int | None = None
+    tor_uplinks_to_spine: int | None = None
+    reserved_spine_downlinks_per_spine: int = 0
+    enforce_compute_racks_from_spine_budget: bool = False
+
+    @property
+    def computed_max_compute_racks_per_row(self) -> int | None:
+        """Compute per-row max from explicit spine/ToR port budget assumptions.
+
+        Returns None when budget assumptions are not provided for this layout.
+        """
+        if self.spine_downlink_ports_per_spine is None or self.tor_uplinks_to_spine is None:
+            return None
+
+        usable_downlinks_per_spine = max(
+            0, self.spine_downlink_ports_per_spine - self.reserved_spine_downlinks_per_spine
+        )
+        total_usable_downlinks = usable_downlinks_per_spine * self.max_spines_per_pod
+        links_per_compute_rack = self.max_tors_per_compute_rack * self.tor_uplinks_to_spine
+        if links_per_compute_rack <= 0 or self.rows <= 0:
+            return 0
+
+        max_compute_racks_per_pod = total_usable_downlinks // links_per_compute_rack
+        return max_compute_racks_per_pod // self.rows
+
+    def validate_budget_consistency(self) -> None:
+        """Fail fast when hard-enforced layout budget and declared maxima diverge."""
+        if not self.enforce_compute_racks_from_spine_budget:
+            return
+        computed = self.computed_max_compute_racks_per_row
+        if computed is None:
+            raise ValueError(
+                f"Layout {self.name}: enforce_compute_racks_from_spine_budget=True but spine budget fields are missing"
+            )
+        if self.compute_racks_per_row != computed:
+            raise ValueError(
+                f"Layout {self.name}: compute_racks_per_row={self.compute_racks_per_row} "
+                f"does not match spine budget derived value={computed}"
+            )
 
     @classmethod
     def from_name(cls, layout: str) -> "PodLayout":
-        return cls(name=layout, **POD_LAYOUTS[layout])
+        resolved = cls(name=layout, **POD_LAYOUTS[layout])
+        resolved.validate_budget_consistency()
+        return resolved
 
 
 # Data Center size capacity — same numbers TopologyDataCenterDesign used to
@@ -270,6 +331,146 @@ class DCSizeLayout(BaseModel):
         return cls(name=size, **DC_SIZE_LAYOUTS[size])
 
 
+@dataclass(frozen=True)
+class StandardProfileAssumptions:
+    """Shared assumptions used by standard profile templates.
+
+    These assumptions explain WHY the default profile numbers exist and provide
+    one declarative place for future tuning.
+    """
+
+    oversubscription: str = "1:2"
+    homing: Literal["single", "dual"] = "dual"
+    spare_ratio: float = 0.20
+    preferred_topology: Literal["middle_rack", "tor", "mixed"] = "mixed"
+    suite_container_mode: bool = True
+
+
+STANDARD_PROFILE_ASSUMPTIONS = StandardProfileAssumptions()
+
+
+class DCProfile(BaseModel):
+    """Resolved per-DC profile derived from a standard size template."""
+
+    owner_kind: Literal["dc"] = "dc"
+    owner_id: str
+    owner_name: str
+    profile_name: str
+    profile_template: str
+    oversubscription: str
+    homing: Literal["single", "dual"]
+    spare_ratio: float
+    preferred_topology: Literal["middle_rack", "tor", "mixed"]
+    max_pods: int
+    max_super_spines_per_fabric: int
+    max_hyper_spines_per_fabric: int
+    max_spines_per_pod: int
+    max_border_leafs_per_fabric: int
+    loopback_prefix_length: int
+    technical_prefix_length: int
+    management_prefix_length: int
+
+    @classmethod
+    def from_dc(cls, *, dc_id: str, dc_name: str, size: str) -> "DCProfile":
+        layout = DCSizeLayout.from_name(size)
+        assumptions = STANDARD_PROFILE_ASSUMPTIONS
+        return cls(
+            owner_id=dc_id,
+            owner_name=dc_name,
+            profile_name=f"{dc_name}:{size}",
+            profile_template=size,
+            oversubscription=assumptions.oversubscription,
+            homing=assumptions.homing,
+            spare_ratio=assumptions.spare_ratio,
+            preferred_topology=assumptions.preferred_topology,
+            max_pods=layout.max_pods,
+            max_super_spines_per_fabric=layout.max_super_spines_per_fabric,
+            max_hyper_spines_per_fabric=layout.max_hyper_spines_per_fabric,
+            max_spines_per_pod=layout.max_spines_per_pod,
+            max_border_leafs_per_fabric=layout.max_border_leafs_per_fabric,
+            loopback_prefix_length=layout.loopback_prefix_length,
+            technical_prefix_length=layout.technical_prefix_length,
+            management_prefix_length=layout.management_prefix_length,
+        )
+
+
+class PodProfile(BaseModel):
+    """Resolved per-Pod profile derived from a standard layout template."""
+
+    owner_kind: Literal["pod"] = "pod"
+    owner_id: str
+    owner_name: str
+    owner_dc_id: str | None = None
+    owner_dc_name: str | None = None
+    profile_name: str
+    profile_template: str
+    deployment_type: Literal["middle_rack", "tor", "mixed"]
+    oversubscription: str
+    homing: Literal["single", "dual"]
+    spare_ratio: float
+    preferred_topology: Literal["middle_rack", "tor", "mixed"]
+    suite_container_mode: bool
+    rows: int
+    compute_racks_per_row: int
+    network_racks_per_row: int
+    max_leafs_per_network_rack: int
+    max_tors_per_network_rack: int
+    max_tors_per_compute_rack: int
+    max_spines_per_pod: int
+    max_border_leafs_per_pod: int
+    spine_downlink_ports_per_spine: int | None = None
+    tor_uplinks_to_spine: int | None = None
+    reserved_spine_downlinks_per_spine: int = 0
+    enforce_compute_racks_from_spine_budget: bool = False
+
+    @property
+    def row_dependent_rack_slots_per_row(self) -> int:
+        """Row-dependent rack slots used for deterministic ToR offset planning."""
+        if self.deployment_type in ("tor", "mixed"):
+            return self.compute_racks_per_row
+        return 0
+
+    @classmethod
+    def from_pod(
+        cls,
+        *,
+        pod_id: str,
+        pod_name: str,
+        layout_name: str,
+        deployment_type: Literal["middle_rack", "tor", "mixed"],
+        dc_id: str | None = None,
+        dc_name: str | None = None,
+    ) -> "PodProfile":
+        layout = PodLayout.from_name(layout_name)
+        assumptions = STANDARD_PROFILE_ASSUMPTIONS
+        return cls(
+            owner_id=pod_id,
+            owner_name=pod_name,
+            owner_dc_id=dc_id,
+            owner_dc_name=dc_name,
+            profile_name=f"{pod_name}:{layout_name}",
+            profile_template=layout_name,
+            deployment_type=deployment_type,
+            oversubscription=assumptions.oversubscription,
+            homing=assumptions.homing,
+            spare_ratio=assumptions.spare_ratio,
+            preferred_topology=assumptions.preferred_topology,
+            suite_container_mode=assumptions.suite_container_mode,
+            rows=layout.rows,
+            compute_racks_per_row=layout.compute_racks_per_row,
+            network_racks_per_row=layout.network_racks_per_row,
+            max_leafs_per_network_rack=layout.max_leafs_per_network_rack,
+            max_tors_per_network_rack=layout.max_tors_per_network_rack,
+            max_tors_per_compute_rack=layout.max_tors_per_compute_rack,
+            max_spines_per_pod=layout.max_spines_per_pod,
+            max_border_leafs_per_pod=layout.max_border_leafs_per_pod,
+            spine_downlink_ports_per_spine=layout.spine_downlink_ports_per_spine,
+            tor_uplinks_to_spine=layout.tor_uplinks_to_spine,
+            reserved_spine_downlinks_per_spine=layout.reserved_spine_downlinks_per_spine,
+            enforce_compute_racks_from_spine_budget=layout.enforce_compute_racks_from_spine_budget,
+        )
+
+
 # Data Center Design model (fabric-wide architectural principles)
 class RoutingArchitectureMixin(BaseModel):
     """routing_strategy/underlay_protocol and their derived properties.
@@ -323,6 +524,10 @@ class DCModel(RoutingArchitectureMixin):
     management_pool: Pool | None = None
     fabric_asn_pool: Pool | None = None
     children: list[DCPod] = []
+
+    @property
+    def profile(self) -> DCProfile:
+        return DCProfile.from_dc(dc_id=self.id, dc_name=self.name, size=self.size)
 
     @property
     def design(self) -> DCSizeLayout:
@@ -444,6 +649,17 @@ class PodModel(BaseModel):
     leaf_interface_sorting_method: Literal["top_down", "bottom_up"] = "bottom_up"
 
     @property
+    def profile(self) -> PodProfile:
+        return PodProfile.from_pod(
+            pod_id=self.id,
+            pod_name=self.name,
+            layout_name=self.layout,
+            deployment_type=self.deployment_type,
+            dc_id=self.parent.id,
+            dc_name=self.parent.name,
+        )
+
+    @property
     def design(self) -> PodLayout:
         return PodLayout.from_name(self.layout)
 
@@ -458,6 +674,10 @@ class PodModel(BaseModel):
         return self.design.compute_racks_per_row * self.design.max_tors_per_compute_rack
 
     spine_interface_sorting_method: Literal["top_down", "bottom_up"] = "bottom_up"
+    rack_numbering_start_index: int = 1
+    leaf_link_numbering_start: int = 1
+    spine_link_numbering_start: int = 1
+    tor_link_numbering_start: int = 1
     # pod.py validates non-empty at generate() time; the list itself is never null
     fabric_templates: list[DeviceRole] = []
     parent: PodParent
@@ -500,6 +720,22 @@ class PodModel(BaseModel):
     def spine_slot_role(self) -> Literal["spine", "border-spine"]:
         return "border-spine" if self.border_spine_templates else "spine"
 
+    @property
+    def rack_numbering_base_offset(self) -> int:
+        return max(0, self.rack_numbering_start_index - 1)
+
+    @property
+    def leaf_link_base_offset(self) -> int:
+        return max(0, self.leaf_link_numbering_start - 1)
+
+    @property
+    def spine_link_base_offset(self) -> int:
+        return max(0, self.spine_link_numbering_start - 1)
+
+    @property
+    def tor_link_base_offset(self) -> int:
+        return max(0, self.tor_link_numbering_start - 1)
+
 
 # Rack model
 class RackParent(RoutingArchitectureMixin):
@@ -538,6 +774,10 @@ class RackPod(BaseModel):
     leaf_interface_sorting_method: Literal["top_down", "bottom_up"] = "bottom_up"
     spine_interface_sorting_method: Literal["top_down", "bottom_up"] = "bottom_up"
     mlag_create: Literal["no", "back-to-back", "virtual"] = "no"
+    rack_numbering_start_index: int = 1
+    leaf_link_numbering_start: int = 1
+    spine_link_numbering_start: int = 1
+    tor_link_numbering_start: int = 1
     loopback_pool: Pool | None = None
     prefix_pool: Pool | None = None
     asn_pool: Pool | None = None
@@ -547,6 +787,17 @@ class RackPod(BaseModel):
     fabric_templates: list[DeviceRole] = []
     # Spine devices with cable info (from GQL query)
     devices: list[SpineDevice] = []
+
+    @property
+    def profile(self) -> PodProfile:
+        return PodProfile.from_pod(
+            pod_id=self.id,
+            pod_name=self.name,
+            layout_name=self.layout,
+            deployment_type=self.deployment_type,
+            dc_id=self.parent.id,
+            dc_name=self.parent.name,
+        )
 
     @property
     def design(self) -> PodLayout:
@@ -569,6 +820,22 @@ class RackPod(BaseModel):
     @property
     def spine_slot_role(self) -> Literal["spine", "border-spine"]:
         return "border-spine" if self.border_spine_templates else "spine"
+
+    @property
+    def rack_numbering_base_offset(self) -> int:
+        return max(0, self.rack_numbering_start_index - 1)
+
+    @property
+    def leaf_link_base_offset(self) -> int:
+        return max(0, self.leaf_link_numbering_start - 1)
+
+    @property
+    def spine_link_base_offset(self) -> int:
+        return max(0, self.spine_link_numbering_start - 1)
+
+    @property
+    def tor_link_base_offset(self) -> int:
+        return max(0, self.tor_link_numbering_start - 1)
 
     @field_validator("loopback_pool", "prefix_pool", "asn_pool", mode="before")
     @classmethod

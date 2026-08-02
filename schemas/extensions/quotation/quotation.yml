@@ -172,6 +172,36 @@ nodes:
         order_weight: 1020
         parameters:
           min_value: 1
+      - name: topology_strategy
+        label: "Topology Strategy"
+        description: "How to choose multi-pod core: automatic cost decision, forced back-to-back, or forced classic 3-tier."  # yamllint disable-line rule:line-length
+        kind: Dropdown
+        optional: true
+        default_value: auto
+        order_weight: 1030
+        choices:
+          - name: auto
+            label: "Auto"
+            description: "Pick cheaper of back-to-back vs classic 3-tier."
+            color: "#7FBF7F"
+          - name: back_to_back
+            label: "Back-to-Back"
+            description: "Force spine mesh between pods, no super-spine tier."
+            color: "#7F7FBF"
+          - name: classic_3tier
+            label: "Classic 3-Tier"
+            description: "Force super-spine aggregation when eligible, otherwise fall back."
+            color: "#BF7FBF"
+      - name: growth_buffer_percent
+        label: "Growth Buffer (%)"
+        description: "Port-demand growth buffer applied before sizing leaf/spine tiers (for headroom)."
+        kind: Number
+        optional: true
+        default_value: 0
+        order_weight: 1040
+        parameters:
+          min_value: 0
+          max_value: 200
       - name: preferred_switch_vendor
         label: "Preferred Switch Vendor"
         description: "Restrict leaf/spine/super-spine/border-leaf picks to this manufacturer, if set."
@@ -327,6 +357,44 @@ nodes:
             label: "Hierarchical"
             description: "Leafs in network racks aggregate ToRs in compute racks (this project's \"mixed\" layout)."
             color: "#BF7FBF"
+      - name: rack_assignment_strategy
+        label: "Rack Assignment Strategy"
+        description: "How this room's rack demand is assigned when pod_count and room count differ."
+        kind: Dropdown
+        optional: true
+        default_value: round_robin
+        order_weight: 310
+        choices:
+          - name: round_robin
+            label: "Round-Robin"
+            description: "Distribute pod/room assignments round-robin (legacy behavior)."
+            color: "#7FBF7F"
+          - name: sequential
+            label: "Sequential"
+            description: "Fill pods in order using the room list as a sequential source."
+            color: "#7F7FBF"
+          - name: dedicated_room_per_pod
+            label: "Dedicated Room Per Pod"
+            description: "Prefer 1:1 room-to-pod mapping; fall back when rooms are fewer than pods."
+            color: "#BF7FBF"
+      - name: preferred_leaf_link_offset
+        label: "Preferred Leaf Link Offset"
+        description: "Optional 1-based starting index hint for leaf-facing links in this room."
+        kind: Number
+        optional: true
+        default_value: 1
+        order_weight: 320
+        parameters:
+          min_value: 1
+      - name: preferred_spine_uplink_offset
+        label: "Preferred Spine Uplink Offset"
+        description: "Optional 1-based starting index hint for spine uplinks in this room."
+        kind: Number
+        optional: true
+        default_value: 1
+        order_weight: 330
+        parameters:
+          min_value: 1
     relationships:
       - name: quotation
         peer: CustomerQuotationDC

@@ -258,12 +258,28 @@ class TestDeriveSpineInfo:
         assert interface_names == ["Ethernet1/1", "Ethernet1/2"]
 
     def test_raises_when_template_has_no_interfaces(self) -> None:
-        """RuntimeError raised when template has no interfaces (empty list)."""
+        """When template has no interfaces, dynamic fallback uses layout budget."""
         gen = _build_rack_generator(deployment_type="tor", rack_type="tor")
         gen.fabric_name = "dc1"
         gen.data.pod.index = 1
         gen.data.pod.parent.index = 1
         gen.data.pod.parent.naming_convention = "standard"
+        gen.data.pod.fabric_templates[0].template.interfaces = []
+
+        _, interface_names = gen._derive_spine_info()
+
+        # S_MIXED budget: 32 downlinks per spine, none reserved
+        assert len(interface_names) == 32
+        assert interface_names[0] == "Ethernet1/1"
+        assert interface_names[-1] == "Ethernet1/32"
+
+    def test_raises_when_template_has_no_interfaces_and_no_budget_fallback(self) -> None:
+        gen = _build_rack_generator(deployment_type="middle_rack", rack_type="network")
+        gen.fabric_name = "dc1"
+        gen.data.pod.index = 1
+        gen.data.pod.parent.index = 1
+        gen.data.pod.parent.naming_convention = "standard"
+        gen.data.pod.layout = "S_MIDDLE"  # no explicit spine budget metadata
         gen.data.pod.fabric_templates[0].template.interfaces = []
 
         with pytest.raises(RuntimeError, match="Spine template has no downlink interfaces"):

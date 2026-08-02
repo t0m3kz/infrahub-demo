@@ -7,6 +7,7 @@ from utils.data_cleaning import clean_data
 
 from ..common import CablingOptions, CommonGenerator, DeviceOptions, RoutingOptions
 from ..helpers.routing import RoutingStrategy
+from ..helpers.template_interfaces import role_interface_names_or_dynamic
 from ..models import PodModel
 from ..protocols import DcimPhysicalDevice, DcimPhysicalInterface, TopologyPod
 
@@ -262,7 +263,11 @@ class PodTopologyGenerator(CommonGenerator):
                 top_role="super-spine",
             )
 
-        spine_interfaces = [iface.name for iface in spine_template.interfaces if iface.role == "uplink"]
+        spine_interfaces = role_interface_names_or_dynamic(
+            interfaces=spine_template.interfaces,
+            role="uplink",
+            fallback_count=max(1, len(super_spine_devices), dc.design.max_spines_per_pod),
+        )
         if not spine_interfaces:
             self.logger.error(
                 f"Pod {self.data.name}: No uplink interfaces found in spine template. "
@@ -293,7 +298,7 @@ class PodTopologyGenerator(CommonGenerator):
 
             await self._cable_to_existing_sibling_pods(
                 spines=spines,
-                spine_interfaces=[iface.name for iface in spine_template.interfaces if iface.role == "uplink"],
+                spine_interfaces=spine_interfaces,
                 spine_role=spine_role,
                 dc=dc,
                 dc_asn_pool_id=dc_asn_pool_id,
@@ -303,7 +308,7 @@ class PodTopologyGenerator(CommonGenerator):
 
         if not skip_cabling:
             dc_max_spines = dc.design.max_spines_per_pod
-            cabling_offset = (self.data.index - 1) * dc_max_spines
+            cabling_offset = self.data.spine_link_base_offset + ((self.data.index - 1) * dc_max_spines)
             p2p_prefix_length = 127 if is_ipv6 else 31
             routing_opts = RoutingOptions(design=dc, asn_pool=dc_asn_pool_id) if dc_asn_pool_id else RoutingOptions()
             p2p_pairs = await self.create_cabling(
@@ -340,7 +345,15 @@ class PodTopologyGenerator(CommonGenerator):
         # during its own bootstrap instead of dc.py re-deriving it).
         await self._cable_border_leafs_to_spines(
             spines=spines,
-            spine_downlink_interfaces=[iface.name for iface in spine_template.interfaces if iface.role == "downlink"],
+            spine_downlink_interfaces=role_interface_names_or_dynamic(
+                interfaces=spine_template.interfaces,
+                role="downlink",
+                fallback_count=max(
+                    0,
+                    (self.data.profile.spine_downlink_ports_per_spine or 0)
+                    - self.data.profile.reserved_spine_downlinks_per_spine,
+                ),
+            ),
             dc=dc,
             dc_asn_pool_id=dc_asn_pool_id,
             pod_pools=pod_pools,
@@ -443,9 +456,13 @@ class PodTopologyGenerator(CommonGenerator):
 
         design = self.data.design
         if self.data.deployment_type == "tor":
-            offset = design.rows * design.compute_racks_per_row * design.max_tors_per_compute_rack
+            offset = self.data.spine_link_base_offset + (
+                design.rows * design.compute_racks_per_row * design.max_tors_per_compute_rack
+            )
         else:
-            offset = design.rows * design.network_racks_per_row * design.max_leafs_per_network_rack
+            offset = self.data.spine_link_base_offset + (
+                design.rows * design.network_racks_per_row * design.max_leafs_per_network_rack
+            )
 
         p2p_prefix_length = 127 if is_ipv6 else 31
         p2p_pairs = await self.create_cabling(
@@ -555,7 +572,7 @@ class PodTopologyGenerator(CommonGenerator):
                 )
                 continue
 
-            cabling_offset = (sibling.index.value - 1) * dc_max_spines
+            cabling_offset = self.data.spine_link_base_offset + ((sibling.index.value - 1) * dc_max_spines)
             self.logger.info(
                 f"Pod {self.data.name} (idx={self.data.index}): cabling to sibling pod idx={sibling.index.value} "
                 f"[offset={cabling_offset}]"

@@ -305,7 +305,10 @@ class RackGenerator(RackMixin, CommonGenerator):
             return created_leaf_devices, leaf_interfaces, 0, "intra_rack_middle"
 
         # Compute rack (mixed deployment): cable to middle-rack leafs in same row
-        cabling_offset = (self.data.index - 1) * devices_per_rack
+        rack_base = self.data.pod.rack_numbering_base_offset
+        leaf_base = self.data.pod.leaf_link_base_offset
+        effective_rack_index = max(0, self.data.index - 1 - rack_base)
+        cabling_offset = leaf_base + (effective_rack_index * devices_per_rack)
 
         if leaf_row_cache is None:
             leaf_row_cache = await self._get_leaf_devices_in_row(pod_id=self.data.pod.id, row_index=self.data.row_index)
@@ -334,6 +337,64 @@ class RackGenerator(RackMixin, CommonGenerator):
             device_type=device_type,
             racks_in_previous_rows=racks_in_previous_rows,
         )
+
+    def _planned_previous_row_rack_slots(self) -> int:
+        """Deterministic count of row-dependent rack slots before this row.
+
+        Uses pod layout capacity rather than live object count so offsets remain
+        stable even when racks are created incrementally or in parallel.
+        """
+        pod = self.data.pod
+        if self.data.row_index <= 1:
+            return 0
+        profile = pod.profile
+        if profile.deployment_type not in ("tor", "mixed"):
+            return 0
+
+        # In both tor and mixed modes, compute racks are the row-dependent slots.
+        racks_per_row = max(0, profile.row_dependent_rack_slots_per_row)
+        return (self.data.row_index - 1) * racks_per_row
+
+    def _validate_profile_capacity_limits(self) -> list[str]:
+        """Return profile-capacity violations for this rack context.
+
+        Profile maxima define allowed topology shape. Offsets are only valid
+        when the rack/request stays within those limits.
+        """
+        pod = self.data.pod
+        profile = pod.profile
+        errors: list[str] = []
+
+        if self.data.row_index > profile.rows:
+            errors.append(
+                f"row_index={self.data.row_index} exceeds profile rows={profile.rows} "
+                f"for layout={profile.profile_template}"
+            )
+
+        max_rack_slots = profile.compute_racks_per_row + profile.network_racks_per_row
+        if max_rack_slots > 0 and self.data.index > max_rack_slots:
+            errors.append(
+                f"rack index={self.data.index} exceeds per-row rack slots={max_rack_slots} "
+                f"(compute={profile.compute_racks_per_row}, network={profile.network_racks_per_row})"
+            )
+
+        if pod.deployment_type in ("middle_rack", "mixed") and self.data.rack_type == "network":
+            leaf_count = sum(role.quantity for role in self.data.leafs)
+            if leaf_count > profile.max_leafs_per_network_rack:
+                errors.append(
+                    f"leaf count={leaf_count} exceeds profile max_leafs_per_network_rack="
+                    f"{profile.max_leafs_per_network_rack}"
+                )
+
+        if pod.deployment_type in ("tor", "mixed") and self.data.rack_type in ROW_DEPENDENT_RACK_TYPES:
+            tor_count = sum(role.quantity for role in self.data.tors)
+            if tor_count > profile.max_tors_per_compute_rack:
+                errors.append(
+                    f"tor count={tor_count} exceeds profile max_tors_per_compute_rack="
+                    f"{profile.max_tors_per_compute_rack}"
+                )
+
+        return errors
 
     async def _cable_and_route(
         self,
@@ -449,6 +510,14 @@ class RackGenerator(RackMixin, CommonGenerator):
             for error in role_errors:
                 self.logger.error(
                     f"Rack {self.data.name}: {error} — fix the rack's fabric_templates instead of running the generator."
+                )
+            return
+
+        capacity_errors = self._validate_profile_capacity_limits()
+        if capacity_errors:
+            for error in capacity_errors:
+                self.logger.error(
+                    f"Rack {self.data.name}: {error} — profile limits are exceeded, adjust layout/templates first."
                 )
             return
 
@@ -646,15 +715,7 @@ class RackGenerator(RackMixin, CommonGenerator):
         # Both invariant across tor_roles (not derived from any single role) —
         # computed once rather than once per role template.
         tors_per_rack = sum(r.quantity for r in tor_roles)
-        # Live count of ToR-bearing racks only (rack_type in ROW_DEPENDENT_RACK_TYPES) —
-        # in mixed deployment, previous rows also contain a network rack with no ToR
-        # of its own, which must NOT be counted here or the offset would overshoot.
-        sibling_racks = await self.client.filters(kind=LocationRack, pod__ids=[pod.id])
-        prev_row_racks = sum(
-            1
-            for r in sibling_racks
-            if r.row_index.value < self.data.row_index and r.rack_type.value in ROW_DEPENDENT_RACK_TYPES
-        )
+        prev_row_racks = self._planned_previous_row_rack_slots()
 
         for tor_role in tor_roles:
             expected_names = self._roles.expected_names(role="tor", quantity=tor_role.quantity)

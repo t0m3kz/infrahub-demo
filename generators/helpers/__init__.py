@@ -12,6 +12,7 @@ This module provides reusable utilities for generator implementations:
 # Re-export all public APIs for backward compatibility
 from .cabling import (
     CableTypeDetector,
+    CablingPlanError,
     CablingPlanner,
     CablingStrategy,
     ChainCablingStrategy,
@@ -58,6 +59,12 @@ from .quotation import (
 )
 from .routing import PendingASRef, RoutingPlan, RoutingPlanInput, RoutingPlanner, RoutingStrategy
 from .rules import RulePlanningHelper, RulesPlanner
+from .template_interfaces import (
+    build_ethernet_interface_names,
+    build_spine_downlink_template_names,
+    role_interface_names_or_dynamic,
+    template_interface_names_by_role,
+)
 
 __all__ = [
     # Routing
@@ -68,6 +75,7 @@ __all__ = [
     "RoutingStrategy",
     # Cabling
     "CablingPlanner",
+    "CablingPlanError",
     "CablingStrategy",
     "PodCablingStrategy",
     "RackCablingStrategy",
@@ -117,4 +125,9 @@ __all__ = [
     "recommend_design",
     "recommend_pod_design",
     "validate_room_capacity",
+    # Dynamic interface templates
+    "build_ethernet_interface_names",
+    "build_spine_downlink_template_names",
+    "template_interface_names_by_role",
+    "role_interface_names_or_dynamic",
 ]
