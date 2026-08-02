@@ -24,6 +24,8 @@ spec:
       description: All spines
     - name: super-spines
       description: All super spines
+    - name: hyper-spines
+      description: All hyper spines
     - name: firewalls
       description: All firewalls
     - name: loadbalancers

@@ -21,6 +21,7 @@ from .types import CablingOptions, ChainHop, DeviceOptions, RoutingOptions  # no
 _PARENT_WAIT_TIMEOUT = 1800  # 30 min, matches tasks/demo.py's own generator-wait timeout
 _PARENT_WAIT_POLL_INTERVAL = 3
 _IN_FLIGHT_STATES = [TaskState.PENDING, TaskState.RUNNING, TaskState.SCHEDULED]
+_FAILED_PARENT_STATES = [TaskState.FAILED, TaskState.CRASHED, TaskState.CANCELLED, TaskState.CANCELLING]
 
 
 class CommonGenerator(
@@ -131,6 +132,39 @@ class CommonGenerator(
         parent_task_title = f"Run generator {generator_name}"
         matching = [task for task in in_flight if task.title == parent_task_title]
         if not matching:
+            # Parent might have already finished in a terminal failed state.
+            # Detect a fresh failure and fail-fast with a clear error instead of
+            # continuing and surfacing secondary follow-up errors downstream.
+            failed_tasks = await self.client.task.filter(
+                filter=TaskFilter(
+                    branch=self.branch_name,
+                    related_node__ids=[parent_id],
+                    state=_FAILED_PARENT_STATES,
+                )
+            )
+            failed_matching = [task for task in failed_tasks if task.title == parent_task_title]
+            if failed_matching:
+                completed_tasks = await self.client.task.filter(
+                    filter=TaskFilter(
+                        branch=self.branch_name,
+                        related_node__ids=[parent_id],
+                        state=[TaskState.COMPLETED],
+                    )
+                )
+                completed_matching = [task for task in completed_tasks if task.title == parent_task_title]
+
+                def _task_ts(task: Any) -> str:
+                    ts = getattr(task, "updated_at", None) or getattr(task, "created_at", None)
+                    return str(ts or "")
+
+                latest_failed_ts = max((_task_ts(task) for task in failed_matching), default="")
+                latest_completed_ts = max((_task_ts(task) for task in completed_matching), default="")
+
+                if latest_failed_ts >= latest_completed_ts:
+                    self.logger.error(
+                        f"Parent generator '{generator_name}' last run failed for {parent_id} — "
+                        "cannot safely continue child generation until parent succeeds"
+                    )
             return None
 
         self.logger.info(
