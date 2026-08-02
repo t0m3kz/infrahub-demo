@@ -77,7 +77,7 @@ class CommonGenerator(
         if not roles:
             return
 
-        from .models import DeviceRole, DeviceType, Interface, Platform, Template
+        from .models import DeviceRole, DeviceType, Interface, Owner, Platform, Template
         from .protocols import TemplateDcimPhysicalDevice
 
         template_cache: dict[str, Template] = getattr(self, "_device_type_template_cache", {})
@@ -96,7 +96,7 @@ class CommonGenerator(
                 matches = await self.client.filters(
                     kind=TemplateDcimPhysicalDevice,
                     device_type__ids=[device_type_id],
-                    include=["platform", "device_type", "interfaces"],
+                    include=["platform", "device_type", "interfaces", "owner"],
                 )
                 if not matches:
                     self.logger.error(f"No device template found for device_type {device_type_id!r}")
@@ -107,12 +107,15 @@ class CommonGenerator(
                 platform_peer = getattr(platform_rel, "peer", None) if platform_rel else None
                 device_type_rel = getattr(template_obj, "device_type", None)
                 device_type_peer = getattr(device_type_rel, "peer", None) if device_type_rel else None
+                owner_rel = getattr(template_obj, "owner", None)
+                owner_peer = getattr(owner_rel, "peer", None) if owner_rel else None
                 interface_edges = getattr(getattr(template_obj, "interfaces", None), "edges", []) or []
 
                 template_cache[device_type_id] = Template(
                     id=template_obj.id,
                     platform=Platform(id=platform_peer.id) if platform_peer else None,
                     device_type=DeviceType(id=device_type_peer.id if device_type_peer else device_type_id),
+                    owner=Owner(id=owner_peer.id) if owner_peer else None,
                     interfaces=[
                         Interface(
                             name=getattr(getattr(edge.node, "name", None), "value", ""),
