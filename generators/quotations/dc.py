@@ -4,8 +4,7 @@ Reads the requesting CustomerQuotationDC plus its rooms (the actual sizing
 unit — see schemas/extensions/quotation/quotation.yml's module docstring)
 and the live device catalog (DcimDeviceType, TemplateDcimPhysicalDevice —
 see queries/quotation/add_quotation.gql), runs the same sizing algorithm
-scripts/recommend_dc_design.py uses offline for a single speed
-(generators/helpers/quotation.py), generalized here to multiple port
+from generators/helpers/quotation.py, generalized here to multiple port
 speeds per room, and writes the result into:
 
 - CustomerQuotation.estimated_total_cost + CustomerQuotationLineItem
@@ -46,7 +45,7 @@ from infrahub_sdk.generator import InfrahubGenerator
 
 from utils.data_cleaning import clean_data
 
-from .helpers.quotation import (
+from ..helpers.quotation import (
     PORT_SPEEDS,
     Recommender,
     TierResult,
@@ -58,9 +57,9 @@ from .helpers.quotation import (
     recommend_pod_design,
     validate_room_capacity,
 )
-from .logger import FailOnErrorLoggerMixin
-from .models import DC_SIZE_LAYOUTS, POD_LAYOUTS
-from .protocols import (
+from ..logger import FailOnErrorLoggerMixin
+from ..models import DC_SIZE_LAYOUTS, POD_LAYOUTS
+from ..protocols import (
     CustomerQuotationDC,
     CustomerQuotationLineItem,
     CustomerQuotationProposedDesign,
@@ -72,14 +71,15 @@ _DC_SIZE_LAYOUT_ENTRIES = [{"name": name, **fields} for name, fields in DC_SIZE_
 _POD_LAYOUT_ENTRIES = [{"name": name, **fields} for name, fields in POD_LAYOUTS.items()]
 
 
-class QuotationGenerator(FailOnErrorLoggerMixin, InfrahubGenerator):
+class QuotationDCGenerator(FailOnErrorLoggerMixin, InfrahubGenerator):
     """Compute a DC-fabric sizing/pricing recommendation for one CustomerQuotationDC."""
 
     async def generate(self, data: dict[str, Any]) -> None:
         cleaned = clean_data(data)
         quotations = cleaned.get("CustomerQuotationDC", [])
         if not quotations:
-            self.logger.error("No CustomerQuotationDC found in query response")
+            # Generator may be triggered for a non-DC quotation target; skip quietly.
+            self.logger.info("No CustomerQuotationDC found in query response - skipping")
             return
         quotation = quotations[0]
         quotation_id: str = quotation["id"]

@@ -1,8 +1,7 @@
 """DC-fabric sizing/pricing recommendation logic.
 
-Shared between the offline CLI (scripts/recommend_dc_design.py, which reads
-its device/design catalog from data/bootstrap/*.yaml) and the add_quotation
-generator (generators/quotation.py, which reads the same catalog live via
+Shared between legacy offline sizing workflows and the add_quotation
+generator (generators/quotations/dc.py, which reads the catalog live via
 GraphQL from a CustomerQuotation's query response). This module holds only
 the pure computation — no file I/O, no Infrahub client calls — so both
 callers build a catalog their own way and pass it in.
@@ -752,7 +751,7 @@ def build_room_pods(
 
     Mismatch policy (rooms are the sizing unit, pod_count is independent):
       pod_count <= len(rooms): pods beyond pod_count simply aren't created;
-        the caller (generators/quotation.py) is responsible for warning
+        the caller (generators/quotations/dc.py) is responsible for warning
         about any unused surplus rooms — this function only ever returns
         `pod_count` pods.
       pod_count > len(rooms): pods with no room of their own round-robin

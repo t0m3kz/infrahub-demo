@@ -95,4 +95,4 @@ spec:
     - name: customer_deployments
       description: Customer deployment footprints (TopologyCustomerDC/Colocation/Cloud) — generator target for ExchangeGatewayGenerator  # yamllint disable-line rule:line-length
     - name: customer_quotations
-      description: Customer sizing/pricing requests — generator target for QuotationGenerator
+      description: Customer sizing/pricing requests for QuotationDCGenerator and OfficeQuotationGenerator

@@ -1,0 +1,183 @@
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: CustomerQuotationDC
+  data:
+    - name: "Q22-DC-Atlas-Auto"
+      description: "Auto topology selection for a medium enterprise expansion"
+      request_type: "datacenter"
+      status: "draft"
+      owner: "C004"
+      pod_count: 2
+      topology_strategy: "auto"
+      growth_buffer_percent: 20
+      preferred_switch_vendor: "Cisco"
+      preferred_firewall_vendor: "Check Point"
+      preferred_load_balancer_vendor: "F5 Networks"
+      rooms:
+        data:
+          - name: "Atlas-Room-A"
+            rows: 4
+            racks_per_row: 10
+            compute_rack_count: 16
+            storage_rack_count: 4
+            port_count_25g: 300
+            port_count_100g: 56
+            rack_assignment_strategy: "round_robin"
+
+    - name: "Q22-DC-Borealis-BackToBack"
+      description: "Back-to-back design for low-latency east-west traffic"
+      request_type: "datacenter"
+      status: "draft"
+      owner: "C005"
+      pod_count: 3
+      topology_strategy: "back_to_back"
+      growth_buffer_percent: 15
+      preferred_switch_vendor: "Arista"
+      rooms:
+        data:
+          - name: "Borealis-Room-1"
+            rows: 5
+            racks_per_row: 12
+            compute_rack_count: 22
+            storage_rack_count: 5
+            port_count_25g: 460
+            port_count_100g: 110
+            rack_assignment_strategy: "dedicated_room_per_pod"
+          - name: "Borealis-Room-2"
+            rows: 4
+            racks_per_row: 10
+            compute_rack_count: 16
+            storage_rack_count: 4
+            port_count_25g: 300
+            port_count_100g: 72
+            rack_assignment_strategy: "dedicated_room_per_pod"
+
+    - name: "Q22-DC-Celadon-Classic3Tier"
+      description: "Classic 3-tier fabric with dedicated aggregation capacity"
+      request_type: "datacenter"
+      status: "draft"
+      owner: "C006"
+      pod_count: 4
+      topology_strategy: "classic_3tier"
+      growth_buffer_percent: 25
+      preferred_switch_vendor: "Edgecore"
+      preferred_firewall_vendor: "Palo Alto Networks"
+      rooms:
+        data:
+          - name: "Celadon-East"
+            rows: 6
+            racks_per_row: 14
+            compute_rack_count: 28
+            storage_rack_count: 8
+            port_count_25g: 620
+            port_count_100g: 200
+            port_count_400g: 8
+            rack_assignment_strategy: "sequential"
+          - name: "Celadon-Central"
+            rows: 5
+            racks_per_row: 14
+            compute_rack_count: 24
+            storage_rack_count: 6
+            port_count_25g: 520
+            port_count_100g: 180
+            port_count_400g: 6
+            rack_assignment_strategy: "sequential"
+          - name: "Celadon-West"
+            rows: 5
+            racks_per_row: 12
+            compute_rack_count: 20
+            storage_rack_count: 6
+            port_count_25g: 460
+            port_count_100g: 160
+            port_count_400g: 4
+            rack_assignment_strategy: "sequential"
+
+    - name: "Q22-DC-Deltawave-Auto-StorageHeavy"
+      description: "Auto sizing request with storage-heavy profile"
+      request_type: "datacenter"
+      status: "draft"
+      owner: "C007"
+      pod_count: 2
+      topology_strategy: "auto"
+      growth_buffer_percent: 30
+      preferred_switch_vendor: "Dell"
+      rooms:
+        data:
+          - name: "Deltawave-Core"
+            rows: 4
+            racks_per_row: 10
+            compute_rack_count: 12
+            storage_rack_count: 8
+            port_count_25g: 280
+            port_count_100g: 96
+            rack_assignment_strategy: "round_robin"
+
+    - name: "Q22-DC-Evergrid-BackToBack-Compact"
+      description: "Compact back-to-back request for edge-oriented workloads"
+      request_type: "datacenter"
+      status: "draft"
+      owner: "C008"
+      pod_count: 2
+      topology_strategy: "back_to_back"
+      growth_buffer_percent: 10
+      preferred_switch_vendor: "Cisco"
+      rooms:
+        data:
+          - name: "Evergrid-Primary"
+            rows: 3
+            racks_per_row: 8
+            compute_rack_count: 10
+            storage_rack_count: 2
+            port_count_25g: 180
+            port_count_100g: 40
+            rack_assignment_strategy: "sequential"
+          - name: "Evergrid-Secondary"
+            rows: 2
+            racks_per_row: 6
+            compute_rack_count: 6
+            storage_rack_count: 2
+            port_count_25g: 96
+            port_count_100g: 24
+            rack_assignment_strategy: "sequential"
+
+    - name: "Q22-DC-Fastlane-Classic3Tier-HPC"
+      description: "Classic 3-tier design request for HPC and AI cluster growth"
+      request_type: "datacenter"
+      status: "draft"
+      owner: "C009"
+      pod_count: 5
+      topology_strategy: "classic_3tier"
+      growth_buffer_percent: 35
+      preferred_switch_vendor: "Arista"
+      preferred_load_balancer_vendor: "A10 Networks"
+      rooms:
+        data:
+          - name: "Fastlane-HPC-A"
+            rows: 8
+            racks_per_row: 16
+            compute_rack_count: 40
+            storage_rack_count: 10
+            port_count_25g: 900
+            port_count_100g: 320
+            port_count_400g: 24
+            rack_assignment_strategy: "dedicated_room_per_pod"
+          - name: "Fastlane-HPC-B"
+            rows: 8
+            racks_per_row: 16
+            compute_rack_count: 38
+            storage_rack_count: 10
+            port_count_25g: 860
+            port_count_100g: 300
+            port_count_400g: 20
+            rack_assignment_strategy: "dedicated_room_per_pod"
+          - name: "Fastlane-HPC-C"
+            rows: 6
+            racks_per_row: 14
+            compute_rack_count: 26
+            storage_rack_count: 8
+            port_count_25g: 620
+            port_count_100g: 220
+            port_count_400g: 12
+            rack_assignment_strategy: "dedicated_room_per_pod"
