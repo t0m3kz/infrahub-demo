@@ -1,28 +1,11 @@
 ---
-# Arista SD-WAN (formerly VeloCloud) device templates
-# VCE-610: branch edge appliance (physical, 1RU)
-#
-# Interface naming:
-#   GE1-GE4  — WAN/LAN copper GigabitEthernet ports on VCE-610
-#   mgmt0    — out-of-band management
-#
-# The physical VCG-VA gateway/controller template lives in
-# 10_physical_devices_templates_controllers.yaml (ManagedControllerPhysical,
-# controller_type: sdwan_orchestrator) — a colocation SD-WAN gateway is a
-# controller, not a bare edge device. The SD-WAN overlay (DMPO sessions) is
-# orchestrated automatically by Arista SD-WAN Orchestrator — no tunnel
-# interfaces are modelled here.
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
   kind: TemplateDcimPhysicalDevice
   data:
-    # -------------------------------------------------------------------------
-    # VCE-610 — Branch Edge (WAN uplinks + LAN downlinks)
-    # GE1: primary WAN, GE2: secondary WAN, GE3-GE4: LAN
-    # -------------------------------------------------------------------------
-    - template_name: VCE-610_EDGE
-      owner: "P027"
+    - template_name: VCE-610
+      owner: P027
       device_type: VCE-610
       platform: velocloud
       software_image: velocloud-6.0.0
@@ -31,23 +14,23 @@ spec:
       interfaces:
         kind: TemplateDcimPhysicalInterface
         data:
-          - template_name: VCE-610_EDGE_GE1
+          - template_name: VCE-610_GE1
             name: GE1
             role: uplink
             interface_type: 1000base-t
-          - template_name: VCE-610_EDGE_GE2
+          - template_name: VCE-610_GE2
             name: GE2
             role: uplink
             interface_type: 1000base-t
-          - template_name: VCE-610_EDGE_GE3
+          - template_name: VCE-610_GE3
             name: GE3
             role: downlink
             interface_type: 1000base-t
-          - template_name: VCE-610_EDGE_GE4
+          - template_name: VCE-610_GE4
             name: GE4
             role: downlink
             interface_type: 1000base-t
-          - template_name: VCE-610_EDGE_mgmt0
+          - template_name: VCE-610_mgmt0
             name: mgmt0
             role: management
             interface_type: 1000base-t

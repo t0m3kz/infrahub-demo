@@ -4,8 +4,8 @@ kind: Object
 spec:
   kind: TemplateDcimPhysicalDevice
   data:
-    - template_name: SCG50R_CONSOLE
-      owner: "P027"
+    - template_name: SCG50R
+      owner: P027
       device_type: SCG50R
       platform: perle_iolan
       software_image: perle_iolan-5.0
@@ -16,6 +16,6 @@ spec:
         parameters:
           expand_range: true
         data:
-          - template_name: SCG50R_CONSOLE_con[0-24]
+          - template_name: SCG50R_con[0-24]
             name: con[0-24]
             role: console

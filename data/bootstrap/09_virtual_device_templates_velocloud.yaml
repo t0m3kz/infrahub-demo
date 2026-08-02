@@ -3,31 +3,4 @@ apiVersion: infrahub.app/v1
 kind: Object
 spec:
   kind: TemplateDcimVirtualDevice
-  data:
-    - template_name: VCG-VA_CLOUD
-      owner: "P027"
-      device_type: VCG-VA
-      platform: velocloud
-      software_image: velocloud-6.0.0
-      role: edge
-      status: active
-      cpu: 4
-      memory: 8
-      storage: 20
-      interfaces:
-        kind: TemplateDcimPhysicalInterface
-        data:
-          - template_name: VCG-VA_CLOUD_eth0
-            name: eth0
-            role: management
-            interface_type: 1000base-t
-          - template_name: VCG-VA_CLOUD_eth1
-            name: eth1
-            role: uplink
-            interface_type: 1000base-t
-          - template_name: VCG-VA_CLOUD_eth2
-            name: eth2
-            role: downlink
-            interface_type: 1000base-t
-      member_of_groups:
-        - sdwan_gateways
+  data: []

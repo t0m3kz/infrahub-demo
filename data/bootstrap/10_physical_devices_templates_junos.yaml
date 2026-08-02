@@ -4,8 +4,8 @@ kind: Object
 spec:
   kind: TemplateDcimPhysicalDevice
   data:
-    - template_name: SRX-1500_EDGE_FIREWALL
-      owner: "P027"
+    - template_name: SRX-1500
+      owner: P027
       device_type: SRX-1500
       platform: junos
       software_image: junos-23.4R2
@@ -16,40 +16,11 @@ spec:
         parameters:
           expand_range: true
         data:
-          - template_name: SRX-1500_EDGE_FIREWALL_fxp0
+          - template_name: SRX-1500_fxp0
             name: fxp0
             role: management
             interface_type: 1000base-t
-          - template_name: SRX-1500_EDGE_FIREWALL_ge-0/0/[0-3]
+          - template_name: SRX-1500_ge-0/0/[0-3]
             name: ge-0/0/[0-3]
-            role: downlink
-            interface_type: 1000base-t
-
-    - template_name: SRX-1500_DC_FIREWALL
-      owner: "P027"
-      device_type: SRX-1500
-      platform: junos
-      software_image: junos-23.4R2
-      role: firewall
-      status: provisioning
-      interfaces:
-        kind: TemplateDcimPhysicalInterface
-        parameters:
-          expand_range: true
-        data:
-          - template_name: SRX-1500_DC_FIREWALL_fxp0
-            name: fxp0
-            role: management
-            interface_type: 1000base-t
-          - template_name: SRX-1500_DC_FIREWALL_ge-0/0/[0-1]
-            name: ge-0/0/[0-1]
-            role: uplink
-            interface_type: 1000base-t
-          - template_name: SRX-1500_DC_FIREWALL_ge-0/0/2
-            name: ge-0/0/2
-            role: ha
-            interface_type: 1000base-t
-          - template_name: SRX-1500_DC_FIREWALL_ge-0/0/3
-            name: ge-0/0/3
             role: downlink
             interface_type: 1000base-t

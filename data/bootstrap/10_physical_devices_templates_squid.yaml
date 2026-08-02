@@ -4,8 +4,8 @@ kind: Object
 spec:
   kind: TemplateDcimPhysicalDevice
   data:
-    - template_name: SQUID-PROXY_PROXY
-      owner: "P027"
+    - template_name: SQUID-PROXY
+      owner: P027
       device_type: SQUID-PROXY
       platform: squid_cache
       software_image: squid_cache-6.6
@@ -14,15 +14,15 @@ spec:
       interfaces:
         kind: TemplateDcimPhysicalInterface
         data:
-          - template_name: SQUID-PROXY_PROXY_mgmt
+          - template_name: SQUID-PROXY_mgmt
             name: mgmt
             role: management
             interface_type: 1000base-t
-          - template_name: SQUID-PROXY_PROXY_eth0
+          - template_name: SQUID-PROXY_eth0
             name: eth0
             role: uplink
             interface_type: 25gbase-x-sfp28
-          - template_name: SQUID-PROXY_PROXY_eth1
+          - template_name: SQUID-PROXY_eth1
             name: eth1
             role: uplink
             interface_type: 25gbase-x-sfp28

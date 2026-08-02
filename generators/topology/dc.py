@@ -38,6 +38,7 @@ class DCTopologyGenerator(CommonGenerator):
                 return
 
             self.data = DCModel(**deployment_list[0])
+            await self._hydrate_fabric_templates(self.data.fabric_templates)
         except (ValueError, KeyError, IndexError) as exc:
             self.logger.error(f"Generation failed due to {exc}")
             return
@@ -226,11 +227,12 @@ class DCTopologyGenerator(CommonGenerator):
             )
         elif amount_of_super_spines > 0 and super_spine_entries:
             for entry in super_spine_entries:
+                template = self._require_hydrated_template(entry, context="DC super-spine")
                 entry_names = await self.create_devices(
                     deployment_id=dc_id,
                     device_role="super-spine",
                     quantity=entry.quantity,
-                    template=entry.template.model_dump(),
+                    template=template.model_dump(),
                     naming_convention=cast(
                         Literal["standard", "hierarchical", "flat", "computed"],
                         naming_convention.lower(),
@@ -263,11 +265,12 @@ class DCTopologyGenerator(CommonGenerator):
         hyper_spine_names: list[str] = []
         if amount_of_hyper_spines > 0 and hyper_spine_entries:
             for entry in hyper_spine_entries:
+                template = self._require_hydrated_template(entry, context="DC hyper-spine")
                 entry_names = await self.create_devices(
                     deployment_id=dc_id,
                     device_role="hyper-spine",
                     quantity=entry.quantity,
-                    template=entry.template.model_dump(),
+                    template=template.model_dump(),
                     naming_convention=cast(
                         Literal["standard", "hierarchical", "flat", "computed"],
                         naming_convention.lower(),
@@ -332,24 +335,27 @@ class DCTopologyGenerator(CommonGenerator):
             # Cable super-spine <-> hyper-spine full mesh (same "pod" strategy
             # PodCablingStrategy uses for spine<->super-spine — architecturally
             # identical fan-out, just one tier up and both ends DC-scoped).
-            super_spine_uplink_interfaces = [
-                iface_name
-                for entry in super_spine_entries
-                for iface_name in role_interface_names_or_dynamic(
-                    interfaces=entry.template.interfaces,
-                    role="uplink",
-                    fallback_count=max(1, len(hyper_spine_names)),
+            super_spine_uplink_interfaces: list[str] = []
+            for entry in super_spine_entries:
+                template = self._require_hydrated_template(entry, context="DC super-spine")
+                super_spine_uplink_interfaces.extend(
+                    role_interface_names_or_dynamic(
+                        interfaces=template.interfaces,
+                        role="uplink",
+                        fallback_count=max(1, len(hyper_spine_names)),
+                    )
                 )
-            ]
-            hyper_spine_downlink_interfaces = [
-                iface_name
-                for entry in hyper_spine_entries
-                for iface_name in role_interface_names_or_dynamic(
-                    interfaces=entry.template.interfaces,
-                    role="downlink",
-                    fallback_count=max(1, len(super_spine_names)),
+
+            hyper_spine_downlink_interfaces: list[str] = []
+            for entry in hyper_spine_entries:
+                template = self._require_hydrated_template(entry, context="DC hyper-spine")
+                hyper_spine_downlink_interfaces.extend(
+                    role_interface_names_or_dynamic(
+                        interfaces=template.interfaces,
+                        role="downlink",
+                        fallback_count=max(1, len(super_spine_names)),
+                    )
                 )
-            ]
             if super_spine_names and super_spine_uplink_interfaces and hyper_spine_downlink_interfaces:
                 p2p_prefix_length = 127 if is_ipv6 else 31
                 p2p_pairs = await self.create_cabling(
@@ -363,26 +369,17 @@ class DCTopologyGenerator(CommonGenerator):
                         p2p_prefix_length=p2p_prefix_length,
                     ),
                 )
+
+                # Route super-spine <-> hyper-spine links after cabling, using the same
+                # deterministic p2p pairs created above.
                 await self.create_routing(
                     bottom_devices=super_spine_names,
                     top_devices=hyper_spine_names,
-                    options=RoutingOptions(design=self.data, asn_pool=fabric_asn_pool_id),
+                    options=hyper_routing_opts,
                     p2p_interfaces=p2p_pairs,
                     bottom_role="super-spine",
                     top_role="hyper-spine",
                 )
-            elif super_spine_names:
-                self.logger.error(
-                    f"DC {self.fabric_name}: cannot cable super-spine<->hyper-spine — "
-                    f"super_spine_uplinks={len(super_spine_uplink_interfaces)}, "
-                    f"hyper_spine_downlinks={len(hyper_spine_downlink_interfaces)}."
-                )
-
-        # Fan-out to every pod's own add_pod run is handled by the sibling
-        # dc_pod_cascade generator, not here — see that module's docstring for why
-        # (add_pod's own fan-out to add_rack keeps its task RUNNING while waiting on
-        # a child; if add_dc waited on add_pod the same way here, a standalone-created
-        # pod's own wait-for-parent guard would deadlock against it).
         # Back-to-back inter-pod spine mesh cabling (designs with no super-spine tier)
         # is handled by pod.py itself — each pod cables to its existing lower-index
         # siblings directly (see PodTopologyGenerator._cable_to_existing_sibling_pods).
@@ -427,8 +424,9 @@ class DCTopologyGenerator(CommonGenerator):
         max_border_leafs_per_pod cap — a pod whose own design caps it at 0 is
         skipped entirely, which is how a specific subset of pods (e.g. pod 1 and
         pod 3, not pod 2) can be chosen to host border-leafs. deployment_id is the
-        target pod's id (not the DC's) so devices land in that pod's fabric, but
-        cabling/routing them to that pod's spines is pod.py's job, not dc.py's —
+        DC's id (not the pod's) so BLFs are modeled as DC-scoped edge devices; pod.py
+        still owns cabling/routing them to the right pod spines from naming context,
+        not from the deployment relationship.
         it already owns spine context and can query "which border-leafs deploy
         under me" during its own bootstrap. Returns every border-leaf name created
         this run, DC-wide, for BLF<->FW<->LB cabling below."""
@@ -469,7 +467,7 @@ class DCTopologyGenerator(CommonGenerator):
                     loopback_prefix_length=128 if self._is_ipv6 else 32,
                 )
                 names = await self.create_devices(
-                    deployment_id=pod.id,
+                    deployment_id=self.data.id,
                     device_role="border-leaf",
                     quantity=share,
                     template=entry.template.model_dump(),
@@ -503,16 +501,25 @@ class DCTopologyGenerator(CommonGenerator):
             Literal["standard", "hierarchical", "flat", "computed"], self.data.naming_convention.lower()
         )
         border_leaf_names = await self._create_border_leaf_devices()
+        border_leaf_capacity = getattr(getattr(self.data, "design", None), "max_border_leafs_per_fabric", None)
         firewall_names = await self._create_role_devices(
             role="firewall",
-            entries=self.data.firewall_templates,
+            entries=self._select_border_service_entries(
+                role="firewall",
+                entries=self.data.firewall_templates,
+                design_capacity=border_leaf_capacity,
+            ),
             deployment_id=self.data.id,
             naming_convention=naming_convention,
             indexes=[self.data.index],
         )
         load_balancer_names = await self._create_role_devices(
             role="load-balancer",
-            entries=self.data.load_balancer_templates,
+            entries=self._select_border_service_entries(
+                role="load-balancer",
+                entries=self.data.load_balancer_templates,
+                design_capacity=border_leaf_capacity,
+            ),
             deployment_id=self.data.id,
             naming_convention=naming_convention,
             indexes=[self.data.index],

@@ -4,8 +4,8 @@ kind: Object
 spec:
   kind: TemplateDcimPhysicalDevice
   data:
-    - template_name: CISCO-WSA-S195_PROXY
-      owner: "P027"
+    - template_name: CISCO-WSA-S195
+      owner: P027
       device_type: CISCO-WSA-S195
       platform: cisco_wsa
       software_image: cisco_wsa-15.0.0-355
@@ -14,15 +14,15 @@ spec:
       interfaces:
         kind: TemplateDcimPhysicalInterface
         data:
-          - template_name: CISCO-WSA-S195_PROXY_mgmt
+          - template_name: CISCO-WSA-S195_M1
             name: M1
             role: management
             interface_type: 1000base-t
-          - template_name: CISCO-WSA-S195_PROXY_P1
+          - template_name: CISCO-WSA-S195_P1
             name: P1
             role: uplink
             interface_type: 10gbase-x-sfpp
-          - template_name: CISCO-WSA-S195_PROXY_P2
+          - template_name: CISCO-WSA-S195_P2
             name: P2
             role: uplink
             interface_type: 10gbase-x-sfpp

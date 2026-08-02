@@ -4,8 +4,8 @@ kind: Object
 spec:
   kind: TemplateDcimPhysicalDevice
   data:
-    - template_name: CP-26000_FIREWALL
-      owner: "P027"
+    - template_name: CP-26000
+      owner: P027
       device_type: CP-26000
       platform: checkpoint_gaia
       software_image: checkpoint_gaia-R81.20
@@ -14,33 +14,32 @@ spec:
       interfaces:
         kind: TemplateDcimPhysicalInterface
         data:
-          - template_name: CP-26000_FIREWALL_mgmt
+          - template_name: CP-26000_MGMT
             name: MGMT
             role: management
             interface_type: 1000base-t
-          - template_name: CP-26000_FIREWALL_eth1
+          - template_name: CP-26000_eth1
             name: eth1
             role: uplink
             interface_type: 100gbase-x-qsfp28
-          - template_name: CP-26000_FIREWALL_eth2
+          - template_name: CP-26000_eth2
             name: eth2
             role: uplink
             interface_type: 100gbase-x-qsfp28
-          - template_name: CP-26000_FIREWALL_eth3
+          - template_name: CP-26000_eth3
             name: eth3
             role: downlink
             interface_type: 100gbase-x-qsfp28
-          - template_name: CP-26000_FIREWALL_eth4
+          - template_name: CP-26000_eth4
             name: eth4
             role: downlink
             interface_type: 100gbase-x-qsfp28
-          - template_name: CP-26000_FIREWALL_sync
+          - template_name: CP-26000_sync
             name: sync
             role: ha
             interface_type: 10gbase-x-sfpp
-
-    - template_name: PA-5260_FIREWALL
-      owner: "P027"
+    - template_name: PA-5260
+      owner: P027
       device_type: PA-5260
       platform: panos
       software_image: panos-11.1.3
@@ -49,31 +48,31 @@ spec:
       interfaces:
         kind: TemplateDcimPhysicalInterface
         data:
-          - template_name: PA-5260_FIREWALL_mgmt
+          - template_name: PA-5260_MGT
             name: MGT
             role: management
             interface_type: 1000base-t
-          - template_name: PA-5260_FIREWALL_eth1-1
+          - template_name: PA-5260_ethernet1/1
             name: ethernet1/1
             role: uplink
             interface_type: 100gbase-x-qsfp28
-          - template_name: PA-5260_FIREWALL_eth1-2
+          - template_name: PA-5260_ethernet1/2
             name: ethernet1/2
             role: uplink
             interface_type: 100gbase-x-qsfp28
-          - template_name: PA-5260_FIREWALL_eth1-3
+          - template_name: PA-5260_ethernet1/3
             name: ethernet1/3
             role: downlink
             interface_type: 100gbase-x-qsfp28
-          - template_name: PA-5260_FIREWALL_eth1-4
+          - template_name: PA-5260_ethernet1/4
             name: ethernet1/4
             role: downlink
             interface_type: 100gbase-x-qsfp28
-          - template_name: PA-5260_FIREWALL_ha1
+          - template_name: PA-5260_HA1
             name: HA1
             role: ha
             interface_type: 1000base-t
-          - template_name: PA-5260_FIREWALL_ha2
+          - template_name: PA-5260_HA2
             name: HA2
             role: ha
             interface_type: 100gbase-x-qsfp28
