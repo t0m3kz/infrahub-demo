@@ -52,30 +52,9 @@ query topology_dc($name: String!) {
               node {
                 role { value }
                 quantity { value }
-                template {
+                device_type {
                   node {
                     id
-                    ... on TemplateDcimPhysicalDevice {
-                      template_name { value }
-                      platform {
-                        node {
-                          id
-                        }
-                      }
-                      device_type {
-                        node {
-                          id
-                        }
-                      }
-                      interfaces {
-                        edges {
-                          node {
-                            name { value }
-                            role { value }
-                          }
-                        }
-                      }
-                    }
                   }
                 }
               }

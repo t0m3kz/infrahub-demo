@@ -6,4 +6,4 @@ spec:
   data:
     - quantity: 4
       role: l2-leaf
-      template: PowerSwitch-S5224F-ON_TOR
+      device_type: PowerSwitch-S5224F-ON

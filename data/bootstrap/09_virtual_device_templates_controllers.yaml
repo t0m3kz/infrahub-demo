@@ -1,54 +1,48 @@
 ---
-# ManagedControllerVirtual templates — virtual/VM-hosted controller
-# appliances (SD-WAN orchestrator, security management server). Same
-# object_template mechanism as any other device, under the controller's own
-# generated template kind (TemplateManagedControllerVirtual — see schemas/
-# extensions/capabilities/controller.yml).
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
   kind: TemplateManagedControllerVirtual
   data:
-    - template_name: VCO-VA_ORCHESTRATOR
+    - template_name: VCO-VA
       device_type: VCO-VA
       platform: velocloud
       software_image: velocloud-6.0.0
       controller_type: sdwan_orchestrator
       role: controller
       status: active
-      owner: "P027"
+      owner: P027
       cpu: 8
       memory: 32
       storage: 100
       interfaces:
         kind: TemplateDcimPhysicalInterface
         data:
-          - template_name: VCO-VA_ORCHESTRATOR_eth0
+          - template_name: VCO-VA_eth0
             name: eth0
             role: management
             interface_type: 1000base-t
-          - template_name: VCO-VA_ORCHESTRATOR_eth1
+          - template_name: VCO-VA_eth1
             name: eth1
             role: uplink
             interface_type: 1000base-t
-      member_of_groups:
-        - sdwan_orchestrators
-
-    - template_name: CP-SMS_MANAGER
+        member_of_groups:
+    - sdwan_orchestrators
+    - template_name: CP-SMS
       device_type: CP-SMS
       platform: checkpoint_gaia
       software_image: checkpoint_gaia-R81.20
       controller_type: security_manager
       role: controller
       status: active
-      owner: "P027"
+      owner: P027
       cpu: 4
       memory: 16
       storage: 500
       interfaces:
         kind: TemplateDcimPhysicalInterface
         data:
-          - template_name: CP-SMS_MANAGER_eth0
+          - template_name: CP-SMS_eth0
             name: eth0
             role: management
             interface_type: 1000base-t

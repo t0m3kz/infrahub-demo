@@ -118,22 +118,7 @@ fragment PodFields on TopologyPod {
       node {
         role { value }
         quantity { value }
-        template {
-          node {
-            id
-            ... on TemplateDcimPhysicalDevice {
-              interfaces(role__value: "downlink") {
-                edges {
-                  node {
-                    name {
-                      value
-                    }
-                  }
-                }
-              }
-            }
-          }
-        }
+        device_type { node { id } }
       }
     }
   }

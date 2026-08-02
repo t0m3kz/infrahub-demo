@@ -32,6 +32,41 @@ class BorderServicesMixin:
     # CommonGenerator.create_devices (DeviceMixin) — annotation only, no method body.
     create_devices: Any
 
+    # Provided by CommonGenerator at runtime.
+    def _require_hydrated_template(self, role: Any, *, context: str) -> Any: ...
+
+    def _select_border_service_entries(
+        self,
+        *,
+        role: str,
+        entries: list[DeviceRole],
+        design_capacity: Any,
+    ) -> list[DeviceRole]:
+        """Limit border-service entries to the declared design capacity.
+
+        The bootstrap data carries multiple firewall/load-balancer entries so we
+        keep the generator driven by the DC/pod size rather than by whatever
+        happens to already exist in the database.
+        """
+        if not isinstance(design_capacity, int):
+            return entries
+        if design_capacity <= 0:
+            if entries:
+                self.logger.info("Skipping %s provisioning because border-leaf capacity is 0", role)
+            return []
+
+        entry_limit = max(1, design_capacity // 2)
+        if entry_limit >= len(entries):
+            return entries
+
+        self.logger.info(
+            "Limiting %s provisioning to %s template(s) based on border-leaf capacity %s",
+            role,
+            entry_limit,
+            design_capacity,
+        )
+        return entries[:entry_limit]
+
     async def _ensure_ha_pair(
         self,
         device_names: list[str],
@@ -96,11 +131,12 @@ class BorderServicesMixin:
 
         all_names: list[str] = []
         for entry in entries:
+            template = self._require_hydrated_template(entry, context="Border service")
             names = await self.create_devices(
                 deployment_id=deployment_id,
                 device_role=role,
                 quantity=entry.quantity,
-                template=entry.template.model_dump(),
+                template=template.model_dump(),
                 naming_convention=naming_convention,
                 options=device_options,
             )

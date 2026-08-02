@@ -4,8 +4,8 @@ kind: Object
 spec:
   kind: TemplateDcimPhysicalDevice
   data:
-    - template_name: NetScaler-MPX-26000-100G_LOAD_BALANCER
-      owner: "P027"
+    - template_name: NetScaler-MPX-26000-100G
+      owner: P027
       device_type: NetScaler-MPX-26000-100G
       platform: netscaler
       software_image: netscaler-14.1.17.16
@@ -14,63 +14,56 @@ spec:
       interfaces:
         kind: TemplateDcimPhysicalInterface
         data:
-          - template_name: NetScaler-MPX-26000-100G_LB_LOM
+          - template_name: NetScaler-MPX-26000-100G_LOM
             name: LOM
             role: management
             interface_type: 1000base-t
-          - template_name: NetScaler-MPX-26000-100G_LB_0-1
-            name: "0/1"
+          - template_name: NetScaler-MPX-26000-100G_0/1
+            name: 0/1
             role: management
             interface_type: 1000base-t
-          - template_name: NetScaler-MPX-26000-100G_LB_0-2
-            name: "0/2"
+          - template_name: NetScaler-MPX-26000-100G_0/2
+            name: 0/2
             role: management
             interface_type: 1000base-t
-          - template_name: NetScaler-MPX-26000-100G_LB_0-3
-            name: "0/3"
+          - template_name: NetScaler-MPX-26000-100G_0/3
+            name: 0/3
             role: ha
             interface_type: 1000base-t
-          # 100/1-100/2 ("uplink") are pbr mode's border-leaf-facing ports, and
-          # inline mode's firewall-facing middle-leg ports — 2 ports so an HA
-          # pair of border-leafs/firewalls each gets its own link. 100/3-100/4
-          # ("downlink") are only used in inline mode, for the return leg back
-          # to border-leaf. 100/5-100/8 stay "customer" (VIP/server-facing,
-          # not part of the border-leaf/firewall/load-balancer chain).
-          - template_name: NetScaler-MPX-26000-100G_LB_100-1
-            name: "100/1"
+          - template_name: NetScaler-MPX-26000-100G_100/1
+            name: 100/1
             role: uplink
             interface_type: 100gbase-x-qsfp28
-          - template_name: NetScaler-MPX-26000-100G_LB_100-2
-            name: "100/2"
+          - template_name: NetScaler-MPX-26000-100G_100/2
+            name: 100/2
             role: uplink
             interface_type: 100gbase-x-qsfp28
-          - template_name: NetScaler-MPX-26000-100G_LB_100-3
-            name: "100/3"
+          - template_name: NetScaler-MPX-26000-100G_100/3
+            name: 100/3
             role: downlink
             interface_type: 100gbase-x-qsfp28
-          - template_name: NetScaler-MPX-26000-100G_LB_100-4
-            name: "100/4"
+          - template_name: NetScaler-MPX-26000-100G_100/4
+            name: 100/4
             role: downlink
             interface_type: 100gbase-x-qsfp28
-          - template_name: NetScaler-MPX-26000-100G_LB_100-5
-            name: "100/5"
+          - template_name: NetScaler-MPX-26000-100G_100/5
+            name: 100/5
             role: customer
             interface_type: 100gbase-x-qsfp28
-          - template_name: NetScaler-MPX-26000-100G_LB_100-6
-            name: "100/6"
+          - template_name: NetScaler-MPX-26000-100G_100/6
+            name: 100/6
             role: customer
             interface_type: 100gbase-x-qsfp28
-          - template_name: NetScaler-MPX-26000-100G_LB_100-7
-            name: "100/7"
+          - template_name: NetScaler-MPX-26000-100G_100/7
+            name: 100/7
             role: customer
             interface_type: 100gbase-x-qsfp28
-          - template_name: NetScaler-MPX-26000-100G_LB_100-8
-            name: "100/8"
+          - template_name: NetScaler-MPX-26000-100G_100/8
+            name: 100/8
             role: customer
             interface_type: 100gbase-x-qsfp28
-
-    - template_name: NetScaler-MPX-26100-100G_LOAD_BALANCER
-      owner: "P027"
+    - template_name: NetScaler-MPX-26100-100G
+      owner: P027
       device_type: NetScaler-MPX-26100-100G
       platform: netscaler
       software_image: netscaler-14.1.17.16
@@ -79,57 +72,56 @@ spec:
       interfaces:
         kind: TemplateDcimPhysicalInterface
         data:
-          - template_name: NetScaler-MPX-26100-100G_LB_LOM
+          - template_name: NetScaler-MPX-26100-100G_LOM
             name: LOM
             role: management
             interface_type: 1000base-t
-          - template_name: NetScaler-MPX-26100-100G_LB_0-1
-            name: "0/1"
+          - template_name: NetScaler-MPX-26100-100G_0/1
+            name: 0/1
             role: management
             interface_type: 1000base-t
-          - template_name: NetScaler-MPX-26100-100G_LB_0-2
-            name: "0/2"
+          - template_name: NetScaler-MPX-26100-100G_0/2
+            name: 0/2
             role: management
             interface_type: 1000base-t
-          - template_name: NetScaler-MPX-26100-100G_LB_0-3
-            name: "0/3"
+          - template_name: NetScaler-MPX-26100-100G_0/3
+            name: 0/3
             role: ha
             interface_type: 1000base-t
-          - template_name: NetScaler-MPX-26100-100G_LB_100-1
-            name: "100/1"
+          - template_name: NetScaler-MPX-26100-100G_100/1
+            name: 100/1
             role: uplink
             interface_type: 100gbase-x-qsfp28
-          - template_name: NetScaler-MPX-26100-100G_LB_100-2
-            name: "100/2"
+          - template_name: NetScaler-MPX-26100-100G_100/2
+            name: 100/2
             role: uplink
             interface_type: 100gbase-x-qsfp28
-          - template_name: NetScaler-MPX-26100-100G_LB_100-3
-            name: "100/3"
+          - template_name: NetScaler-MPX-26100-100G_100/3
+            name: 100/3
             role: downlink
             interface_type: 100gbase-x-qsfp28
-          - template_name: NetScaler-MPX-26100-100G_LB_100-4
-            name: "100/4"
+          - template_name: NetScaler-MPX-26100-100G_100/4
+            name: 100/4
             role: downlink
             interface_type: 100gbase-x-qsfp28
-          - template_name: NetScaler-MPX-26100-100G_LB_100-5
-            name: "100/5"
+          - template_name: NetScaler-MPX-26100-100G_100/5
+            name: 100/5
             role: customer
             interface_type: 100gbase-x-qsfp28
-          - template_name: NetScaler-MPX-26100-100G_LB_100-6
-            name: "100/6"
+          - template_name: NetScaler-MPX-26100-100G_100/6
+            name: 100/6
             role: customer
             interface_type: 100gbase-x-qsfp28
-          - template_name: NetScaler-MPX-26100-100G_LB_100-7
-            name: "100/7"
+          - template_name: NetScaler-MPX-26100-100G_100/7
+            name: 100/7
             role: customer
             interface_type: 100gbase-x-qsfp28
-          - template_name: NetScaler-MPX-26100-100G_LB_100-8
-            name: "100/8"
+          - template_name: NetScaler-MPX-26100-100G_100/8
+            name: 100/8
             role: customer
             interface_type: 100gbase-x-qsfp28
-
-    - template_name: NetScaler-MPX-26160-100G_LOAD_BALANCER
-      owner: "P027"
+    - template_name: NetScaler-MPX-26160-100G
+      owner: P027
       device_type: NetScaler-MPX-26160-100G
       platform: netscaler
       software_image: netscaler-14.1.17.16
@@ -138,57 +130,56 @@ spec:
       interfaces:
         kind: TemplateDcimPhysicalInterface
         data:
-          - template_name: NetScaler-MPX-26160-100G_LB_LOM
+          - template_name: NetScaler-MPX-26160-100G_LOM
             name: LOM
             role: management
             interface_type: 1000base-t
-          - template_name: NetScaler-MPX-26160-100G_LB_0-1
-            name: "0/1"
+          - template_name: NetScaler-MPX-26160-100G_0/1
+            name: 0/1
             role: management
             interface_type: 1000base-t
-          - template_name: NetScaler-MPX-26160-100G_LB_0-2
-            name: "0/2"
+          - template_name: NetScaler-MPX-26160-100G_0/2
+            name: 0/2
             role: management
             interface_type: 1000base-t
-          - template_name: NetScaler-MPX-26160-100G_LB_0-3
-            name: "0/3"
+          - template_name: NetScaler-MPX-26160-100G_0/3
+            name: 0/3
             role: ha
             interface_type: 1000base-t
-          - template_name: NetScaler-MPX-26160-100G_LB_100-1
-            name: "100/1"
+          - template_name: NetScaler-MPX-26160-100G_100/1
+            name: 100/1
             role: uplink
             interface_type: 100gbase-x-qsfp28
-          - template_name: NetScaler-MPX-26160-100G_LB_100-2
-            name: "100/2"
+          - template_name: NetScaler-MPX-26160-100G_100/2
+            name: 100/2
             role: uplink
             interface_type: 100gbase-x-qsfp28
-          - template_name: NetScaler-MPX-26160-100G_LB_100-3
-            name: "100/3"
+          - template_name: NetScaler-MPX-26160-100G_100/3
+            name: 100/3
             role: downlink
             interface_type: 100gbase-x-qsfp28
-          - template_name: NetScaler-MPX-26160-100G_LB_100-4
-            name: "100/4"
+          - template_name: NetScaler-MPX-26160-100G_100/4
+            name: 100/4
             role: downlink
             interface_type: 100gbase-x-qsfp28
-          - template_name: NetScaler-MPX-26160-100G_LB_100-5
-            name: "100/5"
+          - template_name: NetScaler-MPX-26160-100G_100/5
+            name: 100/5
             role: customer
             interface_type: 100gbase-x-qsfp28
-          - template_name: NetScaler-MPX-26160-100G_LB_100-6
-            name: "100/6"
+          - template_name: NetScaler-MPX-26160-100G_100/6
+            name: 100/6
             role: customer
             interface_type: 100gbase-x-qsfp28
-          - template_name: NetScaler-MPX-26160-100G_LB_100-7
-            name: "100/7"
+          - template_name: NetScaler-MPX-26160-100G_100/7
+            name: 100/7
             role: customer
             interface_type: 100gbase-x-qsfp28
-          - template_name: NetScaler-MPX-26160-100G_LB_100-8
-            name: "100/8"
+          - template_name: NetScaler-MPX-26160-100G_100/8
+            name: 100/8
             role: customer
             interface_type: 100gbase-x-qsfp28
-
-    - template_name: NetScaler-MPX-26200-100G_LOAD_BALANCER
-      owner: "P027"
+    - template_name: NetScaler-MPX-26200-100G
+      owner: P027
       device_type: NetScaler-MPX-26200-100G
       platform: netscaler
       software_image: netscaler-14.1.17.16
@@ -197,57 +188,56 @@ spec:
       interfaces:
         kind: TemplateDcimPhysicalInterface
         data:
-          - template_name: NetScaler-MPX-26200-100G_LB_LOM
+          - template_name: NetScaler-MPX-26200-100G_LOM
             name: LOM
             role: management
             interface_type: 1000base-t
-          - template_name: NetScaler-MPX-26200-100G_LB_0-1
-            name: "0/1"
+          - template_name: NetScaler-MPX-26200-100G_0/1
+            name: 0/1
             role: management
             interface_type: 1000base-t
-          - template_name: NetScaler-MPX-26200-100G_LB_0-2
-            name: "0/2"
+          - template_name: NetScaler-MPX-26200-100G_0/2
+            name: 0/2
             role: management
             interface_type: 1000base-t
-          - template_name: NetScaler-MPX-26200-100G_LB_0-3
-            name: "0/3"
+          - template_name: NetScaler-MPX-26200-100G_0/3
+            name: 0/3
             role: ha
             interface_type: 1000base-t
-          - template_name: NetScaler-MPX-26200-100G_LB_100-1
-            name: "100/1"
+          - template_name: NetScaler-MPX-26200-100G_100/1
+            name: 100/1
             role: uplink
             interface_type: 100gbase-x-qsfp28
-          - template_name: NetScaler-MPX-26200-100G_LB_100-2
-            name: "100/2"
+          - template_name: NetScaler-MPX-26200-100G_100/2
+            name: 100/2
             role: uplink
             interface_type: 100gbase-x-qsfp28
-          - template_name: NetScaler-MPX-26200-100G_LB_100-3
-            name: "100/3"
+          - template_name: NetScaler-MPX-26200-100G_100/3
+            name: 100/3
             role: downlink
             interface_type: 100gbase-x-qsfp28
-          - template_name: NetScaler-MPX-26200-100G_LB_100-4
-            name: "100/4"
+          - template_name: NetScaler-MPX-26200-100G_100/4
+            name: 100/4
             role: downlink
             interface_type: 100gbase-x-qsfp28
-          - template_name: NetScaler-MPX-26200-100G_LB_100-5
-            name: "100/5"
+          - template_name: NetScaler-MPX-26200-100G_100/5
+            name: 100/5
             role: customer
             interface_type: 100gbase-x-qsfp28
-          - template_name: NetScaler-MPX-26200-100G_LB_100-6
-            name: "100/6"
+          - template_name: NetScaler-MPX-26200-100G_100/6
+            name: 100/6
             role: customer
             interface_type: 100gbase-x-qsfp28
-          - template_name: NetScaler-MPX-26200-100G_LB_100-7
-            name: "100/7"
+          - template_name: NetScaler-MPX-26200-100G_100/7
+            name: 100/7
             role: customer
             interface_type: 100gbase-x-qsfp28
-          - template_name: NetScaler-MPX-26200-100G_LB_100-8
-            name: "100/8"
+          - template_name: NetScaler-MPX-26200-100G_100/8
+            name: 100/8
             role: customer
             interface_type: 100gbase-x-qsfp28
-
-    - template_name: NetScaler-ADC-VPX_LOAD_BALANCER
-      owner: "P027"
+    - template_name: NetScaler-ADC-VPX
+      owner: P027
       device_type: NetScaler-ADC-VPX
       platform: netscaler
       software_image: netscaler-14.1.17.16
@@ -256,23 +246,23 @@ spec:
       interfaces:
         kind: TemplateDcimPhysicalInterface
         data:
-          - template_name: NetScaler-ADC-VPX_LOAD_BALANCER_mgmt
+          - template_name: NetScaler-ADC-VPX_eth0
             name: eth0
             role: management
             interface_type: other
-          - template_name: NetScaler-ADC-VPX_LOAD_BALANCER_eth1
+          - template_name: NetScaler-ADC-VPX_eth1
             name: eth1
             role: uplink
             interface_type: other
-          - template_name: NetScaler-ADC-VPX_LOAD_BALANCER_eth2
+          - template_name: NetScaler-ADC-VPX_eth2
             name: eth2
             role: uplink
             interface_type: other
-          - template_name: NetScaler-ADC-VPX_LOAD_BALANCER_eth3
+          - template_name: NetScaler-ADC-VPX_eth3
             name: eth3
             role: customer
             interface_type: other
-          - template_name: NetScaler-ADC-VPX_LOAD_BALANCER_eth4
+          - template_name: NetScaler-ADC-VPX_eth4
             name: eth4
             role: customer
             interface_type: other
