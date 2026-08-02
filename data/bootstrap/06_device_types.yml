@@ -503,7 +503,7 @@ spec:
       tcam_entries: 4000000
     # Dell
       unit_price: 42000
-    - name: PowerSwitch-S5224F
+    - name: PowerSwitch S5224F-ON
       part_number: S5224F-ON
       height: 1
       full_depth: true

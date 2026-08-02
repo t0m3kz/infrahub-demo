@@ -22,9 +22,9 @@ spec:
             deployment_type: middle_rack
             suites: [ams-1-s-1]
             fabric_templates:
-              - ["2", "border-spine", "DCS-7050CX3-32C-R"]
-              - ["2", "firewall", "PA-5260"]
-              - ["2", "load-balancer", "NetScaler-MPX-26000-100G"]
+              - ["2", "border-spine", "DCS-7050CX3-32C-R_BORDER_SPINE"]
+              - ["2", "firewall", "PA-5260_FIREWALL"]
+              - ["2", "load-balancer", "NetScaler-MPX-26000-100G_LOAD_BALANCER"]
             member_of_groups:
               - topologies_pod
             racks:
@@ -37,15 +37,15 @@ spec:
                   parent: ams-1-s-1
                   member_of_groups: [topologies_rack]
                   fabric_templates:
-                    - ["8", "leaf", "DCS-7050CX3-32C-R"]
+                    - ["8", "leaf", "DCS-7050CX3-32C-R_LEAF_MR"]
           - index: 2
             layout: S_BORDER_SPINE_POD
             deployment_type: middle_rack
             suites: [ams-1-s-2]
             fabric_templates:
-              - ["2", "border-spine", "DCS-7050CX3-32C-R"]
-              - ["2", "firewall", "PA-5260"]
-              - ["2", "load-balancer", "NetScaler-MPX-26000-100G"]
+              - ["2", "border-spine", "DCS-7050CX3-32C-R_BORDER_SPINE"]
+              - ["2", "firewall", "PA-5260_FIREWALL"]
+              - ["2", "load-balancer", "NetScaler-MPX-26000-100G_LOAD_BALANCER"]
             member_of_groups:
               - topologies_pod
             racks:
@@ -58,4 +58,4 @@ spec:
                   parent: ams-1-s-2
                   member_of_groups: [topologies_rack]
                   fabric_templates:
-                    - ["8", "leaf", "DCS-7050CX3-32C-R"]
+                    - ["8", "leaf", "DCS-7050CX3-32C-R_LEAF_MR"]

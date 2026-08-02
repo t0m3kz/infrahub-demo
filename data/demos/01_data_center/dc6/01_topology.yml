@@ -11,10 +11,10 @@ spec:
       underlay_protocol: ipv6
       naming_convention: standard
       fabric_templates:
-        - ["2", "super-spine", "N9K-C9336C-FX2"]
-        - ["2", "border-leaf", "PowerSwitch S5232F-ON"]
-        - ["2", "firewall", "CP-26000"]
-        - ["2", "load-balancer", "NetScaler-MPX-26000-100G"]
+        - ["2", "super-spine", "N9K-C9336C-FX2_SUPER_SPINE"]
+        - ["2", "border-leaf", "PowerSwitch-S5232F-ON_BORDER_LEAF"]
+        - ["2", "firewall", "CP-26000_FIREWALL"]
+        - ["2", "load-balancer", "NetScaler-MPX-26000-100G_LOAD_BALANCER"]
       fabric_interface_sorting_method: top_down
       member_of_groups:
         - topologies_dc
@@ -26,7 +26,7 @@ spec:
             deployment_type: middle_rack
             suites: [ktw-1-s-1]
             fabric_templates:
-              - ["2", "spine", "N9K-C9336C-FX2"]
+              - ["2", "spine", "N9K-C9336C-FX2_SPINE"]
             mlag_create: virtual
             member_of_groups:
               - topologies_pod
@@ -40,8 +40,8 @@ spec:
                   parent: ktw-1-s-1
                   member_of_groups: [topologies_rack]
                   fabric_templates:
-                    - ["2", "leaf", "PowerSwitch S5232F-ON"]
-                    - ["2", "l2-leaf", "PowerSwitch-S5224F"]
+                    - ["2", "leaf", "PowerSwitch-S5232F-ON_LEAF_MR"]
+                    - ["2", "l2-leaf", "PowerSwitch-S5224F-ON_TOR"]
                 - index: 5
                   row_index: 2
                   shortname: ktw-1-s-1-r-2-5
@@ -49,14 +49,14 @@ spec:
                   parent: ktw-1-s-1
                   member_of_groups: [topologies_rack]
                   fabric_templates:
-                    - ["2", "leaf", "PowerSwitch S5232F-ON"]
-                    - ["2", "l2-leaf", "PowerSwitch-S5224F"]
+                    - ["2", "leaf", "PowerSwitch-S5232F-ON_LEAF_MR"]
+                    - ["2", "l2-leaf", "PowerSwitch-S5224F-ON_TOR"]
           - index: 2
             layout: S_TOR
             deployment_type: tor
             suites: [ktw-1-s-2]
             fabric_templates:
-              - ["2", "spine", "N9K-C9336C-FX2"]
+              - ["2", "spine", "N9K-C9336C-FX2_SPINE"]
             mlag_create: back-to-back
             member_of_groups:
               - topologies_pod
@@ -70,7 +70,7 @@ spec:
                   parent: ktw-1-s-2
                   member_of_groups: [topologies_rack]
                   fabric_templates:
-                    - ["2", "tor", "N9K-C9336C-FX2"]
+                    - ["2", "tor", "N9K-C9336C-FX2_TOR"]
                 - index: 5
                   row_index: 1
                   shortname: ktw-1-s-2-r-1-5
@@ -78,7 +78,7 @@ spec:
                   parent: ktw-1-s-2
                   member_of_groups: [topologies_rack]
                   fabric_templates:
-                    - ["2", "tor", "N9K-C9336C-FX2"]
+                    - ["2", "tor", "N9K-C9336C-FX2_TOR"]
                 - index: 1
                   row_index: 2
                   shortname: ktw-1-s-2-r-2-1
@@ -86,7 +86,7 @@ spec:
                   parent: ktw-1-s-2
                   member_of_groups: [topologies_rack]
                   fabric_templates:
-                    - ["2", "tor", "PowerSwitch-S5224F"]
+                    - ["2", "tor", "PowerSwitch-S5224F-ON_TOR"]
                 - index: 5
                   row_index: 2
                   shortname: ktw-1-s-2-r-2-5
@@ -94,13 +94,13 @@ spec:
                   parent: ktw-1-s-2
                   member_of_groups: [topologies_rack]
                   fabric_templates:
-                    - ["2", "tor", "PowerSwitch-S5224F"]
+                    - ["2", "tor", "PowerSwitch-S5224F-ON_TOR"]
           - index: 3
             layout: M_MIXED
             deployment_type: mixed
             suites: [ktw-1-s-3]
             fabric_templates:
-              - ["2", "spine", "N9K-C9336C-FX2"]
+              - ["2", "spine", "N9K-C9336C-FX2_SPINE"]
             mlag_create: virtual
             member_of_groups:
               - topologies_pod
@@ -114,7 +114,7 @@ spec:
                   parent: ktw-1-s-3
                   member_of_groups: [topologies_rack]
                   fabric_templates:
-                    - ["2", "l2-leaf", "DCS-7050CX3-32C-R"]
+                    - ["2", "l2-leaf", "DCS-7050CX3-32C-R_TOR"]
                 - index: 4
                   row_index: 1
                   shortname: ktw-1-s-3-r-1-4
@@ -122,7 +122,7 @@ spec:
                   parent: ktw-1-s-3
                   member_of_groups: [topologies_rack]
                   fabric_templates:
-                    - ["2", "leaf", "DCS-7050CX3-32C-R"]
+                    - ["2", "leaf", "DCS-7050CX3-32C-R_LEAF_MIXED"]
                 - index: 7
                   row_index: 1
                   shortname: ktw-1-s-3-r-1-7
@@ -130,7 +130,7 @@ spec:
                   parent: ktw-1-s-3
                   member_of_groups: [topologies_rack]
                   fabric_templates:
-                    - ["2", "l2-leaf", "DCS-7050CX3-32C-R"]
+                    - ["2", "l2-leaf", "DCS-7050CX3-32C-R_TOR"]
                 - index: 1
                   row_index: 2
                   shortname: ktw-1-s-3-r-2-1
@@ -138,7 +138,7 @@ spec:
                   parent: ktw-1-s-3
                   member_of_groups: [topologies_rack]
                   fabric_templates:
-                    - ["2", "l2-leaf", "DCS-7050CX3-32C-R"]
+                    - ["2", "l2-leaf", "DCS-7050CX3-32C-R_TOR"]
                 - index: 4
                   row_index: 2
                   shortname: ktw-1-s-3-r-2-4
@@ -146,7 +146,7 @@ spec:
                   parent: ktw-1-s-3
                   member_of_groups: [topologies_rack]
                   fabric_templates:
-                    - ["2", "leaf", "DCS-7050CX3-32C-R"]
+                    - ["2", "leaf", "DCS-7050CX3-32C-R_LEAF_MIXED"]
                 - index: 7
                   row_index: 2
                   shortname: ktw-1-s-3-r-2-7
@@ -154,4 +154,4 @@ spec:
                   parent: ktw-1-s-3
                   member_of_groups: [topologies_rack]
                   fabric_templates:
-                    - ["2", "l2-leaf", "DCS-7050CX3-32C-R"]
+                    - ["2", "l2-leaf", "DCS-7050CX3-32C-R_TOR"]
