@@ -18,6 +18,7 @@ from ..protocols import (
     SecurityPolicy,
     SecurityPolicyRule,
     SecuritySecurityProfile,
+    SecurityTagRule,
     SecurityZone,
 )
 from ..rules import RuleLifecycleMixin
@@ -489,7 +490,7 @@ class AppApplicationGenerator(RuleLifecycleMixin, CommonGenerator):
 
     async def _get_or_create_policy(self, policy_name: str, app_name: str) -> Any | None:
         try:
-            existing = await self.client.filters(kind="SecurityPolicy", name__value=policy_name)
+            existing = await self.client.filters(kind=SecurityPolicy, name__value=policy_name)
             if existing:
                 self.logger.info("Using existing policy: %s", policy_name)
                 await existing[0].save(allow_upsert=True)
@@ -642,7 +643,7 @@ class AppApplicationGenerator(RuleLifecycleMixin, CommonGenerator):
 
         try:
             existing = await self.client.filters(
-                kind="SecurityTagRule",
+                kind=SecurityTagRule,
                 source_tag__ids=[src_tag_id],
                 destination_tag__ids=[dst_tag_id],
             )
@@ -654,7 +655,7 @@ class AppApplicationGenerator(RuleLifecycleMixin, CommonGenerator):
 
         try:
             tag_rule = await self.client.create(
-                kind="SecurityTagRule",
+                kind=SecurityTagRule,
                 data={
                     "source_tag": {"id": src_tag_id},
                     "destination_tag": {"id": dst_tag_id},

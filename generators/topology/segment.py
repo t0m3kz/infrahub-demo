@@ -27,7 +27,14 @@ from typing import Any
 from utils.data_cleaning import clean_data
 
 from ..common import CommonGenerator
-from ..protocols import DcimPhysicalDevice, DcimPhysicalInterface, DcimVirtualInterface
+from ..protocols import (
+    DcimPhysicalDevice,
+    DcimPhysicalInterface,
+    DcimVirtualInterface,
+    ManagedSegmentDeployment,
+    ManagedVxlanSegment,
+    TopologySegmentHosting,
+)
 
 
 class VxlanSegmentGenerator(CommonGenerator):
@@ -80,7 +87,7 @@ class VxlanSegmentGenerator(CommonGenerator):
         reusable_vni: int | None = None
         try:
             existing_deployments = await self.client.filters(
-                kind="ManagedSegmentDeployment",
+                kind=ManagedSegmentDeployment,
                 segment__ids=[segment_id],
             )
             for existing in existing_deployments:
@@ -191,7 +198,7 @@ class VxlanSegmentGenerator(CommonGenerator):
         if existing_deployment is None:
             try:
                 existing = await self.client.filters(
-                    kind="ManagedSegmentDeployment",
+                    kind=ManagedSegmentDeployment,
                     segment__ids=[segment_id],
                     deployment__ids=[deployment_id],
                 )
@@ -205,7 +212,7 @@ class VxlanSegmentGenerator(CommonGenerator):
         if reusable_vni is None:
             try:
                 existing_for_segment = await self.client.filters(
-                    kind="ManagedSegmentDeployment",
+                    kind=ManagedSegmentDeployment,
                     segment__ids=[segment_id],
                 )
                 reusable_vni = self._extract_existing_vni(existing_for_segment)
@@ -271,7 +278,7 @@ class VxlanSegmentGenerator(CommonGenerator):
 
         try:
             activation = await self.client.create(
-                kind="ManagedSegmentDeployment",
+                kind=ManagedSegmentDeployment,
                 data=activation_data,
             )
             await activation.save(allow_upsert=True)
@@ -297,7 +304,7 @@ class VxlanSegmentGenerator(CommonGenerator):
         if deployment_id not in cache:
             try:
                 cache[deployment_id] = await self.client.get(
-                    kind="TopologySegmentHosting",
+                    kind=TopologySegmentHosting,
                     id=deployment_id,
                     include=["vlan_pool", "vni_pool", "l3_vni_pool"],
                     prefetch_relationships=True,
@@ -324,7 +331,7 @@ class VxlanSegmentGenerator(CommonGenerator):
         if not segment_id or not target_deployments:
             return
 
-        segment_obj = await self.client.get(kind="ManagedVxlanSegment", id=segment_id)
+        segment_obj = await self.client.get(kind=ManagedVxlanSegment, id=segment_id)
         if not segment_obj:
             self.logger.warning(f"Could not fetch segment SDK object for {segment_name}")
             return
@@ -448,7 +455,7 @@ class VxlanSegmentGenerator(CommonGenerator):
         if dep_ids:
             try:
                 existing = await self.client.filters(
-                    kind="ManagedSegmentDeployment",
+                    kind=ManagedSegmentDeployment,
                     segment__ids=[segment_id],
                     deployment__ids=dep_ids,
                 )
@@ -474,7 +481,7 @@ class VxlanSegmentGenerator(CommonGenerator):
         vlan_id = next(iter(vlan_by_dep.values()))
 
         # Fetch the segment SDK object for interface_capabilities linkage
-        segment_obj = await self.client.get(kind="ManagedVxlanSegment", id=segment_id)
+        segment_obj = await self.client.get(kind=ManagedVxlanSegment, id=segment_id)
         if not segment_obj:
             self.logger.warning(f"Could not fetch segment SDK object for '{segment_name}'")
             return

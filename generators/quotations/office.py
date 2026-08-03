@@ -18,7 +18,13 @@ from infrahub_sdk.generator import InfrahubGenerator
 from utils.data_cleaning import clean_data
 
 from ..logger import FailOnErrorLoggerMixin
-from ..protocols import CustomerQuotationLineItem
+from ..protocols import (
+    CustomerQuotationCampusBuilding,
+    CustomerQuotationCampusDesign,
+    CustomerQuotationCampusFloor,
+    CustomerQuotationLineItem,
+    CustomerQuotationOffice,
+)
 
 
 class OfficeLineItem(TypedDict):
@@ -31,9 +37,9 @@ class OfficeLineItem(TypedDict):
 class OfficeQuotationGenerator(FailOnErrorLoggerMixin, InfrahubGenerator):
     """Compute office/campus sizing recommendation for one CustomerQuotationOffice."""
 
-    _KIND_PROPOSED_CAMPUS_DESIGN = "CustomerQuotationCampusDesign"
-    _KIND_PROPOSED_CAMPUS_BUILDING = "CustomerQuotationCampusBuilding"
-    _KIND_PROPOSED_CAMPUS_FLOOR = "CustomerQuotationCampusFloor"
+    _KIND_PROPOSED_CAMPUS_DESIGN = CustomerQuotationCampusDesign
+    _KIND_PROPOSED_CAMPUS_BUILDING = CustomerQuotationCampusBuilding
+    _KIND_PROPOSED_CAMPUS_FLOOR = CustomerQuotationCampusFloor
 
     async def generate(self, data: dict[str, Any]) -> None:
         cleaned = clean_data(data)
@@ -294,7 +300,7 @@ class OfficeQuotationGenerator(FailOnErrorLoggerMixin, InfrahubGenerator):
             if unit_price is not None and quantity > 0:
                 estimated_total_cost += unit_price * quantity
 
-        quotation_obj: Any = await self.client.get(kind="CustomerQuotationOffice", id=quotation_id)
+        quotation_obj: Any = await self.client.get(kind=CustomerQuotationOffice, id=quotation_id)
         quotation_obj.estimated_total_cost.value = int(estimated_total_cost)
         await quotation_obj.save(allow_upsert=True)
 

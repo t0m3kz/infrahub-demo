@@ -12,7 +12,7 @@ from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any, Callable, Literal
 
 from infrahub_sdk.exceptions import GraphQLError, NodeNotFoundError
-from infrahub_sdk.protocols import CoreIPAddressPool, CoreIPPrefixPool, CoreStandardGroup
+from infrahub_sdk.protocols import CoreIPAddressPool, CoreIPPrefixPool, CoreNumberPool, CoreStandardGroup
 
 if TYPE_CHECKING:
     import logging
@@ -194,7 +194,7 @@ class PoolMixin:
             The created/upserted CoreNumberPool SDK object
         """
         pool = await self.client.create(
-            kind="CoreNumberPool",
+            kind=CoreNumberPool,
             data={
                 "name": pool_name,
                 "description": description,

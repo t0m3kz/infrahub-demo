@@ -7,6 +7,7 @@ from types import SimpleNamespace
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
+from generators.protocols import DcimCable, ManagedGeneric
 from generators.topology.ha import HAGenerator, _device_kind, _iface_kind, _is_sync_iface
 
 
@@ -142,7 +143,7 @@ class TestEnsureHACables:
         asyncio.run(gen._ensure_ha_cables("HA-1", devices))
 
         call_kwargs = gen.client.create.call_args.kwargs
-        assert call_kwargs["kind"] == "DcimCable"
+        assert call_kwargs["kind"] == DcimCable
         assert call_kwargs["data"]["name"] == "CBL-HA-1-SYNC"
         assert call_kwargs["data"]["endpoints"] == ["i1", "i2"]
         assert call_kwargs["data"]["deployment"] == {"id": "dep-parent"}
@@ -161,7 +162,7 @@ class TestProcessHADomain:
         ha = {"id": "ha-1", "name": "HA-1", "capabilities": []}
         asyncio.run(gen._process_ha_domain(ha))
 
-        gen.client.get.assert_awaited_once_with(kind="ManagedGeneric", id="ha-1")
+        gen.client.get.assert_awaited_once_with(kind=ManagedGeneric, id="ha-1")
         gen._ensure_ha_cables.assert_awaited_once_with("HA-1", [])
 
     def test_device_load_error_is_tolerated(self) -> None:

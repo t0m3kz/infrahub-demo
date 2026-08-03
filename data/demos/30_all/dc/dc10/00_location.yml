@@ -1,0 +1,35 @@
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: LocationMetro
+  data:
+    - name: "Frankfurt"
+      shortname: "fra"
+      parent: de
+      children:
+        kind: LocationFacility
+        data:
+          - name: "FRA-1"
+            shortname: "fra-1"
+            children:
+              kind: LocationSuite
+              data:
+                - suite_name: "Suite-1"
+                  index: 1
+                  shortname: "fra-1-s-1"
+                  parent: fra-1
+                  rows: 2
+                  racks_per_row: 1
+                - suite_name: "Suite-2"
+                  index: 2
+                  shortname: "fra-1-s-2"
+                  parent: fra-1
+                  rows: 2
+                  racks_per_row: 1
+                - suite_name: "Suite-3"
+                  index: 3
+                  shortname: "fra-1-s-3"
+                  parent: fra-1
+                  rows: 1
+                  racks_per_row: 1

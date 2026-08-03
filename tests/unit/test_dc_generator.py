@@ -586,13 +586,14 @@ class TestCreateSharedRoutingObjects:
 
         await gen._create_shared_routing_objects(overlay_asn=65100)
 
-        gen.logger.error.assert_called_once()
+        gen.logger.warning.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_ospf_ibgp_creates_overlay_as_and_ospf_area(self) -> None:
         gen = self._make_generator_for_shared_routing()
         gen.data = MagicMock(routing_strategy="ospf-ibgp")
         gen.client.filters = AsyncMock(return_value=[])
+        gen.client.get = AsyncMock(return_value=None)
         as_obj = MagicMock(id="as-1")
         as_obj.asn.value = 65100
         as_obj.save = AsyncMock()
@@ -621,7 +622,7 @@ class TestCreateSharedRoutingObjects:
 
         await gen._create_shared_routing_objects(overlay_asn=65100)
 
-        gen.logger.error.assert_called_once()
+        gen.logger.warning.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_ebgp_ebgp_creates_neither_overlay_as_nor_ospf_area(self) -> None:

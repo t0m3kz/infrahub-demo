@@ -9,7 +9,7 @@ from infrahub_sdk.protocols import CoreStandardGroup
 from ..common import CablingOptions, CommonGenerator
 from ..helpers.rack import RackPlanner, RackRolesHelper, parse_rack_data
 from ..models import DeviceRole, RackModel, Template
-from ..protocols import DcimPhysicalDevice, DcimPhysicalInterface, LocationRack
+from ..protocols import DcimPhysicalDevice, DcimPhysicalInterface, LocationRack, ManagedMLAG
 from ..rack import (
     MUTUALLY_EXCLUSIVE_ROLE_GROUPS,
     ROLES_BY_DEPLOYMENT_TYPE,
@@ -582,7 +582,7 @@ class RackGenerator(RackMixin, CommonGenerator):
         mlag_group = await self.client.get(kind=CoreStandardGroup, name__value="mlag_domains")
         for pair_index, (first, second) in enumerate(zip(sorted_names[0::2], sorted_names[1::2]), start=1):
             mlag_name = f"{first}-{second}-mlag"
-            existing = await self.client.filters(kind="ManagedMLAG", name__value=mlag_name)
+            existing = await self.client.filters(kind=ManagedMLAG, name__value=mlag_name)
             if existing:
                 existing_mlag = existing[0]
                 self.client.group_context.related_node_ids.append(existing_mlag.id)
@@ -605,7 +605,7 @@ class RackGenerator(RackMixin, CommonGenerator):
                 continue
 
             mlag_obj = await self.client.create(
-                kind="ManagedMLAG",
+                kind=ManagedMLAG,
                 data={
                     "name": mlag_name,
                     "domain_id": pair_index,

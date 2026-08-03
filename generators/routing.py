@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import secrets
 from typing import TYPE_CHECKING, Any
 
 from infrahub_sdk.exceptions import GraphQLError
@@ -20,6 +21,7 @@ from .protocols import (
     ManagedOSPF,
     ManagedOSPFPeering,
     RoutingAutonomousSystem,
+    RoutingBGPAddressFamily,
     RoutingOSPFArea,
     RoutingOSPFInterface,
     RoutingPassword,
@@ -416,6 +418,94 @@ class RoutingMixin:
 
         return device_to_as_id
 
+    async def _ensure_routing_password(self, *, name: str, description: str) -> str | None:
+        """Create or reuse a shared RoutingPassword node by deterministic name."""
+
+        try:
+            existing = await self.client.get(kind=RoutingPassword, name__value=name, raise_when_missing=False)
+            if existing:
+                self.client.group_context.related_node_ids.append(existing.id)
+                return existing.id
+        except Exception as exc:
+            self.logger.debug(f"Error querying RoutingPassword {name}: {exc}")
+            return None
+
+        try:
+            obj = await self.client.create(
+                kind=RoutingPassword,
+                data={
+                    "name": name,
+                    "description": description,
+                    "password": secrets.token_urlsafe(32),
+                },
+            )
+            await obj.save(allow_upsert=True)
+            self.client.group_context.related_node_ids.append(obj.id)
+            self.logger.info(f"Created shared RoutingPassword: {name}")
+            return obj.id
+        except Exception as exc:
+            self.logger.error(f"Could not create RoutingPassword {name}: {exc}")
+            return None
+
+    async def _create_shared_routing_objects(self, overlay_asn: int) -> None:
+        """Create shared DC-level routing state used by pod and rack generators."""
+
+        await self._ensure_routing_password(
+            name=f"{self.fabric_name}-underlay-key",
+            description=f"Shared eBGP/OSPF underlay auth key for {self.fabric_name}",
+        )
+        await self._ensure_routing_password(
+            name=f"{self.fabric_name}-overlay-key",
+            description=f"Shared BGP overlay/EVPN auth key for {self.fabric_name}",
+        )
+
+        strategy = self.data.routing_strategy
+
+        if strategy in (RoutingStrategy.EBGP_IBGP.value, RoutingStrategy.OSPF_IBGP.value):
+            overlay_desc = f"{self.fabric_name} overlay ASN for iBGP EVPN"
+            try:
+                existing = await self.client.filters(
+                    kind=RoutingAutonomousSystem,
+                    description__value=overlay_desc,
+                )
+                if existing:
+                    as_obj = existing[0]
+                    as_obj.asn.value = overlay_asn
+                    await as_obj.save(allow_upsert=True)
+                    self.logger.info(f"Updated shared overlay AS: AS{as_obj.asn.value} ({as_obj.id})")
+                else:
+                    as_obj = await self.client.create(
+                        kind=RoutingAutonomousSystem,
+                        data={"asn": overlay_asn, "description": overlay_desc},
+                    )
+                    await as_obj.save(allow_upsert=True)
+                    self.logger.info(f"Created shared overlay AS: AS{as_obj.asn.value} ({as_obj.id})")
+                self.client.group_context.related_node_ids.append(as_obj.id)
+            except Exception as exc:
+                self.logger.warning(f"Failed to create shared overlay AS: {exc}")
+
+        if strategy == RoutingStrategy.OSPF_IBGP.value:
+            area_name = f"{self.fabric_name}-ospf-area-0"
+            try:
+                area_obj = await self.client.get(kind=RoutingOSPFArea, name__value=area_name, raise_when_missing=False)
+                if area_obj:
+                    self.client.group_context.related_node_ids.append(area_obj.id)
+                else:
+                    area_obj = await self.client.create(
+                        kind=RoutingOSPFArea,
+                        data={
+                            "name": area_name,
+                            "area": 0,
+                            "area_type": "standard",
+                            "description": f"OSPF backbone area for {self.fabric_name}",
+                        },
+                    )
+                    await area_obj.save(allow_upsert=True)
+                    self.client.group_context.related_node_ids.append(area_obj.id)
+                    self.logger.info(f"Created shared OSPF area: {area_name}")
+            except Exception as exc:
+                self.logger.warning(f"Failed to create shared OSPF area: {exc}")
+
     async def _ensure_evpn_af_node(self) -> str:
         """Upsert the L2VPN/EVPN RoutingBGPAddressFamily node and return its ID.
 
@@ -425,7 +515,7 @@ class RoutingMixin:
         """
         try:
             existing = await self.client.filters(
-                kind="RoutingBGPAddressFamily",
+                kind=RoutingBGPAddressFamily,
                 afi__value="l2vpn",
                 safi__value="evpn",
             )
@@ -438,7 +528,7 @@ class RoutingMixin:
 
         try:
             obj = await self.client.create(
-                kind="RoutingBGPAddressFamily",
+                kind=RoutingBGPAddressFamily,
                 data={
                     "afi": "l2vpn",
                     "safi": "evpn",

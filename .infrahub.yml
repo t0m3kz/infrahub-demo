@@ -429,15 +429,6 @@ generator_definitions:
     execute_after_merge: false
     parameters:
       device_name: name__value
-  - name: add_vrf_namespace
-    file_path: generators/topology/vrf.py
-    targets: vrf_namespaces
-    query: vrf_namespace_data
-    class_name: VrfNamespaceGenerator
-    execute_in_proposed_change: false
-    execute_after_merge: false
-    parameters:
-      name: name__value
   - name: add_vxlan_segment
     file_path: generators/topology/segment.py
     targets: vxlan_segments
