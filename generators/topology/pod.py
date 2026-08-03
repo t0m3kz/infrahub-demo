@@ -5,6 +5,7 @@ from typing import Any, Literal, cast
 
 from utils.data_cleaning import clean_data
 
+from ..border_services import BorderServicesMixin
 from ..common import CablingOptions, CommonGenerator, DeviceOptions, RoutingOptions
 from ..helpers.routing import RoutingStrategy
 from ..helpers.template_interfaces import role_interface_names_or_dynamic
@@ -24,7 +25,7 @@ _DC_ASN_POOL_RETRY_DELAY = 3.0
 _BS_ROLE_FOR: dict[str, str] = {"firewall": "firewall", "load-balancer": "load-balancer"}
 
 
-class PodTopologyGenerator(CommonGenerator):
+class PodTopologyGenerator(BorderServicesMixin, CommonGenerator):
     """Generate pod topology with resource pools and spine infrastructure.
 
     Creates resource pools (technical and management) and creates spine devices
@@ -205,7 +206,7 @@ class PodTopologyGenerator(CommonGenerator):
             dc_asn_pool_name = dc.fabric_asn_pool.name
 
             # Propagate DC pool reference to pod so rack generator can find it via pod.asn_pool
-            pod_obj = await self.client.get(kind="TopologyPod", id=pod_id)
+            pod_obj = await self.client.get(kind=TopologyPod, id=pod_id)
             if pod_obj:
                 pod_obj.asn_pool = {"id": dc.fabric_asn_pool.id}
                 await pod_obj.save(allow_upsert=True)

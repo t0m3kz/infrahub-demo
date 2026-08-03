@@ -1,6 +1,5 @@
 """Infrastructure generator for data center topology."""
 
-import secrets
 from typing import Any, Literal, cast
 
 from utils.data_cleaning import clean_data
@@ -10,24 +9,14 @@ from ..helpers import calculate_dc_fabric_loopback_prefix, name_to_asn_range
 from ..helpers.routing import RoutingStrategy
 from ..helpers.template_interfaces import role_interface_names_or_dynamic
 from ..models import POD_LAYOUTS, DCModel
-from ..protocols import (
-    RoutingAutonomousSystem,
-    RoutingOSPFArea,
-    RoutingPassword,
-    TopologyPod,
-)
+from ..protocols import TopologyDataCenter, TopologyPod
+from ..shared_service_chain import SharedServiceChainMixin
 from ..types import CablingOptions, RoutingOptions
 
 _DC_VALID_FABRIC_ROLES = frozenset({"super-spine", "hyper-spine", "border-leaf", "firewall", "load-balancer"})
-# FW/LB "uplink" interfaces face border-leaf; border-leaf's "firewall"/"load-balancer"
-# interfaces are the dedicated counterpart ports for each service — see
-# N9K-C9336C-FX2_BORDER_LEAF's template for the canonical port layout.
-_BL_ROLE_FOR: dict[str, str] = {"firewall": "firewall", "load-balancer": "load-balancer"}
-_DEFAULT_COMMON_EXCHANGE_NAME = "GLOBAL-SHARED-EXCHANGE"
-_DEFAULT_SHARED_SERVICES_NAMESPACE = "SHARED-SERVICES"
 
 
-class DCTopologyGenerator(CommonGenerator):
+class DCTopologyGenerator(SharedServiceChainMixin, CommonGenerator):
     """Generate data center topology with super-spine infrastructure."""
 
     async def generate(self, data: dict[str, Any]) -> None:
@@ -140,7 +129,7 @@ class DCTopologyGenerator(CommonGenerator):
         # Attach pool references to the DC every run — allocate_resource_pools()
         # returns the same (upserted) pool objects whether they were just created or
         # already existed, so this setattr+save is itself idempotent.
-        dc = await self.client.get(kind="TopologyDataCenter", id=dc_id)
+        dc = await self.client.get(kind=TopologyDataCenter, id=dc_id)
         if dc:
             pool_attr_map: dict[str, str] = {
                 "loopback": "loopback_pool",
@@ -400,62 +389,6 @@ class DCTopologyGenerator(CommonGenerator):
         self._dc_fabric_loopback_pool_id = dc_fabric_loopback_pool.id if dc_fabric_loopback_pool else None
         await self._generate_dc_scoped_fabric_devices()
 
-    async def _ensure_common_exchange_for_dc(self) -> None:
-        """Ensure a default TopologyCommonExchange exists and includes this DC deployment."""
-
-        try:
-            namespaces = await self.client.filters(
-                kind="IpamNamespace",
-                name__value=_DEFAULT_SHARED_SERVICES_NAMESPACE,
-            )
-            if not namespaces:
-                self.logger.warning(
-                    f"Shared services namespace '{_DEFAULT_SHARED_SERVICES_NAMESPACE}' not found; "
-                    f"skipping CommonExchange linking for DC {self.data.name}"
-                )
-                return
-            shared_ns = namespaces[0]
-
-            exchanges = await self.client.filters(
-                kind="TopologyCommonExchange",
-                is_default__value=True,
-            )
-
-            exchange_obj = None
-            if exchanges:
-                exchange_obj = exchanges[0]
-                if len(exchanges) > 1:
-                    self.logger.warning(
-                        "Multiple TopologyCommonExchange objects marked is_default=true; using the first one"
-                    )
-            else:
-                exchange_obj = await self.client.create(
-                    kind="TopologyCommonExchange",
-                    data={
-                        "name": _DEFAULT_COMMON_EXCHANGE_NAME,
-                        "description": "Auto-provisioned default shared exchange domain",
-                        "is_default": True,
-                        "namespace": {"id": shared_ns.id},
-                        "deployments": [{"id": self.data.id}],
-                    },
-                )
-                await exchange_obj.save(allow_upsert=True)
-                self.logger.info(
-                    f"Created default CommonExchange '{_DEFAULT_COMMON_EXCHANGE_NAME}' for DC {self.data.name}"
-                )
-                return
-
-            rel = getattr(exchange_obj, "deployments")
-            await rel.fetch()
-            if any(peer.id == self.data.id for peer in rel.peers):
-                return
-
-            await self._safe_rel_add(rel, {"id": self.data.id})
-            await exchange_obj.save(allow_upsert=True)
-            self.logger.info(f"Linked DC {self.data.name} to default CommonExchange '{exchange_obj.name.value}'")
-        except Exception as exc:
-            self.logger.warning(f"Failed to ensure CommonExchange for DC {self.data.name}: {exc}")
-
     def _validate_fabric_template_roles(self) -> None:
         """Log+skip (don't abort) any fabric_templates entry using a role this
         DC-level generator doesn't know how to place — an unrelated bad entry
@@ -550,139 +483,15 @@ class DCTopologyGenerator(CommonGenerator):
         return all_names
 
     async def _generate_dc_scoped_fabric_devices(self) -> None:
-        """Create border-leaf (distributed across pods by their own design caps),
-        firewall, and load-balancer devices (DC-wide), then cable border-leaf to
-        firewall/load-balancer per connectivity_mode. No-ops on border-leaf if no
-        pods exist yet — a DC with zero pods has nothing to place border-leafs
-        into. A pod added later than this DC's border-leaf declaration needs an
-        explicit dc_pod_cascade run to get its share — same as any other
-        structural DC-level change (see tasks/demo.py's own manual dc_pod_cascade
-        calls after bulk loads); not auto-triggered from pod.py's add_pod, which
-        would otherwise fire a concurrent DC-level re-bootstrap on every single
-        pod creation during a bulk multi-pod load."""
-        naming_convention = cast(
-            Literal["standard", "hierarchical", "flat", "computed"], self.data.naming_convention.lower()
-        )
+        """Create border-leaf devices and delegate the DC service chain to the mixin.
+
+        No-ops on border-leaf if no pods exist yet — a DC with zero pods has
+        nothing to place border-leafs into. A pod added later than this DC's
+        border-leaf declaration needs an explicit dc_pod_cascade run to get its
+        share — same as any other structural DC-level change (see tasks/demo.py's
+        own manual dc_pod_cascade calls after bulk loads); not auto-triggered from
+        pod.py's add_pod, which would otherwise fire a concurrent DC-level
+        re-bootstrap on every single pod creation during a bulk multi-pod load.
+        """
         border_leaf_names = await self._create_border_leaf_devices()
-        firewall_names = await self._create_role_devices(
-            role="firewall",
-            entries=self.data.firewall_templates,
-            deployment_id=self.data.id,
-            naming_convention=naming_convention,
-            indexes=[self.data.index],
-        )
-        load_balancer_names = await self._create_role_devices(
-            role="load-balancer",
-            entries=self.data.load_balancer_templates,
-            deployment_id=self.data.id,
-            naming_convention=naming_convention,
-            indexes=[self.data.index],
-        )
-        await self._cable_border_services(
-            border_role_for=_BL_ROLE_FOR,
-            connectivity_mode=self.data.connectivity_mode,
-            border_names=border_leaf_names,
-            firewall_names=firewall_names,
-            load_balancer_names=load_balancer_names,
-        )
-
-    async def _ensure_routing_password(self, name: str, description: str) -> None:
-        """Find-or-create a shared RoutingPassword by deterministic name.
-
-        Query-first: an existing password's value is never regenerated or
-        upserted, since ``secrets.token_urlsafe()`` is non-deterministic —
-        re-running this on every DC generate would silently rotate the
-        BGP/OSPF auth key underneath already-deployed devices.
-        """
-        try:
-            existing = await self.client.get(kind=RoutingPassword, name__value=name, raise_when_missing=False)
-            if existing:
-                self.client.group_context.related_node_ids.append(existing.id)
-                self.logger.info(f"Found existing RoutingPassword: {name} ({existing.id})")
-                return
-        except Exception as e:
-            self.logger.warning(f"Error querying RoutingPassword {name}: {e}")
-            return
-
-        try:
-            obj = await self.client.create(
-                kind=RoutingPassword,
-                data={
-                    "name": name,
-                    "password": secrets.token_urlsafe(24),
-                    "description": description,
-                },
-            )
-            await obj.save(allow_upsert=True)
-            self.client.group_context.related_node_ids.append(obj.id)
-            self.logger.info(f"Created shared RoutingPassword: {name} ({obj.id})")
-        except Exception as e:
-            self.logger.error(f"Failed to create shared RoutingPassword {name}: {e}")
-
-    async def _create_shared_routing_objects(self, overlay_asn: int) -> None:
-        """Create fabric-wide shared routing objects once at DC level.
-
-        Based on the routing strategy:
-        - ``*-ibgp``: creates a single shared RoutingAutonomousSystem for iBGP overlay
-        - ``ospf-*``: creates a single shared RoutingOSPFArea (area 0) for OSPF underlay
-        - all strategies: creates shared underlay + overlay BGP/OSPF auth keys
-          (RoutingPassword), each referenced by every underlay/overlay peering.
-
-        These objects are created idempotently (allow_upsert) so re-running
-        the DC generator is safe. RoutingPassword is the one exception: its
-        secret value is generated once and never touched again on re-run
-        (see ``_ensure_routing_password``).
-        """
-        strategy = self.data.routing_strategy
-
-        await self._ensure_routing_password(
-            name=f"{self.fabric_name}-underlay-key",
-            description=f"Shared eBGP/OSPF underlay auth key for {self.fabric_name}",
-        )
-        await self._ensure_routing_password(
-            name=f"{self.fabric_name}-overlay-key",
-            description=f"Shared BGP overlay/EVPN auth key for {self.fabric_name}",
-        )
-
-        # iBGP overlay → ensure exactly one shared ASN exists with deterministic value
-        if strategy in (RoutingStrategy.EBGP_IBGP.value, RoutingStrategy.OSPF_IBGP.value):
-            overlay_desc = f"{self.fabric_name} overlay ASN for iBGP EVPN"
-            try:
-                existing = await self.client.filters(
-                    kind=RoutingAutonomousSystem,
-                    description__value=overlay_desc,
-                )
-                if existing:
-                    as_obj = existing[0]
-                    as_obj.asn.value = overlay_asn
-                    await as_obj.save(allow_upsert=True)
-                    self.logger.info(f"Updated shared overlay AS: AS{as_obj.asn.value} ({as_obj.id})")
-                else:
-                    as_obj = await self.client.create(
-                        kind=RoutingAutonomousSystem,
-                        data={"asn": overlay_asn, "description": overlay_desc},
-                    )
-                    await as_obj.save(allow_upsert=True)
-                    self.logger.info(f"Created shared overlay AS: AS{as_obj.asn.value} ({as_obj.id})")
-                self.client.group_context.related_node_ids.append(as_obj.id)
-            except Exception as e:
-                self.logger.error(f"Failed to create shared overlay AS: {e}")
-
-        # OSPF underlay → create shared area 0
-        if strategy == RoutingStrategy.OSPF_IBGP.value:
-            area_name = f"{self.fabric_name}-ospf-area-0"
-            try:
-                area_obj = await self.client.create(
-                    kind=RoutingOSPFArea,
-                    data={
-                        "name": area_name,
-                        "area": 0,
-                        "area_type": "standard",
-                        "description": f"OSPF backbone area for {self.fabric_name}",
-                    },
-                )
-                await area_obj.save(allow_upsert=True)
-                self.client.group_context.related_node_ids.append(area_obj.id)
-                self.logger.info(f"Created shared OSPF area: {area_name}")
-            except Exception as e:
-                self.logger.error(f"Failed to create shared OSPF area: {e}")
+        await self._generate_dc_shared_service_devices(border_leaf_names=border_leaf_names)

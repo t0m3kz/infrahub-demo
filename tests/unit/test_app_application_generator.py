@@ -15,7 +15,7 @@ from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
 from generators.helpers.rules import RulesPlanner
-from generators.protocols import CloudSecurityGroup, CloudSecurityGroupRule
+from generators.protocols import CloudSecurityGroup, CloudSecurityGroupRule, SecurityTagRule
 from generators.topology.application_security import (
     AppApplicationGenerator,
     _resolve_port,
@@ -498,7 +498,7 @@ class TestSourceSegmentPolicyHelpers:
         )
 
         call_kwargs = gen.client.create.call_args.kwargs
-        assert call_kwargs["kind"] == "SecurityTagRule"
+        assert call_kwargs["kind"] == SecurityTagRule
         data = call_kwargs["data"]
         assert data["source_tag"] == {"id": "tag-src"}
         assert data["destination_tag"] == {"id": "tag-dst"}

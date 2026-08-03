@@ -230,12 +230,16 @@ class TestVirtualCircuitGenerator:
     def test_connector_without_interface_z_logs_warning(self):
         """Circuit with missing second interface emits a warning."""
         log = self._run(_virt_circuit_response(omit_interface_z=True))
-        assert log.warning.call_count >= 1
+        assert log.warning.call_count >= 2
         warning_msgs = " ".join(str(c) for c in log.warning.call_args_list)
         assert "expected 2 interfaces" in warning_msgs
+        assert "physical_backed without physical underlay" in warning_msgs
 
     def test_both_interfaces_missing_logs_two_warnings(self):
         """Circuit with both endpoints missing emits warnings."""
         log = self._run(_virt_circuit_response(omit_interface_a=True, omit_interface_z=True))
         assert log.warning.call_count >= 2
+        warning_msgs = " ".join(str(c) for c in log.warning.call_args_list)
+        assert "expected 2 interfaces" in warning_msgs
+        assert "physical_backed without physical underlay" in warning_msgs
         log.error.assert_not_called()

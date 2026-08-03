@@ -24,6 +24,7 @@ import asyncio
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
+from generators.protocols import ManagedSegmentDeployment, TopologySegmentHosting
 from generators.topology.segment import VxlanSegmentGenerator
 
 # ---------------------------------------------------------------------------
@@ -262,7 +263,7 @@ class TestGetDcPool:
 
         gen.client.get.assert_awaited_once()
         call_kwargs = gen.client.get.call_args.kwargs
-        assert call_kwargs["kind"] == "TopologySegmentHosting"
+        assert call_kwargs["kind"] == TopologySegmentHosting
         assert call_kwargs["id"] == "metro-1"
         assert result is pool_peer
 
@@ -343,7 +344,7 @@ class TestActivateSegmentInDeployment:
 
         gen.client.create.assert_called_once()
         call_kwargs = gen.client.create.call_args.kwargs
-        assert call_kwargs["kind"] == "ManagedSegmentDeployment"
+        assert call_kwargs["kind"] == ManagedSegmentDeployment
         call_data = call_kwargs["data"]
 
         assert call_data["segment"] == {"id": "seg-1"}

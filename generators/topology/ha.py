@@ -17,6 +17,7 @@ from infrahub_sdk.generator import InfrahubGenerator
 from utils.data_cleaning import clean_data
 
 from ..logger import FailOnErrorLoggerMixin
+from ..protocols import DcimCable, DcimVirtualInterface, ManagedGeneric, ManagedHAInterface
 
 
 def _is_sync_iface(iface: dict) -> bool:
@@ -83,7 +84,7 @@ class HAGenerator(FailOnErrorLoggerMixin, InfrahubGenerator):
             iface_a_id = iface_a["id"]
             iface_b_id = iface_b["id"]
 
-            existing = await self.client.filters(kind="DcimCable", name__value=cable_name)
+            existing = await self.client.filters(kind=DcimCable, name__value=cable_name)
             if existing:
                 self.logger.info(f"  [{ha_name}] Cable {cable_name} already exists — ensuring state")
                 await existing[0].save(allow_upsert=True)
@@ -92,7 +93,7 @@ class HAGenerator(FailOnErrorLoggerMixin, InfrahubGenerator):
             # Check if either endpoint already has a cable (orphan from a partial run)
             orphan_id = (iface_a.get("cable") or {}).get("id") or (iface_b.get("cable") or {}).get("id")
             if orphan_id:
-                orphan_obj = await self.client.get(kind="DcimCable", id=orphan_id)
+                orphan_obj = await self.client.get(kind=DcimCable, id=orphan_id)
                 old_name = getattr(orphan_obj, "name").value
                 getattr(orphan_obj, "name").value = cable_name
                 await orphan_obj.save(allow_upsert=True)
@@ -111,7 +112,7 @@ class HAGenerator(FailOnErrorLoggerMixin, InfrahubGenerator):
             }
             if deployment_id:
                 cable_data["deployment"] = {"id": deployment_id}
-            cable_obj = await self.client.create(kind="DcimCable", data=cable_data)
+            cable_obj = await self.client.create(kind=DcimCable, data=cable_data)
             await cable_obj.save(allow_upsert=True)
             self.logger.info(f"  [{ha_name}] Created {cable_name}")
 
@@ -122,7 +123,7 @@ class HAGenerator(FailOnErrorLoggerMixin, InfrahubGenerator):
 
         self.logger.info(f"Processing HA domain {ha_name} ({len(devices)} devices)")
 
-        ha_obj = await self.client.get(kind="ManagedGeneric", id=ha_id)
+        ha_obj = await self.client.get(kind=ManagedGeneric, id=ha_id)
 
         for device in devices:
             dev_id: str = device["id"]
@@ -158,7 +159,7 @@ class HAGenerator(FailOnErrorLoggerMixin, InfrahubGenerator):
 
         # Fetch existing HAInterface nodes for this domain — for idempotency
         existing = await self.client.filters(
-            kind="ManagedHAInterface",
+            kind=ManagedHAInterface,
             ha_domain__ids=[ha_id],
         )
         existing_iface_ids = set()
@@ -181,7 +182,7 @@ class HAGenerator(FailOnErrorLoggerMixin, InfrahubGenerator):
                     self.logger.info("[%s] Virtual device has no HA sync interface — creating one", dev_name)
                     candidate_name = "eth7"
                     existing = await self.client.filters(
-                        kind="DcimVirtualInterface",
+                        kind=DcimVirtualInterface,
                         device__ids=[dev_id],
                         name__value=candidate_name,
                     )
@@ -202,7 +203,7 @@ class HAGenerator(FailOnErrorLoggerMixin, InfrahubGenerator):
                         ]
                     else:
                         sync_obj = await self.client.create(
-                            kind="DcimVirtualInterface",
+                            kind=DcimVirtualInterface,
                             data={
                                 "name": candidate_name,
                                 "device": {"id": dev_id},
@@ -253,7 +254,7 @@ class HAGenerator(FailOnErrorLoggerMixin, InfrahubGenerator):
                 self.logger.info(f"  [{dev_name}:{iface_name}] Creating ManagedHAInterface {node_name}")
 
                 ha_iface = await self.client.create(
-                    kind="ManagedHAInterface",
+                    kind=ManagedHAInterface,
                     data={
                         "name": node_name,
                         "link_type": "sync",
@@ -265,7 +266,7 @@ class HAGenerator(FailOnErrorLoggerMixin, InfrahubGenerator):
                 await ha_iface.save(allow_upsert=True)
 
                 # Re-fetch so relationship managers are initialized
-                ha_iface = await self.client.get(kind="ManagedHAInterface", id=ha_iface.id)
+                ha_iface = await self.client.get(kind=ManagedHAInterface, id=ha_iface.id)
 
                 # Wire interface_capabilities → the physical/virtual interface
                 iface_caps = getattr(ha_iface, "interface_capabilities")

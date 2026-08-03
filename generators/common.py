@@ -7,7 +7,6 @@ from infrahub_sdk.generator import InfrahubGenerator
 from infrahub_sdk.protocols import CoreGeneratorDefinition
 from infrahub_sdk.task.models import TaskFilter, TaskState
 
-from .border_services import BorderServicesMixin
 from .cabling import CablingMixin
 from .devices import DeviceMixin
 from .helpers.common import retry_delay
@@ -29,7 +28,6 @@ class CommonGenerator(
     PoolMixin,
     DeviceMixin,
     CablingMixin,
-    BorderServicesMixin,
     RoutingMixin,
     InfrahubGenerator,
 ):
@@ -45,10 +43,9 @@ class CommonGenerator(
     Domain logic lives in dedicated mixins, grouped by responsibility rather
     than 1:1 with each method — see PoolMixin (resource pools + the lock that
     protects concurrent pool allocation), DeviceMixin (device creation),
-    CablingMixin (device-to-device cabling), BorderServicesMixin
-    (border-leaf/border-spine firewall/load-balancer provisioning, shared by
-    dc.py and pod.py), and RoutingMixin (BGP/OSPF underlay+overlay). Fan-out/
-    orchestration (run_generator, wait_for_parent_generator_and_refetch)
+    CablingMixin (device-to-device cabling) and RoutingMixin (BGP/OSPF
+    underlay+overlay).
+    Fan-out/orchestration (run_generator, wait_for_parent_generator_and_refetch)
     stays here since it's generator-lifecycle plumbing, not domain logic.
     """
 

@@ -730,8 +730,9 @@ async def _phase_07_customers(
 
     Loads, per customer (c001/c002/c003): 07_customers/{customer}/01_deployment.yml
     (TopologyCustomer*) -> explicit add_customer_deployment_exchange run, which
-    get-or-creates the VRF namespace ("{ORG_ID}-P") and creates the exchange
-    toward shared services/hub where transport exists -> 08_segments/{customer}/02_segments.yml
+    get-or-creates the VRF namespace ("{ORG_ID}-P"), allocates its L3 VNI,
+    and creates the exchange toward shared services/hub where transport exists ->
+    08_segments/{customer}/02_segments.yml
     (prefixes/gateway IPs in that namespace + ManagedVxlanSegment, a
     customer-specific count of segments) -> add_vxlan_segment (allocates
     VLAN/VNI, wires leaf/tor interfaces) -> applications (from
@@ -795,26 +796,6 @@ async def _phase_07_customers(
             dep_names = [e["node"]["name"]["value"] for e in dep_nodes]
             log.info("  Running add_customer_deployment_exchange for: %s", ", ".join(dep_names))
             await _run_generator(c, "add_customer_deployment_exchange", dep_ids, branch, dry_run)
-
-    if not skip_generators:
-        c.default_branch = branch
-        ns_data = await c.execute_graphql(
-            query="""
-            query {
-                IpamNamespace(name__values: ["C001-P", "C001-T", "C002-P", "C002-D", "C003-P", "C003-S"]) {
-                    edges { node { id name { value } } }
-                }
-            }
-            """
-        )
-        ns_nodes = ns_data.get("IpamNamespace", {}).get("edges", [])
-        if not ns_nodes:
-            log.warning("  No customer namespaces found after data load — skipping add_vrf_namespace")
-        else:
-            ns_ids = [e["node"]["id"] for e in ns_nodes]
-            ns_names = [e["node"]["name"]["value"] for e in ns_nodes]
-            log.info("  Running add_vrf_namespace for: %s", ", ".join(ns_names))
-            await _run_generator(c, "add_vrf_namespace", ns_ids, branch, dry_run)
 
     for customer in customer_dirs:
         _load_objects(f"{segments_base}/{customer}/02_segments.yml", branch, dry_run)

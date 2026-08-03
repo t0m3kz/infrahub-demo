@@ -26,6 +26,7 @@ from generators.models import (
     RackPod,
     Template,
 )
+from generators.protocols import ManagedMLAG
 from generators.topology.rack import RackGenerator
 
 
@@ -196,7 +197,7 @@ class TestCreateLocalLeafRoleDevices:
 
         gen.client.create.assert_awaited_once()
         create_kwargs = gen.client.create.call_args.kwargs
-        assert create_kwargs["kind"] == "ManagedMLAG"
+        assert create_kwargs["kind"] == ManagedMLAG
         assert create_kwargs["data"]["virtual_peer_link"] is False
 
     @pytest.mark.asyncio

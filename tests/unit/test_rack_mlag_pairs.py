@@ -30,6 +30,7 @@ from generators.models import (
     RackPod,
     Template,
 )
+from generators.protocols import ManagedMLAG
 from generators.topology.rack import RackGenerator
 
 
@@ -182,7 +183,7 @@ class TestEnsureMlagPairs:
 
         gen.client.create.assert_awaited_once()
         create_kwargs = gen.client.create.call_args.kwargs
-        assert create_kwargs["kind"] == "ManagedMLAG"
+        assert create_kwargs["kind"] == ManagedMLAG
         assert create_kwargs["data"]["name"] == "tor-01-tor-02-mlag"
         assert create_kwargs["data"]["virtual_peer_link"] is False
         assert create_kwargs["data"]["capabilities"] == [{"id": "id-tor-01"}, {"id": "id-tor-02"}]

@@ -1,4 +1,4 @@
-"""Generator for automatic customer <-> shared-services exchange on deployment creation.
+"""Customer boarding generator for the deployment VRF namespace and shared-services exchange.
 
 Triggered on TopologyCustomerDC/Colocation/Cloud/Office creation (see
 data/events/99_actions.yml's trigger-exchange-gateway-on-*-created rules).
@@ -12,10 +12,9 @@ domain, not a circuit, so TopologyDataCenter keeps TopologyConnectableLocation
 for DCI/external-peering purposes instead.
 
 In every case this generator first gets or creates the deployment's VRF
-namespace ({org_id}-{environment}, e.g. "C005-P"), added to the
-vrf_namespaces group so add_vrf_namespace (generators/topology/vrf.py)
-allocates its L3 VNI from the global pool. What happens next depends on the
-deployment type — they don't reach SHARED-SERVICES the same way:
+namespace ({org_id}-{environment}, e.g. "C005-P") and allocates its L3 VNI
+from the global pool. What happens next depends on the deployment type —
+they don't reach SHARED-SERVICES the same way:
 
   TopologyCustomerDC          -> TopologyRouteLeakExchange to SHARED-SERVICES.
                                  Both live in the same fabric EVPN domain, so
@@ -62,11 +61,15 @@ from __future__ import annotations
 
 from typing import Any
 
+from infrahub_sdk.protocols import CoreNumberPool, CoreStandardGroup
+
 from utils.data_cleaning import clean_data
 
 from ..common import CommonGenerator
+from ..protocols import IpamNamespace, TopologyRoutedExchange, TopologyRouteLeakExchange
 
 DEFAULT_SHARED_SERVICES_NAMESPACE = "SHARED-SERVICES"
+GLOBAL_L3VNI_POOL_NAME = "GLOBAL-L3VNI"
 # Backward-compatible alias used by tests/imports.
 SHARED_SERVICES_NAMESPACE = DEFAULT_SHARED_SERVICES_NAMESPACE
 
@@ -120,6 +123,8 @@ class CustomerDeploymentExchangeGenerator(CommonGenerator):
         if customer_namespace is None:
             return
 
+        await self._ensure_namespace_l3_vni(customer_namespace, namespace_name)
+
         if deployment_kind == "TopologyCustomerDC":
             await self._exchange_via_route_leak(customer_namespace, customer_id)
         else:
@@ -131,7 +136,7 @@ class CustomerDeploymentExchangeGenerator(CommonGenerator):
 
     async def _get_namespace(self, name: str) -> Any | None:
         try:
-            existing = await self.client.filters(kind="IpamNamespace", name__value=name)
+            existing = await self.client.filters(kind=IpamNamespace, name__value=name)
         except Exception as exc:
             self.logger.error(f"Error looking up namespace '{name}': {exc}")
             return None
@@ -144,14 +149,14 @@ class CustomerDeploymentExchangeGenerator(CommonGenerator):
             return existing
 
         try:
-            vrf_group = await self.client.get(kind="CoreStandardGroup", name__value="vrf_namespaces")
+            vrf_group = await self.client.get(kind=CoreStandardGroup, name__value="vrf_namespaces")
         except Exception as exc:
             self.logger.error(f"Cannot find 'vrf_namespaces' group — cannot create namespace '{name}': {exc}")
             return None
 
         try:
             namespace_obj = await self.client.create(
-                kind="IpamNamespace",
+                kind=IpamNamespace,
                 data={
                     "name": name,
                     "description": f"{owner_name} VRF" if owner_name else f"{name} VRF",
@@ -164,6 +169,46 @@ class CustomerDeploymentExchangeGenerator(CommonGenerator):
         except Exception as exc:
             self.logger.error(f"Failed to create namespace '{name}': {exc}")
             return None
+
+    async def _ensure_namespace_l3_vni(self, namespace_obj: Any, namespace_name: str) -> None:
+        if namespace_name == "default":
+            self.logger.info("Namespace 'default' is the default namespace — skipping L3 VNI allocation")
+            return
+
+        try:
+            l3_vni_pool = await self.client.get(kind=CoreNumberPool, name__value=GLOBAL_L3VNI_POOL_NAME)
+        except Exception as exc:
+            self.logger.error(
+                f"Cannot find global pool '{GLOBAL_L3VNI_POOL_NAME}' — cannot allocate L3 VNI for namespace "
+                f"'{namespace_name}': {exc}"
+            )
+            return
+
+        mutation = """
+        mutation AllocateL3Vni($id: String!, $pool_id: String!, $identifier: String!) {
+          IpamNamespaceUpsert(data: {
+            id: $id
+            l3_vni: { from_pool: { id: $pool_id, identifier: $identifier } }
+          }) {
+            object { id }
+          }
+        }
+        """
+
+        try:
+            self.logger.info(f"Allocating L3 VNI for namespace '{namespace_name}' from pool {GLOBAL_L3VNI_POOL_NAME}")
+            await self.client.execute_graphql(
+                query=mutation,
+                variables={
+                    "id": namespace_obj.id,
+                    "pool_id": l3_vni_pool.id,
+                    "identifier": f"{namespace_obj.id}-l3vni",
+                },
+            )
+            await namespace_obj.save(allow_upsert=True)
+            self.logger.info(f"Namespace '{namespace_name}' updated with L3 VNI from pool")
+        except Exception as exc:
+            self.logger.error(f"Failed to allocate L3 VNI for namespace '{namespace_name}': {exc}")
 
     async def _get_default_common_exchange(self) -> tuple[str, str | None]:
         """Return (namespace_name, common_exchange_id) for the default common exchange.
@@ -229,7 +274,7 @@ query default_common_exchange {
 
         exchange_name = f"{customer_namespace.name.value}-{shared_namespace_name}-shared-services"
         try:
-            existing = await self.client.filters(kind="TopologyRouteLeakExchange", name__value=exchange_name)
+            existing = await self.client.filters(kind=TopologyRouteLeakExchange, name__value=exchange_name)
         except Exception as exc:
             self.logger.error(f"Error looking up exchange '{exchange_name}': {exc}")
             return
@@ -240,7 +285,7 @@ query default_common_exchange {
 
         try:
             exchange_obj = await self.client.create(
-                kind="TopologyRouteLeakExchange",
+                kind=TopologyRouteLeakExchange,
                 data={
                     "name": exchange_name,
                     "description": (
@@ -359,7 +404,7 @@ query default_common_exchange {
             )
 
         try:
-            existing = await self.client.filters(kind="TopologyRoutedExchange", name__value=exchange_name)
+            existing = await self.client.filters(kind=TopologyRoutedExchange, name__value=exchange_name)
         except Exception as exc:
             self.logger.error(f"Error looking up exchange '{exchange_name}': {exc}")
             return
@@ -370,7 +415,7 @@ query default_common_exchange {
 
         try:
             exchange_obj = await self.client.create(
-                kind="TopologyRoutedExchange",
+                kind=TopologyRoutedExchange,
                 data={
                     "name": exchange_name,
                     "description": description,

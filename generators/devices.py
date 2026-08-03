@@ -38,11 +38,16 @@ class DeviceMixin:
         template: dict[str, Any],
         naming_convention: Literal["standard", "hierarchical", "flat", "computed"] = "flat",
         options: DeviceOptions | None = None,
+        *,
+        owner: Any | None = None,
+        hosting_device: Any | None = None,
     ) -> list[str]:
         """Create devices using batch creation.
 
         Uses self.fabric_name and self.pod_name (if set) from instance variables.
-        See ``DeviceOptions`` for available option keys.
+        See ``DeviceOptions`` for available option keys. ``owner`` and
+        ``hosting_device`` let callers supply shared placement context for both
+        physical and virtual device creation.
         """
         # Normalize options
         if options is None:
@@ -87,6 +92,20 @@ class DeviceMixin:
             loopback_pool_name = f"{device_prefix}-loopback-pool"
 
         device_kind = DcimVirtualDevice if virtual else DcimPhysicalDevice
+
+        def _object_id(value: Any | None) -> Any | None:
+            if value is None:
+                return None
+            if isinstance(value, dict):
+                return value.get("id")
+            return getattr(value, "id", value)
+
+        owner_id = _object_id(owner)
+        hosting_device_id = _object_id(hosting_device)
+        template_owner = template.get("owner") if isinstance(template, dict) else None
+        template_owner_id = _object_id(template_owner)
+        if owner_id is None:
+            owner_id = template_owner_id
 
         # Resolve pools: accept SDK objects, ID strings, or fall back to name-based lookup
         management_pool = await self._resolve_pool(
@@ -188,6 +207,8 @@ class DeviceMixin:
                         "deployment": {"id": deployment_id} if deployment_id else None,
                         "device_type": template.get("device_type"),
                         "platform": template.get("platform"),
+                        **({"owner": {"id": owner_id}} if owner_id else {}),
+                        **({"hosting_device": {"id": hosting_device_id}} if virtual and hosting_device_id else {}),
                         "primary_address": primary_address_data,
                         "rack": {"id": rack} if rack else None,
                         "member_of_groups": [{"id": group_id} for group_id in groups],
