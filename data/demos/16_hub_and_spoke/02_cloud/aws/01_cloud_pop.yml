@@ -80,7 +80,7 @@ spec:
 # Hub footprint: the operator's own SD-WAN PoP, not a customer's. Its
 # `namespace: INTERNET` is what ExchangeGatewayGenerator's hub-detection
 # looks for on the OTHER end of an office/cloud/colocation footprint's
-# circuit (see generators/topology/exchange_gateway.py) — traffic stops
+# circuit (see generators/topology/customer_deployment.py) — traffic stops
 # here instead of reaching straight into SHARED-SERVICES.
 #
 # `owner` is set via `kind:`+`data:` (upserting the OrganizationProvider
@@ -102,6 +102,8 @@ spec:
       status: active
       parent: "eu-central-1"
       namespace: "INTERNET"
+      member_of_groups:
+        - customer_deployments
 
 ---
 apiVersion: infrahub.app/v1

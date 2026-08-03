@@ -26,6 +26,8 @@ spec:
       environment: "p"
       status: active
       parent: "DC7"
+      member_of_groups:
+        - customer_deployments
 
 ---
 # Multi-tenant firewall slicing on the DC7-FW1 cluster (see schemas/

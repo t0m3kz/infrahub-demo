@@ -11,7 +11,7 @@
 # ExchangeGatewayGenerator's created-trigger fires on each of these before
 # its circuit exists (for DC it doesn't need one at all), so Office/Cloud
 # will log a warning and skip on first run — re-run `infrahubctl generator
-# add_exchange_gateway name=<computed-name>` once circuits are loaded.
+# add_customer_deployment_exchange name=<computed-name>` once circuits are loaded.
 # LocationCountry "pl" already exists via data/bootstrap/01_locations.yml.
 apiVersion: infrahub.app/v1
 kind: Object

@@ -19,3 +19,5 @@ spec:
       environment: "p"
       status: active
       parent: "DC8"
+      member_of_groups:
+        - customer_deployments

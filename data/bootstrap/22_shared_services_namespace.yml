@@ -1,7 +1,7 @@
 ---
 # Shared infrastructure services VRF (DNS/NTP/monitoring). Every customer
 # TopologyCustomerDC/Colocation/Cloud deployment auto-leaks to this namespace
-# via ExchangeGatewayGenerator (generators/topology/exchange_gateway.py) on
+# via ExchangeGatewayGenerator (generators/topology/customer_deployment.py) on
 # boarding, so it must exist globally before any customer is boarded — hence
 # bootstrap rather than per-demo-flow data.
 #

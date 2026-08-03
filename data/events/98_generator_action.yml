@@ -38,9 +38,6 @@ spec:
     - name: run-app-application-generator
       description: Derive security policy rules from application component dependencies
       generator: add_app_application
-    - name: run-exchange-gateway-generator
-      description: Provision a new customer's VRF namespace and its shared-services route leak
-      generator: add_exchange_gateway
     - name: run-endpoint-generator
       description: Run Endpoint Connectivity Generator
       generator: add_endpoint

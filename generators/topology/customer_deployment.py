@@ -79,7 +79,7 @@ _DEPLOYMENT_KINDS = {
 }
 
 
-class ExchangeGatewayGenerator(CommonGenerator):
+class CustomerDeploymentExchangeGenerator(CommonGenerator):
     """Provision a customer's VRF namespace and, where possible, its shared-services exchange."""
 
     async def generate(self, data: dict[str, Any]) -> None:
@@ -310,9 +310,9 @@ query default_common_exchange {
             return
 
         circuit = usable_circuits[0]
-        circuit_interfaces = circuit.get("interfaces") or []
+        circuit_interfaces = circuit.get("interfaces") or circuit.get("customer_interfaces") or []
         if len(circuit_interfaces) != 2:
-            self.logger.warning(
+            self.logger.error(
                 f"Namespace '{namespace_name}': circuit '{circuit.get('name', circuit.get('id'))}' has "
                 f"{len(circuit_interfaces)} interface(s), expected 2 — skipping shared-services exchange"
             )

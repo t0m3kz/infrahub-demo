@@ -97,7 +97,7 @@ spec:
       device_type: C9130AXI-B
       platform: cisco_ios
       software_image: cisco_ios-17.12.4
-      role: endpoint
+      role: controller
       status: provisioning
       interfaces:
         kind: TemplateDcimPhysicalInterface

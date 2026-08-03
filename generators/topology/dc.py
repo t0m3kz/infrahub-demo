@@ -23,6 +23,8 @@ _DC_VALID_FABRIC_ROLES = frozenset({"super-spine", "hyper-spine", "border-leaf",
 # interfaces are the dedicated counterpart ports for each service — see
 # N9K-C9336C-FX2_BORDER_LEAF's template for the canonical port layout.
 _BL_ROLE_FOR: dict[str, str] = {"firewall": "firewall", "load-balancer": "load-balancer"}
+_DEFAULT_COMMON_EXCHANGE_NAME = "GLOBAL-SHARED-EXCHANGE"
+_DEFAULT_SHARED_SERVICES_NAMESPACE = "SHARED-SERVICES"
 
 
 class DCTopologyGenerator(CommonGenerator):
@@ -43,6 +45,9 @@ class DCTopologyGenerator(CommonGenerator):
             return
 
         self.logger.info(f"Processing Data Center: {self.data.name}")
+
+        # Every generated DC should be part of the provider's shared exchange domain.
+        await self._ensure_common_exchange_for_dc()
 
         if self.data.is_managed_by_controller:
             self.logger.info(
@@ -394,6 +399,62 @@ class DCTopologyGenerator(CommonGenerator):
         dc_fabric_loopback_pool = dc_pools.get("dc-fabric-loopback")
         self._dc_fabric_loopback_pool_id = dc_fabric_loopback_pool.id if dc_fabric_loopback_pool else None
         await self._generate_dc_scoped_fabric_devices()
+
+    async def _ensure_common_exchange_for_dc(self) -> None:
+        """Ensure a default TopologyCommonExchange exists and includes this DC deployment."""
+
+        try:
+            namespaces = await self.client.filters(
+                kind="IpamNamespace",
+                name__value=_DEFAULT_SHARED_SERVICES_NAMESPACE,
+            )
+            if not namespaces:
+                self.logger.warning(
+                    f"Shared services namespace '{_DEFAULT_SHARED_SERVICES_NAMESPACE}' not found; "
+                    f"skipping CommonExchange linking for DC {self.data.name}"
+                )
+                return
+            shared_ns = namespaces[0]
+
+            exchanges = await self.client.filters(
+                kind="TopologyCommonExchange",
+                is_default__value=True,
+            )
+
+            exchange_obj = None
+            if exchanges:
+                exchange_obj = exchanges[0]
+                if len(exchanges) > 1:
+                    self.logger.warning(
+                        "Multiple TopologyCommonExchange objects marked is_default=true; using the first one"
+                    )
+            else:
+                exchange_obj = await self.client.create(
+                    kind="TopologyCommonExchange",
+                    data={
+                        "name": _DEFAULT_COMMON_EXCHANGE_NAME,
+                        "description": "Auto-provisioned default shared exchange domain",
+                        "is_default": True,
+                        "namespace": {"id": shared_ns.id},
+                        "deployments": [{"id": self.data.id}],
+                    },
+                )
+                await exchange_obj.save(allow_upsert=True)
+                self.logger.info(
+                    f"Created default CommonExchange '{_DEFAULT_COMMON_EXCHANGE_NAME}' for DC {self.data.name}"
+                )
+                return
+
+            rel = getattr(exchange_obj, "deployments")
+            await rel.fetch()
+            if any(peer.id == self.data.id for peer in rel.peers):
+                return
+
+            await self._safe_rel_add(rel, {"id": self.data.id})
+            await exchange_obj.save(allow_upsert=True)
+            self.logger.info(f"Linked DC {self.data.name} to default CommonExchange '{exchange_obj.name.value}'")
+        except Exception as exc:
+            self.logger.warning(f"Failed to ensure CommonExchange for DC {self.data.name}: {exc}")
 
     def _validate_fabric_template_roles(self) -> None:
         """Log+skip (don't abort) any fabric_templates entry using a role this

@@ -14,7 +14,7 @@
 #
 # C005/C006/C008/C009's namespaces and their TopologyRouteLeakExchange to
 # SHARED-SERVICES below would normally be auto-provisioned by
-# generators/topology/exchange_gateway.py (triggered on TopologyCustomerDC
+# generators/topology/customer_deployment.py (triggered on TopologyCustomerDC
 # creation — see data/events/99_actions.yml's
 # trigger-exchange-gateway-on-customer-dc-created). They are hand-written
 # here instead so this file also demonstrates RoutedExchange, which the
@@ -31,7 +31,7 @@ spec:
   kind: IpamNamespace
   data:
     # Shared infra services VRF (DNS/NTP/monitoring) — every new customer's
-    # generators/topology/exchange_gateway.py run auto-leaks to this namespace.
+    # generators/topology/customer_deployment.py run auto-leaks to this namespace.
     # Manually created here since 15_customer_deployments is self-contained
     # and does not load data/demos/100_universal_topology/06_applications/00_shared.yml.
     - name: "SHARED-SERVICES"
