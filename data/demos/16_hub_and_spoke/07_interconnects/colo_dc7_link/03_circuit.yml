@@ -23,6 +23,7 @@ spec:
           data:
             name: "DC7"
             index: 7
+            size: "S"
         - kind: TopologyCustomerColocation
           data:
             owner:

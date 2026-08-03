@@ -22,12 +22,12 @@ spec:
       shortname: "waw"
       parent: "pl"
       children:
-        kind: LocationOffice
+        kind: LocationFacility
         data:
-          - name: "Warsaw HQ"
-            shortname: "waw-hq"
-          - name: "Warsaw Branch"
-            shortname: "waw-br1"
+          - name: "Warsaw HQ C16"
+            shortname: "waw-hq-c16"
+          - name: "Warsaw Branch C16"
+            shortname: "waw-br1-c16"
 
 ---
 apiVersion: infrahub.app/v1

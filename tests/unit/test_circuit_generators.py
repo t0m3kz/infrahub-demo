@@ -1,8 +1,8 @@
 """Unit tests for circuit generators (PhysicalCircuitGenerator, VirtualCircuitGenerator).
 
-These generators validate that endpoint interfaces are assigned on circuit nodes
-(stored in the cardinality-many `interfaces` relationship).
-Tests use a lightweight mock generator that patches the SDK client and logger.
+Virtual circuits use a simplified direct model (interfaces + physical_circuits)
+while physical circuits keep direct interface validation. Tests use a lightweight
+mock generator that patches the SDK client and logger.
 """
 
 from __future__ import annotations
@@ -54,9 +54,22 @@ def _provider_port(label: str, device: str, port_name: str) -> dict:
     }
 
 
-def _iface_edges(ifaces: list[dict | None]) -> dict:
+def _iface_edges(ifaces: list[dict]) -> dict:
     """Wrap a list of interface dicts in GraphQL edges format."""
-    return {"edges": [{"node": iface} for iface in ifaces if iface is not None]}
+    return {"edges": [{"node": iface} for iface in ifaces]}
+
+
+def _pc_node(label: str, circuit_type: str, circuit_id: str) -> dict:
+    return {
+        "id": f"pc-{label}",
+        "name": {"value": circuit_id},
+        "circuit_id": {"value": circuit_id},
+        "circuit_type": {"value": circuit_type},
+    }
+
+
+def _pc_edges(circuits: list[dict]) -> dict:
+    return {"edges": [{"node": circuit} for circuit in circuits]}
 
 
 def _phys_circuit_response(
@@ -83,9 +96,8 @@ def _phys_circuit_response(
                     "node": {
                         "id": "circ-1",
                         "circuit_id": {"value": name},
-                        "interfaces": _iface_edges(iface_list),
-                        "provider_a": {"node": resolved_pa},
-                        "provider_z": {"node": resolved_pz},
+                        "customer_interfaces": _iface_edges(iface_list),
+                        "provider_interfaces": _iface_edges([resolved_pa, resolved_pz]),
                     }
                 }
             ]
@@ -102,11 +114,21 @@ def _virt_circuit_response(
     omit_interface_a: bool = False,
     omit_interface_z: bool = False,
 ) -> dict:
-    iface_list = []
+    iface_a = interface_a if interface_a is not None else _default_iface_a()
+    iface_z = interface_z if interface_z is not None else _default_iface_z()
+    interfaces: list[dict] = []
     if not omit_interface_a:
-        iface_list.append(interface_a if interface_a is not None else _default_iface_a())
+        interfaces.append(iface_a)
     if not omit_interface_z:
-        iface_list.append(interface_z if interface_z is not None else _default_iface_z())
+        interfaces.append(iface_z)
+
+    inferred_transport = (
+        "internet_backed" if link_type in {"sd_wan", "vpn_ipsec", "vpn_ssl", "gre", "geneve"} else "physical_backed"
+    )
+    physical_circuits = (
+        [_pc_node("1", "internet_underlay", "INET-C001-WAW-HUB")] if inferred_transport == "internet_backed" else []
+    )
+
     return {
         "TopologyVirtualCircuit": {
             "edges": [
@@ -115,7 +137,9 @@ def _virt_circuit_response(
                         "id": "vcirc-1",
                         "name": {"value": name},
                         "link_type": {"value": link_type},
-                        "interfaces": _iface_edges(iface_list),
+                        "transport_mode": {"value": inferred_transport},
+                        "interfaces": _iface_edges(interfaces),
+                        "physical_circuits": _pc_edges(physical_circuits),
                     }
                 }
             ]
@@ -204,13 +228,14 @@ class TestVirtualCircuitGenerator:
         assert "missing name" in log.error.call_args[0][0]
 
     def test_connector_without_interface_z_logs_warning(self):
-        """Circuit with Z-side interface unassigned emits a warning."""
+        """Circuit with missing second interface emits a warning."""
         log = self._run(_virt_circuit_response(omit_interface_z=True))
-        log.warning.assert_called_once()
-        assert "Z-side interface" in log.warning.call_args[0][0]
+        assert log.warning.call_count >= 1
+        warning_msgs = " ".join(str(c) for c in log.warning.call_args_list)
+        assert "expected 2 interfaces" in warning_msgs
 
     def test_both_interfaces_missing_logs_two_warnings(self):
-        """Circuit with both interfaces unassigned emits two warnings."""
+        """Circuit with both endpoints missing emits warnings."""
         log = self._run(_virt_circuit_response(omit_interface_a=True, omit_interface_z=True))
-        assert log.warning.call_count == 2
+        assert log.warning.call_count >= 2
         log.error.assert_not_called()

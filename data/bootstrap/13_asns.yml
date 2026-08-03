@@ -70,7 +70,3 @@ spec:
     - asn: 64521
       owner: "P032"
       description: "AS64521 - GLOBEX Corporation (private ASN, IP-VPN partner)"
-    # AS64512 (AWS DX) and AS12076 (Azure ER) are already defined, without an
-    # owner, in data/demos/100_universal_topology/05_interconnects/cloud-equinix/
-    # 00_cloud_asns.yml — not duplicated here to avoid the demo file's load
-    # (which runs after bootstrap) clearing the owner back to null on upsert.

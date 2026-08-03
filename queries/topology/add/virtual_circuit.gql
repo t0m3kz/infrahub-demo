@@ -5,6 +5,7 @@ query virtual_circuit_data($name: String!) {
         id
         name { value }
         link_type { value }
+        transport_mode { value }
         vni { value }
         tunnel_id { value }
         interfaces {
@@ -12,13 +13,25 @@ query virtual_circuit_data($name: String!) {
             node {
               id
               name { value }
-              ... on DcimPhysicalInterface {
-                ip_address { node { address { value } } }
-              }
-              ... on DcimVirtualInterface {
-                ip_address { node { address { value } } }
-              }
+              __typename
               device {
+                node {
+                  id
+                  name { value }
+                }
+              }
+            }
+          }
+        }
+        physical_circuits {
+          edges {
+            node {
+              id
+              name { value }
+              circuit_id { value }
+              circuit_type { value }
+              status { value }
+              provider {
                 node {
                   id
                   name { value }

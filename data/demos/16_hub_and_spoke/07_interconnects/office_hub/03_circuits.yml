@@ -29,6 +29,7 @@ spec:
   data:
     - name: "C001-SDWAN-HUB"
       link_type: sd_wan
+      transport_mode: internet_backed
       status: active
       provider: "P029"
       owner: "C001"
@@ -42,7 +43,7 @@ spec:
                 org_id: "C001"
             environment: "p"
             parent: "OFFICES"
-            locations: ["waw-hq"]
+            locations: ["waw-hq-c16"]
         - kind: TopologyCustomerCloud
           data:
             owner:
@@ -57,8 +58,11 @@ spec:
       interfaces:
         - ["C001-EDGE1", "GE1"]
         - ["SDWAN-HUB-GW1", "eth1.1001"]
+      underlay_circuits:
+        - "INET-C001-WAW-HUB"
     - name: "C002-SDWAN-HUB"
       link_type: sd_wan
+      transport_mode: internet_backed
       status: active
       provider: "P029"
       owner: "C002"
@@ -72,7 +76,7 @@ spec:
                 org_id: "C002"
             environment: "p"
             parent: "OFFICES"
-            locations: ["waw-br1"]
+            locations: ["waw-br1-c16"]
         - kind: TopologyCustomerCloud
           data:
             owner:
@@ -87,3 +91,5 @@ spec:
       interfaces:
         - ["C002-EDGE1", "GE1"]
         - ["SDWAN-HUB-GW1", "eth1.1002"]
+      underlay_circuits:
+        - "INET-C002-WAW-HUB"

@@ -16,18 +16,16 @@ generics:
 
   - name: Connector
     namespace: Topology
-    description: "Managed endpoint that terminates a circuit (physical or virtual)"
-    label: "Circuit Connector"
+    description: "Compatibility generic for topology connectors used by existing schema nodes"
+    label: "Topology Connector"
     include_in_menu: false
     human_friendly_id:
       - name__value
     attributes:
       - name: name
         kind: Text
-        order_weight: 50
-      - name: description
-        kind: Text
-        order_weight: 100
+        optional: true
+        order_weight: 90
 
   - name: Circuit
     namespace: Topology
@@ -126,6 +124,10 @@ nodes:
         label: "Circuit Type"
         order_weight: 300
         choices:
+          - name: internet_underlay
+            label: "Internet Underlay"
+            description: "Logical physical-underlay for public internet delivery"
+            color: "#f39c12"
           - name: dark_fiber
             label: "Dark Fiber"
             description: "Unlit fiber optic circuit"
@@ -168,32 +170,23 @@ nodes:
         order_weight: 610
 
     relationships:
-      - name: interfaces
+      - name: customer_interfaces
         label: "Customer Interfaces"
         peer: DcimInterface
         cardinality: many
         optional: true
-        identifier: "physical_circuit__interfaces"
+        identifier: "physical_circuit__customer_interfaces"
         order_weight: 1100
-        description: "Customer-side A and Z interfaces (each cabled to a provider port)"
+        description: "Customer-facing circuit interfaces (typically A/Z pair)"
 
-      - name: provider_a
-        label: "Provider A-Side Port"
+      - name: provider_interfaces
+        label: "Provider Interfaces"
         peer: DcimInterface
-        cardinality: one
+        cardinality: many
         optional: true
-        identifier: "physical_circuit__provider_a"
-        order_weight: 1150
-        description: "Provider handoff port on A side (on a provider device)"
-
-      - name: provider_z
-        label: "Provider Z-Side Port"
-        peer: DcimInterface
-        cardinality: one
-        optional: true
-        identifier: "physical_circuit__provider_z"
-        order_weight: 1250
-        description: "Provider handoff port on Z side (on a provider device)"
+        identifier: "physical_circuit__provider_interfaces"
+        order_weight: 1200
+        description: "Provider-facing handoff interfaces (typically A/Z pair)"
 
   - name: VirtualCircuit
     namespace: Topology
@@ -302,25 +295,44 @@ nodes:
         order_weight: 600
         description: "Provider resource ID (e.g., dxcon-xxxxx for AWS)"
 
+      - name: transport_mode
+        kind: Dropdown
+        label: "Transport Mode"
+        optional: true
+        order_weight: 650
+        description: "How this virtual circuit is carried: internet-only, physical-underlay-backed, or provider-managed"
+        choices:
+          - name: internet_backed
+            label: "Internet-backed"
+            description: "Overlay over public internet; no dedicated physical circuit required"
+            color: "#f39c12"
+          - name: physical_backed
+            label: "Physical-underlay-backed"
+            description: "Overlay bound to one or more physical circuits"
+            color: "#3498db"
+          - name: provider_virtual_only
+            label: "Provider virtual-only"
+            description: "Provider-managed virtual service without customer-visible local physical endpoint"
+            color: "#9b59b6"
+
     relationships:
       - name: interfaces
-        label: "Endpoint Interfaces"
+        label: "Virtual Circuit Interfaces"
         peer: DcimInterface
         cardinality: many
         optional: true
         identifier: "virtual_circuit__interfaces"
-        order_weight: 1100
-        description: "A-side and Z-side interfaces this circuit terminates on"
+        order_weight: 1050
+        description: "A/Z (or more) technical interfaces used by this virtual circuit"
 
-      - name: cloud_endpoints
-        label: "Cloud Endpoints"
-        peer: CloudResource
+      - name: physical_circuits
+        label: "Physical Underlay Circuits"
+        peer: TopologyPhysicalCircuit
         cardinality: many
-        max_count: 2
         optional: true
-        identifier: "virtual_circuit__cloud_endpoints"
-        order_weight: 1200
-        description: "Cloud-side termination points (CloudDirectConnect, CloudVPNGateway, CloudTransitGateway, etc.)"
+        identifier: "virtual_circuit__physical_circuits"
+        order_weight: 1075
+        description: "Direct mapping to underlay circuits carrying this virtual circuit"
 
 extensions:
   nodes:
@@ -333,14 +345,3 @@ extensions:
           identifier: "circuit__location"
           order_weight: 5000
           description: "All circuits (physical and virtual) terminating at this location"
-
-    - kind: CloudResource
-      relationships:
-        - name: virtual_circuits
-          label: "Virtual Circuits"
-          peer: TopologyVirtualCircuit
-          cardinality: many
-          optional: true
-          identifier: "virtual_circuit__cloud_endpoints"
-          order_weight: 5000
-          description: "Virtual circuits where this cloud resource is an endpoint"
