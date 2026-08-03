@@ -19,4 +19,4 @@ spec:
       status: active
       parent: "OFFICES"
       locations:
-        - "waw-hq"
+        - "waw-hq-c16"

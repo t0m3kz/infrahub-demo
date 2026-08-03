@@ -222,6 +222,7 @@ nodes:
       - TopologyCustomer
       - TopologyDeployment
       - TopologyClusterHosting
+      - TopologyConnectableLocation
     parent: TopologyDataCenter
     children: ""
     include_in_menu: false

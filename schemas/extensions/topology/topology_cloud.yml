@@ -901,7 +901,6 @@ nodes:
       - name__value
     inherit_from:
       - CloudResource
-      - TopologyConnector
     attributes:
       - name: vpn_type
         kind: Dropdown
