@@ -58,7 +58,7 @@ spec:
       interfaces:
         - ["C001-EDGE1", "GE1"]
         - ["SDWAN-HUB-GW1", "eth1.1001"]
-      underlay_circuits:
+      physical_circuits:
         - "INET-C001-WAW-HUB"
     - name: "C002-SDWAN-HUB"
       link_type: sd_wan
@@ -91,5 +91,5 @@ spec:
       interfaces:
         - ["C002-EDGE1", "GE1"]
         - ["SDWAN-HUB-GW1", "eth1.1002"]
-      underlay_circuits:
+      physical_circuits:
         - "INET-C002-WAW-HUB"

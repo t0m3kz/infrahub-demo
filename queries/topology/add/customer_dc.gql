@@ -90,7 +90,7 @@ query customer_dc_data($name: String!) {
               }
               ... on TopologyPhysicalCircuit {
                 name { value }
-                interfaces {
+                customer_interfaces {
                   edges {
                     node {
                       id
@@ -208,7 +208,7 @@ query customer_dc_data($name: String!) {
               }
               ... on TopologyPhysicalCircuit {
                 name { value }
-                interfaces {
+                customer_interfaces {
                   edges {
                     node {
                       id
@@ -326,7 +326,7 @@ query customer_dc_data($name: String!) {
               }
               ... on TopologyPhysicalCircuit {
                 name { value }
-                interfaces {
+                customer_interfaces {
                   edges {
                     node {
                       id

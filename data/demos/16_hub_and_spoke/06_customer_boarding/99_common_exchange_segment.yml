@@ -1,0 +1,50 @@
+---
+# Common Exchange stretch segment across DC7 and DC8 for a single customer.
+# This models a typical stretched VXLAN deployment for C003 across two DCs.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: IpamIPAddress
+  data:
+    - address: "10.90.0.254/24"
+      description: "Anycast gateway for common exchange segment"
+      ip_namespace: "SHARED-SERVICES"
+
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: ManagedVxlanSegment
+  data:
+    - owner:
+        kind: OrganizationCustomer
+        data:
+          name: "Vaultex Inc."
+          org_id: "C003"
+      customer_name: "common-exchange-stretch"
+      environment: "p"
+      arp_suppression: true
+      gateway:
+        - "10.90.0.254/24"
+        - "SHARED-SERVICES"
+      customer_deployments:
+        - kind: TopologyCustomerDC
+          data:
+            owner:
+              kind: OrganizationCustomer
+              data:
+                name: "Vaultex Inc."
+                org_id: "C003"
+            environment: "p"
+            parent: "DC7"
+        - kind: TopologyCustomerDC
+          data:
+            owner:
+              kind: OrganizationCustomer
+              data:
+                name: "Vaultex Inc."
+                org_id: "C003"
+            environment: "p"
+            parent: "DC8"
+      member_of_groups:
+        - vxlan_segments

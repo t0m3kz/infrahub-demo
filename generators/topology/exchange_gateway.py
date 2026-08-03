@@ -66,7 +66,9 @@ from utils.data_cleaning import clean_data
 
 from ..common import CommonGenerator
 
-SHARED_SERVICES_NAMESPACE = "SHARED-SERVICES"
+DEFAULT_SHARED_SERVICES_NAMESPACE = "SHARED-SERVICES"
+# Backward-compatible alias used by tests/imports.
+SHARED_SERVICES_NAMESPACE = DEFAULT_SHARED_SERVICES_NAMESPACE
 
 # GraphQL root key -> human label, used for logging only.
 _DEPLOYMENT_KINDS = {
@@ -163,15 +165,58 @@ class ExchangeGatewayGenerator(CommonGenerator):
             self.logger.error(f"Failed to create namespace '{name}': {exc}")
             return None
 
+    async def _get_default_common_exchange(self) -> tuple[str, str | None]:
+        """Return (namespace_name, common_exchange_id) for the default common exchange.
+
+        Falls back to SHARED-SERVICES when no default TopologyCommonExchange
+        exists, keeping current behavior intact.
+        """
+
+        query = """
+query default_common_exchange {
+    TopologyCommonExchange(is_default__value: true) {
+        edges {
+            node {
+                id
+                namespace {
+                    node {
+                        name { value }
+                    }
+                }
+            }
+        }
+    }
+}
+"""
+
+        try:
+            result = await self.client.execute_graphql(query=query)
+            edges = result.get("TopologyCommonExchange", {}).get("edges", [])
+            if edges:
+                node = edges[0].get("node", {})
+                namespace_name = node.get("namespace", {}).get("node", {}).get("name", {}).get("value")
+                common_exchange_id = node.get("id")
+                if namespace_name:
+                    if len(edges) > 1:
+                        self.logger.warning(
+                            "Multiple TopologyCommonExchange objects marked is_default=true; using the first one"
+                        )
+                    return namespace_name, common_exchange_id
+        except Exception as exc:
+            self.logger.warning(f"Unable to query TopologyCommonExchange default: {exc}")
+
+        return DEFAULT_SHARED_SERVICES_NAMESPACE, None
+
     # ------------------------------------------------------------------
     # DC: same fabric EVPN domain -> pure route-target leak
     # ------------------------------------------------------------------
 
     async def _exchange_via_route_leak(self, customer_namespace: Any, customer_id: str) -> None:
-        shared_namespace = await self._get_namespace(SHARED_SERVICES_NAMESPACE)
+        shared_namespace_name, common_exchange_id = await self._get_default_common_exchange()
+        shared_namespace = await self._get_namespace(shared_namespace_name)
         if shared_namespace is None:
             self.logger.warning(
-                f"Shared services namespace '{SHARED_SERVICES_NAMESPACE}' not found — skipping "
+                f"Shared services namespace '{shared_namespace_name}' not found — skipping "
                 f"route-leak exchange for {customer_namespace.name.value} (namespace itself was still provisioned)"
             )
             return
@@ -182,7 +227,7 @@ class ExchangeGatewayGenerator(CommonGenerator):
             )
             return
 
-        exchange_name = f"{customer_namespace.name.value}-{SHARED_SERVICES_NAMESPACE}-shared-services"
+        exchange_name = f"{customer_namespace.name.value}-{shared_namespace_name}-shared-services"
         try:
             existing = await self.client.filters(kind="TopologyRouteLeakExchange", name__value=exchange_name)
         except Exception as exc:
@@ -208,6 +253,7 @@ class ExchangeGatewayGenerator(CommonGenerator):
                     # scrape metrics) and the customer must reach shared services — bidirectional.
                     "direction": "bidirectional",
                     "customer_deployments": [{"id": customer_id}],
+                    **({"common_exchange": {"id": common_exchange_id}} if common_exchange_id else {}),
                 },
             )
             await exchange_obj.save(allow_upsert=True)
@@ -279,6 +325,7 @@ class ExchangeGatewayGenerator(CommonGenerator):
         # wired manually, so this footprint never gets a route straight into
         # shared services bypassing the hub's inspection point.
         hub_namespace = None
+        common_exchange_id: str | None = None
         for location in circuit.get("locations") or []:
             if location.get("id") == customer_id:
                 continue
@@ -296,15 +343,16 @@ class ExchangeGatewayGenerator(CommonGenerator):
                 f"{z_namespace_name} via circuit {circuit.get('name', circuit.get('id'))}"
             )
         else:
-            shared_namespace = await self._get_namespace(SHARED_SERVICES_NAMESPACE)
+            shared_namespace_name, common_exchange_id = await self._get_default_common_exchange()
+            shared_namespace = await self._get_namespace(shared_namespace_name)
             if shared_namespace is None:
                 self.logger.warning(
-                    f"Shared services namespace '{SHARED_SERVICES_NAMESPACE}' not found — skipping "
+                    f"Shared services namespace '{shared_namespace_name}' not found — skipping "
                     f"routed exchange for {namespace_name} (namespace itself was still provisioned)"
                 )
                 return
             z_namespace_id = shared_namespace.id
-            exchange_name = f"{namespace_name}-{SHARED_SERVICES_NAMESPACE}-shared-services"
+            exchange_name = f"{namespace_name}-{shared_namespace_name}-shared-services"
             description = (
                 f"Auto-provisioned on customer boarding — {namespace_name} access to shared "
                 f"infrastructure services via circuit {circuit.get('name', circuit.get('id'))}"
@@ -330,6 +378,11 @@ class ExchangeGatewayGenerator(CommonGenerator):
                     "namespace_z": {"id": z_namespace_id},
                     "interface_capabilities": [{"id": iface["id"]} for iface in circuit_interfaces],
                     "customer_deployments": [{"id": customer_id}],
+                    **(
+                        {"common_exchange": {"id": common_exchange_id}}
+                        if hub_namespace is None and common_exchange_id
+                        else {}
+                    ),
                 },
             )
             await exchange_obj.save(allow_upsert=True)

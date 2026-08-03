@@ -1,0 +1,18 @@
+---
+# Provider-owned shared exchange domain used by this demo's customer
+# deployments. It points at the shared-services namespace and is marked
+# as default, so ExchangeGatewayGenerator can target it automatically.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologyCommonExchange
+  data:
+    - name: "GLOBAL-SHARED-EXCHANGE"
+      description: "Default provider common exchange for hub-and-spoke shared services"
+      is_default: true
+      namespace: "SHARED-SERVICES"
+      deployments:
+        - "DC7"
+        - "DC8"
+        - "WAW1"
+        - "eu-central-1"

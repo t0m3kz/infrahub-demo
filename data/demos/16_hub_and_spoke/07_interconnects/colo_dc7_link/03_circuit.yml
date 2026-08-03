@@ -33,6 +33,6 @@ spec:
                 org_id: "C004"
             environment: "p"
             parent: "WAW"
-      interfaces:
+      customer_interfaces:
         - ["C004-EDGE1", "ge-0/0/0"]
         - ["DC7-BL1", "Ethernet1/1"]
