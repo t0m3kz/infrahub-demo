@@ -1,0 +1,16 @@
+---
+# C003 (Vaultex Inc.) additional footprint in DC8 to model a typical
+# single-customer stretched VXLAN across two data centers.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologyCustomerDC
+  data:
+    - owner:
+        kind: OrganizationCustomer
+        data:
+          name: "Vaultex Inc."
+          org_id: "C003"
+      environment: "p"
+      status: active
+      parent: "DC8"
