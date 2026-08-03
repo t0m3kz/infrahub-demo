@@ -349,8 +349,8 @@ queries:
     file_path: queries/topology/add/ha_domain.gql
   - name: mlag_domain_data
     file_path: queries/topology/add/mlag_domain.gql
-  - name: customer_dc_data
-    file_path: queries/topology/add/customer_dc.gql
+  - name: customer_deployment
+    file_path: queries/topology/add/customer_deployment.gql
   - name: quotation_data
     file_path: queries/quotation/add_quotation.gql
   - name: quotation_office_data
@@ -492,11 +492,11 @@ generator_definitions:
     execute_after_merge: false
     parameters:
       name: name__value
-  - name: add_exchange_gateway
-    file_path: generators/topology/exchange_gateway.py
+  - name: add_customer_deployment_exchange
+    file_path: generators/topology/customer_deployment.py
     targets: customer_deployments
-    query: customer_dc_data
-    class_name: ExchangeGatewayGenerator
+    query: customer_deployment
+    class_name: CustomerDeploymentExchangeGenerator
     execute_in_proposed_change: false
     execute_after_merge: false
     parameters:

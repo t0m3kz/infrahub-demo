@@ -729,12 +729,9 @@ async def _phase_07_customers(
     """Phase 07 – customer boarding (deployment footprint + VXLAN segments + applications).
 
     Loads, per customer (c001/c002/c003): 07_customers/{customer}/01_deployment.yml
-    (TopologyCustomerDC) -> event-triggers ExchangeGatewayGenerator, which
-    get-or-creates the VRF namespace ("{ORG_ID}-P") and tags it into
-    vrf_namespaces, auto-running add_vrf_namespace (allocates L3 VNI), and
-    route-leaks to SHARED-SERVICES (data/bootstrap/22_shared_services_namespace.yml
-    — provisioned at bootstrap time, before this phase ever runs) -> wait for
-    those event-driven tasks -> 08_segments/{customer}/02_segments.yml
+    (TopologyCustomer*) -> explicit add_customer_deployment_exchange run, which
+    get-or-creates the VRF namespace ("{ORG_ID}-P") and creates the exchange
+    toward shared services/hub where transport exists -> 08_segments/{customer}/02_segments.yml
     (prefixes/gateway IPs in that namespace + ManagedVxlanSegment, a
     customer-specific count of segments) -> add_vxlan_segment (allocates
     VLAN/VNI, wires leaf/tor interfaces) -> applications (from
@@ -760,13 +757,44 @@ async def _phase_07_customers(
     for customer in customer_dirs:
         _load_objects(f"{customers_base}/{customer}/01_deployment.yml", branch, dry_run)
 
-    # Wait for ExchangeGatewayGenerator (event-triggered on TopologyCustomerDC
-    # creation) to get-or-create each customer's VRF namespace before
-    # 02_segments.yml references it by name.
-    if not dry_run:
+    if not skip_generators:
         c.default_branch = branch
-        await _wait_for_tasks(c, branch)
-        await _check_failed_tasks(c, branch)
+        dep_data = await c.execute_graphql(
+            query="""
+            query {
+                TopologyCustomerDC(owner__ids: ["C001", "C002", "C003"]) {
+                    edges { node { id name { value } } }
+                }
+                TopologyCustomerColocation(owner__ids: ["C001", "C002", "C003"]) {
+                    edges { node { id name { value } } }
+                }
+                TopologyCustomerCloud(owner__ids: ["C001", "C002", "C003"]) {
+                    edges { node { id name { value } } }
+                }
+                TopologyCustomerOffice(owner__ids: ["C001", "C002", "C003"]) {
+                    edges { node { id name { value } } }
+                }
+            }
+            """
+        )
+        dep_nodes = []
+        for kind in (
+            "TopologyCustomerDC",
+            "TopologyCustomerColocation",
+            "TopologyCustomerCloud",
+            "TopologyCustomerOffice",
+        ):
+            dep_nodes.extend(dep_data.get(kind, {}).get("edges", []))
+
+        if not dep_nodes:
+            log.warning(
+                "  No customer deployment nodes found after data load — skipping add_customer_deployment_exchange"
+            )
+        else:
+            dep_ids = [e["node"]["id"] for e in dep_nodes]
+            dep_names = [e["node"]["name"]["value"] for e in dep_nodes]
+            log.info("  Running add_customer_deployment_exchange for: %s", ", ".join(dep_names))
+            await _run_generator(c, "add_customer_deployment_exchange", dep_ids, branch, dry_run)
 
     if not skip_generators:
         c.default_branch = branch

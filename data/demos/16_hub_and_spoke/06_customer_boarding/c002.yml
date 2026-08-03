@@ -17,3 +17,5 @@ spec:
       parent: "OFFICES"
       locations:
         - "waw-br1-c16"
+      member_of_groups:
+        - customer_deployments

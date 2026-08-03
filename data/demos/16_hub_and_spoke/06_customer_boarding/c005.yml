@@ -19,3 +19,5 @@ spec:
       environment: "p"
       status: active
       parent: "eu-central-1"
+      member_of_groups:
+        - customer_deployments

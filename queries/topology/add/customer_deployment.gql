@@ -1,4 +1,4 @@
-query customer_dc_data($name: String!) {
+query customer_deployment($name: String!) {
   TopologyCustomerDC(name__value: $name) {
     edges {
       node {

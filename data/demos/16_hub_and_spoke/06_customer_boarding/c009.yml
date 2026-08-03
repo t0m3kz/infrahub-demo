@@ -16,3 +16,5 @@ spec:
       environment: "p"
       status: active
       parent: "westeurope"
+      member_of_groups:
+        - customer_deployments

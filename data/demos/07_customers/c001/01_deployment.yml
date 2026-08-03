@@ -4,7 +4,7 @@
 # TopologyCustomerDC is the customer's presence inside DC6 (parent = the DC
 # itself, not a pod — see data/demos/15_customer_deployments/*/dc/*/01_deployment.yml
 # for the reference pattern). Creating it (member_of_groups: customer_deployments)
-# event-triggers ExchangeGatewayGenerator (generators/topology/exchange_gateway.py),
+# event-triggers ExchangeGatewayGenerator (generators/topology/customer_deployment.py),
 # which get-or-creates the customer's VRF namespace ("{ORG_ID}-{ENV}", i.e.
 # "C001-P") tagged into vrf_namespaces so add_vrf_namespace allocates its L3
 # VNI, then wires a route-leak exchange to SHARED-SERVICES. No manual
