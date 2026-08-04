@@ -11,8 +11,10 @@ already owns spine context.
 
 Firewall/load-balancer: created DC-wide (deployment_id=dc.id) via
 CommonGenerator._create_role_devices (shared with pod.py's own pod-scoped
-firewall/load-balancer provisioning), paired into an HA domain when an
-entry's quantity == 2 via CommonGenerator._ensure_ha_pair.
+firewall/load-balancer provisioning), which sets DeviceOptions.ha_kind so
+create_devices() itself pairs the created devices two-at-a-time into HA
+domains (see test_device_mixin.py for that pairing logic — any quantity,
+not just 2).
 
 BLF<->FW<->LB cabling: CommonGenerator._cable_border_services with
 connectivity_mode="pbr" cables two independent legs (border-leaf<->firewall,
@@ -78,25 +80,6 @@ def _make_generator() -> Any:
     return gen
 
 
-def _mock_device(name: str) -> MagicMock:
-    dev = MagicMock()
-    dev.id = f"id-{name}"
-    dev.name = MagicMock(value=name)
-    return dev
-
-
-def _mock_iface(name: str) -> MagicMock:
-    iface = MagicMock()
-    iface.name = MagicMock(value=name)
-    return iface
-
-
-def _mock_group(group_id: str = "ha-domains-group") -> MagicMock:
-    group = MagicMock()
-    group.id = group_id
-    return group
-
-
 def _mock_pod(*, id: str, index: int, name: str = "pod-1", loopback_pool_id: str | None = "lo-pool") -> MagicMock:
     pod = MagicMock()
     pod.id = id
@@ -155,60 +138,6 @@ class TestPodBorderLeafCapacity:
         pod = _mock_pod(id="pod-1", index=1)
         pod.layout = MagicMock(value=_mock_pod_layout(max_border_leafs_per_pod=0))
         assert DCTopologyGenerator._pod_border_leaf_capacity(pod) == 0
-
-
-class TestEnsureHaPair:
-    """CommonGenerator._ensure_ha_pair — shared by dc.py (DC-wide firewall/
-    load-balancer) and pod.py (a border-spine pod's own firewall/load-balancer)."""
-
-    @pytest.mark.asyncio
-    async def test_single_device_is_a_noop(self) -> None:
-        gen = _make_generator()
-
-        await gen._ensure_ha_pair(["fw-01"], ha_kind="ManagedFirewallHA", role_label="firewall")
-
-        gen.client.create.assert_not_awaited()
-
-    @pytest.mark.asyncio
-    async def test_creates_domain_for_exactly_two_devices(self) -> None:
-        gen = _make_generator()
-        gen.client.filters = AsyncMock(side_effect=[[], [_mock_device("fw-01"), _mock_device("fw-02")]])
-        gen.client.get = AsyncMock(return_value=_mock_group())
-        ha_obj = MagicMock()
-        ha_obj.id = "ha-1"
-        ha_obj.save = AsyncMock()
-        gen.client.create = AsyncMock(return_value=ha_obj)
-
-        await gen._ensure_ha_pair(["fw-02", "fw-01"], ha_kind="ManagedFirewallHA", role_label="firewall")
-
-        gen.client.create.assert_awaited_once()
-        create_kwargs = gen.client.create.call_args.kwargs
-        assert create_kwargs["kind"] == "ManagedFirewallHA"
-        assert create_kwargs["data"]["name"] == "fw-01-fw-02-ha"
-        assert create_kwargs["data"]["capabilities"] == [{"id": "id-fw-01"}, {"id": "id-fw-02"}]
-        ha_obj.save.assert_awaited_once_with(allow_upsert=True)
-
-    @pytest.mark.asyncio
-    async def test_existing_domain_is_tracked_not_recreated(self) -> None:
-        gen = _make_generator()
-        existing = MagicMock()
-        existing.id = "existing-ha-1"
-        gen.client.filters = AsyncMock(return_value=[existing])
-
-        await gen._ensure_ha_pair(["lb-01", "lb-02"], ha_kind="ManagedLoadbalancerHA", role_label="load-balancer")
-
-        gen.client.create.assert_not_awaited()
-        assert "existing-ha-1" in gen.client.group_context.related_node_ids
-
-    @pytest.mark.asyncio
-    async def test_unresolvable_devices_errors(self) -> None:
-        gen = _make_generator()
-        gen.client.filters = AsyncMock(side_effect=[[], [_mock_device("fw-01")]])
-
-        await gen._ensure_ha_pair(["fw-01", "fw-02"], ha_kind="ManagedFirewallHA", role_label="firewall")
-
-        gen.client.create.assert_not_awaited()
-        gen.logger.error.assert_called_once()
 
 
 class TestCreateBorderLeafDevices:
@@ -349,10 +278,11 @@ class TestCreateRoleDevices:
         assert create_kwargs["options"].get("group_name") is None
 
     @pytest.mark.asyncio
-    async def test_quantity_of_two_triggers_ha_pairing(self) -> None:
+    async def test_firewall_passes_ha_kind_through_options(self) -> None:
+        """HA pairing itself is create_devices()'s job (DeviceOptions.ha_kind) —
+        _create_role_devices only needs to set the right kind per role."""
         gen = _make_generator()
         gen.create_devices = AsyncMock(return_value=["fw-01", "fw-02"])
-        gen._ensure_ha_pair = AsyncMock()
         entries = [_entry("firewall", 2, _FW_TEMPLATE)]
 
         await gen._create_role_devices(
@@ -363,26 +293,25 @@ class TestCreateRoleDevices:
             indexes=[gen.data["index"]],
         )
 
-        gen._ensure_ha_pair.assert_awaited_once_with(
-            ["fw-01", "fw-02"], ha_kind="ManagedFirewallHA", role_label="firewall"
-        )
+        create_kwargs = gen.create_devices.call_args.kwargs
+        assert create_kwargs["options"]["ha_kind"] == "ManagedFirewallHA"
 
     @pytest.mark.asyncio
-    async def test_quantity_of_one_does_not_trigger_ha_pairing(self) -> None:
+    async def test_load_balancer_passes_ha_kind_through_options(self) -> None:
         gen = _make_generator()
-        gen.create_devices = AsyncMock(return_value=["fw-01"])
-        gen._ensure_ha_pair = AsyncMock()
-        entries = [_entry("firewall", 1, _FW_TEMPLATE)]
+        gen.create_devices = AsyncMock(return_value=["lb-01", "lb-02"])
+        entries = [_entry("load-balancer", 2, _LB_TEMPLATE)]
 
         await gen._create_role_devices(
-            role="firewall",
+            role="load-balancer",
             entries=entries,
             deployment_id=gen.data["id"],
             naming_convention="standard",
             indexes=[gen.data["index"]],
         )
 
-        gen._ensure_ha_pair.assert_not_awaited()
+        create_kwargs = gen.create_devices.call_args.kwargs
+        assert create_kwargs["options"]["ha_kind"] == "ManagedLoadbalancerHA"
 
 
 _BL_ROLE_FOR = {"firewall": "firewall", "load-balancer": "load-balancer"}
