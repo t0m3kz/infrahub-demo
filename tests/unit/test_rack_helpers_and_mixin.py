@@ -6,69 +6,59 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from generators.helpers.rack import RackRolesHelper
-from generators.models import (
-    DeviceRole,
-    Interface,
-    LocationSuiteModel,
-    Pool,
-    RackModel,
-    RackParent,
-    RackPod,
-    Template,
-)
 from generators.topology.rack import RackGenerator
 
 
 def _build_gen(*, deployment_type: Literal["middle_rack", "tor", "mixed"] = "mixed", rack_type: str = "network") -> Any:
-    parent = RackParent(
-        id="dc-1",
-        name="DC1",
-        index=1,
-        size="S",
-        underlay_protocol="ipv4",
-        naming_convention="standard",
-        management_pool=Pool(id="mgmt-pool", name="mgmt"),
-    )
-    pod = RackPod(
-        id="pod-1",
-        name="pod-1",
-        index=1,
-        parent=parent,
-        leaf_interface_sorting_method="top_down",
-        spine_interface_sorting_method="bottom_up",
-        loopback_pool=Pool(id="lo-pool", name="lo"),
-        prefix_pool=Pool(id="p2p-pool", name="p2p"),
-        asn_pool=Pool(id="asn-pool", name="asn"),
-        deployment_type=deployment_type,
-        layout="S_MIXED",
-        fabric_templates=[
-            DeviceRole(
-                role="spine",
-                quantity=2,
-                template=Template(
-                    id="tmpl-spine",
-                    interfaces=[Interface(name="Eth1/10"), Interface(name="Eth1/11")],
-                ),
-            )
+    parent = {
+        "id": "dc-1",
+        "name": "DC1",
+        "index": 1,
+        "size": "S",
+        "underlay_protocol": "ipv4",
+        "naming_convention": "standard",
+        "management_pool": {"id": "mgmt-pool", "name": "mgmt"},
+    }
+    pod = {
+        "id": "pod-1",
+        "name": "pod-1",
+        "index": 1,
+        "parent": parent,
+        "leaf_interface_sorting_method": "top_down",
+        "spine_interface_sorting_method": "bottom_up",
+        "loopback_pool": {"id": "lo-pool", "name": "lo"},
+        "prefix_pool": {"id": "p2p-pool", "name": "p2p"},
+        "asn_pool": {"id": "asn-pool", "name": "asn"},
+        "deployment_type": deployment_type,
+        "layout": "S_MIXED",
+        "fabric_templates": [
+            {
+                "role": "spine",
+                "quantity": 2,
+                "template": {
+                    "id": "tmpl-spine",
+                    "interfaces": [{"name": "Eth1/10"}, {"name": "Eth1/11"}],
+                },
+            }
         ],
-    )
-    suite = LocationSuiteModel(index=1)
-    leaf_template = Template(id="tmpl-leaf", interfaces=[Interface(name="Eth1/1"), Interface(name="Eth1/2")])
-    tor_template = Template(
-        id="tmpl-tor",
-        interfaces=[Interface(name="Eth1/47", role="uplink"), Interface(name="Eth1/48", role="uplink")],
-    )
-    rack = RackModel(
-        id="rack-1",
-        name="RACK-1",
-        index=2,
-        rack_type=rack_type,
-        row_index=2,
-        parent=suite,
-        pod=pod,
-        leafs=[DeviceRole(role="leaf", quantity=2, template=leaf_template)],
-        tors=[DeviceRole(role="tor", quantity=2, template=tor_template)],
-    )
+    }
+    suite = {"index": 1}
+    leaf_template = {"id": "tmpl-leaf", "interfaces": [{"name": "Eth1/1"}, {"name": "Eth1/2"}]}
+    tor_template = {
+        "id": "tmpl-tor",
+        "interfaces": [{"name": "Eth1/47", "role": "uplink"}, {"name": "Eth1/48", "role": "uplink"}],
+    }
+    rack = {
+        "id": "rack-1",
+        "name": "RACK-1",
+        "index": 2,
+        "rack_type": rack_type,
+        "row_index": 2,
+        "parent": suite,
+        "pod": pod,
+        "leafs": [{"role": "leaf", "quantity": 2, "template": leaf_template}],
+        "tors": [{"role": "tor", "quantity": 2, "template": tor_template}],
+    }
 
     gen = RackGenerator.__new__(RackGenerator)
     gen.data = rack
@@ -128,14 +118,14 @@ class TestRackRolesHelper:
         assert options["group_name"] == "loadbalancers"
 
     def test_template_interfaces_filters_by_role(self) -> None:
-        template = Template(
-            id="tmpl",
-            interfaces=[
-                Interface(name="Eth1/1", role="uplink"),
-                Interface(name="Eth1/2", role="downlink"),
-                Interface(name="Eth1/3", role="uplink"),
+        template = {
+            "id": "tmpl",
+            "interfaces": [
+                {"name": "Eth1/1", "role": "uplink"},
+                {"name": "Eth1/2", "role": "downlink"},
+                {"name": "Eth1/3", "role": "uplink"},
             ],
-        )
+        }
 
         all_ifaces = RackRolesHelper.template_interfaces(template)
         uplinks = RackRolesHelper.template_interfaces(template, role="uplink")
@@ -170,7 +160,7 @@ class TestRackMixinAdditional:
     async def test_prepare_generation_context_missing_pools(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Pools stay missing across every retry attempt — error fires after exhausting retries."""
         gen = _build_gen()
-        gen.data.pod.loopback_pool = None
+        gen.data["pod"]["loopback_pool"] = None
         gen.client.get = AsyncMock(return_value=_mock_pod_pools(loopback_id=None, prefix_id=None))
         monkeypatch.setattr("generators.rack.asyncio.sleep", AsyncMock())
 
@@ -182,8 +172,8 @@ class TestRackMixinAdditional:
     async def test_prepare_generation_context_pools_recover_after_retry(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Pools missing on the first refetch, present on the second — no error, ids updated."""
         gen = _build_gen()
-        gen.data.pod.loopback_pool = None
-        gen.data.pod.prefix_pool = None
+        gen.data["pod"]["loopback_pool"] = None
+        gen.data["pod"]["prefix_pool"] = None
         gen.client.get = AsyncMock(
             side_effect=[
                 _mock_pod_pools(loopback_id=None, prefix_id=None),

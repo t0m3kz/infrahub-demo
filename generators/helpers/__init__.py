@@ -59,12 +59,7 @@ from .quotation import (
 )
 from .routing import PendingASRef, RoutingPlan, RoutingPlanInput, RoutingPlanner, RoutingStrategy
 from .rules import RulePlanningHelper, RulesPlanner
-from .template_interfaces import (
-    build_ethernet_interface_names,
-    build_spine_downlink_template_names,
-    role_interface_names_or_dynamic,
-    template_interface_names_by_role,
-)
+from .template_interfaces import template_interface_names_by_role
 
 __all__ = [
     # Routing
@@ -125,9 +120,6 @@ __all__ = [
     "recommend_design",
     "recommend_pod_design",
     "validate_room_capacity",
-    # Dynamic interface templates
-    "build_ethernet_interface_names",
-    "build_spine_downlink_template_names",
+    # Template interfaces
     "template_interface_names_by_role",
-    "role_interface_names_or_dynamic",
 ]

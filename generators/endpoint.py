@@ -17,8 +17,8 @@ from netutils.interface import sort_interface_list
 
 from .common import CablingOptions
 from .helpers.cabling import ConnectionValidator, InterfaceSpeedMatcher, pick_matched_switch_port_name
-from .models import ConnectionFingerprint
 from .protocols import DcimPhysicalInterface
+from .types import ConnectionFingerprint
 
 
 class EndpointUplinkMixin:
@@ -67,12 +67,12 @@ class EndpointUplinkMixin:
         ]
 
         if not available_endpoint_interfaces:
-            self.logger.info(f"All interfaces on {self.data.name} already have cables")
+            self.logger.info(f"All interfaces on {self.data['name']} already have cables")
             return
 
         if not all_target_interfaces:
             self.logger.error(
-                f"Endpoint {self.data.name}: No compatible interfaces found on target devices. "
+                f"Endpoint {self.data['name']}: No compatible interfaces found on target devices. "
                 "Cannot create endpoint connectivity."
             )
             return
@@ -90,7 +90,7 @@ class EndpointUplinkMixin:
         device_names = list(device_groups.keys())
         if len(device_names) < 2:
             self.logger.error(
-                f"Endpoint {self.data.name}: Need at least 2 devices for dual-homing, found {len(device_names)}. "
+                f"Endpoint {self.data['name']}: Need at least 2 devices for dual-homing, found {len(device_names)}. "
                 "Cannot create endpoint connectivity."
             )
             return
@@ -106,7 +106,7 @@ class EndpointUplinkMixin:
         for dev_name in selected_devices:
             selected_interfaces.extend(device_groups[dev_name])
 
-        self.logger.info(f"Selected device pair for {self.data.name}: {selected_devices}")
+        self.logger.info(f"Selected device pair for {self.data['name']}: {selected_devices}")
 
         # Choose processing mode based on configuration
         if self.speed_aware:
@@ -123,7 +123,7 @@ class EndpointUplinkMixin:
             )
 
         self.logger.info(
-            f"Completed all connectivity for {self.data.name}: {len(self.planned_connections)} total connection(s) established"
+            f"Completed all connectivity for {self.data['name']}: {len(self.planned_connections)} total connection(s) established"
         )
 
     async def _process_speed_aware(
@@ -144,7 +144,7 @@ class EndpointUplinkMixin:
 
         if not speed_groups:
             self.logger.error(
-                f"Endpoint {self.data.name}: No matching speed groups found between endpoint and {target_device_names}. "
+                f"Endpoint {self.data['name']}: No matching speed groups found between endpoint and {target_device_names}. "
                 "Cannot create endpoint connectivity (speed-aware mode)."
             )
             return
@@ -300,7 +300,7 @@ class EndpointUplinkMixin:
         target_intf_names = sort_interface_list(list({conn.switch_interface for conn in connection_plan}))
 
         await self.create_cabling(
-            bottom_devices=[self.data.name],
+            bottom_devices=[self.data["name"]],
             bottom_interfaces=endpoint_intf_names,
             top_devices=target_device_names,
             top_interfaces=target_intf_names,
@@ -404,7 +404,7 @@ class EndpointUplinkMixin:
                 available_switch_intfs.remove(switch_intf)
 
                 fingerprint = ConnectionFingerprint(
-                    server_name=self.data.name,
+                    server_name=self.data["name"],
                     server_interface=server_intf_name,
                     switch_name=switch_name,
                     switch_interface=switch_intf.name.value,

@@ -5,64 +5,54 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from generators.models import (
-    DeviceRole,
-    Interface,
-    LocationSuiteModel,
-    Pool,
-    RackModel,
-    RackParent,
-    RackPod,
-    Template,
-)
 from generators.topology.rack import RackGenerator
 
 
 def _build_gen() -> Any:
-    parent = RackParent(
-        id="dc-1",
-        name="DC1",
-        index=1,
-        size="S",
-        naming_convention="standard",
-        management_pool=Pool(id="mgmt-pool", name="mgmt"),
-    )
-    pod = RackPod(
-        id="pod-1",
-        name="pod-1",
-        index=1,
-        parent=parent,
-        leaf_interface_sorting_method="top_down",
-        spine_interface_sorting_method="bottom_up",
-        loopback_pool=Pool(id="lo-pool", name="lo"),
-        prefix_pool=Pool(id="p2p-pool", name="p2p"),
-        deployment_type="mixed",
-        layout="S_MIXED",
-        fabric_templates=[
-            DeviceRole(
-                role="spine",
-                quantity=2,
-                template=Template(id="tmpl-spine", interfaces=[Interface(name="Eth1/10"), Interface(name="Eth1/11")]),
-            )
+    parent = {
+        "id": "dc-1",
+        "name": "DC1",
+        "index": 1,
+        "size": "S",
+        "naming_convention": "standard",
+        "management_pool": {"id": "mgmt-pool", "name": "mgmt"},
+    }
+    pod = {
+        "id": "pod-1",
+        "name": "pod-1",
+        "index": 1,
+        "parent": parent,
+        "leaf_interface_sorting_method": "top_down",
+        "spine_interface_sorting_method": "bottom_up",
+        "loopback_pool": {"id": "lo-pool", "name": "lo"},
+        "prefix_pool": {"id": "p2p-pool", "name": "p2p"},
+        "deployment_type": "mixed",
+        "layout": "S_MIXED",
+        "fabric_templates": [
+            {
+                "role": "spine",
+                "quantity": 2,
+                "template": {"id": "tmpl-spine", "interfaces": [{"name": "Eth1/10"}, {"name": "Eth1/11"}]},
+            }
         ],
-    )
-    suite = LocationSuiteModel(index=1)
-    leaf_t = Template(id="tmpl-leaf", interfaces=[Interface(name="Eth1/1"), Interface(name="Eth1/2")])
-    tor_t = Template(id="tmpl-tor", interfaces=[Interface(name="Eth1/47", role="uplink")])
+    }
+    suite = {"index": 1}
+    leaf_t = {"id": "tmpl-leaf", "interfaces": [{"name": "Eth1/1"}, {"name": "Eth1/2"}]}
+    tor_t = {"id": "tmpl-tor", "interfaces": [{"name": "Eth1/47", "role": "uplink"}]}
 
-    rack = RackModel(
-        id="rack-1",
-        name="RACK-1",
-        index=2,
-        rack_type="network",
-        row_index=1,
-        parent=suite,
-        pod=pod,
-        leafs=[DeviceRole(role="leaf", quantity=2, template=leaf_t)],
-        tors=[DeviceRole(role="tor", quantity=1, template=tor_t)],
-        l2_leafs=[],
-        access_leafs=[],
-    )
+    rack = {
+        "id": "rack-1",
+        "name": "RACK-1",
+        "index": 2,
+        "rack_type": "network",
+        "row_index": 1,
+        "parent": suite,
+        "pod": pod,
+        "leafs": [{"role": "leaf", "quantity": 2, "template": leaf_t}],
+        "tors": [{"role": "tor", "quantity": 1, "template": tor_t}],
+        "l2_leafs": [],
+        "access_leafs": [],
+    }
 
     gen = RackGenerator.__new__(RackGenerator)
     gen.data = rack
@@ -92,36 +82,36 @@ class TestRackGeneratorMethods:
     def test_has_role_template_helpers(self) -> None:
         gen = _build_gen()
         assert gen._has_role_templates([]) is False
-        assert gen._has_role_templates(gen.data.leafs) is True
+        assert gen._has_role_templates(gen.data["leafs"]) is True
         assert gen._has_tor_like_templates() is True
         assert gen._has_any_switch_templates() is True
 
     def test_planned_previous_row_rack_slots_uses_layout_capacity(self) -> None:
         gen = _build_gen()
 
-        gen.data.row_index = 3
-        gen.data.pod.deployment_type = "mixed"
-        gen.data.pod.layout = "S_MIXED"  # compute_racks_per_row = 8
+        gen.data["row_index"] = 3
+        gen.data["pod"]["deployment_type"] = "mixed"
+        gen.data["pod"]["layout"] = "S_MIXED"  # compute_racks_per_row = 8
         assert gen._planned_previous_row_rack_slots() == 16
 
-        gen.data.row_index = 3
-        gen.data.pod.deployment_type = "tor"
-        gen.data.pod.layout = "S_TOR"  # compute_racks_per_row = 8
+        gen.data["row_index"] = 3
+        gen.data["pod"]["deployment_type"] = "tor"
+        gen.data["pod"]["layout"] = "S_TOR"  # compute_racks_per_row = 8
         assert gen._planned_previous_row_rack_slots() == 16
 
-        gen.data.row_index = 3
-        gen.data.pod.deployment_type = "middle_rack"
+        gen.data["row_index"] = 3
+        gen.data["pod"]["deployment_type"] = "middle_rack"
         assert gen._planned_previous_row_rack_slots() == 0
 
     def test_validate_profile_capacity_limits_accepts_valid_network_rack(self) -> None:
         gen = _build_gen()
-        gen.data.pod.layout = "S_MIXED"
-        gen.data.pod.deployment_type = "mixed"
-        gen.data.rack_type = "network"
-        gen.data.row_index = 1
-        gen.data.index = 1
-        gen.data.leafs = [
-            DeviceRole(role="leaf", quantity=2, template=Template(id="tmpl-leaf")),
+        gen.data["pod"]["layout"] = "S_MIXED"
+        gen.data["pod"]["deployment_type"] = "mixed"
+        gen.data["rack_type"] = "network"
+        gen.data["row_index"] = 1
+        gen.data["index"] = 1
+        gen.data["leafs"] = [
+            {"role": "leaf", "quantity": 2, "template": {"id": "tmpl-leaf"}},
         ]
 
         errors = gen._validate_profile_capacity_limits()
@@ -130,11 +120,11 @@ class TestRackGeneratorMethods:
 
     def test_validate_profile_capacity_limits_rejects_excess_tors_per_compute_rack(self) -> None:
         gen = _build_gen()
-        gen.data.pod.layout = "S_MIXED"  # max_tors_per_compute_rack = 2
-        gen.data.pod.deployment_type = "mixed"
-        gen.data.rack_type = "compute"
-        gen.data.tors = [
-            DeviceRole(role="tor", quantity=3, template=Template(id="tmpl-tor")),
+        gen.data["pod"]["layout"] = "S_MIXED"  # max_tors_per_compute_rack = 2
+        gen.data["pod"]["deployment_type"] = "mixed"
+        gen.data["rack_type"] = "compute"
+        gen.data["tors"] = [
+            {"role": "tor", "quantity": 3, "template": {"id": "tmpl-tor"}},
         ]
 
         errors = gen._validate_profile_capacity_limits()
@@ -143,8 +133,8 @@ class TestRackGeneratorMethods:
 
     def test_validate_profile_capacity_limits_rejects_row_overflow(self) -> None:
         gen = _build_gen()
-        gen.data.pod.layout = "S_MIXED"  # rows = 2
-        gen.data.row_index = 3
+        gen.data["pod"]["layout"] = "S_MIXED"  # rows = 2
+        gen.data["row_index"] = 3
 
         errors = gen._validate_profile_capacity_limits()
 
@@ -332,9 +322,9 @@ class TestRackGeneratorMethods:
     @pytest.mark.asyncio
     async def test_generate_tors_uses_planned_slots_without_live_sibling_query(self) -> None:
         gen = _build_gen()
-        gen.data.row_index = 2
-        gen.data.pod.deployment_type = "mixed"
-        gen.data.pod.layout = "S_MIXED"  # compute_racks_per_row = 8
+        gen.data["row_index"] = 2
+        gen.data["pod"]["deployment_type"] = "mixed"
+        gen.data["pod"]["layout"] = "S_MIXED"  # compute_racks_per_row = 8
         gen._spine_device_names = ["spine-01"]
 
         gen.client.filters = AsyncMock(side_effect=AssertionError("live sibling query should not be used"))

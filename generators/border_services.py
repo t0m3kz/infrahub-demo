@@ -14,7 +14,6 @@ from infrahub_sdk.protocols import CoreStandardGroup
 if TYPE_CHECKING:
     import logging
 
-from .models import DeviceRole
 from .protocols import DcimPhysicalDevice
 from .types import DeviceOptions
 
@@ -76,7 +75,7 @@ class BorderServicesMixin:
         self,
         *,
         role: Literal["firewall", "load-balancer"],
-        entries: list[DeviceRole],
+        entries: list[Any],
         deployment_id: str,
         naming_convention: Literal["standard", "hierarchical", "flat", "computed"],
         indexes: list[int],
@@ -84,7 +83,12 @@ class BorderServicesMixin:
         """Create firewall/load-balancer devices for one deployment scope
         (DC-wide from dc.py, or one pod from pod.py), pairing each entry's
         devices into an HA domain when quantity == 2. No loopback allocation
-        — not part of underlay/overlay routing."""
+        — not part of underlay/overlay routing.
+
+        Each entry is a fabric_templates row — either a plain ``clean_data()``
+        dict (``{"quantity": ..., "template": {...}}``, dc.py) or the legacy
+        ``DeviceRole`` Pydantic model (pod.py) — both expose the same two
+        fields, just via ``[...]``/``.`` access respectively."""
         device_options = DeviceOptions(indexes=indexes)
         if role == "load-balancer":
             # create_devices()'s default group_name is f"{device_role}s" = "load-balancers",
@@ -96,16 +100,22 @@ class BorderServicesMixin:
 
         all_names: list[str] = []
         for entry in entries:
+            if isinstance(entry, dict):
+                quantity = entry["quantity"]
+                template = entry["template"]
+            else:
+                quantity = entry.quantity
+                template = entry.template.model_dump()
             names = await self.create_devices(
                 deployment_id=deployment_id,
                 device_role=role,
-                quantity=entry.quantity,
-                template=entry.template.model_dump(),
+                quantity=quantity,
+                template=template,
                 naming_convention=naming_convention,
                 options=device_options,
             )
             all_names.extend(names)
-            if entry.quantity == 2:
+            if quantity == 2:
                 await self._ensure_ha_pair(names, ha_kind=ha_kind, role_label=role)
 
         return all_names

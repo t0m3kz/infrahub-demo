@@ -3,7 +3,7 @@ version: "1.0"
 
 nodes:
   # Retired in favor of TopologyDataCenter.size / TopologyPod.layout Dropdowns
-  # (see generators/models.py's DC_SIZE_LAYOUTS/POD_LAYOUTS) — state: absent
+  # (see generators/dc_config.py & generators/pod_config.py's DC_SIZE_LAYOUTS/POD_LAYOUTS) — state: absent
   # marks them for removal rather than deleting outright, so Infrahub drops
   # the node (and its existing instances) from the schema/data instead of
   # silently leaving it orphaned (deleting a node from YAML with no state

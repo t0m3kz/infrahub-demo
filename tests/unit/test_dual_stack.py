@@ -1,40 +1,39 @@
 """Unit tests for dual-stack support.
 
 Covers:
-  - RoutingArchitectureMixin dual-stack properties (DCModel/PodParent/RackParent
-    all carry routing_strategy/underlay_protocol directly — see generators/models.py)
+  - Dual-stack helper functions in generators/helpers/routing.py
+    (underlay_is_ipv6/underlay_is_dual_stack/p2p_is_ipv6/p2p_addressing) —
+    dc.py/pod.py/rack.py all derive these from a plain underlay_protocol
+    string read off clean_data() output, no shared model class involved.
   - calculate_pod_pools() with dual_stack parameter
 """
 
 from generators.helpers.pools import calculate_dc_fabric_loopback_prefix, calculate_pod_pools
-from generators.models import RoutingArchitectureMixin
+from generators.helpers.routing import p2p_addressing, p2p_is_ipv6, underlay_is_dual_stack, underlay_is_ipv6
 
 # ===========================================================================
-# RoutingArchitectureMixin dual-stack properties
+# Dual-stack helper functions
 # ===========================================================================
 
 
 class TestRoutingArchitectureDualStack:
     def test_ipv4_defaults(self) -> None:
-        d = RoutingArchitectureMixin(underlay_protocol="ipv4")
-        assert d.is_ipv6 is False
-        assert d.is_dual_stack is False
-        assert d.p2p_ipv6 is False
-        assert d.p2p_addressing == "/31"
+        assert underlay_is_ipv6("ipv4") is False
+        assert underlay_is_dual_stack("ipv4") is False
+        assert p2p_is_ipv6("ipv4") is False
+        assert p2p_addressing("ipv4") == "/31"
 
     def test_ipv6_properties(self) -> None:
-        d = RoutingArchitectureMixin(underlay_protocol="ipv6")
-        assert d.is_ipv6 is True
-        assert d.is_dual_stack is False
-        assert d.p2p_ipv6 is True
-        assert d.p2p_addressing == "/127"
+        assert underlay_is_ipv6("ipv6") is True
+        assert underlay_is_dual_stack("ipv6") is False
+        assert p2p_is_ipv6("ipv6") is True
+        assert p2p_addressing("ipv6") == "/127"
 
     def test_dual_stack_properties(self) -> None:
-        d = RoutingArchitectureMixin(underlay_protocol="dual_stack")
-        assert d.is_ipv6 is False
-        assert d.is_dual_stack is True
-        assert d.p2p_ipv6 is True
-        assert d.p2p_addressing == "/127"
+        assert underlay_is_ipv6("dual_stack") is False
+        assert underlay_is_dual_stack("dual_stack") is True
+        assert p2p_is_ipv6("dual_stack") is True
+        assert p2p_addressing("dual_stack") == "/127"
 
 
 # ===========================================================================

@@ -188,8 +188,8 @@ class TestGenerateGuardClauses:
 
         await gen.generate(data)
 
-        assert len(gen.data.interfaces) == 1
-        assert gen.data.interfaces[0].name == "eth0"
+        assert len(gen.data["interfaces"]) == 1
+        assert gen.data["interfaces"][0]["name"] == "eth0"
 
     @pytest.mark.asyncio
     async def test_filters_empty_interface_nodes_on_rack_devices(self) -> None:
@@ -209,8 +209,8 @@ class TestGenerateGuardClauses:
 
         await gen.generate(data)
 
-        assert len(gen.data.rack.devices[0].interfaces) == 1
-        assert gen.data.rack.devices[0].interfaces[0].name == "Eth1"
+        assert len(gen.data["rack"]["devices"][0]["interfaces"]) == 1
+        assert gen.data["rack"]["devices"][0]["interfaces"][0]["name"] == "Eth1"
 
 
 class TestGenerateDeploymentUpdate:
@@ -417,10 +417,10 @@ class TestResolveTargetInterfaces:
     @pytest.mark.asyncio
     async def test_middle_rack_dispatches(self) -> None:
         gen = _make_generator()
-        gen.data = SimpleNamespace(
-            rack=SimpleNamespace(id="rack-1", rack_type="network", row_index=1, pod=SimpleNamespace(id="pod-1")),
-            name="server-1",
-        )
+        gen.data = {
+            "rack": {"id": "rack-1", "rack_type": "network", "row_index": 1, "pod": {"id": "pod-1"}},
+            "name": "server-1",
+        }
         gen._connect_middle_rack_deployment = AsyncMock(return_value=["x"])
 
         result = await gen._resolve_target_interfaces("middle_rack")
@@ -431,7 +431,7 @@ class TestResolveTargetInterfaces:
     @pytest.mark.asyncio
     async def test_tor_dispatches(self) -> None:
         gen = _make_generator()
-        gen.data = SimpleNamespace(name="server-1")
+        gen.data = {"name": "server-1"}
         gen._connect_tor_deployment = AsyncMock(return_value=["x"])
 
         result = await gen._resolve_target_interfaces("tor")
@@ -441,7 +441,7 @@ class TestResolveTargetInterfaces:
     @pytest.mark.asyncio
     async def test_mixed_dispatches(self) -> None:
         gen = _make_generator()
-        gen.data = SimpleNamespace(name="server-1")
+        gen.data = {"name": "server-1"}
         gen._connect_mixed_deployment = AsyncMock(return_value=["x"])
 
         result = await gen._resolve_target_interfaces("mixed")
@@ -451,7 +451,7 @@ class TestResolveTargetInterfaces:
     @pytest.mark.asyncio
     async def test_unknown_deployment_type_logs_error_returns_empty(self) -> None:
         gen = _make_generator()
-        gen.data = SimpleNamespace(name="server-1")
+        gen.data = {"name": "server-1"}
 
         result = await gen._resolve_target_interfaces("bogus")
 
@@ -467,10 +467,10 @@ class TestResolveTargetInterfaces:
 class TestConnectMiddleRackDeployment:
     def _gen_with_rack(self) -> Any:
         gen = _make_generator()
-        gen.data = SimpleNamespace(
-            name="server-1",
-            rack=SimpleNamespace(id="rack-1", rack_type="compute", row_index=1, pod=SimpleNamespace(id="pod-1")),
-        )
+        gen.data = {
+            "name": "server-1",
+            "rack": {"id": "rack-1", "rack_type": "compute", "row_index": 1, "pod": {"id": "pod-1"}},
+        }
         gen._free_interfaces = []
         return gen
 
@@ -585,10 +585,10 @@ class TestQueryL2AggregationLayer:
 class TestConnectTorDeployment:
     def _gen_with_rack(self) -> Any:
         gen = _make_generator()
-        gen.data = SimpleNamespace(
-            name="server-1",
-            rack=SimpleNamespace(id="rack-1", row_index=2, pod=SimpleNamespace(id="pod-1")),
-        )
+        gen.data = {
+            "name": "server-1",
+            "rack": {"id": "rack-1", "row_index": 2, "pod": {"id": "pod-1"}},
+        }
         return gen
 
     @pytest.mark.asyncio
@@ -646,10 +646,10 @@ class TestConnectTorDeployment:
 class TestConnectMixedDeployment:
     def _gen_with_rack(self) -> Any:
         gen = _make_generator()
-        gen.data = SimpleNamespace(
-            name="server-1",
-            rack=SimpleNamespace(id="rack-1", row_index=1, pod=SimpleNamespace(id="pod-1")),
-        )
+        gen.data = {
+            "name": "server-1",
+            "rack": {"id": "rack-1", "row_index": 1, "pod": {"id": "pod-1"}},
+        }
         return gen
 
     @pytest.mark.asyncio
@@ -854,7 +854,7 @@ class TestExtractDeviceName:
 class TestExtractCabledSwitchNames:
     def _gen(self) -> Any:
         gen = _make_generator()
-        gen.data = SimpleNamespace(name="server-1")
+        gen.data = {"name": "server-1"}
         return gen
 
     def test_no_cable_returns_empty(self) -> None:
@@ -945,7 +945,7 @@ class TestNextFreeLagId:
 class TestProcessLagEndpointConnections:
     def _gen(self) -> Any:
         gen = _make_generator()
-        gen.data = SimpleNamespace(name="server-1")
+        gen.data = {"name": "server-1"}
         gen._resolve_target_interfaces = AsyncMock()
         # _make_generator() stubs this method out for generate()-level tests —
         # restore the real bound implementation since it's under test here.

@@ -26,7 +26,6 @@ import pytest
 from infrahub_sdk.exceptions import NodeNotFoundError
 
 from generators.common import CommonGenerator
-from generators.models import DCModel
 from generators.topology.dc_pod_cascade import DCPodCascadeGenerator
 from generators.topology.pod_rack_cascade import PodRackCascadeGenerator
 
@@ -214,7 +213,7 @@ def _build_dc_cascade_gen() -> Any:
         if not deployment_list:
             gen.logger.error("No TopologyDeployment data found in GraphQL response")
             return
-        gen.data = DCModel(**deployment_list[0])
+        gen.data = deployment_list[0]
 
     gen._bootstrap_generate = _fake_bootstrap
     return gen
@@ -278,7 +277,7 @@ def _mock_rack(name: str, rack_type: str) -> MagicMock:
 
 def _pod_data(*, deployment_type: str) -> dict[str, Any]:
     """PodModel now carries deployment_type (explicit, no longer derived) plus a
-    `layout` key into POD_LAYOUTS (see generators/models.py) instead of a
+    `layout` key into POD_LAYOUTS (see generators/dc_config.py & generators/pod_config.py) instead of a
     `design` relationship; PodParent (`parent`) carries `size` (a DC_SIZE_LAYOUTS
     key) instead of its own `design` relationship. deployment_type here still
     drives which real POD_LAYOUTS entry we pick, matching the fixture's original
@@ -313,8 +312,6 @@ def _build_pod_rack_cascade_gen() -> Any:
     replaced by a stub that just sets self.data, isolating the cascade logic
     added in PodRackCascadeGenerator.generate() from PodTopologyGenerator's own
     (extensively covered elsewhere) pool/device/routing work."""
-    from generators.models import PodModel
-
     gen = cast(Any, PodRackCascadeGenerator.__new__(PodRackCascadeGenerator))
     gen.logger = MagicMock()
     gen.client = MagicMock()
@@ -329,7 +326,7 @@ def _build_pod_rack_cascade_gen() -> Any:
         if not deployment_list:
             gen.logger.error("No Pod Deployment data found in GraphQL response")
             return
-        gen.data = PodModel(**deployment_list[0])
+        gen.data = deployment_list[0]
 
     gen._bootstrap_generate = _fake_bootstrap
     return gen

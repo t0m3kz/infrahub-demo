@@ -1,14 +1,16 @@
 """Infrastructure generator for data center topology."""
 
-from typing import Any, Literal, cast
+from typing import Any, Literal, TypedDict, cast
 
 from utils.data_cleaning import clean_data
 
+from ..border_services import BorderServicesMixin
 from ..common import CommonGenerator, DeviceOptions
+from ..dc_config import resolve_dc_size_layout
 from ..helpers import calculate_dc_fabric_loopback_prefix, name_to_asn_range
 from ..helpers.routing import RoutingStrategy
-from ..helpers.template_interfaces import role_interface_names_or_dynamic
-from ..models import POD_LAYOUTS, DCModel
+from ..helpers.template_interfaces import template_interface_names_by_role
+from ..pod_config import POD_LAYOUTS
 from ..protocols import TopologyDataCenter, TopologyPod
 from ..shared_service_chain import SharedServiceChainMixin
 from ..types import CablingOptions, RoutingOptions
@@ -16,8 +18,39 @@ from ..types import CablingOptions, RoutingOptions
 _DC_VALID_FABRIC_ROLES = frozenset({"super-spine", "hyper-spine", "border-leaf", "firewall", "load-balancer"})
 
 
-class DCTopologyGenerator(SharedServiceChainMixin, CommonGenerator):
+class TopologyDcData(TypedDict, total=False):
+    """Shape of one clean_data()-processed TopologyDeployment/TopologyDataCenter
+    entry (see queries/topology/add/dc.gql) — declared here, at the read site,
+    instead of a shared Pydantic model file. No runtime validation: a missing/
+    mistyped key surfaces as ``KeyError`` at first read, caught by generate()'s
+    own except clause below."""
+
+    id: str
+    name: str
+    index: int
+    size: str
+    naming_convention: str
+    connectivity_mode: str
+    management_mode: str
+    underlay_protocol: str
+    routing_strategy: str
+    fabric_templates: list[dict[str, Any]]
+    loopback_pool: dict[str, Any] | None
+    technical_pool: dict[str, Any] | None
+    management_pool: dict[str, Any] | None
+    fabric_asn_pool: dict[str, Any] | None
+    children: list[dict[str, Any]]
+
+
+def _templates_by_role(templates: list[dict[str, Any]], role: str) -> list[dict[str, Any]]:
+    """Filter a fabric_templates list down to one role's positive-quantity entries."""
+    return [t for t in templates if t.get("role") == role and t.get("quantity", 0) > 0]
+
+
+class DCTopologyGenerator(SharedServiceChainMixin, BorderServicesMixin, CommonGenerator):
     """Generate data center topology with super-spine infrastructure."""
+
+    data: TopologyDcData
 
     async def generate(self, data: dict[str, Any]) -> None:
         """Generate data center topology."""
@@ -28,19 +61,30 @@ class DCTopologyGenerator(SharedServiceChainMixin, CommonGenerator):
                 self.logger.error("No TopologyDeployment data found in GraphQL response")
                 return
 
-            self.data = DCModel(**deployment_list[0])
+            self.data = cast(TopologyDcData, deployment_list[0])
+            # No Pydantic validation left to catch a malformed/partial GraphQL
+            # response — force-read every field generate() treats as required
+            # here, inside the try, so a missing one raises KeyError in the
+            # same place the old DCModel(**deployment_list[0]) construction did.
+            # management_mode/naming_convention/connectivity_mode are read via
+            # .get() below with the same defaults DCModel used to declare.
+            dc_id = self.data["id"]
+            dc_name = self.data["name"]
+            dc_index = self.data["index"]
+            dc_design = resolve_dc_size_layout(self.data["size"])
+            dc_management_mode = self.data.get("management_mode", "fully_managed")
         except (ValueError, KeyError, IndexError) as exc:
             self.logger.error(f"Generation failed due to {exc}")
             return
 
-        self.logger.info(f"Processing Data Center: {self.data.name}")
+        self.logger.info(f"Processing Data Center: {dc_name}")
 
         # Every generated DC should be part of the provider's shared exchange domain.
         await self._ensure_common_exchange_for_dc()
 
-        if self.data.is_managed_by_controller:
+        if dc_management_mode == "managed_by_controller":
             self.logger.info(
-                f"DC {self.data.name}: management_mode=managed_by_controller — skipping generator, "
+                f"DC {dc_name}: management_mode=managed_by_controller — skipping generator, "
                 "topology is owned by an external controller"
             )
             return
@@ -48,38 +92,36 @@ class DCTopologyGenerator(SharedServiceChainMixin, CommonGenerator):
         # Add existing pods to group context to prevent deletion
         # include=["layout"] also lets _generate_dc_scoped_fabric_devices read each
         # pod's own max_border_leafs_per_pod cap via _pod_border_leaf_capacity.
-        existing_pods = await self.client.filters(kind=TopologyPod, parent__ids=[self.data.id], include=["layout"])
+        existing_pods = await self.client.filters(kind=TopologyPod, parent__ids=[dc_id], include=["layout"])
         related_node_ids = self.client.group_context.related_node_ids
         for pod in existing_pods:
             related_node_ids.append(pod.id)
 
-        dc_id = self.data.id
         self.deployment_id = dc_id  # Store for cable linking
-        self.fabric_name = self.data.name.lower()
-        dc_index = self.data.index  # Get DC index for unique device naming
+        self.fabric_name = dc_name.lower()
         self._validate_fabric_template_roles()
-        super_spine_entries = self.data.super_spine_templates
-        amount_of_super_spines = sum(entry.quantity for entry in super_spine_entries)
+        super_spine_entries = _templates_by_role(self.data.get("fabric_templates", []), "super-spine")
+        amount_of_super_spines = sum(entry["quantity"] for entry in super_spine_entries)
         self.logger.info(f"Generating topology for data center {self.fabric_name.upper()}")
         indexes: list[int] = [dc_index]
 
-        if amount_of_super_spines > self.data.design.max_super_spines_per_fabric:
+        if amount_of_super_spines > dc_design["max_super_spines_per_fabric"]:
             raise RuntimeError(
                 f"DC {self.fabric_name.upper()} requests {amount_of_super_spines} super-spines but the assigned "
-                f"design allows at most {self.data.design.max_super_spines_per_fabric}"
+                f"design allows at most {dc_design['max_super_spines_per_fabric']}"
             )
 
-        naming_convention = self.data.naming_convention
-        dc_design = self.data.design
-        is_ipv6 = self.data.is_ipv6
-        is_dual_stack = self.data.is_dual_stack
+        naming_convention = self.data.get("naming_convention", "standard")
+        underlay_protocol = self.data.get("underlay_protocol", "ipv6")
+        is_ipv6 = underlay_protocol == "ipv6"
+        is_dual_stack = underlay_protocol == "dual_stack"
 
         # Prefix lengths come from the design; the DC instance can override by pre-attaching pools.
         # Values must already match the underlay_protocol (IPv4 or IPv6) — no conversion needed.
         # Management is always IPv4.
-        technical_prefix = dc_design.technical_prefix_length
-        loopback_prefix = dc_design.loopback_prefix_length
-        management_prefix = dc_design.management_prefix_length
+        technical_prefix = dc_design["technical_prefix_length"]
+        loopback_prefix = dc_design["loopback_prefix_length"]
+        management_prefix = dc_design["management_prefix_length"]
 
         # Always (re-)allocate every DC pool on every run — never skip an object just
         # because it already exists. allocate_resource_pools()'s identifier-keyed
@@ -101,10 +143,10 @@ class DCTopologyGenerator(SharedServiceChainMixin, CommonGenerator):
         # load). Sized from the design's max caps (capacity, not live quantity) so
         # growing either tier later never exhausts it — same reasoning as every
         # other pool size in this generator, which are all design-capacity based.
-        design_mode = "back-to-back" if dc_design.max_super_spines_per_fabric == 0 else "super-spine"
-        max_super_spines_cap = dc_design.max_super_spines_per_fabric
-        max_border_leafs_cap = dc_design.max_border_leafs_per_fabric
-        max_hyper_spines_cap = dc_design.max_hyper_spines_per_fabric
+        design_mode = "back-to-back" if dc_design["max_super_spines_per_fabric"] == 0 else "super-spine"
+        max_super_spines_cap = dc_design["max_super_spines_per_fabric"]
+        max_border_leafs_cap = dc_design["max_border_leafs_per_fabric"]
+        max_hyper_spines_cap = dc_design["max_hyper_spines_per_fabric"]
         # Allocated whenever there's capacity for ANY DC-level tier that draws
         # from this pool — independent of design_mode. A back-to-back design
         # (no super-spine tier) can still have border-leaf capacity (e.g.
@@ -144,11 +186,11 @@ class DCTopologyGenerator(SharedServiceChainMixin, CommonGenerator):
         # Derive deterministic ASN range from DC name (unique per site).
         # max_border_leafs_per_fabric is included since border-leaf devices draw
         # from this same fabric_asn_pool (see upsert_asn_pool below).
-        max_pods = self.data.design.max_pods
-        max_spines_per_pod = self.data.design.max_spines_per_pod
-        max_border_leafs_per_fabric = self.data.design.max_border_leafs_per_fabric
+        max_pods = dc_design["max_pods"]
+        max_spines_per_pod = dc_design["max_spines_per_pod"]
+        max_border_leafs_per_fabric = dc_design["max_border_leafs_per_fabric"]
         asn_start, asn_end = name_to_asn_range(
-            dc_name=self.data.name,
+            dc_name=dc_name,
             max_pods=max_pods,
             amount_of_super_spines=amount_of_super_spines,
             max_spines_per_pod=max_spines_per_pod,
@@ -158,7 +200,7 @@ class DCTopologyGenerator(SharedServiceChainMixin, CommonGenerator):
         # Only create ASN pool for eBGP-based strategies (one pool per DC, shared by
         # super-spine AND border-leaf devices)
         # ospf-ibgp uses OSPF underlay + shared overlay AS — no per-device pools needed
-        routing_strategy = self.data.routing_strategy
+        routing_strategy = self.data.get("routing_strategy", "ebgp-ebgp")
         fabric_asn_pool_id: str | None = None
         if routing_strategy in (RoutingStrategy.EBGP_EBGP.value, RoutingStrategy.EBGP_IBGP.value):
             asn_pool_obj = await self.upsert_asn_pool(
@@ -223,8 +265,8 @@ class DCTopologyGenerator(SharedServiceChainMixin, CommonGenerator):
                 entry_names = await self.create_devices(
                     deployment_id=dc_id,
                     device_role="super-spine",
-                    quantity=entry.quantity,
-                    template=entry.template.model_dump(),
+                    quantity=entry["quantity"],
+                    template=entry["template"],
                     naming_convention=cast(
                         Literal["standard", "hierarchical", "flat", "computed"],
                         naming_convention.lower(),
@@ -245,9 +287,9 @@ class DCTopologyGenerator(SharedServiceChainMixin, CommonGenerator):
         # HERE, DC-to-DC-level, since both tiers are DC-scoped — dc.py never
         # cables its own tiers together anywhere else, this is the one case
         # where it does.
-        hyper_spine_entries = self.data.hyper_spine_templates
-        amount_of_hyper_spines = sum(entry.quantity for entry in hyper_spine_entries)
-        max_hyper_spines_cap = self.data.design.max_hyper_spines_per_fabric
+        hyper_spine_entries = _templates_by_role(self.data.get("fabric_templates", []), "hyper-spine")
+        amount_of_hyper_spines = sum(entry["quantity"] for entry in hyper_spine_entries)
+        max_hyper_spines_cap = dc_design["max_hyper_spines_per_fabric"]
         if amount_of_hyper_spines > max_hyper_spines_cap:
             raise RuntimeError(
                 f"DC {self.fabric_name.upper()} requests {amount_of_hyper_spines} hyper-spines but the assigned "
@@ -260,8 +302,8 @@ class DCTopologyGenerator(SharedServiceChainMixin, CommonGenerator):
                 entry_names = await self.create_devices(
                     deployment_id=dc_id,
                     device_role="hyper-spine",
-                    quantity=entry.quantity,
-                    template=entry.template.model_dump(),
+                    quantity=entry["quantity"],
+                    template=entry["template"],
                     naming_convention=cast(
                         Literal["standard", "hierarchical", "flat", "computed"],
                         naming_convention.lower(),
@@ -329,19 +371,17 @@ class DCTopologyGenerator(SharedServiceChainMixin, CommonGenerator):
             super_spine_uplink_interfaces = [
                 iface_name
                 for entry in super_spine_entries
-                for iface_name in role_interface_names_or_dynamic(
-                    interfaces=entry.template.interfaces,
+                for iface_name in template_interface_names_by_role(
+                    interfaces=entry["template"].get("interfaces", []),
                     role="uplink",
-                    fallback_count=max(1, len(hyper_spine_names)),
                 )
             ]
             hyper_spine_downlink_interfaces = [
                 iface_name
                 for entry in hyper_spine_entries
-                for iface_name in role_interface_names_or_dynamic(
-                    interfaces=entry.template.interfaces,
+                for iface_name in template_interface_names_by_role(
+                    interfaces=entry["template"].get("interfaces", []),
                     role="downlink",
-                    fallback_count=max(1, len(super_spine_names)),
                 )
             ]
             if super_spine_names and super_spine_uplink_interfaces and hyper_spine_downlink_interfaces:
@@ -395,10 +435,10 @@ class DCTopologyGenerator(SharedServiceChainMixin, CommonGenerator):
         shouldn't block the other roles from generating (mirrors rack.py's own
         loop-iteration error convention, not its abort-on-error one, since here
         the roles are independent of each other)."""
-        for entry in self.data.fabric_templates:
-            if entry.role not in _DC_VALID_FABRIC_ROLES:
+        for entry in self.data.get("fabric_templates", []):
+            if entry["role"] not in _DC_VALID_FABRIC_ROLES:
                 self.logger.warning(
-                    f"DC {self.fabric_name}: fabric_templates entry with role={entry.role!r} is not valid "
+                    f"DC {self.fabric_name}: fabric_templates entry with role={entry['role']!r} is not valid "
                     f"at DC level (expected one of {sorted(_DC_VALID_FABRIC_ROLES)}) — skipping this entry."
                 )
 
@@ -426,7 +466,7 @@ class DCTopologyGenerator(SharedServiceChainMixin, CommonGenerator):
         it already owns spine context and can query "which border-leafs deploy
         under me" during its own bootstrap. Returns every border-leaf name created
         this run, DC-wide, for BLF<->FW<->LB cabling below."""
-        entries = self.data.border_leaf_templates
+        entries = _templates_by_role(self.data.get("fabric_templates", []), "border-leaf")
         if not entries:
             return []
 
@@ -436,17 +476,17 @@ class DCTopologyGenerator(SharedServiceChainMixin, CommonGenerator):
             return []
         sorted_pods = sorted(existing_pods, key=lambda p: p.index.value)
 
-        max_border_leafs_per_fabric = self.data.design.max_border_leafs_per_fabric
+        max_border_leafs_per_fabric = resolve_dc_size_layout(self.data["size"])["max_border_leafs_per_fabric"]
         all_names: list[str] = []
         for entry in entries:
-            if entry.quantity > max_border_leafs_per_fabric:
+            if entry["quantity"] > max_border_leafs_per_fabric:
                 self.logger.error(
-                    f"DC {self.fabric_name}: border-leaf entry requests {entry.quantity} devices but "
+                    f"DC {self.fabric_name}: border-leaf entry requests {entry['quantity']} devices but "
                     f"design.max_border_leafs_per_fabric allows at most {max_border_leafs_per_fabric} — skipping."
                 )
                 continue
 
-            remaining = entry.quantity
+            remaining = entry["quantity"]
             for pod in sorted_pods:
                 if remaining <= 0:
                     break
@@ -457,7 +497,7 @@ class DCTopologyGenerator(SharedServiceChainMixin, CommonGenerator):
                 remaining -= share
 
                 device_options = DeviceOptions(
-                    indexes=[self.data.index, pod.index.value],
+                    indexes=[self.data["index"], pod.index.value],
                     allocate_loopback=True,
                     loopback_pool=self._dc_fabric_loopback_pool_id,
                     loopback_prefix_length=128 if self._is_ipv6 else 32,
@@ -466,9 +506,9 @@ class DCTopologyGenerator(SharedServiceChainMixin, CommonGenerator):
                     deployment_id=pod.id,
                     device_role="border-leaf",
                     quantity=share,
-                    template=entry.template.model_dump(),
+                    template=entry["template"],
                     naming_convention=cast(
-                        Literal["standard", "hierarchical", "flat", "computed"], self.data.naming_convention.lower()
+                        Literal["standard", "hierarchical", "flat", "computed"], self.data["naming_convention"].lower()
                     ),
                     options=device_options,
                 )

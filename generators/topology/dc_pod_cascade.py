@@ -32,16 +32,18 @@ class DCPodCascadeGenerator(DCTopologyGenerator):
     async def generate(self, data: dict[str, Any]) -> None:
         await super().generate(data)
 
-        if not getattr(self, "data", None) or self.data.is_managed_by_controller:
+        dc_data = getattr(self, "data", None)
+        if not dc_data or dc_data.get("management_mode") == "managed_by_controller":
             return
 
-        existing_pods = await self.client.filters(kind=TopologyPod, parent__ids=[self.data.id])
+        dc_id = dc_data["id"]
+        existing_pods = await self.client.filters(kind=TopologyPod, parent__ids=[dc_id])
         related_node_ids = self.client.group_context.related_node_ids
         for pod in existing_pods:
             related_node_ids.append(pod.id)
 
         if not existing_pods:
-            self.logger.info(f"DC {self.data.name}: no existing pods to cascade to")
+            self.logger.info(f"DC {dc_data['name']}: no existing pods to cascade to")
             return
 
         await self.run_generator("pod_rack_cascade", [pod.id for pod in existing_pods], wait=False)
