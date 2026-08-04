@@ -3,6 +3,13 @@
 Locking exists to protect concurrent pool allocation — two generator runs
 racing to allocate from the same parent pool need to serialize, not to
 create two divergent pools — so the two concerns live together here.
+
+``_resolve_pool`` (pure pool-reference resolution: SDK object / ID string /
+name fallback, with caching) lives on CommonGenerator itself instead of here
+— DeviceMixin/CablingMixin need it for device/P2P IP allocation but have
+nothing to do with the pool creation/locking logic in this file, so pulling
+it in would force every device- or cabling-only generator to carry PoolMixin
+too.
 """
 
 from __future__ import annotations
@@ -47,45 +54,6 @@ class PoolMixin:
     # CommonGenerator._retry_delay — annotation only (no method body), so this
     # mixin never shadows the real staticmethod at runtime via MRO.
     _retry_delay: Callable[..., float]
-
-    async def _resolve_pool(
-        self,
-        provided: Any,
-        kind: type,
-        fallback_name: str | None = None,
-    ) -> Any:
-        """Resolve a pool reference to an SDK node object.
-
-        Accepts:
-        - SDK node object (CoreIPAddressPool/CoreIPPrefixPool) → returned as-is
-        - Pool ID string → resolved via client.get(id=...)
-        - None + fallback_name → resolved via client.get(name__value=fallback_name)
-        - None + no fallback_name → returns None (pool disabled)
-
-        This avoids redundant client.get() calls when pool IDs are already
-        available from GraphQL query data.
-        """
-        cache = getattr(self, "_pool_cache", None)
-        if cache is None:
-            cache = {}
-            self._pool_cache = cache
-
-        kind_key = getattr(kind, "__name__", str(kind))
-
-        if provided is None:
-            if fallback_name is None:
-                return None
-            cache_key = (kind_key, f"name:{fallback_name}")
-            if cache_key not in cache:
-                cache[cache_key] = await self.client.get(kind=kind, name__value=fallback_name)
-            return cache[cache_key]
-        if isinstance(provided, str):
-            cache_key = (kind_key, f"id:{provided}")
-            if cache_key not in cache:
-                cache[cache_key] = await self.client.get(kind=kind, id=provided)
-            return cache[cache_key]
-        # Already an SDK object
-        return provided
 
     async def acquire_resource_lock(self, resource_key: str) -> str:
         """Serialize concurrent generator runs racing for the same shared

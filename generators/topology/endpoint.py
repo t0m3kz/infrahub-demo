@@ -19,10 +19,12 @@ from netutils.interface import sort_interface_list
 
 from utils.data_cleaning import clean_data
 
+from ..cabling import CablingMixin
 from ..common import CablingOptions, CommonGenerator
 from ..endpoint import EndpointUplinkMixin
 from ..helpers.cabling import pick_matched_switch_port_name
 from ..helpers.interface_naming import get_lag_name
+from ..pools import PoolMixin
 from ..protocols import DcimCable, DcimLAGInterface, DcimPhysicalDevice, DcimPhysicalInterface, LocationRack
 from ..types import ConnectionFingerprint
 
@@ -80,7 +82,7 @@ class EndpointDeviceData(TypedDict, total=False):
     interfaces: list[EndpointInterfaceData]
 
 
-class EndpointConnectivityGenerator(EndpointUplinkMixin, CommonGenerator):
+class EndpointConnectivityGenerator(EndpointUplinkMixin, PoolMixin, CablingMixin, CommonGenerator):
     """Generate connectivity for endpoint devices based on deployment patterns.
 
     Deployment strategies:

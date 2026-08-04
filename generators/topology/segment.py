@@ -91,8 +91,9 @@ class VxlanSegmentGenerator(CommonGenerator):
                 segment__ids=[segment_id],
             )
             for existing in existing_deployments:
-                await existing.resolve()
                 deployment_rel = getattr(existing, "deployment", None)
+                if deployment_rel is not None:
+                    await deployment_rel.fetch()
                 deployment_peer = getattr(deployment_rel, "peer", None)
                 deployment_obj = deployment_peer or deployment_rel
                 deployment_id = getattr(deployment_obj, "id", None)
@@ -460,8 +461,9 @@ class VxlanSegmentGenerator(CommonGenerator):
                     deployment__ids=dep_ids,
                 )
                 for sd in existing:
-                    await sd.resolve()
                     deployment_rel = getattr(sd, "deployment", None)
+                    if deployment_rel is not None:
+                        await deployment_rel.fetch()
                     deployment_peer = getattr(deployment_rel, "peer", None)
                     deployment_obj = deployment_peer or deployment_rel
                     dep_id = getattr(deployment_obj, "id", None)

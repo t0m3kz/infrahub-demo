@@ -32,7 +32,7 @@ class DeviceMixin:
     logger: logging.Logger
     fabric_name: str
     pod_name: str | None
-    # CommonGenerator._resolve_pool (PoolMixin) — annotation only, no method body.
+    # CommonGenerator._resolve_pool — annotation only, no method body.
     _resolve_pool: Any
 
     async def create_devices(

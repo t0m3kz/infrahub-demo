@@ -19,11 +19,16 @@ from infrahub_sdk.exceptions import GraphQLError
 
 from generators.common import CommonGenerator
 from generators.logger import GeneratorError
+from generators.pools import PoolMixin
+
+
+class _Gen(PoolMixin, CommonGenerator):
+    pass
 
 
 def _build_gen() -> Any:
-    """Return a CommonGenerator typed as Any so ty allows mock attribute assignments."""
-    gen = CommonGenerator.__new__(CommonGenerator)
+    """Return a PoolMixin+CommonGenerator instance typed as Any so ty allows mock attribute assignments."""
+    gen = _Gen.__new__(_Gen)
     gen.logger = MagicMock()
     gen.client = MagicMock()
     gen.branch = "test-branch"

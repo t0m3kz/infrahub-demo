@@ -7,12 +7,8 @@ from infrahub_sdk.generator import InfrahubGenerator
 from infrahub_sdk.protocols import CoreGeneratorDefinition
 from infrahub_sdk.task.models import TaskFilter, TaskState
 
-from .cabling import CablingMixin
-from .devices import DeviceMixin
 from .helpers.common import retry_delay
 from .logger import FailOnErrorLoggerMixin
-from .pools import PoolMixin
-from .routing import RoutingMixin
 
 # Re-export TypedDicts so existing imports (from .common import DeviceOptions, ...) keep working
 from .types import CablingOptions, ChainHop, DeviceOptions, RoutingOptions  # noqa: F401
@@ -23,15 +19,8 @@ _IN_FLIGHT_STATES = [TaskState.PENDING, TaskState.RUNNING, TaskState.SCHEDULED]
 _FAILED_PARENT_STATES = [TaskState.FAILED, TaskState.CRASHED, TaskState.CANCELLED, TaskState.CANCELLING]
 
 
-class CommonGenerator(
-    FailOnErrorLoggerMixin,
-    PoolMixin,
-    DeviceMixin,
-    CablingMixin,
-    RoutingMixin,
-    InfrahubGenerator,
-):
-    """Extended InfrahubGenerator with helper methods for creating objects.
+class CommonGenerator(FailOnErrorLoggerMixin, InfrahubGenerator):
+    """Extended InfrahubGenerator with fan-out/orchestration helpers.
 
     deployment_id/fabric_name are required, set in generate(); pod_name is
     optional (pod/rack generators only). ``self.logger.error()`` raises
@@ -40,11 +29,14 @@ class CommonGenerator(
     loop iterations warn+continue on one bad item unless it invalidates
     the whole output.
 
-    Domain logic lives in dedicated mixins, grouped by responsibility rather
-    than 1:1 with each method — see PoolMixin (resource pools + the lock that
-    protects concurrent pool allocation), DeviceMixin (device creation),
-    CablingMixin (device-to-device cabling) and RoutingMixin (BGP/OSPF
-    underlay+overlay).
+    Domain logic lives in dedicated mixins, each generator composing exactly
+    the ones it needs alongside CommonGenerator — PoolMixin (resource pools
+    + the lock that protects concurrent pool allocation), DeviceMixin
+    (device creation), CablingMixin (device-to-device cabling), RoutingMixin
+    (BGP/OSPF underlay+overlay). Not every generator needs all four (e.g.
+    circuit.py/segment.py need none of them; dc.py/pod.py/rack.py need all
+    four; endpoint.py needs Pool+Cabling only) — see each generator's own
+    class bases.
     Fan-out/orchestration (run_generator, wait_for_parent_generator_and_refetch)
     stays here since it's generator-lifecycle plumbing, not domain logic.
     """
@@ -65,6 +57,47 @@ class CommonGenerator(
         result = rel.add(obj)
         if inspect.isawaitable(result):
             await result
+
+    async def _resolve_pool(
+        self,
+        provided: Any,
+        kind: type[Any],
+        fallback_name: str | None = None,
+    ) -> Any:
+        """Resolve a pool reference to an SDK node object.
+
+        Accepts:
+        - SDK node object (CoreIPAddressPool/CoreIPPrefixPool) → returned as-is
+        - Pool ID string → resolved via client.get(id=...)
+        - None + fallback_name → resolved via client.get(name__value=fallback_name)
+        - None + no fallback_name → returns None (pool disabled)
+
+        This avoids redundant client.get() calls when pool IDs are already
+        available from GraphQL query data. Lives here (not PoolMixin) since
+        DeviceMixin/CablingMixin need it for device/P2P IP allocation but have
+        nothing to do with PoolMixin's own pool creation/locking logic.
+        """
+        cache = getattr(self, "_pool_cache", None)
+        if cache is None:
+            cache = {}
+            self._pool_cache = cache
+
+        kind_key = getattr(kind, "__name__", str(kind))
+
+        if provided is None:
+            if fallback_name is None:
+                return None
+            cache_key = (kind_key, f"name:{fallback_name}")
+            if cache_key not in cache:
+                cache[cache_key] = await self.client.get(kind=kind, name__value=fallback_name)
+            return cache[cache_key]
+        if isinstance(provided, str):
+            cache_key = (kind_key, f"id:{provided}")
+            if cache_key not in cache:
+                cache[cache_key] = await self.client.get(kind=kind, id=provided)
+            return cache[cache_key]
+        # Already an SDK object
+        return provided
 
     async def run_generator(self, generator_name: str, node_ids: list[str], *, wait: bool = True) -> None:
         """Run another generator definition for the given nodes.

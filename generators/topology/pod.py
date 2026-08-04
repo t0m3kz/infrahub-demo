@@ -5,15 +5,20 @@ from typing import Any, Literal, TypedDict, cast
 
 from utils.data_cleaning import clean_data
 
-from ..border_services import BorderServicesMixin
+from ..cabling import CablingMixin
 from ..common import CablingOptions, CommonGenerator, DeviceOptions, RoutingOptions
 from ..dc_config import resolve_dc_size_layout
+from ..devices import DeviceMixin
+from ..helpers.naming import DeviceNamingConfig
+from ..helpers.rack import expected_device_names
 from ..helpers.routing import RoutingStrategy
 from ..helpers.routing import p2p_addressing as p2p_addressing_for
 from ..helpers.routing import underlay_is_dual_stack, underlay_is_ipv6
 from ..helpers.template_interfaces import template_interface_names_by_role
 from ..pod_config import resolve_pod_layout, spine_slot_role, spine_slot_templates, templates_by_role
+from ..pools import PoolMixin
 from ..protocols import DcimPhysicalDevice, DcimPhysicalInterface, TopologyPod
+from ..routing import RoutingMixin
 
 _SIBLING_SPINE_MAX_RETRIES = 10
 _SIBLING_SPINE_RETRY_DELAY = 3.0
@@ -26,6 +31,14 @@ _DC_ASN_POOL_RETRY_DELAY = 3.0
 # border-spine instead. See DCS-7050CX3-32C-R_BORDER_SPINE's template for
 # the canonical port layout.
 _BS_ROLE_FOR: dict[str, str] = {"firewall": "firewall", "load-balancer": "load-balancer"}
+
+# device_role -> HA node kind. HA pairing itself happens inside
+# DeviceMixin.create_devices() (see DeviceOptions.ha_kind) — only the right
+# kind per role needs picking here.
+_HA_KIND_BY_ROLE: dict[str, str] = {
+    "firewall": "ManagedFirewallHA",
+    "load-balancer": "ManagedLoadbalancerHA",
+}
 
 
 class TopologyPodParentData(TypedDict, total=False):
@@ -79,7 +92,7 @@ def _base_offset(numbering_start: int) -> int:
     return max(0, numbering_start - 1)
 
 
-class PodTopologyGenerator(BorderServicesMixin, CommonGenerator):
+class PodTopologyGenerator(PoolMixin, DeviceMixin, CablingMixin, RoutingMixin, CommonGenerator):
     """Generate pod topology with resource pools and spine infrastructure.
 
     Creates resource pools (technical and management) and creates spine devices
@@ -204,53 +217,25 @@ class PodTopologyGenerator(BorderServicesMixin, CommonGenerator):
 
         indexes: list[int] = [dc["index"], pod_index]
 
-        # Calculate pool sizes from design maximums (not actual deployed racks).
-        # Pools must be sized for full design capacity so adding racks later won't exhaust them.
+        # Fixed per-pod pool sizes from the DC's own size tier (see
+        # dc_config.py's pod_technical_prefix_length/pod_loopback_prefix_length)
+        # — sized generously for that tier's worst-case pod layout, instead of
+        # computed per pod from its own live spine/leaf/tor counts.
         dc_underlay_protocol = dc.get("underlay_protocol", "ipv6")
         is_ipv6 = underlay_is_ipv6(dc_underlay_protocol)
         is_dual_stack = underlay_is_dual_stack(dc_underlay_protocol)
-        from generators.helpers import calculate_pod_pools
-
         p2p_addressing_value = p2p_addressing_for(dc_underlay_protocol)
-
-        max_spines = spine_count
-        dc_super_spine_entries = templates_by_role(dc.get("fabric_templates", []), "super-spine")
-        max_super_spines = sum(entry["quantity"] for entry in dc_super_spine_entries)
-        rows = design["rows"]
-
-        if deployment_type == "middle_rack":
-            max_leafs = rows * design["network_racks_per_row"] * design["max_leafs_per_network_rack"]
-            max_tors = rows * design["network_racks_per_row"] * design["max_tors_per_network_rack"]
-        elif deployment_type == "tor":
-            max_leafs = 0
-            max_tors = rows * design["compute_racks_per_row"] * design["max_tors_per_compute_rack"]
-        else:  # mixed
-            max_leafs = rows * design["network_racks_per_row"] * design["max_leafs_per_network_rack"]
-            max_tors = rows * design["compute_racks_per_row"] * design["max_tors_per_compute_rack"]
-
-        calculated_pools = calculate_pod_pools(
-            max_super_spines_per_fabric=max_super_spines,
-            max_spines_per_pod=max_spines,
-            max_leafs=max_leafs,
-            max_tors=max_tors,
-            deployment_type=deployment_type,
-            p2p_addressing=p2p_addressing_value,
-            ipv6=is_ipv6,
-            dual_stack=is_dual_stack,
-            compute_racks=rows * design["compute_racks_per_row"],
-            network_racks=rows * design["network_racks_per_row"],
-        )
+        dc_design = resolve_dc_size_layout(dc["size"])
 
         pool_sizes = {
-            "technical": calculated_pools["technical"],
-            "loopback": calculated_pools["loopback"],
+            "technical": dc_design["pod_technical_prefix_length"],
+            "loopback": dc_design["pod_loopback_prefix_length"],
         }
 
         self.logger.info(
-            f"Calculated pool sizes for pod {pod_name}: "
-            f"technical=/{calculated_pools['technical']}, loopback=/{calculated_pools['loopback']} "
-            f"(spines={max_spines}, leafs={max_leafs}, tors={max_tors}, "
-            f"p2p={p2p_addressing_value}, ipv6={is_ipv6}, dual_stack={is_dual_stack}, deployment={deployment_type})"
+            f"Pod {pod_name} pool sizes: technical=/{pool_sizes['technical']}, "
+            f"loopback=/{pool_sizes['loopback']} (p2p={p2p_addressing_value}, "
+            f"ipv6={is_ipv6}, dual_stack={is_dual_stack}, deployment={deployment_type})"
         )
 
         # Allocate/upsert pools (idempotent via identifier + allow_upsert)
@@ -281,10 +266,17 @@ class PodTopologyGenerator(BorderServicesMixin, CommonGenerator):
         dc_management_pool = dc.get("management_pool")
         management_pool_id = dc_management_pool["id"] if dc_management_pool else None
 
+        # border-spine collapses spine+border-leaf into one device for
+        # micro-fabrics (see spine_role's own docstring above) — it's a
+        # DC-level fabric tier like border-leaf/super-spine/hyper-spine, so
+        # it deploys to the DC, not this pod, even though it's created here
+        # (pod.py owns spine-slot context). Plain "spine" stays pod-scoped.
+        spine_deployment_id = dc_id if spine_role == "border-spine" else pod_id
+
         spines: list[str] = []
         for entry in spine_entries:
             entry_spines = await self.create_devices(
-                deployment_id=pod_id,
+                deployment_id=spine_deployment_id,
                 device_role=spine_role,
                 quantity=entry["quantity"],
                 template=entry["template"],
@@ -305,6 +297,7 @@ class PodTopologyGenerator(BorderServicesMixin, CommonGenerator):
         spine_template = spine_entries[0]["template"]
 
         super_spine_devices = [device.name for device in dc.get("devices", [])]
+        dc_super_spine_entries = templates_by_role(dc.get("fabric_templates", []), "super-spine")
         super_spine_interfaces = (
             [iface["name"] for iface in dc_super_spine_entries[0]["template"].get("interfaces", [])]
             if dc_super_spine_entries
@@ -328,7 +321,6 @@ class PodTopologyGenerator(BorderServicesMixin, CommonGenerator):
                 top_role="super-spine",
             )
 
-        dc_design = resolve_dc_size_layout(dc["size"])
         spine_interfaces = template_interface_names_by_role(
             interfaces=spine_template.get("interfaces", []),
             role="uplink",
@@ -377,7 +369,13 @@ class PodTopologyGenerator(BorderServicesMixin, CommonGenerator):
                 (pod_index - 1) * dc_max_spines
             )
             p2p_prefix_length = 127 if is_ipv6 else 31
-            routing_opts = RoutingOptions(design=dc, asn_pool=dc_asn_pool_id) if dc_asn_pool_id else RoutingOptions()
+            # design is always set here (needed for routing_strategy lookup inside
+            # create_routing) — asn_pool is only meaningful for eBGP strategies
+            # (ospf-ibgp draws no per-device ASN from a pool), so omit it rather
+            # than pass None (matches dc.py's own RoutingOptions construction).
+            routing_opts = RoutingOptions(design=dc)
+            if dc_asn_pool_id:
+                routing_opts["asn_pool"] = dc_asn_pool_id
             p2p_pairs = await self.create_cabling(
                 bottom_devices=spines,
                 bottom_interfaces=spine_interfaces,
@@ -396,15 +394,14 @@ class PodTopologyGenerator(BorderServicesMixin, CommonGenerator):
                     Literal["top_down", "bottom_up"], dc.get("fabric_interface_sorting_method", "bottom_up")
                 ),
             )
-            if routing_opts.get("design"):
-                await self.create_routing(
-                    bottom_devices=spines,
-                    top_devices=super_spine_devices,
-                    options=routing_opts,
-                    p2p_interfaces=p2p_pairs,
-                    bottom_role=spine_role,
-                    top_role="super-spine",
-                )
+            await self.create_routing(
+                bottom_devices=spines,
+                top_devices=super_spine_devices,
+                options=routing_opts,
+                p2p_interfaces=p2p_pairs,
+                bottom_role=spine_role,
+                top_role="super-spine",
+            )
         # When there are no super-spines to cable to (skip_cabling), inter-pod
         # back-to-back spine cabling is handled above by _cable_to_existing_sibling_pods.
         # Fan-out to add_rack is handled by the sibling pod_rack_cascade generator,
@@ -487,6 +484,40 @@ class PodTopologyGenerator(BorderServicesMixin, CommonGenerator):
             load_balancer_names=load_balancer_names,
         )
 
+    async def _create_role_devices(
+        self,
+        *,
+        role: Literal["firewall", "load-balancer"],
+        entries: list[dict[str, Any]],
+        deployment_id: str,
+        naming_convention: Literal["standard", "hierarchical", "flat", "computed"],
+        indexes: list[int],
+    ) -> list[str]:
+        """Create firewall/load-balancer devices for this pod's own border-spine
+        (deployment_id=pod.id). Each entry's devices are paired into an HA
+        domain two-at-a-time by create_devices() itself (any quantity, not
+        just 2 — an odd device is left unpaired). No loopback allocation — not
+        part of underlay/overlay routing."""
+        device_options = DeviceOptions(indexes=indexes, ha_kind=_HA_KIND_BY_ROLE[role])
+        if role == "load-balancer":
+            # create_devices()'s default group_name is f"{device_role}s" = "load-balancers",
+            # but the bootstrap group is named "loadbalancers" (no hyphen) — override.
+            device_options["group_name"] = "loadbalancers"
+
+        all_names: list[str] = []
+        for entry in entries:
+            names = await self.create_devices(
+                deployment_id=deployment_id,
+                device_role=role,
+                quantity=entry["quantity"],
+                template=entry["template"],
+                naming_convention=naming_convention,
+                options=device_options,
+            )
+            all_names.extend(names)
+
+        return all_names
+
     async def _cable_border_leafs_to_spines(
         self,
         *,
@@ -498,15 +529,37 @@ class PodTopologyGenerator(BorderServicesMixin, CommonGenerator):
         is_ipv6: bool,
     ) -> None:
         """Cable+route this pod's own border-leaf devices (already created by
-        dc.py, deployment_id=this pod) to this pod's spines. Offset is
-        deterministic (design's leaf/tor CAPACITY, not live device count) so it
-        never collides with rack.py's own leaf/tor offsets into the same spine
-        downlink ports — rack.py's offsets start at 0 and fill up to capacity;
-        border-leaf's offset starts exactly where that capacity ends. No-ops if
-        this pod has no border-leaf devices (the common case — most pods don't
-        host any)."""
+        dc.py, deployment_id=the DC — border-leaf is a DC-level fabric tier,
+        like super-spine/hyper-spine) to this pod's spines. Devices are
+        matched by name, not by deployment: names are deterministic
+        ([dc.index, pod.index, role_index]), so querying by name__values for
+        every possible role_index up to the DC's max_border_leafs_per_fabric
+        (a safe upper bound — any pod's real share is at most that) finds
+        exactly this pod's own border-leafs among the DC-wide device pool,
+        without needing a per-pod relationship on the device itself. Offset
+        is deterministic (design's leaf/tor CAPACITY, not live device count)
+        so it never collides with rack.py's own leaf/tor offsets into the
+        same spine downlink ports — rack.py's offsets start at 0 and fill up
+        to capacity; border-leaf's offset starts exactly where that capacity
+        ends. No-ops if this pod has no border-leaf devices (the common case
+        — most pods don't host any)."""
+        max_border_leafs_per_fabric = resolve_dc_size_layout(dc["size"])["max_border_leafs_per_fabric"]
+        if max_border_leafs_per_fabric <= 0:
+            return
+        naming = DeviceNamingConfig(
+            strategy=cast(
+                Literal["standard", "hierarchical", "flat", "computed"], dc.get("naming_convention", "standard")
+            )
+        )
+        candidate_names = expected_device_names(
+            naming_config=naming,
+            fabric_name=self.fabric_name,
+            device_indexes=[dc["index"], self.data["index"]],
+            role="border-leaf",
+            quantity=max_border_leafs_per_fabric,
+        )
         border_leafs = await self.client.filters(
-            kind=DcimPhysicalDevice, deployment__ids=[self.data["id"]], role__value="border-leaf"
+            kind=DcimPhysicalDevice, name__values=sorted(candidate_names), role__value="border-leaf"
         )
         if not border_leafs:
             return
@@ -547,15 +600,23 @@ class PodTopologyGenerator(BorderServicesMixin, CommonGenerator):
                 p2p_prefix_length=p2p_prefix_length,
             ),
         )
+        # design is always set (needed for routing_strategy lookup inside
+        # create_routing) — asn_pool is only meaningful for eBGP strategies
+        # (ospf-ibgp draws no per-device ASN from a pool). Gating the call
+        # itself on dc_asn_pool_id would silently skip routing entirely for
+        # ospf-ibgp fabrics — create_routing()'s own routing_strategy check
+        # is the real gate.
+        routing_opts = RoutingOptions(design=dc)
         if dc_asn_pool_id:
-            await self.create_routing(
-                bottom_devices=border_leaf_names,
-                top_devices=spines,
-                options=RoutingOptions(design=dc, asn_pool=dc_asn_pool_id),
-                p2p_interfaces=p2p_pairs,
-                bottom_role="border-leaf",
-                top_role="spine",
-            )
+            routing_opts["asn_pool"] = dc_asn_pool_id
+        await self.create_routing(
+            bottom_devices=border_leaf_names,
+            top_devices=spines,
+            options=routing_opts,
+            p2p_interfaces=p2p_pairs,
+            bottom_role="border-leaf",
+            top_role="spine",
+        )
 
     async def _cable_to_existing_sibling_pods(
         self,

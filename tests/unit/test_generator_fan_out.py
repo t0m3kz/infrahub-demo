@@ -26,13 +26,18 @@ import pytest
 from infrahub_sdk.exceptions import NodeNotFoundError
 
 from generators.common import CommonGenerator
+from generators.pools import PoolMixin
 from generators.topology.dc_pod_cascade import DCPodCascadeGenerator
 from generators.topology.pod_rack_cascade import PodRackCascadeGenerator
 
 
+class _CommonGen(PoolMixin, CommonGenerator):
+    pass
+
+
 def _build_common_gen() -> Any:
-    """Return a CommonGenerator typed as Any so ty allows mock attribute assignments."""
-    gen = CommonGenerator.__new__(CommonGenerator)
+    """Return a PoolMixin+CommonGenerator instance typed as Any so ty allows mock attribute assignments."""
+    gen = _CommonGen.__new__(_CommonGen)
     gen.logger = MagicMock()
     gen.client = MagicMock()
     gen.branch = "test-branch"

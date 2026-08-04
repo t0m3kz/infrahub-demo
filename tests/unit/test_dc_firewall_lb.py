@@ -10,15 +10,16 @@ test_pod_generator.py-style coverage in generators/topology/pod.py), since pod.p
 already owns spine context.
 
 Firewall/load-balancer: created DC-wide (deployment_id=dc.id) via
-CommonGenerator._create_role_devices (shared with pod.py's own pod-scoped
-firewall/load-balancer provisioning), which sets DeviceOptions.ha_kind so
+DCTopologyGenerator's own _create_role_devices (a near-identical copy lives
+on PodTopologyGenerator for its own pod-scoped provisioning — see
+test_pod_border_services.py), which sets DeviceOptions.ha_kind so
 create_devices() itself pairs the created devices two-at-a-time into HA
 domains (see test_device_mixin.py for that pairing logic — any quantity,
 not just 2).
 
-BLF<->FW<->LB cabling: CommonGenerator._cable_border_services with
-connectivity_mode="pbr" cables two independent legs (border-leaf<->firewall,
-border-leaf<->load-balancer); "inline" chains
+BLF<->FW<->LB cabling: CablingMixin._cable_border_services (shared via
+CommonGenerator) with connectivity_mode="pbr" cables two independent legs
+(border-leaf<->firewall, border-leaf<->load-balancer); "inline" chains
 border-leaf<->firewall<->load-balancer<->border-leaf.
 """
 
@@ -48,6 +49,9 @@ def _register_dc_size(*, max_border_leafs_per_fabric: int = 10) -> str:
         "loopback_prefix_length": 23,
         "technical_prefix_length": 19,
         "management_prefix_length": 25,
+        "pod_technical_prefix_length": 20,
+        "pod_loopback_prefix_length": 24,
+        "dc_fabric_loopback_prefix_length": 28,
     }
     return key
 
@@ -99,7 +103,6 @@ def _mock_pod_layout(max_border_leafs_per_pod: int) -> str:
         "compute_racks_per_row": 1,
         "network_racks_per_row": 1,
         "max_leafs_per_network_rack": 1,
-        "max_tors_per_network_rack": 1,
         "max_tors_per_compute_rack": 1,
         "max_spines_per_pod": 2,
         "max_border_leafs_per_pod": max_border_leafs_per_pod,
@@ -180,9 +183,12 @@ class TestCreateBorderLeafDevices:
         assert names == ["bl-a-01", "bl-b-01", "bl-b-02"]
         assert gen.create_devices.await_count == 2
         first_call, second_call = gen.create_devices.call_args_list
-        assert first_call.kwargs["deployment_id"] == "pod-a"
+        # border-leaf is a DC-level fabric tier (like super-spine/hyper-spine) —
+        # deployment_id is always the DC's own id, never the pod's, regardless
+        # of which pod's capacity share this call is filling.
+        assert first_call.kwargs["deployment_id"] == gen.data["id"]
         assert first_call.kwargs["quantity"] == 1
-        assert second_call.kwargs["deployment_id"] == "pod-b"
+        assert second_call.kwargs["deployment_id"] == gen.data["id"]
         assert second_call.kwargs["quantity"] == 2
 
     @pytest.mark.asyncio
@@ -204,7 +210,9 @@ class TestCreateBorderLeafDevices:
 
         assert names == ["bl-c-01", "bl-c-02"]
         gen.create_devices.assert_awaited_once()
-        assert gen.create_devices.call_args.kwargs["deployment_id"] == "pod-c"
+        # border-leaf is a DC-level fabric tier — deployment_id is the DC's own
+        # id even though the share went to pod-c.
+        assert gen.create_devices.call_args.kwargs["deployment_id"] == gen.data["id"]
 
     @pytest.mark.asyncio
     async def test_entry_exceeding_max_border_leafs_per_fabric_is_skipped(self) -> None:
@@ -238,8 +246,9 @@ class TestCreateBorderLeafDevices:
 
 
 class TestCreateRoleDevices:
-    """CommonGenerator._create_role_devices — shared by dc.py (DC-wide,
-    deployment_id=dc.id) and pod.py (pod-scoped, deployment_id=pod.id)."""
+    """DCTopologyGenerator._create_role_devices (DC-wide, deployment_id=dc.id) —
+    pod.py has its own near-identical copy for pod-scoped provisioning
+    (deployment_id=pod.id), see test_pod_border_services.py."""
 
     @pytest.mark.asyncio
     async def test_load_balancer_uses_loadbalancers_group_override(self) -> None:
