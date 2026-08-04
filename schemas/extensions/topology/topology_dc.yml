@@ -136,6 +136,7 @@ nodes:
       - TopologyConnectableLocation
       - TopologyDeviceHosting
       - TopologySegmentHosting
+      - ManagedControllerAssignment
     label: Data Center
     include_in_menu: false
     children: ""
@@ -194,51 +195,6 @@ nodes:
             label: Decommissioned
             description: "Removed from active service."
             color: "#BFBFBF"
-      - name: management_mode
-        label: Management Mode
-        kind: Dropdown
-        optional: true
-        default_value: fully_managed
-        description: "Whether Infrahub generators own the topology build-out, or an external controller does."
-        order_weight: 600
-        choices:
-          - name: fully_managed
-            label: "Fully Managed"
-            description: "Infrahub generators own the full topology build-out."
-            color: "#7FBF7F"
-          - name: managed_by_controller
-            label: "Managed by Controller"
-            description: "An external controller (e.g. ACI APIC) owns the topology; generators do not run."
-            color: "#7FBFFF"
-          - name: fw_managed_by_controller
-            label: "Firewall Managed by Controller"
-            description: "Infrahub owns the topology build-out except firewall, which an external controller manages."
-            color: "#FFD27F"
-          - name: lb_managed_by_controller
-            label: "Load Balancer Managed by Controller"
-            description: >-
-              Infrahub owns the topology build-out except load-balancer, which
-              an external controller manages.
-            color: "#FFD27F"
-          - name: fw_lb_managed_by_controller
-            label: "Firewall + Load Balancer Managed by Controller"
-            description: >-
-              Infrahub owns the fabric/switch build-out; firewall and
-              load-balancer are both managed by an external controller.
-            color: "#E67E22"
-          - name: fabric_lb_managed_by_controller
-            label: "Fabric + Load Balancer Managed by Controller"
-            description: >-
-              An external controller manages the fabric/switches and
-              load-balancer; Infrahub owns only firewall.
-            color: "#E67E22"
-          - name: fabric_fw_managed_by_controller
-            label: "Fabric + Firewall Managed by Controller"
-            description: >-
-              An external controller manages the fabric/switches and
-              firewall; Infrahub owns only load-balancer.
-            color: "#E67E22"
-
       - name: routing_strategy
         kind: Dropdown
         label: "Routing Strategy"

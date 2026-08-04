@@ -65,6 +65,9 @@ generics:
           - name: security_manager
             label: "Security Management Server (Check Point SMS, etc.)"
             color: "#E4002B"
+          - name: lb_manager
+            label: "Load Balancer Manager (F5 BIG-IQ, Citrix ADM, etc.)"
+            color: "#00BCEB"
           - name: other
             label: "Other"
             color: "#808080"
@@ -77,6 +80,29 @@ generics:
         kind: Generic
         optional: true
         identifier: "controller__managed_devices"
+        order_weight: 1100
+
+  # Deployment-level link to the ManagedController(s) governing some of its
+  # devices — any deployment type (TopologyDataCenter today, Colocation/PoP
+  # later) inherits this to gain a `controllers` relationship, with zero
+  # further schema work. Which role each controller actually covers is
+  # inferred at generator time from controller_type + platform, not stored
+  # here — see generators/devices.py's create_devices().
+  - name: ControllerAssignment
+    namespace: Managed
+    description: "Deployment-level link to the ManagedController(s) governing some of its devices"  # yamllint disable-line rule:line-length
+    label: Controller Assignment
+    icon: "mdi:remote-desktop"
+    include_in_menu: false
+    relationships:
+      - name: controllers
+        peer: ManagedController
+        label: "Controllers"
+        description: "Controllers governing devices in this deployment"
+        cardinality: many
+        kind: Attribute
+        optional: true
+        identifier: "controller_assignment__controllers"
         order_weight: 1100
 
 nodes:

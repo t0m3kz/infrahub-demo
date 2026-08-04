@@ -52,7 +52,7 @@ class PodRackCascadeGenerator(PodTopologyGenerator):
         await super().generate(data)
 
         pod_data = getattr(self, "data", None)
-        if not pod_data or pod_data["parent"].get("management_mode") == "managed_by_controller":
+        if not pod_data:
             return
 
         pod_id = pod_data["id"]

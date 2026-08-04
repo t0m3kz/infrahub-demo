@@ -755,6 +755,42 @@ spec:
       memory_gb: 16
       storage_gb: 500
       unit_price: 0
+    - name: Panorama
+      part_number: PANORAMA-VIRTUAL
+      height: 0
+      full_depth: false
+      manufacturer: Palo Alto Networks
+      cpu_count: 4
+      memory_gb: 16
+      storage_gb: 500
+      unit_price: 0
+    - name: Security-Director
+      part_number: SECURITY-DIRECTOR-VIRTUAL
+      height: 0
+      full_depth: false
+      manufacturer: Juniper
+      cpu_count: 4
+      memory_gb: 16
+      storage_gb: 500
+      unit_price: 0
+    - name: BIG-IQ
+      part_number: F5-BIG-IQ-VIRTUAL
+      height: 0
+      full_depth: false
+      manufacturer: F5 Networks
+      cpu_count: 4
+      memory_gb: 16
+      storage_gb: 500
+      unit_price: 0
+    - name: NetScaler-ADM
+      part_number: NS-ADM-VIRTUAL
+      height: 0
+      full_depth: false
+      manufacturer: Citrix
+      cpu_count: 4
+      memory_gb: 16
+      storage_gb: 500
+      unit_price: 0
     - name: PA-5260
       part_number: PA-5260
       height: 2

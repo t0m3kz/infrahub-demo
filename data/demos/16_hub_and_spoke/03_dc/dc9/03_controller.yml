@@ -1,6 +1,9 @@
 ---
-# DC9's ACI APIC — `managed_devices` covers every leaf/spine across both
-# pods (see 02_devices.yml), regardless of pod/rack placement.
+# DC9's ACI APIC. `managed_devices` is populated automatically by
+# create_devices() (generators/devices.py's _resolve_role_controller) once
+# `controllers` (set below) makes this controller visible to DC9's fabric
+# device creation — no manual device list needed, unlike the old
+# hand-authored 02_devices.yml this replaces.
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
@@ -10,10 +13,19 @@ spec:
       object_template: APIC-L3_ACI_APIC
       status: active
       deployment: DC9
-      managed_devices:
-        - "DC9-SPINE1"
-        - "DC9-SPINE2"
-        - "DC9-POD1-LEAF1"
-        - "DC9-POD1-LEAF2"
-        - "DC9-POD2-LEAF1"
-        - "DC9-POD2-LEAF2"
+
+---
+# Attach the controller to DC9 — must load after the controller above is
+# created, and after 01_topology.yml creates DC9 itself. Re-referencing
+# TopologyDataCenter by name here (rather than setting `controllers`
+# inline in 01_topology.yml) follows the same forward-reference-avoidance
+# pattern as 06_customer_boarding/c003.yml's ManagedFirewallContext.cluster.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologyDataCenter
+  data:
+    - name: "DC9"
+      index: 9
+      controllers:
+        - "DC9-APIC1"

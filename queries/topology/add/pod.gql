@@ -52,7 +52,6 @@ fragment DataCenterFields on TopologyDataCenter {
   naming_convention { value }
   fabric_interface_sorting_method { value }
   connectivity_mode { value }
-  management_mode { value }
   routing_strategy { value }
   underlay_protocol { value }
   fabric_templates {
@@ -75,6 +74,44 @@ fragment DataCenterFields on TopologyDataCenter {
     node {
       id
       name { value }
+    }
+  }
+  fabric_controllers: controllers(controller_type__values: ["aci_apic", "dcnm", "nsx_manager", "ucs_manager"]) {
+    edges {
+      node {
+        id
+        controller_type { value }
+      }
+    }
+  }
+  security_manager_controllers: controllers(controller_type__value: "security_manager") {
+    edges {
+      node {
+        id
+        controller_type { value }
+        ... on DcimDevice {
+          platform {
+            node {
+              id
+            }
+          }
+        }
+      }
+    }
+  }
+  lb_manager_controllers: controllers(controller_type__value: "lb_manager") {
+    edges {
+      node {
+        id
+        controller_type { value }
+        ... on DcimDevice {
+          platform {
+            node {
+              id
+            }
+          }
+        }
+      }
     }
   }
 }

@@ -12,12 +12,43 @@ if TYPE_CHECKING:
 
 from .helpers import DeviceNameContext, DeviceNamingConfig, get_loopback_name
 from .helpers.pairing import pair_device_names
-from .protocols import DcimPhysicalDevice, DcimVirtualDevice, DcimVirtualInterface, ManagedMLAG
+from .protocols import (
+    DcimPhysicalDevice,
+    DcimVirtualDevice,
+    DcimVirtualInterface,
+    ManagedController,
+    ManagedMLAG,
+)
 from .types import DeviceOptions
 
 # device_role values that pair into an HA domain via DeviceOptions.ha_kind
 # rather than MLAG — see create_devices()'s pairing dispatch below.
 _HA_PAIRED_ROLES = frozenset({"firewall", "load-balancer"})
+
+# Fabric-tier device roles route to a controller by controller_type alone —
+# ACI APIC/DCNM/NSX/UCS aren't a 1:1 vendor pairing with the device's own
+# platform the way a firewall pairs with its dedicated manager, so no
+# platform match is required for these.
+_FABRIC_CONTROLLER_TYPES = frozenset({"aci_apic", "dcnm", "nsx_manager", "ucs_manager"})
+_FABRIC_ROLES = frozenset(
+    {
+        "super-spine",
+        "hyper-spine",
+        "border-leaf",
+        "border-spine",
+        "spine",
+        "leaf",
+        "tor",
+        "l2-leaf",
+        "access-leaf",
+    }
+)
+
+# firewall/load-balancer route to a controller by controller_type AND a
+# platform match against the device's own template — a checkpoint_gaia
+# firewall must never route to a Panorama (panos) controller just because
+# both happen to be controller_type=security_manager.
+_ROLE_CONTROLLER_TYPE: dict[str, str] = {"firewall": "security_manager", "load-balancer": "lb_manager"}
 
 
 class DeviceMixin:
@@ -34,6 +65,14 @@ class DeviceMixin:
     pod_name: str | None
     # CommonGenerator._resolve_pool — annotation only, no method body.
     _resolve_pool: Any
+    # Set once per generator run (dc.py/pod.py/rack.py's generate()) by
+    # merging their own query's fabric_controllers/security_manager_
+    # controllers/lb_manager_controllers aliased fields — see
+    # _resolve_role_controller, which reads this via getattr(...,
+    # default=[]) since a generator that never sets it (e.g. one that
+    # doesn't call create_devices() for a controller-eligible role) simply
+    # means "no controllers", not an error.
+    _all_controllers: list[dict[str, Any]]
 
     async def create_devices(
         self,
@@ -136,21 +175,28 @@ class DeviceMixin:
         batch_devices = await self.client.create_batch()
         batch_loopbacks = await self.client.create_batch()
 
-        group_name = options.get("group_name") or f"{device_role}s"
-        try:
-            device_group = await self.client.get(kind=CoreStandardGroup, name__value=group_name)
-        except NodeNotFoundError:
-            # Keep generators robust on branches where bootstrap groups were not
-            # loaded yet (e.g. ad-hoc test branches).
-            device_group = await self.client.create(
-                kind=CoreStandardGroup,
-                data={
-                    "name": group_name,
-                    "description": f"Auto-created by generator for role {device_role}",
-                },
-            )
-            await device_group.save(allow_upsert=True)
-            self.logger.info(f"Created missing device group '{group_name}' for role '{device_role}'")
+        controller_info = self._resolve_role_controller(device_role=device_role, template=template)
+        controller = None
+        if controller_info is not None:
+            controller = await self.client.get(kind=ManagedController, id=controller_info["id"])
+
+        device_group = None
+        if controller is None:
+            group_name = options.get("group_name") or f"{device_role}s"
+            try:
+                device_group = await self.client.get(kind=CoreStandardGroup, name__value=group_name)
+            except NodeNotFoundError:
+                # Keep generators robust on branches where bootstrap groups were not
+                # loaded yet (e.g. ad-hoc test branches).
+                device_group = await self.client.create(
+                    kind=CoreStandardGroup,
+                    data={
+                        "name": group_name,
+                        "description": f"Auto-created by generator for role {device_role}",
+                    },
+                )
+                await device_group.save(allow_upsert=True)
+                self.logger.info(f"Created missing device group '{group_name}' for role '{device_role}'")
         try:
             # Fetch all existing devices in a single batch to optimize performance
             existing_devices_list = await self.client.filters(
@@ -176,13 +222,17 @@ class DeviceMixin:
             # Add device objects and related loopback interfaces (if any) to the batch
             for name in device_names:
                 existing_device = existing_devices_map.get(name)
-                if existing_device:
+                if controller is not None:
+                    # Controller-managed: tracked via managed_devices below,
+                    # not group membership.
+                    groups = []
+                elif existing_device:
                     groups = [peer.id for peer in existing_device.member_of_groups.peers]
                 else:
                     groups = []
 
                 # Ensure the new group is not duplicated
-                if device_group.id not in groups:
+                if device_group is not None and device_group.id not in groups:
                     groups.append(device_group.id)
 
                 primary_address_rel = getattr(existing_device, "primary_address", None) if existing_device else None
@@ -282,6 +332,18 @@ class DeviceMixin:
                 f"Device creation completed: {len(created_devices)} {device_role}(s) created"
                 + (f" with {len(created_loopbacks)} loopback interface(s)" if created_loopbacks else "")
             )
+
+            if controller is not None and created_devices:
+                managed_devices = controller.managed_devices
+                await managed_devices.fetch()
+                existing_managed_ids = {peer.id for peer in managed_devices.peers}
+                for node in created_devices:
+                    if node.id not in existing_managed_ids:
+                        managed_devices.add(node)
+                await controller.save(allow_upsert=True)
+                self.logger.info(
+                    f"Added {len(created_devices)} {device_role}(s) to controller {controller.hfid}'s managed_devices"
+                )
         except ValidationError as exc:
             self.logger.error("Batch creation failed with validation error: %s", exc)
             raise
@@ -301,6 +363,57 @@ class DeviceMixin:
             )
 
         return device_names
+
+    def _resolve_role_controller(self, *, device_role: str, template: dict[str, Any]) -> dict[str, Any] | None:
+        """Find the pre-fetched controller (if any) governing this
+        device_role, from ``self._all_controllers`` — a flat list the caller
+        (dc.py/pod.py/rack.py's generate()) builds once per run by merging
+        its own query's fabric_controllers/security_manager_controllers/
+        lb_manager_controllers aliased fields (see queries/topology/add/
+        dc.gql) — no runtime query here, this data already arrived with the
+        rest of the generator's own fetch.
+
+        Fabric roles (spine/leaf/border-leaf/...) match by controller_type
+        alone (ACI APIC/DCNM/NSX/UCS aren't a 1:1 vendor pairing with the
+        device's own platform). firewall/load-balancer match by
+        controller_type AND platform, so e.g. a checkpoint_gaia firewall
+        never routes to a Panorama (panos) controller.
+
+        Returns None (no controller — caller falls back to a
+        CoreStandardGroup) when the role has no controller mapping, or no
+        controller in ``self._all_controllers`` matches.
+        """
+        if device_role not in _FABRIC_ROLES and device_role not in _ROLE_CONTROLLER_TYPE:
+            return None
+
+        controllers: list[dict[str, Any]] = getattr(self, "_all_controllers", [])
+
+        controller = None
+        if device_role in _FABRIC_ROLES:
+            controller = next((c for c in controllers if c.get("controller_type") in _FABRIC_CONTROLLER_TYPES), None)
+        else:
+            wanted_type = _ROLE_CONTROLLER_TYPE[device_role]
+            template_platform_id = (template.get("platform") or {}).get("id") if template else None
+            controller = next(
+                (
+                    c
+                    for c in controllers
+                    if c.get("controller_type") == wanted_type
+                    and (c.get("platform") or {}).get("id") == template_platform_id
+                ),
+                None,
+            )
+
+        if controller is None and controllers:
+            # Only warn when the deployment has SOME controllers but none
+            # match this role — a deployment with no controllers at all is
+            # simply not controller-managed, which isn't worth a warning.
+            self.logger.warning(
+                f"No controller matching role={device_role!r} found among this deployment's "
+                f"controllers — devices will be added to the '{device_role}s' group instead. "
+                "Assign a matching controller via TopologyDataCenter.controllers to route them there."
+            )
+        return controller
 
     async def _ensure_ha_pairs(
         self,

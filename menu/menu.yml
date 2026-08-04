@@ -150,6 +150,13 @@ spec:
                   icon: "mdi:heart-pulse"
                   kind: ManagedHA
                   description: "High availability domains (firewall, proxy, load balancer, cloud)"
+
+                - name: Controller
+                  namespace: Managed
+                  label: Controllers
+                  icon: "mdi:remote-desktop"
+                  kind: ManagedController
+                  description: "Management/orchestration controllers (WLC, ACI APIC, DNA Center, security/LB managers, etc.)"  # yamllint disable-line rule:line-length
           # --------- Device Catalog ---------
           - namespace: Dcim
             name: CatalogMenu

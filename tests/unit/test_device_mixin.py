@@ -34,6 +34,10 @@ def _make_generator() -> Any:
     gen.client.allocate_next_ip_address = AsyncMock(return_value={"id": "ip-1"})
     gen.client.create_batch = AsyncMock(side_effect=[_DummyBatch(), _DummyBatch()])
     gen._resolve_pool = AsyncMock(return_value=MagicMock(id="pool-1"))
+    # No controllers by default — every existing test here expects normal
+    # CoreStandardGroup behavior, not controller routing (see
+    # TestCreateDevicesControllerRouting for the controller-routing path).
+    gen._all_controllers = []
     return gen
 
 
@@ -176,7 +180,7 @@ class TestCreateDevicesPairingDispatch:
             return []  # no existing devices, no existing HA domain
 
         gen.client.filters = AsyncMock(side_effect=_filters)
-        gen.client.get = AsyncMock(side_effect=[MagicMock(id="group-1"), _mock_group()])
+        gen.client.get = AsyncMock(side_effect=[_mock_group(), _mock_group()])
 
         await gen.create_devices(
             device_role="firewall",
@@ -216,7 +220,7 @@ class TestCreateDevicesPairingDispatch:
             return []  # no existing devices, no existing MLAG domain
 
         gen.client.filters = AsyncMock(side_effect=_filters)
-        gen.client.get = AsyncMock(side_effect=[MagicMock(id="group-1"), _mock_group()])
+        gen.client.get = AsyncMock(side_effect=[_mock_group(), _mock_group()])
 
         await gen.create_devices(
             device_role="leaf",
@@ -353,3 +357,141 @@ class TestEnsureHaPairs:
 
         gen.client.create.assert_not_awaited()
         gen.logger.error.assert_called_once()
+
+
+def _controller_dict(controller_type: str, platform_id: str | None = None, id_: str = "ctrl-1") -> dict[str, Any]:
+    """Shape clean_data() produces for one controllers() query edge — see
+    queries/topology/add/dc.gql's fabric_controllers/security_manager_
+    controllers/lb_manager_controllers aliases."""
+    entry: dict[str, Any] = {"id": id_, "controller_type": controller_type}
+    if platform_id is not None:
+        entry["platform"] = {"id": platform_id}
+    return entry
+
+
+class TestResolveRoleController:
+    """DeviceMixin._resolve_role_controller — synchronous, reads
+    self._all_controllers (pre-fetched once per generator run by dc.py/
+    pod.py/rack.py's generate(), merging their own query's role-bucketed
+    controller aliases — no runtime query here)."""
+
+    def _gen(self, controllers: list[dict[str, Any]] | None = None) -> Any:
+        gen = DeviceMixin.__new__(DeviceMixin)
+        gen.logger = MagicMock()
+        if controllers is not None:
+            gen._all_controllers = controllers
+        return gen
+
+    def test_no_controllers_set_returns_none(self) -> None:
+        gen = self._gen()  # _all_controllers never set
+
+        controller = gen._resolve_role_controller(device_role="firewall", template={})
+
+        assert controller is None
+
+    def test_role_with_no_controller_mapping_returns_none(self) -> None:
+        gen = self._gen(controllers=[_controller_dict("aci_apic")])
+
+        controller = gen._resolve_role_controller(device_role="endpoint", template={})
+
+        assert controller is None
+
+    def test_fabric_role_matches_by_controller_type_alone(self) -> None:
+        apic = _controller_dict("aci_apic")
+        gen = self._gen(controllers=[apic])
+
+        controller = gen._resolve_role_controller(device_role="leaf", template={"platform": {"id": "plat-nxos"}})
+
+        assert controller is apic
+
+    def test_firewall_requires_platform_match_not_just_controller_type(self) -> None:
+        # security_manager controller for a DIFFERENT platform (panos) — must
+        # not match a checkpoint_gaia firewall despite the same controller_type.
+        panorama = _controller_dict("security_manager", platform_id="plat-panos")
+        gen = self._gen(controllers=[panorama])
+
+        controller = gen._resolve_role_controller(
+            device_role="firewall", template={"platform": {"id": "plat-checkpoint"}}
+        )
+
+        assert controller is None
+        gen.logger.warning.assert_called_once()
+
+    def test_firewall_matches_when_controller_type_and_platform_both_match(self) -> None:
+        cp_sms = _controller_dict("security_manager", platform_id="plat-checkpoint")
+        gen = self._gen(controllers=[cp_sms])
+
+        controller = gen._resolve_role_controller(
+            device_role="firewall", template={"platform": {"id": "plat-checkpoint"}}
+        )
+
+        assert controller is cp_sms
+
+    def test_load_balancer_matches_lb_manager_type(self) -> None:
+        big_iq = _controller_dict("lb_manager", platform_id="plat-f5")
+        gen = self._gen(controllers=[big_iq])
+
+        controller = gen._resolve_role_controller(device_role="load-balancer", template={"platform": {"id": "plat-f5"}})
+
+        assert controller is big_iq
+
+    def test_empty_controllers_list_returns_none_without_warning(self) -> None:
+        """No controllers at all isn't controller-managed — shouldn't warn,
+        that's just the normal fully_managed case."""
+        gen = self._gen(controllers=[])
+
+        controller = gen._resolve_role_controller(
+            device_role="firewall", template={"platform": {"id": "plat-checkpoint"}}
+        )
+
+        assert controller is None
+        gen.logger.warning.assert_not_called()
+
+
+class TestCreateDevicesControllerRouting:
+    """End-to-end: create_devices() itself skips group membership and adds
+    to controller.managed_devices when a matching controller is resolved."""
+
+    @pytest.mark.asyncio
+    async def test_routes_to_controller_instead_of_group(self) -> None:
+        gen = _make_generator()
+        gen._all_controllers = [_controller_dict("security_manager", platform_id="plat-checkpoint", id_="cp-sms-1")]
+
+        controller_obj = MagicMock()
+        controller_obj.hfid = "cp-sms-1"
+        controller_obj.managed_devices.fetch = AsyncMock()
+        controller_obj.managed_devices.peers = []
+        controller_obj.managed_devices.add = MagicMock()
+        controller_obj.save = AsyncMock()
+        gen.client.get = AsyncMock(return_value=controller_obj)
+
+        created_device = _mock_created_device(DcimPhysicalDevice.__name__, "dc1-firewall-01")
+        gen.client.create = AsyncMock(return_value=created_device)
+
+        await gen.create_devices(
+            device_role="firewall",
+            quantity=1,
+            deployment_id="dc-1",
+            template={"device_type": {"id": "dt-1"}, "platform": {"id": "plat-checkpoint"}},
+        )
+
+        create_kwargs = gen.client.create.call_args.kwargs
+        assert create_kwargs["data"]["member_of_groups"] == []
+        controller_obj.managed_devices.add.assert_called_once_with(created_device)
+        controller_obj.save.assert_awaited_once_with(allow_upsert=True)
+
+    @pytest.mark.asyncio
+    async def test_no_matching_controller_falls_back_to_group(self) -> None:
+        gen = _make_generator()  # _all_controllers defaults to []
+        created_device = _mock_created_device(DcimPhysicalDevice.__name__, "dc1-firewall-01")
+        gen.client.create = AsyncMock(return_value=created_device)
+
+        await gen.create_devices(
+            device_role="firewall",
+            quantity=1,
+            deployment_id="dc-1",
+            template={"device_type": {"id": "dt-1"}, "platform": {"id": "plat-checkpoint"}},
+        )
+
+        create_kwargs = gen.client.create.call_args.kwargs
+        assert create_kwargs["data"]["member_of_groups"] == [{"id": "group-1"}]

@@ -36,11 +36,13 @@ class TopologyRackParentData(TypedDict, total=False):
     naming_convention: str
     fabric_interface_sorting_method: str
     connectivity_mode: str
-    management_mode: str
     routing_strategy: str
     underlay_protocol: str
     management_pool: dict[str, Any] | None
     size: str
+    fabric_controllers: list[dict[str, Any]]
+    security_manager_controllers: list[dict[str, Any]]
+    lb_manager_controllers: list[dict[str, Any]]
 
 
 class TopologyRackPodData(TypedDict, total=False):
@@ -535,12 +537,6 @@ class RackGenerator(RackMixin, DeviceMixin, CablingMixin, RoutingMixin, CommonGe
         shape = "direct node data" if "name" in data and isinstance(data.get("name"), dict) else "query result"
         self.logger.info(f"Processing {shape}")
 
-        if self.data["pod"]["parent"].get("management_mode", "fully_managed") == "managed_by_controller":
-            self.logger.info(
-                f"Rack {self.data['name']}: parent DC management_mode=managed_by_controller — skipping generator"
-            )
-            return
-
         # Wait for an in-flight add_pod/pod_rack_cascade on our pod before reading
         # pod-level data (spine devices, ASN/loopback pools) — avoid partial data.
         for parent_generator in ("add_pod", "pod_rack_cascade"):
@@ -555,6 +551,17 @@ class RackGenerator(RackMixin, DeviceMixin, CablingMixin, RoutingMixin, CommonGe
 
         pod = self.data["pod"]
         deployment_type = pod["deployment_type"]
+
+        # Merge the grandparent DC's own pre-fetched, role-bucketed controller
+        # lists (see queries/topology/add/rack.gql's PodFields fragment) into
+        # one flat list create_devices() reads synchronously — see
+        # generators/devices.py's _resolve_role_controller.
+        dc = pod.get("parent", {})
+        self._all_controllers = [
+            *dc.get("fabric_controllers", []),
+            *dc.get("security_manager_controllers", []),
+            *dc.get("lb_manager_controllers", []),
+        ]
 
         # A row-dependent (tor/compute) rack cables to its row's network rack's
         # leafs. If triggered independently while that rack's add_rack is still

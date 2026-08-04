@@ -1,15 +1,18 @@
 ---
 # DC9 — Cisco ACI fabric, demonstrating ManagedControllerPhysical (see
-# schemas/extensions/capabilities/controller.yml). Two pods, two leaf
-# switches each (real Nexus 9000 ACI-capable hardware, N9K-C9336C-FX2 —
-# same device type/template already used by DC6's spine/leaf in
-# data/demos/01_data_center/dc6), one shared spine pair, and a single APIC
-# (ManagedControllerPhysical, controller_type: aci_apic) whose
-# `managed_devices` covers every leaf/spine across both pods — the point of
-# this generic is exactly this: one controller, many devices, regardless of
-# pod/rack placement. No pool/VXLAN build-out here (unlike DC7/DC8): DC9's
-# purpose is the controller pattern, not another customer-isolation
-# fixture.
+# schemas/extensions/capabilities/controller.yml). Two pods (real Nexus
+# 9000 ACI-capable hardware, N9K-C9336C-FX2 — same device type/template
+# already used by DC6's spine/leaf in data/demos/01_data_center/dc6), fully
+# generator-driven fabric (super-spine + per-pod spine + per-pod leaf, same
+# shape as data/demos/01_data_center/dc1's minimal S_MIDDLE scaffold — see
+# ./00_location.yml for the suite/rack scaffold this needs), and a single
+# APIC (ManagedControllerPhysical, controller_type: aci_apic) referenced via
+# `controllers` below — create_devices() (generators/devices.py) routes
+# every fabric device it creates into the APIC's own `managed_devices`
+# instead of the usual super-spines/spines/leafs CoreStandardGroups, since
+# it matches by controller_type alone for fabric roles. No pool/VXLAN
+# build-out here (unlike DC7/DC8): DC9's purpose is the controller pattern,
+# not another customer-isolation fixture.
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
@@ -18,15 +21,60 @@ spec:
     - name: "DC9"
       index: 9
       size: L
-      management_mode: managed_by_controller
+      fabric_templates:
+        - ["2", "super-spine", "N9K-C9336C-FX2_SUPER_SPINE"]
       children:
         kind: TopologyPod
         data:
           - index: 1
-            layout: L_MIDDLE
+            layout: S_MIDDLE
             deployment_type: middle_rack
+            suites: [dc9-1-s-1]
+            fabric_templates:
+              - ["2", "spine", "N9K-C9336C-FX2_SPINE"]
             status: active
+            racks:
+              kind: LocationRack
+              data:
+                - index: 1
+                  row_index: 1
+                  shortname: dc9-1-s-1-r-1-1
+                  rack_type: network
+                  parent: dc9-1-s-1
+                  member_of_groups: [topologies_rack]
+                  fabric_templates:
+                    - ["2", "leaf", "N9K-C9336C-FX2_LEAF"]
+                - index: 1
+                  row_index: 2
+                  shortname: dc9-1-s-1-r-2-1
+                  rack_type: network
+                  parent: dc9-1-s-1
+                  member_of_groups: [topologies_rack]
+                  fabric_templates:
+                    - ["2", "leaf", "N9K-C9336C-FX2_LEAF"]
           - index: 2
-            layout: L_MIDDLE
+            layout: S_MIDDLE
             deployment_type: middle_rack
+            suites: [dc9-1-s-2]
+            fabric_templates:
+              - ["2", "spine", "N9K-C9336C-FX2_SPINE"]
             status: active
+            racks:
+              kind: LocationRack
+              data:
+                - index: 1
+                  row_index: 1
+                  shortname: dc9-1-s-2-r-1-1
+                  rack_type: network
+                  parent: dc9-1-s-2
+                  member_of_groups: [topologies_rack]
+                  fabric_templates:
+                    - ["2", "leaf", "N9K-C9336C-FX2_LEAF"]
+                - index: 1
+                  row_index: 2
+                  shortname: dc9-1-s-2-r-2-1
+                  rack_type: network
+                  parent: dc9-1-s-2
+                  member_of_groups: [topologies_rack]
+                  fabric_templates:
+                    - ["2", "leaf", "N9K-C9336C-FX2_LEAF"]
