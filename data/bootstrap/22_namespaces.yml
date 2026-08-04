@@ -20,8 +20,15 @@ kind: Object
 spec:
   kind: IpamNamespace
   data:
+    - name: "TRANSIT"
+      description: "Transit VRF for inter-site connectivity"
+      l3_vni: 20000
+      namespace_type: transit
     - name: "SHARED-SERVICES"
       description: "Shared infrastructure services VRF (DNS, NTP, monitoring)"
-      l3_vni: 50000
-      member_of_groups:
-        - vrf_namespaces
+      l3_vni: 20001
+      namespace_type: shared
+    - name: "INTERNET"
+      description: "Internet egress VRF — hub-and-spoke via per-site TopologyRoutedExchange"
+      l3_vni: 30000
+      namespace_type: internet
