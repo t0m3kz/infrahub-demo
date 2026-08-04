@@ -1,0 +1,36 @@
+---
+# DC9's own facility/suites, in the same Warsaw metro this demo set already
+# uses for the office (../../01_office_anchor.yml) and EQUINIX colocation
+# (../../04_colo/equinix/01_colocation.yml) — LocationMetro "waw" already
+# exists via those files, only this DC's own LocationFacility/LocationSuite
+# is new. One suite per pod, minimal 2-rack shape (matches
+# data/demos/01_data_center/dc1's S_MIDDLE scaffold) — DC9's own purpose is
+# the ManagedController pattern (see 03_controller.yml), not fabric scale.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: LocationMetro
+  data:
+    - name: "Warsaw"
+      shortname: "waw"
+      parent: "pl"
+      children:
+        kind: LocationFacility
+        data:
+          - name: "DC9-1"
+            shortname: "dc9-1"
+            children:
+              kind: LocationSuite
+              data:
+                - suite_name: "Suite-1"
+                  index: 1
+                  shortname: "dc9-1-s-1"
+                  parent: dc9-1
+                  rows: 2
+                  racks_per_row: 1
+                - suite_name: "Suite-2"
+                  index: 2
+                  shortname: "dc9-1-s-2"
+                  parent: dc9-1
+                  rows: 2
+                  racks_per_row: 1

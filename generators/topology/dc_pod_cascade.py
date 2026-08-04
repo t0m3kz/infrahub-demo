@@ -33,7 +33,7 @@ class DCPodCascadeGenerator(DCTopologyGenerator):
         await super().generate(data)
 
         dc_data = getattr(self, "data", None)
-        if not dc_data or dc_data.get("management_mode") == "managed_by_controller":
+        if not dc_data:
             return
 
         dc_id = dc_data["id"]

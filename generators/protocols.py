@@ -598,12 +598,12 @@ class TopologyDataCenter(
     connectivity_mode: Dropdown
     fabric_interface_sorting_method: Dropdown
     index: Integer
-    management_mode: Dropdown
     routing_strategy: Dropdown
     size: Dropdown
     spine_interface_sorting_method: Dropdown
     status: Dropdown
     underlay_protocol: Dropdown
+    controllers: RelationshipManager[ManagedController]
     design: RelationshipManager[TopologyDataCenterDesign]
     fabric_asn_pool: RelationshipAttribute[CoreNumberPool]
     fabric_templates: RelationshipManager[TopologyElement]

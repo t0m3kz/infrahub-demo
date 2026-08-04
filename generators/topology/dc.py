@@ -65,7 +65,6 @@ class TopologyDcData(TypedDict, total=False):
     size: str
     naming_convention: str
     connectivity_mode: str
-    management_mode: str
     underlay_protocol: str
     routing_strategy: str
     fabric_templates: list[dict[str, Any]]
@@ -74,6 +73,9 @@ class TopologyDcData(TypedDict, total=False):
     management_pool: dict[str, Any] | None
     fabric_asn_pool: dict[str, Any] | None
     children: list[dict[str, Any]]
+    fabric_controllers: list[dict[str, Any]]
+    security_manager_controllers: list[dict[str, Any]]
+    lb_manager_controllers: list[dict[str, Any]]
 
 
 def _templates_by_role(templates: list[dict[str, Any]], role: str) -> list[dict[str, Any]]:
@@ -100,28 +102,31 @@ class DCTopologyGenerator(PoolMixin, DeviceMixin, CablingMixin, RoutingMixin, Co
             # response — force-read every field generate() treats as required
             # here, inside the try, so a missing one raises KeyError in the
             # same place the old DCModel(**deployment_list[0]) construction did.
-            # management_mode/naming_convention/connectivity_mode are read via
-            # .get() below with the same defaults DCModel used to declare.
+            # naming_convention/connectivity_mode are read via .get() below
+            # with the same defaults DCModel used to declare.
             dc_id = self.data["id"]
             dc_name = self.data["name"]
             dc_index = self.data["index"]
             dc_design = resolve_dc_size_layout(self.data["size"])
-            dc_management_mode = self.data.get("management_mode", "fully_managed")
         except (ValueError, KeyError, IndexError) as exc:
             self.logger.error(f"Generation failed due to {exc}")
             return
+
+        # Merge this DC's own pre-fetched, role-bucketed controller lists
+        # (see queries/topology/add/dc.gql's fabric_controllers/
+        # security_manager_controllers/lb_manager_controllers aliases) into
+        # one flat list create_devices() reads synchronously — see
+        # generators/devices.py's _resolve_role_controller.
+        self._all_controllers = [
+            *self.data.get("fabric_controllers", []),
+            *self.data.get("security_manager_controllers", []),
+            *self.data.get("lb_manager_controllers", []),
+        ]
 
         self.logger.info(f"Processing Data Center: {dc_name}")
 
         # Every generated DC should be part of the provider's shared exchange domain.
         await self._ensure_common_exchange_for_dc()
-
-        if dc_management_mode == "managed_by_controller":
-            self.logger.info(
-                f"DC {dc_name}: management_mode=managed_by_controller — skipping generator, "
-                "topology is owned by an external controller"
-            )
-            return
 
         # Add existing pods to group context to prevent deletion
         # include=["layout"] also lets _generate_dc_scoped_fabric_devices read each

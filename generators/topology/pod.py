@@ -53,7 +53,6 @@ class TopologyPodParentData(TypedDict, total=False):
     naming_convention: str
     fabric_interface_sorting_method: str
     connectivity_mode: str
-    management_mode: str
     routing_strategy: str
     underlay_protocol: str
     fabric_templates: list[dict[str, Any]]
@@ -61,6 +60,9 @@ class TopologyPodParentData(TypedDict, total=False):
     fabric_asn_pool: dict[str, Any] | None
     management_pool: dict[str, Any] | None
     devices: list[Any]
+    fabric_controllers: list[dict[str, Any]]
+    security_manager_controllers: list[dict[str, Any]]
+    lb_manager_controllers: list[dict[str, Any]]
 
 
 class TopologyPodData(TypedDict, total=False):
@@ -178,9 +180,16 @@ class PodTopologyGenerator(PoolMixin, DeviceMixin, CablingMixin, RoutingMixin, C
 
         self.logger.info(f"Generating topology for pod {pod_name}")
 
-        if dc.get("management_mode", "fully_managed") == "managed_by_controller":
-            self.logger.info(f"Pod {pod_name}: parent DC management_mode=managed_by_controller — skipping generator")
-            return
+        # Merge the parent DC's own pre-fetched, role-bucketed controller
+        # lists (see queries/topology/add/pod.gql's DataCenterFields
+        # fragment) into one flat list create_devices() reads synchronously —
+        # see generators/devices.py's _resolve_role_controller.
+        self._all_controllers = [
+            *dc.get("fabric_controllers", []),
+            *dc.get("security_manager_controllers", []),
+            *dc.get("lb_manager_controllers", []),
+        ]
+
         self.deployment_id = dc_id  # Store for cable linking
         self.pod_name = pod_name.lower()
         self.fabric_name = dc_name.lower()

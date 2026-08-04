@@ -52,3 +52,86 @@ spec:
             name: eth0
             role: management
             interface_type: 1000base-t
+
+    # Firewall managers — one per firewall platform this repo provisions
+    # virtual/physical firewalls for (see 09_virtual_device_templates_
+    # {checkpoint,panos,junos}.yaml), matched by controller_type +
+    # platform at generator time (see generators/devices.py create_devices()).
+    - template_name: Panorama_MANAGER
+      device_type: Panorama
+      platform: panos
+      software_image: panos-11.1.3
+      controller_type: security_manager
+      role: controller
+      status: active
+      owner: "P027"
+      cpu: 4
+      memory: 16
+      storage: 500
+      interfaces:
+        kind: TemplateDcimPhysicalInterface
+        data:
+          - template_name: Panorama_MANAGER_eth0
+            name: eth0
+            role: management
+            interface_type: 1000base-t
+
+    - template_name: Security-Director_MANAGER
+      device_type: Security-Director
+      platform: junos
+      software_image: junos-23.4R2
+      controller_type: security_manager
+      role: controller
+      status: active
+      owner: "P027"
+      cpu: 4
+      memory: 16
+      storage: 500
+      interfaces:
+        kind: TemplateDcimPhysicalInterface
+        data:
+          - template_name: Security-Director_MANAGER_eth0
+            name: eth0
+            role: management
+            interface_type: 1000base-t
+
+    # Load balancer managers — one per load-balancer platform this repo
+    # provisions virtual/physical load balancers for (see
+    # 09_virtual_device_templates_{f5,netscaler}.yaml).
+    - template_name: BIG-IQ_MANAGER
+      device_type: BIG-IQ
+      platform: f5_tmos
+      software_image: f5_tmos-17.1.1
+      controller_type: lb_manager
+      role: controller
+      status: active
+      owner: "P027"
+      cpu: 4
+      memory: 16
+      storage: 500
+      interfaces:
+        kind: TemplateDcimPhysicalInterface
+        data:
+          - template_name: BIG-IQ_MANAGER_eth0
+            name: eth0
+            role: management
+            interface_type: 1000base-t
+
+    - template_name: NetScaler-ADM_MANAGER
+      device_type: NetScaler-ADM
+      platform: netscaler
+      software_image: netscaler-14.1.17.16
+      controller_type: lb_manager
+      role: controller
+      status: active
+      owner: "P027"
+      cpu: 4
+      memory: 16
+      storage: 500
+      interfaces:
+        kind: TemplateDcimPhysicalInterface
+        data:
+          - template_name: NetScaler-ADM_MANAGER_eth0
+            name: eth0
+            role: management
+            interface_type: 1000base-t
