@@ -577,6 +577,14 @@ spec:
       memory_gb: 64
       max_routes: 1000000
       unit_price: 65000
+    - name: BIG-IP-VE
+      part_number: F5-BIG-IP-VE
+      height: 0
+      full_depth: false
+      manufacturer: F5 Networks
+      cpu_count: 2
+      memory_gb: 8
+      unit_price: 0
     - name: NGINX
       part_number: NGINX
       height: 1
@@ -681,6 +689,13 @@ spec:
       memory_gb: 16
       max_routes: 2000000
       unit_price: 12000
+    - name: vSRX
+      height: 0
+      full_depth: false
+      manufacturer: Juniper
+      cpu_count: 2
+      memory_gb: 8
+      unit_price: 0
     - name: MX204
       part_number: MX204-HWBASE-AC-FS
       height: 1
@@ -750,6 +765,14 @@ spec:
       memory_gb: 512
       max_routes: 4000000
       unit_price: 92000
+    - name: PA-VM
+      part_number: PA-VM-100
+      height: 0
+      full_depth: false
+      manufacturer: Palo Alto Networks
+      cpu_count: 2
+      memory_gb: 8
+      unit_price: 0
     - name: linux-vm
       part_number: linux-vm
       height: 0

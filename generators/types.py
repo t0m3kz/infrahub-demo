@@ -44,6 +44,11 @@ class DeviceOptions(TypedDict, total=False):
     """Template dict used to check for a role="mlag-peer" interface, required
     for back-to-back MLAG. Defaults to ``template`` (create_devices()'s own
     positional arg) when omitted."""
+    name_override: str
+    """Explicit device name, bypassing the naming_convention-generated
+    role-index name — only valid with quantity=1. Used for devices whose
+    name doesn't fit the standard fabric/pod/role/index scheme, e.g. dc.py's
+    per-environment shared virtual firewall/load-balancer instances."""
 
 
 class ChainHop(TypedDict, total=False):

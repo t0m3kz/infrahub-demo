@@ -9,11 +9,19 @@ from ..common import CommonGenerator, DeviceOptions
 from ..dc_config import host_bits_to_prefix_length, resolve_dc_size_layout
 from ..devices import DeviceMixin
 from ..helpers import name_to_asn_range
+from ..helpers.pairing import pair_device_names
 from ..helpers.routing import RoutingStrategy
 from ..helpers.template_interfaces import template_interface_names_by_role
 from ..pod_config import POD_LAYOUTS
 from ..pools import PoolMixin
-from ..protocols import IpamNamespace, TopologyCommonExchange, TopologyDataCenter, TopologyPod
+from ..protocols import (
+    DcimPhysicalDevice,
+    DcimVirtualDevice,
+    IpamNamespace,
+    TopologyCommonExchange,
+    TopologyDataCenter,
+    TopologyPod,
+)
 from ..routing import RoutingMixin
 from ..types import CablingOptions, RoutingOptions
 
@@ -25,6 +33,22 @@ _DC_VALID_FABRIC_ROLES = frozenset({"super-spine", "hyper-spine", "border-leaf",
 _HA_KIND_BY_ROLE: dict[str, str] = {
     "firewall": "ManagedFirewallHA",
     "load-balancer": "ManagedLoadbalancerHA",
+}
+
+# environments each physical firewall/load-balancer HA pair gets a shared
+# virtual instance pair for — see _provision_shared_virtual_instances.
+_SHARED_ENVIRONMENTS: tuple[str, ...] = ("production", "non-production")
+
+# (physical template's platform name, device_role) -> matching virtual
+# template's name prefix — see data/bootstrap's 09_virtual_device_templates_
+# *.yaml, where every platform/role combination provides an _S/_M/_L/_XL
+# variant per DC size (e.g. "CloudGuard_EDGE_L"), matched against dc.size.
+_VIRTUAL_TEMPLATE_PREFIX_BY_PLATFORM_AND_ROLE: dict[tuple[str, str], str] = {
+    ("checkpoint_gaia", "firewall"): "CloudGuard_EDGE",
+    ("panos", "firewall"): "PA-VM_EDGE",
+    ("junos", "firewall"): "vSRX_EDGE",
+    ("f5_tmos", "load-balancer"): "BIG-IP-VE_LOAD_BALANCER",
+    ("netscaler", "load-balancer"): "NetScaler-ADC-VPX_LOAD_BALANCER",
 }
 
 
@@ -565,8 +589,100 @@ class DCTopologyGenerator(PoolMixin, DeviceMixin, CablingMixin, RoutingMixin, Co
                 options=device_options,
             )
             all_names.extend(names)
+            await self._provision_shared_virtual_instances(
+                role=role,
+                physical_names=names,
+                physical_template=entry["template"],
+                deployment_id=deployment_id,
+            )
 
         return all_names
+
+    async def _provision_shared_virtual_instances(
+        self,
+        *,
+        role: Literal["firewall", "load-balancer"],
+        physical_names: list[str],
+        physical_template: dict[str, Any],
+        deployment_id: str,
+    ) -> None:
+        """For each physical HA pair just created, provision 2 virtual
+        instances per environment tier (production, non-production) — one
+        hosted on each physical peer — then pair each environment's own 2
+        instances into their own HA domain (any physical peer count works,
+        but this needs exactly a pair to know which 2 physical devices to
+        host onto; an odd leftover physical device is skipped since it has
+        no HA partner to mirror).
+
+        These are shared (not customer-dedicated) instances for future
+        customer boarding — see data/bootstrap's
+        09_virtual_device_templates_*_CUSTOMER_*.yaml for the separate
+        dedicated-per-customer template set this does NOT use.
+        """
+        platform = (physical_template.get("platform") or {}).get("name")
+        if not platform:
+            self.logger.warning(
+                f"{role} template {physical_template.get('id')} has no platform — "
+                "skipping shared virtual instance provisioning."
+            )
+            return
+
+        prefix = _VIRTUAL_TEMPLATE_PREFIX_BY_PLATFORM_AND_ROLE.get((platform, role))
+        if not prefix:
+            self.logger.warning(
+                f"No virtual template mapping for platform={platform} role={role} — "
+                "skipping shared virtual instance provisioning."
+            )
+            return
+
+        dc_size = self.data["size"]
+        virtual_template_name = f"{prefix}_{dc_size}"
+        virtual_templates = await self.client.filters(
+            kind="TemplateDcimVirtualDevice",
+            template_name__value=virtual_template_name,
+            include=["device_type", "platform"],
+        )
+        if not virtual_templates:
+            self.logger.warning(
+                f"No virtual template '{virtual_template_name}' found for platform={platform} role={role} — "
+                "skipping shared virtual instance provisioning."
+            )
+            return
+        virtual_template_obj = virtual_templates[0]
+        virtual_template = {
+            "id": virtual_template_obj.id,
+            "device_type": {"id": virtual_template_obj.device_type.peer.id},
+            "platform": {"id": virtual_template_obj.platform.peer.id},
+        }
+
+        for first, second in pair_device_names(physical_names):
+            physical_pair = await self.client.filters(kind=DcimPhysicalDevice, name__values=[first, second])
+            if len(physical_pair) != 2:
+                self.logger.error(f"Shared virtual instances for {first}/{second}: could not resolve both peers.")
+                continue
+            peer_by_name = {dev.name.value: dev for dev in physical_pair}
+            pair_prefix = f"{first}-{second}"
+
+            for environment in _SHARED_ENVIRONMENTS:
+                instance_names: list[str] = []
+                for peer_index, physical_name in enumerate((first, second), start=1):
+                    instance_name = f"{pair_prefix}-shared-{environment}-{peer_index:02d}"
+                    names = await self.create_devices(
+                        deployment_id=deployment_id,
+                        device_role=role,
+                        quantity=1,
+                        template=virtual_template,
+                        options=DeviceOptions(virtual=True, name_override=instance_name),
+                        hosting_device=peer_by_name[physical_name],
+                    )
+                    instance_names.extend(names)
+
+                await self._ensure_ha_pairs(
+                    instance_names,
+                    ha_kind=_HA_KIND_BY_ROLE[role],
+                    role_label=f"{role} ({environment})",
+                    device_kind=DcimVirtualDevice,
+                )
 
     async def _generate_dc_scoped_fabric_devices(self) -> None:
         """Create border-leaf devices and provision the DC's shared service chain.
