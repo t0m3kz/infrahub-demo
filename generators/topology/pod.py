@@ -7,7 +7,7 @@ from utils.data_cleaning import clean_data
 
 from ..cabling import CablingMixin
 from ..common import CablingOptions, CommonGenerator, DeviceOptions, RoutingOptions
-from ..dc_config import resolve_dc_size_layout
+from ..dc_config import host_bits_to_prefix_length, resolve_dc_size_layout
 from ..devices import DeviceMixin
 from ..helpers.naming import DeviceNamingConfig
 from ..helpers.rack import expected_device_names
@@ -217,19 +217,24 @@ class PodTopologyGenerator(PoolMixin, DeviceMixin, CablingMixin, RoutingMixin, C
 
         indexes: list[int] = [dc["index"], pod_index]
 
-        # Fixed per-pod pool sizes from the DC's own size tier (see
-        # dc_config.py's pod_technical_prefix_length/pod_loopback_prefix_length)
-        # — sized generously for that tier's worst-case pod layout, instead of
-        # computed per pod from its own live spine/leaf/tor counts.
+        # Fixed per-pod pool sizes from this pod's own layout (see
+        # pod_config.py's technical_host_bits/loopback_host_bits) — sized
+        # generously for the layout's own worst-case device count, instead of
+        # computed per pod from its live spine/leaf/tor counts. Host bits are
+        # protocol-agnostic — the real prefix length depends on this DC's
+        # underlay_protocol (IPv4 /32 vs IPv6 /128 address space).
         dc_underlay_protocol = dc.get("underlay_protocol", "ipv6")
         is_ipv6 = underlay_is_ipv6(dc_underlay_protocol)
         is_dual_stack = underlay_is_dual_stack(dc_underlay_protocol)
         p2p_addressing_value = p2p_addressing_for(dc_underlay_protocol)
         dc_design = resolve_dc_size_layout(dc["size"])
 
+        # Dual-stack pods keep loopback on IPv4 (same convention as
+        # allocate_resource_pools' own dual_stack handling) — only technical/
+        # P2P moves to IPv6.
         pool_sizes = {
-            "technical": dc_design["pod_technical_prefix_length"],
-            "loopback": dc_design["pod_loopback_prefix_length"],
+            "technical": host_bits_to_prefix_length(design["technical_host_bits"], ipv6=is_ipv6 or is_dual_stack),
+            "loopback": host_bits_to_prefix_length(design["loopback_host_bits"], ipv6=is_ipv6),
         }
 
         self.logger.info(

@@ -45,9 +45,7 @@ def _design(
         "loopback_prefix_length": 23,
         "technical_prefix_length": 19,
         "management_prefix_length": 25,
-        "pod_technical_prefix_length": 20,
-        "pod_loopback_prefix_length": 24,
-        "dc_fabric_loopback_prefix_length": 28,
+        "dc_fabric_loopback_host_bits": 4,
     }
     return key
 
