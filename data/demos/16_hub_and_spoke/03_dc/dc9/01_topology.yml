@@ -1,4 +1,19 @@
 ---
+# DC9's ACI APIC — created first so it can be referenced inline by name in
+# the DC block below, same as fabric_templates' own template references.
+# `managed_devices` is populated automatically by create_devices()
+# (generators/devices.py's _resolve_role_controller) once `controllers`
+# (below) makes this controller visible to DC9's fabric device creation.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: ManagedControllerPhysical
+  data:
+    - name: "DC9-APIC1"
+      object_template: APIC-L3_ACI_APIC
+      status: active
+
+---
 # DC9 — Cisco ACI fabric, demonstrating ManagedControllerPhysical (see
 # schemas/extensions/capabilities/controller.yml). Two pods (real Nexus
 # 9000 ACI-capable hardware, N9K-C9336C-FX2 — same device type/template
@@ -23,6 +38,8 @@ spec:
       size: L
       fabric_templates:
         - ["2", "super-spine", "N9K-C9336C-FX2_SUPER_SPINE"]
+      controllers:
+        - "DC9-APIC1"
       children:
         kind: TopologyPod
         data:

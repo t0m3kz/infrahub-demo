@@ -1,0 +1,71 @@
+---
+# DC11's controllers — Panorama (security_manager, matches the panos
+# firewall pair's platform below) and NetScaler-ADM (lb_manager, matches
+# the netscaler load-balancer pair's platform) — created first so they can
+# be referenced inline by name in the DC block below, same as
+# fabric_templates' own template references. create_devices()
+# (generators/devices.py) routes DC11's firewall/load-balancer devices
+# into these controllers' own managed_devices instead of the usual
+# firewalls/loadbalancers CoreStandardGroups, once matched by
+# controller_type + platform.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: ManagedControllerVirtual
+  data:
+    - name: "DC11-PANORAMA1"
+      object_template: Panorama_MANAGER
+      status: active
+    - name: "DC11-NSADM1"
+      object_template: NetScaler-ADM_MANAGER
+      status: active
+
+---
+# DC11 — controller-managed firewall AND load-balancer, each via its own
+# dedicated vendor manager (see schemas/extensions/capabilities/
+# controller.yml's ManagedController + TopologyDataCenter.controllers).
+# Two separate controllers, one per role, demonstrating the split (compare
+# DC12's "all of them" single-DC combo: fabric + security + lb all
+# controller-managed at once).
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologyDataCenter
+  data:
+    - name: DC11
+      index: 11
+      size: L
+      routing_strategy: ebgp-ebgp
+      underlay_protocol: ipv6
+      naming_convention: standard
+      connectivity_mode: inline
+      fabric_templates:
+        - ["2", "super-spine", "N9K-C9336C-FX2_SUPER_SPINE"]
+        - ["2", "border-leaf", "N9K-C9336C-FX2_BORDER_LEAF"]
+        - ["2", "firewall", "PA-5260_FIREWALL"]
+        - ["2", "load-balancer", "NetScaler-MPX-26000-100G_LOAD_BALANCER"]
+      fabric_interface_sorting_method: top_down
+      controllers:
+        - "DC11-PANORAMA1"
+        - "DC11-NSADM1"
+      member_of_groups:
+        - topologies_dc
+      children:
+        kind: TopologyPod
+        data:
+          - index: 1
+            layout: S_MIDDLE
+            deployment_type: middle_rack
+            suites: [lyo-1-s-1]
+            fabric_templates:
+              - ["2", "spine", "N9K-C9336C-FX2_SPINE"]
+            member_of_groups:
+              - topologies_pod
+          - index: 2
+            layout: S_MIDDLE
+            deployment_type: middle_rack
+            suites: [lyo-1-s-2]
+            fabric_templates:
+              - ["2", "spine", "N9K-C9336C-FX2_SPINE"]
+            member_of_groups:
+              - topologies_pod

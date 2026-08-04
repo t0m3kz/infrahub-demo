@@ -1,0 +1,81 @@
+---
+# DC12's controllers — DCNM (dcnm, fabric-wide), Check Point SMS
+# (security_manager, matches the checkpoint_gaia firewall pair's platform
+# below), F5 BIG-IQ (lb_manager, matches the f5_tmos load-balancer pair's
+# platform) — created first so they can be referenced inline by name in
+# the DC block below, same as fabric_templates' own template references.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: ManagedControllerPhysical
+  data:
+    - name: "DC12-DCNM1"
+      object_template: MDS-NDFC_DCNM
+      status: active
+
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: ManagedControllerVirtual
+  data:
+    - name: "DC12-CPSMS1"
+      object_template: CP-SMS_MANAGER
+      status: active
+    - name: "DC12-BIGIQ1"
+      object_template: BIG-IQ_MANAGER
+      status: active
+
+---
+# DC12 — controller-managed fabric AND firewall AND load-balancer, all at
+# once ("all of them" — compare DC11's firewall/LB-only split): DCNM
+# governs the cisco_nxos switching fabric (controller_type: dcnm, fabric
+# roles match by controller_type alone — see generators/devices.py's
+# _FABRIC_CONTROLLER_TYPES); Check Point SMS governs the checkpoint_gaia
+# firewall pair (security_manager); F5 BIG-IQ governs the f5_tmos
+# load-balancer pair (lb_manager). Every device this DC creates —
+# super-spine/border-leaf/spine/firewall/load-balancer — routes into one
+# of these 3 controllers' managed_devices instead of a CoreStandardGroup.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologyDataCenter
+  data:
+    - name: DC12
+      index: 12
+      size: L
+      routing_strategy: ebgp-ebgp
+      underlay_protocol: ipv6
+      naming_convention: standard
+      connectivity_mode: inline
+      fabric_templates:
+        - ["2", "super-spine", "N9K-C9336C-FX2_SUPER_SPINE"]
+        - ["2", "border-leaf", "N9K-C9336C-FX2_BORDER_LEAF"]
+        - ["2", "firewall", "CP-26000_FIREWALL"]
+        - ["2", "load-balancer", "BIG-IP-i5800_LOAD_BALANCER"]
+      fabric_interface_sorting_method: top_down
+      controllers:
+        - "DC12-DCNM1"
+        - "DC12-CPSMS1"
+        - "DC12-BIGIQ1"
+      member_of_groups:
+        - topologies_dc
+      children:
+        kind: TopologyPod
+        data:
+          - index: 1
+            layout: S_MIDDLE
+            deployment_type: middle_rack
+            suites: [mil-1-s-1]
+            fabric_templates:
+              - ["2", "spine", "N9K-C9336C-FX2_SPINE"]
+            member_of_groups:
+              - topologies_pod
+          - index: 2
+            layout: S_MIDDLE
+            deployment_type: middle_rack
+            suites: [mil-1-s-2]
+            fabric_templates:
+              - ["2", "spine", "N9K-C9336C-FX2_SPINE"]
+            member_of_groups:
+              - topologies_pod
