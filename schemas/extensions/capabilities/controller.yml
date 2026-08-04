@@ -30,7 +30,14 @@ generics:
     label: Controller
     icon: "mdi:remote-desktop"
     include_in_menu: false
+    human_friendly_id:
+      - "name__value"
     attributes:
+      - name: name
+        kind: Text
+        label: Name
+        optional: false
+        order_weight: 1
       - name: controller_type
         kind: Dropdown
         label: "Controller Type"
@@ -100,7 +107,7 @@ generics:
         label: "Controllers"
         description: "Controllers governing devices in this deployment"
         cardinality: many
-        kind: Attribute
+        kind: Generic
         optional: true
         identifier: "controller_assignment__controllers"
         order_weight: 1100
