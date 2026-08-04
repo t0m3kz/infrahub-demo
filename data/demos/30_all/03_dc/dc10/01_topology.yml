@@ -4,7 +4,7 @@ kind: Object
 spec:
   kind: TopologyDataCenter
   data:
-    - name: DC1
+    - name: DC10
       index: 1
       size: L
       routing_strategy: ebgp-ebgp

@@ -19,7 +19,7 @@ spec:
   kind: TopologyCustomerDC
   data:
     - owner: "C005"
-      environment: "p"
+      environment: "d"
       status: active
       parent: "DC12"
       design: "L_DC"
