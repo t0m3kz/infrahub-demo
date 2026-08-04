@@ -13,6 +13,13 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
+# technical_host_bits/loopback_host_bits: fixed per-pod IP pool sizes,
+# stored as HOST BITS (bits reserved for host addressing, not an absolute
+# prefix length — see dc_config.host_bits_to_prefix_length for why: the
+# real prefix length depends on the DC's underlay_protocol, IPv4 /32 vs
+# IPv6 /128 address space). Sized generously for this layout's own
+# worst-case device count (spines + leafs + tors, +2 growth buffer),
+# instead of computed live per pod from its actual device counts.
 POD_LAYOUTS: dict[str, dict[str, Any]] = {
     "S_MIDDLE": {
         "rows": 2,
@@ -22,6 +29,8 @@ POD_LAYOUTS: dict[str, dict[str, Any]] = {
         "max_tors_per_compute_rack": 0,
         "max_spines_per_pod": 2,
         "max_border_leafs_per_pod": 1,
+        "technical_host_bits": 6,
+        "loopback_host_bits": 4,
     },
     "S_TOR": {
         "rows": 2,
@@ -36,6 +45,8 @@ POD_LAYOUTS: dict[str, dict[str, Any]] = {
         "tor_uplinks_to_spine": 4,
         "reserved_spine_downlinks_per_spine": 0,
         "enforce_compute_racks_from_spine_budget": True,
+        "technical_host_bits": 9,
+        "loopback_host_bits": 6,
     },
     "S_MIXED": {
         "rows": 2,
@@ -50,6 +61,8 @@ POD_LAYOUTS: dict[str, dict[str, Any]] = {
         "tor_uplinks_to_spine": 4,
         "reserved_spine_downlinks_per_spine": 0,
         "enforce_compute_racks_from_spine_budget": True,
+        "technical_host_bits": 9,
+        "loopback_host_bits": 6,
     },
     "S_BORDER_SPINE_POD": {
         "rows": 1,
@@ -59,6 +72,8 @@ POD_LAYOUTS: dict[str, dict[str, Any]] = {
         "max_tors_per_compute_rack": 0,
         "max_spines_per_pod": 2,
         "max_border_leafs_per_pod": 0,
+        "technical_host_bits": 6,
+        "loopback_host_bits": 4,
     },
     "M_MIXED": {
         "rows": 4,
@@ -73,6 +88,8 @@ POD_LAYOUTS: dict[str, dict[str, Any]] = {
         "tor_uplinks_to_spine": 3,
         "reserved_spine_downlinks_per_spine": 0,
         "enforce_compute_racks_from_spine_budget": True,
+        "technical_host_bits": 10,
+        "loopback_host_bits": 7,
     },
     "M_MIDDLE": {
         "rows": 4,
@@ -82,6 +99,8 @@ POD_LAYOUTS: dict[str, dict[str, Any]] = {
         "max_tors_per_compute_rack": 0,
         "max_spines_per_pod": 3,
         "max_border_leafs_per_pod": 1,
+        "technical_host_bits": 7,
+        "loopback_host_bits": 5,
     },
     "L_MIXED": {
         "rows": 8,
@@ -96,6 +115,8 @@ POD_LAYOUTS: dict[str, dict[str, Any]] = {
         "tor_uplinks_to_spine": 2,
         "reserved_spine_downlinks_per_spine": 0,
         "enforce_compute_racks_from_spine_budget": True,
+        "technical_host_bits": 12,
+        "loopback_host_bits": 8,
     },
     "L_MIDDLE": {
         "rows": 8,
@@ -105,6 +126,8 @@ POD_LAYOUTS: dict[str, dict[str, Any]] = {
         "max_tors_per_compute_rack": 0,
         "max_spines_per_pod": 4,
         "max_border_leafs_per_pod": 1,
+        "technical_host_bits": 9,
+        "loopback_host_bits": 6,
     },
 }
 
@@ -117,6 +140,10 @@ _POD_LAYOUT_DEFAULTS: dict[str, Any] = {
     "tor_uplinks_to_spine": None,
     "reserved_spine_downlinks_per_spine": 0,
     "enforce_compute_racks_from_spine_budget": False,
+    # Conservative fallback for any layout that doesn't declare its own —
+    # the largest real value above (L_MIXED's).
+    "technical_host_bits": 12,
+    "loopback_host_bits": 8,
 }
 
 

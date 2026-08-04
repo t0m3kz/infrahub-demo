@@ -6,7 +6,7 @@ from utils.data_cleaning import clean_data
 
 from ..cabling import CablingMixin
 from ..common import CommonGenerator, DeviceOptions
-from ..dc_config import resolve_dc_size_layout
+from ..dc_config import host_bits_to_prefix_length, resolve_dc_size_layout
 from ..devices import DeviceMixin
 from ..helpers import name_to_asn_range
 from ..helpers.routing import RoutingStrategy
@@ -163,7 +163,9 @@ class DCTopologyGenerator(PoolMixin, DeviceMixin, CablingMixin, RoutingMixin, Co
         # "M_BACK_TO_BACK"), and those border-leaf devices need a loopback IP
         # for overlay BGP just like they would under a super-spine design.
         if max_super_spines_cap > 0 or max_border_leafs_cap > 0 or max_hyper_spines_cap > 0:
-            pools_to_allocate["dc-fabric-loopback"] = dc_design["dc_fabric_loopback_prefix_length"]
+            pools_to_allocate["dc-fabric-loopback"] = host_bits_to_prefix_length(
+                dc_design["dc_fabric_loopback_host_bits"], ipv6=is_ipv6
+            )
 
         self.logger.info(f"Allocating DC pools: {list(pools_to_allocate.keys())}")
 

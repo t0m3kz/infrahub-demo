@@ -1,10 +1,11 @@
 """ASN pool range calculation utilities.
 
-Pod-level and DC-fabric IP pool sizes are fixed values from dc_config.py's
-DC_SIZE_LAYOUTS (pod_technical_prefix_length, pod_loopback_prefix_length,
-dc_fabric_loopback_prefix_length) instead of computed dynamically here —
-simpler and avoids a pod/DC generator run producing a differently-sized
-pool than a previous run if device counts change.
+Pod-level and DC-fabric IP pool sizes are fixed HOST-BIT widths — pod-level
+per layout in pod_config.py's POD_LAYOUTS (technical_host_bits,
+loopback_host_bits), DC-fabric in dc_config.py's DC_SIZE_LAYOUTS
+(dc_fabric_loopback_host_bits) — instead of computed dynamically here —
+simpler and avoids a pod/DC generator run producing a differently-sized pool
+than a previous run if device counts change.
 """
 
 from __future__ import annotations
