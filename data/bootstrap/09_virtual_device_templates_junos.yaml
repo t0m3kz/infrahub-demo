@@ -1,0 +1,202 @@
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TemplateDcimVirtualDevice
+  data:
+    - template_name: vSRX_EDGE_S
+      owner: "P027"
+      device_type: vSRX
+      role: firewall
+      platform: junos
+      software_image: junos-23.4R2
+      status: active
+      cpu: 2
+      memory: 8
+      storage: 60
+      interfaces:
+        kind: TemplateDcimPhysicalInterface
+        parameters:
+          expand_range: true
+        data:
+          - template_name: vSRX_EDGE_S_fxp0
+            name: fxp0
+            role: management
+          - template_name: vSRX_EDGE_S_ge-0-0-[0-3]
+            name: "ge-0/0/[0-3]"
+            role: customer
+          - template_name: vSRX_EDGE_S_ge-0-0-4
+            name: "ge-0/0/4"
+            role: ha
+    - template_name: vSRX_EDGE_M
+      owner: "P027"
+      device_type: vSRX
+      role: firewall
+      platform: junos
+      software_image: junos-23.4R2
+      status: active
+      cpu: 4
+      memory: 16
+      storage: 120
+      interfaces:
+        kind: TemplateDcimPhysicalInterface
+        parameters:
+          expand_range: true
+        data:
+          - template_name: vSRX_EDGE_M_fxp0
+            name: fxp0
+            role: management
+          - template_name: vSRX_EDGE_M_ge-0-0-[0-3]
+            name: "ge-0/0/[0-3]"
+            role: customer
+          - template_name: vSRX_EDGE_M_ge-0-0-4
+            name: "ge-0/0/4"
+            role: ha
+    - template_name: vSRX_EDGE_L
+      owner: "P027"
+      device_type: vSRX
+      role: firewall
+      platform: junos
+      software_image: junos-23.4R2
+      status: active
+      cpu: 8
+      memory: 32
+      storage: 240
+      interfaces:
+        kind: TemplateDcimPhysicalInterface
+        parameters:
+          expand_range: true
+        data:
+          - template_name: vSRX_EDGE_L_fxp0
+            name: fxp0
+            role: management
+          - template_name: vSRX_EDGE_L_ge-0-0-[0-3]
+            name: "ge-0/0/[0-3]"
+            role: customer
+          - template_name: vSRX_EDGE_L_ge-0-0-4
+            name: "ge-0/0/4"
+            role: ha
+    - template_name: vSRX_EDGE_XL
+      owner: "P027"
+      device_type: vSRX
+      role: firewall
+      platform: junos
+      software_image: junos-23.4R2
+      status: active
+      cpu: 16
+      memory: 64
+      storage: 480
+      interfaces:
+        kind: TemplateDcimPhysicalInterface
+        parameters:
+          expand_range: true
+        data:
+          - template_name: vSRX_EDGE_XL_fxp0
+            name: fxp0
+            role: management
+          - template_name: vSRX_EDGE_XL_ge-0-0-[0-3]
+            name: "ge-0/0/[0-3]"
+            role: customer
+          - template_name: vSRX_EDGE_XL_ge-0-0-4
+            name: "ge-0/0/4"
+            role: ha
+
+    # ── Dedicated per-customer instances — same sizing tiers, not part of the
+    # shared production/non-production pair dc.py auto-provisions; reserved
+    # for a future customer-boarding generator to instantiate on demand.
+    - template_name: vSRX_EDGE_CUSTOMER_S
+      owner: "P027"
+      device_type: vSRX
+      role: firewall
+      platform: junos
+      software_image: junos-23.4R2
+      status: active
+      cpu: 2
+      memory: 8
+      storage: 60
+      interfaces:
+        kind: TemplateDcimPhysicalInterface
+        parameters:
+          expand_range: true
+        data:
+          - template_name: vSRX_EDGE_CUSTOMER_S_fxp0
+            name: fxp0
+            role: management
+          - template_name: vSRX_EDGE_CUSTOMER_S_ge-0-0-[0-3]
+            name: "ge-0/0/[0-3]"
+            role: customer
+          - template_name: vSRX_EDGE_CUSTOMER_S_ge-0-0-4
+            name: "ge-0/0/4"
+            role: ha
+    - template_name: vSRX_EDGE_CUSTOMER_M
+      owner: "P027"
+      device_type: vSRX
+      role: firewall
+      platform: junos
+      software_image: junos-23.4R2
+      status: active
+      cpu: 4
+      memory: 16
+      storage: 120
+      interfaces:
+        kind: TemplateDcimPhysicalInterface
+        parameters:
+          expand_range: true
+        data:
+          - template_name: vSRX_EDGE_CUSTOMER_M_fxp0
+            name: fxp0
+            role: management
+          - template_name: vSRX_EDGE_CUSTOMER_M_ge-0-0-[0-3]
+            name: "ge-0/0/[0-3]"
+            role: customer
+          - template_name: vSRX_EDGE_CUSTOMER_M_ge-0-0-4
+            name: "ge-0/0/4"
+            role: ha
+    - template_name: vSRX_EDGE_CUSTOMER_L
+      owner: "P027"
+      device_type: vSRX
+      role: firewall
+      platform: junos
+      software_image: junos-23.4R2
+      status: active
+      cpu: 8
+      memory: 32
+      storage: 240
+      interfaces:
+        kind: TemplateDcimPhysicalInterface
+        parameters:
+          expand_range: true
+        data:
+          - template_name: vSRX_EDGE_CUSTOMER_L_fxp0
+            name: fxp0
+            role: management
+          - template_name: vSRX_EDGE_CUSTOMER_L_ge-0-0-[0-3]
+            name: "ge-0/0/[0-3]"
+            role: customer
+          - template_name: vSRX_EDGE_CUSTOMER_L_ge-0-0-4
+            name: "ge-0/0/4"
+            role: ha
+    - template_name: vSRX_EDGE_CUSTOMER_XL
+      owner: "P027"
+      device_type: vSRX
+      role: firewall
+      platform: junos
+      software_image: junos-23.4R2
+      status: active
+      cpu: 16
+      memory: 64
+      storage: 480
+      interfaces:
+        kind: TemplateDcimPhysicalInterface
+        parameters:
+          expand_range: true
+        data:
+          - template_name: vSRX_EDGE_CUSTOMER_XL_fxp0
+            name: fxp0
+            role: management
+          - template_name: vSRX_EDGE_CUSTOMER_XL_ge-0-0-[0-3]
+            name: "ge-0/0/[0-3]"
+            role: customer
+          - template_name: vSRX_EDGE_CUSTOMER_XL_ge-0-0-4
+            name: "ge-0/0/4"
+            role: ha

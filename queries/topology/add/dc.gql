@@ -60,6 +60,7 @@ query topology_dc($name: String!) {
                       platform {
                         node {
                           id
+                          name { value }
                         }
                       }
                       device_type {

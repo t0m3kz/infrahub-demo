@@ -112,6 +112,37 @@ class TestDeviceMixinCreateDevices:
         assert create_kwargs["data"]["owner"] == {"id": "owner-2"}
         assert create_kwargs["data"]["hosting_device"] == {"id": "host-1"}
 
+    @pytest.mark.asyncio
+    async def test_name_override_bypasses_naming_convention(self) -> None:
+        gen = _make_generator()
+        created_device = _mock_created_device(DcimVirtualDevice.__name__, "fw-01-fw-02-shared-production-01")
+        gen.client.create = AsyncMock(return_value=created_device)
+
+        names = await gen.create_devices(
+            device_role="firewall",
+            quantity=1,
+            deployment_id="dep-1",
+            template={"device_type": {"id": "dt-1"}, "platform": {"name": "checkpoint_gaia"}},
+            options={"virtual": True, "name_override": "fw-01-fw-02-shared-production-01"},
+        )
+
+        assert names == ["fw-01-fw-02-shared-production-01"]
+        create_kwargs = gen.client.create.call_args.kwargs
+        assert create_kwargs["data"]["name"] == "fw-01-fw-02-shared-production-01"
+
+    @pytest.mark.asyncio
+    async def test_name_override_rejects_quantity_other_than_one(self) -> None:
+        gen = _make_generator()
+
+        with pytest.raises(ValueError, match="name_override is only valid with quantity=1"):
+            await gen.create_devices(
+                device_role="firewall",
+                quantity=2,
+                deployment_id="dep-1",
+                template={"device_type": {"id": "dt-1"}, "platform": {"name": "checkpoint_gaia"}},
+                options={"virtual": True, "name_override": "fw-shared-production-01"},
+            )
+
 
 def _mock_device(name: str) -> MagicMock:
     dev = MagicMock()
@@ -256,6 +287,26 @@ class TestEnsureHaPairs:
         assert create_kwargs["data"]["name"] == "fw-01-fw-02-ha"
         assert create_kwargs["data"]["capabilities"] == [{"id": "id-fw-01"}, {"id": "id-fw-02"}]
         ha_obj.save.assert_awaited_once_with(allow_upsert=True)
+
+    @pytest.mark.asyncio
+    async def test_device_kind_defaults_to_physical_but_can_be_overridden(self) -> None:
+        """dc.py's shared virtual production/non-production instances pass
+        device_kind=DcimVirtualDevice — pair resolution must query that kind,
+        not the default DcimPhysicalDevice."""
+        gen = self._gen()
+        gen.client.filters = AsyncMock(side_effect=[[], [_mock_device("vfw-01"), _mock_device("vfw-02")]])
+        gen.client.get = AsyncMock(return_value=_mock_group())
+        ha_obj = MagicMock()
+        ha_obj.id = "ha-1"
+        ha_obj.save = AsyncMock()
+        gen.client.create = AsyncMock(return_value=ha_obj)
+
+        await gen._ensure_ha_pairs(
+            ["vfw-02", "vfw-01"], ha_kind="ManagedFirewallHA", role_label="firewall", device_kind=DcimVirtualDevice
+        )
+
+        pair_lookup_kwargs = gen.client.filters.call_args_list[-1].kwargs
+        assert pair_lookup_kwargs["kind"] is DcimVirtualDevice
 
     @pytest.mark.asyncio
     async def test_pairs_two_at_a_time_for_larger_even_counts(self) -> None:

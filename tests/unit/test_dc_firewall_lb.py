@@ -33,6 +33,7 @@ import pytest
 
 from generators.dc_config import DC_SIZE_LAYOUTS
 from generators.pod_config import POD_LAYOUTS
+from generators.protocols import DcimPhysicalDevice
 from generators.topology.dc import DCTopologyGenerator
 
 
@@ -319,6 +320,148 @@ class TestCreateRoleDevices:
 
         create_kwargs = gen.create_devices.call_args.kwargs
         assert create_kwargs["options"]["ha_kind"] == "ManagedLoadbalancerHA"
+
+
+class TestProvisionSharedVirtualInstances:
+    """DCTopologyGenerator._provision_shared_virtual_instances — for each
+    physical HA pair, creates 2 virtual instances per environment tier
+    (production/non-production), one hosted per physical peer, then pairs
+    each environment's own 2 instances into their own HA domain."""
+
+    @pytest.mark.asyncio
+    async def test_no_platform_on_template_is_a_noop(self) -> None:
+        gen = _make_generator()
+        gen.create_devices = AsyncMock()
+
+        await gen._provision_shared_virtual_instances(
+            role="firewall",
+            physical_names=["fw-01", "fw-02"],
+            physical_template={"id": "tmpl-fw"},
+            deployment_id="dc-1",
+        )
+
+        gen.create_devices.assert_not_awaited()
+        gen.logger.warning.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_unmapped_platform_is_a_noop(self) -> None:
+        gen = _make_generator()
+        gen.create_devices = AsyncMock()
+
+        await gen._provision_shared_virtual_instances(
+            role="firewall",
+            physical_names=["fw-01", "fw-02"],
+            physical_template={"id": "tmpl-fw", "platform": {"name": "some_unmapped_platform"}},
+            deployment_id="dc-1",
+        )
+
+        gen.create_devices.assert_not_awaited()
+        gen.logger.warning.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_no_matching_virtual_template_is_a_noop(self) -> None:
+        gen = _make_generator()
+        gen.create_devices = AsyncMock()
+        gen.client.filters = AsyncMock(return_value=[])  # no TemplateDcimVirtualDevice found
+
+        await gen._provision_shared_virtual_instances(
+            role="firewall",
+            physical_names=["fw-01", "fw-02"],
+            physical_template={"id": "tmpl-fw", "platform": {"name": "checkpoint_gaia"}},
+            deployment_id="dc-1",
+        )
+
+        gen.create_devices.assert_not_awaited()
+        gen.logger.warning.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_creates_4_instances_and_2_ha_domains_for_one_physical_pair(self) -> None:
+        gen = _make_generator()
+
+        virtual_template_obj = MagicMock()
+        virtual_template_obj.id = "vtmpl-1"
+        virtual_template_obj.device_type.peer.id = "dt-virtual-1"
+        virtual_template_obj.platform.peer.id = "plat-virtual-1"
+
+        physical_peer_a = MagicMock()
+        physical_peer_a.id = "phys-a"
+        physical_peer_a.name = MagicMock(value="fw-01")
+        physical_peer_b = MagicMock()
+        physical_peer_b.id = "phys-b"
+        physical_peer_b.name = MagicMock(value="fw-02")
+
+        async def _filters(*, kind: Any, **kwargs: Any) -> list[Any]:
+            if kind == "TemplateDcimVirtualDevice":
+                return [virtual_template_obj]
+            if kind is DcimPhysicalDevice:
+                return [physical_peer_a, physical_peer_b]
+            return []
+
+        gen.client.filters = AsyncMock(side_effect=_filters)
+
+        created_instance_names: list[str] = []
+
+        async def _create_devices(*, options: Any, **kwargs: Any) -> list[str]:  # noqa: ARG001
+            name = options["name_override"]
+            created_instance_names.append(name)
+            return [name]
+
+        gen.create_devices = AsyncMock(side_effect=_create_devices)
+        gen._ensure_ha_pairs = AsyncMock()
+
+        await gen._provision_shared_virtual_instances(
+            role="firewall",
+            physical_names=["fw-01", "fw-02"],
+            physical_template={"id": "tmpl-fw", "platform": {"name": "checkpoint_gaia"}},
+            deployment_id="dc-1",
+        )
+
+        assert len(created_instance_names) == 4
+        assert all("shared-production" in n or "shared-non-production" in n for n in created_instance_names)
+        assert gen._ensure_ha_pairs.await_count == 2  # one HA domain per environment tier
+
+        # Each virtual instance is hosted on a distinct physical peer.
+        hosting_devices = [call.kwargs["hosting_device"] for call in gen.create_devices.call_args_list]
+        assert {d.id for d in hosting_devices} == {"phys-a", "phys-b"}
+
+    @pytest.mark.asyncio
+    async def test_odd_leftover_physical_device_is_skipped(self) -> None:
+        """3 physical devices pair into exactly 1 pair (pair_device_names'
+        own odd-one-out behavior) — only that pair gets shared instances."""
+        gen = _make_generator()
+
+        virtual_template_obj = MagicMock()
+        virtual_template_obj.id = "vtmpl-1"
+        virtual_template_obj.device_type.peer.id = "dt-virtual-1"
+        virtual_template_obj.platform.peer.id = "plat-virtual-1"
+
+        physical_peer_a = MagicMock()
+        physical_peer_a.id = "phys-a"
+        physical_peer_a.name = MagicMock(value="fw-01")
+        physical_peer_b = MagicMock()
+        physical_peer_b.id = "phys-b"
+        physical_peer_b.name = MagicMock(value="fw-02")
+
+        async def _filters(*, kind: Any, **kwargs: Any) -> list[Any]:
+            if kind == "TemplateDcimVirtualDevice":
+                return [virtual_template_obj]
+            if kind is DcimPhysicalDevice:
+                return [physical_peer_a, physical_peer_b]
+            return []
+
+        gen.client.filters = AsyncMock(side_effect=_filters)
+        gen.create_devices = AsyncMock(return_value=["ignored"])
+        gen._ensure_ha_pairs = AsyncMock()
+
+        await gen._provision_shared_virtual_instances(
+            role="firewall",
+            physical_names=["fw-01", "fw-02", "fw-03"],
+            physical_template={"id": "tmpl-fw", "platform": {"name": "checkpoint_gaia"}},
+            deployment_id="dc-1",
+        )
+
+        # 1 pair * 2 environments * 2 peers = 4 create_devices calls, not 6.
+        assert gen.create_devices.await_count == 4
 
 
 _BL_ROLE_FOR = {"firewall": "firewall", "load-balancer": "load-balancer"}

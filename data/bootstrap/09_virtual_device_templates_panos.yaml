@@ -1,0 +1,202 @@
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TemplateDcimVirtualDevice
+  data:
+    - template_name: PA-VM_EDGE_S
+      owner: "P027"
+      device_type: PA-VM
+      role: firewall
+      platform: panos
+      software_image: panos-11.1.3
+      status: active
+      cpu: 2
+      memory: 8
+      storage: 60
+      interfaces:
+        kind: TemplateDcimPhysicalInterface
+        parameters:
+          expand_range: true
+        data:
+          - template_name: PA-VM_EDGE_S_mgmt
+            name: mgmt
+            role: management
+          - template_name: PA-VM_EDGE_S_eth[1-6]
+            name: eth1/[1-6]
+            role: customer
+          - template_name: PA-VM_EDGE_S_ha1
+            name: ha1
+            role: ha
+    - template_name: PA-VM_EDGE_M
+      owner: "P027"
+      device_type: PA-VM
+      role: firewall
+      platform: panos
+      software_image: panos-11.1.3
+      status: active
+      cpu: 4
+      memory: 16
+      storage: 120
+      interfaces:
+        kind: TemplateDcimPhysicalInterface
+        parameters:
+          expand_range: true
+        data:
+          - template_name: PA-VM_EDGE_M_mgmt
+            name: mgmt
+            role: management
+          - template_name: PA-VM_EDGE_M_eth[1-6]
+            name: eth1/[1-6]
+            role: customer
+          - template_name: PA-VM_EDGE_M_ha1
+            name: ha1
+            role: ha
+    - template_name: PA-VM_EDGE_L
+      owner: "P027"
+      device_type: PA-VM
+      role: firewall
+      platform: panos
+      software_image: panos-11.1.3
+      status: active
+      cpu: 8
+      memory: 32
+      storage: 240
+      interfaces:
+        kind: TemplateDcimPhysicalInterface
+        parameters:
+          expand_range: true
+        data:
+          - template_name: PA-VM_EDGE_L_mgmt
+            name: mgmt
+            role: management
+          - template_name: PA-VM_EDGE_L_eth[1-6]
+            name: eth1/[1-6]
+            role: customer
+          - template_name: PA-VM_EDGE_L_ha1
+            name: ha1
+            role: ha
+    - template_name: PA-VM_EDGE_XL
+      owner: "P027"
+      device_type: PA-VM
+      role: firewall
+      platform: panos
+      software_image: panos-11.1.3
+      status: active
+      cpu: 16
+      memory: 64
+      storage: 480
+      interfaces:
+        kind: TemplateDcimPhysicalInterface
+        parameters:
+          expand_range: true
+        data:
+          - template_name: PA-VM_EDGE_XL_mgmt
+            name: mgmt
+            role: management
+          - template_name: PA-VM_EDGE_XL_eth[1-6]
+            name: eth1/[1-6]
+            role: customer
+          - template_name: PA-VM_EDGE_XL_ha1
+            name: ha1
+            role: ha
+
+    # ── Dedicated per-customer instances — same sizing tiers, not part of the
+    # shared production/non-production pair dc.py auto-provisions; reserved
+    # for a future customer-boarding generator to instantiate on demand.
+    - template_name: PA-VM_EDGE_CUSTOMER_S
+      owner: "P027"
+      device_type: PA-VM
+      role: firewall
+      platform: panos
+      software_image: panos-11.1.3
+      status: active
+      cpu: 2
+      memory: 8
+      storage: 60
+      interfaces:
+        kind: TemplateDcimPhysicalInterface
+        parameters:
+          expand_range: true
+        data:
+          - template_name: PA-VM_EDGE_CUSTOMER_S_mgmt
+            name: mgmt
+            role: management
+          - template_name: PA-VM_EDGE_CUSTOMER_S_eth[1-6]
+            name: eth1/[1-6]
+            role: customer
+          - template_name: PA-VM_EDGE_CUSTOMER_S_ha1
+            name: ha1
+            role: ha
+    - template_name: PA-VM_EDGE_CUSTOMER_M
+      owner: "P027"
+      device_type: PA-VM
+      role: firewall
+      platform: panos
+      software_image: panos-11.1.3
+      status: active
+      cpu: 4
+      memory: 16
+      storage: 120
+      interfaces:
+        kind: TemplateDcimPhysicalInterface
+        parameters:
+          expand_range: true
+        data:
+          - template_name: PA-VM_EDGE_CUSTOMER_M_mgmt
+            name: mgmt
+            role: management
+          - template_name: PA-VM_EDGE_CUSTOMER_M_eth[1-6]
+            name: eth1/[1-6]
+            role: customer
+          - template_name: PA-VM_EDGE_CUSTOMER_M_ha1
+            name: ha1
+            role: ha
+    - template_name: PA-VM_EDGE_CUSTOMER_L
+      owner: "P027"
+      device_type: PA-VM
+      role: firewall
+      platform: panos
+      software_image: panos-11.1.3
+      status: active
+      cpu: 8
+      memory: 32
+      storage: 240
+      interfaces:
+        kind: TemplateDcimPhysicalInterface
+        parameters:
+          expand_range: true
+        data:
+          - template_name: PA-VM_EDGE_CUSTOMER_L_mgmt
+            name: mgmt
+            role: management
+          - template_name: PA-VM_EDGE_CUSTOMER_L_eth[1-6]
+            name: eth1/[1-6]
+            role: customer
+          - template_name: PA-VM_EDGE_CUSTOMER_L_ha1
+            name: ha1
+            role: ha
+    - template_name: PA-VM_EDGE_CUSTOMER_XL
+      owner: "P027"
+      device_type: PA-VM
+      role: firewall
+      platform: panos
+      software_image: panos-11.1.3
+      status: active
+      cpu: 16
+      memory: 64
+      storage: 480
+      interfaces:
+        kind: TemplateDcimPhysicalInterface
+        parameters:
+          expand_range: true
+        data:
+          - template_name: PA-VM_EDGE_CUSTOMER_XL_mgmt
+            name: mgmt
+            role: management
+          - template_name: PA-VM_EDGE_CUSTOMER_XL_eth[1-6]
+            name: eth1/[1-6]
+            role: customer
+          - template_name: PA-VM_EDGE_CUSTOMER_XL_ha1
+            name: ha1
+            role: ha

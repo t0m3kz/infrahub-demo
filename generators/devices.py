@@ -70,20 +70,26 @@ class DeviceMixin:
 
         device_prefix: str = fabric_name if not pod_name else pod_name
 
-        naming = DeviceNamingConfig(strategy=naming_convention)
-        device_names: list[str] = sorted(
-            [
-                naming.format_device_name(
-                    DeviceNameContext.from_indexes(
-                        fabric_name=fabric_name,
-                        device_role=device_role,
-                        role_index=idx,
-                        indexes=indexes or [],
+        name_override = options.get("name_override")
+        if name_override:
+            if quantity != 1:
+                raise ValueError(f"name_override is only valid with quantity=1, got quantity={quantity}")
+            device_names: list[str] = [name_override]
+        else:
+            naming = DeviceNamingConfig(strategy=naming_convention)
+            device_names = sorted(
+                [
+                    naming.format_device_name(
+                        DeviceNameContext.from_indexes(
+                            fabric_name=fabric_name,
+                            device_role=device_role,
+                            role_index=idx,
+                            indexes=indexes or [],
+                        )
                     )
-                )
-                for idx in range(1, quantity + 1)
-            ]
-        )
+                    for idx in range(1, quantity + 1)
+                ]
+            )
         management_pool_name = f"{fabric_name}-management-pool"
 
         if device_role in ("super-spine", "border-leaf"):
@@ -282,7 +288,7 @@ class DeviceMixin:
 
         ha_kind = options.get("ha_kind")
         if ha_kind and device_role in _HA_PAIRED_ROLES:
-            await self._ensure_ha_pairs(device_names, ha_kind=ha_kind, role_label=device_role)
+            await self._ensure_ha_pairs(device_names, ha_kind=ha_kind, role_label=device_role, device_kind=device_kind)
 
         mlag_create = options.get("mlag_create", "no")
         if mlag_create != "no":
@@ -302,12 +308,16 @@ class DeviceMixin:
         *,
         ha_kind: str,
         role_label: str,
+        device_kind: type[Any] = DcimPhysicalDevice,
     ) -> None:
         """Pair same-role devices two-at-a-time (sorted, odd one unpaired) into
         HA domains. Shared by dc.py (DC-wide firewall/load-balancer) and pod.py
         (a border-spine pod's own firewall/load-balancer) — never pairs across
         pods/DCs, both members must sit in front of the same fabric to mean
-        anything physically."""
+        anything physically. device_kind is DcimVirtualDevice for the shared
+        production/non-production virtual instances dc.py provisions per
+        physical HA pair — same pairing logic, no physical cabling involved
+        (ha.py already skips cable creation for non-physical HA domains)."""
         ha_group = None
         for first, second in pair_device_names(device_names):
             ha_name = f"{first}-{second}-ha"
@@ -316,7 +326,7 @@ class DeviceMixin:
                 self.client.group_context.related_node_ids.append(existing[0].id)
                 continue
 
-            devices = await self.client.filters(kind=DcimPhysicalDevice, name__values=[first, second])
+            devices = await self.client.filters(kind=device_kind, name__values=[first, second])
             if len(devices) != 2:
                 self.logger.error(f"HA pair {first}/{second}: could not resolve both devices.")
                 continue
