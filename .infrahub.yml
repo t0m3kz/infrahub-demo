@@ -124,6 +124,19 @@ artifact_definitions:
     transformation: firewall
     parameters:
       device: name__value
+  # Controller payload — one artifact_definition for every ManagedController
+  # in managed_controllers; controller_type/vendor are passed alongside the
+  # object's own name so the transform can dispatch to the right vendor
+  # builder without any per-controller querying/matching in Python.
+  - name: controller_payload
+    artifact_name: controller-payload
+    content_type: application/json
+    targets: managed_controllers
+    transformation: controller-payload
+    parameters:
+      controller: name__value
+      controller_type: controller_type__value
+      vendor: platform__name__value
   # - name: rack_elevation
   #   artifact_name: rack_elevation
   #   content_type: image/svg+xml
@@ -256,6 +269,9 @@ python_transforms:
   - name: firewall
     class_name: Firewall
     file_path: transforms/config/firewall.py
+  - name: controller-payload
+    class_name: ControllerPayload
+    file_path: transforms/config/controller.py
   - name: rack_elevation
     class_name: RackElevation
     file_path: transforms/topology/rack.py
@@ -316,6 +332,8 @@ queries:
     file_path: queries/config/loadbalancer_cloud.gql
   - name: firewall_config
     file_path: queries/config/firewall.gql
+  - name: controller_payload
+    file_path: queries/config/controller.gql
   - name: oob_config
     file_path: queries/config/oob.gql
   - name: pod_decommission

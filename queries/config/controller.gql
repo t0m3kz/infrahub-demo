@@ -1,0 +1,36 @@
+query controller_payload($controller: String!) {
+  ManagedController(name__value: $controller) {
+    edges {
+      node {
+        __typename
+        id
+        name { value }
+        controller_type { value }
+        ... on DcimDevice {
+          platform {
+            node {
+              id
+              name { value }
+            }
+          }
+        }
+        managed_devices {
+          edges {
+            node {
+              __typename
+              id
+              name { value }
+              role { value }
+              status { value }
+              primary_address {
+                node {
+                  address { value }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

@@ -96,3 +96,5 @@ spec:
       description: Customer deployment footprints (TopologyCustomerDC/Colocation/Cloud) — generator target for ExchangeGatewayGenerator  # yamllint disable-line rule:line-length
     - name: customer_quotations
       description: Customer sizing/pricing requests for QuotationDCGenerator and OfficeQuotationGenerator
+    - name: managed_controllers
+      description: Management/orchestration controllers (ACI APIC, DCNM, Panorama, Check Point SMS, F5 BIG-IQ, NetScaler-ADM, ...) — target for controller payload artifacts  # yamllint disable-line rule:line-length

@@ -12,6 +12,7 @@ spec:
     - name: "DC12-DCNM1"
       object_template: MDS-NDFC_DCNM
       status: active
+      member_of_groups: [managed_controllers]
 
 ---
 apiVersion: infrahub.app/v1
@@ -22,9 +23,11 @@ spec:
     - name: "DC12-CPSMS1"
       object_template: CP-SMS_MANAGER
       status: active
+      member_of_groups: [managed_controllers]
     - name: "DC12-BIGIQ1"
       object_template: BIG-IQ_MANAGER
       status: active
+      member_of_groups: [managed_controllers]
 
 ---
 # DC12 — controller-managed fabric AND firewall AND load-balancer, all at

@@ -16,9 +16,11 @@ spec:
     - name: "DC11-PANORAMA1"
       object_template: Panorama_MANAGER
       status: active
+      member_of_groups: [managed_controllers]
     - name: "DC11-NSADM1"
       object_template: NetScaler-ADM_MANAGER
       status: active
+      member_of_groups: [managed_controllers]
 
 ---
 # DC11 — controller-managed firewall AND load-balancer, each via its own
