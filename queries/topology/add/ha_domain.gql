@@ -113,6 +113,28 @@ query ha_domain_data($name: String!) {
                   }
                 }
               }
+              ... on DcimVirtualDevice {
+                id
+                name { value }
+                interfaces {
+                  edges {
+                    node {
+                      id
+                      name { value }
+                      __typename
+                      ... on DcimPhysicalInterface {
+                        role { value }
+                        description { value }
+                        cable { node { id name { value } } }
+                      }
+                      ... on DcimVirtualInterface {
+                        role { value }
+                        description { value }
+                      }
+                    }
+                  }
+                }
+              }
             }
           }
         }
