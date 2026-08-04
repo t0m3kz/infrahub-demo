@@ -12,6 +12,7 @@ spec:
     - name: "DC9-APIC1"
       object_template: APIC-L3_ACI_APIC
       status: active
+      member_of_groups: [managed_controllers]
 
 ---
 # DC9 — Cisco ACI fabric, demonstrating ManagedControllerPhysical (see
