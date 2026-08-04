@@ -18,15 +18,15 @@ _INFRAHUB_VERSION = os.getenv("VERSION", "latest")
 
 if Path("docker-compose.yml").exists():
     # Local base file — Docker Compose auto-merges docker-compose.override.yml.
-    COMPOSE_COMMAND = "docker compose -p infrahub"
+    COMPOSE_COMMAND = "docker-compose -p infrahub"
 elif Path("docker-compose.override.yml").exists():
     # No local base file; stream upstream and explicitly merge the override.
     COMPOSE_COMMAND = (
         f"curl -fsSL https://infrahub.opsmill.io/{_INFRAHUB_VERSION}"
-        " | docker compose -p infrahub -f - -f docker-compose.override.yml"
+        " | docker-compose -p infrahub -f - -f docker-compose.override.yml"
     )
 else:
-    COMPOSE_COMMAND = f"curl -fsSL https://infrahub.opsmill.io/{_INFRAHUB_VERSION} | docker compose -p infrahub -f -"
+    COMPOSE_COMMAND = f"curl -fsSL https://infrahub.opsmill.io/{_INFRAHUB_VERSION} | docker-compose -p infrahub -f -"
 
 
 def _check_container_running(context: Context, max_attempts: int = 60) -> bool:
