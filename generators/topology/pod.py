@@ -301,7 +301,7 @@ class PodTopologyGenerator(PoolMixin, DeviceMixin, CablingMixin, RoutingMixin, C
         # template shares consistent downlink-interface naming.
         spine_template = spine_entries[0]["template"]
 
-        super_spine_devices = [device.name for device in dc.get("devices", [])]
+        super_spine_devices = [device["name"] for device in dc.get("devices", [])]
         dc_super_spine_entries = templates_by_role(dc.get("fabric_templates", []), "super-spine")
         super_spine_interfaces = (
             [iface["name"] for iface in dc_super_spine_entries[0]["template"].get("interfaces", [])]
