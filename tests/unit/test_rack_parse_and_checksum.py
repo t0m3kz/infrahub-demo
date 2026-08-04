@@ -13,15 +13,6 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from generators.models import (
-    DeviceRole,
-    Interface,
-    LocationSuiteModel,
-    RackModel,
-    RackParent,
-    RackPod,
-    Template,
-)
 from generators.topology.rack import RackGenerator
 
 # ---------------------------------------------------------------------------
@@ -29,7 +20,7 @@ from generators.topology.rack import RackGenerator
 # ---------------------------------------------------------------------------
 
 
-_DEFAULT_LEAF = DeviceRole(role="leaf", quantity=2, template=Template(id="tmpl-leaf"))
+_DEFAULT_LEAF = {"role": "leaf", "quantity": 2, "template": {"id": "tmpl-leaf"}}
 
 
 def _build_rack_generator(
@@ -38,32 +29,32 @@ def _build_rack_generator(
     rack_type: str = "network",
     rack_index: int = 5,
     row_index: int = 1,
-    leafs: list[DeviceRole] | None = None,
+    leafs: list[dict[str, Any]] | None = None,
 ) -> Any:
     """Return a RackGenerator typed as Any so ty allows mock attribute assignments."""
-    parent = RackParent(id="parent-1", name="DC1", index=1, size="S")
-    pod = RackPod(
-        id="pod-1",
-        name="pod-1",
-        index=1,
-        parent=parent,
-        leaf_interface_sorting_method="top_down",
-        spine_interface_sorting_method="bottom_up",
-        fabric_templates=[DeviceRole(role="spine", quantity=2, template=Template(id="tmpl-spine"))],
-        deployment_type=deployment_type,
-        layout="S_MIXED",
-    )
-    suite = LocationSuiteModel(index=1)
-    rack = RackModel(
-        id="rack-net-1",
-        name="MUC-1-S-1-R-1-5",
-        index=rack_index,
-        rack_type=rack_type,
-        row_index=row_index,
-        parent=suite,
-        pod=pod,
-        leafs=leafs if leafs is not None else [_DEFAULT_LEAF],
-    )
+    parent = {"id": "parent-1", "name": "DC1", "index": 1, "size": "S"}
+    pod = {
+        "id": "pod-1",
+        "name": "pod-1",
+        "index": 1,
+        "parent": parent,
+        "leaf_interface_sorting_method": "top_down",
+        "spine_interface_sorting_method": "bottom_up",
+        "fabric_templates": [{"role": "spine", "quantity": 2, "template": {"id": "tmpl-spine"}}],
+        "deployment_type": deployment_type,
+        "layout": "S_MIXED",
+    }
+    suite = {"index": 1}
+    rack = {
+        "id": "rack-net-1",
+        "name": "MUC-1-S-1-R-1-5",
+        "index": rack_index,
+        "rack_type": rack_type,
+        "row_index": row_index,
+        "parent": suite,
+        "pod": pod,
+        "leafs": leafs if leafs is not None else [_DEFAULT_LEAF],
+    }
     gen = RackGenerator.__new__(RackGenerator)
     gen.data = rack
     gen.logger = MagicMock()
@@ -97,19 +88,17 @@ class TestParseRackData:
     def test_direct_node_dict_dispatches_on_name_being_dict(self) -> None:
         """_parse_rack_data takes the direct-node path when data['name'] is a dict.
 
-        The direct-node path passes data straight to RackModel(**data).
-        When data comes from an event trigger it has already been cleaned by
-        the SDK — name is a plain string, not a {value:} wrapper.
-        We verify the dispatch condition fires (ValidationError means it reached
-        RackModel, not the 'unknown shape' fallback).
+        The direct-node path returns data as-is, unvalidated (no more
+        Pydantic model in the loop) — the dispatch condition itself (not
+        model construction) is what this test verifies: a dict `name` routes
+        here instead of falling through to the 'Unknown data structure'
+        ValueError raised when neither condition matches (see
+        test_unknown_shape_raises_value_error).
         """
         # name is a dict → triggers the 'direct node data' branch
         data = {"name": {"value": "TEST-RACK"}, "checksum": "abc", "index": 5}
-        with pytest.raises(Exception):
-            # Either ValidationError (RackModel rejects the dict name) or
-            # some other model error — what matters is it didn't raise
-            # "Unknown data structure" ValueError.
-            RackGenerator._parse_rack_data(data)
+        result = RackGenerator._parse_rack_data(data)
+        assert result is data
 
     def test_direct_node_dict_with_cleaned_name(self) -> None:
         """Direct-node path succeeds when name is already a plain string (event trigger shape)."""
@@ -196,8 +185,8 @@ class TestParseRackData:
             }
         }
         result = RackGenerator._parse_rack_data(raw)
-        assert result.name == "GQL-RACK"
-        assert result.rack_type == "tor"
+        assert result["name"] == "GQL-RACK"
+        assert result["rack_type"] == "tor"
 
     def test_empty_edges_raises_value_error(self) -> None:
         raw = {"LocationRack": {"edges": []}}
@@ -214,13 +203,13 @@ class TestDeriveSpineInfo:
         """Spine interface names come from template; GQL pre-filters to downlink role."""
         gen = _build_rack_generator(deployment_type="tor", rack_type="tor")
         gen.fabric_name = "dc1"
-        gen.data.pod.index = 3
-        gen.data.pod.parent.index = 1
-        gen.data.pod.parent.naming_convention = "standard"
-        gen.data.pod.fabric_templates[0].template.interfaces = [
-            Interface(name="Ethernet1/1"),
-            Interface(name="Ethernet1/2"),
-            Interface(name="Ethernet1/3"),
+        gen.data["pod"]["index"] = 3
+        gen.data["pod"]["parent"]["index"] = 1
+        gen.data["pod"]["parent"]["naming_convention"] = "standard"
+        gen.data["pod"]["fabric_templates"][0]["template"]["interfaces"] = [
+            {"name": "Ethernet1/1"},
+            {"name": "Ethernet1/2"},
+            {"name": "Ethernet1/3"},
         ]
 
         device_names, interface_names = gen._derive_spine_info()
@@ -232,10 +221,10 @@ class TestDeriveSpineInfo:
         """RuntimeError raised when there are no spine fabric_templates entries."""
         gen = _build_rack_generator(deployment_type="tor", rack_type="tor")
         gen.fabric_name = "dc1"
-        gen.data.pod.index = 1
-        gen.data.pod.parent.index = 1
-        gen.data.pod.parent.naming_convention = "standard"
-        gen.data.pod.fabric_templates = []
+        gen.data["pod"]["index"] = 1
+        gen.data["pod"]["parent"]["index"] = 1
+        gen.data["pod"]["parent"]["naming_convention"] = "standard"
+        gen.data["pod"]["fabric_templates"] = []
 
         with pytest.raises(RuntimeError, match="Cannot derive spine info"):
             gen._derive_spine_info()
@@ -244,12 +233,12 @@ class TestDeriveSpineInfo:
         """All template interfaces are returned (GQL pre-filters, no role check needed)."""
         gen = _build_rack_generator(deployment_type="tor", rack_type="tor")
         gen.fabric_name = "dc1"
-        gen.data.pod.index = 1
-        gen.data.pod.parent.index = 1
-        gen.data.pod.parent.naming_convention = "standard"
-        gen.data.pod.fabric_templates[0].template.interfaces = [
-            Interface(name="Ethernet1/1"),
-            Interface(name="Ethernet1/2"),
+        gen.data["pod"]["index"] = 1
+        gen.data["pod"]["parent"]["index"] = 1
+        gen.data["pod"]["parent"]["naming_convention"] = "standard"
+        gen.data["pod"]["fabric_templates"][0]["template"]["interfaces"] = [
+            {"name": "Ethernet1/1"},
+            {"name": "Ethernet1/2"},
         ]
 
         device_names, interface_names = gen._derive_spine_info()
@@ -258,29 +247,13 @@ class TestDeriveSpineInfo:
         assert interface_names == ["Ethernet1/1", "Ethernet1/2"]
 
     def test_raises_when_template_has_no_interfaces(self) -> None:
-        """When template has no interfaces, dynamic fallback uses layout budget."""
+        """No dynamic fallback anymore — every template must declare its own interfaces."""
         gen = _build_rack_generator(deployment_type="tor", rack_type="tor")
         gen.fabric_name = "dc1"
-        gen.data.pod.index = 1
-        gen.data.pod.parent.index = 1
-        gen.data.pod.parent.naming_convention = "standard"
-        gen.data.pod.fabric_templates[0].template.interfaces = []
-
-        _, interface_names = gen._derive_spine_info()
-
-        # S_MIXED budget: 32 downlinks per spine, none reserved
-        assert len(interface_names) == 32
-        assert interface_names[0] == "Ethernet1/1"
-        assert interface_names[-1] == "Ethernet1/32"
-
-    def test_raises_when_template_has_no_interfaces_and_no_budget_fallback(self) -> None:
-        gen = _build_rack_generator(deployment_type="middle_rack", rack_type="network")
-        gen.fabric_name = "dc1"
-        gen.data.pod.index = 1
-        gen.data.pod.parent.index = 1
-        gen.data.pod.parent.naming_convention = "standard"
-        gen.data.pod.layout = "S_MIDDLE"  # no explicit spine budget metadata
-        gen.data.pod.fabric_templates[0].template.interfaces = []
+        gen.data["pod"]["index"] = 1
+        gen.data["pod"]["parent"]["index"] = 1
+        gen.data["pod"]["parent"]["naming_convention"] = "standard"
+        gen.data["pod"]["fabric_templates"][0]["template"]["interfaces"] = []
 
         with pytest.raises(RuntimeError, match="Spine template has no downlink interfaces"):
             gen._derive_spine_info()
@@ -385,9 +358,9 @@ class TestGenerateRackGating:
     @pytest.mark.asyncio
     async def test_endpoint_only_rack_skips_before_role_check(self) -> None:
         gen = _build_rack_generator(deployment_type="mixed", rack_type="compute", leafs=[])
-        gen.data.tors = []
-        gen.data.l2_leafs = []
-        gen.data.access_leafs = []
+        gen.data["tors"] = []
+        gen.data["l2_leafs"] = []
+        gen.data["access_leafs"] = []
         gen._role_compatibility_errors = MagicMock()
         gen._prepare_generation_context = MagicMock()
 
@@ -411,9 +384,9 @@ class TestGenerateRackGating:
 class TestRoleDeploymentCompatibility:
     def test_middle_rack_with_tor_is_incompatible(self) -> None:
         gen = _build_rack_generator(deployment_type="middle_rack", rack_type="network")
-        gen.data.tors = [DeviceRole(role="tor", quantity=2, template=Template(id="tmpl-tor"))]
-        gen.data.l2_leafs = []
-        gen.data.access_leafs = []
+        gen.data["tors"] = [{"role": "tor", "quantity": 2, "template": {"id": "tmpl-tor"}}]
+        gen.data["l2_leafs"] = []
+        gen.data["access_leafs"] = []
 
         errors = gen._role_compatibility_errors("middle_rack")
 
@@ -423,17 +396,17 @@ class TestRoleDeploymentCompatibility:
 
     def test_middle_rack_with_access_leaf_is_compatible(self) -> None:
         gen = _build_rack_generator(deployment_type="middle_rack", rack_type="network")
-        gen.data.tors = []
-        gen.data.l2_leafs = []
-        gen.data.access_leafs = [DeviceRole(role="access-leaf", quantity=2, template=Template(id="tmpl-al"))]
+        gen.data["tors"] = []
+        gen.data["l2_leafs"] = []
+        gen.data["access_leafs"] = [{"role": "access-leaf", "quantity": 2, "template": {"id": "tmpl-al"}}]
 
         assert gen._role_compatibility_errors("middle_rack") == []
 
     def test_tor_and_access_leaf_mutually_exclusive_regardless_of_deployment(self) -> None:
         gen = _build_rack_generator(deployment_type="mixed", rack_type="compute")
-        gen.data.tors = [DeviceRole(role="tor", quantity=2, template=Template(id="tmpl-tor"))]
-        gen.data.l2_leafs = []
-        gen.data.access_leafs = [DeviceRole(role="access-leaf", quantity=2, template=Template(id="tmpl-al"))]
+        gen.data["tors"] = [{"role": "tor", "quantity": 2, "template": {"id": "tmpl-tor"}}]
+        gen.data["l2_leafs"] = []
+        gen.data["access_leafs"] = [{"role": "access-leaf", "quantity": 2, "template": {"id": "tmpl-al"}}]
 
         errors = gen._role_compatibility_errors("mixed")
 
@@ -443,18 +416,18 @@ class TestRoleDeploymentCompatibility:
     def test_mixed_tor_alone_is_compatible(self) -> None:
         """mixed+tor is a real, cabled path (calculate_cabling_offsets' mixed+tor branch)."""
         gen = _build_rack_generator(deployment_type="mixed", rack_type="compute", leafs=[])
-        gen.data.tors = [DeviceRole(role="tor", quantity=2, template=Template(id="tmpl-tor"))]
-        gen.data.l2_leafs = []
-        gen.data.access_leafs = []
+        gen.data["tors"] = [{"role": "tor", "quantity": 2, "template": {"id": "tmpl-tor"}}]
+        gen.data["l2_leafs"] = []
+        gen.data["access_leafs"] = []
 
         assert gen._role_compatibility_errors("mixed") == []
 
     def test_tor_deployment_with_leaf_is_incompatible(self) -> None:
         gen = _build_rack_generator(deployment_type="tor", rack_type="tor", leafs=[])
-        gen.data.leafs = [DeviceRole(role="leaf", quantity=2, template=Template(id="tmpl-leaf"))]
-        gen.data.tors = []
-        gen.data.l2_leafs = []
-        gen.data.access_leafs = []
+        gen.data["leafs"] = [{"role": "leaf", "quantity": 2, "template": {"id": "tmpl-leaf"}}]
+        gen.data["tors"] = []
+        gen.data["l2_leafs"] = []
+        gen.data["access_leafs"] = []
 
         errors = gen._role_compatibility_errors("tor")
 
@@ -466,9 +439,9 @@ class TestRoleDeploymentCompatibility:
         """The role-compatibility gate runs before _prepare_generation_context, so a
         bad rack never reaches device creation."""
         gen = _build_rack_generator(deployment_type="middle_rack", rack_type="network")
-        gen.data.tors = [DeviceRole(role="tor", quantity=2, template=Template(id="tmpl-tor"))]
-        gen.data.l2_leafs = []
-        gen.data.access_leafs = []
+        gen.data["tors"] = [{"role": "tor", "quantity": 2, "template": {"id": "tmpl-tor"}}]
+        gen.data["l2_leafs"] = []
+        gen.data["access_leafs"] = []
         gen._prepare_generation_context = MagicMock()
 
         with patch("generators.topology.rack.parse_rack_data", return_value=gen.data):

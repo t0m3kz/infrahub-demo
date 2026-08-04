@@ -22,7 +22,7 @@ for firewall/load-balancer, generalized to every tier):
              the real generators either (see generators/border_services.py).
 
 For pods > 1 there are two real architectures in this project (see
-generators/models.py's DC_SIZE_LAYOUTS, S/M vs L/XL): back-to-back (pods
+generators/dc_config.py & generators/pod_config.py's DC_SIZE_LAYOUTS, S/M vs L/XL): back-to-back (pods
 mesh their own spines directly, no super-spine tier) or classic 3-tier (a
 dedicated super-spine aggregates every pod's spines). Neither is strictly
 better - both are costed in build_switch_fabric() and the cheaper one is
@@ -632,7 +632,7 @@ def device_templates_from_graphql(raw_templates: list[dict], manufacturers: dict
 
 
 def recommend_pod_design(pod_designs: list[dict], leaf_count: int, spine_count: int) -> dict | None:
-    """Smallest pod layout dict (see POD_LAYOUTS in generators/models.py)
+    """Smallest pod layout dict (see POD_LAYOUTS in generators/dc_config.py & generators/pod_config.py)
     whose leaf capacity (rows * network_racks_per_row *
     max_leafs_per_network_rack - the middle_rack/mixed deployment shape the
     leaf tier assumes) and max_spines_per_pod both cover the computed

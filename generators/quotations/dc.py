@@ -13,10 +13,10 @@ speeds per room, and writes the result into:
   border-leaf/firewall/load-balancer rows sized from the summed leaf count.
 - CustomerQuotationProposedDesign (one per quotation, cardinality one):
   recommended_switch_vendor. The recommended DC/pod layout is logged but not
-  persisted (DC_SIZE_LAYOUTS/POD_LAYOUTS in generators/models.py are plain
-  Python dicts, not Infrahub nodes, since TopologyDataCenterDesign/
-  TopologyPodDesign were retired in favor of TopologyDataCenter.size /
-  TopologyPod.layout Dropdowns).
+  persisted (DC_SIZE_LAYOUTS in generators/dc_config.py, POD_LAYOUTS in
+  generators/dc_config.py & generators/pod_config.py, are plain Python dicts, not Infrahub nodes, since
+  TopologyDataCenterDesign/TopologyPodDesign were retired in favor of
+  TopologyDataCenter.size / TopologyPod.layout Dropdowns).
 - CustomerQuotationProposedPod children of that design (one per
   quotation.pod_count, each mapped 1:1 to a room — see
   generators/helpers/quotation.py's build_room_pods for the exact
@@ -45,6 +45,7 @@ from infrahub_sdk.generator import InfrahubGenerator
 
 from utils.data_cleaning import clean_data
 
+from ..dc_config import DC_SIZE_LAYOUTS
 from ..helpers.quotation import (
     PORT_SPEEDS,
     Recommender,
@@ -58,7 +59,7 @@ from ..helpers.quotation import (
     validate_room_capacity,
 )
 from ..logger import FailOnErrorLoggerMixin
-from ..models import DC_SIZE_LAYOUTS, POD_LAYOUTS
+from ..pod_config import POD_LAYOUTS
 from ..protocols import (
     CustomerQuotationDC,
     CustomerQuotationLineItem,

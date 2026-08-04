@@ -806,7 +806,7 @@ nodes:
         order_weight: 310
       - name: recommended_pod_layout
         label: "Recommended Pod Layout"
-        description: "Smallest POD_LAYOUTS entry (see generators/models.py) fitting this pod's own leaf/spine counts."
+        description: "Smallest POD_LAYOUTS entry "
         kind: Text
         optional: true
         order_weight: 400

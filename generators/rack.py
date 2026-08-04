@@ -10,8 +10,9 @@ if TYPE_CHECKING:
     import logging
 
 from .helpers import DeviceNameContext, DeviceNamingConfig
-from .helpers.template_interfaces import build_spine_downlink_template_names, template_interface_names_by_role
-from .models import Pool
+from .helpers.routing import p2p_is_ipv6, underlay_is_ipv6
+from .helpers.template_interfaces import template_interface_names_by_role
+from .pod_config import spine_slot_role, spine_slot_templates
 from .protocols import LocationRack, TopologyPod
 from .types import RoutingOptions
 
@@ -86,26 +87,28 @@ class RackMixin:
 
         The rack.gql query already fetches pod.fabric_templates (role="spine"
         or role="border-spine" — the two fill the same slot, see
-        PodModel.spine_slot_templates) and all naming indexes (dc.index,
-        pod.index). The pod generator always creates spine-slot devices with
-        strategy="standard" and indexes=[dc.index, pod.index], so names are
-        deterministic - no API call needed.
+        generators/pod_config.py's spine_slot_templates) and all naming
+        indexes (dc.index, pod.index). The pod generator always creates
+        spine-slot devices with strategy="standard" and
+        indexes=[dc.index, pod.index], so names are deterministic - no API
+        call needed.
 
         Returns:
             Tuple of (device_names, interface_names) for create_cabling
         """
-        pod = self.data.pod
-        dc = pod.parent
-        spine_entries = pod.spine_slot_templates
-        spine_role = pod.spine_slot_role
+        pod = self.data["pod"]
+        dc = pod["parent"]
+        fabric_templates = pod.get("fabric_templates", [])
+        spine_entries = spine_slot_templates(fabric_templates)
+        spine_role = spine_slot_role(fabric_templates)
 
         if not spine_entries:
             raise RuntimeError(
-                f"Rack {self.data.name}: Cannot derive spine info - no spine/border-spine fabric_templates entries"
+                f"Rack {self.data['name']}: Cannot derive spine info - no spine/border-spine fabric_templates entries"
             )
 
-        naming = DeviceNamingConfig(strategy=dc.naming_convention)
-        spine_indexes = [dc.index, pod.index]
+        naming = DeviceNamingConfig(strategy=dc.get("naming_convention", "standard"))
+        spine_indexes = [dc["index"], pod["index"]]
         device_names: list[str] = []
         for entry in spine_entries:
             device_names.extend(
@@ -117,40 +120,27 @@ class RackMixin:
                         indexes=spine_indexes,
                     )
                 )
-                for idx in range(1, entry.quantity + 1)
+                for idx in range(1, entry["quantity"] + 1)
             )
         device_names = sorted(device_names)
 
         # Interface names come from the first entry's template only — same accepted
         # limitation as dc.py's/pod.py's super-spine/spine device creation: assumes
         # every spine template shares consistent downlink-interface naming.
+        first_template_interfaces = spine_entries[0]["template"].get("interfaces", [])
         interface_names = template_interface_names_by_role(
-            interfaces=spine_entries[0].template.interfaces,
+            interfaces=first_template_interfaces,
             role="downlink",
         )
         if not interface_names:
             interface_names = template_interface_names_by_role(
-                interfaces=spine_entries[0].template.interfaces,
+                interfaces=first_template_interfaces,
                 role=None,
             )
         interface_names = sorted(interface_names)
 
         if not interface_names:
-            profile = pod.profile
-            if profile.spine_downlink_ports_per_spine is not None:
-                interface_names = build_spine_downlink_template_names(
-                    spine_downlink_ports_per_spine=profile.spine_downlink_ports_per_spine,
-                    reserved_spine_downlinks_per_spine=profile.reserved_spine_downlinks_per_spine,
-                )
-                if interface_names:
-                    self.logger.warning(
-                        f"Rack {self.data.name}: spine template has no interfaces; "
-                        f"generated {len(interface_names)} dynamic downlink interface names "
-                        f"from layout budget"
-                    )
-
-        if not interface_names:
-            raise RuntimeError(f"Rack {self.data.name}: Spine template has no downlink interfaces")
+            raise RuntimeError(f"Rack {self.data['name']}: Spine template has no downlink interfaces")
 
         self.logger.info(
             f"Derived {len(device_names)} spine device names with "
@@ -158,7 +148,7 @@ class RackMixin:
         )
         return device_names, interface_names
 
-    async def _wait_for_pod_pools(self, pod: Any) -> Any:
+    async def _wait_for_pod_pools(self, pod: dict[str, Any]) -> dict[str, Any]:
         """Retry-refetch the pod directly until add_pod has written its pools.
 
         A rack's own created-trigger can fire and reach here before add_pod's
@@ -170,19 +160,19 @@ class RackMixin:
         timing.
         """
         for attempt in range(_POD_POOL_MAX_RETRIES):
-            pod_obj = await self.client.get(kind=TopologyPod, id=pod.id, include=["loopback_pool", "prefix_pool"])
+            pod_obj = await self.client.get(kind=TopologyPod, id=pod["id"], include=["loopback_pool", "prefix_pool"])
             loopback_pool_id = pod_obj.loopback_pool.id
             prefix_pool_id = pod_obj.prefix_pool.id
             if loopback_pool_id and prefix_pool_id:
-                pod.loopback_pool = Pool(id=loopback_pool_id)
-                pod.prefix_pool = Pool(id=prefix_pool_id)
+                pod["loopback_pool"] = {"id": loopback_pool_id}
+                pod["prefix_pool"] = {"id": prefix_pool_id}
                 return pod
             if attempt < _POD_POOL_MAX_RETRIES - 1:
                 delay = self._retry_delay(
                     _POD_POOL_RETRY_DELAY, attempt, cap=_POD_POOL_RETRY_CAP, jitter=_POD_POOL_RETRY_JITTER
                 )
                 self.logger.info(
-                    f"Rack {self.data.name}: Pod {pod.name} pools not ready yet — "
+                    f"Rack {self.data['name']}: Pod {pod['name']} pools not ready yet — "
                     f"retrying in {delay:.2f}s (attempt {attempt + 1}/{_POD_POOL_MAX_RETRIES})"
                 )
                 await asyncio.sleep(delay)
@@ -190,55 +180,59 @@ class RackMixin:
 
     async def _prepare_generation_context(self) -> None:
         """Compute and store shared context needed by every per-role generation method."""
-        pod = self.data.pod
-        dc = pod.parent
-        self.deployment_id = dc.id
-        self.pod_name = pod.name.lower()
-        self.fabric_name = dc.name.lower()
+        pod = self.data["pod"]
+        dc = pod["parent"]
+        self.deployment_id = dc["id"]
+        self.pod_name = pod["name"].lower()
+        self.fabric_name = dc["name"].lower()
 
-        if not pod.loopback_pool or not pod.prefix_pool:
+        if not pod.get("loopback_pool") or not pod.get("prefix_pool"):
             pod = await self._wait_for_pod_pools(pod)
 
-        if not pod.loopback_pool or not pod.prefix_pool:
+        if not pod.get("loopback_pool") or not pod.get("prefix_pool"):
             self.logger.error(
-                f"Rack {self.data.name}: Pod {pod.name} pools not found. "
-                f"Run pod generator first: infrahubctl generator generate_pod name={pod.name}"
+                f"Rack {self.data['name']}: Pod {pod['name']} pools not found. "
+                f"Run pod generator first: infrahubctl generator generate_pod name={pod['name']}"
             )
 
-        self._management_pool_id = dc.management_pool.id if dc.management_pool else None
-        self._loopback_pool_id = pod.loopback_pool.id if pod.loopback_pool else None
+        dc_management_pool = dc.get("management_pool")
+        self._management_pool_id = dc_management_pool["id"] if dc_management_pool else None
+        pod_loopback_pool = pod.get("loopback_pool")
+        self._loopback_pool_id = pod_loopback_pool["id"] if pod_loopback_pool else None
 
-        suite = self.data.parent
+        suite = self.data["parent"]
         self._device_indexes: list[int] = [
-            dc.index,
-            pod.index,
-            suite.index,
-            self.data.row_index,
-            self.data.index,
+            dc["index"],
+            pod["index"],
+            suite["index"],
+            self.data["row_index"],
+            self.data["index"],
         ]
 
-        if pod.deployment_type == "tor":
+        if pod["deployment_type"] == "tor":
             self.logger.info(
-                f"ToR rack {self.data.name}: using suite={suite.index}, row={self.data.row_index}, "
-                f"rack_index={self.data.index}"
+                f"ToR rack {self.data['name']}: using suite={suite['index']}, row={self.data['row_index']}, "
+                f"rack_index={self.data['index']}"
             )
 
         self._naming_conv = cast(
             Literal["standard", "hierarchical", "flat", "computed"],
-            dc.naming_convention,
+            dc.get("naming_convention", "standard"),
         )
-        self._is_ipv6 = dc.is_ipv6
+        self._is_ipv6 = underlay_is_ipv6(dc.get("underlay_protocol", "ipv6"))
 
-        self._spine_role: Literal["spine", "border-spine"] = pod.spine_slot_role
+        self._spine_role: Literal["spine", "border-spine"] = spine_slot_role(pod.get("fabric_templates", []))
         try:
             self._spine_device_names, self._spine_interfaces = self._derive_spine_info()
         except RuntimeError as exc:
             self.logger.error(str(exc))
 
         routing_options: RoutingOptions = RoutingOptions(design=dc)
-        if pod.asn_pool and pod.asn_pool.id:
-            routing_options["asn_pool"] = pod.asn_pool.id
+        pod_asn_pool = pod.get("asn_pool")
+        if pod_asn_pool and pod_asn_pool.get("id"):
+            routing_options["asn_pool"] = pod_asn_pool["id"]
 
-        self._technical_pool_id = pod.prefix_pool.id if pod.prefix_pool else None
-        self._p2p_prefix_length = 127 if dc.p2p_ipv6 else 31
+        pod_prefix_pool = pod.get("prefix_pool")
+        self._technical_pool_id = pod_prefix_pool["id"] if pod_prefix_pool else None
+        self._p2p_prefix_length = 127 if p2p_is_ipv6(dc.get("underlay_protocol", "ipv6")) else 31
         self._routing_options = routing_options

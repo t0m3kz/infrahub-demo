@@ -114,12 +114,14 @@ class RoutingMixin:
         if p2p_interfaces is None:
             p2p_interfaces = []
         design = options.get("design")
+        if isinstance(design, dict):
+            routing_strategy = design.get("routing_strategy")
+        else:
+            routing_strategy = getattr(design, "routing_strategy", None)
 
-        if not design or not hasattr(design, "routing_strategy"):
+        if not design or not routing_strategy:
             self.logger.warning("No design or routing strategy provided")
             return
-
-        routing_strategy = design.routing_strategy
         if routing_strategy not in {s.value for s in RoutingStrategy}:
             self.logger.warning(f"Routing strategy '{routing_strategy}' not supported")
             return
@@ -459,7 +461,10 @@ class RoutingMixin:
             description=f"Shared BGP overlay/EVPN auth key for {self.fabric_name}",
         )
 
-        strategy = self.data.routing_strategy
+        if isinstance(self.data, dict):
+            strategy = self.data.get("routing_strategy", "ebgp-ebgp")
+        else:
+            strategy = self.data.routing_strategy
 
         if strategy in (RoutingStrategy.EBGP_IBGP.value, RoutingStrategy.OSPF_IBGP.value):
             overlay_desc = f"{self.fabric_name} overlay ASN for iBGP EVPN"

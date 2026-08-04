@@ -16,17 +16,22 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from generators.models import DeviceRole, Interface, Template
 from generators.topology.pod import PodTopologyGenerator
 
-_FW_TEMPLATE = Template(
-    id="tmpl-fw",
-    interfaces=[Interface(name="eth1", role="uplink"), Interface(name="eth2", role="uplink")],
-)
-_LB_TEMPLATE = Template(
-    id="tmpl-lb",
-    interfaces=[Interface(name="1.1", role="uplink"), Interface(name="1.2", role="uplink")],
-)
+_FW_TEMPLATE = {
+    "id": "tmpl-fw",
+    "interfaces": [{"name": "eth1", "role": "uplink"}, {"name": "eth2", "role": "uplink"}],
+}
+_LB_TEMPLATE = {
+    "id": "tmpl-lb",
+    "interfaces": [{"name": "1.1", "role": "uplink"}, {"name": "1.2", "role": "uplink"}],
+}
+
+
+def _entry(role: str, quantity: int, template: dict[str, Any]) -> dict[str, Any]:
+    """Build a fabric_templates row — the plain-dict shape pod.py reads from
+    self.data["fabric_templates"] after clean_data()."""
+    return {"role": role, "quantity": quantity, "template": template}
 
 
 def _make_generator() -> Any:
@@ -42,15 +47,16 @@ def _make_generator() -> Any:
     gen.create_devices = AsyncMock(return_value=[])
     gen.create_chain_cabling = AsyncMock(return_value=[[]])
 
-    gen.data = MagicMock()
-    gen.data.id = "pod-1"
-    gen.data.index = 1
-    gen.data.firewall_templates = []
-    gen.data.load_balancer_templates = []
-    gen.data.parent = MagicMock()
-    gen.data.parent.index = 1
-    gen.data.parent.naming_convention = "standard"
-    gen.data.parent.connectivity_mode = "pbr"
+    gen.data = {
+        "id": "pod-1",
+        "index": 1,
+        "fabric_templates": [],
+        "parent": {
+            "index": 1,
+            "naming_convention": "standard",
+            "connectivity_mode": "pbr",
+        },
+    }
     return gen
 
 
@@ -67,8 +73,10 @@ class TestGeneratePodScopedBorderServices:
     @pytest.mark.asyncio
     async def test_creates_pod_scoped_devices_and_cables_to_border_spines(self) -> None:
         gen = _make_generator()
-        gen.data.firewall_templates = [DeviceRole(role="firewall", quantity=1, template=_FW_TEMPLATE)]
-        gen.data.load_balancer_templates = [DeviceRole(role="load-balancer", quantity=1, template=_LB_TEMPLATE)]
+        gen.data["fabric_templates"] = [
+            _entry("firewall", 1, _FW_TEMPLATE),
+            _entry("load-balancer", 1, _LB_TEMPLATE),
+        ]
         gen.create_devices = AsyncMock(side_effect=[["fw-01"], ["lb-01"]])
 
         await gen._generate_pod_scoped_border_services(spines=["bs-01", "bs-02"])
@@ -87,7 +95,7 @@ class TestGeneratePodScopedBorderServices:
     @pytest.mark.asyncio
     async def test_quantity_of_two_triggers_ha_pairing(self) -> None:
         gen = _make_generator()
-        gen.data.firewall_templates = [DeviceRole(role="firewall", quantity=2, template=_FW_TEMPLATE)]
+        gen.data["fabric_templates"] = [_entry("firewall", 2, _FW_TEMPLATE)]
         gen.create_devices = AsyncMock(return_value=["fw-01", "fw-02"])
         gen._ensure_ha_pair = AsyncMock()
 
@@ -100,9 +108,11 @@ class TestGeneratePodScopedBorderServices:
     @pytest.mark.asyncio
     async def test_inline_connectivity_mode_chains_through_dc_parent(self) -> None:
         gen = _make_generator()
-        gen.data.parent.connectivity_mode = "inline"
-        gen.data.firewall_templates = [DeviceRole(role="firewall", quantity=1, template=_FW_TEMPLATE)]
-        gen.data.load_balancer_templates = [DeviceRole(role="load-balancer", quantity=1, template=_LB_TEMPLATE)]
+        gen.data["parent"]["connectivity_mode"] = "inline"
+        gen.data["fabric_templates"] = [
+            _entry("firewall", 1, _FW_TEMPLATE),
+            _entry("load-balancer", 1, _LB_TEMPLATE),
+        ]
         gen.create_devices = AsyncMock(side_effect=[["fw-01"], ["lb-01"]])
 
         await gen._generate_pod_scoped_border_services(spines=["bs-01"])

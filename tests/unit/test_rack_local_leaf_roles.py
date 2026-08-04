@@ -16,62 +16,52 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from generators.models import (
-    DeviceRole,
-    Interface,
-    LocationSuiteModel,
-    Pool,
-    RackModel,
-    RackParent,
-    RackPod,
-    Template,
-)
 from generators.protocols import ManagedMLAG
 from generators.topology.rack import RackGenerator
 
 
 def _build_gen(*, mlag_create: Literal["no", "back-to-back", "virtual"] = "no") -> Any:
-    parent = RackParent(
-        id="dc-1",
-        name="DC1",
-        index=1,
-        size="S",
-        naming_convention="standard",
-        management_pool=Pool(id="mgmt-pool", name="mgmt"),
-    )
-    pod = RackPod(
-        id="pod-1",
-        name="pod-1",
-        index=2,
-        parent=parent,
-        leaf_interface_sorting_method="top_down",
-        spine_interface_sorting_method="bottom_up",
-        mlag_create=mlag_create,
-        loopback_pool=Pool(id="lo-pool", name="lo"),
-        prefix_pool=Pool(id="p2p-pool", name="p2p"),
-        deployment_type="mixed",
-        layout="S_MIXED",
-        fabric_templates=[
-            DeviceRole(
-                role="spine",
-                quantity=2,
-                template=Template(id="tmpl-spine", interfaces=[Interface(name="Eth1/10"), Interface(name="Eth1/11")]),
-            )
+    parent = {
+        "id": "dc-1",
+        "name": "DC1",
+        "index": 1,
+        "size": "S",
+        "naming_convention": "standard",
+        "management_pool": {"id": "mgmt-pool", "name": "mgmt"},
+    }
+    pod = {
+        "id": "pod-1",
+        "name": "pod-1",
+        "index": 2,
+        "parent": parent,
+        "leaf_interface_sorting_method": "top_down",
+        "spine_interface_sorting_method": "bottom_up",
+        "mlag_create": mlag_create,
+        "loopback_pool": {"id": "lo-pool", "name": "lo"},
+        "prefix_pool": {"id": "p2p-pool", "name": "p2p"},
+        "deployment_type": "mixed",
+        "layout": "S_MIXED",
+        "fabric_templates": [
+            {
+                "role": "spine",
+                "quantity": 2,
+                "template": {"id": "tmpl-spine", "interfaces": [{"name": "Eth1/10"}, {"name": "Eth1/11"}]},
+            }
         ],
-    )
-    suite = LocationSuiteModel(index=1)
+    }
+    suite = {"index": 1}
 
-    rack = RackModel(
-        id="rack-1",
-        name="RACK-1",
-        index=1,
-        rack_type="compute",
-        row_index=1,
-        parent=suite,
-        pod=pod,
-        l2_leafs=[],
-        access_leafs=[],
-    )
+    rack = {
+        "id": "rack-1",
+        "name": "RACK-1",
+        "index": 1,
+        "rack_type": "compute",
+        "row_index": 1,
+        "parent": suite,
+        "pod": pod,
+        "l2_leafs": [],
+        "access_leafs": [],
+    }
 
     gen = RackGenerator.__new__(RackGenerator)
     gen.data = rack
@@ -96,8 +86,8 @@ def _build_gen(*, mlag_create: Literal["no", "back-to-back", "virtual"] = "no") 
     return gen
 
 
-_L2_TEMPLATE = Template(id="tmpl-l2", interfaces=[Interface(name="Eth1/1", role="uplink")])
-_ACCESS_TEMPLATE = Template(id="tmpl-access", interfaces=[Interface(name="Eth1/1", role="uplink")])
+_L2_TEMPLATE = {"id": "tmpl-l2", "interfaces": [{"name": "Eth1/1", "role": "uplink"}]}
+_ACCESS_TEMPLATE = {"id": "tmpl-access", "interfaces": [{"name": "Eth1/1", "role": "uplink"}]}
 
 
 class TestCreateLocalLeafRoleDevices:
@@ -107,7 +97,7 @@ class TestCreateLocalLeafRoleDevices:
         gen.create_devices = AsyncMock(return_value=["l2-01", "l2-02"])
         gen.client.create = AsyncMock()
         gen.client.filters = AsyncMock(return_value=[_mock_interface("Eth1/1")])
-        role = DeviceRole(role="l2-leaf", quantity=2, template=_L2_TEMPLATE)
+        role = {"role": "l2-leaf", "quantity": 2, "template": _L2_TEMPLATE}
 
         result = await gen._create_local_leaf_role_devices(
             role, device_role="l2-leaf", allocate_loopback=False, created_leaf_devices=["leaf-01", "leaf-02"]
@@ -124,10 +114,10 @@ class TestCreateLocalLeafRoleDevices:
         role, so a pod configured "virtual" (for its L3 leafs) must still fall
         back to back-to-back for l2-leafs rather than erroring out."""
         gen = _build_gen(mlag_create="virtual")
-        template = Template(
-            id="tmpl-l2-peer",
-            interfaces=[Interface(name="Eth1/1", role="uplink"), Interface(name="Eth1/2", role="mlag-peer")],
-        )
+        template = {
+            "id": "tmpl-l2-peer",
+            "interfaces": [{"name": "Eth1/1", "role": "uplink"}, {"name": "Eth1/2", "role": "mlag-peer"}],
+        }
         gen.create_devices = AsyncMock(return_value=["l2-01", "l2-02"])
         gen.client.filters = AsyncMock(
             side_effect=[
@@ -141,7 +131,7 @@ class TestCreateLocalLeafRoleDevices:
         mlag_obj.id = "mlag-1"
         mlag_obj.save = AsyncMock()
         gen.client.create = AsyncMock(return_value=mlag_obj)
-        role = DeviceRole(role="l2-leaf", quantity=2, template=template)
+        role = {"role": "l2-leaf", "quantity": 2, "template": template}
 
         await gen._create_local_leaf_role_devices(
             role, device_role="l2-leaf", allocate_loopback=False, created_leaf_devices=["leaf-01", "leaf-02"]
@@ -160,7 +150,7 @@ class TestCreateLocalLeafRoleDevices:
         gen.create_devices = AsyncMock(return_value=["l2-01", "l2-02"])
         gen.client.create = AsyncMock()
         gen.client.filters = AsyncMock(return_value=[_mock_interface("Eth1/1")])
-        role = DeviceRole(role="l2-leaf", quantity=2, template=_L2_TEMPLATE)
+        role = {"role": "l2-leaf", "quantity": 2, "template": _L2_TEMPLATE}
 
         await gen._create_local_leaf_role_devices(
             role, device_role="l2-leaf", allocate_loopback=False, created_leaf_devices=["leaf-01", "leaf-02"]
@@ -172,10 +162,10 @@ class TestCreateLocalLeafRoleDevices:
     @pytest.mark.asyncio
     async def test_back_to_back_mlag_create_still_works_for_l2_leafs(self) -> None:
         gen = _build_gen(mlag_create="back-to-back")
-        template = Template(
-            id="tmpl-l2-peer",
-            interfaces=[Interface(name="Eth1/1", role="uplink"), Interface(name="Eth1/2", role="mlag-peer")],
-        )
+        template = {
+            "id": "tmpl-l2-peer",
+            "interfaces": [{"name": "Eth1/1", "role": "uplink"}, {"name": "Eth1/2", "role": "mlag-peer"}],
+        }
         gen.create_devices = AsyncMock(return_value=["l2-01", "l2-02"])
         gen.client.filters = AsyncMock(
             side_effect=[
@@ -189,7 +179,7 @@ class TestCreateLocalLeafRoleDevices:
         mlag_obj.id = "mlag-1"
         mlag_obj.save = AsyncMock()
         gen.client.create = AsyncMock(return_value=mlag_obj)
-        role = DeviceRole(role="l2-leaf", quantity=2, template=template)
+        role = {"role": "l2-leaf", "quantity": 2, "template": template}
 
         await gen._create_local_leaf_role_devices(
             role, device_role="l2-leaf", allocate_loopback=False, created_leaf_devices=["leaf-01", "leaf-02"]
@@ -216,7 +206,7 @@ class TestCreateLocalLeafRoleDevices:
         mlag_obj.id = "mlag-1"
         mlag_obj.save = AsyncMock()
         gen.client.create = AsyncMock(return_value=mlag_obj)
-        role = DeviceRole(role="access-leaf", quantity=2, template=_ACCESS_TEMPLATE)
+        role = {"role": "access-leaf", "quantity": 2, "template": _ACCESS_TEMPLATE}
 
         await gen._create_local_leaf_role_devices(
             role, device_role="access-leaf", allocate_loopback=True, created_leaf_devices=["leaf-01", "leaf-02"]

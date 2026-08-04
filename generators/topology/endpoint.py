@@ -13,7 +13,7 @@ Features:
 
 from __future__ import annotations
 
-from typing import Any, Literal
+from typing import Any, Literal, TypedDict, cast
 
 from netutils.interface import sort_interface_list
 
@@ -23,8 +23,61 @@ from ..common import CablingOptions, CommonGenerator
 from ..endpoint import EndpointUplinkMixin
 from ..helpers.cabling import pick_matched_switch_port_name
 from ..helpers.interface_naming import get_lag_name
-from ..models import ConnectionFingerprint, EndpointModel
 from ..protocols import DcimCable, DcimLAGInterface, DcimPhysicalDevice, DcimPhysicalInterface, LocationRack
+from ..types import ConnectionFingerprint
+
+
+class EndpointInterfaceData(TypedDict, total=False):
+    """One interface projection (``PhysicalInterfaceFields`` in endpoint.gql)."""
+
+    id: str
+    name: str
+    interface_type: str | None
+    role: str | None
+    status: str | None
+    cable: dict[str, Any] | None
+
+
+class EndpointPodData(TypedDict, total=False):
+    """Pod projection (``PodFields`` in endpoint.gql)."""
+
+    id: str
+    name: str
+    deployment_type: Literal["middle_rack", "tor", "mixed"]
+    index: int
+    parent: dict[str, Any]
+
+
+class EndpointRackDeviceData(TypedDict, total=False):
+    """ToR/Leaf device in the endpoint's rack (``RackDeviceFields`` in endpoint.gql)."""
+
+    id: str
+    name: str
+    role: str | None
+    rack: dict[str, Any]
+    interfaces: list[EndpointInterfaceData]
+
+
+class EndpointRackData(TypedDict, total=False):
+    """Rack projection (``RackFields`` in endpoint.gql)."""
+
+    id: str
+    name: str
+    index: int
+    row_index: int
+    rack_type: str
+    pod: EndpointPodData
+    devices: list[EndpointRackDeviceData]
+
+
+class EndpointDeviceData(TypedDict, total=False):
+    """Top-level endpoint device (``DcimDevice`` in endpoint.gql)."""
+
+    id: str
+    name: str
+    role: str | None
+    rack: EndpointRackData | None
+    interfaces: list[EndpointInterfaceData]
 
 
 class EndpointConnectivityGenerator(EndpointUplinkMixin, CommonGenerator):
@@ -50,6 +103,8 @@ class EndpointConnectivityGenerator(EndpointUplinkMixin, CommonGenerator):
     - validate_speeds=True (default): Check speed compatibility, log warnings
     - strict_speed_validation=False (default): Log warnings only (True=skip mismatches)
     """
+
+    data: EndpointDeviceData
 
     @staticmethod
     def _extract_device_name(intf: Any) -> str | None:
@@ -83,7 +138,7 @@ class EndpointConnectivityGenerator(EndpointUplinkMixin, CommonGenerator):
                 if "-" not in endpoint_label:
                     continue
                 device_name, _ = endpoint_label.rsplit("-", 1)
-                if device_name != self.data.name:
+                if device_name != self.data["name"]:
                     switch_names.add(device_name)
         return switch_names
 
@@ -124,25 +179,32 @@ class EndpointConnectivityGenerator(EndpointUplinkMixin, CommonGenerator):
                         # Remove empty dicts ({}) which are virtual interfaces not matching the fragment
                         device["interfaces"] = [intf for intf in device["interfaces"] if intf]
 
-            model_data = EndpointModel(endpoint=deployment_data)
-            self.data = model_data.endpoint
+            self.data = cast(EndpointDeviceData, deployment_data)
+            # No Pydantic validation left to catch a malformed/partial GraphQL
+            # response — force-read every field generate() treats as required
+            # here, inside the try, so a missing one raises KeyError in the
+            # same place the old EndpointModel(**deployment_data) construction did.
+            endpoint_name = self.data["name"]
         except (ValueError, KeyError, IndexError) as exc:
             self.logger.error(f"Generation failed due to {exc}")
             return
 
-        if not self.data.rack:
-            self.logger.error(f"Endpoint {self.data.name} has no rack assigned - cannot determine connectivity")
+        if not self.data.get("rack"):
+            self.logger.error(f"Endpoint {endpoint_name} has no rack assigned - cannot determine connectivity")
             return
 
+        rack = self.data["rack"]
+        assert rack is not None
+        pod = rack["pod"]
         # deployment_type is derived from pod.design's layout (EndpointPod.deployment_type)
-        deployment_type = self.data.rack.pod.deployment_type
-        self.pod_name = self.data.rack.pod.name.lower()
-        pod_id = self.data.rack.pod.id
-        dc = self.data.rack.pod.parent
-        self.deployment_id = dc.id
-        self.fabric_name = dc.name.lower()
+        deployment_type = pod["deployment_type"]
+        self.pod_name = pod["name"].lower()
+        pod_id = pod["id"]
+        dc = pod["parent"]
+        self.deployment_id = dc["id"]
+        self.fabric_name = dc["name"].lower()
 
-        self.logger.info(f"Generating connectivity for endpoint {self.data.name} in {deployment_type} deployment")
+        self.logger.info(f"Generating connectivity for endpoint {self.data['name']} in {deployment_type} deployment")
 
         # Update endpoint device to set deployment to pod. Always saved (even when
         # deployment is already correct) so this run's tracking group always
@@ -150,11 +212,11 @@ class EndpointConnectivityGenerator(EndpointUplinkMixin, CommonGenerator):
         # untracked on a no-op re-run, and delete_unused_nodes would then delete
         # the still-valid device as "unused" (same failure mode create_devices()
         # in common.py works around by always re-upserting every run).
-        endpoint_device = await self.client.get(kind=DcimPhysicalDevice, id=self.data.id)
+        endpoint_device = await self.client.get(kind=DcimPhysicalDevice, id=self.data["id"])
         current_deployment = endpoint_device.deployment.id
         if current_deployment != pod_id:
             endpoint_device.deployment = pod_id
-            self.logger.info(f"Updated {self.data.name} deployment to pod {self.pod_name}")
+            self.logger.info(f"Updated {self.data['name']} deployment to pod {self.pod_name}")
         await endpoint_device.save(allow_upsert=True)
 
         # LAG-based endpoints (server declares role=lag physical NICs bundled into
@@ -163,7 +225,7 @@ class EndpointConnectivityGenerator(EndpointUplinkMixin, CommonGenerator):
         # plain 1:1 uplink cabling — see _process_lag_endpoint_connections.
         server_bonds: list[DcimLAGInterface] = await self.client.filters(
             kind=DcimLAGInterface,
-            device__ids=[self.data.id],
+            device__ids=[self.data["id"]],
             role__value="lag",
             include=["member_interfaces"],
         )
@@ -179,9 +241,7 @@ class EndpointConnectivityGenerator(EndpointUplinkMixin, CommonGenerator):
             ]
             self._existing_switch_names = self._extract_cabled_switch_names(already_cabled_members)
 
-            lock_id = await self.acquire_resource_lock(
-                f"endpoint-cabling-pod-{self.data.rack.pod.id}-row-{self.data.rack.row_index}"
-            )
+            lock_id = await self.acquire_resource_lock(f"endpoint-cabling-pod-{pod['id']}-row-{rack['row_index']}")
             try:
                 await self._process_lag_endpoint_connections(server_bonds, deployment_type)
             finally:
@@ -192,7 +252,7 @@ class EndpointConnectivityGenerator(EndpointUplinkMixin, CommonGenerator):
         # Note: Endpoint devices use "uplink" role, ToR/Leaf devices use "customer" role
         all_endpoint_interfaces: list[DcimPhysicalInterface] = await self.client.filters(
             kind=DcimPhysicalInterface,
-            device__ids=[self.data.id],
+            device__ids=[self.data["id"]],
             role__value="uplink",
             status__values=["free", "planned", "active"],
             include=["device", "interface_type", "cable"],
@@ -214,16 +274,16 @@ class EndpointConnectivityGenerator(EndpointUplinkMixin, CommonGenerator):
         if not endpoint_interfaces:
             if existing_connections > 0:
                 self.logger.info(
-                    f"Endpoint {self.data.name} already has {existing_connections} connection(s) - "
+                    f"Endpoint {self.data['name']} already has {existing_connections} connection(s) - "
                     "all interfaces connected, skipping"
                 )
             else:
-                self.logger.info(f"Endpoint {self.data.name} has no uplink interfaces, skipping")
+                self.logger.info(f"Endpoint {self.data['name']} has no uplink interfaces, skipping")
             return
 
         if existing_connections > 0:
             self.logger.info(
-                f"Endpoint {self.data.name} already has {existing_connections} connection(s) - "
+                f"Endpoint {self.data['name']} already has {existing_connections} connection(s) - "
                 f"will create connections for {len(endpoint_interfaces)} free interface(s)"
             )
 
@@ -239,9 +299,7 @@ class EndpointConnectivityGenerator(EndpointUplinkMixin, CommonGenerator):
         # pick the same "free" port before either saves its cable. Lock on
         # (pod, row) rather than just the rack: the tor/mixed fallback path also
         # reaches into every rack in the same row, not just this endpoint's own.
-        lock_id = await self.acquire_resource_lock(
-            f"endpoint-cabling-pod-{self.data.rack.pod.id}-row-{self.data.rack.row_index}"
-        )
+        lock_id = await self.acquire_resource_lock(f"endpoint-cabling-pod-{pod['id']}-row-{rack['row_index']}")
         try:
             all_target_interfaces = await self._resolve_target_interfaces(deployment_type)
             if all_target_interfaces:
@@ -263,7 +321,7 @@ class EndpointConnectivityGenerator(EndpointUplinkMixin, CommonGenerator):
             return await self._connect_tor_deployment()
         if deployment_type == "mixed":
             return await self._connect_mixed_deployment()
-        self.logger.error(f"Unknown deployment type '{deployment_type}' for endpoint {self.data.name}")
+        self.logger.error(f"Unknown deployment type '{deployment_type}' for endpoint {self.data['name']}")
         return []
 
     async def _connect_middle_rack_deployment(self) -> list[DcimPhysicalInterface]:
@@ -276,30 +334,33 @@ class EndpointConnectivityGenerator(EndpointUplinkMixin, CommonGenerator):
         exists — falling back to Leaf only when neither is present.
         """
         # Safe to assert - validated in generate() before calling this method
-        assert self.data.rack is not None, "Rack must be assigned"
+        assert self.data.get("rack") is not None, "Rack must be assigned"
+        rack = self.data["rack"]
+        assert rack is not None
+        pod_id = rack["pod"]["id"]
 
         self.logger.info(
-            f"Endpoint {self.data.name} is in {self.data.rack.rack_type} rack "
-            f"(row {self.data.rack.row_index}), searching for ToR/L2-leaf/access-leaf/Leaf switches "
+            f"Endpoint {self.data['name']} is in {rack['rack_type']} rack "
+            f"(row {rack['row_index']}), searching for ToR/L2-leaf/access-leaf/Leaf switches "
             "in middle rack (network rack) in same row"
         )
 
         # Query interfaces directly on ToR, l2-leaf/access-leaf, or Leaf devices in network rack
         racks = await self.client.filters(
             kind=LocationRack,
-            pod__ids=[self.data.rack.pod.id],
-            row_index__value=self.data.rack.row_index,
+            pod__ids=[pod_id],
+            row_index__value=rack["row_index"],
             rack_type__value="network",
         )
 
         if not racks:
             self.logger.error(
-                f"Endpoint {self.data.name}: No network rack found in row {self.data.rack.row_index} for middle_rack deployment."
+                f"Endpoint {self.data['name']}: No network rack found in row {rack['row_index']} for middle_rack deployment."
             )
             return []
 
         # Try ToR devices first in network rack (preferred for aggregation)
-        rack_ids = [rack.id for rack in racks]
+        rack_ids = [r.id for r in racks]
         all_target_interfaces = await self._query_interfaces_by_location(
             rack_ids=rack_ids,
             device_role="tor",
@@ -310,13 +371,13 @@ class EndpointConnectivityGenerator(EndpointUplinkMixin, CommonGenerator):
         # attach here when a rack has one, ahead of the routed Leaf layer.
         if not all_target_interfaces:
             self.logger.info(
-                f"No ToR interfaces found in network rack for {self.data.name}, trying l2-leaf/access-leaf switches"
+                f"No ToR interfaces found in network rack for {self.data['name']}, trying l2-leaf/access-leaf switches"
             )
             all_target_interfaces = await self._query_l2_aggregation_layer(rack_ids)
 
         # Fallback to Leaf devices in network rack if nothing else found
         if not all_target_interfaces:
-            self.logger.info(f"No l2-leaf/access-leaf interfaces found for {self.data.name}, trying Leaf switches")
+            self.logger.info(f"No l2-leaf/access-leaf interfaces found for {self.data['name']}, trying Leaf switches")
             all_target_interfaces = await self._query_interfaces_by_location(
                 rack_ids=rack_ids,
                 device_role="leaf",
@@ -325,7 +386,7 @@ class EndpointConnectivityGenerator(EndpointUplinkMixin, CommonGenerator):
 
         if not all_target_interfaces:
             self.logger.error(
-                f"Endpoint {self.data.name}: No free interfaces found on ToR, l2-leaf/access-leaf, or Leaf "
+                f"Endpoint {self.data['name']}: No free interfaces found on ToR, l2-leaf/access-leaf, or Leaf "
                 "devices in middle rack. Cannot create endpoint connectivity."
             )
 
@@ -351,10 +412,12 @@ class EndpointConnectivityGenerator(EndpointUplinkMixin, CommonGenerator):
         Strategy: Connect to ToR switches in same rack, fallback to same row.
         """
         # Safe to assert - validated in generate() before calling this method
-        assert self.data.rack is not None, "Rack must be assigned"
+        assert self.data.get("rack") is not None, "Rack must be assigned"
+        rack = self.data["rack"]
+        assert rack is not None
 
         # First try to query interfaces in same rack
-        rack_ids = [self.data.rack.id]
+        rack_ids = [rack["id"]]
 
         # Query free interfaces on ToR devices in same rack
         all_target_interfaces = await self._query_interfaces_by_location(
@@ -366,25 +429,25 @@ class EndpointConnectivityGenerator(EndpointUplinkMixin, CommonGenerator):
         # Fallback to same row if no interfaces found in rack
         if not all_target_interfaces:
             self.logger.info(
-                f"No ToR interfaces in same rack for {self.data.name}, searching same row {self.data.rack.row_index}"
+                f"No ToR interfaces in same rack for {self.data['name']}, searching same row {rack['row_index']}"
             )
 
             racks = await self.client.filters(
                 kind=LocationRack,
-                pod__ids=[self.data.rack.pod.id],
-                row_index__value=self.data.rack.row_index,
+                pod__ids=[rack["pod"]["id"]],
+                row_index__value=rack["row_index"],
             )
 
             if racks:
                 all_target_interfaces = await self._query_interfaces_by_location(
-                    rack_ids=[rack.id for rack in racks],
+                    rack_ids=[r.id for r in racks],
                     device_role="tor",
                     endpoint_interfaces=self._free_interfaces,
                 )
 
         if not all_target_interfaces:
             self.logger.error(
-                f"Endpoint {self.data.name}: No ToR interfaces found in tor deployment. "
+                f"Endpoint {self.data['name']}: No ToR interfaces found in tor deployment. "
                 "Cannot create endpoint connectivity."
             )
 
@@ -398,10 +461,12 @@ class EndpointConnectivityGenerator(EndpointUplinkMixin, CommonGenerator):
         in the same row.
         """
         # Safe to assert - validated in generate() before calling this method
-        assert self.data.rack is not None, "Rack must be assigned"
+        assert self.data.get("rack") is not None, "Rack must be assigned"
+        rack = self.data["rack"]
+        assert rack is not None
 
         # First try ToR interfaces in same rack
-        rack_ids = [self.data.rack.id]
+        rack_ids = [rack["id"]]
 
         all_target_interfaces = await self._query_interfaces_by_location(
             rack_ids=rack_ids,
@@ -412,7 +477,7 @@ class EndpointConnectivityGenerator(EndpointUplinkMixin, CommonGenerator):
         # Then the L2 aggregation layer in the same rack, if this rack has one
         if not all_target_interfaces:
             self.logger.info(
-                f"No ToR interfaces in same rack for {self.data.name}, trying l2-leaf/access-leaf in same rack"
+                f"No ToR interfaces in same rack for {self.data['name']}, trying l2-leaf/access-leaf in same rack"
             )
             all_target_interfaces = await self._query_l2_aggregation_layer(rack_ids)
 
@@ -420,19 +485,19 @@ class EndpointConnectivityGenerator(EndpointUplinkMixin, CommonGenerator):
         # l2-leaf/access-leaf first, then Leaf as last resort.
         if not all_target_interfaces:
             self.logger.info(
-                f"No local ToR/l2-leaf/access-leaf for {self.data.name}, "
-                f"trying middle rack switches in same row {self.data.rack.row_index}"
+                f"No local ToR/l2-leaf/access-leaf for {self.data['name']}, "
+                f"trying middle rack switches in same row {rack['row_index']}"
             )
 
             racks = await self.client.filters(
                 kind=LocationRack,
-                pod__ids=[self.data.rack.pod.id],
-                row_index__value=self.data.rack.row_index,
+                pod__ids=[rack["pod"]["id"]],
+                row_index__value=rack["row_index"],
                 rack_type__value="network",
             )
 
             if racks:
-                network_rack_ids = [rack.id for rack in racks]
+                network_rack_ids = [r.id for r in racks]
                 all_target_interfaces = await self._query_l2_aggregation_layer(network_rack_ids)
                 if not all_target_interfaces:
                     all_target_interfaces = await self._query_interfaces_by_location(
@@ -443,7 +508,7 @@ class EndpointConnectivityGenerator(EndpointUplinkMixin, CommonGenerator):
 
         if not all_target_interfaces:
             self.logger.error(
-                f"Endpoint {self.data.name}: No ToR, l2-leaf/access-leaf, or Leaf interfaces found "
+                f"Endpoint {self.data['name']}: No ToR, l2-leaf/access-leaf, or Leaf interfaces found "
                 "in mixed deployment. Cannot create endpoint connectivity."
             )
 
@@ -568,7 +633,7 @@ class EndpointConnectivityGenerator(EndpointUplinkMixin, CommonGenerator):
         device_names = list(device_groups.keys())
         if len(device_names) < 2:
             self.logger.error(
-                f"Endpoint {self.data.name}: Need 2 switches for MLAG-attached bonds, found {len(device_names)}."
+                f"Endpoint {self.data['name']}: Need 2 switches for MLAG-attached bonds, found {len(device_names)}."
             )
             return
 
@@ -591,7 +656,7 @@ class EndpointConnectivityGenerator(EndpointUplinkMixin, CommonGenerator):
         shared_domains = mlag_ids_by_switch.get(switch_a_name, set()) & mlag_ids_by_switch.get(switch_b_name, set())
         if len(shared_domains) != 1:
             self.logger.error(
-                f"Endpoint {self.data.name}: {switch_a_name}/{switch_b_name} share "
+                f"Endpoint {self.data['name']}: {switch_a_name}/{switch_b_name} share "
                 f"{len(shared_domains)} MLAG domain(s) (need exactly 1) — cannot wire LAG bond(s). "
                 "Pair the switches into a ManagedMLAG domain first."
             )
@@ -609,7 +674,7 @@ class EndpointConnectivityGenerator(EndpointUplinkMixin, CommonGenerator):
             bond_name = bond.name.value
 
             if len(member_peers) < 2:
-                self.logger.error(f"Bond {bond_name} on {self.data.name} has < 2 member interfaces — cannot wire it")
+                self.logger.error(f"Bond {bond_name} on {self.data['name']} has < 2 member interfaces — cannot wire it")
                 continue
 
             member_names = sort_interface_list([m.name.value for m in member_peers])
@@ -658,7 +723,7 @@ class EndpointConnectivityGenerator(EndpointUplinkMixin, CommonGenerator):
 
             for switch_name, server_interface_name in members_needing_fresh_port.items():
                 if not free_ports_by_switch[switch_name]:
-                    self.logger.error(f"Bond {bond_name} on {self.data.name}: no free port on {switch_name}")
+                    self.logger.error(f"Bond {bond_name} on {self.data['name']}: no free port on {switch_name}")
                     continue
                 if matched_name is not None:
                     switch_port = next(p for p in free_ports_by_switch[switch_name] if p.name.value == matched_name)
@@ -685,7 +750,7 @@ class EndpointConnectivityGenerator(EndpointUplinkMixin, CommonGenerator):
                 switch_port = switch_port_by_name[switch_name]
 
                 fingerprint = ConnectionFingerprint(
-                    server_name=self.data.name,
+                    server_name=self.data["name"],
                     server_interface=server_interface_name,
                     switch_name=switch_name,
                     switch_interface=switch_port.name.value,
@@ -693,7 +758,7 @@ class EndpointConnectivityGenerator(EndpointUplinkMixin, CommonGenerator):
                 if fingerprint not in self.planned_connections:
                     self.planned_connections.add(fingerprint)
                     await self.create_cabling(
-                        bottom_devices=[self.data.name],
+                        bottom_devices=[self.data["name"]],
                         bottom_interfaces=[server_interface_name],
                         top_devices=[switch_name],
                         top_interfaces=[switch_port.name.value],
@@ -707,7 +772,7 @@ class EndpointConnectivityGenerator(EndpointUplinkMixin, CommonGenerator):
                     kind=DcimLAGInterface,
                     data={
                         "name": get_lag_name(platform_name, lag_id),
-                        "description": f"{self.data.name}:{bond_name}",
+                        "description": f"{self.data['name']}:{bond_name}",
                         "device": {"id": switch.id},
                         "status": "active",
                         "role": "lag",
@@ -719,7 +784,7 @@ class EndpointConnectivityGenerator(EndpointUplinkMixin, CommonGenerator):
                 )
                 await lag_obj.save(allow_upsert=True)
                 self.logger.info(
-                    f"{self.data.name}: bond {bond_name} → {switch_name}:{get_lag_name(platform_name, lag_id)} "
+                    f"{self.data['name']}: bond {bond_name} → {switch_name}:{get_lag_name(platform_name, lag_id)} "
                     f"(member {switch_port.name.value}, mlag_domain={mlag_domain_id})"
                 )
 

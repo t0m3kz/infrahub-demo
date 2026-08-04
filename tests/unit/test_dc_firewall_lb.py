@@ -28,8 +28,26 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from generators.models import POD_LAYOUTS, DeviceRole, Interface, Template
+from generators.dc_config import DC_SIZE_LAYOUTS
+from generators.pod_config import POD_LAYOUTS
 from generators.topology.dc import DCTopologyGenerator
+
+
+def _register_dc_size(*, max_border_leafs_per_fabric: int = 10) -> str:
+    """Register a throwaway DC_SIZE_LAYOUTS entry and return its key (a
+    self.data["size"] value) — mirrors test_dc_generator.py's _design()."""
+    key = f"TEST_{uuid.uuid4().hex}"
+    DC_SIZE_LAYOUTS[key] = {
+        "max_pods": 2,
+        "max_super_spines_per_fabric": 2,
+        "max_hyper_spines_per_fabric": 0,
+        "max_border_leafs_per_fabric": max_border_leafs_per_fabric,
+        "max_spines_per_pod": 4,
+        "loopback_prefix_length": 23,
+        "technical_prefix_length": 19,
+        "management_prefix_length": 25,
+    }
+    return key
 
 
 def _make_generator() -> Any:
@@ -49,10 +67,14 @@ def _make_generator() -> Any:
     gen.create_cabling = AsyncMock(return_value=[])
     gen.create_routing = AsyncMock()
 
-    gen.data = MagicMock()
-    gen.data.index = 1
-    gen.data.naming_convention = "standard"
-    gen.data.connectivity_mode = "pbr"
+    gen.data = {
+        "id": "dc-1",
+        "index": 1,
+        "size": _register_dc_size(),
+        "naming_convention": "standard",
+        "connectivity_mode": "pbr",
+        "fabric_templates": [],
+    }
     return gen
 
 
@@ -86,7 +108,7 @@ def _mock_pod(*, id: str, index: int, name: str = "pod-1", loopback_pool_id: str
 
 def _mock_pod_layout(max_border_leafs_per_pod: int) -> str:
     """Register a throwaway POD_LAYOUTS entry and return its key. Pod.layout
-    is now a plain Dropdown string (see generators/models.py POD_LAYOUTS) —
+    is now a plain Dropdown string (see generators/dc_config.py & generators/pod_config.py POD_LAYOUTS) —
     `pod.layout.value` is read directly by DCTopologyGenerator._pod_border_leaf_capacity."""
     key = f"TEST_{uuid.uuid4().hex}"
     POD_LAYOUTS[key] = {
@@ -102,18 +124,25 @@ def _mock_pod_layout(max_border_leafs_per_pod: int) -> str:
     return key
 
 
-_BL_TEMPLATE = Template(
-    id="tmpl-bl",
-    interfaces=[Interface(name="Eth1/1", role="uplink"), Interface(name="Eth1/2", role="uplink")],
-)
-_FW_TEMPLATE = Template(
-    id="tmpl-fw",
-    interfaces=[Interface(name="eth1", role="uplink"), Interface(name="eth2", role="uplink")],
-)
-_LB_TEMPLATE = Template(
-    id="tmpl-lb",
-    interfaces=[Interface(name="1.1", role="uplink"), Interface(name="1.2", role="uplink")],
-)
+_BL_TEMPLATE = {
+    "id": "tmpl-bl",
+    "interfaces": [{"name": "Eth1/1", "role": "uplink"}, {"name": "Eth1/2", "role": "uplink"}],
+}
+_FW_TEMPLATE = {
+    "id": "tmpl-fw",
+    "interfaces": [{"name": "eth1", "role": "uplink"}, {"name": "eth2", "role": "uplink"}],
+}
+_LB_TEMPLATE = {
+    "id": "tmpl-lb",
+    "interfaces": [{"name": "1.1", "role": "uplink"}, {"name": "1.2", "role": "uplink"}],
+}
+
+
+def _entry(role: str, quantity: int, template: dict[str, Any]) -> dict[str, Any]:
+    """Build a fabric_templates row — the plain-dict shape dc.py reads from
+    self.data["fabric_templates"] after clean_data(), replacing the old
+    DeviceRole(role=..., quantity=..., template=...) Pydantic construction."""
+    return {"role": role, "quantity": quantity, "template": template}
 
 
 class TestPodBorderLeafCapacity:
@@ -186,7 +215,7 @@ class TestCreateBorderLeafDevices:
     @pytest.mark.asyncio
     async def test_no_entries_is_a_noop(self) -> None:
         gen = _make_generator()
-        gen.data.border_leaf_templates = []
+        gen.data["fabric_templates"] = []
 
         names = await gen._create_border_leaf_devices()
 
@@ -196,7 +225,7 @@ class TestCreateBorderLeafDevices:
     @pytest.mark.asyncio
     async def test_no_pods_yet_defers(self) -> None:
         gen = _make_generator()
-        gen.data.border_leaf_templates = [DeviceRole(role="border-leaf", quantity=2, template=_BL_TEMPLATE)]
+        gen.data["fabric_templates"] = [_entry("border-leaf", 2, _BL_TEMPLATE)]
         gen._existing_pods = []
 
         names = await gen._create_border_leaf_devices()
@@ -207,8 +236,8 @@ class TestCreateBorderLeafDevices:
     @pytest.mark.asyncio
     async def test_walks_pods_by_index_filling_each_to_its_own_cap(self) -> None:
         gen = _make_generator()
-        gen.data.design = MagicMock(max_border_leafs_per_fabric=10)
-        gen.data.border_leaf_templates = [DeviceRole(role="border-leaf", quantity=3, template=_BL_TEMPLATE)]
+        gen.data["size"] = _register_dc_size(max_border_leafs_per_fabric=10)
+        gen.data["fabric_templates"] = [_entry("border-leaf", 3, _BL_TEMPLATE)]
         pod_a = _mock_pod(id="pod-a", index=1)
         pod_a.layout = MagicMock(value=_mock_pod_layout(max_border_leafs_per_pod=1))
         pod_b = _mock_pod(id="pod-b", index=2)
@@ -230,8 +259,8 @@ class TestCreateBorderLeafDevices:
     @pytest.mark.asyncio
     async def test_pod_with_zero_capacity_is_skipped(self) -> None:
         gen = _make_generator()
-        gen.data.design = MagicMock(max_border_leafs_per_fabric=10)
-        gen.data.border_leaf_templates = [DeviceRole(role="border-leaf", quantity=2, template=_BL_TEMPLATE)]
+        gen.data["size"] = _register_dc_size(max_border_leafs_per_fabric=10)
+        gen.data["fabric_templates"] = [_entry("border-leaf", 2, _BL_TEMPLATE)]
         pod_a = _mock_pod(id="pod-a", index=1)
         pod_a.layout = MagicMock(value=_mock_pod_layout(max_border_leafs_per_pod=0))
         pod_b = _mock_pod(id="pod-b", index=2)
@@ -251,8 +280,8 @@ class TestCreateBorderLeafDevices:
     @pytest.mark.asyncio
     async def test_entry_exceeding_max_border_leafs_per_fabric_is_skipped(self) -> None:
         gen = _make_generator()
-        gen.data.design = MagicMock(max_border_leafs_per_fabric=2)
-        gen.data.border_leaf_templates = [DeviceRole(role="border-leaf", quantity=3, template=_BL_TEMPLATE)]
+        gen.data["size"] = _register_dc_size(max_border_leafs_per_fabric=2)
+        gen.data["fabric_templates"] = [_entry("border-leaf", 3, _BL_TEMPLATE)]
         pod_a = _mock_pod(id="pod-a", index=1)
         pod_a.layout = MagicMock(value=_mock_pod_layout(max_border_leafs_per_pod=3))
         gen._existing_pods = [pod_a]
@@ -266,8 +295,8 @@ class TestCreateBorderLeafDevices:
     @pytest.mark.asyncio
     async def test_leftover_unplaced_devices_logs_warning(self) -> None:
         gen = _make_generator()
-        gen.data.design = MagicMock(max_border_leafs_per_fabric=10)
-        gen.data.border_leaf_templates = [DeviceRole(role="border-leaf", quantity=5, template=_BL_TEMPLATE)]
+        gen.data["size"] = _register_dc_size(max_border_leafs_per_fabric=10)
+        gen.data["fabric_templates"] = [_entry("border-leaf", 5, _BL_TEMPLATE)]
         pod_a = _mock_pod(id="pod-a", index=1)
         pod_a.layout = MagicMock(value=_mock_pod_layout(max_border_leafs_per_pod=2))
         gen._existing_pods = [pod_a]
@@ -287,33 +316,33 @@ class TestCreateRoleDevices:
     async def test_load_balancer_uses_loadbalancers_group_override(self) -> None:
         gen = _make_generator()
         gen.create_devices = AsyncMock(return_value=["lb-01"])
-        entries = [DeviceRole(role="load-balancer", quantity=1, template=_LB_TEMPLATE)]
+        entries = [_entry("load-balancer", 1, _LB_TEMPLATE)]
 
         names = await gen._create_role_devices(
             role="load-balancer",
             entries=entries,
-            deployment_id=gen.data.id,
+            deployment_id=gen.data["id"],
             naming_convention="standard",
-            indexes=[gen.data.index],
+            indexes=[gen.data["index"]],
         )
 
         assert names == ["lb-01"]
         create_kwargs = gen.create_devices.call_args.kwargs
         assert create_kwargs["options"]["group_name"] == "loadbalancers"
-        assert create_kwargs["deployment_id"] == gen.data.id
+        assert create_kwargs["deployment_id"] == gen.data["id"]
 
     @pytest.mark.asyncio
     async def test_firewall_has_no_group_name_override(self) -> None:
         gen = _make_generator()
         gen.create_devices = AsyncMock(return_value=["fw-01"])
-        entries = [DeviceRole(role="firewall", quantity=1, template=_FW_TEMPLATE)]
+        entries = [_entry("firewall", 1, _FW_TEMPLATE)]
 
         await gen._create_role_devices(
             role="firewall",
             entries=entries,
-            deployment_id=gen.data.id,
+            deployment_id=gen.data["id"],
             naming_convention="standard",
-            indexes=[gen.data.index],
+            indexes=[gen.data["index"]],
         )
 
         create_kwargs = gen.create_devices.call_args.kwargs
@@ -324,14 +353,14 @@ class TestCreateRoleDevices:
         gen = _make_generator()
         gen.create_devices = AsyncMock(return_value=["fw-01", "fw-02"])
         gen._ensure_ha_pair = AsyncMock()
-        entries = [DeviceRole(role="firewall", quantity=2, template=_FW_TEMPLATE)]
+        entries = [_entry("firewall", 2, _FW_TEMPLATE)]
 
         await gen._create_role_devices(
             role="firewall",
             entries=entries,
-            deployment_id=gen.data.id,
+            deployment_id=gen.data["id"],
             naming_convention="standard",
-            indexes=[gen.data.index],
+            indexes=[gen.data["index"]],
         )
 
         gen._ensure_ha_pair.assert_awaited_once_with(
@@ -343,14 +372,14 @@ class TestCreateRoleDevices:
         gen = _make_generator()
         gen.create_devices = AsyncMock(return_value=["fw-01"])
         gen._ensure_ha_pair = AsyncMock()
-        entries = [DeviceRole(role="firewall", quantity=1, template=_FW_TEMPLATE)]
+        entries = [_entry("firewall", 1, _FW_TEMPLATE)]
 
         await gen._create_role_devices(
             role="firewall",
             entries=entries,
-            deployment_id=gen.data.id,
+            deployment_id=gen.data["id"],
             naming_convention="standard",
-            indexes=[gen.data.index],
+            indexes=[gen.data["index"]],
         )
 
         gen._ensure_ha_pair.assert_not_awaited()
@@ -458,8 +487,10 @@ class TestGenerateDcScopedFabricDevices:
         gen._create_border_leaf_devices = AsyncMock(return_value=["bl-01"])
         gen._create_role_devices = AsyncMock(side_effect=[["fw-01"], ["lb-01"]])
         gen._cable_border_services = AsyncMock()
-        gen.data.firewall_templates = [DeviceRole(role="firewall", quantity=1, template=_FW_TEMPLATE)]
-        gen.data.load_balancer_templates = [DeviceRole(role="load-balancer", quantity=1, template=_LB_TEMPLATE)]
+        gen.data["fabric_templates"] = [
+            _entry("firewall", 1, _FW_TEMPLATE),
+            _entry("load-balancer", 1, _LB_TEMPLATE),
+        ]
 
         await gen._generate_dc_scoped_fabric_devices()
 
@@ -467,7 +498,7 @@ class TestGenerateDcScopedFabricDevices:
         assert gen._create_role_devices.await_count == 2
         gen._cable_border_services.assert_awaited_once_with(
             border_role_for={"firewall": "firewall", "load-balancer": "load-balancer"},
-            connectivity_mode=gen.data.connectivity_mode,
+            connectivity_mode=gen.data["connectivity_mode"],
             border_names=["bl-01"],
             firewall_names=["fw-01"],
             load_balancer_names=["lb-01"],

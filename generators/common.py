@@ -52,6 +52,7 @@ class CommonGenerator(
     deployment_id: str = ""
     fabric_name: str = ""
     pod_name: str | None = None
+    logger: Any
 
     @staticmethod
     def _retry_delay(base: float, attempt: int, cap: float = 20.0, jitter: float = 0.25) -> float:

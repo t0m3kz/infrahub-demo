@@ -136,6 +136,24 @@ class RoutingStrategy(str, Enum):
     OSPF_IBGP = "ospf-ibgp"
 
 
+def underlay_is_ipv6(underlay_protocol: str) -> bool:
+    return underlay_protocol == "ipv6"
+
+
+def underlay_is_dual_stack(underlay_protocol: str) -> bool:
+    return underlay_protocol == "dual_stack"
+
+
+def p2p_is_ipv6(underlay_protocol: str) -> bool:
+    """Whether P2P fabric links use IPv6 addressing."""
+    return underlay_protocol in ("ipv6", "dual_stack")
+
+
+def p2p_addressing(underlay_protocol: str) -> str:
+    """P2P link prefix: /31 for IPv4, /127 for IPv6/dual-stack."""
+    return "/127" if p2p_is_ipv6(underlay_protocol) else "/31"
+
+
 def _safe_device_name(bgp: Any) -> str | None:
     """Extract device name from a ManagedBGP/ManagedOSPF object via its
     `capabilities` relationship (the device this process is attached to).

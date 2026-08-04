@@ -2,21 +2,8 @@
 
 from __future__ import annotations
 
-from typing import Any, Protocol, TypedDict, runtime_checkable
-
-
-@runtime_checkable
-class HasRoutingStrategy(Protocol):
-    """Structural type for RoutingOptions["design"] — create_routing() and
-    RoutingPlanner.build_routing_plan() only ever read ``routing_strategy``
-    off this object (see generators/routing.py, generators/helpers/routing.py).
-    Every real caller passes a DCModel/PodParent/RackParent instance (all
-    inherit RoutingArchitectureMixin — see generators/models.py), never the
-    old DataCenterDesignData; this Protocol documents and type-checks that
-    duck-typed contract instead of leaving it as ``Any``. runtime_checkable
-    so ``isinstance(design, HasRoutingStrategy)`` also works if ever needed."""
-
-    routing_strategy: str
+from dataclasses import dataclass
+from typing import Any, TypedDict
 
 
 class DeviceOptions(TypedDict, total=False):
@@ -78,9 +65,9 @@ class CablingOptions(TypedDict, total=False):
 class RoutingOptions(TypedDict, total=False):
     """Options for ``CommonGenerator.create_routing()``."""
 
-    design: HasRoutingStrategy
-    """Object exposing ``routing_strategy`` — a DCModel/PodParent/RackParent
-    instance in practice (see HasRoutingStrategy)."""
+    design: Any
+    """Exposes ``routing_strategy`` — a plain ``clean_data()`` dict; create_routing()
+    reads it via ``dict.get()`` (see generators/routing.py)."""
     asn_pool: Any
     """Default ASN pool for all devices (SDK object, pool ID, or pool name)."""
     asn_pool_name: str
@@ -95,3 +82,23 @@ class RoutingOptions(TypedDict, total=False):
     """Pre-resolved shared underlay BGP/OSPF auth key (RoutingPassword) ID."""
     overlay_password_id: str | None
     """Pre-resolved shared overlay BGP auth key (RoutingPassword) ID."""
+
+
+@dataclass(frozen=True)
+class ConnectionFingerprint:
+    """Unique identifier for a server-to-switch connection.
+
+    Provides idempotency by uniquely identifying each connection regardless
+    of execution order or multiple generator runs.
+    """
+
+    server_name: str
+    server_interface: str
+    switch_name: str
+    switch_interface: str
+
+    def __hash__(self) -> int:
+        return hash((self.server_name, self.server_interface, self.switch_name, self.switch_interface))
+
+    def __repr__(self) -> str:
+        return f"{self.server_name}:{self.server_interface} → {self.switch_name}:{self.switch_interface}"

@@ -15,7 +15,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from generators.endpoint import EndpointUplinkMixin
-from generators.models import ConnectionFingerprint
+from generators.types import ConnectionFingerprint
 
 
 class _Host(EndpointUplinkMixin):
@@ -51,8 +51,7 @@ def _make_host(*, speed_aware: bool = True, validate_speeds: bool = True, strict
     host = _Host()
     host.client = MagicMock()
     host.logger = MagicMock()
-    host.data = MagicMock()
-    host.data.name = "server-1"
+    host.data = {"name": "server-1"}
     host.planned_connections = set()
     host.speed_aware = speed_aware
     host.validate_speeds = validate_speeds

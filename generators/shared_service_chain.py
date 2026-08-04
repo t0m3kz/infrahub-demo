@@ -8,8 +8,6 @@ from __future__ import annotations
 
 from typing import Any
 
-from .border_services import BorderServicesMixin
-from .cabling import CablingMixin
 from .protocols import (
     DcimPhysicalDevice,
     IpamNamespace,
@@ -19,32 +17,49 @@ from .protocols import (
 )
 
 
-class SharedServiceChainMixin(BorderServicesMixin, CablingMixin):
-    """Provide shared-service chain helpers for CommonGenerator descendants."""
+class SharedServiceChainMixin:
+    """Provide shared-service chain helpers for CommonGenerator descendants.
+
+    Expects the host class to also provide ``BorderServicesMixin``'s
+    ``_create_role_devices`` and ``CablingMixin``'s ``_cable_border_services``
+    — composed directly on the generator alongside this mixin, not through
+    inheritance between mixins (each mixin owns one job; the generator wires
+    them together).
+    """
 
     client: Any
     logger: Any
     data: Any
     fabric_name: str
     _safe_rel_add: Any
+    # BorderServicesMixin._create_role_devices — annotation only, no method body.
+    _create_role_devices: Any
+    # CablingMixin._cable_border_services — annotation only, no method body.
+    _cable_border_services: Any
 
     async def _generate_dc_shared_service_devices(self, *, border_leaf_names: list[str]) -> None:
         """Create shared DC firewall/load-balancer devices, HA domains, and cabling."""
 
-        naming_convention = self.data.naming_convention.lower()
+        data = self.data
+        naming_convention = data.get("naming_convention", "standard").lower()
+        fabric_templates = data.get("fabric_templates", [])
+        firewall_templates = [t for t in fabric_templates if t.get("role") == "firewall" and t.get("quantity", 0) > 0]
+        load_balancer_templates = [
+            t for t in fabric_templates if t.get("role") == "load-balancer" and t.get("quantity", 0) > 0
+        ]
         firewall_names = await self._create_role_devices(
             role="firewall",
-            entries=self.data.firewall_templates,
-            deployment_id=self.data.id,
+            entries=firewall_templates,
+            deployment_id=data["id"],
             naming_convention=naming_convention,
-            indexes=[self.data.index],
+            indexes=[data["index"]],
         )
         load_balancer_names = await self._create_role_devices(
             role="load-balancer",
-            entries=self.data.load_balancer_templates,
-            deployment_id=self.data.id,
+            entries=load_balancer_templates,
+            deployment_id=data["id"],
             naming_convention=naming_convention,
-            indexes=[self.data.index],
+            indexes=[data["index"]],
         )
 
         await self._ensure_service_ha(
@@ -60,7 +75,7 @@ class SharedServiceChainMixin(BorderServicesMixin, CablingMixin):
 
         await self._cable_border_services(
             border_role_for={"firewall": "firewall", "load-balancer": "load-balancer"},
-            connectivity_mode=self.data.connectivity_mode,
+            connectivity_mode=data.get("connectivity_mode", "pbr"),
             border_names=border_leaf_names,
             firewall_names=firewall_names,
             load_balancer_names=load_balancer_names,
@@ -128,12 +143,14 @@ class SharedServiceChainMixin(BorderServicesMixin, CablingMixin):
     async def _ensure_common_exchange_for_dc(self) -> None:
         """Ensure a default TopologyCommonExchange exists and includes this DC deployment."""
 
+        dc_id = self.data["id"]
+        dc_name = self.data["name"]
         try:
             namespaces = await self.client.filters(kind=IpamNamespace, name__value="SHARED-SERVICES")
             if not namespaces:
                 self.logger.warning(
                     "Shared services namespace 'SHARED-SERVICES' not found; "
-                    f"skipping CommonExchange linking for DC {self.data.name}"
+                    f"skipping CommonExchange linking for DC {dc_name}"
                 )
                 return
             shared_ns = namespaces[0]
@@ -158,20 +175,20 @@ class SharedServiceChainMixin(BorderServicesMixin, CablingMixin):
                         "description": "Auto-provisioned default shared exchange domain",
                         "is_default": True,
                         "namespace": {"id": shared_ns.id},
-                        "deployments": [{"id": self.data.id}],
+                        "deployments": [{"id": dc_id}],
                     },
                 )
                 await exchange_obj.save(allow_upsert=True)
-                self.logger.info("Created default CommonExchange 'GLOBAL-SHARED-EXCHANGE' for DC %s", self.data.name)
+                self.logger.info("Created default CommonExchange 'GLOBAL-SHARED-EXCHANGE' for DC %s", dc_name)
                 return
 
             rel = getattr(exchange_obj, "deployments")
             await rel.fetch()
-            if any(peer.id == self.data.id for peer in rel.peers):
+            if any(peer.id == dc_id for peer in rel.peers):
                 return
 
-            await self._safe_rel_add(rel, {"id": self.data.id})
+            await self._safe_rel_add(rel, {"id": dc_id})
             await exchange_obj.save(allow_upsert=True)
-            self.logger.info(f"Linked DC {self.data.name} to default CommonExchange '{exchange_obj.name.value}'")
+            self.logger.info(f"Linked DC {dc_name} to default CommonExchange '{exchange_obj.name.value}'")
         except Exception as exc:
-            self.logger.warning(f"Failed to ensure CommonExchange for DC {self.data.name}: {exc}")
+            self.logger.warning(f"Failed to ensure CommonExchange for DC {dc_name}: {exc}")

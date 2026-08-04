@@ -43,11 +43,6 @@ def _make_p2p_interface(iface_id: str, iface_name: str, device_id: str, cable_id
 
 
 def _design() -> MagicMock:
-    # routing_strategy must be set via the constructor, not attribute
-    # assignment after — RoutingOptions.design is typed as the
-    # HasRoutingStrategy Protocol, and isinstance() against a
-    # runtime_checkable Protocol uses inspect.getattr_static, which only
-    # sees attributes MagicMock pre-registers from constructor kwargs.
     d = MagicMock(routing_strategy="ebgp-ebgp")
     d.model_dump = MagicMock(return_value={})
     return d

@@ -6,14 +6,6 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from generators.models import (
-    DeviceRole,
-    LocationSuiteModel,
-    RackModel,
-    RackParent,
-    RackPod,
-    Template,
-)
 from generators.topology.rack import RackGenerator
 
 
@@ -42,41 +34,39 @@ def _build_generator(
     layout is a placeholder ("S_MIXED") whose numbers are unused here.
     """
 
-    parent = RackParent(
-        id="parent-1",
-        name="DC1",
-        index=1,
-        size="S",
-    )
+    parent = {
+        "id": "parent-1",
+        "name": "DC1",
+        "index": 1,
+        "size": "S",
+    }
 
-    pod = RackPod(
-        id="pod-1",
-        name="pod-1",
-        index=1,
-        parent=parent,
-        leaf_interface_sorting_method="top_down",
-        spine_interface_sorting_method="bottom_up",
-        fabric_templates=[DeviceRole(role="spine", quantity=2, template=Template(id="tmpl-spine"))],
-        deployment_type=deployment_type,
-        layout="S_MIXED",
-        rack_numbering_start_index=rack_numbering_start_index,
-        leaf_link_numbering_start=leaf_link_numbering_start,
-        spine_link_numbering_start=spine_link_numbering_start,
-    )
+    pod = {
+        "id": "pod-1",
+        "name": "pod-1",
+        "index": 1,
+        "parent": parent,
+        "leaf_interface_sorting_method": "top_down",
+        "spine_interface_sorting_method": "bottom_up",
+        "fabric_templates": [{"role": "spine", "quantity": 2, "template": {"id": "tmpl-spine"}}],
+        "deployment_type": deployment_type,
+        "layout": "S_MIXED",
+        "rack_numbering_start_index": rack_numbering_start_index,
+        "leaf_link_numbering_start": leaf_link_numbering_start,
+        "spine_link_numbering_start": spine_link_numbering_start,
+    }
 
-    suite = LocationSuiteModel(
-        index=1,
-    )
+    suite = {"index": 1}
 
-    rack = RackModel(
-        id="rack-1",
-        name="rack-1",
-        index=rack_index,
-        rack_type="network",
-        row_index=row_index,
-        parent=suite,
-        pod=pod,
-    )
+    rack = {
+        "id": "rack-1",
+        "name": "rack-1",
+        "index": rack_index,
+        "rack_type": "network",
+        "row_index": row_index,
+        "parent": suite,
+        "pod": pod,
+    }
 
     generator = RackGenerator.__new__(RackGenerator)
     generator.data = rack

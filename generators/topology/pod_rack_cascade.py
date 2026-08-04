@@ -51,12 +51,14 @@ class PodRackCascadeGenerator(PodTopologyGenerator):
     async def generate(self, data: dict[str, Any]) -> None:
         await super().generate(data)
 
-        if not getattr(self, "data", None) or self.data.parent.is_managed_by_controller:
+        pod_data = getattr(self, "data", None)
+        if not pod_data or pod_data["parent"].get("management_mode") == "managed_by_controller":
             return
 
+        pod_id = pod_data["id"]
         racks = await self.client.filters(
             kind=LocationRack,
-            pod__ids=[self.data.id],
+            pod__ids=[pod_id],
             rack_type__values=["network", "tor", "compute"],
         )
 
@@ -65,10 +67,10 @@ class PodRackCascadeGenerator(PodTopologyGenerator):
             related_node_ids.append(rack.id)
 
         if not racks:
-            self.logger.info(f"Pod {self.data.name}: no existing racks to cascade to")
+            self.logger.info(f"Pod {pod_data['name']}: no existing racks to cascade to")
             return
 
-        if self.data.deployment_type == "mixed":
+        if pod_data["deployment_type"] == "mixed":
             fan_out_ids = [rack.id for rack in racks if rack.rack_type.value == "network"]
         else:
             fan_out_ids = [rack.id for rack in racks]
