@@ -93,17 +93,16 @@ class TestGeneratePodScopedBorderServices:
         assert first_leg[1]["devices"] == ["fw-01"]
 
     @pytest.mark.asyncio
-    async def test_quantity_of_two_triggers_ha_pairing(self) -> None:
+    async def test_firewall_passes_ha_kind_through_options(self) -> None:
+        """HA pairing itself is create_devices()'s job (DeviceOptions.ha_kind)."""
         gen = _make_generator()
         gen.data["fabric_templates"] = [_entry("firewall", 2, _FW_TEMPLATE)]
         gen.create_devices = AsyncMock(return_value=["fw-01", "fw-02"])
-        gen._ensure_ha_pair = AsyncMock()
 
         await gen._generate_pod_scoped_border_services(spines=["bs-01"])
 
-        gen._ensure_ha_pair.assert_awaited_once_with(
-            ["fw-01", "fw-02"], ha_kind="ManagedFirewallHA", role_label="firewall"
-        )
+        create_kwargs = gen.create_devices.call_args.kwargs
+        assert create_kwargs["options"]["ha_kind"] == "ManagedFirewallHA"
 
     @pytest.mark.asyncio
     async def test_inline_connectivity_mode_chains_through_dc_parent(self) -> None:

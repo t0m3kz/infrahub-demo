@@ -617,7 +617,7 @@ class EndpointConnectivityGenerator(EndpointUplinkMixin, CommonGenerator):
         Requires the target pair to already share exactly one ManagedMLAG
         domain — per user direction, a pair with no shared domain is skipped
         with a warning rather than auto-provisioned here (unlike
-        rack.py's _ensure_mlag_pairs, which creates the domain for switch
+        DeviceMixin._ensure_mlag_pairs, which creates the domain for switch
         pairs it itself creates).
         """
         all_target_interfaces = await self._resolve_target_interfaces(deployment_type)

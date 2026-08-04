@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, TypedDict
+from typing import Any, Literal, TypedDict
 
 
 class DeviceOptions(TypedDict, total=False):
@@ -28,6 +28,22 @@ class DeviceOptions(TypedDict, total=False):
     f"{device_role}s". Needed when a role's group predates and doesn't follow
     that naming convention (e.g. device_role="load-balancer" would mechanically
     resolve to "load-balancers", but the pre-existing group is "loadbalancers")."""
+    ha_kind: str
+    """When set, create_devices() pairs the created devices two-at-a-time
+    (sorted names, odd one left unpaired) into this HA node kind — e.g.
+    "ManagedFirewallHA"/"ManagedLoadbalancerHA". Mirrors mlag_create's
+    pairing behavior but for firewall/load-balancer roles."""
+    mlag_create: Literal["no", "back-to-back", "virtual"]
+    """Pod-wide MLAG pairing mode for leaf/tor/l2-leaf/access-leaf roles —
+    passed through from TopologyPod.mlag_create. "no" (default) never pairs."""
+    mlag_supports_virtual: bool
+    """Whether this role can use mlag_create="virtual" (anchors on a loopback —
+    only L3/routed roles). False forces back-to-back instead of erroring out.
+    Default: True."""
+    mlag_peer_template: dict[str, Any]
+    """Template dict used to check for a role="mlag-peer" interface, required
+    for back-to-back MLAG. Defaults to ``template`` (create_devices()'s own
+    positional arg) when omitted."""
 
 
 class ChainHop(TypedDict, total=False):

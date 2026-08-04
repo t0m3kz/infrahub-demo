@@ -4,12 +4,10 @@ import asyncio
 from pathlib import Path
 from typing import Any, Literal, TypedDict, cast
 
-from infrahub_sdk.protocols import CoreStandardGroup
-
 from ..common import CablingOptions, CommonGenerator
 from ..helpers.rack import RackPlanner, RackRolesHelper, parse_rack_data
 from ..pod_config import pod_profile
-from ..protocols import DcimPhysicalDevice, DcimPhysicalInterface, LocationRack, ManagedMLAG
+from ..protocols import DcimPhysicalDevice, DcimPhysicalInterface, LocationRack
 from ..rack import (
     MUTUALLY_EXCLUSIVE_ROLE_GROUPS,
     ROLES_BY_DEPLOYMENT_TYPE,
@@ -636,81 +634,6 @@ class RackGenerator(RackMixin, CommonGenerator):
 
         await self._fan_out_to_row_dependent_racks()
 
-    async def _ensure_mlag_pairs(
-        self, device_names: list[str], *, role_label: str, template: dict[str, Any], supports_virtual: bool = True
-    ) -> None:
-        """Pair same-role devices two-at-a-time (sorted, odd one unpaired) into MLAG
-        domains, per pod.mlag_create ("no" / "back-to-back" / "virtual").
-
-        back-to-back needs a role=mlag-peer interface on the template — the mlag
-        generator (triggered on ManagedMLAG created/updated) does the actual wiring.
-        virtual anchors on a loopback (mlag.py's _ensure_virtual_peer_link) — only
-        L3/routed roles (leaf, access-leaf) can use it. supports_virtual=False
-        (l2-leaf: no loopback, L2-only by design) forces back-to-back instead of
-        erroring out — mlag_create is one pod-wide setting shared by every role,
-        so a pod with both leaf (L3) and l2-leaf (L2-only) roles must fall back
-        for the L2-only ones regardless of what's configured for the pod.
-        """
-        mlag_create = self.data["pod"].get("mlag_create", "no")
-        if mlag_create == "no" or len(device_names) < 2:
-            return
-
-        if mlag_create == "virtual" and not supports_virtual:
-            self.logger.info(
-                f"Rack {self.data['name']}: {role_label} has no routing/loopback — "
-                f"using back-to-back MLAG instead of the pod's virtual setting (L2-only role)."
-            )
-            mlag_create = "back-to-back"
-
-        if mlag_create == "back-to-back" and not self._roles.template_interfaces(template, role="mlag-peer"):
-            self.logger.error(
-                f"Rack {self.data['name']}: template {template.get('id')} has no mlag-peer interface — "
-                f"cannot create back-to-back MLAG for {role_label}s."
-            )
-            return
-
-        sorted_names = sorted(device_names)
-        mlag_group = await self.client.get(kind=CoreStandardGroup, name__value="mlag_domains")
-        for pair_index, (first, second) in enumerate(zip(sorted_names[0::2], sorted_names[1::2]), start=1):
-            mlag_name = f"{first}-{second}-mlag"
-            existing = await self.client.filters(kind=ManagedMLAG, name__value=mlag_name)
-            if existing:
-                existing_mlag = existing[0]
-                self.client.group_context.related_node_ids.append(existing_mlag.id)
-                # mlag_create may have changed since this domain was created (e.g.
-                # back-to-back <-> virtual) — mlag.py's peer-link wiring branches on
-                # this flag, so it must reflect the current setting, not the one at
-                # creation time, or a re-run would silently keep wiring the old mode.
-                wants_virtual = mlag_create == "virtual"
-                if existing_mlag.virtual_peer_link.value != wants_virtual:
-                    existing_mlag.virtual_peer_link.value = wants_virtual
-                    await existing_mlag.save(allow_upsert=True)
-                    self.logger.info(
-                        f"Rack {self.data['name']}: updated MLAG domain {mlag_name} to {mlag_create} peer-link"
-                    )
-                continue
-
-            devices = await self.client.filters(kind=DcimPhysicalDevice, name__values=[first, second])
-            if len(devices) != 2:
-                self.logger.error(f"MLAG pair {first}/{second}: could not resolve both devices.")
-                continue
-
-            mlag_obj = await self.client.create(
-                kind=ManagedMLAG,
-                data={
-                    "name": mlag_name,
-                    "domain_id": pair_index,
-                    "virtual_peer_link": mlag_create == "virtual",
-                    "status": "active",
-                    "capabilities": [{"id": dev.id} for dev in devices],
-                    "member_of_groups": [{"id": mlag_group.id}],
-                },
-            )
-            await mlag_obj.save(allow_upsert=True)
-            self.logger.info(
-                f"Rack {self.data['name']}: created MLAG domain {mlag_name} ({mlag_create}) for {role_label}s"
-            )
-
     async def _create_devices_for_role(
         self,
         role: dict[str, Any],
@@ -719,16 +642,27 @@ class RackGenerator(RackMixin, CommonGenerator):
         deployment_id: str,
         allocate_loopback: bool,
         group_name: str | None = None,
+        mlag: bool = False,
+        mlag_supports_virtual: bool = True,
     ) -> list[str]:
         """create_devices() + _created_device_names bookkeeping shared by every
-        role generator method (leaf/tor/border-leaf/firewall/load-balancer)."""
+        role generator method (leaf/tor/border-leaf/firewall/load-balancer).
+
+        mlag=True has create_devices() itself pair the created devices into
+        MLAG domains, per the pod's mlag_create setting — see
+        RackRolesHelper.build_device_options."""
         devices = await self.create_devices(
             deployment_id=deployment_id,
             device_role=device_role,
             quantity=role["quantity"],
             template=role["template"],
             naming_convention=self._naming_conv,
-            options=self._roles.build_device_options(allocate_loopback=allocate_loopback, group_name=group_name),
+            options=self._roles.build_device_options(
+                allocate_loopback=allocate_loopback,
+                group_name=group_name,
+                mlag=mlag,
+                mlag_supports_virtual=mlag_supports_virtual,
+            ),
         )
         self._created_device_names.update(devices)
         return devices
@@ -752,10 +686,8 @@ class RackGenerator(RackMixin, CommonGenerator):
         """
         pod = self.data["pod"]
         devices = await self._create_devices_for_role(
-            role, device_role=device_role, deployment_id=deployment_id, allocate_loopback=True
+            role, device_role=device_role, deployment_id=deployment_id, allocate_loopback=True, mlag=mlag
         )
-        if mlag:
-            await self._ensure_mlag_pairs(devices, role_label=device_role, template=role["template"])
 
         await self._cable_and_route(
             bottom_devices=devices,
@@ -846,13 +778,15 @@ class RackGenerator(RackMixin, CommonGenerator):
         local-leaf cabling target — shared by _generate_l2_leafs/_generate_access_leafs.
         Returns None if unresolved (already logged) — caller should ``continue``.
         """
-        devices = await self._create_devices_for_role(
-            role, device_role=device_role, deployment_id=self.data["pod"]["id"], allocate_loopback=allocate_loopback
-        )
         # allocate_loopback doubles as "participates in routing/EVPN" here:
         # l2-leaf (False) is L2-only by design, access-leaf (True) is a routed VTEP.
-        await self._ensure_mlag_pairs(
-            devices, role_label=device_role, template=role["template"], supports_virtual=allocate_loopback
+        devices = await self._create_devices_for_role(
+            role,
+            device_role=device_role,
+            deployment_id=self.data["pod"]["id"],
+            allocate_loopback=allocate_loopback,
+            mlag=True,
+            mlag_supports_virtual=allocate_loopback,
         )
         interfaces = self._roles.template_interfaces(role["template"], role="uplink")
 

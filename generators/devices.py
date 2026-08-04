@@ -11,8 +11,13 @@ if TYPE_CHECKING:
     import logging
 
 from .helpers import DeviceNameContext, DeviceNamingConfig, get_loopback_name
-from .protocols import DcimPhysicalDevice, DcimVirtualDevice, DcimVirtualInterface
+from .helpers.pairing import pair_device_names
+from .protocols import DcimPhysicalDevice, DcimVirtualDevice, DcimVirtualInterface, ManagedMLAG
 from .types import DeviceOptions
+
+# device_role values that pair into an HA domain via DeviceOptions.ha_kind
+# rather than MLAG — see create_devices()'s pairing dispatch below.
+_HA_PAIRED_ROLES = frozenset({"firewall", "load-balancer"})
 
 
 class DeviceMixin:
@@ -274,4 +279,137 @@ class DeviceMixin:
         except ValidationError as exc:
             self.logger.error("Batch creation failed with validation error: %s", exc)
             raise
+
+        ha_kind = options.get("ha_kind")
+        if ha_kind and device_role in _HA_PAIRED_ROLES:
+            await self._ensure_ha_pairs(device_names, ha_kind=ha_kind, role_label=device_role)
+
+        mlag_create = options.get("mlag_create", "no")
+        if mlag_create != "no":
+            await self._ensure_mlag_pairs(
+                device_names,
+                role_label=device_role,
+                template=options.get("mlag_peer_template", template),
+                mlag_create=mlag_create,
+                supports_virtual=options.get("mlag_supports_virtual", True),
+            )
+
         return device_names
+
+    async def _ensure_ha_pairs(
+        self,
+        device_names: list[str],
+        *,
+        ha_kind: str,
+        role_label: str,
+    ) -> None:
+        """Pair same-role devices two-at-a-time (sorted, odd one unpaired) into
+        HA domains. Shared by dc.py (DC-wide firewall/load-balancer) and pod.py
+        (a border-spine pod's own firewall/load-balancer) — never pairs across
+        pods/DCs, both members must sit in front of the same fabric to mean
+        anything physically."""
+        ha_group = None
+        for first, second in pair_device_names(device_names):
+            ha_name = f"{first}-{second}-ha"
+            existing = await self.client.filters(kind=ha_kind, name__value=ha_name)
+            if existing:
+                self.client.group_context.related_node_ids.append(existing[0].id)
+                continue
+
+            devices = await self.client.filters(kind=DcimPhysicalDevice, name__values=[first, second])
+            if len(devices) != 2:
+                self.logger.error(f"HA pair {first}/{second}: could not resolve both devices.")
+                continue
+
+            if ha_group is None:
+                ha_group = await self.client.get(kind=CoreStandardGroup, name__value="ha_domains")
+            ha_obj = await self.client.create(
+                kind=ha_kind,
+                data={
+                    "name": ha_name,
+                    "status": "active",
+                    "capabilities": [{"id": dev.id} for dev in devices],
+                    "member_of_groups": [{"id": ha_group.id}],
+                },
+            )
+            await ha_obj.save(allow_upsert=True)
+            self.logger.info(f"Created HA domain {ha_name} for {role_label}s")
+
+    async def _ensure_mlag_pairs(
+        self,
+        device_names: list[str],
+        *,
+        role_label: str,
+        template: dict[str, Any],
+        mlag_create: Literal["back-to-back", "virtual"],
+        supports_virtual: bool = True,
+    ) -> None:
+        """Pair same-role devices two-at-a-time (sorted, odd one unpaired) into MLAG
+        domains, per pod.mlag_create ("back-to-back" / "virtual").
+
+        back-to-back needs a role=mlag-peer interface on the template — the mlag
+        generator (triggered on ManagedMLAG created/updated) does the actual wiring.
+        virtual anchors on a loopback (mlag.py's _ensure_virtual_peer_link) — only
+        L3/routed roles (leaf, access-leaf) can use it. supports_virtual=False
+        (l2-leaf: no loopback, L2-only by design) forces back-to-back instead of
+        erroring out — mlag_create is one pod-wide setting shared by every role,
+        so a pod with both leaf (L3) and l2-leaf (L2-only) roles must fall back
+        for the L2-only ones regardless of what's configured for the pod.
+        """
+        if len(device_names) < 2:
+            return
+
+        if mlag_create == "virtual" and not supports_virtual:
+            self.logger.info(
+                f"{role_label} has no routing/loopback — "
+                f"using back-to-back MLAG instead of the pod's virtual setting (L2-only role)."
+            )
+            mlag_create = "back-to-back"
+
+        if mlag_create == "back-to-back" and not any(
+            iface.get("role") == "mlag-peer" for iface in template.get("interfaces", [])
+        ):
+            self.logger.error(
+                f"template {template.get('id')} has no mlag-peer interface — "
+                f"cannot create back-to-back MLAG for {role_label}s."
+            )
+            return
+
+        mlag_group = None
+        for pair_index, (first, second) in enumerate(pair_device_names(device_names), start=1):
+            mlag_name = f"{first}-{second}-mlag"
+            existing = await self.client.filters(kind=ManagedMLAG, name__value=mlag_name)
+            if existing:
+                existing_mlag = existing[0]
+                self.client.group_context.related_node_ids.append(existing_mlag.id)
+                # mlag_create may have changed since this domain was created (e.g.
+                # back-to-back <-> virtual) — mlag.py's peer-link wiring branches on
+                # this flag, so it must reflect the current setting, not the one at
+                # creation time, or a re-run would silently keep wiring the old mode.
+                wants_virtual = mlag_create == "virtual"
+                if existing_mlag.virtual_peer_link.value != wants_virtual:
+                    existing_mlag.virtual_peer_link.value = wants_virtual
+                    await existing_mlag.save(allow_upsert=True)
+                    self.logger.info(f"Updated MLAG domain {mlag_name} to {mlag_create} peer-link")
+                continue
+
+            devices = await self.client.filters(kind=DcimPhysicalDevice, name__values=[first, second])
+            if len(devices) != 2:
+                self.logger.error(f"MLAG pair {first}/{second}: could not resolve both devices.")
+                continue
+
+            if mlag_group is None:
+                mlag_group = await self.client.get(kind=CoreStandardGroup, name__value="mlag_domains")
+            mlag_obj = await self.client.create(
+                kind=ManagedMLAG,
+                data={
+                    "name": mlag_name,
+                    "domain_id": pair_index,
+                    "virtual_peer_link": mlag_create == "virtual",
+                    "status": "active",
+                    "capabilities": [{"id": dev.id} for dev in devices],
+                    "member_of_groups": [{"id": mlag_group.id}],
+                },
+            )
+            await mlag_obj.save(allow_upsert=True)
+            self.logger.info(f"Created MLAG domain {mlag_name} ({mlag_create}) for {role_label}s")

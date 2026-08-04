@@ -1,10 +1,13 @@
 """Unit tests for RackGenerator's l2-leaf/access-leaf role generation.
 
 Covers:
-- _create_local_leaf_role_devices: shared device-creation + MLAG-pairing +
-  local-leaf-cabling-target resolution used by both _generate_l2_leafs and
-  _generate_access_leafs (l2-leaf/access-leaf get the same pod.mlag_create
-  MLAG pairing as leaf/tor)
+- _create_local_leaf_role_devices: shared device-creation + local-leaf-cabling-
+  target resolution used by both _generate_l2_leafs/_generate_access_leafs.
+  MLAG pairing itself now happens inside DeviceMixin.create_devices() (see
+  DeviceOptions.mlag_create/mlag_supports_virtual, and test_rack_mlag_pairs.py
+  for the pairing logic) — this file verifies the right options reach
+  create_devices() for l2-leaf (supports_virtual=False) vs access-leaf
+  (supports_virtual=True).
 - _generate_l2_leafs / _generate_access_leafs: per-role cabling differences
   (L2 trunk with no IP pool vs. routed link + overlay-only routing)
 """
@@ -16,7 +19,6 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from generators.protocols import ManagedMLAG
 from generators.topology.rack import RackGenerator
 
 
@@ -92,10 +94,45 @@ _ACCESS_TEMPLATE = {"id": "tmpl-access", "interfaces": [{"name": "Eth1/1", "role
 
 class TestCreateLocalLeafRoleDevices:
     @pytest.mark.asyncio
-    async def test_no_mlag_create_never_pairs(self) -> None:
+    async def test_l2_leaf_passes_mlag_create_and_no_virtual_support(self) -> None:
+        """l2-leaf is L2-only (no loopback, no routing/EVPN) — virtual_peer_link
+        anchors on a loopback (mlag.py's _ensure_virtual_peer_link), which
+        l2-leaf can't use. mlag_supports_virtual=False forces create_devices()
+        to fall back to back-to-back rather than erroring out."""
+        gen = _build_gen(mlag_create="virtual")
+        gen.create_devices = AsyncMock(return_value=["l2-01", "l2-02"])
+        gen.client.filters = AsyncMock(return_value=[])
+        role = {"role": "l2-leaf", "quantity": 2, "template": _L2_TEMPLATE}
+
+        await gen._create_local_leaf_role_devices(
+            role, device_role="l2-leaf", allocate_loopback=False, created_leaf_devices=["leaf-01", "leaf-02"]
+        )
+
+        create_kwargs = gen.create_devices.call_args.kwargs
+        assert create_kwargs["options"]["mlag_create"] == "virtual"
+        assert create_kwargs["options"]["mlag_supports_virtual"] is False
+
+    @pytest.mark.asyncio
+    async def test_access_leaf_passes_mlag_create_and_virtual_support(self) -> None:
+        """access-leaf is a routed VTEP (allocate_loopback=True) — can use
+        mlag_create="virtual" as configured, no fallback needed."""
+        gen = _build_gen(mlag_create="virtual")
+        gen.create_devices = AsyncMock(return_value=["access-01", "access-02"])
+        gen.client.filters = AsyncMock(return_value=[])
+        role = {"role": "access-leaf", "quantity": 2, "template": _ACCESS_TEMPLATE}
+
+        await gen._create_local_leaf_role_devices(
+            role, device_role="access-leaf", allocate_loopback=True, created_leaf_devices=["leaf-01", "leaf-02"]
+        )
+
+        create_kwargs = gen.create_devices.call_args.kwargs
+        assert create_kwargs["options"]["mlag_create"] == "virtual"
+        assert create_kwargs["options"]["mlag_supports_virtual"] is True
+
+    @pytest.mark.asyncio
+    async def test_no_mlag_create_still_resolves_cabling_target(self) -> None:
         gen = _build_gen(mlag_create="no")
         gen.create_devices = AsyncMock(return_value=["l2-01", "l2-02"])
-        gen.client.create = AsyncMock()
         gen.client.filters = AsyncMock(return_value=[_mock_interface("Eth1/1")])
         role = {"role": "l2-leaf", "quantity": 2, "template": _L2_TEMPLATE}
 
@@ -103,134 +140,12 @@ class TestCreateLocalLeafRoleDevices:
             role, device_role="l2-leaf", allocate_loopback=False, created_leaf_devices=["leaf-01", "leaf-02"]
         )
 
-        gen.client.create.assert_not_awaited()
+        create_kwargs = gen.create_devices.call_args.kwargs
+        assert create_kwargs["options"]["mlag_create"] == "no"
         assert result is not None
-
-    @pytest.mark.asyncio
-    async def test_virtual_mlag_create_falls_back_to_back_to_back_for_l2_leafs(self) -> None:
-        """l2-leaf is L2-only (no loopback, no routing/EVPN) — virtual_peer_link
-        anchors on a loopback (mlag.py's _ensure_virtual_peer_link), which
-        l2-leaf can't use. mlag_create is one pod-wide setting shared by every
-        role, so a pod configured "virtual" (for its L3 leafs) must still fall
-        back to back-to-back for l2-leafs rather than erroring out."""
-        gen = _build_gen(mlag_create="virtual")
-        template = {
-            "id": "tmpl-l2-peer",
-            "interfaces": [{"name": "Eth1/1", "role": "uplink"}, {"name": "Eth1/2", "role": "mlag-peer"}],
-        }
-        gen.create_devices = AsyncMock(return_value=["l2-01", "l2-02"])
-        gen.client.filters = AsyncMock(
-            side_effect=[
-                [],
-                [_mock_device("l2-01"), _mock_device("l2-02")],
-                [_mock_interface("Eth1/1")],
-            ]
-        )
-        gen.client.get = AsyncMock(return_value=_mock_group())
-        mlag_obj = MagicMock()
-        mlag_obj.id = "mlag-1"
-        mlag_obj.save = AsyncMock()
-        gen.client.create = AsyncMock(return_value=mlag_obj)
-        role = {"role": "l2-leaf", "quantity": 2, "template": template}
-
-        await gen._create_local_leaf_role_devices(
-            role, device_role="l2-leaf", allocate_loopback=False, created_leaf_devices=["leaf-01", "leaf-02"]
-        )
-
-        gen.client.create.assert_awaited_once()
-        create_kwargs = gen.client.create.call_args.kwargs
-        assert create_kwargs["data"]["virtual_peer_link"] is False
-
-    @pytest.mark.asyncio
-    async def test_virtual_mlag_create_fallback_still_requires_mlag_peer_interface(self) -> None:
-        """Falling back from virtual to back-to-back for l2-leaf still needs a
-        role=mlag-peer interface on the template — same requirement as an
-        explicitly-configured back-to-back pod."""
-        gen = _build_gen(mlag_create="virtual")
-        gen.create_devices = AsyncMock(return_value=["l2-01", "l2-02"])
-        gen.client.create = AsyncMock()
-        gen.client.filters = AsyncMock(return_value=[_mock_interface("Eth1/1")])
-        role = {"role": "l2-leaf", "quantity": 2, "template": _L2_TEMPLATE}
-
-        await gen._create_local_leaf_role_devices(
-            role, device_role="l2-leaf", allocate_loopback=False, created_leaf_devices=["leaf-01", "leaf-02"]
-        )
-
-        gen.client.create.assert_not_awaited()
-        gen.logger.error.assert_called_once()
-
-    @pytest.mark.asyncio
-    async def test_back_to_back_mlag_create_still_works_for_l2_leafs(self) -> None:
-        gen = _build_gen(mlag_create="back-to-back")
-        template = {
-            "id": "tmpl-l2-peer",
-            "interfaces": [{"name": "Eth1/1", "role": "uplink"}, {"name": "Eth1/2", "role": "mlag-peer"}],
-        }
-        gen.create_devices = AsyncMock(return_value=["l2-01", "l2-02"])
-        gen.client.filters = AsyncMock(
-            side_effect=[
-                [],
-                [_mock_device("l2-01"), _mock_device("l2-02")],
-                [_mock_interface("Eth1/1")],
-            ]
-        )
-        gen.client.get = AsyncMock(return_value=_mock_group())
-        mlag_obj = MagicMock()
-        mlag_obj.id = "mlag-1"
-        mlag_obj.save = AsyncMock()
-        gen.client.create = AsyncMock(return_value=mlag_obj)
-        role = {"role": "l2-leaf", "quantity": 2, "template": template}
-
-        await gen._create_local_leaf_role_devices(
-            role, device_role="l2-leaf", allocate_loopback=False, created_leaf_devices=["leaf-01", "leaf-02"]
-        )
-
-        gen.client.create.assert_awaited_once()
-        create_kwargs = gen.client.create.call_args.kwargs
-        assert create_kwargs["kind"] == ManagedMLAG
-        assert create_kwargs["data"]["virtual_peer_link"] is False
-
-    @pytest.mark.asyncio
-    async def test_virtual_mlag_create_pairs_access_leafs(self) -> None:
-        gen = _build_gen(mlag_create="virtual")
-        gen.create_devices = AsyncMock(return_value=["access-01", "access-02"])
-        gen.client.filters = AsyncMock(
-            side_effect=[
-                [],
-                [_mock_device("access-01"), _mock_device("access-02")],
-                [_mock_interface("Eth1/1")],
-            ]
-        )
-        gen.client.get = AsyncMock(return_value=_mock_group())
-        mlag_obj = MagicMock()
-        mlag_obj.id = "mlag-1"
-        mlag_obj.save = AsyncMock()
-        gen.client.create = AsyncMock(return_value=mlag_obj)
-        role = {"role": "access-leaf", "quantity": 2, "template": _ACCESS_TEMPLATE}
-
-        await gen._create_local_leaf_role_devices(
-            role, device_role="access-leaf", allocate_loopback=True, created_leaf_devices=["leaf-01", "leaf-02"]
-        )
-
-        gen.client.create.assert_awaited_once()
-        create_kwargs = gen.client.create.call_args.kwargs
-        assert create_kwargs["data"]["name"] == "access-01-access-02-mlag"
-
-
-def _mock_device(name: str) -> MagicMock:
-    dev = MagicMock()
-    dev.id = f"id-{name}"
-    dev.name = MagicMock(value=name)
-    return dev
 
 
 def _mock_interface(name: str) -> MagicMock:
     intf = MagicMock()
     intf.name = MagicMock(value=name)
     return intf
-
-
-def _mock_group() -> MagicMock:
-    group = MagicMock()
-    group.id = "mlag-domains-group"
-    return group

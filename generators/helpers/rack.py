@@ -192,8 +192,20 @@ class RackRolesHelper:
             quantity=quantity,
         )
 
-    def build_device_options(self, *, allocate_loopback: bool, group_name: str | None = None) -> DeviceOptions:
-        """Build DeviceOptions payload for role device creation."""
+    def build_device_options(
+        self,
+        *,
+        allocate_loopback: bool,
+        group_name: str | None = None,
+        mlag: bool = False,
+        mlag_supports_virtual: bool = True,
+    ) -> DeviceOptions:
+        """Build DeviceOptions payload for role device creation.
+
+        mlag=True passes the pod's mlag_create setting through so
+        create_devices() pairs the created devices itself — see
+        DeviceOptions.mlag_create/mlag_supports_virtual.
+        """
         options = DeviceOptions(
             indexes=self.ctx._device_indexes,
             allocate_loopback=allocate_loopback,
@@ -205,6 +217,9 @@ class RackRolesHelper:
             options["loopback_prefix_length"] = 128 if self.ctx._is_ipv6 else 32
         if group_name:
             options["group_name"] = group_name
+        if mlag:
+            options["mlag_create"] = self.ctx.data["pod"].get("mlag_create", "no")
+            options["mlag_supports_virtual"] = mlag_supports_virtual
         return options
 
     @staticmethod
