@@ -34,3 +34,26 @@ extensions:
             Allocated from GLOBAL-L3VNI pool.
           optional: true
           order_weight: 1000
+        - name: namespace_type
+          kind: Dropdown
+          label: Namespace Type
+          description: "Purpose of this VRF namespace, for filtering/selection by generators"
+          optional: true
+          order_weight: 1100
+          choices:
+            - name: internet
+              label: Internet
+              description: "Public internet edge VRF"
+              color: "#7FA7FF"
+            - name: shared
+              label: Shared
+              description: "Shared services VRF (e.g. SHARED-SERVICES)"
+              color: "#7FBF7F"
+            - name: transit
+              label: Transit
+              description: "DCI/transit VRF carrying route leaks between namespaces"
+              color: "#FFD27F"
+            - name: customer
+              label: Customer
+              description: "Per-customer/tenant VRF"
+              color: "#BF7F7F"
