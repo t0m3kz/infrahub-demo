@@ -1,0 +1,12 @@
+---
+# Cloud account for C016 (Prolexar Inc.) in Azure.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: CloudAccount
+  data:
+    - name: "prolexar-azure-prod"
+      account_id: "9a1b2c3d-4e5f-6a7b-8c9d-0e1f2a3b4c5d"
+      environment: "p"
+      provider: "P005"
+      owner: "C016"

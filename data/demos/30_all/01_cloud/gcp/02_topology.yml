@@ -1,0 +1,20 @@
+---
+# GCP europe-west4 region + zones (a, b) — europe-west4 maps to Amsterdam
+# metro (Equinix AM presence), same location as Azure's westeurope.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologyCloud
+  data:
+    - name: GCP
+      children:
+        kind: TopologyCloudRegion
+        data:
+          - name: europe-west4
+            status: active
+            location: ams
+            children:
+              kind: TopologyCloudZone
+              data:
+                - name: europe-west4-a
+                - name: europe-west4-b

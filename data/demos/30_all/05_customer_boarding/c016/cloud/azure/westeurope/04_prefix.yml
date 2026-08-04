@@ -1,0 +1,10 @@
+---
+# CIDR block for C016's subnet in Azure westeurope-2.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: IpamPrefix
+  data:
+    - prefix: "10.160.1.0/24"
+      ip_namespace: "default"
+      status: active

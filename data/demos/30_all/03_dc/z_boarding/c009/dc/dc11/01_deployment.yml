@@ -1,0 +1,27 @@
+---
+# Customer C009 deployment footprint inside an existing data center from
+# data/demos/01_data_center/. TopologyCustomerDC's parent is the data center
+# (TopologyDataCenter) itself, not a pod — the customer's presence spans the
+# whole fabric.
+#
+# Requires the corresponding DC to already exist:
+#   - DC5  <- data/demos/01_data_center/dc5/
+#
+# design links to one of the M_DC/S_DC/L_DC/XL_DC boarding blueprints from
+# data/bootstrap/21_customer_templates.yml (loaded at bootstrap time).
+#
+# name is a computed attribute ({owner_org_id}-{environment}-{parent}) —
+# read-only, do not set it explicitly.
+
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: TopologyCustomerDC
+  data:
+    - owner: "C009"
+      environment: "p"
+      status: active
+      parent: "DC11"
+      design: "XL_DC"
+      member_of_groups:
+        - customer_deployments

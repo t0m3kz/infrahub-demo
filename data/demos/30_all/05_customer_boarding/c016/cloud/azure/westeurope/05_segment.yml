@@ -1,0 +1,15 @@
+---
+# Cloud subnet (CloudNetworkSegment) for C016 in Azure westeurope-2.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: CloudNetworkSegment
+  data:
+    - owner: "C016"
+      customer_name: "prolexar-subnet-prod"
+      environment: "p"
+      segment_type: "azure_vnet_subnet"
+      virtual_network: "prolexar-vnet-prod"
+      availability_zone: ["westeurope", "westeurope-2"]
+      cidr_block: ["10.160.1.0/24", "default"]
+      customer_deployment: ["C016", "p"]

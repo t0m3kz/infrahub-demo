@@ -1,0 +1,13 @@
+---
+# Virtual network (VNet) for C016 in Azure westeurope.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: CloudVirtualNetwork
+  data:
+    - name: "prolexar-vnet-prod"
+      account: "prolexar-azure-prod"
+      region: "westeurope"
+      is_default: false
+      dns_support: true
+      dns_hostnames: true
