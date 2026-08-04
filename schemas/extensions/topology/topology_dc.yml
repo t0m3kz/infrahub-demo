@@ -210,6 +210,34 @@ nodes:
             label: "Managed by Controller"
             description: "An external controller (e.g. ACI APIC) owns the topology; generators do not run."
             color: "#7FBFFF"
+          - name: fw_managed_by_controller
+            label: "Firewall Managed by Controller"
+            description: "Infrahub owns the topology build-out except firewall, which an external controller manages."
+            color: "#FFD27F"
+          - name: lb_managed_by_controller
+            label: "Load Balancer Managed by Controller"
+            description: >-
+              Infrahub owns the topology build-out except load-balancer, which
+              an external controller manages.
+            color: "#FFD27F"
+          - name: fw_lb_managed_by_controller
+            label: "Firewall + Load Balancer Managed by Controller"
+            description: >-
+              Infrahub owns the fabric/switch build-out; firewall and
+              load-balancer are both managed by an external controller.
+            color: "#E67E22"
+          - name: fabric_lb_managed_by_controller
+            label: "Fabric + Load Balancer Managed by Controller"
+            description: >-
+              An external controller manages the fabric/switches and
+              load-balancer; Infrahub owns only firewall.
+            color: "#E67E22"
+          - name: fabric_fw_managed_by_controller
+            label: "Fabric + Firewall Managed by Controller"
+            description: >-
+              An external controller manages the fabric/switches and
+              firewall; Infrahub owns only load-balancer.
+            color: "#E67E22"
 
       - name: routing_strategy
         kind: Dropdown
