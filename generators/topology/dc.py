@@ -4,17 +4,28 @@ from typing import Any, Literal, TypedDict, cast
 
 from utils.data_cleaning import clean_data
 
-from ..border_services import BorderServicesMixin
+from ..cabling import CablingMixin
 from ..common import CommonGenerator, DeviceOptions
 from ..dc_config import resolve_dc_size_layout
-from ..helpers import calculate_dc_fabric_loopback_prefix, name_to_asn_range
+from ..devices import DeviceMixin
+from ..helpers import name_to_asn_range
 from ..helpers.routing import RoutingStrategy
 from ..helpers.template_interfaces import template_interface_names_by_role
 from ..pod_config import POD_LAYOUTS
+from ..pools import PoolMixin
 from ..protocols import IpamNamespace, TopologyCommonExchange, TopologyDataCenter, TopologyPod
+from ..routing import RoutingMixin
 from ..types import CablingOptions, RoutingOptions
 
 _DC_VALID_FABRIC_ROLES = frozenset({"super-spine", "hyper-spine", "border-leaf", "firewall", "load-balancer"})
+
+# device_role -> HA node kind. HA pairing itself happens inside
+# DeviceMixin.create_devices() (see DeviceOptions.ha_kind) — only the right
+# kind per role needs picking here.
+_HA_KIND_BY_ROLE: dict[str, str] = {
+    "firewall": "ManagedFirewallHA",
+    "load-balancer": "ManagedLoadbalancerHA",
+}
 
 
 class TopologyDcData(TypedDict, total=False):
@@ -46,7 +57,7 @@ def _templates_by_role(templates: list[dict[str, Any]], role: str) -> list[dict[
     return [t for t in templates if t.get("role") == role and t.get("quantity", 0) > 0]
 
 
-class DCTopologyGenerator(BorderServicesMixin, CommonGenerator):
+class DCTopologyGenerator(PoolMixin, DeviceMixin, CablingMixin, RoutingMixin, CommonGenerator):
     """Generate data center topology with super-spine infrastructure."""
 
     data: TopologyDcData
@@ -152,10 +163,7 @@ class DCTopologyGenerator(BorderServicesMixin, CommonGenerator):
         # "M_BACK_TO_BACK"), and those border-leaf devices need a loopback IP
         # for overlay BGP just like they would under a super-spine design.
         if max_super_spines_cap > 0 or max_border_leafs_cap > 0 or max_hyper_spines_cap > 0:
-            pools_to_allocate["dc-fabric-loopback"] = calculate_dc_fabric_loopback_prefix(
-                max_devices=max_super_spines_cap + max_border_leafs_cap + max_hyper_spines_cap,
-                ipv6=is_ipv6,
-            )
+            pools_to_allocate["dc-fabric-loopback"] = dc_design["dc_fabric_loopback_prefix_length"]
 
         self.logger.info(f"Allocating DC pools: {list(pools_to_allocate.keys())}")
 
@@ -459,12 +467,15 @@ class DCTopologyGenerator(BorderServicesMixin, CommonGenerator):
         walking pods in index order and giving each pod up to its OWN design's
         max_border_leafs_per_pod cap — a pod whose own design caps it at 0 is
         skipped entirely, which is how a specific subset of pods (e.g. pod 1 and
-        pod 3, not pod 2) can be chosen to host border-leafs. deployment_id is the
-        target pod's id (not the DC's) so devices land in that pod's fabric, but
-        cabling/routing them to that pod's spines is pod.py's job, not dc.py's —
-        it already owns spine context and can query "which border-leafs deploy
-        under me" during its own bootstrap. Returns every border-leaf name created
-        this run, DC-wide, for BLF<->FW<->LB cabling below."""
+        pod 3, not pod 2) can be chosen to host border-leafs. deployment_id is
+        the DC's own id (border-leaf is a DC-level fabric tier, like
+        super-spine/hyper-spine — pod.index only picks WHICH pod's spines it
+        physically cables to, it does not own the device). Cabling/routing to
+        that pod's spines is still pod.py's job, not dc.py's — it already owns
+        spine context and can query "which border-leafs deploy under me" (by
+        rack/index placement, not by deployment) during its own bootstrap.
+        Returns every border-leaf name created this run, DC-wide, for
+        BLF<->FW<->LB cabling below."""
         entries = _templates_by_role(self.data.get("fabric_templates", []), "border-leaf")
         if not entries:
             return []
@@ -502,7 +513,7 @@ class DCTopologyGenerator(BorderServicesMixin, CommonGenerator):
                     loopback_prefix_length=128 if self._is_ipv6 else 32,
                 )
                 names = await self.create_devices(
-                    deployment_id=pod.id,
+                    deployment_id=self.data["id"],
                     device_role="border-leaf",
                     quantity=share,
                     template=entry["template"],
@@ -521,8 +532,42 @@ class DCTopologyGenerator(BorderServicesMixin, CommonGenerator):
 
         return all_names
 
+    async def _create_role_devices(
+        self,
+        *,
+        role: Literal["firewall", "load-balancer"],
+        entries: list[dict[str, Any]],
+        deployment_id: str,
+        naming_convention: Literal["standard", "hierarchical", "flat", "computed"],
+        indexes: list[int],
+    ) -> list[str]:
+        """Create firewall/load-balancer devices for one fabric_templates role,
+        DC-wide (deployment_id=dc.id). Each entry's devices are paired into an
+        HA domain two-at-a-time by create_devices() itself (any quantity, not
+        just 2 — an odd device is left unpaired). No loopback allocation — not
+        part of underlay/overlay routing."""
+        device_options = DeviceOptions(indexes=indexes, ha_kind=_HA_KIND_BY_ROLE[role])
+        if role == "load-balancer":
+            # create_devices()'s default group_name is f"{device_role}s" = "load-balancers",
+            # but the bootstrap group is named "loadbalancers" (no hyphen) — override.
+            device_options["group_name"] = "loadbalancers"
+
+        all_names: list[str] = []
+        for entry in entries:
+            names = await self.create_devices(
+                deployment_id=deployment_id,
+                device_role=role,
+                quantity=entry["quantity"],
+                template=entry["template"],
+                naming_convention=naming_convention,
+                options=device_options,
+            )
+            all_names.extend(names)
+
+        return all_names
+
     async def _generate_dc_scoped_fabric_devices(self) -> None:
-        """Create border-leaf devices and delegate the DC service chain to the mixin.
+        """Create border-leaf devices and provision the DC's shared service chain.
 
         No-ops on border-leaf if no pods exist yet — a DC with zero pods has
         nothing to place border-leafs into. A pod added later than this DC's

@@ -7,8 +7,8 @@ the pure computation — no file I/O, no Infrahub client calls — so both
 callers build a catalog their own way and pass it in.
 
 Sizing algorithm, tier by tier, all with a hard minimum of 2 devices (no
-single point of failure — mirrors border_services.py's HA-pairing pattern
-for firewall/load-balancer, generalized to every tier):
+single point of failure — mirrors dc.py's/pod.py's HA-pairing pattern for
+firewall/load-balancer, generalized to every tier):
 
   leaf     - customer ports must cover the server count at the required speed.
   spine    - downlink ports must cover the chosen leaf count (one link per
@@ -19,7 +19,8 @@ for firewall/load-balancer, generalized to every tier):
              to 2.
   border-leaf, firewall, load-balancer - fixed redundant pair (2x cheapest
              capable device type); these aren't driven by server count in
-             the real generators either (see generators/border_services.py).
+             the real generators either (see generators/topology/dc.py /
+             generators/topology/pod.py's _create_role_devices).
 
 For pods > 1 there are two real architectures in this project (see
 generators/dc_config.py & generators/pod_config.py's DC_SIZE_LAYOUTS, S/M vs L/XL): back-to-back (pods
@@ -168,9 +169,9 @@ class Recommender:
     def cheapest_pair(self, role: str, manufacturer: str | None = None) -> TierResult:
         """Fixed redundant pair of the cheapest device_type for `role` -
         border-leaf/firewall/load-balancer aren't sized from server count in
-        the real generators either (see generators/border_services.py's
-        fixed HA-pairing at quantity==2). `manufacturer` pins the pick to a
-        preferred vendor instead of the cheapest available."""
+        the real generators either (see dc.py's/pod.py's own fixed 2x
+        provisioning). `manufacturer` pins the pick to a preferred vendor
+        instead of the cheapest available."""
         candidates = self._candidates(role, manufacturer)
         priced = [(self.prices.get(t.device_type_id), t) for t in candidates]
         priced = [(p, t) for p, t in priced if p is not None]

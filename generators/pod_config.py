@@ -11,7 +11,6 @@ any of this sizing/offset logic.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 from typing import Any, Literal
 
 POD_LAYOUTS: dict[str, dict[str, Any]] = {
@@ -20,7 +19,6 @@ POD_LAYOUTS: dict[str, dict[str, Any]] = {
         "compute_racks_per_row": 8,
         "network_racks_per_row": 1,
         "max_leafs_per_network_rack": 4,
-        "max_tors_per_network_rack": 4,
         "max_tors_per_compute_rack": 0,
         "max_spines_per_pod": 2,
         "max_border_leafs_per_pod": 1,
@@ -31,7 +29,6 @@ POD_LAYOUTS: dict[str, dict[str, Any]] = {
         "compute_racks_per_row": 8,
         "network_racks_per_row": 0,
         "max_leafs_per_network_rack": 0,
-        "max_tors_per_network_rack": 0,
         "max_tors_per_compute_rack": 2,
         "max_spines_per_pod": 4,
         "max_border_leafs_per_pod": 1,
@@ -46,7 +43,6 @@ POD_LAYOUTS: dict[str, dict[str, Any]] = {
         "compute_racks_per_row": 8,
         "network_racks_per_row": 1,
         "max_leafs_per_network_rack": 2,
-        "max_tors_per_network_rack": 0,
         "max_tors_per_compute_rack": 2,
         "max_spines_per_pod": 4,
         "max_border_leafs_per_pod": 1,
@@ -60,7 +56,6 @@ POD_LAYOUTS: dict[str, dict[str, Any]] = {
         "compute_racks_per_row": 0,
         "network_racks_per_row": 1,
         "max_leafs_per_network_rack": 8,
-        "max_tors_per_network_rack": 0,
         "max_tors_per_compute_rack": 0,
         "max_spines_per_pod": 2,
         "max_border_leafs_per_pod": 0,
@@ -71,7 +66,6 @@ POD_LAYOUTS: dict[str, dict[str, Any]] = {
         "compute_racks_per_row": 8,
         "network_racks_per_row": 1,
         "max_leafs_per_network_rack": 2,
-        "max_tors_per_network_rack": 0,
         "max_tors_per_compute_rack": 2,
         "max_spines_per_pod": 3,
         "max_border_leafs_per_pod": 1,
@@ -85,7 +79,6 @@ POD_LAYOUTS: dict[str, dict[str, Any]] = {
         "compute_racks_per_row": 8,
         "network_racks_per_row": 1,
         "max_leafs_per_network_rack": 4,
-        "max_tors_per_network_rack": 4,
         "max_tors_per_compute_rack": 0,
         "max_spines_per_pod": 3,
         "max_border_leafs_per_pod": 1,
@@ -96,7 +89,6 @@ POD_LAYOUTS: dict[str, dict[str, Any]] = {
         "compute_racks_per_row": 8,
         "network_racks_per_row": 1,
         "max_leafs_per_network_rack": 2,
-        "max_tors_per_network_rack": 0,
         "max_tors_per_compute_rack": 2,
         "max_spines_per_pod": 4,
         "max_border_leafs_per_pod": 1,
@@ -110,7 +102,6 @@ POD_LAYOUTS: dict[str, dict[str, Any]] = {
         "compute_racks_per_row": 8,
         "network_racks_per_row": 1,
         "max_leafs_per_network_rack": 4,
-        "max_tors_per_network_rack": 4,
         "max_tors_per_compute_rack": 0,
         "max_spines_per_pod": 4,
         "max_border_leafs_per_pod": 1,
@@ -119,7 +110,6 @@ POD_LAYOUTS: dict[str, dict[str, Any]] = {
 
 _POD_LAYOUT_DEFAULTS: dict[str, Any] = {
     "max_leafs_per_network_rack": 4,
-    "max_tors_per_network_rack": 2,
     "max_tors_per_compute_rack": 1,
     "max_spines_per_pod": 2,
     "max_border_leafs_per_pod": 1,
@@ -191,62 +181,25 @@ def _computed_max_compute_racks_per_row(layout: dict[str, Any]) -> int | None:
     return max_compute_racks_per_pod // layout["rows"]
 
 
-@dataclass(frozen=True)
-class StandardProfileAssumptions:
-    """Shared assumptions used by standard profile templates.
-
-    These assumptions explain WHY the default profile numbers exist and provide
-    one declarative place for future tuning.
-    """
-
-    oversubscription: str = "1:2"
-    homing: Literal["single", "dual"] = "dual"
-    spare_ratio: float = 0.20
-    preferred_topology: Literal["middle_rack", "tor", "mixed"] = "mixed"
-    suite_container_mode: bool = True
-
-
-STANDARD_PROFILE_ASSUMPTIONS = StandardProfileAssumptions()
-
-
 def pod_profile(
     *,
-    pod_id: str,
-    pod_name: str,
     layout_name: str,
     deployment_type: Literal["middle_rack", "tor", "mixed"],
-    dc_id: str | None = None,
-    dc_name: str | None = None,
 ) -> dict[str, Any]:
-    """Resolved per-Pod profile derived from a standard layout template."""
+    """Resolved per-Pod profile derived from a standard layout template —
+    only the fields rack.py's capacity/offset checks actually read
+    (deployment_type, rows, profile_template, compute_racks_per_row,
+    network_racks_per_row, max_leafs_per_network_rack,
+    max_tors_per_compute_rack, row_dependent_rack_slots_per_row)."""
     layout = resolve_pod_layout(layout_name)
-    assumptions = STANDARD_PROFILE_ASSUMPTIONS
     return {
-        "owner_kind": "pod",
-        "owner_id": pod_id,
-        "owner_name": pod_name,
-        "owner_dc_id": dc_id,
-        "owner_dc_name": dc_name,
-        "profile_name": f"{pod_name}:{layout_name}",
         "profile_template": layout_name,
         "deployment_type": deployment_type,
-        "oversubscription": assumptions.oversubscription,
-        "homing": assumptions.homing,
-        "spare_ratio": assumptions.spare_ratio,
-        "preferred_topology": assumptions.preferred_topology,
-        "suite_container_mode": assumptions.suite_container_mode,
         "rows": layout["rows"],
         "compute_racks_per_row": layout["compute_racks_per_row"],
         "network_racks_per_row": layout["network_racks_per_row"],
         "max_leafs_per_network_rack": layout["max_leafs_per_network_rack"],
-        "max_tors_per_network_rack": layout["max_tors_per_network_rack"],
         "max_tors_per_compute_rack": layout["max_tors_per_compute_rack"],
-        "max_spines_per_pod": layout["max_spines_per_pod"],
-        "max_border_leafs_per_pod": layout["max_border_leafs_per_pod"],
-        "spine_downlink_ports_per_spine": layout["spine_downlink_ports_per_spine"],
-        "tor_uplinks_to_spine": layout["tor_uplinks_to_spine"],
-        "reserved_spine_downlinks_per_spine": layout["reserved_spine_downlinks_per_spine"],
-        "enforce_compute_racks_from_spine_budget": layout["enforce_compute_racks_from_spine_budget"],
         # Row-dependent rack slots used for deterministic ToR offset planning
         # — same computation as the old PodProfile.row_dependent_rack_slots_per_row property.
         "row_dependent_rack_slots_per_row": (

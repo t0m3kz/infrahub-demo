@@ -4,7 +4,9 @@ import asyncio
 from pathlib import Path
 from typing import Any, Literal, TypedDict, cast
 
+from ..cabling import CablingMixin
 from ..common import CablingOptions, CommonGenerator
+from ..devices import DeviceMixin
 from ..helpers.rack import RackPlanner, RackRolesHelper, parse_rack_data
 from ..pod_config import pod_profile
 from ..protocols import DcimPhysicalDevice, DcimPhysicalInterface, LocationRack
@@ -14,6 +16,7 @@ from ..rack import (
     ROW_DEPENDENT_RACK_TYPES,
     RackMixin,
 )
+from ..routing import RoutingMixin
 
 _ROW_LEAF_MAX_RETRIES = 10
 _ROW_LEAF_RETRY_DELAY = 3.0
@@ -95,7 +98,7 @@ def _base_offset(numbering_start: int) -> int:
     return max(0, numbering_start - 1)
 
 
-class RackGenerator(RackMixin, CommonGenerator):
+class RackGenerator(RackMixin, DeviceMixin, CablingMixin, RoutingMixin, CommonGenerator):
     """Generator for creating rack infrastructure based on fabric templates."""
 
     data: TopologyRackData
@@ -414,17 +417,11 @@ class RackGenerator(RackMixin, CommonGenerator):
         )
 
     def _pod_profile(self) -> dict[str, Any]:
-        """Build this rack's pod's profile dict (was pod.profile) — pod/dc ids
-        are the pod's own scope, unrelated to what the profile numbers describe."""
+        """Build this rack's pod's profile dict (was pod.profile)."""
         pod = self.data["pod"]
-        dc = pod["parent"]
         return pod_profile(
-            pod_id=pod["id"],
-            pod_name=pod["name"],
             layout_name=pod["layout"],
             deployment_type=pod["deployment_type"],
-            dc_id=dc["id"],
-            dc_name=dc["name"],
         )
 
     def _planned_previous_row_rack_slots(self) -> int:

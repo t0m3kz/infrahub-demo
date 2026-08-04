@@ -32,7 +32,7 @@ class CablingMixin:
     client: Any
     logger: logging.Logger
     deployment_id: str
-    # CommonGenerator._resolve_pool (PoolMixin) / _retry_delay — annotation only.
+    # CommonGenerator._resolve_pool / _retry_delay — annotation only.
     _resolve_pool: Any
     _retry_delay: Callable[..., float]
 

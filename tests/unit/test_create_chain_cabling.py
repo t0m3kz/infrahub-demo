@@ -15,11 +15,16 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from generators.cabling import CablingMixin
 from generators.common import CommonGenerator
 
 
+class _Gen(CablingMixin, CommonGenerator):
+    pass
+
+
 def _make_generator() -> Any:
-    gen = CommonGenerator.__new__(CommonGenerator)
+    gen = _Gen.__new__(_Gen)
     gen.logger = MagicMock()
     gen.client = MagicMock()
     gen.client.filters = AsyncMock(return_value=[])
