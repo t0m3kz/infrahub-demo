@@ -1,12 +1,12 @@
 from __future__ import annotations
 
-from typing import Any, Literal
+from typing import Any, Literal, cast
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
 from generators.helpers.rack import RackRolesHelper
-from generators.topology.rack import RackGenerator
+from generators.topology.rack import RackGenerator, TopologyRackData
 
 
 def _build_gen(*, deployment_type: Literal["middle_rack", "tor", "mixed"] = "mixed", rack_type: str = "network") -> Any:
@@ -61,7 +61,7 @@ def _build_gen(*, deployment_type: Literal["middle_rack", "tor", "mixed"] = "mix
     }
 
     gen = RackGenerator.__new__(RackGenerator)
-    gen.data = rack
+    gen.data = cast(TopologyRackData, rack)
     gen.logger = MagicMock()
     gen.client = MagicMock()
     gen.client.group_context = MagicMock()

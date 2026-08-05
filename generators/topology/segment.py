@@ -155,9 +155,7 @@ class VxlanSegmentGenerator(CommonGenerator):
             return
         try:
             segment_obj = await self.client.get(kind=ManagedVxlanSegment, id=segment_id)
-            # getattr: owner_org_id isn't yet in generators/protocols.py (regenerate
-            # via `infrahubctl protocols` after this schema is loaded onto the instance).
-            getattr(segment_obj, "owner_org_id").value = org_id
+            segment_obj.owner_org_id.value = org_id
             await segment_obj.save(allow_upsert=True)
         except Exception as exc:
             self.logger.error(f"Segment {segment_name}: failed to set owner_org_id: {exc}")
