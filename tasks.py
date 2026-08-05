@@ -5,24 +5,8 @@ Namespaces:
   infra   — Docker container lifecycle
   data    — schema, menu, and object loading
 
-Top-level shortcuts (aliases for namespaced tasks):
-  start                    — infra.start
-  stop                     — infra.stop
-  restart                  — infra.restart
-  destroy                  — infra.destroy
-  setup                    — infra.setup
-  register-repo            — infra.register-repo
-  validate                 — dev.validate
-  setup-precommit          — dev.setup-precommit
-  test-unit                — dev.test-unit
-  test-integration         — dev.test-integration
-  clean-testcontainers     — dev.clean-testcontainers
-  upgrade                  — dev.upgrade
-  release                  — dev.release
-  load-schema              — data.load-schema
-  load-menu                — data.load-menu
-  load-objects             — data.load-objects
-  load-data                — data.load-data
+Every task is also available at the top level (e.g. `invoke start` is the
+same task as `invoke infra.start`) — use whichever you prefer.
 """
 
 import logging
@@ -82,7 +66,7 @@ def _check_container_running(context: Context, max_attempts: int = 60) -> bool:
 
 
 @_task
-def infra_start(context: Context) -> None:
+def start(context: Context) -> None:
     """Start all Infrahub containers."""
     os.environ["INFRAHUB_ADDRESS"] = INFRAHUB_ADDRESS
     os.environ["INFRAHUB_API_TOKEN"] = INFRAHUB_API_TOKEN
@@ -90,13 +74,13 @@ def infra_start(context: Context) -> None:
 
 
 @_task
-def infra_stop(context: Context) -> None:
+def stop(context: Context) -> None:
     """Stop all Infrahub containers."""
     context.run(f"{COMPOSE_COMMAND} down", pty=True)
 
 
 @_task(optional=["component"])
-def infra_restart(context: Context, component: str = "") -> None:
+def restart(context: Context, component: str = "") -> None:
     """Restart all (or a specific) container.
 
     Example:
@@ -107,13 +91,13 @@ def infra_restart(context: Context, component: str = "") -> None:
 
 
 @_task
-def infra_destroy(context: Context) -> None:
+def destroy(context: Context) -> None:
     """Destroy all containers and volumes."""
     context.run(f"{COMPOSE_COMMAND} down -v", pty=True)
 
 
 @_task
-def infra_setup(context: Context) -> None:
+def setup(context: Context) -> None:
     """Full environment setup: start containers, load schema, menu, and bootstrap data.
 
     Example:
@@ -133,7 +117,7 @@ def infra_setup(context: Context) -> None:
         log.info("Infrahub containers already running")
     else:
         log.info("Starting containers...")
-        infra_start(context)
+        start(context)
         if not _check_container_running(context):
             log.error("Infrahub container failed to start. Aborting.")
             return
@@ -155,7 +139,7 @@ def infra_setup(context: Context) -> None:
 
 
 @_task(optional=["ref"])
-def infra_register_repo(context: Context, ref: str = "routing") -> None:
+def register_repo(context: Context, ref: str = "routing") -> None:
     """Register the local repository and load event actions.
 
     Example:
@@ -195,7 +179,7 @@ def _ensure_pytest_basetemp(basetemp: str) -> Path:
 
 
 @_task
-def dev_setup_precommit(context: Context) -> None:
+def setup_precommit(context: Context) -> None:
     """Install pre-commit hooks (prek) for local development."""
     log.info("Installing pre-commit hooks...")
     context.run("uv run prek install", pty=True)
@@ -203,7 +187,7 @@ def dev_setup_precommit(context: Context) -> None:
 
 
 @_task
-def dev_validate(context: Context) -> None:
+def validate(context: Context) -> None:
     """Run ruff, type checks, smoke tests, and unit tests with coverage."""
     log.info("Running pre-commit hooks on all files...")
     context.run("uv run prek run --all-files", pty=True)
@@ -218,7 +202,7 @@ def dev_validate(context: Context) -> None:
 
 
 @_task(optional=["basetemp"])
-def dev_test_unit(context: Context, basetemp: str = ".pytest-tmp") -> None:
+def test_unit(context: Context, basetemp: str = ".pytest-tmp") -> None:
     """Run unit tests.
 
     Uses a repo-local basetemp to avoid bind-mount issues on macOS+Colima.
@@ -231,7 +215,7 @@ def dev_test_unit(context: Context, basetemp: str = ".pytest-tmp") -> None:
 
 
 @_task(optional=["basetemp", "server_port", "tests"])
-def dev_test_integration(
+def test_integration(
     context: Context,
     basetemp: str = "~/.pytest-tmp/infrahub-demo",
     server_port: int = 8100,
@@ -256,7 +240,7 @@ def dev_test_integration(
 
 
 @_task(optional=["increment"])
-def dev_release(context: Context, increment: str = "") -> None:
+def release(context: Context, increment: str = "") -> None:
     """Bump version, update CHANGELOG.md, commit, and tag using commitizen.
 
     Example:
@@ -270,7 +254,7 @@ def dev_release(context: Context, increment: str = "") -> None:
 
 
 @_task
-def dev_upgrade(context: Context) -> None:
+def upgrade(context: Context) -> None:
     """Upgrade all Python dependencies and pre-commit hook revisions.
 
     Runs uv lock --upgrade to update the lockfile, then prek auto-update
@@ -287,7 +271,7 @@ def dev_upgrade(context: Context) -> None:
 
 
 @_task
-def dev_clean_testcontainers(context: Context) -> None:
+def clean_testcontainers(context: Context) -> None:
     """Remove leftover Docker resources created by integration tests."""
     for cmd in [
         "docker ps -aq --filter 'name=infrahub-test-' | xargs -r docker rm -f",
@@ -304,7 +288,7 @@ def dev_clean_testcontainers(context: Context) -> None:
 
 
 @_task(optional=["schema", "branch"])
-def data_load_schema(context: Context, schema: str = "./schemas/", branch: str = "main") -> None:
+def load_schema(context: Context, schema: str = "./schemas/", branch: str = "main") -> None:
     """Load base and extension schemas.
 
     Example:
@@ -316,7 +300,7 @@ def data_load_schema(context: Context, schema: str = "./schemas/", branch: str =
 
 
 @_task(optional=["branch"])
-def data_load_menu(context: Context, menu: str = "menu", branch: str = "main") -> None:
+def load_menu(context: Context, menu: str = "menu", branch: str = "main") -> None:
     """Load the navigation menu.
 
     Example:
@@ -326,7 +310,7 @@ def data_load_menu(context: Context, menu: str = "menu", branch: str = "main") -
 
 
 @_task(optional=["branch"])
-def data_load_objects(context: Context, path: str = "data/bootstrap/", branch: str = "main") -> None:
+def load_objects(context: Context, path: str = "data/bootstrap/", branch: str = "main") -> None:
     """Load object YAML files from a path.
 
     Example:
@@ -337,7 +321,7 @@ def data_load_objects(context: Context, path: str = "data/bootstrap/", branch: s
 
 
 @_task(optional=["branch"])
-def data_load_data(context: Context, name: str = "bootstrap.py", branch: str = "main") -> None:
+def load_data(context: Context, name: str = "bootstrap.py", branch: str = "main") -> None:
     """Run a bootstrap Python script.
 
     Example:
@@ -347,138 +331,31 @@ def data_load_data(context: Context, name: str = "bootstrap.py", branch: str = "
 
 
 # ---------------------------------------------------------------------------
-# Top-level aliases
-# ---------------------------------------------------------------------------
-
-
-@_task
-def start(context: Context) -> None:
-    """Start all Infrahub containers (alias for infra.start)."""
-    infra_start(context)
-
-
-@_task
-def stop(context: Context) -> None:
-    """Stop all Infrahub containers (alias for infra.stop)."""
-    infra_stop(context)
-
-
-@_task(optional=["component"])
-def restart(context: Context, component: str = "") -> None:
-    """Restart all (or a specific) container (alias for infra.restart)."""
-    infra_restart(context, component=component)
-
-
-@_task
-def destroy(context: Context) -> None:
-    """Destroy all containers and volumes (alias for infra.destroy)."""
-    infra_destroy(context)
-
-
-@_task
-def setup(context: Context) -> None:
-    """Full environment setup (alias for infra.setup)."""
-    infra_setup(context)
-
-
-@_task(optional=["ref"])
-def register_repo(context: Context, ref: str = "routing") -> None:
-    """Register the local repository and load event actions (alias for infra.register-repo)."""
-    infra_register_repo(context, ref=ref)
-
-
-@_task
-def validate(context: Context) -> None:
-    """Run linting and type checks (alias for dev.validate)."""
-    dev_validate(context)
-
-
-@_task
-def setup_precommit(context: Context) -> None:
-    """Install pre-commit hooks (alias for dev.setup-precommit)."""
-    dev_setup_precommit(context)
-
-
-@_task(optional=["basetemp"])
-def test_unit(context: Context, basetemp: str = ".pytest-tmp") -> None:
-    """Run unit tests (alias for dev.test-unit)."""
-    dev_test_unit(context, basetemp=basetemp)
-
-
-@_task(optional=["basetemp", "server_port"])
-def test_integration(context: Context, basetemp: str = ".pytest-tmp", server_port: int = 8000) -> None:
-    """Run integration tests (alias for dev.test-integration)."""
-    dev_test_integration(context, basetemp=basetemp, server_port=server_port)
-
-
-@_task
-def clean_testcontainers(context: Context) -> None:
-    """Remove leftover test containers (alias for dev.clean-testcontainers)."""
-    dev_clean_testcontainers(context)
-
-
-@_task
-def upgrade(context: Context) -> None:
-    """Upgrade Python dependencies and pre-commit hooks (alias for dev.upgrade)."""
-    dev_upgrade(context)
-
-
-@_task(optional=["increment"])
-def release(context: Context, increment: str = "") -> None:
-    """Bump version, update CHANGELOG, commit, and tag (alias for dev.release)."""
-    dev_release(context, increment=increment)
-
-
-@_task(optional=["schema", "branch"])
-def load_schema(context: Context, schema: str = "./schemas/", branch: str = "main") -> None:
-    """Load schema into Infrahub (alias for data.load-schema)."""
-    data_load_schema(context, schema=schema, branch=branch)
-
-
-@_task(optional=["branch"])
-def load_menu(context: Context, menu: str = "menu", branch: str = "main") -> None:
-    """Load navigation menu (alias for data.load-menu)."""
-    data_load_menu(context, menu=menu, branch=branch)
-
-
-@_task(optional=["branch"])
-def load_objects(context: Context, path: str = "data/bootstrap/", branch: str = "main") -> None:
-    """Load bootstrap objects (alias for data.load-objects)."""
-    data_load_objects(context, path=path, branch=branch)
-
-
-@_task(optional=["branch"])
-def load_data(context: Context, name: str = "bootstrap.py", branch: str = "main") -> None:
-    """Run a data-loading script (alias for data.load-data)."""
-    data_load_data(context, name=name, branch=branch)
-
-
-# ---------------------------------------------------------------------------
-# Collections
+# Collections — each task is registered under its namespace AND at the root
 # ---------------------------------------------------------------------------
 
 infra_ns = Collection("infra")
-infra_ns.add_task(cast(Task, infra_start), name="start")
-infra_ns.add_task(cast(Task, infra_stop), name="stop")
-infra_ns.add_task(cast(Task, infra_restart), name="restart")
-infra_ns.add_task(cast(Task, infra_destroy), name="destroy")
-infra_ns.add_task(cast(Task, infra_setup), name="setup")
-infra_ns.add_task(cast(Task, infra_register_repo), name="register-repo")
+infra_ns.add_task(cast(Task, start))
+infra_ns.add_task(cast(Task, stop))
+infra_ns.add_task(cast(Task, restart))
+infra_ns.add_task(cast(Task, destroy))
+infra_ns.add_task(cast(Task, setup))
+infra_ns.add_task(cast(Task, register_repo), name="register-repo")
 
 dev_ns = Collection("dev")
-dev_ns.add_task(cast(Task, dev_setup_precommit), name="setup-precommit")
-dev_ns.add_task(cast(Task, dev_validate), name="validate")
-dev_ns.add_task(cast(Task, dev_test_unit), name="test-unit")
-dev_ns.add_task(cast(Task, dev_test_integration), name="test-integration")
-dev_ns.add_task(cast(Task, dev_release), name="release")
-dev_ns.add_task(cast(Task, dev_upgrade), name="upgrade")
-dev_ns.add_task(cast(Task, dev_clean_testcontainers), name="clean-testcontainers")
+dev_ns.add_task(cast(Task, setup_precommit), name="setup-precommit")
+dev_ns.add_task(cast(Task, validate))
+dev_ns.add_task(cast(Task, test_unit), name="test-unit")
+dev_ns.add_task(cast(Task, test_integration), name="test-integration")
+dev_ns.add_task(cast(Task, release))
+dev_ns.add_task(cast(Task, upgrade))
+dev_ns.add_task(cast(Task, clean_testcontainers), name="clean-testcontainers")
 
 data_ns = Collection("data")
-data_ns.add_task(cast(Task, data_load_schema), name="load-schema")
-data_ns.add_task(cast(Task, data_load_menu), name="load-menu")
-data_ns.add_task(cast(Task, data_load_objects), name="load-objects")
-data_ns.add_task(cast(Task, data_load_data), name="load-data")
+data_ns.add_task(cast(Task, load_schema), name="load-schema")
+data_ns.add_task(cast(Task, load_menu), name="load-menu")
+data_ns.add_task(cast(Task, load_objects), name="load-objects")
+data_ns.add_task(cast(Task, load_data), name="load-data")
 
 ns = Collection()
 ns.add_task(cast(Task, start))
@@ -486,18 +363,18 @@ ns.add_task(cast(Task, stop))
 ns.add_task(cast(Task, restart))
 ns.add_task(cast(Task, destroy))
 ns.add_task(cast(Task, setup))
-ns.add_task(cast(Task, register_repo))
+ns.add_task(cast(Task, register_repo), name="register-repo")
 ns.add_task(cast(Task, validate))
-ns.add_task(cast(Task, setup_precommit))
-ns.add_task(cast(Task, test_unit))
-ns.add_task(cast(Task, test_integration))
-ns.add_task(cast(Task, clean_testcontainers))
+ns.add_task(cast(Task, setup_precommit), name="setup-precommit")
+ns.add_task(cast(Task, test_unit), name="test-unit")
+ns.add_task(cast(Task, test_integration), name="test-integration")
+ns.add_task(cast(Task, clean_testcontainers), name="clean-testcontainers")
 ns.add_task(cast(Task, upgrade))
 ns.add_task(cast(Task, release))
-ns.add_task(cast(Task, load_schema))
-ns.add_task(cast(Task, load_menu))
-ns.add_task(cast(Task, load_objects))
-ns.add_task(cast(Task, load_data))
+ns.add_task(cast(Task, load_schema), name="load-schema")
+ns.add_task(cast(Task, load_menu), name="load-menu")
+ns.add_task(cast(Task, load_objects), name="load-objects")
+ns.add_task(cast(Task, load_data), name="load-data")
 ns.add_collection(infra_ns)
 ns.add_collection(dev_ns)
 ns.add_collection(data_ns)
