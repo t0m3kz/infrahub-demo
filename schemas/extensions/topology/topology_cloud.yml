@@ -42,24 +42,28 @@ generics:
             color: "#BFBFBF"
 
 nodes:
+
   - name: Cloud
     namespace: Topology
+    icon: mdi:cloud-outline
     inherit_from:
       - TopologyDeployment
-    include_in_menu: false
+    parent: TopologyLabel
     children: TopologyCloudRegion
+    include_in_menu: false
     uniqueness_constraints:
-      - ["name__value"]
+      - ["name__value", "parent"]
     human_friendly_id:
       - name__value
     display_label: "{{ name__value|upper}} CLOUD"
 
   - name: CloudRegion
     namespace: Topology
+    icon: mdi:earth
     inherit_from:
       - TopologyDeployment
     parent: TopologyCloud
-    children: ""
+    children: TopologyCloudZone
     human_friendly_id:
       - name__value
     order_by:
@@ -129,9 +133,9 @@ nodes:
         order_weight: 2100
         description: "Virtual networks (VPC/VNet) deployed in this region"
 
-
   - name: CloudZone
     namespace: Topology
+    icon: mdi:map-marker-outline
     inherit_from:
       - TopologyDeployment
     parent: TopologyCloudRegion
@@ -165,6 +169,7 @@ nodes:
   - name: Account
     namespace: Cloud
     label: Cloud Account
+    icon: mdi:account-key-outline
     description: Cloud account/subscription/project scoped to a provider.
     include_in_menu: false
     inherit_from:
@@ -223,6 +228,7 @@ nodes:
   - name: VirtualNetwork
     namespace: Cloud
     label: Virtual Network
+    icon: mdi:cloud-braces
     description: Provider-agnostic virtual network container
     include_in_menu: false
     inherit_from:
@@ -285,6 +291,7 @@ nodes:
   - name: NetworkSegment
     namespace: Cloud
     label: Network Segment
+    icon: mdi:vector-square
     description: Network segment (subnet) within a virtual network.
     include_in_menu: false
     inherit_from:
@@ -804,6 +811,7 @@ nodes:
   - name: Route
     namespace: Cloud
     label: Route
+    icon: mdi:transit-connection-horizontal
     description: Route entry within a route table.
     include_in_menu: false
     inherit_from:
@@ -841,6 +849,7 @@ nodes:
   - name: TransitGateway
     namespace: Cloud
     label: Transit Gateway
+    icon: mdi:transit-connection-horizontal
     description: Multi-region virtual network transit hub for routing.
     include_in_menu: false
     inherit_from:
@@ -895,6 +904,7 @@ nodes:
   - name: VPNGateway
     namespace: Cloud
     label: VPN Gateway
+    icon: mdi:shield-link-variant
     description: VPN gateway for site-to-site and client VPN connections.
     include_in_menu: false
     human_friendly_id:
@@ -950,6 +960,7 @@ nodes:
   - name: CustomerGateway
     namespace: Cloud
     label: Customer Gateway
+    icon: mdi:router-wireless
     description: Customer/remote gateway for VPN connections.
     include_in_menu: false
     inherit_from:
@@ -999,6 +1010,7 @@ nodes:
   - name: DirectConnect
     namespace: Cloud
     label: Direct Connect
+    icon: mdi:lan-connect
     description: Dedicated physical connection to cloud provider.
     include_in_menu: false
     inherit_from:
@@ -1068,6 +1080,7 @@ nodes:
   - name: VirtualInterface
     namespace: Cloud
     label: Virtual Interface
+    icon: mdi:ethernet
     description: Virtual interface on Direct Connect/ExpressRoute.
     include_in_menu: false
     inherit_from:

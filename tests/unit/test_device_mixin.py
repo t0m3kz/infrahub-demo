@@ -404,6 +404,14 @@ class TestResolveRoleController:
 
         assert controller is apic
 
+    def test_campus_role_matches_dna_center_by_controller_type_alone(self) -> None:
+        dnac = _controller_dict("dna_center")
+        gen = self._gen(controllers=[dnac])
+
+        controller = gen._resolve_role_controller(device_role="access-switch", template={})
+
+        assert controller is dnac
+
     def test_firewall_requires_platform_match_not_just_controller_type(self) -> None:
         # security_manager controller for a DIFFERENT platform (panos) — must
         # not match a checkpoint_gaia firewall despite the same controller_type.

@@ -6,6 +6,7 @@ spec:
   kind: TopologyColocation
   data:
     - name: EQUINIX
+      parent: "Colocation"
       children:
         kind: TopologyColocationMetro
         data:

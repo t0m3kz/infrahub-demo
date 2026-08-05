@@ -8,6 +8,7 @@ spec:
   kind: TopologyCloud
   data:
     - name: AWS
+      parent: "Cloud"
       children:
         kind: TopologyCloudRegion
         data:

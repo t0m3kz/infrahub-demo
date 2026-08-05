@@ -97,12 +97,25 @@ def _build_netscaler_adm(controller: dict[str, Any]) -> dict[str, Any]:
     return {"profile": controller.get("name"), "instances": instances}
 
 
+def _build_dna_center(controller: dict[str, Any]) -> dict[str, Any]:
+    devices = [
+        {
+            "hostname": device.get("name"),
+            "role": device.get("role"),
+            "managementIpAddress": _device_ip(device),
+        }
+        for device in controller.get("managed_devices") or []
+    ]
+    return {"siteName": controller.get("name"), "devices": devices}
+
+
 # (controller_type, vendor) -> payload builder. `vendor` is the controller's own
 # platform name — None means "any platform" (fabric controller_types aren't tied to
 # one vendor platform the way firewall/lb managers are).
 _BUILDERS: dict[tuple[str, str | None], Any] = {
     ("aci_apic", None): _build_apic,
     ("dcnm", None): _build_dcnm,
+    ("dna_center", None): _build_dna_center,
     ("security_manager", "panos"): _build_panorama,
     ("security_manager", "junos"): _build_security_director,
     ("security_manager", "checkpoint_gaia"): _build_checkpoint_sms,

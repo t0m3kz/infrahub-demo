@@ -1,52 +1,6 @@
 ---
 version: "1.0"
 generics:
-  - name: ManagementServer
-    namespace: Network
-    description: "Generic for network management server (dns, ntp, and dhcp)."
-    label: "Network Management Servers"
-    human_friendly_id:
-      - name__value
-    display_label: "{{name__value}}"
-    order_by: [name__value]
-    include_in_menu: false
-    attributes:
-      - name: name
-        kind: Text
-      - name: description
-        kind: Text
-        optional: true
-      - name: status
-        kind: Dropdown
-        choices:
-          - name: active
-            label: Active
-            description: "Fully operational and currently in service."
-            color: "#7fbf7f"
-          - name: provisioning
-            label: Provisioning
-            description: "In the process of being set up and configured."
-            color: "#ffff7f"
-          - name: maintenance
-            label: Maintenance
-            description: "Undergoing routine maintenance or repairs."
-            color: "#ffd27f"
-          - name: drained
-            label: Drained
-            description: "Temporarily taken out of service."
-            color: "#bfbfbf"
-    relationships:
-      - name: location
-        peer: LocationGeneric
-        optional: true
-        cardinality: many
-      - name: ip_addresses
-        peer: IpamIPAddress
-        optional: true
-        cardinality: many
-        kind: Component
-        on_delete: cascade
-
   - name: Deployment
     namespace: Topology
     include_in_menu: false
@@ -60,6 +14,8 @@ generics:
       - name: name
         kind: Text
         order_weight: 100
+
+
   - name: PhysicalDeployment
     namespace: Topology
     description: "Physical infrastructure deployments with cabling"
@@ -80,21 +36,6 @@ generics:
         identifier: "physical_deployment__cables"
         order_weight: 2000
         on_delete: cascade
-
-
-  - name: Design
-    namespace: Topology
-    description: "Design aspect of topology elements."
-    label: "Topology Design"
-    include_in_menu: false
-    human_friendly_id:
-      - name__value
-    display_label: "{{name__value}}"
-    attributes:
-      - name: name
-        kind: Text
-        unique: true
-        order_weight: 100
 
   - name: RackHosting
     namespace: Topology
@@ -215,6 +156,19 @@ generics:
         order_weight: 7500
         on_delete: cascade
         description: "L3 VNI pool for VRF allocation. Used when namespace.l3_vni is null."
+
+nodes:
+  - name: Label
+    namespace: Topology
+    description: "A deployment footprint for a customer or internal use."
+    label: "Topology Deployment"
+    icon: "carbon:network-3-reference"
+    menu_placement: TopologyGeneric
+    include_in_menu: false
+    generate_template: false
+    children: ""
+    inherit_from:
+      - TopologyDeployment
 
 extensions:
   nodes:

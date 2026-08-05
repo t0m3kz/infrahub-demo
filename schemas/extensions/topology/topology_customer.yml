@@ -218,6 +218,7 @@ nodes:
     namespace: Topology
     description: "Customer deployment footprint inside a data center"
     label: "Customer (Data Center)"
+    icon: "mdi:account-server-outline"
     inherit_from:
       - TopologyCustomer
       - TopologyDeployment
@@ -233,7 +234,7 @@ nodes:
       - name__value
     display_label: "{{ name__value }}"
     uniqueness_constraints:
-      - ["owner", "environment__value", "parent"]
+      - ["name__value", "parent"]
     attributes:
       - name: name
         kind: Text
@@ -256,6 +257,7 @@ nodes:
     namespace: Topology
     description: "Customer deployment footprint inside a colocation metro"
     label: "Customer (Colocation)"
+    icon: "mdi:account-building-outline"
     inherit_from:
       - TopologyCustomer
       - TopologyDeployment
@@ -271,7 +273,7 @@ nodes:
       - name__value
     display_label: "{{ name__value }}"
     uniqueness_constraints:
-      - ["owner", "environment__value", "parent"]
+      - ["name__value", "parent"]
     attributes:
       - name: name
         kind: Text
@@ -286,33 +288,88 @@ nodes:
     namespace: Topology
     description: "Customer deployment footprint inside an office building"
     label: "Customer (Office)"
+    icon: "mdi:office-building-outline"
     inherit_from:
-      - TopologyCustomer
       - TopologyDeployment
       - TopologyClusterHosting
       - TopologyPhysicalDeployment
       - TopologyDeviceHosting
       - TopologyConnectableLocation
-    parent: TopologyOffice
+    parent: TopologyOfficeCustomer
     children: ""
     include_in_menu: false
     human_friendly_id:
-      - owner__org_id__value
+      - parent__name__value
       - environment__value
     order_by:
       - name__value
     display_label: "{{ name__value }}"
     uniqueness_constraints:
-      - ["owner", "environment__value", "parent"]
+      - ["name__value", "parent"]
     attributes:
       - name: name
         kind: Text
         order_weight: 100
         computed_attribute:
           kind: Jinja2
-          jinja2_template: "{{ owner__org_id__value|upper }}-{{ environment__value|upper }}-{{ parent__name__value|upper }}"  # yamllint disable-line rule:line-length
+          jinja2_template: "{{ parent__name__value|upper }}-{{ environment__value|upper }}"  # yamllint disable-line rule:line-length
         read_only: true
         optional: true
+      - name: environment
+        kind: Dropdown
+        description: "Environment this customer deployment footprint represents"
+        optional: true
+        default_value: p
+        order_weight: 200
+        choices:
+          - name: p
+            label: Production
+            color: "#A9CCE3"
+          - name: n
+            label: Non-Production
+            color: "#A9DFBF"
+          - name: s
+            label: Staging
+            color: "#FFA500"
+          - name: d
+            label: Development
+            color: "#7f7fff"
+          - name: t
+            label: Testing
+            color: "#D2B4DE"
+      - name: status
+        kind: Dropdown
+        optional: true
+        default_value: active
+        order_weight: 300
+        choices:
+          - name: active
+            label: Active
+            color: "#7fbf7f"
+          - name: provisioning
+            label: Provisioning
+            color: "#ffff7f"
+          - name: decommissioned
+            label: Decommissioned
+            color: "#bfbfbf"
+      - name: site_type
+        kind: Dropdown
+        optional: true
+        default_value: branch
+        order_weight: 400
+        choices:
+          - name: hq
+            label: Headquarters
+            color: "#2ECC71"
+          - name: regional
+            label: Regional Office
+            color: "#3498DB"
+          - name: branch
+            label: Branch Office
+            color: "#7F7FBF"
+          - name: campus
+            label: Campus
+            color: "#F39C12"
     relationships:
       - name: locations
         peer: LocationFacility
@@ -323,12 +380,21 @@ nodes:
         order_weight: 1000
         description: "Building locations backing this customer's office footprint
           (single for branch/regional, multiple for HQ/campus)"
+      - name: namespace
+        peer: BuiltinIPNamespace
+        cardinality: one
+        kind: Attribute
+        optional: true
+        identifier: "topology_customer_office__namespace"
+        order_weight: 1100
+        description: "IPAM namespace (= VRF) for this environment's footprint"
 
 
   - name: CustomerCloud
     namespace: Topology
     description: "Customer deployment footprint inside a cloud region"
     label: "Customer (Cloud)"
+    icon: "mdi:account-cloud-outline"
     inherit_from:
       - TopologyCustomer
       - TopologyDeployment
@@ -344,7 +410,7 @@ nodes:
       - name__value
     display_label: "{{ name__value }}"
     uniqueness_constraints:
-      - ["owner", "environment__value", "parent"]
+      - ["name__value", "parent"]
     attributes:
       - name: name
         kind: Text
@@ -356,7 +422,6 @@ nodes:
         optional: true
       - name: customer_name
         kind: Text
-        unique: true
         optional: false
         order_weight: 100
     relationships:
@@ -372,6 +437,7 @@ nodes:
     namespace: Topology
     description: "Boarding blueprint for a data center customer deployment"
     label: "Customer Template (Data Center)"
+    icon: "mdi:file-document-edit-outline"
     inherit_from:
       - TopologyCustomerTemplate
     include_in_menu: false
@@ -424,6 +490,7 @@ nodes:
     namespace: Topology
     description: "Boarding blueprint for a colocation customer deployment"
     label: "Customer Template (Colocation)"
+    icon: "mdi:file-document-plus-outline"
     inherit_from:
       - TopologyCustomerTemplate
     include_in_menu: false
@@ -476,6 +543,7 @@ nodes:
     namespace: Topology
     description: "Boarding blueprint for a cloud customer deployment"
     label: "Customer Template (Cloud)"
+    icon: "mdi:file-cloud-outline"
     inherit_from:
       - TopologyCustomerTemplate
     include_in_menu: false

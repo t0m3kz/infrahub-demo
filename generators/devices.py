@@ -26,10 +26,10 @@ from .types import DeviceOptions
 _HA_PAIRED_ROLES = frozenset({"firewall", "load-balancer"})
 
 # Fabric-tier device roles route to a controller by controller_type alone —
-# ACI APIC/DCNM/NSX/UCS aren't a 1:1 vendor pairing with the device's own
-# platform the way a firewall pairs with its dedicated manager, so no
-# platform match is required for these.
-_FABRIC_CONTROLLER_TYPES = frozenset({"aci_apic", "dcnm", "nsx_manager", "ucs_manager"})
+# ACI APIC/DCNM/NSX/UCS/DNA Center aren't a 1:1 vendor pairing with the
+# device's own platform the way a firewall pairs with its dedicated
+# manager, so no platform match is required for these.
+_FABRIC_CONTROLLER_TYPES = frozenset({"aci_apic", "dcnm", "nsx_manager", "ucs_manager", "dna_center"})
 _FABRIC_ROLES = frozenset(
     {
         "super-spine",
@@ -41,6 +41,8 @@ _FABRIC_ROLES = frozenset(
         "tor",
         "l2-leaf",
         "access-leaf",
+        "access-switch",
+        "distribution-switch",
     }
 )
 
