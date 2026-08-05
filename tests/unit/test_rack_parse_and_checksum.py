@@ -8,12 +8,12 @@ Covers:
 
 from __future__ import annotations
 
-from typing import Any, Literal
+from typing import Any, Literal, cast
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from generators.topology.rack import RackGenerator
+from generators.topology.rack import RackGenerator, TopologyRackData
 
 # ---------------------------------------------------------------------------
 # Helpers (shared with test_rack_offset_calculation.py)
@@ -56,7 +56,7 @@ def _build_rack_generator(
         "leafs": leafs if leafs is not None else [_DEFAULT_LEAF],
     }
     gen = RackGenerator.__new__(RackGenerator)
-    gen.data = rack
+    gen.data = cast(TopologyRackData, rack)
     gen.logger = MagicMock()
     gen.client = MagicMock()
     gen.client.group_context = MagicMock()

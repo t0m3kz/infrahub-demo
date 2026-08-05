@@ -6,7 +6,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from generators.topology.rack import RackGenerator
+from generators.topology.rack import RackGenerator, TopologyRackData
 
 
 def _build_generator(
@@ -69,7 +69,7 @@ def _build_generator(
     }
 
     generator = RackGenerator.__new__(RackGenerator)
-    generator.data = rack
+    generator.data = cast(TopologyRackData, rack)
     generator.logger = MagicMock()
     generator.client = cast(Any, SimpleNamespace())  # Not used by calculate_cabling_offsets
     return generator

@@ -137,17 +137,19 @@ def validate_exchange_gateways(data: dict[str, Any]) -> list[str]:
                 )
                 continue
 
-            leg_namespaces = []
+            leg_namespaces_raw: list[str | None] = []
             for leg in legs:
                 ns = (leg.get("ip_address") or {}).get("ip_namespace") or {}
-                leg_namespaces.append(ns.get("name"))
+                leg_namespaces_raw.append(ns.get("name"))
 
-            if None in leg_namespaces:
+            if None in leg_namespaces_raw:
                 errors.append(
                     f"RoutedExchange '{exchange_name}' on '{device_name}' has a leg with no "
                     "IP address / namespace assigned."
                 )
                 continue
+
+            leg_namespaces: list[str] = [ns for ns in leg_namespaces_raw if ns is not None]
 
             if leg_namespaces[0] == leg_namespaces[1]:
                 errors.append(
