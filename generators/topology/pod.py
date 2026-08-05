@@ -447,8 +447,8 @@ class PodTopologyGenerator(PoolMixin, DeviceMixin, CablingMixin, RoutingMixin, C
         # A pod added AFTER its DC already declared border-leaf/firewall/load-balancer
         # fabric_templates needs a retroactive share of those devices — same as any
         # other structural DC-level reconciliation, this requires an explicit
-        # dc_pod_cascade run (see tasks/demo.py's own manual dc_pod_cascade calls
-        # after bulk loads). Deliberately NOT auto-triggered from here: every
+        # dc_pod_cascade run (see the manual dc_pod_cascade calls after bulk
+        # loads). Deliberately NOT auto-triggered from here: every
         # add_pod run (including each pod during a bulk multi-DC load) would fire
         # its own concurrent dc_pod_cascade re-run against the same DC-level pools/
         # ASN pool, racing the DC's own already-in-flight bootstrap.

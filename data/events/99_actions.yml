@@ -10,8 +10,8 @@ spec:
     # add_dc's own work (see generators/topology/dc_pod_cascade.py's docstring).
     # A DC created standalone (e.g. a bulk DC+pod+rack load) only needs its own
     # bootstrap — fanning out to pods that were just bulk-loaded alongside it would
-    # be redundant with the manual dc_pod_cascade run that follows the load (see
-    # tasks/demo.py), so `created` fires plain add_dc, not the cascade. Structural
+    # be redundant with the manual dc_pod_cascade run that follows the load, so
+    # `created` fires plain add_dc, not the cascade. Structural
     # DC-level changes that EXISTING pods (and their racks) need to reconcile
     # against fire the cascade instead.
 
