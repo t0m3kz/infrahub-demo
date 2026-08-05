@@ -12,11 +12,11 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from infrahub_sdk.protocols import CoreNumberPool, CoreStandardGroup
 
-from generators.topology.customer_deployment import GLOBAL_L3VNI_POOL_NAME, CustomerDeploymentExchangeGenerator
+from generators.topology.customer_deployment import GLOBAL_L3VNI_POOL_NAME, CustomerDeploymentDCExchangeGenerator
 
 
 def _make_generator() -> Any:
-    gen = CustomerDeploymentExchangeGenerator.__new__(CustomerDeploymentExchangeGenerator)
+    gen = CustomerDeploymentDCExchangeGenerator.__new__(CustomerDeploymentDCExchangeGenerator)
     gen.logger = MagicMock()
     gen.client = MagicMock()
     gen.client.filters = AsyncMock(return_value=[])
