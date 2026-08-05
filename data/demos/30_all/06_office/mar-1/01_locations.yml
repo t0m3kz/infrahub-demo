@@ -1,0 +1,36 @@
+---
+apiVersion: infrahub.app/v1
+version: "1.0"
+kind: Object
+spec:
+  kind: LocationMetro
+  data:
+    - name: "Marseille"
+      shortname: "mar"
+      parent: "fr"
+      children:
+        kind: LocationOffice
+        data:
+          - name: "Marseille Office"
+            shortname: "mar-1"
+            children:
+              kind: LocationOfficeFloor
+              data:
+                - name: "Floor 12"
+                  shortname: "mar-1-12"
+                  index: 12
+                  conference_rooms: 5
+                  employee_count: 50
+                  area_sqm: 500
+                - name: "Floor 13"
+                  shortname: "mar-1-13"
+                  index: 13
+                  conference_rooms: 3
+                  employee_count: 30
+                  area_sqm: 300
+                - name: "Floor 17"
+                  shortname: "mar-1-17"
+                  index: 17
+                  conference_rooms: 4
+                  employee_count: 40
+                  area_sqm: 400

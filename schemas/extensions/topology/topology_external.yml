@@ -6,11 +6,13 @@ nodes:
     namespace: Topology
     inherit_from:
       - TopologyDeployment
+    parent: TopologyLabel
     label: External Topology
+    icon: "mdi:earth"
     include_in_menu: false
     children: TopologyExternalProviders
     uniqueness_constraints:
-      - ["name__value"]
+      - ["name__value", "parent"]
     human_friendly_id:
       - name__value
     display_label: "{{ name__value|upper }}"
@@ -23,10 +25,11 @@ nodes:
       - TopologyDeviceHosting
     parent: TopologyExternal
     label: External Provider Endpoint
+    icon: "mdi:lan-connect"
     include_in_menu: false
     children: ""
     uniqueness_constraints:
-      - ["name__value"]
+      - ["name__value", "parent"]
     human_friendly_id:
       - name__value
     display_label: "{{ name__value }}"

@@ -1,46 +1,57 @@
 ---
 version: "1.0"
 
-# TopologyOffice is a pure grouping container — a shared SITE name/label
-# under which one or more TopologyCustomerOffice footprints live (topology_
-# customer.yml, parent: TopologyOffice). It carries no locations/cables/
-# devices (those belong to whichever customer occupies the building) and no
-# TopologyConnectableLocation either — circuits always terminate on a
-# specific customer footprint (TopologyCustomer inherits
-# TopologyConnectableLocation directly), never on the shared site container,
-# since connecting two different customer deployments always requires an
-# explicit virtual/physical link between their own footprints.
+# TopologyOfficeCustomer groups one tenant's own TopologyCustomerOffice
+# footprints (topology_customer.yml, parent: TopologyOfficeCustomer) — e.g.
+# one customer with both a production and a non-production footprint gets
+# one OfficeCustomer node with two CustomerOffice children, instead of two
+# unrelated footprints only tied together by a shared `owner` attribute.
+# It hangs directly off TopologyLabel ("Campus and Office") — there is no
+# separate shared-site anchor node, since a site name/label would just
+# duplicate TopologyLabel's own grouping role with no data of its own
+# (previously named TopologyOffice; removed as a redundant intermediate
+# layer). It carries no locations/cables/devices (those belong to whichever
+# customer occupies the building) and no TopologyConnectableLocation either
+# — circuits always terminate on a specific customer footprint
+# (TopologyCustomer inherits TopologyConnectableLocation directly), never
+# on the shared grouping node, since connecting two different customer
+# deployments always requires an explicit virtual/physical link between
+# their own footprints.
 
 nodes:
-  - name: Office
+  - name: OfficeCustomer
     namespace: Topology
+    description: "Groups a tenant's CustomerOffice footprints under one customer node"
+    label: "Office Customer"
+    icon: "mdi:account-network-outline"
     inherit_from:
       - CoreArtifactTarget
       - TopologyDeployment
+    parent: TopologyLabel
+    children: TopologyCustomerOffice
     uniqueness_constraints:
+      - ["owner", "parent"]
       - ["name__value"]
     human_friendly_id:
-      - name__value
+      - owner__org_id__value
     include_in_menu: false
     display_label: "{{ name__value }}"
-    label: Office Topology
-    children: ""
     attributes:
-      - name: site_type
-        kind: Dropdown
+      - name: name
+        kind: Text
+        order_weight: 100
+        computed_attribute:
+          kind: Jinja2
+          jinja2_template: "{{ owner__org_id__value|upper }}"
+        read_only: true
         optional: true
-        default_value: branch
-        order_weight: 650
-        choices:
-          - name: hq
-            label: Headquarters
-            color: "#2ECC71"
-          - name: regional
-            label: Regional Office
-            color: "#3498DB"
-          - name: branch
-            label: Branch Office
-            color: "#7F7FBF"
-          - name: campus
-            label: Campus
-            color: "#F39C12"
+    relationships:
+      - name: owner
+        peer: OrganizationEntity
+        label: "Owner"
+        cardinality: one
+        kind: Attribute
+        optional: false
+        order_weight: 150
+        identifier: "office_customer__owner"
+        description: "Customer or provider this office footprint belongs to"

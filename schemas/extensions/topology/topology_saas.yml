@@ -8,10 +8,12 @@ nodes:
       - TopologyDeployment
       - CoreArtifactTarget
     label: SaaS Cloud
+    icon: "mdi:cloud-outline"
     include_in_menu: false
+    parent: TopologyLabel
     children: TopologySaasRegion
     uniqueness_constraints:
-      - ["name__value"]
+      - ["name__value", "parent"]
     human_friendly_id:
       - name__value
     display_label: "{{ name__value|upper}} SAAS"
@@ -107,9 +109,10 @@ nodes:
       - TopologyConnectableLocation
     parent: TopologySaas
     children: ""
+    icon: "mdi:map-marker-network"
     display_label: "{{ name__value }}"
     uniqueness_constraints:
-      - [parent, region_name__value]
+      - [name__value, parent]
     include_in_menu: false
     attributes:
       - name: name

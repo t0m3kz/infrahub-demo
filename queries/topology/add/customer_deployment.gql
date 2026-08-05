@@ -263,15 +263,21 @@ query customer_deployment($name: String!) {
         id
         name { value }
         environment { value }
-        owner {
+        parent {
           node {
-            id
-            org_id { value }
-            ... on OrganizationCustomer {
-              name { value }
-            }
-            ... on OrganizationProvider {
-              name { value }
+            ... on TopologyOfficeCustomer {
+              owner {
+                node {
+                  id
+                  org_id { value }
+                  ... on OrganizationCustomer {
+                    name { value }
+                  }
+                  ... on OrganizationProvider {
+                    name { value }
+                  }
+                }
+              }
             }
           }
         }

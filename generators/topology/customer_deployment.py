@@ -102,7 +102,13 @@ class CustomerDeploymentExchangeGenerator(CommonGenerator):
             return
 
         customer_id: str = customer.get("id", "")
-        owner = customer.get("owner") or {}
+        # TopologyCustomerOffice has no owner of its own — it groups under
+        # TopologyOfficeCustomer, which carries owner for all of that
+        # customer's office footprints (see topology_pop_office.yml).
+        if deployment_kind == "TopologyCustomerOffice":
+            owner = (customer.get("parent") or {}).get("owner") or {}
+        else:
+            owner = customer.get("owner") or {}
         org_id: str = owner.get("org_id", "")
         environment: str = customer.get("environment", "")
 

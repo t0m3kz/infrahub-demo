@@ -35,6 +35,7 @@ spec:
   kind: TopologyDataCenter
   data:
     - name: DC11
+      parent: "DC"
       index: 11
       size: L
       routing_strategy: ebgp-ebgp

@@ -1,20 +1,24 @@
 ---
-# C002 (SwiftGo GmbH) — TopologyCustomerOffice footprint under the shared
-# OFFICES site anchor, owning its own building (waw-br1) — see ./c001.yml
-# for the reference pattern.
+# C002 (SwiftGo GmbH) — TopologyCustomerOffice footprint under a
+# TopologyOfficeCustomer node (owner lives there, groups all of C002's
+# footprints under the shared OFFICES site anchor), owning its own
+# building (waw-br1) — see ./c001.yml for the reference pattern.
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
   kind: TopologyCustomerOffice
   data:
-    - owner:
-        kind: OrganizationCustomer
-        data:
-          name: "SwiftGo GmbH"
-          org_id: "C002"
-      environment: "p"
+    - environment: "p"
       status: active
-      parent: "OFFICES"
+      parent:
+        kind: TopologyOfficeCustomer
+        data:
+          owner:
+            kind: OrganizationCustomer
+            data:
+              name: "SwiftGo GmbH"
+              org_id: "C002"
+          parent: "OFFICES"
       locations:
         - "waw-br1-c16"
       member_of_groups:

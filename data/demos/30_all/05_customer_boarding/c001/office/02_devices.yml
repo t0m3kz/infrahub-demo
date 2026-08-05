@@ -1,0 +1,48 @@
+---
+# C001's Wi-Fi APs and campus access switches at Warsaw HQ, and the
+# controllers that manage them. Both devices and controllers attach to
+# C001's own TopologyOfficeCustomer node (created in 01_deployment.yml) —
+# one WLC/DNAC pair per customer, since there is no longer a shared
+# multi-tenant TopologyOffice site anchor to hang a shared controller off.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: DcimPhysicalDevice
+  data:
+    - name: "C001-WAW-AP1"
+      object_template: C9130AXI-B_AP
+      status: active
+      deployment: ["C001", "p"]
+    - name: "C001-WAW-AP2"
+      object_template: C9130AXI-B_AP
+      status: active
+      deployment: ["C001", "p"]
+    - name: "C001-WAW-ACC-SW1"
+      object_template: C9200L-24P-4G_ACCESS
+      status: active
+      deployment: ["C001", "p"]
+    - name: "C001-WAW-ACC-SW2"
+      object_template: C9200L-24P-4G_ACCESS
+      status: active
+      deployment: ["C001", "p"]
+
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: ManagedControllerPhysical
+  data:
+    - name: "C001-WAW-WLC1"
+      object_template: C9800-40_WLC
+      status: active
+      deployment: "C001"
+      managed_devices:
+        - "C001-WAW-AP1"
+        - "C001-WAW-AP2"
+    - name: "C001-WAW-DNAC1"
+      object_template: DN2-HW_DNAC
+      status: active
+      deployment: "C001"
+      managed_devices:
+        - "C001-WAW-ACC-SW1"
+        - "C001-WAW-ACC-SW2"

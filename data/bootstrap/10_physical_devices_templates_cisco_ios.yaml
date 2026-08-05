@@ -49,7 +49,7 @@ spec:
       device_type: C9200L-24P-4G
       platform: cisco_ios
       software_image: cisco_ios-17.12.4
-      role: edge
+      role: access-switch
       status: provisioning
       interfaces:
         kind: TemplateDcimPhysicalInterface
@@ -73,7 +73,7 @@ spec:
       device_type: C9200L-24P-4G
       platform: cisco_ios
       software_image: cisco_ios-17.12.4
-      role: edge
+      role: access-switch
       status: provisioning
       interfaces:
         kind: TemplateDcimPhysicalInterface

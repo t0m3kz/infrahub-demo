@@ -772,8 +772,20 @@ async def _phase_07_customers(
                 TopologyCustomerCloud(owner__ids: ["C001", "C002", "C003"]) {
                     edges { node { id name { value } } }
                 }
-                TopologyCustomerOffice(owner__ids: ["C001", "C002", "C003"]) {
-                    edges { node { id name { value } } }
+                TopologyCustomerOffice {
+                    edges {
+                        node {
+                            id
+                            name { value }
+                            parent {
+                                node {
+                                    ... on TopologyOfficeCustomer {
+                                        owner { node { org_id { value } } }
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
             }
             """
@@ -783,9 +795,19 @@ async def _phase_07_customers(
             "TopologyCustomerDC",
             "TopologyCustomerColocation",
             "TopologyCustomerCloud",
-            "TopologyCustomerOffice",
         ):
             dep_nodes.extend(dep_data.get(kind, {}).get("edges", []))
+
+        # TopologyCustomerOffice has no owner of its own — filter in Python
+        # by its parent TopologyOfficeCustomer's owner instead (see
+        # topology_pop_office.yml).
+        target_org_ids = {"C001", "C002", "C003"}
+        for edge in dep_data.get("TopologyCustomerOffice", {}).get("edges", []):
+            parent_node = (edge["node"].get("parent") or {}).get("node") or {}
+            owner_node = (parent_node.get("owner") or {}).get("node") or {}
+            org_id = (owner_node.get("org_id") or {}).get("value")
+            if org_id in target_org_ids:
+                dep_nodes.append(edge)
 
         if not dep_nodes:
             log.warning(

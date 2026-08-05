@@ -136,6 +136,14 @@ generics:
             label: Patch Panel
             description: "Passive patch panel used as cable interconnect."
             color: "#d4b8a0"
+          - name: access-switch
+            label: Access Switch
+            description: "Campus wiring-closet switch — SD-Access edge node."
+            color: "#b4d6ff"
+          - name: distribution-switch
+            label: Distribution Switch
+            description: "Campus aggregation switch — SD-Access intermediate/border node."
+            color: "#87b8e8"
       - name: status
         kind: Dropdown
         optional: false

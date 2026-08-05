@@ -15,48 +15,20 @@ spec:
     - name: "OFFICES-AP1"
       object_template: C9130AXI-B_AP
       status: active
-      deployment:
-        kind: TopologyCustomerOffice
-        data:
-          owner:
-            kind: OrganizationCustomer
-            data:
-              name: "Nordix Ltd."
-              org_id: "C001"
-          environment: "p"
-          parent: "OFFICES"
-          locations:
-            - "waw-hq-c16"
+      # References the C001 TopologyCustomerOffice footprint created in
+      # ../../06_customer_boarding/c001.yml by its hfid
+      # [parent__owner__org_id__value, environment__value] — does not
+      # recreate it, since owner now lives on the parent TopologyOfficeCustomer,
+      # not on TopologyCustomerOffice itself.
+      deployment: ["C001", "p"]
     - name: "OFFICES-AP2"
       object_template: C9130AXI-B_AP
       status: active
-      deployment:
-        kind: TopologyCustomerOffice
-        data:
-          owner:
-            kind: OrganizationCustomer
-            data:
-              name: "Nordix Ltd."
-              org_id: "C001"
-          environment: "p"
-          parent: "OFFICES"
-          locations:
-            - "waw-hq-c16"
+      deployment: ["C001", "p"]
     - name: "OFFICES-AP3"
       object_template: C9130AXI-B_AP
       status: active
-      deployment:
-        kind: TopologyCustomerOffice
-        data:
-          owner:
-            kind: OrganizationCustomer
-            data:
-              name: "SwiftGo GmbH"
-              org_id: "C002"
-          environment: "p"
-          parent: "OFFICES"
-          locations:
-            - "waw-br1-c16"
+      deployment: ["C002", "p"]
 
 ---
 apiVersion: infrahub.app/v1

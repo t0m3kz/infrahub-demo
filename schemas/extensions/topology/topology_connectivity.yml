@@ -14,19 +14,6 @@ generics:
         kind: Text
         order_weight: 100
 
-  - name: Connector
-    namespace: Topology
-    description: "Compatibility generic for topology connectors used by existing schema nodes"
-    label: "Topology Connector"
-    include_in_menu: false
-    human_friendly_id:
-      - name__value
-    attributes:
-      - name: name
-        kind: Text
-        optional: true
-        order_weight: 90
-
   - name: Circuit
     namespace: Topology
     description: "Point-to-point connectivity between two topology locations"
@@ -124,7 +111,7 @@ nodes:
         label: "Circuit Type"
         order_weight: 300
         choices:
-          - name: internet_underlay
+          - name: internet
             label: "Internet Underlay"
             description: "Logical physical-underlay for public internet delivery"
             color: "#f39c12"

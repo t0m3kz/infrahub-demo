@@ -85,6 +85,25 @@ class TestDcnmPayload:
         assert payload["switches"][0]["ipAddress"] == "10.0.0.1"
 
 
+class TestDnaCenterPayload:
+    def test_builds_device_inventory(self) -> None:
+        data = _raw_controller(
+            "CAMPUS-DNAC1",
+            "dna_center",
+            devices=[
+                _raw_device("acc-sw1", role="access-switch"),
+                _raw_device("dist-sw1", role="distribution-switch"),
+            ],
+        )
+        result = asyncio.run(_make_transform().transform(data))
+        payload = json.loads(result)
+
+        assert payload["siteName"] == "CAMPUS-DNAC1"
+        assert [d["hostname"] for d in payload["devices"]] == ["acc-sw1", "dist-sw1"]
+        assert payload["devices"][0]["role"] == "access-switch"
+        assert payload["devices"][0]["managementIpAddress"] == "10.0.0.1"
+
+
 class TestSecurityManagerVendorDispatch:
     def test_panos_platform_builds_panorama_payload(self) -> None:
         data = _raw_controller(

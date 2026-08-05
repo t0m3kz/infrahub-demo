@@ -6,23 +6,29 @@ Namespaces:
   data    — schema, menu, and object loading
   demo    — end-to-end demo flows
 
+See tasks/README.md for the full list of tasks and examples.
+
 Top-level shortcuts (aliases for namespaced tasks):
-  start               — infra.start
-  destroy             — infra.destroy
-  setup               — infra.setup
-  validate            — dev.validate
-  setup-precommit     — dev.setup-precommit
-  test-unit           — dev.test-unit
-  test-integration    — dev.test-integration
-  clean-testcontainers — dev.clean-testcontainers
-  load-schema         — data.load-schema
-  load-menu           — data.load-menu
-  load-objects        — data.load-objects
-  load-data           — data.load-data
-  release             — dev.release
-  register-repo       — infra.register-repo
-  deploy-dc           — demo.deploy-dc
-  run-demo            — demo.run-demo
+  start                    — infra.start
+  stop                     — infra.stop
+  restart                  — infra.restart
+  destroy                  — infra.destroy
+  setup                    — infra.setup
+  register-repo            — infra.register-repo
+  validate                 — dev.validate
+  setup-precommit          — dev.setup-precommit
+  test-unit                — dev.test-unit
+  test-integration         — dev.test-integration
+  clean-testcontainers     — dev.clean-testcontainers
+  upgrade                  — dev.upgrade
+  release                  — dev.release
+  load-schema              — data.load-schema
+  load-menu                — data.load-menu
+  load-objects             — data.load-objects
+  load-data                — data.load-data
+  deploy-dc                — demo.deploy-dc
+  deploy-universal-topology — demo.deploy-universal-topology
+  run-demo                 — demo.run-demo
 """
 
 from typing import cast
@@ -37,6 +43,18 @@ from tasks import data, demo, dev, infra
 def start(context):
     """Start all Infrahub containers (alias for infra.start)."""
     infra.start(context)
+
+
+@_task
+def stop(context):
+    """Stop all Infrahub containers (alias for infra.stop)."""
+    infra.stop(context)
+
+
+@_task(optional=["component"])
+def restart(context, component=""):
+    """Restart all (or a specific) container (alias for infra.restart)."""
+    infra.restart(context, component=component)
 
 
 @_task
@@ -81,6 +99,12 @@ def clean_testcontainers(context):
     dev.clean_testcontainers(context)
 
 
+@_task
+def upgrade(context):
+    """Upgrade Python dependencies and pre-commit hooks (alias for dev.upgrade)."""
+    dev.upgrade(context)
+
+
 @_task(optional=["schema", "branch"])
 def load_schema(context, schema="./schemas/", branch="main"):
     """Load schema into Infrahub (alias for data.load-schema)."""
@@ -123,6 +147,12 @@ def deploy_dc(context, scenario="dc1", branch="main"):
     demo.deploy_dc(context, scenario=scenario, branch=branch)
 
 
+@_task(optional=["branch", "dcs", "skip_generators", "dry_run"])
+def deploy_universal_topology(context, branch="main", dcs="", skip_generators=False, dry_run=False):
+    """Load the universal topology demo data (alias for demo.deploy-universal-topology)."""
+    demo.deploy_universal_topology(context, branch=branch, dcs=dcs, skip_generators=skip_generators, dry_run=dry_run)
+
+
 @_task(optional=["phases", "skip_generators", "skip_merge", "dry_run", "dcs"])
 def run_demo(context, phases="", skip_generators=False, skip_merge=False, dry_run=False, dcs=""):
     """Run end-to-end demo flow (alias for demo.run-demo)."""
@@ -133,20 +163,24 @@ def run_demo(context, phases="", skip_generators=False, skip_merge=False, dry_ru
 
 ns = Collection()
 ns.add_task(cast(Task, start))
+ns.add_task(cast(Task, stop))
+ns.add_task(cast(Task, restart))
 ns.add_task(cast(Task, destroy))
 ns.add_task(cast(Task, setup))
+ns.add_task(cast(Task, register_repo))
 ns.add_task(cast(Task, validate))
 ns.add_task(cast(Task, setup_precommit))
 ns.add_task(cast(Task, test_unit))
 ns.add_task(cast(Task, test_integration))
 ns.add_task(cast(Task, clean_testcontainers))
+ns.add_task(cast(Task, upgrade))
+ns.add_task(cast(Task, release))
 ns.add_task(cast(Task, load_schema))
 ns.add_task(cast(Task, load_menu))
 ns.add_task(cast(Task, load_objects))
 ns.add_task(cast(Task, load_data))
-ns.add_task(cast(Task, release))
-ns.add_task(cast(Task, register_repo))
 ns.add_task(cast(Task, deploy_dc))
+ns.add_task(cast(Task, deploy_universal_topology))
 ns.add_task(cast(Task, run_demo))
 ns.add_collection(dev.ns)
 ns.add_collection(infra.ns)
