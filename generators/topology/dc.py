@@ -695,8 +695,8 @@ class DCTopologyGenerator(PoolMixin, DeviceMixin, CablingMixin, RoutingMixin, Co
         No-ops on border-leaf if no pods exist yet — a DC with zero pods has
         nothing to place border-leafs into. A pod added later than this DC's
         border-leaf declaration needs an explicit dc_pod_cascade run to get its
-        share — same as any other structural DC-level change (see tasks/demo.py's
-        own manual dc_pod_cascade calls after bulk loads); not auto-triggered from
+        share — same as any other structural DC-level change (see the manual
+        dc_pod_cascade calls after bulk loads); not auto-triggered from
         pod.py's add_pod, which would otherwise fire a concurrent DC-level
         re-bootstrap on every single pod creation during a bulk multi-pod load.
         """

@@ -13,7 +13,7 @@ from .logger import FailOnErrorLoggerMixin
 # Re-export TypedDicts so existing imports (from .common import DeviceOptions, ...) keep working
 from .types import CablingOptions, ChainHop, DeviceOptions, RoutingOptions  # noqa: F401
 
-_PARENT_WAIT_TIMEOUT = 1800  # 30 min, matches tasks/demo.py's own generator-wait timeout
+_PARENT_WAIT_TIMEOUT = 1800  # 30 min generator-wait timeout
 _PARENT_WAIT_POLL_INTERVAL = 3
 _IN_FLIGHT_STATES = [TaskState.PENDING, TaskState.RUNNING, TaskState.SCHEDULED]
 _FAILED_PARENT_STATES = [TaskState.FAILED, TaskState.CRASHED, TaskState.CANCELLED, TaskState.CANCELLING]
