@@ -16,12 +16,7 @@ kind: Object
 spec:
   kind: ManagedVxlanSegment
   data:
-    - owner:
-        kind: OrganizationCustomer
-        data:
-          name: "Vaultex Inc."
-          org_id: "C003"
-      customer_name: "common-exchange-stretch"
+    - customer_name: "common-exchange-stretch"
       environment: "p"
       arp_suppression: true
       gateway:

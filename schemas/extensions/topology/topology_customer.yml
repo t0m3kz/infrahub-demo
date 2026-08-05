@@ -45,6 +45,17 @@ generics:
         read_only: true
         optional: false
 
+      - name: org_id
+        kind: Text
+        label: "Owner Org ID"
+        description: "Owner's org_id, one hop closer for 1-hop-only Jinja2 computed_attribute consumers"  # yamllint disable-line rule:line-length
+        order_weight: 110
+        computed_attribute:
+          kind: Jinja2
+          jinja2_template: "{{ owner__org_id__value }}"
+        read_only: true
+        optional: false
+
       - name: environment
         kind: Dropdown
         description: "Environment this customer deployment footprint represents"

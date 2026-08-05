@@ -55,6 +55,13 @@ its customer_deployments relationship (see _link_customer_deployment) — the
 reverse-lookup that lets a query walk TopologyCustomerDC/Colocation/Cloud/
 Office -> exchange_gateways directly, instead of recomputing the namespace
 name and searching by it.
+
+Registered as four separate generator_definitions (see .infrahub.yml) — one
+per deployment kind — all targeting the same customer_deployments group and
+sharing this one customer_deployment.gql query. Each subclass below only
+sets `deployment_kind`; _CustomerDeploymentExchangeBase.generate() no-ops
+(logs and returns) when the triggering node isn't its own kind, since every
+member of customer_deployments fires every one of the four generators.
 """
 
 from __future__ import annotations
@@ -82,24 +89,27 @@ _DEPLOYMENT_KINDS = {
 }
 
 
-class CustomerDeploymentExchangeGenerator(CommonGenerator):
-    """Provision a customer's VRF namespace and, where possible, its shared-services exchange."""
+class _CustomerDeploymentExchangeBase(CommonGenerator):
+    """Provision a customer's VRF namespace and, where possible, its shared-services exchange.
+
+    Subclasses set `deployment_kind` to one of _DEPLOYMENT_KINDS' keys. All
+    four subclasses target the same customer_deployments group (see
+    .infrahub.yml), so every boarding event fires all four generators —
+    each one no-ops (logs and returns) unless the triggering node matches
+    its own deployment_kind.
+    """
+
+    deployment_kind: str = ""
 
     async def generate(self, data: dict[str, Any]) -> None:
         cleaned = clean_data(data)
 
-        customer = None
-        deployment_kind = None
-        for kind in _DEPLOYMENT_KINDS:
-            entries = cleaned.get(kind, [])
-            if entries:
-                customer = entries[0]
-                deployment_kind = kind
-                break
-
-        if customer is None or deployment_kind is None:
-            self.logger.error("No TopologyCustomerDC/Colocation/Cloud/Office data in GraphQL response")
+        entries = cleaned.get(self.deployment_kind, [])
+        if not entries:
+            self.logger.info(f"No {self.deployment_kind} data in GraphQL response — not this generator's kind")
             return
+        customer = entries[0]
+        deployment_kind = self.deployment_kind
 
         customer_id: str = customer.get("id", "")
         # TopologyCustomerOffice has no owner of its own — it groups under
@@ -440,3 +450,27 @@ query default_common_exchange {
             self.logger.info(f"Created routed exchange '{exchange_name}' on circuit interfaces")
         except Exception as exc:
             self.logger.error(f"Failed to create routed exchange '{exchange_name}': {exc}")
+
+
+class CustomerDeploymentDCExchangeGenerator(_CustomerDeploymentExchangeBase):
+    """add_customer_deployment_dc — namespace + route-leak exchange for TopologyCustomerDC."""
+
+    deployment_kind = "TopologyCustomerDC"
+
+
+class CustomerDeploymentColocationExchangeGenerator(_CustomerDeploymentExchangeBase):
+    """add_customer_deployment_colocation — namespace + routed exchange for TopologyCustomerColocation."""
+
+    deployment_kind = "TopologyCustomerColocation"
+
+
+class CustomerDeploymentCloudExchangeGenerator(_CustomerDeploymentExchangeBase):
+    """add_customer_deployment_cloud — namespace + routed exchange for TopologyCustomerCloud."""
+
+    deployment_kind = "TopologyCustomerCloud"
+
+
+class CustomerDeploymentOfficeExchangeGenerator(_CustomerDeploymentExchangeBase):
+    """add_customer_deployment_office — namespace + routed exchange for TopologyCustomerOffice."""
+
+    deployment_kind = "TopologyCustomerOffice"

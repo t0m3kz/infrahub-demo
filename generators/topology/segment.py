@@ -133,6 +133,34 @@ class VxlanSegmentGenerator(CommonGenerator):
 
         await self._assign_to_deployment_interfaces(segment, target_deployments)
         await self._create_inline_sub_interfaces(segment, target_deployments)
+        await self._set_owner_org_id(segment, segment_id, segment_name)
+
+    async def _set_owner_org_id(self, segment: dict[str, Any], segment_id: str, segment_name: str) -> None:
+        """Set owner_org_id from the first customer_deployments entry's org_id.
+
+        VxlanSegment.customer_deployments is cardinality:many, so unlike
+        VlanSegment/CloudNetworkSegment (cardinality:one deployment) this
+        can't be a Jinja2 computed_attribute — Jinja2 has no way to index
+        into a many relationship. Picking the first entry is inherently
+        ambiguous for a segment stretched across several customers, but
+        gives a deterministic, non-empty value.
+        """
+        customer_deployments: list[dict] = segment.get("customer_deployments") or []
+        org_id = next(
+            (dep.get("org_id") for dep in customer_deployments if dep.get("org_id")),
+            None,
+        )
+        if not org_id:
+            self.logger.warning(f"Segment {segment_name}: no org_id on any customer_deployments entry — skipping")
+            return
+        try:
+            segment_obj = await self.client.get(kind=ManagedVxlanSegment, id=segment_id)
+            # getattr: owner_org_id isn't yet in generators/protocols.py (regenerate
+            # via `infrahubctl protocols` after this schema is loaded onto the instance).
+            getattr(segment_obj, "owner_org_id").value = org_id
+            await segment_obj.save(allow_upsert=True)
+        except Exception as exc:
+            self.logger.error(f"Segment {segment_name}: failed to set owner_org_id: {exc}")
 
     def _resolve_target_deployments(self, segment: dict[str, Any], segment_name: str) -> list[dict[str, Any]]:
         """Resolve segment.customer_deployments to their hosting parents.

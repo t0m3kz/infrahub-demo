@@ -501,11 +501,38 @@ generator_definitions:
     execute_after_merge: false
     parameters:
       name: name__value
-  - name: add_customer_deployment_exchange
+  - name: add_customer_deployment_dc
     file_path: generators/topology/customer_deployment.py
     targets: customer_deployments
     query: customer_deployment
-    class_name: CustomerDeploymentExchangeGenerator
+    class_name: CustomerDeploymentDCExchangeGenerator
+    execute_in_proposed_change: false
+    execute_after_merge: false
+    parameters:
+      name: name__value
+  - name: add_customer_deployment_colocation
+    file_path: generators/topology/customer_deployment.py
+    targets: customer_deployments
+    query: customer_deployment
+    class_name: CustomerDeploymentColocationExchangeGenerator
+    execute_in_proposed_change: false
+    execute_after_merge: false
+    parameters:
+      name: name__value
+  - name: add_customer_deployment_cloud
+    file_path: generators/topology/customer_deployment.py
+    targets: customer_deployments
+    query: customer_deployment
+    class_name: CustomerDeploymentCloudExchangeGenerator
+    execute_in_proposed_change: false
+    execute_after_merge: false
+    parameters:
+      name: name__value
+  - name: add_customer_deployment_office
+    file_path: generators/topology/customer_deployment.py
+    targets: customer_deployments
+    query: customer_deployment
+    class_name: CustomerDeploymentOfficeExchangeGenerator
     execute_in_proposed_change: false
     execute_after_merge: false
     parameters:
