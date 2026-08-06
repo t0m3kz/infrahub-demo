@@ -1,7 +1,7 @@
 ---
 # Cloud subnet (CloudNetworkSegment) for C003 in AWS eu-central-1a.
 # customer_deployment references TopologyCustomerCloud by its
-# human_friendly_id: [owner__org_id__value, environment__value].
+# human_friendly_id: name__value (computed as owner-customer_name-env-parent).
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
@@ -14,4 +14,4 @@ spec:
       virtual_network: "vaultex-vpc-prod"
       availability_zone: ["eu-central-1", "eu-central-1a"]
       cidr_block: ["10.30.1.0/24", "default"]
-      customer_deployment: ["C003", "p"]
+      customer_deployment: "C003-VAULTEX-AWS-P-EU-CENTRAL-1"

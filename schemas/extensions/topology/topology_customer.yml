@@ -28,8 +28,7 @@ generics:
     include_in_menu: false
     hierarchical: false
     human_friendly_id:
-      - owner__org_id__value
-      - environment__value
+      - name__value
     order_by:
       - name__value
     display_label: "{{ name__value }}"
@@ -264,8 +263,7 @@ nodes:
     children: ""
     include_in_menu: false
     human_friendly_id:
-      - owner__org_id__value
-      - environment__value
+      - name__value
     order_by:
       - name__value
     display_label: "{{ name__value }}"
@@ -279,7 +277,7 @@ nodes:
           kind: Jinja2
           jinja2_template: "{{ owner__org_id__value|upper }}-{{ environment__value|upper }}-{{ parent__name__value|upper }}"  # yamllint disable-line rule:line-length
         read_only: true
-        optional: true
+        optional: false
     relationships:
       - name: design
         peer: TopologyCustomerTemplateDC
@@ -304,8 +302,7 @@ nodes:
     children: ""
     include_in_menu: false
     human_friendly_id:
-      - owner__org_id__value
-      - environment__value
+      - name__value
     order_by:
       - name__value
     display_label: "{{ name__value }}"
@@ -319,7 +316,7 @@ nodes:
           kind: Jinja2
           jinja2_template: "{{ owner__org_id__value|upper }}-{{ environment__value|upper }}-{{ parent__name__value|upper }}"  # yamllint disable-line rule:line-length
         read_only: true
-        optional: true
+        optional: false
 
   - name: CustomerOffice
     namespace: Topology
@@ -466,8 +463,7 @@ nodes:
     children: ""
     include_in_menu: false
     human_friendly_id:
-      - owner__org_id__value
-      - environment__value
+      - name__value
     order_by:
       - name__value
     display_label: "{{ name__value }}"
@@ -481,7 +477,7 @@ nodes:
           kind: Jinja2
           jinja2_template: "{{ owner__org_id__value|upper }}-{{ customer_name__value|upper }}-{{ environment__value|upper }}-{{ parent__name__value|upper }}"  # yamllint disable-line rule:line-length
         read_only: true
-        optional: true
+        optional: false
       - name: customer_name
         kind: Text
         optional: false
@@ -516,8 +512,7 @@ nodes:
     children: ""
     include_in_menu: false
     human_friendly_id:
-      - owner__org_id__value
-      - environment__value
+      - name__value
     order_by:
       - name__value
     display_label: "{{ name__value }}"
@@ -531,7 +526,7 @@ nodes:
           kind: Jinja2
           jinja2_template: "{{ owner__org_id__value|upper }}-{{ customer_name__value|upper }}-{{ environment__value|upper }}-{{ parent__name__value|upper }}"  # yamllint disable-line rule:line-length
         read_only: true
-        optional: true
+        optional: false
       - name: customer_name
         kind: Text
         optional: false
