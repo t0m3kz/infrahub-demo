@@ -1,0 +1,58 @@
+---
+# C005 sample application bound to demo VXLAN segments.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: AppApplication
+  data:
+    - label: payment-core
+      environment: p
+      criticality: critical
+      security_profile: fintech_strict
+      fqdn: payment-core.c005.demo.local
+      ingress_mode: frontend
+      owner: C005
+      member_of_groups:
+        - app_applications
+      children:
+        kind: AppComponent
+        data:
+          - name: web-frontend
+            component_type: frontend
+            network_segment: c005-web-frontend-local-dc10-p
+            service_ports:
+              data:
+                - port: 443
+                  protocol: tcp
+            member_of_groups:
+              - app_components
+
+          - name: app-backend
+            component_type: backend
+            network_segment: c005-app-backend-stretch-p
+            service_ports:
+              data:
+                - port: 8443
+                  protocol: tcp
+            member_of_groups:
+              - app_components
+
+          - name: order-db
+            component_type: database
+            network_segment: c005-database-local-dc12-p
+            service_ports:
+              data:
+                - port: 5432
+                  protocol: tcp
+            member_of_groups:
+              - app_components
+
+          - name: event-bus
+            component_type: message_queue
+            network_segment: c005-message-queue-stretch-p
+            service_ports:
+              data:
+                - port: 5672
+                  protocol: tcp
+            member_of_groups:
+              - app_components

@@ -222,6 +222,9 @@ check_definitions:
   - name: validate_capability_guard
     class_name: CheckCapabilityGuard
     file_path: checks/capability_guard.py
+  - name: validate_segment_placement
+    class_name: CheckSegmentPlacement
+    file_path: checks/segment_placement.py
 
 python_transforms:
   - name: topology_cabling
@@ -352,6 +355,8 @@ queries:
     file_path: queries/topology/add/virtual_circuit.gql
   - name: capability_guard
     file_path: queries/validation/capability_guard.gql
+  - name: segment_placement
+    file_path: queries/validation/segment_placement.gql
   - name: loadbalancer_validation
     file_path: queries/validation/lb.gql
   - name: proxy_validation

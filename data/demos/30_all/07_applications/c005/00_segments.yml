@@ -1,0 +1,73 @@
+---
+# C005 application-oriented VXLAN segments for demo 30_all.
+# Includes both local and stretched patterns used by AppComponent.network_segment.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: ManagedVxlanSegment
+  data:
+    - owner: "C005"
+      customer_name: "web-frontend-local-dc10"
+      environment: "p"
+      stretch_scope: local
+      arp_suppression: true
+      customer_deployments:
+        - kind: TopologyCustomerDC
+          data:
+            owner: "C005"
+            environment: "p"
+            parent: "DC10"
+      member_of_groups:
+        - vxlan_segments
+
+    - owner: "C005"
+      customer_name: "app-backend-stretch"
+      environment: "p"
+      stretch_scope: dc_pair
+      arp_suppression: true
+      customer_deployments:
+        - kind: TopologyCustomerDC
+          data:
+            owner: "C005"
+            environment: "p"
+            parent: "DC10"
+        - kind: TopologyCustomerDC
+          data:
+            owner: "C005"
+            environment: "p"
+            parent: "DC12"
+      member_of_groups:
+        - vxlan_segments
+
+    - owner: "C005"
+      customer_name: "database-local-dc12"
+      environment: "p"
+      stretch_scope: local
+      arp_suppression: true
+      customer_deployments:
+        - kind: TopologyCustomerDC
+          data:
+            owner: "C005"
+            environment: "p"
+            parent: "DC12"
+      member_of_groups:
+        - vxlan_segments
+
+    - owner: "C005"
+      customer_name: "message-queue-stretch"
+      environment: "p"
+      stretch_scope: dc_pair
+      arp_suppression: true
+      customer_deployments:
+        - kind: TopologyCustomerDC
+          data:
+            owner: "C005"
+            environment: "p"
+            parent: "DC10"
+        - kind: TopologyCustomerDC
+          data:
+            owner: "C005"
+            environment: "p"
+            parent: "DC12"
+      member_of_groups:
+        - vxlan_segments

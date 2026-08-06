@@ -77,6 +77,9 @@ class VxlanSegmentGenerator(CommonGenerator):
             self.logger.error(f"Segment {segment_name}: could not resolve any hosting parent — cannot proceed")
             return
 
+        stretch_scope = segment.get("stretch_scope") or "local"
+        self.logger.info(f"Segment {segment_name}: stretch_scope={stretch_scope}")
+
         self.logger.info(
             f"Segment {segment_name} will be activated in "
             f"{len(target_deployments)} deployment(s): "
@@ -121,6 +124,7 @@ class VxlanSegmentGenerator(CommonGenerator):
                 deployment_name=dep_name,
                 existing_deployment=existing_by_deployment_id.get(dep_id),
                 reusable_vni=reusable_vni,
+                stretch_scope=stretch_scope,
             )
             if not success:
                 failed_deployments.append(dep_name)
@@ -187,6 +191,7 @@ class VxlanSegmentGenerator(CommonGenerator):
         deployment_name: str,
         existing_deployment: Any | None = None,
         reusable_vni: int | None = None,
+        stretch_scope: str = "local",
     ) -> bool:
         """Create or upsert one SegmentDeployment record.
 
@@ -250,14 +255,16 @@ class VxlanSegmentGenerator(CommonGenerator):
         vni_from_pool: dict[str, Any] | None = None
         vni_literal: int | None = reusable_vni
         if vni_literal is not None:
-            self.logger.info(
-                f"  [{deployment_name}] Reusing VNI {vni_literal} from existing SegmentDeployment for {segment_name}"
-            )
+            self.logger.info(f"  [{deployment_name}] Reusing VNI {vni_literal} for {segment_name}")
         else:
             # First DC to activate this segment — allocate from pool
             vni_pool = await self._get_dc_pool(deployment_id, deployment_name, "vni_pool")
             if vni_pool is not None:
-                vni_identifier = f"{segment_id}-vni"
+                # Local segments use per-deployment identifiers; stretched fallback
+                # keeps one identifier to converge to a shared VNI.
+                vni_identifier = (
+                    f"{segment_id}-{deployment_id}-vni" if stretch_scope == "local" else f"{segment_id}-vni"
+                )
                 vni_from_pool = {"from_pool": {"id": vni_pool.id}, "identifier": vni_identifier}
                 self.logger.info(f"  [{deployment_name}] Allocating VNI from pool {vni_pool.name.value}")
             else:
