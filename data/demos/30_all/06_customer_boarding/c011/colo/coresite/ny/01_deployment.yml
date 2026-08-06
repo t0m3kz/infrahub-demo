@@ -18,6 +18,7 @@ spec:
     - owner: "C011"
       environment: "p"
       status: active
+      infrastructure_orchestrator: ansible_automation_platform
       parent: "NY"
       member_of_groups:
         - customer_deployments

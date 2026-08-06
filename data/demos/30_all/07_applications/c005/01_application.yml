@@ -11,6 +11,7 @@ spec:
       security_profile: fintech_strict
       fqdn: payment-core.c005.demo.local
       ingress_mode: frontend
+      application_orchestrator: ansible_automation_platform
       owner: C005
       member_of_groups:
         - app_applications

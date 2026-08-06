@@ -1,0 +1,16 @@
+query application_orchestrator_routing_data($name: String!) {
+  AppApplication(name__value: $name) {
+    edges {
+      node {
+        id
+        name { value }
+        label { value }
+        environment { value }
+        criticality { value }
+        fqdn { value }
+        application_orchestrator { value }
+        owner { node { org_id { value } } }
+      }
+    }
+  }
+}

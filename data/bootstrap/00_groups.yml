@@ -92,6 +92,20 @@ spec:
       description: Application component instances
     - name: app_dependencies
       description: Application dependency edges
+    - name: topology_ansible
+      description: Customer deployment footprints routed to Ansible-based infrastructure orchestration
+    - name: topology_github_actions
+      description: Customer deployment footprints routed to GitHub Actions-based infrastructure orchestration
+    - name: topology_terraform
+      description: Customer deployment footprints routed to Terraform/OpenTofu-based infrastructure orchestration
+    - name: topology_argocd
+      description: Customer deployment footprints routed to Argo CD-based platform orchestration
+    - name: application_ansible
+      description: Applications routed to Ansible Automation Platform delivery workflows
+    - name: application_github_actions
+      description: Applications routed to GitHub Actions delivery workflows
+    - name: application_argocd
+      description: Applications routed to Argo CD delivery workflows
     - name: customer_deployments
       description: Customer deployment footprints (TopologyCustomerDC/Colocation/Cloud) — generator target for ExchangeGatewayGenerator  # yamllint disable-line rule:line-length
     - name: customer_quotations

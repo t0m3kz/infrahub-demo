@@ -21,6 +21,7 @@ spec:
     - owner: "C006"
       environment: "p"
       status: active
+      infrastructure_orchestrator: github_actions
       parent: "DC11"
       design: "S_DC"
       member_of_groups:
