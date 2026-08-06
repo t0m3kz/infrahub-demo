@@ -108,7 +108,7 @@ nodes:
       - TopologyDeployment
       - TopologyConnectableLocation
     parent: TopologySaas
-    children: ""
+    children: TopologyCustomerSaas
     icon: "mdi:map-marker-network"
     display_label: "{{ name__value }}"
     uniqueness_constraints:

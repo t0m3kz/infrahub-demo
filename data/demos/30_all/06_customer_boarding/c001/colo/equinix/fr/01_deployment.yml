@@ -21,10 +21,3 @@ spec:
       parent: "FR"
       member_of_groups:
         - customer_deployments
-      network_segments:
-        - kind: ManagedVlanSegment
-          data:
-            owner: "C001"
-            customer_name: "nordix-prod"
-            environment: "p"
-            vlan_id: 101
