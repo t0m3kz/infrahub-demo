@@ -55,6 +55,27 @@ set access-rule layer "Network" name "{{ rule.name }}" destination {{ rule.dst_z
 {%- endfor %}
 !
 {%- endif %}
+{%- if contexts %}
+!
+! --- Firewall Contexts (VSX Virtual Systems) — one per tenant, per ManagedFirewallContext ---
+!
+{%- for context in contexts %}
+add virtual-system name {{ context.name }}
+{%- if context.tenant_name %}
+set virtual-system {{ context.name }} comments "{{ context.tenant_name }}"
+{%- endif %}
+{%- if context.vlan_id and context.parent_interface.name %}
+{%- set ctx_iface_name = context.parent_interface.name + '.' + context.vlan_id | string %}
+set interface {{ ctx_iface_name }} vlan {{ context.vlan_id }}
+set interface {{ ctx_iface_name }} state on
+{%- if context.ip_address %}
+set interface {{ ctx_iface_name }} ipv4-address {{ context.ip_address | replace('/', ' mask-length ') }}
+{%- endif %}
+set virtual-system {{ context.name }} interface {{ ctx_iface_name }}
+{%- endif %}
+{%- endfor %}
+!
+{%- endif %}
 {%- if ha %}
 !
 ! --- ClusterXL ---

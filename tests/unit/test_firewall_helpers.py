@@ -5,9 +5,13 @@ Covers:
   - get_firewall_static_routes()  — static routes per zone interface
   - get_vrf_default_gateways()    — VRF → FW gateway IP map from activations
   - get_zone_policies()           — policy dicts with rules from SecurityPolicy nodes
+  - get_customer_pbr_rules()      — default-redirect-to-firewall PBR rules per VLAN
+  - get_firewall_contexts()       — per-tenant FirewallContext list from this device's interfaces
 """
 
 from transforms.helpers.firewall import (
+    get_customer_pbr_rules,
+    get_firewall_contexts,
     get_firewall_static_routes,
     get_firewall_zones,
     get_vrf_default_gateways,
@@ -654,3 +658,210 @@ class TestGetZonePolicies:
         result = get_zone_policies([policy])
         assert len(result) == 1
         assert result[0]["name"] == "no-enabled-key"
+
+
+# ===========================================================================
+# get_customer_pbr_rules()
+# ===========================================================================
+
+
+def _make_pbr_activation(
+    *,
+    vlan_id: int = 100,
+    owner_id: str | None = "cust-a",
+    security_policies: list | None = None,
+) -> dict:
+    seg: dict = {"id": "seg-1", "name": "seg-1", "customer_name": "web", "owner": {"id": owner_id} if owner_id else {}}
+    if security_policies is not None:
+        seg["security_policies"] = security_policies
+    return {"vlan_id": vlan_id, "segment": seg}
+
+
+def _make_pbr_rule(*, action: str = "permit", dst_prefix: str | None = "10.0.2.0/24", disabled: bool = False) -> dict:
+    rule: dict = {"action": action, "disabled": disabled}
+    if dst_prefix:
+        rule["destination_segment"] = {"gateway": {"ip_prefix": {"prefix": dst_prefix}}}
+    return rule
+
+
+def _make_context_leg(*, ip_addr: str = "10.65.0.2/30", tenant_id: str | None = None) -> dict:
+    cap: dict = {"typename": "ManagedFirewallContext"}
+    if tenant_id:
+        cap["tenant"] = {"id": tenant_id}
+    return {"ip_address": {"address": ip_addr}, "interface_capabilities": [cap]}
+
+
+class TestGetCustomerPbrRules:
+    def test_none_activations_returns_empty(self) -> None:
+        assert get_customer_pbr_rules(None, [{"ip_address": {"address": "10.65.0.2/30"}}]) == []
+
+    def test_no_firewall_context_leg_returns_empty(self) -> None:
+        activations = [_make_pbr_activation(security_policies=[])]
+        assert get_customer_pbr_rules(activations, []) == []
+
+    def test_segment_without_security_policies_key_is_skipped(self) -> None:
+        """Missing 'security_policies' key (not queried) means no PBR rule — same
+        gate get_acls() uses."""
+        activations = [_make_pbr_activation(security_policies=None)]
+        interfaces = [_make_context_leg()]
+        assert get_customer_pbr_rules(activations, interfaces) == []
+
+    def test_shared_context_nexthop_used_when_no_tenant(self) -> None:
+        activations = [_make_pbr_activation(owner_id="cust-a", security_policies=[])]
+        interfaces = [_make_context_leg(ip_addr="10.65.0.2/30")]
+        result = get_customer_pbr_rules(activations, interfaces)
+        assert len(result) == 1
+        assert result[0]["fw_nexthop"] == "10.65.0.1"
+        assert result[0]["vlan_id"] == 100
+        assert result[0]["bypass_prefixes"] == []
+
+    def test_dedicated_context_nexthop_preferred_over_shared(self) -> None:
+        activations = [_make_pbr_activation(owner_id="cust-a", security_policies=[])]
+        interfaces = [
+            _make_context_leg(ip_addr="10.65.0.2/30"),  # shared
+            _make_context_leg(ip_addr="10.66.0.2/30", tenant_id="cust-a"),  # dedicated
+        ]
+        result = get_customer_pbr_rules(activations, interfaces)
+        assert result[0]["fw_nexthop"] == "10.66.0.1"
+
+    def test_dedicated_context_for_other_tenant_not_used(self) -> None:
+        """A dedicated context for a DIFFERENT owner must not leak as this
+        segment's nexthop — falls back to shared (or nothing) instead."""
+        activations = [_make_pbr_activation(owner_id="cust-a", security_policies=[])]
+        interfaces = [_make_context_leg(ip_addr="10.66.0.2/30", tenant_id="cust-b")]
+        assert get_customer_pbr_rules(activations, interfaces) == []
+
+    def test_permit_rule_becomes_bypass_prefix(self) -> None:
+        policies = [{"enabled": True, "rules": [_make_pbr_rule(dst_prefix="10.0.2.0/24")]}]
+        activations = [_make_pbr_activation(security_policies=policies)]
+        interfaces = [_make_context_leg()]
+        result = get_customer_pbr_rules(activations, interfaces)
+        assert result[0]["bypass_prefixes"] == ["10.0.2.0/24"]
+
+    def test_deny_rule_is_not_a_bypass(self) -> None:
+        policies = [{"enabled": True, "rules": [_make_pbr_rule(action="deny", dst_prefix="10.0.2.0/24")]}]
+        activations = [_make_pbr_activation(security_policies=policies)]
+        interfaces = [_make_context_leg()]
+        result = get_customer_pbr_rules(activations, interfaces)
+        assert result[0]["bypass_prefixes"] == []
+
+    def test_disabled_rule_is_not_a_bypass(self) -> None:
+        policies = [{"enabled": True, "rules": [_make_pbr_rule(disabled=True)]}]
+        activations = [_make_pbr_activation(security_policies=policies)]
+        interfaces = [_make_context_leg()]
+        result = get_customer_pbr_rules(activations, interfaces)
+        assert result[0]["bypass_prefixes"] == []
+
+    def test_disabled_policy_contributes_no_bypass(self) -> None:
+        policies = [{"enabled": False, "rules": [_make_pbr_rule()]}]
+        activations = [_make_pbr_activation(security_policies=policies)]
+        interfaces = [_make_context_leg()]
+        result = get_customer_pbr_rules(activations, interfaces)
+        assert result[0]["bypass_prefixes"] == []
+
+    def test_cross_owner_permit_still_bypasses(self) -> None:
+        """A permit rule bypasses PBR regardless of whether source/destination
+        share an owner — intra- and inter-customer traffic use one model."""
+        policies = [{"enabled": True, "rules": [_make_pbr_rule(dst_prefix="10.9.0.0/24")]}]
+        activations = [_make_pbr_activation(owner_id="cust-a", security_policies=policies)]
+        interfaces = [_make_context_leg()]
+        result = get_customer_pbr_rules(activations, interfaces)
+        assert "10.9.0.0/24" in result[0]["bypass_prefixes"]
+
+    def test_duplicate_vlan_deduplicated(self) -> None:
+        activations = [
+            _make_pbr_activation(vlan_id=100, security_policies=[]),
+            _make_pbr_activation(vlan_id=100, security_policies=[]),
+        ]
+        interfaces = [_make_context_leg()]
+        result = get_customer_pbr_rules(activations, interfaces)
+        assert len(result) == 1
+
+    def test_results_sorted_by_vlan_id(self) -> None:
+        activations = [
+            _make_pbr_activation(vlan_id=200, security_policies=[]),
+            _make_pbr_activation(vlan_id=100, security_policies=[]),
+        ]
+        interfaces = [_make_context_leg()]
+        result = get_customer_pbr_rules(activations, interfaces)
+        assert [r["vlan_id"] for r in result] == [100, 200]
+
+
+# ===========================================================================
+# get_firewall_contexts()
+# ===========================================================================
+
+
+def _make_fw_context_interface(
+    *,
+    iface_name: str = "ethernet1/1.3000",
+    ip_addr: str | None = "10.65.0.1/30",
+    parent_name: str = "ethernet1/1",
+    context_id: str = "ctx-1",
+    context_name: str = "dc10-shared",
+    vlan_id: int = 3000,
+    tenant_name: str | None = None,
+) -> dict:
+    cap = {
+        "typename": "ManagedFirewallContext",
+        "id": context_id,
+        "name": context_name,
+        "vlan_id": vlan_id,
+        "context_id": None,
+        "tenant": {"name": tenant_name} if tenant_name else {},
+    }
+    iface: dict = {
+        "name": iface_name,
+        "parent_interface": {"name": parent_name},
+        "interface_capabilities": [cap],
+    }
+    if ip_addr:
+        iface["ip_address"] = {"address": ip_addr}
+    return iface
+
+
+class TestGetFirewallContexts:
+    def test_none_returns_empty(self) -> None:
+        assert get_firewall_contexts(None) == []
+
+    def test_empty_list_returns_empty(self) -> None:
+        assert get_firewall_contexts([]) == []
+
+    def test_interface_without_context_capability_ignored(self) -> None:
+        iface = {"name": "eth0", "interface_capabilities": [{"typename": "ManagedVxlanSegment"}]}
+        assert get_firewall_contexts([iface]) == []
+
+    def test_single_context_extracted(self) -> None:
+        result = get_firewall_contexts([_make_fw_context_interface()])
+        assert len(result) == 1
+        assert result[0]["name"] == "dc10-shared"
+        assert result[0]["vlan_id"] == 3000
+        assert result[0]["sub_interface"] == "ethernet1/1.3000"
+        assert result[0]["parent_interface"] == {"name": "ethernet1/1"}
+        assert result[0]["ip_address"] == "10.65.0.1/30"
+        assert result[0]["tenant_name"] is None
+
+    def test_dedicated_context_carries_tenant_name(self) -> None:
+        result = get_firewall_contexts([_make_fw_context_interface(tenant_name="C005-P-DC10")])
+        assert result[0]["tenant_name"] == "C005-P-DC10"
+
+    def test_context_without_ip_still_extracted(self) -> None:
+        """inline connectivity_mode contexts have no dedicated p2p IP."""
+        result = get_firewall_contexts([_make_fw_context_interface(ip_addr=None)])
+        assert len(result) == 1
+        assert result[0]["ip_address"] is None
+
+    def test_duplicate_context_id_deduplicated(self) -> None:
+        ifaces = [
+            _make_fw_context_interface(context_id="ctx-1"),
+            _make_fw_context_interface(context_id="ctx-1", iface_name="ethernet1/2.3000"),
+        ]
+        assert len(get_firewall_contexts(ifaces)) == 1
+
+    def test_multiple_contexts_sorted_by_name(self) -> None:
+        ifaces = [
+            _make_fw_context_interface(context_id="ctx-b", context_name="dc10-b-dedicated"),
+            _make_fw_context_interface(context_id="ctx-a", context_name="dc10-a-dedicated"),
+        ]
+        result = get_firewall_contexts(ifaces)
+        assert [c["name"] for c in result] == ["dc10-a-dedicated", "dc10-b-dedicated"]

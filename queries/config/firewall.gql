@@ -58,6 +58,13 @@ query firewall_config(
                   node {
                     __typename
                     ...NetworkSegmentFields
+                    ... on ManagedFirewallContext {
+                      id
+                      name { value }
+                      context_id { value }
+                      vlan_id { value }
+                      tenant { node { id name { value } } }
+                    }
                   }
                 }
               }

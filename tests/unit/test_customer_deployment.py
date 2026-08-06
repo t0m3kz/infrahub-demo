@@ -227,3 +227,179 @@ class TestCloudDeployment:
         await gen.generate(payload)
 
         gen.client.filters.assert_not_called()
+
+
+def _dc_payload_with_parent(
+    *,
+    customer_id: str = "cust-1",
+    dedicated_firewall: bool = False,
+    connectivity_mode: str = "pbr",
+) -> dict:
+    return {
+        "TopologyCustomerDC": [
+            {
+                "id": customer_id,
+                "name": "C005-P-DC10",
+                "environment": "p",
+                "owner": {"org_id": "C005", "name": "Drentec BV"},
+                "parent": {"id": "dc10-id", "name": "DC10", "connectivity_mode": {"value": connectivity_mode}},
+                "design": {"dedicated_firewall": {"value": dedicated_firewall}},
+            }
+        ]
+    }
+
+
+class TestFirewallContextNoFirewallOrCluster:
+    @pytest.mark.asyncio
+    async def test_cloud_deployment_never_provisions_firewall_context(self) -> None:
+        """TopologyCustomerCloud has no ManagedFirewallHA at all — skip entirely,
+        no filters call for firewall devices."""
+        gen = _make_generator(CustomerDeploymentCloudExchangeGenerator)
+        payload = {
+            "TopologyCustomerCloud": [
+                {"id": "cust-1", "name": "C003-P-AWS", "owner": {}, "parent": {"id": "region-1"}, "circuits": []}
+            ]
+        }
+
+        await gen.generate(payload)
+
+        gen.client.filters.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_no_parent_skips_with_warning(self) -> None:
+        gen = _make_generator(CustomerDeploymentDCExchangeGenerator)
+
+        await gen.generate(_dc_payload())  # no "parent" key
+
+        gen.client.filters.assert_not_called()
+        gen.logger.warning.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_no_firewall_devices_on_parent_is_noop(self) -> None:
+        gen = _make_generator(CustomerDeploymentDCExchangeGenerator)
+        gen.client.filters = AsyncMock(return_value=[])
+
+        await gen.generate(_dc_payload_with_parent())
+
+        gen.client.filters.assert_awaited_once()
+        assert gen.client.filters.call_args.kwargs["role__value"] == "firewall"
+        gen.client.create.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_firewall_devices_not_yet_paired_is_noop(self) -> None:
+        gen = _make_generator(CustomerDeploymentDCExchangeGenerator)
+        fw_device = MagicMock(id="fw-1")
+        gen.client.filters = AsyncMock(side_effect=[[fw_device], []])
+
+        await gen.generate(_dc_payload_with_parent())
+
+        assert gen.client.filters.await_count == 2
+        gen.logger.warning.assert_called()
+        gen.client.create.assert_not_called()
+
+
+class TestFirewallContextProvisioning:
+    def _make_gen_with_cluster(self, *, cluster_name: str = "DC10-FW1-FW2-ha") -> Any:
+        gen = _make_generator(CustomerDeploymentDCExchangeGenerator)
+        fw_device = MagicMock(id="fw-1")
+        fw_device.name.value = "DC10-FW1"
+        cluster = MagicMock(id="cluster-1")
+        cluster.name.value = cluster_name
+        gen.client.filters = AsyncMock(side_effect=[[fw_device], [cluster]])
+        gen._create_context_subinterface = AsyncMock(return_value=MagicMock())
+        gen._ensure_context_subinterface = AsyncMock()
+        return gen, fw_device, cluster
+
+    @pytest.mark.asyncio
+    async def test_shared_context_created_when_not_dedicated(self) -> None:
+        gen, _, cluster = self._make_gen_with_cluster()
+        context_obj = MagicMock(id="ctx-1")
+        context_obj.name.value = f"{cluster.name.value}-shared"
+        gen._get_or_create_firewall_context = AsyncMock(return_value=context_obj)
+
+        await gen.generate(_dc_payload_with_parent(dedicated_firewall=False))
+
+        gen._get_or_create_firewall_context.assert_awaited_once_with(f"{cluster.name.value}-shared", cluster.id, None)
+
+    @pytest.mark.asyncio
+    async def test_dedicated_context_created_when_design_requests_it(self) -> None:
+        gen, _, cluster = self._make_gen_with_cluster()
+        context_obj = MagicMock(id="ctx-1")
+        gen._get_or_create_firewall_context = AsyncMock(return_value=context_obj)
+
+        await gen.generate(_dc_payload_with_parent(customer_id="cust-1", dedicated_firewall=True))
+
+        call = gen._get_or_create_firewall_context.call_args
+        assert call.args[0] == f"{cluster.name.value}-C005-P-DC10-dedicated"
+        assert call.args[2] == "cust-1"
+
+    @pytest.mark.asyncio
+    async def test_connectivity_mode_passed_through_to_subinterface_step(self) -> None:
+        gen, fw_device, _ = self._make_gen_with_cluster()
+        context_obj = MagicMock(id="ctx-1")
+        gen._get_or_create_firewall_context = AsyncMock(return_value=context_obj)
+
+        await gen.generate(_dc_payload_with_parent(connectivity_mode="inline"))
+
+        gen._ensure_context_subinterface.assert_awaited_once()
+        assert gen._ensure_context_subinterface.call_args.kwargs["connectivity_mode"] == "inline"
+
+    @pytest.mark.asyncio
+    async def test_missing_connectivity_mode_defaults_to_pbr(self) -> None:
+        gen, _, _ = self._make_gen_with_cluster()
+        context_obj = MagicMock(id="ctx-1")
+        gen._get_or_create_firewall_context = AsyncMock(return_value=context_obj)
+        payload = _dc_payload_with_parent()
+        del payload["TopologyCustomerDC"][0]["parent"]["connectivity_mode"]
+
+        await gen.generate(payload)
+
+        assert gen._ensure_context_subinterface.call_args.kwargs["connectivity_mode"] == "pbr"
+
+    @pytest.mark.asyncio
+    async def test_context_creation_failure_skips_subinterface_step(self) -> None:
+        gen, _, _ = self._make_gen_with_cluster()
+        gen._get_or_create_firewall_context = AsyncMock(return_value=None)
+
+        await gen.generate(_dc_payload_with_parent())
+
+        gen._create_context_subinterface.assert_not_called()
+
+
+class TestGetOrCreateFirewallContext:
+    @pytest.mark.asyncio
+    async def test_reuses_existing_context(self) -> None:
+        gen = _make_generator(CustomerDeploymentDCExchangeGenerator)
+        existing = MagicMock(id="ctx-1")
+        gen.client.filters = AsyncMock(return_value=[existing])
+
+        result = await gen._get_or_create_firewall_context("dc10-shared", "cluster-1", None)
+
+        assert result is existing
+        gen.client.create.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_creates_shared_context_without_tenant(self) -> None:
+        gen = _make_generator(CustomerDeploymentDCExchangeGenerator)
+        gen.client.filters = AsyncMock(return_value=[])
+        created = AsyncMock()
+        gen.client.create = AsyncMock(return_value=created)
+
+        await gen._get_or_create_firewall_context("dc10-shared", "cluster-1", None)
+
+        data = gen.client.create.call_args.kwargs["data"]
+        assert data["cluster"] == {"id": "cluster-1"}
+        assert "tenant" not in data
+        created.save.assert_awaited_once_with(allow_upsert=True)
+
+    @pytest.mark.asyncio
+    async def test_creates_dedicated_context_with_tenant(self) -> None:
+        gen = _make_generator(CustomerDeploymentDCExchangeGenerator)
+        gen.client.filters = AsyncMock(return_value=[])
+        created = AsyncMock()
+        gen.client.create = AsyncMock(return_value=created)
+
+        await gen._get_or_create_firewall_context("dc10-cust-1-dedicated", "cluster-1", "cust-1")
+
+        data = gen.client.create.call_args.kwargs["data"]
+        assert data["tenant"] == {"id": "cust-1"}

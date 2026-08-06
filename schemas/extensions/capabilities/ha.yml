@@ -184,6 +184,15 @@ nodes:
         description: "Vendor-side VDOM/vsys/context identifier"
         optional: true
         order_weight: 1400
+      - name: vlan_id
+        kind: Number
+        label: "Sub-interface VLAN ID"
+        description: "802.1Q tag for this context's sub-interface on the cluster's trunk uplink — allocated from FW-CONTEXT-VLAN-POOL"  # yamllint disable-line rule:line-length
+        optional: true
+        order_weight: 1450
+        parameters:
+          min_value: 1
+          max_value: 4094
     relationships:
       - name: cluster
         peer: ManagedFirewallHA

@@ -76,6 +76,11 @@ fragment InterfaceCapabilitiesFields on DcimInterface {
   }
 }
 
+fragment FirewallContextInterfaceCapabilityFields on ManagedFirewallContext {
+  name { value }
+  tenant { node { id } }
+}
+
 fragment InterfaceCapabilitiesWithSegmentFields on DcimInterface {
   interface_capabilities {
     edges {
@@ -84,6 +89,7 @@ fragment InterfaceCapabilitiesWithSegmentFields on DcimInterface {
         ...OspfInterfaceCapabilityFields
         ...NetworkSegmentFields
         ...ExchangeGatewayInterfaceCapabilityFields
+        ...FirewallContextInterfaceCapabilityFields
       }
     }
   }

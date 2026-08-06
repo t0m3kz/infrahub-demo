@@ -88,6 +88,38 @@ config firewall policy
 {%- endfor %}
 end
 {%- endif %}
+{%- if contexts %}
+#
+# --- Firewall Contexts (VDOMs) — one per tenant, per ManagedFirewallContext ---
+config system vdom
+{%- for context in contexts %}
+    edit "{{ context.name }}"
+    next
+{%- endfor %}
+end
+{%- for context in contexts %}
+{%- if context.vlan_id and context.parent_interface.name %}
+config global
+    config system interface
+        edit "{{ context.parent_interface.name }}.{{ context.vlan_id }}"
+            set type vlan
+            set vlanid {{ context.vlan_id }}
+            set interface "{{ context.parent_interface.name }}"
+            set vdom "{{ context.name }}"
+{%- if context.ip_address %}
+            set ip {{ context.ip_address }}
+{%- endif %}
+            set allowaccess ping https ssh
+            set status up
+{%- if context.tenant_name %}
+            set description "{{ context.tenant_name }}"
+{%- endif %}
+        next
+    end
+end
+{%- endif %}
+{%- endfor %}
+{%- endif %}
 {%- if ha %}
 #
 # --- HA Configuration ---
