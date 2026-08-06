@@ -151,6 +151,55 @@ artifact_definitions:
     transformation: cloud-vpc-terraform
     parameters:
       account: name__value
+  - name: topology_orchestrator_ansible_inventory
+    artifact_name: ansible-inventory
+    content_type: text/plain
+    targets: topology_ansible
+    transformation: topology-orchestrator-ansible
+    parameters:
+      name: name__value
+  - name: topology_orchestrator_terraform_vars
+    artifact_name: terraform-vars
+    content_type: text/plain
+    targets: topology_terraform
+    transformation: topology-orchestrator-terraform
+    parameters:
+      name: name__value
+  - name: topology_orchestrator_argocd_manifest
+    artifact_name: argocd-application
+    content_type: application/json
+    targets: topology_argocd
+    transformation: topology-orchestrator-argocd
+    parameters:
+      name: name__value
+  - name: topology_orchestrator_github_actions_dispatch
+    artifact_name: github-actions-dispatch
+    content_type: application/json
+    targets: topology_github_actions
+    transformation: topology-orchestrator-github-actions
+    parameters:
+      name: name__value
+  - name: application_orchestrator_ansible_inventory
+    artifact_name: ansible-inventory
+    content_type: text/plain
+    targets: application_ansible
+    transformation: application-orchestrator-ansible
+    parameters:
+      name: name__value
+  - name: application_orchestrator_argocd_manifest
+    artifact_name: argocd-application
+    content_type: application/json
+    targets: application_argocd
+    transformation: application-orchestrator-argocd
+    parameters:
+      name: name__value
+  - name: application_orchestrator_github_actions_dispatch
+    artifact_name: github-actions-dispatch
+    content_type: application/json
+    targets: application_github_actions
+    transformation: application-orchestrator-github-actions
+    parameters:
+      name: name__value
 
 check_definitions:
   - name: validate_spine
@@ -275,6 +324,27 @@ python_transforms:
   - name: controller-payload
     class_name: ControllerPayload
     file_path: transforms/config/controller.py
+  - name: topology-orchestrator-ansible
+    class_name: TopologyOrchestratorAnsible
+    file_path: transforms/topology/orchestrator_routing.py
+  - name: topology-orchestrator-terraform
+    class_name: TopologyOrchestratorTerraform
+    file_path: transforms/topology/orchestrator_routing.py
+  - name: topology-orchestrator-argocd
+    class_name: TopologyOrchestratorArgoCD
+    file_path: transforms/topology/orchestrator_routing.py
+  - name: topology-orchestrator-github-actions
+    class_name: TopologyOrchestratorGitHubActions
+    file_path: transforms/topology/orchestrator_routing.py
+  - name: application-orchestrator-ansible
+    class_name: ApplicationOrchestratorAnsible
+    file_path: transforms/topology/orchestrator_routing.py
+  - name: application-orchestrator-argocd
+    class_name: ApplicationOrchestratorArgoCD
+    file_path: transforms/topology/orchestrator_routing.py
+  - name: application-orchestrator-github-actions
+    class_name: ApplicationOrchestratorGitHubActions
+    file_path: transforms/topology/orchestrator_routing.py
   - name: rack_elevation
     class_name: RackElevation
     file_path: transforms/topology/rack.py
@@ -374,6 +444,14 @@ queries:
     file_path: queries/topology/add/mlag_domain.gql
   - name: customer_deployment
     file_path: queries/topology/add/customer_deployment.gql
+  - name: application_orchestrator_routing
+    file_path: queries/topology/add/application_orchestrator_routing.gql
+  - name: customer_deployment_orchestrator_routing
+    file_path: queries/topology/add/customer_deployment_orchestrator_routing.gql
+  - name: topology_orchestrator_routing_data
+    file_path: queries/topology/add/topology_orchestrator_routing_data.gql
+  - name: application_orchestrator_routing_data
+    file_path: queries/topology/add/application_orchestrator_routing_data.gql
   - name: quotation_data
     file_path: queries/quotation/add_quotation.gql
   - name: quotation_office_data
@@ -538,6 +616,24 @@ generator_definitions:
     targets: customer_deployments
     query: customer_deployment
     class_name: CustomerDeploymentOfficeExchangeGenerator
+    execute_in_proposed_change: false
+    execute_after_merge: false
+    parameters:
+      name: name__value
+  - name: add_application_orchestrator_routing
+    file_path: generators/topology/orchestrator_routing.py
+    targets: app_applications
+    query: application_orchestrator_routing
+    class_name: ApplicationOrchestratorRoutingGenerator
+    execute_in_proposed_change: false
+    execute_after_merge: false
+    parameters:
+      name: name__value
+  - name: add_customer_deployment_orchestrator_routing
+    file_path: generators/topology/orchestrator_routing.py
+    targets: customer_deployments
+    query: customer_deployment_orchestrator_routing
+    class_name: TopologyOrchestratorRoutingGenerator
     execute_in_proposed_change: false
     execute_after_merge: false
     parameters:

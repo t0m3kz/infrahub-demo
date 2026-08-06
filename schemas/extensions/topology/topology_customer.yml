@@ -95,6 +95,30 @@ generics:
             label: Decommissioned
             color: "#bfbfbf"
 
+      - name: infrastructure_orchestrator
+        kind: Dropdown
+        label: "Infrastructure Orchestrator"
+        description: "Primary automation system used to provision infrastructure for this deployment"
+        optional: false
+        default_value: manual
+        order_weight: 350
+        choices:
+          - name: ansible_automation_platform
+            label: "Ansible Automation Platform"
+            color: "#EE0000"
+          - name: github_actions
+            label: "GitHub Actions"
+            color: "#24292F"
+          - name: terraform
+            label: "Terraform / OpenTofu"
+            color: "#7B42BC"
+          - name: argocd
+            label: "Argo CD"
+            color: "#EF7B4D"
+          - name: manual
+            label: "Manual"
+            color: "#808080"
+
     relationships:
       - name: owner
         peer: OrganizationEntity
@@ -231,6 +255,7 @@ nodes:
     label: "Customer (Data Center)"
     icon: "mdi:account-server-outline"
     inherit_from:
+      - CoreArtifactTarget
       - TopologyCustomer
       - TopologyDeployment
       - TopologyClusterHosting
@@ -270,6 +295,7 @@ nodes:
     label: "Customer (Colocation)"
     icon: "mdi:account-building-outline"
     inherit_from:
+      - CoreArtifactTarget
       - TopologyCustomer
       - TopologyDeployment
       - TopologyClusterHosting
@@ -301,6 +327,7 @@ nodes:
     label: "Customer (Office)"
     icon: "mdi:office-building-outline"
     inherit_from:
+      - CoreArtifactTarget
       - TopologyDeployment
       - TopologyClusterHosting
       - TopologyPhysicalDeployment
@@ -363,6 +390,29 @@ nodes:
           - name: decommissioned
             label: Decommissioned
             color: "#bfbfbf"
+      - name: infrastructure_orchestrator
+        kind: Dropdown
+        label: "Infrastructure Orchestrator"
+        description: "Primary automation system used to provision infrastructure for this deployment"
+        optional: false
+        default_value: manual
+        order_weight: 350
+        choices:
+          - name: ansible_automation_platform
+            label: "Ansible Automation Platform"
+            color: "#EE0000"
+          - name: github_actions
+            label: "GitHub Actions"
+            color: "#24292F"
+          - name: terraform
+            label: "Terraform / OpenTofu"
+            color: "#7B42BC"
+          - name: argocd
+            label: "Argo CD"
+            color: "#EF7B4D"
+          - name: manual
+            label: "Manual"
+            color: "#808080"
       - name: site_type
         kind: Dropdown
         optional: true
@@ -407,6 +457,7 @@ nodes:
     label: "Customer (Cloud)"
     icon: "mdi:account-cloud-outline"
     inherit_from:
+      - CoreArtifactTarget
       - TopologyCustomer
       - TopologyDeployment
       - TopologyClusterHosting

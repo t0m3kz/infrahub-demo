@@ -11,6 +11,7 @@ spec:
       security_profile: internet_exposed
       fqdn: billing-cloud.c016.demo.local
       ingress_mode: dns
+      application_orchestrator: argocd
       owner: C016
       member_of_groups:
         - app_applications

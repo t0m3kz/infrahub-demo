@@ -23,6 +23,7 @@ nodes:
     icon: "mdi:application"
     include_in_menu: false
     inherit_from:
+      - CoreArtifactTarget
       - AppGeneric
     parent: ""
     children: AppComponent
@@ -126,6 +127,25 @@ nodes:
             label: "DNS"
             color: "#4CAF50"
             description: "Application exposure is DNS-driven (without frontend VIP mapping)"
+      - name: application_orchestrator
+        kind: Dropdown
+        optional: false
+        order_weight: 775
+        default_value: manual
+        description: "Primary automation system used to deploy this application workload"
+        choices:
+          - name: github_actions
+            label: "GitHub Actions"
+            color: "#24292F"
+          - name: ansible_automation_platform
+            label: "Ansible Automation Platform"
+            color: "#EE0000"
+          - name: argocd
+            label: "Argo CD"
+            color: "#EF7B4D"
+          - name: manual
+            label: "Manual"
+            color: "#808080"
     relationships:
       - name: owner
         peer: OrganizationCustomer

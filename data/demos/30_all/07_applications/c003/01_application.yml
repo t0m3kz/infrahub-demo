@@ -11,6 +11,7 @@ spec:
       security_profile: internet_exposed
       fqdn: custody-api.c003.demo.local
       ingress_mode: dns
+      application_orchestrator: argocd
       owner: C003
       member_of_groups:
         - app_applications

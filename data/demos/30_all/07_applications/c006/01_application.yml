@@ -11,6 +11,7 @@ spec:
       security_profile: internal_standard
       fqdn: erp-core.c006.demo.local
       ingress_mode: frontend
+      application_orchestrator: github_actions
       owner: C006
       member_of_groups:
         - app_applications

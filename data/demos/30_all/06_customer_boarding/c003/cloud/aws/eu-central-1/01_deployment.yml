@@ -20,6 +20,7 @@ spec:
       customer_name: "vaultex-aws"
       environment: "p"
       status: active
+      infrastructure_orchestrator: terraform
       parent: "eu-central-1"
       member_of_groups:
         - customer_deployments
