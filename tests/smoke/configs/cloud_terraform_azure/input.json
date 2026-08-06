@@ -72,11 +72,7 @@
                     "value": "azure_vnet_subnet"
                   },
                   "cidr_block": {
-                    "node": {
-                      "prefix": {
-                        "value": "10.0.1.0/24"
-                      }
-                    }
+                    "value": "10.0.1.0/24"
                   },
                   "availability_zone": {
                     "node": {

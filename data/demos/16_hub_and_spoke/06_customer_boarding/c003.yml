@@ -1,8 +1,8 @@
 ---
 # C003 (Vaultex Inc.) — TopologyCustomerDC footprint on DC7, one of two
 # customers on that site (see ./c006.yml) exercising inter-customer
-# isolation on a single DC. Creates a route-target leak exchange to
-# SHARED-SERVICES via the ExchangeGatewayGenerator's created-trigger.
+# isolation on a single DC. Lives in the "default" namespace alongside
+# shared services — no exchange gateway needed to reach them.
 #
 # `owner` is set via the object loader's `kind:`+`data:` form, not a bare
 # HFID string: TopologyCustomer.owner peers the generic OrganizationEntity
@@ -40,8 +40,7 @@ spec:
 # the bare CoreOrganization), so it references the TopologyCustomerDC
 # footprint created above by hfid — this must load AFTER that footprint
 # exists, which is why it lives here rather than alongside the HA domain in
-# 03_dc/. This also lets the ExchangeGatewayGenerator auto-wire C003's VRF
-# namespace to SHARED-SERVICES via the usual created-trigger.
+# 03_dc/.
 apiVersion: infrahub.app/v1
 kind: Object
 spec:

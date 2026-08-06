@@ -1,19 +1,17 @@
 ---
-# Shared infrastructure services VRF (DNS/NTP/monitoring). Every customer
-# TopologyCustomerDC/Colocation/Cloud deployment auto-leaks to this namespace
-# via ExchangeGatewayGenerator (generators/topology/customer_deployment.py) on
-# boarding, so it must exist globally before any customer is boarded — hence
-# bootstrap rather than per-demo-flow data.
+# All customer deployments (DC/Colocation/Cloud/Office) share Infrahub's
+# built-in "default" namespace — there is no VRF-per-customer or
+# VRF-per-environment. Every customer already has non-overlapping addressing,
+# so there's no address-space reason to keep tenants in separate VRFs;
+# tenant isolation on shared L2 segments is enforced by ACL/firewall, not by
+# a routing boundary. Shared services (DNS/NTP/monitoring) live in that same
+# "default" namespace too, so no exchange gateway is needed to reach them.
 #
-# l3_vni is set explicitly to 50000 — one below GLOBAL-L3VNI's start_range
-# (18_vni_pools.yml: 50001-59999) — rather than left for add_vrf_namespace
-# (generators/topology/vrf.py) to allocate from that pool. Every other VRF
-# namespace gets its L3 VNI from the pool; this one is reserved outside it
-# so the always-present shared-services VRF never competes with customer
-# namespaces for a pool slot, and needs no generator run to be usable.
-# add_vrf_namespace still fires on member_of_groups: vrf_namespaces (every
-# namespace in that group is generator-tracked) but is a no-op here since
-# l3_vni is already set.
+# TRANSIT and INTERNET remain distinct namespaces: they're real VRF
+# boundaries the operator's hub-and-spoke topology routes across via
+# TopologyRoutedExchange (see generators/topology/customer_deployment.py and
+# docs/exchange_gateway.md) — unrelated to per-customer/per-environment VRF
+# assignment, so they're kept as-is.
 
 apiVersion: infrahub.app/v1
 kind: Object
@@ -24,10 +22,6 @@ spec:
       description: "Transit VRF for inter-site connectivity"
       l3_vni: 20000
       namespace_type: transit
-    - name: "SHARED-SERVICES"
-      description: "Shared infrastructure services VRF (DNS, NTP, monitoring)"
-      l3_vni: 20001
-      namespace_type: shared
     - name: "INTERNET"
       description: "Internet egress VRF — hub-and-spoke via per-site TopologyRoutedExchange"
       l3_vni: 30000

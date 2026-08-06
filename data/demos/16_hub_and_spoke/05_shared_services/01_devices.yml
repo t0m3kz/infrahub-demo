@@ -1,20 +1,9 @@
 ---
 # Shared infrastructure services (DNS/NTP/monitoring) — one LINUX-SVC virtual
 # server per physical location (DC7, DC8, EQUINIX/WAW1), each with an
-# interface in the SHARED-SERVICES namespace (created in data/bootstrap/
-# 22_shared_services_namespace.yml). Without this, "SHARED-SERVICES" was
-# just a VRF name with nothing actually living in it — every customer's
-# route-leak/routed exchange had a destination namespace but no real
-# endpoint on the other end.
-#
-# DC7/DC8 reach SHARED-SERVICES via each customer's own
-# TopologyRouteLeakExchange (06_customer_boarding/ + the generator run — see
-# docs/exchange_gateway.md). C004 (Colocation, WAW1) now reaches it
-# automatically too, via a real WAW1<->DC7 circuit (07_interconnects/
-# colo_dc7_link/) — TopologyCustomerColocation inherits
-# TopologyConnectableLocation directly, so ExchangeGatewayGenerator's
-# circuit path applies the same way it does for Cloud/Office, no manual
-# wiring needed anymore.
+# interface in the "default" namespace — the same namespace every customer
+# deployment (DC7/DC8/WAW1) already lives in, so no exchange gateway is
+# needed to reach it.
 apiVersion: infrahub.app/v1
 kind: Object
 spec:

@@ -72,11 +72,7 @@
                     "value": "aws_vpc_subnet"
                   },
                   "cidr_block": {
-                    "node": {
-                      "prefix": {
-                        "value": "10.0.1.0/24"
-                      }
-                    }
+                    "value": "10.0.1.0/24"
                   },
                   "availability_zone": {
                     "node": {
@@ -162,11 +158,7 @@
                     "value": "aws_vpc_subnet"
                   },
                   "cidr_block": {
-                    "node": {
-                      "prefix": {
-                        "value": "10.1.1.0/24"
-                      }
-                    }
+                    "value": "10.1.1.0/24"
                   },
                   "availability_zone": {
                     "node": {

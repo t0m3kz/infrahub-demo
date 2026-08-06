@@ -215,6 +215,21 @@ spec:
           - relationship_name: customer_deployments
             modification_type: updated
 
+    # Re-run generator when stretch_scope changes (e.g. local -> dc_pair) —
+    # it picks the VNI identifier strategy (per-deployment vs shared, see
+    # generators/topology/segment.py's _activate_segment_in_deployment), so a
+    # scope flip needs re-processing even without a customer_deployments change.
+    - name: trigger-vxlan-segment-generator-update-stretch-scope
+      branch_scope: "other_branches"
+      node_kind: ManagedVxlanSegment
+      mutation_action: "updated"
+      action: run-vxlan-segment-generator
+      matches:
+        kind: CoreNodeTriggerAttributeMatch
+        data:
+          - attribute_name: stretch_scope
+            value_match: any
+
     # ── Endpoint Connectivity ────────────────────────────────────────────────
     # Endpoint targets (data/bootstrap/00_groups.yml's `endpoints` group) are
     # server devices with role=endpoint. `created` bootstraps a fresh server's

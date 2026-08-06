@@ -65,8 +65,8 @@ def _dep(
 
 
 class TestSegCidr:
-    def test_cloud_segment_returns_cidr_block_prefix(self):
-        seg = {"cidr_block": {"prefix": "10.0.1.0/24"}}
+    def test_cloud_segment_returns_cidr_block(self):
+        seg = {"cidr_block": "10.0.1.0/24"}
         assert _seg_cidr(seg) == "10.0.1.0/24"
 
     def test_on_prem_segment_returns_gateway_prefix(self):
@@ -78,13 +78,13 @@ class TestSegCidr:
 
     def test_cidr_block_takes_precedence_over_gateway_prefix(self):
         seg = {
-            "cidr_block": {"prefix": "172.16.0.0/12"},
+            "cidr_block": "172.16.0.0/12",
             "gateway": {"ip_prefix": {"prefix": "10.0.0.0/8"}},
         }
         assert _seg_cidr(seg) == "172.16.0.0/12"
 
     def test_empty_cidr_block_falls_through_to_gateway_prefix(self):
-        seg = {"cidr_block": {}, "gateway": {"ip_prefix": {"prefix": "10.0.0.0/8"}}}
+        seg = {"cidr_block": None, "gateway": {"ip_prefix": {"prefix": "10.0.0.0/8"}}}
         assert _seg_cidr(seg) == "10.0.0.0/8"
 
     def test_no_gateway_returns_none(self):
@@ -393,7 +393,7 @@ class TestCreateCloudRule:
     def test_source_cidr_set_for_ingress_rule(self):
         gen = self._make_gen_with_sg()
         src_comp = self._comp(
-            {"typename": "ManagedVxlanSegment", "id": "s1", "name": "s", "cidr_block": {"prefix": "10.1.0.0/24"}},
+            {"typename": "ManagedVxlanSegment", "id": "s1", "name": "s", "cidr_block": "10.1.0.0/24"},
             "fe",
             "frontend",
         )

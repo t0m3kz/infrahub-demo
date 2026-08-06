@@ -100,7 +100,7 @@ def _make_subnet(
         "is_public": _v(is_public),
         "auto_assign_public_ip": _v(auto_assign_public_ip),
         "segment_type": _v(segment_type),
-        "cidr_block": _node({"prefix": _v(cidr)}),
+        "cidr_block": _v(cidr),
         "availability_zone": _node({"name": _v(az)}),
     }
 

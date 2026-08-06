@@ -144,7 +144,7 @@ def _vpc_blocks_aws(
     for seg in vpc.get("network_segments") or []:
         seg_name = seg.get("name", "")
         seg_id = _tf_id(seg_name)
-        cidr = (seg.get("cidr_block") or {}).get("prefix", "")
+        cidr = seg.get("cidr_block") or ""
         az = (seg.get("availability_zone") or {}).get("name", "")
         lines += _res(
             "aws_subnet",
@@ -560,7 +560,7 @@ def _vpc_blocks_azure(
     for seg in vpc.get("network_segments") or []:
         seg_name = seg.get("name", "")
         seg_id = _tf_id(seg_name)
-        cidr = (seg.get("cidr_block") or {}).get("prefix", "")
+        cidr = seg.get("cidr_block") or ""
         lines += [
             f'resource "azurerm_subnet" "{seg_id}" {{',
             f'  name                 = "{seg_name}"',
@@ -919,7 +919,7 @@ def _vpc_blocks_gcp(
     for seg in vpc.get("network_segments") or []:
         seg_name = seg.get("name", "")
         seg_id = _tf_id(seg_name)
-        cidr = (seg.get("cidr_block") or {}).get("prefix", "")
+        cidr = seg.get("cidr_block") or ""
         az_name = (seg.get("availability_zone") or {}).get("name", "")
         seg_region = "-".join(az_name.split("-")[:-1]) if az_name else region
         lines += [

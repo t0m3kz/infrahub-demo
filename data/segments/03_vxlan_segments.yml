@@ -92,6 +92,6 @@ spec:
       arp_suppression: false
       gateway:
         - "10.255.1.1/24"
-        - "SHARED-SERVICES"
+        - "default"
       member_of_groups:
         - vxlan_segments

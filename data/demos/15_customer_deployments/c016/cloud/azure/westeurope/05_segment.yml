@@ -11,5 +11,5 @@ spec:
       segment_type: "azure_vnet_subnet"
       virtual_network: "prolexar-vnet-prod"
       availability_zone: ["westeurope", "westeurope-2"]
-      cidr_block: ["10.160.1.0/24", "default"]
+      cidr_block: "10.160.1.0/24"
       customer_deployment: ["C016", "p"]

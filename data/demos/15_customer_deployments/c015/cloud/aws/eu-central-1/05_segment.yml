@@ -11,5 +11,5 @@ spec:
       segment_type: "aws_vpc_subnet"
       virtual_network: "novantis-vpc-prod"
       availability_zone: ["eu-central-1", "eu-central-1b"]
-      cidr_block: ["10.150.1.0/24", "default"]
+      cidr_block: "10.150.1.0/24"
       customer_deployment: ["C015", "p"]
