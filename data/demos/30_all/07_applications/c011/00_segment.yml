@@ -1,13 +1,20 @@
 ---
 # VLAN segment activated in C011's colocation footprint (NY). Loaded before
 # 01_application.yml since components there reference it by human_friendly_id.
+# Nested under OrganizationCustomer (owner) via the network_segments reverse
+# relationship — owner is set automatically from the parent, no need to
+# repeat it on the segment itself.
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
-  kind: ManagedVlanSegment
+  kind: OrganizationCustomer
   data:
-    - owner: "C011"
-      customer_name: "nordix-prod"
-      environment: "p"
-      vlan_id: 104
-      customer_deployment: ["C011", "p"]
+    - name: "Flarex Ltd."
+      org_id: "C011"
+      network_segments:
+        - kind: ManagedVlanSegment
+          data:
+            customer_name: "nordix-prod"
+            environment: "p"
+            vlan_id: 104
+            customer_deployment: ["C011", "p"]

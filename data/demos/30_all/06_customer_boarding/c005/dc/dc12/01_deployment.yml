@@ -19,7 +19,7 @@ spec:
   kind: TopologyCustomerDC
   data:
     - owner: "C005"
-      environment: "p"
+      environment: "d"
       status: active
       infrastructure_orchestrator: ansible_automation_platform
       parent: "DC12"
