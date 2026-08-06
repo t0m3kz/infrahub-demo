@@ -743,7 +743,7 @@ class DCTopologyGenerator(PoolMixin, DeviceMixin, CablingMixin, RoutingMixin, Co
             description=f"FirewallContext sub-interface VLAN pool for {dc_name.upper()}",
             start_range=3000,
             end_range=3999,
-            node="FirewallContext",
+            node="ManagedFirewallContext",
             node_attribute="vlan_id",
         )
 
