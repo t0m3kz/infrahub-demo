@@ -327,15 +327,6 @@ nodes:
             label: Azure VNet Subnet
             description: "Azure Virtual Network subnet"
             color: "#0078D4"
-      - name: owner_org_id
-        kind: Text
-        label: "Owner Org ID"
-        order_weight: 90
-        computed_attribute:
-          kind: Jinja2
-          jinja2_template: "{{ customer_deployment__org_id__value }}"
-        read_only: true
-        optional: false
     relationships:
       - name: virtual_network
         peer: CloudVirtualNetwork
@@ -377,7 +368,7 @@ nodes:
         cardinality: one
         kind: Attribute
         order_weight: 1900
-        optional: false
+        optional: true
         identifier: "segment__customer_deployments"
         description: "Customer deployment footprint this cloud subnet belongs to."
     uniqueness_constraints:

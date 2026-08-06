@@ -5,7 +5,8 @@ kind: Object
 spec:
   kind: CloudNetworkSegment
   data:
-    - customer_name: "peakora-subnet-prod"
+    - owner: "C004"
+      customer_name: "peakora-subnet-prod"
       environment: "p"
       segment_type: "azure_vnet_subnet"
       virtual_network: "peakora-vnet-prod"

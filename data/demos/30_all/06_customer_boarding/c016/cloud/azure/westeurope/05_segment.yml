@@ -5,7 +5,8 @@ kind: Object
 spec:
   kind: CloudNetworkSegment
   data:
-    - customer_name: "prolexar-subnet-prod"
+    - owner: "C016"
+      customer_name: "prolexar-subnet-prod"
       environment: "p"
       segment_type: "azure_vnet_subnet"
       virtual_network: "prolexar-vnet-prod"

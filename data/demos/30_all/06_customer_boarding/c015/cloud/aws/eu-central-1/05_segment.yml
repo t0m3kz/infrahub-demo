@@ -5,7 +5,8 @@ kind: Object
 spec:
   kind: CloudNetworkSegment
   data:
-    - customer_name: "novantis-subnet-prod"
+    - owner: "C015"
+      customer_name: "novantis-subnet-prod"
       environment: "p"
       segment_type: "aws_vpc_subnet"
       virtual_network: "novantis-vpc-prod"

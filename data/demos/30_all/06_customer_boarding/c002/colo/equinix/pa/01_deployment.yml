@@ -24,6 +24,7 @@ spec:
       network_segments:
         - kind: ManagedVlanSegment
           data:
+            owner: "C002"
             customer_name: "swiftgo-prod"
             environment: "p"
             vlan_id: 102

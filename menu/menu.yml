@@ -290,12 +290,6 @@ spec:
                   kind: RoutingOSPFArea
                   icon: "mdi:hexagon-outline"
 
-                - namespace: Managed
-                  name: OspfLinkItem
-                  label: OSPF Link Services
-                  kind: ManagedOSPFLinkService
-                  icon: "mdi:link-variant"
-
           # ── Static Routes ───────────────────────────────────────────────────
           - namespace: Cloud
             name: StaticRoutesItem

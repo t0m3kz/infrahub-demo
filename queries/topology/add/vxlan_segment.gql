@@ -27,7 +27,6 @@ query vxlan_segment_data($name: String!) {
             node {
               id
               name { value }
-              org_id { value }
               ... on TopologyCustomerDC {
                 parent { node { id name { value } } }
               }
