@@ -68,11 +68,7 @@ query cloud_vpc_config($account: String!) {
                 value
               }
               cidr_block {
-                node {
-                  prefix {
-                    value
-                  }
-                }
+                value
               }
               availability_zone {
                 node {

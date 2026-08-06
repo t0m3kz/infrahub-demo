@@ -44,7 +44,7 @@ AWS_CLEANED: dict = {
                     "is_public": False,
                     "auto_assign_public_ip": False,
                     "segment_type": "aws_vpc_subnet",
-                    "cidr_block": {"prefix": "10.0.1.0/24"},
+                    "cidr_block": "10.0.1.0/24",
                     "availability_zone": {"name": "eu-central-1a"},
                 }
             ],

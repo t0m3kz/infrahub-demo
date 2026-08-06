@@ -33,8 +33,3 @@ spec:
     - name: "C002-PROD"
       description: "SwiftGo production VRF"
       l3_vni: 50003
-
-    # Shared services VRF (DNS, NTP, monitoring — accessible from all tenants)
-    - name: "SHARED-SERVICES"
-      description: "Shared infrastructure services VRF"
-      l3_vni: 50100

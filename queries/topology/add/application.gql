@@ -73,11 +73,7 @@ fragment AppComponentSecurityFields on AppComponent {
       ... on CloudNetworkSegment {
         name { value }
         segment_type { value }
-        cidr_block {
-          node {
-            prefix { value }
-          }
-        }
+        cidr_block { value }
         virtual_network {
           node {
             id

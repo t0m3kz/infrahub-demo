@@ -13,5 +13,5 @@ spec:
       segment_type: "aws_vpc_subnet"
       virtual_network: "vaultex-vpc-prod"
       availability_zone: ["eu-central-1", "eu-central-1a"]
-      cidr_block: ["10.30.1.0/24", "default"]
+      cidr_block: "10.30.1.0/24"
       customer_deployment: ["C003", "p"]

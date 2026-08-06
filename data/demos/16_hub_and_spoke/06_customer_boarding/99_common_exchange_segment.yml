@@ -8,7 +8,7 @@ spec:
   data:
     - address: "10.90.0.254/24"
       description: "Anycast gateway for common exchange segment"
-      ip_namespace: "SHARED-SERVICES"
+      ip_namespace: "default"
 
 ---
 apiVersion: infrahub.app/v1
@@ -26,7 +26,7 @@ spec:
       arp_suppression: true
       gateway:
         - "10.90.0.254/24"
-        - "SHARED-SERVICES"
+        - "default"
       customer_deployments:
         - kind: TopologyCustomerDC
           data:

@@ -94,9 +94,8 @@ class RulesPlanner(RulePlanningHelper):
     @staticmethod
     def seg_cidr(seg: dict[str, Any]) -> str | None:
         """Extract a CIDR string from a segment dict (on-prem or cloud)."""
-        cidr_block = seg.get("cidr_block") or {}
-        if cidr_block.get("prefix"):
-            return cidr_block["prefix"]
+        if seg.get("cidr_block"):
+            return seg["cidr_block"]
         gateway = seg.get("gateway") or {}
         return (gateway.get("ip_prefix") or {}).get("prefix")
 

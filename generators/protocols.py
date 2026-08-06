@@ -819,12 +819,11 @@ class ManagedNTPServer(CoreNode):
 
 class CloudNetworkSegment(CloudResource, ManagedNetworkSegment):
     auto_assign_public_ip: Boolean
+    cidr_block: StringOptional
     is_public: BooleanOptional
     segment_type: Dropdown
     availability_zone: RelationshipAttribute[TopologyCloudZone]
-    cidr_block: RelationshipAttribute[IpamPrefix]
     customer_deployment: RelationshipAttribute[TopologyCustomer]
-    ip_prefixes: RelationshipManager[IpamPrefix]
     tags: RelationshipManager[BuiltinTag]
     virtual_network: RelationshipAttribute[CloudVirtualNetwork]
 

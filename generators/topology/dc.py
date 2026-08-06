@@ -17,8 +17,6 @@ from ..pools import PoolMixin
 from ..protocols import (
     DcimPhysicalDevice,
     DcimVirtualDevice,
-    IpamNamespace,
-    TopologyCommonExchange,
     TopologyDataCenter,
     TopologyPod,
 )
@@ -124,9 +122,6 @@ class DCTopologyGenerator(PoolMixin, DeviceMixin, CablingMixin, RoutingMixin, Co
         ]
 
         self.logger.info(f"Processing Data Center: {dc_name}")
-
-        # Every generated DC should be part of the provider's shared exchange domain.
-        await self._ensure_common_exchange_for_dc()
 
         # Add existing pods to group context to prevent deletion
         # include=["layout"] also lets _generate_dc_scoped_fabric_devices read each
@@ -268,7 +263,8 @@ class DCTopologyGenerator(PoolMixin, DeviceMixin, CablingMixin, RoutingMixin, Co
             parent_attr="vlan_pool",
         )
 
-        # Create VNI and L3 VNI pools for the VXLAN-EVPN overlay
+        # L2 VNI pool for the VXLAN overlay (VRF-lite: no VRF stretches over
+        # EVPN, so there's no L3 VNI pool — border-leaf VRFs are local-only).
         await self.upsert_number_pool(
             pool_name=f"{self.fabric_name}-vni-pool",
             description=f"L2 VNI pool for {self.fabric_name.upper()}",
@@ -279,17 +275,6 @@ class DCTopologyGenerator(PoolMixin, DeviceMixin, CablingMixin, RoutingMixin, Co
             parent_kind="TopologyDataCenter",
             parent_id=dc_id,
             parent_attr="vni_pool",
-        )
-        await self.upsert_number_pool(
-            pool_name=f"{self.fabric_name}-l3vni-pool",
-            description=f"L3 VNI pool for {self.fabric_name.upper()} VRFs",
-            start_range=50001,
-            end_range=59999,
-            node="BuiltinIPNamespace",
-            node_attribute="l3_vni",
-            parent_kind="TopologyDataCenter",
-            parent_id=dc_id,
-            parent_attr="l3_vni_pool",
         )
 
         super_spine_names: list[str] = []
@@ -739,56 +724,3 @@ class DCTopologyGenerator(PoolMixin, DeviceMixin, CablingMixin, RoutingMixin, Co
             firewall_names=firewall_names,
             load_balancer_names=load_balancer_names,
         )
-
-    async def _ensure_common_exchange_for_dc(self) -> None:
-        """Ensure a default TopologyCommonExchange exists and includes this DC deployment."""
-
-        dc_id = self.data["id"]
-        dc_name = self.data["name"]
-        try:
-            namespaces = await self.client.filters(kind=IpamNamespace, name__value="SHARED-SERVICES")
-            if not namespaces:
-                self.logger.warning(
-                    "Shared services namespace 'SHARED-SERVICES' not found; "
-                    f"skipping CommonExchange linking for DC {dc_name}"
-                )
-                return
-            shared_ns = namespaces[0]
-
-            exchanges = await self.client.filters(
-                kind=TopologyCommonExchange,
-                is_default__value=True,
-            )
-
-            exchange_obj = None
-            if exchanges:
-                exchange_obj = exchanges[0]
-                if len(exchanges) > 1:
-                    self.logger.warning(
-                        "Multiple TopologyCommonExchange objects marked is_default=true; using the first one"
-                    )
-            else:
-                exchange_obj = await self.client.create(
-                    kind=TopologyCommonExchange,
-                    data={
-                        "name": "GLOBAL-SHARED-EXCHANGE",
-                        "description": "Auto-provisioned default shared exchange domain",
-                        "is_default": True,
-                        "namespace": {"id": shared_ns.id},
-                        "deployments": [{"id": dc_id}],
-                    },
-                )
-                await exchange_obj.save(allow_upsert=True)
-                self.logger.info("Created default CommonExchange 'GLOBAL-SHARED-EXCHANGE' for DC %s", dc_name)
-                return
-
-            rel = getattr(exchange_obj, "deployments")
-            await rel.fetch()
-            if any(peer.id == dc_id for peer in rel.peers):
-                return
-
-            await self._safe_rel_add(rel, {"id": dc_id})
-            await exchange_obj.save(allow_upsert=True)
-            self.logger.info(f"Linked DC {dc_name} to default CommonExchange '{exchange_obj.name.value}'")
-        except Exception as exc:
-            self.logger.warning(f"Failed to ensure CommonExchange for DC {dc_name}: {exc}")
