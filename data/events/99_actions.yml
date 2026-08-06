@@ -189,7 +189,21 @@ spec:
     # VRF namespace: generator auto-triggers via group membership (execute_in_proposed_change: true)
     # No deployment-based trigger needed — L3 VNI comes from global pool
 
-    # Segment triggers: re-run generator when customer deployments are added/updated
+    # Segment triggers: `created` fires when customer_deployments is set inline
+    # during object creation (e.g. nested under OrganizationCustomer.network_
+    # segments — see data/demos/30_all/07_applications/*/00_segment*.yml), which
+    # is a `created` mutation on the segment itself, not an `updated` relationship
+    # mutation. Without this, a segment created with customer_deployments already
+    # populated never gets a SegmentDeployment realization until something later
+    # updates customer_deployments and happens to trigger the rule below.
+    - name: trigger-vxlan-segment-generator-on-created
+      branch_scope: "other_branches"
+      node_kind: ManagedVxlanSegment
+      mutation_action: "created"
+      action: run-vxlan-segment-generator
+
+    # Re-run generator when customer deployments are added/updated after creation
+    # (e.g. a stretched segment gaining its second DC leg later).
     - name: trigger-vxlan-segment-deployments-updated
       branch_scope: "other_branches"
       node_kind: ManagedVxlanSegment
