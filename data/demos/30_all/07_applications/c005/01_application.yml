@@ -40,7 +40,7 @@ spec:
 
           - name: order-db
             component_type: database
-            network_segment: c005-database-local-dc12-p
+            network_segment: c005-database-local-dc12-d
             service_ports:
               data:
                 - port: 5432
