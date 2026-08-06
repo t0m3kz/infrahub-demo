@@ -24,6 +24,7 @@ spec:
       network_segments:
         - kind: ManagedVlanSegment
           data:
+            owner: "C001"
             customer_name: "nordix-prod"
             environment: "p"
             vlan_id: 101

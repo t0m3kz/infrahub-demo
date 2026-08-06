@@ -226,12 +226,12 @@ class ManagedNetworkSegment(CoreNode):
     environment: Dropdown
     isolation_mode: Dropdown
     name: String
-    owner_org_id: StringOptional
     pbr_enabled: Boolean
     segment_role: Dropdown
     segment_type: DropdownOptional
     status: Dropdown
     gateway: RelationshipAttribute[IpamIPAddress]
+    owner: RelationshipAttribute[OrganizationCustomer]
 
 
 class ManagedPeering(CoreNode):

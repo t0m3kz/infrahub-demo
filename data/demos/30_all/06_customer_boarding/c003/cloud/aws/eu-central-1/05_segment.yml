@@ -7,7 +7,8 @@ kind: Object
 spec:
   kind: CloudNetworkSegment
   data:
-    - customer_name: "vaultex-subnet-prod"
+    - owner: "C003"
+      customer_name: "vaultex-subnet-prod"
       environment: "p"
       segment_type: "aws_vpc_subnet"
       virtual_network: "vaultex-vpc-prod"
