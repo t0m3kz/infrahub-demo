@@ -27,12 +27,14 @@ query segment_placement {
               id
               __typename
               name { value }
-              parent {
-                node {
-                  id
-                  __typename
-                  name { value }
-                }
+              ... on TopologyCustomerDC {
+                parent { node { id __typename name { value } } }
+              }
+              ... on TopologyCustomerColocation {
+                parent { node { id __typename name { value } } }
+              }
+              ... on TopologyCustomerCloud {
+                parent { node { id __typename name { value } } }
               }
             }
           }
