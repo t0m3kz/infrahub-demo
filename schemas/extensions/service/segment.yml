@@ -49,7 +49,9 @@ nodes:
 
   # VXLAN overlay segment with EVPN multi-tenancy.
   # Zero trust: prefix → ip_namespace (VRF+l3_vni+owner) → tenant isolation.
-  # L2 VNI allocated per-deployment via SegmentDeployment.
+  # For stretched segments, generator behavior is local-pool-first: first
+  # SegmentDeployment allocates VNI from deployment vni_pool, then reuses the
+  # same value in other deployments.
   - name: VxlanSegment
     namespace: Managed
     description: "VXLAN overlay segment with EVPN multi-tenancy"
@@ -86,12 +88,36 @@ nodes:
         default_value: false
         order_weight: 4
         description: "When true, FW/LB terminates traffic inline. Leaf is pure L2."
+      - name: stretch_scope
+        kind: Dropdown
+        label: Stretch Scope
+        optional: true
+        default_value: local
+        order_weight: 5
+        description: "Intended L2 stretch scope for this segment."
+        choices:
+          - name: local
+            label: Local
+            description: "Single deployment only"
+            color: "#7FBF7F"
+          - name: metro
+            label: Metro
+            description: "Stretched between deployments in one metro"
+            color: "#3498DB"
+          - name: dc_pair
+            label: DC Pair
+            description: "Stretched between two data center deployments"
+            color: "#9B59B6"
+          - name: global
+            label: Global
+            description: "Stretched across multiple metros/regions"
+            color: "#E67E22"
     relationships:
       - name: customer_deployments
         peer: TopologyCustomer
         cardinality: many
         kind: Attribute
-        order_weight: 110
+        order_weight: 100
         optional: true
         identifier: "segment__customer_deployments"
         description: "Customer deployment footprints this VXLAN segment is activated in (stretch across DCs or single-site)."  # yamllint disable-line rule:line-length
@@ -135,9 +161,17 @@ nodes:
         label: L2 VNI
         optional: true
         order_weight: 1050
-        description: >-
-          L2 VNI for this segment in this deployment. Null means no VXLAN
-          overlay (traditional VLAN). Allocated from DC vni_pool.
+        description: "L2 VNI for this deployment; stretched segments share one value across deployments."
+        parameters:
+          min_value: 1
+          max_value: 16777215
+
+      - name: local_vni_override
+        kind: Number
+        label: Local VNI Override
+        optional: true
+        order_weight: 1055
+        description: "Optional local VNI override for exceptional migration/interoperability cases."
         parameters:
           min_value: 1
           max_value: 16777215

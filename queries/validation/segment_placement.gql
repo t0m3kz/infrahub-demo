@@ -1,0 +1,74 @@
+query segment_placement {
+  ManagedVlanSegment {
+    edges {
+      node {
+        id
+        name { value }
+        customer_deployment {
+          node {
+            id
+            __typename
+            name { value }
+          }
+        }
+      }
+    }
+  }
+
+  ManagedVxlanSegment {
+    edges {
+      node {
+        id
+        name { value }
+        stretch_scope { value }
+        customer_deployments {
+          edges {
+            node {
+              id
+              __typename
+              name { value }
+              parent {
+                node {
+                  id
+                  __typename
+                  name { value }
+                }
+              }
+            }
+          }
+        }
+        segment_deployments {
+          edges {
+            node {
+              id
+              vni { value }
+              deployment {
+                node {
+                  id
+                  __typename
+                  name { value }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+
+  CloudNetworkSegment {
+    edges {
+      node {
+        id
+        name { value }
+        customer_deployment {
+          node {
+            id
+            __typename
+            name { value }
+          }
+        }
+      }
+    }
+  }
+}

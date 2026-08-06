@@ -472,3 +472,58 @@ class TestVxlanVniAllocation:
         gen.client.create.assert_called_once()
         call_data = gen.client.create.call_args.kwargs["data"]
         assert "vni" not in call_data
+
+    def test_stretched_reuses_existing_vni_and_skips_vni_pool(self):
+        """Stretched allocation reuses existing VNI and avoids new vni_pool calls."""
+        gen = _make_gen()
+
+        existing_dep = MagicMock()
+        existing_dep.resolve = AsyncMock()
+        existing_dep.vni = MagicMock()
+        existing_dep.vni.value = 10100
+
+        # idempotency check -> no existing for this deployment
+        # reusable-VNI lookup -> one existing deployment with vni=10100
+        gen.client.filters = AsyncMock(side_effect=[[], [existing_dep]])
+
+        vlan_pool = _mock_pool("pool-vlan", "DC1-VLAN-Pool")
+        gen._get_dc_pool = AsyncMock(return_value=vlan_pool)
+
+        activation = MagicMock()
+        activation.save = AsyncMock()
+        gen.client.create = AsyncMock(return_value=activation)
+
+        asyncio.run(gen._activate_segment_in_deployment(**self._CALL, stretch_scope="dc_pair"))
+
+        call_data = gen.client.create.call_args.kwargs["data"]
+        assert call_data["vni"] == 10100
+        # vlan_pool only; no vni_pool lookup because vni is fixed
+        assert gen._get_dc_pool.await_count == 1
+
+    def test_stretched_allocates_from_local_pool_with_shared_identifier(self):
+        """First stretched deployment allocates from local vni_pool using shared segment identifier."""
+        gen = _make_gen()
+
+        # idempotency check -> no existing for this deployment
+        # reusable-VNI lookup -> none
+        gen.client.filters = AsyncMock(side_effect=[[], []])
+
+        vlan_pool = _mock_pool("pool-vlan", "DC1-VLAN-Pool")
+        vni_pool = _mock_pool("pool-vni", "DC1-VNI-Pool")
+        gen._get_dc_pool = AsyncMock(side_effect=[vlan_pool, vni_pool])
+
+        activation = MagicMock()
+        activation.save = AsyncMock()
+        gen.client.create = AsyncMock(return_value=activation)
+
+        asyncio.run(
+            gen._activate_segment_in_deployment(
+                **self._CALL,
+                stretch_scope="dc_pair",
+            )
+        )
+
+        call_data = gen.client.create.call_args.kwargs["data"]
+        assert call_data["vni"]["from_pool"]["id"] == "pool-vni"
+        assert call_data["vni"]["identifier"] == "seg-2-vni"
+        assert gen._get_dc_pool.await_count == 2

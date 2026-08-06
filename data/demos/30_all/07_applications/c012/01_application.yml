@@ -1,0 +1,38 @@
+---
+# C012 colocation application sample for VA metro.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: AppApplication
+  data:
+    - label: payment-edge
+      environment: p
+      criticality: high
+      security_profile: internal_standard
+      fqdn: payment-edge.c012.demo.local
+      ingress_mode: frontend
+      owner: C012
+      member_of_groups:
+        - app_applications
+      children:
+        kind: AppComponent
+        data:
+          - name: payment-ui
+            component_type: frontend
+            network_segment: c012-nordix-prod-p
+            service_ports:
+              data:
+                - port: 443
+                  protocol: tcp
+            member_of_groups:
+              - app_components
+
+          - name: payment-engine
+            component_type: backend
+            network_segment: c012-nordix-prod-p
+            service_ports:
+              data:
+                - port: 8443
+                  protocol: tcp
+            member_of_groups:
+              - app_components

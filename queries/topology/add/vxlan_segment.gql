@@ -4,6 +4,7 @@ query vxlan_segment_data($name: String!) {
       node {
         id
         name { value }
+        stretch_scope { value }
         arp_suppression { value }
         terminate_inline { value }
         inline_service {
