@@ -686,6 +686,7 @@ class LocationFacility(LocationGeneric):
 
 class ManagedFirewallContext(ManagedGeneric, ManagedGenericInterfaces, ManagedInlineService):
     context_id: StringOptional
+    vlan_id: IntegerOptional
     cluster: RelationshipAttribute[ManagedFirewallHA]
     tenant: RelationshipAttribute[TopologyCustomer]
 

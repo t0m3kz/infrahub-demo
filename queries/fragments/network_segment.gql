@@ -78,6 +78,12 @@ fragment SegmentSecurityPolicyFields on ManagedNetworkSegment {
     }
   }
   isolation_mode { value }
+  owner {
+    node {
+      id
+      org_id { value }
+    }
+  }
   security_tag {
     node {
       name { value }

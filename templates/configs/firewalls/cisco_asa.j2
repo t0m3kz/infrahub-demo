@@ -48,6 +48,42 @@ access-group {{ iface.security_zone.name }}-in in interface {{ iface.security_zo
 {%- endif %}
 {%- endfor %}
 {%- endif %}
+{%- if contexts %}
+!
+! --- Firewall Contexts (Security Contexts) — one per tenant, per ManagedFirewallContext ---
+! mode multiple must already be set on this ASA (system exec space, requires reload) —
+! not idempotently re-set here.
+{%- for context in contexts %}
+{%- if context.vlan_id and context.parent_interface.name %}
+interface {{ context.parent_interface.name }}.{{ context.vlan_id }}
+ vlan {{ context.vlan_id }}
+ no shutdown
+!
+{%- endif %}
+{%- endfor %}
+{%- for context in contexts %}
+context {{ context.name }}
+{%- if context.vlan_id and context.parent_interface.name %}
+ allocate-interface {{ context.parent_interface.name }}.{{ context.vlan_id }}
+{%- endif %}
+ config-url disk0:/{{ context.name }}.cfg
+{%- if context.tenant_name %}
+ description {{ context.tenant_name }}
+{%- endif %}
+!
+{%- endfor %}
+{%- for context in contexts %}
+{%- if context.vlan_id and context.parent_interface.name and context.ip_address %}
+changeto context {{ context.name }}
+interface {{ context.parent_interface.name }}.{{ context.vlan_id }}
+ ip address {{ context.ip_address | replace('/', ' ') }}
+ nameif customer-pbr
+ security-level 50
+ no shutdown
+!
+{%- endif %}
+{%- endfor %}
+{%- endif %}
 {%- if ha %}
 !
 ! --- Failover (HA) ---

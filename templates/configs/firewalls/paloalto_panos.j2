@@ -86,6 +86,26 @@ set rulebase security rules {{ rule_name }} description "{{ rule.description }}"
 {%- endfor %}
 #
 {%- endif %}
+{%- if contexts %}
+#
+# --- Firewall Contexts (VDOM/vsys) — one per tenant, per ManagedFirewallContext ---
+#
+{%- for context in contexts %}
+set vsys {{ context.name }}
+{%- if context.tenant_name %}
+set vsys {{ context.name }} display-name "{{ context.tenant_name }}"
+{%- endif %}
+{%- if context.vlan_id and context.parent_interface.name %}
+{%- set ctx_iface_ref = context.parent_interface.name + '.' + context.vlan_id | string %}
+set network interface ethernet {{ context.parent_interface.name }} layer3 units {{ ctx_iface_ref }} tag {{ context.vlan_id }}
+{%- if context.ip_address %}
+set network interface ethernet {{ context.parent_interface.name }} layer3 units {{ ctx_iface_ref }} ipv4 addr {{ context.ip_address }}
+{%- endif %}
+set vsys {{ context.name }} import network interface {{ ctx_iface_ref }}
+{%- endif %}
+{%- endfor %}
+#
+{%- endif %}
 {%- if ha %}
 #
 # --- High Availability ---

@@ -179,6 +179,148 @@ def get_vrf_default_gateways(
     return gateways
 
 
+def get_firewall_contexts(interfaces: list[dict[str, Any]] | None) -> list[dict[str, Any]]:
+    """Build the per-VDOM/vsys/context list from this firewall's own sub-interfaces.
+
+    A ManagedFirewallContext shows up as an interface_capabilities entry on
+    whichever DcimVirtualInterface generators/topology/customer_deployment.py's
+    _ensure_context_subinterface created for it (always on the cluster's
+    "uplink"-role trunk — see that function's docstring). One context can
+    only have one sub-interface per firewall device, so this is a plain
+    one-pass collection, no cross-interface pairing needed (unlike
+    get_vrf_default_gateways, which pairs two legs of the SAME exchange).
+    """
+    if not interfaces:
+        return []
+
+    contexts: list[dict[str, Any]] = []
+    seen_ids: set[str] = set()
+    for iface in interfaces:
+        ip_obj = iface.get("ip_address") or {}
+        parent_iface = iface.get("parent_interface") or {}
+        for cap in iface.get("interface_capabilities") or []:
+            if cap.get("typename") != "ManagedFirewallContext":
+                continue
+            context_id = cap.get("id")
+            if not context_id or context_id in seen_ids:
+                continue
+            seen_ids.add(context_id)
+            tenant = cap.get("tenant") or {}
+            contexts.append(
+                {
+                    "name": cap.get("name"),
+                    "context_id": cap.get("context_id"),
+                    "vlan_id": cap.get("vlan_id"),
+                    "tenant_name": tenant.get("name"),
+                    "sub_interface": iface.get("name"),
+                    "parent_interface": parent_iface,
+                    "ip_address": ip_obj.get("address"),
+                }
+            )
+    contexts.sort(key=lambda c: c.get("name") or "")
+    return contexts
+
+
+def get_customer_pbr_rules(
+    activations: list[dict[str, Any]] | None,
+    interfaces: list[dict[str, Any]] | None,
+) -> list[dict[str, Any]]:
+    """Build PBR rules that redirect all traffic to the firewall by default.
+
+    All inter-segment traffic defaults to the firewall (stateful inspection);
+    a SecurityPolicyRule permit is the only bypass — the SAME rule data
+    get_acls() already reads for its ACL rendering (_get_segment_prefix_str
+    per rule.destination_segment), just consumed here for a different
+    purpose. Not filtered by owner: a cross-owner permit bypasses PBR the
+    same as a same-owner one, since intra- and inter-customer traffic use
+    one unified default-redirect model.
+
+    fw_nexthop resolution: this device's own interface_capabilities carry a
+    ManagedFirewallContext leg (pbr connectivity_mode only — see
+    generators/topology/customer_deployment.py's _ensure_context_subinterface;
+    inline mode has no border-leaf-side leg, so no PBR rule is produced for
+    it — the firewall is already in the forwarding path). Mirrors
+    get_vrf_default_gateways()'s same-device-both-legs pattern, except here
+    only ONE leg (the border-leaf's) is on this device — the other lives on
+    the firewall, so the nexthop is this leg's own peer IP on the /30,
+    computed from the interface's own address, not a sibling leg lookup.
+    """
+    if not activations:
+        return []
+
+    context_nexthop_by_owner: dict[str, str] = {}
+    shared_nexthop: str | None = None
+    for iface in interfaces or []:
+        ip_obj = iface.get("ip_address") or {}
+        address = ip_obj.get("address")
+        if not address:
+            continue
+        for cap in iface.get("interface_capabilities") or []:
+            if cap.get("typename") != "ManagedFirewallContext":
+                continue
+            try:
+                network = ip_network(address, strict=False)
+                own_ip = ip_interface(address).ip
+            except ValueError:
+                continue
+            hosts = [h for h in network.hosts() if h != own_ip]
+            if not hosts:
+                continue
+            nexthop = str(hosts[0])
+            tenant = cap.get("tenant") or {}
+            tenant_id = tenant.get("id")
+            if tenant_id:
+                context_nexthop_by_owner[tenant_id] = nexthop
+            else:
+                shared_nexthop = nexthop
+
+    if not context_nexthop_by_owner and shared_nexthop is None:
+        return []
+
+    rules: list[dict[str, Any]] = []
+    seen_vlans: set[int] = set()
+    for act in activations:
+        vlan_id = act.get("vlan_id")
+        if not vlan_id or vlan_id in seen_vlans:
+            continue
+        seg = act.get("segment") or {}
+        if "security_policies" not in seg:
+            continue
+        seen_vlans.add(vlan_id)
+
+        owner = seg.get("owner") or {}
+        owner_id = owner.get("id")
+        fw_nexthop = context_nexthop_by_owner.get(owner_id) if owner_id else None
+        if fw_nexthop is None:
+            fw_nexthop = shared_nexthop
+        if fw_nexthop is None:
+            continue
+
+        bypass_prefixes: list[str] = []
+        for policy in seg.get("security_policies") or []:
+            if not policy.get("enabled", True):
+                continue
+            for rule in policy.get("rules") or []:
+                if rule.get("disabled") or rule.get("action") != "permit":
+                    continue
+                dst_seg = rule.get("destination_segment") or {}
+                dst_prefix = _get_segment_prefix_str(dst_seg) if dst_seg else None
+                if dst_prefix:
+                    bypass_prefixes.append(dst_prefix)
+
+        rules.append(
+            {
+                "vlan_id": vlan_id,
+                "segment_name": seg.get("customer_name") or seg.get("name") or f"VLAN_{vlan_id}",
+                "bypass_prefixes": sorted(set(bypass_prefixes)),
+                "fw_nexthop": fw_nexthop,
+            }
+        )
+
+    rules.sort(key=lambda r: r["vlan_id"])
+    return rules
+
+
 def get_zone_policies(policies_data: list[dict[str, Any]] | None = None) -> list[dict[str, Any]]:
     """Build a zone policy list from SecurityPolicy nodes (global query).
 

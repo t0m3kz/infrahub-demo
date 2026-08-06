@@ -15,6 +15,7 @@ from ..helpers.template_interfaces import template_interface_names_by_role
 from ..pod_config import POD_LAYOUTS
 from ..pools import PoolMixin
 from ..protocols import (
+    CoreIPPrefixPool,
     DcimPhysicalDevice,
     DcimVirtualDevice,
     TopologyDataCenter,
@@ -717,6 +718,9 @@ class DCTopologyGenerator(PoolMixin, DeviceMixin, CablingMixin, RoutingMixin, Co
             indexes=[data["index"]],
         )
 
+        if firewall_names:
+            await self._ensure_firewall_context_pools(dc_name=self.fabric_name)
+
         await self._cable_border_services(
             border_role_for={"firewall": "firewall", "load-balancer": "load-balancer"},
             connectivity_mode=cast(Literal["pbr", "inline"], data.get("connectivity_mode", "pbr")),
@@ -724,3 +728,59 @@ class DCTopologyGenerator(PoolMixin, DeviceMixin, CablingMixin, RoutingMixin, Co
             firewall_names=firewall_names,
             load_balancer_names=load_balancer_names,
         )
+
+    async def _ensure_firewall_context_pools(self, *, dc_name: str) -> None:
+        """Create this DC's own FirewallContext VLAN + P2P prefix pools.
+
+        Per-DC (not global) so each fabric's context sub-interfaces and
+        transit links stay within its own numbering, matching the existing
+        {fabric_name}-vlan-pool/{fabric_name}-vni-pool pattern above.
+        generators/topology/customer_deployment.py's _ensure_firewall_context
+        allocates from these once a customer boards onto this DC.
+        """
+        await self.upsert_number_pool(
+            pool_name=f"{dc_name}-fw-context-vlan-pool",
+            description=f"FirewallContext sub-interface VLAN pool for {dc_name.upper()}",
+            start_range=3000,
+            end_range=3999,
+            node="FirewallContext",
+            node_attribute="vlan_id",
+        )
+
+        pool_name = f"{dc_name}-fw-context-p2p-pool"
+        existing = await self.client.filters(kind=CoreIPPrefixPool, name__value=pool_name)
+        if existing:
+            self.logger.info(f"FirewallContext P2P pool '{pool_name}' already exists")
+            return
+
+        # Second octet stays within 65-127 (100.64.0.0/10 is the RFC 6598 shared
+        # address space; .64 is reserved for the global DCI pool, see
+        # data/bootstrap/20_dci_pools.yml) — one /16 per DC index, wrapping
+        # after 63 DCs rather than spilling outside the RFC 6598 block.
+        supernet = await self.client.create(
+            kind="IpamPrefix",
+            data={
+                "prefix": f"100.{65 + (self.data['index'] % 63)}.0.0/16",
+                "description": f"FirewallContext P2P links for {dc_name.upper()} (RFC 6598 shared address space)",
+                "status": "active",
+                "member_type": "prefix",
+                "is_pool": True,
+                "role": "technical",
+                "ip_namespace": {"hfid": ["default"]},
+            },
+        )
+        await supernet.save(allow_upsert=True)
+
+        pool = await self.client.create(
+            kind=CoreIPPrefixPool,
+            data={
+                "name": pool_name,
+                "description": f"P2P /30 pool for border-leaf <-> FirewallContext links on {dc_name.upper()}",
+                "default_prefix_type": "IpamPrefix",
+                "default_prefix_length": 30,
+                "ip_namespace": {"hfid": ["default"]},
+                "resources": [supernet.id],
+            },
+        )
+        await pool.save(allow_upsert=True)
+        self.logger.info(f"Created FirewallContext P2P pool '{pool_name}'")

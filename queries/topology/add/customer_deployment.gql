@@ -17,6 +17,20 @@ query customer_deployment($name: String!) {
             }
           }
         }
+        parent {
+          node {
+            id
+            name { value }
+            ... on TopologyDataCenter {
+              connectivity_mode { value }
+            }
+          }
+        }
+        design {
+          node {
+            dedicated_firewall { value }
+          }
+        }
       }
     }
   }
@@ -39,6 +53,7 @@ query customer_deployment($name: String!) {
             }
           }
         }
+        parent { node { id name { value } } }
         circuits {
           edges {
             node {
@@ -157,6 +172,7 @@ query customer_deployment($name: String!) {
             }
           }
         }
+        parent { node { id name { value } } }
         circuits {
           edges {
             node {

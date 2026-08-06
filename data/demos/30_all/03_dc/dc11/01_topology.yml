@@ -41,7 +41,7 @@ spec:
       routing_strategy: ebgp-ebgp
       underlay_protocol: ipv6
       naming_convention: standard
-      connectivity_mode: inline
+      connectivity_mode: pbr
       fabric_templates:
         - ["2", "super-spine", "N9K-C9336C-FX2_SUPER_SPINE"]
         - ["2", "border-leaf", "N9K-C9336C-FX2_BORDER_LEAF"]

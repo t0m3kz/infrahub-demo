@@ -20,6 +20,8 @@ from transforms.helpers.bgp import (
     get_bgp_profile,
 )
 from transforms.helpers.firewall import (
+    get_customer_pbr_rules,
+    get_firewall_contexts,
     get_firewall_static_routes,
     get_firewall_zones,
     get_vrf_default_gateways,
@@ -227,12 +229,17 @@ class BaseDeviceTransform(InfrahubTransform):
         # SGT rules derived from segment activations (via security_tag.rules_as_source)
         sgt_rules = _get_sgt_rules(activations)
 
+        # Customer PBR: default-redirect to the firewall context serving this
+        # segment's owner; a SecurityPolicyRule permit is the only bypass.
+        customer_pbr_rules = get_customer_pbr_rules(activations, data.get("interfaces"))
+
         return {
             "vlans": vlans,
             "vxlan": get_vxlan_config(data, platform_name, device_role=self.device_role, activations=activations),
             "acls": get_acls(activations=activations),
             "vrf_gateways": vrf_gateways,
             "sgt_rules": sgt_rules,
+            "customer_pbr_rules": customer_pbr_rules,
         }
 
     _ACTIVE_STATUSES = ("active", "provisioning")
@@ -302,7 +309,9 @@ __all__ = [
     "get_acls",
     "get_bgp_profile",
     "get_capabilities",
+    "get_customer_pbr_rules",
     "get_data",
+    "get_firewall_contexts",
     "get_firewall_static_routes",
     "get_ha",
     "get_firewall_zones",

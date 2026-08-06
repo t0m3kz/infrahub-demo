@@ -1,6 +1,12 @@
 from typing import Any
 
-from transforms.common import BaseDeviceTransform, get_firewall_static_routes, get_firewall_zones, get_zone_policies
+from transforms.common import (
+    BaseDeviceTransform,
+    get_firewall_contexts,
+    get_firewall_static_routes,
+    get_firewall_zones,
+    get_zone_policies,
+)
 from transforms.helpers.ha import get_ha
 from utils.data_cleaning import clean_data
 
@@ -141,6 +147,7 @@ class Firewall(BaseDeviceTransform):
                 "zone_policies": get_zone_policies(all_policies_data),
                 "static_routes": get_firewall_static_routes(fw_interfaces, zones),
                 "ha": ha_config,
+                "contexts": get_firewall_contexts(device.get("interfaces")),
             }
         )
 
