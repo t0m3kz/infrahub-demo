@@ -12,4 +12,4 @@ spec:
       virtual_network: "novantis-vpc-prod"
       availability_zone: ["eu-central-1", "eu-central-1b"]
       cidr_block: ["10.150.1.0/24", "default"]
-      customer_deployment: ["C015", "p"]
+      customer_deployment: "C015-NOVANTIS-AWS-P-EU-CENTRAL-1"

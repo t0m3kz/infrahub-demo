@@ -12,4 +12,4 @@ spec:
       virtual_network: "peakora-vnet-prod"
       availability_zone: ["westeurope", "westeurope-1"]
       cidr_block: ["10.40.1.0/24", "default"]
-      customer_deployment: ["C004", "p"]
+      customer_deployment: "C004-PEAKORA-AZURE-P-WESTEUROPE"

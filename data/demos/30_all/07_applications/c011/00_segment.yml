@@ -17,4 +17,4 @@ spec:
             customer_name: "nordix-prod"
             environment: "p"
             vlan_id: 104
-            customer_deployment: ["C011", "p"]
+            customer_deployment: "C011-P-NY"

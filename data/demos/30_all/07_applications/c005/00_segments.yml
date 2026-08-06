@@ -4,9 +4,8 @@
 # Nested under OrganizationCustomer (owner) via the network_segments reverse
 # relationship — owner is set automatically from the parent, no need to
 # repeat it on each segment. customer_deployments references the existing
-# TopologyCustomerDC footprints from 06_customer_boarding/c005/dc/ by
-# human_friendly_id (owner_org_id, environment) — DC10 is "p", DC12 is "d",
-# so the pair is unambiguous even though both belong to C005.
+# TopologyCustomerDC footprints from 06_customer_boarding/c005/dc/ by their
+# computed name (DC10 is "p" -> C005-P-DC10, DC12 is "d" -> C005-D-DC12).
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
@@ -22,7 +21,7 @@ spec:
             stretch_scope: local
             arp_suppression: true
             customer_deployments:
-              - ["C005", "p"]
+              - "C005-P-DC10"
             member_of_groups:
               - vxlan_segments
 
@@ -33,8 +32,8 @@ spec:
             stretch_scope: dc_pair
             arp_suppression: true
             customer_deployments:
-              - ["C005", "p"]
-              - ["C005", "d"]
+              - "C005-P-DC10"
+              - "C005-D-DC12"
             member_of_groups:
               - vxlan_segments
 
@@ -45,7 +44,7 @@ spec:
             stretch_scope: local
             arp_suppression: true
             customer_deployments:
-              - ["C005", "d"]
+              - "C005-D-DC12"
             member_of_groups:
               - vxlan_segments
 
@@ -56,7 +55,7 @@ spec:
             stretch_scope: dc_pair
             arp_suppression: true
             customer_deployments:
-              - ["C005", "p"]
-              - ["C005", "d"]
+              - "C005-P-DC10"
+              - "C005-D-DC12"
             member_of_groups:
               - vxlan_segments
