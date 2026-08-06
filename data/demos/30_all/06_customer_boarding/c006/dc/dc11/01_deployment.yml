@@ -26,10 +26,3 @@ spec:
       design: "S_DC"
       member_of_groups:
         - customer_deployments
-      network_segments:
-        - kind: ManagedVlanSegment
-          data:
-            owner: "C006"
-            customer_name: "nordix-prod"
-            environment: "p"
-            vlan_id: 103

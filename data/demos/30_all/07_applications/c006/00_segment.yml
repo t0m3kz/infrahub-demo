@@ -1,0 +1,13 @@
+---
+# VLAN segment activated in C006's DC footprint (DC11). Loaded before
+# 01_application.yml since components there reference it by human_friendly_id.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: ManagedVlanSegment
+  data:
+    - owner: "C006"
+      customer_name: "nordix-prod"
+      environment: "p"
+      vlan_id: 103
+      customer_deployment: ["C006", "p"]

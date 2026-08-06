@@ -256,3 +256,15 @@ extensions:
           identifier: "segmentdeployment__deployment"
           order_weight: 7950
           description: "Per-DC/Metro VLAN/VNI activations realized on this deployment"
+
+    - kind: OrganizationCustomer
+      relationships:
+        - name: network_segments
+          label: Network Segments
+          peer: ManagedNetworkSegment
+          kind: Generic
+          cardinality: many
+          optional: true
+          identifier: "network_segment__owner"
+          order_weight: 2200
+          description: "VLAN/VXLAN/cloud network segments owned by this customer"

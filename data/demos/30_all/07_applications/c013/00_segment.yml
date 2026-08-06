@@ -1,0 +1,13 @@
+---
+# VLAN segment activated in C013's colocation footprint (AMS). Loaded before
+# 01_application.yml since components there reference it by human_friendly_id.
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: ManagedVlanSegment
+  data:
+    - owner: "C013"
+      customer_name: "nordix-prod"
+      environment: "p"
+      vlan_id: 106
+      customer_deployment: ["C013", "p"]

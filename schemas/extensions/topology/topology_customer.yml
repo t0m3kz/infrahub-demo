@@ -495,6 +495,54 @@ nodes:
         optional: true
         order_weight: 200
 
+  # Customer deployment footprint inside a SaaS provider region — same shape
+  # as CustomerCloud (parent: a region, owner/environment/status from
+  # TopologyCustomer). Inherits TopologyClusterHosting/TopologyConnectableLocation
+  # only for parity with the other TopologyCustomer* kinds (unused: a SaaS
+  # tenant is reached over the internet/API, not a physical or virtual
+  # circuit, so it has no fabric or transport connectivity to model).
+  - name: CustomerSaas
+    namespace: Topology
+    description: "Customer deployment footprint inside a SaaS provider region"
+    label: "Customer (SaaS)"
+    icon: "mdi:account-cloud-outline"
+    inherit_from:
+      - CoreArtifactTarget
+      - TopologyCustomer
+      - TopologyDeployment
+      - TopologyClusterHosting
+      - TopologyConnectableLocation
+    parent: TopologySaasRegion
+    children: ""
+    include_in_menu: false
+    human_friendly_id:
+      - owner__org_id__value
+      - environment__value
+    order_by:
+      - name__value
+    display_label: "{{ name__value }}"
+    uniqueness_constraints:
+      - ["name__value"]
+    attributes:
+      - name: name
+        kind: Text
+        order_weight: 100
+        computed_attribute:
+          kind: Jinja2
+          jinja2_template: "{{ owner__org_id__value|upper }}-{{ customer_name__value|upper }}-{{ environment__value|upper }}-{{ parent__name__value|upper }}"  # yamllint disable-line rule:line-length
+        read_only: true
+        optional: true
+      - name: customer_name
+        kind: Text
+        optional: false
+        order_weight: 100
+      - name: tenant_id
+        kind: Text
+        label: "Tenant / Org ID"
+        description: "Provider-side tenant or organization identifier for this customer"  # yamllint disable-line rule:line-length
+        optional: true
+        order_weight: 200
+
   - name: CustomerTemplateDC
     namespace: Topology
     description: "Boarding blueprint for a data center customer deployment"
