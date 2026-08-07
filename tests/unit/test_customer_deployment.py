@@ -300,14 +300,40 @@ class TestFirewallContextNoFirewallOrCluster:
         gen.client.create.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_firewall_devices_not_yet_paired_is_a_hard_error(self) -> None:
+    async def test_firewall_devices_not_yet_paired_self_heals_via_ensure_ha_pairs(self) -> None:
+        """A customer can board before, or concurrently with, the DC's own
+        firewall HA-pairing — instead of hard-failing, pair the existing
+        firewall devices with the same DeviceMixin helper dc.py uses."""
         gen = _make_generator(CustomerDeploymentDCExchangeGenerator)
-        fw_device = MagicMock(id="fw-1")
-        gen.client.filters = AsyncMock(side_effect=[[fw_device], []])
+        fw1, fw2 = MagicMock(id="fw-1"), MagicMock(id="fw-2")
+        fw1.name.value = "DC10-FW1"
+        fw2.name.value = "DC10-FW2"
+        cluster = MagicMock(id="cluster-1")
+        cluster.name.value = "DC10-FW1-FW2-ha"
+        cluster.capabilities.peers = [MagicMock(id="fw-1"), MagicMock(id="fw-2")]
+        gen.client.filters = AsyncMock(side_effect=[[fw1, fw2], [], [cluster]])
+        gen._ensure_ha_pairs = AsyncMock()
+        gen._get_or_create_firewall_context = AsyncMock(return_value=None)
 
         await gen.generate(_dc_payload_with_parent())
 
-        assert gen.client.filters.await_count == 2
+        gen._ensure_ha_pairs.assert_awaited_once_with(
+            ["DC10-FW1", "DC10-FW2"], ha_kind="ManagedFirewallHA", role_label="firewall"
+        )
+        gen._get_or_create_firewall_context.assert_awaited_once()
+        gen.logger.error.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_firewall_devices_still_unpaired_after_self_heal_is_a_hard_error(self) -> None:
+        gen = _make_generator(CustomerDeploymentDCExchangeGenerator)
+        fw_device = MagicMock(id="fw-1")
+        fw_device.name.value = "DC10-FW1"
+        gen.client.filters = AsyncMock(side_effect=[[fw_device], [], []])
+        gen._ensure_ha_pairs = AsyncMock()
+
+        await gen.generate(_dc_payload_with_parent())
+
+        assert gen.client.filters.await_count == 3
         gen.logger.error.assert_called()
         gen.client.create.assert_not_called()
 
@@ -319,6 +345,7 @@ class TestFirewallContextProvisioning:
         fw_device.name.value = "DC10-FW1"
         cluster = MagicMock(id="cluster-1")
         cluster.name.value = cluster_name
+        cluster.capabilities.peers = [MagicMock(id="fw-1")]
         gen.client.filters = AsyncMock(side_effect=[[fw_device], [cluster]])
         gen._create_context_subinterface = AsyncMock(return_value=MagicMock())
         gen._ensure_context_subinterface = AsyncMock()
@@ -556,16 +583,9 @@ class TestAllocateContextP2p:
 
 
 class TestGetOrCreateFirewallContext:
-    @pytest.mark.asyncio
-    async def test_reuses_existing_context(self) -> None:
-        gen = _make_generator(CustomerDeploymentDCExchangeGenerator)
-        existing = MagicMock(id="ctx-1")
-        gen.client.filters = AsyncMock(return_value=[existing])
-
-        result = await gen._get_or_create_firewall_context("dc10-shared", "cluster-1", None)
-
-        assert result is existing
-        gen.client.create.assert_not_called()
+    """Always create+upsert, never pre-check-and-skip — ManagedFirewallContext's
+    uniqueness_constraints on name__value makes allow_upsert=True match the
+    existing node by name, same convention as dc.py/pools.py's pool creation."""
 
     @pytest.mark.asyncio
     async def test_creates_shared_context_without_tenant(self) -> None:
