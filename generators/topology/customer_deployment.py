@@ -48,6 +48,7 @@ from utils.data_cleaning import clean_data
 from ..common import CommonGenerator
 from ..protocols import (
     DcimPhysicalDevice,
+    DcimPhysicalInterface,
     DcimVirtualInterface,
     IpamNamespace,
     IpamPrefix,
@@ -325,16 +326,9 @@ class _CustomerDeploymentExchangeBase(CommonGenerator):
         context_name = context_obj.name.value
         try:
             trunk_ifaces = await self.client.filters(
-                kind=DcimPhysicalDevice, ids=[device.id], include=["interfaces"], prefetch_relationships=True
+                kind=DcimPhysicalInterface, device__ids=[device.id], role__value=trunk_role
             )
-            trunk_iface = None
-            if trunk_ifaces:
-                interfaces_rel = getattr(trunk_ifaces[0], "interfaces")
-                await interfaces_rel.fetch()
-                for iface in interfaces_rel.peers:
-                    if getattr(iface.role, "value", None) == trunk_role:
-                        trunk_iface = iface
-                        break
+            trunk_iface = trunk_ifaces[0] if trunk_ifaces else None
         except Exception as exc:
             self.logger.error(f"Error resolving {trunk_role} interface on {device.name.value}: {exc}")
             return None
