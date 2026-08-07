@@ -500,6 +500,61 @@ class TestCreateContextSubinterface:
         gen.client.create.assert_not_called()
 
 
+class TestAllocateContextP2p:
+    """No prefix_length is passed to allocate_next_ip_prefix() — the pool's own
+    default_prefix_length (set per-DC's underlay_protocol in dc.py's
+    _ensure_firewall_context_pools) decides /127 (IPv6) vs /31 (IPv4).
+    ip_ids are derived from network.prefixlen, not a hardcoded /30."""
+
+    @pytest.mark.asyncio
+    async def test_ipv6_p2p_link_uses_127_suffix(self) -> None:
+        gen = _make_generator(CustomerDeploymentDCExchangeGenerator)
+        pool = MagicMock(id="pool-1")
+        gen.client.get = AsyncMock(return_value=pool)
+        allocated = MagicMock()
+        allocated.prefix.value = "fd00:2300::/127"
+        allocated.ip_namespace = {"id": "ns-default"}
+        gen.client.allocate_next_ip_prefix = AsyncMock(return_value=allocated)
+        created_ips = [AsyncMock(id="fw-ip"), AsyncMock(id="bl-ip")]
+        gen.client.create = AsyncMock(side_effect=created_ips)
+
+        result = await gen._allocate_context_p2p("shared-ctx", "DC10")
+
+        assert result == ("fw-ip", "bl-ip")
+        alloc_kwargs = gen.client.allocate_next_ip_prefix.call_args.kwargs
+        assert "prefix_length" not in alloc_kwargs
+        addresses = [c.kwargs["data"]["address"] for c in gen.client.create.call_args_list]
+        assert addresses == ["fd00:2300::/127", "fd00:2300::1/127"]
+
+    @pytest.mark.asyncio
+    async def test_ipv4_p2p_link_uses_31_suffix(self) -> None:
+        gen = _make_generator(CustomerDeploymentDCExchangeGenerator)
+        pool = MagicMock(id="pool-1")
+        gen.client.get = AsyncMock(return_value=pool)
+        allocated = MagicMock()
+        allocated.prefix.value = "100.65.0.0/31"
+        allocated.ip_namespace = {"id": "ns-default"}
+        gen.client.allocate_next_ip_prefix = AsyncMock(return_value=allocated)
+        created_ips = [AsyncMock(id="fw-ip"), AsyncMock(id="bl-ip")]
+        gen.client.create = AsyncMock(side_effect=created_ips)
+
+        result = await gen._allocate_context_p2p("shared-ctx", "DC10")
+
+        assert result == ("fw-ip", "bl-ip")
+        addresses = [c.kwargs["data"]["address"] for c in gen.client.create.call_args_list]
+        assert addresses == ["100.65.0.0/31", "100.65.0.1/31"]
+
+    @pytest.mark.asyncio
+    async def test_pool_not_found_returns_none(self) -> None:
+        gen = _make_generator(CustomerDeploymentDCExchangeGenerator)
+        gen.client.get = AsyncMock(side_effect=Exception("not found"))
+
+        result = await gen._allocate_context_p2p("shared-ctx", "DC10")
+
+        assert result is None
+        gen.logger.error.assert_called_once()
+
+
 class TestGetOrCreateFirewallContext:
     @pytest.mark.asyncio
     async def test_reuses_existing_context(self) -> None:

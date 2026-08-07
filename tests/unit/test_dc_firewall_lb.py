@@ -566,6 +566,7 @@ class TestGenerateDcScopedFabricDevices:
         gen._create_border_leaf_devices = AsyncMock(return_value=["bl-01"])
         gen._create_role_devices = AsyncMock(side_effect=[["fw-01"], ["lb-01"]])
         gen._cable_border_services = AsyncMock()
+        gen._ensure_firewall_context_pools = AsyncMock()
         gen.data["fabric_templates"] = [
             _entry("firewall", 1, _FW_TEMPLATE),
             _entry("load-balancer", 1, _LB_TEMPLATE),
@@ -575,6 +576,7 @@ class TestGenerateDcScopedFabricDevices:
 
         gen._create_border_leaf_devices.assert_awaited_once()
         assert gen._create_role_devices.await_count == 2
+        gen._ensure_firewall_context_pools.assert_awaited_once_with(dc_name="dc1")
         gen._cable_border_services.assert_awaited_once_with(
             border_role_for={"firewall": "firewall", "load-balancer": "load-balancer"},
             connectivity_mode=gen.data["connectivity_mode"],
@@ -582,3 +584,77 @@ class TestGenerateDcScopedFabricDevices:
             firewall_names=["fw-01"],
             load_balancer_names=["lb-01"],
         )
+
+
+class TestEnsureFirewallContextPools:
+    """The P2P pool is a per-DC SLICE from a GLOBAL bootstrap pool
+    (FW-Context-P2P-IPv6/IPv4), not a runtime-created top-level supernet —
+    see _ensure_firewall_context_pools's docstring for why the old approach
+    broke across branches."""
+
+    def _make_gen(self, *, underlay_protocol: str = "ipv6") -> Any:
+        gen = _make_generator()
+        gen.data["underlay_protocol"] = underlay_protocol
+        gen.upsert_number_pool = AsyncMock()
+        gen._get_parent_pool_with_retry = AsyncMock(return_value=MagicMock(id="parent-pool-id"))
+        gen.client.allocate_next_ip_prefix = AsyncMock(return_value=MagicMock(id="dc-slice-id"))
+        return gen
+
+    @pytest.mark.asyncio
+    async def test_ipv6_underlay_slices_from_ipv6_parent_pool(self) -> None:
+        gen = self._make_gen(underlay_protocol="ipv6")
+
+        await gen._ensure_firewall_context_pools(dc_name="dc1")
+
+        gen._get_parent_pool_with_retry.assert_awaited_once_with("FW-Context-P2P-IPv6")
+        alloc_kwargs = gen.client.allocate_next_ip_prefix.call_args.kwargs
+        assert alloc_kwargs["prefix_length"] == 56
+        create_kwargs = gen.client.create.call_args.kwargs
+        assert create_kwargs["data"]["default_prefix_length"] == 127
+
+    @pytest.mark.asyncio
+    async def test_ipv4_underlay_slices_from_ipv4_parent_pool(self) -> None:
+        gen = self._make_gen(underlay_protocol="ipv4")
+
+        await gen._ensure_firewall_context_pools(dc_name="dc1")
+
+        gen._get_parent_pool_with_retry.assert_awaited_once_with("FW-Context-P2P-IPv4")
+        alloc_kwargs = gen.client.allocate_next_ip_prefix.call_args.kwargs
+        assert alloc_kwargs["prefix_length"] == 24
+        create_kwargs = gen.client.create.call_args.kwargs
+        assert create_kwargs["data"]["default_prefix_length"] == 31
+
+    @pytest.mark.asyncio
+    async def test_dual_stack_underlay_prefers_ipv6_for_p2p(self) -> None:
+        gen = self._make_gen(underlay_protocol="dual_stack")
+
+        await gen._ensure_firewall_context_pools(dc_name="dc1")
+
+        gen._get_parent_pool_with_retry.assert_awaited_once_with("FW-Context-P2P-IPv6")
+
+    @pytest.mark.asyncio
+    async def test_existing_p2p_pool_skips_allocation(self) -> None:
+        gen = self._make_gen()
+        gen.client.filters = AsyncMock(return_value=[MagicMock(id="existing-pool")])
+
+        await gen._ensure_firewall_context_pools(dc_name="dc1")
+
+        gen._get_parent_pool_with_retry.assert_not_called()
+        gen.client.allocate_next_ip_prefix.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_slice_allocated_from_global_pool_not_a_fresh_supernet(self) -> None:
+        """Regression: the old implementation created a fresh top-level
+        IpamPrefix supernet at runtime (self.client.create(kind="IpamPrefix",
+        ...)) — only visible on the branch it ran on. Confirm the new
+        implementation never does that; it only slices from the pool
+        returned by _get_parent_pool_with_retry."""
+        gen = self._make_gen()
+
+        await gen._ensure_firewall_context_pools(dc_name="dc1")
+
+        create_calls = gen.client.create.call_args_list
+        ip_prefix_creates = [c for c in create_calls if c.kwargs.get("kind") == "IpamPrefix"]
+        assert ip_prefix_creates == []
+        alloc_kwargs = gen.client.allocate_next_ip_prefix.call_args.kwargs
+        assert alloc_kwargs["resource_pool"].id == "parent-pool-id"

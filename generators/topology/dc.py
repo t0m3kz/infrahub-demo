@@ -10,7 +10,7 @@ from ..dc_config import host_bits_to_prefix_length, resolve_dc_size_layout
 from ..devices import DeviceMixin
 from ..helpers import name_to_asn_range
 from ..helpers.pairing import pair_device_names
-from ..helpers.routing import RoutingStrategy
+from ..helpers.routing import RoutingStrategy, p2p_is_ipv6
 from ..helpers.template_interfaces import template_interface_names_by_role
 from ..pod_config import POD_LAYOUTS
 from ..pools import PoolMixin
@@ -734,7 +734,18 @@ class DCTopologyGenerator(PoolMixin, DeviceMixin, CablingMixin, RoutingMixin, Co
 
         Per-DC (not global) so each fabric's context sub-interfaces and
         transit links stay within its own numbering, matching the existing
-        {fabric_name}-vlan-pool/{fabric_name}-vni-pool pattern above.
+        {fabric_name}-vlan-pool/{fabric_name}-vni-pool pattern above. The
+        P2P pool itself is a per-DC SLICE allocated from a GLOBAL bootstrap
+        pool (FW-Context-P2P-IPv6/IPv4, data/bootstrap/20_dci_pools.yml) —
+        same idiom as PoolMixin.allocate_resource_pools()'s technical/
+        loopback pools — not a fresh top-level supernet invented at runtime,
+        which was a real bug: a runtime-created IpamPrefix only exists on
+        the branch it was created on, so re-running this generator on a
+        DIFFERENT branch (e.g. a fresh scratch branch off main) found the
+        pool object by name (globally visible) but its resource prefix
+        didn't resolve there, and every P2P allocation failed with
+        "No more resources available".
+
         generators/topology/customer_deployment.py's _ensure_firewall_context
         allocates from these once a customer boards onto this DC.
         """
@@ -753,34 +764,29 @@ class DCTopologyGenerator(PoolMixin, DeviceMixin, CablingMixin, RoutingMixin, Co
             self.logger.info(f"FirewallContext P2P pool '{pool_name}' already exists")
             return
 
-        # Second octet stays within 65-127 (100.64.0.0/10 is the RFC 6598 shared
-        # address space; .64 is reserved for the global DCI pool, see
-        # data/bootstrap/20_dci_pools.yml) — one /16 per DC index, wrapping
-        # after 63 DCs rather than spilling outside the RFC 6598 block.
-        supernet = await self.client.create(
-            kind="IpamPrefix",
-            data={
-                "prefix": f"100.{65 + (self.data['index'] % 63)}.0.0/16",
-                "description": f"FirewallContext P2P links for {dc_name.upper()} (RFC 6598 shared address space)",
-                "status": "active",
-                "member_type": "prefix",
-                "is_pool": True,
-                "role": "technical",
-                "ip_namespace": {"hfid": ["default"]},
-            },
+        underlay_protocol = self.data.get("underlay_protocol", "ipv6")
+        use_ipv6 = p2p_is_ipv6(underlay_protocol)
+        parent_pool_name = "FW-Context-P2P-IPv6" if use_ipv6 else "FW-Context-P2P-IPv4"
+        slice_prefix_length = 56 if use_ipv6 else 24
+        parent_pool = await self._get_parent_pool_with_retry(parent_pool_name)
+
+        dc_slice = await self.client.allocate_next_ip_prefix(
+            resource_pool=parent_pool,
+            identifier=pool_name,
+            prefix_length=slice_prefix_length,
+            data={"role": "technical", "identifier": pool_name},
         )
-        await supernet.save(allow_upsert=True)
 
         pool = await self.client.create(
             kind=CoreIPPrefixPool,
             data={
                 "name": pool_name,
-                "description": f"P2P /30 pool for border-leaf <-> FirewallContext links on {dc_name.upper()}",
+                "description": f"P2P pool for border-leaf <-> FirewallContext links on {dc_name.upper()}",
                 "default_prefix_type": "IpamPrefix",
-                "default_prefix_length": 30,
+                "default_prefix_length": 127 if use_ipv6 else 31,
                 "ip_namespace": {"hfid": ["default"]},
-                "resources": [supernet.id],
+                "resources": [dc_slice.id],
             },
         )
         await pool.save(allow_upsert=True)
-        self.logger.info(f"Created FirewallContext P2P pool '{pool_name}'")
+        self.logger.info(f"Created FirewallContext P2P pool '{pool_name}' from '{parent_pool_name}'")
