@@ -50,6 +50,7 @@ from ..protocols import (
     DcimPhysicalDevice,
     DcimPhysicalInterface,
     DcimVirtualInterface,
+    IpamIPAddress,
     IpamNamespace,
     IpamPrefix,
     ManagedFirewallContext,
@@ -278,19 +279,19 @@ class _CustomerDeploymentExchangeBase(CommonGenerator):
                 return
             context_obj = await self.client.get(kind=ManagedFirewallContext, id=context_obj.id)
 
-        fw_ip: str | None = None
-        bl_ip: str | None = None
+        fw_ip_id: str | None = None
+        bl_ip_id: str | None = None
         if connectivity_mode == "pbr":
             ip_pair = await self._allocate_context_p2p(context_name, parent_name)
             if ip_pair is not None:
-                fw_ip, bl_ip = ip_pair
+                fw_ip_id, bl_ip_id = ip_pair
 
         fw_sub_iface = await self._create_context_subinterface(
             device=fw_devices[0],
             trunk_role="uplink",
             vlan_id_value=context_obj.vlan_id.value,
             context_obj=context_obj,
-            ip_address=fw_ip,
+            ip_address_id=fw_ip_id,
         )
         if fw_sub_iface is None or connectivity_mode != "pbr":
             return
@@ -311,7 +312,7 @@ class _CustomerDeploymentExchangeBase(CommonGenerator):
             trunk_role="firewall",
             vlan_id_value=context_obj.vlan_id.value,
             context_obj=context_obj,
-            ip_address=bl_ip,
+            ip_address_id=bl_ip_id,
         )
 
     async def _create_context_subinterface(
@@ -321,7 +322,7 @@ class _CustomerDeploymentExchangeBase(CommonGenerator):
         trunk_role: str,
         vlan_id_value: int | None,
         context_obj: Any,
-        ip_address: str | None,
+        ip_address_id: str | None,
     ) -> Any | None:
         context_name = context_obj.name.value
         try:
@@ -346,7 +347,7 @@ class _CustomerDeploymentExchangeBase(CommonGenerator):
             "parent_interface": {"id": trunk_iface.id},
             "status": "active",
             "role": "service",
-            **({"ip_address": {"address": ip_address}} if ip_address else {}),
+            **({"ip_address": {"id": ip_address_id}} if ip_address_id else {}),
         }
 
         try:
@@ -365,7 +366,9 @@ class _CustomerDeploymentExchangeBase(CommonGenerator):
 
     async def _allocate_context_p2p(self, context_name: str, parent_name: str) -> tuple[str, str] | None:
         """Allocate a /30 from this DC/Colo's FW-context P2P pool; returns
-        (firewall_side_ip_with_prefixlen, borderleaf_side_ip_with_prefixlen)."""
+        (firewall_side_ip_id, borderleaf_side_ip_id) — IpamIPAddress node ids,
+        since DcimVirtualInterface.ip_address needs a related-node reference,
+        not an inline-create address string."""
         pool_name = f"{parent_name.lower()}-fw-context-p2p-pool"
         try:
             pool = await self.client.get(kind=CoreIPPrefixPool, name__value=pool_name)
@@ -391,7 +394,17 @@ class _CustomerDeploymentExchangeBase(CommonGenerator):
 
         network = ipaddress.ip_network(allocated_prefix.prefix.value, strict=False)
         addrs = list(network)
-        return f"{addrs[0]}/30", f"{addrs[1]}/30"
+        ip_namespace = allocated_prefix.ip_namespace
+
+        ip_ids: list[str] = []
+        for addr in addrs[:2]:
+            ip_obj = await self.client.create(
+                kind=IpamIPAddress,
+                data={"address": f"{addr}/30", "ip_namespace": ip_namespace},
+            )
+            await ip_obj.save(allow_upsert=True)
+            ip_ids.append(ip_obj.id)
+        return ip_ids[0], ip_ids[1]
 
     # ------------------------------------------------------------------
     # Colocation/Cloud/Office: only provision an exchange when the
