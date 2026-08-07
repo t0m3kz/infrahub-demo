@@ -531,3 +531,112 @@ class TestFirewallTransformSmoke:
         result = await fw.transform(data)
         assert isinstance(result, str)
         assert len(result) > 0
+
+
+# ===========================================================================
+# Class 5 — Address-family-aware rendering (IPv6 P2P links, IPv4 fw_interfaces)
+# ===========================================================================
+#
+# FW-context P2P links default to IPv6 (/127, generators/topology/dc.py's
+# _ensure_firewall_context_pools) — templates must branch on address family
+# rather than hardcoding an IPv4-only command (e.g. PAN-OS "ipv4 addr" for
+# an actual IPv6 address is simply wrong syntax). Renders templates directly
+# (not through Firewall.transform()) since only the address-family branching
+# is under test here, not the full data-shaping pipeline.
+
+
+def _render_template(platform: str, **context: Any) -> str:
+    fw = _make_fw()
+    template = fw._load_template(platform)
+    return template.render(**context)
+
+
+class TestAddressFamilyAwareRendering:
+    _FW_IFACE_V6 = {
+        "name": "eth0",
+        "vlan_id": None,
+        "parent_interface": None,
+        "ip_address": {"address": "fd00:2300::1/127"},
+        "description": None,
+        "security_zone": None,
+    }
+    _FW_IFACE_V4 = {
+        "name": "eth1",
+        "vlan_id": None,
+        "parent_interface": None,
+        "ip_address": {"address": "10.0.0.1/30"},
+        "description": None,
+        "security_zone": None,
+    }
+    _CONTEXT_V6 = {
+        "name": "ctx-shared",
+        "tenant_name": None,
+        "vlan_id": 3000,
+        "parent_interface": {"name": "eth1"},
+        "ip_address": "fd00:2300::/127",
+        "context_id": None,
+    }
+    _CONTEXT_V4 = {
+        "name": "ctx-shared",
+        "tenant_name": None,
+        "vlan_id": 3000,
+        "parent_interface": {"name": "eth1"},
+        "ip_address": "100.65.0.0/31",
+        "context_id": None,
+    }
+
+    @pytest.mark.parametrize(
+        "platform,v6_marker,v4_marker",
+        [
+            ("checkpoint_gaia", "ipv6-address", "ipv4-address"),
+            ("paloalto_panos", "ipv6 addr", "ipv4 addr"),
+            ("fortinet_fortios", "set ip6-address", "set ip "),
+            ("cisco_asa", "ipv6 address", "ip address"),
+        ],
+    )
+    def test_fw_interface_v6_uses_v6_command(self, platform: str, v6_marker: str, v4_marker: str) -> None:
+        out = _render_template(platform, name="fw1", fw_interfaces=[self._FW_IFACE_V6])
+        assert v6_marker in out
+        assert v4_marker not in out
+
+    @pytest.mark.parametrize(
+        "platform,v6_marker,v4_marker",
+        [
+            ("checkpoint_gaia", "ipv6-address", "ipv4-address"),
+            ("paloalto_panos", "ipv6 addr", "ipv4 addr"),
+            ("fortinet_fortios", "set ip6-address", "set ip "),
+            ("cisco_asa", "ipv6 address", "ip address"),
+        ],
+    )
+    def test_fw_interface_v4_uses_v4_command(self, platform: str, v6_marker: str, v4_marker: str) -> None:
+        out = _render_template(platform, name="fw1", fw_interfaces=[self._FW_IFACE_V4])
+        assert v4_marker in out
+        assert v6_marker not in out
+
+    @pytest.mark.parametrize(
+        "platform,v6_marker,v4_marker",
+        [
+            ("checkpoint_gaia", "ipv6-address", "ipv4-address"),
+            ("paloalto_panos", "ipv6 addr", "ipv4 addr"),
+            ("fortinet_fortios", "set ip6-address", "set ip "),
+            ("cisco_asa", "ipv6 address", "ip address"),
+        ],
+    )
+    def test_context_v6_uses_v6_command(self, platform: str, v6_marker: str, v4_marker: str) -> None:
+        out = _render_template(platform, name="fw1", contexts=[self._CONTEXT_V6])
+        assert v6_marker in out
+        assert v4_marker not in out
+
+    @pytest.mark.parametrize(
+        "platform,v6_marker,v4_marker",
+        [
+            ("checkpoint_gaia", "ipv6-address", "ipv4-address"),
+            ("paloalto_panos", "ipv6 addr", "ipv4 addr"),
+            ("fortinet_fortios", "set ip6-address", "set ip "),
+            ("cisco_asa", "ipv6 address", "ip address"),
+        ],
+    )
+    def test_context_v4_uses_v4_command(self, platform: str, v6_marker: str, v4_marker: str) -> None:
+        out = _render_template(platform, name="fw1", contexts=[self._CONTEXT_V4])
+        assert v4_marker in out
+        assert v6_marker not in out

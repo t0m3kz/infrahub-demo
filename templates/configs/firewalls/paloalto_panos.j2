@@ -9,7 +9,7 @@ set deviceconfig system hostname {{ name }}
 {%- set iface_ref = iface.parent_interface.name + '.' + iface.vlan_id | string %}
 set network interface ethernet {{ iface.parent_interface.name }} layer3 units {{ iface_ref }} tag {{ iface.vlan_id }}
 {%- if iface.ip_address %}
-set network interface ethernet {{ iface.parent_interface.name }} layer3 units {{ iface_ref }} ipv4 addr {{ iface.ip_address.address }}
+set network interface ethernet {{ iface.parent_interface.name }} layer3 units {{ iface_ref }} {{ 'ipv6' if ':' in iface.ip_address.address else 'ipv4' }} addr {{ iface.ip_address.address }}
 {%- endif %}
 {%- if iface.description %}
 set network interface ethernet {{ iface_ref }} comment "{{ iface.description }}"
@@ -18,7 +18,7 @@ set network interface ethernet {{ iface_ref }} comment "{{ iface.description }}"
 set zone {{ iface.security_zone.name }} network layer3 {{ iface_ref }}
 {%- endif %}
 {%- else %}
-set network interface ethernet {{ iface.name }} layer3 ipv4 addr {{ iface.ip_address.address if iface.ip_address else '' }}
+set network interface ethernet {{ iface.name }} layer3 {{ 'ipv6' if iface.ip_address and ':' in iface.ip_address.address else 'ipv4' }} addr {{ iface.ip_address.address if iface.ip_address else '' }}
 {%- if iface.description %}
 set network interface ethernet {{ iface.name }} comment "{{ iface.description }}"
 {%- endif %}
@@ -99,7 +99,7 @@ set vsys {{ context.name }} display-name "{{ context.tenant_name }}"
 {%- set ctx_iface_ref = context.parent_interface.name + '.' + context.vlan_id | string %}
 set network interface ethernet {{ context.parent_interface.name }} layer3 units {{ ctx_iface_ref }} tag {{ context.vlan_id }}
 {%- if context.ip_address %}
-set network interface ethernet {{ context.parent_interface.name }} layer3 units {{ ctx_iface_ref }} ipv4 addr {{ context.ip_address }}
+set network interface ethernet {{ context.parent_interface.name }} layer3 units {{ ctx_iface_ref }} {{ 'ipv6' if ':' in context.ip_address else 'ipv4' }} addr {{ context.ip_address }}
 {%- endif %}
 set vsys {{ context.name }} import network interface {{ ctx_iface_ref }}
 {%- endif %}
