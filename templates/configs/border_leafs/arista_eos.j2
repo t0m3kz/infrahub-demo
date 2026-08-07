@@ -34,6 +34,9 @@ interface {{ interface.name }}
 {%- else %}
    description {{ interface.role|title }} interface
 {%- endif %}
+{%- if interface.dot1q_vlan %}
+   encapsulation dot1q vlan {{ interface.dot1q_vlan }}
+{%- endif %}
 {%- include 'common/arista_eos_interface_ip.j2' %}
 {%- if interface.vlans %}
 {%- if interface.vlans|length == 1 %}
@@ -63,6 +66,69 @@ interface {{ interface.name }}
 ! Configure route-maps
 route-map RM-CONN-2-BGP permit 10
    match interface {{ _lb.name }}
+
+{%- if vxlan and vxlan.enabled %}
+!
+! VXLAN Configuration — border-leaf is a VTEP too, terminating customer/shared
+! VNIs the same as a regular leaf.
+!
+interface {{ vxlan.interface }}
+{%- if vxlan.vtep.ipv4 %}
+   vxlan source-interface {{ vxlan.vtep.source_interface }}
+{%- endif %}
+{%- if vxlan.vtep.udp_port != 4789 %}
+   vxlan udp-port {{ vxlan.vtep.udp_port }}
+{%- endif %}
+{%- if vxlan.l2_vni_mappings %}
+   !
+   ! L2 VNI Mappings (VLAN segments)
+{%- for mapping in vxlan.l2_vni_mappings %}
+   vxlan vlan {{ mapping.vlan_id }} vni {{ mapping.vni }}
+{%- endfor %}
+{%- endif %}
+{%- if vxlan.l3_vni_mappings %}
+   !
+   ! L3 VNI Mappings (VRF segments for microsegmentation)
+{%- for mapping in vxlan.l3_vni_mappings %}
+   vxlan vrf {{ mapping.vrf_name }} vni {{ mapping.l3_vni }}
+{%- endfor %}
+{%- endif %}
+{%- if vxlan.flooding == "static" and vxlan.remote_vteps and vxlan.l2_vni_mappings %}
+{%- for mapping in vxlan.l2_vni_mappings %}
+   vxlan vlan {{ mapping.vlan_id }} flood vtep {{ vxlan.remote_vteps | join(' ') }}
+{%- endfor %}
+{%- endif %}
+!
+{%- if vxlan.evpn and vxlan.evpn.enabled and bgp %}
+!
+! EVPN Configuration (L2 + L3 VNI)
+!
+{%- for bgp_config in bgp %}
+router bgp {{ bgp_config.local_as.asn }}
+{%- if vxlan.l2_vni_mappings %}
+   !
+   ! L2 EVPN (VLAN-based)
+{%- for mapping in vxlan.l2_vni_mappings %}
+   vlan {{ mapping.vlan_id }}
+      rd {{ vxlan.evpn.rd_format | replace('{vni}', mapping.vni | string) }}
+      route-target both {{ vxlan.evpn.rt_format | replace('{vni}', mapping.vni | string) }}
+      redistribute learned
+{%- endfor %}
+{%- endif %}
+{%- if vxlan.l3_vni_mappings %}
+   !
+   ! L3 EVPN (VRF-based for microsegmentation)
+{%- for mapping in vxlan.l3_vni_mappings %}
+   vrf {{ mapping.vrf_name }}
+      rd {{ vxlan.evpn.rd_format | replace('{vni}', mapping.l3_vni | string) }}
+      route-target import evpn {{ vxlan.evpn.rt_format | replace('{vni}', mapping.l3_vni | string) }}
+      route-target export evpn {{ vxlan.evpn.rt_format | replace('{vni}', mapping.l3_vni | string) }}
+      redistribute connected
+{%- endfor %}
+{%- endif %}
+{% endfor %}
+{%- endif %}
+{%- endif %}
 
 {%- if vxlan.anycast_gateway and vxlan.anycast_gateway.enabled %}
 !

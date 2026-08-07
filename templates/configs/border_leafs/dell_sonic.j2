@@ -55,6 +55,53 @@ interface {{ interface.name }}
 {% include 'common/dell_sonic_bgp.j2' %}
 {%- endif %}
 
+{%- if vxlan and vxlan.enabled %}
+!
+! VXLAN Configuration — border-leaf is a VTEP too, terminating customer/shared
+! VNIs the same as a regular leaf.
+!
+interface {{ vxlan.interface }}
+{%- if vxlan.vtep.ipv4 %}
+  source {{ vxlan.vtep.source_interface }}
+{%- endif %}
+{%- if vxlan.l2_vni_mappings %}
+  !
+  ! L2 VNI Mappings (VLAN segments)
+{%- for mapping in vxlan.l2_vni_mappings %}
+  map vni {{ mapping.vni }} vlan {{ mapping.vlan_id }}
+{%- endfor %}
+{%- endif %}
+{%- if vxlan.l3_vni_mappings %}
+  !
+  ! L3 VNI Mappings (VRF segments for microsegmentation)
+{%- for mapping in vxlan.l3_vni_mappings %}
+  map vni {{ mapping.l3_vni }} vrf {{ mapping.vrf_name }}
+{%- endfor %}
+{%- endif %}
+  no shutdown
+!
+{%- if vxlan.evpn and vxlan.evpn.enabled %}
+!
+! EVPN Configuration (FRR)
+!
+router bgp {{ bgp[0].local_as.asn }}
+  address-family l2vpn evpn
+    advertise-all-vni
+{%- if vxlan.l2_vni_mappings %}
+    !
+    ! L2 VNI EVPN Configuration
+{%- for mapping in vxlan.l2_vni_mappings %}
+    vni {{ mapping.vni }}
+      rd {{ vxlan.evpn.rd_format | replace('{vni}', mapping.vni | string) }}
+      route-target import {{ bgp[0].local_as.asn }}:{{ mapping.vni }}
+      route-target export {{ bgp[0].local_as.asn }}:{{ mapping.vni }}
+{%- endfor %}
+{%- endif %}
+  exit-address-family
+!
+{%- endif %}
+{%- endif %}
+
 ! Configure route-maps
 route-map RM-CONN-2-BGP permit 10
   match interface Loopback0

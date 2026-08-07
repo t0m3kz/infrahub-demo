@@ -983,3 +983,86 @@ class TestGetInterfacesOspfAuthentication:
         result = get_interfaces([iface])
         assert result[0]["ospf"]["authentication_mode"] is None
         assert result[0]["ospf"]["password"] is None
+
+
+class TestBorderLeafTemplateFirewallContextDot1q:
+    """FirewallContext sub-interface (role='service') must render its own
+    802.1Q encapsulation on border-leaf — the IP address alone isn't enough
+    to scope it to the right VLAN on real hardware."""
+
+    def _ctx_with_context_subinterface(self) -> dict:
+        return _minimal_ctx(
+            interfaces=[
+                {
+                    "name": "Ethernet1/49.150",
+                    "role": "service",
+                    "status": "active",
+                    "description": None,
+                    "ip_addresses": [{"address": "10.99.99.1/31", "ip_namespace": {"name": "default"}}],
+                    "dot1q_vlan": 150,
+                    "vlans": [],
+                }
+            ],
+        )
+
+    def test_cisco_nxos_renders_encapsulation_dot1q(self) -> None:
+        env = jinja2.Environment(
+            loader=jinja2.FileSystemLoader(str(_TEMPLATES_CONFIGS_DIR)),
+            undefined=jinja2.Undefined,
+        )
+        ctx = self._ctx_with_context_subinterface()
+        ctx["name"] = "test-border-leaf"
+        ctx["ospf"] = []
+        ctx["bgp"] = []
+        rendered = env.get_template("border_leafs/cisco_nxos.j2").render(**ctx)
+        assert "interface Ethernet1/49.150" in rendered
+        assert "encapsulation dot1q 150" in rendered
+
+    def test_arista_eos_renders_encapsulation_dot1q(self, arista_env: jinja2.Environment) -> None:
+        ctx = self._ctx_with_context_subinterface()
+        rendered = arista_env.get_template("border_leafs/arista_eos.j2").render(**ctx)
+        assert "interface Ethernet1/49.150" in rendered
+        assert "encapsulation dot1q vlan 150" in rendered
+
+    def test_no_dot1q_vlan_omits_encapsulation_line(self, arista_env: jinja2.Environment) -> None:
+        ctx = _minimal_ctx(
+            interfaces=[
+                {
+                    "name": "Ethernet1",
+                    "role": "uplink",
+                    "status": "active",
+                    "description": None,
+                    "ip_addresses": [],
+                    "dot1q_vlan": None,
+                    "vlans": [],
+                }
+            ],
+        )
+        rendered = arista_env.get_template("border_leafs/arista_eos.j2").render(**ctx)
+        assert "encapsulation" not in rendered
+
+
+class TestGetInterfacesFirewallContextDot1q:
+    """get_interfaces() must expose the FirewallContext sub-interface's own
+    vlan_id as a scalar `dot1q_vlan` (border-leaf/firewall PBR leg) — distinct
+    from `vlans` (customer segment trunk/access VLANs), since a context
+    sub-interface's VLAN comes from the FW-context VLAN pool, not any
+    customer segment."""
+
+    def test_firewall_context_capability_sets_dot1q_vlan(self):
+        iface = {
+            "name": "Ethernet1/49.150",
+            "parent_interface": {"name": "Ethernet1/49"},
+            "interface_capabilities": [
+                {"typename": "ManagedFirewallContext", "name": "dc10-shared", "vlan_id": 150},
+            ],
+        }
+        result = get_interfaces([iface])
+        assert result[0]["dot1q_vlan"] == 150
+        assert result[0]["parent_interface"] == {"name": "Ethernet1/49"}
+
+    def test_no_firewall_context_capability_leaves_dot1q_vlan_none(self):
+        iface = {"name": "Ethernet1", "interface_capabilities": []}
+        result = get_interfaces([iface])
+        assert result[0]["dot1q_vlan"] is None
+        assert result[0]["parent_interface"] is None

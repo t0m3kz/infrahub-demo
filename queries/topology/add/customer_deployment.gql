@@ -23,6 +23,7 @@ query customer_deployment($name: String!) {
             name { value }
             ... on TopologyDataCenter {
               connectivity_mode { value }
+              size { value }
             }
           }
         }
