@@ -151,9 +151,9 @@ class _CustomerDeploymentExchangeBase(CommonGenerator):
         parent_id: str = parent.get("id", "")
         parent_name: str = parent.get("name", parent_id)
         if not parent_id:
-            self.logger.warning(
+            self.logger.error(
                 f"Deployment {customer.get('name', customer_id)}: no parent DC/ColocationMetro — "
-                "skipping FirewallContext provisioning"
+                "cannot provision FirewallContext"
             )
             return
 
@@ -174,7 +174,7 @@ class _CustomerDeploymentExchangeBase(CommonGenerator):
             self.logger.error(f"Error looking up ManagedFirewallHA cluster on {parent_name}: {exc}")
             return
         if not clusters:
-            self.logger.warning(f"{parent_name}: firewall device(s) not yet paired into a ManagedFirewallHA cluster")
+            self.logger.error(f"{parent_name}: firewall device(s) not yet paired into a ManagedFirewallHA cluster")
             return
         cluster = clusters[0]
 
@@ -295,7 +295,8 @@ class _CustomerDeploymentExchangeBase(CommonGenerator):
                 self.logger.error(f"Error looking up border-leaf devices on {parent_name}: {exc}")
                 return
             if not border_leaves:
-                self.logger.warning(f"{parent_name}: no border-leaf device found for context '{context_name}' p2p link")
+                self.logger.error(f"{parent_name}: no border-leaf device found for context '{context_name}' p2p link")
+                return
 
         # One sub-interface per firewall in the HA pair — cabling is index-paired
         # (fw[i] <-> border_leaf[i]), never any-to-any, so every firewall needs its
@@ -346,8 +347,8 @@ class _CustomerDeploymentExchangeBase(CommonGenerator):
             self.logger.error(f"Error resolving {trunk_role} interface on {device.name.value}: {exc}")
             return None
         if trunk_iface is None:
-            self.logger.warning(
-                f"{device.name.value}: no role={trunk_role} interface found — skipping sub-interface for "
+            self.logger.error(
+                f"{device.name.value}: no role={trunk_role} interface found — cannot create sub-interface for "
                 f"FirewallContext '{context_name}'"
             )
             return None

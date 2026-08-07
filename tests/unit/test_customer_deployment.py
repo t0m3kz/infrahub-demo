@@ -13,6 +13,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from generators.common import CommonGenerator
+from generators.protocols import DcimPhysicalDevice
 from generators.topology.customer_deployment import (
     DEFAULT_NAMESPACE,
     CustomerDeploymentCloudExchangeGenerator,
@@ -55,6 +56,7 @@ def _colo_payload(*, customer_id: str = "cust-1", circuits: list | None = None) 
                 "name": "C001-P-WAW",
                 "environment": "p",
                 "owner": {"org_id": "C001", "name": "Customer 1"},
+                "parent": {"id": "metro-1", "name": "WAW-METRO"},
                 "circuits": circuits or [],
             }
         ]
@@ -91,13 +93,19 @@ class TestDCDeployment:
 
 
 class TestColocationNoCircuit:
+    """_ensure_firewall_context() always runs first now and legitimately calls
+    client.filters() once for firewall-device lookup (default mock: []) — these
+    assertions only cover the circuit/exchange path, not that call."""
+
     @pytest.mark.asyncio
     async def test_no_circuits_is_noop(self) -> None:
         gen = _make_generator(CustomerDeploymentColocationExchangeGenerator)
 
         await gen.generate(_colo_payload(circuits=[]))
 
-        gen.client.filters.assert_not_called()
+        gen.client.filters.assert_awaited_once_with(
+            kind=DcimPhysicalDevice, deployment__ids=["metro-1"], role__value="firewall"
+        )
         gen.client.create.assert_not_called()
 
     @pytest.mark.asyncio
@@ -116,7 +124,9 @@ class TestColocationNoCircuit:
 
         await gen.generate(_colo_payload(circuits=[circuit]))
 
-        gen.client.filters.assert_not_called()
+        gen.client.filters.assert_awaited_once_with(
+            kind=DcimPhysicalDevice, deployment__ids=["metro-1"], role__value="firewall"
+        )
         gen.client.create.assert_not_called()
 
 
@@ -136,7 +146,8 @@ class TestColocationHubExchange:
     async def test_creates_routed_exchange_to_hub(self) -> None:
         gen = _make_generator(CustomerDeploymentColocationExchangeGenerator)
         default_ns = MagicMock(id="ns-default")
-        gen.client.filters = AsyncMock(side_effect=[[default_ns], []])
+        # First call is _ensure_firewall_context's firewall-device lookup (none on Colocation).
+        gen.client.filters = AsyncMock(side_effect=[[], [default_ns], []])
         exchange_obj = AsyncMock()
         exchange_obj.name.value = f"{DEFAULT_NAMESPACE}-INTERNET-hub"
         gen.client.create = AsyncMock(return_value=exchange_obj)
@@ -160,7 +171,7 @@ class TestColocationHubExchange:
         rel.fetch = AsyncMock()
         rel.peers = []
         existing_exchange.customer_deployments = rel
-        gen.client.filters = AsyncMock(side_effect=[[default_ns], [existing_exchange]])
+        gen.client.filters = AsyncMock(side_effect=[[], [default_ns], [existing_exchange]])
         gen._safe_rel_add = AsyncMock()
 
         await gen.generate(_colo_payload(circuits=[self._CIRCUIT]))
@@ -178,7 +189,7 @@ class TestColocationHubExchange:
         rel.fetch = AsyncMock()
         rel.peers = [MagicMock(id="cust-1")]
         existing_exchange.customer_deployments = rel
-        gen.client.filters = AsyncMock(side_effect=[[default_ns], [existing_exchange]])
+        gen.client.filters = AsyncMock(side_effect=[[], [default_ns], [existing_exchange]])
 
         await gen.generate(_colo_payload(circuits=[self._CIRCUIT]))
 
@@ -203,7 +214,10 @@ class TestColocationHubExchange:
 
         await gen.generate(_colo_payload(circuits=[circuit]))
 
-        gen.client.filters.assert_not_called()
+        # _ensure_firewall_context's firewall-device lookup runs first (none on Colocation).
+        gen.client.filters.assert_awaited_once_with(
+            kind=DcimPhysicalDevice, deployment__ids=["metro-1"], role__value="firewall"
+        )
         gen.client.create.assert_not_called()
         gen.logger.error.assert_called_once()
 
@@ -266,13 +280,13 @@ class TestFirewallContextNoFirewallOrCluster:
         gen.client.filters.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_no_parent_skips_with_warning(self) -> None:
+    async def test_no_parent_is_a_hard_error(self) -> None:
         gen = _make_generator(CustomerDeploymentDCExchangeGenerator)
 
         await gen.generate(_dc_payload())  # no "parent" key
 
         gen.client.filters.assert_not_called()
-        gen.logger.warning.assert_called_once()
+        gen.logger.error.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_no_firewall_devices_on_parent_is_noop(self) -> None:
@@ -286,7 +300,7 @@ class TestFirewallContextNoFirewallOrCluster:
         gen.client.create.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_firewall_devices_not_yet_paired_is_noop(self) -> None:
+    async def test_firewall_devices_not_yet_paired_is_a_hard_error(self) -> None:
         gen = _make_generator(CustomerDeploymentDCExchangeGenerator)
         fw_device = MagicMock(id="fw-1")
         gen.client.filters = AsyncMock(side_effect=[[fw_device], []])
@@ -294,7 +308,7 @@ class TestFirewallContextNoFirewallOrCluster:
         await gen.generate(_dc_payload_with_parent())
 
         assert gen.client.filters.await_count == 2
-        gen.logger.warning.assert_called()
+        gen.logger.error.assert_called()
         gen.client.create.assert_not_called()
 
 
@@ -425,6 +439,24 @@ class TestEnsureContextSubinterface:
         gen.client.filters.assert_not_called()
 
     @pytest.mark.asyncio
+    async def test_pbr_mode_no_border_leaf_found_is_a_hard_error(self) -> None:
+        gen, context_obj = self._make_gen()
+        fw1 = MagicMock(id="fw-1")
+        fw1.name.value = "fw-1"
+        gen.client.filters = AsyncMock(return_value=[])
+
+        await gen._ensure_context_subinterface(
+            context_obj=context_obj,
+            fw_devices=[fw1],
+            parent_id="dc-1",
+            parent_name="DC10",
+            connectivity_mode="pbr",
+        )
+
+        gen.logger.error.assert_called_once()
+        gen._create_context_subinterface.assert_not_called()
+
+    @pytest.mark.asyncio
     async def test_more_firewalls_than_border_leaves_wraps_around(self) -> None:
         gen, context_obj = self._make_gen()
         fw1, fw2 = MagicMock(id="fw-1"), MagicMock(id="fw-2")
@@ -443,6 +475,29 @@ class TestEnsureContextSubinterface:
 
         devices_used = [c.kwargs["device"] for c in gen._create_context_subinterface.call_args_list]
         assert devices_used == [fw1, bl1, fw2, bl1]
+
+
+class TestCreateContextSubinterface:
+    @pytest.mark.asyncio
+    async def test_missing_trunk_role_interface_is_a_hard_error(self) -> None:
+        gen = _make_generator(CustomerDeploymentDCExchangeGenerator)
+        gen.client.filters = AsyncMock(return_value=[])
+        device = MagicMock(id="fw-1")
+        device.name.value = "fw-1"
+        context_obj = MagicMock(id="ctx-1")
+        context_obj.name.value = "shared-ctx"
+
+        result = await gen._create_context_subinterface(
+            device=device,
+            trunk_role="uplink",
+            vlan_id_value=3000,
+            context_obj=context_obj,
+            ip_address_id=None,
+        )
+
+        assert result is None
+        gen.logger.error.assert_called_once()
+        gen.client.create.assert_not_called()
 
 
 class TestGetOrCreateFirewallContext:
