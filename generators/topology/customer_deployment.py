@@ -308,7 +308,7 @@ class _CustomerDeploymentExchangeBase(CommonGenerator):
 
         await self._create_context_subinterface(
             device=border_leaves[0],
-            trunk_role="downlink",
+            trunk_role="firewall",
             vlan_id_value=context_obj.vlan_id.value,
             context_obj=context_obj,
             ip_address=bl_ip,
