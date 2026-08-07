@@ -242,7 +242,7 @@ class _CustomerDeploymentExchangeBase(CommonGenerator):
         see generators/cabling.py's _cable_border_services, `firewall_hop =
         ChainHop(devices=firewall_names, up_role="uplink")`, unconditional).
         pbr mode also gets a matching border-leaf-side sub-interface with a
-        dedicated /30 point-to-point link — the firewall isn't otherwise in
+        dedicated point-to-point link — the firewall isn't otherwise in
         the forwarding path, so PBR needs a real next-hop to redirect to.
         inline mode's chain cabling already puts every packet through the
         firewall's trunk, so no separate p2p link is needed — the
@@ -378,10 +378,16 @@ class _CustomerDeploymentExchangeBase(CommonGenerator):
             return None
 
     async def _allocate_context_p2p(self, context_name: str, parent_name: str) -> tuple[str, str] | None:
-        """Allocate a /30 from this DC/Colo's FW-context P2P pool; returns
+        """Allocate a P2P link from this DC/Colo's FW-context P2P pool; returns
         (firewall_side_ip_id, borderleaf_side_ip_id) — IpamIPAddress node ids,
         since DcimVirtualInterface.ip_address needs a related-node reference,
-        not an inline-create address string."""
+        not an inline-create address string.
+
+        No prefix_length passed — the pool's own default_prefix_length (set in
+        generators/topology/dc.py's _ensure_firewall_context_pools, /127 for
+        IPv6 or /31 for IPv4, matching every other P2P link in the fabric —
+        see generators/helpers/routing.py's p2p_is_ipv6()/p2p_addressing())
+        already picked the right one for this DC's underlay_protocol."""
         pool_name = f"{parent_name.lower()}-fw-context-p2p-pool"
         try:
             pool = await self.client.get(kind=CoreIPPrefixPool, name__value=pool_name)
@@ -394,7 +400,6 @@ class _CustomerDeploymentExchangeBase(CommonGenerator):
                 resource_pool=pool,
                 kind=IpamPrefix,
                 identifier=f"{context_name}-fw-context-p2p",
-                prefix_length=30,
                 member_type="address",
                 data={"role": "technical", "is_pool": True},
             )
@@ -405,6 +410,9 @@ class _CustomerDeploymentExchangeBase(CommonGenerator):
             self.logger.error(f"P2P pool '{pool_name}' returned no prefix for FirewallContext '{context_name}'")
             return None
 
+        # Works for both /31 (RFC 3021) and /127 (RFC 6164) — list(network)
+        # returns exactly the 2 usable addresses at these lengths, same idiom
+        # as generators/cabling.py's fabric P2P allocation.
         network = ipaddress.ip_network(allocated_prefix.prefix.value, strict=False)
         addrs = list(network)
         ip_namespace = allocated_prefix.ip_namespace
@@ -413,7 +421,7 @@ class _CustomerDeploymentExchangeBase(CommonGenerator):
         for addr in addrs[:2]:
             ip_obj = await self.client.create(
                 kind=IpamIPAddress,
-                data={"address": f"{addr}/30", "ip_namespace": ip_namespace},
+                data={"address": f"{addr}/{network.prefixlen}", "ip_namespace": ip_namespace},
             )
             await ip_obj.save(allow_upsert=True)
             ip_ids.append(ip_obj.id)
