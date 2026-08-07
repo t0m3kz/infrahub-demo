@@ -46,6 +46,7 @@ from infrahub_sdk.protocols import CoreIPPrefixPool, CoreNumberPool
 from utils.data_cleaning import clean_data
 
 from ..common import CommonGenerator
+from ..devices import DeviceMixin
 from ..protocols import (
     DcimPhysicalDevice,
     DcimPhysicalInterface,
@@ -70,7 +71,7 @@ _DEPLOYMENT_KINDS = {
 }
 
 
-class _CustomerDeploymentExchangeBase(CommonGenerator):
+class _CustomerDeploymentExchangeBase(DeviceMixin, CommonGenerator):
     """Provision a hub-and-spoke exchange gateway when this deployment's circuit reaches an operator hub.
 
     Subclasses set `deployment_kind` to one of _DEPLOYMENT_KINDS' keys. All
@@ -169,14 +170,52 @@ class _CustomerDeploymentExchangeBase(CommonGenerator):
             return
 
         try:
-            clusters = await self.client.filters(kind=ManagedFirewallHA, capabilities__ids=[fw_devices[0].id])
+            clusters = await self.client.filters(
+                kind=ManagedFirewallHA, capabilities__ids=[fw_devices[0].id], include=["capabilities"]
+            )
         except Exception as exc:
             self.logger.error(f"Error looking up ManagedFirewallHA cluster on {parent_name}: {exc}")
             return
         if not clusters:
-            self.logger.error(f"{parent_name}: firewall device(s) not yet paired into a ManagedFirewallHA cluster")
-            return
+            # Mirror dc.py's own bootstrap (_generate_dc_shared_service_devices ->
+            # create_devices(ha_kind=...)): a customer can board before, or
+            # concurrently with, the DC's own firewall HA-pairing — pair the
+            # existing firewall devices here with the same helper dc.py uses,
+            # instead of hard-failing and leaving this deployment with no
+            # FirewallContext until someone re-runs the DC generator.
+            self.logger.info(
+                f"{parent_name}: firewall device(s) not yet paired — pairing into a ManagedFirewallHA cluster"
+            )
+            await self._ensure_ha_pairs(
+                sorted(d.name.value for d in fw_devices), ha_kind="ManagedFirewallHA", role_label="firewall"
+            )
+            try:
+                clusters = await self.client.filters(
+                    kind=ManagedFirewallHA, capabilities__ids=[fw_devices[0].id], include=["capabilities"]
+                )
+            except Exception as exc:
+                self.logger.error(f"Error looking up ManagedFirewallHA cluster on {parent_name}: {exc}")
+                return
+            if not clusters:
+                self.logger.error(f"{parent_name}: failed to pair firewall device(s) into a ManagedFirewallHA cluster")
+                return
         cluster = clusters[0]
+
+        # A DC can have multiple independent firewall HA clusters (e.g. a newly
+        # added pair alongside an existing one) — fw_devices above is a flat,
+        # DC-wide, role-filtered list (see generators/cabling.py's
+        # _cable_border_services, which is equally cluster-unaware), so it can
+        # span clusters. A FirewallContext belongs to exactly one cluster, so
+        # its sub-interfaces must only be created on that cluster's own member
+        # devices, never on firewalls that happen to belong to a different
+        # cluster on the same DC.
+        member_ids = {peer.id for peer in cluster.capabilities.peers}
+        fw_devices = [d for d in fw_devices if d.id in member_ids]
+        if not fw_devices:
+            self.logger.error(
+                f"{parent_name}: no firewall device resolved as a member of cluster '{cluster.name.value}'"
+            )
+            return
 
         dedicated = bool((customer.get("design") or {}).get("dedicated_firewall"))
         if dedicated:
@@ -202,15 +241,11 @@ class _CustomerDeploymentExchangeBase(CommonGenerator):
     async def _get_or_create_firewall_context(
         self, context_name: str, cluster_id: str, tenant_id: str | None
     ) -> Any | None:
-        try:
-            existing = await self.client.filters(kind=ManagedFirewallContext, name__value=context_name)
-        except Exception as exc:
-            self.logger.error(f"Error looking up FirewallContext '{context_name}': {exc}")
-            return None
-        if existing:
-            self.logger.info(f"FirewallContext '{context_name}' already exists")
-            return existing[0]
-
+        # Always create+upsert, never pre-check-and-skip — ManagedFirewallContext's
+        # uniqueness_constraints on name__value (schemas/extensions/capabilities/
+        # ha.yml) makes allow_upsert=True match the existing node by name, same
+        # convention as dc.py/pools.py's pool creation. A pre-check-then-return
+        # would silently skip reconciling cluster/tenant on an existing context.
         try:
             context_obj = await self.client.create(
                 kind=ManagedFirewallContext,
