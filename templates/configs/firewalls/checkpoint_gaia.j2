@@ -10,7 +10,7 @@ set hostname {{ name }}
 set interface {{ iface_name }} vlan {{ iface.vlan_id }}
 set interface {{ iface_name }} state on
 {%- if iface.ip_address %}
-set interface {{ iface_name }} ipv4-address {{ iface.ip_address.address | replace('/', ' mask-length ') }}
+set interface {{ iface_name }} {{ 'ipv6-address' if ':' in iface.ip_address.address else 'ipv4-address' }} {{ iface.ip_address.address | replace('/', ' mask-length ') }}
 {%- endif %}
 {%- if iface.security_zone %}
 set interface {{ iface_name }} security-zone {{ iface.security_zone.name }}
@@ -21,7 +21,7 @@ set interface {{ iface_name }} comments "{{ iface.description }}"
 {%- else %}
 set interface {{ iface.name }} state on
 {%- if iface.ip_address %}
-set interface {{ iface.name }} ipv4-address {{ iface.ip_address.address | replace('/', ' mask-length ') }}
+set interface {{ iface.name }} {{ 'ipv6-address' if ':' in iface.ip_address.address else 'ipv4-address' }} {{ iface.ip_address.address | replace('/', ' mask-length ') }}
 {%- endif %}
 {%- if iface.security_zone %}
 set interface {{ iface.name }} security-zone {{ iface.security_zone.name }}
@@ -69,7 +69,7 @@ set virtual-system {{ context.name }} comments "{{ context.tenant_name }}"
 set interface {{ ctx_iface_name }} vlan {{ context.vlan_id }}
 set interface {{ ctx_iface_name }} state on
 {%- if context.ip_address %}
-set interface {{ ctx_iface_name }} ipv4-address {{ context.ip_address | replace('/', ' mask-length ') }}
+set interface {{ ctx_iface_name }} {{ 'ipv6-address' if ':' in context.ip_address else 'ipv4-address' }} {{ context.ip_address | replace('/', ' mask-length ') }}
 {%- endif %}
 set virtual-system {{ context.name }} interface {{ ctx_iface_name }}
 {%- endif %}

@@ -16,7 +16,11 @@ config system interface
     edit "{{ iface.name }}"
 {%- endif %}
 {%- if iface.ip_address %}
+{%- if ':' in iface.ip_address.address %}
+        set ip6-address {{ iface.ip_address.address }}
+{%- else %}
         set ip {{ iface.ip_address.address }}
+{%- endif %}
 {%- endif %}
         set allowaccess ping https ssh
         set status up
@@ -107,7 +111,11 @@ config global
             set interface "{{ context.parent_interface.name }}"
             set vdom "{{ context.name }}"
 {%- if context.ip_address %}
+{%- if ':' in context.ip_address %}
+            set ip6-address {{ context.ip_address }}
+{%- else %}
             set ip {{ context.ip_address }}
+{%- endif %}
 {%- endif %}
             set allowaccess ping https ssh
             set status up

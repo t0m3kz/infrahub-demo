@@ -12,7 +12,11 @@ interface {{ iface.parent_interface.name }}.{{ iface.vlan_id }}
 interface {{ iface.name }}
 {%- endif %}
 {%- if iface.ip_address %}
+{%- if ':' in iface.ip_address.address %}
+ ipv6 address {{ iface.ip_address.address }}
+{%- else %}
  ip address {{ iface.ip_address.address | replace('/', ' ') }}
+{%- endif %}
 {%- endif %}
 {%- if iface.security_zone %}
  nameif {{ iface.security_zone.name }}
@@ -76,7 +80,11 @@ context {{ context.name }}
 {%- if context.vlan_id and context.parent_interface.name and context.ip_address %}
 changeto context {{ context.name }}
 interface {{ context.parent_interface.name }}.{{ context.vlan_id }}
+{%- if ':' in context.ip_address %}
+ ipv6 address {{ context.ip_address }}
+{%- else %}
  ip address {{ context.ip_address | replace('/', ' ') }}
+{%- endif %}
  nameif customer-pbr
  security-level 50
  no shutdown
