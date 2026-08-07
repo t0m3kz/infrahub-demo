@@ -246,7 +246,13 @@ class _CustomerDeploymentExchangeBase(CommonGenerator):
         the forwarding path, so PBR needs a real next-hop to redirect to.
         inline mode's chain cabling already puts every packet through the
         firewall's trunk, so no separate p2p link is needed — the
-        VLAN-tagged sub-interface alone is enough to tell contexts apart."""
+        VLAN-tagged sub-interface alone is enough to tell contexts apart.
+
+        Every firewall in the HA pair gets its own sub-interface — cabling
+        is index-paired, never any-to-any (border[0]<->fw[0], border[1]<->fw[1],
+        each an independent redundant path — see _cable_border_services's
+        docstring in generators/cabling.py), so a single sub-interface would
+        leave the second firewall/border-leaf pair with no context at all."""
         context_name = context_obj.name.value
 
         vlan_id = getattr(context_obj, "vlan_id", None)
@@ -279,41 +285,47 @@ class _CustomerDeploymentExchangeBase(CommonGenerator):
                 return
             context_obj = await self.client.get(kind=ManagedFirewallContext, id=context_obj.id)
 
-        fw_ip_id: str | None = None
-        bl_ip_id: str | None = None
+        border_leaves: list[Any] = []
         if connectivity_mode == "pbr":
-            ip_pair = await self._allocate_context_p2p(context_name, parent_name)
-            if ip_pair is not None:
-                fw_ip_id, bl_ip_id = ip_pair
+            try:
+                border_leaves = await self.client.filters(
+                    kind=DcimPhysicalDevice, deployment__ids=[parent_id], role__value="border-leaf"
+                )
+            except Exception as exc:
+                self.logger.error(f"Error looking up border-leaf devices on {parent_name}: {exc}")
+                return
+            if not border_leaves:
+                self.logger.warning(f"{parent_name}: no border-leaf device found for context '{context_name}' p2p link")
 
-        fw_sub_iface = await self._create_context_subinterface(
-            device=fw_devices[0],
-            trunk_role="uplink",
-            vlan_id_value=context_obj.vlan_id.value,
-            context_obj=context_obj,
-            ip_address_id=fw_ip_id,
-        )
-        if fw_sub_iface is None or connectivity_mode != "pbr":
-            return
+        # One sub-interface per firewall in the HA pair — cabling is index-paired
+        # (fw[i] <-> border_leaf[i]), never any-to-any, so every firewall needs its
+        # own context sub-interface, not just the first.
+        for i, fw_device in enumerate(fw_devices):
+            fw_ip_id: str | None = None
+            bl_ip_id: str | None = None
+            if connectivity_mode == "pbr" and border_leaves:
+                ip_pair = await self._allocate_context_p2p(f"{context_name}-{fw_device.name.value}", parent_name)
+                if ip_pair is not None:
+                    fw_ip_id, bl_ip_id = ip_pair
 
-        try:
-            border_leaves = await self.client.filters(
-                kind=DcimPhysicalDevice, deployment__ids=[parent_id], role__value="border-leaf"
+            fw_sub_iface = await self._create_context_subinterface(
+                device=fw_device,
+                trunk_role="uplink",
+                vlan_id_value=context_obj.vlan_id.value,
+                context_obj=context_obj,
+                ip_address_id=fw_ip_id,
             )
-        except Exception as exc:
-            self.logger.error(f"Error looking up border-leaf devices on {parent_name}: {exc}")
-            return
-        if not border_leaves:
-            self.logger.warning(f"{parent_name}: no border-leaf device found for context '{context_name}' p2p link")
-            return
+            if fw_sub_iface is None or not border_leaves:
+                continue
 
-        await self._create_context_subinterface(
-            device=border_leaves[0],
-            trunk_role="firewall",
-            vlan_id_value=context_obj.vlan_id.value,
-            context_obj=context_obj,
-            ip_address_id=bl_ip_id,
-        )
+            border_leaf = border_leaves[i % len(border_leaves)]
+            await self._create_context_subinterface(
+                device=border_leaf,
+                trunk_role="firewall",
+                vlan_id_value=context_obj.vlan_id.value,
+                context_obj=context_obj,
+                ip_address_id=bl_ip_id,
+            )
 
     async def _create_context_subinterface(
         self,

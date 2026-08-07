@@ -366,6 +366,85 @@ class TestFirewallContextProvisioning:
         gen._create_context_subinterface.assert_not_called()
 
 
+class TestEnsureContextSubinterface:
+    """Cabling is index-paired, never any-to-any (fw[0]<->bl[0], fw[1]<->bl[1],
+    each an independent redundant path — see generators/cabling.py's
+    _cable_border_services docstring), so every firewall in the HA pair needs
+    its own context sub-interface, not just the first."""
+
+    def _make_gen(self) -> Any:
+        gen = _make_generator(CustomerDeploymentDCExchangeGenerator)
+        context_obj = MagicMock(id="ctx-1")
+        context_obj.name.value = "shared-ctx"
+        context_obj.vlan_id.value = 3000
+        gen._create_context_subinterface = AsyncMock(side_effect=lambda **kwargs: MagicMock())
+        gen._allocate_context_p2p = AsyncMock(return_value=("fw-ip-id", "bl-ip-id"))
+        return gen, context_obj
+
+    @pytest.mark.asyncio
+    async def test_pbr_mode_creates_subinterface_pair_per_firewall(self) -> None:
+        gen, context_obj = self._make_gen()
+        fw1, fw2 = MagicMock(id="fw-1"), MagicMock(id="fw-2")
+        fw1.name.value = "fw-1"
+        fw2.name.value = "fw-2"
+        bl1, bl2 = MagicMock(id="bl-1"), MagicMock(id="bl-2")
+        gen.client.filters = AsyncMock(return_value=[bl1, bl2])
+
+        await gen._ensure_context_subinterface(
+            context_obj=context_obj,
+            fw_devices=[fw1, fw2],
+            parent_id="dc-1",
+            parent_name="DC10",
+            connectivity_mode="pbr",
+        )
+
+        assert gen._create_context_subinterface.await_count == 4
+        devices_used = [c.kwargs["device"] for c in gen._create_context_subinterface.call_args_list]
+        assert devices_used == [fw1, bl1, fw2, bl2]
+        assert gen._allocate_context_p2p.await_count == 2
+
+    @pytest.mark.asyncio
+    async def test_inline_mode_creates_only_firewall_subinterfaces_no_p2p(self) -> None:
+        gen, context_obj = self._make_gen()
+        fw1, fw2 = MagicMock(id="fw-1"), MagicMock(id="fw-2")
+        fw1.name.value = "fw-1"
+        fw2.name.value = "fw-2"
+
+        await gen._ensure_context_subinterface(
+            context_obj=context_obj,
+            fw_devices=[fw1, fw2],
+            parent_id="dc-1",
+            parent_name="DC10",
+            connectivity_mode="inline",
+        )
+
+        assert gen._create_context_subinterface.await_count == 2
+        devices_used = [c.kwargs["device"] for c in gen._create_context_subinterface.call_args_list]
+        assert devices_used == [fw1, fw2]
+        gen._allocate_context_p2p.assert_not_called()
+        gen.client.filters.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_more_firewalls_than_border_leaves_wraps_around(self) -> None:
+        gen, context_obj = self._make_gen()
+        fw1, fw2 = MagicMock(id="fw-1"), MagicMock(id="fw-2")
+        fw1.name.value = "fw-1"
+        fw2.name.value = "fw-2"
+        bl1 = MagicMock(id="bl-1")
+        gen.client.filters = AsyncMock(return_value=[bl1])
+
+        await gen._ensure_context_subinterface(
+            context_obj=context_obj,
+            fw_devices=[fw1, fw2],
+            parent_id="dc-1",
+            parent_name="DC10",
+            connectivity_mode="pbr",
+        )
+
+        devices_used = [c.kwargs["device"] for c in gen._create_context_subinterface.call_args_list]
+        assert devices_used == [fw1, bl1, fw2, bl1]
+
+
 class TestGetOrCreateFirewallContext:
     @pytest.mark.asyncio
     async def test_reuses_existing_context(self) -> None:
