@@ -668,10 +668,19 @@ class TestGetZonePolicies:
 def _make_pbr_activation(
     *,
     vlan_id: int = 100,
-    owner_id: str | None = "cust-a",
+    deployment_id: str | None = "dep-a",
     security_policies: list | None = None,
 ) -> dict:
-    seg: dict = {"id": "seg-1", "name": "seg-1", "customer_name": "web", "owner": {"id": owner_id} if owner_id else {}}
+    """deployment_id models VxlanSegment.customer_deployments (TopologyCustomer
+    ids) — the field FirewallContext.tenant is actually matched against, NOT
+    segment.owner (an OrganizationCustomer, a different kind with different
+    ids that never equals FirewallContext.tenant.id)."""
+    seg: dict = {
+        "id": "seg-1",
+        "name": "seg-1",
+        "customer_name": "web",
+        "customer_deployments": [{"id": deployment_id}] if deployment_id else [],
+    }
     if security_policies is not None:
         seg["security_policies"] = security_policies
     return {"vlan_id": vlan_id, "segment": seg}
@@ -713,7 +722,7 @@ class TestGetCustomerPbrRules:
         assert get_customer_pbr_rules(activations, contexts) == []
 
     def test_shared_context_nexthop_used_when_no_tenant(self) -> None:
-        activations = [_make_pbr_activation(owner_id="cust-a", security_policies=[])]
+        activations = [_make_pbr_activation(deployment_id="dep-a", security_policies=[])]
         contexts = [_make_context_leg(fw_ip="10.65.0.0/30")]
         result = get_customer_pbr_rules(activations, contexts)
         assert len(result) == 1
@@ -722,25 +731,65 @@ class TestGetCustomerPbrRules:
         assert result[0]["bypass_prefixes"] == []
 
     def test_dedicated_context_nexthop_preferred_over_shared(self) -> None:
-        activations = [_make_pbr_activation(owner_id="cust-a", security_policies=[])]
+        activations = [_make_pbr_activation(deployment_id="dep-a", security_policies=[])]
         contexts = [
             _make_context_leg(fw_ip="10.65.0.0/30"),  # shared
-            _make_context_leg(fw_ip="10.66.0.0/30", tenant_id="cust-a"),  # dedicated
+            _make_context_leg(fw_ip="10.66.0.0/30", tenant_id="dep-a"),  # dedicated
         ]
         result = get_customer_pbr_rules(activations, contexts)
         assert result[0]["fw_nexthop"] == "10.66.0.0"
 
     def test_dedicated_context_for_other_tenant_not_used(self) -> None:
-        """A dedicated context for a DIFFERENT owner must not leak as this
+        """A dedicated context for a DIFFERENT deployment must not leak as this
         segment's nexthop — falls back to shared (or nothing) instead."""
-        activations = [_make_pbr_activation(owner_id="cust-a", security_policies=[])]
-        contexts = [_make_context_leg(fw_ip="10.66.0.0/30", tenant_id="cust-b")]
+        activations = [_make_pbr_activation(deployment_id="dep-a", security_policies=[])]
+        contexts = [_make_context_leg(fw_ip="10.66.0.0/30", tenant_id="dep-b")]
+        assert get_customer_pbr_rules(activations, contexts) == []
+
+    def test_stretched_vxlan_segment_matches_by_any_of_its_deployments(self) -> None:
+        """VxlanSegment.customer_deployments is cardinality many (stretch across
+        DCs) — a dedicated context keyed to ANY one of them must match, not
+        just the first."""
+        activations = [
+            {
+                "vlan_id": 100,
+                "segment": {
+                    "id": "seg-1",
+                    "name": "seg-1",
+                    "customer_name": "web",
+                    "customer_deployments": [{"id": "dep-a"}, {"id": "dep-b"}],
+                    "security_policies": [],
+                },
+            }
+        ]
+        contexts = [_make_context_leg(fw_ip="10.66.0.0/30", tenant_id="dep-b")]
+        result = get_customer_pbr_rules(activations, contexts)
+        assert result[0]["fw_nexthop"] == "10.66.0.0"
+
+    def test_owner_org_id_never_matches_tenant_deployment_id(self) -> None:
+        """Regression: FirewallContext.tenant peers TopologyCustomer (a
+        deployment footprint), not OrganizationCustomer (the org) — segment.owner
+        must never be used for this match even if it happens to look like an id."""
+        activations = [
+            {
+                "vlan_id": 100,
+                "segment": {
+                    "id": "seg-1",
+                    "name": "seg-1",
+                    "customer_name": "web",
+                    "owner": {"id": "dep-a"},
+                    "customer_deployments": [],
+                    "security_policies": [],
+                },
+            }
+        ]
+        contexts = [_make_context_leg(fw_ip="10.66.0.0/30", tenant_id="dep-a")]
         assert get_customer_pbr_rules(activations, contexts) == []
 
     def test_context_without_firewall_leg_is_skipped(self) -> None:
         """inline connectivity_mode never allocates an IP on the firewall leg —
         a context with no addressed firewall-role leg contributes no nexthop."""
-        activations = [_make_pbr_activation(owner_id="cust-a", security_policies=[])]
+        activations = [_make_pbr_activation(deployment_id="dep-a", security_policies=[])]
         contexts = [{"interface_capabilities": [{"device": {"role": "firewall"}, "ip_address": {}}]}]
         assert get_customer_pbr_rules(activations, contexts) == []
 
@@ -776,7 +825,7 @@ class TestGetCustomerPbrRules:
         """A permit rule bypasses PBR regardless of whether source/destination
         share an owner — intra- and inter-customer traffic use one model."""
         policies = [{"enabled": True, "rules": [_make_pbr_rule(dst_prefix="10.9.0.0/24")]}]
-        activations = [_make_pbr_activation(owner_id="cust-a", security_policies=policies)]
+        activations = [_make_pbr_activation(deployment_id="dep-a", security_policies=policies)]
         contexts = [_make_context_leg()]
         result = get_customer_pbr_rules(activations, contexts)
         assert "10.9.0.0/24" in result[0]["bypass_prefixes"]
