@@ -249,11 +249,20 @@ def get_customer_pbr_rules(
     generators/topology/customer_deployment.py's _ensure_context_subinterface),
     so contexts without one are skipped — no PBR rule for them, since the
     firewall is already physically in the forwarding path.
+
+    Dedicated-context matching is by DEPLOYMENT id, not OrganizationCustomer
+    id: FirewallContext.tenant peers TopologyCustomer (the specific
+    deployment footprint the dedicated_firewall flag was set on, e.g.
+    C005-P-DC10), not the customer's org — segment.owner is an
+    OrganizationCustomer and would never equal it. Segments carry their own
+    TopologyCustomer link via customer_deployment (VlanSegment, cardinality
+    one) / customer_deployments (VxlanSegment, cardinality many) — same
+    identifier, both sides of one relationship split by cardinality.
     """
     if not activations:
         return []
 
-    context_nexthop_by_owner: dict[str, str] = {}
+    context_nexthop_by_deployment: dict[str, str] = {}
     shared_nexthop: str | None = None
     for ctx in firewall_contexts or []:
         fw_ip: str | None = None
@@ -275,11 +284,11 @@ def get_customer_pbr_rules(
         tenant = ctx.get("tenant") or {}
         tenant_id = tenant.get("id")
         if tenant_id:
-            context_nexthop_by_owner[tenant_id] = fw_ip
+            context_nexthop_by_deployment[tenant_id] = fw_ip
         else:
             shared_nexthop = fw_ip
 
-    if not context_nexthop_by_owner and shared_nexthop is None:
+    if not context_nexthop_by_deployment and shared_nexthop is None:
         return []
 
     rules: list[dict[str, Any]] = []
@@ -293,9 +302,18 @@ def get_customer_pbr_rules(
             continue
         seen_vlans.add(vlan_id)
 
-        owner = seg.get("owner") or {}
-        owner_id = owner.get("id")
-        fw_nexthop = context_nexthop_by_owner.get(owner_id) if owner_id else None
+        deployment_ids: list[str] = []
+        single_deployment = seg.get("customer_deployment")
+        if single_deployment and single_deployment.get("id"):
+            deployment_ids.append(single_deployment["id"])
+        for dep in seg.get("customer_deployments") or []:
+            if dep.get("id"):
+                deployment_ids.append(dep["id"])
+
+        fw_nexthop = next(
+            (context_nexthop_by_deployment[d] for d in deployment_ids if d in context_nexthop_by_deployment),
+            None,
+        )
         if fw_nexthop is None:
             fw_nexthop = shared_nexthop
         if fw_nexthop is None:

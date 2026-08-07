@@ -76,6 +76,16 @@ fragment SegmentSecurityPolicyFields on ManagedNetworkSegment {
     inline_service {
       node { id name { value } }
     }
+    customer_deployments {
+      edges {
+        node { id }
+      }
+    }
+  }
+  ... on ManagedVlanSegment {
+    customer_deployment {
+      node { id }
+    }
   }
   isolation_mode { value }
   owner {
