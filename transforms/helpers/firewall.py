@@ -223,7 +223,7 @@ def get_firewall_contexts(interfaces: list[dict[str, Any]] | None) -> list[dict[
 
 def get_customer_pbr_rules(
     activations: list[dict[str, Any]] | None,
-    interfaces: list[dict[str, Any]] | None,
+    firewall_contexts: list[dict[str, Any]] | None,
 ) -> list[dict[str, Any]]:
     """Build PBR rules that redirect all traffic to the firewall by default.
 
@@ -235,44 +235,49 @@ def get_customer_pbr_rules(
     same as a same-owner one, since intra- and inter-customer traffic use
     one unified default-redirect model.
 
-    fw_nexthop resolution: this device's own interface_capabilities carry a
-    ManagedFirewallContext leg (pbr connectivity_mode only — see
-    generators/topology/customer_deployment.py's _ensure_context_subinterface;
-    inline mode has no border-leaf-side leg, so no PBR rule is produced for
-    it — the firewall is already in the forwarding path). Mirrors
-    get_vrf_default_gateways()'s same-device-both-legs pattern, except here
-    only ONE leg (the border-leaf's) is on this device — the other lives on
-    the firewall, so the nexthop is this leg's own peer IP on the /30,
-    computed from the interface's own address, not a sibling leg lookup.
+    fw_nexthop resolution: `firewall_contexts` is GLOBAL data (a top-level
+    ManagedFirewallContext query root, same idiom as get_zone_policies()'s
+    SecurityPolicy root) — not scoped to the rendered device's own
+    interfaces. This matters because the anycast gateway/symmetric-IRB
+    model puts every leaf, not just the border-leaf, in a position to make
+    the PBR redirect decision, and no leaf ever owns a FirewallContext
+    interface itself (only the firewall and, in pbr connectivity_mode, the
+    border-leaf do). The nexthop is the FIREWALL's OWN leg IP on the /30 —
+    reachable from any leaf via normal fabric underlay routing, since the
+    border-leaf already redistributes that directly-connected subnet.
+    inline connectivity_mode never allocates that IP (see
+    generators/topology/customer_deployment.py's _ensure_context_subinterface),
+    so contexts without one are skipped — no PBR rule for them, since the
+    firewall is already physically in the forwarding path.
     """
     if not activations:
         return []
 
     context_nexthop_by_owner: dict[str, str] = {}
     shared_nexthop: str | None = None
-    for iface in interfaces or []:
-        ip_obj = iface.get("ip_address") or {}
-        address = ip_obj.get("address")
-        if not address:
-            continue
-        for cap in iface.get("interface_capabilities") or []:
-            if cap.get("typename") != "ManagedFirewallContext":
+    for ctx in firewall_contexts or []:
+        fw_ip: str | None = None
+        for leg in ctx.get("interface_capabilities") or []:
+            device = leg.get("device") or {}
+            if device.get("role") != "firewall":
+                continue
+            ip_obj = leg.get("ip_address") or {}
+            address = ip_obj.get("address")
+            if not address:
                 continue
             try:
-                network = ip_network(address, strict=False)
-                own_ip = ip_interface(address).ip
+                fw_ip = str(ip_interface(address).ip)
             except ValueError:
                 continue
-            hosts = [h for h in network.hosts() if h != own_ip]
-            if not hosts:
-                continue
-            nexthop = str(hosts[0])
-            tenant = cap.get("tenant") or {}
-            tenant_id = tenant.get("id")
-            if tenant_id:
-                context_nexthop_by_owner[tenant_id] = nexthop
-            else:
-                shared_nexthop = nexthop
+            break
+        if fw_ip is None:
+            continue
+        tenant = ctx.get("tenant") or {}
+        tenant_id = tenant.get("id")
+        if tenant_id:
+            context_nexthop_by_owner[tenant_id] = fw_ip
+        else:
+            shared_nexthop = fw_ip
 
     if not context_nexthop_by_owner and shared_nexthop is None:
         return []
