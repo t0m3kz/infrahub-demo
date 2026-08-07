@@ -500,3 +500,17 @@ extensions:
           order_weight: 3100
           identifier: network_segment__inline_service
           description: "Inline service (firewall or load balancer HA) terminating this segment."
+    # Reverse lookup for FirewallContext.tenant (above) — same identifier
+    # binds this to that relationship's other side, mirroring
+    # TopologyCustomer.exchange_gateways in exchange_gateway.yml.
+    - kind: TopologyCustomer
+      relationships:
+        - name: firewall_context
+          label: "Firewall Context"
+          peer: ManagedFirewallContext
+          kind: Generic
+          cardinality: one
+          optional: true
+          identifier: firewall_context__tenant
+          order_weight: 2300
+          description: "Dedicated FirewallContext (VDOM/vsys); unset means a shared low-risk context"
