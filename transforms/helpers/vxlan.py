@@ -96,6 +96,21 @@ def get_interfaces(
             if s.get("typename") in ("ManagedVlanSegment", "ManagedVxlanSegment") and s.get("name") in segment_vlan
         ]
 
+        # FirewallContext sub-interface (role="service", created by
+        # generators/topology/customer_deployment.py's _create_context_subinterface)
+        # needs its own dot1q tag rendered — the border-leaf/firewall leg of a
+        # PBR p2p link isn't part of any customer segment's own VLAN, so it
+        # can't come from `segment_vlan` above like a trunk's access/trunk
+        # VLANs do. The context capability carries its own vlan_id directly.
+        context_vlan_id = next(
+            (
+                s.get("vlan_id")
+                for s in (iface.get("interface_capabilities") or [])
+                if s.get("typename") == "ManagedFirewallContext" and s.get("vlan_id")
+            ),
+            None,
+        )
+
         # Extract OSPF interface configuration. Area/network_type/cost live on the
         # peering (ManagedOSPFPeering), reached via the interface's `peering`
         # relationship — not on RoutingOSPFInterface itself (mode/metric/auth/password
@@ -182,6 +197,8 @@ def get_interfaces(
             "mtu": iface.get("mtu"),
             "ip_addresses": ip_addresses,
             "is_bgp_unnumbered": is_bgp_unnumbered,
+            "dot1q_vlan": context_vlan_id,
+            "parent_interface": iface.get("parent_interface"),
         }
 
         if is_lag:

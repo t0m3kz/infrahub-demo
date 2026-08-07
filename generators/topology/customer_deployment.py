@@ -45,11 +45,12 @@ from infrahub_sdk.protocols import CoreIPPrefixPool, CoreNumberPool
 
 from utils.data_cleaning import clean_data
 
-from ..common import CommonGenerator
+from ..common import CommonGenerator, DeviceOptions
 from ..devices import DeviceMixin
 from ..protocols import (
     DcimPhysicalDevice,
     DcimPhysicalInterface,
+    DcimVirtualDevice,
     DcimVirtualInterface,
     IpamIPAddress,
     IpamNamespace,
@@ -58,6 +59,7 @@ from ..protocols import (
     ManagedFirewallHA,
     TopologyRoutedExchange,
 )
+from .dc import _VIRTUAL_TEMPLATE_PREFIX_BY_PLATFORM_AND_ROLE
 
 DEFAULT_NAMESPACE = "default"
 _SHARED_CONTEXT_NAME_SUFFIX = "shared"
@@ -219,7 +221,17 @@ class _CustomerDeploymentExchangeBase(DeviceMixin, CommonGenerator):
 
         dedicated = bool((customer.get("design") or {}).get("dedicated_firewall"))
         if dedicated:
-            context_name = f"{cluster.name.value}-{customer.get('name', customer_id)}-dedicated"
+            customer_name = customer.get("name", customer_id)
+            dedicated_result = await self._ensure_dedicated_firewall_pair(
+                fw_devices=fw_devices,
+                parent_id=parent_id,
+                parent_name=parent_name,
+                dc_size=parent.get("size"),
+                customer_name=customer_name,
+            )
+            if dedicated_result is not None:
+                cluster, fw_devices = dedicated_result
+            context_name = f"{cluster.name.value}-{customer_name}-dedicated"
             tenant_id: str | None = customer_id
         else:
             context_name = f"{cluster.name.value}-{_SHARED_CONTEXT_NAME_SUFFIX}"
@@ -237,6 +249,117 @@ class _CustomerDeploymentExchangeBase(DeviceMixin, CommonGenerator):
             parent_name=parent_name,
             connectivity_mode=connectivity_mode,
         )
+
+    async def _ensure_dedicated_firewall_pair(
+        self,
+        *,
+        fw_devices: list[Any],
+        parent_id: str,
+        parent_name: str,
+        dc_size: str | None,
+        customer_name: str,
+    ) -> tuple[Any, list[Any]] | None:
+        """Provision a dedicated virtual firewall HA pair for this customer,
+        one virtual instance hosted on each of the shared cluster's physical
+        peers — same host-per-peer pattern as dc.py's
+        _provision_shared_virtual_instances, but scoped to one customer
+        instead of looping over _SHARED_ENVIRONMENTS, and sourced from the
+        *_CUSTOMER_* template variant (data/bootstrap's
+        09_virtual_device_templates_*.yaml) instead of the shared one.
+
+        Returns (dedicated_cluster, dedicated_fw_devices) on success, so the
+        caller's FirewallContext (and its sub-interfaces) attach to the
+        customer's own dedicated cluster/devices rather than the shared
+        physical one. Returns None (caller falls back to the shared cluster)
+        when the physical template's platform has no dedicated variant
+        mapped, or the *_CUSTOMER_* template itself doesn't exist yet.
+        """
+        if not dc_size:
+            self.logger.warning(f"{parent_name}: no size set — cannot resolve dedicated firewall template size")
+            return None
+
+        try:
+            physical_pair = await self.client.filters(
+                kind=DcimPhysicalDevice,
+                ids=[d.id for d in fw_devices],
+                include=["platform", "device_type"],
+            )
+        except Exception as exc:
+            self.logger.error(f"Error resolving platform for dedicated firewall on {parent_name}: {exc}")
+            return None
+        if len(physical_pair) != 2:
+            self.logger.warning(
+                f"{parent_name}: expected 2 physical firewall peers for dedicated provisioning, "
+                f"found {len(physical_pair)} — falling back to shared context"
+            )
+            return None
+
+        platform_name = physical_pair[0].platform.peer.name.value
+        prefix = _VIRTUAL_TEMPLATE_PREFIX_BY_PLATFORM_AND_ROLE.get((platform_name, "firewall"))
+        if not prefix:
+            self.logger.warning(
+                f"No virtual template mapping for platform={platform_name} role=firewall — "
+                "cannot provision dedicated firewall, falling back to shared context"
+            )
+            return None
+
+        virtual_template_name = f"{prefix}_CUSTOMER_{dc_size}"
+        try:
+            virtual_templates = await self.client.filters(
+                kind="TemplateDcimVirtualDevice",
+                template_name__value=virtual_template_name,
+                include=["device_type", "platform"],
+            )
+        except Exception as exc:
+            self.logger.error(f"Error looking up dedicated firewall template '{virtual_template_name}': {exc}")
+            return None
+        if not virtual_templates:
+            self.logger.warning(
+                f"No dedicated firewall template '{virtual_template_name}' found — falling back to shared context"
+            )
+            return None
+        virtual_template_obj = virtual_templates[0]
+        virtual_template = {
+            "id": virtual_template_obj.id,
+            "device_type": {"id": virtual_template_obj.device_type.peer.id},
+            "platform": {"id": virtual_template_obj.platform.peer.id},
+        }
+
+        pair_prefix = "-".join(sorted(d.name.value for d in physical_pair))
+        instance_names: list[str] = []
+        self.fabric_name = parent_name.lower()
+        for physical_device in sorted(physical_pair, key=lambda d: d.name.value):
+            instance_name = f"{pair_prefix}-{customer_name}-dedicated-{physical_device.name.value}"
+            names = await self.create_devices(
+                deployment_id=parent_id,
+                device_role="firewall",
+                quantity=1,
+                template=virtual_template,
+                options=DeviceOptions(virtual=True, name_override=instance_name),
+                hosting_device=physical_device,
+            )
+            instance_names.extend(names)
+
+        await self._ensure_ha_pairs(
+            instance_names,
+            ha_kind="ManagedFirewallHA",
+            role_label=f"firewall (dedicated {customer_name})",
+            device_kind=DcimVirtualDevice,
+        )
+
+        try:
+            virtual_devices = await self.client.filters(kind=DcimVirtualDevice, name__values=instance_names)
+            dedicated_clusters = await self.client.filters(
+                kind=ManagedFirewallHA, capabilities__ids=[virtual_devices[0].id], include=["capabilities"]
+            )
+        except Exception as exc:
+            self.logger.error(f"Error resolving dedicated ManagedFirewallHA cluster for {customer_name}: {exc}")
+            return None
+        if not dedicated_clusters or len(virtual_devices) != 2:
+            self.logger.error(f"{parent_name}: failed to resolve dedicated firewall cluster for {customer_name}")
+            return None
+
+        return dedicated_clusters[0], virtual_devices
 
     async def _get_or_create_firewall_context(
         self, context_name: str, cluster_id: str, tenant_id: str | None

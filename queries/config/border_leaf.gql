@@ -90,6 +90,7 @@ query border_leaf_config(
                     ip_namespace { node { name { value } } }
                   }
                 }
+                parent_interface { node { name { value } } }
               }
 
               ... on DcimLAGInterface {

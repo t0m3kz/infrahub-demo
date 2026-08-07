@@ -248,6 +248,7 @@ def _dc_payload_with_parent(
     customer_id: str = "cust-1",
     dedicated_firewall: bool = False,
     connectivity_mode: str = "pbr",
+    dc_size: str = "M",
 ) -> dict:
     return {
         "TopologyCustomerDC": [
@@ -256,7 +257,12 @@ def _dc_payload_with_parent(
                 "name": "C005-P-DC10",
                 "environment": "p",
                 "owner": {"org_id": "C005", "name": "Drentec BV"},
-                "parent": {"id": "dc10-id", "name": "DC10", "connectivity_mode": {"value": connectivity_mode}},
+                "parent": {
+                    "id": "dc10-id",
+                    "name": "DC10",
+                    "connectivity_mode": {"value": connectivity_mode},
+                    "size": {"value": dc_size},
+                },
                 "design": {"dedicated_firewall": {"value": dedicated_firewall}},
             }
         ]
@@ -367,6 +373,7 @@ class TestFirewallContextProvisioning:
         gen, _, cluster = self._make_gen_with_cluster()
         context_obj = MagicMock(id="ctx-1")
         gen._get_or_create_firewall_context = AsyncMock(return_value=context_obj)
+        gen._ensure_dedicated_firewall_pair = AsyncMock(return_value=None)
 
         await gen.generate(_dc_payload_with_parent(customer_id="cust-1", dedicated_firewall=True))
 
@@ -405,6 +412,93 @@ class TestFirewallContextProvisioning:
         await gen.generate(_dc_payload_with_parent())
 
         gen._create_context_subinterface.assert_not_called()
+
+
+class TestEnsureDedicatedFirewallPair:
+    """Dedicated customers get an actual dedicated virtual firewall HA pair
+    (from the *_CUSTOMER_* template), not just a VDOM/context on shared
+    hardware — one virtual instance hosted on each physical peer, same
+    host-per-peer pattern as dc.py's _provision_shared_virtual_instances."""
+
+    def _make_gen(self) -> Any:
+        gen = _make_generator(CustomerDeploymentDCExchangeGenerator)
+        gen._ensure_ha_pairs = AsyncMock()
+        return gen
+
+    def _physical_pair(self) -> list[Any]:
+        fw1, fw2 = MagicMock(id="fw-1"), MagicMock(id="fw-2")
+        fw1.name.value = "DC10-FW1"
+        fw2.name.value = "DC10-FW2"
+        fw1.platform.peer.name.value = "checkpoint_gaia"
+        fw2.platform.peer.name.value = "checkpoint_gaia"
+        return [fw1, fw2]
+
+    @pytest.mark.asyncio
+    async def test_no_dc_size_returns_none(self) -> None:
+        gen = self._make_gen()
+        result = await gen._ensure_dedicated_firewall_pair(
+            fw_devices=self._physical_pair(), parent_id="dc-1", parent_name="DC10", dc_size=None, customer_name="C005"
+        )
+        assert result is None
+        gen.client.filters.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_unmapped_platform_returns_none(self) -> None:
+        gen = self._make_gen()
+        physical = self._physical_pair()
+        physical[0].platform.peer.name.value = "unknown_os"
+        physical[1].platform.peer.name.value = "unknown_os"
+        gen.client.filters = AsyncMock(return_value=physical)
+
+        result = await gen._ensure_dedicated_firewall_pair(
+            fw_devices=physical, parent_id="dc-1", parent_name="DC10", dc_size="M", customer_name="C005"
+        )
+
+        assert result is None
+
+    @pytest.mark.asyncio
+    async def test_missing_customer_template_returns_none(self) -> None:
+        gen = self._make_gen()
+        physical = self._physical_pair()
+        gen.client.filters = AsyncMock(side_effect=[physical, []])
+
+        result = await gen._ensure_dedicated_firewall_pair(
+            fw_devices=physical, parent_id="dc-1", parent_name="DC10", dc_size="M", customer_name="C005"
+        )
+
+        assert result is None
+        assert gen.client.filters.call_args_list[1].kwargs["template_name__value"] == "CloudGuard_EDGE_CUSTOMER_M"
+
+    @pytest.mark.asyncio
+    async def test_creates_dedicated_pair_and_returns_cluster(self) -> None:
+        gen = self._make_gen()
+        physical = self._physical_pair()
+        template_obj = MagicMock(id="tmpl-1")
+        template_obj.device_type.peer.id = "devtype-1"
+        template_obj.platform.peer.id = "plat-1"
+        virt1, virt2 = MagicMock(id="virt-1"), MagicMock(id="virt-2")
+        virt1.name.value = "DC10-FW1-DC10-FW2-C005-dedicated-DC10-FW1"
+        virt2.name.value = "DC10-FW1-DC10-FW2-C005-dedicated-DC10-FW2"
+        dedicated_cluster = MagicMock(id="dedicated-cluster-1")
+
+        gen.client.filters = AsyncMock(
+            side_effect=[
+                physical,  # resolve platform via include
+                [template_obj],  # resolve *_CUSTOMER_* template
+                [virt1, virt2],  # resolve created virtual devices by name
+                [dedicated_cluster],  # resolve dedicated ManagedFirewallHA cluster
+            ]
+        )
+        gen.create_devices = AsyncMock(side_effect=[["virt-name-1"], ["virt-name-2"]])
+
+        result = await gen._ensure_dedicated_firewall_pair(
+            fw_devices=physical, parent_id="dc-1", parent_name="DC10", dc_size="M", customer_name="C005"
+        )
+
+        assert result == (dedicated_cluster, [virt1, virt2])
+        assert gen.create_devices.await_count == 2
+        gen._ensure_ha_pairs.assert_awaited_once()
+        assert gen._ensure_ha_pairs.call_args.kwargs["ha_kind"] == "ManagedFirewallHA"
 
 
 class TestEnsureContextSubinterface:
