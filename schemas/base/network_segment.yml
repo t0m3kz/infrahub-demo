@@ -126,7 +126,7 @@ generics:
         kind: Boolean
         label: PBR Enabled
         description: "Traffic is redirected to the firewall via policy-based routing (not physically inline)."  # yamllint disable-line rule:line-length
-        default_value: false
+        default_value: true
         optional: true
         order_weight: 270
       - name: isolation_mode

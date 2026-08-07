@@ -514,3 +514,17 @@ extensions:
           identifier: firewall_context__tenant
           order_weight: 2300
           description: "Dedicated FirewallContext (VDOM/vsys); unset means a shared low-risk context"
+    # Reverse lookup for FirewallContext.cluster (above) — lets a device
+    # query find every context (shared + dedicated) on its own cluster in
+    # one hop, without a name-based lookup.
+    - kind: ManagedFirewallHA
+      relationships:
+        - name: contexts
+          label: "Firewall Contexts"
+          peer: ManagedFirewallContext
+          kind: Generic
+          cardinality: many
+          optional: true
+          identifier: firewall_context__cluster
+          order_weight: 1000
+          description: "FirewallContexts (VDOMs/vsys) hosted on this HA cluster"

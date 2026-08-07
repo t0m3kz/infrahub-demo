@@ -29,6 +29,14 @@ query border_leaf_config(
         # Device Services (BGP, OSPF) with nested peerings
         ...DeviceCapabilitiesOnDeviceFields
 
+        ... on DcimPhysicalDevice {
+          deployment {
+            node {
+              ...FirewallContextsOnDeploymentFields
+            }
+          }
+        }
+
         # Interface Information
         interfaces {
           edges {

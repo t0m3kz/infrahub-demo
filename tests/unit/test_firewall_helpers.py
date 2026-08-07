@@ -684,16 +684,22 @@ def _make_pbr_rule(*, action: str = "permit", dst_prefix: str | None = "10.0.2.0
     return rule
 
 
-def _make_context_leg(*, ip_addr: str = "10.65.0.2/30", tenant_id: str | None = None) -> dict:
-    cap: dict = {"typename": "ManagedFirewallContext"}
+def _make_context_leg(*, fw_ip: str = "10.65.0.0/30", tenant_id: str | None = None) -> dict:
+    """A GLOBAL ManagedFirewallContext dict (its own query root), not scoped to
+    the rendered device's own interfaces — the firewall's OWN leg is what
+    provides the nexthop, found by filtering interface_capabilities legs to
+    the one on a device with role="firewall"."""
+    ctx: dict = {
+        "interface_capabilities": [{"device": {"role": "firewall"}, "ip_address": {"address": fw_ip}}],
+    }
     if tenant_id:
-        cap["tenant"] = {"id": tenant_id}
-    return {"ip_address": {"address": ip_addr}, "interface_capabilities": [cap]}
+        ctx["tenant"] = {"id": tenant_id}
+    return ctx
 
 
 class TestGetCustomerPbrRules:
     def test_none_activations_returns_empty(self) -> None:
-        assert get_customer_pbr_rules(None, [{"ip_address": {"address": "10.65.0.2/30"}}]) == []
+        assert get_customer_pbr_rules(None, [_make_context_leg()]) == []
 
     def test_no_firewall_context_leg_returns_empty(self) -> None:
         activations = [_make_pbr_activation(security_policies=[])]
@@ -703,60 +709,67 @@ class TestGetCustomerPbrRules:
         """Missing 'security_policies' key (not queried) means no PBR rule — same
         gate get_acls() uses."""
         activations = [_make_pbr_activation(security_policies=None)]
-        interfaces = [_make_context_leg()]
-        assert get_customer_pbr_rules(activations, interfaces) == []
+        contexts = [_make_context_leg()]
+        assert get_customer_pbr_rules(activations, contexts) == []
 
     def test_shared_context_nexthop_used_when_no_tenant(self) -> None:
         activations = [_make_pbr_activation(owner_id="cust-a", security_policies=[])]
-        interfaces = [_make_context_leg(ip_addr="10.65.0.2/30")]
-        result = get_customer_pbr_rules(activations, interfaces)
+        contexts = [_make_context_leg(fw_ip="10.65.0.0/30")]
+        result = get_customer_pbr_rules(activations, contexts)
         assert len(result) == 1
-        assert result[0]["fw_nexthop"] == "10.65.0.1"
+        assert result[0]["fw_nexthop"] == "10.65.0.0"
         assert result[0]["vlan_id"] == 100
         assert result[0]["bypass_prefixes"] == []
 
     def test_dedicated_context_nexthop_preferred_over_shared(self) -> None:
         activations = [_make_pbr_activation(owner_id="cust-a", security_policies=[])]
-        interfaces = [
-            _make_context_leg(ip_addr="10.65.0.2/30"),  # shared
-            _make_context_leg(ip_addr="10.66.0.2/30", tenant_id="cust-a"),  # dedicated
+        contexts = [
+            _make_context_leg(fw_ip="10.65.0.0/30"),  # shared
+            _make_context_leg(fw_ip="10.66.0.0/30", tenant_id="cust-a"),  # dedicated
         ]
-        result = get_customer_pbr_rules(activations, interfaces)
-        assert result[0]["fw_nexthop"] == "10.66.0.1"
+        result = get_customer_pbr_rules(activations, contexts)
+        assert result[0]["fw_nexthop"] == "10.66.0.0"
 
     def test_dedicated_context_for_other_tenant_not_used(self) -> None:
         """A dedicated context for a DIFFERENT owner must not leak as this
         segment's nexthop — falls back to shared (or nothing) instead."""
         activations = [_make_pbr_activation(owner_id="cust-a", security_policies=[])]
-        interfaces = [_make_context_leg(ip_addr="10.66.0.2/30", tenant_id="cust-b")]
-        assert get_customer_pbr_rules(activations, interfaces) == []
+        contexts = [_make_context_leg(fw_ip="10.66.0.0/30", tenant_id="cust-b")]
+        assert get_customer_pbr_rules(activations, contexts) == []
+
+    def test_context_without_firewall_leg_is_skipped(self) -> None:
+        """inline connectivity_mode never allocates an IP on the firewall leg —
+        a context with no addressed firewall-role leg contributes no nexthop."""
+        activations = [_make_pbr_activation(owner_id="cust-a", security_policies=[])]
+        contexts = [{"interface_capabilities": [{"device": {"role": "firewall"}, "ip_address": {}}]}]
+        assert get_customer_pbr_rules(activations, contexts) == []
 
     def test_permit_rule_becomes_bypass_prefix(self) -> None:
         policies = [{"enabled": True, "rules": [_make_pbr_rule(dst_prefix="10.0.2.0/24")]}]
         activations = [_make_pbr_activation(security_policies=policies)]
-        interfaces = [_make_context_leg()]
-        result = get_customer_pbr_rules(activations, interfaces)
+        contexts = [_make_context_leg()]
+        result = get_customer_pbr_rules(activations, contexts)
         assert result[0]["bypass_prefixes"] == ["10.0.2.0/24"]
 
     def test_deny_rule_is_not_a_bypass(self) -> None:
         policies = [{"enabled": True, "rules": [_make_pbr_rule(action="deny", dst_prefix="10.0.2.0/24")]}]
         activations = [_make_pbr_activation(security_policies=policies)]
-        interfaces = [_make_context_leg()]
-        result = get_customer_pbr_rules(activations, interfaces)
+        contexts = [_make_context_leg()]
+        result = get_customer_pbr_rules(activations, contexts)
         assert result[0]["bypass_prefixes"] == []
 
     def test_disabled_rule_is_not_a_bypass(self) -> None:
         policies = [{"enabled": True, "rules": [_make_pbr_rule(disabled=True)]}]
         activations = [_make_pbr_activation(security_policies=policies)]
-        interfaces = [_make_context_leg()]
-        result = get_customer_pbr_rules(activations, interfaces)
+        contexts = [_make_context_leg()]
+        result = get_customer_pbr_rules(activations, contexts)
         assert result[0]["bypass_prefixes"] == []
 
     def test_disabled_policy_contributes_no_bypass(self) -> None:
         policies = [{"enabled": False, "rules": [_make_pbr_rule()]}]
         activations = [_make_pbr_activation(security_policies=policies)]
-        interfaces = [_make_context_leg()]
-        result = get_customer_pbr_rules(activations, interfaces)
+        contexts = [_make_context_leg()]
+        result = get_customer_pbr_rules(activations, contexts)
         assert result[0]["bypass_prefixes"] == []
 
     def test_cross_owner_permit_still_bypasses(self) -> None:
@@ -764,8 +777,8 @@ class TestGetCustomerPbrRules:
         share an owner — intra- and inter-customer traffic use one model."""
         policies = [{"enabled": True, "rules": [_make_pbr_rule(dst_prefix="10.9.0.0/24")]}]
         activations = [_make_pbr_activation(owner_id="cust-a", security_policies=policies)]
-        interfaces = [_make_context_leg()]
-        result = get_customer_pbr_rules(activations, interfaces)
+        contexts = [_make_context_leg()]
+        result = get_customer_pbr_rules(activations, contexts)
         assert "10.9.0.0/24" in result[0]["bypass_prefixes"]
 
     def test_duplicate_vlan_deduplicated(self) -> None:
@@ -773,8 +786,8 @@ class TestGetCustomerPbrRules:
             _make_pbr_activation(vlan_id=100, security_policies=[]),
             _make_pbr_activation(vlan_id=100, security_policies=[]),
         ]
-        interfaces = [_make_context_leg()]
-        result = get_customer_pbr_rules(activations, interfaces)
+        contexts = [_make_context_leg()]
+        result = get_customer_pbr_rules(activations, contexts)
         assert len(result) == 1
 
     def test_results_sorted_by_vlan_id(self) -> None:
@@ -782,8 +795,8 @@ class TestGetCustomerPbrRules:
             _make_pbr_activation(vlan_id=200, security_policies=[]),
             _make_pbr_activation(vlan_id=100, security_policies=[]),
         ]
-        interfaces = [_make_context_leg()]
-        result = get_customer_pbr_rules(activations, interfaces)
+        contexts = [_make_context_leg()]
+        result = get_customer_pbr_rules(activations, contexts)
         assert [r["vlan_id"] for r in result] == [100, 200]
 
 

@@ -278,6 +278,30 @@ mac security sgt-policy {{ rule.src_sgt }}-to-{{ rule.dst_sgt }}
 {%- endfor %}
 {%- endif %}
 
+{%- if customer_pbr_rules %}
+!
+! Customer PBR — default-redirect to firewall (TopologyCustomerDeployment's
+! FirewallContext); a SecurityPolicyRule permit is the only bypass.
+!
+{%- for rule in customer_pbr_rules %}
+ip access-list PBR-BYPASS-VLAN{{ rule.vlan_id }}
+{%- for prefix in rule.bypass_prefixes %}
+   permit ip any {{ prefix }}
+{%- endfor %}
+   deny ip any any
+!
+route-map RM-CUSTOMER-PBR-VLAN{{ rule.vlan_id }} permit 10
+   match ip address PBR-BYPASS-VLAN{{ rule.vlan_id }}
+!
+route-map RM-CUSTOMER-PBR-VLAN{{ rule.vlan_id }} permit 20
+   set ip next-hop {{ rule.fw_nexthop }}
+!
+interface Vlan{{ rule.vlan_id }}
+   ip policy route-map RM-CUSTOMER-PBR-VLAN{{ rule.vlan_id }}
+!
+{%- endfor %}
+{%- endif %}
+
 {%- include 'common/arista_eos_management.j2' %}
 
 ! End of configuration

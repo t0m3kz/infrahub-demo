@@ -210,7 +210,7 @@ class BaseDeviceTransform(InfrahubTransform):
             config["capabilities"] = capabilities
         return config
 
-    def _extra_config(self, data: dict, platform_name: str, extra_roots: dict | None = None) -> dict:  # noqa: ARG002
+    def _extra_config(self, data: dict, platform_name: str, extra_roots: dict | None = None) -> dict:
         """Return device-specific template variables.
 
         Default implementation adds VLANs, VXLAN config, ACLs, VRF default
@@ -231,7 +231,11 @@ class BaseDeviceTransform(InfrahubTransform):
 
         # Customer PBR: default-redirect to the firewall context serving this
         # segment's owner; a SecurityPolicyRule permit is the only bypass.
-        customer_pbr_rules = get_customer_pbr_rules(activations, data.get("interfaces"))
+        # ManagedFirewallContext is GLOBAL data (its own query root), not
+        # scoped to this device's own interfaces — no leaf ever owns a
+        # FirewallContext interface itself, only the firewall/border-leaf do.
+        firewall_contexts = (extra_roots or {}).get("ManagedFirewallContext") or []
+        customer_pbr_rules = get_customer_pbr_rules(activations, firewall_contexts)
 
         return {
             "vlans": vlans,
