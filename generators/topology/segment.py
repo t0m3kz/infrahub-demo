@@ -27,17 +27,17 @@ from typing import Any
 from utils.data_cleaning import clean_data
 
 from ..common import CommonGenerator
+from ..connections import CablingMixin
 from ..protocols import (
     DcimPhysicalDevice,
     DcimPhysicalInterface,
-    DcimVirtualInterface,
     ManagedSegmentDeployment,
     ManagedVxlanSegment,
     TopologySegmentHosting,
 )
 
 
-class VxlanSegmentGenerator(CommonGenerator):
+class VxlanSegmentGenerator(CablingMixin, CommonGenerator):
     """VXLAN segment generator — allocates VLAN ID + VNI from pools, assigns
     the segment to leaf/tor customer-facing interfaces and physical host uplinks,
     and creates inline sub-interfaces when terminate_inline is set.
@@ -504,67 +504,27 @@ class VxlanSegmentGenerator(CommonGenerator):
             device_id: str = member.get("id", "")
             device_name: str = member.get("name", device_id)
 
-            # Find the trunk/uplink physical interface on this device
-            trunk_iface = await self._find_trunk_interface(device_id, device_name)
+            # Find the trunk/uplink physical interface on this device — role=uplink
+            # first, falling back to the first physical interface alphabetically.
+            try:
+                trunk_iface = await self.find_role_interface(
+                    device_id=device_id, role="uplink", fallback_any_physical=True
+                )
+            except Exception as exc:
+                self.logger.warning(f"  [{device_name}] Error fetching interfaces: {exc}")
+                continue
             if trunk_iface is None:
                 self.logger.warning(f"  [{device_name}] No trunk/uplink interface found — skipping")
                 continue
 
-            # Sub-interface name: <parent>.<vlan_id> (e.g. Ethernet1/1.100)
-            sub_iface_name = f"{trunk_iface.name.value}.{vlan_id}"
-
-            gateway_ip_str: str | None = gateway.get("address")
             ip_address_data: Any = {"id": gateway["id"]} if gateway.get("id") else None
 
-            try:
-                sub_iface = await self.client.create(
-                    kind=DcimVirtualInterface,
-                    data={
-                        "name": sub_iface_name,
-                        "device": {"id": device_id},
-                        "parent_interface": {"id": trunk_iface.id},
-                        "status": "active",
-                        "role": "service",
-                        **({"ip_address": ip_address_data} if ip_address_data else {}),
-                    },
-                )
-                await sub_iface.save(allow_upsert=True)
-
-                # Link segment to interface_capabilities
-                iface_services = getattr(sub_iface, "interface_capabilities")
-                await iface_services.fetch()
-                existing_ids = {peer.id for peer in iface_services.peers}
-                if segment_id not in existing_ids:
-                    await iface_services.add(segment_obj)
-                    await sub_iface.save(allow_upsert=True)
-
-                self.logger.info(
-                    f"  [{device_name}] Upserted sub-interface {sub_iface_name}"
-                    + (f" with IP {gateway_ip_str}" if gateway_ip_str else "")
-                )
-            except Exception as exc:
-                self.logger.error(f"  [{device_name}] Failed to create sub-interface {sub_iface_name}: {exc}")
-
-    async def _find_trunk_interface(self, device_id: str, device_name: str) -> Any:
-        """Return the trunk/uplink physical interface for a device.
-
-        Looks for role=uplink first, then falls back to the first physical interface.
-        """
-        try:
-            uplinks = await self.client.filters(
-                kind=DcimPhysicalInterface,
-                device__ids=[device_id],
-                role__value="uplink",
+            await self.ensure_vlan_subinterface(
+                device_id=device_id,
+                device_name=device_name,
+                trunk_iface=trunk_iface,
+                vlan_id_value=vlan_id,
+                capability_obj=segment_obj,
+                ip_address_id=ip_address_data["id"] if ip_address_data else None,
             )
-            if uplinks:
-                return uplinks[0]
-            # Fallback: first physical interface alphabetically
-            all_ifaces = await self.client.filters(
-                kind=DcimPhysicalInterface,
-                device__ids=[device_id],
-            )
-            if all_ifaces:
-                return sorted(all_ifaces, key=lambda i: i.name.value)[0]
-        except Exception as exc:
-            self.logger.warning(f"  [{device_name}] Error fetching interfaces: {exc}")
         return None

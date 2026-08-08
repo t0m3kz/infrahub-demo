@@ -5,8 +5,8 @@ from typing import Any, Literal, TypedDict, cast
 
 from utils.data_cleaning import clean_data
 
-from ..cabling import CablingMixin
 from ..common import CablingOptions, CommonGenerator, DeviceOptions, RoutingOptions
+from ..connections import CablingMixin
 from ..dc_config import host_bits_to_prefix_length, resolve_dc_size_layout
 from ..devices import DeviceMixin
 from ..helpers.naming import DeviceNamingConfig

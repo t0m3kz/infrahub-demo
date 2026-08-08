@@ -183,7 +183,7 @@ def get_firewall_contexts(interfaces: list[dict[str, Any]] | None) -> list[dict[
     """Build the per-VDOM/vsys/context list from this firewall's own sub-interfaces.
 
     A ManagedFirewallContext shows up as an interface_capabilities entry on
-    whichever DcimVirtualInterface generators/topology/customer_deployment.py's
+    whichever DcimVirtualInterface generators/topology/customer_dc.py's
     _ensure_context_subinterface created for it (always on the cluster's
     "uplink"-role trunk — see that function's docstring). One context can
     only have one sub-interface per firewall device, so this is a plain
@@ -246,7 +246,7 @@ def get_customer_pbr_rules(
     reachable from any leaf via normal fabric underlay routing, since the
     border-leaf already redistributes that directly-connected subnet.
     inline connectivity_mode never allocates that IP (see
-    generators/topology/customer_deployment.py's _ensure_context_subinterface),
+    generators/topology/customer_dc.py's _ensure_context_subinterface),
     so contexts without one are skipped — no PBR rule for them, since the
     firewall is already physically in the forwarding path.
 

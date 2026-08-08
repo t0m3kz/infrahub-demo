@@ -97,7 +97,7 @@ def get_interfaces(
         ]
 
         # FirewallContext sub-interface (role="service", created by
-        # generators/topology/customer_deployment.py's _create_context_subinterface)
+        # generators/topology/customer_dc.py's _create_context_subinterface)
         # needs its own dot1q tag rendered — the border-leaf/firewall leg of a
         # PBR p2p link isn't part of any customer segment's own VLAN, so it
         # can't come from `segment_vlan` above like a trunk's access/trunk

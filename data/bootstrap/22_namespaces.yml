@@ -9,7 +9,8 @@
 #
 # TRANSIT and INTERNET remain distinct namespaces: they're real VRF
 # boundaries the operator's hub-and-spoke topology routes across via
-# TopologyRoutedExchange (see generators/topology/customer_deployment.py and
+# TopologyRoutedExchange (see generators/topology/customer_colocation.py,
+# customer_cloud.py, customer_office.py's _exchange_via_circuit and
 # docs/exchange_gateway.md) — unrelated to per-customer/per-environment VRF
 # assignment, so they're kept as-is.
 

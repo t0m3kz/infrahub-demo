@@ -19,8 +19,8 @@ from netutils.interface import sort_interface_list
 
 from utils.data_cleaning import clean_data
 
-from ..cabling import CablingMixin
 from ..common import CablingOptions, CommonGenerator
+from ..connections import CablingMixin
 from ..endpoint import EndpointUplinkMixin
 from ..helpers.cabling import pick_matched_switch_port_name
 from ..helpers.interface_naming import get_lag_name

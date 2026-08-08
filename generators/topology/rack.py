@@ -4,8 +4,8 @@ import asyncio
 from pathlib import Path
 from typing import Any, Literal, TypedDict, cast
 
-from ..cabling import CablingMixin
 from ..common import CablingOptions, CommonGenerator
+from ..connections import CablingMixin
 from ..devices import DeviceMixin
 from ..helpers.rack import RackPlanner, RackRolesHelper, parse_rack_data
 from ..pod_config import pod_profile
