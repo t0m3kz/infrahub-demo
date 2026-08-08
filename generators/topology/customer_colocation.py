@@ -70,6 +70,19 @@ def _dev_name(device: Any) -> str:
     return device["name"] if isinstance(device, dict) else device.name.value
 
 
+def _customer_short_id(customer: dict[str, Any], customer_id: str) -> str:
+    """{org_id}-{environment} (e.g. "C009-p") — used for dedicated device/
+    context naming instead of customer["name"] (the full computed
+    {org_id}-{environment}-{parent}, e.g. "C009-P-DC11"). The parent segment
+    is redundant here: physical_name already identifies which cluster a
+    dedicated instance belongs to, so keeping it in the customer portion too
+    only stacks up length once _ensure_ha_pairs joins both instance names."""
+    owner = customer.get("owner") or {}
+    org_id = owner.get("org_id") or customer.get("name", customer_id)
+    environment = customer.get("environment")
+    return f"{org_id}-{environment}" if environment else org_id
+
+
 class CustomerDeploymentColocationExchangeGenerator(DeviceMixin, CablingMixin, CommonGenerator):
     """add_customer_deployment_colocation — FirewallContext (always a no-op
     in practice) plus hub-and-spoke exchange for TopologyCustomerColocation.
@@ -160,7 +173,6 @@ class CustomerDeploymentColocationExchangeGenerator(DeviceMixin, CablingMixin, C
             )
             return
 
-        customer_name = customer.get("name", customer_id)
         dedicated = bool((customer.get("design") or {}).get("dedicated_firewall"))
         if dedicated:
             dedicated_result = await self._ensure_dedicated_device_pair(
@@ -170,11 +182,15 @@ class CustomerDeploymentColocationExchangeGenerator(DeviceMixin, CablingMixin, C
                 parent_id=parent_id,
                 parent_name=parent_name,
                 dc_size=parent.get("size"),
-                customer_name=customer_name,
+                customer_name=_customer_short_id(customer, customer_id),
             )
             if dedicated_result is not None:
                 cluster, fw_devices = dedicated_result
-            context_name = f"{cluster.name.value}-{customer_name}-dedicated"
+            # cluster.name.value already carries customer_name (see
+            # _ensure_dedicated_device_pair's instance_name) — don't append
+            # it again here, or the context name grows with every extra
+            # "-dedicated" segment stacked on top of the cluster's own.
+            context_name = f"{cluster.name.value}-context"
             tenant_id: str | None = customer_id
         else:
             context_name = f"{cluster.name.value}-{_SHARED_CONTEXT_NAME_SUFFIX}"
@@ -250,12 +266,15 @@ class CustomerDeploymentColocationExchangeGenerator(DeviceMixin, CablingMixin, C
             "platform": {"id": virtual_template_obj.platform.peer.id},
         }
 
-        pair_prefix = "-".join(sorted(_dev_name(d) for d in physical_pair))
         instance_names: list[str] = []
         self.fabric_name = parent_name.lower()
         for physical_device in sorted(physical_pair, key=_dev_name):
             physical_name = _dev_name(physical_device)
-            instance_name = f"{pair_prefix}-{customer_name}-dedicated-{physical_name}"
+            # physical_name alone is enough to keep this unique — it's
+            # already the specific host device in the pair. Prefixing with
+            # both hosts' names (the old pair_prefix) just doubled up once
+            # _ensure_ha_pairs joins the two instance names together below.
+            instance_name = f"{physical_name}-{customer_name}-dedicated"
             names = await self.create_devices(
                 deployment_id=parent_id,
                 device_role=role,
@@ -312,7 +331,7 @@ class CustomerDeploymentColocationExchangeGenerator(DeviceMixin, CablingMixin, C
             parent_id=parent_id,
             parent_name=parent_name,
             dc_size=parent.get("size"),
-            customer_name=customer.get("name", customer_id),
+            customer_name=_customer_short_id(customer, customer_id),
             tenant_id=customer_id,
         )
 
