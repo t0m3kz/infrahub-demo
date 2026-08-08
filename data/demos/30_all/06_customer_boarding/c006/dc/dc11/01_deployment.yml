@@ -25,4 +25,4 @@ spec:
       parent: "DC11"
       design: "S_DC"
       member_of_groups:
-        - customer_deployments
+        - customer_deployments_dc

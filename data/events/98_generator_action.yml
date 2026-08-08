@@ -44,3 +44,15 @@ spec:
     - name: run-endpoint-generator
       description: Run Endpoint Connectivity Generator
       generator: add_endpoint
+    - name: run-customer-deployment-dc-generator
+      description: Provision FirewallContext/dedicated LB and exchange routing for a DC customer deployment
+      generator: add_customer_deployment_dc
+    - name: run-customer-deployment-colocation-generator
+      description: Provision FirewallContext/dedicated LB and exchange routing for a colocation customer deployment
+      generator: add_customer_deployment_colocation
+    - name: run-customer-deployment-cloud-generator
+      description: Provision exchange routing for a cloud customer deployment
+      generator: add_customer_deployment_cloud
+    - name: run-customer-deployment-office-generator
+      description: Provision exchange routing for an office customer deployment
+      generator: add_customer_deployment_office

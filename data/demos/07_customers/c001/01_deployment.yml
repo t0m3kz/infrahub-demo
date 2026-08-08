@@ -18,11 +18,11 @@ spec:
       parent: "DC6"
       design: "M_DC"
       member_of_groups:
-        - customer_deployments
+        - customer_deployments_dc
     - owner: "C001"
       environment: "t"
       status: active
       parent: "DC6"
       design: "S_DC"
       member_of_groups:
-        - customer_deployments
+        - customer_deployments_dc

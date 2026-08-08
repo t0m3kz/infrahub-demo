@@ -22,4 +22,4 @@ spec:
       locations:
         - "waw-br1-c16"
       member_of_groups:
-        - customer_deployments
+        - customer_deployments_office

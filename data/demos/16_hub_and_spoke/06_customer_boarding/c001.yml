@@ -28,4 +28,4 @@ spec:
       locations:
         - "waw-hq-c16"
       member_of_groups:
-        - customer_deployments
+        - customer_deployments_office

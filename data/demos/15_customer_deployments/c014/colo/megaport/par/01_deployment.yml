@@ -20,4 +20,4 @@ spec:
       status: active
       parent: "PAR"
       member_of_groups:
-        - customer_deployments
+        - customer_deployments_colocation
