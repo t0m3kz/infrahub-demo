@@ -442,8 +442,14 @@ queries:
     file_path: queries/topology/add/ha_domain.gql
   - name: mlag_domain_data
     file_path: queries/topology/add/mlag_domain.gql
-  - name: customer_deployment
-    file_path: queries/topology/add/customer_deployment.gql
+  - name: customer_dc
+    file_path: queries/topology/add/customer_dc.gql
+  - name: customer_colocation
+    file_path: queries/topology/add/customer_colocation.gql
+  - name: customer_cloud
+    file_path: queries/topology/add/customer_cloud.gql
+  - name: customer_office
+    file_path: queries/topology/add/customer_office.gql
   - name: application_orchestrator_routing
     file_path: queries/topology/add/application_orchestrator_routing.gql
   - name: customer_deployment_orchestrator_routing
@@ -585,36 +591,36 @@ generator_definitions:
     parameters:
       name: name__value
   - name: add_customer_deployment_dc
-    file_path: generators/topology/customer_deployment.py
+    file_path: generators/topology/customer_dc.py
     targets: customer_deployments
-    query: customer_deployment
+    query: customer_dc
     class_name: CustomerDeploymentDCExchangeGenerator
     execute_in_proposed_change: false
     execute_after_merge: false
     parameters:
       name: name__value
   - name: add_customer_deployment_colocation
-    file_path: generators/topology/customer_deployment.py
+    file_path: generators/topology/customer_colocation.py
     targets: customer_deployments
-    query: customer_deployment
+    query: customer_colocation
     class_name: CustomerDeploymentColocationExchangeGenerator
     execute_in_proposed_change: false
     execute_after_merge: false
     parameters:
       name: name__value
   - name: add_customer_deployment_cloud
-    file_path: generators/topology/customer_deployment.py
+    file_path: generators/topology/customer_cloud.py
     targets: customer_deployments
-    query: customer_deployment
+    query: customer_cloud
     class_name: CustomerDeploymentCloudExchangeGenerator
     execute_in_proposed_change: false
     execute_after_merge: false
     parameters:
       name: name__value
   - name: add_customer_deployment_office
-    file_path: generators/topology/customer_deployment.py
+    file_path: generators/topology/customer_office.py
     targets: customer_deployments
-    query: customer_deployment
+    query: customer_office
     class_name: CustomerDeploymentOfficeExchangeGenerator
     execute_in_proposed_change: false
     execute_after_merge: false

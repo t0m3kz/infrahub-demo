@@ -4,8 +4,8 @@ from typing import Any, Literal, TypedDict, cast
 
 from utils.data_cleaning import clean_data
 
-from ..cabling import CablingMixin
 from ..common import CommonGenerator, DeviceOptions
+from ..connections import CablingMixin
 from ..dc_config import host_bits_to_prefix_length, resolve_dc_size_layout
 from ..devices import DeviceMixin
 from ..helpers import name_to_asn_range
@@ -746,7 +746,7 @@ class DCTopologyGenerator(PoolMixin, DeviceMixin, CablingMixin, RoutingMixin, Co
         didn't resolve there, and every P2P allocation failed with
         "No more resources available".
 
-        generators/topology/customer_deployment.py's _ensure_firewall_context
+        generators/topology/customer_dc.py's _ensure_firewall_context
         allocates from these once a customer boards onto this DC.
         """
         await self.upsert_number_pool(

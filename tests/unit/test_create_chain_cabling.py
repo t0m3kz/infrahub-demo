@@ -15,8 +15,8 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from generators.cabling import CablingMixin
 from generators.common import CommonGenerator
+from generators.connections import CablingMixin
 
 
 class _Gen(CablingMixin, CommonGenerator):

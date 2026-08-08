@@ -1,0 +1,91 @@
+query customer_dc($name: String!) {
+  TopologyCustomerDC(name__value: $name) {
+    edges {
+      node {
+        id
+        name { value }
+        environment { value }
+        owner {
+          node {
+            id
+            org_id { value }
+            ... on OrganizationCustomer {
+              name { value }
+            }
+            ... on OrganizationProvider {
+              name { value }
+            }
+          }
+        }
+        parent {
+          node {
+            id
+            name { value }
+            ... on TopologyDataCenter {
+              connectivity_mode { value }
+              size { value }
+              firewall_devices: devices(role__value: "firewall") {
+                edges {
+                  node {
+                    id
+                    name { value }
+                    ... on DcimPhysicalDevice {
+                      platform { node { name { value } } }
+                    }
+                  }
+                }
+              }
+              loadbalancer_devices: devices(role__value: "load-balancer") {
+                edges {
+                  node {
+                    id
+                    name { value }
+                    ... on DcimPhysicalDevice {
+                      platform { node { name { value } } }
+                    }
+                  }
+                }
+              }
+              security_manager_controllers: controllers(controller_type__value: "security_manager") {
+                edges {
+                  node {
+                    id
+                    controller_type { value }
+                    ... on DcimDevice {
+                      platform {
+                        node {
+                          id
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+              lb_manager_controllers: controllers(controller_type__value: "lb_manager") {
+                edges {
+                  node {
+                    id
+                    controller_type { value }
+                    ... on DcimDevice {
+                      platform {
+                        node {
+                          id
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+        design {
+          node {
+            dedicated_firewall { value }
+            dedicated_loadbalancer { value }
+          }
+        }
+      }
+    }
+  }
+}

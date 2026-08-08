@@ -12,7 +12,7 @@ if TYPE_CHECKING:
     import logging
 
 from .helpers import CableTypeDetector, CablingPlanner
-from .protocols import DcimCable, DcimPhysicalInterface, IpamIPAddress
+from .protocols import DcimCable, DcimPhysicalInterface, DcimVirtualInterface, IpamIPAddress
 from .types import CablingOptions, ChainHop
 
 _INTERFACE_READY_MAX_RETRIES = 10
@@ -35,6 +35,8 @@ class CablingMixin:
     # CommonGenerator._resolve_pool / _retry_delay — annotation only.
     _resolve_pool: Any
     _retry_delay: Callable[..., float]
+    # CommonGenerator._safe_rel_add — annotation only, needed by ensure_vlan_subinterface.
+    _safe_rel_add: Any
 
     async def create_cabling(
         self,
@@ -306,6 +308,66 @@ class CablingMixin:
             all_leg_pairs.append(await self._execute_cabling_plan(leg_plan, iface_map, options, technical_pool))
 
         return all_leg_pairs
+
+    async def find_role_interface(
+        self, *, device_id: str, role: str, fallback_any_physical: bool = False
+    ) -> Any | None:
+        """Return the first physical interface matching role on device_id, or
+        (if fallback_any_physical) the alphabetically-first physical
+        interface when no role match exists. Returns None on error or no
+        match — shared trunk/uplink resolution for
+        ensure_vlan_subinterface() callers.
+        """
+        ifaces = await self.client.filters(kind=DcimPhysicalInterface, device__ids=[device_id], role__value=role)
+        if ifaces:
+            return ifaces[0]
+        if not fallback_any_physical:
+            return None
+        all_ifaces = await self.client.filters(kind=DcimPhysicalInterface, device__ids=[device_id])
+        if not all_ifaces:
+            return None
+        return sorted(all_ifaces, key=lambda i: i.name.value)[0]
+
+    async def ensure_vlan_subinterface(
+        self,
+        *,
+        device_id: str,
+        device_name: str,
+        trunk_iface: Any,
+        vlan_id_value: int,
+        capability_obj: Any,
+        ip_address_id: str | None = None,
+    ) -> Any | None:
+        """Upsert a VLAN-tagged DcimVirtualInterface (<trunk>.<vlan_id>) on
+        trunk_iface, linked to capability_obj via interface_capabilities —
+        shared by customer_dc.py/customer_colocation.py's FirewallContext
+        sub-interfaces and segment.py's inline VxlanSegment termination.
+        Trunk-interface resolution stays with the caller since fallback
+        behavior differs (see find_role_interface).
+        """
+        sub_iface_name = f"{trunk_iface.name.value}.{vlan_id_value}"
+        sub_iface_data: dict[str, Any] = {
+            "name": sub_iface_name,
+            "device": {"id": device_id},
+            "parent_interface": {"id": trunk_iface.id},
+            "status": "active",
+            "role": "service",
+            **({"ip_address": {"id": ip_address_id}} if ip_address_id else {}),
+        }
+
+        try:
+            sub_iface = await self.client.create(kind=DcimVirtualInterface, data=sub_iface_data)
+            await sub_iface.save(allow_upsert=True)
+            iface_capabilities = getattr(sub_iface, "interface_capabilities")
+            await iface_capabilities.fetch()
+            if not any(peer.id == capability_obj.id for peer in iface_capabilities.peers):
+                await self._safe_rel_add(iface_capabilities, capability_obj)
+                await sub_iface.save(allow_upsert=True)
+            self.logger.info(f"Upserted sub-interface {sub_iface_name} on {device_name}")
+            return sub_iface
+        except Exception as exc:
+            self.logger.error(f"Failed to create sub-interface {sub_iface_name} on {device_name}: {exc}")
+            return None
 
     async def _cable_border_services(
         self,

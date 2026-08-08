@@ -1,0 +1,120 @@
+query customer_cloud($name: String!) {
+  TopologyCustomerCloud(name__value: $name) {
+    edges {
+      node {
+        id
+        name { value }
+        environment { value }
+        owner {
+          node {
+            id
+            org_id { value }
+            ... on OrganizationCustomer {
+              name { value }
+            }
+            ... on OrganizationProvider {
+              name { value }
+            }
+          }
+        }
+        parent { node { id name { value } } }
+        circuits {
+          edges {
+            node {
+              id
+              __typename
+              ... on TopologyVirtualCircuit {
+                name { value }
+                interfaces {
+                  edges {
+                    node {
+                      id
+                      name { value }
+                      device { node { name { value } } }
+                    }
+                  }
+                }
+                locations {
+                  edges {
+                    node {
+                      id
+                      __typename
+                      ... on TopologyCustomerColocation {
+                        namespace {
+                          node {
+                            id
+                            name { value }
+                          }
+                        }
+                      }
+                      ... on TopologyCustomerCloud {
+                        namespace {
+                          node {
+                            id
+                            name { value }
+                          }
+                        }
+                      }
+                      ... on TopologyCustomerOffice {
+                        namespace {
+                          node {
+                            id
+                            name { value }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+              ... on TopologyPhysicalCircuit {
+                name { value }
+                customer_interfaces {
+                  edges {
+                    node {
+                      id
+                      name { value }
+                      device { node { name { value } } }
+                    }
+                  }
+                }
+                locations {
+                  edges {
+                    node {
+                      id
+                      __typename
+                      ... on TopologyCustomerColocation {
+                        namespace {
+                          node {
+                            id
+                            name { value }
+                          }
+                        }
+                      }
+                      ... on TopologyCustomerCloud {
+                        namespace {
+                          node {
+                            id
+                            name { value }
+                          }
+                        }
+                      }
+                      ... on TopologyCustomerOffice {
+                        namespace {
+                          node {
+                            id
+                            name { value }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
