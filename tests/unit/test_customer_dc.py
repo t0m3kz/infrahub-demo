@@ -379,6 +379,41 @@ class TestEnsureDedicatedDevicePair:
         assert gen.create_devices.await_count == 2
         gen._ensure_ha_pairs.assert_awaited_once()
         assert gen._ensure_ha_pairs.call_args.kwargs["ha_kind"] == "ManagedFirewallHA"
+        assert gen._ensure_ha_pairs.call_args.kwargs["tenant_id"] is None
+
+    @pytest.mark.asyncio
+    async def test_tenant_id_forwarded_to_ensure_ha_pairs(self) -> None:
+        """tenant_id (set by the dedicated load-balancer path) reaches
+        _ensure_ha_pairs so ManagedLoadbalancerHA.tenant gets recorded."""
+        gen = self._make_gen()
+        physical = self._physical_pair(platform="f5_tmos")
+        template_obj = MagicMock(id="tmpl-1")
+        template_obj.device_type.peer.id = "devtype-1"
+        template_obj.platform.peer.id = "plat-1"
+        virt1, virt2 = MagicMock(id="virt-1"), MagicMock(id="virt-2")
+        dedicated_cluster = MagicMock(id="dedicated-cluster-1")
+
+        gen.client.filters = AsyncMock(
+            side_effect=[
+                [template_obj],
+                [virt1, virt2],
+                [dedicated_cluster],
+            ]
+        )
+        gen.create_devices = AsyncMock(side_effect=[["virt-name-1"], ["virt-name-2"]])
+
+        await gen._ensure_dedicated_device_pair(
+            role="load-balancer",
+            ha_kind="ManagedLoadbalancerHA",
+            physical_devices=physical,
+            parent_id="dc-1",
+            parent_name="DC10",
+            dc_size="M",
+            customer_name="C005",
+            tenant_id="cust-1",
+        )
+
+        assert gen._ensure_ha_pairs.call_args.kwargs["tenant_id"] == "cust-1"
 
 
 class TestEnsureDedicatedLoadbalancer:
@@ -421,6 +456,7 @@ class TestEnsureDedicatedLoadbalancer:
             parent_name="DC10",
             dc_size="M",
             customer_name="C005-P-DC10",
+            tenant_id="cust-1",
         )
 
     @pytest.mark.asyncio

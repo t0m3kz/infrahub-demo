@@ -24,6 +24,7 @@ from transforms.common import (
     get_acls,
     get_interfaces,
     get_vlans,
+    get_vxlan_config,
 )
 
 # ---------------------------------------------------------------------------
@@ -296,6 +297,47 @@ class TestTransformVxlanArista:
 
 
 # ===========================================================================
+# get_vxlan_config() — VTEP-role gate
+# ===========================================================================
+
+
+class TestGetVxlanConfigVtepGate:
+    """Spine/super-spine/hyper-spine are underlay+EVPN-route-reflector only —
+    never VTEPs — so get_vxlan_config() must return None for those roles
+    regardless of what activations/data it's given."""
+
+    def _data(self) -> dict:
+        return {"interfaces": [{"name": "Loopback0", "ip_addresses": [{"address": "10.0.0.1/32"}]}], "capabilities": []}
+
+    def test_spine_role_returns_none_even_with_activations(self) -> None:
+        acts = [_make_activation(vlan_id=100, customer_name="web")]
+        assert get_vxlan_config(self._data(), "arista_eos", device_role="spine", activations=acts) is None
+
+    def test_super_spine_role_returns_none_even_with_activations(self) -> None:
+        acts = [_make_activation(vlan_id=100, customer_name="web")]
+        assert get_vxlan_config(self._data(), "arista_eos", device_role="super_spine", activations=acts) is None
+
+    def test_super_spine_hyphenated_role_returns_none(self) -> None:
+        acts = [_make_activation(vlan_id=100, customer_name="web")]
+        assert get_vxlan_config(self._data(), "arista_eos", device_role="super-spine", activations=acts) is None
+
+    def test_hyper_spine_role_returns_none(self) -> None:
+        acts = [_make_activation(vlan_id=100, customer_name="web")]
+        assert get_vxlan_config(self._data(), "arista_eos", device_role="hyper-spine", activations=acts) is None
+
+    def test_leaf_role_still_builds_config(self) -> None:
+        acts = [_make_activation(vlan_id=100, customer_name="web")]
+        result = get_vxlan_config(self._data(), "arista_eos", device_role="leaf", activations=acts)
+        assert result is not None
+
+    def test_border_spine_role_still_builds_config(self) -> None:
+        """border-spine collapses spine+border-leaf — it IS a VTEP."""
+        acts = [_make_activation(vlan_id=100, customer_name="web")]
+        result = get_vxlan_config(self._data(), "arista_eos", device_role="border-spine", activations=acts)
+        assert result is not None
+
+
+# ===========================================================================
 # get_acls()
 # ===========================================================================
 
@@ -361,8 +403,13 @@ def _rule(
     return rule
 
 
-def _seg_ref(prefix: str) -> dict:
-    return {"id": "x", "name": "other", "gateway": {"ip_prefix": {"prefix": prefix}}}
+def _seg_ref(prefix: str, *, customer_name: str | None = None, environment: str | None = None) -> dict:
+    ref: dict = {"id": "x", "name": "other", "gateway": {"ip_prefix": {"prefix": prefix}}}
+    if customer_name is not None:
+        ref["customer_name"] = customer_name
+    if environment is not None:
+        ref["environment"] = environment
+    return ref
 
 
 class TestGetAclsEmpty:
@@ -659,6 +706,58 @@ class TestGetAclsZoneSupport:
         r = get_acls(activations=acts)[0]["rules"][0]
         assert r["src_zone"] == "external"
         assert r["dst_zone"] is None
+
+
+class TestGetAclsCustomerAttribution:
+    """src_customer/src_environment/dst_customer/dst_environment let a policy
+    mixing rules from different customers' segments be attributed per-rule,
+    not just at the whole-ACL segment_name level."""
+
+    def test_customer_environment_fields_passed_through(self) -> None:
+        rule = _rule(
+            index=10,
+            src=_seg_ref("10.1.0.0/16", customer_name="acme", environment="p"),
+            dst=_seg_ref("192.168.10.0/24", customer_name="globex", environment="s"),
+        )
+        acts = [_make_acl_activation(vlan_id=100, security_policies=[_policy(rules=[rule])])]
+        r = get_acls(activations=acts)[0]["rules"][0]
+        assert r["src_customer"] == "acme"
+        assert r["src_environment"] == "p"
+        assert r["dst_customer"] == "globex"
+        assert r["dst_environment"] == "s"
+
+    def test_customer_fields_none_when_absent(self) -> None:
+        acts = [_make_acl_activation(vlan_id=100, security_policies=[_policy(rules=[_rule()])])]
+        r = get_acls(activations=acts)[0]["rules"][0]
+        assert r["src_customer"] is None
+        assert r["src_environment"] is None
+        assert r["dst_customer"] is None
+        assert r["dst_environment"] is None
+
+    def test_implicit_deny_has_null_customer_fields(self) -> None:
+        acts = [_make_acl_activation(vlan_id=100, security_policies=[])]
+        deny = get_acls(activations=acts)[0]["rules"][-1]
+        assert deny["src_customer"] is None
+        assert deny["dst_customer"] is None
+
+    def test_mirrored_rule_dst_customer_is_this_segments_own_identity(self) -> None:
+        """A mirrored rule fires on the DESTINATION segment's own VLAN — its
+        dst_customer/dst_environment must be the segment it's rendering for,
+        not whatever the original rule's destination_segment happened to be."""
+        rule = _rule(index=10, dst=_seg_ref("10.0.2.0/24", customer_name="other-customer", environment="d"))
+        acts = [
+            _make_acl_activation(
+                vlan_id=100, customer_name="src-seg", seg_id="seg-a", security_policies=[_policy(rules=[rule])]
+            ),
+            _make_acl_activation(vlan_id=200, customer_name="this-customer", seg_id="seg-b", security_policies=[]),
+        ]
+        # Point the rule's destination_segment id at seg-b so it mirrors onto it.
+        rule["destination_segment"]["id"] = "seg-b"
+        result = get_acls(activations=acts)
+        acl_200 = next(a for a in result if a["vlan_id"] == 200)
+        mirrored = acl_200["rules"][0]
+        assert mirrored["dst_customer"] == "this-customer"
+        assert mirrored["dst_environment"] is None
 
 
 # ===========================================================================

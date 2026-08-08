@@ -241,6 +241,15 @@ nodes:
         optional: true
         order_weight: 600
         description: "Explicit route-target override (e.g. '65000:5001'). Unset means derive from the peer namespace's l3_vni + local AS."  # yamllint disable-line rule:line-length
+    relationships:
+      - name: cloud_attachment
+        peer: CloudHybridAttachment
+        cardinality: one
+        kind: Attribute
+        optional: true
+        identifier: "route_leak__cloud_attachment"
+        description: "Cloud-side DX VIF or VPN Gateway carrying this leak's BGP session. Unset for a pure on-prem leak."
+        order_weight: 700
 # interfaces (many, via ManagedGenericInterfaces) — optional and usually
 # empty: a pure fabric RT-leak has no interface at all. Set only when the
 # leak requires a DCI transport hop (interfaces on the circuit-facing ports

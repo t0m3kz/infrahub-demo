@@ -238,9 +238,15 @@ class DeviceMixin:
                     groups.append(device_group.id)
 
                 primary_address_rel = getattr(existing_device, "primary_address", None) if existing_device else None
-                primary_address_peer = getattr(primary_address_rel, "peer", None)
-                primary_address_obj = primary_address_peer or primary_address_rel
-                primary_address_id = getattr(primary_address_obj, "id", None)
+                # primary_address_rel is a RelatedNode wrapper — always truthy even when
+                # unset (no __bool__ override), and its .peer property raises ValueError
+                # instead of returning None when neither id nor hfid is set. Check
+                # .initialized before touching .peer at all.
+                primary_address_id = (
+                    primary_address_rel.peer.id
+                    if primary_address_rel is not None and primary_address_rel.initialized
+                    else None
+                )
                 if primary_address_id:
                     primary_address_data: Any = {"id": primary_address_id}
                 else:
@@ -283,9 +289,13 @@ class DeviceMixin:
                 if loopback_pool:
                     existing_loopback = existing_loopbacks_by_device.get(name)
                     loopback_ip_rel = getattr(existing_loopback, "ip_address", None) if existing_loopback else None
-                    loopback_ip_peer = getattr(loopback_ip_rel, "peer", None)
-                    loopback_ip_obj = loopback_ip_peer or loopback_ip_rel
-                    loopback_ip_id = getattr(loopback_ip_obj, "id", None)
+                    # loopback_ip_rel is a RelatedNode wrapper — always truthy even when
+                    # unset (no __bool__ override), and its .peer property raises
+                    # ValueError instead of returning None when neither id nor hfid is
+                    # set. Check .initialized before touching .peer at all.
+                    loopback_ip_id = (
+                        loopback_ip_rel.peer.id if loopback_ip_rel is not None and loopback_ip_rel.initialized else None
+                    )
                     if loopback_ip_id:
                         loopback_ip_data: Any = {"id": loopback_ip_id}
                     else:
@@ -424,6 +434,7 @@ class DeviceMixin:
         ha_kind: str,
         role_label: str,
         device_kind: type[Any] = DcimPhysicalDevice,
+        tenant_id: str | None = None,
     ) -> None:
         """Pair same-role devices two-at-a-time (sorted, odd one unpaired) into
         HA domains. Shared by dc.py (DC-wide firewall/load-balancer) and pod.py
@@ -432,7 +443,13 @@ class DeviceMixin:
         anything physically. device_kind is DcimVirtualDevice for the shared
         production/non-production virtual instances dc.py provisions per
         physical HA pair — same pairing logic, no physical cabling involved
-        (ha.py already skips cable creation for non-physical HA domains)."""
+        (ha.py already skips cable creation for non-physical HA domains).
+        tenant_id sets .tenant on ha_kind for a dedicated pair (e.g.
+        ManagedLoadbalancerHA created for one customer) — only meaningful for
+        ha_kind's that carry a tenant relationship (LoadbalancerHA today;
+        FirewallHA itself has none — a firewall's dedicated tenant is
+        recorded one level down, on its ManagedFirewallContext). Ignored
+        (never sent) when None, matching every non-dedicated caller."""
         ha_group = None
         for first, second in pair_device_names(device_names):
             ha_name = f"{first}-{second}-ha"
@@ -455,6 +472,7 @@ class DeviceMixin:
                     "status": "active",
                     "capabilities": [{"id": dev.id} for dev in devices],
                     "member_of_groups": [{"id": ha_group.id}],
+                    **({"tenant": {"id": tenant_id}} if tenant_id else {}),
                 },
             )
             await ha_obj.save(allow_upsert=True)

@@ -41,6 +41,11 @@ generics:
             description: Resource is retired and inactive.
             color: "#BFBFBF"
 
+  - name: HybridAttachment
+    namespace: Cloud
+    description: "Cloud-side endpoint of a hybrid (on-prem/VRF) routing attachment — DX private VIF or VPN Gateway."
+    include_in_menu: false
+
 nodes:
 
   - name: Cloud
@@ -285,6 +290,22 @@ nodes:
         optional: true
         description: Subnets within this virtual network
         order_weight: 2000
+      - name: customer_deployment
+        peer: TopologyCustomer
+        cardinality: one
+        kind: Attribute
+        optional: true
+        identifier: "virtual_network__customer_deployments"
+        description: "Customer deployment footprint this VPC belongs to."
+        order_weight: 2100
+      - name: instances
+        peer: CloudInstance
+        cardinality: many
+        kind: Generic
+        optional: true
+        identifier: "virtual_network__instances"
+        description: "Instances placed directly in this VPC (no subnet-level segment)."
+        order_weight: 2200
     uniqueness_constraints:
       - [account, name__value]
 
@@ -620,6 +641,14 @@ nodes:
         optional: true
         description: Network segment where this instance is deployed
         order_weight: 1100
+      - name: virtual_network
+        peer: CloudVirtualNetwork
+        cardinality: one
+        kind: Attribute
+        optional: true
+        identifier: "virtual_network__instances"
+        description: "VPC this instance runs in — set directly when the instance has no subnet-level network_segment."  # yamllint disable-line rule:line-length
+        order_weight: 1120
       - name: security_groups
         peer: CloudSecurityGroup
         cardinality: many
@@ -901,6 +930,7 @@ nodes:
       - name__value
     inherit_from:
       - CloudResource
+      - CloudHybridAttachment
     attributes:
       - name: vpn_type
         kind: Dropdown
@@ -1075,6 +1105,7 @@ nodes:
     include_in_menu: false
     inherit_from:
       - CloudResource
+      - CloudHybridAttachment
     human_friendly_id:
       - name__value
     display_label: "{{ name__value }}"

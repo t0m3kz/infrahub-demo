@@ -417,6 +417,8 @@ queries:
     file_path: queries/topology/add/application.gql
   - name: vxlan_segment_data
     file_path: queries/topology/add/vxlan_segment.gql
+  - name: loadbalancer_vip_data
+    file_path: queries/topology/add/loadbalancer_vip.gql
   - name: vrf_namespace_data
     file_path: queries/topology/add/vrf_namespace.gql
   - name: circuit_data
@@ -581,6 +583,15 @@ generator_definitions:
     execute_after_merge: false
     parameters:
       name: name__value
+  - name: add_lb_backend_nexthop
+    file_path: generators/topology/loadbalancer.py
+    targets: loadbalancer_vips
+    query: loadbalancer_vip_data
+    class_name: LoadbalancerBackendNexthopGenerator
+    execute_in_proposed_change: false
+    execute_after_merge: false
+    parameters:
+      id: id
   - name: add_app_application
     file_path: generators/topology/application_security.py
     targets: app_applications

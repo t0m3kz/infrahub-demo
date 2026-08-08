@@ -33,6 +33,7 @@ query border_leaf_config(
           deployment {
             node {
               ...FirewallContextsOnDeploymentFields
+              ...LoadbalancerVipsOnDeploymentFields
             }
           }
         }

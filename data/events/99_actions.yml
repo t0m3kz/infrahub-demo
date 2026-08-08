@@ -291,6 +291,36 @@ spec:
       node_kind: ManagedLoadbalancerHA
       mutation_action: "updated"
       action: ha-generator
+
+    # ── LB Backend No-SNAT Return-Path ────────────────────────────────────────
+    - name: trigger-lb-backend-nexthop-on-created
+      branch_scope: "other_branches"
+      node_kind: LoadbalancerVIP
+      mutation_action: "created"
+      action: lb-backend-nexthop-generator
+
+    - name: trigger-lb-backend-nexthop-update-snat
+      branch_scope: "other_branches"
+      node_kind: LoadbalancerVIP
+      mutation_action: "updated"
+      action: lb-backend-nexthop-generator
+      matches:
+        kind: CoreNodeTriggerAttributeMatch
+        data:
+          - attribute_name: snat_enabled
+            value_match: any
+
+    - name: trigger-lb-backend-nexthop-update-backend-segment
+      branch_scope: "other_branches"
+      node_kind: LoadbalancerVIP
+      mutation_action: "updated"
+      action: lb-backend-nexthop-generator
+      matches:
+        kind: CoreNodeTriggerRelationshipMatch
+        data:
+          - relationship_name: backend_segment
+            modification_type: updated
+
     # ── App Security Rules ────────────────────────────────────────────────────
     # Single trigger path: AppApplication events invoke the canonical app generator.
 

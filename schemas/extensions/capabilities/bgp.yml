@@ -180,6 +180,28 @@ nodes:
         description: "BGP confederation identifier (if using confederation)"
         optional: true
         order_weight: 1700
+      - name: process_role
+        kind: Dropdown
+        label: Process Role
+        description: >-
+          Distinguishes a fabric underlay process, an EVPN overlay process,
+          or a regular process for external partner/provider peering.
+        default_value: underlay
+        optional: true
+        order_weight: 1550
+        choices:
+          - name: underlay
+            label: Underlay
+            description: "Fabric underlay routing process (OSPF/eBGP between directly-connected devices)"  # yamllint disable-line rule:line-length
+            color: "#74B9FF"
+          - name: overlay
+            label: Overlay
+            description: "EVPN overlay process (loopback-based iBGP/eBGP for VXLAN-EVPN)"
+            color: "#FD79A8"
+          - name: regular
+            label: Regular
+            description: "Regular BGP peering to an external partner/provider"
+            color: "#FDCB6E"
     relationships:
       - name: router_id
         peer: IpamIPAddress
@@ -292,6 +314,25 @@ nodes:
         default_value: false
         optional: true
         order_weight: 2400
+      - name: peering_role
+        kind: Dropdown
+        label: Peering Role
+        description: "Underlay, overlay, or regular (external partner) peering — set explicitly at creation."  # yamllint disable-line rule:line-length
+        optional: true
+        order_weight: 2450
+        choices:
+          - name: underlay
+            label: Underlay
+            description: "Fabric underlay peering (OSPF/eBGP between directly-connected devices)"
+            color: "#74B9FF"
+          - name: overlay
+            label: Overlay
+            description: "EVPN overlay peering (loopback-based iBGP/eBGP for VXLAN-EVPN)"
+            color: "#FD79A8"
+          - name: regular
+            label: Regular
+            description: "Regular BGP peering to an external partner/provider"
+            color: "#FDCB6E"
     relationships:
       - name: bgp_processes
         peer: ManagedBGP

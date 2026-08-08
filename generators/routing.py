@@ -201,7 +201,7 @@ class RoutingMixin:
                 ),
             )
             overlay_device_names = {
-                name for b in all_bgp if b.name.value.endswith("-bgp-overlay") and (name := _safe_device_name(b))
+                name for b in all_bgp if b.process_role.value == "overlay" and (name := _safe_device_name(b))
             }
             missing_overlay_bgp = top_device_set - overlay_device_names
 
@@ -266,10 +266,10 @@ class RoutingMixin:
                 capabilities__name__values=all_device_names,
             )
         else:
-            underlay = [b for b in all_bgp if "underlay" in b.name.value]
+            underlay = [b for b in all_bgp if b.process_role.value == "underlay"]
 
         # Overlay is always iBGP/eBGP (ManagedBGP) — only the underlay can be OSPF.
-        overlay = [b for b in all_bgp if "overlay" in b.name.value]
+        overlay = [b for b in all_bgp if b.process_role.value == "overlay"]
 
         self.logger.info(
             f"Collected: {len(interfaces)} P2P interface(s), "

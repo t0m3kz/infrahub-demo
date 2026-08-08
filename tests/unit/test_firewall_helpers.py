@@ -10,6 +10,7 @@ Covers:
 """
 
 from transforms.helpers.firewall import (
+    _flatten_deployment_firewall_contexts,
     get_customer_pbr_rules,
     get_firewall_contexts,
     get_firewall_static_routes,
@@ -670,6 +671,7 @@ def _make_pbr_activation(
     vlan_id: int = 100,
     deployment_id: str | None = "dep-a",
     security_policies: list | None = None,
+    environment: str | None = None,
 ) -> dict:
     """deployment_id models VxlanSegment.customer_deployments (TopologyCustomer
     ids) — the field FirewallContext.tenant is actually matched against, NOT
@@ -681,6 +683,8 @@ def _make_pbr_activation(
         "customer_name": "web",
         "customer_deployments": [{"id": deployment_id}] if deployment_id else [],
     }
+    if environment is not None:
+        seg["environment"] = environment
     if security_policies is not None:
         seg["security_policies"] = security_policies
     return {"vlan_id": vlan_id, "segment": seg}
@@ -694,16 +698,79 @@ def _make_pbr_rule(*, action: str = "permit", dst_prefix: str | None = "10.0.2.0
 
 
 def _make_context_leg(*, fw_ip: str = "10.65.0.0/30", tenant_id: str | None = None) -> dict:
-    """A GLOBAL ManagedFirewallContext dict (its own query root), not scoped to
-    the rendered device's own interfaces — the firewall's OWN leg is what
-    provides the nexthop, found by filtering interface_capabilities legs to
-    the one on a device with role="firewall"."""
+    """A ManagedFirewallContext dict as returned by
+    _flatten_deployment_firewall_contexts() — device-scoped (this device's
+    own deployment's firewall-role devices), not the rendered device's own
+    interfaces. The firewall's OWN leg is what provides the nexthop, found
+    by filtering interface_capabilities legs to the one on a device with
+    role="firewall"."""
     ctx: dict = {
         "interface_capabilities": [{"device": {"role": "firewall"}, "ip_address": {"address": fw_ip}}],
     }
     if tenant_id:
         ctx["tenant"] = {"id": tenant_id}
     return ctx
+
+
+# ===========================================================================
+# _flatten_deployment_firewall_contexts()
+# ===========================================================================
+
+
+def _make_ha_capability(*, contexts: list[dict] | None = None) -> dict:
+    return {"typename": "ManagedFirewallHA", "contexts": contexts or []}
+
+
+def _make_fw_device(*, contexts: list[dict] | None = None, extra_capability: dict | None = None) -> dict:
+    capabilities = [_make_ha_capability(contexts=contexts)]
+    if extra_capability:
+        capabilities.append(extra_capability)
+    return {"capabilities": capabilities}
+
+
+class TestFlattenDeploymentFirewallContexts:
+    def test_none_deployment_returns_empty(self) -> None:
+        assert _flatten_deployment_firewall_contexts(None) == []
+
+    def test_empty_deployment_returns_empty(self) -> None:
+        assert _flatten_deployment_firewall_contexts({}) == []
+
+    def test_dc_tier_device_contexts_extracted(self) -> None:
+        """DC-tier devices (border-leaf, firewall, spine) have contexts directly
+        under deployment.devices — no parent hop needed."""
+        ctx = {"id": "ctx-1"}
+        deployment = {"devices": [_make_fw_device(contexts=[ctx])]}
+        assert _flatten_deployment_firewall_contexts(deployment) == [ctx]
+
+    def test_pod_tier_device_contexts_extracted_via_parent(self) -> None:
+        """Pod-tier devices (leaf/tor/access-leaf) have their deployment set to
+        the POD, so contexts live under deployment.parent.devices instead."""
+        ctx = {"id": "ctx-1"}
+        deployment = {"devices": [], "parent": {"devices": [_make_fw_device(contexts=[ctx])]}}
+        assert _flatten_deployment_firewall_contexts(deployment) == [ctx]
+
+    def test_non_firewall_ha_capability_ignored(self) -> None:
+        deployment = {
+            "devices": [_make_fw_device(contexts=[{"id": "ctx-1"}], extra_capability={"typename": "ManagedBGP"})]
+        }
+        result = _flatten_deployment_firewall_contexts(deployment)
+        assert result == [{"id": "ctx-1"}]
+
+    def test_dedup_across_dc_and_pod_tier_paths(self) -> None:
+        """A context reachable both directly and via parent must not double-count."""
+        ctx = {"id": "ctx-1"}
+        deployment = {
+            "devices": [_make_fw_device(contexts=[ctx])],
+            "parent": {"devices": [_make_fw_device(contexts=[ctx])]},
+        }
+        result = _flatten_deployment_firewall_contexts(deployment)
+        assert result == [ctx]
+
+    def test_multiple_contexts_across_devices(self) -> None:
+        ctx_a, ctx_b = {"id": "ctx-a"}, {"id": "ctx-b"}
+        deployment = {"devices": [_make_fw_device(contexts=[ctx_a]), _make_fw_device(contexts=[ctx_b])]}
+        result = _flatten_deployment_firewall_contexts(deployment)
+        assert {c["id"] for c in result} == {"ctx-a", "ctx-b"}
 
 
 class TestGetCustomerPbrRules:
@@ -847,6 +914,19 @@ class TestGetCustomerPbrRules:
         contexts = [_make_context_leg()]
         result = get_customer_pbr_rules(activations, contexts)
         assert [r["vlan_id"] for r in result] == [100, 200]
+
+    def test_customer_name_and_environment_passed_through(self) -> None:
+        activations = [_make_pbr_activation(security_policies=[], environment="s")]
+        contexts = [_make_context_leg()]
+        result = get_customer_pbr_rules(activations, contexts)
+        assert result[0]["customer_name"] == "web"
+        assert result[0]["environment"] == "s"
+
+    def test_environment_none_when_absent(self) -> None:
+        activations = [_make_pbr_activation(security_policies=[])]
+        contexts = [_make_context_leg()]
+        result = get_customer_pbr_rules(activations, contexts)
+        assert result[0]["environment"] is None
 
 
 # ===========================================================================

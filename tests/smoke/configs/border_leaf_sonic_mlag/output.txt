@@ -35,7 +35,7 @@
       "description": "MLAG peer-link member 2",
       "mtu": "9000"
     },
-    "PortChannel100": {
+    "Port-Channel100": {
       "admin_status": "up",
       "description": "MLAG Peer-Link",
       "mtu": "9000"
@@ -59,7 +59,7 @@
 
 # MC-LAG Configuration
 sudo config mclag add 1
-sudo config portchannel add PortChannel100
-sudo config portchannel member add PortChannel100 Ethernet33
-sudo config portchannel member add PortChannel100 Ethernet34
-sudo config mclag peer-link add PortChannel100
+sudo config portchannel add Port-Channel100
+sudo config portchannel member add Port-Channel100 Ethernet33
+sudo config portchannel member add Port-Channel100 Ethernet34
+sudo config mclag peer-link add Port-Channel100

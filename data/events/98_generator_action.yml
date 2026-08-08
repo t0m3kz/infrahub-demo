@@ -35,6 +35,9 @@ spec:
     - name: ha-generator
       description: Create HA sync interfaces and cables for an HA domain
       generator: add_ha
+    - name: lb-backend-nexthop-generator
+      description: Wire a no-SNAT VIP's backend return-path VLAN sub-interface + IP
+      generator: add_lb_backend_nexthop
     - name: run-app-application-generator
       description: Derive security policy rules from application component dependencies
       generator: add_app_application

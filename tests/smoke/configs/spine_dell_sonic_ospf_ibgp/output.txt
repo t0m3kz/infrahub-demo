@@ -2,12 +2,9 @@
 hostname dc1-spine-01
 
 ! Enable required features
-nv overlay evpn
 feature ospf
 feature bgp
 feature interface-vlan
-feature vn-segment-vlan-based
-feature nv overlay
 interface Ethernet1
   description to spine-01
   ip address 10.1.0.1/31

@@ -259,6 +259,7 @@ nodes:
       - TopologyDeployment
       - TopologyClusterHosting
       - TopologyConnectableLocation
+      - ManagedTenantScoped
     parent: TopologyDataCenter
     children: ""
     include_in_menu: false
@@ -298,6 +299,7 @@ nodes:
       - TopologyDeployment
       - TopologyClusterHosting
       - TopologyConnectableLocation
+      - ManagedTenantScoped
     parent: TopologyColocationMetro
     children: ""
     include_in_menu: false
@@ -490,6 +492,15 @@ nodes:
         kind: Attribute
         optional: true
         order_weight: 200
+      - name: virtual_networks
+        label: "Virtual Networks"
+        peer: CloudVirtualNetwork
+        cardinality: many
+        kind: Generic
+        optional: true
+        identifier: "virtual_network__customer_deployments"
+        description: "VPCs belonging to this customer deployment footprint."
+        order_weight: 300
 
   # Customer deployment footprint inside a SaaS provider region — same shape
   # as CustomerCloud (parent: a region, owner/environment/status from

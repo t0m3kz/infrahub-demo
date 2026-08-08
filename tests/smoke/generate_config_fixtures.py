@@ -373,7 +373,6 @@ def build_device_data(
     scenario: str = "ebgp_ibgp",
     include_segments: bool = False,
     include_acls: bool = False,
-    stretched_segments: bool = False,
     isolation_mode: str | None = None,
     security_fields: bool = False,
 ) -> dict:
@@ -635,49 +634,22 @@ def build_device_data(
                 gateway_ip="10.100.0.1/24",
                 ns_name="VRF_A",
                 security_policies=policies_vxlan,
-                num_deployments=2 if stretched_segments else 1,
+                num_deployments=1,
                 isolation_mode=isolation_mode,
                 has_firewall=microseg,
             )
         )
-        if not stretched_segments:
-            # Local-only VLAN segment — not relevant for stretched super-spine view
-            activations.append(
-                _make_segment_deployment(
-                    vlan_id=200,
-                    seg_name="seg-200",
-                    seg_type="ManagedVlanSegment",
-                    gateway_ip="10.200.0.1/24",
-                    security_policies=policies_vlan,
-                    isolation_mode=isolation_mode,
-                    num_deployments=1,
-                )
+        activations.append(
+            _make_segment_deployment(
+                vlan_id=200,
+                seg_name="seg-200",
+                seg_type="ManagedVlanSegment",
+                gateway_ip="10.200.0.1/24",
+                security_policies=policies_vlan,
+                isolation_mode=isolation_mode,
+                num_deployments=1,
             )
-        else:
-            # Second stretched VXLAN segment (different VNI/VLAN for DC2) — also stretched
-            activations.append(
-                _make_segment_deployment(
-                    vlan_id=101,
-                    vni=10101,
-                    seg_name="seg-101",
-                    seg_type="ManagedVxlanSegment",
-                    gateway_ip="10.101.0.1/24",
-                    ns_name="VRF_B",
-                    num_deployments=2,
-                )
-            )
-            # Local-only segment — should be filtered out by super-spine transform
-            activations.append(
-                _make_segment_deployment(
-                    vlan_id=300,
-                    vni=10300,
-                    seg_name="seg-300-local",
-                    seg_type="ManagedVxlanSegment",
-                    gateway_ip="10.30.0.1/24",
-                    ns_name="VRF_LOCAL",
-                    num_deployments=1,
-                )
-            )
+        )
 
     device_node: dict[str, Any] = {
         "__typename": "DcimPhysicalDevice",
@@ -1292,7 +1264,6 @@ def _write_fixture(
     scenario: str,
     include_segments: bool,
     include_acls: bool = False,
-    stretched_segments: bool = False,
     isolation_mode: str | None = None,
     security_fields: bool = False,
 ) -> tuple[int, int]:
@@ -1306,7 +1277,6 @@ def _write_fixture(
         scenario=scenario,
         include_segments=include_segments,
         include_acls=include_acls,
-        stretched_segments=stretched_segments,
         isolation_mode=isolation_mode,
         security_fields=security_fields,
     )
@@ -1348,23 +1318,6 @@ def main() -> None:
                 )
                 generated += g
                 errors += e
-
-    # Super-spine: stretched segments only (local segments filtered out by transform)
-    print("\nGenerating super-spine stretched segment fixtures:")
-    for platform in FABRIC_PLATFORMS:
-        for scenario in SCENARIOS:
-            g, e = _write_fixture(
-                SuperSpine,
-                dir_name=f"super_spine_{platform}_{scenario}_stretched",
-                dev_name="dc1-super-spine-01",
-                role="super_spine",
-                platform=platform,
-                scenario=scenario,
-                include_segments=True,
-                stretched_segments=True,
-            )
-            generated += g
-            errors += e
 
     # ACL scenario: leaf only, ebgp_ibgp base, with security_policies on segments
     print("\nGenerating ACL fixtures (leaf):")
