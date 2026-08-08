@@ -208,6 +208,7 @@ class CustomerDeploymentDCExchangeGenerator(DeviceMixin, CablingMixin, CommonGen
         parent_name: str,
         dc_size: str | None,
         customer_name: str,
+        tenant_id: str | None = None,
     ) -> tuple[Any, list[Any]] | None:
         """Provision a dedicated virtual HA pair (firewall or load-balancer)
         for this customer, one virtual instance hosted on each of the shared
@@ -216,6 +217,12 @@ class CustomerDeploymentDCExchangeGenerator(DeviceMixin, CablingMixin, CommonGen
         instead of looping over _SHARED_ENVIRONMENTS, and sourced from the
         *_CUSTOMER_* template variant (data/bootstrap's
         09_virtual_device_templates_*.yaml) instead of the shared one.
+
+        tenant_id sets ManagedTenantScoped.tenant on ha_kind — meaningful for
+        the load-balancer path (ManagedLoadbalancerHA carries that field);
+        the firewall path passes None here since a dedicated firewall's
+        tenant is recorded one level down, on its own ManagedFirewallContext
+        (see _get_or_create_firewall_context), not on ManagedFirewallHA itself.
 
         Returns (dedicated_cluster, dedicated_devices) on success. Returns
         None (caller falls back to shared capacity) when the physical
@@ -290,6 +297,7 @@ class CustomerDeploymentDCExchangeGenerator(DeviceMixin, CablingMixin, CommonGen
             ha_kind=ha_kind,
             role_label=f"{role} (dedicated {customer_name})",
             device_kind=DcimVirtualDevice,
+            tenant_id=tenant_id,
         )
 
         try:
@@ -313,11 +321,13 @@ class CustomerDeploymentDCExchangeGenerator(DeviceMixin, CablingMixin, CommonGen
         have no VDOM/context-equivalent generic in the schema (unlike
         ManagedFirewallContext), so there's nothing further to provision
         beyond the dedicated devices themselves — no context object, no
-        sub-interface, no tenant-scoped logical partition. Independent of
-        _ensure_firewall_context: a customer can have dedicated_loadbalancer
-        set without dedicated_firewall (or without any firewalls at all on
-        the parent), so this must not be gated on that method's own
-        early-returns."""
+        sub-interface. The dedicated ManagedLoadbalancerHA's own .tenant
+        relationship (ManagedTenantScoped) records the owning customer
+        directly, same role FirewallContext.tenant plays one level down for
+        firewalls. Independent of _ensure_firewall_context: a customer can
+        have dedicated_loadbalancer set without dedicated_firewall (or
+        without any firewalls at all on the parent), so this must not be
+        gated on that method's own early-returns."""
         if not bool((customer.get("design") or {}).get("dedicated_loadbalancer")):
             return
 
@@ -340,6 +350,7 @@ class CustomerDeploymentDCExchangeGenerator(DeviceMixin, CablingMixin, CommonGen
             parent_name=parent_name,
             dc_size=parent.get("size"),
             customer_name=customer.get("name", customer_id),
+            tenant_id=customer_id,
         )
 
     async def _get_or_create_firewall_context(

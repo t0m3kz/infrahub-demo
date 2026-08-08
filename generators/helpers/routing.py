@@ -197,6 +197,7 @@ def _make_bgp_proc(
     local_as: dict | PendingASRef,
     router_id: dict,
     device_id: str,
+    process_role: str,
     multipath: bool = False,
 ) -> dict[str, Any]:
     proc: dict[str, Any] = {
@@ -206,6 +207,7 @@ def _make_bgp_proc(
         "local_as": local_as,
         "router_id": router_id,
         "capabilities": [{"id": device_id}],
+        "process_role": process_role,
     }
     if multipath:
         proc["multipath"] = True
@@ -319,7 +321,7 @@ class RoutingPlanner:
 
         # ---- Overlay peerings ----
         if design:
-            overlay_bgp = [b for b in plan.bgp_processes if b["name"].endswith("-bgp-overlay")]
+            overlay_bgp = [b for b in plan.bgp_processes if b.get("process_role") == "overlay"]
             planned_device_ids = {b["capabilities"][0]["id"] for b in overlay_bgp}
 
             # Include remote devices with existing overlay BGP not yet in plan.
@@ -483,6 +485,7 @@ class RoutingPlanner:
                 local_as,
                 router_id,
                 info["id"],
+                process_role="underlay",
                 multipath=True,
             )
             plan.bgp_processes.append(proc)
@@ -544,6 +547,7 @@ class RoutingPlanner:
                     "bfd_enabled": True,
                     "send_community": True,
                     "ttl": 1,
+                    "peering_role": "underlay",
                     "interface_capabilities": [{"id": a.id}, {"id": b.id}],
                     "bgp_processes": [
                         {"hfid": f"{a_name}-bgp-underlay"},
@@ -622,6 +626,7 @@ class RoutingPlanner:
                 as_ref,
                 router_id,
                 info["id"],
+                process_role="overlay",
             )
             plan.bgp_processes.append(proc)
 
@@ -860,6 +865,7 @@ class RoutingPlanner:
                 "send_community": True,
                 "send_extended_community": True,
                 "route_reflector_client": rr_client_session,
+                "peering_role": "overlay",
                 **({"address_families": [{"id": evpn_af_id}]} if evpn_af_id else {}),
                 **({"password": {"id": password_id}} if password_id else {}),
                 "bgp_processes": [_bgp_process_ref(bgp1), _bgp_process_ref(bgp2)],

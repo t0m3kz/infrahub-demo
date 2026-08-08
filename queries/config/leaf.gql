@@ -33,6 +33,7 @@ query leaf_config(
           deployment {
             node {
               ...FirewallContextsOnDeploymentFields
+              ...LoadbalancerVipsOnDeploymentFields
             }
           }
         }

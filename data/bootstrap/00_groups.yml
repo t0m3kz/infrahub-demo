@@ -86,6 +86,8 @@ spec:
       description: HA domains (firewall + load balancer) — generator target for HAInterfaceGenerator
     - name: mlag_domains
       description: MLAG domains — generator target for MLAGWiringGenerator
+    - name: loadbalancer_vips
+      description: Load balancer VIP services — generator target for LoadbalancerBackendNexthopGenerator
     - name: app_applications
       description: Application instances — generator target for AppApplicationGenerator
     - name: app_components

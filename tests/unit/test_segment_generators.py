@@ -12,8 +12,11 @@ _resolve_hosting_parent(), then calls _activate_segment_in_deployment()
 for each resolved parent, followed by interface assignment and inline
 sub-interface creation.
 
-_activate_segment_in_deployment() does an idempotency check via
-client.filters(), allocates VLAN ID and VNI, then calls client.create() / save().
+vlan_pool/vni_pool are read straight from the vxlan_segment query's
+TopologySegmentHosting parent fragment (queries/topology/add/vxlan_segment.gql)
+— no separate client.get() round-trip per deployment. _activate_segment_in_deployment()
+does an idempotency check via client.filters(), allocates VLAN ID and VNI
+from those pool dicts, then calls client.create() / save().
 
 Tests use asyncio.run() directly — same pattern as test_circuit_generators.py.
 """
@@ -24,7 +27,7 @@ import asyncio
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
-from generators.protocols import ManagedSegmentDeployment, TopologySegmentHosting
+from generators.protocols import ManagedSegmentDeployment
 from generators.topology.segment import VxlanSegmentGenerator
 
 # ---------------------------------------------------------------------------
@@ -33,8 +36,7 @@ from generators.topology.segment import VxlanSegmentGenerator
 
 
 def _make_gen() -> Any:
-    """Return a VxlanSegmentGenerator instance with mocked client, logger, and
-    empty DC cache.
+    """Return a VxlanSegmentGenerator instance with mocked client and logger.
 
     Typed as Any so that ty does not flag mock attribute assignments or
     mock method calls (e.g. gen.logger.error.assert_called_once()).
@@ -42,15 +44,7 @@ def _make_gen() -> Any:
     gen = VxlanSegmentGenerator.__new__(VxlanSegmentGenerator)
     gen.client = AsyncMock()
     gen.logger = MagicMock()
-    gen._dc_cache = {}
     return gen
-
-
-def _mock_pool(pool_id: str = "pool-1", name: str = "Test-Pool") -> MagicMock:
-    pool = MagicMock()
-    pool.id = pool_id
-    pool.name.value = name
-    return pool
 
 
 # ---------------------------------------------------------------------------
@@ -66,20 +60,34 @@ def _seg_response(
     """Build a raw (un-cleaned) GraphQL response for a vxlan_segment_data query.
 
     Each entry in `deployments` is a customer footprint (CustomerDC/Colocation)
-    dict with "id", "name", and "parent" (the hosting DC/Metro dict) — mirroring
-    the `... on TopologyCustomerDC/Colocation { parent { node {...} } }` fragment
-    in the real vxlan_segment query.
+    dict with "id", "name", and "parent" (the hosting DC/Metro dict, optionally
+    carrying "vlan_pool"/"vni_pool" sub-dicts with "id"/"name") — mirroring the
+    `... on TopologyCustomerDC/Colocation { parent { node {... vlan_pool ...} } }`
+    fragment in the real vxlan_segment query.
     """
-    dep_edges = [
-        {
-            "node": {
-                "id": d["id"],
-                "name": {"value": d["name"]},
-                "parent": {"node": {"id": d["parent"]["id"], "name": {"value": d["parent"]["name"]}}},
+
+    def _pool_node(pool: dict | None) -> dict | None:
+        if pool is None:
+            return None
+        return {"node": {"id": pool["id"], "name": {"value": pool["name"]}}}
+
+    dep_edges = []
+    for d in deployments:
+        parent = d["parent"]
+        parent_node: dict[str, Any] = {"id": parent["id"], "name": {"value": parent["name"]}}
+        if "vlan_pool" in parent:
+            parent_node["vlan_pool"] = _pool_node(parent["vlan_pool"])
+        if "vni_pool" in parent:
+            parent_node["vni_pool"] = _pool_node(parent["vni_pool"])
+        dep_edges.append(
+            {
+                "node": {
+                    "id": d["id"],
+                    "name": {"value": d["name"]},
+                    "parent": {"node": parent_node},
+                }
             }
-        }
-        for d in deployments
-    ]
+        )
     return {
         "ManagedVxlanSegment": {
             "edges": [
@@ -96,8 +104,26 @@ def _seg_response(
 
 
 # Convenience customer-deployment fixtures — each resolves to hosting parent dc-1/dc-2
-_DEP_1 = {"id": "cust-1", "name": "C001-P-DC1", "parent": {"id": "dc-1", "name": "DC-1"}}
-_DEP_2 = {"id": "cust-2", "name": "C002-P-DC2", "parent": {"id": "dc-2", "name": "DC-2"}}
+_DEP_1 = {
+    "id": "cust-1",
+    "name": "C001-P-DC1",
+    "parent": {
+        "id": "dc-1",
+        "name": "DC-1",
+        "vlan_pool": {"id": "pool-vlan-1", "name": "DC1-VLAN-Pool"},
+        "vni_pool": {"id": "pool-vni-1", "name": "DC1-VNI-Pool"},
+    },
+}
+_DEP_2 = {
+    "id": "cust-2",
+    "name": "C002-P-DC2",
+    "parent": {
+        "id": "dc-2",
+        "name": "DC-2",
+        "vlan_pool": {"id": "pool-vlan-2", "name": "DC2-VLAN-Pool"},
+        "vni_pool": {"id": "pool-vni-2", "name": "DC2-VNI-Pool"},
+    },
+}
 
 # ===========================================================================
 # TestVxlanSegmentGeneratorGenerate
@@ -156,6 +182,20 @@ class TestVxlanSegmentGeneratorGenerate:
         assert dep_ids_called == {"dc-1", "dc-2"}
         for c in calls:
             assert c.kwargs["segment_id"] == "seg-1"
+
+    def test_happy_path_passes_vlan_and_vni_pool_through(self):
+        """vlan_pool/vni_pool from the query's parent fragment are forwarded as-is."""
+        gen = _make_gen()
+        gen._activate_segment_in_deployment = AsyncMock()
+        gen._assign_to_deployment_interfaces = AsyncMock()
+        gen._create_inline_sub_interfaces = AsyncMock()
+
+        data = _seg_response(seg_id="seg-1", seg_name="vxlan-1000", deployments=[_DEP_1])
+        asyncio.run(gen.generate(data))
+
+        call = gen._activate_segment_in_deployment.call_args
+        assert call.kwargs["vlan_pool"] == {"id": "pool-vlan-1", "name": "DC1-VLAN-Pool"}
+        assert call.kwargs["vni_pool"] == {"id": "pool-vni-1", "name": "DC1-VNI-Pool"}
 
     def test_deployment_missing_id_is_skipped(self):
         """A customer deployment entry with id='' is skipped; only the valid one triggers activation."""
@@ -241,48 +281,6 @@ class TestResolveHostingParent:
 
 
 # ===========================================================================
-# TestGetDcPool
-# ===========================================================================
-
-
-class TestGetDcPool:
-    """Tests for _get_dc_pool — fetches vlan_pool/vni_pool/l3_vni_pool via the
-    generic TopologySegmentHosting kind (resolves both DC and Metro ids)."""
-
-    def test_fetches_via_segment_hosting_generic_kind(self):
-        gen = _make_gen()
-        pool_peer = MagicMock()
-        pool_peer.id = "pool-1"
-        pool_rel = MagicMock()
-        pool_rel.peer = pool_peer
-        parent_obj = MagicMock()
-        parent_obj.vlan_pool = pool_rel
-        gen.client.get = AsyncMock(return_value=parent_obj)
-
-        result = asyncio.run(gen._get_dc_pool("metro-1", "FR", "vlan_pool"))
-
-        gen.client.get.assert_awaited_once()
-        call_kwargs = gen.client.get.call_args.kwargs
-        assert call_kwargs["kind"] == TopologySegmentHosting
-        assert call_kwargs["id"] == "metro-1"
-        assert result is pool_peer
-
-    def test_caches_parent_across_calls(self):
-        gen = _make_gen()
-        pool_rel = MagicMock()
-        pool_rel.peer = MagicMock(id="pool-1")
-        parent_obj = MagicMock()
-        parent_obj.vlan_pool = pool_rel
-        parent_obj.vni_pool = pool_rel
-        gen.client.get = AsyncMock(return_value=parent_obj)
-
-        asyncio.run(gen._get_dc_pool("dc-1", "DC-1", "vlan_pool"))
-        asyncio.run(gen._get_dc_pool("dc-1", "DC-1", "vni_pool"))
-
-        gen.client.get.assert_awaited_once()
-
-
-# ===========================================================================
 # TestActivateSegmentInDeployment
 # ===========================================================================
 
@@ -298,8 +296,8 @@ class TestActivateSegmentInDeployment:
         deployment_name="DC-1",
     )
 
-    def _run(self, gen) -> None:
-        asyncio.run(gen._activate_segment_in_deployment(**self._CALL))
+    def _run(self, gen, **overrides) -> None:
+        asyncio.run(gen._activate_segment_in_deployment(**{**self._CALL, **overrides}))
 
     def test_idempotent_existing_deployment_skips_create(self):
         """When client.filters returns an existing record, create is never called."""
@@ -320,9 +318,8 @@ class TestActivateSegmentInDeployment:
         """No vlan_pool → error logged, no create call."""
         gen = _make_gen()
         gen.client.filters = AsyncMock(return_value=[])  # no existing
-        gen._get_dc_pool = AsyncMock(return_value=None)
 
-        self._run(gen)
+        self._run(gen, vlan_pool=None)
 
         gen.client.create.assert_not_called()
         error_msg = gen.logger.error.call_args[0][0]
@@ -332,15 +329,14 @@ class TestActivateSegmentInDeployment:
         """Happy path: no existing record, pool found → create() called with correct data."""
         gen = _make_gen()
         gen.client.filters = AsyncMock(return_value=[])
-        vlan_pool = _mock_pool("pool-vlan", "DC1-VLAN-Pool")
-        vni_pool = _mock_pool("pool-vni", "DC1-VNI-Pool")
-        gen._get_dc_pool = AsyncMock(side_effect=[vlan_pool, vni_pool])
+        vlan_pool = {"id": "pool-vlan", "name": "DC1-VLAN-Pool"}
+        vni_pool = {"id": "pool-vni", "name": "DC1-VNI-Pool"}
 
         activation = MagicMock()
         activation.save = AsyncMock()
         gen.client.create = AsyncMock(return_value=activation)
 
-        self._run(gen)
+        self._run(gen, vlan_pool=vlan_pool, vni_pool=vni_pool)
 
         gen.client.create.assert_called_once()
         call_kwargs = gen.client.create.call_args.kwargs
@@ -357,10 +353,9 @@ class TestActivateSegmentInDeployment:
         """client.create() raising an exception results in an error log."""
         gen = _make_gen()
         gen.client.filters = AsyncMock(return_value=[])
-        gen._get_dc_pool = AsyncMock(return_value=_mock_pool())
         gen.client.create = AsyncMock(side_effect=Exception("network timeout"))
 
-        self._run(gen)
+        self._run(gen, vlan_pool={"id": "pool-vlan", "name": "DC1-VLAN-Pool"})
 
         error_msg = gen.logger.error.call_args[0][0]
         assert "Failed to create" in error_msg
@@ -370,15 +365,13 @@ class TestActivateSegmentInDeployment:
         to the vlan_pool lookup (does not silently drop the activation)."""
         gen = _make_gen()
         gen.client.filters = AsyncMock(side_effect=Exception("timeout"))
-        # After the warning, the method falls through to vlan_pool lookup
-        gen._get_dc_pool = AsyncMock(return_value=None)  # no pool → error path
 
-        self._run(gen)
+        self._run(gen, vlan_pool=None)
 
         # Warning about the exception during idempotency check
         warning_msgs = " ".join(str(c) for c in gen.logger.warning.call_args_list)
         assert "Error checking existing activations" in warning_msgs or len(gen.logger.warning.call_args_list) >= 1
-        # Fell through to pool lookup, which returned None → error about vlan_pool
+        # Fell through to pool lookup, which is empty → error about vlan_pool
         gen.logger.error.assert_called_once()
         assert "vlan_pool" in gen.logger.error.call_args[0][0]
 
@@ -398,8 +391,8 @@ class TestVxlanVniAllocation:
         deployment_name="DC-1",
     )
 
-    def _run(self, gen) -> None:
-        asyncio.run(gen._activate_segment_in_deployment(**self._CALL))
+    def _run(self, gen, **overrides) -> None:
+        asyncio.run(gen._activate_segment_in_deployment(**{**self._CALL, **overrides}))
 
     def test_reuses_existing_vni_from_other_deployment(self):
         """When another DC already has a SegmentDeployment with a VNI, that value
@@ -415,14 +408,11 @@ class TestVxlanVniAllocation:
         # Second call: VNI reuse check → one existing SegmentDeployment with VNI
         gen.client.filters = AsyncMock(side_effect=[[], [existing_dep]])
 
-        vlan_pool = _mock_pool("pool-vlan", "DC1-VLAN-Pool")
-        gen._get_dc_pool = AsyncMock(return_value=vlan_pool)
-
         activation = MagicMock()
         activation.save = AsyncMock()
         gen.client.create = AsyncMock(return_value=activation)
 
-        self._run(gen)
+        self._run(gen, vlan_pool={"id": "pool-vlan", "name": "DC1-VLAN-Pool"})
 
         call_data = gen.client.create.call_args.kwargs["data"]
         assert call_data["vni"] == 10100
@@ -435,15 +425,15 @@ class TestVxlanVniAllocation:
         # Both idempotency and VNI-reuse checks return empty
         gen.client.filters = AsyncMock(side_effect=[[], []])
 
-        vlan_pool = _mock_pool("pool-vlan", "DC1-VLAN-Pool")
-        vni_pool = _mock_pool("pool-vni", "DC1-VNI-Pool")
-        gen._get_dc_pool = AsyncMock(side_effect=[vlan_pool, vni_pool])
-
         activation = MagicMock()
         activation.save = AsyncMock()
         gen.client.create = AsyncMock(return_value=activation)
 
-        self._run(gen)
+        self._run(
+            gen,
+            vlan_pool={"id": "pool-vlan", "name": "DC1-VLAN-Pool"},
+            vni_pool={"id": "pool-vni", "name": "DC1-VNI-Pool"},
+        )
 
         call_data = gen.client.create.call_args.kwargs["data"]
         assert "from_pool" in call_data["vni"]
@@ -456,15 +446,11 @@ class TestVxlanVniAllocation:
 
         gen.client.filters = AsyncMock(side_effect=[[], []])
 
-        vlan_pool = _mock_pool("pool-vlan", "DC1-VLAN-Pool")
-        # vlan_pool is returned first, then None for vni_pool
-        gen._get_dc_pool = AsyncMock(side_effect=[vlan_pool, None])
-
         activation = MagicMock()
         activation.save = AsyncMock()
         gen.client.create = AsyncMock(return_value=activation)
 
-        self._run(gen)
+        self._run(gen, vlan_pool={"id": "pool-vlan", "name": "DC1-VLAN-Pool"}, vni_pool=None)
 
         warning_msgs = " ".join(str(c) for c in gen.logger.warning.call_args_list)
         assert "vni_pool" in warning_msgs
@@ -486,19 +472,20 @@ class TestVxlanVniAllocation:
         # reusable-VNI lookup -> one existing deployment with vni=10100
         gen.client.filters = AsyncMock(side_effect=[[], [existing_dep]])
 
-        vlan_pool = _mock_pool("pool-vlan", "DC1-VLAN-Pool")
-        gen._get_dc_pool = AsyncMock(return_value=vlan_pool)
-
         activation = MagicMock()
         activation.save = AsyncMock()
         gen.client.create = AsyncMock(return_value=activation)
 
-        asyncio.run(gen._activate_segment_in_deployment(**self._CALL, stretch_scope="dc_pair"))
+        asyncio.run(
+            gen._activate_segment_in_deployment(
+                **self._CALL,
+                vlan_pool={"id": "pool-vlan", "name": "DC1-VLAN-Pool"},
+                stretch_scope="dc_pair",
+            )
+        )
 
         call_data = gen.client.create.call_args.kwargs["data"]
         assert call_data["vni"] == 10100
-        # vlan_pool only; no vni_pool lookup because vni is fixed
-        assert gen._get_dc_pool.await_count == 1
 
     def test_stretched_allocates_from_local_pool_with_shared_identifier(self):
         """First stretched deployment allocates from local vni_pool using shared segment identifier."""
@@ -508,10 +495,6 @@ class TestVxlanVniAllocation:
         # reusable-VNI lookup -> none
         gen.client.filters = AsyncMock(side_effect=[[], []])
 
-        vlan_pool = _mock_pool("pool-vlan", "DC1-VLAN-Pool")
-        vni_pool = _mock_pool("pool-vni", "DC1-VNI-Pool")
-        gen._get_dc_pool = AsyncMock(side_effect=[vlan_pool, vni_pool])
-
         activation = MagicMock()
         activation.save = AsyncMock()
         gen.client.create = AsyncMock(return_value=activation)
@@ -519,6 +502,8 @@ class TestVxlanVniAllocation:
         asyncio.run(
             gen._activate_segment_in_deployment(
                 **self._CALL,
+                vlan_pool={"id": "pool-vlan", "name": "DC1-VLAN-Pool"},
+                vni_pool={"id": "pool-vni", "name": "DC1-VNI-Pool"},
                 stretch_scope="dc_pair",
             )
         )
@@ -526,4 +511,3 @@ class TestVxlanVniAllocation:
         call_data = gen.client.create.call_args.kwargs["data"]
         assert call_data["vni"]["from_pool"]["id"] == "pool-vni"
         assert call_data["vni"]["identifier"] == "seg-2-vni"
-        assert gen._get_dc_pool.await_count == 2

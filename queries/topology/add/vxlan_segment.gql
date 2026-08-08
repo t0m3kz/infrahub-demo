@@ -29,10 +29,28 @@ query vxlan_segment_data($name: String!) {
               id
               name { value }
               ... on TopologyCustomerDC {
-                parent { node { id name { value } } }
+                parent {
+                  node {
+                    id
+                    name { value }
+                    ... on TopologySegmentHosting {
+                      vlan_pool { node { id name { value } } }
+                      vni_pool { node { id name { value } } }
+                    }
+                  }
+                }
               }
               ... on TopologyCustomerColocation {
-                parent { node { id name { value } } }
+                parent {
+                  node {
+                    id
+                    name { value }
+                    ... on TopologySegmentHosting {
+                      vlan_pool { node { id name { value } } }
+                      vni_pool { node { id name { value } } }
+                    }
+                  }
+                }
               }
             }
           }

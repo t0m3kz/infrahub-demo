@@ -385,6 +385,13 @@ nodes:
           - name: application
             label: Application
             color: "#D2B4DE"
+      - name: snat_enabled
+        kind: Boolean
+        label: "Source NAT Enabled"
+        optional: true
+        default_value: true
+        order_weight: 450
+        description: "When false, backends see the real client IP — see backend_segment for the PBR return-path this requires."  # yamllint disable-line rule:line-length
     relationships:
       - name: load_balancer
         peer: ManagedLoadBalancer
@@ -400,6 +407,14 @@ nodes:
         optional: true
         order_weight: 600
         identifier: vip_service__ip
+      - name: backend_segment
+        peer: ManagedNetworkSegment
+        cardinality: one
+        kind: Attribute
+        optional: true
+        order_weight: 650
+        identifier: vip_service__backend_segment
+        description: "VLAN/VXLAN segment this VIP's pool members live in — required when snat_enabled is false."  # yamllint disable-line rule:line-length
       - name: health_checks
         peer: LoadbalancerHealthCheck
         cardinality: many

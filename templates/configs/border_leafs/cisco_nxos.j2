@@ -165,6 +165,7 @@ ip route 0.0.0.0/0 {{ nexthop }} vrf {{ vrf }}
 ! FirewallContext); a SecurityPolicyRule permit is the only bypass.
 !
 {%- for rule in customer_pbr_rules %}
+! Customer: {{ rule.customer_name or 'any' }}/{{ rule.environment or 'any' }}
 ip access-list PBR-BYPASS-VLAN{{ rule.vlan_id }}
 {%- for prefix in rule.bypass_prefixes %}
   permit ip any {{ prefix }}

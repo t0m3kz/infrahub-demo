@@ -233,18 +233,6 @@ extensions:
           order_weight: 9000
           description: "Per-deployment VLAN/VNI allocations for this segment"
 
-    - kind: TopologyCustomer
-      relationships:
-        - name: network_segments
-          label: Network Segments
-          peer: ManagedNetworkSegment
-          kind: Generic
-          cardinality: many
-          optional: true
-          identifier: "segment__customer_deployments"
-          order_weight: 2100
-          description: "VLAN/VXLAN segments activated in this customer deployment footprint"
-
     - kind: TopologySegmentHosting
       relationships:
         - name: segment_deployments
@@ -268,3 +256,19 @@ extensions:
           identifier: "network_segment__owner"
           order_weight: 2200
           description: "VLAN/VXLAN/cloud network segments owned by this customer"
+
+    # Reverse lookup for VlanSegment.customer_deployment / VxlanSegment.
+    # customer_deployments / CloudNetworkSegment.customer_deployment (all
+    # share this identifier) — lets any TopologyCustomer* deployment find
+    # its own activated segments in one hop.
+    - kind: TopologyCustomer
+      relationships:
+        - name: network_segments
+          label: Network Segments
+          peer: ManagedNetworkSegment
+          kind: Generic
+          cardinality: many
+          optional: true
+          identifier: "segment__customer_deployments"
+          order_weight: 2100
+          description: "VLAN/VXLAN/cloud network segments activated in this customer deployment footprint"

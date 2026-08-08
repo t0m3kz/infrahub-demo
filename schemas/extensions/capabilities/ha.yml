@@ -15,6 +15,12 @@ version: "1.0"
 # ============================================================================
 
 generics:
+  - name: TenantScoped
+    namespace: Managed
+    description: "Marker for deployment kinds that can be a dedicated FirewallContext/LoadbalancerHA tenant."
+    label: Tenant-Scoped Deployment
+    include_in_menu: false
+
   - name: InlineService
     namespace: Managed
     description: "Abstract type anchor for services that sit inline in a network segment"
@@ -204,7 +210,7 @@ nodes:
         identifier: firewall_context__cluster
         order_weight: 900
       - name: tenant
-        peer: TopologyCustomer
+        peer: ManagedTenantScoped
         label: "Dedicated Tenant"
         description: "Customer this context is dedicated to; unset means a shared low-risk context"
         cardinality: one
@@ -244,6 +250,15 @@ nodes:
         direction: inbound
         identifier: device_capabilities
         order_weight: 900
+      - name: tenant
+        peer: ManagedTenantScoped
+        label: "Dedicated Tenant"
+        description: "Customer this HA domain is dedicated to; unset means shared capacity"
+        cardinality: one
+        kind: Attribute
+        optional: true
+        identifier: loadbalancer_ha__tenant
+        order_weight: 950
 
   # ── Cloud Firewall HA ─────────────────────────────────────────────────────
   - name: CloudFirewallHA
@@ -500,20 +515,6 @@ extensions:
           order_weight: 3100
           identifier: network_segment__inline_service
           description: "Inline service (firewall or load balancer HA) terminating this segment."
-    # Reverse lookup for FirewallContext.tenant (above) — same identifier
-    # binds this to that relationship's other side, mirroring
-    # TopologyCustomer.exchange_gateways in exchange_gateway.yml.
-    - kind: TopologyCustomer
-      relationships:
-        - name: firewall_context
-          label: "Firewall Context"
-          peer: ManagedFirewallContext
-          kind: Generic
-          cardinality: one
-          optional: true
-          identifier: firewall_context__tenant
-          order_weight: 2300
-          description: "Dedicated FirewallContext (VDOM/vsys); unset means a shared low-risk context"
     # Reverse lookup for FirewallContext.cluster (above) — lets a device
     # query find every context (shared + dedicated) on its own cluster in
     # one hop, without a name-based lookup.
@@ -528,3 +529,27 @@ extensions:
           identifier: firewall_context__cluster
           order_weight: 1000
           description: "FirewallContexts (VDOMs/vsys) hosted on this HA cluster"
+
+    # Reverse lookups for FirewallContext.tenant / LoadbalancerHA.tenant
+    # (above) — lets a TopologyCustomerDC/Colocation query find its own
+    # dedicated FirewallContext/LoadbalancerHA (if any) in one hop.
+    - kind: ManagedTenantScoped
+      relationships:
+        - name: firewall_context
+          label: "Dedicated Firewall Context"
+          peer: ManagedFirewallContext
+          kind: Generic
+          cardinality: one
+          optional: true
+          identifier: firewall_context__tenant
+          order_weight: 900
+          description: "Dedicated FirewallContext (VDOM/vsys), if any, this deployment is the tenant of."
+        - name: loadbalancer_ha
+          label: "Dedicated Load Balancer HA"
+          peer: ManagedLoadbalancerHA
+          kind: Generic
+          cardinality: one
+          optional: true
+          identifier: loadbalancer_ha__tenant
+          order_weight: 950
+          description: "Dedicated LoadbalancerHA domain, if any, this deployment is the tenant of."

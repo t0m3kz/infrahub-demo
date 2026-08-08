@@ -221,6 +221,46 @@ def get_firewall_contexts(interfaces: list[dict[str, Any]] | None) -> list[dict[
     return contexts
 
 
+def _flatten_deployment_firewall_contexts(deployment: dict[str, Any] | None) -> list[dict[str, Any]]:
+    """Flatten the device-scoped FirewallContext traversal into the flat
+    list get_customer_pbr_rules() expects.
+
+    `deployment` is this device's own `deployment` field (already cleaned),
+    shaped by queries/fragments/firewall_contexts.gql's
+    FirewallContextsOnDeploymentFields fragment: deployment.devices
+    (pre-filtered to role="firewall") -> each device's capabilities (keep
+    typename == "ManagedFirewallHA") -> contexts -> [ManagedFirewallContext, ...].
+    Pod-tier devices (leaf/tor/access-leaf) have their deployment set to the
+    POD, not the DC — deployment_id=self.data["pod"]["id"] in
+    generators/topology/rack.py vs deployment_id=dc_id in
+    generators/topology/dc.py — so the fragment also nests one `parent` hop
+    for that case; both paths are flattened here, deduped by context id.
+    """
+    if not deployment:
+        return []
+
+    def _contexts_from_device_hosting(hosting: dict[str, Any]) -> list[dict[str, Any]]:
+        found: list[dict[str, Any]] = []
+        for device in hosting.get("devices") or []:
+            for cap in device.get("capabilities") or []:
+                if cap.get("typename") != "ManagedFirewallHA":
+                    continue
+                found.extend(cap.get("contexts") or [])
+        return found
+
+    contexts = _contexts_from_device_hosting(deployment)
+    parent = deployment.get("parent")
+    if parent:
+        contexts.extend(_contexts_from_device_hosting(parent))
+
+    deduped: dict[str, dict[str, Any]] = {}
+    for ctx in contexts:
+        ctx_id = ctx.get("id")
+        if ctx_id and ctx_id not in deduped:
+            deduped[ctx_id] = ctx
+    return list(deduped.values())
+
+
 def get_customer_pbr_rules(
     activations: list[dict[str, Any]] | None,
     firewall_contexts: list[dict[str, Any]] | None,
@@ -235,10 +275,12 @@ def get_customer_pbr_rules(
     same as a same-owner one, since intra- and inter-customer traffic use
     one unified default-redirect model.
 
-    fw_nexthop resolution: `firewall_contexts` is GLOBAL data (a top-level
-    ManagedFirewallContext query root, same idiom as get_zone_policies()'s
-    SecurityPolicy root) — not scoped to the rendered device's own
-    interfaces. This matters because the anycast gateway/symmetric-IRB
+    fw_nexthop resolution: `firewall_contexts` comes from
+    _flatten_deployment_firewall_contexts(data["deployment"]) — a
+    device-scoped traversal (this device's own deployment's firewall-role
+    devices -> their ManagedFirewallHA cluster -> contexts), NOT a global
+    query root and NOT scoped to the rendered device's own interfaces
+    either. This matters because the anycast gateway/symmetric-IRB
     model puts every leaf, not just the border-leaf, in a position to make
     the PBR redirect decision, and no leaf ever owns a FirewallContext
     interface itself (only the firewall and, in pbr connectivity_mode, the
@@ -337,6 +379,8 @@ def get_customer_pbr_rules(
                 "segment_name": seg.get("customer_name") or seg.get("name") or f"VLAN_{vlan_id}",
                 "bypass_prefixes": sorted(set(bypass_prefixes)),
                 "fw_nexthop": fw_nexthop,
+                "customer_name": seg.get("customer_name"),
+                "environment": seg.get("environment"),
             }
         )
 

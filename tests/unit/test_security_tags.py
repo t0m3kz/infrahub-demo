@@ -80,6 +80,7 @@ def _make_activation_with_rules(
     vlan_id: int = 100,
     vni: int = 10100,
     customer_name: str = "web-frontend",
+    environment: str | None = None,
     sgt_name: str | None = None,
     sgt_group_id: int | None = None,
     rules: list[dict] | None = None,
@@ -91,6 +92,8 @@ def _make_activation_with_rules(
         "arp_suppression": True,
         "prefix": {"ip_namespace": {"name": "C001-PROD"}},
     }
+    if environment is not None:
+        seg["environment"] = environment
     if sgt_name or sgt_group_id:
         seg["security_tag"] = {
             "name": sgt_name,
@@ -193,6 +196,31 @@ class TestGetSgtRules:
         ]
         result = _get_sgt_rules(acts)
         assert result[0]["action"] == "deny"
+
+    def test_src_customer_and_environment_passed_through(self) -> None:
+        acts = [
+            _make_activation_with_rules(
+                customer_name="web-frontend",
+                environment="s",
+                sgt_name="web-tier",
+                sgt_group_id=20,
+                rules=[_make_sgt_rule()],
+            )
+        ]
+        result = _get_sgt_rules(acts)
+        assert result[0]["src_customer"] == "web-frontend"
+        assert result[0]["src_environment"] == "s"
+
+    def test_environment_none_when_absent(self) -> None:
+        acts = [
+            _make_activation_with_rules(
+                sgt_name="web-tier",
+                sgt_group_id=20,
+                rules=[_make_sgt_rule()],
+            )
+        ]
+        result = _get_sgt_rules(acts)
+        assert result[0]["src_environment"] is None
 
 
 # ===========================================================================

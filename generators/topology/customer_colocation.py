@@ -203,6 +203,7 @@ class CustomerDeploymentColocationExchangeGenerator(DeviceMixin, CablingMixin, C
         parent_name: str,
         dc_size: str | None,
         customer_name: str,
+        tenant_id: str | None = None,
     ) -> tuple[Any, list[Any]] | None:
         """Provision a dedicated virtual HA pair (firewall or load-balancer)
         for this customer — see customer_dc.py's identical method."""
@@ -270,6 +271,7 @@ class CustomerDeploymentColocationExchangeGenerator(DeviceMixin, CablingMixin, C
             ha_kind=ha_kind,
             role_label=f"{role} (dedicated {customer_name})",
             device_kind=DcimVirtualDevice,
+            tenant_id=tenant_id,
         )
 
         try:
@@ -311,6 +313,7 @@ class CustomerDeploymentColocationExchangeGenerator(DeviceMixin, CablingMixin, C
             parent_name=parent_name,
             dc_size=parent.get("size"),
             customer_name=customer.get("name", customer_id),
+            tenant_id=customer_id,
         )
 
     async def _get_or_create_firewall_context(

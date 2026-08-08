@@ -114,6 +114,66 @@ fragment SegmentSecurityPolicyFields on ManagedNetworkSegment {
       }
     }
   }
+  security_policies {
+    edges {
+      node {
+        id
+        name { value }
+        enabled { value }
+        default_action { value }
+        rules {
+          edges {
+            node {
+              index { value }
+              name { value }
+              action { value }
+              protocol { value }
+              port_start { value }
+              port_end { value }
+              log { value }
+              disabled { value }
+              source_zone { node { name { value } } }
+              destination_zone { node { name { value } } }
+              source_segment {
+                node {
+                  id
+                  ... on ManagedVlanSegment {
+                    name { value }
+                    customer_name { value }
+                    environment { value }
+                    gateway { node { ip_prefix { node { prefix { value } } } } }
+                  }
+                  ... on ManagedVxlanSegment {
+                    name { value }
+                    customer_name { value }
+                    environment { value }
+                    gateway { node { ip_prefix { node { prefix { value } } } } }
+                  }
+                }
+              }
+              destination_segment {
+                node {
+                  id
+                  ... on ManagedVlanSegment {
+                    name { value }
+                    customer_name { value }
+                    environment { value }
+                    gateway { node { ip_prefix { node { prefix { value } } } } }
+                  }
+                  ... on ManagedVxlanSegment {
+                    name { value }
+                    customer_name { value }
+                    environment { value }
+                    gateway { node { ip_prefix { node { prefix { value } } } } }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
 }
 
 fragment NetworkSegmentFields on ManagedNetworkSegment {
@@ -123,6 +183,8 @@ fragment NetworkSegmentFields on ManagedNetworkSegment {
     description { value }
     status { value }
     vlan_id { value }
+    customer_name { value }
+    environment { value }
     gateway {
       node {
         address { value }
@@ -148,6 +210,7 @@ fragment NetworkSegmentFields on ManagedNetworkSegment {
     description { value }
     status { value }
     customer_name { value }
+    environment { value }
     arp_suppression { value }
     segment_deployments(status__values: ["active", "provisioning"]) {
       edges {

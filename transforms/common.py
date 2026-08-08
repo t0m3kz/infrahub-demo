@@ -20,6 +20,7 @@ from transforms.helpers.bgp import (
     get_bgp_profile,
 )
 from transforms.helpers.firewall import (
+    _flatten_deployment_firewall_contexts,
     get_customer_pbr_rules,
     get_firewall_contexts,
     get_firewall_static_routes,
@@ -28,6 +29,7 @@ from transforms.helpers.firewall import (
     get_zone_policies,
 )
 from transforms.helpers.ha import _HA_TYPENAMES, get_ha
+from transforms.helpers.loadbalancer_pbr import _flatten_deployment_lb_vips, get_lb_backend_pbr_rules
 from transforms.helpers.management import get_management_services
 from transforms.helpers.mlag import get_mlag
 from transforms.helpers.ospf import get_ospf
@@ -64,7 +66,8 @@ def _get_sgt_rules(activations: list[dict[str, Any]] | None) -> list[dict[str, A
     seen: set[tuple[int, int]] = set()
     rules: list[dict[str, Any]] = []
     for act in activations:
-        tag = (act.get("segment") or {}).get("security_tag") or {}
+        segment = act.get("segment") or {}
+        tag = segment.get("security_tag") or {}
         src_sgt = tag.get("group_id")
         src_name = tag.get("name")
         if not src_sgt:
@@ -87,6 +90,8 @@ def _get_sgt_rules(activations: list[dict[str, Any]] | None) -> list[dict[str, A
                     "dst_sgt": dst_sgt,
                     "action": rule.get("action", "permit"),
                     "log": rule.get("log", False),
+                    "src_customer": segment.get("customer_name"),
+                    "src_environment": segment.get("environment"),
                 }
             )
     return rules
@@ -231,11 +236,19 @@ class BaseDeviceTransform(InfrahubTransform):
 
         # Customer PBR: default-redirect to the firewall context serving this
         # segment's owner; a SecurityPolicyRule permit is the only bypass.
-        # ManagedFirewallContext is GLOBAL data (its own query root), not
-        # scoped to this device's own interfaces — no leaf ever owns a
-        # FirewallContext interface itself, only the firewall/border-leaf do.
-        firewall_contexts = (extra_roots or {}).get("ManagedFirewallContext") or []
+        # ManagedFirewallContext is reached via a device-scoped traversal —
+        # this device's own `deployment` (queries/fragments/firewall_contexts.gql's
+        # FirewallContextsOnDeploymentFields), not a global query root — no
+        # leaf ever owns a FirewallContext interface itself, only the
+        # firewall/border-leaf do.
+        firewall_contexts = _flatten_deployment_firewall_contexts(data.get("deployment"))
         customer_pbr_rules = get_customer_pbr_rules(activations, firewall_contexts)
+
+        # LB backend no-SNAT return-path PBR: same device-scoped deployment
+        # traversal as firewall_contexts above, leaf-only in practice since
+        # border-leaf never hosts pool members (no activations there).
+        lb_vips = _flatten_deployment_lb_vips(data.get("deployment"))
+        lb_backend_pbr_rules = get_lb_backend_pbr_rules(activations, lb_vips)
 
         return {
             "vlans": vlans,
@@ -244,6 +257,7 @@ class BaseDeviceTransform(InfrahubTransform):
             "vrf_gateways": vrf_gateways,
             "sgt_rules": sgt_rules,
             "customer_pbr_rules": customer_pbr_rules,
+            "lb_backend_pbr_rules": lb_backend_pbr_rules,
         }
 
     _ACTIVE_STATUSES = ("active", "provisioning")
@@ -320,6 +334,7 @@ __all__ = [
     "get_ha",
     "get_firewall_zones",
     "get_interfaces",
+    "get_lb_backend_pbr_rules",
     "get_ospf",
     "get_vlans",
     "get_vrf_default_gateways",
@@ -330,6 +345,8 @@ __all__ = [
     "_build_peer_groups",
     "_build_session_from_peering",
     "_collect_l3_vni_from_namespaces",
+    "_flatten_deployment_firewall_contexts",
+    "_flatten_deployment_lb_vips",
     "_get_segment_gateways",
     "_get_segment_namespace",
     "_get_segment_prefix_str",

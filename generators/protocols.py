@@ -75,7 +75,9 @@ class TopologyCustomer(CoreNode):
     name: String
     org_id: String
     status: Dropdown
+    exchange_gateways: RelationshipManager[TopologyExchangeGateway]
     namespace: RelationshipAttribute[BuiltinIPNamespace]
+    network_segments: RelationshipManager[ManagedNetworkSegment]
     owner: RelationshipAttribute[OrganizationEntity]
 
 
@@ -275,6 +277,15 @@ class CloudResource(CoreNode):
     status: DropdownOptional
 
 
+class CloudHybridAttachment(CoreNode):
+    pass
+
+
+class ManagedTenantScoped(CoreNode):
+    firewall_context: RelationshipAttribute[ManagedFirewallContext]
+    loadbalancer_ha: RelationshipAttribute[ManagedLoadbalancerHA]
+
+
 class ManagedRouting(CoreNode):
     name: String
 
@@ -348,6 +359,7 @@ class ManagedBGP(ManagedGeneric, ManagedGenericDevice, ManagedRouting):
     confederation_identifier: IntegerOptional
     graceful_restart: Boolean
     multipath: Boolean
+    process_role: DropdownOptional
     local_as: RelationshipAttribute[RoutingAutonomousSystem]
     router_id: RelationshipAttribute[IpamIPAddress]
 
@@ -366,6 +378,7 @@ class ManagedBGPPeering(ManagedGeneric, ManagedPeering, ManagedGenericInterfaces
     local_pref: IntegerOptional
     maximum_routes: IntegerOptional
     med: IntegerOptional
+    peering_role: DropdownOptional
     remove_private_as: Boolean
     route_reflector_client: Boolean
     send_community: Boolean
@@ -537,15 +550,18 @@ class TopologyCustomerCloud(TopologyCustomer, TopologyDeployment, TopologyCluste
     customer_name: String
     name: StringOptional
     cloud_account: RelationshipAttribute[CloudAccount]
+    virtual_networks: RelationshipManager[CloudVirtualNetwork]
 
 
 class TopologyCustomerColocation(
-    TopologyCustomer, TopologyDeployment, TopologyClusterHosting, TopologyConnectableLocation
+    TopologyCustomer, TopologyDeployment, TopologyClusterHosting, TopologyConnectableLocation, ManagedTenantScoped
 ):
     name: StringOptional
 
 
-class TopologyCustomerDC(TopologyCustomer, TopologyDeployment, TopologyClusterHosting, TopologyConnectableLocation):
+class TopologyCustomerDC(
+    TopologyCustomer, TopologyDeployment, TopologyClusterHosting, TopologyConnectableLocation, ManagedTenantScoped
+):
     name: StringOptional
     design: RelationshipAttribute[TopologyCustomerTemplateDC]
 
@@ -688,7 +704,7 @@ class ManagedFirewallContext(ManagedGeneric, ManagedGenericInterfaces, ManagedIn
     context_id: StringOptional
     vlan_id: IntegerOptional
     cluster: RelationshipAttribute[ManagedFirewallHA]
-    tenant: RelationshipAttribute[TopologyCustomer]
+    tenant: RelationshipAttribute[ManagedTenantScoped]
 
 
 class ManagedFirewallHA(ManagedHA, ManagedGeneric, ManagedGenericDevice, ManagedInlineService):
@@ -734,6 +750,7 @@ class CloudInstance(CloudResource, DcimCapabilities, AppInstance):
     availability_zone: RelationshipAttribute[TopologyCloudZone]
     network_segment: RelationshipAttribute[CloudNetworkSegment]
     security_groups: RelationshipManager[CloudSecurityGroup]
+    virtual_network: RelationshipAttribute[CloudVirtualNetwork]
 
 
 class CloudInternetGateway(CloudResource):
@@ -763,6 +780,7 @@ class OnpremLoadbalancer(ManagedLoadBalancer, ManagedGeneric, CoreArtifactTarget
 
 class ManagedLoadbalancerHA(ManagedHA, ManagedGeneric, ManagedGenericDevice, ManagedInlineService, ManagedLoadBalancer):
     capabilities: RelationshipManager[DcimCapabilities]
+    tenant: RelationshipAttribute[ManagedTenantScoped]
 
 
 class ManagedMLAG(ManagedGeneric, ManagedGenericDevice, ManagedGenericInterfaces):
@@ -1230,6 +1248,7 @@ class CloudRoute(CloudResource):
 class TopologyRouteLeakExchange(TopologyExchangeGateway, ManagedGeneric, ManagedGenericInterfaces):
     direction: Dropdown
     route_target: StringOptional
+    cloud_attachment: RelationshipAttribute[CloudHybridAttachment]
 
 
 class CloudRouteTable(CloudResource):
@@ -1414,18 +1433,20 @@ class LoadbalancerVIP(ManagedGenericInterfaces):
     port: Integer
     protocol: Dropdown
     session_persistence: DropdownOptional
+    snat_enabled: Boolean
     ssl_certificate: StringOptional
     ssl_redirect: Boolean
     status: Dropdown
     timeout_client: IntegerOptional
     timeout_server: IntegerOptional
+    backend_segment: RelationshipAttribute[ManagedNetworkSegment]
     health_checks: RelationshipManager[LoadbalancerHealthCheck]
     load_balancer: RelationshipAttribute[ManagedLoadBalancer]
     members: RelationshipManager[LoadbalancerPoolMember]
     vip_ip: RelationshipAttribute[IpamIPAddress]
 
 
-class CloudVPNGateway(CloudResource):
+class CloudVPNGateway(CloudResource, CloudHybridAttachment):
     vpn_type: Dropdown
     asn: RelationshipAttribute[RoutingAutonomousSystem]
     customer_gateway: RelationshipAttribute[CloudCustomerGateway]
@@ -1457,7 +1478,7 @@ class DcimVirtualInterface(DcimInterface):
     parent_interface: RelationshipAttribute[DcimPhysicalInterface]
 
 
-class CloudVirtualInterface(CloudResource):
+class CloudVirtualInterface(CloudResource, CloudHybridAttachment):
     vif_type: Dropdown
     vlan_id: Integer
     asn: RelationshipAttribute[RoutingAutonomousSystem]
@@ -1473,6 +1494,8 @@ class CloudVirtualNetwork(CloudResource):
     is_shared: BooleanOptional
     account: RelationshipAttribute[CloudAccount]
     cidr_blocks: RelationshipManager[IpamPrefix]
+    customer_deployment: RelationshipAttribute[TopologyCustomer]
+    instances: RelationshipManager[CloudInstance]
     network_segments: RelationshipManager[CloudNetworkSegment]
     region: RelationshipAttribute[TopologyCloudRegion]
 

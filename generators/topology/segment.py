@@ -33,7 +33,6 @@ from ..protocols import (
     DcimPhysicalInterface,
     ManagedSegmentDeployment,
     ManagedVxlanSegment,
-    TopologySegmentHosting,
 )
 
 
@@ -122,6 +121,8 @@ class VxlanSegmentGenerator(CablingMixin, CommonGenerator):
                 segment_name=segment_name,
                 deployment_id=dep_id,
                 deployment_name=dep_name,
+                vlan_pool=dep.get("vlan_pool"),
+                vni_pool=dep.get("vni_pool"),
                 existing_deployment=existing_by_deployment_id.get(dep_id),
                 reusable_vni=reusable_vni,
                 stretch_scope=stretch_scope,
@@ -189,6 +190,8 @@ class VxlanSegmentGenerator(CablingMixin, CommonGenerator):
         segment_name: str,
         deployment_id: str,
         deployment_name: str,
+        vlan_pool: dict[str, Any] | None = None,
+        vni_pool: dict[str, Any] | None = None,
         existing_deployment: Any | None = None,
         reusable_vni: int | None = None,
         stretch_scope: str = "local",
@@ -196,6 +199,10 @@ class VxlanSegmentGenerator(CablingMixin, CommonGenerator):
         """Create or upsert one SegmentDeployment record.
 
         VLAN ID and VNI are always allocated from the deployment's pools.
+        vlan_pool/vni_pool are {"id": ..., "name": ...} dicts read straight
+        from the vxlan_segment query's TopologySegmentHosting parent fragment
+        (see queries/topology/add/vxlan_segment.gql) — no separate client.get()
+        round-trip per deployment needed to discover them.
         Idempotency: checks for existing SegmentDeployment first — from_pool
         is only called for genuinely new deployments.
         """
@@ -235,8 +242,8 @@ class VxlanSegmentGenerator(CablingMixin, CommonGenerator):
             return True
 
         # --- VLAN ID (always from pool via from_pool) ---
-        vlan_pool = await self._get_dc_pool(deployment_id, deployment_name, "vlan_pool")
-        if vlan_pool is None:
+        vlan_pool_id = (vlan_pool or {}).get("id")
+        if not vlan_pool_id:
             self.logger.error(
                 f"  [{deployment_name}] No vlan_pool for {segment_name}. Attach a CoreNumberPool to the DC's vlan_pool."
             )
@@ -244,7 +251,7 @@ class VxlanSegmentGenerator(CablingMixin, CommonGenerator):
 
         # Unique identifier per segment+deployment ensures stable allocation
         vlan_identifier = f"{segment_id}-{deployment_id}-vlan"
-        self.logger.info(f"  [{deployment_name}] Allocating VLAN ID from pool {vlan_pool.name.value}")
+        self.logger.info(f"  [{deployment_name}] Allocating VLAN ID from pool {(vlan_pool or {}).get('name')}")
 
         # --- VNI ---
         # VNI must be globally consistent — the same segment must carry the same VNI
@@ -258,15 +265,15 @@ class VxlanSegmentGenerator(CablingMixin, CommonGenerator):
             self.logger.info(f"  [{deployment_name}] Reusing VNI {vni_literal} for {segment_name}")
         else:
             # First DC to activate this segment — allocate from pool
-            vni_pool = await self._get_dc_pool(deployment_id, deployment_name, "vni_pool")
-            if vni_pool is not None:
+            vni_pool_id = (vni_pool or {}).get("id")
+            if vni_pool_id:
                 # Local segments use per-deployment identifiers; stretched fallback
                 # keeps one identifier to converge to a shared VNI.
                 vni_identifier = (
                     f"{segment_id}-{deployment_id}-vni" if stretch_scope == "local" else f"{segment_id}-vni"
                 )
-                vni_from_pool = {"from_pool": {"id": vni_pool.id}, "identifier": vni_identifier}
-                self.logger.info(f"  [{deployment_name}] Allocating VNI from pool {vni_pool.name.value}")
+                vni_from_pool = {"from_pool": {"id": vni_pool_id}, "identifier": vni_identifier}
+                self.logger.info(f"  [{deployment_name}] Allocating VNI from pool {(vni_pool or {}).get('name')}")
             else:
                 self.logger.warning(
                     f"  [{deployment_name}] No vni_pool — VXLAN segment {segment_name} will not have L2 VNI allocated"
@@ -274,7 +281,7 @@ class VxlanSegmentGenerator(CablingMixin, CommonGenerator):
 
         # --- Create SegmentDeployment with pool-allocated values ---
         activation_data: dict[str, Any] = {
-            "vlan_id": {"from_pool": {"id": vlan_pool.id}, "identifier": vlan_identifier},
+            "vlan_id": {"from_pool": {"id": vlan_pool_id}, "identifier": vlan_identifier},
             "segment": {"id": segment_id},
             "deployment": {"id": deployment_id},
             "status": "provisioning",
@@ -298,37 +305,6 @@ class VxlanSegmentGenerator(CablingMixin, CommonGenerator):
         except Exception as exc:
             self.logger.error(f"  [{deployment_name}] Failed to create SegmentDeployment for {segment_name}: {exc}")
             return False
-
-    async def _get_dc_pool(self, deployment_id: str, deployment_name: str, pool_attr: str) -> Any:
-        """Fetch a pool (vlan_pool, vni_pool, l3_vni_pool) from a TopologySegmentHosting parent.
-
-        deployment_id is a TopologyDataCenter or TopologyColocationMetro id — both
-        inherit the pool relationships from TopologySegmentHosting, so the generic
-        kind resolves either concrete type.
-        Returns the pool SDK object, or None if not found.
-        Uses a per-run cache to avoid re-fetching the parent for each pool attribute.
-        """
-        cache = getattr(self, "_dc_cache", {})
-        if deployment_id not in cache:
-            try:
-                cache[deployment_id] = await self.client.get(
-                    kind=TopologySegmentHosting,
-                    id=deployment_id,
-                    include=["vlan_pool", "vni_pool", "l3_vni_pool"],
-                    prefetch_relationships=True,
-                )
-                self._dc_cache = cache
-            except Exception:
-                self.logger.debug(f"  [{deployment_name}] Could not fetch deployment {deployment_id}")
-                return None
-
-        dc = cache.get(deployment_id)
-        pool_rel = getattr(dc, pool_attr, None) if dc else None
-        pool_peer = getattr(pool_rel, "peer", None) if pool_rel else None
-        if pool_peer and getattr(pool_peer, "id", None):
-            return pool_peer
-        self.logger.debug(f"  [{deployment_name}] No {pool_attr} on deployment {deployment_id}")
-        return None
 
     async def _assign_to_deployment_interfaces(
         self, segment: dict[str, Any], target_deployments: list[dict[str, Any]]

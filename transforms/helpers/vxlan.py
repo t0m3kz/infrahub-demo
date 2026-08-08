@@ -235,6 +235,9 @@ def get_interfaces(
 # Following netlab's approach: single implementation, platform-agnostic data model
 
 
+_VTEP_ROLES = frozenset({"leaf", "border-leaf", "border_leaf", "tor", "l2-leaf", "access-leaf", "border-spine"})
+
+
 def get_vxlan_config(
     data: dict,
     platform: str,
@@ -254,6 +257,13 @@ def get_vxlan_config(
     Returns:
         VXLAN configuration dict or None if VXLAN not needed
     """
+    # Spine/super-spine/hyper-spine are underlay+EVPN-route-reflector only —
+    # never VTEPs, never terminate VXLAN. Gated here (not just by callers'
+    # query shape or generator wiring) so this function is self-defending
+    # regardless of what data happens to reach it.
+    if device_role not in _VTEP_ROLES:
+        return None
+
     interfaces = data.get("interfaces", [])
 
     if not activations:
