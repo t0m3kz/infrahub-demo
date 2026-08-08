@@ -239,7 +239,7 @@ class TestFirewallContextProvisioning:
         await gen.generate(_dc_payload_with_parent(customer_id="cust-1", dedicated_firewall=True))
 
         call = gen._get_or_create_firewall_context.call_args
-        assert call.args[0] == f"{cluster.name.value}-C005-P-DC10-dedicated"
+        assert call.args[0] == f"{cluster.name.value}-context"
         assert call.args[2] == "cust-1"
 
     @pytest.mark.asyncio
@@ -455,7 +455,7 @@ class TestEnsureDedicatedLoadbalancer:
             parent_id="dc10-id",
             parent_name="DC10",
             dc_size="M",
-            customer_name="C005-P-DC10",
+            customer_name="C005-p",
             tenant_id="cust-1",
         )
 
