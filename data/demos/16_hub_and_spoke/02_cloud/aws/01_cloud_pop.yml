@@ -104,7 +104,7 @@ spec:
       parent: "eu-central-1"
       namespace: "INTERNET"
       member_of_groups:
-        - customer_deployments
+        - customer_deployments_cloud
 
 ---
 apiVersion: infrahub.app/v1

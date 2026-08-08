@@ -17,4 +17,4 @@ spec:
       status: active
       parent: "europe-west4"
       member_of_groups:
-        - customer_deployments
+        - customer_deployments_cloud

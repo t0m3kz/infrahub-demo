@@ -603,7 +603,7 @@ generator_definitions:
       name: name__value
   - name: add_customer_deployment_dc
     file_path: generators/topology/customer_dc.py
-    targets: customer_deployments
+    targets: customer_deployments_dc
     query: customer_dc
     class_name: CustomerDeploymentDCExchangeGenerator
     execute_in_proposed_change: false
@@ -612,7 +612,7 @@ generator_definitions:
       name: name__value
   - name: add_customer_deployment_colocation
     file_path: generators/topology/customer_colocation.py
-    targets: customer_deployments
+    targets: customer_deployments_colocation
     query: customer_colocation
     class_name: CustomerDeploymentColocationExchangeGenerator
     execute_in_proposed_change: false
@@ -621,7 +621,7 @@ generator_definitions:
       name: name__value
   - name: add_customer_deployment_cloud
     file_path: generators/topology/customer_cloud.py
-    targets: customer_deployments
+    targets: customer_deployments_cloud
     query: customer_cloud
     class_name: CustomerDeploymentCloudExchangeGenerator
     execute_in_proposed_change: false
@@ -630,7 +630,7 @@ generator_definitions:
       name: name__value
   - name: add_customer_deployment_office
     file_path: generators/topology/customer_office.py
-    targets: customer_deployments
+    targets: customer_deployments_office
     query: customer_office
     class_name: CustomerDeploymentOfficeExchangeGenerator
     execute_in_proposed_change: false

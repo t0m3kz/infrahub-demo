@@ -203,6 +203,16 @@ nodes:
             description: "Regular BGP peering to an external partner/provider"
             color: "#FDCB6E"
     relationships:
+      - name: capabilities
+        peer: DcimCapabilities
+        label: "Device"
+        description: "The single device this BGP process runs on — always created one-per-device."  # yamllint disable-line rule:line-length
+        cardinality: many
+        optional: true
+        kind: Attribute
+        direction: inbound
+        identifier: capabilities
+        order_weight: 800
       - name: router_id
         peer: IpamIPAddress
         optional: false
