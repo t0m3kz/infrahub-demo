@@ -330,14 +330,16 @@ class DeviceMixin:
                     self.logger.error(f"  - Failed to save [{node.get_kind()}] {node.hfid}: {error}")
                     raise ValidationError(str(error))
                 created_devices.append(node)
-                self.logger.info(f"  - Created [{node.get_kind()}] {node.hfid}")
+                verb = "Updated" if node.name.value in existing_devices_map else "Created"
+                self.logger.info(f"  - {verb} [{node.get_kind()}] {node.hfid}")
 
             async for node, error in batch_loopbacks.execute():
                 if error:
                     self.logger.error(f"  - Failed to save loopback for {node.device.hfid}: {error}")
                     raise ValidationError(str(error))
                 created_loopbacks.append(node)
-                self.logger.info(f"  - Created [{node.get_kind()}] {node.device.hfid} {node.name.value}")
+                verb = "Updated" if node.device.hfid[0] in existing_loopbacks_by_device else "Created"
+                self.logger.info(f"  - {verb} [{node.get_kind()}] {node.device.hfid} {node.name.value}")
 
             # Summary logging
             self.logger.info(

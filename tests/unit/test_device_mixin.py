@@ -135,6 +135,32 @@ class TestDeviceMixinCreateDevices:
         assert create_kwargs["data"]["name"] == "fw-01-fw-02-shared-production-01"
 
     @pytest.mark.asyncio
+    async def test_logs_updated_not_created_for_pre_existing_device(self) -> None:
+        """A device already present in existing_devices_map (upsert-by-id path)
+        must log "Updated", not "Created" — re-running create_devices() is
+        idempotent at the data level, and the log should say so instead of
+        always claiming a fresh creation."""
+        gen = _make_generator()
+        existing_device = MagicMock(member_of_groups=MagicMock(peers=[]))
+        existing_device.name.value = "dc1-fw-01"
+        gen.client.filters = AsyncMock(return_value=[existing_device])
+        created_device = _mock_created_device(DcimPhysicalDevice.__name__, "dc1-fw-01")
+        created_device.name.value = "dc1-fw-01"
+        gen.client.create = AsyncMock(return_value=created_device)
+
+        await gen.create_devices(
+            device_role="firewall",
+            quantity=1,
+            deployment_id="dep-1",
+            template={"device_type": {"id": "dt-1"}, "platform": {"name": "nxos"}},
+            options={"name_override": "dc1-fw-01"},
+        )
+
+        info_messages = [c.args[0] for c in gen.logger.info.call_args_list]
+        assert any("Updated [" in m for m in info_messages)
+        assert not any("Created [" in m for m in info_messages)
+
+    @pytest.mark.asyncio
     async def test_name_override_rejects_quantity_other_than_one(self) -> None:
         gen = _make_generator()
 
