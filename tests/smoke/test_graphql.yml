@@ -236,14 +236,6 @@ infrahub_tests:
           kind: graphql-query-smoke
 
   - resource: GraphQLQuery
-    resource_name: ha_domain_data
-    tests:
-      - name: syntax_check
-        spec:
-          path: queries/topology/add/ha_domain.gql
-          kind: graphql-query-smoke
-
-  - resource: GraphQLQuery
     resource_name: mlag_domain_data
     tests:
       - name: syntax_check

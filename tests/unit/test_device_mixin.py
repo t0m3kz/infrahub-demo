@@ -8,7 +8,15 @@ from unittest.mock import AsyncMock, MagicMock, Mock
 import pytest
 
 from generators.devices import DeviceMixin
-from generators.protocols import DcimPhysicalDevice, DcimVirtualDevice, ManagedMLAG
+from generators.protocols import (
+    DcimCable,
+    DcimPhysicalDevice,
+    DcimPhysicalInterface,
+    DcimVirtualDevice,
+    DcimVirtualInterface,
+    ManagedHAInterface,
+    ManagedMLAG,
+)
 
 
 class _DummyBatch:
@@ -197,6 +205,10 @@ class TestCreateDevicesPairingDispatch:
     @pytest.mark.asyncio
     async def test_firewall_with_ha_kind_pairs_after_creation(self) -> None:
         gen = _make_generator()
+        # HA sync interface/cable creation is covered by TestEnsureHaInterfaces
+        # in test_device_mixin.py — stub it here, this test only checks that
+        # create_devices() dispatches into HA domain creation at all.
+        gen._ensure_ha_interfaces = AsyncMock()
         created = [_mock_created_device(DcimPhysicalDevice.__name__, n) for n in ("dc1-firewall-01", "dc1-firewall-02")]
         gen.client.create = AsyncMock(side_effect=[*created, MagicMock(id="ha-1", save=AsyncMock())])
 
@@ -289,6 +301,10 @@ class TestEnsureHaPairs:
         gen.client.create = AsyncMock()
         gen.client.filters = AsyncMock(return_value=[])
         gen.client.get = AsyncMock()
+        # _ensure_ha_interfaces (HA sync interface/cable creation) is covered
+        # by its own TestEnsureHaInterfaces below — stub it here so these
+        # tests only exercise _ensure_ha_pairs's own domain create/lookup.
+        gen._ensure_ha_interfaces = AsyncMock()
         return gen
 
     @pytest.mark.asyncio
@@ -422,6 +438,263 @@ class TestEnsureHaPairs:
 
         create_kwargs = gen.client.create.call_args.kwargs
         assert "tenant" not in create_kwargs["data"]
+
+
+def _mock_relmgr(peer_ids: list[str]) -> MagicMock:
+    """A cardinality-many RelationshipManager stub — .fetch() is a no-op,
+    .peers is pre-populated (mirrors client.create()'s own client-side
+    initialization from the data dict passed to it, no server round-trip
+    needed to see the ids back)."""
+    rel = MagicMock()
+    rel.fetch = AsyncMock()
+    rel.peers = [MagicMock(id=pid) for pid in peer_ids]
+    return rel
+
+
+def _mock_iface(iface_id: str, name: str, *, cable_id: str | None = None) -> MagicMock:
+    iface = MagicMock()
+    iface.id = iface_id
+    iface.name = MagicMock(value=name)
+    cable = MagicMock()
+    cable.initialized = cable_id is not None
+    if cable_id is not None:
+        cable.id = cable_id
+    iface.cable = cable
+    return iface
+
+
+class TestEnsureHaInterfaces:
+    """DeviceMixin._ensure_ha_interfaces / _ensure_ha_cable — replaces the old
+    standalone add_ha generator (generators/topology/ha.py, deleted). Called
+    synchronously from _ensure_ha_pairs right after a domain is created or
+    found, so there's no separate trigger-based dispatch to race on."""
+
+    def _gen(self) -> Any:
+        gen = DeviceMixin.__new__(DeviceMixin)
+        gen.logger = MagicMock()
+        gen.client = MagicMock()
+        gen.client.filters = AsyncMock(return_value=[])
+        gen.client.create = AsyncMock()
+        gen.client.get = AsyncMock()
+        return gen
+
+    @pytest.mark.asyncio
+    async def test_no_members_is_a_noop(self) -> None:
+        gen = self._gen()
+        ha_obj = MagicMock(id="ha-1", capabilities=_mock_relmgr([]))
+
+        await gen._ensure_ha_interfaces(ha_obj, "fw-01-fw-02-ha")
+
+        gen.client.filters.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_creates_interface_capability_for_each_member_with_existing_sync_iface(self) -> None:
+        """Physical devices already have a role=ha interface from their
+        template — no on-demand creation, just wire ManagedHAInterface."""
+        gen = self._gen()
+        ha_obj = MagicMock(id="ha-1", capabilities=_mock_relmgr(["dev-1", "dev-2"]))
+        dev_1 = MagicMock(id="dev-1", deployment=MagicMock(initialized=False))
+        dev_1.name = MagicMock(value="fw-01")
+        dev_2 = MagicMock(id="dev-2", deployment=MagicMock(initialized=False))
+        dev_2.name = MagicMock(value="fw-02")
+        iface_1 = _mock_iface("iface-1", "sync0")
+        iface_2 = _mock_iface("iface-2", "sync0")
+
+        async def _filters(*, kind: Any, **kwargs: Any) -> list[Any]:
+            if kind is DcimPhysicalDevice:
+                return [dev_1, dev_2]
+            if kind is ManagedHAInterface:
+                return []  # no existing HAInterface nodes
+            if kind is DcimPhysicalInterface:
+                return [iface_1] if kwargs.get("device__ids") == ["dev-1"] else [iface_2]
+            return []
+
+        gen.client.filters = AsyncMock(side_effect=_filters)
+        created_ha_iface = MagicMock(save=AsyncMock())
+        gen.client.create = AsyncMock(return_value=created_ha_iface)
+
+        await gen._ensure_ha_interfaces(ha_obj, "fw-01-fw-02-ha")
+
+        ha_iface_calls = [c for c in gen.client.create.call_args_list if c.kwargs["kind"] is ManagedHAInterface]
+        assert len(ha_iface_calls) == 2
+        assert ha_iface_calls[0].kwargs["data"]["name"] == "fw-01-HA-SYNC"
+        assert ha_iface_calls[0].kwargs["data"]["interface_capabilities"] == [{"id": "iface-1"}]
+
+    @pytest.mark.asyncio
+    async def test_existing_sync_iface_membership_skips_create(self) -> None:
+        """An interface already wired to a ManagedHAInterface in this domain
+        must not get a second ManagedHAInterface created for it."""
+        gen = self._gen()
+        ha_obj = MagicMock(id="ha-1", capabilities=_mock_relmgr(["dev-1", "dev-2"]))
+        dev_1 = MagicMock(id="dev-1", deployment=MagicMock(initialized=False))
+        dev_1.name = MagicMock(value="fw-01")
+        dev_2 = MagicMock(id="dev-2", deployment=MagicMock(initialized=False))
+        dev_2.name = MagicMock(value="fw-02")
+        iface_1 = _mock_iface("iface-1", "sync0")
+        iface_2 = _mock_iface("iface-2", "sync0")
+        existing_ha_iface = MagicMock(interface_capabilities=_mock_relmgr(["iface-1", "iface-2"]))
+
+        async def _filters(*, kind: Any, **kwargs: Any) -> list[Any]:
+            if kind is DcimPhysicalDevice:
+                return [dev_1, dev_2]
+            if kind is ManagedHAInterface:
+                return [existing_ha_iface]
+            if kind is DcimPhysicalInterface:
+                return [iface_1] if kwargs.get("device__ids") == ["dev-1"] else [iface_2]
+            return []
+
+        gen.client.filters = AsyncMock(side_effect=_filters)
+
+        await gen._ensure_ha_interfaces(ha_obj, "fw-01-fw-02-ha")
+
+        ha_iface_calls = [c for c in gen.client.create.call_args_list if c.kwargs["kind"] is ManagedHAInterface]
+        assert len(ha_iface_calls) == 0
+
+    @pytest.mark.asyncio
+    async def test_missing_sync_iface_on_physical_device_logs_error(self) -> None:
+        gen = self._gen()
+        ha_obj = MagicMock(id="ha-1", capabilities=_mock_relmgr(["dev-1", "dev-2"]))
+        dev_1 = MagicMock(id="dev-1", deployment=MagicMock(initialized=False))
+        dev_1.name = MagicMock(value="fw-01")
+        dev_2 = MagicMock(id="dev-2", deployment=MagicMock(initialized=False))
+        dev_2.name = MagicMock(value="fw-02")
+
+        async def _filters(*, kind: Any, **kwargs: Any) -> list[Any]:
+            if kind is DcimPhysicalDevice:
+                return [dev_1, dev_2]
+            return []  # no HA sync interface found for either device
+
+        gen.client.filters = AsyncMock(side_effect=_filters)
+
+        await gen._ensure_ha_interfaces(ha_obj, "fw-01-fw-02-ha")
+
+        assert gen.logger.error.call_count == 2
+        gen.client.create.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_virtual_device_with_no_sync_iface_creates_eth7_on_demand(self) -> None:
+        gen = self._gen()
+        ha_obj = MagicMock(id="ha-1", capabilities=_mock_relmgr(["dev-1", "dev-2"]))
+        dev_1 = MagicMock(id="dev-1", deployment=MagicMock(initialized=False))
+        dev_1.name = MagicMock(value="vfw-01")
+        dev_2 = MagicMock(id="dev-2", deployment=MagicMock(initialized=False))
+        dev_2.name = MagicMock(value="vfw-02")
+
+        created_sync_iface = MagicMock(id="new-iface", save=AsyncMock())
+        created_sync_iface.name = MagicMock(value="eth7")
+
+        async def _filters(*, kind: Any, **kwargs: Any) -> list[Any]:
+            if kind is DcimVirtualDevice:
+                return [dev_1, dev_2]
+            return []  # no existing sync interface, no existing HAInterface
+
+        gen.client.filters = AsyncMock(side_effect=_filters)
+        gen.client.create = AsyncMock(
+            side_effect=[
+                created_sync_iface,
+                MagicMock(save=AsyncMock()),
+                created_sync_iface,
+                MagicMock(save=AsyncMock()),
+            ]
+        )
+
+        await gen._ensure_ha_interfaces(ha_obj, "vfw-01-vfw-02-ha", device_kind=DcimVirtualDevice)
+
+        virtual_iface_calls = [c for c in gen.client.create.call_args_list if c.kwargs["kind"] is DcimVirtualInterface]
+        assert len(virtual_iface_calls) == 2
+        assert virtual_iface_calls[0].kwargs["data"]["name"] == "eth7"
+        assert virtual_iface_calls[0].kwargs["data"]["role"] == "ha"
+
+    @pytest.mark.asyncio
+    async def test_virtual_pairs_never_create_a_cable(self) -> None:
+        """No physical cabling exists between hosted virtual instances —
+        _ensure_ha_cable must never be reached for device_kind=DcimVirtualDevice."""
+        gen = self._gen()
+        ha_obj = MagicMock(id="ha-1", capabilities=_mock_relmgr(["dev-1", "dev-2"]))
+        dev_1 = MagicMock(id="dev-1", deployment=MagicMock(initialized=False))
+        dev_1.name = MagicMock(value="vfw-01")
+        dev_2 = MagicMock(id="dev-2", deployment=MagicMock(initialized=False))
+        dev_2.name = MagicMock(value="vfw-02")
+        iface_1 = _mock_iface("iface-1", "eth7")
+        iface_2 = _mock_iface("iface-2", "eth7")
+
+        async def _filters(*, kind: Any, **kwargs: Any) -> list[Any]:
+            if kind is DcimVirtualDevice:
+                return [dev_1, dev_2]
+            if kind is DcimVirtualInterface:
+                return [iface_1] if kwargs.get("device__ids") == ["dev-1"] else [iface_2]
+            return []
+
+        gen.client.filters = AsyncMock(side_effect=_filters)
+        gen.client.create = AsyncMock(return_value=MagicMock(save=AsyncMock()))
+        gen._ensure_ha_cable = AsyncMock()
+
+        await gen._ensure_ha_interfaces(ha_obj, "vfw-01-vfw-02-ha", device_kind=DcimVirtualDevice)
+
+        gen._ensure_ha_cable.assert_not_awaited()
+
+
+class TestEnsureHaCable:
+    def _gen(self) -> Any:
+        gen = DeviceMixin.__new__(DeviceMixin)
+        gen.logger = MagicMock()
+        gen.client = MagicMock()
+        gen.client.filters = AsyncMock(return_value=[])
+        gen.client.create = AsyncMock()
+        return gen
+
+    @pytest.mark.asyncio
+    async def test_existing_named_cable_skips_create(self) -> None:
+        gen = self._gen()
+        gen.client.filters = AsyncMock(return_value=[MagicMock()])
+        dev_1 = MagicMock()
+        dev_1.name = MagicMock(value="fw-01")
+        dev_2 = MagicMock()
+        dev_2.name = MagicMock(value="fw-02")
+        iface_1 = _mock_iface("iface-1", "sync0")
+        iface_2 = _mock_iface("iface-2", "sync0")
+
+        await gen._ensure_ha_cable("fw-01-fw-02-ha", [(dev_1, iface_1), (dev_2, iface_2)])
+
+        gen.client.create.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_orphan_cabled_interface_skips_create(self) -> None:
+        """Either endpoint already has a real cable (just not under the
+        expected name) — treat as already-cabled, don't create a duplicate."""
+        gen = self._gen()
+        dev_1 = MagicMock()
+        dev_1.name = MagicMock(value="fw-01")
+        dev_2 = MagicMock()
+        dev_2.name = MagicMock(value="fw-02")
+        iface_1 = _mock_iface("iface-1", "sync0", cable_id="orphan-cbl")
+        iface_2 = _mock_iface("iface-2", "sync0")
+
+        await gen._ensure_ha_cable("fw-01-fw-02-ha", [(dev_1, iface_1), (dev_2, iface_2)])
+
+        gen.client.create.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_creates_new_cable_with_deployment(self) -> None:
+        gen = self._gen()
+        created = MagicMock(save=AsyncMock())
+        gen.client.create = AsyncMock(return_value=created)
+        dev_1 = MagicMock(deployment=MagicMock(initialized=True))
+        dev_1.name = MagicMock(value="fw-01")
+        dev_1.deployment.peer = MagicMock(id="dep-1")
+        dev_2 = MagicMock()
+        dev_2.name = MagicMock(value="fw-02")
+        iface_1 = _mock_iface("iface-1", "sync0")
+        iface_2 = _mock_iface("iface-2", "sync0")
+
+        await gen._ensure_ha_cable("fw-01-fw-02-ha", [(dev_2, iface_2), (dev_1, iface_1)])
+
+        call_kwargs = gen.client.create.call_args.kwargs
+        assert call_kwargs["kind"] is DcimCable
+        assert call_kwargs["data"]["name"] == "CBL-fw-01-fw-02-ha-SYNC"
+        assert call_kwargs["data"]["endpoints"] == ["iface-1", "iface-2"]
+        assert call_kwargs["data"]["deployment"] == {"id": "dep-1"}
+        created.save.assert_awaited_once_with(allow_upsert=True)
 
 
 def _controller_dict(controller_type: str, platform_id: str | None = None, id_: str = "ctrl-1") -> dict[str, Any]:

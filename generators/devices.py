@@ -13,10 +13,13 @@ if TYPE_CHECKING:
 from .helpers import DeviceNameContext, DeviceNamingConfig, get_loopback_name
 from .helpers.pairing import pair_device_names
 from .protocols import (
+    DcimCable,
     DcimPhysicalDevice,
+    DcimPhysicalInterface,
     DcimVirtualDevice,
     DcimVirtualInterface,
     ManagedController,
+    ManagedHAInterface,
     ManagedMLAG,
 )
 from .types import DeviceOptions
@@ -439,13 +442,19 @@ class DeviceMixin:
         tenant_id: str | None = None,
     ) -> None:
         """Pair same-role devices two-at-a-time (sorted, odd one unpaired) into
-        HA domains. Shared by dc.py (DC-wide firewall/load-balancer) and pod.py
-        (a border-spine pod's own firewall/load-balancer) — never pairs across
-        pods/DCs, both members must sit in front of the same fabric to mean
-        anything physically. device_kind is DcimVirtualDevice for the shared
-        production/non-production virtual instances dc.py provisions per
-        physical HA pair — same pairing logic, no physical cabling involved
-        (ha.py already skips cable creation for non-physical HA domains).
+        HA domains, then ensure each pair's HA sync interfaces/ManagedHAInterface/
+        cable in the same call — no separate add_ha generator/trigger round-trip
+        (that used to run async off a ManagedFirewallHA/LoadbalancerHA "updated"
+        mutation, and re-fired 2-3x per domain whenever two concurrent callers
+        raced on the filter-then-create check below, since every racer's
+        allow_upsert=True save was itself an "updated" mutation). Shared by
+        dc.py (DC-wide firewall/load-balancer) and pod.py (a border-spine pod's
+        own firewall/load-balancer) — never pairs across pods/DCs, both members
+        must sit in front of the same fabric to mean anything physically.
+        device_kind is DcimVirtualDevice for the shared production/
+        non-production virtual instances dc.py provisions per physical HA
+        pair — same pairing logic, no physical cabling involved (mirrors the
+        skip _ensure_ha_interfaces itself applies for non-physical devices).
         tenant_id sets .tenant on ha_kind for a dedicated pair (e.g.
         ManagedLoadbalancerHA created for one customer) — only meaningful for
         ha_kind's that carry a tenant relationship (LoadbalancerHA today;
@@ -455,30 +464,158 @@ class DeviceMixin:
         ha_group = None
         for first, second in pair_device_names(device_names):
             ha_name = f"{first}-{second}-ha"
-            existing = await self.client.filters(kind=ha_kind, name__value=ha_name)
+            existing = await self.client.filters(kind=ha_kind, name__value=ha_name, include=["capabilities"])
             if existing:
-                self.client.group_context.related_node_ids.append(existing[0].id)
+                ha_obj = existing[0]
+                self.client.group_context.related_node_ids.append(ha_obj.id)
+            else:
+                devices = await self.client.filters(kind=device_kind, name__values=[first, second])
+                if len(devices) != 2:
+                    self.logger.error(f"HA pair {first}/{second}: could not resolve both devices.")
+                    continue
+
+                if ha_group is None:
+                    ha_group = await self.client.get(kind=CoreStandardGroup, name__value="ha_domains")
+                ha_obj = await self.client.create(
+                    kind=ha_kind,
+                    data={
+                        "name": ha_name,
+                        "status": "active",
+                        "capabilities": [{"id": dev.id} for dev in devices],
+                        "member_of_groups": [{"id": ha_group.id}],
+                        **({"tenant": {"id": tenant_id}} if tenant_id else {}),
+                    },
+                )
+                await ha_obj.save(allow_upsert=True)
+                self.logger.info(f"Created HA domain {ha_name} for {role_label}s")
+
+            await self._ensure_ha_interfaces(ha_obj, ha_name, device_kind=device_kind)
+
+    async def _ensure_ha_interfaces(
+        self,
+        ha_obj: Any,
+        ha_name: str,
+        *,
+        device_kind: type[Any] = DcimPhysicalDevice,
+    ) -> None:
+        """Ensure each member device has a ManagedHAInterface on its HA sync
+        interface, and (for physical pairs only) a DcimCable between the two
+        sync interfaces. Purely idempotent: every write is gated on an
+        existing-membership check first, so a repeat call on an unchanged
+        domain performs zero writes (see _ensure_ha_pairs's docstring for why
+        that matters — this used to be a separate generator invoked via
+        trigger, unconditionally create()-ing on every run)."""
+        caps = getattr(ha_obj, "capabilities")
+        await caps.fetch()
+        member_ids = [peer.id for peer in caps.peers]
+        if not member_ids:
+            return
+
+        is_physical = device_kind is DcimPhysicalDevice
+        iface_kind = DcimPhysicalInterface if is_physical else DcimVirtualInterface
+        member_devices = await self.client.filters(kind=device_kind, ids=member_ids, include=["deployment"])
+
+        existing_ha_ifaces = await self.client.filters(
+            kind=ManagedHAInterface, ha_domain__ids=[ha_obj.id], include=["interface_capabilities"]
+        )
+        existing_sync_iface_ids: set[str] = set()
+        for node in existing_ha_ifaces:
+            node_caps = getattr(node, "interface_capabilities")
+            await node_caps.fetch()
+            existing_sync_iface_ids.update(peer.id for peer in node_caps.peers)
+
+        sync_ifaces: list[Any] = []
+        for device_obj in member_devices:
+            device_sync_ifaces = await self.client.filters(
+                kind=iface_kind,
+                device__ids=[device_obj.id],
+                role__value="ha",
+                include=["cable"] if is_physical else None,
+            )
+            sync_iface = device_sync_ifaces[0] if device_sync_ifaces else None
+            if sync_iface is None and not is_physical:
+                # Virtual devices from the *_CUSTOMER_* templates get a fixed
+                # eth7 HA sync port (see data/bootstrap's virtual device
+                # templates) — create it on demand rather than requiring
+                # every template author to remember one.
+                sync_iface = await self.client.create(
+                    kind=DcimVirtualInterface,
+                    data={
+                        "name": "eth7",
+                        "device": {"id": device_obj.id},
+                        "status": "active",
+                        "role": "ha",
+                        "description": f"HA sync — {device_obj.name.value}",
+                    },
+                )
+                await sync_iface.save(allow_upsert=True)
+            if sync_iface is None:
+                self.logger.error(f"[{device_obj.name.value}] No HA sync interface found (expected role=ha)")
+                continue
+            sync_ifaces.append((device_obj, sync_iface))
+
+            if sync_iface.id in existing_sync_iface_ids:
                 continue
 
-            devices = await self.client.filters(kind=device_kind, name__values=[first, second])
-            if len(devices) != 2:
-                self.logger.error(f"HA pair {first}/{second}: could not resolve both devices.")
-                continue
-
-            if ha_group is None:
-                ha_group = await self.client.get(kind=CoreStandardGroup, name__value="ha_domains")
-            ha_obj = await self.client.create(
-                kind=ha_kind,
+            suffix = "HA-MIRROR" if "mirror" in sync_iface.name.value.lower() else "HA-SYNC"
+            node_name = f"{device_obj.name.value}-{suffix}"
+            self.logger.info(
+                f"  [{device_obj.name.value}:{sync_iface.name.value}] Creating ManagedHAInterface {node_name}"
+            )
+            ha_iface = await self.client.create(
+                kind=ManagedHAInterface,
                 data={
-                    "name": ha_name,
+                    "name": node_name,
+                    "link_type": "sync",
                     "status": "active",
-                    "capabilities": [{"id": dev.id} for dev in devices],
-                    "member_of_groups": [{"id": ha_group.id}],
-                    **({"tenant": {"id": tenant_id}} if tenant_id else {}),
+                    "description": f"HA link — {device_obj.name.value}:{sync_iface.name.value}",
+                    "ha_domain": {"id": ha_obj.id},
+                    "interface_capabilities": [{"id": sync_iface.id}],
                 },
             )
-            await ha_obj.save(allow_upsert=True)
-            self.logger.info(f"Created HA domain {ha_name} for {role_label}s")
+            await ha_iface.save(allow_upsert=True)
+
+        if is_physical and len(sync_ifaces) == 2:
+            await self._ensure_ha_cable(ha_name, sync_ifaces)
+
+    async def _ensure_ha_cable(self, ha_name: str, sync_ifaces: list[tuple[Any, Any]]) -> None:
+        """Create the DcimCable between two peer devices' HA sync interfaces —
+        physical HA pairs only, called once both member interfaces are known."""
+        (dev_a, iface_a), (dev_b, iface_b) = sorted(sync_ifaces, key=lambda pair: pair[0].name.value)
+        cable_name = f"CBL-{ha_name}-SYNC"
+
+        existing = await self.client.filters(kind=DcimCable, name__value=cable_name)
+        if existing:
+            return
+
+        existing_cable_a = getattr(iface_a, "cable", None)
+        existing_cable_b = getattr(iface_b, "cable", None)
+        if (existing_cable_a is not None and existing_cable_a.initialized) or (
+            existing_cable_b is not None and existing_cable_b.initialized
+        ):
+            # Orphan from a partial run — the sync interfaces are already
+            # cabled (just not under this expected name). Leave it as-is
+            # rather than creating a second, conflicting cable.
+            return
+
+        deployment_rel = getattr(dev_a, "deployment", None)
+        deployment_id: str | None = None
+        if deployment_rel is not None and deployment_rel.initialized:
+            deployment_id = deployment_rel.peer.id
+
+        self.logger.info(
+            f"  [{ha_name}] Creating HA sync cable {cable_name}: "
+            f"{dev_a.name.value}:{iface_a.name.value} ↔ {dev_b.name.value}:{iface_b.name.value}"
+        )
+        cable_data: dict[str, Any] = {
+            "name": cable_name,
+            "type": "smf",
+            "endpoints": [iface_a.id, iface_b.id],
+        }
+        if deployment_id:
+            cable_data["deployment"] = {"id": deployment_id}
+        cable_obj = await self.client.create(kind=DcimCable, data=cable_data)
+        await cable_obj.save(allow_upsert=True)
 
     async def _ensure_mlag_pairs(
         self,
