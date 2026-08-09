@@ -30,6 +30,10 @@ def _make_generator(cls: type[_T]) -> Any:
     gen.client.get = AsyncMock()
     gen.client.create = AsyncMock()
     gen.client.execute_graphql = AsyncMock()
+    # generate() waits for an in-flight add_dc/dc_pod_cascade on the parent DC
+    # before reading firewall_devices/loadbalancer_devices (see pod.py's
+    # identical wait) — no in-flight parent in these unit tests, so no-op.
+    gen.wait_for_parent_generator_and_refetch = AsyncMock(return_value=None)
     return gen
 
 
@@ -115,6 +119,51 @@ class TestDCDeployment:
         await gen.generate({"TopologyCustomerColocation": [{"id": "x"}]})
 
         gen.client.filters.assert_not_called()
+
+
+class TestWaitsForParentDcGenerator:
+    """A customer can board concurrently with (or immediately after) its
+    parent DC's own creation — generate() must wait for an in-flight
+    add_dc/dc_pod_cascade before reading firewall_devices/loadbalancer_devices,
+    same as pod.py waits for its own parent DC."""
+
+    @pytest.mark.asyncio
+    async def test_waits_on_both_parent_generators_when_dc_id_present(self) -> None:
+        gen = _make_generator(CustomerDeploymentDCExchangeGenerator)
+
+        await gen.generate(_dc_payload_with_parent(fw_devices=[]))
+
+        assert gen.wait_for_parent_generator_and_refetch.await_args_list == [
+            (("add_dc", "dc10-id"), {}),
+            (("dc_pod_cascade", "dc10-id"), {}),
+        ]
+
+    @pytest.mark.asyncio
+    async def test_no_parent_id_skips_wait(self) -> None:
+        gen = _make_generator(CustomerDeploymentDCExchangeGenerator)
+
+        await gen.generate(_dc_payload())  # no "parent" key at all
+
+        gen.wait_for_parent_generator_and_refetch.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_refetched_data_is_reparsed_and_used(self) -> None:
+        """If add_dc was in-flight, the refreshed data (now carrying
+        firewall_devices that were missing the first time) replaces the
+        original — not just logged and discarded."""
+        gen = _make_generator(CustomerDeploymentDCExchangeGenerator)
+        refreshed_payload = _dc_payload_with_parent(fw_devices=[_fw_device(id="fw-1", name="DC10-FW1")])
+        gen.wait_for_parent_generator_and_refetch = AsyncMock(side_effect=[refreshed_payload, None])
+        cluster = MagicMock(id="cluster-1")
+        cluster.name.value = "DC10-FW1-ha"
+        cluster.capabilities.peers = [MagicMock(id="fw-1")]
+        gen.client.filters = AsyncMock(return_value=[cluster])
+        gen._get_or_create_firewall_context = AsyncMock(return_value=None)
+
+        await gen.generate(_dc_payload_with_parent(fw_devices=[]))
+
+        gen.client.filters.assert_awaited()
+        gen._get_or_create_firewall_context.assert_awaited_once()
 
 
 class TestFirewallContextNoFirewallOrCluster:

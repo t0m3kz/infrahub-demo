@@ -90,6 +90,25 @@ class CustomerDeploymentDCExchangeGenerator(DeviceMixin, CablingMixin, CommonGen
 
         self.logger.info(f"Processing DC deployment {customer.get('name', customer_id)}")
 
+        # This reads DC-level data (firewall_devices, loadbalancer_devices)
+        # written by add_dc/dc_pod_cascade. A customer can board concurrently
+        # with (or immediately after) its parent DC's own creation — e.g. a
+        # bulk DC+customer-boarding load — so wait for an in-flight parent
+        # generator and re-parse rather than risk provisioning against a
+        # parent that has no firewall/LB devices yet (see pod.py's identical
+        # wait for the same reason).
+        dc_id = (customer.get("parent") or {}).get("id")
+        if dc_id:
+            for parent_generator in ("add_dc", "dc_pod_cascade"):
+                refreshed = await self.wait_for_parent_generator_and_refetch(parent_generator, dc_id)
+                if refreshed is not None:
+                    cleaned = clean_data(refreshed)
+                    entries = cleaned.get("TopologyCustomerDC", [])
+                    if not entries:
+                        self.logger.error("No TopologyCustomerDC data in GraphQL response")
+                        return
+                    customer = entries[0]
+
         # Merge this deployment's parent DC's own pre-fetched, role-bucketed
         # controller lists (see queries/topology/add/customer_dc.gql's
         # security_manager_controllers/lb_manager_controllers aliases) into
