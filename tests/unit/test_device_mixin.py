@@ -335,6 +335,44 @@ class TestEnsureHaPairs:
         ha_obj.save.assert_awaited_once_with(allow_upsert=True)
 
     @pytest.mark.asyncio
+    async def test_fresh_domain_passes_member_ids_skipping_capabilities_fetch(self) -> None:
+        """A just-created ha_obj's capabilities peers only carry the id each
+        was created with, no __typename — RelatedNode.fetch() requires both
+        (raises 'Unable to fetch the peer, id and/or typename are not
+        defined' otherwise, caught live on a real run). _ensure_ha_pairs must
+        pass the already-known device ids through as member_ids so
+        _ensure_ha_interfaces never calls capabilities.fetch() on this path."""
+        gen = self._gen()
+        gen.client.filters = AsyncMock(side_effect=[[], [_mock_device("fw-01"), _mock_device("fw-02")]])
+        gen.client.get = AsyncMock(return_value=_mock_group())
+        ha_obj = MagicMock()
+        ha_obj.id = "ha-1"
+        ha_obj.save = AsyncMock()
+        gen.client.create = AsyncMock(return_value=ha_obj)
+
+        await gen._ensure_ha_pairs(["fw-02", "fw-01"], ha_kind="ManagedFirewallHA", role_label="firewall")
+
+        gen._ensure_ha_interfaces.assert_awaited_once_with(
+            ha_obj, "fw-01-fw-02-ha", device_kind=DcimPhysicalDevice, member_ids=["id-fw-01", "id-fw-02"]
+        )
+
+    @pytest.mark.asyncio
+    async def test_existing_domain_passes_no_member_ids_so_capabilities_is_fetched(self) -> None:
+        """An existing ha_obj came from client.filters(..., include=[
+        "capabilities"]) — real server-side typenames, so letting
+        _ensure_ha_interfaces fetch() it itself is safe and correct (also
+        covers domains whose membership changed since creation)."""
+        gen = self._gen()
+        existing = MagicMock(id="existing-ha-1")
+        gen.client.filters = AsyncMock(return_value=[existing])
+
+        await gen._ensure_ha_pairs(["fw-01", "fw-02"], ha_kind="ManagedFirewallHA", role_label="firewall")
+
+        gen._ensure_ha_interfaces.assert_awaited_once_with(
+            existing, "fw-01-fw-02-ha", device_kind=DcimPhysicalDevice, member_ids=None
+        )
+
+    @pytest.mark.asyncio
     async def test_device_kind_defaults_to_physical_but_can_be_overridden(self) -> None:
         """dc.py's shared virtual production/non-production instances pass
         device_kind=DcimVirtualDevice — pair resolution must query that kind,
@@ -486,6 +524,38 @@ class TestEnsureHaInterfaces:
         await gen._ensure_ha_interfaces(ha_obj, "fw-01-fw-02-ha")
 
         gen.client.filters.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_member_ids_param_skips_capabilities_fetch(self) -> None:
+        """Passing member_ids (the fresh-domain path in _ensure_ha_pairs)
+        must never touch ha_obj.capabilities.fetch() — a just-created ha_obj's
+        capabilities peers have no __typename, so fetch() would raise 'Unable
+        to fetch the peer, id and/or typename are not defined' (caught live
+        on a real add_dc run before this param existed)."""
+        gen = self._gen()
+        caps = _mock_relmgr([])
+        caps.fetch = AsyncMock(side_effect=AssertionError("capabilities.fetch() must not be called"))
+        ha_obj = MagicMock(id="ha-1", capabilities=caps)
+        dev_1 = MagicMock(id="dev-1", deployment=MagicMock(initialized=False))
+        dev_1.name = MagicMock(value="fw-01")
+        dev_2 = MagicMock(id="dev-2", deployment=MagicMock(initialized=False))
+        dev_2.name = MagicMock(value="fw-02")
+        iface_1 = _mock_iface("iface-1", "sync0")
+        iface_2 = _mock_iface("iface-2", "sync0")
+
+        async def _filters(*, kind: Any, **kwargs: Any) -> list[Any]:
+            if kind is DcimPhysicalDevice:
+                return [dev_1, dev_2]
+            if kind is DcimPhysicalInterface:
+                return [iface_1] if kwargs.get("device__ids") == ["dev-1"] else [iface_2]
+            return []
+
+        gen.client.filters = AsyncMock(side_effect=_filters)
+        gen.client.create = AsyncMock(return_value=MagicMock(save=AsyncMock()))
+
+        await gen._ensure_ha_interfaces(ha_obj, "fw-01-fw-02-ha", member_ids=["dev-1", "dev-2"])
+
+        caps.fetch.assert_not_awaited()
 
     @pytest.mark.asyncio
     async def test_creates_interface_capability_for_each_member_with_existing_sync_iface(self) -> None:
