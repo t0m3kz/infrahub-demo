@@ -76,6 +76,25 @@ class VxlanSegmentGenerator(CablingMixin, CommonGenerator):
             self.logger.error(f"Segment {segment_name}: could not resolve any hosting parent — cannot proceed")
             return
 
+        # A segment can reference a customer that just boarded onto a DC
+        # still being bootstrapped (its own add_dc/dc_pod_cascade hasn't
+        # created vlan_pool/vni_pool yet) — wait for that in-flight parent
+        # and re-resolve rather than fail immediately (same race as
+        # customer_dc.py's firewall/LB device read).
+        missing_pool_ids = [
+            dep["id"] for dep in target_deployments if dep.get("id") and not (dep.get("vlan_pool") or {}).get("id")
+        ]
+        if missing_pool_ids:
+            for dep_id in missing_pool_ids:
+                for parent_generator in ("add_dc", "dc_pod_cascade"):
+                    refreshed = await self.wait_for_parent_generator_and_refetch(parent_generator, dep_id)
+                    if refreshed is not None:
+                        cleaned = clean_data(refreshed)
+                        refreshed_list = cleaned.get(self.graphql_root_key, [])
+                        if refreshed_list:
+                            segment = refreshed_list[0]
+            target_deployments = self._resolve_target_deployments(segment, segment_name)
+
         stretch_scope = segment.get("stretch_scope") or "local"
         self.logger.info(f"Segment {segment_name}: stretch_scope={stretch_scope}")
 

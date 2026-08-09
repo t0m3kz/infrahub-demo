@@ -44,6 +44,10 @@ def _make_gen() -> Any:
     gen = VxlanSegmentGenerator.__new__(VxlanSegmentGenerator)
     gen.client = AsyncMock()
     gen.logger = MagicMock()
+    # generate() waits for an in-flight add_dc/dc_pod_cascade on a target
+    # deployment missing its vlan_pool (see customer_dc.py's identical
+    # wait) — no in-flight parent in these unit tests, so no-op.
+    gen.wait_for_parent_generator_and_refetch = AsyncMock(return_value=None)
     return gen
 
 
@@ -247,6 +251,46 @@ class TestVxlanSegmentGeneratorGenerate:
         gen._activate_segment_in_deployment.assert_awaited_once()
         gen._assign_to_deployment_interfaces.assert_awaited_once()
         gen._create_inline_sub_interfaces.assert_awaited_once()
+
+    def test_missing_vlan_pool_waits_on_parent_dc_generators(self):
+        """A target deployment with no vlan_pool (its own add_dc/dc_pod_cascade
+        hasn't run yet) triggers a wait on both parent generators before
+        _resolve_target_deployments is retried."""
+        gen = _make_gen()
+        gen._activate_segment_in_deployment = AsyncMock()
+        gen._assign_to_deployment_interfaces = AsyncMock()
+        gen._create_inline_sub_interfaces = AsyncMock()
+
+        dep_no_pool = {"id": "cust-1", "name": "C001-P-DC1", "parent": {"id": "dc-1", "name": "DC-1"}}
+        data = _seg_response(seg_id="seg-1", seg_name="vxlan-1000", deployments=[dep_no_pool])
+        asyncio.run(gen.generate(data))
+
+        assert gen.wait_for_parent_generator_and_refetch.await_args_list == [
+            (("add_dc", "dc-1"), {}),
+            (("dc_pod_cascade", "dc-1"), {}),
+        ]
+
+    def test_refetched_data_is_reparsed_when_parent_was_in_flight(self):
+        """If add_dc was in-flight, the refreshed data (now carrying the
+        vlan_pool that was missing the first time) replaces the segment
+        before target deployments are re-resolved."""
+        gen = _make_gen()
+        gen._activate_segment_in_deployment = AsyncMock()
+        gen._assign_to_deployment_interfaces = AsyncMock()
+        gen._create_inline_sub_interfaces = AsyncMock()
+
+        refreshed_payload = _seg_response(seg_id="seg-1", seg_name="vxlan-1000", deployments=[_DEP_1])
+        gen.wait_for_parent_generator_and_refetch = AsyncMock(side_effect=[refreshed_payload, None])
+
+        dep_no_pool = {"id": "cust-1", "name": "C001-P-DC1", "parent": {"id": "dc-1", "name": "DC-1"}}
+        data = _seg_response(seg_id="seg-1", seg_name="vxlan-1000", deployments=[dep_no_pool])
+        asyncio.run(gen.generate(data))
+
+        gen._activate_segment_in_deployment.assert_awaited_once()
+        assert gen._activate_segment_in_deployment.call_args.kwargs["vlan_pool"] == {
+            "id": "pool-vlan-1",
+            "name": "DC1-VLAN-Pool",
+        }
 
 
 # ===========================================================================
