@@ -124,7 +124,7 @@ spec:
             role: management
           - template_name: vSRX_EDGE_CUSTOMER_S_ge-0-0-[0-3]
             name: "ge-0/0/[0-3]"
-            role: customer
+            role: uplink
           - template_name: vSRX_EDGE_CUSTOMER_S_ge-0-0-4
             name: "ge-0/0/4"
             role: ha
@@ -148,7 +148,7 @@ spec:
             role: management
           - template_name: vSRX_EDGE_CUSTOMER_M_ge-0-0-[0-3]
             name: "ge-0/0/[0-3]"
-            role: customer
+            role: uplink
           - template_name: vSRX_EDGE_CUSTOMER_M_ge-0-0-4
             name: "ge-0/0/4"
             role: ha
@@ -172,7 +172,7 @@ spec:
             role: management
           - template_name: vSRX_EDGE_CUSTOMER_L_ge-0-0-[0-3]
             name: "ge-0/0/[0-3]"
-            role: customer
+            role: uplink
           - template_name: vSRX_EDGE_CUSTOMER_L_ge-0-0-4
             name: "ge-0/0/4"
             role: ha
@@ -196,7 +196,7 @@ spec:
             role: management
           - template_name: vSRX_EDGE_CUSTOMER_XL_ge-0-0-[0-3]
             name: "ge-0/0/[0-3]"
-            role: customer
+            role: uplink
           - template_name: vSRX_EDGE_CUSTOMER_XL_ge-0-0-4
             name: "ge-0/0/4"
             role: ha

@@ -633,14 +633,19 @@ class TestEnsureFirewallContextPools:
         gen._get_parent_pool_with_retry.assert_awaited_once_with("FW-Context-P2P-IPv6")
 
     @pytest.mark.asyncio
-    async def test_existing_p2p_pool_skips_allocation(self) -> None:
+    async def test_rerun_always_allocates_idempotently_no_existence_short_circuit(self) -> None:
+        """No manual "does the pool already exist" check: allocate_next_ip_prefix's
+        identifier and CoreIPPrefixPool.name's uniqueness + save(allow_upsert=True)
+        already make re-running this idempotent — a prior existence check here was
+        the actual cause of a pool broken by an older code version never healing
+        (see docstring)."""
         gen = self._make_gen()
-        gen.client.filters = AsyncMock(return_value=[MagicMock(id="existing-pool")])
 
         await gen._ensure_firewall_context_pools(dc_name="dc1")
 
-        gen._get_parent_pool_with_retry.assert_not_called()
-        gen.client.allocate_next_ip_prefix.assert_not_called()
+        gen._get_parent_pool_with_retry.assert_awaited_once()
+        gen.client.allocate_next_ip_prefix.assert_awaited_once()
+        gen.client.create.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_slice_allocated_from_global_pool_not_a_fresh_supernet(self) -> None:
